@@ -4361,6 +4361,8 @@ axis	Both	Les deux
 @msg	`name` must be the name of a script engine	`name` doit être le nom d'un moteur de script
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	le moteur de script principal est nouveau à chaque exécution et n'est jamais conservé, il ne peut donc pas être supprimé
 @msg	there is no script engine named {name}	il n'y a aucun moteur de script nommé {name}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l'application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé

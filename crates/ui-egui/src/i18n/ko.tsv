@@ -5114,6 +5114,8 @@ theme	Appearance	외관
 @msg	`name` must be the name of a script engine	`name`은(는) 스크립트 엔진의 이름이어야 합니다
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다

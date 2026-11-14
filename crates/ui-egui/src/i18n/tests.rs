@@ -2093,6 +2093,26 @@ fn a_repeated_placeholder_matches_the_same_text() {
     assert!(c.message("alert: the next answer is for prompt, not confirm").is_none());
 }
 
+/// Of two templates that start with text, the one with the longer text before its first
+/// placeholder matches first, so a row that wraps a message takes it before a row with more text
+/// in all whose placeholder would take part of it; a quoted name may still hold a backtick.
+#[test]
+fn the_longer_leading_text_matches_first() {
+    let c = Catalog::parse(concat!(
+        "@msg\t`{key}` must be true or false\tkey {key}\n",
+        "@msg\t`answers[{i}]` {e}\tanswer {i} {e}\n",
+        "@msg\tno brush named `{name}`\tbrush {name}\n",
+    ));
+    let (form, caps) = c.message("`select` must be true or false").expect("matches");
+    assert_eq!((form, caps), ("key {key}", vec![("key", "select")]));
+    let (form, caps) = c.message("`answers[3]` is a confirm's answer, whose `value` must be true or false").expect("matches");
+    assert_eq!((form, caps), ("answer {i} {e}", vec![("i", "3"), ("e", "is a confirm's answer, whose `value` must be true or false")]));
+    let (form, caps) = c.message("`a`b` must be true or false").expect("matches");
+    assert_eq!((form, caps), ("key {key}", vec![("key", "a`b")]));
+    let (form, caps) = c.message("no brush named `a`b`").expect("matches");
+    assert_eq!((form, caps), ("brush {name}", vec![("name", "a`b")]));
+}
+
 /// A template that starts with text matches a message it wraps before a template that starts
 /// with a placeholder, even one with more literal text, so the wrapped reason is translated by
 /// its own row.
@@ -3393,6 +3413,96 @@ fn dataset_import_repeated_column_error_is_translated() {
     }
 }
 
+/// The scan reads the refusals `script.run`'s `param(msg)` gives, and not the arguments of a type's
+/// own function of that name.
+#[test]
+fn message_scan_reads_script_run_param_refusals() {
+    let code = r#"
+fn f(p: &Value) -> Result<()> {
+    let grays = Grays::param(C, p)?;
+    let pick = Pick::param(p, C)?;
+    let _ = cmd::bad(C, "the name is too long");
+    Err(param("`path` is empty"))
+}
+"#;
+    let engine: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "engine").map(|&(_, call, before)| (call, before)).collect();
+    let consts = [("C".to_string(), vec!["view.proofSetup".to_string()])].into();
+    assert_eq!(source_messages(code, &engine, &consts), ["the name is too long", "`path` is empty"]);
+}
+
+/// `script.run`'s refusals of `answers`, the list's own, an answer's at its index and the refusal
+/// of `answers` in the app, are translated in every language that translates every message, with
+/// the index, the counts and the code names kept. The command's error stays in English.
+#[test]
+fn script_answers_errors_are_translated() {
+    use serde_json::{Value, json};
+    use vectorcraft_engine::{EngineError, Session};
+    let reasons = [
+        "must be an object with `kind` and `value`",
+        "must have exactly `kind` and `value`",
+        "is an alert's answer, whose `value` must be \"ok\"",
+        "is a confirm's answer, whose `value` must be true or false",
+        "is longer than 16 KiB",
+        "is a prompt's answer, whose `value` must be a string or null",
+        "must have `kind` alert, confirm or prompt",
+    ];
+    let in_app = "`answers` is only for a run with nobody to ask: in the app, the person answers each dialog";
+    let lists = ["`answers` must be a list of answers", "`answers` has more than {MAX_ANSWERS} answers", "`answers` is larger than 1 MiB"];
+    let scanned = message_literals();
+    for template in reasons.into_iter().chain(lists).chain(["`answers[{i}]` {e}", in_app]) {
+        assert!(scanned.contains(template), "{template}");
+    }
+    let ok = json!({"kind": "alert", "value": "ok"});
+    let wrong = [
+        json!(1),
+        json!({"kind": "alert"}),
+        json!({"kind": "alert", "value": "yes"}),
+        json!({"kind": "confirm", "value": "yes"}),
+        json!({"kind": "prompt", "value": "x".repeat(16 * 1024 + 1)}),
+        json!({"kind": "prompt", "value": 1}),
+        json!({"kind": "beep", "value": 1}),
+    ];
+    let run = |s: &mut Session, answers: Value| s.execute("script.run", &json!({"source": "1", "answers": answers})).unwrap_err();
+    let mut s = Session::new();
+    // Each error, with the English message the command gives and the reason an answer's holds.
+    let mut errors = vec![];
+    for (reason, answer) in reasons.into_iter().zip(wrong) {
+        for at in [3, 9_999] {
+            let mut list = vec![ok.clone(); at];
+            list.push(answer.clone());
+            errors.push((run(&mut s, json!(list)), format!("`answers[{at}]` {reason}"), Some(reason)));
+        }
+    }
+    errors.push((run(&mut s, json!("ok")), lists[0].to_string(), None));
+    errors.push((run(&mut s, json!(vec![ok.clone(); 10_001])), "`answers` has more than 10000 answers".to_string(), None));
+    let long = json!({"kind": "prompt", "value": "x".repeat(16 * 1024)});
+    errors.push((run(&mut s, json!(vec![long; 70])), lists[2].to_string(), None));
+    s.script_frames = true;
+    errors.push((run(&mut s, json!([ok])), in_app.to_string(), None));
+    for (e, want, reason) in &errors {
+        assert!(matches!(e, EngineError::BadParams { cmd, msg } if cmd == "script.run" && msg == want), "{e}");
+        let line = e.to_string();
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            let shown = message(lang, &line);
+            let inner = message(lang, want);
+            assert_ne!(inner, *want, "{code}");
+            assert!(shown.contains(&inner) && !shown.contains("invalid parameters"), "{code}: {shown}");
+            if let Some(reason) = reason {
+                let translated = message(lang, reason);
+                assert_ne!(translated, *reason, "{code}");
+                assert!(inner.contains(&translated), "{code}: {inner}");
+            }
+            let numbers: Vec<&str> = want.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).collect();
+            let names = ["`answers", "`kind`", "`value`", "true", "false", "null"];
+            assert!(numbers.iter().chain(&names).all(|n| !want.contains(n) || shown.contains(n)), "{code}: {shown}");
+            if want.ends_with("alert, confirm or prompt") {
+                assert!(["alert", "confirm", "prompt"].iter().all(|k| shown.contains(k)), "{code}: {shown}");
+            }
+        }
+    }
+}
+
 /// The errors of a command's parameter schema are translated in every language that translates
 /// every message, with the parameter's path and the refused value kept.
 #[test]
@@ -4214,14 +4324,15 @@ const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Oth
 /// message: the engine's `bad(cmd, msg)` (`EngineError::BadParams`), `err(msg)` (`cmd/fileio`)
 /// and `error(msg)` (`cmd/dimension.rs`), the script host's `fail(msg)` (`script/files.rs`,
 /// `script/dollar.rs`) and `value(msg)`, which gives the messages the script `File` object's own
-/// code throws (`script/files.rs`), and `.over(limit)` for a limit a run passes (`script/mod.rs`),
-/// the PDF writer's `bad(why)` (`forms.rs`) and `failed(why)` (`encrypt.rs`, `linearize.rs`), the
+/// code throws (`script/files.rs`), `.over(limit)` for a limit a run passes (`script/mod.rs`) and
+/// `param(msg)` for `script.run`'s parameters (`cmd/scripts.rs`), the PDF writer's `bad(why)` (`forms.rs`) and `failed(why)` (`encrypt.rs`, `linearize.rs`), the
 /// plug-in host's `bad(what)` (a parameter's spec and dialog keys), `wrong(what)` (a parameter's
 /// value), `out_err(at, msg)` (plug-in output), `in_range(x, lo, hi, at, what)` and
 /// `unit(x, at, what)` (a painted effect's numbers) and `.read_packed(packed, what, max)` (the block
 /// a plug-in returned), and the script interpreter's methods that throw an error at a script:
 /// `.type_error(msg)`, `.throw(kind, msg)` and the XPath evaluator's `.error(msg)`. A helper that
-/// starts with `.` is a method of any receiver.
+/// starts with `.` is a method of any receiver; any other is a function, not a type's own function
+/// of the same name (`Grays::param(C, p)`).
 const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("engine", "bad(", 1),
     ("engine", "err(", 0),
@@ -4229,6 +4340,7 @@ const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("engine", "fail(", 0),
     ("engine", "value(", 0),
     ("engine", ".over(", 0),
+    ("engine", "param(", 0),
     ("pdf", "bad(", 0),
     ("pdf", "failed(", 0),
     ("plugins", "bad(", 0),
@@ -4411,6 +4523,10 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
             .filter(|&(at, _)| call.starts_with('.') || !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
+            .filter(|&(at, _)| {
+                let owner = code[..at].strip_suffix("::").map(|p| p.rsplit(|c: char| !c.is_alphanumeric() && c != '_').next().unwrap_or(""));
+                !owner.is_some_and(|o| o.starts_with(|c: char| c.is_ascii_uppercase()))
+            })
             // `format!(` given as a helper, and an `error(` helper that is an `#[error(…)]` attribute, take a format string.
             .filter_map(move |(at, _)| {
                 skip_args(&code[at + call.len()..], before).map(|rest| (rest, call == "format!(" || code[..at].ends_with("#[")))

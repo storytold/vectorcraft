@@ -2441,6 +2441,18 @@ axis	Both	Και τα δύο
 @msg	`name` must be the name of a script engine	το `name` πρέπει να είναι το όνομα μιας μηχανής σεναρίων
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	η κύρια μηχανή σεναρίων είναι νέα σε κάθε εκτέλεση και δεν διατηρείται ποτέ, οπότε δεν μπορεί να απορριφθεί
 @msg	there is no script engine named {name}	δεν υπάρχει μηχανή σεναρίων με όνομα {name}
+@msg	`answers` must be a list of answers	το `answers` πρέπει να είναι λίστα απαντήσεων
+@msg	`answers` has more than {MAX_ANSWERS} answers	το `answers` έχει περισσότερες από {MAX_ANSWERS} απαντήσεις
+@msg	`answers` is larger than 1 MiB	το `answers` είναι μεγαλύτερο από 1 MiB
+@msg	`answers[{i}]` {e}	το `answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	πρέπει να είναι αντικείμενο με `kind` και `value`
+@msg	must have exactly `kind` and `value`	πρέπει να έχει ακριβώς `kind` και `value`
+@msg	is an alert's answer, whose `value` must be "ok"	είναι απάντηση σε alert, οπότε το `value` πρέπει να είναι "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	είναι απάντηση σε confirm, οπότε το `value` πρέπει να είναι true ή false
+@msg	is longer than 16 KiB	είναι μεγαλύτερο από 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	είναι απάντηση σε prompt, οπότε το `value` πρέπει να είναι συμβολοσειρά ή null
+@msg	must have `kind` alert, confirm or prompt	πρέπει να έχει `kind` alert, confirm ή prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	το `answers` είναι μόνο για εκτέλεση χωρίς κανέναν να ερωτηθεί: στην εφαρμογή, το άτομο απαντά σε κάθε παράθυρο διαλόγου
 @msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Corners edits the corners of a path	Η εντολή Γωνίες επεξεργάζεται τις γωνίες μιας διαδρομής

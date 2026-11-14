@@ -7652,8 +7652,10 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` deve listar índices de pontos de ancoragem (0, 1, 2…), não {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` deve listar índices de pontos de ancoragem (0, 1, 2…), não {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` para esta caixa de diálogo {kind} deve ser um de: {_1}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tem mais de {MAX_ANSWERS} respostas
 @msg	`answers` is larger than 1 MiB	`answers` tem mais de 1 MiB
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` é só para uma execução sem ninguém a quem perguntar: no app, a pessoa responde a cada caixa de diálogo
 @msg	`answers` must be a list of answers	`answers` deve ser uma lista de respostas
 @msg	`artboard` must be the index of an artboard of the document	`artboard` deve ser o índice de uma prancheta do documento
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` deve ser [x, y]

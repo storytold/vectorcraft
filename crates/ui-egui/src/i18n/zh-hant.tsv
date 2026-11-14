@@ -2581,6 +2581,8 @@ file-filter	Templates	範本
 @msg	`name` must be the name of a script engine	`name` 必須是指令碼引擎的名稱
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主指令碼引擎在每次執行時都是新的，從不保留，因此無法捨棄
 @msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 僅適用於沒有人可詢問的執行：在應用程式中，由使用者回答每個對話框
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
 @msg	Exported {path}	已匯出 {path}

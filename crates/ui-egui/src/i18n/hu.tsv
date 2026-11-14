@@ -5184,6 +5184,18 @@ imageTrace	Outline	Körvonal
 @msg	`name` must be the name of a script engine	a `name` értékének egy parancsfájlmotor nevének kell lennie
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	a fő parancsfájlmotor minden futáshoz új, és sosem marad meg, ezért nem dobható el
 @msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
+@msg	`answers` must be a list of answers	az `answers` értékének válaszok listájának kell lennie
+@msg	`answers` has more than {MAX_ANSWERS} answers	az `answers` több mint {MAX_ANSWERS} választ tartalmaz
+@msg	`answers` is larger than 1 MiB	az `answers` nagyobb 1 MiB-nál
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	must be an object with `kind` and `value`	`kind` és `value` kulcsú objektumnak kell lennie
+@msg	must have exactly `kind` and `value`	pontosan `kind` és `value` kulcsot kell tartalmaznia
+@msg	is an alert's answer, whose `value` must be "ok"	alert válasza, ezért a `value` értékének "ok"-nak kell lennie
+@msg	is a confirm's answer, whose `value` must be true or false	confirm válasza, ezért a `value` értékének true vagy false értéknek kell lennie
+@msg	is longer than 16 KiB	hosszabb 16 KiB-nál
+@msg	is a prompt's answer, whose `value` must be a string or null	prompt válasza, ezért a `value` értékének karakterláncnak vagy null értéknek kell lennie
+@msg	must have `kind` alert, confirm or prompt	a `kind` értékének alert, confirm vagy prompt értéknek kell lennie
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	az `answers` csak olyan futtatáshoz való, ahol nincs kit megkérdezni: az alkalmazásban minden párbeszédpanelre a felhasználó válaszol
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti

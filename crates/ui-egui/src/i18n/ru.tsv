@@ -4409,6 +4409,17 @@ axis	Both	Оба
 @msg	`name` must be the name of a script engine	`name` должно быть именем движка скриптов
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	основной движок скриптов создаётся заново для каждого запуска и никогда не сохраняется, поэтому его нельзя удалить
 @msg	there is no script engine named {name}	движка скриптов с именем {name} нет
+@msg	`answers` must be a list of answers	`answers` должен быть списком ответов
+@msg	`answers` has more than {MAX_ANSWERS} answers	в `answers` больше {MAX_ANSWERS} ответов
+@msg	`answers` is larger than 1 MiB	`answers` больше 1 МиБ
+@msg	must be an object with `kind` and `value`	должен быть объектом с `kind` и `value`
+@msg	must have exactly `kind` and `value`	должен содержать ровно `kind` и `value`
+@msg	is an alert's answer, whose `value` must be "ok"	является ответом на alert, поэтому его `value` должно быть "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	является ответом на confirm, поэтому его `value` должно быть true или false
+@msg	is longer than 16 KiB	длиннее 16 КиБ
+@msg	is a prompt's answer, whose `value` must be a string or null	является ответом на prompt, поэтому его `value` должно быть строкой или null
+@msg	must have `kind` alert, confirm or prompt	должен иметь `kind` alert, confirm или prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` предназначен только для запуска, в котором некого спросить: в приложении человек сам отвечает на каждое диалоговое окно
 @msg	Running a script	Выполняется скрипт
 @msg	Copied the script report	Отчёт о сценарии скопирован
 @msg	Corners edits the corners of a path	«Углы» редактирует углы контура

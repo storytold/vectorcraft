@@ -5577,6 +5577,18 @@ digits	Malayalam	Malaiàlam
 @msg	`name` must be the name of a script engine	`name` ha de ser el nom d'un motor d'scripts
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor d'scripts principal és nou a cada execució i no es conserva mai, per tant no es pot descartar
 @msg	there is no script engine named {name}	no hi ha cap motor d'scripts anomenat {name}
+@msg	`answers` must be a list of answers	`answers` ha de ser una llista de respostes
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` té més de {MAX_ANSWERS} respostes
+@msg	`answers` is larger than 1 MiB	`answers` ocupa més d'1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	ha de ser un objecte amb `kind` i `value`
+@msg	must have exactly `kind` and `value`	ha de tenir exactament `kind` i `value`
+@msg	is an alert's answer, whose `value` must be "ok"	és la resposta d'un alert, i el seu `value` ha de ser "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	és la resposta d'un confirm, i el seu `value` ha de ser true o false
+@msg	is longer than 16 KiB	ocupa més de 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	és la resposta d'un prompt, i el seu `value` ha de ser una cadena o null
+@msg	must have `kind` alert, confirm or prompt	ha de tenir `kind` alert, confirm o prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` només és per a una execució sense ningú a qui preguntar: a l'aplicació, la persona respon cada quadre de diàleg
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat

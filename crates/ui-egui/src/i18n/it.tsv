@@ -7155,8 +7155,10 @@ breakText	Glyphs	Glifi
 @msg	`alignOn` must be a string	`alignOn` deve essere una stringa
 @msg	`align` must be a string	`align` deve essere una stringa
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` per questa finestra di dialogo {kind} deve essere uno tra: {_1}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` ha più di {MAX_ANSWERS} risposte
 @msg	`answers` is larger than 1 MiB	`answers` supera 1 MiB
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` è solo per un'esecuzione senza nessuno a cui chiedere: nell'app, la persona risponde a ogni finestra di dialogo
 @msg	`answers` must be a list of answers	`answers` deve essere un elenco di risposte
 @msg	`artboard` must be the index of an artboard of the document	`artboard` deve essere l'indice di una tavola da disegno del documento
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` deve essere [x, y]

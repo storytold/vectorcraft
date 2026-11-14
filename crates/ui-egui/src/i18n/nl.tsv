@@ -145,6 +145,18 @@
 @msg	`name` must be the name of a script engine	`name` moet de naam van een scriptengine zijn
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	de hoofdscriptengine is bij elke uitvoering nieuw en wordt nooit bewaard, dus kan hij niet worden verwijderd
 @msg	there is no script engine named {name}	er is geen scriptengine met de naam {name}
+@msg	`answers` must be a list of answers	`answers` moet een lijst met antwoorden zijn
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` heeft meer dan {MAX_ANSWERS} antwoorden
+@msg	`answers` is larger than 1 MiB	`answers` is groter dan 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	moet een object met `kind` en `value` zijn
+@msg	must have exactly `kind` and `value`	moet precies `kind` en `value` hebben
+@msg	is an alert's answer, whose `value` must be "ok"	is het antwoord op een alert, waarvan `value` "ok" moet zijn
+@msg	is a confirm's answer, whose `value` must be true or false	is het antwoord op een confirm, waarvan `value` true of false moet zijn
+@msg	is longer than 16 KiB	is langer dan 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	is het antwoord op een prompt, waarvan `value` een tekenreeks of null moet zijn
+@msg	must have `kind` alert, confirm or prompt	moet `kind` alert, confirm of prompt hebben
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` is alleen voor een uitvoering zonder iemand om te vragen: in de app beantwoordt de persoon elk dialoogvenster
 @msg	Running a script	Er wordt een script uitgevoerd
 @msg	Data Recovery can't keep copies in {path}: {e}	Gegevensherstel kan geen kopieën bewaren in {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kunnen niet worden geladen uit {path}: {e}

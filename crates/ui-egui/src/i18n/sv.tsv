@@ -4282,6 +4282,18 @@ axis	Both	Båda
 @msg	`name` must be the name of a script engine	`name` måste vara namnet på en skriptmotor
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	huvudskriptmotorn är ny för varje körning och sparas aldrig, så den kan inte tas bort
 @msg	there is no script engine named {name}	det finns ingen skriptmotor med namnet {name}
+@msg	`answers` must be a list of answers	`answers` måste vara en lista med svar
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har fler än {MAX_ANSWERS} svar
+@msg	`answers` is larger than 1 MiB	`answers` är större än 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	måste vara ett objekt med `kind` och `value`
+@msg	must have exactly `kind` and `value`	måste ha exakt `kind` och `value`
+@msg	is an alert's answer, whose `value` must be "ok"	är svaret på en alert, vars `value` måste vara "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	är svaret på en confirm, vars `value` måste vara true eller false
+@msg	is longer than 16 KiB	är längre än 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	är svaret på en prompt, vars `value` måste vara en sträng eller null
+@msg	must have `kind` alert, confirm or prompt	måste ha `kind` alert, confirm eller prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` är bara för en körning utan någon att fråga: i appen svarar personen på varje dialogruta
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana

@@ -4838,6 +4838,18 @@ theme	Appearance	Giao diện
 @msg	`name` must be the name of a script engine	`name` phải là tên của một bộ máy tập lệnh
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	bộ máy tập lệnh chính được tạo mới cho mỗi lần chạy và không bao giờ được giữ lại, nên không thể loại bỏ nó
 @msg	there is no script engine named {name}	không có bộ máy tập lệnh nào tên {name}
+@msg	`answers` must be a list of answers	`answers` phải là một danh sách câu trả lời
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` có hơn {MAX_ANSWERS} câu trả lời
+@msg	`answers` is larger than 1 MiB	`answers` lớn hơn 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	phải là một đối tượng có `kind` và `value`
+@msg	must have exactly `kind` and `value`	phải có đúng `kind` và `value`
+@msg	is an alert's answer, whose `value` must be "ok"	là câu trả lời cho alert, nên `value` phải là "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	là câu trả lời cho confirm, nên `value` phải là true hoặc false
+@msg	is longer than 16 KiB	dài hơn 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	là câu trả lời cho prompt, nên `value` phải là chuỗi hoặc null
+@msg	must have `kind` alert, confirm or prompt	phải có `kind` là alert, confirm hoặc prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` chỉ dành cho lần chạy không có ai để hỏi: trong ứng dụng, người dùng trả lời từng hộp thoại
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
