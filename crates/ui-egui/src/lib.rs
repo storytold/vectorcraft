@@ -235,6 +235,12 @@ pub struct VectorcraftApp {
     /// icon and title. Set by the desktop app when it opens the window; `false` for embedders
     /// without a window of their own.
     pub desktop_frame: bool,
+    /// Linux and the BSDs: `VECTORCRAFT_TITLEBAR` is unset and the desktop would draw the window's
+    /// frame on this session with Preferences › User Interface › System Title Bar on or off while
+    /// VectorCraft Title Bar on Every Desktop is off, so the dialog says so under System Title Bar.
+    /// It stays `true` while VectorCraft Title Bar on Every Desktop gives the app the frame. Set by
+    /// the desktop app when it opens the window; `false` elsewhere.
+    pub desktop_keeps_frame: bool,
     /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
     /// sent again only when it changes, so idle frames don't spam the backend.
     pub(crate) last_window_title: String,

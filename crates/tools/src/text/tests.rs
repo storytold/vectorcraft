@@ -1538,6 +1538,36 @@ fn selected_type_shows_its_ports_in_each_state() {
     assert!(thread_ports(&mut marks, &cx(&d, &sel, &p)).is_empty(), "only selected type shows them");
 }
 
+/// The out port shows whether the text fits as the hyphenation exceptions lay it out now: when
+/// Preferences › Hyphenation › Exceptions change, the selected type is laid out again.
+#[test]
+fn the_out_port_follows_the_hyphenation_exceptions() {
+    struct Clear;
+    impl Drop for Clear {
+        fn drop(&mut self) {
+            vectorcraft_text::set_hyphenation_exceptions("");
+        }
+    }
+    let _clear = Clear;
+    const WORDS: &str = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    const NEVER: &str = "extraordinarily, comprehensive, typographical, considerations, notwithstanding";
+    let (mut d, id) = crate::testutil::doc_with_area_type();
+    // A 70 by 170 pt frame holds the hyphenated text, and the text without those breaks overflows
+    // it.
+    let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("not text") };
+    t.runs = vec![TextRun::new(WORDS, CharStyle { size: 14.0, ..Default::default() })];
+    t.para.hyphenate = true;
+    t.kind = TextKind::Area { frame: vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, 70.0, 170.0).to_path(0.1)) };
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([id]);
+    let mut marks = PortMarks::default();
+    let red = |ov: &[Overlay]| ov.iter().filter(|o| matches!(o, Overlay::Path { color: [230, 30, 30], .. })).count();
+    vectorcraft_text::set_hyphenation_exceptions("");
+    assert_eq!(red(&thread_ports(&mut marks, &cx(&d, &sel, &p))), 0, "the hyphenated text fits");
+    vectorcraft_text::set_hyphenation_exceptions(NEVER);
+    assert_eq!(red(&thread_ports(&mut marks, &cx(&d, &sel, &p))), 1, "the text without those breaks does not");
+}
+
 /// Past [`PORTS_MAX`] selected frames (select all of an opened PDF) no ports are drawn or clicked:
 /// they would bury the canvas in boxes; up to it every frame has its two.
 #[test]
