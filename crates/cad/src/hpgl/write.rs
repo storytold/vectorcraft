@@ -1024,6 +1024,23 @@ fn overlaps(a: Rect, b: Rect) -> bool {
     a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1
 }
 
+/// Whether a plot draws nothing of `n` wherever it is, apart from what every export leaves out
+/// (hidden objects, guides and template layers): an object at 0% opacity, a non-printing layer, a
+/// placed image, a gradient mesh whose every point is at 0% opacity, or a path or compound path
+/// without effects whose fills and strokes paint nothing. A clipping path still clips when the
+/// plot draws nothing of it.
+pub fn plots_nothing(n: &Node) -> bool {
+    let unpainted = || n.appearance.effects.is_empty() && top_stroke(n).is_none() && top_fill(n).is_none();
+    n.opacity <= 0.0
+        || match &n.kind {
+            NodeKind::Layer { printable, .. } => !printable,
+            NodeKind::Image(_) => true,
+            NodeKind::Mesh(m) => m.points.iter().all(|p| p.opacity <= 0.0),
+            NodeKind::Path { .. } | NodeKind::Compound { .. } => unpainted(),
+            _ => false,
+        }
+}
+
 /// `nodes` (the children of a clipping container when `clipping`) without the layers and
 /// sublayers a plot leaves out (hidden, non-printing, template or at 0% opacity) and without
 /// guides, in layers and groups at any depth, so that baking can't wrap one in art that is drawn

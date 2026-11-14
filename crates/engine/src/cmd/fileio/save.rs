@@ -757,8 +757,9 @@ pub const AI_EDITING_NEEDS_THE_ARTBOARDS: &str =
 pub const ART_PAGE_NEEDS_PDF: &str = "pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false";
 
 /// With `useArtboards: false` in `p`: the PDF-compatible `.ai` file of one page, the bounds of
-/// `doc`'s visible art ([`super::encode::art_page`]). It carries neither the native document nor
-/// the editing copy for other apps, and its notes end with [`AI_EDITING_NEEDS_THE_ARTBOARDS`].
+/// `doc`'s visible art on the layers its pages draw ([`super::pdf::art_page`]). It carries neither
+/// the native document nor the editing copy for other apps, and its notes end with
+/// [`AI_EDITING_NEEDS_THE_ARTBOARDS`].
 /// `pdfCompatible: false` is refused. `None` when `p` asks for the artboards or for a legacy
 /// version 7 `.ai` file.
 pub(super) fn encode_ai_art_page(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result<Option<Encoded>> {
@@ -768,7 +769,7 @@ pub(super) fn encode_ai_art_page(cmd: &str, f: &Format, doc: &Document, p: &Valu
     if !bool_or(p, "pdfCompatible", true) {
         return Err(bad(cmd, ART_PAGE_NEEDS_PDF));
     }
-    let Some((art, q)) = super::encode::art_page(cmd, doc, p)? else { return Ok(None) };
+    let Some((art, q)) = super::pdf::art_page(cmd, doc, &ai_pdf_params(p, false))? else { return Ok(None) };
     let mut enc = encode_ai_pages(cmd, f, &art, &q, false)?;
     enc.setting_notes.push(AI_EDITING_NEEDS_THE_ARTBOARDS.to_string());
     Ok(Some(enc))
@@ -784,9 +785,10 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
     encode_ai_pages(cmd, f, doc, p, true)
 }
 
-/// [`encode_ai`] of a `.ai` file with or without PDF content, carrying the native document and
-/// the editing copy for other apps when `editing` is true, and neither otherwise.
-fn encode_ai_pages(cmd: &str, f: &Format, doc: &Document, p: &Value, editing: bool) -> Result<Encoded> {
+/// `p` with the PDF options a `.ai` file is written with: Preserve Editing when `editing` is true,
+/// layers unless a standard decides, long pages with a `UserUnit`, and `compress` as
+/// `compression.compressText`.
+fn ai_pdf_params(p: &Value, editing: bool) -> Value {
     let mut params = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = params.as_object_mut() {
         o.insert("preserveEditing".into(), json!(editing));
@@ -805,6 +807,13 @@ fn encode_ai_pages(cmd: &str, f: &Format, doc: &Document, p: &Value, editing: bo
             }
         }
     }
+    params
+}
+
+/// [`encode_ai`] of a `.ai` file with or without PDF content, carrying the native document and
+/// the editing copy for other apps when `editing` is true, and neither otherwise.
+fn encode_ai_pages(cmd: &str, f: &Format, doc: &Document, p: &Value, editing: bool) -> Result<Encoded> {
+    let params = ai_pdf_params(p, editing);
     let pdf_compatible = bool_or(&params, "pdfCompatible", true);
     let f = &if pdf_compatible { *f } else { without_pdf(f) };
     let native_options = super::native::ai_options(cmd, f, doc, &params)?;
