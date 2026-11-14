@@ -1479,6 +1479,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraft-titelbalk op elk bureaublad
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Zolang de omgevingsvariabele VECTORCRAFT_TITLEBAR is ingesteld, kiest die de titelbalk.
 	System Title Bar takes precedence over this option while it is on.	Zolang Systeemtitelbalk is ingeschakeld, heeft die voorrang op deze optie.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Zolang VectorCraft-titelbalk op elk bureaublad is uitgeschakeld, tekent dit bureaublad de titelbalk van het venster, of deze optie nu aan of uit staat.
 	Exit	Afsluiten
 	Distort	Vervormen
 	Diffuse Glow…	Diffuse gloed…
@@ -5350,11 +5351,11 @@ imageTrace	Outline	Contour
 @msg	unknown effect `{id}`	onbekend effect `{id}`
 @msg	unknown format	onbekende indeling
 @msg	unknown format `{f}` (Save writes {_1})	onbekende indeling `{f}` (Opslaan schrijft {_1})
-@msg	unknown freeform mode `{m}` (points, lines)	onbekende vrijvormmodus `{m}` (punten, lijnen)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	onbekend verlooptype `{k}` (lineair, radiaal, conisch, ruit, vrijvorm)
+@msg	unknown freeform mode `{m}` (points, lines)	onbekende vrijvormmodus `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	onbekend verlooptype `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	onbekende markering `{h}`
 @msg	unknown option `{path}.{k}`	onbekende optie `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (behouden, simuleren of verwerpen)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (preserve, simulate of discard)
 @msg	unknown panel `{raw}`	onbekend paneel `{raw}`
 @msg	unknown preference `{key}`	onbekende voorkeur `{key}`
 @msg	Preferences imported.	Voorkeuren geïmporteerd.
@@ -5372,10 +5373,10 @@ imageTrace	Outline	Contour
 @msg	`{key}` must be an object	`{key}` moet een object zijn
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` wordt los uitgevoerd, niet als stap van een batch
 @msg	unknown preset (one of {_1})	onbekende voorinstelling (één van {_1})
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	onbekende voorinstelling `{name}` (hoog, middel, laag of een opgeslagen voorinstelling: zie flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	onbekende voorinstelling `{name}` (high, medium, low of een opgeslagen voorinstelling: zie flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	onbekende voorinstelling `{name}` (zie flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	onbekende voorinstelling `{name}` (zie webExport.presets.list)
-@msg	unknown side `{other}` (left|right|top|bottom)	onbekende zijde `{other}` (links|rechts|boven|onder)
+@msg	unknown side `{other}` (left|right|top|bottom)	onbekende zijde `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	onbekend gereedschap `{tool}`
 @msg	unknown tool `{t}`	onbekend gereedschap `{t}`
 @msg	unknown tool or command `{key}`	onbekend gereedschap of opdracht `{key}`
@@ -6733,6 +6734,8 @@ axis	Y Axis	Y-as
 	Action Options…	Actieopties…
 	Action Options	Actieopties
 	Playback Options…	Afspeelopties…
+	Button Mode	Knopmodus
+	No actions.	Geen acties.
 	Insert Stop…	Stop invoegen…
 	Insert Stop	Stop invoegen
 	Record Stop	Stop opnemen

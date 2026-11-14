@@ -5402,6 +5402,7 @@ effect	Regular	Normale
 	VectorCraft Title Bar on Every Desktop	Barra del titolo di VectorCraft su ogni desktop
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Finché è impostata, la variabile d'ambiente VECTORCRAFT_TITLEBAR sceglie la barra del titolo.
 	System Title Bar takes precedence over this option while it is on.	Finché è attiva, Barra del titolo di sistema ha la precedenza su questa opzione.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Finché Barra del titolo di VectorCraft su ogni desktop è disattivata, questo desktop disegna la barra del titolo della finestra, sia con questa opzione attiva sia disattivata.
 	Value Axis	Asse dei valori
 	On Left Side	Sul lato sinistro
 	On Right Side	Sul lato destro
@@ -6251,6 +6252,8 @@ axis	Y Axis	Asse Y
 	Action Options…	Opzioni azione…
 	Action Options	Opzioni azione
 	Playback Options…	Opzioni di riproduzione…
+	Button Mode	Modalità pulsante
+	No actions.	Nessuna azione.
 	Insert Stop…	Inserisci interruzione…
 	Insert Stop	Inserisci interruzione
 	Record Stop	Registra interruzione

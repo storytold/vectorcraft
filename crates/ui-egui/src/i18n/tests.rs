@@ -4154,6 +4154,87 @@ fn translated_messages_keep_the_command_ids_their_english_names() {
     assert!(missing.is_empty(), "{} rows drop a command id their English names:\n{}", missing.len(), missing.join("\n"));
 }
 
+/// Whether `word` is an ASCII name a command reads: a letter followed by letters, digits or
+/// underscores.
+fn is_ascii_name(word: &str) -> bool {
+    word.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// The field names and accepted values that `s` spells out of its backticked spans: each name of a
+/// comma-separated list in square brackets, such as `[x, y, width, height]` or
+/// `[[subpath, anchor]…]`; each `a|b|c` list of values, whole; and the values an `unknown …` or
+/// `bad model …` message lists in parentheses, such as `(none, standard or wedges)`, up to the first
+/// item that is not a single name, so `(high, medium, low or a saved one: see …)` gives `high`,
+/// `medium` and `low`, and `(or give its ids)` gives none.
+fn field_names_and_values(s: &str) -> Vec<String> {
+    let outside = s.split('`').step_by(2).collect::<Vec<_>>().join(" ");
+    let mut found = Vec::new();
+    for piece in outside.split('[').skip(1) {
+        let Some(end) = piece.find(']') else { continue };
+        let names: Vec<&str> = piece[..end].split(',').map(str::trim).collect();
+        if names.len() > 1 && names.iter().all(|name| is_ascii_name(name)) {
+            found.extend(names.into_iter().map(str::to_string));
+        }
+    }
+    let lists = outside.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '|'));
+    found.extend(lists.filter(|w| w.contains('|') && w.split('|').all(is_ascii_name)).map(str::to_string));
+    for (at, _) in outside.match_indices('(') {
+        let before = &outside[..at];
+        if !(holds_ascii_word(before, "unknown") || before.contains("bad model")) {
+            continue;
+        }
+        let Some(end) = outside[at..].find(')') else { continue };
+        let items = outside[at + 1..at + end].split(", ").flat_map(|item| item.split(" or "));
+        let values: Vec<&str> = items.map(str::trim).take_while(|item| is_ascii_name(item)).collect();
+        if values.len() > 1 {
+            found.extend(values.into_iter().map(str::to_string));
+        }
+    }
+    found
+}
+
+#[test]
+fn field_names_and_values_finds_bracketed_names_and_listed_values() {
+    assert_eq!(field_names_and_values("`{key}` must be [x, y, width, height]: four numbers"), ["x", "y", "width", "height"]);
+    assert_eq!(field_names_and_values("missing anchors [[subpath, anchor]…]"), ["subpath", "anchor"]);
+    assert_eq!(field_names_and_values("arrowScale must be [start, end]"), ["start", "end"]);
+    assert_eq!(field_names_and_values("unknown pieLegend {v} (none, standard or wedges)"), ["none", "standard", "wedges"]);
+    assert_eq!(field_names_and_values("unknown side `{other}` (left|right|top|bottom)"), ["left|right|top|bottom"]);
+    assert_eq!(field_names_and_values("bad model {other} (keep, new or document)"), ["keep", "new", "document"]);
+    assert_eq!(
+        field_names_and_values("unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)"),
+        ["high", "medium", "low"]
+    );
+    assert_eq!(field_names_and_values("unknown object (or give its ids)"), Vec::<String>::new());
+    assert_eq!(field_names_and_values("unknown color `{c}` (#rrggbb or a preset name)"), Vec::<String>::new());
+    assert_eq!(field_names_and_values("unknown resolution (72 screen, 150 medium, 300 high)"), Vec::<String>::new());
+    assert_eq!(field_names_and_values("the art is [1, 2] (left, right) and `[a, b]`"), Vec::<String>::new());
+}
+
+/// A translated status or error message keeps each field name and accepted value its English text
+/// spells out (see [`field_names_and_values`]), as the English spells it: the message tells a user
+/// what to pass, and a command reads only the English names and values.
+#[test]
+fn translated_messages_keep_the_field_names_and_values_their_english_lists() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                for name in field_names_and_values(english) {
+                    if !holds_ascii_word(form, &name) {
+                        missing.push(format!("{}: {name} in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a field name or value their English lists:\n{}", missing.len(), missing.join("\n"));
+}
+
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
