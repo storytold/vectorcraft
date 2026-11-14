@@ -78,7 +78,11 @@ fn samples(t: &Track, step: Option<f64>) -> Vec<(Point, Vec2, f64)> {
             let pieces = (seg / step).ceil().clamp(1.0, MAX_STEPS) as usize;
             for k in 1..pieces {
                 let u = k as f64 / pieces as f64;
-                out.push((p.lerp(t.verts[i + 1], u), t.dirs[i], (t.cum[i] + seg * u) / len));
+                let s = t.cum[i] + seg * u;
+                // On a chord of a flattened curve the samples follow the smooth frame through the
+                // vertices.
+                let (q, tg) = if t.curved.get(i).copied().unwrap_or(false) { t.frame_in(i, u) } else { (p.lerp(t.verts[i + 1], u), t.dirs[i]) };
+                out.push((q, tg, s / len));
             }
         }
     }
