@@ -1643,6 +1643,7 @@ file-filter	Templates	模板
 	Images:	图像：
 	Import Keyboard Shortcuts…	导入键盘快捷键…
 	Import PDF	导入 PDF
+	Import PDF pages as links	将 PDF 页面导入为链接
 	Import PDF Presets	导入 PDF 预设
 	Import Perspective Grid Presets	导入透视网格预设
 	Import Print Presets	导入打印预设
@@ -3306,6 +3307,18 @@ digits	Malayalam	马拉雅拉姆数字
 	Smart Guides (View → Smart Guides)	智能参考线 (视图 → 智能参考线)
 	Smart Guides (⌘U)	智能参考线 (⌘U)
 	Smart Punctuation…	智能标点…
+	Smart Punctuation	智能标点
+	ff, fi, ffi Ligatures	ff、fi、ffi 连字
+	ff, fl, ffl Ligatures	ff、fl、ffl 连字
+	Smart Quotes	智能引号
+	Smart Spaces	智能空格
+	En, Em Dashes	短破折号和长破折号
+	Ellipses	删节号
+	Expert Fractions	专家分数字
+	Replace In	替换范围
+	Selected Text Only	仅所选文本
+	Entire Document	整个文档
+	Report Results	报告结果
 	Smooth	平滑
 	Corner	尖角
 	Relative	相对
@@ -3336,6 +3349,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Solid	实心
 	Sort by Kind	按类型排序
 	Sort by Name	按名称排序
+	Sort by Size	依大小排序
 	Sort by Status	依状态排序
 	Source code on GitHub	GitHub 源代码
 	Source Sans 3	Source Sans 3
@@ -8855,6 +8869,7 @@ breakText	Glyphs	字形
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 文件过大，无法作为文字置入 (最多 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG 展开后的嵌套 SVG 图像超过 {0} 个
 @msg	the SVG expands to more than {0} objects	SVG 展开后的对象超过 {0} 个
+@msg	the SVG's styles expand to more than {0} MB	SVG 的样式展开后超过 {0} MB
 @msg	the SVG has no drawable objects	SVG 中没有可绘制的对象
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 文件解压后超过 {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文档的属性页超过 {MAX_PAGES} 页，过多而无法置入

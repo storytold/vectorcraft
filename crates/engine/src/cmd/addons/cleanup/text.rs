@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Breaks",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{kind: \"line\"|\"paragraph\", ids?: [id…] (the type they name is taken locked or hidden too)} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool (after Select All in a frame of threaded text, in the text of every frame of the story), else in all the text of the selected type, as one undo step; a break between two words becomes a space, the frames of a threaded story selected all together being read as one text → {ids, removed}",
+            "{kind: \"line\"|\"paragraph\", ids?: [id…] (the type they name is taken locked or hidden too)} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool (after Select All in a frame of threaded text, in the text of every frame of the story, locked and hidden frames included), else in all the text of the selected type, as one undo step; a break between two words becomes a space, the frames of a threaded story selected all together being read as one text → {ids, removed}",
             has_selection,
             remove_breaks
         ),
@@ -821,9 +821,9 @@ fn apply_cuts(t: &mut TextObject, cuts: &[(usize, bool)], brk: char) -> usize {
 }
 
 /// The breaks `brk` in the text of the frames of `story`, read as one text: a break at the end or
-/// start of a frame between words of the frames on either side becomes a space. Each editable frame
-/// (each frame when `all`) comes with its own breaks, at its own bytes.
-fn story_cuts(d: &Document, story: &[NodeId], brk: char, all: bool) -> Vec<(NodeId, Vec<(usize, bool)>)> {
+/// start of a frame between words of the frames on either side becomes a space. Each frame comes
+/// with its own breaks, at its own bytes, its locked and hidden frames included.
+fn story_cuts(d: &Document, story: &[NodeId], brk: char) -> Vec<(NodeId, Vec<(usize, bool)>)> {
     let texts: Vec<(NodeId, String)> = story.iter().filter_map(|id| Some((*id, text_of(d, *id)?.plain_text()))).collect();
     let joined: String = texts.iter().map(|(_, t)| t.as_str()).collect();
     // The breaks in story order, handed to the frames in one pass.
@@ -836,9 +836,7 @@ fn story_cuts(d: &Document, story: &[NodeId], brk: char, all: bool) -> Vec<(Node
         while let Some((at, space)) = cuts.next_if(|(at, _)| *at < end) {
             own.push((at - start, space));
         }
-        if all || d.is_editable(id) {
-            out.push((id, own));
-        }
+        out.push((id, own));
         start = end;
     }
     out
@@ -859,7 +857,7 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     // Each type object with the breaks that go from it.
     let targets: Vec<(NodeId, Vec<(usize, bool)>)> = match editing {
-        Some(_) if !story.is_empty() => story_cuts(d, &story, brk, false),
+        Some(_) if !story.is_empty() => story_cuts(d, &story, brk),
         Some((id, a, b)) => vec![(id, a.min(b), a.max(b))]
             .into_iter()
             .filter(|(id, ..)| d.is_editable(*id))
@@ -886,8 +884,7 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
                 };
                 if !story.is_empty() && story.iter().all(|f| named.contains(f)) {
                     done.extend(story.iter().copied());
-                    // Every frame is among them, so each one keeps its breaks.
-                    out.extend(story_cuts(d, &story, brk, true));
+                    out.extend(story_cuts(d, &story, brk));
                 } else if let Some(t) = text_of(d, id) {
                     // `id` is type, so the story of its thread is the same for each of its frames.
                     partial.extend(thread);

@@ -329,6 +329,8 @@ impl Session {
         // Ruler guides a reader left in the saved list become nodes on their layers.
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
+        // A plane held by Automatic Plane Positioning when the file was saved is back in its place.
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
@@ -357,6 +359,7 @@ impl Session {
         doc.resolve_inline_art();
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         // In the back, type set in a font named like a composite font is measured again below, in
         // the document's own composite fonts, not in the front document's.
         let back = self.active != Some(index);

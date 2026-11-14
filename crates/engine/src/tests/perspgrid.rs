@@ -520,7 +520,10 @@ fn the_plane_widget_stays_on_screen_and_takes_clicks_with_any_tool() {
     click(&mut s, q, view);
     assert_eq!(grid(&s).plane, Plane::Ground);
     // Perspective Grid Options move it to another corner or hide it.
-    assert_eq!(run(&mut s, "perspective.widget.options", json!({"position": "bottomRight"})), json!({"show": true, "position": "bottomRight"}));
+    assert_eq!(
+        run(&mut s, "perspective.widget.options", json!({"position": "bottomRight"})),
+        json!({"show": true, "position": "bottomRight", "anchorPoint": true, "gridlineIntersection": true})
+    );
     let r = face(&s, view, WidgetCorner::BottomRight, Plane::Left);
     assert!(r.x > 100.0 + 450.0 && r.y > 50.0 + 300.0, "{r:?}");
     click(&mut s, r, view);
