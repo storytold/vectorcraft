@@ -806,6 +806,8 @@ font-technology	Variable	Biến thiên
 	Crop Image	Cắt xén ảnh
 	Image Tools	Công cụ hình ảnh
 	Remove Background…	Xóa nền…
+	Draw (Pencil)	Vẽ (Bút chì)
+	Place Image	Đặt hình ảnh
 	Remove Background	Xóa nền
 	Background	Nền
 	Edge Color	Màu cạnh
@@ -2826,6 +2828,29 @@ digits	Hindi	Hindi
 	Pattern	Họa tiết
 	Pattern Brush	Cọ họa tiết
 	missing from the Brushes panel	không có trong bảng Cọ
+	built in	tích hợp sẵn
+	embedding not allowed	không cho phép nhúng
+	embedding for editing	nhúng để chỉnh sửa
+	embedding for preview and print	nhúng để xem trước và in
+	embedding allowed	cho phép nhúng
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	đã thay thế: hiển thị bằng {family} {style} ({detail})
+	missing: shown in {family} {style}	thiếu: hiển thị bằng {family} {style}
+	missing	thiếu
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Chuyển sắc tuyến tính
+	Radial gradient	Chuyển sắc hướng tâm
+	Conic gradient	Chuyển sắc hình nón
+	Diamond gradient	Chuyển sắc hình thoi
+	Freeform gradient	Chuyển sắc tự do
+@plural	{n} instance|{n} instances	{n} phiên bản
+@plural	{n} row|{n} rows	{n} hàng
+@plural	{n} column|{n} columns	{n} cột
 	Pattern Brush Options	Tùy chọn cọ họa tiết
 	Pattern Editing	Chỉnh sửa họa tiết
 	Pattern Options	Tùy chọn họa tiết
@@ -4013,6 +4038,7 @@ mark-style	Japanese	Kiểu Nhật
 	VectorCraft Title Bar on Every Desktop	Thanh tiêu đề VectorCraft trên mọi màn hình nền
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Khi biến môi trường VECTORCRAFT_TITLEBAR được đặt, biến này chọn thanh tiêu đề.
 	System Title Bar takes precedence over this option while it is on.	Khi Thanh tiêu đề hệ thống được bật, tùy chọn đó được ưu tiên hơn tùy chọn này.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Khi Thanh tiêu đề VectorCraft trên mọi màn hình nền đang tắt, màn hình nền này vẽ thanh tiêu đề của cửa sổ dù tùy chọn này bật hay tắt.
 	Tab	Tab
 	Tab Stops	Vị trí tab
 	Table	Bảng
@@ -4550,6 +4576,7 @@ theme	Appearance	Giao diện
 @msg	`select` must be true or false	`select` phải là true hoặc false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` và `maxAnchors` phải là số nguyên
 @msg	`{key}` must be a number not below 0	`{key}` phải là một số không nhỏ hơn 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` phải là bốn số không nhỏ hơn 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` phải là [x, y, width, height]: bốn số hữu hạn, chiều rộng và chiều cao không âm
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` lớn hơn `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	hãy cung cấp ít nhất một trong `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4843,6 +4870,7 @@ theme	Appearance	Giao diện
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Đã loại bỏ {n} tài liệu đã phục hồi
 @msg	divide into 1 to {MAX_PIECES} slices	chia thành 1 đến {MAX_PIECES} lát cắt
 @msg	Divide Objects Below: select a path	Chia đối tượng bên dưới: hãy chọn một đường dẫn
+@msg	select a path	hãy chọn một đường dẫn
 @msg	Divide Objects Below: select exactly one path	Chia đối tượng bên dưới: chọn đúng một đường dẫn
 @msg	docking action contains an unknown panel or an excessive split path	hành động neo chứa bảng không xác định hoặc đường dẫn tách quá dài
 @msg	Downloaded {what}	Đã tải xuống {what}
@@ -4953,6 +4981,8 @@ theme	Appearance	Giao diện
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	dòng {line}: giá trị của `{var}` dài hơn {MAX_GRAPH_CSV} byte
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	ảnh liên kết hiển thị bản xem trước độ phân giải thấp đã lưu trong tệp cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
 @msg	linked type areas past VectorCraft's limits were left out	các vùng chữ liên kết vượt quá giới hạn của VectorCraft đã bị bỏ qua
+@msg	the Line Breaking setting of legacy type was left out	thiết lập ngắt dòng của chữ định dạng cũ đã bị bỏ qua
+@msg	the Japanese layout rules of legacy type were left out	các quy tắc dàn trang tiếng Nhật của chữ định dạng cũ đã bị bỏ qua
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	chữ đổi hướng viết bên trong một đối tượng văn bản sẽ mở theo hướng của ký tự đầu tiên
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	chữ dùng làm mặt nạ trong các vùng liên kết, chữ bao quanh hoặc đường dẫn phức không cắt xén
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ảnh liên kết không có bản xem trước trong tệp hiển thị ô giữ chỗ cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
@@ -5779,6 +5809,7 @@ theme	Appearance	Giao diện
 @msg	no such color	không có màu như vậy
 @msg	{_1} cannot be used on Windows	không thể dùng {_1} trên Windows
 @msg	more than one action is named “{_1}”	có nhiều hành động tên là “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	hành động “{_1}” đặt tùy chọn thư mục {_2}; hãy xóa bước đó để lưu bộ
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
 	Smudge Stick…	Bút chì xóa mờ…
 	Smudge Stick	Bút chì xóa mờ
@@ -6181,6 +6212,8 @@ axis	Y Axis	Trục Y
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
 	Playback Options…	Tùy chọn phát lại…
+	Button Mode	Chế độ nút
+	No actions.	Không có hành động.
 	Insert Stop…	Chèn điểm dừng…
 	Insert Stop	Chèn điểm dừng
 	Record Stop	Ghi điểm dừng

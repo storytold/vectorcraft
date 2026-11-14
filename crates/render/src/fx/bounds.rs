@@ -356,7 +356,7 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
             let b = match &reshaped {
-                Some(r) if matches!(n.kind, NodeKind::SymbolInstance { .. }) && effects::has_item_geometry(n) => instance_piece_bounds(symbols, r),
+                Some(r) if has_instance_row_effects(n) => instance_piece_bounds(symbols, r),
                 Some(r) if matches!(n.kind, NodeKind::Text(_)) || (matches!(n.kind, NodeKind::Image(_)) && !r.clips()) => {
                     r.children().into_iter().flatten().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, painted_reach(symbols, c)))
                 }
@@ -379,9 +379,16 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     }
 }
 
+/// Is `n` a symbol instance whose active fill or stroke has geometry or raster effects that the
+/// fills and strokes of its art take ([`effects::has_item_geometry`],
+/// [`effects::has_instance_row_raster`])?
+fn has_instance_row_effects(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::SymbolInstance { .. }) && (effects::has_item_geometry(n) || effects::has_instance_row_raster(n))
+}
+
 /// The bounds of `art`, the art [`effects::reshape`] made of a symbol instance whose active fill or
-/// stroke has geometry effects ([`effects::has_item_geometry`]): its paths measured with the
-/// geometry effects of their fills and strokes ([`visual_bounds`]), the symbol instances in it that
+/// stroke has geometry or raster effects ([`has_instance_row_effects`]): its paths measured with the
+/// effects of their fills and strokes, shadows and glows included ([`visual_bounds`]), the symbol instances in it that
 /// took those effects by their own reshaped art in turn, its groups and layers with their own fills
 /// and strokes by the art those paint ([`effects::evaluate_container`]), its clip groups by their
 /// clipping paths and other objects as [`Node::visual_bounds_with`] measures them. Hidden objects are left out.
@@ -409,7 +416,7 @@ fn pieces_within(symbols: &SymbolBoxes, art: &Node, depth: usize, budget: &mut u
             g.children().into_iter().flatten().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, pieces_within(symbols, c, depth, budget)))
         }
         NodeKind::Path { .. } | NodeKind::Compound { .. } if has_fx(art) => visual_bounds(symbols, art),
-        NodeKind::SymbolInstance { symbol, .. } if depth < vectorcraft_doc::depth::MAX_DEPTH && effects::has_item_geometry(art) => {
+        NodeKind::SymbolInstance { symbol, .. } if depth < vectorcraft_doc::depth::MAX_DEPTH && has_instance_row_effects(art) => {
             let doc = symbols.document();
             let reshaped = doc.symbols.iter().find(|s| s.name == *symbol).and_then(|s| {
                 let count = s.art.count() as u64;
@@ -639,7 +646,7 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
             let b = match &reshaped {
-                Some(r) if matches!(n.kind, NodeKind::SymbolInstance { .. }) && effects::has_item_geometry(n) => instance_piece_bounds(symbols, r),
+                Some(r) if has_instance_row_effects(n) => instance_piece_bounds(symbols, r),
                 Some(r) if matches!(n.kind, NodeKind::Text(_)) || (matches!(n.kind, NodeKind::Image(_)) && !r.clips()) => {
                     r.children().into_iter().flatten().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, inner(c)))
                 }

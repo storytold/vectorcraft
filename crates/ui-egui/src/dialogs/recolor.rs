@@ -1783,7 +1783,7 @@ mod tests {
     /// The Color Theme Picker's picks (the `themePicks` field) give the rows that aren't excluded
     /// the palette of the art picked, in row order, repeating it when the rows outnumber its
     /// colors, and the art previews them. Picks that touch no art leave the rows as they are, and
-    /// OK keeps the recolor as one undo step.
+    /// OK with rows that give the art its own colors back records no undo step.
     #[test]
     fn theme_picks_give_the_rows_the_palette_of_the_art_picked() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -1822,7 +1822,7 @@ mod tests {
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "nothing is committed before OK");
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#ff0000".into(), "#0000ff".into()), "the excluded row kept red");
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "the art is unchanged: no undo step");
     }
 
     const RED: &str = "rgb 255 0 0";

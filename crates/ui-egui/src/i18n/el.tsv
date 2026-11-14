@@ -665,6 +665,8 @@ font-technology	Variable	Μεταβλητές
 	Crop Image	Περικοπή εικόνας
 	Image Tools	Εργαλεία εικόνας
 	Remove Background…	Αφαίρεση φόντου…
+	Draw (Pencil)	Σχεδίαση (μολύβι)
+	Place Image	Τοποθέτηση εικόνας
 	Remove Background	Αφαίρεση φόντου
 	Background	Φόντο
 	Edge Color	Χρώμα άκρης
@@ -1827,6 +1829,29 @@ font-technology	Variable	Μεταβλητές
 	Bristle Brush	Πινέλο με τρίχες
 	Pattern Brush	Πινέλο μοτίβου
 	missing from the Brushes panel	λείπει από τον πίνακα Πινέλα
+	built in	ενσωματωμένη
+	embedding not allowed	η ενσωμάτωση δεν επιτρέπεται
+	embedding for editing	ενσωμάτωση για επεξεργασία
+	embedding for preview and print	ενσωμάτωση για προεπισκόπηση και εκτύπωση
+	embedding allowed	η ενσωμάτωση επιτρέπεται
+	{file}; {embedding}	{file}· {embedding}
+	substituted: shown in {family} {style} ({detail})	αντικαταστάθηκε: εμφανίζεται με {family} {style} ({detail})
+	missing: shown in {family} {style}	λείπει: εμφανίζεται με {family} {style}
+	missing	λείπει
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Γραμμικό ντεγκραντέ
+	Radial gradient	Ακτινικό ντεγκραντέ
+	Conic gradient	Κωνικό ντεγκραντέ
+	Diamond gradient	Ρομβοειδές ντεγκραντέ
+	Freeform gradient	Ντεγκραντέ ελεύθερης μορφής
+@plural	{n} instance|{n} instances	{n} παρουσία|{n} παρουσίες
+@plural	{n} row|{n} rows	{n} γραμμή|{n} γραμμές
+@plural	{n} column|{n} columns	{n} στήλη|{n} στήλες
 	Select art to make a scatter, art or pattern brush.	Επιλέξτε σχέδιο για να δημιουργήσετε πινέλο διασποράς, σχεδίου ή μοτίβου.
 	Brush Art	Σχέδιο πινέλου
 	New Layer…	Νέο επίπεδο…
@@ -2441,6 +2466,7 @@ axis	Both	Και τα δύο
 @msg	Plug-ins can't be loaded from {path}: {e}	Δεν είναι δυνατή η φόρτωση πρόσθετων από το {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	Επιλέξτε άμεσα τα σημεία αγκύρωσης όπου θα γίνει η αποκοπή (όχι τα τελικά σημεία ανοιχτών διαδρομών)
 @msg	Divide Objects Below: select a path	Διαίρεση αντικειμένων από κάτω: επιλέξτε μια διαδρομή
+@msg	select a path	επιλέξτε μια διαδρομή
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
 @msg	Downloaded {what}	Έγινε λήψη του {what}
 @msg	Expand Appearance: the selection has a basic appearance	Επέκταση εμφάνισης: η επιλογή έχει βασική εμφάνιση
@@ -2535,6 +2561,7 @@ axis	Both	Και τα δύο
 @msg	`select` must be true or false	Το `select` πρέπει να είναι true ή false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	Τα `minAnchors` και `maxAnchors` πρέπει να είναι ακέραιοι αριθμοί
 @msg	`{key}` must be a number not below 0	Το `{key}` πρέπει να είναι αριθμός όχι μικρότερος από 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	Το `{key}` πρέπει να είναι τέσσερις αριθμοί όχι μικρότεροι από 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	Το `{key}` πρέπει να είναι [x, y, width, height]: τέσσερις πεπερασμένοι αριθμοί, με πλάτος και ύψος όχι αρνητικά
 @msg	`{min_key}` is greater than `{max_key}`	Το `{min_key}` είναι μεγαλύτερο από το `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	δώστε τουλάχιστον ένα από τα `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -5079,6 +5106,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	μια ενσωματωμένη εικόνα {_1} × {_2} pixel μειώθηκε σε {_3} × {_4} pixel για να διατηρηθούν τα επίπεδα
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες εμφανίζουν την προεπισκόπηση χαμηλής ανάλυσης που έχει αποθηκευτεί, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
 @msg	linked type areas past VectorCraft's limits were left out	οι συνδεδεμένες περιοχές κειμένου πέρα από τα όρια του VectorCraft παραλείφθηκαν
+@msg	the Line Breaking setting of legacy type was left out	η ρύθμιση αλλαγής γραμμής του κειμένου παλιάς μορφής παραλείφθηκε
+@msg	the Japanese layout rules of legacy type were left out	οι ιαπωνικοί κανόνες διάταξης του κειμένου παλιάς μορφής παραλείφθηκαν
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	το κείμενο που αλλάζει κατεύθυνση γραφής μέσα σε ένα αντικείμενο κειμένου ανοίγει με την κατεύθυνση του πρώτου χαρακτήρα του
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	το κείμενο που χρησιμοποιείται ως μάσκα σε συνδεδεμένες περιοχές, σε κείμενο με αναδίπλωση ή σε σύνθετη διαδρομή δεν αποκόπτει
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες χωρίς προεπισκόπηση στο αρχείο εμφανίζουν ένα σύμβολο κράτησης θέσης, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
@@ -5208,6 +5237,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
 	System Title Bar takes precedence over this option while it is on.	Όσο είναι ενεργή, η Γραμμή τίτλου συστήματος υπερισχύει αυτής της επιλογής.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Όσο η Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας είναι ανενεργή, αυτή η επιφάνεια εργασίας σχεδιάζει τη γραμμή τίτλου του παραθύρου, είτε αυτή η επιλογή είναι ενεργή είτε όχι.
 	Value Axis	Άξονας τιμών
 	On Left Side	Στην αριστερή πλευρά
 	On Right Side	Στη δεξιά πλευρά
@@ -6129,6 +6159,7 @@ effect	Points	Σημεία
 @msg	no such color	δεν υπάρχει τέτοιο χρώμα
 @msg	{_1} cannot be used on Windows	Το {_1} δεν μπορεί να χρησιμοποιηθεί στα Windows
 @msg	more than one action is named “{_1}”	περισσότερες από μία ενέργειες ονομάζονται «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	η ενέργεια «{_1}» ορίζει την προτίμηση φακέλου {_2}· διαγράψτε αυτό το βήμα για να αποθηκεύσετε το σύνολο
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
 	Smudge Stick…	Μουτζούρα…
 	Smudge Stick	Μουτζούρα
@@ -6526,6 +6557,8 @@ axis	Y Axis	Άξονας Y
 	Action Options…	Επιλογές ενέργειας…
 	Action Options	Επιλογές ενέργειας
 	Playback Options…	Επιλογές αναπαραγωγής…
+	Button Mode	Λειτουργία κουμπιών
+	No actions.	Δεν υπάρχουν ενέργειες.
 	Insert Stop…	Εισαγωγή διακοπής…
 	Insert Stop	Εισαγωγή διακοπής
 	Record Stop	Καταγραφή διακοπής

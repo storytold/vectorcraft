@@ -7,7 +7,7 @@ use vectorcraft_doc::color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind, OpacityMask};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect, Vec2};
 use vectorcraft_pathops::BoolOp;
-use vectorcraft_three_d::{Bevel, BevelShape, DepthPlane, Extrude, Facet, Inflate, MAX_OBJECT_FACES, Mesh, PlanarFace, View};
+use vectorcraft_three_d::{Bevel, BevelShape, DepthPlane, Extrude, Facet, Inflate, MAX_OBJECT_FACES, Mesh, MeshedSolid, PlanarFace, View};
 
 #[cfg(test)]
 use vectorcraft_doc::color::Color;
@@ -429,6 +429,12 @@ const MAX_MEMBERS: usize = 4096;
 /// normals): past it the object is too complex to export.
 const MAX_MESH_TRIANGLES: usize = 2_000_000;
 
+/// The most facets of solid colors under colored lights that one 3D effect draws as faces of their
+/// own, to go in one order with other solids' faces. Each such face is about 16 nodes, a composite
+/// of a whole surface about 6 per facet, so at this count the faces hold about as many nodes as the
+/// composites do at the paint-copy allowance. Past it those solids draw as one composite each.
+const MAX_FACE_COMPOSITES: usize = 30_720;
+
 /// The shapes a 3D effect on group or layer `n` builds its solids from: every visible path,
 /// compound path and type in it (after [`resolve`] gives it the art of its symbol instances, blends
 /// and clipping groups), at any depth of its groups, each through its own geometry
@@ -535,9 +541,12 @@ pub fn validate_three_d_params(id: &str, p: &Value) -> Result<(), String> {
 }
 
 /// One surface: each facet a path shaded from `paint`, as a group with the paint's opacity and
-/// blend mode (so overlapping facets don't add up their transparency).
-fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: BlendMode, colored: bool) -> Node {
-    if colored && paint.color().is_some() && facets.iter().any(|face| face.rgb_gradient.is_some()) {
+/// blend mode (so overlapping facets don't add up their transparency). Under colored lights a solid
+/// color with smooth facets is one composite of all its facets ([`composites_facets`]) unless
+/// `faces`: then each facet is a face of its own, as in a gradient, so the faces can go in one order
+/// with the faces of other solids.
+fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: BlendMode, colored: bool, faces: bool) -> Node {
+    if !faces && composites_facets(&facets, paint, colored) {
         let mut group = crate::lighting::solid_surface(n.id, &facets, paint);
         group.opacity = opacity;
         group.blend = blend;
@@ -583,6 +592,12 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
     group
 }
 
+/// Is a surface of `facets` in `paint` one composite of all its facets when [`surface`] draws it
+/// whole: a solid color under colored lights with smooth shading?
+fn composites_facets(facets: &[Facet], paint: &Paint, colored: bool) -> bool {
+    colored && paint.color().is_some() && facets.iter().any(|face| face.rgb_gradient.is_some())
+}
+
 /// `item`'s paint, its opacity times `member` (the opacity of the objects it is in) and its blend.
 fn paint_of(item: &AppearanceItem, member: f32) -> (Paint, f32, BlendMode) {
     match item {
@@ -600,10 +615,10 @@ fn paint_ref(item: &AppearanceItem) -> &Paint {
 }
 
 /// Paint copies `surface` makes for `facets`: two per facet (fill and seam stroke), six when colored
-/// lights give each facet derived paints (`lighting::solid_surface`).
+/// lights give each facet derived paints (`lighting::solid_surface`, or `lighting::facet_art` for
+/// each face).
 fn facet_copies(facets: &[Facet], paint: &Paint, colored: bool) -> usize {
-    let derived = colored && paint.color().is_some() && facets.iter().any(|f| f.rgb_gradient.is_some());
-    facets.len().saturating_mul(if derived { 6 } else { 2 })
+    facets.len().saturating_mul(if composites_facets(facets, paint, colored) { 6 } else { 2 })
 }
 
 /// The area `item` paints on `path`, and the rule that fills it: the path itself for a fill, the
@@ -641,7 +656,7 @@ fn solid_parts(shapes: &[Profile], fallback: Rect) -> (Vec<Part<'_>>, Rect) {
 
 #[cfg(test)]
 thread_local! {
-    /// How many solids [`built_solids`] has built on this thread, for the tests.
+    /// How many solids [`built_solids`] and [`meshes_for`] have built on this thread, for the tests.
     static SOLIDS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -1265,8 +1280,9 @@ type ShadowAndSurfaces = (Vec<Arc<Node>>, Vec<Arc<Node>>);
 /// The 3D art of one effect `fx` on `path` (already through the effects before it).
 /// Rotate turns every fill and stroke, each in its own paint. Extrude & Bevel and Inflate build a
 /// solid from the path for the top visible fill and one from the outline of each visible stroke,
-/// each in its own paint. When every one is opaque with normal blending and no colored light makes
-/// a surface one composite, their faces are drawn in one back-to-front order (where depths tie, as
+/// each in its own paint. When every one is opaque with normal blending, their faces are drawn in
+/// one back-to-front order, a solid color under colored lights included up to
+/// [`MAX_FACE_COMPOSITES`] facets (where depths tie, as
 /// for the caps turned toward the viewer, in the order of the appearance, and with caps, a shape's
 /// fill walls before the faces of its covering strokes that overlap them, and its fill's faces and
 /// its other strokes' faces, cut where they pass through each other ([`cut_stroke_faces`]), in the
@@ -1521,7 +1537,8 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
                         filled.push(Filled { at: out.len(), member, caps, opacity, blend, masked: masks_surface(&paint, colored) });
                     }
                 }
-                let art = if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored) };
+                let art =
+                    if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored, false) };
                 out.push((s.scopes.as_slice(), Arc::new(art)));
             }
         }
@@ -1554,22 +1571,31 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
         opacity >= 1.0 && blend == BlendMode::Normal
     });
     let closed = |shape: usize| shapes.get(shape).is_some_and(|s| holds_edge(&fx.id, &s.path));
-    // A solid whose surface is one composite of all its facets ([`surface`]: a solid color under
-    // colored lights with smooth shading) has no faces to order.
-    let composite = |item: &AppearanceItem, f: &[Facet]| colored && paint_ref(item).color().is_some() && f.iter().any(|f| f.rgb_gradient.is_some());
-    // The faces are drawn in one order (below) unless a composite draws the surfaces whole. Under
-    // a member's opacity mask or blending, each member's faces go in one order of their own when its
-    // fills and strokes are opaque, blend normally, carry no opacity mask and are not composites.
-    let one_order = opaque && !solids.iter().any(|(item, _, _, f, _)| composite(item, f));
+    // A solid color under colored lights with smooth shading draws as one composite of its facets
+    // ([`surface`]) unless its facets go in one order with other solids' faces. They do while all
+    // such facets together number at most MAX_FACE_COMPOSITES.
+    let composite = |item: &AppearanceItem, f: &[Facet]| composites_facets(f, paint_ref(item), colored);
+    let colored_faces: usize = solids.iter().filter(|(item, _, _, f, _)| composite(item, f)).map(|(.., f, _)| f.len()).sum();
+    let split = colored_faces <= MAX_FACE_COMPOSITES;
+    // The faces are drawn in one order (below) when every solid is opaque and blends normally and
+    // no composite draws a surface whole. Under a member's opacity mask or blending, each member's
+    // faces go in one order of their own when its fills and strokes are opaque, blend normally,
+    // carry no opacity mask and are not composites.
+    let one_order = opaque && (split || !solids.iter().any(|(item, _, _, f, _)| composite(item, f)));
     let shape_order: Vec<bool> = (0..shapes.len())
         .map(|shape| {
             solids.iter().filter(|s| s.4 == shape).all(|(item, member, _, f, _)| {
                 let (paint, opacity, blend) = paint_of(item, *member);
-                opacity >= 1.0 && blend == BlendMode::Normal && !masks_surface(&paint, colored) && !composite(item, f)
+                opacity >= 1.0 && blend == BlendMode::Normal && !masks_surface(&paint, colored) && (split || !composite(item, f))
             })
         })
         .collect();
     let ordered = |shape: usize| if masks { shape_order.get(shape).copied().unwrap_or(false) } else { one_order };
+    // The solids whose faces share one order with another solid's: every solid in the one order of
+    // the object, or of its member under a mask. A lone solid draws its facets in their own order,
+    // so a solid color under colored lights stays one composite there ([`surface`]).
+    let shared: Vec<bool> =
+        (0..shapes.len()).map(|shape| ordered(shape) && solids.iter().filter(|s| !masks || s.4 == shape).nth(1).is_some()).collect();
     if solids.iter().any(|s| ordered(s.4)) {
         // A stroke face that passes through a fill wall or another stroke's face is cut where it
         // does. The pieces count against the limits as the faces did: cutting stops before the
@@ -1605,6 +1631,10 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
             .collect();
         placed_graphics(doc, n.id, (&fx.id, &p), bounds, &filled, masks)
     };
+    // With the pieces of the cuts, solid colors under colored lights past MAX_FACE_COMPOSITES draw
+    // as one composite each, so their surfaces draw whole (below).
+    let split =
+        split && solids.iter().filter(|(item, _, _, f, _)| composite(item, f)).map(|(.., f, _)| f.len()).sum::<usize>() <= MAX_FACE_COMPOSITES;
     let members: Vec<usize> = solids.iter().map(|s| s.4).collect();
     let surfaces: Vec<BuiltSurface> = solids
         .into_iter()
@@ -1613,7 +1643,11 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
             let depths: Vec<Placed> = f.iter().map(|f| Placed::of(f, shape, paints)).collect();
             let ends = f.iter().map(|f| f.end.filter(|_| !f.away)).collect();
             let (paint, opacity, blend) = paint_of(item, member);
-            let art = if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored) };
+            let art = if classic {
+                classic::surface(n, f, &paint, opacity, blend, &p)
+            } else {
+                surface(n, f, &paint, opacity, blend, colored, split && shared.get(shape).copied().unwrap_or(false))
+            };
             (depths, art, scopes, ends)
         })
         .collect();
@@ -1622,8 +1656,8 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
         CLASSIC_EXTRUDE => classic_extrude_options(&p).cap,
         _ => extrude_options(&p).cap,
     };
-    // One order takes a plain group of faces from each solid, one face for each facet. With
-    // colored lights a surface can instead be one clipped composite of all its facets. A composite
+    // One order takes a plain group of faces from each solid, one face for each facet. A lone
+    // solid's surface can instead be one clipped composite of all its facets ([`surface`]), which
     // has no faces to order, so it draws whole.
     let plain = |(depths, s, _, _): &BuiltSurface| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len());
     if masks {
@@ -2005,31 +2039,35 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
         return Ok(out);
     }
     let (parts, bounds) = solid_parts(shapes, b);
-    // The solids the art draws, past the limits of the object's solids together as it is
-    // ([`built_solids`]), each built and its faces counted as the loop reaches it, then dropped.
-    let drawn = built_solids(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES).map(|r| r.map(|f| f.is_some()));
-    // Inflate lays out every puff at once (they share one eye); each Inflate and Extrude & Bevel
-    // solid and its mesh are built as the loop reaches them.
+    // Inflate lays out every puff at once (they share one eye). Each Inflate and Extrude & Bevel
+    // solid is built once, as the loop reaches it: its facets decide whether the art draws it, as
+    // [`built_solids`] does, and its faces before projection make its mesh.
     let mut inflated = (fx.id == INFLATE).then(|| {
         let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
-        vectorcraft_three_d::inflate_meshes(&shapes, bounds, inflate_options(&p), view)
+        vectorcraft_three_d::inflate_meshed(&shapes, bounds, inflate_options(&p), view)
     });
     let extrude = if fx.id == CLASSIC_EXTRUDE { classic_extrude_options(&p) } else { extrude_options(&p) };
-    for ((item, member, area, rule, _, _), drawn) in parts.iter().zip(drawn) {
+    let mut kept = 0usize;
+    for (item, member, area, rule, _, _) in &parts {
         let item: &AppearanceItem = item;
-        if !drawn? {
-            // A stroke the art leaves out is left out of the meshes too; Inflate's next puff
-            // still belongs to the next part.
-            if let Some(built) = inflated.as_mut() {
-                built.next();
-            }
-            continue;
-        }
-        let mesh = match inflated.as_mut() {
-            Some(built) => built.next().unwrap_or_else(|| Ok(Mesh::default())),
-            None => vectorcraft_three_d::extrude_mesh(area, *rule, bounds, extrude, view),
+        #[cfg(test)]
+        SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
+        let built = match inflated.as_mut() {
+            Some(each) => each.next().unwrap_or_else(|| Ok(MeshedSolid::default())),
+            None => vectorcraft_three_d::extrude_meshed(area, *rule, bounds, extrude, view),
         };
-        match mesh {
+        // A stroke the art leaves out is left out of the meshes too. The faces of the solids kept
+        // count together against the object's limit.
+        let solid = match built {
+            Ok(solid) => solid,
+            Err(_) if matches!(item, AppearanceItem::Stroke(_)) => continue,
+            Err(e) => return Err(e),
+        };
+        kept = kept.saturating_add(solid.facets.len());
+        if kept > MAX_OBJECT_FACES {
+            return Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string());
+        }
+        match solid.mesh() {
             Ok(mesh) => {
                 let (paint, opacity, _) = paint_of(item, *member);
                 keep(&mut out, mesh, mesh_color(&paint, opacity))?;
