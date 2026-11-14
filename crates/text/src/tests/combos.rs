@@ -495,18 +495,72 @@ fn composer_x_mixed_sizes_in_a_frame_that_widens() {
 
 #[test]
 fn composer_x_mixed_sizes_overflow_a_shaped_frame() {
-    // A stepped frame too short for the paragraph: the lines that fit are set, in order, each once
-    // and within its room, and the frame overflows.
+    // A stepped frame too short for the paragraph: the every-line composer still breaks the lines
+    // that fit as one paragraph, with the lines past the frame's end measured as wide as the last
+    // line the frame holds. Here that is the narrow part, so the lines that fit break as in a frame
+    // tall enough for the whole paragraph, and not as the single-line composer breaks them. They
+    // are set in order, each once and within its room, and the frame overflows.
     let w = x_width();
-    let mut t = stepped(w, w * 0.5, 40.0, 75.0);
-    t.runs = with_x(sans(36.0));
-    t.para.composer = Composer::EveryLine;
-    let l = layout(db(), &t);
+    let set = |bottom: f64, composer: Composer| {
+        let mut t = stepped(w, w * 0.5, 40.0, bottom);
+        t.runs = with_x(sans(36.0));
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        (line_texts(&t, &l), l, t)
+    };
+    let (every, l, t) = set(75.0, Composer::EveryLine);
     assert!(l.overflow && l.lines.len() >= 2, "{:?}", l.lines);
     assert_eq!(l.lines[0].start, 0);
     assert!(l.lines.windows(2).all(|p| p[0].end == p[1].start && p[0].start < p[0].end), "{:?}", l.lines);
     assert!(past_their_room(&t, &l).is_empty(), "{:?}", l.lines);
     assert!(l.lines.iter().all(|li| li.baseline + li.descent <= 75.0 + 0.01), "{:?}", l.lines);
+    assert_eq!(every, ["Destroy all creatures with toughness", "X or less. Then", "draw a card for each"]);
+    let (whole, ..) = set(300.0, Composer::EveryLine);
+    assert_eq!(every, whole[..every.len()]);
+    let (greedy, ..) = set(75.0, Composer::SingleLine);
+    assert_ne!(every, greedy);
+    // A frame with no room for a line sets none.
+    for composer in [Composer::EveryLine, Composer::SingleLine] {
+        let mut t = stepped(w, w * 0.5, 4.0, 8.0);
+        t.runs = with_x(sans(36.0));
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        assert!(l.lines.is_empty() && l.overflow, "{composer:?}: {:?}", l.lines);
+    }
+}
+
+#[test]
+fn composer_x_mixed_sizes_overflow_around_text_wrap() {
+    // A rectangle that wraps around an object beside its lower lines, too short for the
+    // paragraph: the every-line composer breaks the lines that fit as one paragraph, each span
+    // measured across its line's whole height, and the frame overflows. No glyph runs into the
+    // object.
+    let w = x_width();
+    let object = Rect::new(w * 0.4, 40.0, w * 0.6, 70.0);
+    let set = |composer: Composer| {
+        let mut runs = with_x(sans(36.0));
+        runs[0] = run("Destroy all creatures with toughness\u{a0}", sans(12.0));
+        let mut t = area(runs, Rect::new(0.0, 0.0, w, 80.0));
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&object.to_path(0.1)), wrap: Default::default() }];
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        (line_texts(&t, &l), l, t)
+    };
+    let (every, l, t) = set(Composer::EveryLine);
+    assert!(l.overflow && l.lines.len() >= 3, "{:?}", l.lines);
+    assert!(l.lines.windows(2).all(|p| p[0].end == p[1].start && p[0].start < p[0].end), "{:?}", l.lines);
+    assert!(past_their_room(&t, &l).is_empty(), "{:?}", l.lines);
+    let text = t.plain_text();
+    let hits = l.glyphs.iter().filter(|g| {
+        let li = &l.lines[g.line];
+        let across = li.baseline - li.ascent < object.y1 && li.baseline + li.descent > object.y0;
+        across && !text[g.byte..].starts_with(char::is_whitespace) && g.origin.x < object.x1 && g.origin.x + g.advance > object.x0
+    });
+    assert_eq!(hits.count(), 0, "{:?}", l.lines);
+    // The lines that fit break as in `composer_x_mixed_sizes_around_text_wrap`'s taller frame.
+    assert_eq!(every, ["Destroy all creatures with", "toughness\u{a0}X", "or less. Then", "draw a card for", "each creature"]);
+    let (greedy, ..) = set(Composer::SingleLine);
+    assert_ne!(every, greedy);
 }
 
 #[test]
