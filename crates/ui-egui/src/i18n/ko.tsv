@@ -2429,6 +2429,29 @@ antiAlias	Sharp	날카롭게
 	Bristle Brush	강모 브러시
 	Pattern Brush	패턴 브러시
 	missing from the Brushes panel	브러시 패널에 없음
+	built in	내장
+	embedding not allowed	포함 허용 안 됨
+	embedding for editing	편집용 포함
+	embedding for preview and print	미리 보기 및 인쇄용 포함
+	embedding allowed	포함 허용
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	대체됨: {family} {style}(으)로 표시({detail})
+	missing: shown in {family} {style}	없음: {family} {style}(으)로 표시
+	missing	없음
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	선형 그레이디언트
+	Radial gradient	방사형 그레이디언트
+	Conic gradient	원뿔형 그레이디언트
+	Diamond gradient	다이아몬드 그레이디언트
+	Freeform gradient	자유 형태 그레이디언트
+@plural	{n} instance|{n} instances	인스턴스 {n}개
+@plural	{n} row|{n} rows	{n}행
+@plural	{n} column|{n} columns	{n}열
 	Select art to make a scatter, art or pattern brush.	흩뿌리기, 아트 또는 패턴 브러시를 만들려면 아트웍을 선택하세요.
 	Brush Art	브러시 아트
 	New Calligraphic Brush	새 캘리그래피 브러시
@@ -4499,6 +4522,7 @@ theme	Appearance	외관
 @msg	direct-select anchor points to cut at (not the end points of open paths)	자를 앵커 포인트를 직접 선택하세요(열린 패스의 끝점 제외)
 @msg	select paths or anchor points	패스 또는 앵커 포인트를 선택하세요
 @msg	Divide Objects Below: select a path	아래 개체 분할: 패스를 선택하세요
+@msg	select a path	패스를 선택하세요
 @msg	Divide Objects Below: select exactly one path	아래 개체 분할: 패스를 하나만 선택하세요
 @msg	Offset Path: select paths	패스 오프셋: 패스를 선택하세요
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	패스 오프셋: 오프셋을 적용하면 선택한 패스가 남지 않습니다(안쪽 오프셋이 모양보다 큼)
@@ -4642,6 +4666,8 @@ theme	Appearance	외관
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	레이어를 유지하기 위해 {_1} × {_2} 픽셀의 포함된 이미지를 {_3} × {_4} 픽셀로 줄였습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft 한도를 넘는 연결된 문자 영역은 제외되었습니다
+@msg	the Line Breaking setting of legacy type was left out	이전 형식 문자의 줄 바꿈 설정이 생략되었습니다
+@msg	the Japanese layout rules of legacy type were left out	이전 형식 문자의 일본어 조판 규칙이 생략되었습니다
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	문자 개체 안에서 쓰기 방향이 바뀌는 문자는 첫 글자의 방향으로 열립니다
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	연결된 영역, 문자 감싸기 또는 컴파운드 패스에서 마스크로 사용된 문자는 클리핑하지 않습니다
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	파일에 미리 보기가 없는 연결된 그림은 해당 파일을 찾을 때까지 자리 표시자로 표시됩니다: 링크 패널에서 다시 연결하세요
@@ -5771,6 +5797,7 @@ lighting	Light	광원
 @msg	no such color	해당 색상이 없습니다
 @msg	{_1} cannot be used on Windows	{_1}은(는) Windows에서 사용할 수 없습니다
 @msg	more than one action is named “{_1}”	“{_1}”(이)라는 이름의 액션이 둘 이상 있습니다
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	액션 “{_1}”이(가) 폴더 환경 설정 {_2}을(를) 설정합니다. 세트를 저장하려면 해당 단계를 삭제하세요
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
 	Smudge Stick…	문지르기 막대…
 	Smudge Stick	문지르기 막대

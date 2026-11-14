@@ -1632,6 +1632,83 @@ fn smoothing_a_whole_closed_path_smooths_a_bump_at_its_start() {
     assert!(start <= far + 0.5, "the bump at the start stays {start} pt high, the far one {far} pt");
 }
 
+/// A straight line along y = 200 from x = 100 to 400, one anchor every 5 pt, whose second and
+/// second-to-last anchors are 1.5 pt off the line: its first and last segments leave and arrive at
+/// 16.7° to it.
+fn smooth_jagged_ends(s: &mut Session) -> NodeId {
+    let anchors: Vec<_> = (0..=60).map(|i| json!({"x": 100.0 + 5.0 * f64::from(i), "y": if i == 1 || i == 59 { 201.5 } else { 200.0 }})).collect();
+    smooth_test_path(s, &anchors, false)
+}
+
+/// The degrees between the direction `sp` leaves its first anchor along (`at_end` false), or arrives
+/// at its last anchor along, and the x axis.
+fn smooth_end_angle(sp: &vectorcraft_geom::SubPath, at_end: bool) -> f64 {
+    let c = sp.segment(if at_end { sp.segment_count() - 1 } else { 0 });
+    let d = if at_end {
+        [c.p3 - c.p2, c.p3 - c.p1, c.p3 - c.p0].into_iter().find(|d| d.hypot() > 1e-9)
+    } else {
+        [c.p1 - c.p0, c.p2 - c.p0, c.p3 - c.p0].into_iter().find(|d| d.hypot() > 1e-9)
+    };
+    d.map_or(f64::NAN, |d| d.y.atan2(d.x).to_degrees().abs())
+}
+
+/// The largest turn, in degrees, at any anchor of `sp` (other than its ends) whose x is in `xs`.
+fn smooth_largest_turn(sp: &vectorcraft_geom::SubPath, xs: std::ops::Range<f64>) -> f64 {
+    let dir = |v: kurbo::Vec2, w: kurbo::Vec2, chord: kurbo::Vec2| [v, w, chord].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or(chord);
+    (1..sp.segment_count())
+        .filter(|&i| xs.contains(&sp.anchors[i].p.x))
+        .map(|i| {
+            let (prev, next) = (sp.segment(i - 1), sp.segment(i));
+            let arrive = dir(prev.p3 - prev.p2, prev.p3 - prev.p1, prev.p3 - prev.p0);
+            let leave = dir(next.p1 - next.p0, next.p2 - next.p0, next.p3 - next.p0);
+            arrive.cross(leave).atan2(arrive.dot(leave)).abs().to_degrees()
+        })
+        .fold(0.0, f64::max)
+}
+
+/// A Smooth drag over the whole of an open path turns the curve at each end to follow the smoothed
+/// path rather than the jag of its first or last segment, and leaves both end points where they were.
+#[test]
+fn smoothing_an_open_path_turns_its_jagged_ends_with_the_path() {
+    let mut s = session();
+    let id = smooth_jagged_ends(&mut s);
+    let before = path(&s, id);
+    assert!(smooth_end_angle(&before.subpaths[0], false) > 16.0 && smooth_end_angle(&before.subpaths[0], true) > 16.0);
+    smooth_pass(&mut s, &smooth_drag_along(200.0, 90.0, 410.0));
+    let p = path(&s, id);
+    assert_ne!(p, before, "the path is smoothed");
+    let sp = &p.subpaths[0];
+    let (first, last) = (sp.anchors[0].p, sp.anchors[sp.anchors.len() - 1].p);
+    assert!(first == Point::new(100.0, 200.0) && last == Point::new(400.0, 200.0), "the ends stay: {first:?} {last:?}");
+    let (start, end) = (smooth_end_angle(sp, false), smooth_end_angle(sp, true));
+    assert!(start <= 5.0, "the path leaves its start at {start}° to the line");
+    assert!(end <= 5.0, "and arrives at its end at {end}°");
+    let off = smooth_test_samples(&p).iter().map(|q| (q.y - 200.0).abs()).fold(0.0, f64::max);
+    assert!(off <= 1.5, "the path stays within {off} pt of the line");
+}
+
+/// A Smooth drag that reaches only the start of an open path turns the curve there, and the rest of
+/// the path, its far end with its jag included, stays as it was, joining the refitted part without a
+/// corner.
+#[test]
+fn a_smooth_drag_turns_only_the_end_it_reaches() {
+    let mut s = session();
+    let id = smooth_jagged_ends(&mut s);
+    let before = path(&s, id);
+    smooth_pass(&mut s, &smooth_drag_along(200.0, 90.0, 200.0));
+    let p = path(&s, id);
+    assert_ne!(p, before, "the start is smoothed");
+    let sp = &p.subpaths[0];
+    assert_eq!(sp.anchors[0].p, Point::new(100.0, 200.0), "the start stays");
+    let start = smooth_end_angle(sp, false);
+    assert!(start <= 5.0, "the path leaves its start at {start}° to the line");
+    let kept = |sp: &vectorcraft_geom::SubPath| sp.anchors.iter().filter(|a| a.p.x >= 215.0).copied().collect::<Vec<_>>();
+    assert_eq!(kept(sp), kept(&before.subpaths[0]), "the anchors out of reach stay as they were");
+    assert!(smooth_end_angle(sp, true) > 16.0, "the far end keeps its jag");
+    let turn = smooth_largest_turn(sp, 101.0..300.0);
+    assert!(turn <= 1.0, "the refitted part joins the rest with a {turn}° turn");
+}
+
 /// `path.smoothRegion` along `drag` with the Smooth tool's reach and default Fidelity → the ids changed.
 fn smooth_pass_ids(s: &mut Session, drag: &[Point]) -> serde_json::Value {
     let pts: Vec<_> = drag.iter().map(|p| json!([p.x, p.y])).collect();

@@ -20,7 +20,9 @@ use vectorcraft_doc::{Node, NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect};
 use vectorcraft_render::effects;
 
+use super::super::appearance::series_children_in_paint_order;
 use super::super::edit::selected_roots;
+use super::super::graph::capture_series_object_opacity;
 use super::super::menucmds::whole_or;
 use super::super::object::{choice, object_bounds_transform, scaling, transform_node, transform_patterns};
 use super::super::typecmd::refresh_bounds_of;
@@ -90,7 +92,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Randomize Opacity",
             ["Object", "Plug-ins", "Arrange Tools"],
             None,
-            "{min?: % 0..100 (30), max?: % 0..100 (100; not less than min), seed?: whole number (0; the same seed, objects and range give the same opacities), ids?: [id…] (default: the selection)} give each selected object (the top-level ones) its own opacity, picked at random and evenly from min to max, as one undo step; it is the object's opacity, as the Transparency panel sets it → {count}",
+            "{min?: % 0..100 (30), max?: % 0..100 (100; not less than min), seed?: whole number (0; the same seed, objects and range give the same opacities), ids?: [id…] (default: the selection)} give each selected object (the top-level ones) its own opacity, picked at random and evenly from min to max, as one undo step; it is the object's opacity, as the Transparency panel sets it. On paths directly in a graph series whose opacity changes, the graph stores the opacity and blend mode of the frontmost of them for its next redraw (docs/mcp.md) → {count}",
             has_selection,
             randomize_opacity
         ),
@@ -99,7 +101,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sort Objects",
             ["Object", "Plug-ins", "Arrange Tools"],
             None,
-            "{by?: \"width\" | \"height\" | \"area\" (width × height) | \"x\" (left edge) | \"y\" (top edge) | \"opacity\" (%) | \"stacking\" (stacking order, from the back) (\"area\"), apply?: one of the same (\"stacking\"), order?: \"ascending\" (small to large) | \"descending\" (large to small) | \"random\" (\"ascending\"), distribute?: false (true: the values step evenly from the smallest to the largest; false: the objects trade the values they have), seed?: whole number (0; the order \"random\" picks), scaleStrokes?: the Scale Strokes & Effects preference (width, height and area), ids?: [id…] (default: the selection)} sort the selected objects (the top-level ones, at most 20000) by the attribute `by` and give them the values of `apply` in that order, as one undo step: the first in order gets the smallest value. Sizes and places are measured and set as object.setBounds measures them (Use Preview Bounds), a width, height or area about each object's centre (an area in proportion); stacking order always trades places, and only among the objects in the same layer or group. A run that changes nothing makes no step → {count}",
+            "{by?: \"width\" | \"height\" | \"area\" (width × height) | \"x\" (left edge) | \"y\" (top edge) | \"opacity\" (%) | \"stacking\" (stacking order, from the back) (\"area\"), apply?: one of the same (\"stacking\"), order?: \"ascending\" (small to large) | \"descending\" (large to small) | \"random\" (\"ascending\"), distribute?: false (true: the values step evenly from the smallest to the largest; false: the objects trade the values they have), seed?: whole number (0; the order \"random\" picks), scaleStrokes?: the Scale Strokes & Effects preference (width, height and area), ids?: [id…] (default: the selection)} sort the selected objects (the top-level ones, at most 20000) by the attribute `by` and give them the values of `apply` in that order, as one undo step: the first in order gets the smallest value. Sizes and places are measured and set as object.setBounds measures them (Use Preview Bounds), a width, height or area about each object's centre (an area in proportion); stacking order always trades places, and only among the objects in the same layer or group. With apply \"opacity\", on paths directly in a graph series whose opacity changes, the graph stores the opacity and blend mode of the frontmost of them for its next redraw (docs/mcp.md). A run that changes nothing makes no step → {count}",
             has_multi,
             sort
         ),
@@ -396,15 +398,28 @@ fn randomize_opacity(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let (lo, hi) = ((min / 100.0) as f32, (max / 100.0) as f32);
     s.edit("Randomize Opacity", |d, _| {
+        let mut changed = vec![];
         for id in &ids {
             let o = rng.range(lo, hi);
-            if let Some(n) = d.node_mut(*id) {
+            if let Some(n) = d.node_mut(*id)
+                && n.opacity != o
+            {
                 n.opacity = o;
+                changed.push(*id);
             }
         }
+        keep_series_opacity(d, &changed);
         Ok(())
     })?;
     Ok(json!({ "count": ids.len() }))
+}
+
+/// Store on their graphs the opacity just given to the paths among `changed` (objects whose opacity changed) that are
+/// directly in a graph series, with their blend mode, so that every path of the series has them when the graph is drawn
+/// again; the frontmost of them in a series sets them.
+fn keep_series_opacity(d: &mut vectorcraft_doc::Document, changed: &[NodeId]) {
+    let marks = series_children_in_paint_order(d, changed);
+    capture_series_object_opacity(d, &marks);
 }
 
 /// An object Sort Objects sorts: its layer or group, its place in it, its box as
@@ -510,6 +525,8 @@ fn sort(s: &mut Session, p: &Value) -> Result<Value> {
                     n.opacity = (v / 100.0) as f32;
                 }
             }
+            let changed: Vec<NodeId> = wanted.iter().filter(|(o, v)| (o.opacity - v).abs() >= 1e-6).map(|(o, _)| o.id).collect();
+            keep_series_opacity(d, &changed);
             Ok(())
         })?;
         return Ok(count);

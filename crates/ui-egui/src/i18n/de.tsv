@@ -2154,6 +2154,29 @@ file-filter	Templates	Vorlagen
 	Bristle Brush	Borstenpinsel
 	Pattern Brush	Musterpinsel
 	missing from the Brushes panel	fehlt im Bedienfeld „Pinsel“
+	built in	integriert
+	embedding not allowed	Einbetten nicht erlaubt
+	embedding for editing	Einbetten zum Bearbeiten
+	embedding for preview and print	Einbetten für Vorschau und Druck
+	embedding allowed	Einbetten erlaubt
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	ersetzt: angezeigt in {family} {style} ({detail})
+	missing: shown in {family} {style}	fehlt: angezeigt in {family} {style}
+	missing	fehlt
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linearer Verlauf
+	Radial gradient	Radialer Verlauf
+	Conic gradient	Konischer Verlauf
+	Diamond gradient	Rautenverlauf
+	Freeform gradient	Freiformverlauf
+@plural	{n} instance|{n} instances	{n} Instanz|{n} Instanzen
+@plural	{n} row|{n} rows	{n} Zeile|{n} Zeilen
+@plural	{n} column|{n} columns	{n} Spalte|{n} Spalten
 	Select art to make a scatter, art or pattern brush.	Wählen Sie eine Grafik aus, um einen Spezial-, Bild- oder Musterpinsel zu erstellen.
 	Brush Art	Pinselgrafik
 	New Calligraphic Brush	Neuer Kalligrafiepinsel
@@ -4294,6 +4317,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Plug-ins can't be loaded from {path}: {e}	Aus {path} können keine Plug-ins geladen werden: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	wählen Sie mit der Direktauswahl die Ankerpunkte aus, an denen geschnitten werden soll (nicht die Endpunkte offener Pfade)
 @msg	Divide Objects Below: select a path	Darunterliegende Objekte aufteilen: Wählen Sie einen Pfad aus
+@msg	select a path	Wählen Sie einen Pfad aus
 @msg	Divide Objects Below: select exactly one path	Darunterliegende Objekte aufteilen: Wählen Sie genau einen Pfad aus
 @msg	Downloaded {what}	{what} heruntergeladen
 @msg	Expand Appearance: the selection has a basic appearance	Aussehen umwandeln: Die Auswahl hat ein einfaches Aussehen
@@ -5054,6 +5078,8 @@ theme	Appearance	Erscheinungsbild
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ein eingebettetes Bild mit {_1} × {_2} Pixeln wurde auf {_3} × {_4} Pixel verkleinert, damit die Ebenen erhalten bleiben
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	verknüpfte Bilder zeigen die in der Datei gespeicherte Vorschau in niedriger Auflösung, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
 @msg	linked type areas past VectorCraft's limits were left out	verkettete Textbereiche jenseits der Grenzen von VectorCraft wurden ausgelassen
+@msg	the Line Breaking setting of legacy type was left out	die Einstellung für den Zeilenumbruch von Text im alten Format wurde ausgelassen
+@msg	the Japanese layout rules of legacy type were left out	die japanischen Satzregeln von Text im alten Format wurden ausgelassen
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	Text, der innerhalb eines Textobjekts die Schreibrichtung wechselt, wird in der Richtung seines ersten Zeichens geöffnet
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	als Maske verwendeter Text in verketteten Bereichen, umfließendem Text oder einem zusammengesetzten Pfad beschneidet nicht
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	verknüpfte Bilder ohne Vorschau in der Datei zeigen einen Platzhalter, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
@@ -5775,6 +5801,7 @@ effect	Soft	Weich
 @msg	no such color	keine solche Farbe
 @msg	{_1} cannot be used on Windows	{_1} kann unter Windows nicht verwendet werden
 @msg	more than one action is named “{_1}”	mehr als eine Aktion heißt „{_1}“
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	die Aktion „{_1}“ legt die Ordnervoreinstellung {_2} fest; löschen Sie diesen Schritt, um den Satz zu speichern
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
 	Smudge Stick…	Wischstift…
 	Smudge Stick	Wischstift
@@ -7067,6 +7094,1811 @@ breakText	Glyphs	Glyphen
 	Margin	Rand
 	Box	Rahmen
 	Swatch	Farbfeld
+# Status and error messages of commands, scripts, file import and export, and plug-ins.
+@msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' und 'arguments' können in Funktionen im Strict-Modus nicht verwendet werden
+@msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Boolean.prototype.{name} wurde für einen Wert aufgerufen, der kein Boolean ist
+@msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	CMYK-Bilder, deren Samples nicht in CMYK gelesen werden konnten, wurden in RGB importiert
+@msg	Cannot write to the location of “{name}”; choose where to save it	Am Speicherort von „{name}“ kann nicht geschrieben werden; wählen Sie aus, wo die Datei gespeichert werden soll
+@msg	DCS files can only be placed linked: use File › Place with Link on	DCS-Dateien können nur verknüpft platziert werden: Verwenden Sie Datei › Platzieren mit aktivierter Option „Verknüpfen“
+@msg	Date.prototype method called on a value that is not a Date object	Date.prototype-Methode wurde für einen Wert aufgerufen, der kein Date-Objekt ist
+@msg	Error.prototype.toString was called on a value that is not an object	Error.prototype.toString wurde für einen Wert aufgerufen, der kein Objekt ist
+@msg	Function.prototype.toString was called on a value that is not a function	Function.prototype.toString wurde für einen Wert aufgerufen, der keine Funktion ist
+@msg	Import SVG Filter reads SVG files, not SVGZ	SVG-Filter importieren liest SVG-Dateien, keine SVGZ-Dateien
+@msg	JSON.parse: {why} (at offset {at})	JSON.parse: {why} (bei Offset {at})
+@msg	JSON.stringify cannot write a structure that contains itself	JSON.stringify kann keine Struktur schreiben, die sich selbst enthält
+@msg	Namespace.prototype.toString needs a Namespace	Namespace.prototype.toString braucht einen Namespace
+@msg	New Document profiles need the preferences folder, which this run doesn't have	Profile für neue Dokumente brauchen den Voreinstellungsordner, den diese Sitzung nicht hat
+@msg	Number.prototype.{name} was called on a value that is not a number	Number.prototype.{name} wurde für einen Wert aufgerufen, der keine Zahl ist
+@msg	Object.create's prototype must be an object or null	der Prototyp für Object.create muss ein Objekt oder null sein
+@msg	Object.{function} was given a value that is not an object	Object.{function} hat einen Wert erhalten, der kein Objekt ist
+@msg	QName.prototype.toString needs a QName	QName.prototype.toString braucht einen QName
+@msg	RegExp.prototype.{name} was called on a value that is not a RegExp object	RegExp.prototype.{name} wurde für einen Wert aufgerufen, der kein RegExp-Objekt ist
+@msg	Stencil Bridges: the selected art is too large or too detailed to bridge	Schablonenstege: Das ausgewählte Bildmaterial ist zu groß oder zu detailliert für Stege
+@msg	String.prototype.toString was called on a value that is not a string	String.prototype.toString wurde für einen Wert aufgerufen, der kein String ist
+@msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Das Profil {name} konnte nicht gelesen werden, daher hat das neue Dokument die Standardeinstellungen: {reason}
+@msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Überfüllen: Mehr als {_1} Objektpaare liegen nah genug zum Überfüllen, oder zu viele Objekte teilen sich einen horizontalen Bereich; überfüllen Sie weniger Objekte auf einmal
+@msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Entgitterrahmen und -linien: Keine Entgitterlinie passt außerhalb des Bildmaterials, und der Entgitterrahmen ist deaktiviert
+@msg	\\ at end of pattern	\\ am Ende des Musters
+@msg	`alignOn` cannot be empty	`alignOn` darf nicht leer sein
+@msg	`alignOn` must be a string	`alignOn` muss ein String sein
+@msg	`align` must be a string	`align` muss ein String sein
+@msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` für dieses {kind}-Dialogfeld muss eines der folgenden sein: {_1}
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` hat mehr als {MAX_ANSWERS} Antworten
+@msg	`answers` is larger than 1 MiB	`answers` ist größer als 1 MiB
+@msg	`answers` must be a list of answers	`answers` muss eine Liste von Antworten sein
+@msg	`artboard` must be the index of an artboard of the document	`artboard` muss der Index einer Zeichenfläche des Dokuments sein
+@msg	`artboardsAt` must be [x, y]	`artboardsAt` muss [x, y] sein
+@msg	`artboards` names an artboard the document does not have	`artboards` nennt eine Zeichenfläche, die das Dokument nicht hat
+@msg	`artboards` names an artboard twice	`artboards` nennt eine Zeichenfläche zweimal
+@msg	`at` must be [x, y] (got {at})	`at` muss [x, y] sein (erhalten: {at})
+@msg	`beside` needs `side`	`beside` braucht `side`
+@msg	`code` must be a whole number	`code` muss eine ganze Zahl sein
+@msg	`colorMode` must be one of rgb, cmyk	`colorMode` muss rgb oder cmyk sein
+@msg	`colors` does not apply to the {name} reduction	`colors` gilt nicht für die Reduzierung {name}
+@msg	`colors` must be a whole number from 2 to 256	`colors` muss eine ganze Zahl von 2 bis 256 sein
+@msg	`colors` must be at least 9 for the uniform reduction	`colors` muss für die einheitliche Reduzierung mindestens 9 sein
+@msg	`colors` must be between 1 and {MAX_THEME_COLORS} (got {n})	`colors` muss zwischen 1 und {MAX_THEME_COLORS} liegen (erhalten: {n})
+@msg	`count` must be a whole number from 0 to {MAX_COUNT}	`count` muss eine ganze Zahl von 0 bis {MAX_COUNT} sein
+@msg	`ditherAmount` must be a number from 0 to 100	`ditherAmount` muss eine Zahl von 0 bis 100 sein
+@msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` muss zwischen {lo} und {hi} pt liegen
+@msg	`focal` and `radius` cannot be used together	`focal` und `radius` können nicht zusammen verwendet werden
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` muss ein Array aus Paaren [subpath, anchor] sein
+@msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` nennt [{si}, {ai}], das kein Ankerpunkt des Pfads ist
+@msg	`glyphAlternate` takes only null, which takes a glyph choice away (text.setGlyphAlternate makes one)	`glyphAlternate` nimmt nur null, was eine Glyphenauswahl entfernt (text.setGlyphAlternate legt eine fest)
+@msg	`group` must be one of {_1}	`group` muss eines der folgenden sein: {_1}
+@msg	`group` must be the Objects on Path group of `member` and `target`	`group` muss die Gruppe „Objekte auf Pfad“ von `member` und `target` sein
+@msg	`id` is an object id, not {v}	`id` ist eine Objekt-ID, nicht {v}
+@msg	`item` needs `index`	`item` braucht `index`
+@msg	`kerningBefore` belongs to a line's first character, not to a character style (text.setRangeStyle sets it)	`kerningBefore` gehört zum ersten Zeichen einer Zeile, nicht zu einem Zeichenformat (text.setRangeStyle legt es fest)
+@msg	`kinsokuType` must be "pushInFirst", "pushOutFirst" or "pushOutOnly"	`kinsokuType` muss „pushInFirst“, „pushOutFirst“ oder „pushOutOnly“ sein
+@msg	`leader` must be a string	`leader` muss ein String sein
+@msg	`max` must be 1 to {MAX_SUGGESTIONS}	`max` muss zwischen 1 und {MAX_SUGGESTIONS} liegen
+@msg	`name` must be a name that is not empty	`name` muss ein nicht leerer Name sein
+@msg	`name` must not be empty	`name` darf nicht leer sein
+@msg	`origin` must be [x, y] in points	`origin` muss [x, y] in Punkt sein
+@msg	`picks` must be an array (got {v})	`picks` muss ein Array sein (erhalten: {v})
+@msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` muss 1 bis {MAX_PICKS} Auswahlen enthalten (erhalten: {_1})
+@msg	`radius` must be 0 or more	`radius` muss 0 oder größer sein
+@msg	`rect` must be [x0, y0, x1, y1] (got {r})	`rect` muss [x0, y0, x1, y1] sein (erhalten: {r})
+@msg	`replace` must be a string	`replace` muss ein String sein
+@msg	`rows` must be lists of numbers or nulls, not {r}	`rows` müssen Listen aus Zahlen oder null-Werten sein, nicht {r}
+@msg	`scale` must be a number from 0.001 to 1000	`scale` muss eine Zahl von 0,001 bis 1000 sein
+@msg	`scope.{key}` must be a non-empty array	`scope.{key}` muss ein nicht leeres Array sein
+@msg	`scope` must be "document", {artboards} or {layers}	`scope` muss „document“, {artboards} oder {layers} sein
+@msg	`side` must be "left", "right", "top" or "bottom"	`side` muss „left“, „right“, „top“ oder „bottom“ sein
+@msg	`side` places the artboard: leave out x, y, width and height	`side` platziert die Zeichenfläche: Lassen Sie x, y, width und height weg
+@msg	`source` is the only path in series group `target`	`source` ist der einzige Pfad in der Reihengruppe `target`
+@msg	`spacing` makes more than {MAX_COUNT} lines across the box	`spacing` ergibt mehr als {MAX_COUNT} Linien über den Rahmen
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` muss größer als 0 und höchstens {MAX_DISTANCE} pt sein
+@msg	`target` must be an object of the same Objects on Path group as `member`	`target` muss ein Objekt derselben Gruppe „Objekte auf Pfad“ wie `member` sein
+@msg	`version` must be 0 or {_1}	`version` muss 0 oder {_1} sein
+@msg	`version` must be 0 or {newest}	`version` muss 0 oder {newest} sein
+@msg	`weight` must be from 0.01 to 1000 pt	`weight` muss zwischen 0,01 und 1000 pt liegen
+@msg	`weights` must be a list of {_1} numbers, one per row (got {v})	`weights` muss eine Liste aus {_1} Zahlen sein, eine pro Zeile (erhalten: {v})
+@msg	`xml` must be a string	`xml` muss ein String sein
+@msg	`{KEY}` entry {n} gives the paragraph at byte {start} of {_1} other indents than an entry before it	`{KEY}`-Eintrag {n} gibt dem Absatz bei Byte {start} von {_1} andere Einzüge als ein Eintrag davor
+@msg	`{KEY}` entry {n} must be an object	`{KEY}`-Eintrag {n} muss ein Objekt sein
+@msg	`{KEY}` entry {n} sets neither `leftIndent` nor `firstLineIndent`	`{KEY}`-Eintrag {n} legt weder `leftIndent` noch `firstLineIndent` fest
+@msg	`{KEY}` entry {n}: `id` must be an object id	`{KEY}`-Eintrag {n}: `id` muss eine Objekt-ID sein
+@msg	`{KEY}` entry {n}: `start` must be a byte offset	`{KEY}`-Eintrag {n}: `start` muss ein Byte-Offset sein
+@msg	`{KEY}` entry {n}: `{k}` must be a number from -{MAX_PARA} to {MAX_PARA} pt	`{KEY}`-Eintrag {n}: `{k}` muss eine Zahl von -{MAX_PARA} bis {MAX_PARA} pt sein
+@msg	`{KEY}` entry {n}: no paragraph of {_1} starts at byte {start}	`{KEY}`-Eintrag {n}: Kein Absatz von {_1} beginnt bei Byte {start}
+@msg	`{KEY}` entry {n}: unknown key `{k}`	`{KEY}`-Eintrag {n}: unbekannter Schlüssel `{k}`
+@msg	`{KEY}` entry {n}: {_1} is not a type object	`{KEY}`-Eintrag {n}: {_1} ist kein Textobjekt
+@msg	`{KEY}` is empty	`{KEY}` ist leer
+@msg	`{KEY}` must be a list	`{KEY}` muss eine Liste sein
+@msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}` nimmt höchstens {MAX_PARAGRAPH_INDENTS} Einträge (erhalten: {_1})
+@msg	`{KEY}` takes no `{other}` beside it	`{KEY}` nimmt kein `{other}` daneben
+@msg	`{base}` is larger than {_1} MB	`{base}` ist größer als {_1} MB
+@msg	`{base}` is not in the DCS file's folder	`{base}` ist nicht im Ordner der DCS-Datei
+@msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` enthält mehr als {MAX_EDIT_WORDS} Wörter
+@msg	`{key}` must be 0 or more	`{key}` muss 0 oder größer sein
+@msg	`{key}` must be [x, y] numbers	`{key}` muss aus den Zahlen [x, y] bestehen
+@msg	`{key}` must be a list of words	`{key}` muss eine Liste von Wörtern sein
+@msg	`{key}` must be a list, not {v}	`{key}` muss eine Liste sein, nicht {v}
+@msg	`{key}` must be a number or null, not {v}	`{key}` muss eine Zahl oder null sein, nicht {v}
+@msg	`{key}` must be a whole number of 0 or more	`{key}` muss eine ganze Zahl von 0 oder größer sein
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` muss zwischen 0 und {MAX_DISTANCE} pt liegen
+@msg	`{key}` must be from {lo} to {hi}, not {v}	`{key}` muss zwischen {lo} und {hi} liegen, nicht {v}
+@msg	`{key}` must be one of auto, always, never	`{key}` muss auto, always oder never sein
+@msg	`{key}` must be one of miter, round, bevel	`{key}` muss miter, round oder bevel sein
+@msg	`{key}` must be one word of at most {_1} characters	`{key}` muss ein Wort mit höchstens {_1} Zeichen sein
+@msg	`{key}` must hold single words of at most {_1} characters	`{key}` muss einzelne Wörter mit höchstens {_1} Zeichen enthalten
+@msg	`{key}` must name an object attached to the path of an Objects on Path group	`{key}` muss ein Objekt nennen, das an den Pfad einer Gruppe „Objekte auf Pfad“ angehängt ist
+@msg	`{key}` names an object that is hidden or locked	`{key}` nennt ein Objekt, das ausgeblendet oder gesperrt ist
+@msg	`{name}` is a file of its own, which can only be found next to the DCS file's path	`{name}` ist eine eigene Datei, die nur neben dem Pfad der DCS-Datei gefunden werden kann
+@msg	`{name}`: {_1}: {e}	`{name}`: {_1}: {e}
+@msg	`{u}` is no Unicode character	`{u}` ist kein Unicode-Zeichen
+@msg	`{word}` isn't in the custom dictionary	`{word}` ist nicht im Benutzerwörterbuch
+@msg	a CMap has too many mappings	eine CMap hat zu viele Zuordnungen
+@msg	a \\u escape needs four hexadecimal digits	ein \\u-Escape braucht vier Hexadezimalziffern
+@msg	a comma in an XPath expression must separate function arguments	ein Komma in einem XPath-Ausdruck muss Funktionsargumente trennen
+@msg	a document holds at most {_1} SVG filters	ein Dokument enthält höchstens {_1} SVG-Filter
+@msg	a document with unsaved changes has no recovery copy	ein Dokument mit nicht gespeicherten Änderungen hat keine Wiederherstellungskopie
+@msg	a font's data is too large	die Daten einer Schrift sind zu groß
+@msg	a font's subroutines are too large	die Subroutinen einer Schrift sind zu groß
+@msg	a function declaration without a name	eine Funktionsdeklaration ohne Namen
+@msg	a host value has too many entries	ein Host-Wert hat zu viele Einträge
+@msg	a host value is nested too deep	ein Host-Wert ist zu tief verschachtelt
+@msg	a namespace declaration uses a reserved prefix or URI	eine Namespace-Deklaration verwendet ein reserviertes Präfix oder einen reservierten URI
+@msg	a namespace qualifier is undefined	ein Namespace-Qualifizierer ist nicht definiert
+@msg	a namespace with an empty URI cannot have a prefix	ein Namespace mit leerem URI kann kein Präfix haben
+@msg	a number has no digits	eine Zahl hat keine Ziffern
+@msg	a number's exponent has no digits	der Exponent einer Zahl hat keine Ziffern
+@msg	a number's fraction has no digits	der Nachkommateil einer Zahl hat keine Ziffern
+@msg	a property descriptor cannot have both a value or writable and a get or set	ein Eigenschaftsdeskriptor kann nicht zugleich value oder writable und get oder set haben
+@msg	a property descriptor must be an object	ein Eigenschaftsdeskriptor muss ein Objekt sein
+@msg	a property's {name} must be a function or undefined	{name} einer Eigenschaft muss eine Funktion oder undefined sein
+@msg	a stream in it would decode to more than 256 MB, or its decode parameters can't be applied	ein Datenstrom darin würde zu mehr als 256 MB decodiert, oder seine Decodierparameter können nicht angewendet werden
+@msg	a string holds a control character	ein String enthält ein Steuerzeichen
+@msg	a string holds an escape sequence JSON does not have	ein String enthält eine Escape-Sequenz, die JSON nicht kennt
+@msg	a string is not closed	ein String ist nicht geschlossen
+@msg	an SVG filter is named by its id: give `xml` with `name`	ein SVG-Filter wird über seine ID benannt: Geben Sie `xml` mit `name` an
+@msg	an XML element has two attributes with the same name	ein XML-Element hat zwei Attribute mit demselben Namen
+@msg	an XML value cannot be inserted into itself or its descendants	ein XML-Wert kann nicht in sich selbst oder seine Nachfahren eingefügt werden
+@msg	an XML value's children cannot be assigned by position	die Kinder eines XML-Werts können nicht über ihre Position zugewiesen werden
+@msg	an XML value's children cannot be deleted by position	die Kinder eines XML-Werts können nicht über ihre Position gelöscht werden
+@msg	an XMLList converts to XML only when it has one item	eine XMLList wird nur in XML umgewandelt, wenn sie genau ein Element hat
+@msg	an XPath node test is missing	ein XPath-Knotentest fehlt
+@msg	an XPath operand is missing	ein XPath-Operand fehlt
+@msg	an XPath operator is missing	ein XPath-Operator fehlt
+@msg	an XPath predicate or step cannot follow here	ein XPath-Prädikat oder -Schritt kann hier nicht folgen
+@msg	an XPath predicate or step follows a value that is not a node-set	ein XPath-Prädikat oder -Schritt folgt auf einen Wert, der keine Knotenmenge ist
+@msg	an XPath step is missing	ein XPath-Schritt fehlt
+@msg	an image couldn't be decoded and is missing from the picture	ein Bild konnte nicht decodiert werden und fehlt in der Darstellung
+@msg	an image of {w} × {h} pixels is too large to convert (at most {_1} pixels)	ein Bild mit {w} × {h} Pixeln ist zu groß zum Konvertieren (höchstens {_1} Pixel)
+@msg	apply was called on a value that is not a function	apply wurde für einen Wert aufgerufen, der keine Funktion ist
+@msg	area type in a thread cannot use Dynamic Text: {frames}	Flächentext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
+@msg	array literal too long	Array-Literal zu lang
+@msg	assignment to a constant binding	Zuweisung an eine konstante Bindung
+@msg	at least one row that isn't excluded needs a weight above 0	mindestens eine nicht ausgeschlossene Zeile braucht eine Gewichtung über 0
+@msg	blend must be a mode name	blend muss der Name eines Modus sein
+@msg	both sides of an XPath | must select nodes	beide Seiten eines XPath-| müssen Knoten auswählen
+@msg	canceled	abgebrochen
+@msg	cannot convert the object to a primitive value	das Objekt kann nicht in einen primitiven Wert umgewandelt werden
+@msg	cannot convert undefined or null to an object	undefined oder null kann nicht in ein Objekt umgewandelt werden
+@msg	character dimensions cannot be represented with the source text transform	Zeichenmaße können mit der Texttransformation der Quelle nicht dargestellt werden
+@msg	character dimensions cannot be represented with the target text transform	Zeichenmaße können mit der Texttransformation des Ziels nicht dargestellt werden
+@msg	continuation must be an array of path chunks	continuation muss ein Array aus Pfadstücken sein
+@msg	continuation requires points	continuation erfordert Punkte
+@msg	each path chunk must contain 1 to 4096 points	jedes Pfadstück muss 1 bis 4096 Punkte enthalten
+@msg	each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})	jede Auswahl ist {{at: [x, y]}} oder {{rect: [x0, y0, x1, y1]}} (erhalten: {v})
+@msg	each weight must be a number of 0 or more (got {v})	jede Gewichtung muss eine Zahl von 0 oder größer sein (erhalten: {v})
+@msg	finally table {t} out of range	finally-Tabelle {t} außerhalb des gültigen Bereichs
+@msg	flags cannot be given with a RegExp object	mit einem RegExp-Objekt können keine Flags angegeben werden
+@msg	function declaration index out of range	Index der Funktionsdeklaration außerhalb des gültigen Bereichs
+@msg	give `char`, `text`, `code` or `unicode`	geben Sie `char`, `text`, `code` oder `unicode` an
+@msg	give `count` or `spacing`, not both	geben Sie `count` oder `spacing` an, nicht beides
+@msg	give `name`, an SVG filter's name	geben Sie `name` an, den Namen eines SVG-Filters
+@msg	give `path`, an SVG file, or `svg`, SVG text	geben Sie `path` an, eine SVG-Datei, oder `svg`, SVG-Text
+@msg	give `xml`, one SVG <filter> element	geben Sie `xml` an, ein SVG-Element <filter>
+@msg	give exactly one of `path`, `data` and `dataBase64`	geben Sie genau eines von `path`, `data` und `dataBase64` an
+@msg	give index or indexes, not both	geben Sie index oder indexes an, nicht beides
+@msg	give one <filter> element	geben Sie ein einzelnes Element <filter> an
+@msg	give opacity or blend	geben Sie opacity oder blend an
+@msg	handler at {_1} expects {_2} values but its range starts with {d}	der Handler bei {_1} erwartet {_2} Werte, aber sein Bereich beginnt mit {d}
+@msg	handler depth too large	Handler-Tiefe zu groß
+@msg	handler range {_1}..{_2} out of range	Handler-Bereich {_1}..{_2} außerhalb des gültigen Bereichs
+@msg	hiddenLayers must be true or false	hiddenLayers muss true oder false sein
+@msg	hvcC	hvcC
+@msg	images in a spot ink whose samples couldn't be read were imported in RGB	Bilder in einer Volltonfarbe, deren Samples nicht gelesen werden konnten, wurden in RGB importiert
+@msg	images past the most pixels one file may hold were left out	Bilder über der Höchstzahl an Pixeln, die eine Datei enthalten darf, wurden ausgelassen
+@msg	images too large to read were left out	Bilder, die zum Lesen zu groß sind, wurden ausgelassen
+@msg	indexes may hold at most {MAX_GUIDE_INDEXES} entries	indexes darf höchstens {MAX_GUIDE_INDEXES} Einträge enthalten
+@msg	indexes must be an array of guide indexes	indexes muss ein Array aus Hilfslinienindizes sein
+@msg	instruction out of range	Anweisung außerhalb des gültigen Bereichs
+@msg	instruction {pc} ({op}) pops below the stack	Anweisung {pc} ({op}) entnimmt mehr Werte, als der Stapel enthält
+@msg	instruction {pc} reached with stack depths {seen} and {d}	Anweisung {pc} wird mit den Stapeltiefen {seen} und {d} erreicht
+@msg	invalid array length	ungültige Array-Länge
+@msg	invalid group	ungültige Gruppe
+@msg	invalid object id {v}: expected a non-negative integer	ungültige Objekt-ID {v}: erwartet wird eine nicht negative ganze Zahl
+@msg	invalid regular expression flag '{_1}'	ungültiges Flag '{_1}' für regulären Ausdruck
+@msg	invalid regular expression: {m}	ungültiger regulärer Ausdruck: {m}
+@msg	invalid time value	ungültiger Zeitwert
+@msg	is a confirm's answer, whose `value` must be true or false	ist die Antwort auf eine Bestätigung, deren `value` true oder false sein muss
+@msg	is a prompt's answer, whose `value` must be a string or null	ist die Antwort auf eine Eingabeaufforderung, deren `value` ein String oder null sein muss
+@msg	is an alert's answer, whose `value` must be "ok"	ist die Antwort auf eine Warnung, deren `value` „ok“ sein muss
+@msg	is longer than 16 KiB	ist länger als 16 KiB
+@msg	it draws its image through a clipping path	es zeichnet sein Bild durch einen Beschneidungspfad
+@msg	it draws no image	es zeichnet kein Bild
+@msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	sie ist größer als {MAX_DICTIONARY_FILE_BYTES} Byte
+@msg	it isn't a file	es ist keine Datei
+@msg	it names {_1} plates, and at most {MAX_PLATES} are read	sie nennt {_1} Platten, und höchstens {MAX_PLATES} werden gelesen
+@msg	its art is too long or too detailed for a head	seine Grafik ist zu lang oder zu detailliert für eine Spitze
+@msg	its art paints nothing	seine Grafik malt nichts
+@msg	its image is too large to read	sein Bild ist zu groß zum Lesen
+@msg	its plates are too large: more than {MAX_SAMPLES} pixels together	seine Platten sind zu groß: zusammen mehr als {MAX_SAMPLES} Pixel
+@msg	its plates are too large: {_1} plates of {w} × {h} pixels	seine Platten sind zu groß: {_1} Platten mit {w} × {h} Pixeln
+@msg	its plates can't be kept together	seine Platten können nicht zusammengehalten werden
+@msg	its shapes could not be combined into one	seine Formen konnten nicht zu einer zusammengefasst werden
+@msg	jump to {pc}, past the end	Sprung zu {pc}, hinter das Ende
+@msg	legacyNameEncoding must be one of {_1}	legacyNameEncoding muss eines der folgenden sein: {_1}
+@msg	localize: the first argument must be a localization object or a string	localize: Das erste Argument muss ein Lokalisierungsobjekt oder ein String sein
+@msg	missing `picks`	`picks` fehlt
+@msg	missing `word`	`word` fehlt
+@msg	must be an object with `kind` and `value`	muss ein Objekt mit `kind` und `value` sein
+@msg	must have `kind` alert, confirm or prompt	muss `kind` alert, confirm oder prompt haben
+@msg	must have exactly `kind` and `value`	muss genau `kind` und `value` haben
+@msg	needs a closing quote after the name	braucht ein schließendes Anführungszeichen nach dem Namen
+@msg	needs a name	braucht einen Namen
+@msg	needs a name of at most 64 bytes	braucht einen Namen mit höchstens 64 Byte
+@msg	needs a name of letters, digits and _, or a quoted name	braucht einen Namen aus Buchstaben, Ziffern und _ oder einen Namen in Anführungszeichen
+@msg	needs a name without control characters	braucht einen Namen ohne Steuerzeichen
+@msg	nesting too deep	zu tief verschachtelt
+@msg	no HP-GL format	kein HP-GL-Format
+@msg	no New Document profile called `{shown}` ({_1})	kein Profil für neue Dokumente namens `{shown}` ({_1})
+@msg	no SVG filter at index {k}	kein SVG-Filter bei Index {k}
+@msg	no arrowheads file here	hier ist keine Pfeilspitzendatei
+@msg	no character has code {code}	kein Zeichen hat den Code {code}
+@msg	no custom arrowhead {name} (see stroke.arrowheads.list)	keine eigene Pfeilspitze {name} (siehe stroke.arrowheads.list)
+@msg	no file to open	keine Datei zum Öffnen
+@msg	no instructions	keine Anweisungen
+@msg	no layer to rename	keine Ebene zum Umbenennen
+@msg	no random numbers ({e})	keine Zufallszahlen ({e})
+@msg	no selected or given object has a visible 3D effect	kein ausgewähltes oder angegebenes Objekt hat einen sichtbaren 3D-Effekt
+@msg	no such artboard {v}	keine solche Zeichenfläche {v}
+@msg	no symbol named `{_1}`	kein Symbol namens `{_1}`
+@msg	node {_1} already has the text variable `{_2}`	Knoten {_1} hat bereits die Textvariable `{_2}`
+@msg	not a DCS file	keine DCS-Datei
+@msg	not a RegExp object	kein RegExp-Objekt
+@msg	not a regular expression	kein regulärer Ausdruck
+@msg	not an action set: the text doesn't start with /version and a number	kein Aktionssatz: Der Text beginnt nicht mit /version und einer Zahl
+@msg	nothing to repeat	nichts zu wiederholen
+@msg	numbers out of order in {_1} quantifier	Zahlen in falscher Reihenfolge im Quantifizierer {_1}
+@msg	object {_1} needs a 3D effect	Objekt {_1} braucht einen 3D-Effekt
+@msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	Objekt {_1}: Ein hohles „Extrudieren und abgeflachte Kante“ hat keine Deckflächen: Aktivieren Sie „Deckflächen“, um eine Grafik zuzuweisen
+@msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	Objekt {_1}: Bei einer Tiefe von 0 hat das Objekt nur eine Fläche: Weisen Sie seine Grafiken der Vorderseite zu
+@msg	object {_1}: {_2}	Objekt {_1}: {_2}
+@msg	object {_1}: {e}	Objekt {_1}: {e}
+@msg	object {_1}: {name} at index {index} has no lighting presets; set its lights with effect.setParams	Objekt {_1}: {name} bei Index {index} hat keine Beleuchtungsvorgaben; legen Sie seine Lichter mit effect.setParams fest
+@msg	opacity must be a number	opacity muss eine Zahl sein
+@msg	operand too large	Operand zu groß
+@msg	order is a whole number from 0 to {others}, not `{v}`	order ist eine ganze Zahl von 0 bis {others}, nicht `{v}`
+@msg	path chunks must share their boundary point	Pfadstücke müssen ihren Grenzpunkt teilen
+@msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false braucht die Zeichenflächen, um die bearbeitbare Grafik zu behalten, wenn useArtboards false ist
+@msg	point x must be a number	Punkt x muss eine Zahl sein
+@msg	point y must be a number	Punkt y muss eine Zahl sein
+@msg	points must be [x,y] pairs	Punkte müssen [x,y]-Paare sein
+@msg	points must be finite canvas points	Punkte müssen endliche Punkte auf der Arbeitsfläche sein
+@msg	range out of order in character class	Bereich in falscher Reihenfolge in der Zeichenklasse
+@msg	reduce of an empty array with no initial value	reduce eines leeren Arrays ohne Startwert
+@msg	regular expression flag '{_1}' given twice	Flag '{_1}' des regulären Ausdrucks zweimal angegeben
+@msg	sampled text would exceed the canvas (coordinates out of range)	der Mustertext würde über die Arbeitsfläche hinausgehen (Koordinaten außerhalb des gültigen Bereichs)
+@msg	select an SVG filter	wählen Sie einen SVG-Filter aus
+@msg	select an object with a 3D effect	wählen Sie ein Objekt mit einem 3D-Effekt aus
+@msg	select an object with a 3D effect, or give its id in ids	wählen Sie ein Objekt mit einem 3D-Effekt aus, oder geben Sie seine ID in ids an
+@msg	select one layer, group or object to rename	wählen Sie eine Ebene, Gruppe oder ein Objekt zum Umbenennen aus
+@msg	select the art to weed	wählen Sie das zu entgitternde Bildmaterial aus
+@msg	select type on a path or area type	wählen Sie Pfadtext oder Flächentext aus
+@msg	side is left or right, not `{v}`	side ist left oder right, nicht `{v}`
+@msg	source text transform is collapsed or unrepresentable	die Texttransformation der Quelle ist zusammengefallen oder nicht darstellbar
+@msg	table must be true or false	table muss true oder false sein
+@msg	takes one name	nimmt einen Namen
+@msg	target text transform is collapsed or unrepresentable	die Texttransformation des Ziels ist zusammengefallen oder nicht darstellbar
+@msg	that makes too many pieces (at most 100000) or dash steps: simplify the dash pattern or make the dashes longer	das ergibt zu viele Teile (höchstens 100000) oder Strichschritte: Vereinfachen Sie das Strichmuster oder verlängern Sie die Striche
+@msg	the Layers panel is not shown	das Bedienfeld „Ebenen“ wird nicht angezeigt
+@msg	the Layers panel's search, filter or Show Layers Only hides its row	die Suche, der Filter oder „Nur Ebenen einblenden“ im Bedienfeld „Ebenen“ blendet seine Zeile aus
+@msg	the Objects on Path group is hidden or locked	die Gruppe „Objekte auf Pfad“ ist ausgeblendet oder gesperrt
+@msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	die SVG-Datei ist größer als {MAX_IMPORT_BYTES} Byte
+@msg	the XML operation needs an XML or XMLList value	die XML-Operation braucht einen XML- oder XMLList-Wert
+@msg	the XPath expression does not evaluate to a node-set	der XPath-Ausdruck ergibt keine Knotenmenge
+@msg	the XPath expression ends early	der XPath-Ausdruck endet zu früh
+@msg	the XPath expression has an unmatched )	der XPath-Ausdruck hat eine ) ohne Gegenstück
+@msg	the XPath expression has an unmatched ]	der XPath-Ausdruck hat eine ] ohne Gegenstück
+@msg	the XPath expression has an unmatched closing bracket	der XPath-Ausdruck hat eine schließende Klammer ohne Gegenstück
+@msg	the XPath expression selects a namespace node, which is not an XML value	der XPath-Ausdruck wählt einen Namespace-Knoten aus, der kein XML-Wert ist
+@msg	the XPath expression selects the root node, which is not an XML value	der XPath-Ausdruck wählt den Wurzelknoten aus, der kein XML-Wert ist
+@msg	the XPath function {name} needs a node-set	die XPath-Funktion {name} braucht eine Knotenmenge
+@msg	the XPath function {name} takes the wrong number of arguments	die XPath-Funktion {name} erhält die falsche Anzahl an Argumenten
+@msg	the XPath name functions need a node-set	die XPath-Namensfunktionen brauchen eine Knotenmenge
+@msg	the XPath prefix {shown} is not bound to a namespace	das XPath-Präfix {shown} ist an keinen Namespace gebunden
+@msg	the XPath variable ${shown} is not bound	die XPath-Variable ${shown} ist nicht gebunden
+@msg	the argument list is not an object	die Argumentliste ist kein Objekt
+@msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	die Grafik ist zu groß für EPS: Was nach 256 MB PostScript folgt, wurde ausgelassen
+@msg	the bitmaps hold more pixels than one file may	die Bitmaps enthalten mehr Pixel, als eine Datei enthalten darf
+@msg	the code runs past its last instruction	der Code läuft über seine letzte Anweisung hinaus
+@msg	the curve tolerance must be from 0.01 to 10 points	die Kurventoleranz muss zwischen 0,01 und 10 Punkt liegen
+@msg	the custom dictionary couldn't be saved to {_1}: {e}	das Benutzerwörterbuch konnte nicht unter {_1} gespeichert werden: {e}
+@msg	the custom dictionary {_1} can't be read ({why}), so it is left as it is	das Benutzerwörterbuch {_1} kann nicht gelesen werden ({why}), daher bleibt es unverändert
+@msg	the document already has an SVG filter named {name}	das Dokument hat bereits einen SVG-Filter namens {name}
+@msg	the document has another SVG filter named {name}: use svgFilter.apply, or svgFilter.define with `replace` to edit it	das Dokument hat einen anderen SVG-Filter namens {name}: Verwenden Sie svgFilter.apply oder svgFilter.define mit `replace`, um ihn zu bearbeiten
+@msg	the document has no SVG filter named {name}	das Dokument hat keinen SVG-Filter namens {name}
+@msg	the document has no SVG filter named {r}	das Dokument hat keinen SVG-Filter namens {r}
+@msg	the document has no color swatches	das Dokument hat keine Farbfelder
+@msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	die Farbfelder des Dokuments enthalten {_1} Farben; die Reduzierung auf Dokumentfarben nimmt höchstens 255
+@msg	the file isn't valid SVG: {e}	die Datei ist kein gültiges SVG: {e}
+@msg	the file names no plate	die Datei nennt keine Platte
+@msg	the function's prototype is not an object	der Prototyp der Funktion ist kein Objekt
+@msg	the guide is hidden or locked	die Hilfslinie ist ausgeblendet oder gesperrt
+@msg	the library's file is outside the read roots	die Datei der Bibliothek liegt außerhalb der Lesestammordner
+@msg	the method needs an XML value	die Methode braucht einen XML-Wert
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	die Farbe ist kein Freiformverlauf (wenden Sie einen mit paint.editGradient {kind} an)
+@msg	the parameters or body do not form one function	die Parameter oder der Rumpf bilden keine einzelne Funktion
+@msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	der eingefügte SVG-Filter {name} zeichnet anders als der gleichnamige Filter des Dokuments, und kein freier Name passt zu ihm
+@msg	the pen table holds more than 255 pens	die Stifttabelle enthält mehr als 255 Stifte
+@msg	the plates can't be kept	die Platten können nicht behalten werden
+@msg	the position table does not match the instructions	die Positionstabelle passt nicht zu den Anweisungen
+@msg	the prompt's text is longer than {MAX_PROMPT_BYTES} bytes	der Text der Eingabeaufforderung ist länger als {MAX_PROMPT_BYTES} Byte
+@msg	the radix must be between 2 and 36	die Basis muss zwischen 2 und 36 liegen
+@msg	the right side of 'in' is not an object	die rechte Seite von 'in' ist kein Objekt
+@msg	the right side of 'instanceof' is not a function	die rechte Seite von 'instanceof' ist keine Funktion
+@msg	the selected art is nested more than {MAX_DEPTH} levels deep	das ausgewählte Bildmaterial ist mehr als {MAX_DEPTH} Ebenen tief verschachtelt
+@msg	the selected art is too large to measure	das ausgewählte Bildmaterial ist zu groß zum Messen
+@msg	the selection has no outlines to weed around	die Auswahl hat keine Umrisse, um die herum entgittert werden kann
+@msg	the value bind was called on is not a function	der Wert, für den bind aufgerufen wurde, ist keine Funktion
+@msg	the value is not a constructor	der Wert ist kein Konstruktor
+@msg	the value is not a function	der Wert ist keine Funktion
+@msg	the value is not a valid XML name	der Wert ist kein gültiger XML-Name
+@msg	the value is not an XML attribute name	der Wert ist kein XML-Attributname
+@msg	the value is not an XML name	der Wert ist kein XML-Name
+@msg	the weeding lines cross the art's outlines too many times to measure; use fewer lines	die Entgitterlinien kreuzen die Umrisse des Bildmaterials zu oft zum Messen; verwenden Sie weniger Linien
+@msg	the weeding lines pass too close to too many outline segments to measure; use fewer lines or a smaller gap	die Entgitterlinien verlaufen zu nah an zu vielen Umrisssegmenten zum Messen; verwenden Sie weniger Linien oder einen kleineren Abstand
+@msg	the weeding lines would be more than {max_pieces} pieces	die Entgitterlinien würden mehr als {max_pieces} Teile ergeben
+@msg	the {_1} plate lies outside the file	die Platte {_1} liegt außerhalb der Datei
+@msg	this is a binary DXF file, which can't be read: save it from the CAD app as an ASCII DXF and open that	dies ist eine binäre DXF-Datei, die nicht gelesen werden kann: Speichern Sie sie in der CAD-Anwendung als ASCII-DXF und öffnen Sie diese
+@msg	this warp's points can't be edited: use Reset with Mesh first	die Punkte dieser Verkrümmung können nicht bearbeitet werden: Verwenden Sie zuerst „Mit Gitter zurücksetzen“
+@msg	toExponential() digits must be between 0 and 20	die Stellen für toExponential() müssen zwischen 0 und 20 liegen
+@msg	toFixed() digits must be between 0 and 20	die Stellen für toFixed() müssen zwischen 0 und 20 liegen
+@msg	toISOString is not a function	toISOString ist keine Funktion
+@msg	toPrecision() argument must be between 1 and 21	das Argument von toPrecision() muss zwischen 1 und 21 liegen
+@msg	toSource: a getter cannot be written as source	toSource: Ein Getter kann nicht als Quelltext geschrieben werden
+@msg	toSource: an array with properties besides its elements, a property that is not enumerable or another prototype cannot be written as source	toSource: Ein Array mit Eigenschaften neben seinen Elementen, einer nicht aufzählbaren Eigenschaft oder einem anderen Prototyp kann nicht als Quelltext geschrieben werden
+@msg	toSource: an object with a property that is not enumerable, or whose prototype is not Object.prototype, cannot be written as source	toSource: Ein Objekt mit einer nicht aufzählbaren Eigenschaft oder mit einem anderen Prototyp als Object.prototype kann nicht als Quelltext geschrieben werden
+@msg	toSource: the source is too long	toSource: Der Quelltext ist zu lang
+@msg	toSource: the value contains itself	toSource: Der Wert enthält sich selbst
+@msg	toSource: the value has too many entries	toSource: Der Wert hat zu viele Einträge
+@msg	toSource: the value is nested too deep	toSource: Der Wert ist zu tief verschachtelt
+@msg	toString is not a function	toString ist keine Funktion
+@msg	too many arguments	zu viele Argumente
+@msg	too many quantifiers	zu viele Quantifizierer
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	unbekannte OpenType-Funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; mit vorangestelltem - ausschalten; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom und aalt nehmen die Nummer einer Alternative als `tag=N` mit N von 0 bis {_1}, etwa `salt=2`)
+@msg	unknown dither `{d}` (diffusion, pattern, noise or none)	unbekanntes Dithering `{d}` (diffusion, pattern, noise oder none)
+@msg	unknown panel `{panel}`	unbekanntes Bedienfeld `{panel}`
+@msg	unknown parameter `{key}`	unbekannter Parameter `{key}`
+@msg	unknown parameter `{within}settings.{format}`; {why}	unbekannter Parameter `{within}settings.{format}`; {why}
+@msg	unknown parameter `{within}{key}`; {why}	unbekannter Parameter `{within}{key}`; {why}
+@msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	unbekannte Reduzierung `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform oder document)
+@msg	unmatched ')'	')' ohne Gegenstück
+@msg	unterminated character class	nicht abgeschlossene Zeichenklasse
+@msg	unterminated group	nicht abgeschlossene Gruppe
+@msg	wordGap and lineGap need area type in the selection	wordGap und lineGap brauchen Flächentext in der Auswahl
+@msg	xpath needs its variables as an object	xpath braucht seine Variablen als Objekt
+@msg	xpath needs the expression as a string	xpath braucht den Ausdruck als String
+@msg	{GRANT_NOT_REMOVED}, and its settings and cache can't be moved back from {_1} to {_2}: {e}	{GRANT_NOT_REMOVED}, und seine Einstellungen und sein Cache können nicht von {_1} nach {_2} zurückverschoben werden: {e}
+@msg	{_1} is not a folder: {e}	{_1} ist kein Ordner: {e}
+@msg	{_1}: {_2} and {_3} are in the way	{_1}: {_2} und {_3} sind im Weg
+@msg	{code}: {0}	{code}: {0}
+@msg	{dir}: {e}	{dir}: {e}
+@msg	{file} names more than one linked JavaScript file	{file} nennt mehr als eine verknüpfte JavaScript-Datei
+@msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k}: Der Pfad einer eigenen Pfeilspitze braucht eine zu füllende Fläche und höchstens {most} Ankerpunkte und {most} Teilpfade, jeder Ankerpunkt höchstens {far} Spitzeneinheiten von ihrer Spitze entfernt
+@msg	{k}: bad custom arrowhead path: {e}	{k}: ungültiger Pfad einer eigenen Pfeilspitze: {e}
+@msg	{k}: bad custom arrowhead: {e}	{k}: ungültige eigene Pfeilspitze: {e}
+@msg	{k}: custom must be a name	{k}: custom muss ein Name sein
+@msg	{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are	{path}: Kopieren nimmt eine DCS-Datei nur, wenn ihre Platten darin enthalten sind; verknüpfen Sie sie dort neu, wo ihre Plattendateien liegen
+@msg	{path}: larger than {_1} MB	{path}: größer als {_1} MB
+@msg	{shown} is not an XPath 1.0 function	{shown} ist keine XPath-1.0-Funktion
+@msg	{v} names no layer or sublayer	{v} nennt keine Ebene oder Unterebene
+@msg	{what} is not a function	{what} ist keine Funktion
+@msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what} würde mehr als {MAX_COPIES_PER_SHEET} Kopien auf einem Bogen drucken: Vergrößern Sie es
+@msg	{what} {i} out of range	{what} {i} außerhalb des gültigen Bereichs
+@msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Ein Profil unterstützt einen Kreiseln-Effekt. Bearbeiten Sie stattdessen die Optionen des vorhandenen Effekts.
+@msg	Add Points at Crossings: a path went missing	Punkte an Kreuzungen hinzufügen: Ein Pfad ist verloren gegangen
+@msg	CSS options: {e}	CSS-Optionen: {e}
+@msg	CSV has a header but no data rows	die CSV-Datei hat eine Kopfzeile, aber keine Datenzeilen
+@msg	CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark	die CSV-Datei enthält NUL-Bytes: Speichern Sie sie als UTF-8 oder als UTF-16 mit Byte-Order-Mark
+@msg	CSV is empty	die CSV-Datei ist leer
+@msg	CSV is larger than {MAX_CSV_BYTES} bytes	die CSV-Datei ist größer als {MAX_CSV_BYTES} Byte
+@msg	CSV is not UTF-16	die CSV-Datei ist nicht UTF-16
+@msg	CSV is not UTF-8	die CSV-Datei ist nicht UTF-8
+@msg	CSV would be larger than {MAX_CSV_BYTES} bytes	die CSV-Datei wäre größer als {MAX_CSV_BYTES} Byte
+@msg	Choose original artwork, not a dimension's generated paths	Wählen Sie die ursprüngliche Grafik, nicht die erzeugten Pfade einer Bemaßung
+@msg	Contour: select paths or shapes	Umriss: Wählen Sie Pfade oder Formen aus
+@msg	Contour: the Offset Path effect is not available	Umriss: Der Effekt „Pfad verschieben“ ist nicht verfügbar
+@msg	Create needs fills, strokes or both	Erstellen braucht Flächen, Konturen oder beides
+@msg	DXF options: {e}	DXF-Optionen: {e}
+@msg	DXF scale must be a positive number up to {_1}, not {scale}	der DXF-Maßstab muss eine positive Zahl bis {_1} sein, nicht {scale}
+@msg	DXF {field} `{s}`: {allowed}	DXF {field} `{s}`: {allowed}
+@msg	Dimension is locked or hidden	Die Bemaßung ist gesperrt oder ausgeblendet
+@msg	Dimension mode does not match its source	Der Bemaßungsmodus passt nicht zu seiner Quelle
+@msg	Draw Inside needs exactly one selected path, compound path or text	„Innen zeichnen“ braucht genau einen ausgewählten Pfad, zusammengesetzten Pfad oder Text
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	Speichern als EPS schreibt die gesamte Grafik: Verwenden Sie document.export für ein EPS nur mit der Auswahl
+@msg	EPS flattener: {e}	EPS-Reduzierung: {e}
+@msg	EPS options: {e}	EPS-Optionen: {e}
+@msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
+@msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	Für Bildschirme exportieren schreibt png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai oder vectorcraft
+@msg	Flare click coordinates must be finite numbers	Die Klickkoordinaten für Blendenflecke müssen endliche Zahlen sein
+@msg	HTML Text applies to object slices of type only	HTML-Text gilt nur für Objekt-Slices aus Text
+@msg	Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)	„Objekte identifizieren nach“ ist XML-ID: Der Name muss eine gültige XML-ID sein (beginnt mit einem Buchstaben, Unterstrich oder Doppelpunkt; keine Leerzeichen)
+@msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Bildnachzeichner fehlgeschlagen: interner Fehler: Sein Thread wurde beendet (bitte melden Sie diesen Fehler)
+@msg	Image Trace failed: {e}	Bildnachzeichner fehlgeschlagen: {e}
+@msg	Image Trace finished, but its document was closed	Bildnachzeichner abgeschlossen, aber sein Dokument wurde geschlossen
+@msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Bildnachzeichner abgeschlossen, aber das Bild oder seine Einstellungen haben sich inzwischen geändert: Zeichnen Sie es erneut nach
+@msg	Invalid dimension offset	Ungültiger Bemaßungsversatz
+@msg	Invalid point	Ungültiger Punkt
+@msg	Join: a subpath went missing	Zusammenfügen: Ein Teilpfad ist verloren gegangen
+@msg	Lock Workspace is not available in VectorCraft	Arbeitsbereich sperren ist in VectorCraft nicht verfügbar
+@msg	Move Panel to New Window is not available: floating panels stay in the main window	Bedienfeld in neues Fenster verschieben ist nicht verfügbar: Schwebende Bedienfelder bleiben im Hauptfenster
+@msg	Offset Path: the path is too complex to offset	Pfad verschieben: Der Pfad ist zu komplex zum Verschieben
+@msg	Offset Path: {e}	Pfad verschieben: {e}
+@msg	PDF content is incomplete or exceeds the reader's limits; no document was imported	der PDF-Inhalt ist unvollständig oder überschreitet die Grenzen des Lesers; es wurde kein Dokument importiert
+@msg	PDF flattener: {e}	PDF-Reduzierung: {e}
+@msg	PDF options: {e}	PDF-Optionen: {e}
+@msg	Recolor Artwork is no longer open	„Grafik neu färben“ ist nicht mehr geöffnet
+@msg	SVG is not UTF-8, UTF-16 or ISO 8859-1	SVG ist nicht UTF-8, UTF-16 oder ISO 8859-1
+@msg	Save writes one artboard: name one, or export several with document.export	Speichern schreibt eine Zeichenfläche: Nennen Sie eine, oder exportieren Sie mehrere mit document.export
+@msg	Select a dimension first	Wählen Sie zuerst eine Bemaßung aus
+@msg	Select dimensions to update	Wählen Sie die zu aktualisierenden Bemaßungen aus
+@msg	Select only dimensions	Wählen Sie nur Bemaßungen aus
+@msg	Select two or more objects, or a group	Wählen Sie zwei oder mehr Objekte oder eine Gruppe aus
+@msg	Shaper needs 1–64 source paths	Shaper braucht 1–64 Quellpfade
+@msg	Switch x/y is for scatter graphs	x/y vertauschen gilt für Streudiagramme
+@msg	Text options: {e}	Textoptionen: {e}
+@msg	`align` is start, center or end	`align` ist start, center oder end
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` muss ein Array aus Paaren [subpath, anchor] sein
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` muss Ankerpunktindizes (0, 1, 2…) auflisten, nicht {k}
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` muss Ankerpunktindizes (0, 1, 2…) auflisten, nicht {v}
+@msg	`artboards` must be a list of artboard indices	`artboards` muss eine Liste von Zeichenflächenindizes sein
+@msg	`asset` is the asset id (see assets.list)	`asset` ist die Asset-ID (siehe assets.list)
+@msg	`at` must be a byte offset	`at` muss ein Byte-Offset sein
+@msg	`autoLeading` must be a number	`autoLeading` muss eine Zahl sein
+@msg	`background` must be "", "matte" or #rrggbb	`background` muss "", „matte“ oder #rrggbb sein
+@msg	`burasagari` must be "none", "standard" or "forced"	`burasagari` muss „none“, „standard“ oder „forced“ sein
+@msg	`center` must be [x, y]	`center` muss [x, y] sein
+@msg	`charAlign` must be "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" or "icfBottom"	`charAlign` muss „romanBaseline“, „emBoxTop“, „emBoxCenter“, „emBoxBottom“, „icfTop“ oder „icfBottom“ sein
+@msg	`charDirection` must be "default", "leftToRight" or "rightToLeft"	`charDirection` muss „default“, „leftToRight“ oder „rightToLeft“ sein
+@msg	`clearStroke` requires `stroke: false`, `ids: []` and no `stop`	`clearStroke` erfordert `stroke: false`, `ids: []` und kein `stop`
+@msg	`clear` must be a list of type object ids, not {v}	`clear` muss eine Liste von Textobjekt-IDs sein, nicht {v}
+@msg	`clear` must list type objects; {_1} is not one	`clear` muss Textobjekte auflisten; {_1} ist keines
+@msg	`clear` must not list `id`	`clear` darf `id` nicht auflisten
+@msg	`color` needs a `rule` to make the theme from	`color` braucht eine `rule`, aus der das Farbthema erstellt wird
+@msg	`colors` is empty	`colors` ist leer
+@msg	`columnType` is vertical, uniform, repeating or sliding	`columnType` ist vertical, uniform, repeating oder sliding
+@msg	`columns` must be a whole number 1..50	`columns` muss eine ganze Zahl von 1..50 sein
+@msg	`commands` must not be empty	`commands` darf nicht leer sein
+@msg	`contents` goes with `to`	`contents` gehört zu `to`
+@msg	`corners` must be sharp, round or square, not `{other}`	`corners` muss sharp, round oder square sein, nicht `{other}`
+@msg	`corners` must list anchor indices (0, 1, 2…), not {v}	`corners` muss Ankerpunktindizes (0, 1, 2…) auflisten, nicht {v}
+@msg	`count` must be a whole number from 1 to 100	`count` muss eine ganze Zahl von 1 bis 100 sein
+@msg	`dataBase64` is larger than the module limit	`dataBase64` ist größer als die Modulgrenze
+@msg	`dataBase64` is not valid base64	`dataBase64` ist kein gültiges Base64
+@msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kann nicht mit `ids`, `reverse` oder `append` kombiniert werden
+@msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` und `childLimit` begrenzen die Zusammenfassung: Übergeben Sie `summary: true`
+@msg	`design` is a design name, or null for plain columns	`design` ist ein Designname oder null für einfache Säulen
+@msg	`design` is a design name, or null for the default marker	`design` ist ein Designname oder null für die Standardmarkierung
+@msg	`destinationFolder` is required when destination is `folder`	`destinationFolder` ist erforderlich, wenn destination `folder` ist
+@msg	`destination` must be `none`, `saveAndClose` or `folder`	`destination` muss `none`, `saveAndClose` oder `folder` sein
+@msg	`diameter` must be from 0.1 to 2500 pt	`diameter` muss zwischen 0,1 und 2500 pt liegen
+@msg	`digits` must be one of {_1}	`digits` muss eines der folgenden sein: {_1}
+@msg	`dimImages` is a percentage or false	`dimImages` ist ein Prozentwert oder false
+@msg	`direction` must be "auto", "leftToRight" or "rightToLeft"	`direction` muss „auto“, „leftToRight“ oder „rightToLeft“ sein
+@msg	`each` is the value one design stands for, more than 0	`each` ist der Wert, für den ein Design steht, größer als 0
+@msg	`end` must be "start" or "end"	`end` muss „start“ oder „end“ sein
+@msg	`ends` applies to joining exactly two paths	`ends` gilt für das Zusammenfügen von genau zwei Pfaden
+@msg	`event` must be one of {_1}	`event` muss eines der folgenden sein: {_1}
+@msg	`every` must be "all", "odd" or "even", not {v}	`every` muss „all“, „odd“ oder „even“ sein, nicht {v}
+@msg	`expand` must be true or false	`expand` muss true oder false sein
+@msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` muss 1 bis 1000 Pfade von Schriftdateien sein, die die letzte Suche mit text.findFontFiles gefunden hat
+@msg	`folder` must be an absolute folder path	`folder` muss ein absoluter Ordnerpfad sein
+@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` muss ein Objekt aus Achsen-Tags und Werten sein, etwa {"wght"}
+@msg	`format` must be a string	`format` muss ein String sein
+@msg	`format` must be one of {_1}	`format` muss eines der folgenden sein: {_1}
+@msg	`fractions` is chop or scale	`fractions` ist chop oder scale
+@msg	`from` and `to` must differ	`from` und `to` müssen sich unterscheiden
+@msg	`from` has an empty frame	`from` hat einen leeren Rahmen
+@msg	`from` must be a non-negative integer	`from` muss eine nicht negative ganze Zahl sein
+@msg	`from` must be area type or type on a path	`from` muss Flächentext oder Pfadtext sein
+@msg	`gid` must be a glyph id, not {v}	`gid` muss eine Glyphen-ID sein, nicht {v}
+@msg	`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)	`glyphAlternate` gehört zu einem einzelnen Zeichen, nicht zu einem Zeichenformat (text.setGlyphAlternate legt es fest)
+@msg	`guide` must be a guide index (guide.list)	`guide` muss ein Hilfslinienindex sein (guide.list)
+@msg	`hAlign` must be default, left, center or right	`hAlign` muss default, left, center oder right sein
+@msg	`id` must be a node id	`id` muss eine Knoten-ID sein
+@msg	`id` must be an object id, not {v}	`id` muss eine Objekt-ID sein, nicht {v}
+@msg	`ids` must name Objects on Path groups or objects in them	`ids` muss Gruppen „Objekte auf Pfad“ oder Objekte darin nennen
+@msg	`ids` takes at most {MAX_INSPECT_IDS} ids	`ids` nimmt höchstens {MAX_INSPECT_IDS} IDs
+@msg	`imageMap` must be none, rectangle or polygon	`imageMap` muss none, rectangle oder polygon sein
+@msg	`includeArtboardFill` must be true or false	`includeArtboardFill` muss true oder false sein
+@msg	`includeSubdirs` must be true or false	`includeSubdirs` muss true oder false sein
+@msg	`index` must be a point index	`index` muss ein Punktindex sein
+@msg	`index` must be a whole number or null	`index` muss eine ganze Zahl oder null sein
+@msg	`indices` must be a non-empty array of item indices	`indices` muss ein nicht leeres Array aus Elementindizes sein
+@msg	`items` is a list of {kind, item}	`items` ist eine Liste aus {kind, item}
+@msg	`items` is empty	`items` ist leer
+@msg	`items` must be a list of {id, points}	`items` muss eine Liste aus {id, points} sein
+@msg	`items` must be a list of {{id, anchors?}}, not {v}	`items` muss eine Liste aus {{id, anchors?}} sein, nicht {v}
+@msg	`items` must be an array of {id, anchors}	`items` muss ein Array aus {id, anchors} sein
+@msg	`items` must be an array of {{id, corners?}}, not {v}	`items` muss ein Array aus {{id, corners?}} sein, nicht {v}
+@msg	`kashida` must be "none", "short", "medium", "long" or "stylistic"	`kashida` muss „none“, „short“, „medium“, „long“ oder „stylistic“ sein
+@msg	`kind` is one of {_1}	`kind` ist eines der folgenden: {_1}
+@msg	`kind` must be "round", "invertedRound" or "chamfer", not {v}	`kind` muss „round“, „invertedRound“ oder „chamfer“ sein, nicht {v}
+@msg	`kind` must be `text`, `visibility`, `image` or `graph`	`kind` muss `text`, `visibility`, `image` oder `graph` sein
+@msg	`kind` must be a string	`kind` muss ein String sein
+@msg	`kind` must be image, noImage or htmlText	`kind` muss image, noImage oder htmlText sein
+@msg	`kinsoku` must be "none", "hard" or "soft"	`kinsoku` muss „none“, „hard“ oder „soft“ sein
+@msg	`label` must be a non-empty name of at most 200 characters	`label` muss ein nicht leerer Name mit höchstens 200 Zeichen sein
+@msg	`language` must be a language name or tag, such as "Turkish" or "tr"	`language` muss ein Sprachname oder -Tag sein, etwa „Turkish“ oder „tr“
+@msg	`leadingModel` must be "romanBaseline" or "emBoxTop"	`leadingModel` muss „romanBaseline“ oder „emBoxTop“ sein
+@msg	`leading` must be from 0.1 to 5000, or null for Auto	`leading` muss zwischen 0,1 und 5000 liegen oder null für Automatisch sein
+@msg	`length` must be a number of at most 1000000 pt either way	`length` muss eine Zahl von höchstens 1000000 pt in beide Richtungen sein
+@msg	`line` must be true or false	`line` muss true oder false sein
+@msg	`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)	`minAngle` ({min_angle}°) darf nicht größer als `maxAngle` ({max_angle}°) sein
+@msg	`mode` must be "handles", "straight" or "smooth"	`mode` muss „handles“, „straight“ oder „smooth“ sein
+@msg	`mode` must be "straight", "bezier" or "arc"	`mode` muss „straight“, „bezier“ oder „arc“ sein
+@msg	`mode` must be one of {_1}	`mode` muss eines der folgenden sein: {_1}
+@msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` muss „none“, „yakumonoHankaku“, „gyomatsuYakumonoHankaku“, „gyomatsuYakumonoZenkaku“, „yakumonoZenkaku“ oder „lineEndHalf“ sein
+@msg	`names` is a list of preset names	`names` ist eine Liste von Vorgabennamen
+@msg	`names` lists preset names	`names` listet Vorgabennamen auf
+@msg	`names` must be a list of names	`names` muss eine Liste von Namen sein
+@msg	`names` must be a list of swatch names	`names` muss eine Liste von Farbfeldnamen sein
+@msg	`names` must be an array of style names	`names` muss ein Array aus Formatnamen sein
+@msg	`new` is a design name, or true	`new` ist ein Designname oder true
+@msg	`path` must be a folder	`path` muss ein Ordner sein
+@msg	`path` must be a path object	`path` muss ein Pfadobjekt sein
+@msg	`pivot` must be a whole number from 0 to 8	`pivot` muss eine ganze Zahl von 0 bis 8 sein
+@msg	`points` must be a list of [x, y] points	`points` muss eine Liste von Punkten [x, y] sein
+@msg	`points` must be a list of point indexes	`points` muss eine Liste von Punktindizes sein
+@msg	`points` must be an array of point indices	`points` muss ein Array aus Punktindizes sein
+@msg	`points` must be point indexes	`points` müssen Punktindizes sein
+@msg	`port` must be "in" or "out"	`port` muss „in“ oder „out“ sein
+@msg	`position` is above or below	`position` ist above oder below
+@msg	`preset` must be a string	`preset` muss ein String sein
+@msg	`ratio` must be from 0.1 to 0.5	`ratio` muss zwischen 0,1 und 0,5 liegen
+@msg	`rect` must be [x, y, width, height] with a positive size	`rect` muss [x, y, width, height] mit einer positiven Größe sein
+@msg	`relation` must be overlap, inside or outside	`relation` muss overlap, inside oder outside sein
+@msg	`reversed` must be true or false	`reversed` muss true oder false sein
+@msg	`rotate` must be a finite number	`rotate` muss eine endliche Zahl sein
+@msg	`rule` must be nonZero or evenOdd	`rule` muss nonZero oder evenOdd sein
+@msg	`scale` must be a number in (0, 100]	`scale` muss eine Zahl in (0, 100] sein
+@msg	`scope` must be "selection" or "document", not {other}	`scope` muss „selection“ oder „document“ sein, nicht {other}
+@msg	`script` must be a string	`script` muss ein String sein
+@msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` ist eine nicht leere Liste von Reihenindizes
+@msg	`seriesIndexes` needs a `type` or a `valueAxis`	`seriesIndexes` braucht einen `type` oder eine `valueAxis`
+@msg	`shift` must be a number of points	`shift` muss eine Anzahl Punkt sein
+@msg	`showCenter` must be true or false	`showCenter` muss true oder false sein
+@msg	`singleWordJustification` must be "fullJustify", "alignLeft", "alignCenter" or "alignRight"	`singleWordJustification` muss „fullJustify“, „alignLeft“, „alignCenter“ oder „alignRight“ sein
+@msg	`size` is a percentage of the base text's size, 1 to 100	`size` ist ein Prozentwert der Größe des Grundtexts, 1 bis 100
+@msg	`source` and `target` are the same object	`source` und `target` sind dasselbe Objekt
+@msg	`source` must be `folder` or `datasets`	`source` muss `folder` oder `datasets` sein
+@msg	`spacing` must be a number	`spacing` muss eine Zahl sein
+@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing` muss eine Anzahl Punkt sein, 0 oder größer, oder „auto“
+@msg	`start` must be a finite number	`start` muss eine endliche Zahl sein
+@msg	`starts` must be an array of anchor indices (or nulls)	`starts` muss ein Array aus Ankerpunktindizes (oder null-Werten) sein
+@msg	`status` must be linked, embedded, missing or modified, or a list of them	`status` muss linked, embedded, missing oder modified oder eine Liste davon sein
+@msg	`stop` must be a stop index	`stop` muss ein Farbstoppindex sein
+@msg	`story` styles the whole story: give no `start` or `end`	`story` formatiert den gesamten Textabschnitt: Geben Sie kein `start` oder `end` an
+@msg	`story` takes the whole story: give no `start` or `end`	`story` nimmt den gesamten Textabschnitt: Geben Sie kein `start` oder `end` an
+@msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode` gilt für Konturen (stroke: true)
+@msg	`style` must be roman or japanese	`style` muss roman oder japanese sein
+@msg	`subpaths` must be two integer indices	`subpaths` müssen zwei ganzzahlige Indizes sein
+@msg	`symbol` must be a symbol name	`symbol` muss ein Symbolname sein
+@msg	`target` must be "object" or "contents", not {v}	`target` muss „object“ oder „contents“ sein, nicht {v}
+@msg	`tint` applies to global and spot colours	`tint` gilt für globale Farben und Volltonfarben
+@msg	`tint` goes with a global or spot `swatch`	`tint` gehört zu einem globalen oder Volltonfarben-`swatch`
+@msg	`tint` must be a number (%)	`tint` muss eine Zahl sein (%)
+@msg	`tint` needs a global or spot colour	`tint` braucht eine globale Farbe oder Volltonfarbe
+@msg	`to` is already threaded	`to` ist bereits verkettet
+@msg	`to` is the design's new name	`to` ist der neue Name des Designs
+@msg	`to` must be [x, y]	`to` muss [x, y] sein
+@msg	`to` must be a closed path, area type or type on a path other than `from`	`to` muss ein geschlossener Pfad, Flächentext oder Pfadtext außer `from` sein
+@msg	`to` must be a whole number	`to` muss eine ganze Zahl sein
+@msg	`to` takes the rows of one object's stack, not aligned rows	`to` nimmt die Zeilen des Stapels eines Objekts, keine ausgerichteten Zeilen
+@msg	`useLab` must be true or false	`useLab` muss true oder false sein
+@msg	`vAlign` must be default, top, middle, baseline or bottom	`vAlign` muss default, top, middle, baseline oder bottom sein
+@msg	`values` must be a list	`values` muss eine Liste sein
+@msg	`values` must be an object	`values` muss ein Objekt sein
+@msg	`values` must name hex, rgb, cmyk, lab or gray	`values` muss hex, rgb, cmyk, lab oder gray nennen
+@msg	`values` names a kind twice	`values` nennt eine Art zweimal
+@msg	`{_1}` can't be edited or removed	`{_1}` kann nicht bearbeitet oder entfernt werden
+@msg	`{_1}` is built in and always listed	`{_1}` ist integriert und wird immer aufgeführt
+@msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` ist keine Schriftdatei, die die letzte Suche mit text.findFontFiles gefunden hat
+@msg	`{_1}` would be overwritten by the package: choose a different folder or name	`{_1}` würde durch das Paket überschrieben: Wählen Sie einen anderen Ordner oder Namen
+@msg	`{file}` has no art to place	`{file}` hat keine Grafik zum Platzieren
+@msg	`{file}` is over {_1} MB	`{file}` ist größer als {_1} MB
+@msg	`{f}` belongs to a VectorCraft that is running	`{f}` gehört zu einem laufenden VectorCraft
+@msg	`{f}` is the copy of a document open now	`{f}` ist die Kopie eines gerade geöffneten Dokuments
+@msg	`{id}` is no writable format (see document.formats)	`{id}` ist kein beschreibbares Format (siehe document.formats)
+@msg	`{id}` isn't a loaded library	`{id}` ist keine geladene Bibliothek
+@msg	`{key}` has no colours	`{key}` hat keine Farben
+@msg	`{key}` is a design name	`{key}` ist ein Designname
+@msg	`{key}` is a design name or a list of them	`{key}` ist ein Designname oder eine Liste davon
+@msg	`{key}` is longer than {MAX_NAME} characters	`{key}` ist länger als {MAX_NAME} Zeichen
+@msg	`{key}` is out of range	`{key}` liegt außerhalb des gültigen Bereichs
+@msg	`{key}` must be [min, desired, max] or {{min?, desired?, max?}}, in percent	`{key}` muss [min, desired, max] oder {{min?, desired?, max?}} in Prozent sein
+@msg	`{key}` must be a non-negative integer	`{key}` muss eine nicht negative ganze Zahl sein
+@msg	`{key}` must be a number {_1}..{_2}	`{key}` muss eine Zahl von {_1}..{_2} sein
+@msg	`{key}` must be a whole number of at least 0, not {n}	`{key}` muss eine ganze Zahl von mindestens 0 sein, nicht {n}
+@msg	`{key}` must be an appearance item index (paint order) or null	`{key}` muss ein Index eines Aussehenselements (Malreihenfolge) oder null sein
+@msg	`{key}` must be an array of asset ids (see assets.list)	`{key}` muss ein Array aus Asset-IDs sein (siehe assets.list)
+@msg	`{key}` must be from 0 to 180 degrees, not {a}	`{key}` muss zwischen 0 und 180 Grad liegen, nicht {a}
+@msg	`{key}` must be from {_1} to {shift_max}	`{key}` muss zwischen {_1} und {shift_max} liegen
+@msg	`{key}`: not a colour: {v}	`{key}`: keine Farbe: {v}
+@msg	`{k}.family` is required	`{k}.family` ist erforderlich
+@msg	`{k}` is a number 0..1	`{k}` ist eine Zahl von 0..1
+@msg	`{k}` is true or false	`{k}` ist true oder false
+@msg	`{k}` isn't an export setting: {_1}	`{k}` ist keine Exporteinstellung: {_1}
+@msg	`{k}` must be a byte offset	`{k}` muss ein Byte-Offset sein
+@msg	`{k}` must be a number	`{k}` muss eine Zahl sein
+@msg	`{k}` must be a number of points	`{k}` muss eine Anzahl Punkt sein
+@msg	`{k}` must be a string	`{k}` muss ein String sein
+@msg	`{k}` must be a whole number	`{k}` muss eine ganze Zahl sein
+@msg	`{k}` must be from {lo} to {hi} for {key}	`{k}` muss für {key} zwischen {lo} und {hi} liegen
+@msg	`{k}` must be {what}, not {v}	`{k}` muss {what} sein, nicht {v}
+@msg	`{l}` isn't a global or spot colour	`{l}` ist keine globale Farbe und keine Volltonfarbe
+@msg	`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText	`{m}` ist keine Bitmap: Verwenden Sie clipboard.importSvg, importPdf oder importText
+@msg	`{name}` can't be deleted	`{name}` kann nicht gelöscht werden
+@msg	`{name}` can't be duplicated	`{name}` kann nicht dupliziert werden
+@msg	`{name}` can't be edited	`{name}` kann nicht bearbeitet werden
+@msg	`{name}` can't be edited this way	`{name}` kann nicht auf diese Weise bearbeitet werden
+@msg	`{name}` can't be renamed	`{name}` kann nicht umbenannt werden
+@msg	`{name}` can't name a folder	`{name}` kann keinen Ordner benennen
+@msg	`{name}` has no art to place	`{name}` hat keine Grafik zum Platzieren
+@msg	`{name}` has no text to place	`{name}` hat keinen Text zum Platzieren
+@msg	`{name}` in the Word document is not UTF-8 or UTF-16 text	`{name}` im Word-Dokument ist kein UTF-8- oder UTF-16-Text
+@msg	`{name}` in the Word document is not well-formed XML: {e}	`{name}` im Word-Dokument ist kein wohlgeformtes XML: {e}
+@msg	`{name}` in the Word document nests elements more than {MAX_NESTING} deep	`{name}` im Word-Dokument verschachtelt Elemente mehr als {MAX_NESTING} Ebenen tief
+@msg	`{name}` is a built-in preset and is read-only: save it under another name	`{name}` ist eine integrierte Vorgabe und schreibgeschützt: Speichern Sie sie unter einem anderen Namen
+@msg	`{name}` is a built-in preset: save under another name	`{name}` ist eine integrierte Vorgabe: Speichern Sie unter einem anderen Namen
+@msg	`{name}` is a built-in profile and stays	`{name}` ist ein integriertes Profil und bleibt erhalten
+@msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` ist ein Tonwert von `{base}`: Bearbeiten Sie `{base}` (ein Tonwertfeld nimmt nur einen neuen Namen an)
+@msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` ist ein Arbeitsfarbraum: Wählen Sie zuerst mit edit.colorSettings einen anderen
+@msg	`{name}` is built in and stays	`{name}` ist integriert und bleibt erhalten
+@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` nimmt eine Farbe seiner eigenen Art (Farbe, Verlauf oder Muster)
+@msg	`{n}` can't be deleted	`{n}` kann nicht gelöscht werden
+@msg	`{n}` can't be merged	`{n}` kann nicht zusammengeführt werden
+@msg	`{n}` can't be moved	`{n}` kann nicht verschoben werden
+@msg	`{n}` is not a colour swatch	`{n}` ist kein Farbfeld
+@msg	`{n}` isn't a solid colour	`{n}` ist keine Vollfarbe
+@msg	`{n}`: colour groups hold solid colours only	`{n}`: Farbgruppen enthalten nur Vollfarben
+@msg	`{other}` doesn't trace an image	`{other}` zeichnet kein Bild nach
+@msg	`{s}`: the step's references copy in more than {_1} MB of values	`{s}`: Die Verweise des Schritts kopieren mehr als {_1} MB an Werten
+@msg	`{tag}` is not an axis tag: a tag is four characters, such as "wght"	`{tag}` ist kein Achsen-Tag: Ein Tag hat vier Zeichen, etwa „wght“
+@msg	`{to}` is empty or already used	`{to}` ist leer oder wird bereits verwendet
+@msg	`{what}` is longer than {MAX_TEXT} bytes	`{what}` ist länger als {MAX_TEXT} Byte
+@msg	`{what}` must be text	`{what}` muss Text sein
+@msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	eine DXF-Zeichnung hat einen Ursprung: Übergeben Sie useArtboards: true für eine Zeichnung pro Zeichenfläche
+@msg	a PDF presets file with over {_1} presets	eine PDF-Vorgabendatei mit über {_1} Vorgaben
+@msg	a batch preview cannot switch documents	eine Stapelvorschau kann nicht zwischen Dokumenten wechseln
+@msg	a brush named `{nn}` exists	ein Pinsel namens `{nn}` existiert bereits
+@msg	a container of the listed objects is gone	ein Container der aufgelisteten Objekte ist nicht mehr vorhanden
+@msg	a content stream can't be read	ein Inhaltsdatenstrom kann nicht gelesen werden
+@msg	a content stream isn't a stream	ein Inhaltsdatenstrom ist kein Datenstrom
+@msg	a design holds at most {_1} objects	ein Design enthält höchstens {_1} Objekte
+@msg	a design needs a name	ein Design braucht einen Namen
+@msg	a dictionary grew too large	ein Wörterbuch ist zu groß geworden
+@msg	a document keeps at most {_1} graph designs	ein Dokument enthält höchstens {_1} Diagrammdesigns
+@msg	a document keeps at most {_1} saved selections	ein Dokument enthält höchstens {_1} gespeicherte Auswahlen
+@msg	a document keeps at most {_1} views	ein Dokument enthält höchstens {_1} Ansichten
+@msg	a document links at most {MAX_SVG_SCRIPTS} JavaScript files	ein Dokument verknüpft höchstens {MAX_SVG_SCRIPTS} JavaScript-Dateien
+@msg	a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes	die Ordnung eines feConvolveMatrix-Filters ist {x}×{y}, was bei der Multiplikation der Kernelgröße in usvg überläuft
+@msg	a gradient preset is already called {n}	eine Verlaufsvorgabe heißt bereits {n}
+@msg	a graph has at most {_1} series, so it transposes with at most that many categories	ein Diagramm hat höchstens {_1} Reihen, daher lässt es sich nur mit höchstens so vielen Kategorien transponieren
+@msg	a layer can't be merged into its own sublayer	eine Ebene kann nicht mit ihrer eigenen Unterebene zusammengeführt werden
+@msg	a layer's form box isn't an array	der Formularrahmen einer Ebene ist kein Array
+@msg	a layer's form can't be read	das Formular einer Ebene kann nicht gelesen werden
+@msg	a layer's form has no box	das Formular einer Ebene hat keinen Rahmen
+@msg	a layer's form has no dictionary	das Formular einer Ebene hat kein Wörterbuch
+@msg	a legend draws at most {MAX_CHIPS} swatches	eine Legende zeichnet höchstens {MAX_CHIPS} Farbfelder
+@msg	a name names one asset: give multiple: false, or one object	ein Name benennt ein einzelnes Asset: Geben Sie multiple: false oder ein Objekt an
+@msg	a page can't be read	eine Seite kann nicht gelesen werden
+@msg	a page object is used by something else	ein Seitenobjekt wird von etwas anderem verwendet
+@msg	a page thumbnail must be RGB pixels, 1 to {THUMBNAIL_SIZE} a side (got {w} × {h})	eine Seitenminiatur muss aus RGB-Pixeln bestehen, 1 bis {THUMBNAIL_SIZE} pro Seite (erhalten: {w} × {h})
+@msg	a pattern layer doesn't end what it starts	eine Musterebene beendet nicht, was sie beginnt
+@msg	a pattern layer's colors hold something else	die Farben einer Musterebene enthalten etwas anderes
+@msg	a pattern named `{n}` exists	ein Muster namens `{n}` existiert bereits
+@msg	a plug-in with id {_1} is already installed	ein Plug-in mit der ID {_1} ist bereits installiert
+@msg	a preset named `{n}` exists	eine Vorgabe namens `{n}` existiert bereits
+@msg	a print presets file with over {_1} presets	eine Druckvorgabendatei mit über {_1} Vorgaben
+@msg	a profile is already called {n}	ein Profil heißt bereits {n}
+@msg	a row can't go into itself	eine Zeile kann nicht in sich selbst eingefügt werden
+@msg	a series goes on the left or the right value axis	eine Reihe gehört auf die linke oder die rechte Werteachse
+@msg	a start must be an anchor index ≥ 0 or null	ein Anfang muss ein Ankerpunktindex ≥ 0 oder null sein
+@msg	a style named `{name}` already exists	ein Format namens `{name}` existiert bereits
+@msg	a style named `{to}` already exists	ein Format namens `{to}` existiert bereits
+@msg	a swatch needs a colour, gradient or pattern	ein Farbfeld braucht eine Farbe, einen Verlauf oder ein Muster
+@msg	a symbol named `{n}` already exists	ein Symbol namens `{n}` existiert bereits
+@msg	a theme has 1 to {THEME_SIZE} colours	ein Farbthema hat 1 bis {THEME_SIZE} Farben
+@msg	a theme is already called {name} (replace: "{name}" overwrites it)	ein Farbthema heißt bereits {name} (replace: „{name}“ überschreibt es)
+@msg	a toolbar name has at most {MAX_NAME} characters	ein Werkzeugleistenname hat höchstens {MAX_NAME} Zeichen
+@msg	a view named `{_1}` exists	eine Ansicht namens `{_1}` existiert bereits
+@msg	a view named `{name}` exists	eine Ansicht namens `{name}` existiert bereits
+@msg	a workspace keeps at most {MAX} toolbars	ein Arbeitsbereich enthält höchstens {MAX} Werkzeugleisten
+@msg	a {_1} series can't go in a {_2} graph	eine Reihe vom Typ {_1} kann nicht in ein Diagramm vom Typ {_2}
+@msg	aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)	aiVersion {v}: „pdf“ (PDF-kompatibel, Standard) oder „7“ (älteres .ai, Version 7)
+@msg	already editing an opacity mask	eine Deckkraftmaske wird bereits bearbeitet
+@msg	already editing another object's opacity mask	die Deckkraftmaske eines anderen Objekts wird bereits bearbeitet
+@msg	already in pattern editing mode	bereits im Musterbearbeitungsmodus
+@msg	an artboard is listed twice	eine Zeichenfläche ist zweimal aufgeführt
+@msg	an empty artboard has no width or height to scale to	eine leere Zeichenfläche hat keine Breite oder Höhe, auf die skaliert werden kann
+@msg	an image is too large for DXF and was left out	ein Bild ist zu groß für DXF und wurde ausgelassen
+@msg	an image of {_1} MB, at most {_2} MB	ein Bild mit {_1} MB, höchstens {_2} MB
+@msg	an image of {declared_w} × {declared_h} pixels is too large to draw	ein Bild mit {declared_w} × {declared_h} Pixeln ist zu groß zum Zeichnen
+@msg	an image of {width} × {height} pixels is too large to draw	ein Bild mit {width} × {height} Pixeln ist zu groß zum Zeichnen
+@msg	an index must be a whole number	ein Index muss eine ganze Zahl sein
+@msg	an inline graphic has no glyphs	eine eingebundene Grafik hat keine Glyphen
+@msg	an invisible text form can't be read	ein unsichtbares Textformular kann nicht gelesen werden
+@msg	an object is missing	ein Objekt fehlt
+@msg	an object's header is missing	der Kopf eines Objekts fehlt
+@msg	an overprinting form can't be read	ein überdruckendes Formular kann nicht gelesen werden
+@msg	an unread object has no readable bounds	ein nicht gelesenes Objekt hat keine lesbaren Begrenzungen
+@msg	an unread object holds a frame of threaded type	ein nicht gelesenes Objekt enthält einen Rahmen mit verkettetem Text
+@msg	an unread object is missing from its layer	ein nicht gelesenes Objekt fehlt in seiner Ebene
+@msg	anchor `smooth` must be true or false	Ankerpunkt-`smooth` muss true oder false sein
+@msg	anchor `{key}` must be [x, y]	Ankerpunkt-`{key}` muss [x, y] sein
+@msg	anchor `{key}` must be a number	Ankerpunkt-`{key}` muss eine Zahl sein
+@msg	angle and roundness must be finite	angle und roundness müssen endlich sein
+@msg	angles must be a list as long as pins (degrees or null)	angles muss eine Liste so lang wie pins sein (Grad oder null)
+@msg	appearance must be flat|center|edge	appearance muss flat|center|edge sein
+@msg	apply is "fill" or "stroke", not `{other}`	apply ist „fill“ oder „stroke“, nicht `{other}`
+@msg	area must be a closed polygon of 3 to 100000 [x, y] points	area muss ein geschlossenes Polygon aus 3 bis 100000 Punkten [x, y] sein
+@msg	area type needs a path that encloses an area	Flächentext braucht einen Pfad, der eine Fläche umschließt
+@msg	area type {_1} is named twice	Flächentext {_1} ist zweimal genannt
+@msg	arrowAlign must be extend|tip, got {o}	arrowAlign muss extend|tip sein, erhalten: {o}
+@msg	arrowScale must be [start, end]	arrowScale muss [start, end] sein
+@msg	artboard is a 0-based index	artboard ist ein nullbasierter Index
+@msg	artboard must be a 0-based index	artboard muss ein nullbasierter Index sein
+@msg	artboard {i} doesn't print	Zeichenfläche {i} wird nicht gedruckt
+@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout muss {layout?, columns?, spacing?, rightToLeft?} sein
+@msg	artboardLayout.columns must be 1 or more	artboardLayout.columns muss 1 oder größer sein
+@msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout muss gridByRow, gridByColumn, row oder column sein
+@msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft muss true oder false sein
+@msg	artboardLayout.spacing must be 0–{MAX_SPACING} pt	artboardLayout.spacing muss 0–{MAX_SPACING} pt sein
+@msg	artboards must be a non-empty list	artboards muss eine nicht leere Liste sein
+@msg	artboards must be a number	artboards muss eine Zahl sein
+@msg	asset `{_1}` has no art to export	Asset `{_1}` hat keine Grafik zum Exportieren
+@msg	at most {MAX_KEYWORDS} keywords	höchstens {MAX_KEYWORDS} Stichwörter
+@msg	at most {MAX_MATCHES} matches are kept	höchstens {MAX_MATCHES} Treffer werden behalten
+@msg	at most {MAX_POINTS} points	höchstens {MAX_POINTS} Punkte
+@msg	at most {MAX_QUEUE} files	höchstens {MAX_QUEUE} Dateien
+@msg	at must be [x, y]	at muss [x, y] sein
+@msg	at/rect lie outside the canvas	at/rect liegen außerhalb der Arbeitsfläche
+@msg	attribute must be size|leading|tracking|kerning|baselineShift	attribute muss size|leading|tracking|kerning|baselineShift sein
+@msg	attrs must be an object	attrs muss ein Objekt sein
+@msg	automation path rejected: the folder's name isn't valid text	Automatisierungspfad abgelehnt: Der Name des Ordners ist kein gültiger Text
+@msg	automation path rejected: {_1} isn't valid text	Automatisierungspfad abgelehnt: {_1} ist kein gültiger Text
+@msg	automation path rejected: {why}: {path}	Automatisierungspfad abgelehnt: {why}: {path}
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`	axis muss „vertical“, „horizontal“ oder ein Winkel in Grad sein, nicht `{given}`
+@msg	backgroundContents must be transparent or white	backgroundContents muss transparent oder white sein
+@msg	bad AES key	ungültiger AES-Schlüssel
+@msg	bad `runs`: {e}	ungültige `runs`: {e}
+@msg	bad arrowScale	ungültige arrowScale
+@msg	bad base64	ungültiges Base64
+@msg	bad color {c}	ungültige Farbe {c}
+@msg	bad colour	ungültige Farbe
+@msg	bad colour in `colors`	ungültige Farbe in `colors`
+@msg	bad colour {v}	ungültige Farbe {v}
+@msg	bad colour {v} in groupColors	ungültige Farbe {v} in groupColors
+@msg	bad cross-reference entry	ungültiger Querverweiseintrag
+@msg	bad cross-reference table	ungültige Querverweistabelle
+@msg	bad current colour {v}	ungültige aktuelle Farbe {v}
+@msg	bad dataBase64	ungültiges dataBase64
+@msg	bad edit	ungültige Bearbeitung
+@msg	bad fill {v}	ungültige Fläche {v}
+@msg	bad fit: {e}	ungültige Einpassung: {e}
+@msg	bad model {other} (keep, new or document)	ungültiges Modell {other} (keep, new oder document)
+@msg	bad new colour {v}	ungültige neue Farbe {v}
+@msg	bad object	ungültiges Objekt
+@msg	bad object number	ungültige Objektnummer
+@msg	bad offset	ungültiger Offset
+@msg	bad path data: {e}	ungültige Pfaddaten: {e}
+@msg	bad point {v}: expected [x, y] or [x, y, pressure]	ungültiger Punkt {v}: erwartet wird [x, y] oder [x, y, pressure]
+@msg	bad reference	ungültiger Verweis
+@msg	bad trailer size	ungültige Trailer-Größe
+@msg	bad {k} colour	ungültige {k}-Farbe
+@msg	batches cannot nest	Stapel können nicht verschachtelt werden
+@msg	bind something to a variable first	binden Sie zuerst etwas an eine Variable
+@msg	bleed must be 0–{MAX_BLEED} pt: a number, [top, bottom, left, right] or {{top, bottom, left, right}}	bleed muss 0–{MAX_BLEED} pt sein: eine Zahl, [top, bottom, left, right] oder {{top, bottom, left, right}}
+@msg	brush must be a name or null	brush muss ein Name oder null sein
+@msg	by must be a number	by muss eine Zahl sein
+@msg	can't add page thumbnails: {why}	Seitenminiaturen können nicht hinzugefügt werden: {why}
+@msg	can't add the editing data for other apps: {why}	die Bearbeitungsdaten für andere Anwendungen können nicht hinzugefügt werden: {why}
+@msg	can't edit the written PDF: {why}	das geschriebene PDF kann nicht bearbeitet werden: {why}
+@msg	can't encrypt the PDF: {why}	das PDF kann nicht verschlüsselt werden: {why}
+@msg	can't linearise the PDF: {why}	das PDF kann nicht linearisiert werden: {why}
+@msg	can't open `{_1}`: {_2}	`{_1}` kann nicht geöffnet werden: {_2}
+@msg	can't open `{_1}`: {e}	`{_1}` kann nicht geöffnet werden: {e}
+@msg	can't open `{name}`: not a format VectorCraft reads (see document.formats)	`{name}` kann nicht geöffnet werden: kein Format, das VectorCraft liest (siehe document.formats)
+@msg	can't place `{name}`: not a format VectorCraft reads (see document.formats)	`{name}` kann nicht platziert werden: kein Format, das VectorCraft liest (siehe document.formats)
+@msg	can't read back the written PDF: {e}	das geschriebene PDF kann nicht zurückgelesen werden: {e}
+@msg	can't read this Word document: {why}	dieses Word-Dokument kann nicht gelesen werden: {why}
+@msg	can't write .{e} images: use .png, .jpg, .gif, .webp, .tif or .bmp	.{e}-Bilder können nicht geschrieben werden: Verwenden Sie .png, .jpg, .gif, .webp, .tif oder .bmp
+@msg	can't write PDF layers, overprint or invisible text: {why}	PDF-Ebenen, Überdrucken oder unsichtbarer Text können nicht geschrieben werden: {why}
+@msg	can't write the file's copyright: {why}	das Copyright der Datei kann nicht geschrieben werden: {why}
+@msg	can't write the file's modification date: {why}	das Änderungsdatum der Datei kann nicht geschrieben werden: {why}
+@msg	can't write the pages' user units: {why}	die Benutzereinheiten der Seiten können nicht geschrieben werden: {why}
+@msg	cannot distort a zero-size or non-finite bounding box	ein Begrenzungsrahmen der Größe null oder mit nicht endlichen Werten kann nicht verzerrt werden
+@msg	cannot move an object into itself	ein Objekt kann nicht in sich selbst verschoben werden
+@msg	case must be upper|lower|title|sentence	case muss upper|lower|title|sentence sein
+@msg	category `{c}`: one of {_1}	Kategorie `{c}`: eines von {_1}
+@msg	center must be [x, y]	center muss [x, y] sein
+@msg	choose at least one artboard	wählen Sie mindestens eine Zeichenfläche
+@msg	choose at least one status	wählen Sie mindestens einen Status
+@msg	clip must be true or false	clip muss true oder false sein
+@msg	clippingMask must be true or false	clippingMask muss true oder false sein
+@msg	closed must be a boolean	closed muss ein boolescher Wert sein
+@msg	collapsed must be true or false	collapsed muss true oder false sein
+@msg	color.profile: no RGB or CMYK profile is called “{profile}”	color.profile: Kein RGB- oder CMYK-Profil heißt „{profile}“
+@msg	colorMode must be rgb or cmyk, not `{m}`	colorMode muss rgb oder cmyk sein, nicht `{m}`
+@msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel muss {own} (der Modus des Dokuments), grayscale oder bitmap sein
+@msg	colour groups can't go into colour groups	Farbgruppen können nicht in Farbgruppen eingefügt werden
+@msg	colour, mode and spot apply to solid-colour swatches only	colour, mode und spot gelten nur für Vollfarbfelder
+@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	Spalte {column}: `{cell}` ist eine `%`-Spalte von Diagrammdatendateien, die nicht gelesen werden
+@msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	Spalte {column}: `{cell}` nennt `{name}`, eine Variable vom Typ {_1}
+@msg	column {column}: `{cell}` names no variable	Spalte {column}: `{cell}` nennt keine Variable
+@msg	column {column}: the variable name is longer than {MAX_NAME} characters	Spalte {column}: Der Variablenname ist länger als {MAX_NAME} Zeichen
+@msg	column: true floats the whole column and takes no onto, above or below	column: true macht die ganze Spalte schwebend und nimmt kein onto, above oder below
+@msg	command must be a shape.* command	command muss ein shape.*-Befehl sein
+@msg	commands[{i}]: missing `command`	commands[{i}]: `command` fehlt
+@msg	composer must be "singleLine" or "everyLine"	composer muss „singleLine“ oder „everyLine“ sein
+@msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	zusammengesetzte Formen nehmen Pfade, zusammengesetzte Pfade, Gruppen, zusammengesetzte Formen, Text, Angleichungen und Verzerrungshüllen
+@msg	compound {_1} must contain exactly one open path to join	zusammengesetzter Pfad {_1} muss genau einen offenen Pfad zum Zusammenfügen enthalten
+@msg	connect end must be "start" or "end"	connect end muss „start“ oder „end“ sein
+@msg	connect needs a path other than the one extended	connect braucht einen anderen Pfad als den verlängerten
+@msg	connect needs id	connect braucht id
+@msg	connect path has no open end	der connect-Pfad hat kein offenes Ende
+@msg	copy needs path: the file to copy into the document's folder	copy braucht path: die Datei, die in den Ordner des Dokuments kopiert werden soll
+@msg	copy takes images only: relink placed documents where their files are	copy nimmt nur Bilder: Verknüpfen Sie platzierte Dokumente dort neu, wo ihre Dateien liegen
+@msg	copying a file isn't available on the web	das Kopieren einer Datei ist im Web nicht verfügbar
+@msg	copyrightStatus must be unknown, copyrighted or publicDomain	copyrightStatus muss unknown, copyrighted oder publicDomain sein
+@msg	copyrightUrl must be a URL (no spaces, at most 2048 characters)	copyrightUrl muss eine URL sein (keine Leerzeichen, höchstens 2048 Zeichen)
+@msg	corners must be 4 [x, y] points (TL, TR, BR, BL)	corners müssen 4 Punkte [x, y] sein (TL, TR, BR, BL)
+@msg	counterPer `{c}`: item or file	counterPer `{c}`: item oder file
+@msg	crop `{_1}`: only PDF pages have art, trim, bleed and media boxes; use "crop" or "bounding"	crop `{_1}`: Nur PDF-Seiten haben Art-, Trim-, Bleed- und Media-Boxen; verwenden Sie „crop“ oder „bounding“
+@msg	crop rectangle doesn't overlap the image	das Freistellungsrechteck überlappt das Bild nicht
+@msg	cross-reference and object streams aren't supported	Querverweis- und Objektdatenströme werden nicht unterstützt
+@msg	damaged compressed data: {e}	beschädigte komprimierte Daten: {e}
+@msg	dash lengths must be numbers, got {v}	Strichlängen müssen Zahlen sein, erhalten: {v}
+@msg	dash must be a list of lengths or null, got {v}	dash muss eine Liste von Längen oder null sein, erhalten: {v}
+@msg	data key `{k}`: letters, digits, -, _ and . (not name or vc-…)	Datenschlüssel `{k}`: Buchstaben, Ziffern, -, _ und . (nicht name oder vc-…)
+@msg	data must be an object of key: value, not {v}	data muss ein Objekt aus key: value sein, nicht {v}
+@msg	data set `{name}` holds a value for `{var}`, which the library doesn't declare	Datensatz `{name}` enthält einen Wert für `{var}`, den die Bibliothek nicht deklariert
+@msg	data set `{name}` holds two values for `{var}`	Datensatz `{name}` enthält zwei Werte für `{var}`
+@msg	data set `{name}` is declared twice	Datensatz `{name}` ist zweimal deklariert
+@msg	data takes at most {MAX_DATA} keys at once	data nimmt höchstens {MAX_DATA} Schlüssel auf einmal
+@msg	dataset `{name}` already exists	Datensatz `{name}` existiert bereits
+@msg	dataset `{to}` already exists	Datensatz `{to}` existiert bereits
+@msg	date `{d}`: YYYY-MM-DD	Datum `{d}`: YYYY-MM-DD
+@msg	decoded data is too large	die decodierten Daten sind zu groß
+@msg	define a variable first	definieren Sie zuerst eine Variable
+@msg	detect must be true or false	detect muss true oder false sein
+@msg	direct-select anchor points of a path	wählen Sie Ankerpunkte eines Pfads direkt aus
+@msg	distance must be > 0	distance muss > 0 sein
+@msg	dx and dy give the arrow's direction	dx und dy geben die Richtung des Pfeils an
+@msg	dx and dy must be numbers	dx und dy müssen Zahlen sein
+@msg	dxf fitTo must be [width, height], positive	dxf fitTo muss [width, height] sein, positiv
+@msg	dxf must be an object of DXF import options	dxf muss ein Objekt aus DXF-Importoptionen sein
+@msg	dxf scale must be a positive number up to {_1}, not {s}	dxf scale muss eine positive Zahl bis {_1} sein, nicht {s}
+@msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf unit `{u}`: eine Einheit wie mm, cm, in oder pt
+@msg	dxf: {e}	dxf: {e}
+@msg	each format is an object {format, scale?, suffix?}	jedes Format ist ein Objekt {format, scale?, suffix?}
+@msg	each item needs an id	jedes Element braucht eine id
+@msg	each match needs `kind`	jeder Treffer braucht `kind`
+@msg	each match needs a `name`	jeder Treffer braucht einen `name`
+@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	jedes Element von `fonts` ist {family, style?}; 1 bis 1000 davon
+@msg	each of `items` is {kind, item}	jedes Element von `items` ist {kind, item}
+@msg	each of `items` is {{id, corners?}} with an object id, not {it}	jedes Element von `items` ist {{id, corners?}} mit einer Objekt-ID, nicht {it}
+@msg	each row needs `from`	jede Zeile braucht `from`
+@msg	each stop needs a position	jeder Farbstopp braucht eine Position
+@msg	each subpath needs an anchors array	jeder Teilpfad braucht ein anchors-Array
+@msg	easingType must be easeIn, easeOut, easeInOut or easeOutIn	easingType muss easeIn, easeOut, easeInOut oder easeOutIn sein
+@msg	editingData must be true or false	editingData muss true oder false sein
+@msg	editingData must be true, false or "always"	editingData muss true, false oder „always“ sein
+@msg	edits overlap	Bearbeitungen überlappen sich
+@msg	effects of objects whose appearances differ can't be moved together	Effekte von Objekten mit unterschiedlichem Aussehen können nicht zusammen verschoben werden
+@msg	empty header in column {_1}	leere Kopfzeile in Spalte {_1}
+@msg	encoding `{_1}`: utf8 or utf16	Codierung `{_1}`: utf8 oder utf16
+@msg	ends must be two of "first" and "last"	ends muss zwei von „first“ und „last“ sein
+@msg	every numbered name for the result is taken	jeder nummerierte Name für das Ergebnis ist bereits vergeben
+@msg	expanded SVG styles exceed the import size limit	die erweiterten SVG-Stile überschreiten die Importgrößengrenze
+@msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	die Exportvorgabendatei ist größer als {MAX_PRESET_FILE_BYTES} Byte
+@msg	exportText must be editable or appearance	exportText muss editable oder appearance sein
+@msg	exportType must be movieClip or graphic, not `{s}`	exportType muss movieClip oder graphic sein, nicht `{s}`
+@msg	extend needs id	extend braucht id
+@msg	featureChanges lists at most {MAX_FEATURE_CHANGES} tags	featureChanges listet höchstens {MAX_FEATURE_CHANGES} Tags auf
+@msg	featureChanges must be a list of tags	featureChanges muss eine Liste von Tags sein
+@msg	features must be a list of tags	features muss eine Liste von Tags sein
+@msg	fidelity must be 0..100	fidelity muss 0..100 sein
+@msg	files must be {name, dataBase64}	files muss {name, dataBase64} sein
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit muss none|autoHeight|shrinkText|block sein, erhalten: {id}
+@msg	flattener: {e}	Reduzierung: {e}
+@msg	flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)	flattenerPreset `{name}`: high, medium, low oder eine gespeicherte (siehe flattener.presets.list)
+@msg	flipProfile must be along|across, got {o}	flipProfile muss along|across sein, erhalten: {o}
+@msg	folders `{f}`: none, rows, format, item or itemFormat	folders `{f}`: none, rows, format, item oder itemFormat
+@msg	folders deeper than {MAX_BATCH_DEPTH} levels	Ordner tiefer als {MAX_BATCH_DEPTH} Ebenen
+@msg	folders deeper than {MAX_DEPTH} levels	Ordner tiefer als {MAX_DEPTH} Ebenen
+@msg	font family `{family}` is not available	die Schriftfamilie `{family}` ist nicht verfügbar
+@msg	font family `{tf}` is not available	die Schriftfamilie `{tf}` ist nicht verfügbar
+@msg	format `{f}`: pdf or postscript	Format `{f}`: pdf oder postscript
+@msg	format `{f}`: text or json	Format `{f}`: text oder json
+@msg	format is `{format}`	das Format ist `{format}`
+@msg	formats must be an array of rows, not {v}	formats muss ein Array aus Zeilen sein, nicht {v}
+@msg	frequency must be between 1 and 300 lines per inch	frequency muss zwischen 1 und 300 Linien pro Zoll liegen
+@msg	from and to must be finite	from und to müssen endlich sein
+@msg	from must be [x0, y0, x1, y1]	from muss [x0, y0, x1, y1] sein
+@msg	give `before` or `after`, not both	geben Sie `before` oder `after` an, nicht beides
+@msg	give `colors`, or `color` and `rule`	geben Sie `colors` an, oder `color` und `rule`
+@msg	give `event`, such as onclick	geben Sie `event` an, etwa onclick
+@msg	give `file`, the JavaScript file's path or URL	geben Sie `file` an, den Pfad oder die URL der JavaScript-Datei
+@msg	give `fill` and/or `stroke`	geben Sie `fill` und/oder `stroke` an
+@msg	give `fill`, `stroke` or both	geben Sie `fill`, `stroke` oder beides an
+@msg	give `folder`	geben Sie `folder` an
+@msg	give `fonts`, or open a document	geben Sie `fonts` an, oder öffnen Sie ein Dokument
+@msg	give `from` or `indices`, not both	geben Sie `from` oder `indices` an, nicht beides
+@msg	give `id` (no text is being edited)	geben Sie `id` an (es wird kein Text bearbeitet)
+@msg	give `id` and `anchors`, or `items`, not both	geben Sie `id` und `anchors` oder `items` an, nicht beides
+@msg	give `id` or `guide`, not both	geben Sie `id` oder `guide` an, nicht beides
+@msg	give `length` or `to`	geben Sie `length` oder `to` an
+@msg	give `matches`: [{kind, name, target}]	geben Sie `matches` an: [{kind, name, target}]
+@msg	give `name` (or edit a pattern)	geben Sie `name` an (oder bearbeiten Sie ein Muster)
+@msg	give `name` or `names`	geben Sie `name` oder `names` an
+@msg	give `path` (a .wasm file) or `dataBase64` (the module)	geben Sie `path` (eine .wasm-Datei) oder `dataBase64` (das Modul) an
+@msg	give `path`, `data` or `dataBase64`	geben Sie `path`, `data` oder `dataBase64` an
+@msg	give `path`, `data`, `dataBase64` or `csv`	geben Sie `path`, `data`, `dataBase64` oder `csv` an
+@msg	give `path`, `xml` or `dataBase64`	geben Sie `path`, `xml` oder `dataBase64` an
+@msg	give `script`, the JavaScript the event runs ("" removes the event)	geben Sie `script` an, das JavaScript, das das Ereignis ausführt ("" entfernt das Ereignis)
+@msg	give `text` (the reading) or `remove`	geben Sie `text` (die Lesung) oder `remove` an
+@msg	give `x` and `y` (and a `tolerance` of 0 or more)	geben Sie `x` und `y` an (und eine `tolerance` von 0 oder größer)
+@msg	give a mode or r/g/b, c/m/y/k, gray or tint adjustments	geben Sie einen Modus oder Anpassungen für r/g/b, c/m/y/k, gray oder tint an
+@msg	give a name, or paint the active proxy with a saved preset	geben Sie einen Namen an, oder färben Sie den aktiven Proxy mit einer gespeicherten Vorgabe
+@msg	give a name, or select a stroke with a saved profile	geben Sie einen Namen an, oder wählen Sie eine Kontur mit einem gespeicherten Profil aus
+@msg	give a pattern name or select an object painted with a pattern	geben Sie einen Musternamen an, oder wählen Sie ein mit einem Muster gefärbtes Objekt aus
+@msg	give at least one of clip, invert, disabled, linked	geben Sie mindestens eines von clip, invert, disabled, linked an
+@msg	give color, none, swatch or gradient	geben Sie color, none, swatch oder gradient an
+@msg	give dataBase64	geben Sie dataBase64 an
+@msg	give either at (a click) or area (a path drawn around the overlaps)	geben Sie entweder at (einen Klick) oder area (einen um die Überlappungen gezeichneten Pfad) an
+@msg	give formats or a preset, not both	geben Sie formats oder eine Vorgabe an, nicht beides
+@msg	give newName or delete	geben Sie newName oder delete an
+@msg	give offset or by	geben Sie offset oder by an
+@msg	give one of `to`, `rect` or `at`	geben Sie eines von `to`, `rect` oder `at` an
+@msg	give one of assets, layers, selection or fullDocument	geben Sie eines von assets, layers, selection oder fullDocument an
+@msg	give only one of onto, above, below, icon and a column place	geben Sie nur eines von onto, above, below, icon und einem Spaltenplatz an
+@msg	give origin: [x, y], or reset: true	geben Sie origin: [x, y] oder reset: true an
+@msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	geben Sie overprintFill, overprintStroke, showCenter, imageMap, url oder note an
+@msg	give path (a file) or folder	geben Sie path (eine Datei) oder folder an
+@msg	give path, or name and dataBase64	geben Sie path an, oder name und dataBase64
+@msg	give paths or files	geben Sie paths oder files an
+@msg	give rows, rowHeight, columns or columnWidth	geben Sie rows, rowHeight, columns oder columnWidth an
+@msg	give svg, or dataBase64 of an SVG or SVGZ file	geben Sie svg an, oder dataBase64 einer SVG- oder SVGZ-Datei
+@msg	give text	geben Sie text an
+@msg	give the asset a name	geben Sie dem Asset einen Namen
+@msg	give the preset a `name`	geben Sie der Vorgabe einen `name`
+@msg	give the preset a name	geben Sie der Vorgabe einen Namen
+@msg	give the preset a name (1–64 characters)	geben Sie der Vorgabe einen Namen (1–64 Zeichen)
+@msg	give the settings to change, e.g. {"formats"}]}	geben Sie die zu ändernden Einstellungen an, z. B. {"formats"}]}
+@msg	give the style a name	geben Sie dem Format einen Namen
+@msg	give two or more style `names`	geben Sie zwei oder mehr Formatnamen in `names` an
+@msg	give two or more swatches	geben Sie zwei oder mehr Farbfelder an
+@msg	give x, y, or a handle's length or angle	geben Sie x, y oder die Länge oder den Winkel eines Griffs an
+@msg	give {key, value} or {values}	geben Sie {key, value} oder {values} an
+@msg	global must be true or false	global muss true oder false sein
+@msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	Glyphe {_1} wird für {ch} mit dem Format des Zeichens nicht gezeichnet (etwa Großbuchstaben, Kapitälchen oder ein Zahlensystem)
+@msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	Glyphe {g} ist keine Alternative zu {ch} in {_1} {_2}
+@msg	gradient must be "objects" or "mesh"	gradient muss „objects“ oder „mesh“ sein
+@msg	grays must be "profile" or "black", not `{g}`	grays muss „profile“ oder „black“ sein, nicht `{g}`
+@msg	gridColors must be a preset name or two colours	gridColors muss ein Vorgabenname oder zwei Farben sein
+@msg	gridSize must be small, medium or large	gridSize muss small, medium oder large sein
+@msg	guide {g} is not selected	Hilfslinie {g} ist nicht ausgewählt
+@msg	handle must be 0..3	handle muss 0..3 sein
+@msg	hiddenObjects {v}: "layer" (the default), "omit" or "visible"	hiddenObjects {v}: „layer“ (Standard), „omit“ oder „visible“
+@msg	highlight a layer to merge into	markieren Sie eine Ebene, in die zusammengeführt werden soll
+@msg	highlight two or more rows in one layer or group	markieren Sie zwei oder mehr Zeilen in einer Ebene oder Gruppe
+@msg	highlight two or more rows to merge	markieren Sie zwei oder mehr Zeilen zum Zusammenführen
+@msg	icon docks a panel in the icon column: use window.panel.dock	icon dockt ein Bedienfeld in der Symbolspalte an: Verwenden Sie window.panel.dock
+@msg	id must be a dimension id	id muss eine Bemaßungs-ID sein
+@msg	image has no bounds	das Bild hat keine Begrenzungen
+@msg	image {_1} is linked already	Bild {_1} ist bereits verknüpft
+@msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client oder server
+@msg	index out of range	Index außerhalb des gültigen Bereichs
+@msg	instances must be 1..1000	instances muss 1..1000 sein
+@msg	invalid `color`	ungültige `color`
+@msg	invalid anchor index {v}: expected a non-negative integer	ungültiger Ankerpunktindex {v}: erwartet wird eine nicht negative ganze Zahl
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	ungültiger Ankerpunktverweis {v}: erwartet wird [subpath, anchor]
+@msg	invalid angle	ungültiger Winkel
+@msg	invalid brush: {e}	ungültiger Pinsel: {e}
+@msg	invalid color	ungültige Farbe
+@msg	invalid colour {c}	ungültige Farbe {c}
+@msg	invalid delta	ungültiges Delta
+@msg	invalid point	ungültiger Punkt
+@msg	invalid size	ungültige Größe
+@msg	invalid t	ungültiges t
+@msg	invalid tolerance	ungültige Toleranz
+@msg	its artboards all lie beyond the canvas (more than {_1} pt from the origin)	seine Zeichenflächen liegen alle außerhalb der Arbeitsfläche (mehr als {_1} pt vom Ursprung entfernt)
+@msg	its clipping masks are nested too deeply	seine Schnittmasken sind zu tief verschachtelt
+@msg	its metadata has no description	seine Metadaten haben keine Beschreibung
+@msg	its metadata has no direct length	seine Metadaten haben keine direkte Länge
+@msg	join two different paths	fügen Sie zwei verschiedene Pfade zusammen
+@msg	justify must be auto|left|center|right|justifyAll	justify muss auto|left|center|right|justifyAll sein
+@msg	kbps must be a positive number, not {kbps}	kbps muss eine positive Zahl sein, nicht {kbps}
+@msg	keywords must be a list of words or a comma-separated string	keywords muss eine Liste von Wörtern oder ein durch Kommas getrennter String sein
+@msg	keywords must be at most {MAX_KEYWORD} characters, without control characters	keywords darf höchstens {MAX_KEYWORD} Zeichen ohne Steuerzeichen haben
+@msg	kind must be 1, 2 or 3, or give a preset `name` (see perspective.presets.list)	kind muss 1, 2 oder 3 sein, oder geben Sie einen Vorgaben-`name` an (siehe perspective.presets.list)
+@msg	kind must be graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle or paraStyle	kind muss graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle oder paraStyle sein
+@msg	knockout must be "on", "off", "neutral" or a bool, not {v}	knockout muss „on“, „off“, „neutral“ oder ein bool sein, nicht {v}
+@msg	layer `{name}` has no art to export	Ebene `{name}` hat keine Grafik zum Exportieren
+@msg	layer must name a layer or sublayer	layer muss eine Ebene oder Unterebene nennen
+@msg	layers can't be intertwined: select the objects in them	Ebenen können nicht verflochten werden: Wählen Sie die Objekte darin aus
+@msg	layers go only at the top level or in layers, objects in layers and groups	Ebenen gehören nur auf die oberste Stufe oder in Ebenen, Objekte in Ebenen und Gruppen
+@msg	layers must be true or false	layers muss true oder false sein
+@msg	layout must be gridByRow, gridByColumn, row or column	layout muss gridByRow, gridByColumn, row oder column sein
+@msg	leading must be a number or "auto"	leading muss eine Zahl oder „auto“ sein
+@msg	left/right must be non-negative widths	left/right müssen nicht negative Breiten sein
+@msg	level `{t}`: 2 or 3	Stufe `{t}`: 2 oder 3
+@msg	line {line}: more than {MAX_CSV_COLS} columns	Zeile {line}: mehr als {MAX_CSV_COLS} Spalten
+@msg	line {line}: unclosed quote	Zeile {line}: nicht geschlossenes Anführungszeichen
+@msg	line {line}: value for `{var}` must match its variable kind	Zeile {line}: Der Wert für `{var}` muss zur Art seiner Variable passen
+@msg	lineEndings `{other}`: lf or crlf	lineEndings `{other}`: lf oder crlf
+@msg	loading profiles from disk isn't available in the browser	das Laden von Profilen vom Datenträger ist im Browser nicht verfügbar
+@msg	margin: a {m} pt margin leaves no imageable area on the paper	margin: Ein Rand von {m} pt lässt keinen druckbaren Bereich auf dem Papier
+@msg	matrix must be finite and invertible, depth finite	matrix muss endlich und invertierbar sein, depth endlich
+@msg	matte: {e}	matte: {e}
+@msg	member is for order front, forward, backward or back	member gilt für order front, forward, backward oder back
+@msg	missing `artboards`	`artboards` fehlt
+@msg	missing `at` [x, y]	`at` [x, y] fehlt
+@msg	missing `attrs`	`attrs` fehlt
+@msg	missing `color` or `opacity`	`color` oder `opacity` fehlt
+@msg	missing `colors`	`colors` fehlt
+@msg	missing `commands`	`commands` fehlt
+@msg	missing `destinationFolder`	`destinationFolder` fehlt
+@msg	missing `effect` id	`effect`-ID fehlt
+@msg	missing `family`	`family` fehlt
+@msg	missing `find`	`find` fehlt
+@msg	missing `gid` (a glyph id, or null for the default glyph)	`gid` fehlt (eine Glyphen-ID oder null für die Standardglyphe)
+@msg	missing `group`	`group` fehlt
+@msg	missing `id`	`id` fehlt
+@msg	missing `id`: give one, or select one type object	`id` fehlt: Geben Sie eine an, oder wählen Sie ein Textobjekt aus
+@msg	missing `index` (a point index, or null to clear)	`index` fehlt (ein Punktindex oder null zum Löschen)
+@msg	missing `index` (a stop index, or null to clear)	`index` fehlt (ein Farbstoppindex oder null zum Löschen)
+@msg	missing `index` (an item index or null)	`index` fehlt (ein Elementindex oder null)
+@msg	missing `item`	`item` fehlt
+@msg	missing `library`	`library` fehlt
+@msg	missing `library` (see graphicStyle.libraries)	`library` fehlt (siehe graphicStyle.libraries)
+@msg	missing `library` (see swatch.library.list)	`library` fehlt (siehe swatch.library.list)
+@msg	missing `map` (rows [{from, to}] or {current})	`map` fehlt (Zeilen [{from, to}] oder {current})
+@msg	missing `matrix` [a,b,c,d,e,f]	`matrix` [a,b,c,d,e,f] fehlt
+@msg	missing `name` (see gradient.presets.list)	`name` fehlt (siehe gradient.presets.list)
+@msg	missing `offset` (a distance in points)	`offset` fehlt (ein Abstand in Punkt)
+@msg	missing `path`	`path` fehlt
+@msg	missing `path` (a path object id)	`path` fehlt (eine Pfadobjekt-ID)
+@msg	missing `rule`	`rule` fehlt
+@msg	missing `source` id	`source`-ID fehlt
+@msg	missing `start` (the byte offset of a character)	`start` fehlt (der Byte-Offset eines Zeichens)
+@msg	missing `status`: linked, embedded, missing or modified	`status` fehlt: linked, embedded, missing oder modified
+@msg	missing `target` id	`target`-ID fehlt
+@msg	missing `text`	`text` fehlt
+@msg	missing `to`	`to` fehlt
+@msg	missing `to` (an index)	`to` fehlt (ein Index)
+@msg	missing `to`: a non-negative integer	`to` fehlt: eine nicht negative ganze Zahl
+@msg	missing `type`	`type` fehlt
+@msg	missing `value`	`value` fehlt
+@msg	missing `{key}`	`{key}` fehlt
+@msg	missing `{k}`	`{k}` fehlt
+@msg	missing anchor	Ankerpunkt fehlt
+@msg	missing anchors	Ankerpunkte fehlen
+@msg	missing anchors [[subpath, anchor]…]	Ankerpunkte fehlen [[subpath, anchor]…]
+@msg	missing array `{key}`	Array `{key}` fehlt
+@msg	missing case	case fehlt
+@msg	missing color	Farbe fehlt
+@msg	missing commands	Befehle fehlen
+@msg	missing destination folder	Zielordner fehlt
+@msg	missing from	from fehlt
+@msg	missing group	Gruppe fehlt
+@msg	missing id or ids	id oder ids fehlt
+@msg	missing ids	ids fehlt
+@msg	missing indexes	Indizes fehlen
+@msg	missing matrix [a,b,c,d,e,f]	Matrix [a,b,c,d,e,f] fehlt
+@msg	missing name	Name fehlt
+@msg	missing op	op fehlt
+@msg	missing or invalid `color`	`color` fehlt oder ist ungültig
+@msg	missing or unknown `tool`	`tool` fehlt oder ist unbekannt
+@msg	missing point	Punkt fehlt
+@msg	missing point [x,y]	Punkt [x,y] fehlt
+@msg	missing point `{key}` ([x, y])	Punkt `{key}` fehlt ([x, y])
+@msg	missing points	Punkte fehlen
+@msg	missing points [[x,y]…]	Punkte fehlen [[x,y]…]
+@msg	missing segment	Segment fehlt
+@msg	missing stops	Farbstopps fehlen
+@msg	missing subpaths	Teilpfade fehlen
+@msg	missing target	Ziel fehlt
+@msg	missing to	to fehlt
+@msg	missing x, y	x, y fehlen
+@msg	mode is set, add or toggle, not `{other}`	mode ist set, add oder toggle, nicht `{other}`
+@msg	mode must be "cmyk" or "rgb"	mode muss „cmyk“ oder „rgb“ sein
+@msg	mode must be area|onPath, got {o}	mode muss area|onPath sein, erhalten: {o}
+@msg	more than 10000 linked files: package dependencies in smaller parts	mehr als 10000 verknüpfte Dateien: Verpacken Sie Abhängigkeiten in kleineren Teilen
+@msg	more than 256 commands	mehr als 256 Befehle
+@msg	more than {MAX_BATCH_FILES} data sets	mehr als {MAX_BATCH_FILES} Datensätze
+@msg	more than {MAX_BATCH_FILES} files	mehr als {MAX_BATCH_FILES} Dateien
+@msg	more than {MAX_CSV_ROWS} data rows	mehr als {MAX_CSV_ROWS} Datenzeilen
+@msg	more than {MAX_FILES} images	mehr als {MAX_FILES} Bilder
+@msg	more than {MAX_IMPORT} presets	mehr als {MAX_IMPORT} Vorgaben
+@msg	moved must be [[x,y]…]	moved muss [[x,y]…] sein
+@msg	name (a toolbar's name) is required	name (der Name einer Werkzeugleiste) ist erforderlich
+@msg	name (a toolbar's name) must be a string	name (der Name einer Werkzeugleiste) muss ein String sein
+@msg	name must be a toolbar's name	name muss der Name einer Werkzeugleiste sein
+@msg	names is empty	names ist leer
+@msg	names must be an array of symbol names	names muss ein Array aus Symbolnamen sein
+@msg	need `anchor` or `segment` + `t`	`anchor` oder `segment` + `t` erforderlich
+@msg	need at least one anchor	mindestens ein Ankerpunkt erforderlich
+@msg	need at least one point	mindestens ein Punkt erforderlich
+@msg	need at least two points	mindestens zwei Punkte erforderlich
+@msg	needs points	braucht Punkte
+@msg	nineSlice must be true or false	nineSlice muss true oder false sein
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides muss [left, top, right, bottom] sein, jeweils -16..16, mit left + right < 1 und top + bottom < 1
+@msg	no PDF preset named `{n}`	keine PDF-Vorgabe namens `{n}`
+@msg	no action set is current	kein Aktionssatz ist aktuell
+@msg	no active data set	kein aktiver Datensatz
+@msg	no appearance item {index}	kein Aussehenselement {index}
+@msg	no artboard {_1}	keine Zeichenfläche {_1}
+@msg	no artboard {artboard} (0-based; the document has {_1})	keine Zeichenfläche {artboard} (nullbasiert; das Dokument hat {_1})
+@msg	no asset {id}	kein Asset {id}
+@msg	no asset {id} (see assets.list)	kein Asset {id} (siehe assets.list)
+@msg	no assets to export	keine Assets zum Exportieren
+@msg	no assets yet: collect art for export first (assets.add)	noch keine Assets: Sammeln Sie zuerst Grafiken für den Export (assets.add)
+@msg	no brush named `{n}`	kein Pinsel namens `{n}`
+@msg	no character at byte {start}	kein Zeichen bei Byte {start}
+@msg	no colour	keine Farbe
+@msg	no colour group `{group}`	keine Farbgruppe `{group}`
+@msg	no colour group `{name}`	keine Farbgruppe `{name}`
+@msg	no data sets	keine Datensätze
+@msg	no dataset named `{from}`	kein Datensatz namens `{from}`
+@msg	no dataset named `{name}`	kein Datensatz namens `{name}`
+@msg	no datasets	keine Datensätze
+@msg	no design named `{name}`	kein Design namens `{name}`
+@msg	no design named `{n}`	kein Design namens `{n}`
+@msg	no design named `{old}`	kein Design namens `{old}`
+@msg	no encoder for {_1} yet	noch kein Encoder für {_1}
+@msg	no export preset `{name}` (see document.exportPresets.list)	keine Exportvorgabe `{name}` (siehe document.exportPresets.list)
+@msg	no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder	kein Ordner: Übergeben Sie `path` oder legen Sie Voreinstellungen › Plug-ins & Arbeitsvolumes › Zusätzlicher Plug-in-Ordner fest
+@msg	no fonts to look for: they are all available	keine Schriften zu suchen: Alle sind verfügbar
+@msg	no formats to export	keine Formate zum Exportieren
+@msg	no gradient preset `{name}` (see gradient.presets.list)	keine Verlaufsvorgabe `{name}` (siehe gradient.presets.list)
+@msg	no graphic style `{n}` in `{_1}`	kein Grafikstil `{n}` in `{_1}`
+@msg	no graphic style library `{key}` (see graphicStyle.libraries)	keine Grafikstil-Bibliothek `{key}` (siehe graphicStyle.libraries)
+@msg	no guide selected	keine Hilfslinie ausgewählt
+@msg	no guide selected (or give an index)	keine Hilfslinie ausgewählt (oder geben Sie einen Index an)
+@msg	no guide {i}	keine Hilfslinie {i}
+@msg	no images in the folder	keine Bilder im Ordner
+@msg	no item at index {_1}	kein Element bei Index {_1}
+@msg	no item at index {from}	kein Element bei Index {from}
+@msg	no item at one of the indices {idx}	kein Element bei einem der Indizes {idx}
+@msg	no layer	keine Ebene
+@msg	no layer {id} (see layer.list)	keine Ebene {id} (siehe layer.list)
+@msg	no layers to export	keine Ebenen zum Exportieren
+@msg	no library `{key}`	keine Bibliothek `{key}`
+@msg	no metafile format	kein Metadateiformat
+@msg	no object {_1}	kein Objekt {_1}
+@msg	no objects	keine Objekte
+@msg	no parent layer	keine übergeordnete Ebene
+@msg	no perspective grid preset named `{b}` (see perspective.presets.list)	keine Perspektivenrastervorgabe namens `{b}` (siehe perspective.presets.list)
+@msg	no perspective grid preset named `{n}`	keine Perspektivenrastervorgabe namens `{n}`
+@msg	no point selected (give `index`)	kein Punkt ausgewählt (geben Sie `index` an)
+@msg	no preset called `{from}` (see file.newPresets)	keine Vorgabe namens `{from}` (siehe file.newPresets)
+@msg	no preset called `{name}` (see file.newPresets)	keine Vorgabe namens `{name}` (siehe file.newPresets)
+@msg	no preset named `{n}`	keine Vorgabe namens `{n}`
+@msg	no print preset named `{b}` (see print.presets.list)	keine Druckvorgabe namens `{b}` (siehe print.presets.list)
+@msg	no print preset named `{name}` (presets: {_1})	keine Druckvorgabe namens `{name}` (Vorgaben: {_1})
+@msg	no print preset named `{n}`	keine Druckvorgabe namens `{n}`
+@msg	no profile named `{name}`	kein Profil namens `{name}`
+@msg	no readable files in the folder	keine lesbaren Dateien im Ordner
+@msg	no recovery copy `{f}` (see file.recovery.list)	keine Wiederherstellungskopie `{f}` (siehe file.recovery.list)
+@msg	no rows	keine Zeilen
+@msg	no saved PDF preset named `{name}`	keine gespeicherte PDF-Vorgabe namens `{name}`
+@msg	no saved export preset `{name}`	keine gespeicherte Exportvorgabe `{name}`
+@msg	no saved gradient preset called {name}	keine gespeicherte Verlaufsvorgabe namens {name}
+@msg	no saved gradient presets	keine gespeicherten Verlaufsvorgaben
+@msg	no saved preset called `{name}`	keine gespeicherte Vorgabe namens `{name}`
+@msg	no saved presets to export (name [Default] in `names` to export it)	keine gespeicherten Vorgaben zum Exportieren (nennen Sie [Default] in `names`, um sie zu exportieren)
+@msg	no saved presets to export (name built-in ones in `names`)	keine gespeicherten Vorgaben zum Exportieren (nennen Sie integrierte in `names`)
+@msg	no saved print preset named `{name}`	keine gespeicherte Druckvorgabe namens `{name}`
+@msg	no saved profile called {name}	kein gespeichertes Profil namens {name}
+@msg	no saved selection `{name}`	keine gespeicherte Auswahl `{name}`
+@msg	no saved theme called {name} (see colorTheme.list)	kein gespeichertes Farbthema namens {name} (siehe colorTheme.list)
+@msg	no saved views	keine gespeicherten Ansichten
+@msg	no series {i}	keine Reihe {i}
+@msg	no slice {n} in the image (see slice.list)	kein Slice {n} im Bild (siehe slice.list)
+@msg	no source art	keine Quellgrafik
+@msg	no stop {i} (the gradient has {n})	kein Farbstopp {i} (der Verlauf hat {n})
+@msg	no style `{name}`	kein Format `{name}`
+@msg	no such assets (see assets.list)	keine solchen Assets (siehe assets.list)
+@msg	no such frame anchor, or the frame would reach past the canvas	kein solcher Rahmenankerpunkt, oder der Rahmen würde über die Arbeitsfläche hinausreichen
+@msg	no such objects	keine solchen Objekte
+@msg	no such path anchor, or the path would reach past the canvas	kein solcher Pfadankerpunkt, oder der Pfad würde über die Arbeitsfläche hinausreichen
+@msg	no such rows	keine solchen Zeilen
+@msg	no swatch `{keep}`	kein Farbfeld `{keep}`
+@msg	no swatch `{n}`	kein Farbfeld `{n}`
+@msg	no swatch `{n}` (swatches and colour groups move separately)	kein Farbfeld `{n}` (Farbfelder und Farbgruppen werden getrennt verschoben)
+@msg	no swatch library `{key}` (see swatch.library.list)	keine Farbfeldbibliothek `{key}` (siehe swatch.library.list)
+@msg	no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)	keine Farbfeldbibliothek `{key}` (siehe swatch.library.list; „document“: die Farbfelder des Dokuments)
+@msg	no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)	keine Farbfeldbibliothek `{key}` (siehe swatch.library.list; „{DOCUMENT_SWATCHES}“: die Farbfelder des Dokuments)
+@msg	no swatch named `{n}`	kein Farbfeld namens `{n}`
+@msg	no swatch or colour group `{n}`	kein Farbfeld und keine Farbgruppe `{n}`
+@msg	no swatch or colour group `{n}` in `{_1}`	kein Farbfeld und keine Farbgruppe `{n}` in `{_1}`
+@msg	no symbol named `{name}`	kein Symbol namens `{name}`
+@msg	no text objects selected	keine Textobjekte ausgewählt
+@msg	no toolbar named `{_1}`	keine Werkzeugleiste namens `{_1}`
+@msg	no toolbar named `{name}`	keine Werkzeugleiste namens `{name}`
+@msg	no tracing preset `{preset}` (see imageTrace.presets)	keine Nachzeichnervorgabe `{preset}` (siehe imageTrace.presets)
+@msg	no user library folder here (save with a path, or without one to get the data)	hier ist kein Benutzerbibliotheksordner (speichern Sie mit einem Pfad oder ohne Pfad, um die Daten zu erhalten)
+@msg	no variable named `{from}`	keine Variable namens `{from}`
+@msg	no variable named `{name}`	keine Variable namens `{name}`
+@msg	no variable named `{var}`	keine Variable namens `{var}`
+@msg	no variable named `{v}`	keine Variable namens `{v}`
+@msg	no view named `{name}`	keine Ansicht namens `{name}`
+@msg	node {_1} is not a graph	Knoten {_1} ist kein Diagramm
+@msg	node {_1} is not an image	Knoten {_1} ist kein Bild
+@msg	node {_1} is not type	Knoten {_1} ist kein Text
+@msg	not a PDF presets file (format `{_1}`)	keine PDF-Vorgabendatei (Format `{_1}`)
+@msg	not a PDF presets file: {e}	keine PDF-Vorgabendatei: {e}
+@msg	not a Word document: its WordDocument stream doesn't start with a file information block	kein Word-Dokument: Sein WordDocument-Datenstrom beginnt nicht mit einem File Information Block
+@msg	not a Word document: its compound file has no WordDocument stream	kein Word-Dokument: Seine Verbunddatei hat keinen WordDocument-Datenstrom
+@msg	not a Word document: its main part is not a WordprocessingML document	kein Word-Dokument: Sein Hauptteil ist kein WordprocessingML-Dokument
+@msg	not a Word document: its package has no main document part	kein Word-Dokument: Sein Paket hat keinen Hauptdokumentteil
+@msg	not a closed path	kein geschlossener Pfad
+@msg	not a flattener presets file (format `{_1}`)	keine Reduzierungsvorgabendatei (Format `{_1}`)
+@msg	not a flattener presets file: {e}	keine Reduzierungsvorgabendatei: {e}
+@msg	not a layer or group	keine Ebene oder Gruppe
+@msg	not a library file: {e}	keine Bibliotheksdatei: {e}
+@msg	not a mesh envelope point	kein Punkt eines Hüllengitters
+@msg	not a perspective grid presets file (format `{_1}`)	keine Perspektivenrastervorgabendatei (Format `{_1}`)
+@msg	not a perspective grid presets file: {e}	keine Perspektivenrastervorgabendatei: {e}
+@msg	not a print presets file (format `{_1}`)	keine Druckvorgabendatei (Format `{_1}`)
+@msg	not a print presets file: {e}	keine Druckvorgabendatei: {e}
+@msg	not a stored or deflated central record	kein gespeicherter oder Deflate-komprimierter zentraler Eintrag
+@msg	not a valid SVGZ file: {e}	keine gültige SVGZ-Datei: {e}
+@msg	not an RTF file: it doesn't start with {\\rtf	keine RTF-Datei: Sie beginnt nicht mit {\\rtf
+@msg	not an image VectorCraft reads (see document.formats)	kein Bild, das VectorCraft liest (siehe document.formats)
+@msg	not area type (text in a frame) outside perspective	kein Flächentext (Text in einem Rahmen) außerhalb der Perspektive
+@msg	not editing an opacity mask	es wird keine Deckkraftmaske bearbeitet
+@msg	not type on a path outside perspective	kein Pfadtext außerhalb der Perspektive
+@msg	nothing prints	nichts wird gedruckt
+@msg	nothing to bind	nichts zu binden
+@msg	nothing to change	nichts zu ändern
+@msg	nothing to change: give dx, dy, hScale, vScale or rotation	nichts zu ändern: Geben Sie dx, dy, hScale, vScale oder rotation an
+@msg	nothing to crop	nichts zuzuschneiden
+@msg	nothing to export	nichts zu exportieren
+@msg	nothing to export: the document has no visible art	nichts zu exportieren: Das Dokument hat keine sichtbare Grafik
+@msg	nothing to mark	nichts zu markieren
+@msg	nothing to print: every artboard picked is blank	nichts zu drucken: Jede gewählte Zeichenfläche ist leer
+@msg	nothing to print: the document has no art that prints	nichts zu drucken: Das Dokument hat keine Grafik, die gedruckt wird
+@msg	object is not a path	das Objekt ist kein Pfad
+@msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	Objekttransparenz kann nicht auf markierte Zeichen übertragen werden; deaktivieren Sie „Transparenz“ in den Pipettenoptionen oder wählen Sie das ganze Objekt aus
+@msg	object {_1} can't be set as point type	Objekt {_1} kann nicht als Punkttext festgelegt werden
+@msg	object {_1} has lost its file's contents: relink it	Objekt {_1} hat den Inhalt seiner Datei verloren: Verknüpfen Sie es neu
+@msg	object {_1} has no path	Objekt {_1} hat keinen Pfad
+@msg	object {_1} has no size	Objekt {_1} hat keine Größe
+@msg	object {_1} is hidden or locked, or on a locked artboard	Objekt {_1} ist ausgeblendet oder gesperrt oder liegt auf einer gesperrten Zeichenfläche
+@msg	object {_1} is not a placed document	Objekt {_1} ist kein platziertes Dokument
+@msg	object {_1} is not an Intertwine group	Objekt {_1} ist keine Verflechtungsgruppe
+@msg	object {_1} is not an image	Objekt {_1} ist kein Bild
+@msg	object {_1} is not an image or a linked file	Objekt {_1} ist kein Bild und keine verknüpfte Datei
+@msg	object {_1} is not an image or a placed document	Objekt {_1} ist kein Bild und kein platziertes Dokument
+@msg	object {_1} is not in this Intertwine group	Objekt {_1} ist nicht in dieser Verflechtungsgruppe
+@msg	object {_1} needs a 3D effect at index {index}	Objekt {_1} braucht einen 3D-Effekt bei Index {index}
+@msg	object {id} has anchors 0–{_1} for `corners`, not {past}	Objekt {id} hat die Ankerpunkte 0–{_1} für `corners`, nicht {past}
+@msg	object {id} has {n} anchors, so no anchor {past}	Objekt {id} hat {n} Ankerpunkte, also keinen Ankerpunkt {past}
+@msg	objects must be none, move or copy	objects muss none, move oder copy sein
+@msg	objects were left out	Objekte wurden ausgelassen
+@msg	offset out of range	Offset außerhalb des gültigen Bereichs
+@msg	on must be true or false	on muss true oder false sein
+@msg	only groups, layers, type and images have a Contents (Characters) row	nur Gruppen, Ebenen, Text und Bilder haben eine Zeile „Inhalt (Zeichen)“
+@msg	only interior mesh lines can be deleted	nur innere Gitterlinien können gelöscht werden
+@msg	only solid colours can be added (not gradients or patterns)	nur Vollfarben können hinzugefügt werden (keine Verläufe oder Muster)
+@msg	only solid-colour swatches can be spot colours	nur Vollfarbfelder können Volltonfarben sein
+@msg	only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first	nur die eingebettete Vorschau dieser Affinity-Datei konnte gelesen werden: Verwenden Sie Datei › Öffnen, um sie mit ihrer Warnung zu sehen, oder exportieren Sie zuerst SVG oder PDF aus Affinity
+@msg	only this Affinity file's embedded preview could be read; use File › Open to see it with its warning	nur die eingebettete Vorschau dieser Affinity-Datei konnte gelesen werden; verwenden Sie Datei › Öffnen, um sie mit ihrer Warnung zu sehen
+@msg	onto, above, below, icon and a column place belong to window.panel.float and window.panel.dock	onto, above, below, icon und ein Spaltenplatz gehören zu window.panel.float und window.panel.dock
+@msg	onto, above, below, icon and a column place take no anchor, side, zone or before	onto, above, below, icon und ein Spaltenplatz nehmen kein anchor, side, zone oder before
+@msg	onto, above, below, icon and a column place take no x, y, width or height	onto, above, below, icon und ein Spaltenplatz nehmen kein x, y, width oder height
+@msg	open a document to look for its linked files	öffnen Sie ein Dokument, um nach seinen verknüpften Dateien zu suchen
+@msg	options must be an object (see file.formatOptions)	options muss ein Objekt sein (siehe file.formatOptions)
+@msg	order must be leftToRight or rightToLeft	order muss leftToRight oder rightToLeft sein
+@msg	orientation must be portrait or landscape, not `{o}`	orientation muss portrait oder landscape sein, nicht `{o}`
+@msg	outlineText {v}: true or false	outlineText {v}: true oder false
+@msg	output intent profile: {e}	Profil der Ausgabemethode: {e}
+@msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: Kein RGB- oder CMYK-Profil heißt „{name}“
+@msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1}-Dateien sind CMYK, und „{name}“ ist ein RGB-Profil
+@msg	output.destination: {e}	output.destination: {e}
+@msg	output.inks: no ink is set to print	output.inks: Keine Druckfarbe ist zum Drucken eingestellt
+@msg	output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile	output.outputIntent: Kein Profil heißt „{name}“, und eine {std}-Ausgabemethode bettet ihr Profil ein
+@msg	output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)	output.outputIntent: Kein Profil heißt „{name}“: Eine {std}-Ausgabemethode bettet ein Profil ein oder nennt eine registrierte Druckbedingung (outputConditionId und registry)
+@msg	output.outputIntent: {std} files print in CMYK, and “{name}” is an RGB profile	output.outputIntent: {std}-Dateien drucken in CMYK, und „{name}“ ist ein RGB-Profil
+@msg	output.outputIntent: “{name}” is a grey profile, which can't be a {std} output intent	output.outputIntent: „{name}“ ist ein Graustufenprofil, das keine {std}-Ausgabemethode sein kann
+@msg	overlap: {o} pt is half a tile or more	overlap: {o} pt ist eine halbe Kachel oder mehr
+@msg	overlapping Shaper paths must be in the same layer or group	überlappende Shaper-Pfade müssen in derselben Ebene oder Gruppe liegen
+@msg	overlapping edits	überlappende Bearbeitungen
+@msg	page art conflicts with image data for {key}	die Seitengrafik widerspricht den Bilddaten für {key}
+@msg	page art conflicts with pattern {name}	die Seitengrafik widerspricht dem Muster {name}
+@msg	page art conflicts with swatch {name}	die Seitengrafik widerspricht dem Farbfeld {name}
+@msg	page art is missing image data for {key}	der Seitengrafik fehlen die Bilddaten für {key}
+@msg	page art is missing pattern {name}	der Seitengrafik fehlt das Muster {name}
+@msg	page art is missing swatch {name}	der Seitengrafik fehlt das Farbfeld {name}
+@msg	page must be a whole number from 1	page muss eine ganze Zahl ab 1 sein
+@msg	page thumbnail: {e}	Seitenminiatur: {e}
+@msg	page {page} of the PDF has no objects	Seite {page} des PDF hat keine Objekte
+@msg	page {page}: `{file}` has {n} {artboards}	Seite {page}: `{file}` hat {n} {artboards}
+@msg	page {page}: `{name}` has {n} {pages}	Seite {page}: `{name}` hat {n} {pages}
+@msg	pages must be a range such as "2-3" or a page number, not {v}	pages muss ein Bereich wie „2-3“ oder eine Seitenzahl sein, nicht {v}
+@msg	pages: {e}	pages: {e}
+@msg	panel position must be finite	die Bedienfeldposition muss endlich sein
+@msg	parameters must be an object	parameters muss ein Objekt sein
+@msg	params must be an object	params muss ein Objekt sein
+@msg	passwords can have up to {MAX_PASSWORD} bytes	Kennwörter können bis zu {MAX_PASSWORD} Byte haben
+@msg	path has no open end	der Pfad hat kein offenes Ende
+@msg	paths must be strings	paths müssen Strings sein
+@msg	pdfCompatible: false needs every artboard to keep the editable artwork	pdfCompatible: false braucht jede Zeichenfläche, um die bearbeitbare Grafik zu behalten
+@msg	pdfs `{m}`: single or multiple	pdfs `{m}`: single oder multiple
+@msg	pickColorFrom is "artwork" or "swatches", not {v}	pickColorFrom ist „artwork“ oder „swatches“, nicht {v}
+@msg	pins and moved must be non-empty lists of the same length	pins und moved müssen nicht leere Listen gleicher Länge sein
+@msg	pins must be [[x,y]…]	pins muss [[x,y]…] sein
+@msg	pins must be finite	pins müssen endlich sein
+@msg	place is above, below or inside, not `{other}`	place ist above, below oder inside, nicht `{other}`
+@msg	plane must be left|right|ground	plane muss left|right|ground sein
+@msg	plane must be left|right|ground|none	plane muss left|right|ground|none sein
+@msg	point is outside the mesh	der Punkt liegt außerhalb des Gitters
+@msg	points must be [t, left, right] with non-negative widths	points muss [t, left, right] mit nicht negativen Breiten sein
+@msg	points must be a non-empty [[x,y,pressure?]…] list	points muss eine nicht leere Liste [[x,y,pressure?]…] sein
+@msg	points must be a non-empty list of finite [x,y]	points muss eine nicht leere Liste endlicher [x,y] sein
+@msg	points must be an array or null	points muss ein Array oder null sein
+@msg	points must be finite	points müssen endlich sein
+@msg	points must be finite [x,y] pairs	points müssen endliche [x,y]-Paare sein
+@msg	points must contain 1–4096 coordinates	points muss 1–4096 Koordinaten enthalten
+@msg	position must be normal, superscript or subscript	position muss normal, superscript oder subscript sein
+@msg	position must be topLeft, topRight, bottomLeft or bottomRight	position muss topLeft, topRight, bottomLeft oder bottomRight sein
+@msg	positions must be between 0 and 100000 pt	positions müssen zwischen 0 und 100000 pt liegen
+@msg	ppi must be a positive number, not {ppi}	ppi muss eine positive Zahl sein, nicht {ppi}
+@msg	ppi must be between 1 and 2400	ppi muss zwischen 1 und 2400 liegen
+@msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` ist nicht transforms|bounds|fileDimensions|fit|fill
+@msg	preserveShape must be clippingMask|transparency	preserveShape muss clippingMask|transparency sein
+@msg	preset `{id}`: mobile or density	Vorgabe `{id}`: mobile oder density
+@msg	preset must be standard, diffuse, topLeft or right	preset muss standard, diffuse, topLeft oder right sein
+@msg	preset must be the name of a print preset	preset muss der Name einer Druckvorgabe sein
+@msg	previewMode must be default, pixel or overprint	previewMode muss default, pixel oder overprint sein
+@msg	print settings: {e}	Druckeinstellungen: {e}
+@msg	procedures nest too deeply	Prozeduren sind zu tief verschachtelt
+@msg	procedures nested too deeply	Prozeduren zu tief verschachtelt
+@msg	quotes must be {double?, single?}	quotes muss {double?, single?} sein
+@msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	quotes.{k} muss ein öffnendes und ein schließendes Anführungszeichen sein, z. B. "“”"
+@msg	rasterEffectsPpi must be 1–2400 (72 screen, 150 medium, 300 high)	rasterEffectsPpi muss 1–2400 sein (72 Bildschirm, 150 mittel, 300 hoch)
+@msg	rating must be a whole number from 0 to {MAX_RATING}	rating muss eine ganze Zahl von 0 bis {MAX_RATING} sein
+@msg	rect and {k} contradict each other: give the area or the artboards	rect und {k} widersprechen sich: Geben Sie den Bereich oder die Zeichenflächen an
+@msg	rect applies to raster formats, not {_1}	rect gilt für Rasterformate, nicht für {_1}
+@msg	rect is [x, y, width, height] in points	rect ist [x, y, width, height] in Punkt
+@msg	rect must be [x, y, width, height]	rect muss [x, y, width, height] sein
+@msg	rect must be [x, y, width, height] with a positive width and height	rect muss [x, y, width, height] mit positiver Breite und Höhe sein
+@msg	rect needs finite numbers and a positive width and height	rect braucht endliche Zahlen und eine positive Breite und Höhe
+@msg	redraw needs id	redraw braucht id
+@msg	redraw within must be a finite distance of 0 or more	redraw within muss ein endlicher Abstand von 0 oder größer sein
+@msg	registration must be 0..8	registration muss 0..8 sein
+@msg	release a layer or a group	wandeln Sie eine Ebene oder eine Gruppe zurück
+@msg	replace keeps the replaced object's place and transform: drop template, at and rect	replace behält Platz und Transformation des ersetzten Objekts: Lassen Sie template, at und rect weg
+@msg	replace: select the one object to replace	replace: Wählen Sie das eine zu ersetzende Objekt aus
+@msg	resolution must be a number or screen|medium|high	resolution muss eine Zahl oder screen|medium|high sein
+@msg	resolution must be between 1 and 2400 ppi	resolution muss zwischen 1 und 2400 ppi liegen
+@msg	rotation must be a number of degrees	rotation muss eine Gradzahl sein
+@msg	rotation must be finite	rotation muss endlich sein
+@msg	rows and cols must be 1..50	rows und cols müssen 1..50 sein
+@msg	rows and columns must be 1..500	rows und columns müssen 1..500 sein
+@msg	rows of objects whose appearances differ can't be reordered together	Zeilen von Objekten mit unterschiedlichem Aussehen können nicht zusammen neu angeordnet werden
+@msg	save the document first: Package collects a saved document	speichern Sie zuerst das Dokument: Verpacken sammelt ein gespeichertes Dokument
+@msg	save the document first: copy puts the file in its folder	speichern Sie zuerst das Dokument: copy legt die Datei in seinen Ordner
+@msg	savedPreset: {e}	savedPreset: {e}
+@msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	scale `{s}`: ein Faktor wie 2x, eine Breite (100w), eine Höhe (100h) oder eine Auflösung (72ppi)
+@msg	scale must be a number above 0, at most 64	scale muss eine Zahl über 0 sein, höchstens 64
+@msg	scale must be non-zero	scale darf nicht null sein
+@msg	scope must be selection or all (got {other})	scope muss selection oder all sein (erhalten: {other})
+@msg	scribble is too long	die Kritzelei ist zu lang
+@msg	segment does not exist	das Segment existiert nicht
+@msg	select a Shaper group	wählen Sie eine Shaper-Gruppe aus
+@msg	select a blend to set easing or color shift	wählen Sie eine Angleichung aus, um Beschleunigung oder Farbverschiebung festzulegen
+@msg	select a compound shape	wählen Sie eine zusammengesetzte Form aus
+@msg	select a graph	wählen Sie ein Diagramm aus
+@msg	select a group or layer with visible, unlocked members	wählen Sie eine Gruppe oder Ebene mit sichtbaren, nicht gesperrten Elementen aus
+@msg	select a layer	wählen Sie eine Ebene aus
+@msg	select a text object	wählen Sie ein Textobjekt aus
+@msg	select an image (or an Image Trace group)	wählen Sie ein Bild (oder eine Bildnachzeichner-Gruppe) aus
+@msg	select an image, or pass id	wählen Sie ein Bild aus, oder übergeben Sie id
+@msg	select an object (or pass `id`)	wählen Sie ein Objekt aus (oder übergeben Sie `id`)
+@msg	select an object with a freeform gradient	wählen Sie ein Objekt mit einem Freiformverlauf aus
+@msg	select an object with an opacity mask	wählen Sie ein Objekt mit einer Deckkraftmaske aus
+@msg	select area type	wählen Sie Flächentext aus
+@msg	select area type (text in a frame)	wählen Sie Flächentext (Text in einem Rahmen) aus
+@msg	select area type and closed paths (at least one area type object)	wählen Sie Flächentext und geschlossene Pfade aus (mindestens ein Flächentextobjekt)
+@msg	select area type whose first line can fit its frame	wählen Sie Flächentext aus, dessen erste Zeile in seinen Rahmen passt
+@msg	select artwork to add its colours	wählen Sie Grafik aus, um ihre Farben hinzuzufügen
+@msg	select artwork to make a group of its colours	wählen Sie Grafik aus, um aus ihren Farben eine Gruppe zu erstellen
+@msg	select artwork to recolour, or give a colour `group`	wählen Sie die neu zu färbende Grafik aus, oder geben Sie eine Farbgruppe in `group` an
+@msg	select exactly two path ends to join	wählen Sie genau zwei Pfadenden zum Zusammenfügen aus
+@msg	select members of a compound shape	wählen Sie Elemente einer zusammengesetzten Form aus
+@msg	select objects or give ids	wählen Sie Objekte aus, oder geben Sie ids an
+@msg	select objects to align to the guide	wählen Sie Objekte aus, die an der Hilfslinie ausgerichtet werden sollen
+@msg	select one Intertwine group	wählen Sie eine Verflechtungsgruppe aus
+@msg	select one image or pass id	wählen Sie ein Bild aus, oder übergeben Sie id
+@msg	select paths	wählen Sie Pfade aus
+@msg	select paths or compound paths	wählen Sie Pfade oder zusammengesetzte Pfade aus
+@msg	select rows or objects to collect	wählen Sie Zeilen oder Objekte zum Sammeln aus
+@msg	select something to export	wählen Sie etwas zum Exportieren aus
+@msg	select something to export (or turn off selectedOnly)	wählen Sie etwas zum Exportieren aus (oder deaktivieren Sie selectedOnly)
+@msg	select text to redefine the style from	wählen Sie den Text aus, aus dem das Format neu definiert werden soll
+@msg	select the art and, on top of it, the mask object	wählen Sie das Bildmaterial und darüber das Maskenobjekt aus
+@msg	select the art for the design	wählen Sie das Bildmaterial für das Design aus
+@msg	select the art for the pattern tile	wählen Sie das Bildmaterial für die Musterkachel aus
+@msg	select the art to add first	wählen Sie zuerst das hinzuzufügende Bildmaterial aus
+@msg	select the art to collect (or give its ids)	wählen Sie das zu sammelnde Bildmaterial aus (oder geben Sie seine IDs an)
+@msg	select the content and a path on top	wählen Sie den Inhalt und einen darüberliegenden Pfad aus
+@msg	select the images to relink, or pass ids	wählen Sie die neu zu verknüpfenden Bilder aus, oder übergeben Sie ids
+@msg	select the images, or pass ids	wählen Sie die Bilder aus, oder übergeben Sie ids
+@msg	select the linked images or placed documents, or pass ids	wählen Sie die verknüpften Bilder oder platzierten Dokumente aus, oder übergeben Sie ids
+@msg	select the object to copy from	wählen Sie das Objekt aus, aus dem kopiert werden soll
+@msg	select the objects (or give their ids)	wählen Sie die Objekte aus (oder geben Sie ihre IDs an)
+@msg	select the objects to attach to the path	wählen Sie die Objekte aus, die an den Pfad angehängt werden sollen
+@msg	select the objects to bind	wählen Sie die zu bindenden Objekte aus
+@msg	select two or more objects to intertwine	wählen Sie zwei oder mehr Objekte zum Verflechten aus
+@msg	select two or more slices to combine	wählen Sie zwei oder mehr Slices zum Kombinieren aus
+@msg	select type on a path	wählen Sie Pfadtext aus
+@msg	selection `{m}`: one or each	selection `{m}`: one oder each
+@msg	settings is an object of document.exportForScreens params	settings ist ein Objekt aus Parametern von document.exportForScreens
+@msg	settings must be an object	settings muss ein Objekt sein
+@msg	show `{show}`: all, missing, modified or embedded	show `{show}`: all, missing, modified oder embedded
+@msg	show must be true or false	show muss true oder false sein
+@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size muss „small“, „medium“, „large“ oder eine Anzahl Punkt über 0 bis {_1} sein
+@msg	size must be positive	size muss positiv sein
+@msg	sizeMode is "fixed" or "pressure", not `{other}`	sizeMode ist „fixed“ oder „pressure“, nicht `{other}`
+@msg	sizeMode is "fixed" or "pressure", not {other}	sizeMode ist „fixed“ oder „pressure“, nicht {other}
+@msg	sizeVariation must be 0 or more	sizeVariation muss 0 oder größer sein
+@msg	smallCaps must be true or false	smallCaps muss true oder false sein
+@msg	sort `{x}`: name, kind or status	sort `{x}`: name, kind oder status
+@msg	source paths are too large for Shaper	die Quellpfade sind zu groß für Shaper
+@msg	spot, mode and group apply to solid colours only	spot, mode und group gelten nur für Vollfarben
+@msg	status `{s}`: linked, embedded, missing or modified	status `{s}`: linked, embedded, missing oder modified
+@msg	steps must be 1..1000	steps muss 1..1000 sein
+@msg	steps must be 1..{MAX_STEPS}	steps muss 1..{MAX_STEPS} sein
+@msg	stop {i}: `plates` must be four numbers from 0 to 1 (C, M, Y, K)	Farbstopp {i}: `plates` muss aus vier Zahlen von 0 bis 1 bestehen (C, M, Y, K)
+@msg	stopped before the archive was finished	angehalten, bevor das Archiv fertig war
+@msg	strokeMode must be within|along|across, got {m}	strokeMode muss within|along|across sein, erhalten: {m}
+@msg	strokeOptions must be an object of stroke.set options	strokeOptions muss ein Objekt aus Optionen von stroke.set sein
+@msg	strokeWidth must be a positive number of pixels	strokeWidth muss eine positive Anzahl Pixel sein
+@msg	subpath {si} is not an open subpath	Teilpfad {si} ist kein offener Teilpfad
+@msg	subpaths required when joining the same path	subpaths ist beim Zusammenfügen desselben Pfads erforderlich
+@msg	swatchConflict must be "merge" or "add", not {v}	swatchConflict muss „merge“ oder „add“ sein, nicht {v}
+@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text muss {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?} sein
+@msg	text transform is collapsed or unrepresentable	die Texttransformation ist zusammengefallen oder nicht darstellbar
+@msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces muss eine ganze Zahl von 2 bis 100 sein
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: Verwenden Sie „{_1}“ oder „{_2}“
+@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: Geben Sie {path} oder {name, dataBase64} einer Bilddatei an, oder eine Textur, wie effect.list sie angibt
+@msg	textureImage: {e}	textureImage: {e}
+@msg	that makes more than {MAX_PIECES} slices	das ergibt mehr als {MAX_PIECES} Slices
+@msg	that object is not in the overlap	dieses Objekt liegt nicht in der Überlappung
+@msg	the Affinity document has no page with a size	das Affinity-Dokument hat keine Seite mit einer Größe
+@msg	the CMYK image couldn't be written	das CMYK-Bild konnte nicht geschrieben werden
+@msg	the PDF security settings were saved without their passwords: give openPassword or permissionsPassword again, or security without passwordRequired to export unprotected	die PDF-Sicherheitseinstellungen wurden ohne ihre Kennwörter gespeichert: Geben Sie openPassword oder permissionsPassword erneut an, oder security ohne passwordRequired, um ungeschützt zu exportieren
+@msg	the RTF file has too many paragraphs or formatting changes to place as type (at most {MAX_PARAGRAPHS} paragraphs and {MAX_RUNS} runs)	die RTF-Datei hat zu viele Absätze oder Formatierungswechsel, um als Text platziert zu werden (höchstens {MAX_PARAGRAPHS} Absätze und {MAX_RUNS} Textläufe)
+@msg	the RTF file is too large to place as type (at most {_1} MB)	die RTF-Datei ist zu groß, um als Text platziert zu werden (höchstens {_1} MB)
+@msg	the SVG expands to more than {0} nested SVG images	das SVG wird zu mehr als {0} verschachtelten SVG-Bildern erweitert
+@msg	the SVG expands to more than {0} objects	das SVG wird zu mehr als {0} Objekten erweitert
+@msg	the SVG has no drawable objects	das SVG hat keine zeichenbaren Objekte
+@msg	the SVGZ file unpacks to more than {_1} MB	die SVGZ-Datei wird auf mehr als {_1} MB entpackt
+@msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	das Word-Dokument hat mehr als {MAX_PAGES} Seiten an Eigenschaften, zu viele zum Platzieren
+@msg	the Word document has more than {MAX_RUNS} runs of character or paragraph properties, too many to place	das Word-Dokument hat mehr als {MAX_RUNS} Läufe mit Zeichen- oder Absatzeigenschaften, zu viele zum Platzieren
+@msg	the Word document has more than {_1} MB of formatting properties, too many to place	das Word-Dokument hat mehr als {_1} MB an Formatierungseigenschaften, zu viele zum Platzieren
+@msg	the Word document has too much text or formatting to place as type (at most {MAX_PARAGRAPHS} paragraphs, {MAX_RUNS} runs and {_1} MB of text)	das Word-Dokument hat zu viel Text oder Formatierung, um als Text platziert zu werden (höchstens {MAX_PARAGRAPHS} Absätze, {MAX_RUNS} Textläufe und {_1} MB Text)
+@msg	the Word document has too much text to place as type (at most {_1} MB)	das Word-Dokument hat zu viel Text, um als Text platziert zu werden (höchstens {_1} MB)
+@msg	the Word document is encrypted or protected with a password; save it without one to place it	das Word-Dokument ist verschlüsselt oder mit einem Kennwort geschützt; speichern Sie es ohne Kennwort, um es zu platzieren
+@msg	the Word document is too large to place (its {name} stream holds more than {_1} MB)	das Word-Dokument ist zu groß zum Platzieren (sein Datenstrom {name} enthält mehr als {_1} MB)
+@msg	the Word document was last saved with fast save, which VectorCraft doesn't read; save it again with fast save turned off	das Word-Dokument wurde zuletzt mit Schnellspeicherung gespeichert, die VectorCraft nicht liest; speichern Sie es erneut mit deaktivierter Schnellspeicherung
+@msg	the Word document was saved by Word 6.0 or Word 95, which VectorCraft doesn't read; save it as a Word 97-2003 document	das Word-Dokument wurde mit Word 6.0 oder Word 95 gespeichert, das VectorCraft nicht liest; speichern Sie es als Word-97-2003-Dokument
+@msg	the Word document's text is made of more than {MAX_PIECES} pieces, too many to place	der Text des Word-Dokuments besteht aus mehr als {MAX_PIECES} Teilen, zu viele zum Platzieren
+@msg	the action set ids are not a list	die IDs der Aktionssätze sind keine Liste
+@msg	the active paint is not a gradient	die aktive Farbe ist kein Verlauf
+@msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	die Zeichenflächen passen nicht auf die Arbeitsfläche: weniger Zeichenflächen, weniger Abstand oder eine kleinere Größe
+@msg	the character's size can't be measured	die Größe des Zeichens kann nicht gemessen werden
+@msg	the compound shape is too complex to expand	die zusammengesetzte Form ist zu komplex zum Umwandeln
+@msg	the container of the listed objects is gone	der Container der aufgelisteten Objekte ist nicht mehr vorhanden
+@msg	the copy `{user_id}` can't be read as a library	die Kopie `{user_id}` kann nicht als Bibliothek gelesen werden
+@msg	the copy would leave the canvas	die Kopie würde die Arbeitsfläche verlassen
+@msg	the cut cannot be made on this art: {e}	der Schnitt kann an diesem Bildmaterial nicht ausgeführt werden: {e}
+@msg	the data isn't an EMF or WMF picture	die Daten sind kein EMF- oder WMF-Bild
+@msg	the data isn't an EPS or PostScript picture	die Daten sind kein EPS- oder PostScript-Bild
+@msg	the deferred paste is no longer available	das verzögerte Einfügen ist nicht mehr verfügbar
+@msg	the design is too big to draw at every data point of this graph	das Design ist zu groß, um an jedem Datenpunkt dieses Diagramms gezeichnet zu werden
+@msg	the design is too big to draw in every column of this graph	das Design ist zu groß, um in jeder Säule dieses Diagramms gezeichnet zu werden
+@msg	the dialog it was opened over is no longer open	das Dialogfeld, über dem es geöffnet wurde, ist nicht mehr geöffnet
+@msg	the dictionary stack overflowed	der Wörterbuchstapel ist übergelaufen
+@msg	the editing data's hash has no place	der Hash der Bearbeitungsdaten hat keinen Platz
+@msg	the entities the document declares expand to too much text	die vom Dokument deklarierten Entitäten werden zu zu viel Text erweitert
+@msg	the envelope's content has no bounds	der Inhalt der Verzerrungshülle hat keine Begrenzungen
+@msg	the envelope's mesh is malformed	das Gitter der Verzerrungshülle ist fehlerhaft
+@msg	the file holds no `variableSets` element	die Datei enthält kein `variableSets`-Element
+@msg	the file is larger than {_1} MB	die Datei ist größer als {_1} MB
+@msg	the file is too large	die Datei ist zu groß
+@msg	the file was updated or encrypted already	die Datei wurde bereits aktualisiert oder verschlüsselt
+@msg	the first character of a line has no character before it to kern: it moves only up and down (dy)	das erste Zeichen einer Zeile hat kein Zeichen davor zum Unterschneiden: Es bewegt sich nur nach oben und unten (dy)
+@msg	the font {_1} is not available	die Schrift {_1} ist nicht verfügbar
+@msg	the format has no file extension	das Format hat keine Dateierweiterung
+@msg	the graphic can't be read: {e}	die Grafik kann nicht gelesen werden: {e}
+@msg	the graphic is empty	die Grafik ist leer
+@msg	the graphic's data is damaged	die Daten der Grafik sind beschädigt
+@msg	the graphic's document has no artboard	das Dokument der Grafik hat keine Zeichenfläche
+@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	die Kopfzeile `{cell}` für `{name}` würde als Variable `{other}` zurückgelesen: Benennen Sie eine von ihnen um
+@msg	the image `{path}` isn't followed: {r}	dem Bild `{path}` wird nicht gefolgt: {r}
+@msg	the image has no embedded pixels	das Bild hat keine eingebetteten Pixel
+@msg	the image is empty	das Bild ist leer
+@msg	the image is fully transparent	das Bild ist vollständig transparent
+@msg	the image is not on an artboard; pass rect	das Bild liegt auf keiner Zeichenfläche; übergeben Sie rect
+@msg	the image's pixels are missing	die Pixel des Bilds fehlen
+@msg	the image's pixels aren't in the document	die Pixel des Bilds sind nicht im Dokument
+@msg	the image's pixels can't be read: {e}	die Pixel des Bilds können nicht gelesen werden: {e}
+@msg	the image's transparency doesn't fit it	die Transparenz des Bilds passt nicht zu ihm
+@msg	the job would print more than {MAX_PAGES} pages	der Auftrag würde mehr als {MAX_PAGES} Seiten drucken
+@msg	the job would print more than {_1} pages	der Auftrag würde mehr als {_1} Seiten drucken
+@msg	the layers hold no art to mask	die Ebenen enthalten keine Grafik zum Maskieren
+@msg	the layout moved	das Layout hat sich verschoben
+@msg	the library has a group `{name}` already	die Bibliothek hat bereits eine Gruppe `{name}`
+@msg	the library has no group `{name}`	die Bibliothek hat keine Gruppe `{name}`
+@msg	the library has no item `{item}`	die Bibliothek hat kein Element `{item}`
+@msg	the library has no item `{other}`	die Bibliothek hat kein Element `{other}`
+@msg	the library holds {MAX_GROUPS} groups already	die Bibliothek enthält bereits {MAX_GROUPS} Gruppen
+@msg	the library holds {MAX_ITEMS} items of this kind already	die Bibliothek enthält bereits {MAX_ITEMS} Elemente dieser Art
+@msg	the name is empty	der Name ist leer
+@msg	the object has no fill, stroke or effect	das Objekt hat keine Fläche, Kontur oder Effekt
+@msg	the object has no graphic style (pass `name`)	das Objekt hat keinen Grafikstil (übergeben Sie `name`)
+@msg	the objects don't match the plan	die Objekte passen nicht zum Plan
+@msg	the open and permissions passwords must differ	das Kennwort zum Öffnen und das Berechtigungskennwort müssen sich unterscheiden
+@msg	the operand stack overflowed	der Operandenstapel ist übergelaufen
+@msg	the page has no area	die Seite hat keine Fläche
+@msg	the page's type in an unread object's box isn't in its page art	der Text der Seite im Rahmen eines nicht gelesenen Objekts ist nicht in seiner Seitengrafik
+@msg	the paint behind the proxy is not a gradient	die Farbe hinter dem Proxy ist kein Verlauf
+@msg	the parent must be a layer or sublayer	das übergeordnete Element muss eine Ebene oder Unterebene sein
+@msg	the path can't be extended	der Pfad kann nicht verlängert werden
+@msg	the path can't be inside one of the objects to attach	der Pfad darf nicht in einem der anzuhängenden Objekte liegen
+@msg	the path has no segments to measure	der Pfad hat keine Segmente zum Messen
+@msg	the path is empty	der Pfad ist leer
+@msg	the path is too short to shorten that much	der Pfad ist zu kurz, um ihn so stark zu kürzen
+@msg	the picture has no objects	das Bild hat keine Objekte
+@msg	the program runs too long	das Programm läuft zu lange
+@msg	the program uses too much memory	das Programm verwendet zu viel Speicher
+@msg	the rectangle must have a width and a height	das Rechteck muss eine Breite und eine Höhe haben
+@msg	the rectangle needs a size and must lie on the canvas	das Rechteck braucht eine Größe und muss auf der Arbeitsfläche liegen
+@msg	the selected art has no width	das ausgewählte Bildmaterial hat keine Breite
+@msg	the selection draws nothing	die Auswahl zeichnet nichts
+@msg	the selection has no area	die Auswahl hat keine Fläche
+@msg	the selection has no art to export	die Auswahl hat keine Grafik zum Exportieren
+@msg	the selection has no bounds	die Auswahl hat keine Begrenzungen
+@msg	the selection has no graphic style	die Auswahl hat keinen Grafikstil
+@msg	the slice would leave the canvas	der Slice würde die Arbeitsfläche verlassen
+@msg	the spot colour couldn't be added	die Volltonfarbe konnte nicht hinzugefügt werden
+@msg	the subpath has no ends to extend (it is closed or a single point)	der Teilpfad hat keine Enden zum Verlängern (er ist geschlossen oder ein einzelner Punkt)
+@msg	the symbols are nested too deeply to expand their instances	die Symbole sind zu tief verschachtelt, um ihre Instanzen umzuwandeln
+@msg	the text file is too large to place as type (at most {_1} MB)	die Textdatei ist zu groß, um als Text platziert zu werden (höchstens {_1} MB)
+@msg	the text is empty	der Text ist leer
+@msg	the text is over {_1} MB	der Text ist größer als {_1} MB
+@msg	the top object must be a path	das oberste Objekt muss ein Pfad sein
+@msg	the trace was cancelled	das Nachzeichnen wurde abgebrochen
+@msg	the trailer has no size	der Trailer hat keine Größe
+@msg	the type object is flattened to nothing	das Textobjekt wird zu nichts reduziert
+@msg	the value of axis `{tag}` must be a number or null	der Wert der Achse `{tag}` muss eine Zahl oder null sein
+@msg	the variable library declares more than {MAX_LIBRARY_DATASETS} data sets	die Variablenbibliothek deklariert mehr als {MAX_LIBRARY_DATASETS} Datensätze
+@msg	the variable library declares more than {MAX_LIBRARY_ENTITIES} entities	die Variablenbibliothek deklariert mehr als {MAX_LIBRARY_ENTITIES} Entitäten
+@msg	the variable library declares more than {MAX_LIBRARY_VARIABLES} variables	die Variablenbibliothek deklariert mehr als {MAX_LIBRARY_VARIABLES} Variablen
+@msg	the variable library declares no variables	die Variablenbibliothek deklariert keine Variablen
+@msg	the variable library is larger than {MAX_LIBRARY_BYTES} bytes	die Variablenbibliothek ist größer als {MAX_LIBRARY_BYTES} Byte
+@msg	the variable library is not UTF-8	die Variablenbibliothek ist nicht UTF-8
+@msg	the variable library is not well-formed XML: {e}	die Variablenbibliothek ist kein wohlgeformtes XML: {e}
+@msg	the variable library nests elements more than {MAX_LIBRARY_NESTING} deep	die Variablenbibliothek verschachtelt Elemente mehr als {MAX_LIBRARY_NESTING} Ebenen tief
+@msg	the variable library's document type declaration holds something other than entities of plain text	die Dokumenttypdeklaration der Variablenbibliothek enthält etwas anderes als Entitäten aus reinem Text
+@msg	the variable library's entities expand to more than {MAX_LIBRARY_BYTES} bytes	die Entitäten der Variablenbibliothek werden zu mehr als {MAX_LIBRARY_BYTES} Byte erweitert
+@msg	the window has no dock	das Fenster hat kein Dock
+@msg	the written PDF has no catalog	das geschriebene PDF hat keinen Katalog
+@msg	the written PDF has no cross-reference table	das geschriebene PDF hat keine Querverweistabelle
+@msg	the written PDF's metadata can't be edited	die Metadaten des geschriebenen PDF können nicht bearbeitet werden
+@msg	there are no colour swatches to draw	es gibt keine Farbfelder zum Zeichnen
+@msg	there is already a design named `{name}`	es gibt bereits ein Design namens `{name}`
+@msg	there is already a design named `{to}`	es gibt bereits ein Design namens `{to}`
+@msg	there is already a toolbar named `{name}`	es gibt bereits eine Werkzeugleiste namens `{name}`
+@msg	there is already a toolbar named `{to}`	es gibt bereits eine Werkzeugleiste namens `{to}`
+@msg	there is no library: create one first	es gibt keine Bibliothek: Erstellen Sie zuerst eine
+@msg	these paths are too degenerate for Shaper	diese Pfade sind zu entartet für Shaper
+@msg	thumbnail: no page {v} (the {what} has {count})	Miniatur: keine Seite {v} ({what} hat {count})
+@msg	tileRange of {what}: {e}	tileRange von {what}: {e}
+@msg	title can't be empty	title darf nicht leer sein
+@msg	to (the new name) is required	to (der neue Name) ist erforderlich
+@msg	to must be fill or stroke	to muss fill oder stroke sein
+@msg	to must be smooth or corner	to muss smooth oder corner sein
+@msg	too large for a zip archive: package to a folder	zu groß für ein ZIP-Archiv: Verpacken Sie in einen Ordner
+@msg	too many Shaper edits	zu viele Shaper-Bearbeitungen
+@msg	too many `points` (at most 100000)	zu viele `points` (höchstens 100000)
+@msg	too many characters: at most {MAX_CHARS}	zu viele Zeichen: höchstens {MAX_CHARS}
+@msg	too many dots for this size: lower the frequency	zu viele Punkte für diese Größe: Verringern Sie die Frequenz
+@msg	too many filters over one file	zu viele Filter über einer Datei
+@msg	too many overlapping paths for Shaper	zu viele überlappende Pfade für Shaper
+@msg	too many saved clips	zu viele gespeicherte Beschneidungen
+@msg	too many saved graphics states	zu viele gespeicherte Grafikzustände
+@msg	toolbar (a toolbar's name) must be a string	toolbar (der Name einer Werkzeugleiste) muss ein String sein
+@msg	toolbar name can't be empty	der Werkzeugleistenname darf nicht leer sein
+@msg	transparentImages {v}: "flatten" (the default) or "omit"	transparentImages {v}: „flatten“ (Standard) oder „omit“
+@msg	two saved selections would be named `{_1}`	zwei gespeicherte Auswahlen würden `{_1}` heißen
+@msg	type dimension cannot be represented with this text transform	das Textmaß kann mit dieser Texttransformation nicht dargestellt werden
+@msg	type dimension must be finite	das Textmaß muss endlich sein
+@msg	unexpected resources	unerwartete Ressourcen
+@msg	unknown CMYK profile `{name}`	unbekanntes CMYK-Profil `{name}`
+@msg	unknown File Info field `{k}`	unbekanntes Dateiinformationen-Feld `{k}`
+@msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	unbekannte OpenType-Funktion `{t}` in featureChanges (die Tags, die `features` nimmt)
+@msg	unknown PDF preset `{name}` (presets: {_1})	unbekannte PDF-Vorgabe `{name}` (Vorgaben: {_1})
+@msg	unknown Warp style	unbekannter Verkrümmungsstil
+@msg	unknown alignToPath `{a}`	unbekanntes alignToPath `{a}`
+@msg	unknown arrowhead {v}	unbekannte Pfeilspitze {v}
+@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	unbekannter artboardLayout-Schlüssel `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown attribute `{attribute}`	unbekanntes Attribut `{attribute}`
+@msg	unknown attribute `{k}`	unbekanntes Attribut `{k}`
+@msg	unknown axis `{other}` (vertical|horizontal|free)	unbekannte Achse `{other}` (vertical|horizontal|free)
+@msg	unknown blend mode `{b}`	unbekannte Füllmethode `{b}`
+@msg	unknown blend mode {b}	unbekannte Füllmethode {b}
+@msg	unknown brush type `{o}`	unbekannter Pinseltyp `{o}`
+@msg	unknown category `{c}`	unbekannte Kategorie `{c}`
+@msg	unknown category `{c}` ({_1})	unbekannte Kategorie `{c}` ({_1})
+@msg	unknown character `{c}`	unbekanntes Zeichen `{c}`
+@msg	unknown character style number field	unbekanntes Zahlenfeld im Zeichenformat
+@msg	unknown effect `{e}`	unbekannter Effekt `{e}`
+@msg	unknown end {e}	unbekanntes Ende {e}
+@msg	unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)	unbekanntes flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution oder eine gespeicherte: siehe flattener.presets.list)
+@msg	unknown format `{f}` (vcswatches, gpl, ase or css)	unbekanntes Format `{f}` (vcswatches, gpl, ase oder css)
+@msg	unknown from {f}	unbekanntes from {f}
+@msg	unknown graph type `{t}`	unbekannter Diagrammtyp `{t}`
+@msg	unknown grid colours `{name}` (one of {_1})	unbekannte Rasterfarben `{name}` (eines von {_1})
+@msg	unknown gridType `{t}`	unbekannter gridType `{t}`
+@msg	unknown highlight `{v}`	unbekannte Hervorhebung `{v}`
+@msg	unknown intent `{i}`	unbekannte Renderpriorität `{i}`
+@msg	unknown issue kind {id}	unbekannte Problemart {id}
+@msg	unknown issue kind {v}	unbekannte Problemart {v}
+@msg	unknown knockout state {k}	unbekannter Aussparungszustand {k}
+@msg	unknown language `{language}` (one of {_1})	unbekannte Sprache `{language}` (eine von {_1})
+@msg	unknown language `{l}` (one of {_1})	unbekannte Sprache `{l}` (eine von {_1})
+@msg	unknown method `{m}` ({_1})	unbekannte Methode `{m}` ({_1})
+@msg	unknown mode `{other}` (gray, rgb, hsb, lab, cmyk or web)	unbekannter Modus `{other}` (gray, rgb, hsb, lab, cmyk oder web)
+@msg	unknown mode `{other}` (mono|cmyk)	unbekannter Modus `{other}` (mono|cmyk)
+@msg	unknown mode `{other}` (rgb|cmyk|gray|global)	unbekannter Modus `{other}` (rgb|cmyk|gray|global)
+@msg	unknown mode `{other}` (set, add, subtract)	unbekannter Modus `{other}` (set, add, subtract)
+@msg	unknown mode `{o}`	unbekannter Modus `{o}`
+@msg	unknown mode {m}	unbekannter Modus {m}
+@msg	unknown model `{other}`	unbekanntes Modell `{other}`
+@msg	unknown model `{other}` (keep, new or document)	unbekanntes Modell `{other}` (keep, new oder document)
+@msg	unknown op {o}	unbekannte Operation {o}
+@msg	unknown order `{o}`: toggle, front, forward, backward or back	unbekannte Reihenfolge `{o}`: toggle, front, forward, backward oder back
+@msg	unknown overprints `{v}` (preserve, simulate or discard)	unbekanntes Überdrucken `{v}` (preserve, simulate oder discard)
+@msg	unknown panel	unbekanntes Bedienfeld
+@msg	unknown pieLegend `{v}` (none, standard or wedges)	unbekannte pieLegend `{v}` (none, standard oder wedges)
+@msg	unknown piePosition `{v}` (even, ratio or stacked)	unbekannte piePosition `{v}` (even, ratio oder stacked)
+@msg	unknown pieSort `{v}` (none, all or first)	unbekannte pieSort `{v}` (none, all oder first)
+@msg	unknown plate `{n}`	unbekannte Platte `{n}`
+@msg	unknown preference `{k}`	unbekannte Voreinstellung `{k}`
+@msg	unknown profile {id} (see stroke.widthProfile.list)	unbekanntes Profil {id} (siehe stroke.widthProfile.list)
+@msg	unknown proof target `{t}`	unbekanntes Proof-Ziel `{t}`
+@msg	unknown quotes key `{k}` (double, single)	unbekannter quotes-Schlüssel `{k}` (double, single)
+@msg	unknown resolution `{v}`	unbekannte Auflösung `{v}`
+@msg	unknown rule `{rule}` ({_1})	unbekannte Regel `{rule}` ({_1})
+@msg	unknown rule `{r}` (see color.harmony)	unbekannte Regel `{r}` (siehe color.harmony)
+@msg	unknown setting `{k}`	unbekannte Einstellung `{k}`
+@msg	unknown shape `{v}` (circle|ellipse|square|diamond|line)	unbekannte Form `{v}` (circle|ellipse|square|diamond|line)
+@msg	unknown spacing `{o}` (smooth|steps|distance)	unbekannter Abstand `{o}` (smooth|steps|distance)
+@msg	unknown tileType `{t}` ({_1})	unbekannter tileType `{t}` ({_1})
+@msg	unknown units	unbekannte Einheiten
+@msg	unknown units `{u}`	unbekannte Einheiten `{u}`
+@msg	unknown value axis `{v}` (left, right or both)	unbekannte Werteachse `{v}` (left, right oder both)
+@msg	unknown variation `{v}` (tintsShades|warmCool|vividMuted)	unbekannte Variante `{v}` (tintsShades|warmCool|vividMuted)
+@msg	unknown warp style `{s}`	unbekannter Verkrümmungsstil `{s}`
+@msg	unknown {key} `{v}` (none, short or full)	unbekanntes {key} `{v}` (none, short oder full)
+@msg	unknown {key} profile `{n}`	unbekanntes {key}-Profil `{n}`
+@msg	unknown {k} key `{key}` (size, position)	unbekannter {k}-Schlüssel `{key}` (size, position)
+@msg	unreadable object	nicht lesbares Objekt
+@msg	unsafe destination file name	unsicherer Zieldateiname
+@msg	use paths or compound paths	verwenden Sie Pfade oder zusammengesetzte Pfade
+@msg	useArtboards must be true or false, not {v}	useArtboards muss true oder false sein, nicht {v}
+@msg	value for `{var}` must match its variable kind	der Wert für `{var}` muss zur Art seiner Variable passen
+@msg	variable `{_1}` is already defined	Variable `{_1}` ist bereits definiert
+@msg	variable `{name}` has no `trait`	Variable `{name}` hat kein `trait`
+@msg	variable `{name}` is already defined	Variable `{name}` ist bereits definiert
+@msg	variable `{name}` is declared twice	Variable `{name}` ist zweimal deklariert
+@msg	variable `{to}` already exists	Variable `{to}` existiert bereits
+@msg	view is required	view ist erforderlich
+@msg	view must be one of {_1}	view muss eines der folgenden sein: {_1}
+@msg	warpStyle can only edit an applied Warp effect	warpStyle kann nur einen angewendeten Verkrümmungseffekt bearbeiten
+@msg	width and height must be more than 0 and at most {limit}	width und height müssen größer als 0 und höchstens {limit} sein
+@msg	width factors must be finite	Breitenfaktoren müssen endlich sein
+@msg	width must be positive	width muss positiv sein
+@msg	width out of range	Breite außerhalb des gültigen Bereichs
+@msg	width/height must be > 0	width/height müssen > 0 sein
+@msg	x and y must be finite numbers	x und y müssen endliche Zahlen sein
+@msg	x and y must be given together	x und y müssen zusammen angegeben werden
+@msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone braucht einen Anker: Docken Sie mit anchor neben einem Bedienfeld an oder mit side (Start oder End) in einer neuen Dockspalte
+@msg	zoom must be positive	zoom muss positiv sein
+@msg	{C}: no effect at index {list}	{C}: kein Effekt bei Index {list}
+@msg	{DEFAULT_PRESET} is protected and stays	{DEFAULT_PRESET} ist geschützt und bleibt erhalten
+@msg	{DEFAULT_PRESET} is protected: save the settings under another name	{DEFAULT_PRESET} ist geschützt: Speichern Sie die Einstellungen unter einem anderen Namen
+@msg	{LABEL} produced an empty result	{LABEL} hat ein leeres Ergebnis erzeugt
+@msg	{_1} MB of document, at most {_2} MB	{_1} MB Dokument, höchstens {_2} MB
+@msg	{_1} MB of images, at most {_2} MB	{_1} MB Bilder, höchstens {_2} MB
+@msg	{_1} bytes of RGBA data for a {width} × {height} image	{_1} Byte RGBA-Daten für ein Bild mit {width} × {height}
+@msg	{_1} can't be read, or changed since it was read: relink or update it first	{_1} kann nicht gelesen werden oder hat sich seit dem Lesen geändert: Verknüpfen Sie es zuerst neu oder aktualisieren Sie es
+@msg	{_1} can't go into {into}	{_1} kann nicht in {into} eingefügt werden
+@msg	{_1} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing	{_1} kann das Drucken nicht auf niedrige Auflösung beschränken: Wählen Sie PDF 1.4 oder höher, oder erlauben Sie das Drucken in hoher Auflösung
+@msg	{_1} files can't be opened yet	{_1}-Dateien können noch nicht geöffnet werden
+@msg	{_1} files can't be password-protected: remove the passwords or choose no standard	{_1}-Dateien können nicht mit einem Kennwort geschützt werden: Entfernen Sie die Kennwörter oder wählen Sie keinen Standard
+@msg	{_1} files can't be {_2}	{_1}-Dateien können nicht {_2} sein
+@msg	{_1} files can't carry editing data: turn off preserveEditing	{_1}-Dateien können keine Bearbeitungsdaten enthalten: Deaktivieren Sie preserveEditing
+@msg	{_1} files can't have PDF layers: turn off createLayers	{_1}-Dateien können keine PDF-Ebenen haben: Deaktivieren Sie createLayers
+@msg	{_1} files need a creation date, and this platform has no clock to give one	{_1}-Dateien brauchen ein Erstellungsdatum, und diese Plattform hat keine Uhr, die eines liefert
+@msg	{_1} isn't a path	{_1} ist kein Pfad
+@msg	{_1} options: {e}	{_1}-Optionen: {e}
+@msg	{_1} paints nothing to rasterize	{_1} malt nichts, das gerastert werden kann
+@msg	{_1} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)	{_1}-Kennwörter können bis zu {MAX_LEGACY_PASSWORD} ASCII-Zeichen haben (PDF 1.7 und höher nehmen beliebige)
+@msg	{_1} with linked images or an image map writes several files: use document.export	{_1} mit verknüpften Bildern oder einer Imagemap schreibt mehrere Dateien: Verwenden Sie document.export
+@msg	{_1} writes one file per artboard here: use document.export, or name one artboard	{_1} schreibt hier eine Datei pro Zeichenfläche: Verwenden Sie document.export, oder nennen Sie eine Zeichenfläche
+@msg	{_1} × {_2} pixels is too large for {_3} (at most {max} pixels a side): lower the scale	{_1} × {_2} Pixel ist zu groß für {_3} (höchstens {max} Pixel pro Seite): Verringern Sie die Skalierung
+@msg	{_1}: belongs to another account	{_1}: gehört einem anderen Konto
+@msg	{_1}: not a folder of its own	{_1}: kein eigener Ordner
+@msg	{_1}: not a plain file	{_1}: keine normale Datei
+@msg	{dest}: {e}	{dest}: {e}
+@msg	{doc} has no folder	{doc} hat keinen Ordner
+@msg	{file} isn't linked	{file} ist nicht verknüpft
+@msg	{folder} is not a package folder	{folder} ist kein Paketordner
+@msg	{folder}: more than {max} files and folders	{folder}: mehr als {max} Dateien und Ordner
+@msg	{folder}: {e}	{folder}: {e}
+@msg	{g} is not a Live Paint group	{g} ist keine Gruppe „Interaktiv malen“
+@msg	{id} is not a slice	{id} ist kein Slice
+@msg	{key} must be 0–{MAX_ADD_AROUND} pt	{key} muss 0–{MAX_ADD_AROUND} pt sein
+@msg	{key} must be [x,y]	{key} muss [x,y] sein
+@msg	{key} must be a percentage {min}..100	{key} muss ein Prozentwert von {min}..100 sein
+@msg	{key} must be a positive number, not {n}	{key} muss eine positive Zahl sein, nicht {n}
+@msg	{key} must be a positive number, not {v}	{key} muss eine positive Zahl sein, nicht {v}
+@msg	{key} must be one of {_1}	{key} muss eines der folgenden sein: {_1}
+@msg	{key} must be {_1}, got {s}	{key} muss {_1} sein, erhalten: {s}
+@msg	{key} must name a floating panel	{key} muss ein schwebendes Bedienfeld nennen
+@msg	{key} must name a panel in another group	{key} muss ein Bedienfeld in einer anderen Gruppe nennen
+@msg	{key} must name a panel that shows	{key} muss ein angezeigtes Bedienfeld nennen
+@msg	{key} must name a registered panel	{key} muss ein registriertes Bedienfeld nennen
+@msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-Dateien haben keine Transparenz, und die Datei hätte {what}: Reduzieren Sie sie zuerst (object.flattenTransparency)
+@msg	{kind} images can't be opened (see document.formats)	{kind}-Bilder können nicht geöffnet werden (siehe document.formats)
+@msg	{k} `{v}` is not one of the choices	{k} `{v}` ist keine der Auswahlmöglichkeiten
+@msg	{k} has control characters{_1}	{k} enthält Steuerzeichen{_1}
+@msg	{k} is too long (at most {MAX_TEXT} characters)	{k} ist zu lang (höchstens {MAX_TEXT} Zeichen)
+@msg	{k} must be > 0	{k} muss > 0 sein
+@msg	{k} must be a number (pt) or a length such as "210 mm"	{k} muss eine Zahl (pt) oder eine Länge wie „210 mm“ sein
+@msg	{k} must be a number from {min} to {max}	{k} muss eine Zahl von {min} bis {max} sein
+@msg	{k} must be a number or "auto"	{k} muss eine Zahl oder „auto“ sein
+@msg	{k} must be a string	{k} muss ein String sein
+@msg	{k} must be text	{k} muss Text sein
+@msg	{k} must be true or false	{k} muss true oder false sein
+@msg	{k} must be {{size?, position?}}	{k} muss {{size?, position?}} sein
+@msg	{k}: can't read `{s}` as a length	{k}: `{s}` kann nicht als Länge gelesen werden
+@msg	{label} must be a number at most {max}	{label} muss eine Zahl von höchstens {max} sein
+@msg	{label} must be a number from -1296 to 1296	{label} muss eine Zahl von -1296 bis 1296 sein
+@msg	{label} must be a number from 1 to 10000	{label} muss eine Zahl von 1 bis 10000 sein
+@msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
+@msg	{name} is built in and can't be deleted	{name} ist integriert und kann nicht gelöscht werden
+@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} muss {lo}–{hi}{unit} sein (erhalten: {v})
+@msg	{name}: CRC or size mismatch	{name}: CRC oder Größe stimmt nicht überein
+@msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: nur die eingebettete Vorschau dieser Affinity-Datei konnte gelesen werden; verwenden Sie Datei › Öffnen, um sie mit ihrer Warnung zu sehen, oder exportieren Sie vor dem Platzieren SVG oder PDF aus Affinity
+@msg	{name}: {e}	{name}: {e}
+@msg	{native}; its embedded preview can't be read either ({e})	{native}; seine eingebettete Vorschau kann ebenfalls nicht gelesen werden ({e})
+@msg	{std} files are CMYK, and the file would have colours in {_1}	{std}-Dateien sind CMYK, und die Datei hätte Farben in {_1}
+@msg	{std} files embed their fonts, and the file would have one that isn't	{std}-Dateien betten ihre Schriften ein, und die Datei hätte eine, die nicht eingebettet ist
+@msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	{target} ist die Datei, aus der dieses Dokument gelesen wurde, und beim Lesen wurde etwas ausgelassen ({what}): Ein Überschreiben würde es endgültig verlieren. Schreiben Sie stattdessen eine andere Datei, oder übergeben Sie acknowledgeLoss: true, um sie trotzdem zu ersetzen
+@msg	{ty} brushes need selected art (or params.{k})	{ty}-Pinsel brauchen ausgewähltes Bildmaterial (oder params.{k})
+@msg	{v} is not an asset id	{v} ist keine Asset-ID
+@msg	{what} can't be intertwined	{what} kann nicht verflochten werden
+@msg	{what} doesn't fit the paper with its bleed and marks	{what} passt mit Anschnitt und Marken nicht auf das Papier
+@msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} würde auf mehr als {MAX_TILES} Kacheln gedruckt: Verkleinern Sie es
+@msg	Alignment must be one of the choices	Ausrichtung muss eine der Auswahlmöglichkeiten sein
+@msg	Line Gap must be a number	Zeilenabstand muss eine Zahl sein
+@msg	`at` must be a point [x, y]	`at` muss ein Punkt [x, y] sein
+@msg	`points` must hold from 2 to 100000 points	`points` muss 2 bis 100000 Punkte enthalten
+@msg	`rect` must be [x, y, width, height]	`rect` muss [x, y, width, height] sein
+@msg	`tolerance` must be from 0 to 100 pt	`tolerance` muss zwischen 0 und 100 pt liegen
+@msg	`warichuAlign` must be one of {_1}	`warichuAlign` muss eines der folgenden sein: {_1}
+@msg	`warichuLines` must be a whole number from {_1} to {_2}	`warichuLines` muss eine ganze Zahl von {_1} bis {_2} sein
+@msg	bad point {v}: expected [x, y]	ungültiger Punkt {v}: erwartet wird [x, y]
+@msg	give exactly one of `at`, `rect` and `points`	geben Sie genau eines von `at`, `rect` und `points` an
+@msg	the line is too long, or the paths it passes too many, to check	die Linie ist zu lang, oder sie kreuzt zu viele Pfade, um sie zu prüfen
+@msg	the paths are too many or too tangled to find where they cross	die Pfade sind zu zahlreich oder zu verschlungen, um ihre Kreuzungen zu finden
+@msg	the rectangle or line reaches too many paths to check	das Rechteck oder die Linie erreicht zu viele Pfade, um sie zu prüfen
+@msg	{name} must be a number	{name} muss eine Zahl sein
 	Banner Hems and Grommets…	Bannersäume und Ösen…
 	Banner Hems and Grommets	Bannersäume und Ösen
 	Hem	Saum

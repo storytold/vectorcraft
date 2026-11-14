@@ -3009,6 +3009,29 @@ file-filter	Templates	Sablonok
 	Pattern	Mintázat
 	Pattern Brush	Mintázatecset
 	missing from the Brushes panel	hiányzik az Ecsetek panelről
+	built in	beépített
+	embedding not allowed	beágyazás nem engedélyezett
+	embedding for editing	beágyazás szerkesztéshez
+	embedding for preview and print	beágyazás előnézethez és nyomtatáshoz
+	embedding allowed	beágyazás engedélyezett
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	helyettesítve: megjelenítés ezzel: {family} {style} ({detail})
+	missing: shown in {family} {style}	hiányzik: megjelenítés ezzel: {family} {style}
+	missing	hiányzik
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineáris színátmenet
+	Radial gradient	Körkörös színátmenet
+	Conic gradient	Kúpos színátmenet
+	Diamond gradient	Rombusz színátmenet
+	Freeform gradient	Szabad formájú színátmenet
+@plural	{n} instance|{n} instances	{n} példány
+@plural	{n} row|{n} rows	{n} sor
+@plural	{n} column|{n} columns	{n} oszlop
 	Pattern Brush Options	Mintázatecset beállításai
 	Pattern Editing	Mintázatszerkesztés
 	Pattern Options	Mintázat beállításai
@@ -4976,6 +4999,8 @@ imageTrace	Outline	Körvonal
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	egy {_1} × {_2} képpontos beágyazott kép {_3} × {_4} képpontosra lett kicsinyítve, hogy a rétegek megmaradjanak
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	a csatolt képek a fájlban mentett kis felbontású előnézetet mutatják, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
 @msg	linked type areas past VectorCraft's limits were left out	a VectorCraft korlátain túli csatolt szövegterületek kimaradtak
+@msg	the Line Breaking setting of legacy type was left out	a régi formátumú szöveg sortörési beállítása kimaradt
+@msg	the Japanese layout rules of legacy type were left out	a régi formátumú szöveg japán tördelési szabályai kimaradtak
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	a szövegobjektumon belül írásirányt váltó szöveg az első karakterének irányában nyílik meg
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	a csatolt területeken, körbefuttatott szövegben vagy összetett útvonalban maszkként használt szöveg nem vág ki
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	a fájlban előnézet nélküli csatolt képek helyőrzőt mutatnak, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
@@ -5187,6 +5212,7 @@ imageTrace	Outline	Körvonal
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Elvetett helyreállított dokumentumok: {n}
 @msg	divide into 1 to {MAX_PIECES} slices	a felosztás 1 és {MAX_PIECES} közötti szeletre lehetséges
 @msg	Divide Objects Below: select a path	Alatta lévő objektumok felosztása: jelölj ki egy útvonalat
+@msg	select a path	jelölj ki egy útvonalat
 @msg	Divide Objects Below: select exactly one path	Alatta lévő objektumok felosztása: pontosan egy útvonalat jelölj ki
 @msg	docking action contains an unknown panel or an excessive split path	a dokkolási művelet ismeretlen panelt vagy túl hosszú felosztási útvonalat tartalmaz
 @msg	Downloaded {what}	Letöltve: {what}
@@ -6172,6 +6198,7 @@ imageTrace	Outline	Körvonal
 @msg	no such color	nincs ilyen szín
 @msg	{_1} cannot be used on Windows	A(z) {_1} nem használható Windows rendszeren
 @msg	more than one action is named “{_1}”	több művelet neve is „{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	a(z) „{_1}” művelet beállítja a(z) {_2} mappabeállítást; a készlet mentéséhez törölje ezt a lépést
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
 	Smudge Stick…	Elmosó rúd…
 	Smudge Stick	Elmosó rúd

@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-13 · **Change:** Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained. Previously: Save location-refusal error (#6146); existing response shapes retained.
+> **Last updated:** 2026-11-13 · **Change:** Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
@@ -148,12 +148,14 @@ the suite) keep the agent to the folders you give it:
   in a recorded action's steps in `ui.action_sets`, also in a batch step's commands, the `path`, `paths`, `file`,
   `files` and `folder` params, a param whose name ends in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
   `destinationFolder`), the entries of a list under such a param, and under any other param, as a key or in any
-  list, an absolute path or a `file:` URL outside the roots (any case of `file:`, `%XX` escapes decoded; a URL that
+  list, an absolute path or a `file:` URL outside the roots, also with whitespace around it (any case of `file:`, `%XX` escapes decoded; a URL that
   names another host is always left out), and `~`, a path under `~` or a path that starts with `./` or `../`
   (either separator) that resolves outside the roots from the app's working folder; and the folder
-  preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
-  (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
-  empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
+  preferences in `ui.engine_prefs`, in an open Preferences dialog's `ui.dialog.fields` and in a recorded
+  `prefs.set` step (its `value` for such a `key`, and the entries of `values`), also in a batch step's commands
+  (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`, checked
+  as written and trimmed, a bare name or a subfolder from the app's working folder; an empty folder and the scratch
+  disk choices `Startup` and `None` stay). A library loaded from a file outside the
   roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
   Color Guide's `ui.color_guide_limit`, a closed panel's key in `ui.docking_hidden` and the `library` and `panel`
   params of a recorded action's steps in `ui.action_sets`, and the keys of shortcut overrides (`panel:<panel id>`
@@ -234,6 +236,14 @@ the suite) keep the agent to the folders you give it:
   file outside the read roots by its file name alone in `files`, as `document.json` does, and `removeFile` takes that
   name for it (see SVG interactivity). In a frame a request drives, the JavaScript Files dialog lists such a file by
   its file name, and `ui_inspect` gives the file selected in the dialog the same way.
+- An SVG or SVGZ of a document that links a JavaScript file outside the read roots (SVG Interactivity's files: a
+  path, a `file:` URL, or a relative path taken from the document's folder) is refused with "a linked JavaScript
+  file is outside the read roots", which names no file or folder: `document.serialize`, `document.export` (MCP's
+  `export`), `document.exportSelection`, `document.exportForScreens` and `assets.export` (before the folder is
+  made or any row is written), `document.save`, `file.save`, `file.saveAs` and `file.saveCopy` (also a save
+  without a path of a document whose own format is SVG or SVGZ), `file.exportAs`, and the SVG Options dialog's
+  Show Code. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
+  person at the keyboard exports it as stored.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
@@ -795,6 +805,16 @@ The other commands given a series group's id edit the group itself, and the grap
 `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
 group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
 
+The graph draws the art of a column or marker design in a series again from the design, so the commands that add,
+change, move or remove fill and stroke rows, effects or graphic styles leave that art out: the `appearance.*` commands
+listed above, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit, move or remove an
+effect, `graphicStyle.apply` (and `graphicStyle.addFromLibrary` with `apply`), `transparency.set` with a fill or stroke
+`item`, and `appearance.copyFrom` as the target. The art is any object inside a series group other than a path directly
+in it, whether given by id, selected, or reached through `target: "contents"`. The commands edit the other objects they
+are given, and a command whose objects are all design art is an error. `appearance.transfer` with design art as its
+`target`, or as its `source` without `copy`, is an error. The paint commands leave the art out as well, without an
+error. To change the art, edit the design with `graph.design`.
+
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
 made, placed or edited with `paint.editGradient`, `paint.setGradientGeom`, `paint.freeform.addPoint`,
@@ -805,9 +825,13 @@ color changed by `paint.invert`, `paint.complement`, `edit.colors.invert`, `edit
 `addon.color.filter`, `addon.color.applyNearestSwatch` or the ink limit of `addon.color.printFixes`. The recolor
 commands store it too when they are given a series group, the graph or a group that holds the graph. A row a command
 leaves as it was keeps what the graph stores. When one command changes several paths of a series, the frontmost of
-them sets what the graph stores. A gradient is stored with its placement, and every path of the series takes that
-placement when the graph is drawn again. The graph does not store a stroke's dashes, caps, joins, arrowheads, width
-profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
+them sets what the graph stores. While Global Edit is on, a path directly in a series that takes an edit from another
+match (a graph's paths are matches only while the graph is isolated) has what changed on it stored for its series: the
+paint, weight, opacity and blend mode of the topmost visible fill and stroke, and the object's opacity and blend mode.
+`addon.arrange.randomizeOpacity` and `addon.arrange.sort` with `apply: "opacity"` store the object opacity, with the
+blend mode, of the frontmost path of a series whose opacity they change. A gradient is stored with its placement, and
+every path of the series takes that placement when the graph is drawn again. The graph does not store a stroke's
+dashes, caps, joins, arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
 with the paint they had.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
@@ -3146,8 +3170,13 @@ already walks Image Trace. Short agent entry points:
   reply's `defined` lists the variables the import defined. While the variables are
   locked, an import whose header would define a variable fails with "variables are locked".
   A `dataset.import` file that isn't UTF-8 is read as Windows-1252, unless it starts with the UTF-8 byte-order mark.
-  A file that starts with a UTF-16 byte-order mark is read as UTF-16, and a file without one that holds NUL bytes is
-  refused. `csv` and `data` are read as the text they hold.
+  A file that starts with a UTF-16 byte-order mark is read as UTF-16. A file without one that holds NUL bytes is read
+  as UTF-16 when at least half of its two-byte units hold a NUL byte, as characters from U+0001 to U+00FF do, in the
+  byte order that reads a line break (`\n` or `\r`). It is refused when fewer of its units hold a NUL byte (UTF-8 or
+  Windows-1252 text with stray NUL bytes, or UTF-16 text made mostly of other characters, which needs a byte-order
+  mark), when both byte orders read a line break (the text holds U+0A00 or U+0D00), when it has an odd length, and
+  when it isn't valid UTF-16 in that order or holds a NUL character. A file with no line break has no data rows and is
+  refused for that. `csv` and `data` are read as the text they hold.
 - Variable libraries: `variable.loadLibrary {path|xml|dataBase64}` (the Variables panel menu's Load Variable
   Library…) replaces the document's variables and data sets with a variable library's in one undo step. A load, like a
   `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
@@ -3204,7 +3233,11 @@ already walks Image Trace. Short agent entry points:
   after the set (the web downloads it), and returns `{path}`. `id` holds the panel's own set id, which the panel menu
   passes: the set with this id is saved wherever it is when the file dialog answers, and `set` is not read. A set that
   would be larger than 8 MiB as a file, has more than 1,000 actions or has an action of more than 10,000 steps is not
-  written, and the command returns the same error as a load of such a file. `ui.actionSet.load {path? | data?}` reads
+  written, and the command returns the same error as a load of such a file. Nor is a set with a `prefs.set` step, also
+  in a batch step's commands, that sets a folder preference (`fontsFolder`, `pluginsFolder`, `scratchPrimary`,
+  `scratchSecondary`, `recoveryFolder`, `templatesFolder`) to a folder, which names a folder on this computer: the
+  error `the action “<name>” sets the folder preference <key>; delete that step to save the set` names the first such
+  action and preference. An empty folder and the scratch disk choices `Startup` and `None` save. `ui.actionSet.load {path? | data?}` reads
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
   other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
@@ -3488,7 +3521,8 @@ already walks Image Trace. Short agent entry points:
   at the pointer selects under these rules: the arrow with a filled square for a face, with a short line for an edge,
   and with an x for nothing. It keeps the look it had at the press until the release.
   The Live Paint Bucket's options (`tool.setOption {tool: "livePaintBucket", values}`; double-clicking the tool opens
-  them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `highlight` (on), `color` (the
+  them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `cursorSwatchPreview` (on),
+  `highlight` (on), `color` (the
   highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the face highlight's width, 1 to 20 screen
   pixels; 4; an edge's highlight is half as wide). The dialog's OK gives an error for a `color` with an alpha part
   (`#rrggbbaa` or `#rgba`) and changes nothing. `tool.setOption` gives an error that names the option and sets none of
@@ -3501,12 +3535,26 @@ already walks Image Trace. Short agent entry points:
   `livePaint.strokeEdge` when an edge is within 4 screen pixels of the pointer and `livePaint.fill` otherwise, and
   Shift-click runs `livePaint.fill`. With both off, a click runs nothing. With `highlight` off, the face or edge under
   the pointer is not outlined.
+  With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
+  keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
+  `paint.setStroke` when the Stroke proxy is in front) with the color swatch before or after the active paint in the
+  Swatches panel, wrapping around at the ends; from a color that is no swatch, Right picks the first swatch and Left
+  the last, and with no color swatch the tool does not take the keys. The selected art keeps its paint. With
+  `cursorSwatchPreview` on, the active paint shows as a ringed chip above the pointer between the swatches before and
+  after it, except during a fill drag or with Alt held; a solid color that is no swatch shows alone, and a paint that is not a solid color shows no chip. Left and
+  Right step the swatches with `cursorSwatchPreview` off too.
   `livePaint.merge` keeps the bottom Live Paint group's id, name, lock, visibility, transparency, appearance, opacity
   mask and graphic style link. With a Live Paint group among the objects, `livePaint.make` adds the others to it as
   `livePaint.merge` does, and so does `livePaint.fill {ids}` when `point` is outside that group's faces.
   `livePaint.fill` does not fill a face that is hidden on its own. With `group`, a point on a hidden face is an
   error. With `ids`, at a point on a hidden face it fills the face there of another Live Paint group among the
   objects; otherwise it returns an error and does not merge the objects.
+  A Live Paint command that changes nothing records no undo step, keeps the redo steps, leaves a saved document saved
+  and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has the paint,
+  `livePaint.strokeEdge` when the edge already has the paint and the width, `livePaint.gapOptions` (and the Gap Options
+  dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
+  `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
+  colors and the last color as they are. `livePaint.gapOptions` makes a group's faces again, with new ids, only when it adds a path or when Gap Detection is turned on or off or given a new size while it is on.
 
 `brush.selectionArt {ids?|id?}` (a query) replies `{art}`: the object that `brush.new` given the same `ids` or `id`,
 or the same selection, takes as a new scatter or art brush's art and as a new pattern brush's side tile. Several
@@ -3916,6 +3964,9 @@ For `edit.colors.*`, `fill: false` leaves colorized image fills unchanged. `reco
 `edit.colors.toGrayscale` and `edit.colors.adjustBalance` with `mode: "gray"` and `convert: true` store an embedded image
 with one gray channel, so a PDF writes it in gray.
 `includePatterns: false` leaves patterns out. The Blend commands also grade gradient meshes, which keep their shading.
+The `edit.colors.*` commands, including the Blend commands, and `recolor.apply`, `paint.invert`, `paint.complement`,
+`addon.color.filter` and `addon.color.applyNearestSwatch` record no undo step when they change nothing, for example
+`edit.colors.invert` with `fill: false` and `stroke: false`, or a Blend whose objects already have the graded fills.
 `edit.colors.saturate` needs `intensity`, a number from -100 to 100 (a number outside the range counts as its nearest
 end). Without one, or with `null`, it answers `` missing number `intensity` ``; with a value that is not a number, such as
 `"40"`, it answers `` `intensity` must be a number, not "40" ``. Either way it changes nothing.
@@ -4907,7 +4958,9 @@ stay live. `object.expand.info` answers which options have something to expand i
 (`{object, fill, stroke, gradient, appearance, symbolArt?}`; `gradient` says whether Fill has a gradient fill, which Expand
 Gradient To applies to, that it turns into art: it is false when every such fill repeats or reflects in more than 256
 runs across the box it fills, which for type, symbol art included, is the box of each outline Object makes of a character,
-ruby character, underline or strikethrough; `appearance` whether the selection has appearance attributes Expand Appearance expands first,
+ruby character, underline or strikethrough, and for a fill of the type object itself the box of its whole outline;
+`stroke` and `fill` count the type object's own strokes and pattern fills as well as its characters' (its own
+only when the type has an outline, which type of only spaces does not); `appearance` whether the selection has appearance attributes Expand Appearance expands first,
 for which Object → Expand… is dimmed in the menus; `symbolArt: {fill, stroke, gradient}`, present when the selection
 holds symbol instances that `object` expands, whether only their art holds it, which Fill and Stroke reach only with
 `object` on), and `object.mesh.create` on a gradient-filled object colours the
@@ -4971,7 +5024,8 @@ more than one linked file (two such files, or such a file and a file linked as t
 error and unlinks nothing. `ui.javascriptFilesDialog {}`
 opens the JavaScript Files dialog, whose Choose… puts a picked file in as a `file:///` URL. SVG export writes each event
 as an event attribute on the object's element (`onclick="…"`; with the SVG Tiny 1.2 profile it leaves them out with a
-warning) and each file as `<script xlink:href>`. SVG import reads the event attributes the panel lists and the
+warning) and each file as `<script xlink:href>`, as stored; for a caller with automation read roots, an SVG or SVGZ
+of a document that links a file outside them is refused (see the read roots above). SVG import reads the event attributes the panel lists and the
 `<script>` links back as text; it never reads a script file or runs a script, and leaves inline scripts and the links
 after the first 64 out with a warning. An unnamed `<g>` with event attributes of its own stays a group, apart from the object in
 it. The native format keeps the events and the files.
@@ -5090,6 +5144,8 @@ the canvas (coordinates out of range)".
 `path.setHandle`, `path.moveAnchor` and `path.insertAnchor` edit subpath 0 when `subpath` is absent or null, and refuse a `subpath` that
 is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `subpath`"); `path.split` refuses such
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
+`path.moveAnchor` to the point the anchor is at, and `path.setHandle` to the point the handle is at on an anchor that
+keeps its kind, leave the document as it is and record no undo step.
 `path.insertAnchor` keeps the direct-selected anchors and selected segments of the path on the same points: those
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
 selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
@@ -5231,6 +5287,13 @@ round, such as a rectangle, stays as it is. Closed paths stay closed and open pa
 ```json
 {"name":"run_command","arguments":{"command":"object.path.smooth","params":{"level":80}}}
 ```
+
+`path.smoothRegion` (the Smooth tool) keeps the end points of an open path where they are. When the stretch it refits
+reaches the first or last anchor of an open path, the curve there leaves or arrives along the smoothed path within
+`radius` of that end rather than along the first or last segment, so a jagged end turns with the rest of the path; it
+keeps the segment's direction when the smoothed path there turns back by 90° or more. Where the stretch ends inside a
+path, the curve keeps the direction of the part outside the drag. `object.path.smooth` and Simplify keep each end's
+direction.
 
 In the desktop app, Object › Path › Smooth and the canvas context menu's Smooth… (listed while the selection holds a
 path) open the slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at
@@ -5809,7 +5872,7 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `usePreciseCursors`: the Pen, Eyedropper, Slice and Blend tools' pointers are a crosshair.
 - `snapToPointTolerance` (1–8 px, 2 by default): with View › Snap to Point on and Smart Guides off (desktop app), the
   point a selection is dragged by, a drawn point and a transform tool's reference point land on an anchor or a ruler
-  guide that near.
+  guide that near, showing none of the Smart Guides labels or lines.
 - `moveLockedWithArtboard`: `artboard.move {moveArt: true}`, the Artboard tool and `artboard.rearrange` move locked and
   hidden art, and art that is also on a locked artboard, with the artboard too, and `artboard.setProps {scaleArt: true}`
   scales it too; off (the default) it stays where it is. `artboard.duplicate`, `artboard.copy` and `artboard.cut` copy or
@@ -6233,12 +6296,13 @@ Preferences. `prefs.reset` resets the preferences at once, without the question.
 `prefs.export {path?}` writes the preferences as a JSON file, `{"format": "vectorcraft-preferences", "version": 1,
 "prefs": {…}}`, and replies `{path, count}`; without `path` it replies `{data, count}` with the file's text. The file
 holds every preference `prefs.list` lists and the `eyedropper`, `perspectiveWidget`, `pathfinder`, `glyphSnap` and
-`pixelSnap` groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `recoveryFolder`, `templatesFolder`) and
-saved presets. An export over 1 MB, the most `prefs.import` reads, is an error and writes nothing.
+`pixelSnap` groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`,
+`recoveryFolder`, `templatesFolder`) and saved presets. An export over 1 MB, the most `prefs.import` reads, is an error and writes nothing.
 `prefs.import {path | data}` applies such a file and replies `{imported}`, the number of preferences it
 set. It checks every value first, as `prefs.set` does: a file over 1 MB, malformed JSON, another `format`, a newer
 `version`, an empty `prefs`, an unknown preference, a value of the wrong type or out of range, or a folder preference
-is an error, and nothing changes. Preferences the file leaves out keep their values. An import leaves the open
+is an error, and nothing changes. For `scratchPrimary` and `scratchSecondary` only a folder is an error: an empty
+value and the choices `Startup` and `None` are read. Preferences the file leaves out keep their values. An import leaves the open
 document's units as they are, records no undo step, and is saved with the other preferences. An open Preferences
 dialog shows the imported values. `prefs.import` is refused as a `command.batch` step. The dialog's Export Preferences… and Import Preferences… buttons run the two
 commands with a save or open dialog; the web build downloads the exported file and has no Import Preferences… button.
@@ -7168,7 +7232,7 @@ hatches filled, pattern hatches as their boundaries), text and multiline text po
 (one per look when their art takes colour "by block"), anonymous blocks such as dimensions groups. Indexed colours
 (7 is black on paper), true colour, lineweights (`scaleLineweights` scales them with the art), linetypes and
 transparency resolve through layers and blocks. What is left out (viewports, images, meshes, unknown entities) is
-listed in `warnings`. Binary DXF and DWG files answer an error saying to save them as ASCII DXF.
+listed in `warnings`. ASCII and binary DXF files are read; DWG files answer an error saying to save them as DXF.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.dxfInfo","params":{"path":"/tmp/plan.dxf"}}}
@@ -7236,7 +7300,14 @@ result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entr
 document, objects, graphicStyles, brushes, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
 embeddedImages, repeats), `fonts` (the fonts the document's type uses, the type in opacity masks and in the art of
 its symbols and pattern swatches included, which the fonts and fontDetails categories list; with `selectionOnly`, the
-fonts of the selected type), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
+fonts of the selected type), `fontDetails` (`[{font, match, family, style, file, embedding}]`: each font of `fonts`,
+in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
+`family` `style`), `missingWithFallback` (not installed, shown in `family` `style`) or `missing`; `file` is the face's
+file name, null for a built-in face; `embedding` is `allowed`, `editing`, `previewPrint` or `forbidden`, null when no
+face is found), `imageObjects` (`[{name, width, height, linked, file}]`: the image objects in the order the
+linkedImages and embeddedImages categories list them, with the file a linked image's row shows and null for an
+embedded one), `document.unitId` (the document's units as Preferences › Units names them, such as `millimeters`, beside
+the English `document.units`), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
 paint or width, guides, paths with no segment, type that draws no characters, a group's or layer's own strokes, a compound path member's own strokes and an image's strokes without a
 shape left out; with `selectionOnly`, the brushes the selected
 objects' strokes use), `brushes` (`[{name, type}]`: those brushes with their types, `calligraphic`, `scatter`, `art`,
@@ -7249,9 +7320,11 @@ whose drawn characters use a pattern included, hidden fills and strokes, fills a
 member's own fills and strokes, an image's fills and strokes that no Convert to Shape or Outline Object effect gives a
 shape, and characters that draw nothing (spaces and line breaks without an underline or strikethrough) left out, with
 the patterns it uses, which the patterns category lists as Pattern Objects and `objects.patterns` counts; with `selectionOnly`, those in the selection),
-`patternNames` (the patterns those objects use), `gradientObjects` (`[{id, name, gradients}]`: every object filled or
+`patternNames` (the patterns those objects use), `gradientObjects` (`[{id, name, gradients, kinds}]`: every object filled or
 stroked with a gradient, by the same rules as `patternObjects`, with the gradients it uses: the name of the gradient
-swatch a gradient is linked to, else `Linear gradient`, `Radial gradient` or `Freeform gradient`; the gradients category
+swatch a gradient is linked to, else its kind's name, such as `Linear gradient`, `Radial gradient` or `Freeform gradient`;
+`kinds` gives, for each of `gradients`, the kind (`linear`, `radial`, `conic`, `diamond` or `freeform`) of a gradient
+named by its kind and null for a swatch's name; the gradients category
 lists them as Gradient Objects and `objects.gradients` counts them; gradient swatches no art uses are not listed; with
 `selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use), `spotObjects`
 (`[{id, name, spotColors}]`: every object filled or stroked with a spot color swatch, as a solid color or in the
@@ -8334,6 +8407,14 @@ indent and bullet or number again.
 ```json
 {"name":"run_command","arguments":{"command":"text.thread.add","params":{"from":42,"at":[300,120]}}}
 ```
+
+`type.createOutlines` (Type › Create Outlines) makes a group with a path per glyph, ruby glyph and underline or
+strikethrough bar, each painted as its characters are. The type object's own fills and strokes (the items around the
+Appearance panel's Characters row, not the characters' formatting) go on paths of the type's whole outline: the items
+below the Characters row on one path under the glyph paths, the others on one path over them, in their order and with
+their opacity, blend mode, effects and stroke settings. Their gradients that are not placed are fixed to the type's
+layout box, as the canvas paints them, so one gradient spans every glyph. The group itself has no fills or strokes.
+`object.expand` outlines type with this command, so Fill and Stroke expand those paths' gradients, patterns and strokes.
 
 `type.createOutlines` (Type › Create Outlines) and `effect.expandAppearance` (when it outlines type, as Expand
 Appearance describes) take an outlined frame of threaded text out of its thread with the text it shows, and the other
@@ -9859,8 +9940,8 @@ The Shape Builder tool's options are its Shape Builder Tool Options (dialog `sha
 `openFilledAsClosed` (on: a filled open path bounds a region as if an invisible edge closed it; off: it cuts regions
 as an unfilled path does), `pickColorFrom` (`artwork`, the default: a merged shape takes the appearance, opacity and
 blending mode of the front-most selected object under the drag's first point, else of the one under its last point,
-else of the front-most selected object; `swatches`: the current fill, and the Left and Right arrow keys step the
-current fill through the document's color swatches), `cursorSwatchPreview` (off; with `swatches`, chips above the
+else of the front-most selected object; `swatches`: the current fill, and the Left and Right arrow keys without
+Shift, Alt or Cmd/Ctrl step the current fill through the document's color swatches), `cursorSwatchPreview` (off; with `swatches`, chips above the
 pointer show the current fill and the swatches before and after it), `selection` (`freeform`, the default, or
 `straightLine`: a drag touches what the line from its first point to the pointer crosses), `highlightFill` (on by
 default; when it is off, merge mode shades no regions), `gapDetection` (off) with `gapLength` (pt, 0 to 72; 3), `clickStrokeSplitsPath` (In Merge Mode,
@@ -10760,7 +10841,8 @@ Commands:
 - `addon.pathtools.cornerSet {ids?, anchors?, items?, radius, kind?, every?, minAngle?, maxAngle?}` cuts live corners, the ones Direct Selection's
   corner widgets and the Corners dialog edit, as one undo step. `ids` (default: the selection) are the paths and
   `anchors` the anchor indices of each path's outline with no corners cut; without `anchors`, a path's direct-selected
-  anchors, or all of them. `items: [{id, anchors?}…]` gives each path its own instead. Only anchors where two sides meet
+  anchors, or all of them. `items: [{id, anchors?}…]` gives each path its own instead; a member key other than `id`
+  and `anchors`, or `items` given with `ids`, is an error. Only anchors where two sides meet
   at an angle take a corner: smooth anchors and open ends are skipped, and it is an error if none is left. `radius` is
   0 to 1,000,000 pt, drawn no larger than fits; `kind` is `round`, `invertedRound` or `chamfer` (default: each corner's
   own). `every` (`all`, `odd` or `even`; default `all`) keeps, of those anchors, only the odd- or even-numbered ones,
@@ -10770,7 +10852,7 @@ Commands:
   be more than `maxAngle`, and it is an error, saying so, if no chosen corner is in the range. Object › Plug-ins › Path Precision Tools › Set Corners… (also in the Anchor Inspector's
   Corners section) sets these with Preview. → `{ids, corners}`.
 - `addon.pathtools.cornerRemove {ids?, anchors?, items?}` makes those corners sharp again, as one undo step; a plain path
-  with none left is plain again. → `{ids, corners}`.
+  with none left is plain again. Its `items` take the same keys as `cornerSet`'s. → `{ids, corners}`.
 - `addon.pathtools.slideAnchor {id, subpath?, anchor, t}` moves an anchor along its path, the segments beside it refitted
   so the outline stays (the anchor count and index stay). `t`, -0.98 to 0.98, says where: positive, a curve parameter on
   the segment after the anchor; negative, back from the end of the one before. An anchor at a sharp corner loses it, as
@@ -11098,7 +11180,7 @@ the other colour adjustments (Effect › Color Adjustments); each colour keeps i
 `addon.color.filter {effect, params?, fill?, stroke?, includeImages?, includePatterns?, ids?}` applies any colour
 adjustment, the add-on's or one of Effect › Color Adjustments', to the colours themselves instead of as a live effect:
 fills, strokes, type, gradient meshes, embedded images and pattern tiles, as `edit.colors.invert` reaches them, as one
-undo step. Missing `params` take the effect's dialog defaults; the objects' own effects stay as they are.
+undo step (none when nothing changes). Missing `params` take the effect's dialog defaults; the objects' own effects stay as they are.
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"addon.color.exposure","params":{"exposure":1.5}}}}
@@ -11265,7 +11347,7 @@ spot, deltaE}]}]}` (`values` as a default swatch name reads them: `C=10 M=20 Y=3
 `addon.color.applyNearestSwatch {library?, fill?, stroke?, ids?}` (Object › Plug-ins › Color Effects › Find Nearest
 Swatch…, whose dialog lists each colour's three closest swatches with their difference; Apply runs it) gives each solid
 colour and gradient stop of the selected objects' fills and strokes (and gradient meshes) the colour of its nearest
-swatch, as one undo step. A global or spot swatch's colour links to it. The library's swatches the colours take are
+swatch, as one undo step (none when nothing changes). A global or spot swatch's colour links to it. The library's swatches the colours take are
 added to the document's first, as `swatch.library.add` adds them, so a spot colour from a colour book stays spot;
 images and patterns keep their colours. → `{changed, swatches: [the document swatches the colours took], added}`
 
@@ -11549,5 +11631,6 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | Snap to Point with Smart Guides off draws no Smart Guides labels or lines (#7250). |
 | 2026-11-13 | Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097). |
 | 2026-11-11 | Document READ_ONLY_LOCATION for saves (#6146); no response-shape change. |
