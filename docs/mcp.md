@@ -3689,7 +3689,8 @@ already walks Image Trace. Short agent entry points:
   topmost stroke that is shown, with paint, above 0 pt and not fully transparent, and with none when the edge is fully
   transparent or has no such stroke. Each click of a double-click or triple-click runs as it
   arrives and is its own undo step. `match` is the paint the face or edge had before the first of the double-click's
-  two clicks or the triple-click's three that painted it, so the clicks before the last do not change what it matches;
+  two clicks or the triple-click's three that painted it, or before the double-click when the triple-click's double-click
+  reached it, so the clicks before the last do not change what it matches;
   a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. An edge takes the
   paint and weight in its topmost stroke that is shown, or in a new stroke above the others when it has none. These rules
   for what faces and edges join and what paints match are VectorCraft's own. The help page describes the gestures:

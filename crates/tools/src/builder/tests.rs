@@ -1206,6 +1206,40 @@ fn bucket_double_and_triple_click_widen_what_a_click_paints() {
     assert!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 400.0, 400.0)).is_empty());
 }
 
+/// A triple-click whose third click lands on a face the double-click's flood filled matches that
+/// face's fill from before the double-click.
+#[test]
+fn bucket_triple_click_on_a_face_the_double_click_flooded_matches_its_earlier_fill() {
+    let (mut d, gid, f2, _) = live_group_doc();
+    let red = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    let f1 = crate::builder::face_at(d.node(gid).unwrap(), Point::new(25.0, 25.0)).unwrap().id;
+    for f in [f1, f2] {
+        d.node_mut(f).unwrap().appearance.set_fill(red.clone());
+    }
+    let mut first = d.clone();
+    first.node_mut(f1).unwrap().appearance.set_fill(blue.clone());
+    let mut flooded = first.clone();
+    flooded.node_mut(f2).unwrap().appearance.set_fill(blue.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (start, first, flooded) = (cx(&d, &s, &p), cx(&first, &s, &p), cx(&flooded, &s, &p));
+    let mut t = LivePaintBucketTool::default();
+    let click = |t: &mut LivePaintBucketTool, cx: &ToolContext, x: f64| {
+        t.pointer(cx, &ev(PointerKind::Down, x, 25.0));
+        t.pointer(cx, &ev(PointerKind::Up, x, 25.0));
+    };
+    click(&mut t, &start, 25.0);
+    click(&mut t, &first, 25.0);
+    t.pointer(&first, &ev(PointerKind::DoubleClick, 25.0, 25.0));
+    click(&mut t, &flooded, 75.0);
+    let like = serde_json::to_value(&red).unwrap();
+    assert_eq!(
+        t.pointer(&flooded, &ev(PointerKind::TripleClick, 75.0, 25.0)),
+        vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": like }))]
+    );
+}
+
 /// On an edge that stores a stroke paint but draws none (its stroke hidden, or the edge fully
 /// transparent), a double-click or triple-click matches no paint, with or without the clicks
 /// before it.

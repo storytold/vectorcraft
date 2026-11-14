@@ -226,6 +226,9 @@ struct LpPress {
     /// Its fill (a face), or the stroke paint it draws with ([`lp_stroke_paint`], an edge), before
     /// the press.
     before: Paint,
+    /// The other faces or edges the double-click that followed the press reached, each with its
+    /// fill or drawn stroke paint before the double-click.
+    also: Vec<(NodeId, Paint)>,
 }
 
 /// The fill of the face under `p` in the Live Paint group that `roots` make: the fill of the
@@ -333,29 +336,50 @@ impl LivePaintBucketTool {
     /// Note a press at `at` that paints face or edge (`edge`) `n`.
     fn note_part(&mut self, n: &Node, edge: bool, at: Point) {
         let before = if edge { lp_stroke_paint(n) } else { n.appearance.fill_paint() };
-        self.note_press(Some(LpPress { part: Some(n.id), at, before }));
+        self.note_press(Some(LpPress { part: Some(n.id), at, before, also: vec![] }));
+    }
+
+    /// Note that the double-click after the last press also reaches `parts` of group `group`, with
+    /// the paint each has now (a face's fill, or an edge's drawn stroke paint with `edge`).
+    fn note_reached(&mut self, group: &Node, parts: Vec<NodeId>, edge: bool) {
+        let Some(Some(last)) = self.presses.last_mut() else { return };
+        let reached: std::collections::HashSet<NodeId> = parts.into_iter().filter(|id| last.part != Some(*id)).collect();
+        last.also = group
+            .children()
+            .into_iter()
+            .flatten()
+            .filter(|c| reached.contains(&c.id))
+            .map(|n| (n.id, if edge { lp_stroke_paint(n) } else { n.appearance.fill_paint() }))
+            .collect();
     }
 
     /// The paint `part` had before the first press of a click sequence of `clicks` presses that
-    /// painted `part` (the sequence's first press counts when it made the group `part` is in and
-    /// the face it filled there is `part`); `now` when the last press did not paint it.
+    /// painted `part`, or before the double-click after a press when that double-click reached it
+    /// (the sequence's first press counts when it made the group `part` is in and the face it
+    /// filled there is `part`); `now` when the last press did not paint it.
     fn before(&self, cx: &ToolContext, part: NodeId, clicks: usize, now: Paint) -> Paint {
         let Some(run) = self.presses.len().checked_sub(clicks).and_then(|from| self.presses.get(from..)) else { return now };
         let made_part = |q: &LpPress| live_paint_at(cx.doc, q.at).and_then(|g| visible_face_at(cx.doc.node(g)?, q.at)).is_some_and(|f| f.id == part);
-        let on_part =
-            |(i, q): (usize, &Option<LpPress>)| q.as_ref().is_some_and(|q| q.part == Some(part) || (i == 0 && q.part.is_none() && made_part(q)));
-        if !run.last().is_some_and(|q| on_part((run.len() - 1, q))) {
+        let on_part = |i: usize, q: &LpPress| q.part == Some(part) || (i == 0 && q.part.is_none() && made_part(q));
+        if !run.last().and_then(Option::as_ref).is_some_and(|q| on_part(run.len() - 1, q)) {
             return now;
         }
-        match run.iter().enumerate().find(|&iq| on_part(iq)) {
-            Some((_, Some(first))) => first.before.clone(),
-            _ => now,
+        for (i, q) in run.iter().enumerate() {
+            let Some(q) = q else { continue };
+            if on_part(i, q) {
+                return q.before.clone();
+            }
+            if let Some((_, paint)) = q.also.iter().find(|(id, _)| *id == part) {
+                return paint.clone();
+            }
         }
+        now
     }
 
     /// What a double-click (`scope` "connected", 2 `clicks`) or a triple-click ("samePaint", 3) at
     /// `p` runs: the command a click there runs, with `scope`, and the paint it compares as `match`.
-    fn multi_click(&self, cx: &ToolContext, p: Point, mods: Mods, scope: &str, clicks: usize) -> Vec<Action> {
+    /// A double-click notes the other faces or edges it reaches, for the triple-click's `match`.
+    fn multi_click(&mut self, cx: &ToolContext, p: Point, mods: Mods, scope: &str, clicks: usize) -> Vec<Action> {
         // With Alt held, with Space held for the view tools, or with Cmd/Ctrl held (its presses went
         // to the selection tool Cmd lends), a double-click or triple-click paints nothing.
         if mods.alt || mods.space || mods.cmd {
@@ -367,7 +391,13 @@ impl LivePaintBucketTool {
             && let Some((g, Some(e))) = lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id))
         {
             let mut v = json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0), "scope": scope });
-            if let Ok(like) = serde_json::to_value(self.before(cx, e.id, clicks, lp_stroke_paint(e))) {
+            let like = self.before(cx, e.id, clicks, lp_stroke_paint(e));
+            if clicks == 2
+                && let Some(group) = cx.doc.node(g)
+            {
+                self.note_reached(group, connected_edges(group, e.id, &like), true);
+            }
+            if let Ok(like) = serde_json::to_value(like) {
                 v["match"] = like;
             }
             return vec![Action::Exec("livePaint.strokeEdge".into(), v)];
@@ -377,6 +407,11 @@ impl LivePaintBucketTool {
         }
         let Some((g, f)) = live_paint_at(cx.doc, p).and_then(|g| Some((g, visible_face_at(cx.doc.node(g)?, p)?))) else { return vec![] };
         let mut v = json!({ "group": g.0, "point": point, "scope": scope });
+        if clicks == 2
+            && let Some(group) = cx.doc.node(g)
+        {
+            self.note_reached(group, flood_faces(group, f.id), false);
+        }
         if scope == "samePaint"
             && let Ok(like) = serde_json::to_value(self.before(cx, f.id, clicks, f.appearance.fill_paint()))
         {
@@ -522,7 +557,7 @@ impl Tool for LivePaintBucketTool {
                 }
                 if self.cache.at(cx, p).is_some() {
                     let roots = sorted_roots(cx.doc, &cx.selection.objects);
-                    self.note_press(Some(LpPress { part: None, at: p, before: made_face_fill(cx.doc, &roots, p) }));
+                    self.note_press(Some(LpPress { part: None, at: p, before: made_face_fill(cx.doc, &roots, p), also: vec![] }));
                     return self.begin_fill(json!({ "ids": json_ids(&roots), "point": point }), p);
                 }
                 self.note_press(None);
