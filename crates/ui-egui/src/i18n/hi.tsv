@@ -1993,6 +1993,7 @@ antiAlias	Sharp	शार्प
 	Format Options	फ़ॉर्मेट ऑप्शन्स
 	Format Presets	फ़ॉर्मैट प्रीसेट
 	Format Settings	फ़ॉर्मैट सेटिंग
+	Format Settings…	फ़ॉर्मैट सेटिंग…
 	Format:	फ़ॉर्मेट:
 	Formats:	फ़ॉर्मैट:
 	Fractional Widths	आंशिक चौड़ाई
@@ -8904,3 +8905,6 @@ theme	Appearance	अपीयरेंस
 	Grommets	आईलेट
 	Grommet Inset	किनारे से आईलेट की दूरी
 	Diameter	व्यास
+	Nest Shapes…	आकृतियाँ सटाकर रखें…
+	Nest Shapes	आकृतियाँ सटाकर रखें
+	Roll	रोल

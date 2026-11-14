@@ -1837,6 +1837,7 @@ antiAlias	Sharp	シャープ
 	Format	形式
 	Format Options	形式オプション
 	Format Settings	形式の設定
+	Format Settings…	形式の設定…
 	Format:	形式:
 	Formats:	形式:
 	Fractions	分数
@@ -9013,6 +9014,9 @@ breakText	Glyphs	字形
 	Grommets	ハトメ
 	Grommet Inset	端からハトメまでの距離
 	Diameter	直径
+	Nest Shapes…	図形のネスティング…
+	Nest Shapes	図形のネスティング
+	Roll	ロール
 
 # Messages no catalog translated yet: image export and color profiles, color books and swatch exchange files, 3D and Revolve, and script, zip, line and file errors.
 @msg	3D effects require finite coordinates within 100 million points	3D 効果には 1 億ポイント以内の有限の座標が必要です
