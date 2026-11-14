@@ -709,6 +709,11 @@ font-technology	Variable	Változó
 	Color blindness – Deuteranopia-type	Színvakság – deuteranópia
 	Color blindness – Protanopia-type	Színvakság – protanópia
 	Color blindness – Tritanopia-type	Színvakság – tritanópia
+	Show Color Vision Preview	Színlátás-előnézet megjelenítése
+	Protanopia	Protanópia
+	Deuteranopia	Deuteranópia
+	Tritanopia	Tritanópia
+	Achromatopsia	Akromatopszia
 	Color Burn	Színsötétítés
 	Color conversion:	Színátalakítás:
 	Color Dodge	Színvilágosítás

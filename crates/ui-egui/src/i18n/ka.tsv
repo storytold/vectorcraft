@@ -5686,6 +5686,11 @@ imageTrace	Outline	კონტური
 @plural	{n} part of the file wasn't read|{n} parts of the file weren't read	ფაილის წაუკითხავი ნაწილები: {n}|ფაილის წაუკითხავი ნაწილები: {n}
 # Upstream sync 2026-10-16: legacy .ai export, screen color sampler, Hidden Objects, Dimension tool.
 	Color blindness – Tritanopia-type	დალტონიზმი – ტრიტანოპიის ტიპი
+	Show Color Vision Preview	ფერთა აღქმის გადახედვის ჩვენება
+	Protanopia	პროტანოპია
+	Deuteranopia	დეიტერანოპია
+	Tritanopia	ტრიტანოპია
+	Achromatopsia	აქრომატოფსია
 	Darkness	სიმუქე
 	Sample Color from Screen	ფერის აღება ეკრანიდან
 	This system has no screen color sampler	ამ სისტემას ეკრანიდან ფერის აღების საშუალება არ აქვს

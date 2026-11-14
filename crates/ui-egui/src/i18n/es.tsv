@@ -536,6 +536,11 @@ font-technology	Variable	Variables
 	Color blindness – Deuteranopia-type	Daltonismo – tipo deuteranopía
 	Color blindness – Protanopia-type	Daltonismo – tipo protanopía
 	Color blindness – Tritanopia-type	Daltonismo – tipo tritanopía
+	Show Color Vision Preview	Mostrar vista previa de visión del color
+	Protanopia	Protanopía
+	Deuteranopia	Deuteranopía
+	Tritanopia	Tritanopía
+	Achromatopsia	Acromatopsia
 	Color Burn	Subexponer color
 	Color conversion:	Conversión de color:
 	Color Dodge	Sobreexponer color

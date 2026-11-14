@@ -5810,6 +5810,11 @@ theme	Appearance	Външен вид
 	The active document changed while the screen color sampler was open	Активният документ се промени, докато взимането на цвят от екрана беше отворено
 	This system has no screen color sampler	Тази система няма инструмент за взимане на цвят от екрана
 	Color blindness – Tritanopia-type	Цветна слепота – тип тританопия
+	Show Color Vision Preview	Показване на преглед на цветовото зрение
+	Protanopia	Протанопия
+	Deuteranopia	Девтеранопия
+	Tritanopia	Тританопия
+	Achromatopsia	Ахроматопсия
 	Panels Except Tools and Control	Панели без инструменти и контрол
 
 # Type › Reset Tracking and Kerning

@@ -537,6 +537,11 @@ font-technology	Variable	Variables
 	Color blindness – Deuteranopia-type	Daltonisme – type deutéranopie
 	Color blindness – Protanopia-type	Daltonisme – type protanopie
 	Color blindness – Tritanopia-type	Daltonisme – type tritanopie
+	Show Color Vision Preview	Afficher un aperçu de la vision des couleurs
+	Protanopia	Protanopie
+	Deuteranopia	Deutéranopie
+	Tritanopia	Tritanopie
+	Achromatopsia	Achromatopsie
 	Color Burn	Densité couleur +
 	Color conversion:	Conversion des couleurs :
 	Color Dodge	Densité couleur -

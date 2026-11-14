@@ -499,6 +499,11 @@ font-technology	Variable	可變
 	Color blindness – Deuteranopia-type	色盲 – 綠色盲型
 	Color blindness – Protanopia-type	色盲 – 紅色盲型
 	Color blindness – Tritanopia-type	色盲 – 藍色盲型
+	Show Color Vision Preview	顯示色覺預覽
+	Protanopia	紅色盲
+	Deuteranopia	綠色盲
+	Tritanopia	藍色盲
+	Achromatopsia	全色盲
 	Color Burn	加深顏色
 	Color conversion:	色彩轉換：
 	Color Dodge	加亮顏色

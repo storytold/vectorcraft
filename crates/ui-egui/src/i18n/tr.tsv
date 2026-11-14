@@ -518,6 +518,11 @@ font-technology	Variable	Değişken
 	Color blindness – Deuteranopia-type	Renk körlüğü – Döteranopi tipi
 	Color blindness – Protanopia-type	Renk körlüğü – Protanopi tipi
 	Color blindness – Tritanopia-type	Renk körlüğü – Tritanopia tipi
+	Show Color Vision Preview	Renk Görme Önizlemesini Göster
+	Protanopia	Protanopi
+	Deuteranopia	Döteranopi
+	Tritanopia	Tritanopi
+	Achromatopsia	Akromatopsi
 	Color Burn	Renkli Yanık
 	Color conversion:	Renk dönüşümü:
 	Color Dodge	Renk Soldurma

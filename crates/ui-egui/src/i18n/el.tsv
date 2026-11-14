@@ -5998,6 +5998,11 @@ effect	Points	Σημεία
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Κλείσιμο των κυκλικών άκρων των ανοιχτών προφίλ. Οι μερικές περιστροφές κρατούν ανοιχτές τις πλευρές τομής τους.
 	Color Panel Options	Επιλογές πίνακα χρώματος
 	Color blindness – Tritanopia-type	Αχρωματοψία – τύπου τριτανοπίας
+	Show Color Vision Preview	Εμφάνιση προεπισκόπησης χρωματικής όρασης
+	Protanopia	Πρωτανοπία
+	Deuteranopia	Δευτερανοπία
+	Tritanopia	Τριτανοπία
+	Achromatopsia	Ολική αχρωματοψία
 	Create Dimension	Δημιουργία διάστασης
 	Darkness	Σκουρότητα
 	Destination Folder:	Φάκελος προορισμού:

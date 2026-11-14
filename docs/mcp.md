@@ -625,6 +625,12 @@ strip at its right) in place of the wheel, as the panel menu's Box View and Box 
 shows the wheel again. Keys left out keep their values. Params that are not an object, another key or a value off
 the list return an error and change nothing. The command returns `{view, channel}`, and both settings are kept with
 the preferences.
+`ui.colorWheel {"vision": true}` turns on the Color Wheel panel's Show Color Vision Preview, as its panel menu
+does: a row of four chips under the wheel or the box shows the current color through the protanopia, deuteranopia
+and tritanopia simulations of `view.proofSetup`, and for achromatopsia as the gray with the color's CIE L*. Each
+chip reports its name and hex value to screen readers, and a click on a chip does not apply its color. `false`
+hides the row. A value that is not a bool returns an error and changes nothing. The command returns
+`{view, channel, vision}`, and the setting is kept with the preferences.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

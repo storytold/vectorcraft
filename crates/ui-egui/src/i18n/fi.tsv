@@ -6009,6 +6009,11 @@ mark-style	Japanese	Japanilainen
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset jättävät leikkauspintansa auki.
 	Color Panel Options	Väri-paneelin asetukset
 	Color blindness – Tritanopia-type	Värisokeus – tritanopia
+	Show Color Vision Preview	Näytä värinäön esikatselu
+	Protanopia	Protanopia
+	Deuteranopia	Deuteranopia
+	Tritanopia	Tritanopia
+	Achromatopsia	Akromatopsia
 	Create Dimension	Luo mitta
 	Darkness	Tummuus
 	Destination Folder:	Kohdekansio:

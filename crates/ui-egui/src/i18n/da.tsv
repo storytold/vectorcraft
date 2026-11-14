@@ -5565,6 +5565,11 @@ mark-style	Japanese	Japansk
 	The active document changed while the screen color sampler was open	Det aktive dokument ændrede sig, mens skærmfarvesampleren var åben
 	This system has no screen color sampler	Dette system har ingen skærmfarvesampler
 	Color blindness – Tritanopia-type	Farveblindhed – tritanopitype
+	Show Color Vision Preview	Vis eksempel på farvesyn
+	Protanopia	Protanopi
+	Deuteranopia	Deuteranopi
+	Tritanopia	Tritanopi
+	Achromatopsia	Akromatopsi
 	Panels Except Tools and Control	Paneler undtagen værktøjer og kontrol
 	Reset Tracking and Kerning	Nulstil sporing og kerning
 	Reset Horizontal Scale	Nulstil vandret skalering

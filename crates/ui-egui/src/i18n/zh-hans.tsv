@@ -482,6 +482,11 @@ antiAlias	Sharp	锐利
 	Color blindness – Deuteranopia-type	色盲 – 绿色盲型
 	Color blindness – Protanopia-type	色盲 – 红色盲型
 	Color blindness – Tritanopia-type	色盲 – 蓝色盲型
+	Show Color Vision Preview	显示色觉预览
+	Protanopia	红色盲
+	Deuteranopia	绿色盲
+	Tritanopia	蓝色盲
+	Achromatopsia	全色盲
 	Color Burn	颜色加深
 	Color conversion:	色彩转换：
 	Color Dodge	颜色减淡
