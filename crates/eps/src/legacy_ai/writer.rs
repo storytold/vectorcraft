@@ -45,6 +45,13 @@ pub(super) struct Writer<'a> {
     roman: bool,
     /// Inside a Kumi block `1 TY` began (Tate-chu-yoko in horizontal type).
     kumi: bool,
+    /// The outlines of the clipping groups the art being written is in, in the document.
+    clips: Vec<BezPath>,
+    /// The image decoded last (`None` when it can't be): the pieces of a warped image, which follow
+    /// one another, decode it once.
+    last_image: Option<(ImageBlob, Option<Arc<image::DynamicImage>>)>,
+    /// The images written whole so far, by the address of their data (which each entry keeps).
+    whole_images: std::collections::HashMap<usize, Arc<Vec<u8>>>,
 }
 
 impl<'a> Writer<'a> {
@@ -68,6 +75,9 @@ impl<'a> Writer<'a> {
             fonts: vec![],
             roman: false,
             kumi: false,
+            clips: vec![],
+            last_image: None,
+            whole_images: std::collections::HashMap::new(),
         }
     }
 
@@ -363,12 +373,14 @@ impl<'a> Writer<'a> {
         if several {
             self.line("*U");
         }
+        self.clips.push(outline);
         if let Some(fill) = &paint.fill {
             self.node(fill, locked);
         }
         for c in rest {
             self.node(c, locked);
         }
+        self.clips.pop();
         self.lock(locked);
         self.line("Q");
         if let Some(stroke) = &paint.stroke {
@@ -1037,7 +1049,8 @@ impl<'a> Writer<'a> {
     /// whose pixels are all black or white is written as an image mask (ImageMask 1, §8.1): its
     /// color as the fill, then 1-bit samples, a 0 bit for each black pixel, which takes the color,
     /// and a 1 bit for each white pixel, which is clear. Another colorized image is written with
-    /// its color in its pixels.
+    /// its color in its pixels. In a clipping group, an image whose pixels were written whole
+    /// already is written as the part of them the group shows ([`ai_ops::image_window`]).
     fn image(&mut self, blob: Option<&ImageBlob>, width: u32, height: u32, xf: Affine, colorize: Option<&Paint>) {
         let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let m = self.to_art * xf * flip;
@@ -1048,7 +1061,7 @@ impl<'a> Writer<'a> {
             self.warn(LARGE_IMAGE);
             return;
         }
-        let Some(img) = blob.and_then(|b| image::load_from_memory(&b.bytes).ok()) else {
+        let Some((blob, img)) = blob.and_then(|b| Some((b, self.decoded(b)?))) else {
             self.warn(UNDECODED);
             return;
         };
@@ -1059,14 +1072,31 @@ impl<'a> Writer<'a> {
         }
         // The object places the image's own pixel grid (its width × height) wherever the file's is.
         let fit = Affine::scale_non_uniform(f64::from(width.max(1)) / f64::from(w), f64::from(height.max(1)) / f64::from(h));
-        let m = self.to_art * xf * fit * flip;
+        let coverage = match colorize {
+            Some(paint) => {
+                let Some((_, _, coverage)) = ImageBlob::coverage(blob).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
+                    self.warn(UNDECODED);
+                    return;
+                };
+                Some((paint, coverage))
+            }
+            None => None,
+        };
+        // An image written whole already, cut to a clipping group: the part the group shows, placed
+        // where it is in the image (the pieces of a warped image each show a small part of the same one).
+        let key = Arc::as_ptr(&blob.bytes) as usize;
+        let window = if self.whole_images.contains_key(&key) { ai_ops::image_window(&self.clips, xf * fit, (w, h)) } else { None };
+        if window.is_none() {
+            self.whole_images.insert(key, blob.bytes.clone());
+        }
+        let window = window.unwrap_or([0, 0, w, h]);
+        let [x0, y0, x1, y1] = window;
+        let m = self.to_art * xf * fit * Affine::translate((f64::from(x0), f64::from(y0))) * flip;
+        let (w, h) = (x1 - x0, y1 - y0);
         // Over white.
         let over = |c: u8, a: u8| ((u32::from(c) * u32::from(a) + 255 * (255 - u32::from(a)) + 127) / 255) as u8;
-        if let Some(paint) = colorize {
-            let Some((_, _, coverage)) = blob.and_then(ImageBlob::coverage).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
-                self.warn(UNDECODED);
-                return;
-            };
+        if let Some((paint, coverage)) = coverage {
+            let coverage = ai_ops::window_samples(&coverage, img.width(), 1, window);
             if coverage.iter().all(|&v| v == 0 || v == 255) {
                 let stride = (w as usize).div_ceil(8);
                 let mut bits = vec![0xFF; stride.saturating_mul(h as usize)];
@@ -1086,7 +1116,7 @@ impl<'a> Writer<'a> {
             self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
             return;
         }
-        let rgba = img.to_rgba8();
+        let rgba = img.crop_imm(x0, y0, w, h).to_rgba8();
         let mut samples = Vec::with_capacity(rgba.len() / 4 * 3);
         let mut see_through = false;
         for px in rgba.pixels() {
@@ -1100,6 +1130,19 @@ impl<'a> Writer<'a> {
             self.warn(IMAGE_ALPHA);
         }
         self.raster(m, &format!("0 0 {w} {h} {w} {h} 8 3 0 0 0 0"), &samples);
+    }
+
+    /// The pixels of `blob`, decoded once for images that follow one another with the same data.
+    fn decoded(&mut self, blob: &ImageBlob) -> Option<Arc<image::DynamicImage>> {
+        if let Some((last, img)) = &self.last_image
+            && Arc::ptr_eq(&last.bytes, &blob.bytes)
+            && last.mime == blob.mime
+        {
+            return img.clone();
+        }
+        let img = image::load_from_memory(&blob.bytes).ok().map(Arc::new);
+        self.last_image = Some((blob.clone(), img.clone()));
+        img
     }
 
     /// An image's lines (§8.4): `%AI5_File:`, `%AI5_BeginRaster`, matrix `m` as `[ a b c d tx ty ]`
