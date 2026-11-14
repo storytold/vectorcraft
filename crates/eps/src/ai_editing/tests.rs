@@ -10222,3 +10222,151 @@ fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
         same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 5.0, true)]);
     }
 }
+
+/// The wrap shapes [`vectorcraft_doc::text::resolve_wrap`] gives the area type in `doc`.
+fn area_wrap(doc: &Document) -> Vec<vectorcraft_doc::WrapShape> {
+    let mut d = doc.clone();
+    vectorcraft_doc::text::resolve_wrap(None, &mut d);
+    let mut out = vec![];
+    d.layers[0].walk(&mut |n| {
+        if let NodeKind::Text(t) = &n.kind
+            && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. })
+        {
+            out.clone_from(&t.wrap);
+        }
+    });
+    out
+}
+
+/// `got` and `want` are the same wrap shapes: the same options, offsets within `1e-6`, and the
+/// same subpaths with anchors within `1e-3`.
+fn same_shapes(got: &[vectorcraft_doc::WrapShape], want: &[vectorcraft_doc::WrapShape], case: &str) {
+    let same = got.len() == want.len()
+        && got.iter().zip(want).all(|(g, w)| {
+            g.wrap.invert == w.wrap.invert
+                && (g.wrap.offset - w.wrap.offset).abs() < 1e-6
+                && g.path.subpaths.len() == w.path.subpaths.len()
+                && g.path.subpaths.iter().zip(&w.path.subpaths).all(|(a, b)| {
+                    a.closed == b.closed
+                        && a.anchors.len() == b.anchors.len()
+                        && a.anchors.iter().zip(&b.anchors).all(|(p, q)| (p.p - q.p).hypot() < 1e-3)
+                })
+        });
+    assert!(same, "{case}\n{got:?}\n{want:?}");
+}
+
+/// A clipping object that isn't written as an object of its own (a group, an image, a symbol
+/// instance, a path or compound path without paint in art cut to a clipping object) or is written
+/// as its outlines or cut (type, a path the outer clipping object cuts) keeps its text wrap options on one unpainted object
+/// of its wrap outline: area type below it wraps alike after a round trip, and the object stays
+/// locked or hidden as it was. A clipping object without options gets no such object.
+#[test]
+fn a_clipping_object_not_written_whole_keeps_its_text_wrap() {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    let cases = ["group", "hidden", "locked", "image", "instance", "type", "unpainted path", "unpainted compound", "cut path", "no options"];
+    for case in cases {
+        let mut doc = Document::new(400.0, 200.0);
+        let layer = doc.layers[0].id;
+        let st = style(10.0, Color::BLACK);
+        let mut area = TextObject::point(vectorcraft_geom::Point::ZERO, "", st.clone());
+        area.runs = vec![TextRun::new("One two three four five six", st)];
+        area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 400.0, 200.0)) };
+        area.xf = Affine::IDENTITY;
+        let area = text_node(&mut doc, area);
+        doc.insert(Some(layer), usize::MAX, area).unwrap();
+        let art = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF);
+        doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+        let mut cutter = match case {
+            "group" | "hidden" | "locked" | "no options" => {
+                let mut off = square(&mut doc, Rect::new(200.0, 20.0, 230.0, 60.0), Color::gray(0.5));
+                off.visible = false;
+                let members = vec![
+                    square(&mut doc, Rect::new(20.0, 20.0, 50.0, 60.0), Color::gray(0.5)),
+                    square(&mut doc, Rect::new(60.0, 30.0, 90.0, 70.0), Color::gray(0.5)),
+                    off,
+                ];
+                group(&mut doc, members, false)
+            }
+            "image" => image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::new([20.0, 0.0, 0.0, 20.0, 30.0, 40.0]), None),
+            "instance" => instance(&mut doc, "Leaf", Affine::translate((40.0, 30.0))),
+            "type" => {
+                let label = TextObject::point(vectorcraft_geom::Point::new(30.0, 50.0), "Clip", style(24.0, Color::BLACK));
+                text_node(&mut doc, label)
+            }
+            "unpainted path" => clipping(&mut doc, shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0))),
+            "unpainted compound" => {
+                let outer = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)), Appearance::default());
+                let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(30.0, 30.0, 70.0, 70.0)), Appearance::default());
+                Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd })
+            }
+            _ => {
+                let mut c = clipping(&mut doc, shapes::rectangle(Rect::new(50.0, 20.0, 150.0, 80.0)));
+                c.appearance = Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0).into();
+                c
+            }
+        };
+        cutter.visible = case != "hidden";
+        cutter.locked = case == "locked";
+        let cutter = if case == "no options" { cutter } else { wrapped(cutter, -4.5, true) };
+        let member = square(&mut doc, Rect::new(30.0, 30.0, 70.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+        let mut top = group(&mut doc, vec![cutter, member], true);
+        if matches!(case, "unpainted path" | "unpainted compound" | "cut path") {
+            let frame = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::gray(0.9));
+            let frame = group(&mut doc, vec![frame], false);
+            top = group(&mut doc, vec![frame, top], true);
+        }
+        doc.insert(Some(layer), usize::MAX, top).unwrap();
+        let text = program(&doc);
+        let back = read_back(&doc);
+        if case == "no options" {
+            assert!(!text.contains("(AI11TextWrapOffset)"), "{text}");
+            assert!(wraps(back.layers[0].children().unwrap()).is_empty());
+            continue;
+        }
+        assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 1, "{case}\n{text}");
+        same_wraps(&wraps(back.layers[0].children().unwrap()), &[(None, -4.5, true)]);
+        let mut carrier = None;
+        back.layers[0].walk(&mut |n| {
+            if n.extras().wrap.is_some() {
+                carrier = Some((n.locked, n.visible));
+            }
+        });
+        assert_eq!(carrier, Some((case == "locked", case != "hidden")), "{case}");
+        let want = area_wrap(&doc);
+        assert_eq!(want.is_empty(), case == "hidden", "{case}");
+        same_shapes(&area_wrap(&back), &want, case);
+    }
+}
+
+/// With too little room for the unpainted object that carries a clipping object's text wrap
+/// options, the options are left out, never written on another object, and the data stays readable.
+#[test]
+fn a_clipping_objects_text_wrap_is_left_out_without_room() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let members = vec![
+        square(&mut doc, Rect::new(20.0, 20.0, 50.0, 60.0), Color::gray(0.5)),
+        square(&mut doc, Rect::new(60.0, 30.0, 90.0, 70.0), Color::gray(0.5)),
+    ];
+    let cutter = wrapped(group(&mut doc, members, false), 2.0, false);
+    let member = square(&mut doc, Rect::new(30.0, 30.0, 70.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+    let top = group(&mut doc, vec![cutter, member], true);
+    doc.insert(Some(layer), usize::MAX, top).unwrap();
+    let all = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    for room in 0..=all {
+        let out = export_within(&doc, &opts(), room).unwrap();
+        assert!(crate::import::objects_read(&out.program).unwrap() <= room);
+        let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        // The group, then the compound path of the two squares (three objects): with room for all four
+        // the options are written, on that compound path.
+        assert_eq!(text.matches("(AI11TextWrapOffset)").count(), usize::from(room >= 4), "{room}\n{text}");
+        let (back, _) = crate::ai_alone(&out.program).unwrap();
+        let mut carriers = vec![];
+        back.layers[0].walk(&mut |n| {
+            if n.extras().wrap.is_some() {
+                carriers.push(matches!(n.kind, NodeKind::Compound { .. }) && n.appearance.items.is_empty());
+            }
+        });
+        assert_eq!(carriers, if room >= 4 { vec![true] } else { vec![] }, "{room}\n{text}");
+    }
+}

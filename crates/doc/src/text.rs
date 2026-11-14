@@ -34,7 +34,7 @@ pub use tabs_lists::{
     Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, NumberStyle, ParaList, TabAlign,
     TabStop,
 };
-pub use wrap::{resolve_wrap, wrap_work};
+pub use wrap::{resolve_wrap, wrap_outline, wrap_work};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///
