@@ -1797,6 +1797,7 @@ digits	Malayalam	Malaiàlam
 	Format	Format
 	Format Options	Opcions de format
 	Format Settings	Configuració de format
+	Format Settings…	Configuració de format…
 	Format:	Format:
 	Formats:	Formats:
 	Fractional Widths	Amplades fraccionàries
@@ -7494,6 +7495,9 @@ breakText	Glyphs	Glifs
 	Grommets	Ullets
 	Grommet Inset	Distància dels ullets a la vora
 	Diameter	Diàmetre
+	Nest Shapes…	Encaixa les formes…
+	Nest Shapes	Encaixa les formes
+	Roll	Rotlle
 # Status and error messages of image export, color profiles and libraries, 3D effects, path operations and scripts.
 @msg	3D effects require finite coordinates within 100 million points	Els efectes 3D requereixen coordenades finites dins de 100 milions de punts
 @msg	3D effects require one to ten lights	Els efectes 3D requereixen d’un a deu llums
