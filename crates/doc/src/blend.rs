@@ -668,8 +668,12 @@ fn reoriented<V: Copy>(points: &[(f64, V)], o: Orient, at: impl Fn(f64) -> V, wr
 /// One of `g`'s own stops keeps its swatch link (each stop of a step its own), and a stop between
 /// two of them the link [`link_at`] reads there.
 fn gradient_from(g: &Gradient, s: f32) -> Gradient {
+    // A hue gradient that reflects unrolls through its curve, whose stops have no links: the links
+    // come from its own stops unrolled as a Classic gradient's, which keep them.
+    let hue_reflect = g.is_spread() && g.spread == GradientSpread::Reflect && g.method.is_hue();
+    let classic = hue_reflect.then(|| Gradient { method: GradientMethod::Classic, ..g.clone() });
     let g = g.unrolled();
-    let mut own = g.stops.clone();
+    let mut own = classic.as_ref().map_or_else(|| g.stops.clone(), |c| c.unrolled().stops.clone());
     own.sort_by(|a, b| a.offset.total_cmp(&b.offset));
     let mut stops = Vec::new();
     // The part from `s` to the end runs first, then the part up to `s`.
@@ -3011,6 +3015,85 @@ mod tests {
             p => panic!("a gradient: {p:?}"),
         };
         assert_eq!(ends, (Some(Some("Paper".into())), Some(Some("Ink".into()))), "{:?}", s.paint);
+        // A hue gradient that reflects keeps its links on the repeated stops.
+        let hue = keyed(square(100.0), &|s| {
+            let (mut red, mut blue) =
+                (GradientStop::new(0.0, Color::Rgb { r: 1.0, g: 0.0, b: 0.0 }), GradientStop::new(1.0, Color::Rgb { r: 0.0, g: 0.0, b: 1.0 }));
+            (red.swatch, blue.swatch) = (Some("Ink".into()), Some("Paper".into()));
+            let g = Gradient {
+                method: GradientMethod::HueClockwise,
+                spread: GradientSpread::Reflect,
+                repeats: 2,
+                ..Gradient::new(vectorcraft_color::GradientKind::Linear, vec![red, blue])
+            };
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+            s.gradient_mode = StrokeGradientMode::Along;
+        });
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &hue, (Some(0), Some(2))).b);
+        let linked = |name: &str| match &s.paint {
+            Paint::Gradient(g) => g.gradient.stops.iter().filter(|st| st.swatch.as_deref() == Some(name)).map(|st| st.offset).collect::<Vec<_>>(),
+            p => panic!("a gradient: {p:?}"),
+        };
+        assert!(linked("Paper").contains(&0.0) && linked("Paper").contains(&1.0), "{:?}", s.paint);
+        assert!(linked("Ink").contains(&0.5), "{:?}", s.paint);
+        // Two stops of one color at one place keep their own links, in reverse in a mirrored run.
+        let hue_step = keyed(square(100.0), &|s| {
+            let green = Color::Rgb { r: 0.0, g: 1.0, b: 0.0 };
+            let (mut before, mut after) = (GradientStop::new(0.5, green), GradientStop::new(0.5, green));
+            (before.swatch, after.swatch) = (Some("Ink".into()), Some("Paper".into()));
+            let stops = vec![
+                GradientStop::new(0.0, Color::Rgb { r: 1.0, g: 0.0, b: 0.0 }),
+                before,
+                after,
+                GradientStop::new(1.0, Color::Rgb { r: 0.0, g: 0.0, b: 1.0 }),
+            ];
+            let g = Gradient {
+                method: GradientMethod::HueClockwise,
+                spread: GradientSpread::Reflect,
+                repeats: 2,
+                ..Gradient::new(vectorcraft_color::GradientKind::Linear, stops)
+            };
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+            s.gradient_mode = StrokeGradientMode::Along;
+        });
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &hue_step, (Some(0), Some(2))).b);
+        // The links at `u` in order, a link repeated by the next stop listed once.
+        let links_at = |u: f32| match &s.paint {
+            Paint::Gradient(g) => {
+                let mut links =
+                    g.gradient.stops.iter().filter(|st| (st.offset - u).abs() < 1e-4).filter_map(|st| st.swatch.clone()).collect::<Vec<_>>();
+                links.dedup();
+                links
+            }
+            p => panic!("a gradient: {p:?}"),
+        };
+        assert_eq!(links_at(0.25), vec!["Paper".to_string(), "Ink".to_string()], "{:?}", s.paint);
+        assert_eq!(links_at(0.75), vec!["Ink".to_string(), "Paper".to_string()], "{:?}", s.paint);
+        // Where two runs meet, each run's stops keep their own links.
+        let hue_end = keyed(square(100.0), &|s| {
+            let green = Color::Rgb { r: 0.0, g: 1.0, b: 0.0 };
+            let (mut a, mut b) = (GradientStop::new(1.0, green), GradientStop::new(1.0, green));
+            (a.swatch, b.swatch) = (Some("Ink".into()), Some("Paper".into()));
+            let g = Gradient {
+                method: GradientMethod::HueClockwise,
+                spread: GradientSpread::Reflect,
+                repeats: 2,
+                ..Gradient::new(vectorcraft_color::GradientKind::Linear, vec![GradientStop::new(0.0, Color::Rgb { r: 1.0, g: 0.0, b: 0.0 }), a, b])
+            };
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+            s.gradient_mode = StrokeGradientMode::Along;
+        });
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &hue_end, (Some(0), Some(1))).b);
+        let links_at = |u: f32| match &s.paint {
+            Paint::Gradient(g) => {
+                let mut links =
+                    g.gradient.stops.iter().filter(|st| (st.offset - u).abs() < 1e-4).filter_map(|st| st.swatch.clone()).collect::<Vec<_>>();
+                links.dedup();
+                links
+            }
+            p => panic!("a gradient: {p:?}"),
+        };
+        assert_eq!(links_at(0.25), vec!["Ink".to_string(), "Paper".to_string(), "Ink".to_string()], "{:?}", s.paint);
         // Blended with a gradient of other stops, the steps keep that step.
         let three = keyed(square(0.0), &|s| {
             let mut g = Gradient::default();
