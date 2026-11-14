@@ -350,6 +350,66 @@ fn wmf_without_a_placeable_header_is_read_at_1440_units_an_inch() {
 }
 
 #[test]
+fn wmf_without_a_placeable_box_in_a_metric_map_mode_is_read_at_96_pixels_an_inch() {
+    // MM_TWIPS (y up) and a window of 1440 twips square: one inch. The rectangle is the whole window.
+    let records = vec![(0x0103, le16(&[6])), (0x020B, le16(&[0, 0])), (0x020C, le16(&[1440, 1440])), (0x041B, le16(&[1440, 1440, 0, 0]))];
+    let boxed = hand_wmf(1440, 1440, &records);
+    let plain = boxed[22..].to_vec();
+    // The box runs from right to left, so it gives no size.
+    let mut inverted = boxed;
+    inverted[6..8].copy_from_slice(&1440i16.to_le_bytes());
+    inverted[10..12].copy_from_slice(&0i16.to_le_bytes());
+    for bytes in [plain, inverted] {
+        let back = import(&bytes).unwrap();
+        assert!(near(back.document.artboards[0].rect, Rect::new(0.0, 0.0, 72.0, 72.0), 1e-4), "{:?}", back.document.artboards[0].rect);
+        let p = paths(&back.document);
+        assert_eq!(p.len(), 1);
+        assert!(near(p[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 72.0, 72.0), 1e-4), "{:?}", p[0].geometric_bounds());
+    }
+}
+
+#[test]
+fn wmf_whose_metric_map_mode_is_restored_away_is_read_at_1440_units_an_inch() {
+    // SAVEDC, MM_TWIPS, then RESTOREDC back to MM_TEXT, by a count of levels and by a level; the
+    // drawing is then the one in `wmf_without_a_placeable_header_is_read_at_1440_units_an_inch`.
+    for restore in [-1i16, 1] {
+        let records = vec![
+            (0x001E, Vec::new()),
+            (0x0103, le16(&[6])),
+            (0x0127, le16(&[restore])),
+            (0x020B, le16(&[0, 0])),
+            (0x020C, le16(&[1440, 2880])),
+            (0x041B, le16(&[1440, 1440, 0, 0])),
+        ];
+        let plain = hand_wmf(2880, 1440, &records)[22..].to_vec();
+        let back = import(&plain).unwrap();
+        assert!(near(back.document.artboards[0].rect, Rect::new(0.0, 0.0, 144.0, 72.0), 1e-6), "{restore}: {:?}", back.document.artboards[0].rect);
+        let p = paths(&back.document);
+        assert_eq!(p.len(), 1);
+        assert!(near(p[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 72.0, 72.0), 1e-6), "{restore}: {:?}", p[0].geometric_bounds());
+    }
+}
+
+#[test]
+fn wmf_that_draws_in_a_metric_map_mode_and_restores_is_read_at_96_pixels_an_inch() {
+    // SAVEDC, MM_TWIPS, a one-inch rectangle, then RESTOREDC back to MM_TEXT with nothing more drawn.
+    let records = vec![
+        (0x001E, Vec::new()),
+        (0x0103, le16(&[6])),
+        (0x020B, le16(&[0, 0])),
+        (0x020C, le16(&[1440, 1440])),
+        (0x041B, le16(&[1440, 1440, 0, 0])),
+        (0x0127, le16(&[-1])),
+    ];
+    let plain = hand_wmf(1440, 1440, &records)[22..].to_vec();
+    let back = import(&plain).unwrap();
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1);
+    let b = p[0].geometric_bounds().unwrap();
+    assert!((b.width() - 72.0).abs() < 1e-4 && (b.height() - 72.0).abs() < 1e-4, "{b:?}");
+}
+
+#[test]
 fn damaged_files_fail_or_import_partly() {
     let good = emf(&sample()).bytes;
     for cut in [0, 8, 50, 107, 108, 120, good.len() / 2, good.len() - 4] {
@@ -588,6 +648,33 @@ fn translucent_strokes_drawn_one_after_another_stay_apart() {
     }
     // Opaque strokes still join into one path.
     assert_eq!(lines(0xFFFF_0000).len(), 1);
+}
+
+#[test]
+fn strokes_join_only_with_round_caps_round_joins_and_no_dashes() {
+    // CREATEPENINDIRECT: a 20-unit black pen of `style`, selected; then two lines one after the
+    // other that meet at a right angle.
+    let lines = |style: i16| {
+        let records = vec![
+            (0x02FA, [le16(&[style, 20, 0]), 0u32.to_le_bytes().to_vec()].concat()),
+            (0x012D, le16(&[0])),
+            (0x0214, le16(&[100, 100])),
+            (0x0213, le16(&[100, 700])),
+            (0x0213, le16(&[700, 700])),
+        ];
+        paths(&import(&hand_wmf(1440, 1440, &records)).unwrap().document)
+    };
+    // Round caps and round joins, a solid line: one path, as a round join is the two round caps.
+    assert_eq!(lines(0).len(), 1);
+    // Flat caps and miter joins, flat caps alone and miter joins alone: each line keeps its caps.
+    for style in [0x2200, 0x0200, 0x2000] {
+        let p = lines(style);
+        assert_eq!(p.len(), 2, "style {style:#x}: {p:?}");
+    }
+    // PS_DASH: each line's dashes start at its own start.
+    let p = lines(1);
+    assert_eq!(p.len(), 2, "{p:?}");
+    assert!(p.iter().all(|n| n.appearance.stroke().is_some_and(|st| st.dash.is_some())), "{p:?}");
 }
 
 #[test]

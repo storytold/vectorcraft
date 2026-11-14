@@ -2,8 +2,9 @@
 //! picture, and the picture's items become document objects here.
 //!
 //! - A filled or stroked path becomes a path with a fill and a stroke (caps, joins, miter limit
-//!   and dashes from the pen). Opaque strokes drawn one after another, each starting where the
-//!   last one ended, with the same pen and clip, join into one path.
+//!   and dashes from the pen). Opaque solid strokes with round caps and round joins drawn one after
+//!   another, each starting where the last one ended, with the same pen and clip, join into one
+//!   path. Other strokes stay apart, each with its own caps and its own dashes.
 //! - A path filled with a pattern or hatched brush is filled with the average color of the
 //!   brush's tile.
 //! - A bitmap becomes an image (its pixels as PNG) placed where the picture draws it, turned or
@@ -14,8 +15,10 @@
 //!   the whole picture clips nothing and is left out.
 //!
 //! A WMF without a placeable header is read at 1440 units an inch, and one whose placeable box is
-//! empty or inverted at the units an inch the header gives. An EMF without a usable frame is read
-//! at its device's pixels a millimetre (96 pixels an inch when the header doesn't say).
+//! empty or inverted at the units an inch the header gives. Either one that draws in a metric map
+//! mode (MM_LOMETRIC to MM_TWIPS) is read at 96 pixels an inch, as `craft_metafile` plays those
+//! modes. An EMF without a usable frame is read at its device's pixels a millimetre (96
+//! pixels an inch when the header doesn't say).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
@@ -46,11 +49,79 @@ const READER_ITEMS: usize = 200_000;
 
 /// Points a unit of a WMF without a placeable header (1440 units an inch).
 const WMF_UNIT: f64 = 72.0 / 1440.0;
+/// The SAVEDC levels `craft_metafile` keeps; it stops reading at a SAVEDC past them.
+const SAVED_LEVELS: usize = 1024;
+/// Points a pixel at 96 pixels an inch.
+const PT_PER_PX: f64 = 72.0 / 96.0;
 /// Points a millimetre.
 const PT_PER_MM: f64 = 72.0 / 25.4;
 
+/// WMF records that draw and that `craft_metafile` plays: lines, shapes, text, PATBLT and bitmaps.
+const WMF_DRAWS: [u16; 16] =
+    [0x0213, 0x0324, 0x0325, 0x0418, 0x041B, 0x0521, 0x0538, 0x061C, 0x061D, 0x0817, 0x081A, 0x0830, 0x0940, 0x0A32, 0x0B41, 0x0F43];
+
+/// Does a WMF draw in a metric map mode (MM_LOMETRIC to MM_TWIPS)? `craft_metafile` plays those
+/// at 96 pixels an inch, whatever the window. The mode that more drawing records are played in
+/// decides; a file that draws nothing goes by its last mode. `start` is where the standard header
+/// begins.
+fn wmf_metric(bytes: &[u8], start: usize) -> bool {
+    let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]));
+    let u32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let Some(words) = start.checked_add(2).and_then(u16_at) else { return false };
+    let mut at = start.saturating_add(usize::from(words) * 2);
+    let mut mode = 1;
+    let metric = |mode: u16| (2..=6).contains(&mode);
+    // Drawing records played in a metric mode, and in any other.
+    let (mut in_metric, mut in_other) = (0usize, 0usize);
+    // The modes SAVEDC kept, which RESTOREDC brings back as the reader does.
+    let mut saved: Vec<u16> = Vec::new();
+    // The records as the reader walks them: it stops at the end record, a record shorter than its
+    // header, one that runs past the file and a SAVEDC past its 1,024 levels.
+    while let (Some(words), Some(function)) = (u32_at(at), u16_at(at.saturating_add(4))) {
+        let size = (words as usize).saturating_mul(2);
+        let Some(next) = at.checked_add(size) else { break };
+        if function == 0 || size < 6 || next > bytes.len() {
+            break;
+        }
+        match function {
+            // SETMAPMODE, when the record holds its mode.
+            0x0103 if size >= 8 => mode = u16_at(at + 6).unwrap_or(mode),
+            // SAVEDC.
+            0x001E => {
+                if saved.len() >= SAVED_LEVELS {
+                    break;
+                }
+                saved.push(mode);
+            }
+            // RESTOREDC: a negative count pops that many levels, a positive one goes back to that
+            // level. One that names no saved level changes nothing.
+            0x0127 if size >= 8 => {
+                let n = u16_at(at + 6).map_or(0, |v| i32::from(i16::from_le_bytes(v.to_le_bytes())));
+                let level = if n < 0 { saved.len().checked_sub(n.unsigned_abs() as usize) } else { (n as usize).checked_sub(1) };
+                if let Some(level) = level
+                    && let Some(m) = saved.get(level).copied()
+                {
+                    mode = m;
+                    saved.truncate(level);
+                }
+            }
+            f if WMF_DRAWS.contains(&f) => {
+                if metric(mode) {
+                    in_metric += 1;
+                } else {
+                    in_other += 1;
+                }
+            }
+            _ => {}
+        }
+        at = next;
+    }
+    if in_metric == in_other { metric(mode) } else { in_metric > in_other }
+}
+
 /// Points a picture unit across and down. `craft_metafile` gives a placeable WMF with a box and an
-/// EMF with a frame in points, and other files in their logical (WMF) or device (EMF) units.
+/// EMF with a frame in points, and other files in their logical units (WMF; pixels in a metric map
+/// mode) or device units (EMF).
 fn unit(bytes: &[u8], kind: Kind) -> (f64, f64) {
     let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]));
     let i16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| i16::from_le_bytes([b[0], b[1]]));
@@ -59,14 +130,19 @@ fn unit(bytes: &[u8], kind: Kind) -> (f64, f64) {
     let positive = |v: Option<i32>| v.filter(|v| *v > 0).map(f64::from);
     match kind {
         Kind::Wmf => {
-            if bytes.get(..4) != Some(&PLACEABLE_KEY.to_le_bytes()[..]) {
-                return (WMF_UNIT, WMF_UNIT);
-            }
-            if let (Some(l), Some(t), Some(r), Some(b)) = (i16_at(6), i16_at(8), i16_at(10), i16_at(12))
+            let placeable = bytes.get(..4) == Some(&PLACEABLE_KEY.to_le_bytes()[..]);
+            if placeable
+                && let (Some(l), Some(t), Some(r), Some(b)) = (i16_at(6), i16_at(8), i16_at(10), i16_at(12))
                 && r > l
                 && b > t
             {
                 return (1.0, 1.0);
+            }
+            if wmf_metric(bytes, if placeable { 22 } else { 0 }) {
+                return (PT_PER_PX, PT_PER_PX);
+            }
+            if !placeable {
+                return (WMF_UNIT, WMF_UNIT);
             }
             let k = 72.0 / u16_at(14).filter(|v| *v > 0).map_or(1440.0, f64::from);
             (k, k)
@@ -85,7 +161,7 @@ fn unit(bytes: &[u8], kind: Kind) -> (f64, f64) {
             match px_mm {
                 Some(_) if frame => (1.0, 1.0),
                 Some((x, y)) if ok(x) && ok(y) => (PT_PER_MM / x, PT_PER_MM / y),
-                _ => (0.75, 0.75),
+                _ => (PT_PER_PX, PT_PER_PX),
             }
         }
     }
@@ -330,10 +406,14 @@ impl Mapper {
                         PathEl::MoveTo(p) => Some(*p),
                         _ => None,
                     });
-                    // A translucent stroke stays apart, so where strokes overlap each one shows.
+                    // A translucent stroke stays apart, so where strokes overlap each one shows. So
+                    // does a dashed one, whose dashes start at its own start, and one whose caps
+                    // or joins aren't round: a join where two strokes meet is not their two caps.
                     if let Some(p) = &mut self.pending
                         && p.pen == pen
                         && pen.color[3] == u8::MAX
+                        && pen.line.dash.is_empty()
+                        && matches!((&pen.line.cap, &pen.line.join), (Cap::Round, Join::Round))
                         && start.is_some()
                         && p.path.elements().last().and_then(|e| e.end_point()) == start
                     {
