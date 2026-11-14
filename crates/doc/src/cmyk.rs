@@ -248,16 +248,45 @@ fn cmyk_inks(kind: tiff::ColorType, d: &mut tiff::decoder::Decoder<Cursor<&[u8]>
     matches!(kind, tiff::ColorType::CMYK(8 | 16)) && !extra_samples(d).iter().any(|e| matches!(e, 1 | 2))
 }
 
-/// Most samples a pixel of a TIFF with extra samples is read with, its color included:
-/// VectorCraft's own limit.
+/// Most samples a pixel of a TIFF is read with, its color and extra samples included, as the
+/// file's SamplesPerPixel counts them: VectorCraft's own limit.
 const MAX_EXTRA_SAMPLES_PIXEL: usize = 64;
 
+/// The bytes of the row the decoder of the TIFF `d` reads takes before it reads each strip or tile
+/// of a file that stores a pixel's samples together and has more of them (its SamplesPerPixel)
+/// than the decoder gives: one row of the strip or tile, every sample of each pixel. 0 for other
+/// files. `None` when the file has more than [`MAX_EXTRA_SAMPLES_PIXEL`] samples a pixel, when its
+/// samples aren't unsigned integers (a SampleFormat other than 1, which the readers don't take, and
+/// which the floating-point predictor needs) and when its color type isn't read. Reads only the
+/// file's tags.
+fn row_buffer<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -> Option<u64> {
+    use tiff::tags::Tag;
+    let kind = d.colortype().ok()?;
+    let all = d.find_tag_unsigned::<u16>(Tag::SamplesPerPixel).ok()?.unwrap_or(1);
+    if usize::from(all) > MAX_EXTRA_SAMPLES_PIXEL {
+        return None;
+    }
+    if d.find_tag_unsigned_vec::<u16>(Tag::SampleFormat).ok()?.is_some_and(|f| f.iter().any(|&f| f != 1)) {
+        return None;
+    }
+    if all <= kind.num_samples() || planar(d) {
+        return Some(0);
+    }
+    // A strip is as wide as the image, a tile as its TileWidth.
+    let width = match d.get_chunk_type() {
+        tiff::decoder::ChunkType::Tile => d.find_tag_unsigned::<u32>(Tag::TileWidth).ok()??,
+        tiff::decoder::ChunkType::Strip => d.dimensions().ok()?.0,
+    };
+    u64::from(width).checked_mul(u64::from(all))?.checked_mul(u64::from(kind.bit_depth().div_ceil(8)))
+}
+
 /// `d`, the decoder of a TIFF of `file` bytes, set to decode `n` pixels of `per` samples of `bits`
-/// bits each into RGBA. `None` when a pixel has more than [`MAX_EXTRA_SAMPLES_PIXEL`] samples, and
-/// when the decoded samples, the copy that puts a planar file's samples pixel by pixel and the
-/// RGBA pixels together take more than [`crate::MAX_RASTER_ALLOC`]. The decoder may then decode
-/// no more than those samples, and read no strip or tile of more compressed bytes than the file
-/// holds (nor more than its own limit of 128 MiB).
+/// bits each into RGBA. `None` when the file has more than [`MAX_EXTRA_SAMPLES_PIXEL`] samples a
+/// pixel, and when the decoded samples, the copy that puts a planar file's samples pixel by pixel,
+/// the row the decoder reads each strip or tile into ([`row_buffer`]) and the RGBA pixels together
+/// take more than [`crate::MAX_RASTER_ALLOC`]. The decoder may then decode no more than those
+/// samples, and read no strip or tile of more compressed bytes than the file holds (nor more than
+/// its own limit of 128 MiB).
 fn with_room<R: std::io::Read + std::io::Seek>(
     mut d: tiff::decoder::Decoder<R>,
     file: usize,
@@ -268,9 +297,10 @@ fn with_room<R: std::io::Read + std::io::Seek>(
     if per > MAX_EXTRA_SAMPLES_PIXEL {
         return None;
     }
+    let row = row_buffer(&mut d)?;
     let need = n.checked_mul(per)?.checked_mul(usize::from(bits.div_ceil(8)))?;
     let copies = if per > 1 && planar(&mut d) { 2 } else { 1 };
-    let peak = u64::try_from(need).ok()?.checked_mul(copies)?.checked_add(u64::try_from(n).ok()?.checked_mul(4)?)?;
+    let peak = u64::try_from(need).ok()?.checked_mul(copies)?.checked_add(u64::try_from(n).ok()?.checked_mul(4)?)?.checked_add(row)?;
     if peak > crate::MAX_RASTER_ALLOC {
         return None;
     }
@@ -289,7 +319,9 @@ fn planar<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -
 /// type has), pixel by pixel and 8 bits each (16-bit samples to their high byte), whether the file
 /// stores each pixel's samples together or one plane per channel. `None` when they don't decode to
 /// that many samples, which includes images whose planes together need more than the decoder's
-/// limit (256 MB of samples).
+/// limit (256 MB of samples), and, before any decoding, files with more than
+/// [`MAX_EXTRA_SAMPLES_PIXEL`] samples a pixel and ones whose samples with the row the decoder
+/// reads each strip or tile into ([`row_buffer`]) take more than [`crate::MAX_RASTER_ALLOC`].
 pub(crate) fn read_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Vec<u8>> {
     Some(match read_samples_at_depth(d, n, per)? {
         Samples::Eight(v) => v,
@@ -322,6 +354,19 @@ enum SampleSlice<'a> {
 
 /// [`read_samples`], keeping 16-bit samples at 16 bits.
 fn read_samples_at_depth<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>, n: usize, per: usize) -> Option<Samples> {
+    // Checked from the tags, before anything is decoded.
+    let row = row_buffer(d)?;
+    let bytes = u64::from(d.colortype().ok()?.bit_depth().div_ceil(8));
+    let need = u64::try_from(n).ok()?.checked_mul(u64::try_from(per).ok()?)?.checked_mul(bytes)?;
+    if need.checked_add(row)? > crate::MAX_RASTER_ALLOC {
+        return None;
+    }
+    decode_samples(d, n, per)
+}
+
+/// [`read_samples_at_depth`] without its checks, for a decoder that [`with_room`] made. Its tags
+/// can't be read once its limits are set: the decoder holds a tag's values to its decoding limit.
+fn decode_samples<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>, n: usize, per: usize) -> Option<Samples> {
     let mut buf = tiff::decoder::DecodingResult::U8(Vec::new());
     let layout = d.read_image_to_buffer(&mut buf).ok()?;
     match buf {
@@ -332,7 +377,8 @@ fn read_samples_at_depth<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder
 }
 
 /// `data`, the samples of `n` pixels, `per` to a pixel, stored in `planes` planes, as the samples
-/// pixel by pixel; `None` when it doesn't hold that many samples or a plane per sample.
+/// pixel by pixel; `None` when it doesn't hold that many samples or a plane per sample. The copy
+/// of a planar file's samples is allocated once, at its length.
 fn chunky<T: Copy>(data: Vec<T>, planes: usize, n: usize, per: usize) -> Option<Vec<T>> {
     if Some(data.len()) != n.checked_mul(per) {
         return None;
@@ -344,7 +390,13 @@ fn chunky<T: Copy>(data: Vec<T>, planes: usize, n: usize, per: usize) -> Option<
         return None;
     }
     let planes: Vec<&[T]> = data.chunks_exact(n).collect();
-    Some((0..n).flat_map(|i| planes.iter().filter_map(move |p| p.get(i).copied())).collect())
+    let mut out = Vec::with_capacity(data.len());
+    for i in 0..n {
+        for p in &planes {
+            out.push(*p.get(i)?);
+        }
+    }
+    Some(out)
 }
 
 /// The color space an ICC profile's header names (bytes 16 to 19, such as `RGB `, `GRAY` or
@@ -665,9 +717,10 @@ pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi:
 /// together or one plane per channel. A CMYK file with two or more samples past its inks and its
 /// ExtraSamples values is read when one of those values names an alpha. `None` for other images,
 /// CMYK ones without alpha (their inks are read by [`ImageBlob::cmyk`]), ones larger than
-/// [`MAX_CMYK_PIXELS`], ones with more than [`MAX_EXTRA_SAMPLES_PIXEL`] samples a pixel and ones
-/// whose samples, with the copy a planar file needs and the RGBA pixels, take more than
-/// [`crate::MAX_RASTER_ALLOC`].
+/// [`MAX_CMYK_PIXELS`], ones whose SamplesPerPixel is more than [`MAX_EXTRA_SAMPLES_PIXEL`] and
+/// ones whose samples, with the copy a planar file needs, the row the decoder reads each strip or
+/// tile into and the RGBA pixels, take more than [`crate::MAX_RASTER_ALLOC`]; those are refused
+/// from the file's tags, before any decoding.
 pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3]) -> Option<image::RgbaImage> {
     use tiff::tags::Tag;
     let mut d = tiff_decoder(bytes)?;
@@ -698,9 +751,9 @@ pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3])
         let mut d = tiff::decoder::Decoder::new(as_black_is_zero(bytes)?).ok()?;
         let tiff::ColorType::Multiband { bit_depth: bits @ (8 | 16), num_samples } = d.colortype().ok()? else { return None };
         let samples = usize::from(num_samples);
-        (read_samples_at_depth(&mut with_room(d, bytes.len(), n, samples, bits)?, n, samples)?, samples)
+        (decode_samples(&mut with_room(d, bytes.len(), n, samples, bits)?, n, samples)?, samples)
     } else {
-        (read_samples_at_depth(&mut with_room(d, bytes.len(), n, given, kind?.bit_depth())?, n, given)?, given)
+        (decode_samples(&mut with_room(d, bytes.len(), n, given, kind?.bit_depth())?, n, given)?, given)
     };
     // (the alpha's sample in a pixel, is it associated?), when the pixel has that sample.
     let alpha = alpha.map(|(i, associated)| (colour + i, associated)).filter(|(at, _)| *at < samples);
@@ -1213,6 +1266,110 @@ mod tests {
         let samples = u16::try_from(MAX_EXTRA_SAMPLES_PIXEL).unwrap();
         assert!(extra_samples_tiff_rgba(&tall_gray_tiff(2, 2, samples), |_| [0.0; 3]).is_some(), "at the limit: reads");
         assert!(extra_samples_tiff_rgba(&tall_gray_tiff(2, 2, samples + 1), |_| [0.0; 3]).is_none(), "past it: not read");
+    }
+
+    /// The header of a one-row CMYK TIFF `width` pixels wide, each pixel `samples` samples of
+    /// `bits` bits stored together, with the ExtraSamples values `extras` (more than two). Its one
+    /// strip claims every sample of the row, uncompressed, and holds four bytes of zeros.
+    fn cmyk_header(width: u32, samples: u16, bits: u16, extras: &[u16]) -> Vec<u8> {
+        assert!(extras.len() > 2, "the values sit outside the entry");
+        let mut f = b"II*\0\0\0\0\0".to_vec();
+        f.extend([0; 4]);
+        let at = u32::try_from(f.len()).unwrap();
+        f.extend(extras.iter().flat_map(|e| e.to_le_bytes()));
+        let ifd = u32::try_from(f.len()).unwrap();
+        f[4..8].copy_from_slice(&ifd.to_le_bytes());
+        let strip = u32::try_from(u64::from(width) * u64::from(samples) * u64::from(bits / 8)).unwrap();
+        // (tag, type (3 SHORT, 4 LONG), count, value or offset)
+        let entries = [
+            (256u16, 4u16, 1, width),
+            (257, 4, 1, 1),
+            (258, 3, 1, u32::from(bits)),
+            (259, 3, 1, 1),
+            (262, 3, 1, 5),
+            (273, 4, 1, 8),
+            (277, 3, 1, u32::from(samples)),
+            (278, 4, 1, 1),
+            (279, 4, 1, strip),
+            (284, 3, 1, 1),
+            (338, 3, u32::try_from(extras.len()).unwrap(), at),
+        ];
+        f.extend(u16::try_from(entries.len()).unwrap().to_le_bytes());
+        for (tag, ty, count, value) in entries {
+            f.extend([tag.to_le_bytes(), ty.to_le_bytes()].concat());
+            f.extend([count.to_le_bytes(), value.to_le_bytes()].concat());
+        }
+        f.extend([0; 4]);
+        f
+    }
+
+    /// A CMYK TIFF whose first ExtraSamples value is alpha has the color type of CMYK with alpha,
+    /// five samples, however many samples its pixels have; one with more than
+    /// [`MAX_EXTRA_SAMPLES_PIXEL`] is refused from its tags, before the decoder takes a row of
+    /// every sample (here 8,192 × 65,535 × 2 bytes, 1 GiB). Neither is it read as inks.
+    #[test]
+    fn a_cmyk_tiff_with_more_samples_a_pixel_than_the_limit_is_refused_before_decoding() {
+        let (width, samples) = (8192u32, u16::MAX);
+        for first in [1u16, 0] {
+            let extras: Vec<u16> = std::iter::once(first).chain(std::iter::repeat_n(0, usize::from(samples) - 5)).collect();
+            let bytes = cmyk_header(width, samples, 16, &extras);
+            let mut d = tiff::decoder::Decoder::new(Cursor::new(&bytes[..])).unwrap();
+            let kind = d.colortype().unwrap();
+            assert_eq!(kind, if first == 1 { tiff::ColorType::CMYKA(16) } else { tiff::ColorType::CMYK(16) });
+            assert_eq!(row_buffer(&mut d), None, "{kind:?}: refused from the tags");
+            let given = usize::from(kind.num_samples());
+            assert!(with_room(d, bytes.len(), usize::try_from(width).unwrap(), given, 16).is_none(), "{kind:?}: refused before the decode");
+            assert!(extra_samples_tiff_rgba(&bytes, |_| [0.0; 3]).is_none(), "{kind:?}");
+            assert!(ImageBlob::new("image/tiff", bytes).cmyk().is_none(), "{kind:?}: no inks");
+        }
+    }
+
+    /// The row the decoder reads each strip of a CMYK TIFF with alpha into, every sample of the
+    /// row, counts in the allowance: 2²⁴ pixels of 64 16-bit samples, whose five decoded samples
+    /// and RGBA pixels fit but not with that row of 2 GiB.
+    #[test]
+    fn the_decoders_row_of_every_sample_counts_in_the_allowance() {
+        let width = 1u32 << 24;
+        let samples = u16::try_from(MAX_EXTRA_SAMPLES_PIXEL).unwrap();
+        let extras: Vec<u16> = std::iter::once(2).chain(std::iter::repeat_n(0, usize::from(samples) - 5)).collect();
+        let bytes = cmyk_header(width, samples, 16, &extras);
+        let n = usize::try_from(width).unwrap();
+        let (need, rgba, row) = (u64::from(width) * 5 * 2, u64::from(width) * 4, u64::from(width) * u64::from(samples) * 2);
+        assert!(need + rgba <= crate::MAX_RASTER_ALLOC && need + rgba + row > crate::MAX_RASTER_ALLOC);
+        let mut d = tiff::decoder::Decoder::new(Cursor::new(&bytes[..])).unwrap();
+        assert_eq!(d.colortype().unwrap(), tiff::ColorType::CMYKA(16));
+        assert_eq!(row_buffer(&mut d), Some(row));
+        assert!(with_room(d, bytes.len(), n, 5, 16).is_none(), "refused before the decode");
+        assert!(extra_samples_tiff_rgba(&bytes, |_| [0.0; 3]).is_none());
+    }
+
+    /// A TIFF whose samples aren't unsigned integers is refused from its tags.
+    #[test]
+    fn a_tiff_of_float_samples_is_refused_from_its_tags() {
+        use tiff::encoder::colortype::{Gray8, Gray32Float};
+        let mut file = Cursor::new(Vec::new());
+        tiff::encoder::TiffEncoder::new(&mut file).unwrap().write_image::<Gray32Float>(2, 1, &[0.25, 0.5]).unwrap();
+        let float = file.into_inner();
+        let mut d = tiff::decoder::Decoder::new(Cursor::new(&float[..])).unwrap();
+        assert_eq!(row_buffer(&mut d), None, "floats: refused");
+        assert!(read_samples_at_depth(&mut d, 2, 1).is_none());
+        let mut file = Cursor::new(Vec::new());
+        tiff::encoder::TiffEncoder::new(&mut file).unwrap().write_image::<Gray8>(2, 1, &[64, 128]).unwrap();
+        let bytes = file.into_inner();
+        let mut d = tiff::decoder::Decoder::new(Cursor::new(&bytes[..])).unwrap();
+        assert_eq!(row_buffer(&mut d), Some(0), "unsigned: no extra row");
+        assert_eq!(read_samples_at_depth(&mut d, 2, 1), Some(Samples::Eight(vec![64, 128])));
+    }
+
+    /// The copy that puts a planar file's samples pixel by pixel is allocated at its length, so
+    /// the reader holds no more than the allowance counts.
+    #[test]
+    fn the_planar_copy_is_allocated_at_its_length() {
+        let (n, per) = (3, 5);
+        let data: Vec<u8> = (0..15).collect();
+        let out = chunky(data, per, n, per).unwrap();
+        assert_eq!(out, [0, 3, 6, 9, 12, 1, 4, 7, 10, 13, 2, 5, 8, 11, 14]);
+        assert_eq!(out.capacity(), n * per);
     }
 
     /// A TIFF whose decoded samples fit [`crate::MAX_RASTER_ALLOC`] but not with its RGBA pixels
