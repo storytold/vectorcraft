@@ -750,6 +750,9 @@ impl Writer<'_> {
         let xy = Xy::of(orig);
         let was = self.in_look;
         self.in_look = true;
+        // The reader draws the look apart from the clipping groups around the object to compare it
+        // with the object's effects, and keeps the object itself: neither is cut to those groups.
+        let shown_by = std::mem::take(&mut self.shown);
         self.line("u");
         let mut look = n.clone();
         (look.name, look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape) =
@@ -800,6 +803,7 @@ impl Writer<'_> {
         }
         self.dictionary(orig);
         self.hidden -= 1;
+        self.shown = shown_by;
         let part = std::mem::replace(&mut self.body, saved);
         hide(&part, &mut self.body);
         self.block_end = usize::MAX;
