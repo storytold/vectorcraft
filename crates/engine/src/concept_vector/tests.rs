@@ -104,7 +104,7 @@ fn squares(r: &Request, _: Steps) -> Result<Vec<Variation>, ProviderError> {
         .iter()
         .map(|st| Variation {
             style: st.clone(),
-            paths: vec![VectorPath { path: sq.clone(), fill: Some([9, 9, 9]), stroke: None }],
+            paths: vec![VectorPath { path: sq.clone(), fill: Some([9, 9, 9]), stroke: None, square_caps: false }],
             warnings: vec![],
         })
         .collect())
@@ -204,7 +204,7 @@ fn results_are_checked_whatever_provider_made_them() {
     let sq = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 10.0, 0.0), Point::new(x + 10.0, 10.0)], true));
     let v = |style: &str, path: PathData, fill: Option<[u8; 3]>, stroke: Option<([u8; 3], f64)>| Variation {
         style: style.into(),
-        paths: vec![VectorPath { path, fill, stroke }],
+        paths: vec![VectorPath { path, fill, stroke, square_caps: false }],
         warnings: vec![],
     };
     let ok = vec![v("a", sq(0.0), Some([1, 2, 3]), None), v("b", sq(0.0), None, Some(([0, 0, 0], 2.0)))];
@@ -429,7 +429,7 @@ fn styles_made_one_at_a_time_match_one_call_and_are_checked_as_they_come() {
             .iter()
             .map(|st| Variation {
                 style: st.clone(),
-                paths: vec![VectorPath { path: path.clone(), fill: Some([0; 3]), stroke: None }],
+                paths: vec![VectorPath { path: path.clone(), fill: Some([0; 3]), stroke: None, square_caps: false }],
                 warnings: vec![],
             })
             .collect())
@@ -538,6 +538,24 @@ fn detail_moves_each_style_within_its_range() {
         offline::TraceStyles.generate(&r, &|_, _| true).unwrap()[0].anchors()
     };
     assert!(anchors(100) > anchors(0), "{} vs {}", anchors(100), anchors(0));
+}
+
+/// Insert gives a stroked path the ends its variation names: square or round.
+#[test]
+fn insert_keeps_the_stroke_caps_of_each_path() {
+    fn lines(r: &Request, _: Steps) -> Result<Vec<Variation>, ProviderError> {
+        let line = |y: f64| PathData::single(SubPath::polyline(&[Point::new(10.0, y), Point::new(60.0, y)], false));
+        let path = |y: f64, square_caps: bool| VectorPath { path: line(y), fill: None, stroke: Some(([0, 0, 0], 4.0)), square_caps };
+        Ok(r.styles.iter().map(|st| Variation { style: st.clone(), paths: vec![path(20.0, true), path(40.0, false)], warnings: vec![] }).collect())
+    }
+    let (mut s, img) = doc_with(&art());
+    with_fake(&mut s, fake(lines));
+    let job = generate(&mut s, json!({"provider": "test.fake", "styles": ["s0"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["s0"]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let group = d.node(NodeId(r["ids"][0].as_u64().unwrap())).unwrap();
+    let caps: Vec<_> = group.children().unwrap().iter().map(|n| n.appearance.stroke().unwrap().cap).collect();
+    assert_eq!(caps, [vectorcraft_doc::appearance::LineCap::Square, vectorcraft_doc::appearance::LineCap::Round]);
 }
 
 /// An image scaled down to fit keeps within the pixel limit whatever its shape, a long thin one
@@ -657,7 +675,7 @@ fn insert_moves_the_row_past_art_that_a_variation_reaches_beyond_the_image_box()
             .iter()
             .map(|st| Variation {
                 style: st.clone(),
-                paths: vec![VectorPath { path: bar.clone(), fill: Some([9, 9, 9]), stroke: None }],
+                paths: vec![VectorPath { path: bar.clone(), fill: Some([9, 9, 9]), stroke: None, square_caps: false }],
                 warnings: vec![],
             })
             .collect())
@@ -690,7 +708,7 @@ fn insert_keeps_the_gap_when_a_variation_reaches_left_of_the_image_box() {
             .iter()
             .map(|st| Variation {
                 style: st.clone(),
-                paths: vec![VectorPath { path: bar.clone(), fill: Some([9, 9, 9]), stroke: None }],
+                paths: vec![VectorPath { path: bar.clone(), fill: Some([9, 9, 9]), stroke: None, square_caps: false }],
                 warnings: vec![],
             })
             .collect())

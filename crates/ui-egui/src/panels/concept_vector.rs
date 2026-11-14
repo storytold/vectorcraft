@@ -361,15 +361,18 @@ fn fill_rings(img: &mut egui::ColorImage, rings: &[Vec<Pos2>], color: Color32) {
 
 /// Paints `rings` (polylines in 0..1 of the image's box) stroked `width` pixels wide in `color`
 /// over `img`: each segment as a rectangle, with a disc at each point for round joins and caps
-/// once the stroke is wide enough for them to show.
-fn stroke_rings(img: &mut egui::ColorImage, rings: &[Vec<Pos2>], width: f32, color: Color32) {
+/// once the stroke is wide enough for them to show. With `square_caps`, an open line has no disc
+/// at its ends, and its end segments reach half the width past them.
+fn stroke_rings(img: &mut egui::ColorImage, rings: &[Vec<Pos2>], width: f32, color: Color32, square_caps: bool) {
     let (sx, sy) = (img.size[0] as f32, img.size[1] as f32);
     let r = width / 2.0;
     let unit = |p: Pos2| Pos2::new(p.x / sx, p.y / sy);
     for ring in rings {
         let pts: Vec<Pos2> = ring.iter().map(|q| Pos2::new(q.x * sx, q.y * sy)).collect();
+        let last = pts.len().saturating_sub(1);
+        let square = square_caps && pts.len() > 1 && pts.first() != pts.last();
         for (k, a) in pts.iter().enumerate() {
-            if r > 0.75 {
+            if r > 0.75 && !(square && (k == 0 || k == last)) {
                 let disc: Vec<Pos2> = (0..8)
                     .map(|i| {
                         let t = i as f32 * std::f32::consts::TAU / 8.0;
@@ -383,7 +386,10 @@ fn stroke_rings(img: &mut egui::ColorImage, rings: &[Vec<Pos2>], width: f32, col
             let len = d.length();
             if len > 0.0 {
                 let n = vec2(-d.y, d.x) * (r / len);
-                fill_rings(img, &[vec![unit(*a + n), unit(*b + n), unit(*b - n), unit(*a - n)]], color);
+                let along = d * (r / len);
+                let a = if square && k == 0 { *a - along } else { *a };
+                let b = if square && k + 1 == last { *b + along } else { *b };
+                fill_rings(img, &[vec![unit(a + n), unit(b + n), unit(b - n), unit(a - n)]], color);
             }
         }
     }
@@ -455,7 +461,7 @@ fn preview(v: &Variation, label: String, size: (u32, u32)) -> Preview {
         if let Some((c, width)) = p.stroke {
             // To scale with the image, and at least MIN_STROKE points.
             let px = ((width / w) as f32 * image.size[0] as f32).max(MIN_STROKE * PREVIEW_SCALE);
-            stroke_rings(&mut image, &rings, px, rgb(c));
+            stroke_rings(&mut image, &rings, px, rgb(c), p.square_caps);
         }
     }
     Preview { style: v.style.clone(), label, aspect, image, texture: None, warnings: v.warnings.clone() }

@@ -225,8 +225,8 @@ impl Decoded {
             .map(|tp| {
                 let path = tp.path.transformed(self.back);
                 match tp.stroke {
-                    Some(w) => VectorPath { path, fill: None, stroke: Some((tp.color, w * self.unit)) },
-                    None => VectorPath { path, fill: Some(tp.color), stroke: None },
+                    Some(w) => VectorPath { path, fill: None, stroke: Some((tp.color, w * self.unit)), square_caps: tp.square_caps },
+                    None => VectorPath { path, fill: Some(tp.color), stroke: None, square_caps: false },
                 }
             })
             .collect();

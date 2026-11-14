@@ -206,7 +206,7 @@ fn generate_runs_off_the_ui_thread_and_cancel_drops_it() {
 fn one_path(points: &[Point], fill: Option<[u8; 3]>, stroke: Option<([u8; 3], f64)>) -> Variation {
     Variation {
         style: "s".into(),
-        paths: vec![VectorPath { path: PathData::single(SubPath::polyline(points, true)), fill, stroke }],
+        paths: vec![VectorPath { path: PathData::single(SubPath::polyline(points, true)), fill, stroke, square_caps: false }],
         warnings: vec![],
     }
 }
@@ -247,6 +247,22 @@ fn preview_strokes_keep_their_widths() {
     assert!(stroke_cover(0.01) >= 1, "thin lines still show");
 }
 
+/// A line with square caps is painted to the corners of its ends, and one with round caps leaves
+/// them white.
+#[test]
+fn preview_strokes_keep_their_caps() {
+    let line = PathData::single(SubPath::polyline(&[Point::new(25.0, 50.0), Point::new(75.0, 50.0)], false));
+    let corner = |square_caps: bool| {
+        let paths = vec![VectorPath { path: line.clone(), fill: None, stroke: Some(([0, 0, 0], 20.0)), square_caps }];
+        let p = preview(&Variation { style: "s".into(), paths, warnings: vec![] }, "s".into(), (100, 100));
+        let [w, h] = p.image.size;
+        // Past the line's right end, near the corner of a square cap: 8 and 8 pixels of the image.
+        p.image.pixels[(h * 58 / 100) * w + w * 83 / 100]
+    };
+    assert_eq!(corner(true), Color32::BLACK, "square caps");
+    assert_eq!(corner(false), Color32::WHITE, "round caps");
+}
+
 /// Paths are painted in their order: a fill above a stroke covers it, and a stroke above a fill
 /// shows.
 #[test]
@@ -254,8 +270,8 @@ fn previews_paint_paths_in_their_order() {
     let square = [Point::new(25.0, 25.0), Point::new(75.0, 25.0), Point::new(75.0, 75.0), Point::new(25.0, 75.0)];
     let cover = [Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 100.0), Point::new(0.0, 100.0)];
     let path = |pts: &[Point]| PathData::single(SubPath::polyline(pts, true));
-    let stroke = VectorPath { path: path(&square), fill: None, stroke: Some(([0, 0, 0], 4.0)) };
-    let fill = VectorPath { path: path(&cover), fill: Some([200, 20, 20]), stroke: None };
+    let stroke = VectorPath { path: path(&square), fill: None, stroke: Some(([0, 0, 0], 4.0)), square_caps: false };
+    let fill = VectorPath { path: path(&cover), fill: Some([200, 20, 20]), stroke: None, square_caps: false };
     let on_edge = |paths: Vec<VectorPath>| {
         let p = preview(&Variation { style: "s".into(), paths, warnings: vec![] }, "s".into(), (100, 100));
         let [w, h] = p.image.size;

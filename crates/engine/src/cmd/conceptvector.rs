@@ -396,7 +396,8 @@ fn appearance_of(p: &cv::VectorPath, unit: f64) -> Appearance {
         items.push(AppearanceItem::Fill(FillLayer::new(solid(c))));
     }
     if let Some((c, w)) = p.stroke {
-        items.push(AppearanceItem::Stroke(StrokeLayer { cap: LineCap::Round, join: LineJoin::Round, ..StrokeLayer::new(solid(c), w * unit) }));
+        let cap = if p.square_caps { LineCap::Square } else { LineCap::Round };
+        items.push(AppearanceItem::Stroke(StrokeLayer { cap, join: LineJoin::Round, ..StrokeLayer::new(solid(c), w * unit) }));
     }
     Appearance { items, ..Default::default() }
 }

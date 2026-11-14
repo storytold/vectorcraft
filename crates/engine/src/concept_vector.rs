@@ -92,6 +92,9 @@ pub struct VectorPath {
     pub fill: Option<[u8; 3]>,
     /// The stroke color (sRGB) and width in pixels, if it is stroked.
     pub stroke: Option<([u8; 3], f64)>,
+    /// Stroked: the stroke's ends are square (cut straight half the width past the path's end);
+    /// otherwise round.
+    pub square_caps: bool,
 }
 
 /// The variation a provider made for one style.
