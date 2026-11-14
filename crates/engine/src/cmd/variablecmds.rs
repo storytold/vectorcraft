@@ -26,6 +26,7 @@ use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids
 mod csv;
 mod library;
 
+pub use csv::utf16_order_without_mark;
 use csv::{MAX_GRAPH_CSV, dataset_export, dataset_import};
 pub(crate) use library::{give_svg_library, svg_library};
 use library::{load_library, save_library};
