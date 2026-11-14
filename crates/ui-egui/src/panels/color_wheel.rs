@@ -10,12 +10,15 @@
 //! The panel menu's Box View puts a box in the wheel's place: a color field with a vertical
 //! channel strip at its right, for the channel picked under Box Channel (Hue, Saturation,
 //! Brightness, Red, Green or Blue). The field shows the other two components on the Color
-//! Picker's axes. The view and the channel are kept with the preferences (`ui.colorWheel`).
+//! Picker's axes.
 //!
 //! Panel menu › Show Color Vision Preview adds a row under the wheel or the box with the color as
 //! simulated for protanopia, deuteranopia and tritanopia, through the simulations View › Proof
 //! Setup uses, and for achromatopsia as the gray with the color's CIE L*. The chips only show the
 //! simulation.
+//!
+//! The view, the channel and Show Color Vision Preview are kept with the preferences
+//! (`ui.colorWheel`).
 
 use egui::{Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, vec2};
 use serde::{Deserialize, Serialize};
@@ -73,13 +76,10 @@ pub struct Settings {
     pub view: View,
     #[serde(serialize_with = "serialize_channel", deserialize_with = "deserialize_channel")]
     pub channel: Channel,
-    /// Show Color Vision Preview: the row of simulated colors under the wheel or the box.
-    #[serde(deserialize_with = "deserialize_flag")]
+    /// Show Color Vision Preview: the row of simulated colors under the wheel or the box. A saved
+    /// `true` shows the row and any other value hides it.
+    #[serde(deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub vision: bool,
-}
-
-fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
-    Ok(<Value as Deserialize>::deserialize(d)?.as_bool().unwrap_or_default())
 }
 
 fn deserialize_view<'de, D: serde::Deserializer<'de>>(d: D) -> Result<View, D::Error> {
@@ -104,8 +104,9 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
 }
 
 /// `ui.colorWheel {view?, channel?, vision?}`: show the wheel or the box, pick the box's channel,
-/// and show or hide the color vision row. Keys left out keep their values; params that are not an
-/// object, another key or a value off the list are an error and change nothing. → the settings.
+/// and show or hide the color vision row. Keys left out or null keep their values; params that are
+/// not an object, another key or a value off the list are an error and change nothing. → the
+/// settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     const KEYS: [&str; 3] = ["view", "channel", "vision"];
     match p {
@@ -252,15 +253,16 @@ pub(crate) fn bytes(rgb: [f32; 3]) -> [u8; 3] {
     rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
 }
 
-/// `#rrggbb` of 0 to 255 values.
+/// The hex text of 0 to 255 values, in the form of the Color panel's hex field (`E67828`).
 pub(crate) fn hex([r, g, b]: [u8; 3]) -> String {
-    format!("#{r:02x}{g:02x}{b:02x}")
+    format!("{r:02X}{g:02X}{b:02X}")
 }
 
 /// The Show Color Vision Preview row: four chips across the panel with `color` as each color
 /// vision deficiency shows it. Each chip takes the keyboard focus and reports its name and, with a
 /// solid color, its hex value as its value to screen readers; its tooltip shows both. A click or a
-/// key on a chip does nothing. With no solid color the chips are empty and carry only their names.
+/// key on a chip does nothing. With no solid color the chips are empty and keep their names in the tooltip and for screen
+/// readers.
 fn vision_row(ui: &mut Ui, cms: &Cms, color: Option<&Color>) {
     let t = Tokens::get(ui.ctx());
     let colors = color.map(|c| vision_colors(cms, c));

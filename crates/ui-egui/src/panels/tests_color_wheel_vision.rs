@@ -62,7 +62,7 @@ fn painted(h: &Harness<'static, VectorcraftApp>, cell: Rect) -> Option<Color32> 
 }
 
 fn color32(hex: &str) -> Color32 {
-    Color32::from_hex(hex).expect("a #rrggbb value")
+    Color32::from_hex(&format!("#{hex}")).expect("an RRGGBB value")
 }
 
 /// The protanopia, deuteranopia and tritanopia chips show the fill as View › Proof Setup's
@@ -81,18 +81,18 @@ fn the_chips_show_the_proof_setup_simulations_of_the_fill() {
     }
 }
 
-/// The achromatopsia chip of a red fill is the gray with red's CIE L* (D50, about 54.29: #828282),
+/// The achromatopsia chip of a red fill is the gray with red's CIE L* (D50, about 54.29: 828282),
 /// and the simulations of a pure red differ from it and from each other.
 #[test]
 fn the_achromatopsia_chip_is_the_gray_of_the_colors_lightness() {
     let cms = cms::active();
     let [p, d, t, a] = vision_colors(&cms, &Color::rgb(1.0, 0.0, 0.0));
-    assert_eq!(hex(a), "#828282");
+    assert_eq!(hex(a), "828282");
     assert_ne!(hex(p), hex(d));
     assert_ne!(hex(t), hex(a));
     let h = harness(app(json!("#ff0000")));
-    assert_eq!(value(&h, "Achromatopsia").as_deref(), Some("#828282"));
-    assert_eq!(painted(&h, h.get_by_label("Achromatopsia").rect()), Some(color32("#828282")));
+    assert_eq!(value(&h, "Achromatopsia").as_deref(), Some("828282"));
+    assert_eq!(painted(&h, h.get_by_label("Achromatopsia").rect()), Some(color32("828282")));
 }
 
 /// A gray fill shows as the same gray in every chip.
@@ -139,23 +139,32 @@ fn the_chips_take_the_focus_and_report_their_names_and_values() {
     for name in NAMES {
         let node = h.get_by_label(name);
         assert_eq!(node.accesskit_node().role(), egui::accesskit::Role::Image, "{name}");
-        assert!(node.value().is_some_and(|v| v.starts_with('#') && v.len() == 7), "{name}: {:?}", node.value());
+        assert!(
+            node.value().is_some_and(|v| v.len() == 6 && v.bytes().all(|b| b.is_ascii_digit() || b.is_ascii_uppercase())),
+            "{name}: {:?}",
+            node.value()
+        );
         assert!(!node.accesskit_node().is_disabled(), "{name}");
     }
-    // Tab stops on the panel's other controls first.
-    for _ in 0..40 {
-        if h.get_by_label(NAMES[0]).accesskit_node().is_focused() {
-            break;
-        }
-        h.key_press(Key::Tab);
-        h.run_steps(1);
-    }
-    assert!(h.get_by_label(NAMES[0]).accesskit_node().is_focused(), "Tab reaches {}", NAMES[0]);
+    tab_to(&mut h, NAMES[0]);
     for name in &NAMES[1..] {
         h.key_press(Key::Tab);
         h.run_steps(1);
         assert!(h.get_by_label(name).accesskit_node().is_focused(), "the next Tab reaches {name}");
     }
+}
+
+/// Press Tab until the chip `name` has the keyboard focus. Tab stops on the panel's other controls
+/// first.
+fn tab_to(h: &mut Harness<'static, VectorcraftApp>, name: &str) {
+    for _ in 0..40 {
+        if h.get_by_label(name).accesskit_node().is_focused() {
+            break;
+        }
+        h.key_press(Key::Tab);
+        h.run_steps(1);
+    }
+    assert!(h.get_by_label(name).accesskit_node().is_focused(), "Tab reaches {name}");
 }
 
 /// A click on a chip, and Enter or Space on a focused chip, leave the fill and the undo history as
@@ -167,6 +176,7 @@ fn a_click_or_a_key_on_a_chip_applies_nothing() {
     for name in NAMES {
         h.get_by_label(name).click();
         h.run_steps(2);
+        tab_to(&mut h, name);
         for key in [Key::Enter, Key::Space] {
             h.key_press_modifiers(Modifiers::NONE, key);
             h.run_steps(1);
@@ -209,8 +219,9 @@ fn the_panel_menu_turns_the_row_on_and_off() {
 }
 
 /// `ui.colorWheel` sets the keys given and reads them with `{}`, and `ui.inspect` reports them as
-/// `ui.color_wheel`. A value that is not a bool, params that are not an object and another key
-/// are errors that change nothing.
+/// `ui.color_wheel`. A `vision` value other than true, false or null, params that are not an object
+/// and another key are errors that change nothing, the view and the channel given with them
+/// included.
 #[test]
 fn ui_color_wheel_sets_and_reads_the_settings() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -218,6 +229,8 @@ fn ui_color_wheel_sets_and_reads_the_settings() {
     assert_eq!(app.run("ui.colorWheel", json!({"vision": true})).unwrap(), json!({"view": "wheel", "channel": "hue", "vision": true}));
     assert_eq!(crate::control::inspect(&app, &egui::Context::default())["ui"]["color_wheel"]["vision"], true);
     assert_eq!(app.run("ui.colorWheel", json!({"vision": "no"})).unwrap_err(), "`vision` must be true or false");
+    assert_eq!(app.run("ui.colorWheel", json!({"view": "box", "channel": "red", "vision": 1})).unwrap_err(), "`vision` must be true or false");
+    assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), json!({"view": "wheel", "channel": "hue", "vision": true}));
     assert_eq!(app.run("ui.colorWheel", json!("junk")).unwrap_err(), "the params must be an object, not \"junk\"");
     assert_eq!(app.run("ui.colorWheel", json!(5)).unwrap_err(), "the params must be an object, not 5");
     assert_eq!(
