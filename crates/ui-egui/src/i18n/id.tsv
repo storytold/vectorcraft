@@ -6875,6 +6875,9 @@ breakText	Glyphs	Glif
 	Open Tutorial Sample	Buka contoh tutorial
 	Finish Tutorial	Selesaikan tutorial
 	Next Tutorial	Tutorial berikutnya
+	Show Learn Tab	Tampilkan tab Belajar
+	Show Skill	Tampilkan keterampilan
+	Back One Level	Kembali satu tingkat
 	Back to Skills	Kembali ke keterampilan
 @msg	tutorial `{id}` has no practice sample	tutorial `{id}` tidak memiliki contoh latihan
 @msg	open the practice sample of `{id}` first (see learn.openSample)	buka contoh latihan `{id}` terlebih dahulu (lihat learn.openSample)

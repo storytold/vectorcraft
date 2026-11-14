@@ -6913,6 +6913,9 @@ shape	Open	Otvoren
 	Open Tutorial Sample	Otvori uzorak tutorijala
 	Finish Tutorial	Završi tutorijal
 	Next Tutorial	Sljedeći tutorijal
+	Show Learn Tab	Prikaži karticu u Učenju
+	Show Skill	Prikaži vještinu
+	Back One Level	Jedan nivo nazad
 	Back to Skills	Nazad na vještine
 @msg	tutorial `{id}` has no practice sample	tutorijal `{id}` nema uzorak za vježbu
 @msg	open the practice sample of `{id}` first (see learn.openSample)	prvo otvorite uzorak za vježbu tutorijala `{id}` (vidi learn.openSample)

@@ -7112,6 +7112,9 @@ breakText	Glyphs	字符
 	Open Tutorial Sample	開啟教學課程範例
 	Finish Tutorial	完成教學課程
 	Next Tutorial	下一個教學課程
+	Show Learn Tab	顯示學習索引標籤
+	Show Skill	顯示技能
+	Back One Level	返回上一層
 	Back to Skills	返回技能
 @msg	tutorial `{id}` has no practice sample	教學課程 `{id}` 沒有練習範例
 @msg	open the practice sample of `{id}` first (see learn.openSample)	請先開啟 `{id}` 的練習範例 (請參閱 learn.openSample)

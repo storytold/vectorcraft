@@ -7579,6 +7579,9 @@ font-script	Japanese	იაპონური
 	Open Tutorial Sample	გაკვეთილის ნიმუშის გახსნა
 	Finish Tutorial	გაკვეთილის დასრულება
 	Next Tutorial	შემდეგი გაკვეთილი
+	Show Learn Tab	სწავლის ჩანართის ჩვენება
+	Show Skill	უნარის ჩვენება
+	Back One Level	ერთი დონით უკან
 	Back to Skills	უნარებზე დაბრუნება
 @msg	tutorial `{id}` has no practice sample	გაკვეთილს `{id}` არ აქვს სავარჯიშო ნიმუში
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ჯერ გახსენით `{id}` გაკვეთილის სავარჯიშო ნიმუში (იხ. learn.openSample)

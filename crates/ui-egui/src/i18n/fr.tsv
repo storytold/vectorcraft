@@ -7460,6 +7460,9 @@ breakText	Glyphs	Glyphes
 	Open Tutorial Sample	Ouvrir le fichier d’exercice du tutoriel
 	Finish Tutorial	Terminer le tutoriel
 	Next Tutorial	Tutoriel suivant
+	Show Learn Tab	Afficher un onglet d'Apprendre
+	Show Skill	Afficher la compétence
+	Back One Level	Revenir d'un niveau
 	Back to Skills	Retour aux compétences
 @msg	tutorial `{id}` has no practice sample	le tutoriel `{id}` n’a pas de fichier d’exercice
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ouvrez d’abord le fichier d’exercice de `{id}` (voir learn.openSample)

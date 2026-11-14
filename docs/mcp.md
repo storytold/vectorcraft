@@ -2901,8 +2901,15 @@ other value of `show` is an error and changes nothing. `learn.list {}` → `{ski
 lists them, where `steps` is the number of steps. `learn.skills {}` shows the panel on its Skills tab with the list of
 skills, with no skill and no tutorial open, as the Quick skill guide card and Back to skills do, and answers what
 `learn.list` answers. `learn.show {tutorial}` shows the panel on its Skills tab with that
-tutorial's steps → `{skill, tutorial, title, steps: [text]}`. A missing, non-string or unknown `tutorial` is an error
-and changes nothing.
+tutorial's steps → `{skill, tutorial, title, steps: [text]}`; choosing a tutorial's row runs it. A missing, non-string
+or unknown `tutorial` is an error and changes nothing. The For you and Skills tab buttons run `learn.tab {tab}`, with
+`tab` set to `forYou` or `skills`, which shows the panel on that tab → `{tab, skill, tutorial}`, with null for no
+skill or no tutorial open; the Skills tab keeps the skill and tutorial it had open. Choosing a skill's row runs
+`learn.skill {skill}`, which shows the panel on the Skills tab with that skill's tutorials → the skill as `learn.list`
+lists it. A missing, non-string or unknown `tab` or `skill` is an error and changes nothing. Back runs `learn.back {}`,
+which shows the panel and goes up one level on the Skills tab, from a tutorial's steps to its skill's tutorials and
+from a skill's tutorials to the list of skills, and answers what `learn.tab` answers; on the list of skills or the For
+you tab the view stays as it is.
 
 Under a tutorial's steps, View more opens the tutorial's practice sample, a small drawing of VectorCraft's own with the
 art its steps work on, as a new untitled document that becomes the active one; Save asks where to save it. Once the
@@ -2934,6 +2941,9 @@ rules.
 {"name":"invoke_menu","arguments":{"command":"learn.finish","params":{"tutorial":"pen-paths"}}}
 {"name":"invoke_menu","arguments":{"command":"learn.next","params":{"tutorial":"pen-paths"}}}
 {"name":"invoke_menu","arguments":{"command":"learn.skills","params":{}}}
+{"name":"invoke_menu","arguments":{"command":"learn.skill","params":{"skill":"draw"}}}
+{"name":"invoke_menu","arguments":{"command":"learn.back","params":{}}}
+{"name":"invoke_menu","arguments":{"command":"learn.tab","params":{"tab":"forYou"}}}
 ```
 
 A step that names a tool shows the tool's name as a blue link. A click on it, or Enter or Space while it has the

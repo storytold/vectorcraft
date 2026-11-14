@@ -7465,6 +7465,9 @@ breakText	Glyphs	Glyfy
 	Open Tutorial Sample	Otevřít ukázku výukového kurzu
 	Finish Tutorial	Dokončit výukový kurz
 	Next Tutorial	Další výukový kurz
+	Show Learn Tab	Zobrazit kartu Výuky
+	Show Skill	Zobrazit dovednost
+	Back One Level	O úroveň zpět
 	Back to Skills	Zpět na dovednosti
 @msg	tutorial `{id}` has no practice sample	výukový kurz `{id}` nemá cvičnou ukázku
 @msg	open the practice sample of `{id}` first (see learn.openSample)	nejprve otevřete cvičnou ukázku kurzu `{id}` (viz learn.openSample)

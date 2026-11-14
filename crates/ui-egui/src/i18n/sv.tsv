@@ -8903,6 +8903,9 @@ digits	Hindi	Hindi
 	Open Tutorial Sample	Öppna övningsexempel för självstudie
 	Finish Tutorial	Slutför självstudie
 	Next Tutorial	Nästa självstudie
+	Show Learn Tab	Visa flik i Lär dig
+	Show Skill	Visa färdighet
+	Back One Level	En nivå tillbaka
 	Back to Skills	Tillbaka till färdigheter
 @msg	tutorial `{id}` has no practice sample	självstudien `{id}` har inget övningsexempel
 @msg	open the practice sample of `{id}` first (see learn.openSample)	öppna först övningsexemplet för `{id}` (se learn.openSample)

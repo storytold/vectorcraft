@@ -7498,6 +7498,9 @@ breakText	Glyphs	Glyphs
 	Open Tutorial Sample	Oefenbestand van tutorial openen
 	Finish Tutorial	Tutorial voltooien
 	Next Tutorial	Volgende tutorial
+	Show Learn Tab	Tabblad van Leren tonen
+	Show Skill	Vaardigheid tonen
+	Back One Level	Eén niveau terug
 	Back to Skills	Terug naar vaardigheden
 @msg	tutorial `{id}` has no practice sample	tutorial `{id}` heeft geen oefenbestand
 @msg	open the practice sample of `{id}` first (see learn.openSample)	open eerst het oefenbestand van `{id}` (zie learn.openSample)

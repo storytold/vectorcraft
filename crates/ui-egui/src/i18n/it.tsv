@@ -7095,6 +7095,9 @@ breakText	Glyphs	Glifi
 	Open Tutorial Sample	Apri l’esempio del tutorial
 	Finish Tutorial	Termina il tutorial
 	Next Tutorial	Tutorial successivo
+	Show Learn Tab	Mostra una scheda di Impara
+	Show Skill	Mostra competenza
+	Back One Level	Indietro di un livello
 	Back to Skills	Torna alle competenze
 @msg	tutorial `{id}` has no practice sample	il tutorial `{id}` non ha un esempio di esercitazione
 @msg	open the practice sample of `{id}` first (see learn.openSample)	apri prima l’esempio di esercitazione di `{id}` (vedi learn.openSample)

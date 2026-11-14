@@ -7500,6 +7500,9 @@ breakText	Glyphs	Merkit
 	Open Tutorial Sample	Avaa opetusohjelman harjoitustiedosto
 	Finish Tutorial	Viimeistele opetusohjelma
 	Next Tutorial	Seuraava opetusohjelma
+	Show Learn Tab	Näytä Opi-paneelin välilehti
+	Show Skill	Näytä taito
+	Back One Level	Taso takaisin
 	Back to Skills	Takaisin taitoihin
 @msg	tutorial `{id}` has no practice sample	opetusohjelmalla `{id}` ei ole harjoitustiedostoa
 @msg	open the practice sample of `{id}` first (see learn.openSample)	avaa ensin opetusohjelman `{id}` harjoitustiedosto (ks. learn.openSample)
