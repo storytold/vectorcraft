@@ -15,7 +15,7 @@ translation never fails a test or a build: the interface shows the English text 
 `cargo xtask ci` prints the untranslated report (`cargo xtask i18n-report` alone), which lists per language the
 strings missing from each catalog with the `complete_menus` flag and the messages missing from each language in
 the `COMPLETE_MESSAGES` list. Every non-English language marked "full" has the flag, and all of them except
-Bosnian, Bulgarian, Danish and Indonesian are in the list. No language has help content: there is no translated (or
+Bosnian, Bulgarian and Indonesian are in the list. No language has help content: there is no translated (or
 English) in-app help, and the docs are English.
 
 **Native review:** every catalog was written clean-room from the English meaning, most of it by agents
@@ -55,7 +55,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Traditional Chinese (Taiwan) | `zh-hant` | 8,820 rows, 3,438 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it; menus, `tl!` literals and messages were complete when counted on 2026-10-21 (80% overall) | partial |
 | Italian | `it` | 8,924 rows, 3,560 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 54 missing messages for it, which open #7116, #7211, #7378 and #7405 translate | full |
 | Dutch | `nl` | 3,447 `@msg` and 48 `@msgplural` rows (counted 2026-11-13): in `COMPLETE_MESSAGES`, and the untranslated report lists 41 missing messages for it; one/other plurals | full |
-| Danish | `da` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one/other plurals | full |
+| Danish | `da` | 7,422 rows, 1,636 of them `@msg` and 48 `@msgplural` (counted 2026-11-14 on `main` at `edb228ac3`): in `COMPLETE_MESSAGES`, and the untranslated report lists the same missing messages for it as for Greek, Spanish and Finnish; one/other plurals | full |
 | Russian | `ru` | 4,009 / 4,020 | full |
 | Ukrainian | `uk` | 8,802 rows, 3,439 of them `@msg` and 48 `@msgplural` (counted 2026-11-13); one/few/many plurals | full |
 | Hungarian | `hu` | 9,166 rows, 3,444 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it, and lists 47 menu strings, 25 `tl!` strings, 11 undo labels and 45 swatch names without a row; one plural form | full |

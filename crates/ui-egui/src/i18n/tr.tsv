@@ -1293,6 +1293,7 @@ font-technology	Variable	Değişken
 	Format	Biçim
 	Format Options	Biçim Seçenekleri
 	Format Settings	Biçim Ayarları
+	Format Settings…	Biçim Ayarları…
 	Format:	Biçim:
 	Formats:	Formatlar:
 	Fractional Widths	Kesirli Genişlikler
@@ -9398,3 +9399,6 @@ breakText	Glyphs	Glifler
 @msg	the hem is too deep for the banner	kenar kıvırma afiş için çok derin
 @msg	the grommet inset is too large for the banner	kuşgözlerinin kenara uzaklığı afiş için çok büyük
 @msg	the spacing makes more than {MAX_GROMMETS} grommets	bu aralık {MAX_GROMMETS} taneden fazla kuşgözü oluşturur
+	Nest Shapes…	Şekilleri yerleştir…
+	Nest Shapes	Şekilleri yerleştir
+	Roll	Rulo
