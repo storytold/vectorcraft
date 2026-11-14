@@ -6034,10 +6034,10 @@ mod tests {
         }
     }
 
-    /// A drag with the Selection tool (a committed preview) or the Rectangle tool (a command the
-    /// tool runs) that takes a recording past 10,000 steps keeps its edit and the journal, the
-    /// status bar names the limit as the tool ends, and Stop Playing/Recording keeps the 10,000
-    /// steps that fit. One that fills the action exactly names no limit.
+    /// A drag with the Selection tool or the Rectangle tool (each commits its preview) that takes a
+    /// recording past 10,000 steps keeps its edit and the journal, the status bar names the limit
+    /// as the tool ends, and Stop Playing/Recording keeps the 10,000 steps that fit. One that fills
+    /// the action exactly names no limit.
     #[test]
     fn tool_commit_checks_recording_step_limit() {
         let steps = "the action already has 10,000 steps";
@@ -6087,6 +6087,115 @@ mod tests {
             app.run(STOP_RECORDING, json!({})).unwrap();
             assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "{tool}: the step is left out");
             assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+        }
+    }
+
+    /// Drags the Enclosing Lasso away from the selected rectangle, which runs `select.set` with no
+    /// objects, and checks that the tool journaled that one step and cleared the selection.
+    fn lasso_nothing(app: &mut VectorcraftApp) {
+        app.select_tool(vectorcraft_tools::addons::enclosing_lasso::ID);
+        assert_eq!(app.session.tool_id(), vectorcraft_tools::addons::enclosing_lasso::ID);
+        assert!(!app.session.active().unwrap().selection.objects.is_empty());
+        let journal = app.session.journal.len();
+        tool_drag(app, (100.0, 80.0), (120.0, 80.0));
+        assert_eq!(app.session.journal.len(), journal + 1, "the tool journals one step");
+        assert_eq!(app.session.journal.last(), Some(&("select.set".to_string(), json!({"ids": []}))));
+        assert!(app.session.active().unwrap().selection.objects.is_empty(), "the edit stays");
+    }
+
+    /// A command a tool runs (the Enclosing Lasso's `select.set`) that takes a recording past
+    /// 10,000 steps keeps its edit and the journal, the status bar names the limit as the tool
+    /// ends, the next recorded command does not run, and Stop Playing/Recording keeps the 10,000
+    /// steps that fit. One that fills the action exactly names no limit.
+    #[test]
+    fn tool_exec_checks_recording_step_limit() {
+        let steps = "the action already has 10,000 steps";
+        for filler in [files::MAX_ACTION_STEPS, files::MAX_ACTION_STEPS - 1] {
+            let (mut app, _) = app_with_three_moves();
+            recording_with(&mut app, filler);
+            app.ui.status.clear();
+            lasso_nothing(&mut app);
+            if filler < files::MAX_ACTION_STEPS {
+                assert_eq!(app.ui.status, "", "10,000 steps fit");
+                continue;
+            }
+            assert_eq!(app.ui.status, steps, "the status bar names the limit now");
+            assert!(app.ui.recording.is_some(), "the recording goes on");
+            let (journal, art) = (app.session.journal.len(), app.session.active().unwrap().doc.art_bounds());
+            let r = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 20, "height": 20}));
+            assert_eq!(r.unwrap_err(), steps, "no later command runs");
+            assert_eq!(app.session.journal.len(), journal);
+            assert_eq!(app.session.active().unwrap().doc.art_bounds(), art, "no rectangle is drawn");
+            assert_eq!(app.session.journal.since(recording_start(&app).unwrap()).len(), files::MAX_ACTION_STEPS + 1, "the journal keeps the step");
+            app.run(STOP_RECORDING, json!({})).unwrap();
+            assert_eq!(app.ui.action_sets[0].actions.last().unwrap().steps.len(), files::MAX_ACTION_STEPS);
+        }
+    }
+
+    /// A command a tool runs (the Enclosing Lasso's `select.set`) whose step gives the recording's
+    /// set a file larger than 8 MiB keeps its edit, the status bar names the limit as the tool
+    /// ends, and Stop Playing/Recording leaves the step out of a set that Load Actions… reads.
+    #[test]
+    fn tool_exec_checks_recording_byte_limit() {
+        let size = "the action set would be larger than 8 MiB";
+        let (mut app, _) = app_with_three_moves();
+        app.run(START_RECORDING, json!({})).unwrap();
+        let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+        app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
+        let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+        app.ui.action_sets[0].actions[0].steps = vec![pad(room)];
+        app.ui.recording_into = Some(app.ui.action_sets[0].actions[0].id);
+        app.ui.status.clear();
+        lasso_nothing(&mut app);
+        assert_eq!(app.ui.status, size, "the status bar names the limit now");
+        assert_eq!(app.session.journal.since(recording_start(&app).unwrap()).len(), 1, "the journal keeps the step");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "the step is left out");
+        let saved = files::write_set(&app.ui.action_sets[0]);
+        assert!(saved.len() <= files::MAX_SET_FILE);
+        assert!(files::read_set(&saved, "Test").is_ok());
+    }
+
+    /// The place cursor's `file.place` that takes a recording past 10,000 steps keeps the placed
+    /// file and the journal, and the status bar names the limit once the file is placed: on the
+    /// release when the file is read at once, and on the frame that places it when it is read off
+    /// the UI thread. Stop Playing/Recording keeps the 10,000 steps that fit.
+    #[test]
+    fn place_cursor_exec_checks_recording_step_limit_on_completion() {
+        let steps = "the action already has 10,000 steps";
+        let mut png = vec![];
+        image::RgbImage::new(8, 8).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let placed = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            st.doc.layers.iter().flat_map(|l| l.children().into_iter().flatten()).filter(|n| n.name.as_deref() == Some("a.png")).count()
+        };
+        for background in [false, true] {
+            let (mut app, _) = app_with_three_moves();
+            app.placing.off_the_ui_thread = background;
+            app.run("file.place.queue", json!({"files": [{"name": "a.png", "dataBase64": vectorcraft_format::base64_encode(&png)}]})).unwrap();
+            assert_eq!(app.session.tool_id(), "place");
+            recording_with(&mut app, files::MAX_ACTION_STEPS);
+            app.ui.status.clear();
+            let journal = app.session.journal.len();
+            tool_drag(&mut app, (40.0, 40.0), (80.0, 80.0));
+            if background {
+                assert_eq!(app.session.journal.len(), journal, "the release places nothing yet");
+                assert_eq!(placed(&app), 0);
+                assert_ne!(app.ui.status, steps, "nothing is checked before the file is placed");
+                app.placing.wait_for_reads();
+                let ctx = egui::Context::default();
+                app.begin_host_iteration();
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
+                out.textures_delta.clear();
+                assert!(app.placing.pending.is_empty(), "the frame after the read places the file");
+            }
+            assert_eq!(app.session.journal.len(), journal + 1, "background {background}: the place journals one step");
+            assert_eq!(app.session.journal.last().map(|(c, _)| c.as_str()), Some("file.place"));
+            assert_eq!(placed(&app), 1, "background {background}: the placed file stays");
+            assert_eq!(app.ui.status, steps, "background {background}: the status bar names the limit once the file is placed");
+            assert!(app.ui.recording.is_some(), "the recording goes on");
+            app.run(STOP_RECORDING, json!({})).unwrap();
+            assert_eq!(app.ui.action_sets[0].actions.last().unwrap().steps.len(), files::MAX_ACTION_STEPS, "background {background}");
         }
     }
 
