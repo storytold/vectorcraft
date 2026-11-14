@@ -2107,6 +2107,7 @@ file-filter	Templates	Sablonok
 	Import Library	Könyvtár importálása
 	Import Library…	Könyvtár importálása…
 	Import PDF	PDF importálása
+	Import PDF pages as links	PDF-oldalak importálása csatolásként
 	Import PDF Presets	PDF-előbeállítások importálása
 	Import Perspective Grid Presets	Perspektivikus rács előbeállításainak importálása
 	Import Print Presets	Nyomtatási előbeállítások importálása
