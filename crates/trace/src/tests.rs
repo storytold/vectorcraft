@@ -1085,6 +1085,30 @@ fn decode_to_fit_scales_an_oversized_image_down() {
     assert!(matches!(Raster::decode_to_fit(&png_header(9000, 9000)), Err(TraceError::Decode(_))));
 }
 
+/// Scaling an oversized image down weighs each color by its alpha: a clear pixel next to an
+/// opaque one leaves the opaque color as it is and only lowers the alpha.
+#[test]
+fn scaling_down_weighs_color_by_alpha() {
+    use crate::raster::box_reduced;
+    const RED: [u8; 4] = [200, 30, 30, 255];
+    // Opaque red and clear black columns, decoded from a PNG and scaled to fit as `decode_to_fit`
+    // does: each scaled pixel covers a red and a clear one.
+    let half_clear = Raster::from_fn(4, 2, |x, _| if x % 2 == 0 { RED } else { [0; 4] });
+    let decoded = image::load_from_memory(&half_clear.encode_png()).unwrap().into_rgba8();
+    let fitted = Raster::fitted(&decoded, 2);
+    assert_eq!((fitted.width, fitted.height), (2, 1));
+    assert_eq!(fitted.rgba, [[200, 30, 30, 128]; 2].concat());
+    // A partly clear blue pulls an opaque red toward it by its alpha.
+    let mixed = Raster::from_fn(2, 1, |x, _| if x == 0 { [255, 0, 0, 255] } else { [0, 0, 255, 85] });
+    assert_eq!(box_reduced(&mixed.rgba, 2, 1, 1, 1), [191, 0, 64, 170]);
+    // A wholly clear block stays clear, with the plain mean of its colors.
+    let clear = Raster::from_fn(2, 1, |x, _| [100 * x as u8, 0, 0, 0]);
+    assert_eq!(box_reduced(&clear.rgba, 2, 1, 1, 1), [50, 0, 0, 0]);
+    // A 3 → 2 reduction counts every source pixel once.
+    let ramp = Raster::from_fn(3, 3, |x, y| [(x * 60 + y * 10) as u8, 0, 0, 255]);
+    assert_eq!(box_reduced(&ramp.rgba, 3, 3, 2, 2), [0, 0, 0, 255, 90, 0, 0, 255, 15, 0, 0, 255, 105, 0, 0, 255]);
+}
+
 /// Four flat colours with anti-aliased (blended) edges between the quadrants.
 fn flat_quads() -> Raster {
     const C: [[u8; 3]; 4] = [[220, 30, 30], [30, 200, 40], [30, 40, 210], [240, 220, 20]];
