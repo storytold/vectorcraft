@@ -326,12 +326,8 @@ fn paints_documents_lack_make_the_glyph_an_image() {
     let line = |extend| ColorLine::new(extend, 2, vec![ColorStop::new(F2Dot14::from_f32(0.0), 0, one), ColorStop::new(one, 1, one)]);
     let w = FWord::new;
     type GlyphPaint<'a> = Box<dyn Fn(write_fonts::types::GlyphId16) -> ColrPaint + 'a>;
-    let cases: [(&str, GlyphPaint<'_>); 3] = [
+    let cases: [(&str, GlyphPaint<'_>); 2] = [
         ("Colrtest Xor", Box::new(|o| ColrPaint::composite(ColrPaint::glyph(solid(2), o), CompositeMode::Xor, ColrPaint::glyph(solid(0), o)))),
-        (
-            "Colrtest Repeat",
-            Box::new(move |o| ColrPaint::glyph(ColrPaint::linear_gradient(line(Extend::Repeat), w(0), w(0), w(100), w(0), w(0), w(100)), o)),
-        ),
         (
             "Colrtest Circles",
             Box::new(move |o| {
@@ -469,6 +465,129 @@ fn an_image_of_a_radial_gradient_with_a_stop_past_its_circle_of_radius_0_draws_f
             pixmap.take_unpremultiplied().into_iter().filter(|p| p.a == 255).map(|p| [p.r, p.g, p.b]).collect();
         assert!(colors.len() > 10, "{family}: {colors:?}");
     }
+}
+
+/// A COLRv1 color line through `stops` (offset, palette index) that extends by `extend`.
+fn color_line(extend: write_fonts::tables::colr::Extend, stops: &[(f32, u16)]) -> write_fonts::tables::colr::ColorLine {
+    use write_fonts::tables::colr::{ColorLine, ColorStop};
+    use write_fonts::types::F2Dot14;
+    let one = F2Dot14::from_f32(1.0);
+    let stops: Vec<ColorStop> = stops.iter().map(|&(at, index)| ColorStop::new(F2Dot14::from_f32(at), index, one)).collect();
+    ColorLine::new(extend, u16::try_from(stops.len()).unwrap(), stops)
+}
+
+/// The gradient filling the glyph's one path.
+fn glyph_gradient(font: &[u8]) -> vectorcraft_doc::color::GradientPaint {
+    let root = art(font, COLOUR_CHAR);
+    let [only] = children(&root) else { panic!("one path") };
+    let Paint::Gradient(g) = fill(only) else { panic!("a gradient") };
+    *g
+}
+
+/// A linear gradient that repeats or reflects is vector art. The gradient spreads the same way,
+/// and its stops run once from the first stop's place to the last stop's place.
+#[test]
+fn a_repeating_or_reflecting_linear_gradient_is_vector_art() {
+    use vectorcraft_doc::color::GradientSpread;
+    use write_fonts::tables::colr::Extend;
+    use write_fonts::types::FWord;
+    let w = FWord::new;
+    for (family, extend, spread) in
+        [("Colrtest Linear Repeat", Extend::Repeat, GradientSpread::Repeat), ("Colrtest Linear Reflect", Extend::Reflect, GradientSpread::Reflect)]
+    {
+        let line = color_line(extend, &[(0.2, 0), (0.6, 1)]);
+        let font =
+            v1_font(family, COLOUR_CHAR, |o| ColrPaint::glyph(ColrPaint::linear_gradient(line.clone(), w(0), w(0), w(100), w(0), w(0), w(100)), o));
+        let g = glyph_gradient(&font);
+        assert_eq!(g.gradient.kind, GradientKind::Linear, "{family}");
+        assert_eq!(g.gradient.painted_spread(), (spread, 1), "{family}");
+        let offsets: Vec<f32> = g.gradient.stops.iter().map(|s| s.offset).collect();
+        assert_eq!(offsets, [0.0, 1.0], "{family}");
+        let geom = g.geom.unwrap();
+        assert!((geom.start.x - 20.0).abs() < 0.01 && (geom.end.x - 60.0).abs() < 0.01, "{family}: {:?} → {:?}", geom.start, geom.end);
+    }
+}
+
+/// A radial gradient from its center that repeats or reflects is vector art that spreads the same
+/// way, also with a focal point. Its circle is at the last stop, and its stops run once from the
+/// center out to that circle.
+#[test]
+fn a_repeating_or_reflecting_radial_gradient_from_its_center_is_vector_art() {
+    use vectorcraft_doc::color::GradientSpread;
+    use write_fonts::tables::colr::Extend;
+    use write_fonts::types::{FWord, UfWord};
+    let w = FWord::new;
+    let cases = [
+        ("Colrtest Radial Repeat", Extend::Repeat, GradientSpread::Repeat, 250, 1.0, 400.0),
+        ("Colrtest Radial Reflect", Extend::Reflect, GradientSpread::Reflect, 300, 1.0, 400.0),
+        ("Colrtest Radial Half", Extend::Repeat, GradientSpread::Repeat, 300, 0.5, 200.0),
+        // Normalized, the last stop is a rounding error short of 1.
+        ("Colrtest Radial Fine", Extend::Repeat, GradientSpread::Repeat, 250, 41.0 / 16384.0, 400.0 * 41.0 / 16384.0),
+    ];
+    for (family, extend, spread, x0, last, radius) in cases {
+        let line = color_line(extend, &[(0.0, 0), (last / 2.0, 2), (last, 1)]);
+        let font = v1_font(family, COLOUR_CHAR, |o| {
+            ColrPaint::glyph(ColrPaint::radial_gradient(line.clone(), w(x0), w(300), UfWord::new(0), w(250), w(300), UfWord::new(400)), o)
+        });
+        let g = glyph_gradient(&font);
+        assert_eq!(g.gradient.kind, GradientKind::Radial, "{family}");
+        assert_eq!(g.gradient.painted_spread(), (spread, 1), "{family}");
+        let offsets: Vec<f32> = g.gradient.stops.iter().map(|s| s.offset).collect();
+        assert!(offsets.len() == 3 && offsets.iter().zip([0.0, 0.5, 1.0]).all(|(a, b)| (a - b).abs() < 0.05), "{family}: {offsets:?}");
+        let geom = g.geom.unwrap();
+        assert!(((geom.end - geom.start).hypot() - radius).abs() < 0.1, "{family}: {geom:?}");
+        assert_eq!(geom.focal.is_some(), x0 != 250, "{family}");
+    }
+}
+
+/// A radial gradient that repeats from a circle stays an image. The circle is either a start circle
+/// around the center or the place a first stop past the center puts the start.
+#[test]
+fn a_repeating_radial_gradient_from_a_circle_makes_the_glyph_an_image() {
+    use write_fonts::tables::colr::Extend;
+    use write_fonts::types::{FWord, UfWord};
+    let w = FWord::new;
+    for (family, r0, first) in [("Colrtest Ring Repeat", 100, 0.0), ("Colrtest Short Repeat", 0, 0.25)] {
+        let line = color_line(Extend::Repeat, &[(first, 0), (1.0, 1)]);
+        let font = v1_font(family, COLOUR_CHAR, |o| {
+            ColrPaint::glyph(ColrPaint::radial_gradient(line.clone(), w(250), w(300), UfWord::new(r0), w(250), w(300), UfWord::new(400)), o)
+        });
+        assert!(matches!(content(&font, COLOUR_CHAR), Some(ColourContent::Image(_))), "{family}");
+    }
+}
+
+/// A gradient that repeats or reflects with a stop whose palette index is outside the palette stays
+/// an image. Without that stop, the other stops would repeat over a different interval.
+#[test]
+fn a_repeating_gradient_with_a_stop_missing_from_the_palette_makes_the_glyph_an_image() {
+    use write_fonts::tables::colr::Extend;
+    use write_fonts::types::{FWord, UfWord};
+    let w = FWord::new;
+    let line = color_line(Extend::Repeat, &[(0.0, 0), (0.5, 1), (1.0, 200)]);
+    let linear = v1_font("Colrtest Linear Missing", COLOUR_CHAR, |o| {
+        ColrPaint::glyph(ColrPaint::linear_gradient(line.clone(), w(0), w(0), w(100), w(0), w(0), w(100)), o)
+    });
+    let radial = v1_font("Colrtest Radial Missing", COLOUR_CHAR, |o| {
+        ColrPaint::glyph(ColrPaint::radial_gradient(line.clone(), w(250), w(300), UfWord::new(0), w(250), w(300), UfWord::new(400)), o)
+    });
+    for (family, font) in [("linear", linear), ("radial", radial)] {
+        assert!(matches!(content(&font, COLOUR_CHAR), Some(ColourContent::Image(_))), "{family}");
+    }
+}
+
+/// A color line with an extend value the COLR specification doesn't define pads.
+#[test]
+fn an_unknown_extend_value_pads() {
+    use vectorcraft_doc::color::GradientSpread;
+    use write_fonts::tables::colr::Extend;
+    use write_fonts::types::FWord;
+    let w = FWord::new;
+    let line = color_line(Extend::Unknown, &[(0.0, 0), (1.0, 1)]);
+    let font = v1_font("Colrtest Unknown Extend", COLOUR_CHAR, |o| {
+        ColrPaint::glyph(ColrPaint::linear_gradient(line.clone(), w(0), w(0), w(100), w(0), w(0), w(100)), o)
+    });
+    let g = glyph_gradient(&font);
+    assert_eq!(g.gradient.painted_spread(), (GradientSpread::Pad, 1));
 }
 
 /// A glyph whose layers don't use the foreground colour is read once, whatever the type's fill.
