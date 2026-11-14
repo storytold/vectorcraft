@@ -3281,32 +3281,48 @@ already walks Image Trace. Short agent entry points:
   `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
   is XML whose `variableSets` element holds `variableSet` elements, each with a `variables` element of `variable`
   elements (`varName`, `trait`) and a `sampleDataSets` element of `sampleDataSet` elements (`dataSetName`). Every
-  data set is deleted, and every variable of the document is deleted with its bindings and values, except a text
-  variable the library also declares: it keeps its bindings, so selecting one of the library's data sets changes the
-  objects bound to it. Then the library's other variables whose `trait` is `textcontent` are defined as text
-  variables, unbound. In each data set, the element named
-  after a text variable gives its value: the text of its `p` elements, one paragraph each. An element without a `p`
-  element gives no value. Variables of other kinds are left out with their values: the reply lists them in `skipped`
-  (`name`, `trait`), and its `warning` names each `trait` with its count. The reply's `deleted` and `deletedDataSets`
+  data set is deleted, and every variable of the document is deleted with its bindings and values, except a variable
+  the library also declares with the same kind: it keeps its bindings, so selecting one of the library's data sets
+  changes the objects bound to it. Then the library's other variables are defined, unbound, with the kind their
+  `trait` gives: `textcontent` is text, `visibility` is visibility, `fileref` (a linked file) is image and
+  `graphdata` is graph. A variable without a `trait`, or with one VectorCraft doesn't know, is defined of unknown
+  kind and takes no values. In each data set, the element named after a variable gives its value:
+  - text: the text of its `p` elements, one paragraph each; an element without a `p` element gives no value;
+  - visibility: `true` or `false`, in any case;
+  - image: a file's absolute path (from `/`, `\\` or a drive's root) or a `file:` URL of one, whose `%XX` escapes
+    are decoded; the file isn't read, so a library can name files that aren't there;
+  - graph: a `data` element. Its optional `propertyRow` holds a corner cell and then the series names, and each `row`
+    of its `values` holds the row's category in a first `value` whose `key` is `name`, then a `value` per series. A
+    value that is empty, marked `type="string"` or not a number is a blank. The data is read as the CSV
+    `graph.setData` takes, at most 256 KiB of it. Graph data with more than 10,000 rows or 256 series, which a
+    graph doesn't hold, is refused, by `variable.saveLibrary` too. `variable.saveLibrary` also refuses graph data
+    with neither rows nor series, which loads back as no value.
+
+  Visibility, image and graph values are read without the white space round them, and an element holding only white
+  space gives no value. The reply's `variables` lists the library's variables, and `deleted` and `deletedDataSets`
   list the variables and data sets the load deleted. While the variables are locked, a library that would delete or
-  define a variable fails with "variables are locked". The reply is `{variables, deleted, deletedDataSets, names,
-  skipped, warning?}`. A library larger than 8 MiB, one whose elements nest more than 256 deep, and one with more
+  define a variable fails with "variables are locked". The reply is `{variables, deleted, deletedDataSets, names}`. A
+  library larger than 8 MiB, one whose elements nest more than 256 deep, and one with more
   than 256 variables or 1,000 data sets are refused. Its document type declaration may hold an external identifier,
   comments, processing instructions and up to 64 entity declarations whose values are plain text (no `<`, `&` or
   `%`). A declaration that holds anything else, and entity references that expand the library past 8 MiB, are
-  refused. So are a variable or data set declared twice and a value for a variable the library doesn't declare.
-  `variable.saveLibrary {path?}` (the panel menu's Save Variable Library…) writes the document's text variables and
-  every data set as a variable library in the layout `variable.loadLibrary` reads: a `variable` element with
-  `varName` and `trait="textcontent"` for each text variable, and a `sampleDataSet` element with `dataSetName` for
-  each data set, holding an element named after each text variable it has a value for, with one `p` element per line
-  of the value. Loading the file gives back the same text variables, data set names and text values. Variables of
-  other kinds are left out with their values: the reply lists them in `skipped` (`name`, `kind`), and its `warning`
-  names each kind with its count. Saving is refused for a document without a text variable, for a text variable whose
-  name isn't an XML name (it starts with a letter or `_` and holds only letters, digits, `-`, `_` and `.`), for a
-  data set whose name or text value holds a control character, for a data set name with white space at either end,
-  for a name longer than 255 characters or used twice, and past `variable.loadLibrary`'s caps (256 variables, 1,000
-  data sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets, skipped, warning?}`;
-  with it, the file is written and the reply is `{path, variables, datasets, skipped, warning?}`.
+  refused. So are a variable or data set declared twice, a value for a variable the library doesn't declare, and a
+  value that doesn't fit its variable's kind.
+  `variable.saveLibrary {path?}` (the panel menu's Save Variable Library…) writes the document's variables and every
+  data set as a variable library in the layout `variable.loadLibrary` reads: a `variable` element with `varName` for
+  each variable, with the `trait` and `category` of its kind (`textcontent` and `&ns_flows;`, `visibility` and
+  `&ns_vars;`, `fileref` and `&ns_vars;`, `graphdata` and `&ns_graphs;`; neither for a variable of unknown kind), and
+  a `sampleDataSet` element with `dataSetName` for each data set, holding an element named after each variable it has
+  a value for. A text value is written with one `p` element per line, a visibility value as `true` or `false`, an
+  image value as its path (a path from the root of a Unix file system as a `file:///` URL), and a graph value as a
+  `data` element, with a blank category marked `type="string"`. Loading the file gives back the same variables with their kinds, data set names and values; graph
+  data comes back in the CSV form Graph Data writes. Saving is refused for a document without a variable, for a
+  variable whose name isn't an XML name (it starts with a letter or `_` and holds only letters, digits, `-`, `_` and
+  `.`; a variable of unknown kind has no values, so its name isn't checked), for a name or value that holds a control
+  character, for a name with white space at either end, for a name longer than 255 characters or used twice, for an
+  image value that isn't a file's absolute path, and past `variable.loadLibrary`'s caps (256 variables, 1,000 data
+  sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets}`; with it, the file is written and the reply
+  is `{path, variables, datasets}`.
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
   action on every file in a folder or every data set (the Actions panel menu's Batch…). Override Save and Override

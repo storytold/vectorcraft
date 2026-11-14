@@ -37,9 +37,9 @@ use axis::{nice_axis, tick_values};
 #[cfg(test)]
 use columns::{fill_totals, total_text};
 pub use commands::specs;
-pub(crate) use data::apply_csv;
+pub(crate) use data::{apply_csv, parse_csv};
 #[cfg(test)]
-use data::{fmt_value, parse_csv, to_csv};
+use data::{fmt_value, to_csv};
 #[cfg(test)]
 use generate::generate;
 #[cfg(test)]
