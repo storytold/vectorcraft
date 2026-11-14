@@ -965,6 +965,12 @@ impl Ctx {
         "normal".into()
     }
 
+    /// Whether the computed `direction` of element `n` is `rtl`, in any letter case (CSS keywords
+    /// are ASCII case-insensitive, https://www.w3.org/TR/css-values-3/#keywords).
+    fn is_rtl(&self, n: XNode) -> bool {
+        self.prop(n, "direction").is_some_and(|d| d.trim().eq_ignore_ascii_case("rtl"))
+    }
+
     /// The Character Direction of the characters of element `n` inside a `<text>`, and what it
     /// leaves out (SVG 1.1 §10.7.4,
     /// https://www.w3.org/TR/SVG11/text.html#RelationshipWithBi-directionality, and CSS Writing
@@ -987,7 +993,7 @@ impl Ctx {
         let inherited = parent.as_ref().and_then(|p| p.style.char_direction);
         let mut notes = parent.map_or_else(Vec::new, |p| p.bidi_notes.clone());
         let rtl = |rtl: bool| Some(if rtl { ParaDirection::RightToLeft } else { ParaDirection::LeftToRight });
-        let own = || rtl(self.prop(n, "direction").is_some_and(|d| d.trim() == "rtl"));
+        let own = || rtl(self.is_rtl(n));
         let (dir, note) = match bidi.as_str() {
             "embed" => (own(), None),
             "bidi-override" => (own(), Some(BIDI_OVERRIDE)),
@@ -1376,7 +1382,7 @@ impl Ctx {
         // With `unicode-bidi: plaintext`, the text runs in the direction of its first strong
         // character, and each paragraph in that of its own ([`pin_first_strong`]).
         let plaintext = self.unicode_bidi(t) == "plaintext";
-        let rtl = if plaintext { self.first_strong_rtl(t) == Some(true) } else { self.prop(t, "direction").is_some_and(|d| d.trim() == "rtl") };
+        let rtl = if plaintext { self.first_strong_rtl(t) == Some(true) } else { self.is_rtl(t) };
         let pin = |obj: &mut TextObject| {
             pin_direction(obj, rtl);
             if plaintext {
@@ -1403,7 +1409,7 @@ impl Ctx {
                 let chunk: String = cs.chars[i..end].iter().map(|c| c.0).collect();
                 text_first_strong_rtl(&chunk) == Some(true)
             };
-            let rtl = if plaintext { chunk_rtl() } else { self.prop(el, "direction").is_some_and(|d| d.trim() == "rtl") };
+            let rtl = if plaintext { chunk_rtl() } else { self.is_rtl(el) };
             if !vertical && rtl { 1.0 - a } else { a }
         };
         let anchor = anchor_of(0);
@@ -1425,10 +1431,18 @@ impl Ctx {
             let em = self.font_size(tp);
             let offset = tp.attribute("startOffset").and_then(|v| self.length(v, em, len)).unwrap_or(0.0) + dx[0];
             let width = if anchor > 0.0 { advance(&point_text(&cells)) } else { 0.0 };
-            // Text that would start before the path's beginning starts at it, with all its glyphs
-            // on the path (SVG does not draw the glyphs that fall off it).
-            let start = Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| s.clamp(0.0, 1.0));
-            obj.kind = TextKind::OnPath { path: PathData::from_bezpath(&bp), start, end: None };
+            // On a path of one closed subpath, text that starts before the path's start or past its
+            // end wraps around the path. Otherwise it starts at the path's start or end.
+            let path = PathData::from_bezpath(&bp);
+            let wraps = path.subpaths.len() == 1 && path.is_closed();
+            let wrap = |s: f64| {
+                // `rem_euclid` can round a tiny negative value up to 1.
+                let s = s.rem_euclid(1.0);
+                if s < 1.0 { s } else { 0.0 }
+            };
+            let start =
+                Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| if wraps { wrap(s) } else { s.clamp(0.0, 1.0) });
+            obj.kind = TextKind::OnPath { path, start, end: None };
             obj.xf = Affine::IDENTITY;
         } else if vertical {
             // Type on a vertical path: dy is extra advance, dx shifts across the column.

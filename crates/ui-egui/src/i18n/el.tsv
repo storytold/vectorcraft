@@ -4701,6 +4701,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no action set to save	δεν υπάρχει σύνολο ενεργειών για αποθήκευση
 @msg	the action set file can't be read in full	το αρχείο συνόλου ενεργειών δεν μπορεί να διαβαστεί ολόκληρο
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Φορτώθηκε το «{name}»: παραλείφθηκε {n} βήμα|Φορτώθηκε το «{name}»: παραλείφθηκαν {n} βήματα
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Φορτώθηκε το «{name}»: {n} βήμα έχει άγνωστη εντολή και διατηρήθηκε: «{action}», βήμα {step}, `{command}`|Φορτώθηκε το «{name}»: {n} βήματα έχουν άγνωστες εντολές και διατηρήθηκαν· το πρώτο: «{action}», βήμα {step}, `{command}`
 @msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
 @msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: η αναφορά θα ήταν μεγαλύτερη από {MAX_BYTES} byte
@@ -4935,6 +4936,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	tool shortcuts must be a single key (optionally with Shift)	οι συντομεύσεις εργαλείων πρέπει να περιλαμβάνουν ένα πλήκτρο (προαιρετικά με Shift)
 @msg	truncated	περικομμένο
 @msg	unknown command `{0}`	άγνωστη εντολή `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	το βήμα {step} της ενέργειας «{action}» εκτελεί την άγνωστη εντολή `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	άγνωστη εντολή `{0}`· μήπως εννοείτε `{1}`;
 @msg	unknown effect `{id}`	άγνωστο εφέ `{id}`
 @msg	unknown format	άγνωστη μορφή
@@ -7423,6 +7425,12 @@ breakText	Glyphs	Γλύφοι
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ανοίξτε πρώτα το δείγμα εξάσκησης του `{id}` (δείτε learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	ολοκληρώστε πρώτα το `{id}` (δείτε learn.finish)
 @msg	`{id}` is the last tutorial in its skill	το `{id}` είναι ο τελευταίος οδηγός εκμάθησης της δεξιότητάς του
+	Reset progress	Επαναφορά προόδου
+	Mark Tutorial Step	Σήμανση βήματος οδηγού εκμάθησης
+	Reset Learn Progress	Επαναφορά προόδου εκμάθησης
+@msg	missing `step` (see learn.show)	λείπει το `step` (δείτε learn.show)
+@msg	`step` must be a step number from 0 to {last}	το `step` πρέπει να είναι αριθμός βήματος από 0 έως {last}
+@msg	`{id}` is finished (see learn.resetProgress)	το `{id}` έχει ολοκληρωθεί (δείτε learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή
@@ -7452,3 +7460,120 @@ breakText	Glyphs	Γλύφοι
 	Grommets	Τρουκς
 	Grommet Inset	Απόσταση τρουκς από την άκρη
 	Diameter	Διάμετρος
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books, DXF import and PDF export.
+@msg	3D effects require finite coordinates within 100 million points	Τα εφέ 3D απαιτούν πεπερασμένες συντεταγμένες εντός 100 εκατομμυρίων τυπογραφικών στιγμών
+@msg	3D effects require one to ten lights	Τα εφέ 3D απαιτούν από ένα έως δέκα φώτα
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Βάθος BMP {_1}: 1, 4, 8, 16, 24 ή 32 bit ανά εικονοστοιχείο
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Η κωδικοποίηση BMP απέτυχε: τα {width} × {height} εικονοστοιχεία δεν ταιριάζουν στη μορφή ή στην προσωρινή μνήμη εικονοστοιχείων
+@msg	GIF encoding failed: the palette image is malformed	Η κωδικοποίηση GIF απέτυχε: η εικόνα παλέτας είναι κακοσχηματισμένη
+@msg	GIF encoding failed: {e}	Η κωδικοποίηση GIF απέτυχε: {e}
+@msg	JPEG colour profile: {e}	Προφίλ χρώματος JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Η κωδικοποίηση JPEG απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	JPEG encoding failed: {e}	Η κωδικοποίηση JPEG απέτυχε: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Η κωδικοποίηση PNG απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	PNG encoding failed: the palette image is malformed	Η κωδικοποίηση PNG απέτυχε: η εικόνα παλέτας είναι κακοσχηματισμένη
+@msg	PNG encoding failed: {e}	Η κωδικοποίηση PNG απέτυχε: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Η κωδικοποίηση PNG απέτυχε: τα {width} × {height} εικονοστοιχεία δεν είναι έγκυρο μέγεθος εικόνας
+@msg	PSD colour profile: {e}	Προφίλ χρώματος PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Η κωδικοποίηση PSD απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	Revolve profile contains invalid coordinates	Το προφίλ της περιστροφής γύρω από άξονα περιέχει μη έγκυρες συντεταγμένες
+@msg	Revolve profile is too complex	Το προφίλ της περιστροφής γύρω από άξονα είναι πολύ σύνθετο
+@msg	Revolve projection is not finite	Η προβολή της περιστροφής γύρω από άξονα δεν είναι πεπερασμένη
+@msg	Revolve requires finite profile coordinates within 100 million points	Η περιστροφή γύρω από άξονα απαιτεί πεπερασμένες συντεταγμένες προφίλ εντός 100 εκατομμυρίων τυπογραφικών στιγμών
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Η επιφάνεια περιστροφής είναι πολύ σύνθετη· μειώστε τα «Τμήματα» ή απλοποιήστε το προφίλ
+@msg	Revolve surface is too complex; simplify the profile	Η επιφάνεια περιστροφής είναι πολύ σύνθετη· απλοποιήστε το προφίλ
+@msg	Revolve visibility cannot split the projected boundary	Ο έλεγχος ορατότητας της περιστροφής δεν μπορεί να διαιρέσει το προβαλλόμενο όριο
+@msg	Revolve visibility creates too many fragments	Ο έλεγχος ορατότητας της περιστροφής δημιουργεί πάρα πολλά κομμάτια
+@msg	Revolve visibility creates too many vector anchors	Ο έλεγχος ορατότητας της περιστροφής δημιουργεί πάρα πολλά διανυσματικά σημεία αγκύρωσης
+@msg	Revolve visibility exceeds its geometry work limit	Ο έλεγχος ορατότητας της περιστροφής υπερβαίνει το όριο γεωμετρικών υπολογισμών του
+@msg	Revolve visibility exceeds its spatial index limit	Ο έλεγχος ορατότητας της περιστροφής υπερβαίνει το όριο του χωρικού ευρετηρίου του
+@msg	Revolve visibility has too many boundary crossings	Ο έλεγχος ορατότητας της περιστροφής έχει πάρα πολλές διασταυρώσεις ορίων
+@msg	Revolve visibility has too many input anchors	Ο έλεγχος ορατότητας της περιστροφής έχει πάρα πολλά σημεία αγκύρωσης εισόδου
+@msg	Revolve visibility requires convex cap sectors	Ο έλεγχος ορατότητας της περιστροφής απαιτεί κυρτούς τομείς καλυμμάτων
+@msg	Revolve visibility requires finite projected faces	Ο έλεγχος ορατότητας της περιστροφής απαιτεί πεπερασμένες προβαλλόμενες έδρες
+@msg	SVG options: {e}	Επιλογές SVG: {e}
+@msg	Save for Web settings: {e}	Ρυθμίσεις αποθήκευσης για ιστό: {e}
+@msg	TIFF colour profile: {e}	Προφίλ χρώματος TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Η κωδικοποίηση TIFF απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	TIFF encoding failed: {e}	Η κωδικοποίηση TIFF απέτυχε: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Βάθος Targa {_1}: 16, 24 ή 32 bit ανά εικονοστοιχείο
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Η κωδικοποίηση Targa απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	The 3D projection is not finite	Η προβολή 3D δεν είναι πεπερασμένη
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	Η σκιά 3D είναι πολύ σύνθετη· απενεργοποιήστε τις «Σκιές» ή απλοποιήστε το σχέδιο
+@msg	The shape contains invalid coordinates	Το σχήμα περιέχει μη έγκυρες συντεταγμένες
+@msg	Too many Revolve faces for visibility evaluation	Πάρα πολλές έδρες περιστροφής για τον έλεγχο ορατότητας
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	Το VectorCraft διαβάζει το πολύ {ASE_MAX_ENTRIES} χρώματα και ομάδες από ένα αρχείο ανταλλαγής δειγμάτων, και αυτή η βιβλιοθήκη έχει {entries}
+@msg	WebP encoding failed: {e}	Η κωδικοποίηση WebP απέτυχε: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`index` must be a whole number	Το `index` πρέπει να είναι ακέραιος αριθμός
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	Το `view` είναι smallThumb, mediumThumb, largeThumb, smallList ή largeList
+@msg	a line can't run from a point to itself	μια γραμμή δεν μπορεί να ξεκινά και να καταλήγει στο ίδιο σημείο
+@msg	a line needs at least two points	μια γραμμή χρειάζεται τουλάχιστον δύο σημεία
+@msg	a number cannot be read	ένας αριθμός δεν μπορεί να διαβαστεί
+@msg	a swatch exchange block is too long	ένα μπλοκ του αρχείου ανταλλαγής δειγμάτων είναι πολύ μεγάλο
+@msg	a swatch exchange name is too long	ένα όνομα του αρχείου ανταλλαγής δειγμάτων είναι πολύ μεγάλο
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	μια εικόνα {sw} × {sh} δεν μπορεί να αλλάξει μέγεθος σε {width} × {height} εικονοστοιχεία
+@msg	a {width} × {height} image is too large	μια εικόνα {width} × {height} είναι πολύ μεγάλη
+@msg	a {width} × {height} image: {e}	μια εικόνα {width} × {height}: {e}
+@msg	an image could not be written: {e}	μια εικόνα δεν μπόρεσε να γραφτεί: {e}
+@msg	an image that couldn't be read was left out	παραλείφθηκε μια εικόνα που δεν μπόρεσε να διαβαστεί
+@msg	can't open “{name}”: {e}	δεν είναι δυνατό το άνοιγμα του «{name}»: {e}
+@msg	cannot align zip entries to {align} bytes	δεν είναι δυνατή η στοίχιση των καταχωρίσεων zip σε {align} byte
+@msg	cannot open the automation {kind} root `{_1}`: {e}	δεν είναι δυνατό το άνοιγμα της ρίζας αυτοματισμού ({kind}) `{_1}`: {e}
+@msg	cannot read profile: {0}	δεν είναι δυνατή η ανάγνωση του προφίλ: {0}
+@msg	color book version {version} isn't supported (only 1)	η έκδοση {version} του βιβλίου χρωμάτων δεν υποστηρίζεται (μόνο 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	τα βιβλία χρωμάτων στον χρωματικό χώρο {other} δεν υποστηρίζονται (μόνο RGB, CMYK και Lab)
+@msg	file name too long to zip: {_1}	το όνομα αρχείου είναι πολύ μεγάλο για συμπίεση zip: {_1}
+@msg	file name too long to zip: {name}	το όνομα αρχείου είναι πολύ μεγάλο για συμπίεση zip: {name}
+@msg	freeform line {i}: {e}	γραμμή ελεύθερης μορφής {i}: {e}
+@msg	freeform point {i}: {e}	σημείο ελεύθερης μορφής {i}: {e}
+@msg	give `{key}` or `{other}`, not both	δώστε `{key}` ή `{other}`, όχι και τα δύο
+@msg	grayscale profiles can't be working spaces yet	τα προφίλ κλίμακας του γκρι δεν μπορούν ακόμη να είναι χρωματικοί χώροι εργασίας
+@msg	input contains NaN or infinite coordinates	η είσοδος περιέχει συντεταγμένες NaN ή άπειρες συντεταγμένες
+@msg	input path could not be closed	η διαδρομή εισόδου δεν μπόρεσε να κλείσει
+@msg	invalid ICC profile: {0}	μη έγκυρο προφίλ ICC: {0}
+@msg	invalid scale {scale}	μη έγκυρη κλίμακα {scale}
+@msg	its localized names take more than {_1} KB	τα τοπικοποιημένα ονόματά του καταλαμβάνουν περισσότερα από {_1} KB
+@msg	its objects are nested too deep ({e})	τα αντικείμενά του είναι ένθετα σε πολύ μεγάλο βάθος ({e})
+@msg	its tag table lists the `{_1}` tag more than once	ο πίνακας ετικετών του περιέχει την ετικέτα `{_1}` περισσότερες από μία φορές
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	οι ομάδες διάτρησης με πάρα πολλά επικαλυπτόμενα ημιδιαφανή στοιχεία γράφονται ως ομάδες διάτρησης PDF: τα ημιδιαφανή στοιχεία τους διατρυπούν πλήρως ό,τι καλύπτουν
+@msg	not a graphic style library: {e}	δεν είναι βιβλιοθήκη στυλ γραφικών: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	δεν είναι βιβλιοθήκη δειγμάτων (.vcswatches ή .gpl)
+@msg	not a swatch library (format `{_1}`)	δεν είναι βιβλιοθήκη δειγμάτων (μορφή `{_1}`)
+@msg	not a swatch library: {e}	δεν είναι βιβλιοθήκη δειγμάτων: {e}
+@msg	not an action set file ({e})	δεν είναι αρχείο συνόλου ενεργειών ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	ο χρωματικός χώρος {other} του προφίλ δεν είναι RGB, CMYK ή Gray
+@msg	regular expression too large	η κανονική έκφραση είναι πολύ μεγάλη
+@msg	script file is not UTF-8 text: {value}	το αρχείο σεναρίου δεν είναι κείμενο UTF-8: {value}
+@msg	stop {i}: {e}	σημείο χρώματος {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	η έκδοση {major}.{minor} του αρχείου ανταλλαγής δειγμάτων δεν υποστηρίζεται (μόνο 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	το βιβλίο χρωμάτων περιέχει περισσότερα από {ASE_MAX_ENTRIES} χρώματα
+@msg	the color book is cut short	το βιβλίο χρωμάτων είναι περικομμένο
+@msg	the color book's names take more than {_1} MB	τα ονόματα του βιβλίου χρωμάτων καταλαμβάνουν περισσότερα από {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	η εικόνα θα ήταν {w} × {h} εικονοστοιχεία· οι εξαγωγές raster περιορίζονται σε {MAX_RASTER_SIDE} εικονοστοιχεία ανά πλευρά και {_1} μεγαεικονοστοιχεία: μειώστε την κλίμακα ή την ανάλυση
+@msg	the optimised image can't be read back: {e}	η βελτιστοποιημένη εικόνα δεν μπορεί να διαβαστεί ξανά: {e}
+@msg	the pixel buffer doesn't match the image size	η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	the preview: {e}	η προεπισκόπηση: {e}
+@msg	the request may not read the New Document profiles folder	το αίτημα δεν επιτρέπεται να διαβάσει τον φάκελο προφίλ νέου εγγράφου
+@msg	the shapes are too degenerate to combine	τα σχήματα είναι πολύ εκφυλισμένα για να συνδυαστούν
+@msg	the shapes cross themselves and each other too often to combine	τα σχήματα τέμνουν τον εαυτό τους και το ένα το άλλο πάρα πολλές φορές για να συνδυαστούν
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	το αρχείο ανταλλαγής δειγμάτων περιέχει περισσότερα από {ASE_MAX_ENTRIES} χρώματα και ομάδες
+@msg	the swatch exchange file is cut short	το αρχείο ανταλλαγής δειγμάτων είναι περικομμένο
+@msg	the {_1} plate can't be read: {e}	η πλάκα {_1} δεν μπορεί να διαβαστεί: {e}
+@msg	this binary DXF file is damaged or cut short	αυτό το δυαδικό αρχείο DXF είναι κατεστραμμένο ή περικομμένο
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	αυτό είναι σχέδιο DWG και δεν μπορεί να διαβαστεί: αποθηκεύστε το ως DXF από την εφαρμογή CAD και ανοίξτε το
+@msg	too many classes	υπερβολικά πολλές κλάσεις
+@msg	too many groups	υπερβολικά πολλές ομάδες
+@msg	too many layers for PSD (at most 32767)	πάρα πολλά επίπεδα για PSD (το πολύ 32767)
+@msg	too many swatch exchange blocks	πάρα πολλά μπλοκ στο αρχείο ανταλλαγής δειγμάτων
+@msg	unknown colour profile: {0}	άγνωστο προφίλ χρώματος: {0}
+@msg	{_1} clashes with a built-in profile name	το {_1} συγκρούεται με το όνομα ενός ενσωματωμένου προφίλ
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	τα {_1} × {_2} εικονοστοιχεία είναι υπερβολικό μέγεθος για GIF (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+@msg	{_1}: no usable transform to/from sRGB	{_1}: δεν υπάρχει χρησιμοποιήσιμος μετασχηματισμός προς/από sRGB
+@msg	{name} is not a CMYK profile	το {name} δεν είναι προφίλ CMYK
+@msg	{name} is not an RGB profile	το {name} δεν είναι προφίλ RGB
+@msg	{path}: could not be read	{path}: δεν ήταν δυνατή η ανάγνωση
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για JPEG (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για Targa (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	τα {w} × {h} εικονοστοιχεία είναι υπερβολικό μέγεθος για PSD (το πολύ {MAX_SIDE} εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
