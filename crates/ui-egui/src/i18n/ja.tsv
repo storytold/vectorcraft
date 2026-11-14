@@ -7197,3 +7197,131 @@ breakText	Glyphs	字形
 	Grommets	ハトメ
 	Grommet Inset	端からハトメまでの距離
 	Diameter	直径
+
+# Messages no catalog translated yet: image export and color profiles, color books and swatch exchange files, 3D and Revolve, and script, zip, line and file errors.
+@msg	3D effects require finite coordinates within 100 million points	3D 効果には 1 億ポイント以内の有限の座標が必要です
+@msg	3D effects require one to ten lights	3D 効果にはライトが 1～10 個必要です
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP の色深度 {_1}: 1、4、8、16、24、32 ビット/ピクセルのいずれかにしてください
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP のエンコードに失敗しました: {width} × {height} ピクセルは形式またはピクセルバッファーに収まりません
+@msg	GIF encoding failed: the palette image is malformed	GIF のエンコードに失敗しました: パレット画像の形式が正しくありません
+@msg	GIF encoding failed: {e}	GIF のエンコードに失敗しました: {e}
+@msg	JPEG colour profile: {e}	JPEG のカラープロファイル: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG のエンコードに失敗しました: ピクセルバッファーが画像サイズと一致しません
+@msg	JPEG encoding failed: {e}	JPEG のエンコードに失敗しました: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG のエンコードに失敗しました: ピクセルバッファーが画像サイズと一致しません
+@msg	PNG encoding failed: the palette image is malformed	PNG のエンコードに失敗しました: パレット画像の形式が正しくありません
+@msg	PNG encoding failed: {e}	PNG のエンコードに失敗しました: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG のエンコードに失敗しました: {width} × {height} ピクセルは有効な画像サイズではありません
+@msg	PSD colour profile: {e}	PSD のカラープロファイル: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD のエンコードに失敗しました: ピクセルバッファーが画像サイズと一致しません
+@msg	Revolve profile contains invalid coordinates	回転体のプロファイルに無効な座標が含まれています
+@msg	Revolve profile is too complex	回転体のプロファイルが複雑すぎます
+@msg	Revolve projection is not finite	回転体の投影が有限ではありません
+@msg	Revolve requires finite profile coordinates within 100 million points	回転体には 1 億ポイント以内の有限のプロファイル座標が必要です
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	回転体のサーフェスが複雑すぎます。分割数を減らすか、プロファイルを単純化してください
+@msg	Revolve surface is too complex; simplify the profile	回転体のサーフェスが複雑すぎます。プロファイルを単純化してください
+@msg	Revolve visibility cannot split the projected boundary	回転体の可視判定で投影された境界線を分割できません
+@msg	Revolve visibility creates too many fragments	回転体の可視判定で生成される断片が多すぎます
+@msg	Revolve visibility creates too many vector anchors	回転体の可視判定で生成されるベクトルのアンカーポイントが多すぎます
+@msg	Revolve visibility exceeds its geometry work limit	回転体の可視判定がジオメトリ計算の上限を超えています
+@msg	Revolve visibility exceeds its spatial index limit	回転体の可視判定が空間インデックスの上限を超えています
+@msg	Revolve visibility has too many boundary crossings	回転体の可視判定で境界線の交差が多すぎます
+@msg	Revolve visibility has too many input anchors	回転体の可視判定に入力されるアンカーポイントが多すぎます
+@msg	Revolve visibility requires convex cap sectors	回転体の可視判定には凸状のキャップのセクターが必要です
+@msg	Revolve visibility requires finite projected faces	回転体の可視判定には有限の投影面が必要です
+@msg	SVG options: {e}	SVG オプション: {e}
+@msg	Save for Web settings: {e}	Web 用に保存の設定: {e}
+@msg	TIFF colour profile: {e}	TIFF のカラープロファイル: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF のエンコードに失敗しました: ピクセルバッファーが画像サイズと一致しません
+@msg	TIFF encoding failed: {e}	TIFF のエンコードに失敗しました: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa の色深度 {_1}: 16、24、32 ビット/ピクセルのいずれかにしてください
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa のエンコードに失敗しました: ピクセルバッファーが画像サイズと一致しません
+@msg	The 3D projection is not finite	3D の投影が有限ではありません
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D のシャドウが複雑すぎます。シャドウをオフにするか、アートを単純化してください
+@msg	The shape contains invalid coordinates	シェイプに無効な座標が含まれています
+@msg	Too many Revolve faces for visibility evaluation	可視判定を行うには回転体の面が多すぎます
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft がスウォッチ交換ファイルから読み込めるカラーとグループは {ASE_MAX_ENTRIES} 個までですが、このライブラリには {entries} 個あります
+@msg	WebP encoding failed: {e}	WebP のエンコードに失敗しました: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` には smallThumb、mediumThumb、largeThumb、smallList、largeList のいずれかを指定してください
+@msg	a line can't run from a point to itself	ラインの始点と終点に同じポイントは指定できません
+@msg	a line needs at least two points	ラインには少なくとも 2 つのポイントが必要です
+@msg	a number cannot be read	数値を読み取れません
+@msg	a swatch exchange block is too long	スウォッチ交換ファイルのブロックが長すぎます
+@msg	a swatch exchange name is too long	スウォッチ交換ファイルの名前が長すぎます
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	{sw} × {sh} の画像を {width} × {height} ピクセルにサイズ変更できません
+@msg	a {width} × {height} image is too large	{width} × {height} の画像は大きすぎます
+@msg	a {width} × {height} image: {e}	{width} × {height} の画像: {e}
+@msg	an image could not be written: {e}	画像を書き出せませんでした: {e}
+@msg	an image that couldn't be read was left out	読み込めなかった画像は除外されました
+@msg	can't open “{name}”: {e}	「{name}」を開けません: {e}
+@msg	cannot align zip entries to {align} bytes	ZIP のエントリを {align} バイト境界に揃えられません
+@msg	cannot open the automation {kind} root `{_1}`: {e}	自動化の {kind} ルート `{_1}` を開けません: {e}
+@msg	cannot read profile: {0}	プロファイルを読み込めません: {0}
+@msg	color book version {version} isn't supported (only 1)	カラーブックのバージョン {version} には対応していません (対応しているのは 1 のみ)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	色空間 {other} のカラーブックには対応していません (対応しているのは RGB、CMYK、Lab のみ)
+@msg	file name too long to zip: {_1}	ファイル名が長すぎて ZIP に格納できません: {_1}
+@msg	file name too long to zip: {name}	ファイル名が長すぎて ZIP に格納できません: {name}
+@msg	freeform line {i}: {e}	フリーフォームのライン {i}: {e}
+@msg	freeform point {i}: {e}	フリーフォームのポイント {i}: {e}
+@msg	give `{key}` or `{other}`, not both	`{key}` と `{other}` のどちらか一方を指定してください (両方は指定できません)
+@msg	grayscale profiles can't be working spaces yet	グレースケールのプロファイルはまだ作業用スペースにできません
+@msg	input contains NaN or infinite coordinates	入力に NaN または無限大の座標が含まれています
+@msg	input path could not be closed	入力パスを閉じられませんでした
+@msg	invalid ICC profile: {0}	無効な ICC プロファイル: {0}
+@msg	invalid scale {scale}	倍率 {scale} は無効です
+@msg	its localized names take more than {_1} KB	ローカライズされた名前が {_1} KB を超えています
+@msg	its objects are nested too deep ({e})	オブジェクトの入れ子が深すぎます ({e})
+@msg	its tag table lists the `{_1}` tag more than once	タグテーブルに `{_1}` タグが複数回記載されています
+@msg	not a graphic style library: {e}	グラフィックスタイルライブラリではありません: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	スウォッチライブラリではありません (.vcswatches または .gpl)
+@msg	not a swatch library (format `{_1}`)	スウォッチライブラリではありません (形式: `{_1}`)
+@msg	not a swatch library: {e}	スウォッチライブラリではありません: {e}
+@msg	not an action set file ({e})	アクションセットファイルではありません ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	プロファイルの色空間 {other} は RGB、CMYK、グレースケールのいずれでもありません
+@msg	regular expression too large	正規表現が大きすぎます
+@msg	script file is not UTF-8 text: {value}	スクリプトファイルは UTF-8 テキストではありません: {value}
+@msg	stop {i}: {e}	分岐点 {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	スウォッチ交換ファイルのバージョン {major}.{minor} には対応していません (対応しているのは 1.x のみ)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	カラーブックのカラーが {ASE_MAX_ENTRIES} 色を超えています
+@msg	the color book is cut short	カラーブックが途中で切れています
+@msg	the color book's names take more than {_1} MB	カラーブックの名前が {_1} MB を超えています
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	画像が {w} × {h} ピクセルになります。ラスター書き出しの上限は 1 辺 {MAX_RASTER_SIDE} ピクセル、{_1} メガピクセルです: 倍率または解像度を下げてください
+@msg	the optimised image can't be read back: {e}	最適化した画像を読み戻せません: {e}
+@msg	the pixel buffer doesn't match the image size	ピクセルバッファーが画像サイズと一致しません
+@msg	the preview: {e}	プレビュー: {e}
+@msg	the request may not read the New Document profiles folder	このリクエストには新規ドキュメントプロファイルのフォルダーを読み込む権限がありません
+@msg	the shapes are too degenerate to combine	シェイプの形状がつぶれすぎていて結合できません
+@msg	the shapes cross themselves and each other too often to combine	シェイプ自身やシェイプ同士の交差が多すぎて結合できません
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	スウォッチ交換ファイルのカラーとグループが {ASE_MAX_ENTRIES} 個を超えています
+@msg	the swatch exchange file is cut short	スウォッチ交換ファイルが途中で切れています
+@msg	the {_1} plate can't be read: {e}	{_1} 版を読み込めません: {e}
+@msg	this binary DXF file is damaged or cut short	このバイナリ DXF ファイルは壊れているか途中で切れています
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	DWG 図面は読み込めません: CAD アプリで DXF として保存し、そのファイルを開いてください
+@msg	too many classes	文字クラスが多すぎます
+@msg	too many groups	グループが多すぎます
+@msg	too many layers for PSD (at most 32767)	PSD にはレイヤーが多すぎます (最大 32767)
+@msg	too many swatch exchange blocks	スウォッチ交換ファイルのブロックが多すぎます
+@msg	unknown colour profile: {0}	不明なカラープロファイル: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} は組み込みのプロファイル名と重複しています
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} ピクセルは GIF には大きすぎます (1 辺最大 65535 ピクセル): 解像度を下げてください
+@msg	{_1}: no usable transform to/from sRGB	{_1}: sRGB との間で使用できる変換がありません
+@msg	{name} is not a CMYK profile	{name} は CMYK プロファイルではありません
+@msg	{name} is not an RGB profile	{name} は RGB プロファイルではありません
+@msg	{path}: could not be read	{path}: 読み込めませんでした
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} ピクセルは JPEG には大きすぎます (1 辺最大 65535 ピクセル): 解像度を下げてください
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} ピクセルは Targa には大きすぎます (1 辺最大 65535 ピクセル): 解像度を下げてください
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} ピクセルは PSD には大きすぎます (1 辺最大 {MAX_SIDE} ピクセル): 解像度を下げてください
+
+# Messages other catalogs translate and Japanese did not: Banner Hems and Grommets, a parameter range and the recovery save.
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` は 0.01～1000 pt にしてください
+@msg	select the banner, or mark every artboard	バナーを選択するか、すべてのアートボードにマークを付けてください
+@msg	the banner has no width or height	バナーに幅または高さがありません
+@msg	the grommet inset is too large for the banner	端からハトメまでの距離がバナーに対して大きすぎます
+@msg	the hem is too deep for the banner	折り返しがバナーに対して深すぎます
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	この間隔ではハトメが {MAX_GROMMETS} 個を超えます
+@msg	there is no banner to mark	マークを付けるバナーがありません
+@msg	turn on at least one side	少なくとも 1 つの辺をオンにしてください
+@msg	with no hem and no grommets there is nothing to mark	折り返しもハトメもないため、マークを付けるものがありません
+@msg	{saving} failed: {e}	{saving} に失敗しました: {e}
