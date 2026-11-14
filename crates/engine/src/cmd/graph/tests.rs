@@ -6315,6 +6315,496 @@ fn a_recolor_leaves_wedge_legend_labels_their_contrast() {
     assert_eq!(kept.and_then(|f| f.color()).map(|c| c.to_hex()).as_deref(), Some("#ffffff"));
 }
 
+/// The lines in graph `id`'s Axes group (axis lines, tick marks and a radar graph's rings), in paint order.
+fn line_nodes(s: &Session, id: NodeId) -> Vec<vectorcraft_doc::Node> {
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    group(&n, "Axes").children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Text(_))).map(|c| (**c).clone()).collect()
+}
+
+/// How line `n` looks: its stroke color (empty without one), stroke weight and object opacity.
+fn line_look(n: &vectorcraft_doc::Node) -> (String, f64, f32) {
+    let stroke = n.appearance.stroke_paint().color().map(|c| c.to_hex()).unwrap_or_default();
+    (stroke, n.appearance.stroke_width(), n.opacity)
+}
+
+/// The looks of graph `id`'s lines after it is drawn again.
+fn redrawn_line_looks(s: &mut Session, id: NodeId) -> Vec<(String, f64, f32)> {
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    line_nodes(s, id).iter().map(line_look).collect()
+}
+
+/// A stroke, a weight, no stroke or an opacity given to one axis line is kept for every axis line and tick mark when the
+/// graph is drawn again, and undo takes it back with its edit.
+#[test]
+fn paint_set_on_one_axis_line_is_kept_for_every_line() {
+    let cases = [
+        ("paint.setStroke", json!({"color": "#ff0000"}), ("#ff0000", 0.5, 1.0)),
+        ("stroke.set", json!({"weight": 2}), ("#000000", 2.0, 1.0)),
+        ("paint.setStroke", json!({"none": true}), ("", 0.0, 1.0)),
+        ("appearance.clear", json!({}), ("", 0.0, 1.0)),
+        ("transparency.set", json!({"opacity": 40}), ("#000000", 0.5, 0.4)),
+    ];
+    every_case(cases, |(cmd, params, (hex, width, opacity))| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        assert!(lines.len() > 2, "{lines:?}");
+        let mut p = params.clone();
+        p["ids"] = json!([lines[0].id.0]);
+        s.execute(cmd, &p).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        let want = (hex.to_string(), *width, *opacity);
+        assert!(looks.iter().all(|l| (&l.0, (l.1 - want.1).abs() < 1e-9, (l.2 - want.2).abs() < 1e-6) == (&want.0, true, true)), "{cmd}: {looks:?}");
+        // Undo takes back the redraw, then the edit and what the graph keeps.
+        for _ in 0..2 {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert_eq!(spec(&s, id).label_styles.axis_rows, None, "{cmd}");
+    });
+}
+
+/// A recolor of the whole graph, or Swap Fill and Stroke on its axis lines, is kept for its axis lines, and the labels'
+/// paint stays its own.
+#[test]
+fn recoloring_a_graph_keeps_its_axis_lines_paint() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("edit.colors.invert", &json!({"ids": [id.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ffffff"), "inverted black lines are white");
+    let ids: Vec<u64> = line_nodes(&s, id).iter().map(|n| n.id.0).collect();
+    s.execute("paint.swap", &json!({"ids": ids})).unwrap();
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap();
+    assert_eq!((kept.paint.fill.and_then(|p| p.color()).map(|c| c.to_hex()), kept.paint.stroke), (Some("#ffffff".into()), Some(Paint::None)));
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0.is_empty()), "the lines have no stroke after the swap");
+    // The value labels keep their inverted fill, not the lines' swapped paint.
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let label_paint: Vec<(String, bool)> = group(&n, "Axes")
+        .children()
+        .unwrap()
+        .iter()
+        .filter_map(|c| match &c.kind {
+            NodeKind::Text(t) => Some((t.runs[0].style.fill.color().map(|c| c.to_hex()).unwrap_or_default(), t.runs[0].style.stroke.is_none())),
+            _ => None,
+        })
+        .collect();
+    assert!(!label_paint.is_empty() && label_paint.iter().all(|l| *l == ("#ffffff".to_string(), true)), "{label_paint:?}");
+}
+
+/// A stroke given the whole graph, or its Axes group, is kept for its axis lines.
+#[test]
+fn a_stroke_given_the_whole_graph_or_its_axes_group_is_kept_for_its_axis_lines() {
+    for axes in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let target = if axes { group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").id } else { id };
+        s.execute("paint.setStroke", &json!({"ids": [target.0], "color": "#ff0000"})).unwrap();
+        assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ff0000"), "axes: {axes}");
+    }
+}
+
+/// A radar graph's rings keep what is set on one of them, apart from its spokes.
+#[test]
+fn a_radar_graphs_rings_keep_their_paint_apart_from_its_spokes() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "radar");
+    let lines = line_nodes(&s, id);
+    // Three categories: three spokes, then the rings.
+    assert_eq!(line_look(&lines[3]), ("#999999".into(), 0.25, 1.0));
+    s.execute("paint.setStroke", &json!({"ids": [lines[3].id.0], "color": "#00ff00"})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks[..3].iter().all(|l| l.0 == "#000000" && l.1 == 0.5), "{looks:?}");
+    assert!(looks[3..].iter().all(|l| l.0 == "#00ff00" && l.1 == 0.25), "{looks:?}");
+    s.execute("paint.setStroke", &json!({"ids": [line_nodes(&s, id)[0].id.0], "color": "#0000ff"})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks[..3].iter().all(|l| l.0 == "#0000ff") && looks[3..].iter().all(|l| l.0 == "#00ff00"), "{looks:?}");
+}
+
+/// When an edit gives axis lines different paint, the frontmost one sets what they keep, whatever order `ids` are in.
+#[test]
+fn the_frontmost_axis_line_sets_what_its_recolor_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    let (back, front) = (lines[0].id, lines[lines.len() - 1].id);
+    s.execute("paint.setStroke", &json!({"ids": [front.0], "color": "#ff0000"})).unwrap();
+    s.execute("edit.colors.invert", &json!({"ids": [front.0, back.0]})).unwrap();
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap().paint.stroke.and_then(|p| p.color()).map(|c| c.to_hex());
+    assert_eq!(kept.as_deref(), Some("#00ffff"), "the inverted red of the frontmost line");
+}
+
+/// A radar graph's spoke brought in front of its rings is still a spoke: what is set on it is kept for the spokes.
+#[test]
+fn a_radar_spoke_moved_in_front_of_the_rings_keeps_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "radar");
+    let spoke = line_nodes(&s, id)[0].id;
+    s.execute("object.arrange.bringToFront", &json!({"ids": [spoke.0]})).unwrap();
+    assert_eq!(line_nodes(&s, id).last().map(|n| n.id), Some(spoke), "the spoke is in front of the rings");
+    s.execute("paint.setStroke", &json!({"ids": [spoke.0], "color": "#0000ff"})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks[..3].iter().all(|l| l.0 == "#0000ff") && looks[3..].iter().all(|l| l.0 == "#999999"), "{looks:?}");
+}
+
+/// A graphic style linked to an axis line passes a redefinition on to every axis line.
+#[test]
+fn a_redefined_graphic_style_on_an_axis_line_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+    s.execute("graphicStyle.new", &json!({"id": rect.0, "name": "Axis"})).unwrap();
+    let line = line_nodes(&s, id)[0].id;
+    s.execute("graphicStyle.apply", &json!({"name": "Axis", "ids": [line.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#00ff00"})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Axis", "id": rect.0})).unwrap();
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap().paint.stroke.and_then(|p| p.color()).map(|c| c.to_hex());
+    assert_eq!(kept.as_deref(), Some("#00ff00"));
+}
+
+/// An Eyedropper pick and Apply Stroke to Fill on an axis line are kept for every axis line.
+#[test]
+fn an_eyedropper_pick_and_stroke_to_fill_on_an_axis_line_are_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [rect.0], "none": true})).unwrap();
+    let line = line_nodes(&s, id)[0].id;
+    s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [line.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ff0000" && l.1 == 1.0), "the picked 1 pt red stroke");
+    let line = line_nodes(&s, id)[1].id;
+    s.execute("addon.color.strokeToFill", &json!({"ids": [line.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let fills: Vec<String> = line_nodes(&s, id).iter().map(|n| n.appearance.fill_paint().color().map(|c| c.to_hex()).unwrap_or_default()).collect();
+    assert!(fills.iter().all(|f| f == "#ff0000"), "{fills:?}");
+}
+
+/// Setting a line to the paint it is drawn with by default keeps nothing, and is no edit.
+#[test]
+fn axis_lines_given_their_default_paint_keep_nothing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let line = line_nodes(&s, id)[0].id;
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("paint.setStroke", &json!({"ids": [line.0], "color": "#000000"})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.axis_rows, None);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+}
+
+/// `object.setProps` and `transparency.set` without an `item` keep only a line's object opacity: the stroke its kind
+/// keeps from another line stays, though the line they are given still shows the default stroke.
+#[test]
+fn an_object_opacity_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
+    for (cmd, params) in [("object.setProps", json!({"opacity": 50})), ("transparency.set", json!({"opacity": 50}))] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+        let mut p = params.clone();
+        p["ids"] = json!([lines[1].id.0]);
+        s.execute(cmd, &p).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.5).abs() < 1e-6), "{cmd}: {looks:?}");
+    }
+}
+
+/// An opacity and a stroke weight given to a radar graph's ring are kept for its rings, and its spokes keep their own.
+#[test]
+fn transparency_and_stroke_weight_on_a_radar_ring_are_kept_for_its_rings() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "radar");
+    let ring = line_nodes(&s, id)[3].id;
+    s.execute("transparency.set", &json!({"ids": [ring.0], "opacity": 40})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [ring.0], "weight": 1})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks[..3].iter().all(|l| *l == ("#000000".into(), 0.5, 1.0)), "{looks:?}");
+    assert!(looks[3..].iter().all(|l| l.0 == "#999999" && l.1 == 1.0 && (l.2 - 0.4).abs() < 1e-6), "{looks:?}");
+}
+
+/// A placed gradient on an axis line's stroke is kept for every axis line without its placement.
+#[test]
+fn a_gradient_on_an_axis_line_is_kept_without_its_placement() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let line = line_nodes(&s, id)[0].id;
+    s.execute("paint.editGradient", &json!({"ids": [line.0], "kind": "linear", "stroke": true})).unwrap();
+    let placement = json!({"ids": [line.0], "stroke": true, "start": [100, 100], "end": [200, 100], "aspect": 50});
+    s.execute("paint.setGradientGeom", &placement).unwrap();
+    let shown = line_nodes(&s, id)[0].appearance.stroke_paint().clone();
+    assert!(matches!(&shown, Paint::Gradient(g) if g.geom.is_some()), "the line's gradient is placed: {shown:?}");
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap().paint.stroke;
+    assert!(matches!(&kept, Some(Paint::Gradient(g)) if g.geom.is_none() && g.freeform.is_none()), "{kept:?}");
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    assert!(line_nodes(&s, id).iter().all(|n| matches!(n.appearance.stroke_paint(), Paint::Gradient(_))));
+}
+
+/// Default Fill and Stroke and Apply Fill to Stroke on an axis line are kept for every axis line.
+#[test]
+fn default_fill_and_stroke_and_fill_to_stroke_on_an_axis_line_are_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let line = line_nodes(&s, id)[0].id;
+    s.execute("paint.setStroke", &json!({"ids": [line.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.default", &json!({"ids": [line.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| *l == ("#000000".into(), 1.0, 1.0)), "the 1 pt black default stroke");
+    let fills: Vec<String> = line_nodes(&s, id).iter().map(|n| n.appearance.fill_paint().color().map(|c| c.to_hex()).unwrap_or_default()).collect();
+    assert!(fills.iter().all(|f| f == "#ffffff"), "{fills:?}");
+    let line = line_nodes(&s, id)[1].id;
+    s.execute("paint.setFill", &json!({"ids": [line.0], "color": "#0000ff"})).unwrap();
+    s.execute("addon.color.fillToStroke", &json!({"ids": [line.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#0000ff"), "the blue fill on the stroke");
+}
+
+/// The Appearance commands and `graphicStyle.apply` given a graph's Axes group or Legend group edit the lines and labels
+/// directly in it, as given a series group they edit its paths: every line and label of each kind keeps what they set
+/// when the graph is drawn again, and the groups keep no rows of their own.
+#[test]
+fn appearance_commands_given_the_axes_or_legend_group_edit_its_lines_and_labels() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let part = |s: &Session, name: &str| group(s.doc().unwrap().doc.node(id).unwrap(), name).clone();
+    s.execute("appearance.clear", &json!({"ids": [part(&s, "Axes").id.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0.is_empty()), "the cleared lines have no stroke");
+    let (_, blue) = blue_style(&mut s, "Blue", false);
+    for name in ["Axes", "Legend"] {
+        s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [part(&s, name).id.0]})).unwrap();
+    }
+    let kept = spec(&s, id).label_styles;
+    let fill = |rows: Option<vectorcraft_doc::LabelRows>| rows.and_then(|r| r.paint.fill);
+    assert_eq!(fill(kept.axis_rows), Some(blue.clone()), "axis lines");
+    assert_eq!(fill(kept.values_rows), Some(blue.clone()), "value labels");
+    assert_eq!(fill(kept.legend_rows), Some(blue.clone()), "legend labels");
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    for name in ["Axes", "Legend"] {
+        let g = part(&s, name);
+        assert!(g.appearance.items.is_empty(), "{name} keeps no rows of its own");
+        let members: Vec<Paint> = g.children().unwrap().iter().map(|c| c.appearance.fill_paint()).collect();
+        assert!(!members.is_empty() && members.iter().all(|p| *p == blue), "{name}: {members:?}");
+    }
+}
+
+/// A row index given the Axes group, whose lines and labels have different rows, is refused unless it is `aligned`, a row
+/// of the backmost member's stack: then the members that share that row change, the labels keep theirs, and the graph
+/// keeps the change when it is drawn again.
+#[test]
+fn a_row_index_given_the_axes_group_is_a_row_of_its_backmost_member_with_aligned() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let axes = group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").clone();
+    let back = axes.children().unwrap()[0].id;
+    assert!(line_nodes(&s, id).iter().any(|l| l.id == back), "the backmost member is a line");
+    let stroke = top_row(&s, back, false);
+    for (cmd, p) in [
+        ("appearance.setItem", json!({"ids": [axes.id.0], "index": stroke, "color": "#ff0000"})),
+        ("appearance.removeItem", json!({"ids": [axes.id.0], "index": stroke})),
+        ("appearance.duplicateItem", json!({"ids": [axes.id.0], "index": stroke})),
+        ("appearance.moveItem", json!({"ids": [axes.id.0], "from": stroke, "to": 0})),
+        ("transparency.set", json!({"ids": [axes.id.0], "item": stroke, "opacity": 40})),
+    ] {
+        let err = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(err.contains("aligned"), "{cmd}: {err}");
+    }
+    let labels = |s: &Session| -> Vec<vectorcraft_doc::Appearance> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, "Axes").children().unwrap().iter().filter(|c| matches!(c.kind, NodeKind::Text(_))).map(|c| (*c.appearance).clone()).collect()
+    };
+    let was = labels(&s);
+    s.execute("appearance.setItem", &json!({"ids": [axes.id.0], "index": stroke, "color": "#ff0000", "aligned": true})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [axes.id.0], "item": stroke, "opacity": 40, "aligned": true})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0 == "#ff0000"), "{looks:?}");
+    let rows = spec(&s, id).label_styles.axis_rows.unwrap();
+    assert_eq!(rows.paint.stroke.and_then(|p| p.color()).map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
+    let now = labels(&s);
+    assert!(!now.is_empty() && now.iter().all(|a| *a == was[0]), "the labels keep their rows");
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let l = &group(&n, "Axes").children().unwrap()[0];
+    assert!((l.appearance.items[top_row(&s, l.id, false)].opacity() - 0.4).abs() < 1e-6, "the stroke row's opacity is kept");
+}
+
+/// An aligned row edit given the Axes group leaves alone what a kind of label keeps from a label without that row: the
+/// category labels keep the orange fill row of one of them through an edit of the lines' stroke rows.
+#[test]
+fn an_aligned_row_edit_given_the_axes_group_keeps_the_rows_of_labels_it_did_not_reach() {
+    let cases = [("appearance.setItem", json!({"color": "#0000ff"})), ("appearance.duplicateItem", json!({})), ("appearance.removeItem", json!({}))];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let c = text_id(&s, id, "Axes", "Q2");
+        s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff8000"})).unwrap();
+        let kept = spec(&s, id).label_styles.categories_rows;
+        assert!(kept.is_some(), "the category labels keep the orange row");
+        let axes = group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").clone();
+        let back = axes.children().unwrap()[0].id;
+        let mut p = params.clone();
+        p["ids"] = json!([axes.id.0]);
+        p["index"] = json!(top_row(&s, back, false));
+        p["aligned"] = json!(true);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(spec(&s, id).label_styles.categories_rows, kept, "{cmd}");
+    });
+}
+
+/// An edit of a hidden row of an axis line leaves what its kind keeps from another line: the line's visible rows did not
+/// change.
+#[test]
+fn an_edit_of_a_hidden_row_of_an_axis_line_keeps_what_its_kind_keeps() {
+    let cases = [
+        ("appearance.setItem", json!({"color": "#0000ff"})),
+        ("appearance.duplicateItem", json!({})),
+        ("appearance.removeItem", json!({})),
+        ("transparency.set", json!({"opacity": 40})),
+        ("paint.setStroke", json!({"color": "#0000ff"})),
+    ];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        let line = lines[1].id;
+        s.execute("appearance.addStroke", &json!({"ids": [line.0]})).unwrap();
+        let hidden = top_row(&s, line, false);
+        s.execute("appearance.setItem", &json!({"ids": [line.0], "index": hidden, "visible": false})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        let kept = spec(&s, id).label_styles.axis_rows;
+        let mut p = params.clone();
+        p["ids"] = json!([line.0]);
+        p[if cmd.starts_with("appearance.") { "index" } else { "item" }] = json!(hidden);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(spec(&s, id).label_styles.axis_rows, kept, "{cmd}");
+    });
+}
+
+/// An Eyedropper pick of only the object's opacity, or of only stroke options the graph does not keep, on an axis line
+/// keeps the stroke its kind keeps from another line, though the line it is given still shows the default stroke.
+#[test]
+fn an_eyedropper_pick_of_only_the_opacity_keeps_the_stroke_its_kind_keeps() {
+    let fill = json!({"color": false, "transparency": false, "overprint": false});
+    let stroke = |dash: bool| json!({"color": false, "transparency": false, "overprint": false, "weight": false, "cap": false, "join": false, "miter": false, "dash": dash});
+    let cases = [
+        (json!({"appearance": {"transparency": true, "fill": fill, "stroke": stroke(false)}}), 0.5),
+        (json!({"appearance": {"transparency": false, "fill": fill, "stroke": stroke(true)}}), 1.0),
+    ];
+    every_case(cases, |(pick, opacity)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("object.setProps", &json!({"ids": [rect.0], "opacity": 50})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [rect.0], "dash": [4, 2]})).unwrap();
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [lines[1].id.0], "pickUp": pick})).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - *opacity).abs() < 1e-6), "{pick}: {looks:?}");
+    });
+}
+
+/// Default Fill and Stroke on a label or an axis line that already shows the default paint is kept for its kind, in
+/// place of the paint the kind keeps from another label or line.
+#[test]
+fn default_fill_and_stroke_on_a_label_or_line_that_shows_it_is_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("paint.setFill", &json!({"ids": [text_id(&s, id, "Axes", "4").0], "color": "#ff0000"})).unwrap();
+    let hex = |st: &CharStyle| st.fill.color().map(|c| c.to_hex());
+    assert_eq!(hex(&label_run_style(&s, id, "Axes", "0")).as_deref(), Some("#000000"), "the other labels show black until the graph is drawn again");
+    s.execute("paint.default", &json!({"ids": [text_id(&s, id, "Axes", "0").0]})).unwrap();
+    label_looks(&mut s, id);
+    let st = label_run_style(&s, id, "Axes", "4");
+    assert_eq!((hex(&st).as_deref(), st.stroke.is_none()), (Some("#000000"), true));
+    let lines = line_nodes(&s, id);
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [lines[1].id.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.default", &json!({"ids": [lines[0].id.0]})).unwrap();
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| *l == ("#000000".into(), 1.0, 1.0)), "the 1 pt black default stroke");
+}
+
+/// Default Fill and Stroke on a label of a kind that keeps no style, which already shows the default paint, is no edit.
+#[test]
+fn default_fill_and_stroke_on_a_label_that_shows_it_is_no_edit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("paint.default", &json!({"ids": [text_id(&s, id, "Axes", "4").0]})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.values, None);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+}
+
+/// Redefine Graphic Style on an Axes group linked to the style with rows of its own (as a file can hold it) restyles and
+/// links the lines and labels in it, and clears and unlinks the group; Break Link given the group unlinks them. A style
+/// applied through the group links its lines and labels, and the graph keeps their look, not the link, when it is drawn
+/// again.
+#[test]
+fn graphic_style_links_given_the_axes_group() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let axes = group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").id;
+    let (rect, _) = blue_style(&mut s, "Blue", false);
+    let style = s.doc().unwrap().doc.graphic_style("Blue").unwrap().clone();
+    s.edit("Link", |d, _| {
+        let g = d.node_mut(axes).unwrap();
+        g.appearance = style.appearance.clone().into();
+        g.extras_mut().graphic_style = Some(style.id);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [rect.0], "index": top_row(&s, rect, true), "color": "#00ff00", "opacity": 100})).unwrap();
+    let green = s.doc().unwrap().doc.node(rect).unwrap().appearance.fill_paint();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "id": rect.0})).unwrap();
+    let axes_now = |s: &Session| group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").clone();
+    let members = |s: &Session| -> Vec<(Paint, Option<u32>)> {
+        axes_now(s).children().unwrap().iter().map(|c| (c.appearance.fill_paint(), c.extras().graphic_style)).collect()
+    };
+    let g = axes_now(&s);
+    assert!(g.appearance.items.is_empty() && g.extras().graphic_style.is_none(), "the group is cleared and unlinked");
+    assert!(members(&s).iter().all(|m| *m == (green.clone(), Some(style.id))), "{:?}", members(&s));
+    s.execute("graphicStyle.breakLink", &json!({"ids": [axes_now(&s).id.0]})).unwrap();
+    assert!(members(&s).iter().all(|m| m.1.is_none()), "unlinked");
+    s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [axes_now(&s).id.0]})).unwrap();
+    assert!(members(&s).iter().all(|m| m.1 == Some(style.id)), "linked");
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    assert!(members(&s).iter().all(|m| *m == (green.clone(), None)), "{:?}", members(&s));
+}
+
+/// The Appearance commands given a radar graph's Axes group reach its spokes and rings, which keep the edit apart.
+#[test]
+fn a_style_given_a_radar_graphs_axes_group_is_kept_for_spokes_and_rings() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "radar");
+    let axes = group(s.doc().unwrap().doc.node(id).unwrap(), "Axes").id;
+    let (_, blue) = blue_style(&mut s, "Blue", false);
+    s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [axes.0]})).unwrap();
+    let kept = spec(&s, id).label_styles;
+    let fill = |rows: Option<vectorcraft_doc::LabelRows>| rows.and_then(|r| r.paint.fill);
+    assert_eq!(fill(kept.axis_rows), Some(blue.clone()), "spokes");
+    assert_eq!(fill(kept.ring_rows), Some(blue.clone()), "rings");
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0.is_empty()), "the style has no stroke: {looks:?}");
+}
+
 #[test]
 fn pie_names_and_wedge_labels_keep_their_style() {
     let mut s = Session::new();
