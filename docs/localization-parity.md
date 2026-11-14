@@ -56,7 +56,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Russian | `ru` | 4,009 / 4,020 | full |
 | Ukrainian | `uk` | 8,802 rows, 3,439 of them `@msg` and 48 `@msgplural` (counted 2026-11-13); one/few/many plurals | full |
 | Hungarian | `hu` | 5,253 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form | full |
-| Polish | `pl` | 5,130 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/few/many plurals | full; native review pending |
+| Polish | `pl` | 9,044 rows, 3,439 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 46 missing messages for it, and 47 menu strings, 26 `tl!` literals, 11 undo labels and 45 swatch names; one/few/many plurals | full; native review pending |
 | Finnish | `fi` | 5,318 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals, 797 `@msg` rows | full; AI-assisted, native proofreading pending |
 | Czech | `cs` | 5,240 catalog entries, including 795 `@msg` rows (counted 2026-10-21); menus, literals and messages complete when counted | catalog complete; render-site gaps reduced; native review pending |
 | Bosnian | `bs` | 5,841 rows (counted 2026-10-30): menus, `tl!` literals and messages complete when counted; one/few/other plurals | full; AI-assisted, native review pending |
