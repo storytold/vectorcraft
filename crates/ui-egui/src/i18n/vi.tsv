@@ -5266,6 +5266,9 @@ theme	Appearance	Giao diện
 @msg	Saved to User Defined: {_1}	Đã lưu vào Người dùng tùy chỉnh: {_1}
 @msg	Saved {n} files beside {path}	Đã lưu {n} tệp bên cạnh {path}
 @msg	Saved {path}	Đã lưu {path}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Đã sao chép với {n} ghi chú: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Đã cắt với {n} ghi chú: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Đã vector hóa ảnh với {n} ghi chú: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Đã lưu {path} với {n} ghi chú: {first}
 @msg	Saving	Đang lưu
 @msg	Saving recovery data for {_1}	Đang lưu dữ liệu phục hồi cho {_1}

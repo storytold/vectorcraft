@@ -2524,23 +2524,36 @@ const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
     ("Downloaded 1 file", "Downloaded 2 files"),
     ("Exported 1 file to /out", "Exported 2 files to /out"),
     ("Loaded “Tidy”: 1 step was left out", "Loaded “Tidy”: 2 steps were left out"),
+    ("Copied with 1 note: a note", "Copied with 2 notes: a note"),
+    ("Cut with 1 note: a note", "Cut with 2 notes: a note"),
+    ("Traced with 1 note: a note", "Traced with 2 notes: a note"),
     (
         "Loaded “Tidy”: 1 step has an unknown command and was kept: “Export”, step 4, `example.finish`",
         "Loaded “Tidy”: 2 steps have unknown commands and were kept; the first: “Export”, step 4.2, `example.finish`",
     ),
 ];
 
-/// The link, font, export and action set status messages name a count of 1 in the singular and other counts in
-/// the plural, and every complete catalog translates both, in the form its plural rule picks.
+/// The link, font, export, action set, clipboard and Image Trace status messages name a count of 1 in the singular
+/// and other counts in the plural, and every complete catalog translates both, in the form its plural rule picks.
 #[test]
 fn counted_status_messages_take_the_plural_form() {
     use crate::panels::links::{relinked_status, updated_status};
+    use crate::sysclip::copied_with_notes;
+    use crate::trace_runs::traced_with_notes;
     assert_eq!((relinked_status(1), relinked_status(2)), ("Relinked 1 image".to_string(), "Relinked 2 images".to_string()));
     assert_eq!((updated_status(1), updated_status(2)), ("Updated 1 image".to_string(), "Updated 2 images".to_string()));
     assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(1), COUNTED_STATUS_MESSAGES[2].0);
     assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(2), COUNTED_STATUS_MESSAGES[2].1);
     assert_eq!(crate::io::exported_with_notes("/out/a.svg", 1, "a note"), COUNTED_STATUS_MESSAGES[4].0);
     assert_eq!(crate::io::exported_with_notes("/out/a.svg", 2, "a note"), COUNTED_STATUS_MESSAGES[4].1);
+    let n = COUNTED_STATUS_MESSAGES.len();
+    let owned = |(one, other): (&str, &str)| (one.to_string(), other.to_string());
+    assert_eq!((copied_with_notes(false, 1, "a note"), copied_with_notes(false, 2, "a note")), owned(COUNTED_STATUS_MESSAGES[n - 3]));
+    assert_eq!((copied_with_notes(true, 1, "a note"), copied_with_notes(true, 2, "a note")), owned(COUNTED_STATUS_MESSAGES[n - 2]));
+    assert_eq!((traced_with_notes(1, "a note"), traced_with_notes(2, "a note")), owned(COUNTED_STATUS_MESSAGES[n - 1]));
+    // A note that holds placeholder text is not filled in again.
+    assert_eq!(copied_with_notes(true, 3, "{n} {first}"), "Cut with 3 notes: {n} {first}");
+    assert_eq!(message(de(), &traced_with_notes(2, "{n}")), "Mit 2 Hinweisen nachgezeichnet: {n}");
     // A value that holds placeholder text is not filled in again.
     assert_eq!(crate::io::exported_with_notes("/out/{first}.svg", 1, "{n}"), "Exported /out/{first}.svg with 1 note: {n}");
     for code in COMPLETE_MESSAGES {

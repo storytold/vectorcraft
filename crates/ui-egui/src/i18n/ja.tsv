@@ -5251,6 +5251,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	復帰用データのドキュメントを {n} 件破棄しました
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	復帰用データからドキュメントを {n} 件復元しました: 残すには保存してください
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	ドキュメントを開きました (注意 {n} 件): {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	コピーしましたが、注意事項が {n} 件あります: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	切り取りましたが、注意事項が {n} 件あります: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	画像をトレースしましたが、注意事項が {n} 件あります: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。ドキュメントを開きました (注意 {n} 件): {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} を保存しましたが、注意事項が {n} 件あります: {first}
 @msg	Saving recovery data for {_1}	{_1} の復帰用データを保存中

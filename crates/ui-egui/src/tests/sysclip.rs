@@ -378,29 +378,75 @@ fn a_copy_while_the_worker_saves_writes_the_formats_at_once() {
     assert_eq!(board.borrow().writes, 1);
 }
 
-/// Copy of an image the renderer can't decode: the PNG leaves it out, and once the formats are
-/// written the status bar shows the PNG's note, made at once or on the worker.
-#[test]
-fn copy_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
-    const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
-    // A PNG whose header reads but whose pixel data is cut short.
+/// A PNG whose header reads but whose pixel data is cut short, which the renderer can't decode.
+fn cut_short_png() -> Vec<u8> {
     let mut png = Vec::new();
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
+    png
+}
+
+/// The PNG's note on an image the renderer can't decode.
+const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
+
+/// Copy of an image the renderer can't decode: the PNG leaves it out, and once the formats are
+/// written the status bar says the Copy (or Cut) has 1 note and shows it, made at once or on the
+/// worker. The note is kept for the message's hover, and a Copy without notes leaves the message.
+#[test]
+fn copy_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
+    let png = cut_short_png();
     for worker in [false, true] {
         let (mut app, board) = if worker { app_with_worker() } else { app() };
         app.status("Ready");
         copy_rect(&mut app);
         background::wait_all(&mut app);
-        assert_eq!(app.ui.status, "Ready", "worker {worker}: no note");
-        vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
-        app.status("Ready");
-        run(&mut app, "edit.copy", json!({}));
-        background::wait_all(&mut app);
-        assert_eq!(written(&board), [TEXT, SVG, PNG], "worker {worker}");
-        assert_eq!(app.ui.status, WARNING, "worker {worker}");
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Ready", &None), "worker {worker}: no note");
+        for (id, said) in [("edit.copy", "Copied"), ("artboard.copy", "Copied"), ("edit.cut", "Cut")] {
+            vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
+            app.status("Ready");
+            let p = if id == "artboard.copy" { json!({"index": 0}) } else { json!({}) };
+            run(&mut app, id, p);
+            background::wait_all(&mut app);
+            assert_eq!(written(&board), [TEXT, SVG, PNG], "worker {worker}: {id}");
+            let status = format!("{said} with 1 note: {UNDECODED}");
+            assert_eq!(app.ui.status, status, "worker {worker}: {id}");
+            assert_eq!(app.ui.status_notes, Some((status, vec![UNDECODED.to_string()])), "worker {worker}: {id}");
+        }
     }
+}
+
+/// The status bar names how many notes a Copy's or Cut's formats have and the first of them, and
+/// keeps them all, in order, for the message's hover. Without notes it keeps its message.
+#[test]
+fn copy_notes_are_counted_and_kept_in_order() {
+    let (mut app, _) = app();
+    let notes: Vec<String> = ["first", "second", "third"].map(String::from).to_vec();
+    for (cut, said) in [(false, "Copied"), (true, "Cut")] {
+        crate::sysclip::show_copy_notes(&mut app, cut, notes.clone());
+        let status = format!("{said} with 3 notes: first");
+        assert_eq!(app.ui.status, status);
+        assert_eq!(app.ui.status_notes, Some((status, notes.clone())));
+    }
+    app.status("Ready");
+    app.ui.status_notes = None;
+    crate::sysclip::show_copy_notes(&mut app, false, vec![]);
+    assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Ready", &None));
+}
+
+/// A message shown while a Copy's formats are made on the worker stays: the formats are written
+/// once they are ready, and their note does not replace the newer message.
+#[test]
+fn a_copy_note_does_not_replace_a_newer_message() {
+    let (mut app, board, hold) = app_with_busy_worker("");
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+    app.status("Ready");
+    run(&mut app, "edit.copy", json!({}));
+    app.status("Saved /out/a.vectorcraft");
+    drop(hold);
+    background::wait_all(&mut app);
+    assert_eq!(written(&board), [TEXT, SVG, PNG]);
+    assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Saved /out/a.vectorcraft", &None));
 }
 
 /// Text copied in a field or with the Type tool after Copy, before the formats are written: they

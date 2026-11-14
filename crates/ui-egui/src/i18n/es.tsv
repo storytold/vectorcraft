@@ -5080,6 +5080,9 @@ axis	Both	Ambos
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Se descartó {n} documento recuperado|Se descartaron {n} documentos recuperados
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Se restauró {n} documento recuperado: guárdalo para conservarlo|Se restauraron {n} documentos recuperados: guárdalos para conservarlos
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Se abrió con {n} nota: {first}|Se abrió con {n} notas: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Se copió con {n} nota: {first}|Se copió con {n} notas: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Se cortó con {n} nota: {first}|Se cortó con {n} notas: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Se calcó la imagen con {n} nota: {first}|Se calcó la imagen con {n} notas: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Se abrió con {n} nota: {first}|{notice}. Se abrió con {n} notas: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Se guardó {path} con {n} nota: {first}|Se guardó {path} con {n} notas: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Se incrustó {n} imagen; faltan {missing}: vuelve a vincularlas primero|Se incrustaron {n} imágenes; faltan {missing}: vuelve a vincularlas primero

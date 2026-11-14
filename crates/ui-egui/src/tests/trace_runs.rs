@@ -108,6 +108,46 @@ fn without_threads_make_traces_at_once() {
     assert_eq!(undos(&app), before + 1);
 }
 
+/// A trace's notes: the status bar names how many there are and the first of them, and keeps them
+/// all, in the reply's order, for the message's hover. Make and Make and Expand, at once, off the
+/// UI thread and from the Image Trace panel; a trace without notes leaves the status bar empty.
+#[test]
+fn a_trace_shows_how_many_notes_it_has() {
+    let mut app = app();
+    let img = image::RgbaImage::from_fn(1501, 20, |x, _| image::Rgba(if x < 700 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    let p = json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "keepColors": ["#ff00ff", "#00ffff"]}});
+    for (command, threaded, from_panel) in
+        [("imageTrace.make", false, false), ("imageTrace.make", true, false), ("imageTrace.makeAndExpand", true, true)]
+    {
+        app.run("file.place", json!({"name": "wide.png", "dataBase64": data, "link": false})).unwrap();
+        app.trace_runs.off_the_ui_thread = threaded;
+        app.ui.status.clear();
+        trace_runs::start(&mut app, command, p.clone(), from_panel).unwrap();
+        wait(&mut app);
+        let notes = [
+            "Nothing was traced: none of the colors the trace found matches keepColors (#ff00ff, #00ffff).",
+            "The image is 1501 × 20 pixels, more than 1500 on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.",
+        ]
+        .map(String::from)
+        .to_vec();
+        let status = format!("Traced with 2 notes: {}", notes[0]);
+        assert_eq!(app.ui.status, status, "{command}, threaded {threaded}");
+        assert_eq!(app.ui.status_notes, Some((status, notes)), "{command}, threaded {threaded}");
+    }
+    // The 40 × 40 px image of [`app`] traces without notes: the status bar stays empty.
+    let mut app = self::app();
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        app.ui.status.clear();
+        let v = app.run(command, json!({"preset": "Default"})).unwrap();
+        assert_eq!(v["warnings"], json!([]), "{command}");
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("", &None), "{command}");
+        app.run("edit.undo", json!({})).unwrap();
+    }
+}
+
 /// Nothing to trace fails at once, before anything runs.
 #[test]
 fn nothing_to_trace_fails_at_once() {

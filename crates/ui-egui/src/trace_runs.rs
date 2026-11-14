@@ -77,6 +77,11 @@ pub struct TraceRuns {
     pub(crate) off_the_ui_thread: bool,
 }
 
+/// The status bar's line after an Image Trace with `n` notes, the first of them `first`.
+pub(crate) fn traced_with_notes(n: usize, first: &str) -> String {
+    crate::i18n::msg_n(n as u64, "Traced with {n} note: {first}", "Traced with {n} notes: {first}", &[("first", first)])
+}
+
 /// Does `app` trace off the UI thread? Where documents open off it ([`crate::opening::available`]),
 /// and in the unit tests that set `off_the_ui_thread`.
 pub fn available(app: &VectorcraftApp) -> bool {

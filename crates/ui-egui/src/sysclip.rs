@@ -103,6 +103,9 @@ pub(crate) struct Publishing {
     /// The latest one's formats could not be written: what the system clipboard held when the
     /// write failed, and the text of those formats.
     unwritten: Option<(Held, String)>,
+    /// The status bar's message when the latest one ran. Its formats' notes replace the message
+    /// only while the status bar still shows it.
+    status: String,
 }
 
 impl Publishing {
@@ -116,6 +119,32 @@ impl Publishing {
     pub(crate) fn latest(&self) -> u64 {
         self.latest.load(Ordering::SeqCst)
     }
+
+    /// `status` is the status bar's message the latest Copy or Cut left, which its formats' notes
+    /// may replace.
+    pub(crate) fn ran_with_status(&mut self, status: &str) {
+        status.clone_into(&mut self.status);
+    }
+}
+
+/// The status bar's line after a Copy (or with `cut`, a Cut) whose formats have `n` notes, the
+/// first of them `first`.
+pub(crate) fn copied_with_notes(cut: bool, n: usize, first: &str) -> String {
+    let (one, other) = if cut {
+        ("Cut with {n} note: {first}", "Cut with {n} notes: {first}")
+    } else {
+        ("Copied with {n} note: {first}", "Copied with {n} notes: {first}")
+    };
+    crate::i18n::msg_n(n as u64, one, other, &[("first", first)])
+}
+
+/// Show a Copy's (or with `cut`, a Cut's) formats' `notes` in the status bar: the first of them
+/// and how many there are, with the rest for the message's hover. Without notes the status bar
+/// keeps its message.
+pub(crate) fn show_copy_notes(app: &mut VectorcraftApp, cut: bool, notes: Vec<String>) {
+    let Some(first) = notes.first() else { return };
+    let status = copied_with_notes(cut, notes.len(), first);
+    crate::io::show_with_notes(app, status, notes);
 }
 
 /// Does a flavour of type `mime` load with `clipboard.importImage` ([`import_command`])?
@@ -172,9 +201,11 @@ impl VectorcraftApp {
     /// ([`Self::drop_formats_after_egui_copy`]), drops the formats not written yet. While the
     /// latest Copy or Cut's formats wait to be written, Paste takes the internal clipboard, and
     /// while a text field or type has the keyboard the app waits for them
-    /// ([`Self::write_formats_before_text_input`]). Once they are written, the status bar shows
-    /// the first of the PNG's and PDF's warnings.
-    pub(crate) fn publish_clipboard(&mut self) {
+    /// ([`Self::write_formats_before_text_input`]). Once they are written, while the status bar
+    /// still shows the message the Copy or Cut (`cut`) left ([`Publishing::ran_with_status`]), it
+    /// shows the first of the PNG's and PDF's notes and how many there are; hovering the message
+    /// lists them ([`crate::io::show_with_notes`]).
+    pub(crate) fn publish_clipboard(&mut self, cut: bool) {
         // Ruler guides copied alone stay in VectorCraft, but the Copy still replaces what the
         // system clipboard held: it is emptied, so the next Paste takes the guides rather than
         // what another app copied before, and what another app copies after still wins (#3226).
@@ -194,6 +225,7 @@ impl VectorcraftApp {
         let n = latest.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
         self.clipboard_publishing.pending = true;
         self.clipboard_publishing.unwritten = None;
+        self.clipboard_publishing.ran_with_status(&self.ui.status);
         // What the clipboard holds at the Copy or Cut: a copy made elsewhere before the write is newer.
         let before = self.services.system_clipboard.as_deref_mut().map(Held::now);
         let (tx, made) = channel();
@@ -242,11 +274,11 @@ impl VectorcraftApp {
             });
             match written {
                 Err(e) => app.ui.status = format!("Couldn't copy to the system clipboard: {e}"),
-                // Show the first of the PNG's and PDF's warnings (an image that couldn't be decoded,
-                // type in the fallback font).
+                // The PNG's and PDF's notes (an image that couldn't be decoded, type in the
+                // fallback font), unless another message has replaced the Copy or Cut's since.
                 Ok(warnings) => {
-                    if let Some(first) = warnings.into_iter().next() {
-                        app.ui.status = first;
+                    if app.ui.status == app.clipboard_publishing.status {
+                        show_copy_notes(app, cut, warnings);
                     }
                 }
             }

@@ -5216,6 +5216,9 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odrzucono {n} odzyskany dokument|Odrzucono {n} odzyskane dokumenty|Odrzucono {n} odzyskanych dokumentów
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Przywrócono {n} odzyskany dokument: zapisz go, aby go zachować|Przywrócono {n} odzyskane dokumenty: zapisz je, aby je zachować|Przywrócono {n} odzyskanych dokumentów: zapisz je, aby je zachować
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otwarto z {n} uwagą: {first}|Otwarto z {n} uwagami: {first}|Otwarto z {n} uwagami: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Skopiowano z {n} uwagą: {first}|Skopiowano z {n} uwagami: {first}|Skopiowano z {n} uwagami: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Wycięto z {n} uwagą: {first}|Wycięto z {n} uwagami: {first}|Wycięto z {n} uwagami: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Obrysowano obraz z {n} uwagą: {first}|Obrysowano obraz z {n} uwagami: {first}|Obrysowano obraz z {n} uwagami: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Otwarto z {n} uwagą: {first}|{notice}. Otwarto z {n} uwagami: {first}|{notice}. Otwarto z {n} uwagami: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Zapisano {path} z {n} uwagą: {first}|Zapisano {path} z {n} uwagami: {first}|Zapisano {path} z {n} uwagami: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Osadzono {n} obraz; brakuje {missing}: najpierw połącz je ponownie|Osadzono {n} obrazy; brakuje {missing}: najpierw połącz je ponownie|Osadzono {n} obrazów; brakuje {missing}: najpierw połącz je ponownie
