@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Composer, JustificationOptions, NodeKind, Scaling, SingleWordJustify, TextRun};
 use vectorcraft_geom::{Rect, Vec2};
 
-use super::{Affine, CommandSpec, NodeId, Result, Session, bad, bool_or, check_switches, cmd, has_doc, index, ok, point_indices, switch_or};
+use super::{Affine, CommandSpec, NodeId, Result, Session, bad, bool_or, check_switches, cmd, has_doc, index, ok, switch_or};
 use crate::{Clipboard, EngineError};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -137,19 +137,16 @@ pub(crate) fn named_or_selected(s: &Session, p: &Value, cmd: &str) -> Result<Vec
         return artboard_indices(d, p, cmd);
     }
     if let Some(recorded) = p.get("selectedArtboards") {
-        return artboard_indices(d, &json!({ "indices": recorded }), cmd);
+        return listed_artboards(d, recorded, "selectedArtboards", cmd);
     }
-    let mut picked: Vec<u64> = t["selected"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_u64)
-        .filter(|i| usize::try_from(*i).is_ok_and(|i| i < d.artboards.len()))
-        .collect();
+    let mut picked: Vec<usize> =
+        t["selected"].as_array().into_iter().flatten().filter_map(Value::as_u64).map(index).filter(|i| *i < d.artboards.len()).collect();
     if picked.is_empty() {
-        picked.push(t["active"].as_u64().unwrap_or(0));
+        picked.push(on_board(d, t["active"].as_u64().map_or(0, index))?);
     }
-    artboard_indices(d, &json!({ "indices": picked }), cmd)
+    picked.sort_unstable();
+    picked.dedup();
+    Ok(picked)
 }
 
 /// Rename Artboards: one artboard takes the name, and several take it numbered in artboard order, in
@@ -221,23 +218,51 @@ fn artboard_switch_orientation(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "switched": switched }))
 }
 
-/// The one artboard `cmd` acts on: `index`, an artboard of `d`, with the errors of
-/// [`artboard_indices`] (`missing index`, `no such artboard`).
+/// The one artboard `cmd` acts on: `index`, an artboard of `d`. Left out or null, it is
+/// `missing index`; a value that is not a whole number is "`index` must be a whole number"; a
+/// whole number past the last artboard is `no such artboard`.
 pub(crate) fn artboard_index(d: &vectorcraft_doc::Document, p: &Value, cmd: &str) -> Result<usize> {
-    let i = p.get("index").ok_or_else(|| bad(cmd, "missing index"))?;
-    artboard_indices(d, &json!({ "index": i }), cmd)?.into_iter().next().ok_or_else(|| EngineError::Other("no such artboard".into()))
+    artboard_at(d, p, "index", cmd)?.ok_or_else(|| bad(cmd, "missing index"))
+}
+
+/// The artboard of `d` that `key` of `p` names, or `None` when `p` leaves it out or gives null. A
+/// value that is not a whole number is "`{key}` must be a whole number", and a whole number past the
+/// last artboard is `no such artboard`.
+pub(crate) fn artboard_at(d: &vectorcraft_doc::Document, p: &Value, key: &str, cmd: &str) -> Result<Option<usize>> {
+    super::index_opt(p, key, cmd)?.map(|i| on_board(d, i)).transpose()
+}
+
+/// `i` when it is an artboard of `d`, else `no such artboard`.
+pub(crate) fn on_board(d: &vectorcraft_doc::Document, i: usize) -> Result<usize> {
+    match i < d.artboards.len() {
+        true => Ok(i),
+        false => Err(EngineError::Other("no such artboard".into())),
+    }
 }
 
 /// The artboards `cmd` acts on: `indices` (several), else `index` (one), each an artboard of `d`,
-/// in order and once each.
+/// in order and once each. `indices` is read as [`listed_artboards`] reads it, and `index` as
+/// [`artboard_index`] reads it.
 pub(crate) fn artboard_indices(d: &vectorcraft_doc::Document, p: &Value, cmd: &str) -> Result<Vec<usize>> {
-    let listed = match (p.get("indices"), p.get("index")) {
-        (Some(v), _) => point_indices(v),
-        (None, Some(i)) => point_indices(&json!([i])),
-        (None, None) => return Err(bad(cmd, "missing index")),
-    };
-    let mut indices =
-        listed.filter(|v| !v.is_empty() && v.iter().all(|i| *i < d.artboards.len())).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    match p.get("indices") {
+        Some(v) => listed_artboards(d, v, "indices", cmd),
+        None => Ok(vec![artboard_index(d, p, cmd)?]),
+    }
+}
+
+/// `v`, the value of `key`, as artboards of `d`, in order and once each. A value that is not a list
+/// is "`{key}` must be a list of artboard indices", an empty list is "`{key}` must be a non-empty
+/// list of artboard indices", and a list with an entry that is not a whole number is "`{key}` must
+/// contain whole numbers"; a whole number past the last artboard is `no such artboard`. Every entry
+/// is checked for its form before any is checked against the artboards.
+fn listed_artboards(d: &vectorcraft_doc::Document, v: &Value, key: &str, cmd: &str) -> Result<Vec<usize>> {
+    let entries = v.as_array().ok_or_else(|| bad(cmd, format!("`{key}` must be a list of artboard indices")))?;
+    if entries.is_empty() {
+        return Err(bad(cmd, format!("`{key}` must be a non-empty list of artboard indices")));
+    }
+    let listed = entries.iter().map(Value::as_u64).collect::<Option<Vec<u64>>>();
+    let listed = listed.ok_or_else(|| bad(cmd, format!("`{key}` must contain whole numbers")))?;
+    let mut indices = listed.into_iter().map(|i| on_board(d, index(i))).collect::<Result<Vec<usize>>>()?;
     indices.sort_unstable();
     indices.dedup();
     Ok(indices)
