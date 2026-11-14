@@ -3501,7 +3501,8 @@ already walks Image Trace. Short agent entry points:
   in the provider's order, to the right of the image, each the image's size with 24 pt between them, moved further
   right past other visible art, also where a variation reaches past its image-sized box (the next one then starts 24
   pt past what it paints); it is one undo step and selects the groups. The groups go above the outermost clip group or
-  opacity-masked group around the image, so that it does not hide them. It is an error when the job was canceled
+  opacity-masked group around the image, so that it does not hide them, and above the outermost envelope, blend,
+  repeat or other live object around it, whose content stays as it is. It is an error when the job was canceled
   or dropped, when its document is not the active one, when the object, its pixels or its placement changed, when
   the object is now locked or hidden, or when it is on a layer with a clipping mask or an opacity mask. Example:
 

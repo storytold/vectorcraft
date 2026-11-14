@@ -468,7 +468,9 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, LOCKED));
     }
     // The results go above the outermost group around the image that clips or masks it, so that
-    // it hides none of them; a layer that clips or masks its art leaves them nowhere to go.
+    // it hides none of them, and above the outermost envelope, blend, repeat or other live object
+    // around it, so that its content stays as it is; a layer that clips or masks its art leaves
+    // them nowhere to go.
     let mut anchor = source;
     for &id in st.doc.ancestry(source).ok_or_else(stale)?.iter().rev().skip(1) {
         let n = st.doc.node(id).ok_or_else(stale)?;
@@ -479,7 +481,8 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
         if n.is_layer() && masked {
             return Err(bad(C, "the image is on a layer with an opacity mask, which would hide the results"));
         }
-        if !n.is_layer() && (masked || matches!(n.kind, NodeKind::Group { clip: true, .. })) {
+        let live = !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. });
+        if !n.is_layer() && (masked || live || matches!(n.kind, NodeKind::Group { clip: true, .. })) {
             anchor = id;
         }
     }
@@ -678,7 +681,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Concept to Vector Styles",
             [],
             None,
-            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image; the image and other art stay as they are; one undo step; an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask or an opacity mask → {ids: the groups, selected}",
+            "{job, variations: [style id…] (different styles of the job)} put a group of each chosen variation, named after its style and in the provider's order, in a row to the right of the job's image, each the image's size with 24 pt between them, moved further right past other visible art in their way, where a variation reaches past its box too (the next one then starts 24 pt past what it paints); the groups go above the outermost clip group or opacity-masked group around the image, and above the outermost envelope, blend, repeat or other live object around it; the image and other art stay as they are; one undo step; an error when the job's document is not the active one, the object, its image or its placement changed, the object is now locked or hidden, or it is on a layer with a clipping mask or an opacity mask → {ids: the groups, selected}",
             has_doc,
             insert
         ),

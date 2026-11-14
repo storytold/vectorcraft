@@ -781,6 +781,23 @@ fn insert_keeps_the_gap_when_a_variation_reaches_left_of_the_image_box() {
 
 /// The results go above the outermost clip group around the image, where it does not hide them,
 /// and a layer that clips its art refuses them.
+/// For an image in an envelope, the results go beside the envelope and its content stays as it is.
+#[test]
+fn insert_puts_the_results_outside_an_envelope_around_the_image() {
+    let (mut s, img) = doc_with(&art());
+    s.execute("object.envelope.makeWithWarp", &json!({"style": "arch", "bend": 30})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let envelope = d.parent_of(img).unwrap();
+    assert!(matches!(d.node(envelope).unwrap().kind, NodeKind::Envelope { .. }));
+    let (layer, before) = (d.parent_of(envelope).unwrap(), d.node(envelope).unwrap().clone());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap();
+    let group = NodeId(r["ids"][0].as_u64().unwrap());
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.parent_of(group), Some(layer), "beside the envelope, not in it");
+    assert!(*d.node(envelope).unwrap() == before, "the envelope is unchanged");
+}
+
 #[test]
 fn insert_puts_the_results_outside_a_clip_group_around_the_image() {
     let (mut s, img) = doc_with(&art());
