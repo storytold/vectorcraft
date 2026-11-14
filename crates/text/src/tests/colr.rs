@@ -467,6 +467,38 @@ fn an_image_of_a_radial_gradient_with_a_stop_past_its_circle_of_radius_0_draws_f
     }
 }
 
+/// A radial gradient whose circles both have the same negative radius at a variable font's
+/// instance draws no circle, so a glyph painted with only that gradient is colour art that draws
+/// nothing, not its outline. The radii are 10 at the default weight and -10 at 700.
+#[test]
+fn a_radial_gradient_with_no_circle_drawn_leaves_the_glyph_empty() {
+    use write_fonts::tables::colr::{BaseGlyphList, BaseGlyphPaint, Colr, Extend, VarColorLine, VarColorStop};
+    use write_fonts::tables::variations::{ItemVariationData, ItemVariationStore, RegionAxisCoordinates, VariationRegion, VariationRegionList};
+    use write_fonts::types::{F2Dot14, FWord, GlyphId16, UfWord};
+    let bytes = colr_font(false).unwrap();
+    let read = skrifa::FontRef::new(&bytes).unwrap();
+    let gid = |ch| GlyphId16::new(u16::try_from(read.charmap().map(ch).unwrap().to_u32()).unwrap());
+    let (one, fixed) = (F2Dot14::from_f32(1.0), 0xFFFF_FFFF);
+    let line =
+        VarColorLine::new(Extend::Pad, 2, vec![VarColorStop::new(F2Dot14::from_f32(0.0), 0, one, fixed), VarColorStop::new(one, 1, one, fixed)]);
+    let w = FWord::new;
+    let radial = ColrPaint::var_radial_gradient(line, w(290), w(330), UfWord::new(10), w(290), w(330), UfWord::new(10), 0);
+    let mut colr = Colr::new(0, None, None, 0);
+    colr.base_glyph_list = Some(BaseGlyphList::new(1, vec![BaseGlyphPaint::new(gid(COLOUR_CHAR), ColrPaint::glyph(radial, gid('O')))])).into();
+    // One 16-bit delta for each of x0, y0, r0, x1, y1 and r1, at full weight.
+    let deltas: Vec<u8> = [0i16, 0, -20, 0, 0, -20].iter().flat_map(|d| d.to_be_bytes()).collect();
+    let region = VariationRegion::new(vec![RegionAxisCoordinates::new(F2Dot14::from_f32(0.0), one, one)]);
+    let data = ItemVariationData::new(6, 1, vec![0], deltas);
+    colr.item_variation_store = Some(ItemVariationStore::new(VariationRegionList::new(1, vec![region]), vec![Some(data)])).into();
+    let font = crate::test_fonts::colr_variable_font_with("Colrtest No Circle", &colr).unwrap();
+    let font = skrifa::FontRef::new(&font).unwrap();
+    let bold = font.axes().location([("wght", 700.0)]);
+    let Some(ColourContent::Art(root)) = colour_glyph(&font, (&bold).into(), 1000.0, u32::from(gid(COLOUR_CHAR).to_u16()), FOREGROUND).0 else {
+        panic!("colour art")
+    };
+    assert!(children(&root).is_empty(), "{:?}", children(&root).iter().map(|c| c.kind_label()).collect::<Vec<_>>());
+}
+
 /// A COLRv1 color line through `stops` (offset, palette index) that extends by `extend`.
 fn color_line(extend: write_fonts::tables::colr::Extend, stops: &[(f32, u16)]) -> write_fonts::tables::colr::ColorLine {
     use write_fonts::tables::colr::{ColorLine, ColorStop};

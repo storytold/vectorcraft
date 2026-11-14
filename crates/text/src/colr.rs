@@ -148,6 +148,9 @@ struct Tree<'a> {
     painted: Option<Rect>,
     /// It paints with the foreground colour (palette index 0xFFFF).
     foreground_used: bool,
+    /// A fill draws nothing (a radial gradient none of whose circles has a positive radius), so a
+    /// glyph with nothing else is colour art that draws nothing, not its outline.
+    drew_nothing: bool,
 }
 
 impl<'a> Tree<'a> {
@@ -166,6 +169,7 @@ impl<'a> Tree<'a> {
             too_large: false,
             painted: None,
             foreground_used: false,
+            drew_nothing: false,
         }
     }
 
@@ -254,7 +258,7 @@ impl<'a> Tree<'a> {
             self.close();
         }
         let root = self.groups.pop()?;
-        if root.children.is_empty() {
+        if root.children.is_empty() && !self.drew_nothing {
             return None;
         }
         Some(Arc::new(Node::group(NO_ID, root.children)))
@@ -314,7 +318,11 @@ impl<'a> Tree<'a> {
                     self.unsupported.get_or_insert("a repeating or reflecting gradient with a stop missing from the palette");
                     return None;
                 }
-                let (c0, r0, c1, r1, mut stops) = non_negative_radii(point(*c0), f64::from(*r0), point(*c1), f64::from(*r1), line, *extend)?;
+                let Some((c0, r0, c1, r1, mut stops)) = non_negative_radii(point(*c0), f64::from(*r0), point(*c1), f64::from(*r1), line, *extend)
+                else {
+                    self.drew_nothing = true;
+                    return None;
+                };
                 let concentric = (c0 - c1).hypot() < 1e-6;
                 if (r0 > 1e-6 && !concentric) || r1 <= r0 || (c0 - c1).hypot() >= r1 {
                     self.unsupported.get_or_insert("a radial gradient from a circle");
