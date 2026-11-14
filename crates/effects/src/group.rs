@@ -661,8 +661,9 @@ pub fn has_container_appearance(n: &Node) -> bool {
 /// The regions a group's or layer's own fills and strokes paint, in document space, each with its
 /// fill rule: every visible member path and compound path, type as its glyph outlines and live
 /// objects evaluated; a compound shape as its area, with the symbol instances among its members
-/// as their symbols' art from `doc`; the members of a clip group or clipping layer without its
-/// clipping path. Images, other symbol instances and guides add nothing. A Repeat counts the
+/// as their symbols' art from `doc`; a clip group or clipping layer (`n` itself or one among its
+/// members) as the region its clipping path clips to ([`crate::clip::clip_outline`]), so members
+/// it hides add nothing. Images, other symbol instances and guides add nothing. A Repeat counts the
 /// Repeats in the art of `doc`'s symbols that its instances show toward its instance budget.
 pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRule)> {
     fn push(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
@@ -690,8 +691,14 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         }
     }
     fn members(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
-        let clip = usize::from(n.clips());
-        for c in n.children().into_iter().flatten().skip(clip) {
+        // A clip group shows its members only inside its clipping path: its outline is that
+        // region, not the clipped members' own shapes, which may reach far outside it (#7289).
+        if n.clips() {
+            let clip = n.children().and_then(|ch| ch.first());
+            out.extend(clip.and_then(|c| crate::clip::clip_outline(c)).map(|(bp, rule)| (PathData::from_bezpath(&bp), rule)));
+            return;
+        }
+        for c in n.children().into_iter().flatten() {
             push(doc, c, out);
         }
     }
