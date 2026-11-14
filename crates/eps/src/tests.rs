@@ -1264,6 +1264,79 @@ fn the_page_limit_counts_a_repeated_images_samples_once() {
     assert!(page.body.len() + page.setup.len() <= inline + 1000 + 400, "{}", page.body.len());
 }
 
+/// Type whose color bitmap glyphs fit under the page limit but whose run fill passes it is left
+/// out with its glyph image placements: the page is the page without that type. A glyph image
+/// that other art draws once more is written inline there again, and an image that other art
+/// draws twice keeps its shared samples.
+#[test]
+fn type_taken_back_for_the_page_limit_takes_its_glyph_images_with_it() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    use vectorcraft_text::test_fonts::{COLOUR_CHAR, colour_bitmap_family, colour_bitmap_font};
+    vectorcraft_text::FontDb::global().add_font(colour_bitmap_font(false).unwrap());
+    let black = Paint::solid(Color::rgb(0.0, 0.0, 0.0));
+    let type_node = |d: &mut Document, at: Point, text: &str, fill: Paint| {
+        let st = CharStyle { font_family: colour_bitmap_family(false).into(), size: 32.0, fill, ..CharStyle::default() };
+        Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(at, text, st))))
+    };
+    // Six glyph images, then outlines enough for the fill to pass the limit.
+    let target = format!("{}{}", COLOUR_CHAR.to_string().repeat(6), "W".repeat(40));
+    // `shared`: an image drawn twice comes first; `before`: one glyph drawn with the type's image;
+    // `fill`: the type's run fill (`None`: no type). A red rectangle comes last.
+    let build = |shared: bool, before: bool, fill: Option<Paint>| {
+        let mut d = if shared {
+            let mut d = image_doc(&noise(8, 8), 1.0);
+            place_again(&mut d, 0, Affine::translate((40.0, 0.0)));
+            d
+        } else {
+            Document::new(200.0, 200.0)
+        };
+        let mut nodes = vec![];
+        if before {
+            nodes.push(type_node(&mut d, Point::new(20.0, 40.0), &COLOUR_CHAR.to_string(), black.clone()));
+        }
+        if let Some(fill) = fill {
+            nodes.push(type_node(&mut d, Point::new(20.0, 100.0), &target, fill));
+        }
+        nodes.push(red_rect(&mut d));
+        for n in nodes {
+            d.insert(d.default_layer(), usize::MAX, n).unwrap();
+        }
+        d
+    };
+    for shared in [false, true] {
+        for before in [false, true] {
+            let case = format!("shared {shared}, before {before}");
+            let (without, unfilled, filled) =
+                (build(shared, before, None), build(shared, before, Some(Paint::None)), build(shared, before, Some(black.clone())));
+            let o = opts(&filled);
+            let glyph = usize::from(shared);
+            let fits = crate::scene::Scene::new(&unfilled, &o).run();
+            let full = crate::scene::Scene::new(&filled, &o).run();
+            assert!(fits.warnings.is_empty() && full.warnings.is_empty(), "{case}: {:?} {:?}", fits.warnings, full.warnings);
+            assert_eq!(reuses(&fits.body, glyph, o.level), 6 + usize::from(before), "{case}: {}", fits.body);
+            assert_eq!(reuses(&full.body, glyph, o.level), 6 + usize::from(before), "{case}: {}", full.body);
+            let (fits_len, full_len) = (fits.body.len() + fits.setup.len(), full.body.len() + full.setup.len());
+            assert!(full_len > fits_len + 2000, "{case}: {fits_len} {full_len}");
+            let limit = (fits_len + full_len) / 2;
+            // Without its fill the type fits, every glyph image with it.
+            let page = crate::scene::Scene::new(&unfilled, &o).with_max_body(limit).run();
+            assert!(page.warnings.is_empty(), "{case}: {:?}", page.warnings);
+            assert_eq!((page.setup, page.body), (fits.setup, fits.body), "{case}");
+            // With it the type is taken back after its glyph images were placed.
+            let page = crate::scene::Scene::new(&filled, &o).with_max_body(limit).run();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            let alone = crate::scene::Scene::new(&without, &o).run();
+            assert!(alone.warnings.is_empty(), "{case}: {:?}", alone.warnings);
+            assert_eq!(reuses(&page.body, glyph, o.level), 0, "{case}: {}", page.body);
+            assert!(!page.setup.contains(&format!("/VCim{glyph} ")), "{case}: {}", page.setup);
+            assert_eq!(page.body.matches("/Width 16 /Height 16").count(), usize::from(before), "{case}: {}", page.body);
+            assert_eq!(reuses(&page.body, 0, o.level), if shared { 2 } else { 0 }, "{case}: {}", page.body);
+            assert_eq!((&page.setup, &page.body), (&alone.setup, &alone.body), "{case}");
+            checked_page(&page.body);
+        }
+    }
+}
+
 #[test]
 fn run_length_and_ascii85_round_trip() {
     let cycle: Vec<u8> = (0..=255u8).cycle().take(1000).collect();
