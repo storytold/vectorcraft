@@ -5970,6 +5970,19 @@ mark-style	Japanese	Japans
 	Transform Objects	Objecten transformeren
 @msg	unknown parameter `{key}`; did you mean `{near}`?	onbekende parameter `{key}`; bedoelde je `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	onbekende parameter `{key}`; de opdracht accepteert geen parameters
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	onbekende parameter `{key}`; `{object}` accepteert: {keys}
+@msg	unknown parameter `{key}`; {why_not}	onbekende parameter `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	geen enkele indeling accepteert deze (zie document.formats)
+@msg	no save format takes it (see file.formatOptions)	geen enkele opslagindeling accepteert deze (zie file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF accepteert deze niet (zie document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS accepteert deze niet (zie document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF accepteert deze niet (zie document.formats)
+@msg	{name} must be {range} (got {v})	{name} moet {range} zijn (kreeg {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	De grafische processor die eerst werd geprobeerd, kon het venster niet weergeven, dus VectorCraft is opnieuw gestart met {summary} (Instellingen › Prestaties › Grafische processor › Automatisch gebruikt de processor die je beeldscherm aanstuurt)
+@msg	Sent “{title}” to {to}	“{title}” verzonden naar {to}
+@msg	Sent “{title}” to {to} ({note})	“{title}” verzonden naar {to} ({note})
+@msg	the default printer	de standaardprinter
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rastereffecten op object {object}: {requested} ppi gevraagd, {achieved} ppi bereikt vanwege de limiet van 64 miljoen pixels
 @msg	unknown parameter `{key}`; the command takes: {keys}	onbekende parameter `{key}`; de opdracht accepteert: {keys}
 	Load EPS into Clipboard	EPS in het klembord laden
 @msg	an image of {w} × {h} pixels is too large to draw	een afbeelding van {w} × {h} pixels is te groot om te tekenen

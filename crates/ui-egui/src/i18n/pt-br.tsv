@@ -4755,6 +4755,19 @@ axis	Both	Ambos
 	Transform Objects	Transformar objetos
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parâmetro desconhecido `{key}`; você quis dizer `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parâmetro desconhecido `{key}`; o comando não tem parâmetros
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	parâmetro desconhecido `{key}`; `{object}` aceita: {keys}
+@msg	unknown parameter `{key}`; {why_not}	parâmetro desconhecido `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	nenhum formato o aceita (consulte document.formats)
+@msg	no save format takes it (see file.formatOptions)	nenhum formato de salvamento o aceita (consulte file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF não o aceita (consulte document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS não o aceita (consulte document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF não o aceita (consulte document.formats)
+@msg	{name} must be {range} (got {v})	{name} deve ser {range} (recebido {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	O processador gráfico tentado primeiro não conseguiu exibir a janela, então o VectorCraft reiniciou em {summary} (Configurações › Desempenho › Processador Gráfico › Automático usa o que controla sua tela)
+@msg	Sent “{title}” to {to}	“{title}” enviado para {to}
+@msg	Sent “{title}” to {to} ({note})	“{title}” enviado para {to} ({note})
+@msg	the default printer	a impressora padrão
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efeitos de rasterização no objeto {object}: solicitados {requested} ppi, obtidos {achieved} ppi devido ao limite de 64 milhões de pixels
 @msg	unknown parameter `{key}`; the command takes: {keys}	parâmetro desconhecido `{key}`; o comando aceita: {keys}
 @msg	the params must be an object, not {got}	os parâmetros devem ser um objeto, não {got}
 @msg	unknown parameter `{path}`; the object takes no keys	parâmetro desconhecido `{path}`; o objeto não aceita chaves

@@ -5604,6 +5604,19 @@ lighting	Light	Licht
 	Transform Objects	Objekte transformieren
 @msg	unknown parameter `{key}`; did you mean `{near}`?	unbekannter Parameter `{key}`; meinten Sie `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	unbekannter Parameter `{key}`; der Befehl hat keine Parameter
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	unbekannter Parameter `{key}`; `{object}` akzeptiert: {keys}
+@msg	unknown parameter `{key}`; {why_not}	unbekannter Parameter `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	kein Format akzeptiert ihn (siehe document.formats)
+@msg	no save format takes it (see file.formatOptions)	kein Speicherformat akzeptiert ihn (siehe file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF akzeptiert ihn nicht (siehe document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS akzeptiert ihn nicht (siehe document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF akzeptiert ihn nicht (siehe document.formats)
+@msg	{name} must be {range} (got {v})	{name} muss {range} sein (erhalten: {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Der zuerst verwendete Grafikprozessor konnte das Fenster nicht anzeigen, daher wurde VectorCraft auf {summary} neu gestartet (Einstellungen › Leistung › Grafikprozessor › Automatisch verwendet den, der Ihren Bildschirm ansteuert)
+@msg	Sent “{title}” to {to}	“{title}” an {to} gesendet
+@msg	Sent “{title}” to {to} ({note})	“{title}” an {to} gesendet ({note})
+@msg	the default printer	den Standarddrucker
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	Rastereffekte auf Objekt {object}: {requested} ppi angefordert, {achieved} ppi erreicht wegen der Obergrenze von 64 Millionen Pixeln
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 @msg	the params must be an object, not {got}	die Parameter müssen ein Objekt sein, nicht {got}
 @msg	unknown parameter `{path}`; the object takes no keys	unbekannter Parameter `{path}`; das Objekt akzeptiert keine Schlüssel

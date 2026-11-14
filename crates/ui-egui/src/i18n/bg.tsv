@@ -5229,6 +5229,19 @@ lighting	Light	Светлина
 	Transform Objects	Трансформиране на обекти
 @msg	unknown parameter `{key}`; did you mean `{near}`?	неизвестен параметър `{key}`; имахте ли предвид `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	неизвестен параметър `{key}`; командата не приема параметри
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	неизвестен параметър `{key}`; `{object}` приема: {keys}
+@msg	unknown parameter `{key}`; {why_not}	неизвестен параметър `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	никой формат не го приема (вижте document.formats)
+@msg	no save format takes it (see file.formatOptions)	никой формат за записване не го приема (вижте file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF не го приема (вижте document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS не го приема (вижте document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF не го приема (вижте document.formats)
+@msg	{name} must be {range} (got {v})	{name} трябва да бъде {range} (получено {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Първият опит на графичния процесор да покаже прозореца не успя, затова VectorCraft стартира отново на {summary} (Настройки › Производителност › Графичен процесор › Автоматично използва този, който управлява вашия дисплей)
+@msg	Sent “{title}” to {to}	“{title}” е изпратено към {to}
+@msg	Sent “{title}” to {to} ({note})	“{title}” е изпратено към {to} ({note})
+@msg	the default printer	принтера по подразбиране
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	растерни ефекти върху обект {object}: поискани {requested} ppi, постигнати {achieved} ppi заради ограничението от 64 милиона пиксела
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестен параметър `{key}`; командата приема: {keys}
 	1 Layer	1 слой
 	1 bit	1 бит

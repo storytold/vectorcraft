@@ -621,18 +621,28 @@ fn pdf_option_tree() -> Value {
     tree
 }
 
+/// The parameter error of command `id` for `key`, a key with the objects it is in (`marks.ofset`),
+/// when a key those objects take is near it: `near`, written the same way (`marks.offset`). Each
+/// is one value of the message, so a catalog can match the message and translate it.
+fn misspelled(id: &str, key: &str, near: &str) -> crate::EngineError {
+    bad(id, format!("unknown parameter `{key}`; did you mean `{near}`?"))
+}
+
 /// `given`, the object at `within` (`marks.`), has only keys of `schema`, the objects inside it too.
 fn check_option_tree(id: &str, within: &str, given: &serde_json::Map<String, Value>, schema: &serde_json::Map<String, Value>) -> Result<()> {
     for (key, value) in given {
         match (schema.get(key), value) {
             (None, _) => {
                 let keys: Vec<&str> = schema.keys().map(String::as_str).collect();
-                let why = match nearest(key, &keys) {
-                    Some(near) => format!("did you mean `{within}{near}`?"),
-                    None => format!("`{}` takes: {}", within.trim_end_matches('.'), keys.join(", ")),
-                };
-                let key = shown_key(key);
-                return Err(bad(id, format!("unknown parameter `{within}{key}`; {why}")));
+                let near = nearest(key, &keys);
+                let key = format!("{within}{}", shown_key(key));
+                return Err(match near {
+                    Some(near) => misspelled(id, &key, &format!("{within}{near}")),
+                    None => {
+                        let (object, keys) = (within.trim_end_matches('.'), keys.join(", "));
+                        bad(id, format!("unknown parameter `{key}`; `{object}` takes: {keys}"))
+                    }
+                });
             }
             (Some(Value::Object(inner)), Value::Object(value)) => check_option_tree(id, &format!("{within}{key}."), value, inner)?,
             _ => {}
@@ -649,14 +659,11 @@ fn check_option_keys(id: &str, within: &str, given: &serde_json::Map<String, Val
     for (key, value) in given {
         if !keys.contains(&key.as_str()) {
             let near = nearest(key, keys);
-            let key = shown_key(key);
-            return Err(bad(
-                id,
-                match near {
-                    Some(near) => format!("unknown parameter `{within}{key}`; did you mean `{within}{near}`?"),
-                    None => format!("unknown parameter `{within}{key}`; {why_not}"),
-                },
-            ));
+            let key = format!("{within}{}", shown_key(key));
+            return Err(match near {
+                Some(near) => misspelled(id, &key, &format!("{within}{near}")),
+                None => bad(id, format!("unknown parameter `{key}`; {why_not}")),
+            });
         }
         if let (Some(Value::Object(schema)), Value::Object(value)) = (trees.get(key), value) {
             check_option_tree(id, &format!("{within}{key}."), value, schema)?;
@@ -755,12 +762,15 @@ fn check_screen_rows(id: &str, within: &str, p: &serde_json::Map<String, Value>)
         let formats = screen_formats();
         for (format, options) in settings {
             if !formats.contains(&format.as_str()) {
-                let why = match nearest(format, &formats) {
-                    Some(near) => format!("did you mean `{within}settings.{near}`?"),
-                    None => format!("`{within}settings` takes: {}", formats.join(", ")),
-                };
-                let format = shown_key(format);
-                return Err(bad(id, format!("unknown parameter `{within}settings.{format}`; {why}")));
+                let near = nearest(format, &formats);
+                let key = format!("{within}settings.{}", shown_key(format));
+                return Err(match near {
+                    Some(near) => misspelled(id, &key, &format!("{within}settings.{near}")),
+                    None => {
+                        let (object, keys) = (format!("{within}settings"), formats.join(", "));
+                        bad(id, format!("unknown parameter `{key}`; `{object}` takes: {keys}"))
+                    }
+                });
             }
             if let Value::Object(options) = options {
                 check_option_keys(id, &format!("{within}settings.{format}."), options, &keys, NO_FORMAT, trees)?;

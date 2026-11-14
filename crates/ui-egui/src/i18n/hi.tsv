@@ -5856,7 +5856,7 @@ antiAlias	Sharp	शार्प
 @msg	{label}…	{label}...
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} बनाया गया है और इसे हटाया नहीं जा सकता है।
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} को {lo}-{hi}{unit} ({v}) होना चाहिए।
+@msg	{name} must be {range} (got {v})	{name} को {range} होना चाहिए ({v} मिला)
 @msg	{name}: {e}	{name}: {e}
 @msg	{name}: CRC mismatch	{name}: CRC mismatch
 @msg	{name}: CRC or size mismatch	{name}: CRC या आकार मेल नहीं खाता
@@ -8450,6 +8450,18 @@ antiAlias	Sharp	शार्प
 @msg	panels can't be shown in Presentation Mode	प्रस्तुति मोड में पैनल्स नहीं दिखाए जा सकते
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	अज्ञात पैरामीटर `{key}`; `{object}` लेता है: {keys}
+@msg	unknown parameter `{key}`; {why_not}	अज्ञात पैरामीटर `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	कोई फ़ॉर्मैट इसे नहीं लेता (document.formats देखें)
+@msg	no save format takes it (see file.formatOptions)	कोई सेव फ़ॉर्मैट इसे नहीं लेता (file.formatOptions देखें)
+@msg	PDF doesn't take it (see document.formats)	PDF इसे नहीं लेता (document.formats देखें)
+@msg	EPS doesn't take it (see document.formats)	EPS इसे नहीं लेता (document.formats देखें)
+@msg	DXF doesn't take it (see document.formats)	DXF इसे नहीं लेता (document.formats देखें)
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	पहले आज़माया गया ग्राफिक्स प्रोसेसर विंडो नहीं दिखा सका, इसलिए VectorCraft फिर से {summary} पर शुरू हुआ (सेटिंग्स › प्रदर्शन › ग्राफिक्स प्रोसेसर › स्वचालित उस प्रोसेसर का उपयोग करता है जो आपका डिस्प्ले चलाता है)
+@msg	Sent “{title}” to {to}	“{title}” को {to} पर भेजा गया
+@msg	Sent “{title}” to {to} ({note})	“{title}” को {to} पर भेजा गया ({note})
+@msg	the default printer	डिफ़ॉल्ट प्रिंटर
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	ऑब्जेक्ट {object} पर रास्टर इफ़ेक्ट: {requested} ppi माँगा गया, 64 मिलियन पिक्सेल की सीमा के कारण {achieved} ppi मिला
 @msg	unknown parameter `{key}`; the command takes: {keys}	अज्ञात पैरामीटर `{key}`; कमांड लेता है: {keys}
 @msg	the params must be an object, not {got}	पैरामीटर एक ऑब्जेक्ट होने चाहिए, {got} नहीं
 @msg	unknown parameter `{path}`; the object takes no keys	अज्ञात पैरामीटर `{path}`; ऑब्जेक्ट कोई कुंजी नहीं लेता

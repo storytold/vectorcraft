@@ -179,6 +179,31 @@ pub fn parse_entries(text: &str) -> (Vec<Entry>, Vec<String>) {
     (entries, errors)
 }
 
+/// Whether an `@msg` source is a template, matched piece by piece, and not a whole message.
+fn is_template(source: &str) -> bool {
+    source.contains('{') || source.contains("}}")
+}
+
+/// Whether a message can be matched against the template `source`: it has literal text and no two
+/// placeholders in a row.
+#[cfg(test)]
+pub fn matchable(source: &str) -> bool {
+    Template::parse(source, Vec::new(), false).is_some()
+}
+
+/// The sources of the `@msg` and `@msgplural` rows of a catalog file that [`Catalog::parse`] leaves
+/// out, because no message can be matched against them. The interface shows the messages of such a
+/// row in English.
+#[cfg(test)]
+pub fn unmatchable_rows(text: &str) -> Vec<String> {
+    let left_out = |(ctx, src, _): &Entry| match ctx.as_str() {
+        "@msg" => is_template(src) && !matchable(src),
+        "@msgplural" => src.split('|').any(|english| !matchable(english)),
+        _ => false,
+    };
+    parse_entries(text).0.into_iter().filter(left_out).map(|(_, src, _)| src).collect()
+}
+
 impl Catalog {
     pub fn parse(text: &str) -> Catalog {
         let mut c = Catalog::default();
@@ -194,7 +219,7 @@ impl Catalog {
                     c.plurals.insert(src, tr.split('|').map(str::to_string).collect());
                 }
                 "@msg" => {
-                    if src.contains('{') || src.contains("}}") {
+                    if is_template(&src) {
                         c.templates.extend(Template::parse(&src, vec![tr], false));
                     } else {
                         c.messages.insert(src, tr);

@@ -5743,6 +5743,19 @@ mark-style	Japanese	Japanski
 	Transform Objects	Transformiši objekte
 @msg	unknown parameter `{key}`; did you mean `{near}`?	nepoznat parametar `{key}`; da li ste mislili `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	nepoznat parametar `{key}`; naredba ne prima parametre
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	nepoznat parametar `{key}`; `{object}` prima: {keys}
+@msg	unknown parameter `{key}`; {why_not}	nepoznat parametar `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	nijedan format ga ne prima (pogledajte document.formats)
+@msg	no save format takes it (see file.formatOptions)	nijedan format za spremanje ga ne prima (pogledajte file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF ga ne prima (pogledajte document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS ga ne prima (pogledajte document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF ga ne prima (pogledajte document.formats)
+@msg	{name} must be {range} (got {v})	{name} mora biti {range} (dobiveno {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Grafički procesor koji je prvi pokušan nije mogao prikazati prozor, pa se VectorCraft ponovo pokrenuo na {summary} (Postavke › Performanse › Grafički procesor › Automatski koristi onaj koji pokreće vaš ekran)
+@msg	Sent “{title}” to {to}	“{title}” je poslano na {to}
+@msg	Sent “{title}” to {to} ({note})	“{title}” je poslano na {to} ({note})
+@msg	the default printer	zadani štampač
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rasterski efekti na objektu {object}: traženo {requested} ppi, postignuto {achieved} ppi zbog ograničenja od 64 miliona piksela
 @msg	unknown parameter `{key}`; the command takes: {keys}	nepoznat parametar `{key}`; naredba prima: {keys}
 	Load EPS into Clipboard	Učitaj EPS u međuspremnik
 @msg	an image of {w} × {h} pixels is too large to draw	slika od {w} × {h} piksela prevelika je za crtanje

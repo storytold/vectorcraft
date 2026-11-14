@@ -5870,6 +5870,19 @@ mark-style	Japanese	Japońskie
 	Transform Objects	Przekształć obiekty
 @msg	unknown parameter `{key}`; did you mean `{near}`?	nieznany parametr `{key}`; czy chodziło o `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	nieznany parametr `{key}`; polecenie nie przyjmuje parametrów
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	nieznany parametr `{key}`; `{object}` przyjmuje: {keys}
+@msg	unknown parameter `{key}`; {why_not}	nieznany parametr `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	żaden format go nie przyjmuje (zobacz document.formats)
+@msg	no save format takes it (see file.formatOptions)	żaden format zapisu go nie przyjmuje (zobacz file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF go nie przyjmuje (zobacz document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS go nie przyjmuje (zobacz document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF go nie przyjmuje (zobacz document.formats)
+@msg	{name} must be {range} (got {v})	{name} musi wynosić {range} (podano {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Pierwszy wypróbowany procesor graficzny nie mógł wyświetlić okna, więc VectorCraft uruchomił się ponownie na {summary} (Ustawienia › Wydajność › Procesor graficzny › Automatycznie używa tego, który obsługuje ekran)
+@msg	Sent “{title}” to {to}	Wysłano “{title}” do: {to}
+@msg	Sent “{title}” to {to} ({note})	Wysłano “{title}” do: {to} ({note})
+@msg	the default printer	drukarka domyślna
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efekty rastrowe na obiekcie {object}: żądano {requested} ppi, uzyskano {achieved} ppi z powodu limitu 64 milionów pikseli
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
 @msg	the params must be an object, not {got}	parametry muszą być obiektem, a nie {got}
 @msg	unknown parameter `{path}`; the object takes no keys	nieznany parametr `{path}`; obiekt nie przyjmuje kluczy

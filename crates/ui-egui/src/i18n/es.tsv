@@ -5972,6 +5972,19 @@ mark-style	Japanese	Japonesas
 	Transform Objects	Transformar objetos
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parámetro desconocido `{key}`; ¿quiso decir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parámetro desconocido `{key}`; el comando no tiene parámetros
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	parámetro desconocido `{key}`; `{object}` acepta: {keys}
+@msg	unknown parameter `{key}`; {why_not}	parámetro desconocido `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	ningún formato lo acepta (consulte document.formats)
+@msg	no save format takes it (see file.formatOptions)	ningún formato de guardado lo acepta (consulte file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF no lo acepta (consulte document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS no lo acepta (consulte document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF no lo acepta (consulte document.formats)
+@msg	{name} must be {range} (got {v})	{name} debe ser {range} (se recibió {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	El procesador gráfico probado primero no pudo mostrar la ventana, así que VectorCraft se inició de nuevo con {summary} (Ajustes › Rendimiento › Procesador gráfico › Automático usa el que controla su pantalla)
+@msg	Sent “{title}” to {to}	Se envió “{title}” a {to}
+@msg	Sent “{title}” to {to} ({note})	Se envió “{title}” a {to} ({note})
+@msg	the default printer	la impresora predeterminada
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efectos de rasterizado en el objeto {object}: se solicitaron {requested} ppi y se alcanzaron {achieved} ppi debido al límite de 64 millones de píxeles
 @msg	unknown parameter `{key}`; the command takes: {keys}	parámetro desconocido `{key}`; el comando acepta: {keys}
 @msg	the params must be an object, not {got}	los parámetros deben ser un objeto, no {got}
 @msg	unknown parameter `{path}`; the object takes no keys	parámetro desconocido `{path}`; el objeto no acepta claves
