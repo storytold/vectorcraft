@@ -427,6 +427,7 @@ impl ToolContext<'_> {
             scope: self.isolation,
             skip_guides: !self.guides,
             clip_outlines: false,
+            area_type_interior: false,
         }
     }
 
