@@ -905,12 +905,12 @@ font-technology	Variable	Değişken
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Resmi buraya sürükleyin veya seçip + işaretine tıklayın. Birkaç nesneden oluşan bir varlık için Alt tuşunu basılı tutun.
 	Drag onto art to apply this appearance	Bu görünümü uygulamak için resmin üzerine sürükleyin
 	Drag the art to move it on the paper	Resmi kağıt üzerinde taşımak için sürükleyin
-	Draw	Beraberlik
+	Draw	Çiz
 	Draw Behind	Arkaya Çiz
 	Draw in Perspective	Perspektifte Çiz
 	Draw Inside	İçini Çiz
 	Draw Normal	Normal Çiz
-	Draw:	Beraberlik:
+	Draw:	Çiz:
 	Drawing Mode	Çizim Modu
 	Drop Shadow	Alt Gölge
 	Drop Shadow…	Alt Gölge…
@@ -5719,7 +5719,7 @@ theme	Appearance	Görünüm
 	Drawer menu	Çekmece menüsü
 	Toolbar: Show Controls	Araç Çubuğu: Kontrolleri Göster
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control fillStroke, coloring, drawMode veya screenMode olmalıdır
-@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	bilinmeyen kontrol `{name}`: fillStroke, colouring,drawMode veya screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	bilinmeyen kontrol `{name}`: fillStroke, coloring, drawMode veya screenMode
 @msg	give a fraction `t` from 0 to 1	0'dan 1'e kadar bir `t` kesri verin
 @msg	give the path `id`	`id` yolunu ver
 @msg	invalid stroke widths	geçersiz kontur genişlikleri
@@ -5739,7 +5739,7 @@ theme	Appearance	Görünüm
 	Below Object	Nesnenin altında
 	Registration:	Kayıt:
 	Dimension	Boyut
-	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : Gerçek boyut — 1:10 etiketler sayfada 10 adet olarak 1 adettir.
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : gerçek boyut — 1:10, sayfadaki 1 birimi 10 olarak etiketler.
 	Preview (1 inch on the page)	Önizleme (sayfada 1 inç)
 	Set as Default	Varsayılan Olarak Ayarla
 	 out from a highlighted edge to place its dimension  |  	 boyutunu yerleştirmek için vurgulanan kenardan dışarı |  
@@ -5777,7 +5777,7 @@ theme	Appearance	Görünüm
 @msg	Measured segment no longer exists	Ölçülen segment artık mevcut değil
 @msg	Non-finite dimension	Sonlu olmayan boyut
 @msg	Only linear dimensions are horizontal or vertical	Yalnızca doğrusal boyutlar yatay veya dikey olabilir
-@msg	Scale must be drawing:real, for example 1:10	Ölçek çizim olmalıdır:gerçek, örneğin 1:10
+@msg	Scale must be drawing:real, for example 1:10	Ölçek çizim:gerçek biçiminde olmalıdır, örneğin 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Ölçek oranı 1:1000000 ile 1000000:1 arasında olmalıdır
 @msg	Second measured segment no longer exists	Ölçülen ikinci segment artık mevcut değil
 @msg	Unknown dimension mode	Bilinmeyen boyut modu
