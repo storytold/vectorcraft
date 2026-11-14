@@ -363,7 +363,11 @@ each one that applies. `VECTORCRAFT_TITLEBAR` also takes precedence over System 
 `app` keeps the app bar as the title bar with System Title Bar on. Only the values `app`, `system` and `desktop` take
 precedence (case-sensitive, surrounding spaces ignored); any other value, such as `unknown`, is ignored and does not
 override System Title Bar. While the variable is set to one of those values, the Preferences dialog dims
-System Title Bar and its `__titlebarFromEnv` field is `true`.
+System Title Bar and its `__titlebarFromEnv` field is `true`. The dialog's `__desktopKeepsFrame` field is `true` when
+the variable is unset and the desktop would draw the frame without VectorCraft Title Bar on Every Desktop, whether
+or not that preference is on. The app works it out when it starts, so a Linux Display Server change does not change
+it until the next start. While the field is `true` and VectorCraft Title Bar on Every Desktop is off in the dialog, a
+note under System Title Bar says that the desktop draws the title bar with System Title Bar on or off.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);

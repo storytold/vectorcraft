@@ -163,6 +163,25 @@ pub(crate) fn custom_titlebar(saved: Option<&vectorcraft_ui_egui::UiState>) -> b
     custom_titlebar_from(&frame, opted_into_system)
 }
 
+/// Whether the desktop would draw this window's frame with System Title Bar on or off while
+/// VectorCraft Title Bar on Every Desktop is off: `VECTORCRAFT_TITLEBAR` is not set to `app`,
+/// `system` or `desktop` (`overridden` is `None`), and the probe chose
+/// [`craft_window::Frame::Desktop`] or the window opens through XWayland (`forced_to_x11`)
+/// ([`app_draws_frame`]). The saved VectorCraft Title Bar on Every Desktop is left out, so the value
+/// stays `true` on such a desktop while that preference gives the app the frame. Always `false` on
+/// macOS and Windows, where System Title Bar decides the frame by itself.
+pub(crate) fn desktop_keeps_frame_from(probed: &craft_window::Frame, overridden: Option<bool>, forced_to_x11: bool) -> bool {
+    let probed_app = matches!(probed, craft_window::Frame::App(_));
+    cfg!(not(any(target_os = "macos", target_os = "windows"))) && overridden.is_none() && !app_draws_frame(probed_app, None, forced_to_x11, false)
+}
+
+/// [`desktop_keeps_frame_from`] for this start's probe, given whether the launch path opens the
+/// window through XWayland.
+pub(crate) fn desktop_keeps_frame(forced_to_x11: bool) -> bool {
+    let choice = probed_choice();
+    desktop_keeps_frame_from(choice.frame(), choice.overridden(), forced_to_x11)
+}
+
 pub(crate) fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

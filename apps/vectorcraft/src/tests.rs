@@ -319,6 +319,34 @@ fn the_titlebar_variable_decides_the_frame_before_the_window_opens() {
     }
 }
 
+/// Preferences says under System Title Bar that the desktop draws the frame with it on or off
+/// exactly where the start frame without VectorCraft Title Bar on Every Desktop is the desktop's
+/// with System Title Bar off as well as on and `VECTORCRAFT_TITLEBAR` is unset: Linux and the BSDs
+/// only.
+#[test]
+fn the_desktop_keeps_the_frame_where_system_title_bar_does_not_change_it() {
+    use crate::titlebar::desktop_keeps_frame_from;
+    use craft_window::{Frame, Layout};
+    let linux = cfg!(not(any(target_os = "macos", target_os = "windows")));
+    for probed in [Frame::Desktop, Frame::App(Layout::default())] {
+        for forced_to_x11 in [false, true] {
+            let frame = super::start_frame(probed.clone(), None, forced_to_x11, false);
+            let either_way = !super::custom_titlebar_from(&frame, false) && !super::custom_titlebar_from(&frame, true);
+            assert_eq!(desktop_keeps_frame_from(&probed, None, forced_to_x11), linux && either_way, "{probed:?} {forced_to_x11}");
+        }
+    }
+    // KDE, Sway and X11, and GNOME through XWayland, keep the desktop's frame; GNOME on Wayland does not.
+    assert_eq!(desktop_keeps_frame_from(&Frame::Desktop, None, false), linux);
+    assert_eq!(desktop_keeps_frame_from(&Frame::App(Layout::default()), None, true), linux);
+    assert!(!desktop_keeps_frame_from(&Frame::App(Layout::default()), None, false));
+    // While `VECTORCRAFT_TITLEBAR` chooses the frame, System Title Bar does not apply and there is no note.
+    for (frame, overridden) in [(Frame::App(Layout::default()), Some(true)), (Frame::Desktop, Some(false))] {
+        for forced_to_x11 in [false, true] {
+            assert!(!desktop_keeps_frame_from(&frame, overridden, forced_to_x11), "{overridden:?} {forced_to_x11}");
+        }
+    }
+}
+
 /// The file extensions the macOS bundle declares: its document types and its own exported type.
 fn plist_extensions(plist: &str) -> Vec<&str> {
     ["<key>CFBundleTypeExtensions</key>", "<key>public.filename-extension</key>"]

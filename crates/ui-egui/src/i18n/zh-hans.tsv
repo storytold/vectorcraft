@@ -5656,6 +5656,7 @@ effect	Vertical	垂直
 	VectorCraft Title Bar on Every Desktop	在所有桌面上使用 VectorCraft 标题栏
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	设置了环境变量 VECTORCRAFT_TITLEBAR 时，由它选择标题栏。
 	System Title Bar takes precedence over this option while it is on.	开启系统标题栏时，它优先于此选项。
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	未开启“在所有桌面上使用 VectorCraft 标题栏”时，无论此选项是否开启，此桌面都会绘制窗口的标题栏。
 	Value Axis	数值轴
 	On Left Side	左侧
 	On Right Side	右侧

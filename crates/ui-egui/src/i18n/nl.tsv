@@ -1441,6 +1441,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraft-titelbalk op elk bureaublad
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Zolang de omgevingsvariabele VECTORCRAFT_TITLEBAR is ingesteld, kiest die de titelbalk.
 	System Title Bar takes precedence over this option while it is on.	Zolang Systeemtitelbalk is ingeschakeld, heeft die voorrang op deze optie.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Zolang VectorCraft-titelbalk op elk bureaublad is uitgeschakeld, tekent dit bureaublad de titelbalk van het venster, of deze optie nu aan of uit staat.
 	Exit	Afsluiten
 	Distort	Vervormen
 	Diffuse Glow…	Diffuse gloed…

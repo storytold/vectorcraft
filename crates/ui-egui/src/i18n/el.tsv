@@ -5231,6 +5231,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
 	System Title Bar takes precedence over this option while it is on.	Όσο είναι ενεργή, η Γραμμή τίτλου συστήματος υπερισχύει αυτής της επιλογής.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Όσο η Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας είναι ανενεργή, αυτή η επιφάνεια εργασίας σχεδιάζει τη γραμμή τίτλου του παραθύρου, είτε αυτή η επιλογή είναι ενεργή είτε όχι.
 	Value Axis	Άξονας τιμών
 	On Left Side	Στην αριστερή πλευρά
 	On Right Side	Στη δεξιά πλευρά

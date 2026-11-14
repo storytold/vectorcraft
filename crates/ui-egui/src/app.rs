@@ -135,6 +135,7 @@ impl VectorcraftApp {
             titlebar_from_env: false,
             custom_titlebar: false,
             desktop_frame: false,
+            desktop_keeps_frame: false,
             last_window_title: String::new(),
             fullscreen_for_mode: false,
             graphics_adapter: None,
