@@ -2,7 +2,7 @@
 //! the document and measures it once, and an instance's bounds are its art's box placed by the
 //! instance's transform ([`Node::geometric_bounds_with`]).
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -25,6 +25,9 @@ const MAX_REACHES: usize = 4096;
 
 /// A symbol's name and the bits of the linear part of a transform that places its art.
 type Placing = (String, [u64; 4]);
+
+/// Each symbol name of a document → the index of the first symbol of that name.
+pub(crate) type SymbolNames = HashMap<String, usize>;
 
 /// A symbol's art measured in symbol space.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -51,6 +54,10 @@ pub(crate) struct ArtBox {
 /// symbols change.
 pub struct SymbolBoxes<'a> {
     doc: &'a Document,
+    /// Each symbol name of the document → the index of the first symbol of that name (the one a
+    /// name finds), made the first time a name is looked up ([`Self::symbol_art`]) or given by
+    /// [`Self::with_names`].
+    names: OnceCell<Arc<SymbolNames>>,
     /// The art boxes measured so far, by symbol name (`None` for a symbol whose instances are
     /// measured by [`SYMBOL_SQUARE`]).
     measured: RefCell<HashMap<String, Option<ArtBox>>>,
@@ -89,6 +96,9 @@ pub struct SymbolBoxes<'a> {
     sliced_most: u64,
     /// The widths [`Self::measured_width`] has measured, by kind and symbol name.
     widths: RefCell<HashMap<(&'static str, String), Option<f64>>>,
+    /// While [`Self::consulted`] runs: the symbols whose art boxes [`Self::art`] has given outside
+    /// the measuring of symbol art.
+    consulted: RefCell<Option<HashSet<String>>>,
 }
 
 impl Document {
@@ -96,6 +106,7 @@ impl Document {
     pub fn symbol_boxes(&self) -> SymbolBoxes<'_> {
         SymbolBoxes {
             doc: self,
+            names: OnceCell::new(),
             measured: RefCell::default(),
             depths: RefCell::default(),
             quick: Cell::new(false),
@@ -110,7 +121,18 @@ impl Document {
             sliced_placed: Cell::new(0),
             sliced_most: MAX_SYMBOL_NODES,
             widths: RefCell::default(),
+            consulted: RefCell::default(),
         }
+    }
+
+    /// Each symbol name of this document → the index of the first symbol of that name (the one a
+    /// name finds).
+    pub(crate) fn symbol_names(&self) -> SymbolNames {
+        let mut names = HashMap::with_capacity(self.symbols.len());
+        for (i, s) in self.symbols.iter().enumerate() {
+            names.entry(s.name.clone()).or_insert(i);
+        }
+        names
     }
 }
 
@@ -118,6 +140,26 @@ impl<'a> SymbolBoxes<'a> {
     /// The document whose symbols these are.
     pub fn document(&self) -> &'a Document {
         self.doc
+    }
+
+    /// Makes these boxes find symbols by `names` ([`Document::symbol_names`]), made from the
+    /// document's symbols while they had the names and order they have now.
+    pub(crate) fn with_names(self, names: &Arc<SymbolNames>) -> Self {
+        let _ = self.names.set(names.clone());
+        self
+    }
+
+    /// The art of the first symbol of the document named `name`, found in time independent of the
+    /// number of symbols after the first lookup.
+    pub(crate) fn symbol_art(&self, name: &str) -> Option<&'a Arc<Node>> {
+        let doc: &'a Document = self.doc;
+        let names = self.names.get_or_init(|| Arc::new(doc.symbol_names()));
+        let i = *names.get(name)?;
+        match doc.symbols.get(i) {
+            Some(s) if s.name == name => Some(&s.art),
+            // Names that no longer match the symbols: the first symbol of that name.
+            _ => doc.symbols.iter().find(|s| s.name == name).map(|s| &s.art),
+        }
     }
 
     /// Makes these boxes measure every symbol instance as [`Node::reach_bounds_with`] does, by its
@@ -160,21 +202,37 @@ impl<'a> SymbolBoxes<'a> {
     /// art boxes. Returns `None` when [`Self::depth`] is `None` and when the art has no finite
     /// bounds: instances of the symbol are then measured by [`SYMBOL_SQUARE`].
     pub(crate) fn art(&self, name: &str) -> Option<ArtBox> {
-        if let Some(b) = self.measured.borrow().get(name) {
-            return *b;
+        let cached = self.measured.borrow().get(name).copied();
+        let b = cached.unwrap_or_else(|| {
+            let b = self.measure_art(name, |art| self.in_art(|| art_box(art, self))).flatten();
+            self.measured.borrow_mut().insert(name.to_string(), b);
+            b
+        });
+        if b.is_some()
+            && let Some(seen) = self.consulted.borrow_mut().as_mut()
+            && !seen.contains(name)
+        {
+            seen.insert(name.to_string());
         }
-        let b = self.measure_art(name, |art| self.in_art(|| art_box(art, self))).flatten();
-        self.measured.borrow_mut().insert(name.to_string(), b);
         b
+    }
+
+    /// Runs `measure`, and returns the names of the symbols whose art boxes it took from these
+    /// boxes, the art of symbols it measured left out: the symbols whose art the instances it
+    /// measured are measured by.
+    pub(crate) fn consulted(&self, measure: impl FnOnce()) -> HashSet<String> {
+        let was = self.consulted.replace(Some(HashSet::new()));
+        measure();
+        self.consulted.replace(was).unwrap_or_default()
     }
 
     /// Runs `measure` on the art of the symbol named `name`. Returns `None` when [`Self::depth`]
     /// is `None`, without running it.
     pub fn measure_art<R>(&self, name: &str, measure: impl FnOnce(&Arc<Node>) -> R) -> Option<R> {
         self.depth(name)?;
-        let sym = self.doc.symbols.iter().find(|s| s.name == name)?;
+        let art = self.symbol_art(name)?;
         self.runs.set(self.runs.get() + 1);
-        Some(measure(&sym.art))
+        Some(measure(art))
     }
 
     /// How many times [`Self::measure_art`] has run a measure on symbol art for these boxes, the
@@ -297,10 +355,9 @@ impl<'a> SymbolBoxes<'a> {
     /// other symbols it reaches: the depth of each one it walks to the end, and `None` for those on
     /// the way down to a symbol that holds an instance of itself or nests too deep.
     fn find_depth(&self, name: &str, learned: &mut HashMap<String, Option<usize>>) -> Option<usize> {
-        let art = |n: &str| self.doc.symbols.iter().find(|s| s.name == n).map(|s| &s.art);
         // The symbols on the way down from `name`: each with the symbols its art shows that are
         // still to be walked, and the deepest nesting found under it so far.
-        let mut path: Vec<(String, Vec<String>, usize)> = vec![(name.to_string(), shown(self.doc, art(name)?), 0)];
+        let mut path: Vec<(String, Vec<String>, usize)> = vec![(name.to_string(), self.shown(self.symbol_art(name)?), 0)];
         loop {
             let (_, todo, _) = path.last_mut()?;
             let Some(next) = todo.pop() else {
@@ -330,8 +387,8 @@ impl<'a> SymbolBoxes<'a> {
                 // Symbols nested MAX_DEPTH deep under `name`.
                 None if path.len() >= MAX_DEPTH => return None,
                 None => {
-                    if let Some(a) = art(&next) {
-                        let todo = shown(self.doc, a);
+                    if let Some(a) = self.symbol_art(&next) {
+                        let todo = self.shown(a);
                         path.push((next, todo, 0));
                     }
                 }
@@ -379,7 +436,7 @@ impl<'a> SymbolBoxes<'a> {
             None => {
                 // The most objects placing makes, the art of opacity masks included, is set aside
                 // while the art is placed and measured, and what placing did not make is given back.
-                let art = &self.doc.symbols.iter().find(|s| s.name == name)?.art;
+                let art = self.symbol_art(name)?;
                 let most = match self.doc.symbol_slice_map(name, linear) {
                     Some(m) => m.most_placed(art, self.doc),
                     None => art.count_with_masks() as u64,
@@ -431,10 +488,27 @@ impl<'a> SymbolBoxes<'a> {
     fn in_art<R>(&self, f: impl FnOnce() -> R) -> R {
         let pad = self.brush_art.replace(false);
         let strokes = self.art_strokes.replace(true);
+        let consulted = self.consulted.take();
         let r = self.quickly(f);
         self.brush_art.set(pad);
         self.art_strokes.set(strokes);
+        *self.consulted.borrow_mut() = consulted;
         r
+    }
+
+    /// The names of the symbols of the document that the instances in `art` show, each once.
+    fn shown(&self, art: &Node) -> Vec<String> {
+        let mut seen = HashSet::new();
+        let mut names = vec![];
+        art.walk(&mut |n| {
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+                && seen.insert(symbol.as_str())
+                && self.symbol_art(symbol).is_some()
+            {
+                names.push(symbol.clone());
+            }
+        });
+        names
     }
 }
 
@@ -445,21 +519,6 @@ fn give_up(path: &[(String, Vec<String>, usize)], learned: &mut HashMap<String, 
         learned.insert(n.clone(), None);
     }
     None
-}
-
-/// The names of the symbols of `doc` that the instances in `art` show, each once.
-fn shown(doc: &Document, art: &Node) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut names = vec![];
-    art.walk(&mut |n| {
-        if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
-            && seen.insert(symbol.as_str())
-            && doc.symbols.iter().any(|s| s.name == *symbol)
-        {
-            names.push(symbol.clone());
-        }
-    });
-    names
 }
 
 /// Measures symbol art `art`, with the instances in it measured by `symbols`.
