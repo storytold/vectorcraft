@@ -2695,6 +2695,7 @@ mark-style	Japanese	Японский
 	Proportional Metrics	Пропорциональные метрики
 	Insert Aki Left	Вставить аки слева
 	Insert Aki Right	Вставить аки справа
+	Tsume	Цумэ
 	Character Direction	Направление символов
 	Digits	Цифры
 	Arabic	Арабские
@@ -6015,8 +6016,8 @@ axis	Y Axis	Ось Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	модуль экспорта объявляет от 1 до {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	вне групп может быть не более {MAX_UNGROUPED} параметров: задайте остальным `group`
 @msg	can't encode the input	не удаётся закодировать входные данные
-@msg	expected {"dataBase64"}	ожидалось {"dataBase64"}
-@msg	expected {"objects"}	ожидалось {"objects"}
+@msg	expected {{"dataBase64": "…"}}	ожидалось {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	ожидалось {{"objects": [...]}}
 @msg	export `{name}`: {e}	экспорт модуля `{name}`: {e}
 @msg	extension {e} is listed twice	расширение {e} указано дважды
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	расширение {e}: используйте 1-16 строчных букв и цифр, без точки
@@ -6080,11 +6081,11 @@ axis	Y Axis	Ось Y
 @msg	a painted live effect returns only `objects`	рисующий динамический эффект возвращает только `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	у части рисующего динамического эффекта есть только `path`, `fillRule`, `fills` и `strokes`
 @msg	a read-only object was left out	пропущен объект только для чтения
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	пропущен объект только для чтения: верните его как один {"id"} или в том виде, в каком он был передан
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущен объект только для чтения: верните его как один {{"id": …}} или в том виде, в каком он был передан
 @msg	a string	строка
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	у обводки есть только `paint`, `width`, `join`, `cap` и `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	обводка должна иметь вид {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	эффект должен иметь вид {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обводка должна иметь вид {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	эффект должен иметь вид {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	эффект на заливке возвращает только `fills`
 @msg	an effect on a stroke returns only `strokes`	эффект на обводке возвращает только `strokes`
 @msg	an object must be a JSON object	объект должен быть объектом JSON
@@ -7392,7 +7393,7 @@ breakText	Glyphs	Глифы
 @id	pathfinder.add	Объединить
 @msg	give corners of the path: anchors between two straight sides	укажите углы контура: опорные точки между двумя прямыми сторонами
 @msg	image '{key}' has no pixels and was left out	изображение '{key}' не содержит пикселов и было пропущено
-@msg	not an RTF file: it doesn't start with {\\rtf	это не файл RTF: он не начинается с {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	это не файл RTF: он не начинается с {{\\rtf
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	это файл PostScript (.ai, сохранённый в старом формате или без совместимости с PDF, либо EPS-файл), который пока нельзя открыть: сохраните его как PDF, .ai с совместимостью с PDF или SVG
 @msg	this kind of brush has no options dialog yet	у кистей этого типа пока нет диалога параметров
 digits	Hindi	Хинди

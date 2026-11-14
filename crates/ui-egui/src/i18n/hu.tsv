@@ -3224,6 +3224,7 @@ mark-style	Japanese	Japán
 	Proportional Metrics	Arányos metrika
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
+	Tsume	Tsume
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció
@@ -6388,8 +6389,8 @@ axis	Y Axis	Y tengely
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	az exportáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	csoporton kívül legfeljebb {MAX_UNGROUPED} paraméter lehet: a többinek adj meg `group` értéket
 @msg	can't encode the input	a bemenet nem kódolható
-@msg	expected {"dataBase64"}	várt formátum: {"dataBase64"}
-@msg	expected {"objects"}	várt formátum: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	várt formátum: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	várt formátum: {{"objects": [...]}}
 @msg	export `{name}`: {e}	`{name}` modulexport: {e}
 @msg	extension {e} is listed twice	a(z) {e} kiterjesztés kétszer szerepel
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	{e} kiterjesztés: 1-16 kisbetűt és számjegyet használj, pont nélkül
@@ -6453,11 +6454,11 @@ axis	Y Axis	Y tengely
 @msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
 @msg	a read-only object was left out	kimaradt egy írásvédett objektum
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {"id"} formában vagy úgy, ahogy megkapta
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta
 @msg	a string	karakterlánc
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	a körvonalnak csak `paint`, `width`, `join`, `cap` és `miterLimit` kulcsa van
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	a körvonal formája {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} legyen
-@msg	an effect must be {"id", "params"?, "visible"?}	az effektus formája {"id", "params"?, "visible"?} legyen
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	a körvonal formája {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} legyen
+@msg	an effect must be {{"id", "params"?, "visible"?}}	az effektus formája {{"id", "params"?, "visible"?}} legyen
 @msg	an effect on a fill returns only `fills`	a kitöltésen lévő effektus csak `fills` értéket ad vissza
 @msg	an effect on a stroke returns only `strokes`	a körvonalon lévő effektus csak `strokes` értéket ad vissza
 @msg	an object must be a JSON object	az objektum JSON-objektum legyen
