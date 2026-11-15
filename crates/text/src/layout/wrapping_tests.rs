@@ -1577,6 +1577,43 @@ fn a_custom_set_keeps_its_own_characters_off_line_ends() {
     assert_eq!(ends, [1, 2, 4, 5]);
 }
 
+/// The least room a word needs ([`breaking::word_width`]) runs past spaces where kinsoku allows no
+/// break after them, to the first break [`break_line`] may take: after 「 or a custom set's 三 with
+/// spaces after it, and before a 」 that follows a space. Where the break after the space is
+/// allowed, the word still ends before the space.
+#[test]
+fn word_width_runs_past_spaces_kinsoku_does_not_break_after() {
+    use KinsokuShoriType::PushOutOnly;
+    let finish = custom_set("", "三", "", &[]);
+    let empty = custom_set("", "", "", &[]);
+    for (text, k, word) in [
+        ("「 四五", breaking::KinsokuRules::from(Kinsoku::Hard), 30.0),
+        ("「  四五", Kinsoku::Hard.into(), 40.0),
+        ("a 」二", Kinsoku::Hard.into(), 30.0),
+        ("三 四五", breaking::KinsokuRules::Custom(&finish), 30.0),
+        ("三 四五", breaking::KinsokuRules::Custom(&empty), 10.0),
+        ("一 二三", Kinsoku::Hard.into(), 10.0),
+    ] {
+        let g = full_width(text);
+        assert_eq!(breaking::word_width(&g, 0, &[], k, Burasagari::None), word, "{text}");
+        // In a measure that wide, break_line's first line is that word, drawn without the spaces
+        // at its end.
+        let mut end = break_line(text, &g, 0, word, &[], 0.0, None, Burasagari::None, k, PushOutOnly, false, false, &[], None).0;
+        while end > 0 && g[end - 1].is_space() {
+            end -= 1;
+        }
+        assert_eq!(g[..end].iter().map(|h| h.adv).sum::<f64>(), word, "{text}");
+    }
+    // A No Break run of spaces after 「 longer than the glyphs a word is measured over stops the
+    // measure there.
+    let long: String = std::iter::once('「').chain(std::iter::repeat_n(' ', 2000)).chain(['四']).collect();
+    let mut g = full_width(&long);
+    for h in g.iter_mut().skip(1) {
+        h.no_break = true;
+    }
+    assert_eq!(breaking::word_width(&g, 0, &[], Kinsoku::Hard, Burasagari::None), 10240.0);
+}
+
 /// Soft and a set made from it choose the same composer: small kana and the prolonged sound mark,
 /// which Soft lets start a line, do not send a paragraph that pushes in to the single-line
 /// composer with either, while Hard, which keeps them off a line's start, does.

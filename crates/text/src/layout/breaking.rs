@@ -415,7 +415,7 @@ pub(super) fn leader_outline(db: &FontDb, g: &SGlyph, leader: &str, origin: f64,
 /// Width of the word starting at glyph `i`: its advances up to the first place a line may break
 /// (spaces left out, the hyphen of a soft hyphen in), the least room a line needs not to break
 /// inside it. As in [`break_line`], kinsoku keeps a character that may not end a line with the one
-/// after it, a No Break run (its spaces inside it included) is one word up to a forced line break,
+/// after it, spaces between them included, a No Break run (its spaces inside it included) is one word up to a forced line break,
 /// and a cluster is never split. A soft hyphen just before a forced line break adds no hyphen. A list marker at `i` (glyphs of length 0) counts whole, with the word after it. A word
 /// that ends where a line may end is measured as the line is set: without the spaces at its end,
 /// and with its last glyph as narrow as `line_end` sets it; one that ends at a soft hyphen or past
@@ -440,7 +440,15 @@ pub(super) fn word_width<'k>(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: 
             return set(w, trailing, ink);
         }
         if gl.is_space() && (end == start || !splits_no_break(g, end)) {
-            return set(w, trailing, ink);
+            // A line breaks after one of these spaces only where kinsoku allows it, as in
+            // [`break_line`]; where it allows none (after 「, or before 」), the word goes on past them.
+            let run = end + g[end..].iter().take(start + MAX_GLYPHS - end).take_while(|h| h.is_space()).count();
+            if end == start || (end..run).any(|k| g[k].break_after() && g[k].len > 0 && kinsoku_allows(g, k, kinsoku) && !splits_no_break(g, k + 1)) {
+                return set(w, trailing, ink);
+            }
+            let spaces: f64 = g[end..run].iter().map(|h| h.adv).sum();
+            (w, trailing, end) = (w + spaces, trailing + spaces, run);
+            continue;
         }
         let forced_next = g.get(end + 1).is_some_and(|n| n.ch == '\u{2028}');
         if gl.is_soft_hyphen() && !forced_next && kinsoku_allows(g, end, kinsoku) && !splits_no_break(g, end + 1) {
