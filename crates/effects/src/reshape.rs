@@ -744,11 +744,56 @@ pub(crate) fn clipping_text_outline(t: &Node) -> Option<Node> {
     Some(Node { visible: t.visible, ..o })
 }
 
+/// Clip group or clipping layer `n` whose clipping path is type that paints ([`Node::clip_paint`]),
+/// with that type as plain art drawn as the renderer draws it: its outlines clip
+/// ([`clipping_text_outline`]), its fills become art behind the clipped members inside the clip,
+/// and its strokes become art over the clip group, outside the clip. Each part is the type's art
+/// with only those fills or strokes ([`as_art`]), its own geometry effects applied. With strokes,
+/// `n` becomes a group with its id, name, visibility and transparency that holds a clip group of
+/// the clipping path, the fills and the members, then the strokes; a clipping layer keeps its
+/// ruler guides last. `None` when `n` does not clip, its clipping path is not type, or the type
+/// paints nothing.
+pub(crate) fn painted_type_clip(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    let first = n.children()?.first().filter(|_| n.clips())?;
+    if !matches!(first.kind, NodeKind::Text(_)) {
+        return None;
+    }
+    let paint = first.clip_paint();
+    if paint.fill.is_none() && paint.stroke.is_none() {
+        return None;
+    }
+    let clip = clipping_text_outline(first)?;
+    let fill = paint.fill.and_then(|p| as_art(doc, &p, None));
+    let stroke = paint.stroke.and_then(|p| as_art(doc, &p, None));
+    let mut m = n.clone();
+    let ch = m.children_mut()?;
+    *ch.first_mut()? = Arc::new(clip);
+    if let Some(fill) = fill {
+        ch.insert(1, Arc::new(fill));
+    }
+    let Some(stroke) = stroke else { return Some(m) };
+    let guides = ch.split_off(Node::guide_run_start(ch));
+    let inner = Node::new(n.id, NodeKind::Group { children: std::mem::take(ch), clip: true });
+    match &mut m.kind {
+        NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } => {
+            *children = [Arc::new(inner), Arc::new(stroke)].into_iter().chain(guides).collect();
+            *clip = false;
+        }
+        _ => return None,
+    }
+    Some(m)
+}
+
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
-/// its outlines with its visibility and effects ([`clipping_text_outline`]). The swatches and
-/// patterns that live-effect plug-ins painting their pieces name are looked up in `doc`.
+/// its outlines with its visibility and effects ([`clipping_text_outline`]); when it paints, the
+/// clip group becomes its art with the type's fills and strokes ([`painted_type_clip`]). The
+/// swatches and patterns that live-effect plug-ins painting their pieces name are looked up in
+/// `doc`.
 pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping: bool) {
+    if !clipping && let Some(painted) = painted_type_clip(doc, n) {
+        *n = painted;
+    }
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {

@@ -441,3 +441,125 @@ fn raster_and_hidden_effects_leave_the_clip_as_it_is() {
         assert_eq!(bounds(&clipping_path(1, effects)), Rect::new(50.0, 50.0, 150.0, 150.0));
     }
 }
+
+fn blue() -> Paint {
+    Paint::solid(Color::rgb(0.0, 0.0, 1.0))
+}
+
+fn green() -> Paint {
+    Paint::solid(Color::rgb(0.0, 1.0, 0.0))
+}
+
+/// "IIII" at 40 pt from (5, 60) in a test font built from the bundled Source Sans 3
+/// ([`vectorcraft_text::test_fonts::height_font`]), its characters filled blue when `fill` and
+/// stroked green 2 pt wide when `stroke`.
+fn painted_type(id: u64, fill: bool, stroke: bool) -> Node {
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    static FONT: std::sync::Once = std::sync::Once::new();
+    FONT.call_once(|| {
+        vectorcraft_text::FontDb::global().add_font(height_font(true).expect("the test font builds"));
+    });
+    let style = CharStyle {
+        font_family: HEIGHT_FAMILY.into(),
+        size: 40.0,
+        fill: if fill { blue() } else { Paint::None },
+        stroke: if stroke { green() } else { Paint::None },
+        stroke_width: 2.0,
+        ..Default::default()
+    };
+    Node::new(NodeId(id), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(5.0, 60.0), "IIII", style))))
+}
+
+/// Does `n` or an object in it have a blue fill (`fill`) or a green stroke?
+fn paints(n: &Node, fill: bool) -> bool {
+    use vectorcraft_doc::AppearanceItem;
+    let own = n.appearance.items.iter().any(|i| match i {
+        AppearanceItem::Fill(f) => fill && f.paint == blue(),
+        AppearanceItem::Stroke(s) => !fill && s.paint == green() && s.width > 0.0,
+    });
+    own || n.children().into_iter().flatten().any(|c| paints(c, fill))
+}
+
+/// What the first clip group in `n` paints: the bounds of the region it clips to, the bounds of
+/// the blue fill art right after its clipping path (behind the clipped art), the bounds of the
+/// green stroke art right after the clip group (over it, outside the clip), and whether a green
+/// stroke paints inside the clip group.
+type Painted = (Rect, Option<Rect>, Option<Rect>, bool);
+
+fn painted_clip(n: &Node) -> Option<Painted> {
+    let ch = n.children()?;
+    for (i, c) in ch.iter().enumerate() {
+        if let NodeKind::Group { children, clip: true } = &c.kind {
+            let region = clip_outline(children.first()?)?.0.bounding_box();
+            let fill = children.get(1).filter(|f| paints(f, true)).and_then(|f| f.geometric_bounds());
+            let stroke = ch.get(i + 1).filter(|s| paints(s, false)).and_then(|s| s.geometric_bounds());
+            let inside = children.iter().skip(1).any(|m| paints(m, false));
+            return Some((region, fill, stroke, inside));
+        }
+        if let Some(found) = painted_clip(c) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn near_rect(a: Rect, b: Rect) -> bool {
+    (a.x0 - b.x0).abs() < 0.5 && (a.y0 - b.y0).abs() < 0.5 && (a.x1 - b.x1).abs() < 0.5 && (a.y1 - b.y1).abs() < 0.5
+}
+
+#[test]
+fn painted_clipping_type_survives_enclosing_geometry_effect() {
+    // Type that paints a fill, a stroke, both or neither clips a red square, in a group whose
+    // Transform (moving everything 10 pt down, beside other type that stays type in the export) or
+    // Offset Path reshapes its members: the canvas and the export keep the type's fill as art
+    // behind the square inside the clip and its stroke as art over the clip group, both reshaped
+    // with the clip.
+    let plain = clip_outline(&painted_type(3, false, false)).expect("the type clips").0.bounding_box();
+    assert!(plain.width() > 10.0 && plain.height() > 10.0, "the type has glyph outlines: {plain:?}");
+    let effects = [fx("distort.transform", json!({"moveV": 10})), fx("path.offsetPath", json!({"offset": 1}))];
+    for effect in effects {
+        for (fill, stroke) in [(true, false), (false, true), (true, true), (false, false)] {
+            let clipped = clip_group(2, painted_type(3, fill, stroke));
+            let mut outer = Node::group(NodeId(1), vec![Arc::new(clipped), Arc::new(painted_type(5, true, false))]);
+            outer.appearance.effects.push(effect.clone());
+            let canvas = crate::evaluate_container(None, &outer).unwrap();
+            let mut d = Document::new(400.0, 400.0);
+            let layer = d.layers[0].id;
+            d.insert(Some(layer), 0, outer).unwrap();
+            let baked = bake_document(&d).unwrap();
+            let exported = baked.layers.iter().find_map(|l| painted_clip(l));
+            for (what, found) in [("canvas", painted_clip(&canvas)), ("export", exported)] {
+                let case = format!("{what}, {}, fill {fill}, stroke {stroke}", effect.id);
+                let (region, fills, strokes, inside) = found.unwrap_or_else(|| panic!("{case}: no clip group"));
+                if effect.id == "distort.transform" {
+                    assert!((region.y0 - plain.y0 - 10.0).abs() < 0.5 && (region.x0 - plain.x0).abs() < 0.5, "{case}: {region:?} from {plain:?}");
+                }
+                assert_eq!(fills.is_some(), fill, "{case}: fill art {fills:?}");
+                assert_eq!(strokes.is_some(), stroke, "{case}: stroke art {strokes:?}");
+                assert!(!inside, "{case}: the stroke paints outside the clip");
+                for art in fills.into_iter().chain(strokes) {
+                    assert!(near_rect(art, region), "{case}: the paint {art:?} follows the clip {region:?}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_clip_groups_own_fill_stays_in_the_clip_when_its_clipping_type_strokes() {
+    // A clip group with a yellow fill of its own and an Offset Path effect, clipped by type that
+    // strokes: the group's fill still paints inside the clip, and the type's stroke over it.
+    let yellow = Paint::solid(Color::rgb(1.0, 1.0, 0.0));
+    let mut group = clip_group(2, painted_type(3, false, true));
+    group.appearance =
+        Appearance { effects: vec![fx("path.offsetPath", json!({"offset": 0}))], ..Appearance::basic(yellow.clone(), Paint::None, 0.0) }.into();
+    let canvas = crate::evaluate_container(None, &group).unwrap();
+    let (_, _, strokes, inside) = painted_clip(&Node::group(NodeId(9), vec![Arc::new(canvas.clone())])).unwrap();
+    assert!(strokes.is_some() && !inside, "{canvas:?}");
+    let NodeKind::Group { children, clip: false } = &canvas.kind else { panic!("not a group around the clip: {canvas:?}") };
+    let NodeKind::Group { children: clipped, clip: true } = &children[0].kind else { panic!("no clip group first: {children:?}") };
+    let yellow_in = |n: &Node| n.appearance.items.iter().any(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(f) if f.paint == yellow));
+    assert!(clipped.iter().skip(1).any(|c| yellow_in(c)), "the group's fill paints inside the clip: {clipped:?}");
+    assert!(!children.iter().skip(1).any(|c| yellow_in(c)), "{children:?}");
+}

@@ -879,14 +879,22 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
     if paint {
-        let shapes = member_shapes(doc, &m);
+        // A clip group whose clipping type paints strokes is now a group of a clip group and those
+        // strokes ([`crate::reshape::painted_type_clip`]): its own fills and strokes paint inside
+        // that clip group.
+        let wrapped = n.clips() && !m.clips();
+        let shapes = match m.children().and_then(|ch| ch.first()).filter(|_| wrapped) {
+            Some(inner) => member_shapes(doc, inner),
+            None => member_shapes(doc, &m),
+        };
         let bounds = m.geometric_bounds();
         let art =
             |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
         let (below, above) = m.appearance.split_contents();
         let (below, above) = (art(below), art(above));
-        let at = usize::from(m.clips());
-        if let Some(ch) = m.children_mut() {
+        let at = usize::from(n.clips());
+        let target = if wrapped { m.children_mut().and_then(|ch| ch.first_mut()).map(Arc::make_mut) } else { Some(&mut m) };
+        if let Some(ch) = target.and_then(Node::children_mut) {
             let at = at.min(ch.len());
             ch.splice(at..at, below);
             ch.extend(above);
