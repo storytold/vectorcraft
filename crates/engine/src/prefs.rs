@@ -296,6 +296,7 @@ pub struct Prefs {
     pub gradient_presets: Vec<cmd::GradientPreset>,
     /// Swatches panel defaults for regular new documents. A local library, not a Preferences
     /// dialog field; swatch.defaults.save/reset replace it without editing an open document.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub default_swatches: Option<SavedSwatchDefaults>,
     /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
