@@ -317,8 +317,8 @@ pub(crate) struct Recoded {
     /// Set when the image's colors are converted to the destination without its ICC profile,
     /// which can't be read.
     pub note: Option<&'static str>,
-    /// Set when the colors were to be converted but the image couldn't be decoded or written
-    /// with them: the source image, kept as it is, would be in its own colors.
+    /// Set when the colors were to be converted but the image couldn't be decoded within the
+    /// allowance or written with them: the source image, kept as it is, would be in its own colors.
     pub unconverted: bool,
 }
 
@@ -481,9 +481,10 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
 /// with `to_srgb`, pixels in a gray or RGB profile other than sRGB are converted from it to sRGB
 /// instead ([`ToSrgb`]), and colour ones then by `convert`; grey ones that `convert` leaves as
 /// they are keep their profile. `interpolate` lets viewers smooth it. An image that can't be
-/// decoded is kept as it is, with a warning when its pixels were to be converted to sRGB, and
-/// is [`Recoded::unconverted`] when `convert` was to convert its colors (any image whose header
-/// can't be read, as it may be in color).
+/// decoded is kept as it is, with a warning when its pixels were to be converted to sRGB. When
+/// `convert` was to convert its colors, it is [`Recoded::unconverted`] if its header can't be read
+/// (it may be in color) or its pixels are beyond the decode allowance; a color image whose pixel
+/// data can't be read is not.
 pub(crate) fn recode(
     bytes: &[u8],
     size: (f64, f64),
@@ -539,7 +540,12 @@ pub(crate) fn recode(
     if kept(&rule, dims, size, jpeg) && convert.is_none() && source.is_none() {
         return Recoded { image: None, warning: rule.instead, note: None, unconverted: false };
     }
-    let Some(mut img) = pixels.or_else(|| decoded(bytes)) else { return Recoded { unconverted: convert.is_some(), ..keep } };
+    // Pixels that can't be read can't be written in their own colors either; ones beyond the
+    // allowance can.
+    let mut img = match pixels.map_or_else(|| decoded_within(bytes), Ok) {
+        Ok(img) => img,
+        Err(limited) => return Recoded { unconverted: limited && convert.is_some(), ..keep },
+    };
     if let Some((p, t)) = &source {
         let srgb = match into_srgb(img, p, t.intent) {
             Some(s) => Some(s),
@@ -572,10 +578,10 @@ pub(crate) fn recode(
                 }
                 srgb
             }
-            None => {
-                let Some(img) = decoded(bytes) else { return Recoded { unconverted: convert.is_some(), ..keep } };
-                img
-            }
+            None => match decoded_within(bytes) {
+                Ok(img) => img,
+                Err(limited) => return Recoded { unconverted: limited && convert.is_some(), ..keep },
+            },
         };
     }
     // Pixels that keep their colours keep the profile they are in; converted ones are in the
@@ -732,9 +738,15 @@ fn limits() -> image::Limits {
 
 /// `bytes` decoded within [`limits`]: an image whose header asks for more is not decoded.
 fn decoded(bytes: &[u8]) -> Option<DynamicImage> {
-    let mut r = ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    decoded_within(bytes).ok()
+}
+
+/// `bytes` decoded like [`decoded`]; on failure, whether the decoder stopped at [`limits`]
+/// (`true`) rather than at data it can't read (`false`).
+fn decoded_within(bytes: &[u8]) -> Result<DynamicImage, bool> {
+    let mut r = ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(|_| false)?;
     r.limits(limits());
-    r.decode().ok()
+    r.decode().map_err(|e| matches!(e, image::ImageError::Limits(_)))
 }
 
 /// The alpha an opacity mask whose art is greyscale image `blob` alone gives the image of

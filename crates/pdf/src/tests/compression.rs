@@ -270,12 +270,13 @@ fn images_declaring_more_than_the_allowance_are_not_decoded() {
     assert!(r.image.is_none(), "kept as it is");
 }
 
-/// When the Output settings convert colors, a color image that can't be decoded can't be kept as
-/// it is: it is unconverted, and so is one whose header can't be read or one tagged with an ICC
-/// profile it is converted from. A grey one, whose pixels aren't converted, and any image without
-/// a conversion are kept as they are.
+/// When the Output settings convert colors, a color image beyond the decode allowance can't be
+/// kept as it is: it is unconverted, and so is one whose header can't be read. A color image
+/// whose pixel data can't be read (tagged with an ICC profile it is converted from or not) can't
+/// be written in its own colors either, and is kept as it is, as is a grey one, whose pixels
+/// aren't converted, and any image without a conversion.
 #[test]
-fn a_color_image_that_cant_be_decoded_for_a_conversion_is_unconverted() {
+fn a_color_image_beyond_the_allowance_for_a_conversion_is_unconverted() {
     use vectorcraft_color::cms::{DISPLAY_P3, GENERIC_CMYK, icc_bytes};
     let d = doc(encoded(colour(), ImageFormat::Png), "image/png");
     let settings: PdfSettings = serde_json::from_value(json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}})).unwrap();
@@ -291,9 +292,17 @@ fn a_color_image_that_cant_be_decoded_for_a_conversion_is_unconverted() {
     let cut = |img: DynamicImage| half(encoded(img, ImageFormat::Png));
     let mut p3 = icc_bytes(DISPLAY_P3).unwrap().to_vec();
     p3[8..12].copy_from_slice(&[4, 0x20, 0, 0]);
+    // `declared_png`'s header declaring RGB pixels (color type 2), with the IHDR chunk's CRC
+    // written again.
+    let mut rgb_declared = declared_png(60_000, 60_000);
+    rgb_declared[25] = 2;
+    let mut crc = flate2::Crc::new();
+    crc.update(&rgb_declared[12..29]);
+    rgb_declared[29..33].copy_from_slice(&crc.sum().to_be_bytes());
     let cases = [
-        ("RGB", cut(colour()), true),
-        ("tagged RGB", half(tagged(&colour(), &p3, ImageFormat::Png)), true),
+        ("RGB declaring more than the allowance", rgb_declared, true),
+        ("RGB", cut(colour()), false),
+        ("tagged RGB", half(tagged(&colour(), &p3, ImageFormat::Png)), false),
         ("unreadable", vec![1, 2, 3], true),
         ("grey", cut(colour().grayscale()), false),
         ("grey declaring more than the allowance", declared_png(60_000, 60_000), false),
