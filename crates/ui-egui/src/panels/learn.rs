@@ -8,8 +8,9 @@
 //! sample as a new untitled document; the check box before each step then marks it done, Finish
 //! tutorial marks the tutorial finished with all its steps, and Next Up shows the next tutorial in
 //! the same skill. The preferences keep the progress ([`progress`]); Reset progress under the
-//! skills clears it. `learn.list` lists the tutorials with their progress, `learn.skills` shows the
-//! list of skills, `learn.show` opens one tutorial, `learn.locateTool` shows where a tool is,
+//! skills clears it. `learn.list` lists the tutorials with their progress, `learn.tab` chooses a
+//! tab, `learn.skills` shows the list of skills, `learn.skill` opens one skill, `learn.show` opens
+//! one tutorial, `learn.back` goes up one level, `learn.locateTool` shows where a tool is,
 //! `learn.openSample`, `learn.markStep`, `learn.finish` and `learn.next` run the practice controls,
 //! `learn.resetProgress` clears the progress, and `window.learn` shows or hides the panel. The Home
 //! screen's Learn section shows the same card ([`guide_card`]) and the tutorials, which open the
@@ -52,14 +53,23 @@ pub struct Practice {
     pub opened: Vec<&'static str>,
 }
 
+/// Each tab with the name `learn.tab` takes for it.
+const TABS: [(Tab, &str); 2] = [(Tab::ForYou, "forYou"), (Tab::Skills, "skills")];
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let mut chosen = None;
     ui.horizontal(|ui| {
-        for (tab, label) in [(Tab::ForYou, tl!("For you")), (Tab::Skills, tl!("Skills"))] {
-            if ui.selectable_label(app.ui.learn.tab == tab, label).clicked() {
-                app.ui.learn.tab = tab;
+        for ((tab, name), label) in TABS.into_iter().zip([tl!("For you"), tl!("Skills")]) {
+            if ui.selectable_label(app.ui.learn.tab == tab, label).clicked() && app.ui.learn.tab != tab {
+                chosen = Some(name);
             }
         }
     });
+    if let Some(name) = chosen
+        && let Err(e) = app.run("learn.tab", json!({ "tab": name }))
+    {
+        app.status(e);
+    }
     crate::widgets::divider(ui);
     match app.ui.learn.tab {
         Tab::ForYou => for_you(app, ui),
@@ -113,45 +123,47 @@ pub(crate) fn guide_card(app: &mut VectorcraftApp, ui: &mut Ui, id: egui::Id, fi
 
 /// The Skills tab: the skills, a skill's tutorials, or a tutorial's steps.
 fn skills(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let mut run = None;
     let open = app.ui.learn.tutorial.and_then(catalog::tutorial);
-    if let Some((skill, tutorial)) = open {
+    if let Some((_, tutorial)) = open {
         if back(ui) {
-            app.ui.learn.skill = Some(skill.id);
-            app.ui.learn.tutorial = None;
+            run = Some(("learn.back", json!({})));
         }
         steps(app, ui, tutorial);
         practice(app, ui, tutorial);
-        return;
-    }
-    if let Some(skill) = app.ui.learn.skill.and_then(catalog::skill) {
+    } else if let Some(skill) = app.ui.learn.skill.and_then(catalog::skill) {
         if back(ui) {
-            app.ui.learn.skill = None;
+            run = Some(("learn.back", json!({})));
         }
         crate::widgets::subheader(ui, skill.title);
         for tutorial in skill.tutorials {
             if row(ui, tutorial.title, Mark::Check(app.ui.learn_progress.is_finished(tutorial.id))).clicked() {
-                app.ui.learn.tutorial = Some(tutorial.id);
+                run = Some(("learn.show", json!({ "tutorial": tutorial.id })));
             }
         }
-        return;
-    }
-    for skill in catalog::SKILLS {
-        let ring = Mark::Ring { done: app.ui.learn_progress.done(skill), total: skill.tutorials.len() };
-        if row(ui, skill.title, ring).clicked() {
-            app.ui.learn.skill = Some(skill.id);
+    } else {
+        for skill in catalog::SKILLS {
+            let ring = Mark::Ring { done: app.ui.learn_progress.done(skill), total: skill.tutorials.len() };
+            if row(ui, skill.title, ring).clicked() {
+                run = Some(("learn.skill", json!({ "skill": skill.id })));
+            }
+        }
+        if !app.ui.learn_progress.is_empty() {
+            ui.add_space(6.0);
+            if ui.button(tl!("Reset progress")).clicked() {
+                run = Some(("learn.resetProgress", json!({})));
+            }
         }
     }
-    if !app.ui.learn_progress.is_empty() {
-        ui.add_space(6.0);
-        if ui.button(tl!("Reset progress")).clicked()
-            && let Err(e) = app.run("learn.resetProgress", json!({}))
-        {
-            app.status(e);
-        }
+    if let Some((cmd, params)) = run
+        && let Err(e) = app.run(cmd, params)
+    {
+        app.status(e);
     }
 }
 
-/// The Back button above a skill's tutorials and a tutorial's steps; true when it was clicked.
+/// The Back button above a skill's tutorials and a tutorial's steps (`learn.back`); true when it
+/// was clicked.
 fn back(ui: &mut Ui) -> bool {
     crate::widgets::icon_button(ui, "chevron-left", tl!("Back"), false, 22.0).clicked()
 }
@@ -351,15 +363,18 @@ fn check(painter: &egui::Painter, t: &Tokens, center: egui::Pos2, finished: bool
     painter.add(egui::Shape::line(tick, Stroke::new(1.5, t.panel)));
 }
 
-/// The Learn panel's UI commands: `window.learn`, `learn.list`, `learn.skills`, `learn.show`,
-/// `learn.locateTool`, `learn.openSample`, `learn.markStep`, `learn.finish`, `learn.next` and
-/// `learn.resetProgress`.
+/// The Learn panel's UI commands: `window.learn`, `learn.list`, `learn.tab`, `learn.skills`,
+/// `learn.skill`, `learn.show`, `learn.back`, `learn.locateTool`, `learn.openSample`,
+/// `learn.markStep`, `learn.finish`, `learn.next` and `learn.resetProgress`.
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     Some(match id {
         "window.learn" => toggle(app, p),
         "learn.list" => Ok(list(&app.ui.learn_progress)),
+        "learn.tab" => tab(app, p),
         "learn.skills" => skills_list(app),
+        "learn.skill" => open_skill(app, p),
         "learn.show" => open(app, p),
+        "learn.back" => back_up(app),
         "learn.locateTool" => locate::locate_tool(app, p),
         "learn.openSample" => open_sample(app, p),
         "learn.markStep" => mark_step(app, p),
@@ -397,23 +412,85 @@ fn toggle(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 /// tutorials with their step counts, whether each is finished, and the zero-based indexes of its
 /// steps marked done (`completedSteps`).
 fn list(progress: &progress::Progress) -> Value {
-    let skills = catalog::SKILLS.iter().map(|s| {
-        let tutorials: Vec<Value> = s
-            .tutorials
-            .iter()
-            .map(|t| {
-                json!({
-                    "id": t.id,
-                    "title": t.title,
-                    "steps": t.steps.len(),
-                    "finished": progress.is_finished(t.id),
-                    "completedSteps": progress.completed_steps(t),
-                })
+    json!({ "skills": catalog::SKILLS.iter().map(|s| skill_json(progress, s)).collect::<Vec<_>>() })
+}
+
+/// A skill as `learn.list` lists it: `{id, title, done, total, tutorials: [{id, title, steps,
+/// finished, completedSteps}]}`.
+fn skill_json(progress: &progress::Progress, s: &catalog::Skill) -> Value {
+    let tutorials: Vec<Value> = s
+        .tutorials
+        .iter()
+        .map(|t| {
+            json!({
+                "id": t.id,
+                "title": t.title,
+                "steps": t.steps.len(),
+                "finished": progress.is_finished(t.id),
+                "completedSteps": progress.completed_steps(t),
             })
-            .collect();
-        json!({"id": s.id, "title": s.title, "done": progress.done(s), "total": s.tutorials.len(), "tutorials": tutorials})
-    });
-    json!({ "skills": skills.collect::<Vec<_>>() })
+        })
+        .collect();
+    json!({"id": s.id, "title": s.title, "done": progress.done(s), "total": s.tutorials.len(), "tutorials": tutorials})
+}
+
+/// What the panel shows: `{tab: forYou|skills, skill, tutorial}`, with null for no skill or no
+/// tutorial open.
+fn view_json(view: &View) -> Value {
+    let tab = TABS.iter().find(|(t, _)| *t == view.tab).map(|(_, name)| *name);
+    json!({"tab": tab, "skill": view.skill, "tutorial": view.tutorial})
+}
+
+/// `learn.tab {tab}`: the For you and Skills tabs. Show the panel on that tab (`forYou` or
+/// `skills`); the Skills tab keeps the skill and tutorial it had open → the view ([`view_json`]). A
+/// missing or unknown tab is an error and changes nothing.
+fn tab(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let key = "tab";
+    let name = match p.get(key) {
+        None | Some(Value::Null) => return Err(format!("missing `{key}`")),
+        Some(Value::String(name)) => name.as_str(),
+        Some(_) => return Err(format!("`{key}` must be a string")),
+    };
+    let names = || TABS.map(|(_, name)| name).join(", ");
+    let tab = TABS.iter().find(|(_, n)| *n == name).map(|(t, _)| *t).ok_or_else(|| format!("`{key}` must be one of {}", names()))?;
+    crate::panel_docking::reveal_panel(app, ID)?;
+    app.ui.learn.tab = tab;
+    Ok(view_json(&app.ui.learn))
+}
+
+/// `learn.skill {skill}`: a skill's row on the Skills tab. Show the panel on the Skills tab with
+/// that skill's tutorials → the skill, as `learn.list` lists it. A missing or unknown id is an error
+/// and changes nothing.
+fn open_skill(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let key = "skill";
+    let id = match p.get(key) {
+        None | Some(Value::Null) => return Err(format!("missing `{key}`")),
+        Some(Value::String(id)) => id.as_str(),
+        Some(_) => return Err(format!("`{key}` must be a string")),
+    };
+    let ids = || catalog::SKILLS.iter().map(|s| s.id).collect::<Vec<_>>().join(", ");
+    let skill = catalog::skill(id).ok_or_else(|| format!("`{key}` must be one of {}", ids()))?;
+    crate::panel_docking::reveal_panel(app, ID)?;
+    app.ui.learn = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None };
+    Ok(skill_json(&app.ui.learn_progress, skill))
+}
+
+/// `learn.back`: the Back button on the Skills tab. Show the panel and go up one level: from a
+/// tutorial's steps to its skill's tutorials, and from a skill's tutorials to the list of skills →
+/// the view ([`view_json`]). On the list of skills or the For you tab the view stays as it is.
+fn back_up(app: &mut VectorcraftApp) -> Result<Value, String> {
+    crate::panel_docking::reveal_panel(app, ID)?;
+    let view = &mut app.ui.learn;
+    if view.tab == Tab::Skills {
+        if let Some((skill, _)) = view.tutorial.and_then(catalog::tutorial) {
+            view.skill = Some(skill.id);
+            view.tutorial = None;
+        } else if view.skill.is_some() {
+            view.skill = None;
+            view.tutorial = None;
+        }
+    }
+    Ok(view_json(view))
 }
 
 /// `learn.skills`: Back to skills, and the Quick skill guide card. Show the panel on the Skills tab
