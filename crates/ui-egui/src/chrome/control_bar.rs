@@ -348,8 +348,11 @@ fn transform_reserve(app: &VectorcraftApp, ui: &Ui, selected: bool) -> f32 {
 /// Align To menu and, for two or more objects, the Distribute buttons (a single object keeps the bar
 /// as it was); each shows only while the end of the bar keeps its room. Groups the panel menu has
 /// off are left out, and take no room. Without `room` (the Character group had none), all of these
-/// groups are left out, so the bar trims them from its right end before the Character group.
-fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize, room: bool) -> bool {
+/// groups are left out, so the bar trims them from its right end before the Character group. Also
+/// returns whether the Character group and the Align group had their room: the Align buttons, the
+/// Align To menu and the Distribute buttons the selection calls for all showed, or the group is
+/// off.
+fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize, room: bool) -> (bool, bool) {
     let nothing = objects == 0;
     let end = end_width(app, ui, nothing);
     if room && group_on(app, "paragraph") && crate::panels::paragraph::control_bar(app, ui, BUTTON, |ui| group_end_width(ui) + end) {
@@ -374,24 +377,30 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
                 app.run("edit.preferences", json!({})).ok();
             }
         }
-        return false;
+        return (false, false);
     }
     let transform = group_on(app, "transform");
     let end = if transform { separator_width(ui) + end } else { 0.0 };
-    if room && group_on(app, "alignDistribute") && ui.available_width() >= buttons_width(ui, 7) + end {
+    let align_on = group_on(app, "alignDistribute");
+    // Whether the whole group showed: the Align buttons, the Align To menu and the Distribute
+    // buttons the selection calls for.
+    let mut whole = !align_on;
+    if room && align_on && ui.available_width() >= buttons_width(ui, 7) + end {
         crate::panels::align::align_buttons(app, ui, BUTTON);
         if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x + end {
             crate::panels::align::align_to_menu(app, ui, BUTTON);
+            whole = objects < 2;
             if objects > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
                 ui.add_space(GROUP_GAP);
                 crate::panels::align::distribute_buttons(app, ui, BUTTON);
+                whole = true;
             }
         }
         if transform {
             boundary(ui, separator);
         }
     }
-    transform
+    (transform, room && whole)
 }
 
 /// Draws the Control bar's Align group after the artboard controls, with the Artboard tool in use:
@@ -670,6 +679,59 @@ fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity:
     }
 }
 
+/// The width of the chevron that opens the Select Similar Options menu.
+const SELECT_SIMILAR_MENU_WIDTH: f32 = 16.0;
+
+/// The label of each attribute of [`vectorcraft_engine::cmd::SIMILAR`] in the Select Similar Options
+/// menu, translated.
+fn similar_label(by: &str) -> &'static str {
+    match by {
+        "all" => tl!("All"),
+        "fillColor" => tl!("Fill Color"),
+        "fillAndStroke" => tl!("Fill & Stroke"),
+        "strokeColor" => tl!("Stroke Color"),
+        "strokeWeight" => tl!("Stroke Weight"),
+        "opacity" => tl!("Opacity"),
+        "blendingMode" => tl!("Blending Mode"),
+        "appearance" => tl!("Appearance"),
+        "graphicStyle" => tl!("Graphic Style"),
+        "shapeType" => tl!("Shape"),
+        _ => tl!("Symbol Instance"),
+    }
+}
+
+/// The Control bar's Select Similar Objects button and, beside it, the Select Similar Options menu
+/// (<https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=165>). The
+/// button runs `select.similar`, which selects the objects like the first selected one by the
+/// attribute kept for the session; a menu item runs it by that item's attribute, which is kept from
+/// then on, and the kept one is checked. Both are off while `select.similar` cannot run. They show
+/// together at the right end of the bar, after a separator, while something is selected and the
+/// panel menu has Object Options on, and only in the room every control ahead of them left
+/// ([`contents`]): the bar leaves them out before any other control, and while `ahead_shown` is
+/// false (a control ahead of them was left out for room). They show only while the room left is
+/// also at least `keep`.
+fn trailing_select_similar(app: &mut VectorcraftApp, ui: &mut Ui, ahead_shown: bool, keep: f32) {
+    let selected = app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
+    let width = separator_width(ui) + row_width(ui, &[BUTTON, SELECT_SIMILAR_MENU_WIDTH]);
+    if !ahead_shown || !selected || !group_on(app, "objectOptions") || ui.available_width() < width.max(keep) {
+        return;
+    }
+    boundary(ui, separator);
+    let enabled = crate::menus::enabled(app, "select.similar");
+    if widgets::icon_button_enabled(ui, "copy", tl!("Select Similar Objects"), false, enabled, BUTTON).clicked() {
+        crate::menus::invoke(app, "select.similar", json!({}));
+    }
+    let options = widgets::icon_button_enabled(ui, "chevron-down", tl!("Select Similar Options"), false, enabled, SELECT_SIMILAR_MENU_WIDTH);
+    egui::Popup::menu(&options).show(|ui| {
+        ui.set_min_width(140.0);
+        for (by, _) in vectorcraft_engine::cmd::SIMILAR {
+            if widgets::menu_item(ui, similar_label(by), true, app.session.select_similar == by) {
+                crate::menus::invoke(app, "select.similar", json!({ "by": by }));
+            }
+        }
+    });
+}
+
 /// The Control bar's gripper, at the left end of the bar `bar`. Dragging it shows where a release
 /// puts the bar ([`release_at`] in `dock_room`, the window below the menu bar): a band along the
 /// edge it docks to, or the outline of the bar floating under the pointer. The bar stays where it is
@@ -861,7 +923,11 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         // The Character group shows whole, with the Transform link's room left after it, or not at
         // all; left out, it leaves out the groups between it and the link too.
         let room = !group_on(app, "character") || crate::panels::character::control_bar(app, ui, reserve);
-        if !groups_before_transform(app, ui, sel.len(), room) {
+        let (transform, groups_fit) = groups_before_transform(app, ui, sel.len(), room);
+        if !transform {
+            // With the Transform group off, the room its link and X/Y/W/H fields would take stays
+            // free too, as a group left out ahead takes less than that.
+            trailing_select_similar(app, ui, groups_fit, crate::panels::transform::link_width(ui) + inline_transform_width(ui, t));
             erase_trailing(ui);
             return;
         }
@@ -875,9 +941,9 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         }
         crate::panels::transform::link(app, ui);
         // The bounding box, rotated with rotated objects: its centre and its own sides.
-        if let Some(b) = app.selection_box()
-            && ui.available_width() >= inline_transform_width(ui, t)
-        {
+        let selection_box = app.selection_box();
+        let fields_left_out = selection_box.is_some() && ui.available_width() < inline_transform_width(ui, t);
+        if let Some(b) = selection_box.as_ref().filter(|_| !fields_left_out) {
             let c = b.center();
             let origin = app.ruler_origin();
             let link = crate::panels::transform::proportional(app, ui);
@@ -906,6 +972,8 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
                 crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
             }
         }
+        // Select Similar Objects comes last: it takes only the room every control ahead of it left.
+        trailing_select_similar(app, ui, groups_fit && !fields_left_out, 0.0);
         erase_trailing(ui);
     });
     // Controls that keep their size can still run into the button's room in a narrow window;
