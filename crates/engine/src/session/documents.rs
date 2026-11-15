@@ -24,6 +24,8 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Clicks inside a clip group fall in the region its clipping path's effects give it.
+        vectorcraft_doc::hit::set_clip_region(vectorcraft_render::effects::reshaped_clip_outline);
         // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them,
         // evaluated again when the fonts, the hyphenation exceptions or the plug-ins change.
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
@@ -329,6 +331,8 @@ impl Session {
         // Ruler guides a reader left in the saved list become nodes on their layers.
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
+        // A plane held by Automatic Plane Positioning when the file was saved is back in its place.
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
@@ -357,6 +361,7 @@ impl Session {
         doc.resolve_inline_art();
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         // In the back, type set in a font named like a composite font is measured again below, in
         // the document's own composite fonts, not in the front document's.
         let back = self.active != Some(index);
@@ -415,14 +420,16 @@ impl Session {
 
     /// Measure the type not measured yet in open document `index`, which is in the back, in its own
     /// composite fonts, lent for the measuring, so its type has the bounds it will have when the
-    /// document comes to the front. The front document stays the one whose composite fonts are
-    /// registered. The names of the document's composite fonts its type was measured in are kept,
-    /// so its coming to the front does not measure that type again.
+    /// document comes to the front: type naming a composite font the document does not define is
+    /// measured as in a missing font, also when the front document defines one of that name, and
+    /// also when the document defines none. The front document stays the one whose composite fonts
+    /// are registered. The names of the document's composite fonts its type was measured in are
+    /// kept, so its coming to the front does not measure that type again.
     fn measure_back_document(&mut self, index: usize) {
         let Some(st) = self.docs.get(index) else { return };
         let fonts = st.doc.composite_fonts.clone();
         let db = vectorcraft_text::FontDb::global();
-        let lent = db.lend_composite_fonts(&fonts);
+        let lent = db.lend_document_composite_fonts(&fonts);
         // A name another loan holds with a different definition is not lent: type set in it is
         // measured again when the document comes to the front.
         let own: HashSet<String> =
