@@ -919,7 +919,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.brushObjectOptions",
         "Options of Selected Object…",
         "",
-        "{} open the Brushes panel menu's Options of Selected Object (dialog `brushOptions` with `__object`): the Brush Options of the brush that the first selected brushed path paints with, at that path's own settings, without the name field; Art shows width, widthMax/widthMode, flipAlong, flipAcross and overlap, and Pattern scale, spacing, flipAlong, flipAcross and fit, each with colorization; OK runs brush.objectOptions on the brushed paths selected when it opened, with the values changed since it opened, and the brush stays as it is. An error with nothing painted with a brush selected, for paths painted with brushes of different types and for a bristle brush",
+        "{} open the Brushes panel menu's Options of Selected Object (dialog `brushOptions` with `__object`): the Brush Options of the brush that the first selected brushed path paints with, at that path's own settings, without the name field; Art shows width, widthMax/widthMode, flipAlong, flipAcross and overlap, and Pattern scale, spacing, flipAlong, flipAcross and fit, each with colorization; OK runs brush.objectOptions on the brushed paths selected when it opened, with the values changed since it opened (one end of a range or one colorization field changed leaves each path's other values as they are), and the brush stays as it is. An error with nothing painted with a brush selected, for paths painted with brushes of different types and for a bristle brush",
     ),
     (
         "ui.graphicStyleOptions",
