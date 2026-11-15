@@ -873,6 +873,13 @@ pub struct UiState {
     /// cell; `1`..=`7` is a step from smallest to largest (`crates/ui-egui/src/panels/glyphs.rs`).
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     pub glyphs_preview: u8,
+    /// Export As…'s format id the last export chose, so the dialog opens on it again
+    /// (`dialogs::export_as::open`); none before the first export, which opens on PNG.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_as_format: Option<String>,
+    /// Export As…'s Use Artboards option as it was last left, so the next export starts there.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub export_as_use_artboards: bool,
     /// The desktop window's size, position and maximized state, saved when the app quits and
     /// restored at the next launch (the desktop host reads and writes it; none on the web).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1276,6 +1283,8 @@ impl Default for UiState {
             image_trace_advanced: true,
             image_trace_preview: true,
             glyphs_preview: 0,
+            export_as_format: None,
+            export_as_use_artboards: false,
             window: None,
         }
     }
@@ -1283,6 +1292,11 @@ impl Default for UiState {
 
 fn yes() -> bool {
     true
+}
+
+/// A `false` boolean left out of the saved UI state (its default).
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 fn is_zero_u8(v: &u8) -> bool {

@@ -58,6 +58,28 @@ pub(super) fn names(w: &Written) -> Vec<String> {
     w.borrow().iter().map(|(p, _)| p.clone()).collect()
 }
 
+/// #7916: Export As remembers the format and Use Artboards it was last left on, so the next one
+/// opens there instead of resetting to PNG and no artboards.
+#[test]
+fn export_as_remembers_its_last_format_and_use_artboards() {
+    let (mut app, _) = app(2);
+    app.run("file.exportAs", json!({})).unwrap();
+    assert_eq!((app.ui.dialog.as_ref().unwrap().str("format"), app.ui.dialog.as_ref().unwrap().bool("useArtboards")), ("png".into(), false));
+    set(&mut app, "format", json!("jpg"));
+    set(&mut app, "useArtboards", json!(true));
+    confirm(&mut app).unwrap();
+    // The next Export As (after its options dialog is closed) opens on the same format and Use
+    // Artboards.
+    app.ui.dialog = None;
+    app.run("file.exportAs", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("format"), d.bool("useArtboards")), ("jpg".into(), true));
+    // An explicit format or option still wins over the remembered one.
+    app.run("file.exportAs", json!({"format": "svg", "useArtboards": false})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("format"), d.bool("useArtboards")), ("svg".into(), false));
+}
+
 #[test]
 fn png_options_draw_and_export_with_the_chosen_options() {
     let (mut app, written) = app(2);
