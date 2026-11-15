@@ -3237,6 +3237,10 @@ digits	Malayalam	Malayálam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` debe ser una lista de estos nombres: {_1}
 	Search commands, tools, panels and effects	Buscar comandos, herramientas, paneles y efectos
 	Search commands, tools, panels and effects…	Buscar comandos, herramientas, paneles y efectos…
+	No commands match	Ningún comando coincide
+	{pos} of {total}: {name}	{pos} de {total}: {name}
+@plural	{n} result|{n} results	{n} resultado|{n} resultados
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Search Commands…	Buscar comandos…
 	Secondary	Secundario
 	Section Symbol	Símbolo de sección

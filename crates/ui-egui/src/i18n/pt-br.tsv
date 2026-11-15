@@ -2699,6 +2699,10 @@ digits	Malayalam	Malaiala
 	Search Commands…	Pesquisar Comandos…
 	Search commands, tools, panels and effects	Pesquisar comandos, ferramentas, painéis e efeitos
 	Search commands, tools, panels and effects…	Pesquisar comandos, ferramentas, painéis e efeitos…
+	No commands match	Nenhum comando corresponde
+	{pos} of {total}: {name}	{pos} de {total}: {name}
+@plural	{n} result|{n} results	{n} resultado|{n} resultados
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Continue digitando para filtrá-los.|{shown} de {n} resultados. Continue digitando para filtrá-los.
 	Secondary	Secundária
 	Section Symbol	Símbolo de Seção
 	Select	Selecionar

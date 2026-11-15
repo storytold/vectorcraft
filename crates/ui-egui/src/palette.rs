@@ -362,9 +362,9 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
     }
 }
 
-/// The results the palette shows for the lowercased query `q`: the first 14 entries that hold every
-/// word of it, the ones whose name without its menu path is the query (the Layers panel for
-/// "layers") first, each group in catalog order.
+/// Every entry that holds every word of the lowercased query `q`, the ones whose name without its
+/// menu path is the query (the Layers panel for "layers") first, each group in catalog order.
+/// [`show`] lists the first [`MAX_RESULTS`] and counts the rest.
 fn matching<'a>(entries: &'a [Entry], q: &str) -> Vec<&'a Entry> {
     let words: Vec<&str> = q.split_whitespace().collect();
     let whole = words.join(" ");
@@ -374,41 +374,149 @@ fn matching<'a>(entries: &'a [Entry], q: &str) -> Vec<&'a Entry> {
     if !whole.is_empty() {
         found.sort_by_key(|e| !named(e));
     }
-    found.truncate(14);
     found
 }
 
+/// The height of a result row, in points: one line of 13-point body text.
+const ROW_HEIGHT: f32 = 20.0;
+/// The most result rows the list shows at once; the others scroll into view.
+const VISIBLE_ROWS: usize = 12;
+/// The most results the list holds. The footer says how many matched in all.
+const MAX_RESULTS: usize = 50;
+/// The popup's distance from the top of the window, in points.
+const TOP: f32 = 90.0;
+/// The space kept between the popup and the bottom of the window, in points.
+const BOTTOM_GAP: f32 = 8.0;
+
+/// What a result row shows and screen readers read: its name, and its shortcut after a comma.
+fn row_label(e: &Entry) -> String {
+    let shortcut = menus::shown_shortcut(&e.shortcut);
+    if shortcut.is_empty() { e.shown.clone() } else { format!("{}, {shortcut}", e.shown) }
+}
+
+/// The line under the results: how many results matched, how many of them the list holds when it
+/// can't hold them all, or that none matched.
+fn footer(listed: usize, total: usize) -> String {
+    if total == 0 {
+        tl!("No commands match").to_string()
+    } else if listed < total {
+        let line = crate::i18n::tn(
+            total as u64,
+            "{shown} of {n} result. Keep typing to narrow them.",
+            "{shown} of {n} results. Keep typing to narrow them.",
+        );
+        crate::i18n::fmt(&line, &[("shown", &listed.to_string())])
+    } else {
+        crate::i18n::tn(total as u64, "{n} result", "{n} results")
+    }
+}
+
+/// How many times each key that moves the highlighted result was pressed this frame.
+#[derive(Default)]
+struct Moves {
+    down: usize,
+    up: usize,
+    page_down: usize,
+    page_up: usize,
+}
+
+impl Moves {
+    fn any(&self) -> bool {
+        self.down + self.up + self.page_down + self.page_up > 0
+    }
+
+    /// The highlighted result of `n` after these moves from `sel`, a page being `page` rows: Up and
+    /// Down wrap at the ends, Page Up and Page Down stop at them.
+    fn apply(&self, sel: usize, n: usize, page: usize) -> usize {
+        let Some(last) = n.checked_sub(1) else { return 0 };
+        let sel = sel.min(last);
+        let sel = (sel + self.down % n) % n;
+        let sel = (sel + n - self.up % n) % n;
+        let sel = sel.saturating_add(page.saturating_mul(self.page_down)).min(last);
+        sel.saturating_sub(page.saturating_mul(self.page_up))
+    }
+}
+
+/// `name` laid out on one line at most `width` points wide; a longer name ends with "…".
+fn name_galley(painter: &egui::Painter, name: &str, font: egui::FontId, color: egui::Color32, width: f32) -> Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple_singleline(name.to_owned(), font, color);
+    job.wrap = egui::text::TextWrapping { max_width: width.max(0.0), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    painter.layout_job(job)
+}
+
+/// The scroll offset that keeps row `sel` in a list `view` points tall that was scrolled to `offset`.
+fn offset_showing(sel: usize, offset: f32, view: f32) -> f32 {
+    let top = sel as f32 * ROW_HEIGHT;
+    offset.min(top).max(top + ROW_HEIGHT - view).max(0.0)
+}
+
+/// The row nearest to `sel` among the rows of `n` wholly in view of a list `view` points tall
+/// scrolled to `offset`.
+fn nearest_in_view(sel: usize, offset: f32, view: f32, n: usize) -> usize {
+    let Some(last_row) = n.checked_sub(1) else { return 0 };
+    // Half a point of leeway takes in rounding of the offset.
+    let first = (((offset - 0.5) / ROW_HEIGHT).ceil().max(0.0) as usize).min(last_row);
+    let end = ((offset + view + 0.5) / ROW_HEIGHT).floor().max(0.0) as usize;
+    let last = end.saturating_sub(1).clamp(first, last_row);
+    sel.clamp(first, last)
+}
+
+/// The highlighted result, the query it belongs to and the list's scroll offset.
+type Highlight = (usize, String, f32);
+
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    // The widget that had the keyboard focus when the palette opened takes it back when the palette
+    // closes, unless a pick opened a dialog, which focuses its own first field.
+    let focus_id = egui::Id::unique("palette-focus-before");
     if !app.ui.palette_open {
+        if let Some(Some(before)) = ctx.data_mut(|d| d.remove_temp::<Option<egui::Id>>(focus_id))
+            && app.ui.dialog.is_none()
+        {
+            ctx.memory_mut(|m| m.request_focus(before));
+        }
         return;
+    }
+    if ctx.data(|d| d.get_temp::<Option<egui::Id>>(focus_id)).is_none() {
+        let before = ctx.memory(|m| m.focused());
+        ctx.data_mut(|d| d.insert_temp(focus_id, before));
     }
     crate::shortcuts::hold_back_keys(app, ctx);
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries(ctx, crate::i18n::current());
-    let matches = matching(&entries, &q);
+    let mut matches = matching(&entries, &q);
+    let total = matches.len();
+    matches.truncate(MAX_RESULTS);
     let mut run: Option<String> = None;
-    // The highlighted result (#1757): Up and Down move it (wrapping), the pointer over a result
-    // takes it, and a new query starts again from the first.
+    // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
+    // by a page, the pointer over a result takes it, and a new query starts again from the first.
     let sel_id = egui::Id::unique("palette-selected");
-    let (mut sel, last_q) = ctx.data(|d| d.get_temp::<(usize, String)>(sel_id)).unwrap_or_default();
-    if last_q != q {
+    let (mut sel, last_q, mut offset) = ctx.data(|d| d.get_temp::<Highlight>(sel_id)).unwrap_or_default();
+    let new_query = last_q != q;
+    if new_query {
         sel = 0;
     }
     let n = matches.len();
+    let mut moves = Moves::default();
     if n > 0 {
-        let (down, up) =
-            ctx.input_mut(|i| (i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown), i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)));
-        if down {
-            sel = (sel + 1) % n;
-        }
-        if up {
-            sel = (sel + n - 1) % n;
-        }
-        sel = sel.min(n - 1);
+        ctx.input_mut(|i| {
+            let mut key = |k| i.count_and_consume_key(egui::Modifiers::NONE, k);
+            moves = Moves {
+                down: key(egui::Key::ArrowDown),
+                up: key(egui::Key::ArrowUp),
+                page_down: key(egui::Key::PageDown),
+                page_up: key(egui::Key::PageUp),
+            };
+        });
     }
-    egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 90.0]).show(ctx, |ui| {
-        egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
+    let screen = ctx.content_rect();
+    // The highlighted result the rows and the field's description are drawn with.
+    let mut drawn = sel;
+    // The area keeps itself inside the window (egui's `Area::constrain` is on), so in a window too
+    // short for the field, one row and the footer below TOP, the popup moves up.
+    egui::Area::new(egui::Id::unique("palette")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, TOP]).show(ctx, |ui| {
+        let margin: i8 = 10;
+        egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(margin)).show(ui, |ui| {
             ui.set_width(520.0);
             let r = ui.add(
                 egui::TextEdit::singleline(&mut app.ui.palette_query)
@@ -418,20 +526,72 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             );
             r.request_focus();
             ui.add_space(6.0);
-            for (i, e) in matches.iter().enumerate() {
-                let resp = ui.add(
-                    egui::Button::new(e.shown.as_str())
-                        .shortcut_text(menus::shown_shortcut(&e.shortcut))
-                        .min_size(egui::vec2(500.0, 24.0))
-                        .selected(i == sel),
-                );
-                if resp.hovered() && ui.input(|i| i.pointer.delta() != egui::Vec2::ZERO) {
-                    sel = i;
-                }
-                if resp.clicked() {
-                    run = Some(e.id.clone());
-                }
+            // The list shows as many rows as fit above the footer in the window, up to
+            // VISIBLE_ROWS; a page is that many rows.
+            let spacing = ui.spacing().item_spacing.y;
+            let footer_height = spacing + 6.0 + ui.text_style_height(&egui::TextStyle::Body) + f32::from(margin) + BOTTOM_GAP;
+            let room = screen.bottom() - footer_height - ui.cursor().top() - spacing;
+            let rows = ((room / ROW_HEIGHT).floor().max(1.0) as usize).min(VISIBLE_ROWS);
+            sel = moves.apply(sel, n, rows);
+            drawn = sel;
+            let view = rows.min(n) as f32 * ROW_HEIGHT;
+            // Screen readers stay on the field: its description names the highlighted result and
+            // its place among every match, as the footer counts them.
+            if let Some(e) = matches.get(sel) {
+                let pos = (sel + 1).to_string();
+                let of = total.to_string();
+                let said = crate::i18n::fmt(tl!("{pos} of {total}: {name}"), &[("pos", &pos), ("total", &of), ("name", &row_label(e))]);
+                ui.ctx().accesskit_node_builder(r.id, |node| node.set_description(said));
             }
+            if n > 0 {
+                ui.scope(|ui| {
+                    // `show_rows` adds the item spacing to each row, and rows touch.
+                    ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+                    let mut area = egui::ScrollArea::vertical().id_salt("palette-results").max_height(view).auto_shrink([false, true]);
+                    if new_query || moves.any() {
+                        offset = offset_showing(sel, if new_query { 0.0 } else { offset }, view);
+                        area = area.vertical_scroll_offset(offset);
+                    }
+                    let out = area.show_rows(ui, ROW_HEIGHT, n, |ui, range| {
+                        for i in range {
+                            let Some(e) = matches.get(i) else { continue };
+                            let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), ROW_HEIGHT), egui::Sense::click());
+                            if resp.hovered() && ui.input(|inp| inp.pointer.delta() != egui::Vec2::ZERO) {
+                                sel = i;
+                            }
+                            let on = i == sel;
+                            if on {
+                                ui.painter().rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
+                            }
+                            let font = egui::TextStyle::Body.resolve(ui.style());
+                            let shortcut = menus::shown_shortcut(&e.shortcut);
+                            let p = ui.painter();
+                            let shortcut_at = rect.right_center() - egui::vec2(8.0, 0.0);
+                            let used = p.text(shortcut_at, egui::Align2::RIGHT_CENTER, &shortcut, font.clone(), t.text_dim);
+                            let name_end = if shortcut.is_empty() { rect.right() - 8.0 } else { used.left() - 12.0 };
+                            let name_at = rect.left() + 8.0;
+                            let name = name_galley(p, &e.shown, font, t.text, name_end - name_at);
+                            p.galley(egui::pos2(name_at, rect.center().y - name.size().y / 2.0), name, t.text);
+                            // `WidgetInfo::selected` reaches screen readers as a toggled state, so the
+                            // row sets the selected state on its node itself.
+                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, row_label(e)));
+                            ui.ctx().accesskit_node_builder(resp.id, |node| node.set_selected(on));
+                            if resp.clicked() {
+                                run = Some(e.id.clone());
+                            }
+                        }
+                    });
+                    let before = offset;
+                    offset = out.state.clamped_offset().y;
+                    // After a scroll with the wheel or the scroll bar, the highlight moves to the
+                    // nearest row in view, so Enter runs a result that can be seen.
+                    if !new_query && !moves.any() && (offset - before).abs() > 0.5 {
+                        sel = nearest_in_view(sel, offset, view, n);
+                    }
+                });
+            }
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new(footer(n, total)).color(t.text_dim));
             if ui.input(|i| i.key_pressed(egui::Key::Enter))
                 && let Some(e) = matches.get(sel)
             {
@@ -439,7 +599,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
     });
-    ctx.data_mut(|d| d.insert_temp(sel_id, (sel, q)));
+    // The pointer or a scroll moved the highlight after the rows were drawn: the next frame draws
+    // it where it now is.
+    if sel != drawn {
+        ctx.request_repaint();
+    }
+    ctx.data_mut(|d| d.insert_temp::<Highlight>(sel_id, (sel, q, offset)));
     if let Some(id) = run {
         app.ui.palette_open = false;
         run_pick(app, &id);
@@ -765,7 +930,7 @@ mod tests {
         let key = |k| egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
         let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx())).textures_delta.clear();
-            ctx.data(|d| d.get_temp::<(usize, String)>(egui::Id::unique("palette-selected"))).unwrap().0
+            ctx.data(|d| d.get_temp::<Highlight>(egui::Id::unique("palette-selected"))).unwrap().0
         };
         assert_eq!(frame(&mut app, vec![]), 0);
         assert_eq!(frame(&mut app, vec![key(egui::Key::ArrowDown)]), 1);
@@ -774,6 +939,13 @@ mod tests {
         assert!(last > 1, "Up on the first result wraps to the last: {last}");
         app.ui.palette_query = "zoom in".into();
         assert_eq!(frame(&mut app, vec![]), 0);
+        // With more matches than the list holds, Up on the first wraps to the last one it holds, and
+        // Down there wraps to the first.
+        app.ui.palette_query = "select".into();
+        assert!(matching(&entries(&ctx, Lang::EN), "select").len() > MAX_RESULTS);
+        assert_eq!(frame(&mut app, vec![]), 0);
+        assert_eq!(frame(&mut app, vec![key(egui::Key::ArrowUp)]), MAX_RESULTS - 1);
+        assert_eq!(frame(&mut app, vec![key(egui::Key::ArrowDown)]), 0);
     }
 
     /// Each command, tool and plug-in is one result: Place… and Print…, which are engine commands
@@ -1106,13 +1278,12 @@ mod tests {
         let entries = build(Lang::EN);
         let panels: Vec<&Entry> = entries.iter().filter(|e| e.id.starts_with("panel:")).collect();
         assert_eq!(panels.len(), crate::state::all_panels().count());
-        // More than 14 results hold "layers" in their menu path; the panel, named Layers, is shown
-        // first, and "color guide" shows the Color Guide panel first too.
+        // Many results hold "layers" in their menu path; the panel, named Layers, is shown first, and "color guide" shows the Color Guide panel first too.
         for (query, want) in [("layers", "panel:layers"), ("color guide", "panel:colorGuide"), ("Layers ", "panel:layers")] {
             let all = entries.iter().filter(|e| query.to_lowercase().split_whitespace().all(|w| e.haystack.contains(w))).count();
             let shown: Vec<&str> = matching(&entries, &query.to_lowercase()).into_iter().map(|e| e.id.as_str()).collect();
             assert_eq!(shown.first(), Some(&want), "{query}: {shown:?}");
-            assert_eq!(shown.len(), all.min(14), "{query}");
+            assert_eq!(shown.len(), all, "{query}");
         }
         let layers = entries.iter().find(|e| e.id == "panel:layers").unwrap();
         assert_eq!(layers.shown, "Window › Show Panel › Layers");
@@ -1196,5 +1367,398 @@ mod tests {
         }
         vectorcraft_plugins::registry::remove(one);
         vectorcraft_plugins::registry::remove(two);
+    }
+
+    /// The open palette in a window, drawn a frame at a time with the app's theme, in English, with
+    /// screen readers on.
+    struct Open {
+        app: VectorcraftApp,
+        ctx: egui::Context,
+        size: egui::Vec2,
+        time: f64,
+        /// Whether the last frame asked for another one at once.
+        repaint: bool,
+    }
+
+    impl Open {
+        /// The palette open on `query` in a window `size` points big.
+        fn new(query: &str, size: egui::Vec2) -> Open {
+            crate::i18n::set_current(Lang::EN);
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+            app.ui.palette_open = true;
+            app.ui.palette_query = query.into();
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            crate::theme::install_fonts(&ctx);
+            crate::theme::apply(&ctx, Default::default());
+            let mut open = Open { app, ctx, size, time: 0.0, repaint: false };
+            open.frame(vec![]);
+            open
+        }
+
+        /// One frame with `events`: its screen-reader tree.
+        fn frame(&mut self, events: Vec<egui::Event>) -> Vec<egui::accesskit::Node> {
+            self.time += 0.1;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, self.size);
+            let input = egui::RawInput { time: Some(self.time), screen_rect: Some(screen), events, ..Default::default() };
+            let app = &mut self.app;
+            let mut out = self.ctx.run_ui(input, |ui| show(app, ui.ctx()));
+            out.textures_delta.clear();
+            self.repaint = out.viewport_output.get(&egui::ViewportId::ROOT).is_some_and(|v| v.repaint_delay.is_zero());
+            out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
+        }
+
+        /// A frame where `k` is pressed `times` times.
+        fn press(&mut self, k: egui::Key, times: usize) -> Vec<egui::accesskit::Node> {
+            let key = egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+            self.frame(vec![key; times])
+        }
+
+        /// The highlighted result's index.
+        fn highlighted(&self) -> usize {
+            self.ctx.data(|d| d.get_temp::<Highlight>(egui::Id::unique("palette-selected"))).unwrap().0
+        }
+
+        /// The popup's rectangle.
+        fn popup(&self) -> egui::Rect {
+            self.ctx.memory(|m| m.area_rect(egui::Id::unique("palette"))).unwrap()
+        }
+
+        /// The results the palette lists for its query.
+        fn listed(&self) -> Vec<String> {
+            let entries = entries(&self.ctx, Lang::EN);
+            matching(&entries, &self.app.ui.palette_query.to_lowercase()).iter().take(MAX_RESULTS).map(|e| e.id.clone()).collect()
+        }
+    }
+
+    /// The result rows of a screen-reader tree, top to bottom: (label, highlighted, top, bottom).
+    fn rows(nodes: &[egui::accesskit::Node]) -> Vec<(String, bool, f64, f64)> {
+        let mut rows: Vec<(String, bool, f64, f64)> = nodes
+            .iter()
+            .filter(|n| n.role() == egui::accesskit::Role::ListItem)
+            .map(|n| {
+                let b = n.bounds().unwrap();
+                (n.label().unwrap_or_default().to_string(), n.is_selected() == Some(true), b.y0, b.y1)
+            })
+            .collect();
+        rows.sort_by(|a, b| a.2.total_cmp(&b.2));
+        rows
+    }
+
+    /// The text of the labels in a screen-reader tree.
+    fn labels(nodes: &[egui::accesskit::Node]) -> Vec<String> {
+        nodes.iter().filter(|n| n.role() == egui::accesskit::Role::Label).filter_map(|n| n.label().or(n.value()).map(str::to_string)).collect()
+    }
+
+    /// The search field's screen-reader description.
+    fn field_description(nodes: &[egui::accesskit::Node]) -> String {
+        let field = nodes.iter().find(|n| n.role() == egui::accesskit::Role::TextInput).expect("the search field is in the tree");
+        field.description().unwrap_or_default().to_string()
+    }
+
+    const WINDOW: egui::Vec2 = egui::vec2(1280.0, 900.0);
+
+    /// Each result is a 20-point row, rows touch, and 12 show at once; the popup is shorter than
+    /// the 14 24-point buttons it showed before.
+    #[test]
+    fn results_are_compact_rows_that_touch() {
+        let mut open = Open::new("select", WINDOW);
+        let nodes = open.frame(vec![]);
+        let rows = rows(&nodes);
+        let inside: Vec<_> = rows.iter().filter(|r| r.3 <= f64::from(open.popup().bottom())).collect();
+        assert!(inside.len() >= VISIBLE_ROWS, "{rows:?}");
+        for pair in inside.windows(2).take(VISIBLE_ROWS - 1) {
+            assert_eq!(pair[0].3 - pair[0].2, f64::from(ROW_HEIGHT), "{pair:?}");
+            assert_eq!(pair[0].3, pair[1].2, "rows touch: {pair:?}");
+        }
+        // 14 results took 458 points before the rows were made compact.
+        let height = open.popup().height();
+        println!("popup height for {VISIBLE_ROWS} rows: {height}");
+        assert!(height <= 330.0, "{height}");
+    }
+
+    /// The footer says how many results matched, how many of them the list holds when it holds
+    /// fewer, or that none matched.
+    #[test]
+    fn the_footer_counts_the_results() {
+        crate::i18n::set_current(Lang::EN);
+        assert_eq!(footer(50, 60), "50 of 60 results. Keep typing to narrow them.");
+        assert_eq!(footer(3, 3), "3 results");
+        assert_eq!(footer(1, 1), "1 result");
+        assert_eq!(footer(0, 0), "No commands match");
+        // The count takes each language's form.
+        crate::i18n::set_current(Lang::from_code("ru").unwrap());
+        let ru = [footer(50, 51), footer(50, 52), footer(2, 2)];
+        crate::i18n::set_current(Lang::EN);
+        assert_eq!(
+            ru,
+            [
+                "50 из 51 результата. Продолжайте вводить, чтобы сузить их.",
+                "50 из 52 результатов. Продолжайте вводить, чтобы сузить их.",
+                "2 результата"
+            ]
+        );
+        let mut open = Open::new("select", WINDOW);
+        let total = matching(&entries(&open.ctx, Lang::EN), "select").len();
+        assert!(total > MAX_RESULTS, "{total}");
+        let nodes = open.frame(vec![]);
+        assert!(labels(&nodes).contains(&format!("50 of {total} results. Keep typing to narrow them.")), "{:?}", labels(&nodes));
+        // Every result the list holds is reachable: End of the list by keyboard shows the 50th.
+        let nodes = open.press(egui::Key::ArrowUp, 1);
+        assert_eq!(open.highlighted(), MAX_RESULTS - 1);
+        assert!(rows(&nodes).iter().any(|r| r.1), "the 50th row is drawn and highlighted");
+    }
+
+    /// With no match, the footer says so and Enter runs nothing and leaves the palette open.
+    #[test]
+    fn with_no_match_enter_runs_nothing() {
+        let mut open = Open::new("qqzzxxnothing", WINDOW);
+        let nodes = open.frame(vec![]);
+        assert!(rows(&nodes).is_empty());
+        assert!(labels(&nodes).contains(&"No commands match".to_string()), "{:?}", labels(&nodes));
+        open.app.ui.status.clear();
+        open.press(egui::Key::Enter, 1);
+        open.frame(vec![]);
+        assert!(open.app.ui.palette_open && open.app.ui.status.is_empty(), "{}", open.app.ui.status);
+    }
+
+    /// Down 15 times from the first result highlights the 16th, scrolled into view, and Enter runs
+    /// it.
+    #[test]
+    fn the_sixteenth_result_is_reached_by_keyboard_and_runs() {
+        let mut open = Open::new("show panel", WINDOW);
+        let listed = open.listed();
+        assert!(listed.len() > 16, "{listed:?}");
+        let nodes = open.press(egui::Key::ArrowDown, 15);
+        assert_eq!(open.highlighted(), 15);
+        let lit: Vec<_> = rows(&nodes).into_iter().filter(|r| r.1).collect();
+        let entries = entries(&open.ctx, Lang::EN);
+        let want = entries.iter().find(|e| e.id == listed[15]).map(row_label).unwrap();
+        assert_eq!(lit.len(), 1, "{lit:?}");
+        assert_eq!(lit[0].0, want);
+        let popup = open.popup();
+        assert!(lit[0].2 >= f64::from(popup.top()) && lit[0].3 <= f64::from(popup.bottom()), "scrolled into view: {lit:?} in {popup:?}");
+        let panel = listed[15].strip_prefix("panel:").expect("a panel's result").to_string();
+        assert!(!crate::panel_docking::showing(&open.app.ui, &panel), "{panel}");
+        open.press(egui::Key::Enter, 1);
+        assert!(!open.app.ui.palette_open);
+        assert!(crate::panel_docking::showing(&open.app.ui, &panel), "{panel}: {}", open.app.ui.status);
+    }
+
+    /// Page Down and Page Up move the highlight by the rows shown, stopping at the ends; Up and
+    /// Down wrap.
+    #[test]
+    fn page_keys_move_by_a_page_without_wrapping() {
+        let moves = |down, up, page_down, page_up| Moves { down, up, page_down, page_up };
+        assert_eq!(moves(0, 0, 1, 0).apply(0, 50, 12), 12);
+        assert_eq!(moves(0, 0, 1, 0).apply(45, 50, 12), 49);
+        assert_eq!(moves(0, 0, 0, 1).apply(5, 50, 12), 0);
+        assert_eq!(moves(1, 0, 0, 0).apply(49, 50, 12), 0);
+        assert_eq!(moves(0, 1, 0, 0).apply(0, 50, 12), 49);
+        assert_eq!(moves(3, 0, 0, 0).apply(48, 50, 12), 1);
+        assert_eq!(moves(1, 0, 0, 0).apply(0, 0, 12), 0);
+        let mut open = Open::new("select", WINDOW);
+        open.press(egui::Key::PageDown, 1);
+        assert_eq!(open.highlighted(), VISIBLE_ROWS);
+        open.press(egui::Key::PageDown, 5);
+        assert_eq!(open.highlighted(), MAX_RESULTS - 1, "stops at the last");
+        open.press(egui::Key::PageUp, 1);
+        assert_eq!(open.highlighted(), MAX_RESULTS - 1 - VISIBLE_ROWS);
+        open.press(egui::Key::PageUp, 9);
+        assert_eq!(open.highlighted(), 0, "stops at the first");
+    }
+
+    /// After the list is scrolled with the wheel, the highlight is on a row in view, so Enter runs a
+    /// result that can be seen.
+    #[test]
+    fn a_wheel_scroll_keeps_the_highlight_in_view() {
+        assert_eq!(nearest_in_view(0, 100.0, 240.0, 50), 5);
+        assert_eq!(nearest_in_view(30, 100.0, 240.0, 50), 16);
+        assert_eq!(nearest_in_view(8, 100.0, 240.0, 50), 8);
+        assert_eq!(nearest_in_view(3, 0.0, 240.0, 3), 2);
+        assert_eq!(nearest_in_view(0, 0.0, 240.0, 0), 0);
+        let mut open = Open::new("select", WINDOW);
+        let nodes = open.frame(vec![]);
+        let first = rows(&nodes).into_iter().next().unwrap();
+        let at = egui::pos2(open.popup().center().x, ((first.2 + first.3) / 2.0) as f32);
+        let wheel = egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -200.0),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Unknown,
+            modifiers: egui::Modifiers::NONE,
+        };
+        open.frame(vec![egui::Event::PointerMoved(at)]);
+        let mut nodes = open.frame(vec![wheel]);
+        // The frames that follow, up to the last one the palette or the scroll asks for, which
+        // has to show the highlight where Enter runs it.
+        for _ in 0..120 {
+            if !open.repaint {
+                break;
+            }
+            nodes = open.frame(vec![]);
+        }
+        assert!(!open.repaint, "the scroll settles");
+        let sel = open.highlighted();
+        assert!(sel > 0, "the highlight left the row scrolled out of view");
+        let popup = open.popup();
+        let lit: Vec<_> = rows(&nodes).into_iter().filter(|r| r.1).collect();
+        assert_eq!(lit.len(), 1, "{lit:?}");
+        assert!(lit[0].2 >= f64::from(popup.top()) && lit[0].3 <= f64::from(popup.bottom()), "{lit:?} in {popup:?}");
+        assert_eq!(lit[0].0, row_label(entries(&open.ctx, Lang::EN).iter().find(|e| e.id == open.listed()[sel]).unwrap()));
+    }
+
+    /// The pointer moved onto a row highlights that row alone, and the field's description names
+    /// it, on the frame drawn straight after.
+    #[test]
+    fn the_row_under_the_pointer_is_the_one_highlighted() {
+        let mut open = Open::new("select", WINDOW);
+        let listed = open.listed();
+        let entries = entries(&open.ctx, Lang::EN);
+        let nodes = open.frame(vec![]);
+        let all = rows(&nodes);
+        let middle = |r: &(String, bool, f64, f64)| egui::pos2(open.popup().center().x, ((r.2 + r.3) / 2.0) as f32);
+        let (first, fourth) = (middle(&all[0]), middle(&all[3]));
+        open.frame(vec![egui::Event::PointerMoved(first)]);
+        open.frame(vec![egui::Event::PointerMoved(fourth)]);
+        assert_eq!(open.highlighted(), 3);
+        assert!(open.repaint, "the frame that moved the highlight asks for another");
+        let nodes = open.frame(vec![]);
+        let lit: Vec<String> = rows(&nodes).into_iter().filter(|r| r.1).map(|r| r.0).collect();
+        let label = entries.iter().find(|e| e.id == listed[3]).map(row_label).unwrap();
+        assert_eq!(lit, std::slice::from_ref(&label));
+        assert_eq!(field_description(&nodes), format!("4 of {}: {label}", matching(&entries, "select").len()));
+    }
+
+    /// A name too long for its row is cut short with "…" and stays inside the width it is given.
+    #[test]
+    fn a_long_name_ends_with_an_ellipsis() {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let long = "Window › Show Panel › A Panel Name Long Enough Not To Fit In The Row (addon.panels.long)";
+            let cut = name_galley(ui.painter(), long, font.clone(), egui::Color32::WHITE, 200.0);
+            assert!(cut.elided && cut.size().x <= 200.0, "{:?}", cut.size());
+            assert_eq!(cut.rows.last().and_then(|r| r.glyphs.last()).map(|g| g.chr), Some('…'));
+            let short = name_galley(ui.painter(), "Edit › Copy", font, egui::Color32::WHITE, 200.0);
+            assert!(!short.elided);
+        });
+        out.textures_delta.clear();
+    }
+
+    /// The popup stays inside a short window, showing fewer rows when 12 don't fit; a page is the
+    /// rows shown.
+    #[test]
+    fn the_popup_stays_inside_a_short_window() {
+        for size in [egui::vec2(1280.0, 600.0), egui::vec2(800.0, 300.0), egui::vec2(800.0, 160.0)] {
+            let mut open = Open::new("select", size);
+            open.frame(vec![]);
+            let popup = open.popup();
+            assert!(popup.top() >= 0.0 && popup.bottom() <= size.y, "{size:?}: {popup:?}");
+            open.press(egui::Key::PageDown, 1);
+            let page = open.highlighted();
+            if size.y < 400.0 {
+                assert!((1..VISIBLE_ROWS).contains(&page), "a short window shows fewer than 12 rows: {size:?}: {page}");
+            } else {
+                assert_eq!(page, VISIBLE_ROWS, "{size:?}");
+            }
+        }
+    }
+
+    /// A click anywhere on a row, its empty right end included, runs it.
+    #[test]
+    fn a_click_anywhere_on_a_row_runs_it() {
+        let mut open = Open::new("show panel", WINDOW);
+        let listed = open.listed();
+        let nodes = open.frame(vec![]);
+        let hidden = |id: &String| id.strip_prefix("panel:").is_some_and(|p| !crate::panel_docking::showing(&open.app.ui, p));
+        let k = listed.iter().position(hidden).expect("a hidden panel's result");
+        assert!(k < VISIBLE_ROWS, "{listed:?}");
+        let row = rows(&nodes).into_iter().nth(k).unwrap();
+        let popup = open.popup();
+        let at = egui::pos2(popup.right() - 24.0, ((row.2 + row.3) / 2.0) as f32);
+        let panel = listed[k].strip_prefix("panel:").unwrap_or_default().to_string();
+        assert!(!crate::panel_docking::showing(&open.app.ui, &panel), "{panel}");
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        open.frame(vec![egui::Event::PointerMoved(at)]);
+        open.frame(vec![button(true)]);
+        open.frame(vec![button(false)]);
+        assert!(!open.app.ui.palette_open);
+        assert!(crate::panel_docking::showing(&open.app.ui, &panel), "{panel}: {}", open.app.ui.status);
+    }
+
+    /// Screen readers stay on the field: its description names the highlighted result and its
+    /// place, and follows the highlight; the rows are list items, the highlighted one selected, and
+    /// the footer's count is a label.
+    #[test]
+    fn screen_readers_hear_the_highlighted_result_and_the_count() {
+        let mut open = Open::new("show panel", WINDOW);
+        let listed = open.listed();
+        let entries = entries(&open.ctx, Lang::EN);
+        let label = |i: usize| entries.iter().find(|e| e.id == listed[i]).map(row_label).unwrap();
+        let nodes = open.frame(vec![]);
+        // More results match than the list holds: the place counts every match, as the footer does.
+        let total = matching(&entries, "show panel").len();
+        assert!(total > MAX_RESULTS && listed.len() == MAX_RESULTS, "{total}");
+        assert_eq!(field_description(&nodes), format!("1 of {total}: {}", label(0)));
+        let lit: Vec<String> = rows(&nodes).into_iter().filter(|r| r.1).map(|r| r.0).collect();
+        assert_eq!(lit, [label(0)]);
+        assert!(labels(&nodes).contains(&format!("50 of {total} results. Keep typing to narrow them.")), "{:?}", labels(&nodes));
+        let nodes = open.press(egui::Key::ArrowDown, 1);
+        assert_eq!(field_description(&nodes), format!("2 of {total}: {}", label(1)));
+        // Fewer results match than the list holds.
+        let mut open = Open::new("copy", WINDOW);
+        let n = open.listed().len();
+        assert!((1..MAX_RESULTS).contains(&n), "{n}");
+        let first = entries.iter().find(|e| e.id == open.listed()[0]).map(row_label).unwrap();
+        let nodes = open.frame(vec![]);
+        assert_eq!(field_description(&nodes), format!("1 of {n}: {first}"));
+        assert!(labels(&nodes).contains(&footer(n, n)), "{:?}", labels(&nodes));
+    }
+
+    /// The widget that had the keyboard focus when the palette opened has it again once the
+    /// palette closes.
+    #[test]
+    fn closing_gives_the_focus_back() {
+        let ctx = egui::Context::default();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let mut text = String::new();
+        let field = egui::Id::unique("other field");
+        let mut frame = |app: &mut VectorcraftApp, focus: bool| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                let r = ui.add(egui::TextEdit::singleline(&mut text).id(field));
+                if focus {
+                    r.request_focus();
+                }
+                show(app, ui.ctx());
+            })
+            .textures_delta
+            .clear();
+        };
+        frame(&mut app, true);
+        frame(&mut app, false);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(field));
+        app.ui.palette_open = true;
+        frame(&mut app, false);
+        frame(&mut app, false);
+        assert_ne!(ctx.memory(|m| m.focused()), Some(field), "the search field takes the focus");
+        app.ui.palette_open = false;
+        frame(&mut app, false);
+        frame(&mut app, false);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(field));
+        // A pick that opens a dialog leaves the focus to the dialog.
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), crate::Services::default());
+        frame(&mut app, true);
+        app.ui.palette_open = true;
+        frame(&mut app, false);
+        frame(&mut app, false);
+        app.ui.palette_open = false;
+        run_pick(&mut app, "object.path.cleanUp");
+        assert!(app.ui.dialog.is_some(), "Clean Up… opens its dialog: {}", app.ui.status);
+        frame(&mut app, false);
+        frame(&mut app, false);
+        assert_ne!(ctx.memory(|m| m.focused()), Some(field), "the dialog keeps the focus");
     }
 }

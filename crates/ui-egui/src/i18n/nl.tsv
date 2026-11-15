@@ -4658,6 +4658,10 @@ font-technology	Variable	Variabel
 	Saving	Bezig met opslaan
 	Saving {}	{} wordt opgeslagen
 	Search commands, tools, panels and effects…	Opdrachten, gereedschappen, panelen en effecten zoeken…
+	No commands match	Geen opdrachten gevonden
+	{pos} of {total}: {name}	{pos} van {total}: {name}
+@plural	{n} result|{n} results	{n} resultaat|{n} resultaten
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} van {n} resultaat. Typ verder om ze te beperken.|{shown} van {n} resultaten. Typ verder om ze te beperken.
 	Dashed Line	Streepjeslijn
 	Panel menu	Paneelmenu
 	Unembed…	Insluiten ongedaan maken…

@@ -3038,6 +3038,10 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` şu adlardan oluşan bir dizi olmalıdır: {_1}
 	Search commands, tools, panels and effects	Komutları, araçları, panelleri ve efektleri arayın
 	Search commands, tools, panels and effects…	Komutları, araçları, panelleri ve efektleri arayın…
+	No commands match	Eşleşen komut yok
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} sonuç
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil
 	Section Symbol	Bölüm Sembolü

@@ -4098,6 +4098,10 @@ font-technology	Variable	Variabel
 	Saving	Menyimpan
 	Saving {}	Menyimpan {}
 	Search commands, tools, panels and effects…	Cari perintah, alat, panel, dan efek…
+	No commands match	Tidak ada perintah yang cocok
+	{pos} of {total}: {name}	{pos} dari {total}: {name}
+@plural	{n} result|{n} results	{n} hasil
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Dashed Line	Garis putus-putus
 	Panel menu	Menu panel
 	Unembed…	Lepaskan sematan…

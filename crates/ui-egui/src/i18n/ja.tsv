@@ -3160,6 +3160,10 @@ mark-style	Japanese	日本式
 @msg	`{key}` must be an array of these names: {_1}	`{key}` には {_1} の中の名前の配列を指定してください
 	Search commands, tools, panels and effects	コマンド、ツール、パネル、効果を検索
 	Search commands, tools, panels and effects…	コマンド、ツール、パネル、効果を検索…
+	No commands match	一致するコマンドはありません
+	{pos} of {total}: {name}	{total} 件中 {pos} 件目: {name}
+@plural	{n} result|{n} results	{n} 件
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択
 	Select All Assets	すべてのアセットを選択

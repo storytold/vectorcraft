@@ -4273,6 +4273,10 @@ font-technology	Variable	Zmienne
 	Saving	Zapisywanie
 	Saving {}	Zapisywanie {}
 	Search commands, tools, panels and effects…	Szukaj poleceń, narzędzi, paneli i efektów…
+	No commands match	Żadne polecenie nie pasuje
+	{pos} of {total}: {name}	{pos} z {total}: {name}
+@plural	{n} result|{n} results	{n} wynik|{n} wyniki|{n} wyników
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Dashed Line	Linia przerywana
 	Panel menu	Menu panelu
 	Unembed…	Wyodrębnij…

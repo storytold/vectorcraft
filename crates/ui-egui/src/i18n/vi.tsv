@@ -3606,6 +3606,10 @@ mark-style	Japanese	Kiểu Nhật
 @msg	`{key}` must be an array of these names: {_1}	`{key}` phải là một mảng gồm các tên sau: {_1}
 	Search commands, tools, panels and effects	Tìm kiếm lệnh, công cụ, bảng và hiệu ứng
 	Search commands, tools, panels and effects…	Tìm kiếm lệnh, công cụ, bảng và hiệu ứng…
+	No commands match	Không có lệnh nào khớp
+	{pos} of {total}: {name}	{pos} trên {total}: {name}
+@plural	{n} result|{n} results	{n} kết quả
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
 	Searching…	Đang tìm kiếm…

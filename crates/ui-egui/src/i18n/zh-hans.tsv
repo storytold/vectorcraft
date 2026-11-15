@@ -3101,6 +3101,10 @@ digits	Malayalam	马拉雅拉姆数字
 	Filter Layers Panel Rows	筛选图层面板行
 	Search commands, tools, panels and effects	搜索命令、工具、面板和效果
 	Search commands, tools, panels and effects…	搜索命令、工具、面板和效果…
+	No commands match	没有匹配的命令
+	{pos} of {total}: {name}	第 {pos} 个，共 {total} 个：{name}
+@plural	{n} result|{n} results	{n} 个结果
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Search Commands…	搜索命令…
 	Secondary	次要
 	Section Symbol	章节符号

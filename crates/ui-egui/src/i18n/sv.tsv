@@ -3161,6 +3161,10 @@ digits	Malayalam	Malayalam
 	Search All	Sök i alla
 	Search commands, tools, panels and effects	Sök kommandon, verktyg, paneler och effekter
 	Search commands, tools, panels and effects…	Sök kommandon, verktyg, paneler och effekter…
+	No commands match	Inga kommandon matchar
+	{pos} of {total}: {name}	{pos} av {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultat
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Search Commands…	Sök kommandon…
 	Secondary	Sekundär
 	Section Symbol	Paragraftecken

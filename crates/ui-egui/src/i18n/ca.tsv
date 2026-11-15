@@ -4055,6 +4055,10 @@ digits	Malayalam	Malaiàlam
 	Search All	Cerca a tot
 	Search commands, tools, panels and effects	Cerca ordres, eines, panells i efectes
 	Search commands, tools, panels and effects…	Cerca ordres, eines, panells i efectes…
+	No commands match	Cap ordre coincideix
+	{pos} of {total}: {name}	{pos} de {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultats
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Search Commands…	Cerca ordres…
 	Search Fonts Folder	Cerca a la carpeta de tipus de lletra
 	Searching…	Cercant…

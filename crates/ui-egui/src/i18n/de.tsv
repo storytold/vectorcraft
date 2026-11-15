@@ -3205,6 +3205,10 @@ digits	Malayalam	Malayalam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
 	Search commands, tools, panels and effects	Befehle, Werkzeuge, Bedienfelder und Effekte suchen
 	Search commands, tools, panels and effects…	Befehle, Werkzeuge, Bedienfelder und Effekte suchen…
+	No commands match	Keine passenden Befehle
+	{pos} of {total}: {name}	{pos} von {total}: {name}
+@plural	{n} result|{n} results	{n} Ergebnis|{n} Ergebnisse
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} von {n} Ergebnis. Tippen Sie weiter, um sie einzugrenzen.|{shown} von {n} Ergebnissen. Tippen Sie weiter, um sie einzugrenzen.
 	Search Commands…	Befehle suchen…
 	Secondary	Sekundär
 	Section Symbol	Paragrafenzeichen

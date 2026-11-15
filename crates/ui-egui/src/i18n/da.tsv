@@ -4750,6 +4750,10 @@ font-technology	Variable	Variable
 	Saving	Gemmer
 	Saving {}	Gemmer {}
 	Search commands, tools, panels and effects…	Søg i kommandoer, værktøjer, paneler og effekter…
+	No commands match	Ingen kommandoer passer
+	{pos} of {total}: {name}	{pos} af {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultater
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} af {n} resultat. Skriv videre for at indsnævre dem.|{shown} af {n} resultater. Skriv videre for at indsnævre dem.
 	Dashed Line	Stiplet linje
 	Panel menu	Panelmenu
 	Unembed…	Ophæv integrering…

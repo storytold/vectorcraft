@@ -3274,6 +3274,10 @@ digits	Malayalam	Малаялам
 @msg	`{key}` must be an array of these names: {_1}	`{key}` має бути масивом цих назв: {_1}
 	Search commands, tools, panels and effects	Пошук команд, інструментів, панелей та ефектів
 	Search commands, tools, panels and effects…	Пошук команд, інструментів, панелей та ефектів…
+	No commands match	Немає відповідних команд
+	{pos} of {total}: {name}	{pos} з {total}: {name}
+@plural	{n} result|{n} results	{n} результат|{n} результати|{n} результатів
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
 	Section Symbol	Символ параграфа
