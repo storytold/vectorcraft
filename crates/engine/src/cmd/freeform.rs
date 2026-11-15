@@ -182,7 +182,8 @@ fn edit<R>(s: &mut Session, p: &Value, cmd: &str, mut f: impl FnMut(&mut Freefor
     let item = item_target(s, p, cmd)?;
     let stroke = edits_stroke(s, p, item, !s.fill_active, cmd)?;
     let item = item.of_kind(s, !stroke);
-    let ids = item.targets(s, p)?;
+    // The art of a graph design in a series keeps the design's gradient.
+    let ids = super::appearance::without_design_art(&s.doc()?.doc, item.targets(s, p)?, cmd)?;
     if ids.is_empty() {
         return Err(bad(cmd, "select an object with a freeform gradient"));
     }

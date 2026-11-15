@@ -1520,6 +1520,8 @@ lighting	Light	Cahaya
 	Leading	Leading
 	No Break	Tanpa pemenggalan
 	Proportional Metrics	Metrik proporsional
+	H or V Style	Gaya horizontal atau vertikal
+	Roman Italics	Miring Romawi
 	Insert Aki Left	Sisipkan aki kiri
 	Insert Aki Right	Sisipkan aki kanan
 	Tsume	Tsume
@@ -6268,6 +6270,13 @@ axis	Y Axis	Sumbu Y
 	Graphite Pencil	Pensil grafit
 	Wax Crayon	Krayon lilin
 	Charcoal Dust	Debu arang
+
+# Original procedural circuit brushes.
+	Tech Circuit	Sirkuit teknologi
+	Circuit Trace	Jalur sirkuit
+	Bus Lines	Jalur bus
+	Terminal Nodes	Simpul terminal
+
 	Notched Ribbon	Pita bertakik
 	Double Line	Garis ganda
 	Wave	Gelombang

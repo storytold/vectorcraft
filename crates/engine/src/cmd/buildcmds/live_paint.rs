@@ -1,8 +1,8 @@
 use super::{
     Appearance, AppearanceItem, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId,
-    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json,
-    is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes,
-    switch_or,
+    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite,
+    fit_to_old_edge, ids_json, is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids,
+    source_nodes, source_shapes, switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -85,6 +85,9 @@ pub(super) fn lp_make(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
 
+/// How far, in points, the middle of an edge Merge makes may be from the old edge it lies on.
+const ON_OLD_EDGE: f64 = 1e-3;
+
 /// What Merge carries from a face or edge to the part it makes again in its place, another path:
 /// the appearance, visibility, opacity and blending mode. Gradients fitted to the old outline keep
 /// that fit, and the strokes' pen pressure, tilt, bearing and rotation stay behind.
@@ -125,18 +128,11 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         .ok_or_else(|| EngineError::Other("Live Paint Merge: select a Live Paint group and the paths to add".into()))?;
     check_live_paint_takes(d, roots)?;
     let old = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
-    // Paint to carry over: (point inside face, paint) for faces that draw, and (point on edge,
-    // paint) for every edge.
+    // Paint to carry over: (point inside face, paint) for faces that draw; edges are matched to the
+    // old edges below.
     let keep_faces: Vec<(Point, Carried)> =
         b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
-    let keep_edges: Vec<(Point, Carried)> = b::edges(&old)
-        .iter()
-        .filter_map(|e| {
-            let pd = e.path_data()?;
-            let sp = pd.subpaths.first().filter(|sp| sp.segment_count() > 0)?;
-            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), Carried::of(e)))
-        })
-        .collect();
+    let old_parts = old.clone();
     let mut sources = source_nodes(&old);
     for r in roots {
         if *r != target {
@@ -162,12 +158,24 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
             carried.onto(Arc::make_mut(f));
         }
     }
-    for (pt, carried) in keep_edges {
-        if let Some(eid) = edge_near(&g, pt, 0.5).map(|e| e.id)
-            && let Some(ch) = g.children_mut()
-            && let Some(e) = ch.iter_mut().find(|c| c.id == eid)
-        {
-            carried.onto(Arc::make_mut(e));
+    // Each edge whose middle lies on an old edge, every piece of an edge an added path cuts
+    // included, takes the old edge's paint, with its rows fitted to its part of the old edge.
+    if let Some(ch) = g.children_mut() {
+        for c in ch.iter_mut().filter(|c| c.name.as_deref() == Some(EDGE_NAME)) {
+            let Some(mid) = c
+                .path_data()
+                .and_then(|pd| pd.subpaths.first())
+                .filter(|sp| sp.segment_count() > 0)
+                .map(|sp| kurbo::ParamCurve::eval(&sp.segment(0), 0.5))
+            else {
+                continue;
+            };
+            let Some(was) = edge_near(&old_parts, mid, ON_OLD_EDGE) else { continue };
+            let e = Arc::make_mut(c);
+            Carried::of(was).onto(e);
+            if let Some(outline) = was.path_data() {
+                fit_to_old_edge(e, outline);
+            }
         }
     }
     let mut merged = Beside::replacing(d, roots);
