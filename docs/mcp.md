@@ -2019,8 +2019,9 @@ and `type.fractionalWidths`; `flip` in `type.dynamicTextPreset`; `remove` and `o
 These commands refuse a string or another value that is not a number with `` `radius` must be a number, not "2" ``,
 naming the key, and change nothing: `radius` in `shape.rectangle`; `sides` and `rotation` in `shape.polygon`;
 `radius2`, `points` and `rotation` in `shape.star`; `diameter`, `opacity`, `brightness`, `growth`, `fuzziness`,
-`rays`, `longest`, `rayFuzziness`, `rotation`, `rings`, `largest`, `x2`, `y2`, `direction`, `pathLength` and `seed`
-in `shape.flare`; `decay` and `segments` in `shape.spiral`; `rows` and `columns` in `shape.rectangularGrid`; `concentric`
+`rays`, `longest`, `rayFuzziness`, `rotation`, `rings`, `largest`, `x2`, `y2`, `direction`, `pathLength`, `seed` and
+`ringSeed` in `shape.flare` (`seed` must also be a whole number of at least 0, and `ringSeed` a whole number from
+0 to 2^53 - 1); `decay` and `segments` in `shape.spiral`; `rows` and `columns` in `shape.rectangularGrid`; `concentric`
 and `radial` in `shape.polarGrid`; `size` and the `width`, `height` and `fitMinPercent` of `area` in `text.create`;
 `size` and `fitMinPercent` in `text.createInPath`; `start`, `end`, `size`, `tracking`,
 `baselineShift`, `hScale`, `vScale`, `rotation` and `strokeWidth` in `text.setRangeStyle`; `strokeWidth` in `text.setStyle`; `start` and `end` in
@@ -10721,7 +10722,14 @@ same dialog, and its OK also draws a flare there. While the center is dragged ou
 pointer's document y grows adds one degree per document point to `shape.flare`'s `rotation` (it turns
 only the rays), decreasing y subtracts the same rate, and unchanged y leaves it. This application rate is independent of event frequency; Shift held keeps
 the turn as it is. Space held keeps the turn as well. Once the center drag has passed its starting distance, and in the
-drag that places the rings' end point, Space held moves the flare at its current size. The Artboard tool's are the active artboard's Artboard Options
+drag that places the rings' end point, Space held moves the flare at its current size. In the center drag, Up and Down
+Arrow add and remove rays, and Ctrl (Command on macOS; `mods.cmd`) keeps the center's diameter as the last drag showed
+it while the drag sizes the halo: the halo's radius keeps the ratio to the pointer's distance that it had when the key
+went down, through `growth` within 0 to 300 %. Letting the key go sizes the center with the drag again, and the flare
+keeps the new `growth`. While the rings' end point is placed, Up and Down Arrow add and remove rings (0 to 50; with
+Rings off they do nothing), and each press of backquote (the ~ key; a pointer event's `backquote` turning true) sends a
+new `ringSeed`, which moves the rings along the path and keeps their count and sizes. Each new flare starts from the
+options' counts and growth, without a `ringSeed`. The Artboard tool's are the active artboard's Artboard Options
 (dialog `artboardOptions`; the Artboard tool's active artboard while it is in use, else the window's; its `x` and `y`
 are the artboard's top-left corner in document points, while the dialog shows X and Y at the reference point the
 Transform panel uses, counted from the ruler origin), a graph tool's
