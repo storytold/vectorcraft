@@ -263,7 +263,9 @@ pub(super) fn save_current_in(app: &mut VectorcraftApp, p: &Value, folder: Optio
         return Ok(r);
     }
     let retry = super::read_only_save::Retry::new(&first, folder);
-    write_plan(app, first, ("file.save", p.clone()), Some(retry))
+    // Only `path` was asked about: the files written beside it are checked against the file the
+    // document was read from when the save writes them.
+    write_plan(app, plan(app, SaveMode::Save, p)?, ("file.save", p.clone()), Some(retry))
 }
 
 /// File → Save, Save As…, Save a Copy…, Save as Template… and the options dialogs' OK. `p` is the
