@@ -760,6 +760,29 @@ fn convert_to_srgb_converts_tagged_images_from_their_profile() {
     assert!(r.warnings.iter().any(|w| w.contains("couldn't be read")), "{:?}", r.warnings);
     let spaces = image_spaces(&r.bytes);
     assert!(spaces.len() == 1 && spaces[0].icc.as_deref() == Some(unread.as_slice()), "unread profile: {spaces:?}");
+    // A tagged image whose header declares more pixels than the decoding allowance is kept as it
+    // is, with a warning when it was to be converted.
+    let declared = |img: &DynamicImage, icc: &[u8]| {
+        let mut png = tagged(img, icc, ImageFormat::Png);
+        png[16..24].copy_from_slice(&[0, 0, 0x75, 0x30, 0, 0, 0x75, 0x30]);
+        let mut crc = flate2::Crc::new();
+        crc.update(&png[12..29]);
+        png[29..33].copy_from_slice(&crc.sum().to_be_bytes());
+        png
+    };
+    let c: CompressionSettings = serde_json::from_value(json!({})).unwrap();
+    let srgb_out = Some(crate::images::ToSrgb { intent: Intent::RelativeColorimetric, sixteen_bit: true });
+    for (what, png) in [("RGB", declared(&colour(), &p3)), ("gray", declared(&colour().grayscale(), &gray))] {
+        let r = crate::images::recode(&png, (100.0, 100.0), &c, false, None, true, srgb_out);
+        assert!(r.image.is_none() && r.warning.is_some_and(|w| w.contains("not converted to sRGB")), "{what}: {:?}", r.warning);
+        let r = crate::images::recode(&png, (100.0, 100.0), &c, false, None, true, None);
+        assert!(r.image.is_none() && r.warning.is_none(), "{what}, no conversion: {:?}", r.warning);
+        // Too large to embed as it is too: the export leaves it out, and says only that.
+        let mut settings: PdfSettings = serde_json::from_value(to_srgb(json!({}))).unwrap();
+        settings.compression.compress_text = false;
+        let r = export_with_report(&doc(png, "image/png"), &PdfOptions { settings, ..Default::default() }).unwrap();
+        assert!(r.warnings.len() == 1 && r.warnings[0].contains("missing from the picture"), "{what}, exported: {:?}", r.warnings);
+    }
 }
 
 /// An RGB ICC profile (version 2.1, display class, XYZ connection space) of two lookup tables of

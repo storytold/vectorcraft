@@ -151,10 +151,12 @@ impl Exporter<'_> {
             } else {
                 crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles, to_srgb)
             };
-            if let Some(w) = r.warning {
+            let img = r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles));
+            // An image left out gets the warning below instead.
+            if let Some(w) = r.warning.filter(|_| img.is_some()) {
                 self.warn(w);
             }
-            r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles))
+            img
         });
         if img.is_none() {
             self.warn(UNDECODED);
