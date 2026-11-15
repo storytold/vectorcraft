@@ -2,7 +2,7 @@ use serde_json::json;
 use vectorcraft_doc::Symbol;
 use vectorcraft_geom::shapes;
 
-use super::super::super::{CLASSIC_EXTRUDE, CLASSIC_ROTATE, MapSurface, map_surfaces_at, solid_art_in, validate_three_d_in};
+use super::super::super::{CLASSIC_EXTRUDE, CLASSIC_ROTATE, MapSurface, map_surfaces_at, solid_art_in, validate_three_d_at_in, validate_three_d_in};
 use super::*;
 use crate::CLASSIC_REVOLVE;
 
@@ -337,6 +337,30 @@ fn bad_maps_are_refused() {
     // Rotate (Classic) has no surface to map onto.
     let e = check(CLASSIC_ROTATE, json!({"mapArt": [{"surface": 1, "symbol": "Mark"}]})).unwrap_err();
     assert!(e.contains(MAP_ART_NOT_TAKEN), "{e}");
+}
+
+#[test]
+fn a_mapped_symbol_past_the_limits_of_a_graphics_art_is_refused() {
+    let mut d = document();
+    // A zigzag of more straight sides than one 3D effect's graphics may draw.
+    let mut b = BezPath::new();
+    b.move_to((0.0, 0.0));
+    for i in 1..=MAX_ELEMENTS {
+        b.line_to((i as f64 * 0.001, (i % 2) as f64));
+    }
+    b.close_path();
+    let dense = Node::path(NodeId(0), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    d.symbols.push(Symbol { dynamic: false, name: "Dense".into(), art: Arc::new(dense) });
+    for id in [CLASSIC_EXTRUDE, CLASSIC_REVOLVE] {
+        let p = crate::merged_params(id, &json!({"mapArt": [{"surface": 1, "symbol": "Dense"}]}));
+        let e = validate_three_d_in(Some(&d), &object(id, json!({})), id, &p).unwrap_err();
+        assert!(e.contains("too complex"), "{id}: {e}");
+    }
+    // On a fill, as on the object.
+    let plain = square(7, Rect::new(0.0, 0.0, 100.0, 100.0), Color::rgb(0.5, 0.5, 0.5));
+    let p = crate::merged_params(CLASSIC_REVOLVE, &json!({"mapArt": [{"surface": 1, "symbol": "Dense"}]}));
+    let e = validate_three_d_at_in(Some(&d), &plain, CLASSIC_REVOLVE, &p, (Some(0), 0)).unwrap_err();
+    assert!(e.contains("too complex"), "{e}");
 }
 
 #[test]

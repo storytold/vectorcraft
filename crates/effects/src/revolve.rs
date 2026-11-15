@@ -140,6 +140,7 @@ pub fn validate_revolve_in(doc: Option<&Document>, n: &Node, p: &Value) -> Resul
 /// [`validate_revolve_in`] for Revolve or Revolve (Classic), `id`.
 pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) -> Result<(), String> {
     validate_params_of(id, p)?;
+    validate_map_symbols(doc, id, p)?;
     let n = &*resolve_for(doc, n, "Revolve", false)?;
     let effects = &n.appearance.effects;
     // The profile is measured before the object's one Revolve, hidden or shown.
@@ -236,6 +237,15 @@ fn check_shadow<'a>(p: &Value, paths: impl IntoIterator<Item = &'a PathData>, b:
 
 /// [`validate_revolve`] for a Revolve with parameters `p` at index `index` of the effects of
 /// appearance item `target` of `n` ([`validate_item_of`]).
+/// An error when the symbols that Revolve (Classic)'s Map Art in `p` places, with the symbols of
+/// `doc`, are past the limits of a graphic's art, as on Extrude & Bevel (Classic).
+fn validate_map_symbols(doc: Option<&Document>, id: &str, p: &Value) -> Result<(), String> {
+    match doc.filter(|_| id == CLASSIC_REVOLVE) {
+        Some(doc) => crate::solids::graphics::validate_symbols(doc, p),
+        None => Ok(()),
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn validate_item_revolve(n: &Node, p: &Value, target: usize, index: usize) -> Result<(), String> {
     validate_item_of(None, n, REVOLVE, p, target, index)
@@ -251,6 +261,7 @@ pub(crate) fn validate_item_of(doc: Option<&Document>, n: &Node, id: &str, p: &V
         return validate_in(doc, n, id, p);
     }
     validate_params_of(id, p)?;
+    validate_map_symbols(doc, id, p)?;
     const EMPTY: &str = "Revolve requires a shape with at least two anchors";
     let (path, _) = object_profile(n, "Revolve")?;
     if !has_two_anchors(&path) {
