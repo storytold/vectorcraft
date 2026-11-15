@@ -142,7 +142,6 @@ pub(super) fn show(ui: &mut egui::Ui, d: &mut Dialog) {
     // The selected light last, so it is drawn above the others and a press there takes it.
     let order = (0..lights.len()).filter(|&i| i != current).chain([current]);
     let mut moved = None;
-    let mut picked = None;
     let enabled = ui.is_enabled();
     for index in order {
         let light = lights.get(index).copied().unwrap_or(first);
@@ -150,13 +149,12 @@ pub(super) fn show(ui: &mut egui::Ui, d: &mut Dialog) {
         let id = Id::unique(("three-d-lighting-widget", index));
         let response = ui.interact(Rect::from_center_size(at, Vec2::splat((SUN + 4.0) * 2.0)), id, Sense::click_and_drag());
         response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, enabled, light.name(index)));
-        if response.drag_started() || response.clicked() {
-            // A light the pointer took takes the keyboard focus too, so the arrow keys move it next.
+        // A light the pointer took, or that the keyboard focus reached, becomes the selected light and
+        // keeps the focus, so the arrow keys move it next. Selecting another light stops the editor
+        // that had the focus, which clears the focus, so the light asks for it after that.
+        if response.drag_started() || response.clicked() || response.gained_focus() {
+            select(ui, d, index);
             response.request_focus();
-            picked = Some(index);
-        }
-        if response.gained_focus() {
-            picked = Some(index);
         }
         let origin = ui.input(|i| i.pointer.press_origin());
         if response.drag_started()
@@ -212,9 +210,6 @@ pub(super) fn show(ui: &mut egui::Ui, d: &mut Dialog) {
             ui.ctx().set_cursor_icon(if response.dragged() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab });
         }
         response.on_hover_text(tl!("Drag a light to move it. The arrow keys move the focused light; Shift steps 15°."));
-    }
-    if let Some(index) = picked {
-        select(ui, d, index);
     }
     // Only a setting that moved is written: a press that leaves a light where it is, or a key at a
     // limit, changes nothing, and a key leaves the other setting as each selected effect has it.

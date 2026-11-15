@@ -965,6 +965,25 @@ fn the_arrow_keys_move_the_focused_light() {
     assert_eq!(undo_len(&app), history + 2);
 }
 
+/// A press on another light selects it and gives it the keyboard focus, so the next arrow key
+/// moves that light and leaves the one selected before where it is.
+#[test]
+fn the_arrow_keys_move_the_light_pressed_last() {
+    use crate::panels::tests_appearance::{click, frame_events};
+    let light =
+        |rotation: f64| json!({"color": "#ffffff", "intensity": 80.0, "rotation": rotation, "height": 30.0, "softness": 0.0, "behind": false});
+    let (mut app, ctx) = lighting_app(json!({"lights": [light(0.0), light(180.0)]}));
+    let (_, first) = light_node(&mut app, &ctx, 1);
+    click(&ctx, &mut app, first, show);
+    let (_, second) = light_node(&mut app, &ctx, 2);
+    click(&ctx, &mut app, second, show);
+    let left = egui::Event::Key { key: egui::Key::ArrowLeft, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    frame_events(&ctx, &mut app, vec![left], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    let rotations = effect(&app).1["lights"].as_array().unwrap().iter().map(|l| l["rotation"].clone()).collect::<Vec<_>>();
+    assert_eq!(rotations, [json!(0.0), json!(-179.0)]);
+}
+
 #[test]
 fn changed_settings_lists_only_new_values() {
     let before = json!({"depth": 50.0, "cap": true, "bevel": "none"});
