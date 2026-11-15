@@ -41,6 +41,28 @@ fn frame(app: &mut VectorcraftApp) {
     out.textures_delta.clear();
 }
 
+/// The strings one headless frame of the dialog layer paints.
+fn texts(app: &mut VectorcraftApp) -> Vec<String> {
+    fn walk(s: &egui::Shape, v: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => v.push(t.galley.text().to_string()),
+            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
+            _ => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    // The first frame lays the dialog out; the second paints it (as `Frames::texts` does).
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(app, ui.ctx()));
+    out.textures_delta.clear();
+    let input = egui::RawInput { time: Some(0.1), ..Default::default() };
+    let out = ctx.run_ui(input, |ui| super::super::show(app, ui.ctx()));
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+    v
+}
+
 fn set_field(app: &mut VectorcraftApp, path: &str, v: Value) {
     set(app.ui.dialog.as_mut().expect("dialog open"), path, v);
 }
@@ -487,6 +509,27 @@ fn create_layers_writes_pdf_layers() {
     let names: Vec<_> = back.layers.iter().filter_map(|l| l.name.clone()).collect();
     // The empty pages of the other artboards come in as page layers.
     assert_eq!(names[..2], ["Layer 1", "Notes"]);
+}
+
+/// The transparency note under Flattener preset belongs to the presets that have no transparency
+/// (PDF 1.3, PDF/X-1a, PDF/X-3), not to the ones that keep it (PDF 1.4–1.7, PDF/X-4, PDF/A-2b).
+#[test]
+fn the_flattener_note_shows_only_where_the_preset_flattens_transparency() {
+    const NOTE: &str = "PDF 1.3 files have no transparency: the preset flattens it.";
+    let (mut app, _, _) = app();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "__section", json!("Advanced"));
+    let shown = |app: &mut VectorcraftApp| texts(app).iter().any(|t| t == NOTE);
+    assert!(!shown(&mut app), "PDF 1.7 keeps transparency: {:?}", texts(&mut app));
+    for (standard, version) in [("pdfX4", "1.6"), ("pdfX1a", "1.3"), ("pdfX3", "1.3")] {
+        set_field(&mut app, "standard", json!(standard));
+        set_field(&mut app, "compatibility", json!(version));
+        let want = standard != "pdfX4";
+        assert_eq!(shown(&mut app), want, "{standard}: {:?}", texts(&mut app));
+    }
+    set_field(&mut app, "standard", json!("none"));
+    set_field(&mut app, "compatibility", json!("1.3"));
+    assert!(shown(&mut app), "PDF 1.3 flattens transparency: {:?}", texts(&mut app));
 }
 
 #[test]

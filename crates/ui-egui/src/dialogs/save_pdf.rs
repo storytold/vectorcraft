@@ -718,7 +718,7 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         });
     });
-    if !flat {
+    if flat {
         note(ui, tl!("PDF 1.3 files have no transparency: the preset flattens it."));
     }
 }
