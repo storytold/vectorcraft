@@ -74,19 +74,32 @@ impl Node {
     /// the SVG and PDF writers: its fills, painted behind the clipped art, and its strokes, painted
     /// over it (unclipped). Each part is this object keeping only those appearance items (type:
     /// also only its characters' fills or strokes); `None` where it paints nothing, as right after
-    /// Make Clipping Mask. Only paths, compound paths and type paint as clipping paths.
+    /// Make Clipping Mask. Only paths, compound paths and type paint as clipping paths, and so does
+    /// a group of the pieces a clipping path's fills and strokes draw ([`crate::NodeExtras::clip_pieces`]),
+    /// even after effects around it split or copy those pieces into groups: each part is then that
+    /// group keeping only the pieces of those fills or strokes.
     pub fn clip_paint(&self) -> ClipPaint {
         use crate::appearance::AppearanceItem;
+        let item = |fill: bool, i: &AppearanceItem| match i {
+            AppearanceItem::Fill(f) => fill && f.visible && !f.paint.is_none(),
+            AppearanceItem::Stroke(s) => !fill && s.visible && !s.paint.is_none() && s.width > 0.0,
+        };
+        if matches!(self.kind, NodeKind::Group { clip: false, .. }) && self.extras().clip_pieces {
+            let part = |fill: bool| {
+                let mut paints = false;
+                let mut n = pieces_of(self, fill, &|i| item(fill, i), &mut paints)?;
+                n.extras_mut().clip_pieces = false;
+                paints.then_some(n)
+            };
+            return ClipPaint { fill: part(true), stroke: part(false) };
+        }
         let runs = match &self.kind {
             NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => None,
             NodeKind::Text(t) => Some(&t.runs),
             _ => return ClipPaint::default(),
         };
         let paints = |fill: bool| {
-            let item = |i: &AppearanceItem| match i {
-                AppearanceItem::Fill(f) => fill && f.visible && !f.paint.is_none(),
-                AppearanceItem::Stroke(s) => !fill && s.visible && !s.paint.is_none() && s.width > 0.0,
-            };
+            let item = |i: &AppearanceItem| item(fill, i);
             let run = |r: &crate::text::TextRun| if fill { !r.style.fill.is_none() } else { !r.style.stroke.is_none() && r.style.stroke_width > 0.0 };
             self.appearance.items.iter().any(item) || runs.is_some_and(|rs| rs.iter().any(run))
         };
@@ -108,6 +121,30 @@ impl Node {
         };
         ClipPaint { fill: part(true), stroke: part(false) }
     }
+}
+
+/// `n`, a group of a clipping path's pieces or one of them, keeping only the pieces of its fills
+/// (`fill`) or of its strokes, at every depth of the groups an effect put them in; `None` when it
+/// holds none. `paints` is set when one of the kept fills or strokes paints.
+fn pieces_of(n: &Node, fill: bool, paints_item: &dyn Fn(&crate::appearance::AppearanceItem) -> bool, paints: &mut bool) -> Option<Node> {
+    use crate::appearance::AppearanceItem;
+    if let NodeKind::Group { children, clip: false } = &n.kind {
+        let kept: Vec<_> = children.iter().filter_map(|c| pieces_of(c, fill, paints_item, paints).map(std::sync::Arc::new)).collect();
+        if kept.is_empty() {
+            return None;
+        }
+        let mut m = n.clone();
+        if let Some(ch) = m.children_mut() {
+            *ch = kept;
+        }
+        return Some(m);
+    }
+    let items = &n.appearance.items;
+    if !items.iter().any(|i| matches!(i, AppearanceItem::Fill(_)) == fill) {
+        return None;
+    }
+    *paints |= items.iter().any(paints_item);
+    Some(n.clone())
 }
 
 /// What a clipping path paints ([`Node::clip_paint`]).

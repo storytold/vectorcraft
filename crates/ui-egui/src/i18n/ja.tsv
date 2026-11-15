@@ -570,6 +570,7 @@ digits	Malayalam	マラヤーラム数字
 	Rotate (Classic)…	回転（クラシック）…
 	Surface	表面
 	Wireframe	ワイヤーフレーム
+	Render Settings	レンダリング設定
 	No Shading	陰影なし
 	Plastic	プラスチック
 	Highlight Intensity	ハイライトの強さ
@@ -1076,6 +1077,7 @@ digits	Malayalam	マラヤーラム数字
 	Align to Artboard	アートボードに整列
 	Align to Glyph Bounds	字形の境界に整列
 	Align to Key Object	キーオブジェクトに整列
+	Align to Key Anchor	キーアンカーポイントに整列
 	Align to Page	ページに沿う
 	Align to Path	パスに沿う
 	Align to Selection	選択範囲に整列
@@ -1686,7 +1688,10 @@ antiAlias	Sharp	シャープ
 	Every (minutes)	間隔 (分)
 	Every option is at its default.	すべてのオプションが初期値です。
 	Every option matches {base}.	すべてのオプションが {base} と同じです。
-	Every-line Composer	すべての行を一括処理
+	Middle Eastern & South Asian Single-line Composer	1 行ずつ組む (中東・南アジア)
+	Middle Eastern & South Asian Every-line Composer	すべての行を一括処理 (中東・南アジア)
+	Standard Single-line Composer	1 行ずつ組む (標準)
+	Standard Every-line Composer	すべての行を一括処理 (標準)
 	Exact dash lengths	破線の長さを正確に保つ
 	Exceptions (comma separated)	例外 (カンマ区切り)
 	Exclusion	除外
@@ -1883,6 +1888,14 @@ antiAlias	Sharp	シャープ
 	Previous Artboard	前のアートボード
 	Next Artboard	次のアートボード
 	Last Artboard	最後のアートボード
+	Status Bar Show	ステータスバーの表示
+	Artboard Name	アートボード名
+	Current Tool	現在のツール
+	Date and Time	日付と時刻
+	Number of Undos	取り消し回数
+	Document Color Profile	ドキュメントのカラープロファイル
+	Undos	取り消し
+	Redos	やり直し
 	Gradient Fill: click to apply, drag onto art	グラデーションの塗り: クリックで適用、アートにドラッグ
 	Gradient Mesh	グラデーションメッシュ
 	Gradient Tool	グラデーションツール
@@ -1942,6 +1955,7 @@ antiAlias	Sharp	シャープ
 	Highlight Alternate Glyphs	代替字形をハイライト
 	Highlight Rows	行をハイライト
 	Highlight Variable	変数をハイライト表示
+	Sort Variables	変数を並べ替え
 	Highlight Substituted Fonts	置換フォントをハイライト
 	Highlight Substituted Glyphs	置換字形をハイライト
 	Highlight anchors on mouse over	マウスオーバー時にアンカーをハイライト
@@ -2321,6 +2335,7 @@ antiAlias	Sharp	シャープ
 	Merge Selected	選択レイヤーを結合
 	Merge Swatches	スウォッチを統合
 	Merge colors into one row	カラーを 1 行に統合
+	New Row	新規行
 	Mesh Tool	メッシュツール
 	Message:	メッセージ:
 	Metadata:	メタデータ:
@@ -3278,9 +3293,9 @@ mark-style	Japanese	日本式
 	Simulate Colored Paper	色紙をシミュレート
 	Simulate Paper	紙色をシミュレート
 	Single Quotes:	一重引用符:
-	Single-line Composer	1 行ずつ組む
 	Toggle Line Composer	行の組版方式を切り替え
 	Size Tile to Art	タイルをアートワークのサイズに合わせる
+	Move Tile with Art	タイルをアートワークと一緒に移動
 	Size/Leading	サイズ/行送り
 	Size:	サイズ:
 	Ridges per segment:	セグメントごとの山数:
@@ -3856,6 +3871,40 @@ file-filter	Templates	テンプレート
 	Gradient (. or Shift+.)	グラデーション (. または Shift+.)
 	Graph Data	グラフデータ
 	Graph Type	グラフの種類
+	Graph Options	グラフオプション
+	Left Axis	左軸
+	Right Axis	右軸
+	Category Axis	項目軸
+	Separate Scales	目盛りを別にする
+	Add Drop Shadow	ドロップシャドウを追加
+	Add Legend Across Top	凡例を上に表示
+	First Row in Front	最初の行を前面に
+	First Column in Front	最初の列を前面に
+	Legend	凡例
+	Column Width	棒の幅
+	Bar Width	横棒の幅
+	Cluster Width	グループの幅
+	Mark Data Points	データポイントにマーカーを表示
+	Connect Data Points	データポイントを線でつなぐ
+	Edge-to-Edge Lines	端から端までの線
+	Draw Filled Lines	線を塗りつぶして描く
+	Tick Values	目盛りの値
+	Override Calculated Values	計算値を上書き
+	Divisions	分割数
+	Tick Marks	目盛り
+	Tick Marks per Division	分割ごとの目盛り
+	Draw Tick Marks Between Labels	ラベルの間に目盛りを描く
+	Add Labels	ラベルを追加
+	Maximum must be more than Minimum.	最大値は最小値より大きくしてください。
+	Column Graph	棒グラフ
+	Stacked Column Graph	積み上げ棒グラフ
+	Bar Graph	横向き棒グラフ
+	Stacked Bar Graph	横向き積み上げ棒グラフ
+	Line Graph	折れ線グラフ
+	Area Graph	面グラフ
+	Scatter Graph	散布図
+	Pie Graph	円グラフ
+	Radar Graph	レーダーチャート
 	Graph Design	グラフのデザイン
 	Graph Marker	グラフのマーカー
 	New Design	新規デザイン
@@ -4057,6 +4106,8 @@ file-filter	Templates	テンプレート
 	Superscript	上付き文字
 	Swap Fill and Stroke (Shift+X)	塗りと線を入れ替え (Shift+X)
 	Swap the selected object for the file, keeping its place and transform	選択したオブジェクトを、位置と変形を保ったままファイルに置き換え
+	Show Import Options	読み込みオプションを表示
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	配置する前に PDF、DXF、テキストファイルごとの読み込みオプションを確認。オフのときは前回選んだオプションを使用
 	Swatch Libraries Menu	スウォッチライブラリメニュー
 	System Layout	システムレイアウト
 	Tabular Lining	等幅ライニング
@@ -4074,11 +4125,55 @@ file-filter	Templates	テンプレート
 	Composite Fonts	合成フォント
 	Export Composite Fonts	合成フォントを書き出し
 	Import Composite Fonts	合成フォントを読み込み
+@msg	each font must be {name, parts}	各フォントは {name, parts} の形にしてください
+@msg	unknown key `{k}`; a font takes name and parts	`{k}` は不明なキーです。フォントに使えるのは name と parts です
+@msg	each font needs a name	各フォントには名前が必要です
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` は合成フォントの名前にできません (1～{COMPOSITE_NAME_MAX} 文字、制御文字なし)
+@msg	`{name}`: parts must be an object	`{name}`: parts はオブジェクトにしてください
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: `{k}` は不明なクラスです。クラスは kanji、kana、punctuation、symbols、roman、numerals です
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} はオブジェクトにしてください
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1} の `{k}` は不明なキーです
+@msg	`{name}`: give the kanji part	`{name}`: kanji の部分を指定してください
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	1 つのドキュメントに置ける合成フォントは {COMPOSITE_FONTS_MAX} 個までです
+@msg	two composite fonts are named `{_1}`	`{_1}` という名前の合成フォントが 2 つあります
+@msg	`{_1}` is the name of an installed font	`{_1}` はインストール済みのフォントの名前です
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} に合成フォントの `{font}` が設定されています
+@msg	give fonts: [{name, parts}…]	fonts を指定してください: [{name, parts}…]
+@msg	path is empty	path が空です
+@msg	fonts must be a list of composite fonts	fonts は合成フォントのリストにしてください
+@msg	names must be strings	names は文字列にしてください
+@msg	no composite font named `{n}`	`{n}` という合成フォントはありません
+@msg	names must be a list of names	names は名前のリストにしてください
+@msg	no composite fonts to export	書き出す合成フォントがありません
+@msg	not a composite fonts file: {e}	合成フォントのファイルではありません: {e}
+@msg	not a composite fonts file: no compositeFonts list	合成フォントのファイルではありません: compositeFonts のリストがありません
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	ファイルに {COMPOSITE_FONTS_MAX} 個を超える合成フォントがあります
+@msg	the file is larger than 4 MB	ファイルが 4 MB を超えています
+@msg	dataBase64 is not base64	dataBase64 が base64 ではありません
+@msg	give one of path, data or dataBase64	path、data、dataBase64 のいずれかを指定してください
+@msg	the file holds no composite fonts	ファイルに合成フォントがありません
+@msg	the file holds two composite fonts named `{_1}`	ファイルに `{_1}` という名前の合成フォントが 2 つあります
+@msg	`{_1}` can't name a composite font	`{_1}` は合成フォントの名前にできません
+@msg	{k}: give a font	{k}: フォントを指定してください
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: フォントを指定してください
+@msg	{k}: size must be {_1} to {_2}%	{k}: size は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size は {_1}～{_2}% にしてください
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline は {_1}～{_2}% にしてください
+@msg	{k}: scale must be {_1} to {_2}%	{k}: 比率は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: 比率は {_1}～{_2}% にしてください
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: 比率を変更できるのは kana、roman、numerals だけです
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: 比率を変更できるのは kana、roman、numerals だけです
+@msg	{k}: only kana can be scaled at the center	{k}: 中央を基準に比率を変更できるのは kana だけです
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: 中央を基準に比率を変更できるのは kana だけです
+@msg	no composite font	合成フォントがありません
 	Delete Font	フォントを削除
 	Kanji	漢字
 	Kana	かな
 	Numerals	数字
 	Scale at Center	中心から拡大・縮小
+	Delete Set	セットを削除
+	Direct Entry	直接入力
 	Up/Down:	上下:
 	Left/Right:	左右:
 	Tate-chu-yoko Up/Down	縦中横の上下
@@ -4122,6 +4217,9 @@ file-filter	Templates	テンプレート
 	Windows	Windows
 	Working CMYK (don't tag)	作業用 CMYK (タグなし)
 	Working RGB (don't tag)	作業用 RGB (タグなし)
+	Don't Color Manage This Document	このドキュメントにカラーマネジメントを適用しない
+	Working RGB: {name}	作業用 RGB: {name}
+	Working CMYK: {name}	作業用 CMYK: {name}
 	Workspace {i}	ワークスペース {i}
 	Yellow	イエロー
 	[Normal Character Style]	[標準文字スタイル]
@@ -5211,6 +5309,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`name` must be the name of a script engine	`name` はスクリプトエンジンの名前にしてください
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	メインのスクリプトエンジンは実行ごとに新しく作られ、保持されないため、破棄できません
 @msg	there is no script engine named {name}	{name} という名前のスクリプトエンジンはありません
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` は尋ねる相手がいない実行専用です。アプリでは、各ダイアログに本人が回答します
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Copied the link info	リンク情報をコピーしました
@@ -5330,6 +5429,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	No linked files to look for	検索するリンクファイルがありません
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	このリンクはシンボル、グラフデザイン、パターン、または不透明マスクの中にあり、カンバス上に位置がありません
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	グラフの系列にあるグラフデザインのアートはデザインから描き直されます: 変更するにはデザインを編集してください
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
@@ -5349,6 +5449,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	automation filesystem access is not granted: write authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 書き込み権限がありません: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	自動化のパスを拒否しました: 読み込みルート {root} の外です: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	自動化のパスを拒否しました: 読み込みルート {roots} のいずれの中でもありません: {path}
+@msg	a linked JavaScript file is outside the read roots	リンクされた JavaScript ファイルが読み込みルートの外にあります
 @msg	automation path rejected: outside the write root {root}: {path}	自動化のパスを拒否しました: 書き込みルート {root} の外です: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	自動化のパスを拒否しました: 書き込みルート {roots} のいずれの中でもありません: {path}
 @msg	automation path rejected: path is empty	自動化のパスを拒否しました: パスが空です
@@ -5400,6 +5501,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Imported library {name}	ライブラリ {name} を読み込みました
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB ポリシー:
+	CMYK Policy:	CMYK ポリシー:
+	Preserve Embedded Profiles	埋め込まれたプロファイルを保持
+	Convert to Working Space	作業用スペースに変換
+	Preserve Numbers	カラー値を保持
 	Texture	テクスチャ
 	Craquelure…	クラッキング…
 	Grain…	粒状…
@@ -5676,6 +5782,7 @@ lighting	Light	ライト
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	グループの塗りまたは線にある 3D 効果には書き出せる描画がありません
 @msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	オブジェクトに 3D 効果 (押し出しとベベル、回転体、膨張、回転) がありません
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` は `mode` だけを持ち、その値が shaded または wireframe のオブジェクトにしてください
 @msg	its 3D effect builds no solid	3D 効果からソリッドが作成されません
 @msg	bevel must be none or one of {_1}	bevel には none または {_1} のいずれかを指定してください
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} はこのアートからソリッドを作成できません。シンボルインスタンス、ブレンド、クリッピンググループに含まれるオブジェクトが多すぎます
@@ -5760,6 +5867,9 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+	Move Light to Back	ライトを背面へ
+	Move Light to Front	ライトを前面へ
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	ライトをドラッグして移動します。矢印キーでフォーカスのあるライトを移動し、Shift キーで 15° ずつ移動します。
 	Shadows	シャドウ
 	Distance from Object	オブジェクトからの距離
 	Shadow Bounds	シャドウの範囲
@@ -5842,6 +5952,8 @@ lighting	Light	ライト
 	Save Variable Library…	変数ライブラリを保存…
 @msg	a variable library holds text variables, and the document has none	変数ライブラリにはテキスト変数を保存しますが、このドキュメントにはテキスト変数がありません
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	変数 `{name}` は変数ライブラリに保存できません: 英字または `_` で始まり、スペースや `-`、`_`、`.` 以外の記号を含まない名前に変更してください
+@msg	{k} has control characters	{k} に制御文字が含まれています
+@msg	{k} has control characters or line breaks	{k} に制御文字または改行が含まれています
 @msg	data set `{name}` holds a control character, which a variable library can't hold	データセット `{name}` に変数ライブラリに保存できない制御文字が含まれています
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	データセット `{name}` の先頭または末尾に変数ライブラリに保存できない空白があります
 	Make Graph Dynamic	グラフを動的にする
@@ -6195,6 +6307,7 @@ axis	Y Axis	Y 軸
 @msg	stops must be in order of `offset`	分岐点は `offset` の順に並べてください
 @msg	the document has no pattern {pattern}	ドキュメントにパターン {pattern} がありません
 @msg	the document has no swatch {n}	ドキュメントにスウォッチ {n} がありません
+@msg	`plates` requires a stop linked to a spot swatch	`plates` には特色スウォッチにリンクされた分岐点が必要です
 @msg	the output	出力
 @msg	the path has no anchor points	パスにアンカーポイントがありません
 @msg	too many anchor points (limit {MAX_ANCHORS})	アンカーポイントが多すぎます (上限 {MAX_ANCHORS})
@@ -6430,6 +6543,7 @@ axis	Y Axis	Y 軸
 @msg	`name` must be a name that is not empty	`name` には空でない名前を指定してください
 @msg	`name` must not be empty	`name` を空にすることはできません
 @msg	`origin` must be [x, y] in points	`origin` にはポイント単位の [x, y] を指定してください
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` には [a, b, c, d] を指定してください (各値は -1000 から 1000、a·d - b·c は 0 から 0.001 以上離れた値)
 @msg	`picks` must be an array (got {v})	`picks` には配列を指定してください (指定値: {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` には 1～{MAX_PICKS} 個の指定が必要です (指定数: {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` には 2～100000 個の点が必要です
@@ -6798,6 +6912,7 @@ axis	Y Axis	Y 軸
 @msg	Image Trace failed: {e}	画像トレースに失敗しました: {e}
 @msg	Image Trace finished, but its document was closed	画像トレースは完了しましたが、ドキュメントが閉じられています
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	画像トレースは完了しましたが、その間に画像または設定が変更されました: もう一度トレースしてください
+@msg	Image Trace finished, but its document was reverted: trace it again	画像トレースは完了しましたが、ドキュメントは保存済みの状態に戻されました: もう一度トレースしてください
 @msg	Invalid dimension offset	寸法のオフセットが無効です
 @msg	Invalid point	点が無効です
 @msg	Join: a subpath went missing	連結: サブパスが見つからなくなりました
@@ -7217,7 +7332,7 @@ axis	Y Axis	Y 軸
 @msg	column: true floats the whole column and takes no onto, above or below	column: true は列全体をフローティングにするため、onto、above、below は指定できません
 @msg	command must be a shape.* command	command には shape.* コマンドを指定してください
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` がありません
-@msg	composer must be "singleLine" or "everyLine"	composer には "singleLine" または "everyLine" を指定してください
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer は "singleLine"、"everyLine"、"standardSingleLine"、"standardEveryLine" のいずれかにしてください
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	複合シェイプに含められるのは、パス、複合パス、グループ、複合シェイプ、文字、ブレンド、エンベロープです
 @msg	compound {_1} must contain exactly one open path to join	連結するには、複合パス {_1} にオープンパスがちょうど 1 つ含まれている必要があります
 @msg	connect end must be "start" or "end"	connect の end には "start" または "end" を指定してください
@@ -8192,6 +8307,8 @@ axis	Y Axis	Y 軸
 	Create New Set	新規セットを作成
 	Stop Global Edit	グローバル編集を終了
 	Global Edit Options	グローバル編集オプション
+	Select Similar Objects	類似オブジェクトを選択
+	Select Similar Options	類似オブジェクトの選択オプション
 	Leave Out of Global Edit	グローバル編集から除外
 	Match	一致
 	On Artboards	アートボード上
