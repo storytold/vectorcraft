@@ -351,8 +351,7 @@ fn geometry(path: &PathData, fx: &[Effect], ctx: &GeomContext) -> PathData {
 /// The shadow of Revolve `fx` cast by the surface of `path` in `item`'s paint about the axis of
 /// `b`, revolved with `options`, as dark as `item` is opaque and in its blending mode; `None` with
 /// the shadow off, when `item` is fully transparent or its opacity is not a finite number, or when
-/// it casts nothing, and an error when
-/// the surface it is cast from is past the limits.
+/// it casts nothing, and an error when the surface it is cast from is past the limits.
 ///
 /// `kept` holds the faces the surface drawn kept for its shadow ([`surface`]); without them the
 /// surface is swept again for its shadow alone.
