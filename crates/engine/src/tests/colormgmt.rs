@@ -648,6 +648,158 @@ fn proof_setup_takes_the_custom_proof_settings() {
     assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
 }
 
+/// A custom proof setup saved to a file loads back as the same setup with Proof Colors on; saving
+/// leaves the proof view as it is, and `view.proofSetup.read` only reads the file.
+#[test]
+fn a_saved_proof_setup_loads_back() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-file");
+    let path = dir.join("press.vcproof").to_string_lossy().to_string();
+    let mut s = session();
+    let device = format!("cmyk:{}", cms::GENERIC_CMYK);
+    let r = s
+        .execute(
+            "view.proofSetup.save",
+            &json!({"path": path, "target": device, "intent": "perceptual", "preserveNumbers": true, "simulateBlack": true}),
+        )
+        .unwrap();
+    assert_eq!((r["path"].as_str(), r["target"].as_str(), r["intent"].as_str()), (Some(path.as_str()), Some(device.as_str()), Some("perceptual")));
+    assert_eq!(vectorcraft_render::proof::view(), Default::default(), "saving leaves the proof view alone");
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("\"format\": \"vectorcraft-proof-setup\"") && text.contains("\"version\": 1"), "{text}");
+    let r = s.execute("view.proofSetup.read", &json!({"path": path})).unwrap();
+    assert_eq!((r["target"].as_str(), r["preserveNumbers"].as_bool(), r["simulateBlack"].as_bool()), (Some(device.as_str()), Some(true), Some(true)));
+    assert_eq!(vectorcraft_render::proof::view(), Default::default(), "reading changes nothing");
+    assert!(!crate::waits_for_tool_edit("view.proofSetup.read"), "reading does not finish a tool's edit");
+    let rev = s.doc().unwrap().revision;
+    let r = s.execute("view.proofSetup.load", &json!({"path": path})).unwrap();
+    assert_eq!((r["proofColors"].as_bool(), r["path"].as_str()), (Some(true), Some(path.as_str())));
+    let v = vectorcraft_render::proof::view();
+    assert!(v.proof_colors);
+    let want = ProofSetup {
+        target: ProofTarget::Cmyk(cms::GENERIC_CMYK.into()),
+        intent: Intent::Perceptual,
+        simulate_paper: false,
+        preserve_numbers: true,
+        simulate_black: true,
+        ..Default::default()
+    };
+    assert_eq!(v.setup, want);
+    assert!(s.doc().unwrap().revision > rev, "the canvas redraws");
+    // Saved from the current setup, the file holds that setup: the round trip keeps every field.
+    let again = dir.join("again.vcproof").to_string_lossy().to_string();
+    s.execute("view.proofSetup.save", &json!({"path": again, "simulatePaper": true})).unwrap();
+    s.execute("view.proofSetup", &json!({"target": "workingCmyk"})).unwrap();
+    s.execute("view.proofSetup.load", &json!({"path": again})).unwrap();
+    assert_eq!(vectorcraft_render::proof::view().setup, ProofSetup { simulate_paper: true, ..want });
+}
+
+/// Saving refuses a target that is not a device, bad params and a bad name; loading refuses a file
+/// that is too large, not a proof setup, newer, or whose device is a profile that is not loaded,
+/// and the proof view stays as it was.
+#[test]
+fn proof_setup_files_refuse_what_they_cannot_use() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-refused");
+    let file = |n: &str| dir.join(n).to_string_lossy().to_string();
+    let mut s = session();
+    let path = file("a.vcproof");
+    refused(&mut s, "view.proofSetup.save", json!({"path": path, "target": "protanopia"}), "`protanopia` is not a device to simulate");
+    refused(&mut s, "view.proofSetup.save", json!({"path": path, "target": "rgb:Nope"}), "unknown RGB profile `Nope`");
+    refused(&mut s, "view.proofSetup.save", json!({"path": path, "simulateBlack": "yes"}), "`simulateBlack` must be true or false");
+    refused(&mut s, "view.proofSetup.save", json!({}), "missing `path` or `name`");
+    refused(&mut s, "view.proofSetup.save", json!({"path": path, "name": "x"}), "not both");
+    refused(&mut s, "view.proofSetup.save", json!({"path": " "}), "`path` is empty");
+    refused(&mut s, "view.proofSetup.save", json!({"name": "x"}), "need the preferences folder");
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written");
+    s.attach_proof_setups(dir.join("Proof Setups"));
+    for bad_name in ["", "  ", "../up", "a/b", "a\\b", ".hidden", "c:d"] {
+        refused(&mut s, "view.proofSetup.save", json!({"name": bad_name}), "`name`");
+    }
+    refused(&mut s, "view.proofSetup.save", json!({"name": "x".repeat(101)}), "longer than 100 characters");
+    let before = vectorcraft_render::proof::view();
+    let write = |n: &str, text: &str| {
+        let p = file(n);
+        std::fs::write(&p, text).unwrap();
+        p
+    };
+    let ok = r#"{"format": "vectorcraft-proof-setup", "version": 1, "target": "workingCmyk", "intent": "relative"}"#;
+    let cases = [
+        (write("big.vcproof", &format!("{ok}{}", " ".repeat(64 << 10))), "larger than 65536 bytes"),
+        (write("junk.vcproof", "not json"), "not a proof setup file"),
+        (write("other.vcproof", r#"{"format": "other", "version": 1}"#), "not a VectorCraft proof setup file"),
+        (write("newer.vcproof", &ok.replace("\"version\": 1", "\"version\": 2")), "made by a newer VectorCraft"),
+        (write("missing.vcproof", &ok.replace("workingCmyk", "cmyk:Not Loaded")), "the CMYK profile `Not Loaded`, which is not loaded"),
+        (write("blind.vcproof", &ok.replace("workingCmyk", "deuteranopia")), "not a device to simulate"),
+        (write("intent.vcproof", &ok.replace("relative", "vivid")), "unknown intent `vivid`"),
+        (write("flag.vcproof", &ok.replace("}", r#", "simulatePaper": 1}"#)), "`simulatePaper` must be true or false"),
+    ];
+    for (p, msg) in cases {
+        for cmd in ["view.proofSetup.load", "view.proofSetup.read"] {
+            refused(&mut s, cmd, json!({"path": p}), msg);
+        }
+    }
+    refused(&mut s, "view.proofSetup.load", json!({"path": file("gone.vcproof")}), "gone.vcproof");
+    assert_eq!(vectorcraft_render::proof::view(), before, "the proof view is unchanged");
+    // A file of the limit's size is read.
+    let padded = format!("{ok}{}", " ".repeat((64 << 10) - ok.len()));
+    s.execute("view.proofSetup.load", &json!({"path": write("limit.vcproof", &padded)})).unwrap();
+}
+
+/// Setups saved by name go in the Proof Setups folder, made on the first save, and are listed by
+/// name; other files there are left out, and a run without the folder lists none.
+#[test]
+fn proof_setups_saved_by_name_are_listed() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    assert_eq!(s.execute("view.proofSetup.list", &json!({})).unwrap(), json!({"folder": null, "setups": [], "truncated": false}));
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-list");
+    let folder = dir.join("Proof Setups");
+    s.attach_proof_setups(folder.clone());
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!(r["setups"], json!([]), "no folder yet: none saved");
+    let r = s.execute("view.proofSetup.save", &json!({"name": " Coated Press ", "target": format!("rgb:{}", cms::DISPLAY_P3)})).unwrap();
+    let saved = folder.join("Coated Press.vcproof");
+    assert_eq!(r["path"].as_str(), Some(saved.to_string_lossy().as_ref()));
+    s.execute("view.proofSetup.save", &json!({"name": "Bright"})).unwrap();
+    std::fs::write(folder.join("notes.txt"), "x").unwrap();
+    std::fs::create_dir(folder.join("Sub.vcproof")).unwrap();
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    let names: Vec<&str> = r["setups"].as_array().unwrap().iter().filter_map(|e| e["name"].as_str()).collect();
+    assert_eq!(names, ["Bright", "Coated Press"]);
+    assert_eq!(r["truncated"], false);
+    s.execute("view.proofSetup.load", &json!({"name": "Coated Press"})).unwrap();
+    assert_eq!(vectorcraft_render::proof::view().setup.target, ProofTarget::Rgb(cms::DISPLAY_P3.into()));
+    for i in 0..101 {
+        std::fs::write(folder.join(format!("z{i:03}.vcproof")), "x").unwrap();
+    }
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!((r["setups"].as_array().unwrap().len(), r["truncated"].as_bool()), (100, Some(true)));
+    assert_eq!((r["setups"][0]["name"].as_str(), r["setups"][99]["name"].as_str()), (Some("Bright"), Some("z097")), "the first 100 by name");
+}
+
+/// Other files in the Proof Setups folder, however many, do not keep its setups from the listing.
+#[test]
+fn proof_setups_are_listed_among_many_other_files() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let dir = vectorcraft_testkit::TempDir::new("proof-setup-list-crowded");
+    let folder = dir.join("Proof Setups");
+    std::fs::create_dir_all(&folder).unwrap();
+    for i in 0..5000 {
+        std::fs::write(folder.join(format!("a{i:04}.txt")), "").unwrap();
+    }
+    s.attach_proof_setups(folder.clone());
+    s.execute("view.proofSetup.save", &json!({"name": "Press"})).unwrap();
+    let r = s.execute("view.proofSetup.list", &json!({})).unwrap();
+    assert_eq!((r["setups"].as_array().unwrap().len(), r["truncated"].as_bool()), (1, Some(false)));
+    assert_eq!(r["setups"][0]["name"], "Press");
+}
+
 /// Whether the content has a DeviceCMYK fill/stroke operator (`c m y k k` / `K`).
 fn has_cmyk_op(pdf: &str) -> bool {
     let toks: Vec<&str> = pdf.split_ascii_whitespace().collect();

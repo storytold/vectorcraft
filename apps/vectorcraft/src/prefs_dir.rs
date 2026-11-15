@@ -73,6 +73,14 @@ pub fn attach_new_doc_profiles(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Have View › Proof Setup list the proof setups saved in the `Proof Setups` folder, which
+/// `view.proofSetup.save` makes when it saves a setup by name.
+pub fn attach_proof_setups(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Proof Setups") {
+        session.attach_proof_setups(dir);
+    }
+}
+
 /// Take the saved PDF presets from the `PDF Presets` folder (#2168), and keep the ones saved from
 /// now on there. After the preferences were restored: the folder is the one place the presets live.
 pub fn attach_pdf_preset_store(session: &mut vectorcraft_engine::Session) {

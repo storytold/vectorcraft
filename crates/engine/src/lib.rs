@@ -181,6 +181,11 @@ pub struct Session {
     /// The folder of the New Document profiles `file.new` starts documents from; `None`: none,
     /// every document starts with the defaults ([`Session::attach_new_doc_profiles`]).
     new_doc_profile_dir: Option<std::path::PathBuf>,
+    /// The folder of the proof setups `view.proofSetup.save` saves by name and View → Proof Setup
+    /// lists; `None`: no folder ([`Session::attach_proof_setups`]).
+    proof_setup_dir: Option<std::path::PathBuf>,
+    /// How many proof setup files `view.proofSetup.save` wrote ([`Session::proof_setup_saves`]).
+    proof_setup_saves: u64,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,

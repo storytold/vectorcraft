@@ -142,6 +142,8 @@ pub fn refused_to_scripts(id: &str) -> bool {
         "color.removeProfile",
         "file.print",
         "view.proofSetup",
+        "view.proofSetup.save",
+        "view.proofSetup.load",
         "view.proofColors",
         "view.overprintPreview",
         "view.separationsPreview",

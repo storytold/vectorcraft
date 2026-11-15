@@ -2753,6 +2753,7 @@ diagnostics	ui	UI
 	Device to Simulate:	시뮬레이션할 장치:
 	Simulate Paper Color	용지 색상 시뮬레이션
 	Simulate Black Ink	검정 잉크 시뮬레이션
+	Load…	불러오기…
 	Preserve Editing Capabilities	편집 기능 보존
 	Preserve Lightness	명도 보존
 	Preserve Overprints and Spot Colors	오버프린트 및 별색 보존

@@ -94,6 +94,8 @@ impl Session {
             plugin_dir: None,
             scripts_dir: None,
             new_doc_profile_dir: None,
+            proof_setup_dir: None,
+            proof_setup_saves: 0,
             plugin_output: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,

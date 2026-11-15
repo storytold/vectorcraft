@@ -2606,6 +2606,7 @@ font-technology	Variable	Variables
 	Device to Simulate:	Périphérique à simuler :
 	Simulate Paper Color	Simuler la couleur du papier
 	Simulate Black Ink	Simuler l’encre noire
+	Load…	Charger…
 	Preserve Editing Capabilities	Conserver les fonctions d’édition
 	Preserve editing capabilities	Conserver les fonctions d’édition
 	Preserve Lightness	Conserver la luminosité

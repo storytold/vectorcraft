@@ -2641,6 +2641,7 @@ diagnostics	ui	интерфейс
 	Device to Simulate:	Имитируемое устройство:
 	Simulate Paper Color	Имитировать цвет бумаги
 	Simulate Black Ink	Имитировать чёрную краску
+	Load…	Загрузить…
 	Preserve Editing Capabilities	Сохранять возможности редактирования
 	Preserve editing capabilities	Сохранять возможности редактирования
 	Preserve Lightness	Сохранять светлоту

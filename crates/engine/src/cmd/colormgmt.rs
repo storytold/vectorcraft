@@ -26,6 +26,8 @@ use vectorcraft_render::proof;
 use super::EngineError;
 use super::{CommandSpec, Result, Session, always, bad, cmd, color_value, has_doc, switch_or, targets, text_param};
 
+pub mod proof_file;
+
 /// `Document.unknown` key under which files before format v3 kept the assigned profiles (migrated
 /// to `Document::color_profiles` on load).
 pub const PROFILES_KEY: &str = vectorcraft_doc::profiles::LEGACY_PROFILES_KEY;
@@ -103,6 +105,42 @@ pub fn specs() -> Vec<CommandSpec> {
             "{target?: \"workingCmyk\"|\"cmyk:<profile>\"|\"rgb:<profile>\"|\"legacyMacRgb\"|\"srgb\"|\"monitorRgb\"|\"protanopia\"|\"deuteranopia\"|\"tritanopia\" (cmyk: and rgb: name a CMYK or RGB profile of color.loadProfile or the built-in ones: the device to simulate), intent? (used while preserveNumbers is off), simulatePaper?: bool, preserveNumbers?: bool (Preserve CMYK or RGB Numbers: the colors' numbers in the document's space go to the device unchanged), simulateBlack?: bool (Simulate Black Ink: the device's black shows as the dark gray it prints; simulatePaper does this too; CMYK devices only, as simulatePaper), proof?: bool (also turn Proof Colors on)} → proof state",
             always,
             proof_setup
+        ),
+        cmd!(
+            query "view.proofSetup.save",
+            "Save Proof Setup…",
+            [],
+            None,
+            "{path?: file | name?: a setup in the Proof Setups folder next to the preferences (at most 100 characters and no path characters; exactly one of the two), target?, intent?, simulatePaper?, preserveNumbers?, simulateBlack? (as view.proofSetup; default: the current proof setup's)} write a custom proof setup to a VectorCraft proof setup file (.vcproof, JSON) without changing the proof view. The target must be a device: workingCmyk, cmyk:<profile> or rgb:<profile> → {path, target, intent, simulatePaper, preserveNumbers, simulateBlack}",
+            always,
+            proof_file::save
+        ),
+        cmd!(
+            query "view.proofSetup.load",
+            "Load Proof Setup…",
+            [],
+            None,
+            "{path?: file | name?: a setup in the Proof Setups folder (exactly one of the two)} read a proof setup file of at most 64 KiB that view.proofSetup.save wrote, make it the proof setup and turn Proof Colors on → {path} and the proof state. A file whose device names a profile that is not loaded is refused and nothing changes",
+            always,
+            proof_file::load
+        ),
+        cmd!(
+            query "view.proofSetup.read",
+            "Read Proof Setup",
+            [],
+            None,
+            "{path?: file | name?: a setup in the Proof Setups folder (exactly one of the two)} the settings of a proof setup file, read as view.proofSetup.load reads it, without changing the proof view → {path, target, intent, simulatePaper, preserveNumbers, simulateBlack}",
+            always,
+            proof_file::read
+        ),
+        cmd!(
+            query "view.proofSetup.list",
+            "Saved Proof Setups",
+            [],
+            None,
+            "{} the proof setup files in the Proof Setups folder next to the preferences, by name, at most 100 → {folder (null without the folder), setups: [{name, path}], truncated}",
+            always,
+            proof_file::list
         ),
         cmd!(query "view.proofColors", "Proof Colors", ["View"], None, "{on?: bool (default: toggle)} → proof state", always, |s, p| {
             toggle_view(s, p, "view.proofColors", |v, on| v.proof_colors = on.unwrap_or(!v.proof_colors))
@@ -817,31 +855,39 @@ fn view_json(v: &proof::ProofView) -> Value {
 fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "view.proofSetup";
     let mut v = proof::view();
-    if let Some(t) = text_param(p, "target", C)? {
-        let t = ProofTarget::parse(t).ok_or_else(|| bad(C, format!("unknown proof target `{t}`")))?;
-        if let ProofTarget::Cmyk(name) = &t
-            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Cmyk)
-        {
-            return Err(bad(C, format!("unknown CMYK profile `{name}`")));
-        }
-        if let ProofTarget::Rgb(name) = &t
-            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Rgb)
-        {
-            return Err(bad(C, format!("unknown RGB profile `{name}`")));
-        }
-        v.setup.target = t;
-    }
-    if let Some(i) = intent_param(p, C)? {
-        v.setup.intent = i;
-    }
-    v.setup.simulate_paper = switch_or(p, "simulatePaper", v.setup.simulate_paper, C)?;
-    v.setup.preserve_numbers = switch_or(p, "preserveNumbers", v.setup.preserve_numbers, C)?;
-    v.setup.simulate_black = switch_or(p, "simulateBlack", v.setup.simulate_black, C)?;
+    setup_params(p, &mut v.setup, C)?;
     if let Some(on) = on_param(p, "proof", C)? {
         v.proof_colors = on;
     }
     store_view(s, v.clone());
     Ok(view_json(&v))
+}
+
+/// Take the proof setup settings `p` gives (`target`, `intent`, `simulatePaper`, `preserveNumbers`
+/// and `simulateBlack`, as `view.proofSetup` reads them) into `setup`. A `cmyk:` or `rgb:` target
+/// must name a CMYK or RGB profile that is loaded.
+fn setup_params(p: &Value, setup: &mut cms::ProofSetup, cmd: &str) -> Result<()> {
+    if let Some(t) = text_param(p, "target", cmd)? {
+        let t = ProofTarget::parse(t).ok_or_else(|| bad(cmd, format!("unknown proof target `{t}`")))?;
+        if let ProofTarget::Cmyk(name) = &t
+            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Cmyk)
+        {
+            return Err(bad(cmd, format!("unknown CMYK profile `{name}`")));
+        }
+        if let ProofTarget::Rgb(name) = &t
+            && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Rgb)
+        {
+            return Err(bad(cmd, format!("unknown RGB profile `{name}`")));
+        }
+        setup.target = t;
+    }
+    if let Some(i) = intent_param(p, cmd)? {
+        setup.intent = i;
+    }
+    setup.simulate_paper = switch_or(p, "simulatePaper", setup.simulate_paper, cmd)?;
+    setup.preserve_numbers = switch_or(p, "preserveNumbers", setup.preserve_numbers, cmd)?;
+    setup.simulate_black = switch_or(p, "simulateBlack", setup.simulate_black, cmd)?;
+    Ok(())
 }
 
 /// Make `v` the proof view and redraw every document. When `v` equals the current view, the view

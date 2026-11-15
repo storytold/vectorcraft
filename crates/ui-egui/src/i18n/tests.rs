@@ -421,6 +421,8 @@ fn proof_setup_dialog_labels_are_in_complete_catalogs() {
         "Rendering intent:",
         "Simulate Paper Color",
         "Simulate Black Ink",
+        "Save…",
+        "Load…",
     ];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in labels {

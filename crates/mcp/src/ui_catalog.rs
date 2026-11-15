@@ -979,7 +979,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.proofSetupDialog",
         "Customize…",
         "",
-        "{} open View › Proof Setup › Customize (dialog `proofSetup`, fields `device` (\"workingCmyk\", \"cmyk:<profile>\" or \"rgb:<profile>\": any CMYK or RGB profile), `preserveNumbers`, `intent` (used while preserveNumbers is off), `simulatePaper` and `simulateBlack` (CMYK devices only), `preview` (on): Preview shows the proof on the canvas, OK runs view.proofSetup with these and proof: true, Cancel puts the earlier proof view back)",
+        "{} open View › Proof Setup › Customize (dialog `proofSetup`, fields `device` (\"workingCmyk\", \"cmyk:<profile>\" or \"rgb:<profile>\": any CMYK or RGB profile), `preserveNumbers`, `intent` (used while preserveNumbers is off), `simulatePaper` and `simulateBlack` (CMYK devices only), `preview` (on): Preview shows the proof on the canvas, OK runs view.proofSetup with these and proof: true, Cancel puts the earlier proof view back; Save… writes these to a picked proof setup file with view.proofSetup.save and Load… fills them from one with view.proofSetup.read, both starting in the Proof Setups folder, whose setups View › Proof Setup lists below Customize…)",
     ),
     (
         "ui.indexedColorDialog",

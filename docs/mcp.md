@@ -1057,9 +1057,9 @@ Convert to Grayscale before the switch would give); other colors convert as usua
 colors that changed in the art, symbols, graph designs and pattern tiles; it does not count the colors of graphic
 styles and brushes.
 `edit.colorSettings`, `file.documentColorMode`, `color.convert`, `color.gamutCheck`, `color.loadProfile`,
-`color.removeProfile`, `view.proofSetup`, `view.proofColors`, `view.overprintPreview`, `view.separationsPreview` and
-`swatch.setSpot` reject a param of the wrong type, such as `"bpc": "no"`, `"on": 1`, `"to": 5` or `"colors": "#fff"`,
-and change nothing. Omitting a param or giving null keeps its default.
+`color.removeProfile`, `view.proofSetup`, `view.proofSetup.save`, `view.proofColors`, `view.overprintPreview`,
+`view.separationsPreview` and `swatch.setSpot` reject a param of the wrong type, such as `"bpc": "no"`, `"on": 1`,
+`"to": 5` or `"colors": "#fff"`, and change nothing. Omitting a param or giving null keeps its default.
 View › Proof Setup › Customize… (`ui.proofSetupDialog`, dialog `proofSetup`) sets the custom proof through
 `view.proofSetup`: `target` `"cmyk:<profile>"` or `"rgb:<profile>"` names any CMYK or RGB profile as the device to
 simulate (a profile that is not loaded is an error), `preserveNumbers` sends the colors' numbers in the document's
@@ -1069,6 +1069,17 @@ the proofed colors on the device's paper), and
 `simulateBlack` shows the device's black
 as the dark gray it prints (`simulatePaper` does so too, on the paper's color; both act on CMYK devices only). The
 reply carries `preserveNumbers` and `simulateBlack` with the other proof settings.
+The dialog's Save… and Load… buttons save and load a custom proof setup
+([Save or load a custom proof setup](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=148)).
+`view.proofSetup.save {path}` writes the current proof setup, or the settings it is given as `view.proofSetup` takes
+them, to a proof setup file without changing the proof view; the device must be `workingCmyk`, `cmyk:<profile>` or
+`rgb:<profile>`. `view.proofSetup.load {path}` reads one back, makes it the proof setup and turns Proof Colors on;
+`view.proofSetup.read {path}` only returns the file's settings, which is how Load… fills the dialog. All three take
+`name` in place of `path` for a setup in the Proof Setups folder next to the preferences, and `view.proofSetup.list` lists the setups
+there, at most 100, which View › Proof Setup shows below Customize…. A name is at most 100 characters without path
+characters. These are VectorCraft's own choices: the file is VectorCraft's own JSON format (extension `.vcproof`) of
+at most 64 KiB, checked by size before it is read; a file whose device is a profile that is not loaded is refused
+with an error naming the profile, and nothing changes.
 The Separations panel's Assign rows (where Edit › Assign Profile… goes) act on the profile of the document's color
 mode: Don't Color Manage This Document runs `edit.assignProfile` with null for that model (no profile, so the colors
 show through the working space), Working RGB or Working CMYK with the working space's name (that profile stays
@@ -2333,7 +2344,8 @@ change anything outside the documents: `script.*` except `script.check`, `plugin
 `shortcutSet.*`, `help.*`, `print.*`, `library.*`, `importMatches.*`, `edit.undoGroup.*`, `file.recovery.*`,
 `stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
 `text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
-`view.proofSetup`, `view.proofColors`, `view.overprintPreview` and `view.separationsPreview`. It also cannot run
+`view.proofSetup`, `view.proofSetup.save`, `view.proofSetup.load`, `view.proofColors`, `view.overprintPreview` and
+`view.separationsPreview`. It also cannot run
 `edit.clearHistory`: a run keeps each document's undo steps from before it and adds one. Calling one of these throws
 an error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
 has unsaved changes.

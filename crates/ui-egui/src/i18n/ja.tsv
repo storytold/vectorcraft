@@ -2763,6 +2763,7 @@ diagnostics	ui	UI
 	Device to Simulate:	シミュレートするデバイス:
 	Simulate Paper Color	用紙の色をシミュレート
 	Simulate Black Ink	インキの黒をシミュレート
+	Load…	読み込み…
 	Preserve Editing Capabilities	編集機能を保持
 	Preserve Lightness	明度を保持
 	Preserve Overprints and Spot Colors	オーバープリントと特色を保持

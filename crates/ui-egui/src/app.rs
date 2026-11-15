@@ -353,6 +353,7 @@ impl VectorcraftApp {
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
         crate::panels::actions::after_journaled_edit(self);
         crate::scripts_menu::poll(self, ctx);
+        crate::dialogs::proof_setup::poll(self, ctx);
         if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
             // A script in `$.sleep` goes on when its time is up; until then the app can idle.
             match self.session.script_sleep_left() {
