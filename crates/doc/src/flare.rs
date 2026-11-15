@@ -127,8 +127,33 @@ fn ellipse(geom: &GradientGeom) -> [f64; 3] {
     [u.x * u.x + w.x * w.x, u.x * u.y + w.x * w.y, u.y * u.y + w.y * w.y]
 }
 
+/// The ellipse `[xx, xy, yy]` ([`ellipse`]) as its size, the length of its longer half-axis, and
+/// its shape: the ratio of its shorter axis to its longer one, then the cosine and sine of twice
+/// the longer axis's angle, each times one minus that ratio (0 for a circle). Each number is a
+/// length or a ratio of lengths, never a squared length that a tiny flare or a narrow gradient
+/// makes smaller than the tolerance.
+fn ellipse_size_and_shape(geom: &GradientGeom) -> (f64, [f64; 3]) {
+    let [xx, xy, yy] = ellipse(geom);
+    let half_diff = (xx - yy) / 2.0;
+    let d = half_diff.hypot(xy);
+    let longer = (xx + yy) / 2.0 + d;
+    if longer.is_nan() || longer <= 0.0 {
+        return (0.0, [0.0; 3]);
+    }
+    // The product of the half-axes is the area factor of the map from the unit circle, `u` across
+    // `w` as [`ellipse`] builds them: a sum of squares times the aspect, without the cancellation
+    // of `xx * yy - xy * xy` for a narrow ellipse.
+    let u = geom.end - geom.start;
+    let w = Vec2::new(-u.y, u.x) * geom.aspect;
+    let ratio = ((u.x * w.y - u.y * w.x).abs() / longer).min(1.0);
+    let (cos, sin) = if d > 0.0 { (half_diff / d, xy / d) } else { (0.0, 0.0) };
+    (longer.sqrt(), [ratio, (1.0 - ratio) * cos, (1.0 - ratio) * sin])
+}
+
 /// `n` as JSON without what depends on how its transforms were applied: its id, the angle of its
-/// bounding box, and which axis of a gradient's ellipse its end point is on (the ellipse stays).
+/// bounding box, and which axis of a gradient's ellipse its end point is on (the ellipse stays: its
+/// size in the placement, and its shape beside the placement, out of reach of a pixel-aligned
+/// part's snap allowance, which is a length).
 fn comparable(n: &Node) -> Value {
     fn strip(v: &mut Value) {
         match v {
@@ -140,9 +165,11 @@ fn comparable(n: &Node) -> Value {
                     && let Ok(g) = serde_json::from_value::<GradientGeom>(geom.clone())
                     && let Value::Object(geom) = geom
                 {
+                    let (size, shape) = ellipse_size_and_shape(&g);
                     geom.remove("end");
                     geom.remove("aspect");
-                    geom.insert("ellipse".into(), serde_json::json!(ellipse(&g)));
+                    geom.insert("ellipse".into(), serde_json::json!(size));
+                    m.insert("ellipseShape".into(), serde_json::json!(shape));
                 }
                 m.values_mut().for_each(strip);
             }
@@ -173,7 +200,12 @@ fn close(a: &Value, b: &Value, tol: f64, snap: f64, geometry: bool) -> bool {
         },
         (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(x, y)| close(x, y, tol, snap, geometry)),
         (Value::Object(x), Value::Object(y)) => {
-            x.len() == y.len() && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| close(v, w, tol, snap, geometry || k == "path" || k == "geom")))
+            x.len() == y.len()
+                && x.iter().all(|(k, v)| {
+                    // A gradient's shape is ratios: compared as closely as geometry, without the snap.
+                    let snap = if k == "ellipseShape" { 0.0 } else { snap };
+                    y.get(k).is_some_and(|w| close(v, w, tol, snap, geometry || k == "path" || k == "geom" || k == "ellipseShape"))
+                })
         }
         _ => a == b,
     }
@@ -237,10 +269,11 @@ impl FlareSpec {
     }
 
     /// Whether `group`'s parts are still the ones these settings draw, in place: none was edited,
-    /// distorted, removed or added, and the transform can be undone.
+    /// distorted, removed or added, and the transform can be undone. The parts are compared where
+    /// they are in the document, at any scale.
     pub fn draws(&self, group: &Node) -> bool {
         let NodeKind::Group { children, .. } = &group.kind else { return false };
-        if self.transform.determinant().abs() < 1e-12 || !self.transform.as_coeffs().iter().all(|c| c.is_finite()) {
+        if !self.transform.is_finite() || self.transform.determinant() == 0.0 || !self.transform.inverse().is_finite() {
             return false;
         }
         let expected = parts(&self.params);
@@ -329,5 +362,73 @@ mod tests {
             });
             assert!(!spec(&squashed).draws(&squashed), "gradient shape, aligned {aligned}");
         }
+    }
+
+    /// An ellipse's size and shape are the same whichever axis its end point is on, and a narrow
+    /// gradient made narrower, or turned, changes its shape by more than [`GEOMETRY_TOL`].
+    #[test]
+    fn an_ellipse_shape_tells_narrow_gradients_apart() {
+        let geom = |end: (f64, f64), aspect: f64| GradientGeom { start: Point::new(1.0, 2.0), end: Point::new(end.0, end.1), aspect, focal: None };
+        let of = ellipse_size_and_shape;
+        let (size, shape) = of(&geom((11.0, 2.0), 0.5));
+        // The same ellipse with its end point on the other axis.
+        let (size2, shape2) = of(&geom((1.0, 7.0), 2.0));
+        assert!((size - size2).abs() < 1e-12 && shape.iter().zip(shape2).all(|(a, b)| (a - b).abs() < 1e-12), "{shape:?} {shape2:?}");
+        // A very narrow ellipse, given both ways, keeps its shape to within the tolerance.
+        let (thin, thin2) = (of(&geom((11.0, 2.0), 1e-8)).1, of(&geom((1.0, 2.0 + 1e-7), 1e8)).1);
+        assert!(thin.iter().zip(thin2).all(|(a, b)| (a - b).abs() < GEOMETRY_TOL), "{thin:?} {thin2:?}");
+        let narrow = of(&geom((11.0, 2.0), 1e-4)).1;
+        for other in [of(&geom((11.0, 2.0), 5e-5)).1, of(&geom((1.0, 12.0), 1e-4)).1] {
+            assert!(narrow.iter().zip(other).any(|(a, b)| (a - b).abs() > 1e3 * GEOMETRY_TOL), "{narrow:?} {other:?}");
+        }
+        assert_eq!(of(&geom((1.0, 2.0), 1.0)), (0.0, [0.0; 3]));
+    }
+
+    /// A flare scaled far down, in one direction or in all, anywhere on the canvas, still draws its
+    /// settings, and a part's gradient whose shape was edited is still told apart; a flattened flare
+    /// does not draw its settings.
+    #[test]
+    fn a_flare_scaled_far_down_still_draws_its_settings() {
+        let v = json!({ "cx": 50.0, "cy": 50.0, "x2": 250.0, "y2": 50.0, "rays": 5, "rings": 2, "seed": 9, "diameter": 40.0 });
+        let flare_aligned = |xf: Affine, aligned: bool| {
+            let children = parts(&v).into_iter().enumerate().map(|(i, p)| std::sync::Arc::new(part_node(NodeId(10 + i as u64), p, xf, aligned)));
+            let mut g = Node::group(NodeId(1), children.collect());
+            g.extras_mut().flare = Some(Box::new(FlareSpec { params: v.clone(), transform: xf }));
+            g
+        };
+        let flare = |xf: Affine| flare_aligned(xf, false);
+        // The center's gradient placement, to edit.
+        let center_geom = |g: &mut Node, f: &dyn Fn(&mut GradientGeom)| {
+            let NodeKind::Group { children, .. } = &mut g.kind else { panic!("not a group") };
+            if let Some(crate::AppearanceItem::Fill(fill)) = std::sync::Arc::make_mut(&mut children[2]).appearance.items.first_mut()
+                && let Paint::Gradient(gp) = &mut fill.paint
+                && let Some(geom) = &mut gp.geom
+            {
+                f(geom);
+            } else {
+                panic!("the center has no gradient fill");
+            }
+        };
+        let draws = |g: &Node| g.extras().flare.as_deref().is_some_and(|spec| spec.draws(g));
+        assert!(draws(&flare(Affine::scale(1e-7))), "scaled to 0.00001%");
+        assert!(draws(&flare(Affine::rotate(0.3) * Affine::scale_non_uniform(1.0, 1e-10))), "shrunk far on one axis");
+        assert!(draws(&flare(Affine::translate((crate::MAX_COORD - 1000.0, 0.0)) * Affine::scale(0.5))), "near the edge of the canvas");
+        assert!(draws(&flare(Affine::translate((1000.0, 0.0)) * Affine::scale(1e-5))), "scaled to 0.001% and moved away");
+        assert!(!draws(&flare(Affine::scale_non_uniform(1.0, 0.0))), "flattened");
+        // At that size a part whose gradient's shape was edited no longer draws the settings.
+        let mut squashed = flare(Affine::scale(1e-6));
+        assert!(draws(&squashed), "scaled to 0.0001%");
+        center_geom(&mut squashed, &|geom| geom.aspect *= 0.5);
+        assert!(!draws(&squashed), "gradient shape at 0.0001%");
+        // A pixel-aligned part may sit up to a pixel off, but its gradient's shape may not change,
+        // even when the ellipse keeps its size.
+        let mut reshaped = flare_aligned(Affine::IDENTITY, true);
+        assert!(draws(&reshaped), "aligned");
+        center_geom(&mut reshaped, &|geom| {
+            let a = geom.aspect;
+            geom.aspect = a * 0.5;
+            geom.end = geom.start + (geom.end - geom.start) * ((1.0 + a * a) / (1.0 + a * a / 4.0)).sqrt();
+        });
+        assert!(!draws(&reshaped), "gradient shape of the same size, aligned");
     }
 }
