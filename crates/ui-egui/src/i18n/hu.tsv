@@ -1953,6 +1953,7 @@ file-filter	Templates	Sablonok
 	Show smooth color wheel	Folytonos színkör megjelenítése
 	Show segmented color wheel	Szegmentált színkör megjelenítése
 	Show color bars	Színsávok megjelenítése
+	Find the selected colors in the artwork	A kijelölt színek keresése a grafikában
 	Harmony Sets	Harmóniakészletek
 	HDTV 1080p	HDTV 1080p
 	HDTV 720p	HDTV 720p
@@ -3289,6 +3290,8 @@ mark-style	Japanese	Japán
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Mellékjelek vízszintes helyzetének igazítása
+	Adjust Vertical Diacritic Position	Mellékjelek függőleges helyzetének igazítása
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció
@@ -9581,3 +9584,20 @@ breakText	Glyphs	Glifák
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixel túl nagy a JPEG formátumhoz (oldalanként legfeljebb 65535 pixel): csökkentsd a felbontást
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixel túl nagy a Targa formátumhoz (oldalanként legfeljebb 65535 pixel): csökkentsd a felbontást
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixel túl nagy a PSD formátumhoz (oldalanként legfeljebb {MAX_SIDE} pixel): csökkentsd a felbontást
+	Packaging Tools	Csomagolóeszközök
+	Fold Lines	Hajtásvonalak
+	Make Cut Line	Vágóvonallá alakítás
+	Make Crease Line	Bigvonallá alakítás
+	Make Partial Cut Line	Részleges vágóvonallá alakítás
+	Make Perforation Line	Perforációs vonallá alakítás
+	Make Fold Line	Hajtásvonallá alakítás
+	Role Swatches…	Vonaltípusok színmintái…
+	Role Swatches	Vonaltípusok színmintái
+	Role	Vonaltípus
+	Cut Line	Vágóvonal
+	Crease Line	Bigvonal
+	Partial Cut Line	Részleges vágóvonal
+	Perforation Line	Perforációs vonal
+	No objects are selected.	Nincs kijelölt objektum.
+	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
+	Remove Fold Line Role	Vonaltípus eltávolítása

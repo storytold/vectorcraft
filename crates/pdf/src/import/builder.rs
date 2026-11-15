@@ -361,8 +361,9 @@ impl<'p> Builder<'p> {
                     Some(MaskSpec::Mask(m)) => (opacity, Some(m.clone())),
                     None => (opacity, None),
                 };
-                // Isolation only shows with blending inside; knockout with several objects.
-                let isolate = isolate && Node::children_blend(&children, &mut |c| c.blends_through());
+                // Isolation only shows with blending or overprinting inside; knockout with several
+                // objects.
+                let isolate = isolate && (Node::children_blend(&children, &mut |c| c.blends_through()) || children_overprint(&children));
                 let knockout = knockout && children.len() > 1;
                 let plain = opacity >= 0.999 && blend == BlendMode::Normal && mask.is_none() && !isolate && !knockout;
                 if children.is_empty() {
@@ -1182,4 +1183,17 @@ fn visual_glyph_text(text: String) -> String {
     let Some((order, _)) = vectorcraft_text::logical_order(&text) else { return text };
     let chars: Vec<char> = text.chars().collect();
     order.iter().filter_map(|&i| chars.get(i)).collect()
+}
+
+/// Whether a visible fill or stroke among `children` overprints, characters' too, directly or
+/// through children that don't isolate. In an isolated group an overprinting object is drawn on
+/// the group's empty backdrop, so it covers the inks of the art below the group that it does not
+/// paint; without isolation it leaves them.
+fn children_overprint(children: &[Arc<Node>]) -> bool {
+    children.iter().any(|c| {
+        c.visible
+            && (c.appearance.items.iter().any(|i| i.visible() && i.overprint())
+                || matches!(&c.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
+                || (!c.isolate && c.children().is_some_and(|ch| children_overprint(ch))))
+    })
 }
