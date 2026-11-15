@@ -57,9 +57,9 @@ pub fn in_every_unit(pt: f64) -> Value {
     json!({ "points": pt, "units": units })
 }
 
-/// The unit `p` gives for a number without a suffix (points when left out).
+/// The unit `p` gives for a number without a suffix (points when left out; null is an error).
 fn unit_param(p: &Value) -> Result<Unit> {
-    let Some(given) = p.get("unit").filter(|u| !u.is_null()) else { return Ok(Unit::Points) };
+    let Some(given) = p.get("unit") else { return Ok(Unit::Points) };
     let named = given.as_str().filter(|name| name.len() <= MAX_TEXT_LEN).and_then(Unit::named_east_asian);
     named.ok_or_else(|| {
         let u = match given {

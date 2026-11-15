@@ -155,6 +155,8 @@ fn bad_values_and_units_are_refused() {
         json!({"value": 1, "unit": "furlongs"}),
         json!({"value": 1, "unit": 5}),
         json!({"value": 1, "unit": ["mm"]}),
+        // Only an omitted `unit` is points.
+        json!({"value": 1, "unit": null}),
     ] {
         match s.execute("addon.units.convert", &p) {
             Err(EngineError::BadParams { cmd, .. }) => assert_eq!(cmd, "addon.units.convert", "{p}"),
