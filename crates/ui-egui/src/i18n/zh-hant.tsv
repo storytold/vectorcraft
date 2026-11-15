@@ -2033,6 +2033,9 @@ file-filter	Templates	範本
 @msg	image would be too large; lower the resolution	影像會過大；請降低解析度
 @msg	clipboard is empty	剪貼簿是空的
 @msg	no anchor points selected	未選取錨點
+@msg	`points` must be three [x, y] pairs of numbers	`points` 必須是三組數字 [x, y]
+@msg	direct-select three anchor points, or give `points`	請以直接選取方式選取三個錨點，或提供 `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	沒有圓通過這些點：有兩點相同，或三點共線
 @msg	select at least two objects	請選取至少兩個物件
 @msg	exit isolation mode first	請先結束隔離模式
 @msg	no saved presets	沒有已儲存的預設集

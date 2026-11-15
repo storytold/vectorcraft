@@ -4934,6 +4934,9 @@ imageTrace	Outline	Kontur
 @msg	no active document	brak aktywnego dokumentu
 @msg	no active perspective plane	brak aktywnej płaszczyzny perspektywy
 @msg	no anchor points selected	nie zaznaczono punktów kontrolnych
+@msg	`points` must be three [x, y] pairs of numbers	`points` musi zawierać trzy pary liczb [x, y]
+@msg	direct-select three anchor points, or give `points`	zaznacz bezpośrednio trzy punkty kontrolne lub podaj `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	przez te punkty nie przechodzi żaden okrąg: dwa są takie same albo wszystkie trzy leżą na jednej prostej
 @msg	no app to open files here	brak aplikacji do otwierania plików
 @msg	no artboard	brak obszaru kompozycji
 @msg	no artboard {i} (0-based; the document has {_1})	brak obszaru kompozycji {i} (numeracja od 0; dokument ma {_1})
