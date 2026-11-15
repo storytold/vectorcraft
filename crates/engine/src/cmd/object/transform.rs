@@ -366,9 +366,12 @@ pub(super) fn scale(s: &mut Session, p: &Value) -> Result<Value> {
 /// `"box"` (the default) is the bounding box of `ids`, turned with rotated objects until Reset
 /// Bounding Box ([`Document::bbox_angle`]); `"page"` is the page's axes. Anchors selected with
 /// Direct Selection (with no copy and Transform Objects on) transform along the page's axes, as
-/// their own box does. The basis joins the journal entry, so a replay acts in the same frame.
+/// their own box does. The basis joins the journal entry, so a replay acts in the same frame. A
+/// saved step without `basis` ([`Session::replay`]) was recorded before Scale and Reflect followed
+/// the box, so it acts along the page's axes, as it did when it was recorded.
 fn basis_frame(s: &mut Session, p: &Value, cmd: &str, ids: &[NodeId]) -> Result<OrientedBox> {
-    let page = choice(p, cmd, "basis", &["box", "page"])? == Some("page");
+    let basis = choice(p, cmd, "basis", &["box", "page"])?;
+    let page = basis == Some("page") || (basis.is_none() && s.replaying());
     let st = s.doc()?;
     let anchors = !bool_or(p, "copy", false)
         && transforms_objects(p)

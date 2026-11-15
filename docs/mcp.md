@@ -5635,8 +5635,8 @@ axes, until Object › Transform › Reset Bounding Box squares the box to the p
 `origin` is still a page point, and a numeric `axis` is still a line on the page at that angle. Selections whose
 objects stand at different angles, and anchors selected with Direct Selection, use the page's axes; with `copy` or
 with `objects: false`, the whole objects or their pattern tiles transform, along the box. The journal entry
-records the `basis` used, so a recorded action replays in the same frame; an older recording without `basis` acts
-along the box. `object.transformAgain` repeats the transform's page matrix, also after Reset Bounding Box. The Scale
+records the `basis` used, so a recorded action replays in the same frame; a saved step without `basis` (an action or
+journal entry recorded before it) plays along the page's axes, as it did when it was recorded. `object.transformAgain` repeats the transform's page matrix, also after Reset Bounding Box. The Scale
 and Reflect dialogs, the Transform and Properties panels' flips, the Scale tool and the Reflect tool's default axis
 and Shift steps follow the box the same way; a Reflect axis drawn with the tool is the line drawn on the page.
 

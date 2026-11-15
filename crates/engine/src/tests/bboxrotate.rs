@@ -666,7 +666,7 @@ fn expanding_a_reflected_symbol_instance_keeps_its_box() {
         for reset in [false, true] {
             let (mut s, inst) = turned_instance(0.0);
             s.execute("object.rotate", &json!({"angle": 150})).unwrap();
-            s.execute("object.reflect", &json!({"axis": "horizontal"})).unwrap();
+            s.execute("object.reflect", &json!({"axis": "horizontal", "basis": "page"})).unwrap();
             assert!(near(angle(&s, inst), -170.0), "{}", angle(&s, inst));
             if reset {
                 s.execute("object.resetBoundingBox", &json!({})).unwrap();
@@ -784,6 +784,45 @@ fn scale_and_reflect_follow_the_turned_box() {
     want.transform(m, false);
     let (got, want) = (page(&s, &[a]), want.geometric_bounds_with(&s.doc().unwrap().doc.symbol_boxes()).unwrap());
     assert!([got.x0 - want.x0, got.y0 - want.y0, got.x1 - want.x1, got.y1 - want.y1].iter().all(|d| d.abs() < 1e-6), "{got:?} {want:?}");
+}
+
+/// A saved step without `basis` was recorded before Scale and Reflect followed the turned box, so a
+/// replay of it acts along the page's axes, as it did then, and its new journal entry says so. A
+/// step recorded now names its basis and replays along the box. A call without `basis` that is not
+/// a replay acts along the box.
+#[test]
+fn saved_steps_without_a_basis_replay_on_the_page() {
+    // The turned rectangle after `run` runs on it: its page bounds and its box's angle.
+    let after = |run: &dyn Fn(&mut Session)| {
+        let mut s = session();
+        let a = turned_rect(&mut s);
+        run(&mut s);
+        let st = (s.doc().unwrap().doc.bounds_of(&[a], false).unwrap(), angle(&s, a));
+        (st, s.journal.last().unwrap().clone())
+    };
+    let same = |(r, a): (Rect, f64), (q, b): (Rect, f64)| [r.x0 - q.x0, r.y0 - q.y0, r.x1 - q.x1, r.y1 - q.y1, a - b].iter().all(|d| d.abs() < 1e-6);
+    for (id, p) in [("object.scale", json!({"sx": 200, "sy": 100})), ("object.reflect", json!({"axis": "vertical"}))] {
+        let mut on_page = p.clone();
+        on_page["basis"] = json!("page");
+        let (page, _) = after(&|s| {
+            s.execute(id, &on_page).unwrap();
+        });
+        let (old, (_, noted)) = after(&|s| {
+            s.replay(id, &p).unwrap();
+        });
+        assert!(same(old, page), "{id}: {old:?} {page:?}");
+        assert_eq!(noted["basis"], "page", "{id}");
+
+        let (boxed, (recorded_id, recorded)) = after(&|s| {
+            s.execute(id, &p).unwrap();
+        });
+        assert!(!same(boxed, page) && near(boxed.1, 45.0), "{id}: {boxed:?}");
+        assert_eq!(recorded["basis"], "box", "{id}");
+        let (replayed, _) = after(&|s| {
+            s.replay(&recorded_id, &recorded).unwrap();
+        });
+        assert!(same(replayed, boxed), "{id}: {replayed:?} {boxed:?}");
+    }
 }
 
 /// Once Reset Bounding Box squares the box, and for objects standing at different angles, Scale
