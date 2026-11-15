@@ -367,7 +367,8 @@ fn edit_effects(
 
 /// [`edit_effects`] for several effects of one list (`indices`): `f` gets each target's list and
 /// the positions of `indices` there, ascending; with `aligned`, a position a target doesn't share
-/// is left out of it, and a target sharing none of them is left out.
+/// is left out of it, and a target sharing none of them is left out. A position no target has is
+/// an error with `none`, and nothing changes.
 #[allow(clippy::too_many_arguments)]
 fn edit_effects_at(
     s: &mut Session,
@@ -396,7 +397,12 @@ fn edit_effects_at(
     // Each target's list and the positions in it, in the order the targets first come up.
     let mut targets: Vec<(NodeId, Option<usize>, Vec<usize>)> = vec![];
     for &index in indices {
-        for (id, at, i) in effect_targets(s, p, item, index, cmd)? {
+        let found = effect_targets(s, p, item, index, cmd)?;
+        // An aligned effect of a design's art that no other object has is refused, as it is given alone.
+        if found.is_empty() {
+            return Err(EngineError::Other(none.into()));
+        }
+        for (id, at, i) in found {
             match targets.iter_mut().find(|t| t.0 == id && t.1 == at) {
                 Some(t) => t.2.push(i),
                 None => targets.push((id, at, vec![i])),

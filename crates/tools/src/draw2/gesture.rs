@@ -791,9 +791,16 @@ fn redraw_targets(cx: &ToolContext, id: NodeId) -> Vec<NodeId> {
 /// Whether the selection contains a path the Smooth command can act on: one with a subpath of three
 /// or more anchors, or of two anchors joined by a curve.
 fn has_selected_smooth_path(cx: &ToolContext) -> bool {
-    let editable = cx.doc.editable();
+    can_smooth(cx.doc, cx.selection)
+}
+
+/// Whether `selection` in `doc` holds an editable path, selected or inside a selected object, that
+/// the Smooth tool can smooth: one with a subpath of three or more anchors, or of two anchors
+/// joined by a curve.
+pub fn can_smooth(doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection) -> bool {
+    let editable = doc.editable();
     let smoothable = |sp: &vectorcraft_geom::SubPath| sp.anchors.len() >= 3 || (0..sp.segment_count()).any(|i| !super::segment_is_straight(sp, i));
-    cx.selection.objects.iter().filter_map(|id| cx.doc.node(*id)).any(|n| {
+    selection.objects.iter().filter_map(|id| doc.node(*id)).any(|n| {
         let mut found = false;
         n.walk(&mut |child| {
             if !found
