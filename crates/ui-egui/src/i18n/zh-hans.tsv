@@ -3280,6 +3280,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Sixth Space	六分之一空格
 	Size	大小
 	Size Tile to Art	使拼贴适合图稿
+	Move Tile with Art	拼贴随图稿移动
 	Size/Leading	字号/行距
 	Size:	尺寸：
 	Ridges per segment:	每段起伏数：
@@ -3926,6 +3927,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Working CMYK	工作 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加标签)
 	Working RGB (don't tag)	工作 RGB (不加标签)
+	Don't Color Manage This Document	不对此文档进行色彩管理
+	Working RGB: {name}	工作 RGB：{name}
+	Working CMYK: {name}	工作 CMYK：{name}
 	Workspace	工作区
 	Workspace {i}	工作区 {i}
 	Wrinkle Tool	褶皱工具
@@ -5027,6 +5031,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	every numbered name for {name} is taken in the document's folder	文档所在文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	No linked files to look for	没有要查找的链接文件
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	该链接位于符号、图表设计、图案或不透明度蒙版中，在画布上没有位置
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	图表系列中图表设计的图稿会根据设计重新绘制：要更改它，请编辑设计
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必须是由颜色组成的数组，而不是 {v}
@@ -5046,6 +5051,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	未授予自动化文件系统访问权限：缺少写入权限：{path}
 @msg	automation path rejected: outside the read root {root}: {path}	已拒绝自动化路径：位于读取根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	已拒绝自动化路径：位于所有读取根目录 {roots} 之外：{path}
+@msg	a linked JavaScript file is outside the read roots	链接的 JavaScript 文件位于所有读取根目录之外
 @msg	automation path rejected: outside the write root {root}: {path}	已拒绝自动化路径：位于写入根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒绝自动化路径：位于所有写入根目录 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒绝自动化路径：路径为空
@@ -5991,6 +5997,9 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+	Move Light to Back	将光源移到后方
+	Move Light to Front	将光源移到前方
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	拖动光源可移动它。方向键移动具有焦点的光源；按住 Shift 以 15° 为步长。
 	Shadows	阴影
 	Distance from Object	与对象的距离
 	Shadow Bounds	阴影边界

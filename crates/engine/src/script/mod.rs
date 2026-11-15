@@ -163,6 +163,9 @@ pub(crate) struct Request {
     pub name_given: bool,
     /// The file the script was read from, which its included files are read beside.
     pub file: Option<String>,
+    /// The real path of `file` as the read of `source` found it, which the included files are then
+    /// read beside instead of looking `file` up again.
+    pub checked_real: Option<std::path::PathBuf>,
     pub source: String,
     pub args: Map<String, Value>,
     pub fuel: u64,
@@ -1814,7 +1817,7 @@ impl Session {
         self.script_high_water.retain(|uid, _| open.contains(uid));
         self.script_stop.clear();
         self.script_report = None;
-        let mut files = include::Files::new(request.file.as_deref(), include::Files::jsinclude_env());
+        let mut files = include::Files::new(request.file.as_deref(), request.checked_real, include::Files::jsinclude_env());
         let expanded = files.expand_script(&request.source);
         let name = match &expanded {
             Ok(include::Expanded { name: Some(name), .. }) if !request.name_given => name.clone(),

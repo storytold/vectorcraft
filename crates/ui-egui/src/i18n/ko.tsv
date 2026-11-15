@@ -3270,6 +3270,7 @@ mark-style	Japanese	일본식
 	Single-line Composer	한 줄 조판
 	Toggle Line Composer	줄 조판 방식 전환
 	Size Tile to Art	타일을 아트웍 크기에 맞춤
+	Move Tile with Art	아트웍과 함께 타일 이동
 	Size/Leading	크기/행간
 	Size:	크기:
 	Ridges per segment:	세그먼트당 융기 수:
@@ -4110,6 +4111,9 @@ file-filter	Templates	템플릿
 	Windows	Windows
 	Working CMYK (don't tag)	작업용 CMYK (태그 안 함)
 	Working RGB (don't tag)	작업용 RGB (태그 안 함)
+	Don't Color Manage This Document	이 문서에 색상 관리 안 함
+	Working RGB: {name}	작업용 RGB: {name}
+	Working CMYK: {name}	작업용 CMYK: {name}
 	Workspace {i}	작업 영역 {i}
 	Yellow	노랑
 	[Normal Character Style]	[기본 문자 스타일]
@@ -5278,6 +5282,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	every numbered name for {name} is taken in the document's folder	문서 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	링크가 심볼, 그래프 디자인, 패턴 또는 불투명 마스크 안에 있어 캔버스에 위치가 없습니다
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	그래프 계열에 있는 그래프 디자인의 아트는 디자인에서 다시 그려집니다: 변경하려면 디자인을 편집하세요
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
 @msg	`colors` must be an array of colors, not {v}	`colors`는 {v}이(가) 아니라 색상 배열이어야 합니다
@@ -5297,6 +5302,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	자동화 파일 시스템 접근이 허용되지 않았습니다: 쓰기 권한이 없습니다: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	자동화 경로가 거부되었습니다: 읽기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	자동화 경로가 거부되었습니다: 읽기 루트 {roots} 밖입니다: {path}
+@msg	a linked JavaScript file is outside the read roots	연결된 JavaScript 파일이 읽기 루트 밖에 있습니다
 @msg	automation path rejected: outside the write root {root}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {roots} 밖입니다: {path}
 @msg	automation path rejected: path is empty	자동화 경로가 거부되었습니다: 경로가 비어 있습니다
@@ -5699,6 +5705,9 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	Move Light to Back	조명을 뒤로 이동
+	Move Light to Front	조명을 앞으로 이동
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	조명을 드래그하여 이동합니다. 화살표 키로 포커스된 조명을 이동하고, Shift 키를 누르면 15°씩 이동합니다.
 	Shadows	그림자
 	Distance from Object	개체로부터의 거리
 	Shadow Bounds	그림자 범위

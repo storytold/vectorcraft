@@ -2095,6 +2095,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Näytä värimallin rajat
 	Show Tile Edge	Näytä ruudun reuna
 	Size Tile to Art	Sovita ruudun koko kuvitukseen
+	Move Tile with Art	Siirrä ruutua kuvituksen mukana
 	Tile Type:	Ruudun tyyppi:
 	Top in Front	Ylin edessä
 	V Spacing:	Pystyväli:
@@ -2137,6 +2138,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Käytä mustan pisteen kompensointia
 	Working CMYK (don't tag)	Työ-CMYK (ei tunnistetta)
 	Working RGB (don't tag)	Työ-RGB (ei tunnistetta)
+	Don't Color Manage This Document	Älä hallitse tämän asiakirjan värejä
+	Working RGB: {name}	Työ-RGB: {name}
+	Working CMYK: {name}	Työ-CMYK: {name}
 	{name} (spot)	{name} (spottiväri)
 	Add to Profiles…	Lisää profiileihin…
 	Align Stroke to Center	Tasaa viiva keskelle
@@ -5442,6 +5446,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	every numbered name for {name} is taken in the document's folder	kaikki kohteen {name} numeroidut nimet ovat jo käytössä asiakirjan kansiossa
 @msg	No linked files to look for	Ei etsittäviä linkitettyjä tiedostoja
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Linkki on symbolin, kaaviomallin, kuvion tai peittävyysmaskin sisällä, eikä sillä ole paikkaa piirtoalueella
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	kaavion sarjassa olevan kaaviomallin piirros piirretään uudelleen mallista: muokkaa mallia muuttaaksesi sitä
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` on vaiheviittaus {r}, jonka vain `run` ja `command_batch` ratkaisevat
 @msg	`ids` must be an array of object ids, not {v}	`ids` on oltava objektitunnusten taulukko, ei {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` on oltava värien taulukko, ei {v}
@@ -5461,6 +5466,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automaation tiedostojärjestelmäkäyttöä ei ole myönnetty: kirjoitusoikeus puuttuu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automaation polku hylättiin: lukujuuren {root} ulkopuolella: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	automaation polku hylättiin: lukujuurten {roots} ulkopuolella: {path}
+@msg	a linked JavaScript file is outside the read roots	linkitetty JavaScript-tiedosto on lukujuurten ulkopuolella
+@msg	the library's file is outside the read roots	kirjaston tiedosto on lukujuurten ulkopuolella
+@msg	{file} names more than one linked JavaScript file	{file} vastaa useampaa kuin yhtä linkitettyä JavaScript-tiedostoa
 @msg	automation path rejected: outside the write root {root}: {path}	automaation polku hylättiin: kirjoitusjuuren {root} ulkopuolella: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	automaation polku hylättiin: kirjoitusjuurten {roots} ulkopuolella: {path}
 @msg	automation path rejected: path is empty	automaation polku hylättiin: polku on tyhjä
@@ -6002,6 +6010,9 @@ mark-style	Japanese	Japanilainen
 	Softness	Pehmeys
 	Ambient Light	Ympäristövalo
 	Light behind the object	Valo objektin takana
+	Move Light to Back	Siirrä valo taakse
+	Move Light to Front	Siirrä valo eteen
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Siirrä valoa vetämällä. Nuolinäppäimet siirtävät kohdistettua valoa; Vaihto siirtää 15° kerrallaan.
 	Shadows	Varjot
 	Distance from Object	Etäisyys objektista
 	Shadow Bounds	Varjon rajat
