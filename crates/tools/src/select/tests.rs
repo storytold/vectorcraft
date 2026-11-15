@@ -2646,3 +2646,22 @@ fn outline_view_click_through_an_image_selects_the_path_behind() {
         assert!(!selects(&a, back), "preview, {picked:?} selected: {a:?}");
     }
 }
+
+/// A marquee across clipped art where the clipping path's own shape, but not the region a live
+/// effect moved it to, lets it show reaches the clip group in Outline view only, which draws the
+/// clipping path without its effects.
+#[test]
+fn outline_view_marquees_measure_a_clip_group_by_its_plain_clipping_path() {
+    let (d, g, _) = doc_with_moved_clip_region();
+    let s = Selection::default();
+    let p = paint();
+    let marquee = |outline: bool| {
+        let cx = ToolContext { outline, ..cx(&d, &s, &p) };
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 440.0, 410.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 460.0, 430.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 460.0, 430.0))
+    };
+    assert_eq!(marquee(true), vec![Action::Exec("select.set".into(), json!({"ids": [g.0]}))]);
+    assert_eq!(marquee(false), vec![Action::Exec("select.set".into(), json!({"ids": []}))]);
+}

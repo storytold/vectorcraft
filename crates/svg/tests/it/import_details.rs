@@ -763,14 +763,15 @@ fn percentages_in_a_symbol_are_of_its_view_box() {
 }
 
 /// #1598: the warning for a filter that neither the live effects nor an SVG filter effect can hold
-/// (here, on turned objects) names the filter, its primitives and the object, and says it is drawn
-/// without it (not "a group": usvg wraps the element in one). Such a filter on an object that
-/// isn't turned comes in as an SVG filter effect holding the filter's XML.
+/// (here, on objects skewed past what the effect measures) names the filter, its primitives and the
+/// object, and says it is drawn without it (not "a group": usvg wraps the element in one). Such a
+/// filter on an object that isn't skewed that far comes in as an SVG filter effect holding the
+/// filter's XML.
 #[test]
 fn unsupported_filters_are_named_in_the_warning() {
     let body = r#"<filter id="f"><feColorMatrix type="saturate" values="0"/></filter><filter id="t"><feTurbulence baseFrequency="0.05"/></filter>
-        <rect x="20" y="20" width="60" height="60" fill="red" transform="rotate(10 50 50)" filter="url(#f)"/>
-        <rect id="r" x="100" y="20" width="60" height="60" fill="blue" transform="rotate(10 130 50)" filter="url(#t)"/>
+        <rect x="0.02" y="0.02" width="0.06" height="0.06" fill="red" transform="skewX(89.95)" filter="url(#f)"/>
+        <rect id="r" x="0.1" y="0.02" width="0.06" height="0.06" fill="blue" transform="skewX(89.95)" filter="url(#t)"/>
         <rect x="20" y="90" width="20" height="20" fill="red" filter="url(#f)"/>"#;
     let (d, w) = import_with_report(&svg(body)).unwrap();
     assert!(w.iter().any(|w| w == "filter 'f' (feColorMatrix) on an object isn't supported; drawn without it"), "{w:?}");
@@ -851,6 +852,93 @@ fn nested_image_within_budget_imports_and_use_fan_out_is_refused() {
     assert!(matches!(err, SvgError::TooLarge(15)), "{err:?}");
 }
 
+/// Groups `g0` to `g{levels}`: `g0` a rectangle styled `style`, each other two `<use>`s of the
+/// one before; one `<use>` of the last shown.
+fn use_chain(levels: usize, style: &str) -> String {
+    let links: String = (1..=levels).map(|i| format!(r##"<g id="g{i}"><use href="#g{0}"/><use href="#g{0}"/></g>"##, i - 1)).collect();
+    svg(&format!(r##"<defs><g id="g0"><rect width="1" height="1" style="{style}"/></g>{links}</defs><use href="#g{levels}"/>"##))
+}
+
+/// A style value of 100,000 bytes.
+fn long_style() -> String {
+    format!("font-family:{}", "a".repeat(100_000))
+}
+
+/// A long style that a chain of `<use>`s copies, or that a style sheet rule gives to many
+/// elements, is refused before usvg copies it; short styles import, a rule that matches nothing
+/// costing nothing.
+#[test]
+fn styles_that_expand_past_the_limit_are_refused() {
+    let err = import_with(&use_chain(10, &long_style()), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::StylesTooLarge(64)), "{err:?}");
+    assert_eq!(err.to_string(), "the SVG's styles expand to more than 64 MB");
+    // 1,000 groups that one rule gives the long style, without any `<use>`.
+    let sheet = svg(&format!("<style>g{{{}}}</style>{}", long_style(), "<g/>".repeat(1000)));
+    let err = import_with(&sheet, &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::StylesTooLarge(64)), "{err:?}");
+
+    // The chain with a short style shows its 1,024 rectangles.
+    let (d, _) = import_with(&use_chain(10, "fill:red"), &ImportOptions::default()).unwrap();
+    assert_eq!(art(&d).iter().filter(|n| n.children().is_none()).count(), 1024);
+    // 5,000 rectangles of a class with short rules, beside a long rule that matches none of them.
+    let rules = format!(".a{{fill:#123456;stroke:#654321;stroke-width:2;opacity:.5}} .b{{{}}}", long_style());
+    let classed = svg(&format!("<style>{rules}</style>{}", r#"<rect class="a" width="1" height="1"/>"#.repeat(5000)));
+    let (d, _) = import_with(&classed, &ImportOptions::default()).unwrap();
+    assert_eq!(art(&d).len(), 5000);
+}
+
+/// A chain of `<use>`s that makes more elements than usvg reads is refused before usvg makes them.
+#[test]
+fn a_use_chain_past_the_elements_usvg_reads_is_refused() {
+    let err = import_with(&use_chain(20, ""), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::TooLarge(n) if n == vectorcraft_svg::MAX_NODES.min(999_999)), "{err:?}");
+}
+
+/// An SVG image whose styles expand past the limit refuses the SVG showing it, and the SVG images
+/// share the limit with the SVG showing them.
+#[test]
+fn svg_images_whose_styles_expand_past_the_limit_refuse_the_svg() {
+    let err = import_with(&svg(&image_of("image/svg+xml", &use_chain(10, &long_style()))), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::StylesTooLarge(64)), "{err:?}");
+    // Each image copies its long style 383 times (about 38 MB): one imports, two together don't.
+    let image = image_of("image/svg+xml", &use_chain(7, &long_style()));
+    let (d, _) = import_with(&svg(&image), &ImportOptions::default()).unwrap();
+    assert!(!art(&d).is_empty());
+    let err = import_with(&svg(&image.repeat(2)), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::StylesTooLarge(64)), "{err:?}");
+    // An image that doesn't decode (no size) is left out, and what it would copy doesn't count.
+    let sizeless = use_chain(7, &long_style()).replacen(r#"width="200" height="120""#, r#"width="0" height="0""#, 1);
+    let (d, _) = import_with(&svg(&format!("{}{image}", image_of("image/svg+xml", &sizeless).repeat(2))), &ImportOptions::default()).unwrap();
+    assert!(!art(&d).is_empty());
+}
+
+/// The SVG images share the element limit with the SVG showing them: each image's `<use>` chain
+/// makes 655,356 elements, so one imports and two together are refused before usvg makes the
+/// second.
+#[test]
+fn svg_images_share_the_element_limit() {
+    let chain = use_chain(16, "");
+    let unshown = chain.replacen(r##"<use href="#g16"/>"##, "", 1);
+    assert_ne!(chain, unshown);
+    let image = image_of("image/svg+xml", &unshown);
+    let rect = r#"<rect width="1" height="1"/>"#;
+    assert!(import_with(&svg(&format!("{rect}{image}")), &ImportOptions::default()).is_ok());
+    let err = import_with(&svg(&format!("{rect}{}", image.repeat(2))), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::TooLarge(n) if n == vectorcraft_svg::MAX_NODES.min(999_999)), "{err:?}");
+}
+
+/// A `:not()` rule, which only the import's own style cascade reads, counts toward the style limit
+/// the SVG images share: each image's rule gives 400 groups the long style (about 40 MB), so one
+/// imports and two together are refused.
+#[test]
+fn svg_images_share_the_style_limit_with_not_rules() {
+    let groups = svg(&format!(r#"<style>g:not(.x){{{}}}</style>{}<rect width="1" height="1"/>"#, long_style(), "<g/>".repeat(400)));
+    let image = image_of("image/svg+xml", &groups);
+    assert!(import_with(&svg(&image), &ImportOptions::default()).is_ok());
+    let err = import_with(&svg(&image.repeat(2)), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::StylesTooLarge(64)), "{err:?}");
+}
+
 /// Nested SVG images exceeding `MAX_NESTED_SVG_IMAGES` are left out with a warning note (#3564).
 #[test]
 fn nested_svg_images_past_count_cap_are_left_out() {
@@ -860,6 +948,21 @@ fn nested_svg_images_past_count_cap_are_left_out() {
     let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500">{images}</svg>"#);
     let (_d, warnings) = import_with(&svg, &ImportOptions::default()).unwrap();
     assert!(warnings.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images"))));
+}
+
+/// A data URL shown by `<use>` elements, in the SVG and in an SVG image of it, imports as one
+/// image shown at each use.
+#[test]
+fn data_url_images_shown_by_uses_import_at_each_use() {
+    let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg==";
+    let image = format!(r#"<image id="p" href="data:image/png;base64,{png}" width="4" height="4"/>"#);
+    let uses = r##"<use href="#p" x="5"/>"##.repeat(3);
+    let inner = format!(r#"<svg {SVG_NS} width="20" height="10"><defs>{image}</defs>{uses}</svg>"#);
+    let (d, w) = import_with_report(&svg(&format!("<defs>{image}</defs>{uses}{}", image_of("image/svg+xml", &inner)))).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let found = images(&d);
+    assert_eq!(found.len(), 6);
+    assert!(found.iter().all(|(_, im)| im.key == found[0].1.key && (im.width, im.height) == (1, 1)));
 }
 
 /// Nested SVG images that can't be read: text that isn't XML, and an SVG without a size.

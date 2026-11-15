@@ -55,7 +55,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at, symbol_part_at, symbol_part_outline};
+use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at, symbol_part_at, symbol_part_outline_in_view};
 use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind, Selection, symbol_overrides};
 use vectorcraft_geom::{Anchor, PathData, PathSeg, Point, Rect, Vec2};
 
@@ -188,6 +188,8 @@ fn snapped(d: Vec2, unsnapped: Vec2, shift: bool, guides: &[Overlay]) -> bool {
 pub struct DirectSelectionTool {
     group: bool,
     state: State,
+    /// How far the move's last preview carried the anchors or the objects ([`Tool::readout`]).
+    moved: Option<Vec2>,
     /// The spine point last clicked (blend, anchor): its handles show and can be dragged.
     spine: Option<(NodeId, usize)>,
     /// Other points of that spine picked with it (Shift-click adds or takes one away); dragging
@@ -251,6 +253,7 @@ impl DirectSelectionTool {
         Self {
             group,
             state: State::Idle,
+            moved: None,
             spine: None,
             spine_more: vec![],
             mesh: MeshEdit::default(),
@@ -733,6 +736,10 @@ impl Tool for DirectSelectionTool {
     fn busy(&self) -> bool {
         !matches!(self.state, State::Idle) || self.guide.busy()
     }
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        let moving = matches!(self.state, State::MoveAnchors { began: true, .. } | State::MoveObject { began: true, .. });
+        self.moved.filter(|_| moving).map(crate::Readout::drag)
+    }
     fn options(&self) -> Value {
         self.mesh.options()
     }
@@ -1029,7 +1036,7 @@ impl Tool for DirectSelectionTool {
                 out.extend(self.mesh.overlays(cx, &|id| cx.selection.contains(id)));
                 if !self.group {
                     if let Some(sp) = &cx.selection.symbol_part
-                        && let Some(path) = cx.doc.node(sp.instance).and_then(|n| symbol_part_outline(cx.doc, n, &sp.path))
+                        && let Some(path) = cx.doc.node(sp.instance).and_then(|n| symbol_part_outline_in_view(cx.doc, n, &sp.path, cx.hit_options()))
                     {
                         out.push(Overlay::Path { path, color: cx.doc.layer_color(sp.instance), width: 1.0, dashed: false });
                     }
@@ -1486,6 +1493,7 @@ impl DirectSelectionTool {
             (d, self.guides) = (q - grab, guides);
         }
         self.snapped = snapped(d, unsnapped, ev.mods.shift, &self.guides);
+        self.moved = Some(d);
         out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y})));
         out
     }
@@ -1538,6 +1546,7 @@ impl DirectSelectionTool {
                 (d, self.guides) = (q - held, guides);
             }
             self.snapped = snapped(d, unsnapped, ev.mods.shift, &self.guides);
+            self.moved = Some(d);
             out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y})));
             return out;
         }
@@ -1553,6 +1562,7 @@ impl DirectSelectionTool {
             (d, self.guides) = if ev.mods.shift { snap.snap_along(cx, hold, d, ev.mods.alt) } else { snap.snap(cx, hold, d, ev.mods.alt) };
         }
         self.snapped = snapped(d, unsnapped, ev.mods.shift, &self.guides);
+        self.moved = Some(d);
         out.push(Action::Preview(
             "object.transform".into(),
             json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(d)), "copy": ev.mods.alt}),
@@ -1608,7 +1618,7 @@ impl DirectSelectionTool {
         // (members of groups too), each whole, as a click selects one; with an Alt-marquee, every
         // object it touches, each whole.
         if enclosed || whole {
-            let mut touched = vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true);
+            let mut touched = vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline);
             let editable = cx.doc.editable();
             touched.retain(|id| editable(*id));
             let picked = if enclosed { crate::select::inside(cx, r, touched) } else { touched };
@@ -1680,7 +1690,7 @@ impl DirectSelectionTool {
         }
         // Objects without anchors to pick (type, images, symbols…) are selected whole when
         // the marquee touches them, as with the Selection tool (#927).
-        for id in vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true) {
+        for id in vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline) {
             let whole = cx.doc.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }));
             if whole && !sel.iter().any(|(s, _)| *s == id) && !framed.iter().any(|(f, _)| *f == id) && !meshed.contains(&id) {
                 sel.push((id, vec![]));

@@ -1,4 +1,4 @@
-use super::bounds::{cull_bounds, effected_path_carrying};
+use super::bounds::{cull_bounds, effected_path_carrying, node_bezpath, rasterize_stage};
 use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, Made, Reads, Shadow, ShadowEntry};
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
@@ -330,6 +330,11 @@ impl Renderer {
 
     /// `draw_shape` for nodes with live effects.
     pub(crate) fn draw_shape_fx(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, bp: &BezPath, rule: FillRule) {
+        if !f.opts.outline
+            && let Some(stage) = self.rasterize_stage_of(f, n, self.fx_owner.as_ref().filter(|o| std::ptr::eq(&***o, n)).cloned())
+        {
+            return self.draw_staged(ctx, f, stage, bp, rule);
+        }
         // The node `draw_arc` is drawing gets its geometry from the cache: `bp` is its own path,
         // made from the node alone, so the effects give the same result every frame while the
         // plug-ins installed stay the same (`check_plugins`).
@@ -358,6 +363,47 @@ impl Renderer {
         if let Some((key, e)) = cached {
             self.fx_geom.insert(key, e);
         }
+    }
+
+    /// [`rasterize_stage`] of `n`, kept across frames when `owner` is `n` as held in its document
+    /// (then `true` in the third place: the stage is kept, and so are its caches).
+    fn rasterize_stage_of(&mut self, f: &Frame, n: &Node, owner: Option<Arc<Node>>) -> Option<(Arc<Node>, Affine, bool)> {
+        // Checked first: this runs for every path with effects drawn.
+        effects::rasterize_stage(&n.appearance.effects)?;
+        let Some(owner) = owner else {
+            return rasterize_stage(f.symbols.document(), n).map(|(stage, map)| (Arc::new(stage), map, false));
+        };
+        let key = Arc::as_ptr(&owner) as usize;
+        let stamp = self.stamp;
+        if let Some(e) = self.fx_stages.get_mut(&key)
+            && Arc::ptr_eq(&e.0, &owner)
+        {
+            e.3 = stamp;
+            return Some((e.1.clone(), e.2, true));
+        }
+        let (stage, map) = rasterize_stage(f.symbols.document(), n)?;
+        let stage = Arc::new(stage);
+        self.fx_stages.insert(key, (owner, stage.clone(), map, stamp));
+        Some((stage, map, true))
+    }
+
+    /// Draw `stage`, the node a path's Rasterize image is made from ([`rasterize_stage`]), through
+    /// `map`, the Transform effects after that Rasterize effect: its art and its image, on the
+    /// image's own pixel grid, move with the map. A map that flattens the art leaves nothing to
+    /// draw. `bp` is the path's own path; with `kept`, `stage` is kept across frames and so are
+    /// the geometry and rasters drawn for it.
+    fn draw_staged(&mut self, ctx: &mut RenderContext, f: &Frame, (stage, map, kept): (Arc<Node>, Affine, bool), bp: &BezPath, rule: FillRule) {
+        let det = map.determinant();
+        if !(det.is_finite() && det.abs() > 1e-12) {
+            return;
+        }
+        // A pixel's size in document units through the view and the map, measured as a frame
+        // measures it from its view.
+        let px = f.px / det.abs().sqrt();
+        let fr = Frame { view: f.view * map, visible: map.inverse().transform_rect_bbox(f.visible), px, output: f.output * map, ..*f };
+        let outer = if kept { self.fx_owner.replace(stage.clone()) } else { self.fx_owner.take() };
+        self.draw_shape_fx(ctx, &fr, &stage, bp, rule);
+        self.fx_owner = outer;
     }
 
     /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry:
@@ -389,7 +435,7 @@ impl Renderer {
         let bounds = rasterize_bounds(f.symbols, n, &rfx);
         // Under Rasterize the content reaches as far as its fills' and strokes' raster effects paint.
         let reach = bounds.map_or(reach, |b| reach.union(b));
-        let content = Content { node: n, owner: None, cache: Some(0), reach, outline: Some((g, rule)), bounds, kept: None };
+        let content = Content { node: n, owner: None, cache: Some(0), reach, object: reach, outline: Some((g, rule)), bounds, kept: None };
         let mut items = items;
         self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, paints, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
@@ -417,17 +463,27 @@ impl Renderer {
         if !self.charge_fx_instance(f.doc, a) {
             return;
         }
+        // A path whose Transform effects after its Rasterize effect hold options that reach its
+        // fills and strokes: its image moves with them as for any other path.
+        if !f.opts.outline
+            && let NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. } = &a.kind
+            && let Some(stage) = self.rasterize_stage_of(f, a, cache.then(|| a.clone()))
+            && let Some(bp) = node_bezpath(a)
+        {
+            return self.draw_staged(ctx, f, stage, &bp, *rule);
+        }
         let art = self.fx_art(f.doc, a, cache);
         // Art the cache did not keep is made again in the next frame.
         let kept = cache && self.fx_arts.get(&(Arc::as_ptr(a) as usize), self.stamp).is_some_and(|e| Arc::ptr_eq(&e.1, &art));
         let outer = self.made_again;
         self.made_again = outer || !kept;
         // With Crop Marks, the object inside the art paints its own raster effects; Vector
-        // Halftone samples them with the object.
+        // Halftone samples them with the object. The copies of a Transform effect that carry the
+        // raster effects listed before it paint those themselves.
         let rfx = if effects::has_crop_marks(a) || effects::addons::halftone::has_halftone(a) {
             vec![]
         } else {
-            effects::raster_effects(&a.appearance.effects)
+            effects::raster_effects(effects::outer_effects(a))
         };
         match cull_bounds(f.symbols, &art) {
             Some(reach) if !f.opts.outline && !rfx.is_empty() => {
@@ -446,7 +502,16 @@ impl Renderer {
                     None => rasterize_bounds(f.symbols, a, &rfx),
                 };
                 let reach = bounds.map_or(reach, |b| reach.union(b));
-                let content = Content { node: a, owner: Some(a), cache, reach, outline: region.as_deref().map(|r| (&r.0, r.1)), bounds, kept: None };
+                let content = Content {
+                    node: a,
+                    owner: Some(a),
+                    cache,
+                    reach,
+                    object: reach,
+                    outline: region.as_deref().map(|r| (&r.0, r.1)),
+                    bounds,
+                    kept: None,
+                };
                 self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.draw_fx_art(c, fr, a, &art));
                 ctx.set_transform(Affine::IDENTITY);
             }
@@ -770,6 +835,7 @@ impl Renderer {
                     owner: content.owner,
                     cache: None,
                     reach: content.reach,
+                    object: content.object,
                     outline: content.outline,
                     bounds: content.bounds,
                     kept: kept.as_ref(),
@@ -782,6 +848,7 @@ impl Renderer {
                     owner: content.owner,
                     cache: content.cache.filter(|_| !over),
                     reach,
+                    object: content.object,
                     outline,
                     bounds: spread,
                     kept: content.kept.filter(|_| split == at),

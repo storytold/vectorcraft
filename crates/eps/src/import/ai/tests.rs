@@ -5115,6 +5115,73 @@ fn an_instance_in_a_symbols_art_is_placed_from_the_canvas() {
     assert_eq!(instance_box(&doc, &a[0]), Rect::new(58.0, 53.0, 62.0, 57.0));
 }
 
+/// Files of versions 10 to 13 place an instance by a `TransformMatrix` that takes the symbol's art
+/// to the canvas (y down): the instance stays live and lands where the `RTransformMatrix` of a
+/// newer file puts it, on the page and in a symbol's art.
+#[test]
+fn an_instance_placed_on_the_canvas_by_an_older_file_stays_live() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let older = |name: &str, m: [f64; 6]| {
+        let [a, b, c, d, e, f] = m;
+        format!("/SymbolInstance :\n({name}) /SymbolRef ,\n{a} {b} {c} {d} {e} {f} /TransformMatrix\n;\n")
+    };
+    let page = older("Dot", [1.0, 0.0, 0.0, 1.0, 8111.0, 8192.0]) + &older("Dot", [2.0, 0.0, 0.0, 2.0, 8191.0, 8192.0]);
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Dot", &dot(), 5)), layer(&page));
+    let doc = read_ok(&body).doc;
+    let a = art(&doc);
+    assert_eq!(a.len(), 2);
+    assert!(a.iter().all(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })), "{a:#?}");
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(18.0, 48.0, 22.0, 52.0));
+    assert_eq!(instance_box(&doc, &a[1]), Rect::new(96.0, 46.0, 104.0, 54.0));
+    // Turned and scaled, as the newer file writes the same instance: canvas x is art x + 8091 and
+    // canvas y is 8242 - art y, so the second row of the matrix changes sign.
+    let turned = [1.299, -0.4, 0.75, 0.6928, 8111.0, 8192.0];
+    let newer = [1.299, 0.4, 0.75, -0.6928, 20.0, 50.0];
+    let older_doc =
+        read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Dot", &dot(), 5)), layer(&older("Dot", turned)))).doc;
+    let newer_doc =
+        read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Dot", &dot(), 5)), layer(&instance("Dot", newer)))).doc;
+    let xf = |d: &Document| match &art(d)[0].kind {
+        NodeKind::SymbolInstance { xf, .. } => xf.as_coeffs(),
+        k => panic!("{k:?}"),
+    };
+    let (o, n) = (xf(&older_doc), xf(&newer_doc));
+    assert!(o.iter().zip(n).all(|(a, b)| (a - b).abs() < 1e-9), "{o:?} {n:?}");
+    // In a symbol's art the matrix takes the art to the symbol's own space: Dot at (10, 5) in Pair's
+    // art, which the page instance puts at (50, 50).
+    let nested = older("Dot", [1.0, 0.0, 0.0, 1.0, 10.0, 5.0]);
+    let defs = symbols(&(symbol("Dot", &dot(), 5) + &symbol("Pair", &nested, 1)));
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{defs}{}", layer(&older("Pair", [1.0, 0.0, 0.0, 1.0, 8141.0, 8192.0])));
+    let doc = read_ok(&body).doc;
+    let a = art(&doc);
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(58.0, 53.0, 62.0, 57.0));
+    // One document saved in both forms: the template box's center is (100.5, 99.5), so art space's
+    // origin is at canvas (8091, 8291). Dot sits at (5, 2.5) in Pair's art, and the page instance
+    // puts Pair at (57, 145.5). Both instances get the newer file's matrices, coefficient by
+    // coefficient.
+    let saved = |inner: String, pair: String| {
+        let defs = symbols(&(symbol("Dot", &dot(), 5) + &symbol("Pair", &inner, 1)));
+        read_ok(&format!("%AI3_TemplateBox: 100.5 99.5 100.5 99.5\n{defs}{}", layer(&pair))).doc
+    };
+    let older_doc = saved(older("Dot", [1.0, 0.0, 0.0, 1.0, 5.0, 2.5]), older("Pair", [1.0, 0.0, 0.0, 1.0, 8148.0, 8145.5]));
+    let newer_doc = saved(instance("Dot", [1.0, 0.0, 0.0, -1.0, -8086.0, 8288.5]), instance("Pair", [1.0, 0.0, 0.0, -1.0, 57.0, 145.5]));
+    fn first_xf(n: &Node) -> Option<[f64; 6]> {
+        match &n.kind {
+            NodeKind::SymbolInstance { xf, .. } => Some(xf.as_coeffs()),
+            _ => n.children()?.iter().find_map(|c| first_xf(c)),
+        }
+    }
+    let both = |d: &Document| (xf(d), first_xf(&d.symbols[1].art).expect("Dot's instance in Pair's art"));
+    let ((op, on), (np, nn)) = (both(&older_doc), both(&newer_doc));
+    assert!(op.iter().zip(np).all(|(a, b)| (a - b).abs() < 1e-9), "{op:?} {np:?}");
+    assert!(on.iter().zip(nn).all(|(a, b)| (a - b).abs() < 1e-9), "{on:?} {nn:?}");
+    // Without a template box the canvas's place isn't known: the instance isn't read, though Dot is
+    // defined and the same instance with a template box is read above.
+    let defs = symbols(&symbol("Dot", &dot(), 5));
+    let e = read(stream(&format!("{defs}{}", layer(&older("Dot", [1.0, 0.0, 0.0, 1.0, 8111.0, 8192.0])))).as_bytes());
+    assert!(e.is_err_and(|e| e.contains("symbols")));
+}
+
 #[test]
 fn an_image_in_a_symbols_art_is_placed_from_the_canvas() {
     // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242). The
@@ -8553,6 +8620,224 @@ fn an_envelope_off_the_page_opens_live_when_it_draws_close_to_its_drawn_art() {
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
+/// `art` on `%_` lines, as the editing data writer hides it: a line already on one stays as it is.
+fn hidden_once(art: &str) -> String {
+    art.lines().map(|l| if l.starts_with("%_") { format!("{l}\n") } else { format!("%_{l}\n") }).collect()
+}
+
+/// A mesh envelope of `content` shaped by the grid `shape`, with Edit Contents on (`editing`: the
+/// contents in the group before the dictionary, the grid in its `AIDeformArtKey` block) or off (the
+/// other way round, the contents in a plain group), then `drawn` and the plugin's `XP`. An envelope
+/// record in `content` keeps its own `%_` lines.
+fn mesh_envelope(shape: &str, editing: bool, content: &str, drawn: &str) -> String {
+    let keys = ENVELOPE_KEYS.replace("0 /Bool (AIDeformEditModeKey)", &format!("{} /Bool (AIDeformEditModeKey)", u8::from(editing)));
+    let (before, block) = if editing { (content.to_string(), shape.to_string()) } else { (shape.to_string(), format!("u\n{content}U\n9 () XW\n")) };
+    format!(
+        "{}%_/ArtDictionary :\n{}%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_2 /Int (AIDeformStyle) ,\n%_;\n%_\n%_9 () XW\nu\n{drawn}U\n9 () XW\n(Adobe Deform Plugin) 1 0 0 XP\n",
+        hidden_once(&format!("u\n{before}U\n")),
+        commented(&keys),
+        hidden_once(&block),
+    )
+}
+
+/// The mesh envelope that maps the box 40 20 160 80 onto itself, and what it draws of
+/// [`envelope_content`].
+fn flat_mesh() -> (String, vectorcraft_doc::live::EnvelopeKind, String) {
+    let flat = vectorcraft_doc::live::EnvelopeKind::Mesh {
+        rows: 1,
+        cols: 1,
+        points: vec![Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(40.0, 80.0), Point::new(160.0, 80.0)],
+        handles: vec![],
+    };
+    let drawn = drawn_content(&flat);
+    (straight_mesh(1, 1, (120.0, 60.0)), flat, drawn)
+}
+
+/// An envelope inside another envelope's contents opens as a live envelope inside the live outer
+/// one, with Edit Contents on or off at either level: each keeps its own kind, contents and Edit
+/// Contents, and neither leaves a copy of its contents drawn beside it.
+#[test]
+fn an_envelope_in_an_envelope_s_contents_opens_live_inside_it() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    let (shape, flat, drawn) = flat_mesh();
+    let EnvelopeKind::Mesh { points, .. } = &flat else { panic!("{flat:?}") };
+    for (outer_editing, inner_editing) in [(false, false), (false, true), (true, false), (true, true)] {
+        let why = format!("outer editing {outer_editing}, inner editing {inner_editing}");
+        let inner = mesh_envelope(&shape, inner_editing, &envelope_content(), &drawn);
+        let r = read_ok(&layer(&mesh_envelope(&shape, outer_editing, &hidden_once(&inner), &format!("u\n{drawn}U\n"))));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{why}: {a:#?}");
+        let flat_points = |kind: &EnvelopeKind| match kind {
+            EnvelopeKind::Mesh { rows: 1, cols: 1, points, .. } => Some(points.clone()),
+            _ => None,
+        };
+        let (content, kind, _, editing, _) = live_envelope(&a[0]);
+        assert_eq!((flat_points(kind), editing), (Some(points.clone()), outer_editing), "{why}: {kind:?}");
+        assert_eq!(content.len(), 1, "{why}: {content:#?}");
+        let (inner, kind, _, editing, _) = live_envelope(&content[0]);
+        assert_eq!((flat_points(kind), editing), (Some(points.clone()), inner_editing), "{why}: {kind:?}");
+        assert_eq!(inner.len(), 1, "{why}: {inner:#?}");
+        assert!(matches!(inner[0].kind, NodeKind::Path { .. }), "{why}: {inner:#?}");
+        assert_eq!(fill(&inner[0]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "{why}");
+        assert!(r.warnings.is_empty(), "{why}: {:?}", r.warnings);
+    }
+}
+
+/// An outer envelope, Edit Contents off, whose `AIDeformArtKey` block holds `block` as it is, with no
+/// plain group around it, shaped by the grid `shape` and drawn as `drawn`.
+fn bare_block_envelope(shape: &str, block: &str, drawn: &str) -> String {
+    format!(
+        "{}%_/ArtDictionary :\n{}%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_2 /Int (AIDeformStyle) ,\n%_;\n%_\n%_9 () XW\nu\n{drawn}U\n9 () XW\n(Adobe Deform Plugin) 1 0 0 XP\n",
+        hidden_once(&format!("u\n{shape}U\n")),
+        commented(ENVELOPE_KEYS),
+        hidden_once(block),
+    )
+}
+
+/// An envelope record straight in another envelope's `AIDeformArtKey` block, with no group around
+/// it, opens live inside the live outer envelope too. Two of them there are both its contents.
+#[test]
+fn an_envelope_straight_in_an_envelope_s_block_opens_live_inside_it() {
+    let (shape, _, drawn) = flat_mesh();
+    let inner = hidden_once(&mesh_envelope(&shape, false, &envelope_content(), &drawn));
+    let r = read_ok(&layer(&bare_block_envelope(&shape, &inner, &format!("u\n{drawn}U\n"))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let (content, ..) = live_envelope(&a[0]);
+    assert_eq!(content.len(), 1, "{content:#?}");
+    let (inner_content, ..) = live_envelope(&content[0]);
+    assert!(matches!(inner_content[0].kind, NodeKind::Path { .. }), "{inner_content:#?}");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    // Two envelopes side by side in the block: both are the outer envelope's contents, each live.
+    let two = format!("{inner}{inner}");
+    let r = read_ok(&layer(&bare_block_envelope(&shape, &two, &format!("u\n{drawn}U\nu\n{drawn}U\n"))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let (content, ..) = live_envelope(&a[0]);
+    assert_eq!(content.len(), 2, "{content:#?}");
+    content.iter().for_each(|c| _ = live_envelope(c));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+/// An object's own dictionary straight in an envelope's block, with no group around them, names it
+/// there.
+#[test]
+fn an_object_s_dictionary_straight_in_an_envelope_s_block_names_it() {
+    let (shape, _, drawn) = flat_mesh();
+    let block = format!("{}/ArtDictionary :\n(Box) /String (AIArtName) ,\n;\n", envelope_content());
+    let r = read_ok(&layer(&bare_block_envelope(&shape, &block, &format!("u\n{drawn}U\n"))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let (content, ..) = live_envelope(&a[0]);
+    assert_eq!(content.len(), 1, "{content:#?}");
+    assert_eq!(content[0].name.as_deref(), Some("Box"), "{content:#?}");
+}
+
+/// An inner envelope that doesn't open live keeps its drawn art inside the live outer envelope,
+/// drawn once, without its own source art: one whose drawn art differs from what it draws, and one
+/// whose record doesn't read (a style number past the list). The outer envelope maps that drawn
+/// art's box onto its grid. An outer envelope that doesn't match its drawn art keeps that drawn
+/// art, and nothing of its record is drawn.
+#[test]
+fn a_nested_envelope_that_doesn_t_open_live_keeps_its_drawn_art() {
+    let (shape, _, drawn) = flat_mesh();
+    let shifted = format!("{RED}{}f\n", rect_path(42.0, 20.0, 162.0, 80.0));
+    let unread = mesh_envelope(&shape, false, &envelope_content(), &drawn).replace("%_2 /Int (AIDeformStyle)", "%_9 /Int (AIDeformStyle)");
+    for (why, inner) in [("drawn elsewhere", mesh_envelope(&shape, false, &envelope_content(), &shifted)), ("unread", unread)] {
+        for bare in [false, true] {
+            let inner = hidden_once(&inner);
+            let outer_drawn = format!("u\n{drawn}U\n");
+            let body = if bare { bare_block_envelope(&shape, &inner, &outer_drawn) } else { mesh_envelope(&shape, false, &inner, &outer_drawn) };
+            let r = read_ok(&layer(&body));
+            let a = art(&r.doc);
+            assert_eq!(a.len(), 1, "{why}, bare {bare}: {a:#?}");
+            assert!(matches!(a[0].kind, NodeKind::Envelope { .. }), "{why}, bare {bare}: {:?}", r.warnings);
+            let (content, ..) = live_envelope(&a[0]);
+            assert_eq!(content.len(), 1, "{why}, bare {bare}: {content:#?}");
+            // The inner envelope's drawn art: its group of one path, or, straight in the block, the
+            // path, as the plain group around a block's only object is the block's own.
+            let drawn_path = if bare {
+                &content[0]
+            } else {
+                let kids = content[0].children().unwrap_or_else(|| panic!("{why}: {content:#?}"));
+                assert_eq!(kids.len(), 1, "{why}: {content:#?}");
+                &kids[0]
+            };
+            assert!(matches!(drawn_path.kind, NodeKind::Path { .. }), "{why}, bare {bare}: {content:#?}");
+            assert_eq!(r.warnings, [super::envelope::DRAWN], "{why}, bare {bare}");
+        }
+    }
+    // The outer envelope's drawn art lies elsewhere: it stays, as one group, the inner record with it.
+    let inner = hidden_once(&mesh_envelope(&shape, false, &envelope_content(), &drawn));
+    for bare in [false, true] {
+        let outer_drawn = format!("u\n{shifted}U\n");
+        let body = if bare { bare_block_envelope(&shape, &inner, &outer_drawn) } else { mesh_envelope(&shape, false, &inner, &outer_drawn) };
+        let r = read_ok(&layer(&body));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "bare {bare}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Group { .. }), "bare {bare}: {a:#?}");
+        assert_eq!(a[0].geometric_bounds(), Some(Rect::new(42.0, 20.0, 162.0, 80.0)), "bare {bare}");
+        assert_eq!(r.warnings, [super::envelope::DRAWN], "bare {bare}");
+    }
+}
+
+/// Broken nested records read without taking another record's place: an inner `X=` with no `X+`
+/// (the inner envelope still opens live), an inner dictionary with no group before it (its drawn art
+/// stays), and an `XP` repeated after the inner one. The outer envelope, whose own record is whole,
+/// still opens live around what the inner one left.
+#[test]
+fn broken_nested_envelope_records_keep_the_outer_envelope() {
+    let (shape, _, drawn) = flat_mesh();
+    let inner = hidden_once(&mesh_envelope(&shape, false, &envelope_content(), &drawn));
+    let no_end = inner.replacen("%_X+\n", "", 1);
+    let no_group = inner.replacen(&hidden_once(&format!("u\n{shape}U\n")), "", 1);
+    let twice = inner.replace("%_(Adobe Deform Plugin) 1 0 0 XP\n", "%_(Adobe Deform Plugin) 1 0 0 XP\n%_(Adobe Deform Plugin) 1 0 0 XP\n");
+    for (why, inner, live) in [("no X+", no_end, true), ("no group", no_group, false), ("XP twice", twice, true)] {
+        for bare in [false, true] {
+            let outer_drawn = format!("u\n{drawn}U\n");
+            let body = if bare { bare_block_envelope(&shape, &inner, &outer_drawn) } else { mesh_envelope(&shape, false, &inner, &outer_drawn) };
+            let r = read_ok(&layer(&body));
+            let a = art(&r.doc);
+            assert_eq!(a.len(), 1, "{why}, bare {bare}: {a:#?}");
+            let (content, ..) = live_envelope(&a[0]);
+            assert_eq!(content.len(), 1, "{why}, bare {bare}: {content:#?}");
+            assert_eq!(matches!(content[0].kind, NodeKind::Envelope { .. }), live, "{why}, bare {bare}: {content:#?}");
+        }
+    }
+}
+
+/// An inner envelope whose `XP` is missing stops waiting when the outer envelope's dictionary ends:
+/// a stray `XP` in a later group leaves that group's art as it is.
+#[test]
+fn an_inner_envelope_without_its_xp_does_not_take_later_art() {
+    let (shape, _, drawn) = flat_mesh();
+    let inner = hidden_once(&mesh_envelope(&shape, false, &envelope_content(), &drawn)).replace("%_(Adobe Deform Plugin) 1 0 0 XP\n", "");
+    let later = format!("u\nu\n{drawn}U\n(Adobe Deform Plugin) 1 0 0 XP\nU\n");
+    let r = read_ok(&layer(&format!("{}{later}", bare_block_envelope(&shape, &inner, &format!("u\n{drawn}U\n")))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2, "{a:#?}");
+    live_envelope(&a[0]);
+    let kids = a[1].children().unwrap_or_else(|| panic!("{a:#?}"));
+    assert!(matches!(kids[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert_eq!(r.warnings, [super::envelope::DRAWN], "{:?}", r.warnings);
+}
+
+/// An envelope in an opacity mask's art reads: its block's `X+` ends the block, not the mask's art.
+#[test]
+fn an_envelope_in_an_opacity_mask_s_art_reads() {
+    let (shape, _, drawn) = flat_mesh();
+    let owner = format!("{RED}{}f\n", rect_path(10.0, 20.0, 170.0, 90.0));
+    let envelope = hidden_once(&mesh_envelope(&shape, false, &envelope_content(), &drawn));
+    let mask = format!(
+        "%_/ArtDictionary :\n%_/Mask :\n%_1 /Bool (Linked) ,\n%_X=\n%_u\n{envelope}%_U\n%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_0 /Bool (Inverted) ,\n%_0 /Bool (Disabled) ,\n%_; (AI9_Mask) ,\n%_;\n"
+    );
+    let r = read_ok(&layer(&format!("{owner}{mask}")));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let m = a[0].extras().mask.as_ref().unwrap_or_else(|| panic!("{a:#?}"));
+    assert_eq!(m.art.geometric_bounds(), Some(Rect::new(40.0, 20.0, 160.0, 80.0)), "{:#?}", m.art);
+}
+
 #[test]
 fn a_gradient_mesh_reads_as_a_patch() {
     let corner = |rgb: &str, x: i32, y: i32, next: (i32, i32), prev: (i32, i32)| {
@@ -10329,23 +10614,48 @@ fn a_brushed_path_with_samples_of_the_pen_keeps_its_drawn_look() {
     assert_eq!(a.len(), 1, "{a:#?}");
     assert!(matches!(a[0].kind, NodeKind::Group { .. }), "the drawn look: {a:#?}");
     assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
-    // The samples belong to the path before them: a path after them is read as it was.
-    let after = format!("{path}{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    // The samples belong to the path before them: a path after them with the same brush and no
+    // samples of its own comes in brushed.
+    let after = format!("{path}{}", brushed_path());
     let a = art(&read_ok(&format!("{def}{style}{}", layer(&after))).doc);
     assert_eq!(a.len(), 2, "{a:#?}");
-    assert!(matches!(a[1].kind, NodeKind::Path { .. }) && a[1].appearance.fill().is_some(), "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "the sampled path's drawn look: {a:#?}");
+    assert!(matches!(a[1].kind, NodeKind::Path { .. }), "the path after the samples, brushed: {a:#?}");
+    assert_eq!(a[1].appearance.stroke().and_then(|s| s.brush.as_deref()), Some("Six D"), "{a:#?}");
     // Samples with no object before them in the layer mark nothing: the path after them is read.
     let first = format!("{PEN_SAMPLES}{}", brushed_path());
     let a = art(&read_ok(&format!("{def}{style}{}", layer(&first))).doc);
     assert_eq!(a.len(), 1, "{a:#?}");
     assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the path, brushed: {a:#?}");
-    // A brush whose modes are Fixed and Random, one whose pen modes vary by 0, and an Art brush
-    // don't follow the pen: the path comes in brushed.
+    // Each setting that follows the pen keeps the drawn look on its own, with the other two fixed:
+    // the diameter with the pressure or the tilt, the roundness with the bearing and the angle with
+    // the barrel's rotation.
+    let one_setting = [
+        ("the diameter with the pressure", "1 4 8 40 40 30 30 2 0 0 0", [(6.0, 2.0), (40.0, 0.0), (30.0, 0.0)], [2, 0, 0]),
+        ("the diameter with the tilt", "1 4 8 40 40 30 30 4 0 0 0", [(6.0, 2.0), (40.0, 0.0), (30.0, 0.0)], [4, 0, 0]),
+        ("the roundness with the bearing", "1 6 6 30 50 30 30 0 5 0 0", [(6.0, 0.0), (40.0, 10.0), (30.0, 0.0)], [0, 5, 0]),
+        ("the angle with the rotation", "1 6 6 40 40 -150 210 0 0 6 0", [(6.0, 0.0), (40.0, 0.0), (30.0, 180.0)], [0, 0, 6]),
+    ];
+    for (why, params, settings, codes) in one_setting {
+        let def = plugin_object(CALLIGRAPHIC, "Six D", params);
+        let style = brushed_style("Six D", 0.5, settings, codes, 0);
+        let r = read_ok(&format!("{def}{style}{}", layer(&path)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{why}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{why}: the drawn look, {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+    // A brush whose modes are Fixed and Random, one whose pen modes vary by 0, one whose only
+    // varying setting is Random beside a pen setting that varies by 0, and an Art brush don't
+    // follow the pen: the path comes in brushed.
     let fixed_def = plugin_object(CALLIGRAPHIC, "Six D", &SIX_D.replace(" 2 5 6 0", " 0 1 0 0"));
     let fixed = brushed_style("Six D", 0.5, SIX_D_SETTINGS, [0, 1, 0], 0);
     let even_def = plugin_object(CALLIGRAPHIC, "Six D", "1 6 6 40 40 30 30 2 5 6 0");
     let even = brushed_style("Six D", 0.5, [(6.0, 0.0), (40.0, 0.0), (30.0, 0.0)], [2, 5, 6], 0);
-    for (why, def, style) in [("Fixed and Random", fixed_def, fixed), ("no variation", even_def, even)] {
+    let random_def = plugin_object(CALLIGRAPHIC, "Six D", "1 4 8 40 40 30 30 1 2 0 0");
+    let random = brushed_style("Six D", 0.5, [(6.0, 2.0), (40.0, 0.0), (30.0, 0.0)], [1, 2, 0], 0);
+    let cases = [("Fixed and Random", fixed_def, fixed), ("no variation", even_def, even), ("Random beside an even pen setting", random_def, random)];
+    for (why, def, style) in cases {
         let r = read_ok(&format!("{def}{style}{}", layer(&path)));
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{why}: {a:#?}");

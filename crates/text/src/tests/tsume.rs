@@ -113,6 +113,25 @@ fn the_font_kerning_is_added_after_the_tsume() {
 }
 
 #[test]
+fn optical_kerning_keeps_the_tsume() {
+    // Optical kerning spaces each pair as without the Tsume, and the Tsume stays on top: the
+    // characters move back as far with Optical kerning as without it.
+    let plain = point("HOH", style(100.0));
+    let optical = point("HOH", CharStyle { optical_kerning: true, ..style(100.0) });
+    let xs = |t: &TextObject| {
+        let l = layout(db(), t);
+        [0, 1, 2].map(|i| drawn_x(&l, i))
+    };
+    // The test font's Optical spacing differs from its own for these pairs.
+    assert!(!near(&xs(&optical), &xs(&plain)), "{:?} {:?}", xs(&optical), xs(&plain));
+    for at in [0, 1, 2] {
+        let without = moves(&plain, &with(&plain, at, |s| s.tsume = 100.0), &[0, 1, 2]);
+        let with_optical = moves(&optical, &with(&optical, at, |s| s.tsume = 100.0), &[0, 1, 2]);
+        assert!(without.iter().any(|m| *m < -1.0) && near(&with_optical, &without), "{at}: {without:?} {with_optical:?}");
+    }
+}
+
+#[test]
 fn a_letter_with_its_mark_takes_the_tsume_of_the_letter() {
     let plain = point("H\u{301}O", style(100.0));
     let after = "H\u{301}".len();

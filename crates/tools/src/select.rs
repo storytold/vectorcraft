@@ -40,7 +40,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee, objects_at, selected_hidden_at};
+use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee_in_view, objects_at, selected_hidden_at};
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -48,9 +48,7 @@ use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_dra
 use crate::blendwidget::{self, BlendWidgetDrag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
-use crate::objects_on_path::{
-    MemberDrag, MoveAllDrag, RotateAllDrag, SpaceDrag, member_hover, over_member, over_move_all, over_rotate_all, over_space,
-};
+use crate::objects_on_path::{MemberDrag, MoveAllDrag, RotateAllDrag, SpaceDrag, WidgetDrag, WidgetKind, member_hover, widget_at};
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
@@ -174,6 +172,8 @@ pub struct SelectionTool {
     /// The params of the move's last preview: in Shaper's Construction mode the move ends with
     /// them and `releaseOutside` ([`construction`]).
     last_move: Option<Value>,
+    /// How far the move's last preview carried the selection ([`Tool::readout`]).
+    moved: Option<Vec2>,
     /// Held state used for the most recent bounding-box preview.
     last_backquote: bool,
     /// Pointer position used for the most recent bounding-box preview.
@@ -900,6 +900,10 @@ impl Tool for SelectionTool {
         matches!(self.state, State::Moving { began: true, .. })
     }
 
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        self.moved.filter(|_| self.moving()).map(crate::Readout::drag)
+    }
+
     fn transforming(&self) -> bool {
         match &self.state {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
@@ -1159,7 +1163,7 @@ impl Tool for SelectionTool {
                 if r.width() < Self::drag_threshold(cx) && r.height() < Self::drag_threshold(cx) {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
-                let touched = marquee(cx.doc, r, cx.isolation, false);
+                let touched = marquee_in_view(cx.doc, r, cx.isolation, false, cx.outline);
                 let enclosed = marquee_enclosed(cx, enclosed, marquee_direction(cx, start, p, directional_inside));
                 let ids = if enclosed { inside(cx, r, touched) } else { touched };
                 let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }));
@@ -1269,14 +1273,11 @@ impl Tool for SelectionTool {
         if blendwidget::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
-        if over_rotate_all(cx, p) {
-            return Cursor::Rotate;
-        }
-        if over_space(cx, p) {
-            return Cursor::ArrowHollow;
-        }
-        if over_move_all(cx, p) || over_member(cx, p) {
-            return Cursor::Move;
+        match widget_at(cx, p) {
+            Some(WidgetKind::RotateAll) => return Cursor::Rotate,
+            Some(WidgetKind::Space) => return Cursor::ArrowHollow,
+            Some(WidgetKind::MoveAll | WidgetKind::Member) => return Cursor::Move,
+            None => {}
         }
         if over_bracket(cx, p) {
             return Cursor::PathBracket;
@@ -1651,20 +1652,13 @@ impl SelectionTool {
             self.state = State::BlendWidget(d);
             return Some(vec![]);
         }
-        if let Some(d) = RotateAllDrag::hit(cx, ev) {
-            self.state = State::RotateAll(d);
-            return Some(vec![]);
-        }
-        if let Some(d) = SpaceDrag::hit(cx, ev) {
-            self.state = State::Space(d);
-            return Some(vec![]);
-        }
-        if let Some(d) = MoveAllDrag::hit(cx, ev) {
-            self.state = State::MoveAll(d);
-            return Some(vec![]);
-        }
-        if let Some(d) = MemberDrag::hit(cx, ev) {
-            self.state = State::Member(d);
+        if let Some(d) = WidgetDrag::hit(cx, ev) {
+            self.state = match d {
+                WidgetDrag::RotateAll(d) => State::RotateAll(d),
+                WidgetDrag::Space(d) => State::Space(d),
+                WidgetDrag::MoveAll(d) => State::MoveAll(d),
+                WidgetDrag::Member(d) => State::Member(d),
+            };
             return Some(vec![]);
         }
         if let Some(b) = BracketDrag::hit(cx, ev) {
@@ -1765,6 +1759,7 @@ impl SelectionTool {
             params["patterns"] = json!(true);
         }
         self.last_move = Some(params.clone());
+        self.moved = Some(d);
         out.push(Action::Preview("object.transform".into(), params));
         out
     }

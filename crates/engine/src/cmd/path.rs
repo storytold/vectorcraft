@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Scaling, Selection};
-use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, SubPath, Vec2};
+use vectorcraft_geom::{Anchor, AnchorKind, Anchors, PathData, Point, SubPath, Vec2};
 
 use super::create::anchor_from_json;
 use super::draw2::usize_opt;
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reverse Path Direction",
             ["Object", "Path"],
             None,
-            "{ids?|id?, subpath?: usize (reverse only this subpath of each path, 0 included; default: every subpath), reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path; with subpath, the direction is not read: that subpath is flipped)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step; when every subpath of a path turns alike, its strokes' width profiles (sides swapped) and pen pressure, tilt, bearing and rotation turn with it, so they draw as before → {changed: paths}",
+            "{ids?|id?, subpath?: usize (reverse only this subpath of each path, 0 included; default: every subpath), reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path; with subpath, the direction is not read: that subpath is flipped)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step; when every subpath of a path or compound path turns alike, its strokes' width profiles (sides swapped) and pen pressure, tilt, bearing and rotation turn with it, so they draw as before → {changed: paths}",
             has_selected_path,
             reverse
         ),
@@ -458,14 +458,33 @@ fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "select paths"));
     }
+    let flip_of = |path: &PathData| -> Vec<bool> {
+        match subpath {
+            Some(si) => (0..path.subpaths.len()).map(|i| i == si).collect(),
+            None => path.subpaths.iter().map(|sp| want.is_none_or(|ccw| (sp.signed_area() < 0.0) != ccw)).collect(),
+        }
+    };
     let changed = super::overprint::edit_counted(s, "Reverse Path Direction", |d| {
+        // A compound path's own strokes run along its members' subpaths in order, so they turn
+        // with them, read before any member turns.
+        let compounds: BTreeSet<NodeId> = ids.iter().map(|id| compound_or_self(d, *id)).filter(|c| ids.binary_search(c).is_err()).collect();
+        for c in compounds {
+            let Some(NodeKind::Compound { children, .. }) = d.node(c).map(|n| &n.kind) else { continue };
+            let flip: Vec<bool> = children
+                .iter()
+                .filter_map(|m| m.path_data().map(|pd| if ids.binary_search(&m.id).is_ok() { flip_of(pd) } else { vec![false; pd.subpaths.len()] }))
+                .flatten()
+                .collect();
+            if flip.contains(&true)
+                && let Some(n) = d.node_mut(c)
+            {
+                vectorcraft_doc::blend::reverse_stroke_records(n, &flip);
+            }
+        }
         let mut changed = 0;
         for id in &ids {
             let path = path_mut(d, *id)?;
-            let flip: Vec<bool> = match subpath {
-                Some(si) => (0..path.subpaths.len()).map(|i| i == si).collect(),
-                None => path.subpaths.iter().map(|sp| want.is_none_or(|ccw| (sp.signed_area() < 0.0) != ccw)).collect(),
-            };
+            let flip = flip_of(path);
             if !flip.contains(&true) {
                 continue;
             }
@@ -525,10 +544,12 @@ fn merge_coincident(sp: &mut SubPath, picked: impl Fn(usize) -> bool, join_kind:
         && before > 2
         && picked(0)
         && picked(before - 1)
-        && let [first, .., last] = sp.anchors.as_mut_slice()
-        && same(first, last)
+        && let (Some(&first), Some(&last)) = (sp.anchors.first(), sp.anchors.last())
+        && same(&first, &last)
     {
-        first.h_in = last.h_in;
+        if let Some(first) = sp.anchors.first_mut() {
+            first.h_in = last.h_in;
+        }
         sp.anchors.pop();
         if let Some(smooth) = join_kind {
             join_point(sp, 0, smooth);
@@ -546,10 +567,12 @@ fn merge_coincident(sp: &mut SubPath, picked: impl Fn(usize) -> bool, join_kind:
     for i in (1..len).rev() {
         if picked(i - 1)
             && picked(i)
-            && let Some([a, b]) = anchors.get_mut(i - 1..=i)
-            && same(a, b)
+            && let (Some(&a), Some(&b)) = (anchors.get(i - 1), anchors.get(i))
+            && same(&a, &b)
         {
-            a.h_out = b.h_out;
+            if let Some(a) = anchors.get_mut(i - 1) {
+                a.h_out = b.h_out;
+            }
             if let Some(slot) = gone.get_mut(i) {
                 *slot = true;
             }
@@ -584,7 +607,7 @@ fn merge_coincident(sp: &mut SubPath, picked: impl Fn(usize) -> bool, join_kind:
 }
 
 /// [`join_point`] on anchor `ai` of `anchors` with its neighbors given by index.
-fn join_point_between(anchors: &mut [Anchor], ai: usize, prev: Option<usize>, next: Option<usize>, smooth: bool) {
+fn join_point_between(anchors: &mut Anchors, ai: usize, prev: Option<usize>, next: Option<usize>, smooth: bool) {
     let at = |j: Option<usize>| j.and_then(|j| anchors.get(j)).map(|a| a.p);
     let (prev, next) = (at(prev), at(next));
     if let Some(a) = anchors.get_mut(ai) {
@@ -1546,7 +1569,7 @@ enum Stretch {
 /// anchor, so the two handles of a smooth anchor stay in line with it. That share is below 0 or
 /// above 1 for a handle long enough beside the span. A closed subpath with no anchor that stays
 /// moves whole when it has a focal point.
-fn stretch_weights(anchors: &[Anchor], closed: bool, roles: &[Stretch]) -> Vec<[f64; 3]> {
+fn stretch_weights(anchors: &Anchors, closed: bool, roles: &[Stretch]) -> Vec<[f64; 3]> {
     let n = anchors.len();
     let mut shares = vec![[0.0; 3]; n];
     let role = |i: usize| match roles.get(i) {
@@ -1872,10 +1895,10 @@ mod tests {
             && before > 2
             && picked(0)
             && picked(before - 1)
-            && let [first, .., last] = sp.anchors.as_mut_slice()
-            && same(first, last)
+            && let (Some(&first), Some(&last)) = (sp.anchors.first(), sp.anchors.last())
+            && same(&first, &last)
         {
-            first.h_in = last.h_in;
+            sp.anchors[0].h_in = last.h_in;
             sp.anchors.pop();
             if let Some(smooth) = join_kind {
                 join_point(sp, 0, smooth);
@@ -1884,10 +1907,10 @@ mod tests {
         for i in (1..sp.anchors.len()).rev() {
             if picked(i - 1)
                 && picked(i)
-                && let Some([a, b]) = sp.anchors.get_mut(i - 1..=i)
-                && same(a, b)
+                && let (Some(&a), Some(&b)) = (sp.anchors.get(i - 1), sp.anchors.get(i))
+                && same(&a, &b)
             {
-                a.h_out = b.h_out;
+                sp.anchors[i - 1].h_out = b.h_out;
                 sp.anchors.remove(i);
                 if let Some(smooth) = join_kind {
                     join_point(sp, i - 1, smooth);
