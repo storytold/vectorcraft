@@ -1540,6 +1540,7 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Afficher la roue chromatique continue
 	Show segmented color wheel	Afficher la roue chromatique segmentée
 	Show color bars	Afficher les barres de couleur
+	Find the selected colors in the artwork	Rechercher les couleurs sélectionnées dans l’illustration
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
 	Height	Hauteur
@@ -2717,6 +2718,8 @@ font-technology	Variable	Variables
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajuster la position horizontale des signes diacritiques
+	Adjust Vertical Diacritic Position	Ajuster la position verticale des signes diacritiques
 	Character Direction	Direction des caractères
 	Digits	Chiffres
 	Arabic	Arabes
@@ -5546,6 +5549,8 @@ effect	Soft	Doux
 	Step up or down	Augmenter ou diminuer d’un cran
 	Drag values or labels. Double-click a value to type.	Faites glisser les valeurs ou les libellés. Double-cliquez sur une valeur pour la saisir.
 	Drag rings to rotate. Shift snaps to 15°.	Faites glisser les anneaux pour tourner. Maj contraint par pas de 15°.
+	Track cube	Cube de rotation
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Faites glisser une face, une arête ou l'anneau pour tourner. Maj fait tourner autour d'un axe de l'écran.
 	Drag the light, or its rings. Shift snaps to 15°.	Faites glisser la lumière ou ses anneaux. Maj contraint par pas de 15°.
 	Keep visible surfaces only when expanding	Conserver uniquement les surfaces visibles lors de la décomposition
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Découpe la géométrie masquée lors de la décomposition de l’aspect. L’aperçu conserve toute la surface. Les peintures transparentes et les surfaces dépassant les limites de visibilité conservent toutes les faces.
@@ -9578,4 +9583,21 @@ breakText	Glyphs	Glyphes
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels, c’est trop grand pour le PSD ({MAX_SIDE} pixels par côté au plus) : réduisez la résolution
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	c’est un dessin DWG, qui ne peut pas être lu : enregistrez-le depuis l’application de CAO au format DXF et ouvrez ce fichier
 @msg	this binary DXF file is damaged or cut short	ce fichier DXF binaire est endommagé ou tronqué
+	Packaging Tools	Outils d’emballage
+	Fold Lines	Lignes de pliage
+	Make Cut Line	Convertir en ligne de découpe
+	Make Crease Line	Convertir en ligne de rainage
+	Make Partial Cut Line	Convertir en ligne de découpe partielle
+	Make Perforation Line	Convertir en ligne de perforation
+	Make Fold Line	Convertir en ligne de pliage
+	Role Swatches…	Nuances des types de ligne…
+	Role Swatches	Nuances des types de ligne
+	Role	Type de ligne
+	Cut Line	Ligne de découpe
+	Crease Line	Ligne de rainage
+	Partial Cut Line	Ligne de découpe partielle
+	Perforation Line	Ligne de perforation
+	No objects are selected.	Aucun objet n’est sélectionné.
+	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
+	Remove Fold Line Role	Supprimer le type de ligne
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution

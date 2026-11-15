@@ -9,6 +9,7 @@ pub mod cutting;
 pub mod document;
 pub mod enclosing_lasso;
 pub mod image;
+pub mod packaging;
 pub mod pathtools;
 pub mod pen;
 pub mod select;
@@ -30,6 +31,7 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Document Tools", document::menu()),
         Item::Sub("Enclosing Lasso", enclosing_lasso::menu()),
         Item::Sub("Image Tools", image::menu()),
+        Item::Sub("Packaging Tools", packaging::menu()),
         Item::Sub("Path Precision Tools", pathtools::menu()),
         Item::Sub("Selection Tools", select::menu()),
         Item::Sub("Smart Pen", pen::menu()),

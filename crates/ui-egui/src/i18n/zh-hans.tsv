@@ -1494,6 +1494,7 @@ file-filter	Templates	模板
 	Show smooth color wheel	显示平滑色轮
 	Show segmented color wheel	显示分段色轮
 	Show color bars	显示颜色条
+	Find the selected colors in the artwork	在图稿中查找所选颜色
 	Harmony Sets	色彩调和组
 	Height	高度
 	Height:	高度：
@@ -2618,6 +2619,8 @@ font-script	Japanese	汉字
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在后方插入空白
 	Tsume	比例间距
+	Adjust Horizontal Diacritic Position	调整变音符号水平位置
+	Adjust Vertical Diacritic Position	调整变音符号垂直位置
 	Character Direction	字符方向
 	Digits	数字
 	Arabic	阿拉伯数字
@@ -5853,6 +5856,8 @@ effect	Vertical	垂直
 	Step up or down	逐级增减
 	Drag values or labels. Double-click a value to type.	拖动数值或标签。双击数值即可输入。
 	Drag rings to rotate. Shift snaps to 15°.	拖动圆环旋转。按住 Shift 以 15° 为步长调整。
+	Track cube	旋转立方体
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	拖动面、边或圆环进行旋转。按住 Shift 绕一个屏幕轴旋转。
 	Drag the light, or its rings. Shift snaps to 15°.	拖动光源或圆环。按住 Shift 以 15° 为步长调整。
 lighting	Light	光源
 	Keep visible surfaces only when expanding	扩展时仅保留可见表面
@@ -9431,4 +9436,21 @@ breakText	Glyphs	字形
 @msg	{path}: could not be read	{path}：无法读取
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素对 JPEG 而言过大 (每边最多 65535 像素)：请降低分辨率
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素对 Targa 而言过大 (每边最多 65535 像素)：请降低分辨率
+	Packaging Tools	包装工具
+	Fold Lines	折线
+	Make Cut Line	设为切割线
+	Make Crease Line	设为压痕线
+	Make Partial Cut Line	设为半切线
+	Make Perforation Line	设为打孔线
+	Make Fold Line	设为折线
+	Role Swatches…	线条类型色板…
+	Role Swatches	线条类型色板
+	Role	线条类型
+	Cut Line	切割线
+	Crease Line	压痕线
+	Partial Cut Line	半切线
+	Perforation Line	打孔线
+	No objects are selected.	未选择任何对象。
+	Open a document to mark its fold lines.	打开文档以标记其折线。
+	Remove Fold Line Role	移除线条类型
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率

@@ -1566,6 +1566,7 @@ file-filter	Templates	Modelli
 	Show smooth color wheel	Mostra ruota dei colori continua
 	Show segmented color wheel	Mostra ruota dei colori segmentata
 	Show color bars	Mostra barre di colore
+	Find the selected colors in the artwork	Trova i colori selezionati nella grafica
 	Harmony Sets	Gruppi di armonia
 	Height	Altezza
 	Height:	Altezza:
@@ -2765,6 +2766,8 @@ mark-style	Japanese	Giapponese
 	Insert Aki Left	Inserisci aki a sinistra
 	Insert Aki Right	Inserisci aki a destra
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Regola posizione orizzontale dei segni diacritici
+	Adjust Vertical Diacritic Position	Regola posizione verticale dei segni diacritici
 	Character Direction	Direzione caratteri
 	Digits	Cifre
 	Arabic	Arabe
@@ -5593,6 +5596,8 @@ effect	Regular	Normale
 	Step up or down	Aumenta o riduci di un passo
 	Drag values or labels. Double-click a value to type.	Trascina i valori o le etichette. Fai doppio clic su un valore per digitarlo.
 	Drag rings to rotate. Shift snaps to 15°.	Trascina gli anelli per ruotare. Shift usa incrementi di 15°.
+	Track cube	Cubo di rotazione
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Trascina una faccia, uno spigolo o l'anello per ruotare. Shift ruota attorno a un asse dello schermo.
 	Drag the light, or its rings. Shift snaps to 15°.	Trascina la luce o i suoi anelli. Shift usa incrementi di 15°.
 lighting	Light	Luce
 	Keep visible surfaces only when expanding	Mantieni solo le superfici visibili durante l’espansione
@@ -9225,3 +9230,20 @@ breakText	Glyphs	Glifi
 	Nest Shapes…	Annida forme…
 	Nest Shapes	Annida forme
 	Roll	Rotolo
+	Packaging Tools	Strumenti di imballaggio
+	Fold Lines	Linee di piega
+	Make Cut Line	Trasforma in linea di taglio
+	Make Crease Line	Trasforma in linea di cordonatura
+	Make Partial Cut Line	Trasforma in linea di taglio parziale
+	Make Perforation Line	Trasforma in linea di perforazione
+	Make Fold Line	Trasforma in linea di piega
+	Role Swatches…	Campioni dei tipi di linea…
+	Role Swatches	Campioni dei tipi di linea
+	Role	Tipo di linea
+	Cut Line	Linea di taglio
+	Crease Line	Linea di cordonatura
+	Partial Cut Line	Linea di taglio parziale
+	Perforation Line	Linea di perforazione
+	No objects are selected.	Nessun oggetto selezionato.
+	Open a document to mark its fold lines.	Apri un documento per segnarne le linee di piega.
+	Remove Fold Line Role	Rimuovi tipo di linea
