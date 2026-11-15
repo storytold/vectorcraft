@@ -657,24 +657,28 @@ mod shared_outline_tests {
         }
     }
 
+    // Generated CFF keeps the differential tests independent of installed fonts.
+    fn cff_font(program: &[u8]) -> Vec<u8> {
+        let mut cff = vec![1, 0, 4, 4, 0, 1, 1, 1, 2, b'X', 0, 1, 1, 1, 7, 29, 0, 0, 0, 25, 17, 0, 0, 0, 0];
+        cff.extend_from_slice(&[0, 1, 4]);
+        cff.extend_from_slice(&1u32.to_be_bytes());
+        cff.extend_from_slice(&((program.len() as u32) + 1).to_be_bytes());
+        cff.extend_from_slice(program);
+        let mut builder = write_fonts::FontBuilder::new();
+        let mut head = vec![0; 54];
+        head[18..20].copy_from_slice(&1000u16.to_be_bytes());
+        let mut hhea = vec![0; 36];
+        hhea[34..36].copy_from_slice(&1u16.to_be_bytes());
+        for (tag, data) in [(b"head", head), (b"hhea", hhea), (b"hmtx", vec![0, 100, 0, 0]), (b"maxp", vec![0, 0, 0x50, 0, 0, 1]), (b"CFF ", cff)] {
+            builder.add_raw(write_fonts::types::Tag::new(tag), data);
+        }
+        builder.build()
+    }
+
     #[test]
     fn malformed_cff_prefix_matches_original_pen() {
-        use skrifa::raw::ps::cff::CffFontRef;
-        let Ok(dir) = std::env::var("CRAFT_FONTS_DIR") else { return };
-        let mut bytes = std::fs::read(std::path::Path::new(&dir).join("fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf")).unwrap();
-        let (gid, start) = {
-            let f = skrifa::FontRef::new(&bytes).unwrap();
-            let table = f.table_data(skrifa::Tag::new(b"CFF ")).unwrap().as_bytes();
-            let cff = CffFontRef::new(table, 0, None).unwrap();
-            let (gid, cs) = (0..cff.num_glyphs())
-                .find_map(|gid| {
-                    let cs = cff.charstrings().get(gid as usize)?;
-                    (cs.len() >= 8).then_some((gid, cs))
-                })
-                .unwrap();
-            (gid, cs.as_ptr() as usize - bytes.as_ptr() as usize)
-        };
-        bytes[start..start + 8].copy_from_slice(&[139, 139, 21, 239, 139, 5, 10, 14]);
+        let bytes = cff_font(&[139, 139, 21, 239, 139, 5, 10, 14]);
+        let gid = 0;
         let f = skrifa::FontRef::new(&bytes).unwrap();
         let mut old = FlipPen(BezPath::new());
         let result = f
@@ -692,25 +696,12 @@ mod shared_outline_tests {
 
     #[test]
     fn large_valid_outline_matches_original_pen() {
-        let Ok(dir) = std::env::var("CRAFT_FONTS_DIR") else { return };
-        let source = std::fs::read(std::path::Path::new(&dir).join("fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf")).unwrap();
-        let source = skrifa::FontRef::new(&source).unwrap();
         let mut program = vec![139, 139, 21];
         for _ in 0..100_001 {
             program.extend_from_slice(&[140, 6]);
         }
         program.push(14);
-        let mut cff = vec![1, 0, 4, 4, 0, 1, 1, 1, 2, b'X', 0, 1, 1, 1, 7, 29, 0, 0, 0, 25, 17, 0, 0, 0, 0];
-        cff.extend_from_slice(&[0, 1, 4]);
-        cff.extend_from_slice(&1u32.to_be_bytes());
-        cff.extend_from_slice(&((program.len() as u32) + 1).to_be_bytes());
-        cff.extend_from_slice(&program);
-        let mut builder = write_fonts::FontBuilder::new();
-        for tag in [b"head", b"maxp", b"hhea", b"hmtx"] {
-            builder.add_raw(write_fonts::types::Tag::new(tag), source.table_data(skrifa::Tag::new(tag)).unwrap().as_bytes().to_vec());
-        }
-        builder.add_raw(write_fonts::types::Tag::new(b"CFF "), cff);
-        let bytes = builder.build();
+        let bytes = cff_font(&program);
         let f = skrifa::FontRef::new(&bytes).unwrap();
         let mut old = FlipPen(BezPath::new());
         f.outline_glyphs()
