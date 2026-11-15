@@ -114,7 +114,7 @@ pub fn listed(held: &[SvgFilter]) -> (Vec<Listed>, usize) {
 mod tests {
     use serde_json::json;
     use vectorcraft_doc::Effect;
-    use vectorcraft_geom::{Affine, Point, Vec2};
+    use vectorcraft_geom::{Affine, Point};
 
     use super::*;
     use crate::pixel::{Channels, PixelSpace};
@@ -128,7 +128,7 @@ mod tests {
             to_doc: Affine::scale(1.0),
             px: 1.0,
             center: Point::new(wd / 2.0, wd / 2.0),
-            size: Vec2::new(wd, wd),
+            size: vectorcraft_geom::Vec2::new(wd, wd),
             channels: Channels::Rgb,
             line: 1.0,
             extent: 0.5 * wd.hypot(wd),

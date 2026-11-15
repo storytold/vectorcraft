@@ -14,7 +14,7 @@ fn harness(view: View) -> Harness<'static, VectorcraftApp> {
             if std::mem::replace(&mut first, false) {
                 egui_extras::install_image_loaders(ui.ctx());
                 crate::theme::install_fonts(ui.ctx());
-                set_pstate(ui.ctx(), "swatch-view", view);
+                app.ui.swatches_view = view;
                 return;
             }
             show(app, ui);
