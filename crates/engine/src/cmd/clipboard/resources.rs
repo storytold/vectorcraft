@@ -595,6 +595,8 @@ struct Relink {
     styles: BTreeMap<u32, u32>,
     /// Swatch (its name in the document) → the colour linked colours show at 100 %.
     colors: BTreeMap<String, Color>,
+    /// Leave graphic style links as they are ([`Clipboard::show_merged_colors`]).
+    keep_styles: bool,
 }
 
 impl Relink {
@@ -674,7 +676,9 @@ impl Relink {
     /// Relink a node tree (the mirror of [`node_refs`]).
     fn node(&self, n: &mut Node) {
         self.appearance(&mut n.appearance);
-        n.extras_mut().graphic_style = n.extras().graphic_style.and_then(|id| self.styles.get(&id).copied());
+        if !self.keep_styles {
+            n.extras_mut().graphic_style = n.extras().graphic_style.and_then(|id| self.styles.get(&id).copied());
+        }
         if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
             self.node(Arc::make_mut(&mut m.art));
         }
@@ -1031,10 +1035,13 @@ impl Imported {
             self.relink.renames.entry(r).or_default().insert(from.to_string(), to.clone());
         }
     }
-    /// Point a pasted copy at the document's resources.
+    /// Point a pasted copy at the document's resources. A pie's legend labels in wedges that now show a color of the
+    /// other darkness take the contrast a redraw sets there.
     pub(crate) fn apply(&self, n: &mut Node) {
         if self.relinks {
+            let shades = super::super::graph::wedge_shades(n);
             self.relink.node(n);
+            super::super::graph::follow_wedge_shades(n, &shades);
         }
     }
 }
@@ -1107,6 +1114,30 @@ impl Clipboard {
     /// unchanged, when a pasted SVG filter finds no free name ([`Self::filter_links`]).
     pub(crate) fn import_into(&self, d: &mut Document, choices: &SwatchChoices, same_doc: bool) -> Result<Imported> {
         self.import_used(d, &self.used(), choices, same_doc)
+    }
+
+    /// Give the objects' colors linked to a global or spot swatch whose conflict with `d`
+    /// `choices` merge the color that swatch has in `d`, as pasting into `d` gives them (Paste
+    /// without Formatting sets its pie legend labels' contrast from the wedge colors before it
+    /// pastes). Nothing changes for the document the objects came from (`same_doc`).
+    pub(crate) fn show_merged_colors(&mut self, d: &Document, choices: &SwatchChoices, same_doc: bool) {
+        if same_doc {
+            return;
+        }
+        let used = self.used();
+        let colors: BTreeMap<String, Color> = self
+            .conflicts(d, &used)
+            .into_iter()
+            .filter(|(w, _)| choices.of(&w.name) == SwatchChoice::Merge)
+            .filter_map(|(w, _)| d.global_color(&w.name).map(|c| (w.name.clone(), c)))
+            .collect();
+        if colors.is_empty() {
+            return;
+        }
+        let relink = Relink { colors, keep_styles: true, ..Default::default() };
+        for n in &mut self.nodes {
+            relink.node(n);
+        }
     }
 
     /// [`Self::import_into`] for the resources `used` names. Each style, symbol, pattern and brush

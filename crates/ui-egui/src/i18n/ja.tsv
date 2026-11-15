@@ -55,6 +55,8 @@ font-technology	Variable	バリアブル
 	Insert Aki Left	前にアキを挿入
 	Insert Aki Right	後ろにアキを挿入
 	Tsume	文字ツメ
+	Adjust Horizontal Diacritic Position	発音区別符号の水平位置を調整
+	Adjust Vertical Diacritic Position	発音区別符号の垂直位置を調整
 	Character Direction	文字の方向
 	Digits	数字
 	Arabic	アラビア数字
@@ -1938,6 +1940,7 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
 	Help › Search Commands…	ヘルプ › コマンドを検索…
@@ -3871,6 +3874,8 @@ file-filter	Templates	テンプレート
 	Gradient (. or Shift+.)	グラデーション (. または Shift+.)
 	Graph Data	グラフデータ
 	Graph Type	グラフの種類
+	Graph Type…	グラフの種類…
+	Graph Data…	グラフデータ…
 	Graph Options	グラフオプション
 	Left Axis	左軸
 	Right Axis	右軸
@@ -5108,6 +5113,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
 @msg	column must be true or a number from 1	column には true または 1 以上の数値を指定してください
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
+@msg	`{panel}` has no display sizes to cycle	`{panel}` には切り替える表示サイズがありません
+@msg	the panels are not shown	パネルが表示されていません
 @msg	panels can't be shown in Presentation Mode	プレゼンテーションモードではパネルを表示できません
 @msg	x and y must both be numbers	x と y はどちらも数値で指定してください
 @msg	Downloaded {what}	{what} をダウンロードしました
@@ -5591,6 +5598,7 @@ effect	Vertical	垂直
 	Change Panel Layout	パネルの配置を変更
 	Close Panel	パネルを閉じる
 	Collapse Panel Group	パネルグループを折りたたむ
+	Cycle Display Sizes	表示サイズを切り替え
 	Move Panel	パネルを移動
 	Group with	グループ化先
 	Resize panels	パネルのサイズを変更
@@ -5953,6 +5961,7 @@ lighting	Light	ライト
 	Export Data Sets…	データセットを書き出し…
 	Load Variable Library…	変数ライブラリを読み込み…
 	Save Variable Library…	変数ライブラリを保存…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	「読み込み」は拡張子が .csv、.tsv、.txt、.xml のデータソースファイルを読み込みます
 @msg	a variable library holds text variables, and the document has none	変数ライブラリにはテキスト変数を保存しますが、このドキュメントにはテキスト変数がありません
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	変数 `{name}` は変数ライブラリに保存できません: 英字または `_` で始まり、スペースや `-`、`_`、`.` 以外の記号を含まない名前に変更してください
 @msg	{k} has control characters	{k} に制御文字が含まれています
@@ -9293,3 +9302,20 @@ breakText	Glyphs	字形
 @msg	turn on at least one side	少なくとも 1 つの辺をオンにしてください
 @msg	with no hem and no grommets there is nothing to mark	折り返しもハトメもないため、マークを付けるものがありません
 @msg	{saving} failed: {e}	{saving} に失敗しました: {e}
+	Packaging Tools	パッケージツール
+	Fold Lines	折り線
+	Make Cut Line	カット線にする
+	Make Crease Line	筋入れ線にする
+	Make Partial Cut Line	半抜き線にする
+	Make Perforation Line	ミシン目線にする
+	Make Fold Line	折り線にする
+	Role Swatches…	線種のスウォッチ…
+	Role Swatches	線種のスウォッチ
+	Role	線種
+	Cut Line	カット線
+	Crease Line	筋入れ線
+	Partial Cut Line	半抜き線
+	Perforation Line	ミシン目線
+	No objects are selected.	オブジェクトが選択されていません。
+	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
+	Remove Fold Line Role	線種を解除

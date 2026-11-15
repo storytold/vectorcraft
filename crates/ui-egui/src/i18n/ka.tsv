@@ -3008,6 +3008,7 @@
 	Change Panel Layout	პანელების განლაგების შეცვლა
 	Close Panel	პანელის დახურვა
 	Collapse Panel Group	პანელების ჯგუფის აკეცვა
+	Cycle Display Sizes	ჩვენების ზომების გადართვა
 	Move Panel	პანელის გადაადგილება
 	Group with	ერთად დაჯგუფება
 	Resize panels	პანელების ზომის შეცვლა
@@ -3556,6 +3557,8 @@ lighting	Light	სინათლე
 	Insert Aki Left	აკის ჩასმა მარცხნივ
 	Insert Aki Right	აკის ჩასმა მარჯვნივ
 	Tsume	ცუმე
+	Adjust Horizontal Diacritic Position	დიაკრიტიკის ჰორიზონტალური პოზიციის მორგება
+	Adjust Vertical Diacritic Position	დიაკრიტიკის ვერტიკალური პოზიციის მორგება
 	Character Direction	სიმბოლოების მიმართულება
 	Digits	ციფრები
 	Arabic	არაბული
@@ -4762,6 +4765,7 @@ digits	Malayalam	მალაიალამური
 	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
 	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
 	Show color bars	ფერთა ზოლების ჩვენება
+	Find the selected colors in the artwork	არჩეული ფერების პოვნა ნახატში
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
 	Link harmony colors	ჰარმონიის ფერების დაკავშირება
@@ -5346,6 +5350,8 @@ theme	Appearance	იერსახე
 	Create Graph	დიაგრამის შექმნა
 	Graph Data	დიაგრამის მონაცემები
 	Graph Type	დიაგრამის ტიპი
+	Graph Type…	გრაფიკის ტიპი…
+	Graph Data…	გრაფიკის მონაცემები…
 	Graph Options	გრაფიკის პარამეტრები
 	Left Axis	მარცხენა ღერძი
 	Right Axis	მარჯვენა ღერძი
@@ -6860,6 +6866,8 @@ font-technology	Variable	ცვლადი
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
 @msg	unknown panel `{raw}`	უცნობი პანელი `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` პანელს არ აქვს გადასართავი ჩვენების ზომები
+@msg	the panels are not shown	პანელები არ ჩანს
 @msg	panels can't be shown in Presentation Mode	პრეზენტაციის რეჟიმში პანელების ჩვენება შეუძლებელია
 @msg	unknown preference `{key}`	უცნობი პარამეტრი `{key}`
 @msg	Preferences imported.	პარამეტრები იმპორტირებულია.
@@ -8028,6 +8036,7 @@ imageTrace	Outline	კონტური
 	Export Data Sets…	მონაცემთა ნაკრებების ექსპორტი…
 	Load Variable Library…	ცვლადების ბიბლიოთეკის ჩატვირთვა…
 	Save Variable Library…	ცვლადების ბიბლიოთეკის შენახვა…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„იმპორტი“ კითხულობს მონაცემთა წყაროს ფაილს გაფართოებით .csv, .tsv, .txt ან .xml
 @msg	a variable library holds text variables, and the document has none	ცვლადების ბიბლიოთეკა ტექსტურ ცვლადებს შეიცავს, დოკუმენტს კი არცერთი არ აქვს
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	ცვლადი `{name}` ვერ შეინახება ცვლადების ბიბლიოთეკაში: გადაარქვით სახელი ისე, რომ იწყებოდეს ასოთი ან `_`-ით, ჰარეების და `-`, `_` და `.`-ის გარდა სხვა სიმბოლოების გარეშე
 @msg	{k} has control characters	{k} შეიცავს მმართველ სიმბოლოებს
@@ -9865,4 +9874,21 @@ font-script	Japanese	იაპონური
 	Nest Shapes…	ფორმების განლაგება…
 	Nest Shapes	ფორმების განლაგება
 	Roll	რულონი
+	Packaging Tools	შეფუთვის ხელსაწყოები
+	Fold Lines	მოკეცვის ხაზები
+	Make Cut Line	ჭრის ხაზად გადაქცევა
+	Make Crease Line	ბიგის ხაზად გადაქცევა
+	Make Partial Cut Line	ნაწილობრივი ჭრის ხაზად გადაქცევა
+	Make Perforation Line	პერფორაციის ხაზად გადაქცევა
+	Make Fold Line	მოკეცვის ხაზად გადაქცევა
+	Role Swatches…	ხაზის ტიპების ფერის ნიმუშები…
+	Role Swatches	ხაზის ტიპების ფერის ნიმუშები
+	Role	ხაზის ტიპი
+	Cut Line	ჭრის ხაზი
+	Crease Line	ბიგის ხაზი
+	Partial Cut Line	ნაწილობრივი ჭრის ხაზი
+	Perforation Line	პერფორაციის ხაზი
+	No objects are selected.	ობიექტები არ არის მონიშნული.
+	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მოსანიშნად.
+	Remove Fold Line Role	ხაზის ტიპის მოხსნა
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
