@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: places the rings along the path anew, keeping their count and sizes)} → {id}",
             has_doc,
             super::flare::flare
         ),

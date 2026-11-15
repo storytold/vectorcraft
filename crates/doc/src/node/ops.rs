@@ -228,7 +228,11 @@ impl Node {
     /// grown by the farthest a stroke in the art can reach. For an instance placed through 9-slice
     /// guides, that box also holds the art box placed by each cell's map
     /// ([`crate::NineSliceMap::placement_bounds`]). An instance whose art holds an instance of a
-    /// symbol with 9-slice guides at any depth is measured as its art placed by its transform.
+    /// symbol with 9-slice guides at any depth is measured as its art placed by its transform. An
+    /// instance whose art holds a clipping path with live geometry effects also takes in the region
+    /// they give it ([`crate::hit::set_clip_region`]): moved with the instance when it only moves its
+    /// art, otherwise placed by it and grown by as far as the region reaches past the art, times √2
+    /// and the larger of 1 and the Frobenius norm of the transform's linear part.
     pub fn reach_bounds_with(&self, symbols: &SymbolBoxes) -> Option<Rect> {
         symbols.quickly(|| self.reach(Some(symbols)))
     }
@@ -267,6 +271,30 @@ impl Node {
             // past its plain shape ([`crate::hit::set_clip_region`]).
             NodeKind::Layer { children, clip: true, .. } | NodeKind::Group { children, clip: true } => {
                 vectorcraft_geom::union_opt(self.visual(symbols), children.first().and_then(|c| crate::hit::reshaped_clip_box(c)))
+            }
+            // The live geometry effects of the clipping paths in the art can draw it past its box.
+            NodeKind::SymbolInstance { symbol, xf } => {
+                let Some((s, art, region)) = symbols.and_then(|s| {
+                    let a = s.art(symbol)?;
+                    Some((s, a, a.reshaped?))
+                }) else {
+                    return self.visual(symbols);
+                };
+                let map = s.document().symbol_slice_map_of(symbol, art.geometric, *xf);
+                let placed = if moves_only(*xf) && map.is_none() {
+                    xf.transform_rect_bbox(region)
+                } else {
+                    // An effect can reach a fixed distance past the art or a distance in proportion
+                    // to its size, as `SymbolBoxes::effects_reach` estimates it.
+                    let g = art.geometric;
+                    let all = region.union(g);
+                    let past = [g.x0 - region.x0, region.x1 - g.x1, g.y0 - region.y0, region.y1 - g.y1].into_iter().fold(0.0_f64, f64::max);
+                    let [a, b, c, d, _, _] = xf.as_coeffs();
+                    let grow = past * std::f64::consts::SQRT_2 * (a * a + b * b + c * c + d * d).sqrt().max(1.0);
+                    map.map_or_else(|| xf.transform_rect_bbox(all), |m| m.placement_bounds(all)).inflate(grow, grow)
+                };
+                let o = self.appearance.outset();
+                vectorcraft_geom::union_opt(self.visual(symbols), self.projected(Some(placed)).map(|b| b.inflate(o, o)))
             }
             _ => self.visual(symbols),
         }
@@ -369,7 +397,7 @@ impl Node {
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // A clipping path that paints (see `clip_paint`) strokes over the clip edge.
                 let clip = children.first()?;
-                if matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
+                if matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) || clip.extras().clip_pieces {
                     clip.visual(symbols)
                 } else {
                     clip.geometric(symbols)

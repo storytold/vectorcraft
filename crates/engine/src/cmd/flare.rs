@@ -38,12 +38,22 @@ fn count_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<u64> {
 
 /// `shape.flare`'s params `p` with every setting given: the defaults filled in, the counts at most
 /// 50 and the rings' end point as `x2`, `y2` (from `pathLength` and `direction` when `p` gives no
-/// end point).
+/// end point), with `ringSeed` when `p` gives one.
 fn settings_of(p: &Value, cmd: &str) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", cmd)?, f64_req(p, "cy", cmd)?);
     let mut numbers: Vec<&str> = SETTINGS.iter().map(|(key, _)| *key).collect();
-    numbers.extend(["x2", "y2", "direction", "pathLength", "seed"]);
+    numbers.extend(["x2", "y2", "direction", "pathLength", "seed", "ringSeed"]);
     check_numbers(p, &numbers, cmd)?;
+    let seed_of = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number of at least 0, not {v}"))),
+    };
+    let seed = seed_of("seed")?.unwrap_or(DEFAULT_SEED);
+    // Each `ringSeed` below 2^53 (what a JSON number holds exactly) places the rings anew.
+    let ring_seed = match seed_of("ringSeed")? {
+        Some(r) if r >= 1 << 53 => return Err(bad(cmd, format!("`ringSeed` must be below 2^53, not {r}"))),
+        r => r,
+    };
     let rays = count_or(p, "rays", 15, cmd)?.min(50);
     let rings = count_or(p, "rings", 10, cmd)?.min(50);
     let end = match (p.get("x2").and_then(Value::as_f64), p.get("y2").and_then(Value::as_f64)) {
@@ -53,8 +63,10 @@ fn settings_of(p: &Value, cmd: &str) -> Result<Value> {
             c + Vec2::new(a.cos(), -a.sin()) * f64_or(p, "pathLength", 300.0)
         }
     };
-    let seed = p.get("seed").and_then(Value::as_u64).unwrap_or(DEFAULT_SEED);
     let mut v = json!({ "cx": c.x, "cy": c.y, "x2": end.x, "y2": end.y, "rays": rays, "rings": rings, "seed": seed });
+    if let Some(r) = ring_seed {
+        v["ringSeed"] = json!(r);
+    }
     for (key, default) in SETTINGS {
         v[key] = json!(f64_or(p, key, default));
     }

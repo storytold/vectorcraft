@@ -36,14 +36,20 @@ pub fn parts(v: &Value) -> Vec<Part> {
     let ray_turn = number(v, "rotation", 0.0).to_radians();
     let rings = v.get("rings").and_then(Value::as_u64).unwrap_or(0).min(50) as usize;
     let largest = pct("largest");
-    // Deterministic pseudo-random sizes (same parameters → same flare).
-    let mut seed = v.get("seed").and_then(Value::as_u64).unwrap_or(DEFAULT_SEED) | 1;
-    let mut rnd = move || {
-        seed ^= seed << 13;
-        seed ^= seed >> 7;
-        seed ^= seed << 17;
-        (seed >> 11) as f64 / (1u64 << 53) as f64
+    // Deterministic pseudo-random sizes (same parameters → same flare). `ringSeed` places the rings
+    // along the path from a sequence of its own; their count and sizes and the other parts stay.
+    // The generator's state is odd (never 0).
+    let random = |mut state: u64| {
+        move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        }
     };
+    let mut rnd = random(v.get("seed").and_then(Value::as_u64).unwrap_or(DEFAULT_SEED) | 1);
+    // Each `ringSeed` below 2^53 (what a JSON number holds exactly) gets a state of its own.
+    let mut ring_at = v.get("ringSeed").and_then(Value::as_u64).filter(|r| *r < 1 << 53).map(|r| random((r << 1) | 1));
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
         let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
@@ -81,6 +87,7 @@ pub fn parts(v: &Value) -> Vec<Part> {
     // Rings along the path to the end point (Largest = % of the average ring size).
     for _ in 0..rings {
         let t = rnd();
+        let t = ring_at.as_mut().map_or(t, |next| next());
         let at = c + (end - c) * t;
         let rr = (r * largest * (0.25 + rnd() * 0.75)).max(0.5);
         let solid = rnd() < 0.5;

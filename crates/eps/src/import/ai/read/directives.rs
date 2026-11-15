@@ -242,10 +242,13 @@ impl<'a> Reader<'a> {
             && let Ok(n) = v.trim().parse::<u8>()
         {
             self.ruler_units = Some(n);
+        } else if self.frames.is_empty() && line.starts_with("AI5_FileFormat") {
+            self.file_format = true;
         } else if let Some(v) = line.strip_prefix("AI5_ArtSize:") {
             self.art_size = two(v);
         } else if let Some(v) = line.strip_prefix("AI3_TemplateBox:").or_else(|| line.strip_prefix("%TemplateBox:")) {
-            self.template_center = two(v);
+            // The center of the box (a file without a template writes it with no width or height).
+            self.template_center = four(v).map(|[x0, y0, x1, y1]| ((x0 + x1) / 2.0, (y0 + y1) / 2.0)).or_else(|| two(v));
             self.template = four(v).or(self.template);
         } else if let Some(v) = line.strip_prefix("AI24_LargeCanvasScale:") {
             self.large_canvas_scale(v);
