@@ -36,6 +36,15 @@ fn count_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<u64> {
     }
 }
 
+/// `end`, the rings' end point, or an error naming `x2` or `y2` when that coordinate is not a
+/// finite number (a `pathLength` so large that the end point overflows).
+fn finite_end(end: Point, cmd: &str) -> Result<Point> {
+    match [("x2", end.x), ("y2", end.y)].into_iter().find(|(_, v)| !v.is_finite()) {
+        None => Ok(end),
+        Some((key, _)) => Err(bad(cmd, format!("{key} must be a finite coordinate"))),
+    }
+}
+
 /// `shape.flare`'s params `p` with every setting given: the defaults filled in, the counts at most
 /// 50 and the rings' end point as `x2`, `y2` (from `pathLength` and `direction` when `p` gives no
 /// end point), with `ringSeed` when `p` gives one.
@@ -60,7 +69,7 @@ fn settings_of(p: &Value, cmd: &str) -> Result<Value> {
         (Some(x), Some(y)) => Point::new(x, y),
         _ => {
             let a = f64_or(p, "direction", 45.0).to_radians();
-            c + Vec2::new(a.cos(), -a.sin()) * f64_or(p, "pathLength", 300.0)
+            finite_end(c + Vec2::new(a.cos(), -a.sin()) * f64_or(p, "pathLength", 300.0), cmd)?
         }
     };
     let mut v = json!({ "cx": c.x, "cy": c.y, "x2": end.x, "y2": end.y, "rays": rays, "rings": rings, "seed": seed });
@@ -173,7 +182,7 @@ fn edited(old: &Value, p: &Value, xf: Affine) -> Result<Value> {
             let (c, e) = (xf * centre, xf * old_end);
             let d = e - c;
             let a = number_or(p, "direction", (-d.y).atan2(d.x).to_degrees(), C)?.to_radians();
-            inv * (c + Vec2::new(a.cos(), -a.sin()) * number_or(p, "pathLength", d.hypot(), C)?)
+            finite_end(inv * (c + Vec2::new(a.cos(), -a.sin()) * number_or(p, "pathLength", d.hypot(), C)?), C)?
         }
         // Moving the center leaves the rings' end point where it is.
         None => old_end,

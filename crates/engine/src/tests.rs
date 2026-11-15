@@ -3360,6 +3360,19 @@ fn flare_counts_are_whole_numbers() {
     assert!(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 2.5})).is_err());
 }
 
+/// `shape.editFlare` on a flare scaled far down: a `pathLength` whose end point, taken back to
+/// where the flare was drawn, is not a finite number is an error, and the flare keeps its settings.
+#[test]
+fn edit_flare_end_points_that_are_not_finite_are_errors() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.scale", &json!({"sx": 1e-4, "sy": 1e-4})).unwrap();
+    let before = flare_settings(&s.doc().unwrap().doc, id).expect("a flare");
+    let err = s.execute("shape.editFlare", &json!({"pathLength": 1e305})).unwrap_err().to_string();
+    assert!(err.ends_with("x2 must be a finite coordinate"), "{err}");
+    assert_eq!(flare_settings(&s.doc().unwrap().doc, id).expect("still a flare"), before);
+}
+
 /// A flare drawn again keeps its parts' pixel-aligned property, whatever the document's Align New
 /// Objects to Pixel Grid is now, and a pixel-aligned flare that was moved is still a flare.
 #[test]
