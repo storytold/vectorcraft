@@ -3506,6 +3506,11 @@ imageTrace	Outline	Contorno
 	NTSC Colors	Cores NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Política RGB:
+	CMYK Policy:	Política CMYK:
+	Preserve Embedded Profiles	Preservar perfis incorporados
+	Convert to Working Space	Converter para espaço de trabalho
+	Preserve Numbers	Preservar números
 	Texture	Textura
 	Craquelure…	Craquelê…
 	Grain…	Granulação…

@@ -472,6 +472,11 @@
 	CMYK Images	CMYK ઇમેજ
 	CMYK colours print with their own values; off, they go through the colour settings too.	CMYK રંગો પોતાની કિંમતો સાથે છાપે છે; બંધ હોય ત્યારે તે રંગ સેટિંગમાંથી પણ પસાર થાય છે.
 	CMYK:	CMYK:
+	RGB Policy:	RGB નીતિ:
+	CMYK Policy:	CMYK નીતિ:
+	Preserve Embedded Profiles	એમ્બેડ કરેલી પ્રોફાઇલ જાળવો
+	Convert to Working Space	કાર્યકારી સ્પેસમાં રૂપાંતરિત કરો
+	Preserve Numbers	સંખ્યાઓ જાળવો
 	CSS Properties	CSS ગુણધર્મો
 	Calligraphic Brush	કેલિગ્રાફિક બ્રશ
 	Calligraphic Brush Options	કેલિગ્રાફિક બ્રશ વિકલ્પો

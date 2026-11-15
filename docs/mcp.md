@@ -1666,10 +1666,18 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   command, so `edit.colorSettings {"cmyk": "…"}` or a preset's output intent can name it in a later run. The
   copy is what counts: the original may move or be deleted. `color.removeProfile {name}` forgets a profile and its
   copy (not while it is a working space).
-- **Color Settings** (`edit.colorSettings`): the RGB and CMYK working spaces, intent and black point
-  compensation go into `Color Settings.json` when they change, and are the active settings again at the next
-  start, after the profiles above are registered (#6335). Saved settings that name a profile that is no longer
-  there, or a damaged file, leave the defaults (logged), and the next change writes over the file.
+- **Color Settings** (`edit.colorSettings`): the RGB and CMYK working spaces, intent, black point
+  compensation and color management policies go into `Color Settings.json` when they change, and are the active
+  settings again at the next start, after the profiles above are registered (#6335). Saved settings that name a
+  profile that is no longer there, or a damaged file, leave the defaults (logged), and the next change writes over
+  the file; settings saved without policies take the default, `preserveEmbedded`. `rgbPolicy` (`off`,
+  `preserveEmbedded`, `convert`) and `cmykPolicy` (the same and `preserveNumbers`) decide what `document.open`,
+  `file.newFromTemplate` and `file.revert` do with an RGB or CMYK profile the file is tagged with that is not the
+  working space: keep it, take it off and keep the color numbers (`off`, `preserveNumbers`), or convert the colors
+  of that model into the working space with the intent and black point compensation and take it off (`convert`; a
+  profile that is not available stays). The reply's `warnings` name each profile, and a document a policy changed
+  opens with unsaved changes. A profile that is the working space stays whatever the policy. `document.open`'s
+  `colorMode` converts the colors after the policies, through the profiles the document keeps.
   `edit.assignProfile` tags the document only: colors show and convert through the profiles it assigns, and the
   working spaces and the file stay as they are. The profiles in use are those of the document in front, after
   `file.new`, `document.open`, `document.activate`, `file.close`, `file.revert`, `edit.undo`, `edit.redo` and a
@@ -1823,6 +1831,15 @@ and the action still plays. `Session::replay` plays a journal the same way. The 
 `toggle` it hides only a panel that can be seen, which is the panel the Window menu checks. While Tab or Shift+Tab
 hides the dock, no panel is checked, and the panel shows again with the dock in its earlier place; the toolbar and the
 Control bar stay as they are.
+
+While Tab or Shift+Tab hides the panels, resting the pointer for 0.3 s on a 6 pt band along the left or right edge of
+the area below the bars shows the panels docked on that side of the canvas, over the canvas's edge; the canvas keeps its
+size, so the art does not move. They hide again once the pointer has been away from them for 0.3 s, and stay while a
+flyout opened from them, a menu or a pressed button is open. Floating panels, the toolbar and the Control bar stay
+hidden, and Tab or Shift+Tab shows the panels for good. `window.panels.peek {side: "left" | "right"}` shows them as the
+pointer does, `{side: null}` hides them, and `ui.docking`'s `peek` names the side shown (null for none). The command
+refuses another side, a side with no docked panel, panels that are not hidden and Presentation Mode, and changes
+nothing.
 
 The export commands limit those keys. `document.export`, `document.exportSelection`, `document.serialize`, `app.export`
 and `file.export` refuse a key that no format takes. They accept a key that only another format takes and do not use

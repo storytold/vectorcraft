@@ -928,6 +928,11 @@
 	NTSC Colors	Warna NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Kebijakan RGB:
+	CMYK Policy:	Kebijakan CMYK:
+	Preserve Embedded Profiles	Pertahankan Profil Tersemat
+	Convert to Working Space	Konversi ke Ruang Kerja
+	Preserve Numbers	Pertahankan Angka
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Craquelure…

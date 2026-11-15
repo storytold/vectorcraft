@@ -5353,6 +5353,11 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	Imported library {name}	Εισήχθη η βιβλιοθήκη {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Πολιτική RGB:
+	CMYK Policy:	Πολιτική CMYK:
+	Preserve Embedded Profiles	Διατήρηση ενσωματωμένων προφίλ
+	Convert to Working Space	Μετατροπή στον χώρο εργασίας
+	Preserve Numbers	Διατήρηση αριθμών
 	System Title Bar	Γραμμή τίτλου συστήματος
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.

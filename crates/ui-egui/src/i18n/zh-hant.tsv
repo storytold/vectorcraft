@@ -5567,6 +5567,11 @@ axis	Both	兩者
 	Interpolation	內插
 	RGB:	RGB：
 	CMYK:	CMYK：
+	RGB Policy:	RGB 原則：
+	CMYK Policy:	CMYK 原則：
+	Preserve Embedded Profiles	保留內嵌描述檔
+	Convert to Working Space	轉換為工作空間
+	Preserve Numbers	保留數值
 	Texture	紋理
 	Craquelure…	龜裂紋…
 	Grain…	顆粒…

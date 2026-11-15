@@ -696,6 +696,11 @@ font-technology	Variable	Változó
 	CMYK Equivalents	CMYK-megfelelők
 	CMYK profile in effect	Érvényes CMYK-profil
 	CMYK:	CMYK:
+	RGB Policy:	RGB-házirend:
+	CMYK Policy:	CMYK-házirend:
+	Preserve Embedded Profiles	Beágyazott profilok megtartása
+	Convert to Working Space	Konvertálás a munkaszíntérbe
+	Preserve Numbers	Számértékek megtartása
 	Coarse Dots	Durva pontok
 	Collapse Panels to Icons	Panelek ikonná csukása
 	Collapse to Icons	Ikonná csukás
