@@ -5855,7 +5855,8 @@ commands send `to: "key"` while the selection has a key, else `"artboard"` for o
 anchor points, else the Align To choice. The Distribute commands send `to: "key"` while the selection has a key, else
 the Align To choice, and while there is a key object or a key guide they send the panel's Distribute Spacing value as
 `spacing`. Edit › Keyboard Shortcuts lists them under Align, with no default shortcut, and
-`shortcuts.set {id, shortcut}` gives one a shortcut.
+`shortcuts.set {id, shortcut}` gives one a shortcut. The Object › Distribute menu lists the eight Distribute commands,
+and each item runs its command.
 
 With the Artboard tool chosen, the same buttons and UI commands, and the Control bar's Align and Distribute buttons,
 run `artboard.align`, `artboard.distribute` and `artboard.distributeSpacing` on the artboards the tool has selected.
