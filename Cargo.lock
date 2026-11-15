@@ -1106,6 +1106,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-text"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=48dcbe61b1d4887f7b08f51b76e54cfb00d51c75#48dcbe61b1d4887f7b08f51b76e54cfb00d51c75"
+dependencies = [
+ "kurbo 0.13.1",
+]
+
+[[package]]
 name = "craft-ui"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=c4b8405d5fd8f29cf77de528206bd2b38bb0ecb6#c4b8405d5fd8f29cf77de528206bd2b38bb0ecb6"
@@ -6871,6 +6879,7 @@ dependencies = [
 name = "vectorcraft-text"
 version = "0.24.1"
 dependencies = [
+ "craft-text",
  "harfrust 0.13.3",
  "icu_segmenter",
  "kurbo 0.13.1",

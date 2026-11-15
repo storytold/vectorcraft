@@ -111,90 +111,40 @@ impl Default for LayoutOptions {
     }
 }
 
-/// One laid-out glyph.
+/// Application artwork carried by the shared placed-glyph model.
 #[derive(Clone, Debug)]
-pub struct PositionedGlyph {
-    /// Outline in text space.
-    pub outline: BezPath,
-    /// Index of the run (`TextObject::runs`) the glyph came from.
-    pub run: usize,
-    /// Byte offset of the source character (cluster start) in the plain text.
-    pub byte: usize,
-    /// Pen position on the baseline (leading edge of the glyph).
-    pub origin: Point,
-    /// Advance along the baseline (includes tracking and justification space).
-    pub advance: f64,
-    /// Number of source bytes covered by the glyph's cluster.
-    pub len: usize,
-    /// Baseline direction in radians (0 = horizontal; non-zero for type on a path).
-    pub angle: f64,
-    /// Index into [`TextLayout::lines`].
-    pub line: usize,
-    /// [`FontFace::id`] of the face that supplied the glyph.
-    pub font_id: u32,
-    /// The glyph's id in that face.
-    pub gid: u32,
-    /// Font units (y down, as [`FontDb::outline`] gives them) → text space: where the glyph is
-    /// drawn, also for glyphs without an outline (spaces).
-    pub xf: Affine,
-    /// True when the logical leading edge is the glyph’s right edge.
-    pub rtl: bool,
-    /// How much wider than its font draws it the glyph is drawn by its paragraph's Glyph Scaling
-    /// (Justification…), Desired and justification together: 1 at 100%. Horizontal Scale isn't
-    /// included.
-    pub scale: f64,
-    /// A colour bitmap glyph (emoji), drawn through `xf` instead of an outline: its `outline` is
-    /// empty. Also a COLR glyph whose paints documents have no form for, drawn as an image.
-    pub image: Option<Arc<GlyphImage>>,
-    /// A colour glyph's art (COLR layers, an SVG document's art), drawn through `xf` instead of an
-    /// outline: a group in font units (y down). Its `outline` is empty.
-    pub colour: Option<Arc<vectorcraft_doc::Node>>,
-    /// Type on a curved path in a script whose letters join: the glyph's `outline` is bent along
-    /// the path ([`GlyphBend`]) so it meets its neighbours, and `xf` is only the straight glyph
-    /// nearest it (for the caret, hit testing and tools). `None`: the glyph is drawn through `xf`.
-    pub bend: Option<GlyphBend>,
-    /// Font units → font units: `xf * unturned` places the glyph as it would be placed without
-    /// its Character Rotation. The identity for a glyph without one.
-    pub unturned: Affine,
-    /// Font units: `xf * pivot` is the point its Character Rotation turns it about, its pen
-    /// position after composition spacing adjustments, moved by its baseline shift.
-    pub pivot: Point,
-    /// A ligature (one glyph that alone stands for several characters, grapheme clusters, of the
-    /// text): the caret stop between each two of them, in logical order, as the byte offset of the
-    /// later character and how far the caret stands along the glyph's own width ([`Self::width`])
-    /// from its logical leading edge, 0 to 1. The font's ligature carets
-    /// ([`FontFace::ligature_carets`], or [`FontFace::vertical_ligature_carets`] for a glyph
-    /// standing upright in vertical type) when it lists one for each stop, else the width divided
-    /// equally among the characters. Empty for any other glyph.
-    pub carets: Vec<(usize, f64)>,
-    /// The glyph's own width along its advance in text space: its font advance at its size,
-    /// Horizontal Scale and glyph scaling, without the tracking, kerning, justification space and
-    /// kashida that [`Self::advance`] includes after it (to its right in horizontal type). The
-    /// advance itself in vertical type.
-    pub width: f64,
-    /// How far right of the left end of its advance the glyph's own width ([`Self::width`]) starts,
-    /// in text space: the font's placement of the glyph (`GPOS` x placement), less a leading space
-    /// taken off, plus the manual kerning of right-to-left text, which moves the glyph right so that
-    /// the space it adds lies on the glyph's left. 0 for a glyph standing upright or set across the
-    /// column in vertical type, and for an inline graphic. An upright glyph in vertical type on a
-    /// path stands with its top toward the path's start, and its cell starts at its top: 0.12 em
-    /// before the pen without the font's vertical metrics.
-    pub width_start: f64,
-    /// A glyph of a warichu block: the byte offset of the block's first character, which names the
-    /// block. The block's lines share its line of text, so hit testing takes the block line nearest
-    /// the point before the nearest caret stop along it. `None` for any other glyph.
-    pub warichu: Option<usize>,
-    /// A glyph of a warichu block: the baseline of its block line across the line, from the
-    /// line's baseline before Character Alignment moves the glyph (y down). It names the block
-    /// line whatever the alignment of each character on it. 0 for any other glyph.
-    pub warichu_line: f64,
-    /// Type on an open path that starts before the path: the glyph's middle falls before the
-    /// path's start, so it draws nothing (its `outline` is empty and it has no image or color
-    /// art), hit testing and Touch Type skip it while a glyph is drawn, and exports leave it out.
-    /// It stays in the layout for the caret, at the path's start with no advance or width, and its
-    /// ligature carets stand there too.
-    pub off_path: bool,
+pub struct GlyphArtwork;
+
+impl craft_text::positioned::Artwork for GlyphArtwork {
+    type Image = Arc<GlyphImage>;
+    type Colour = Arc<vectorcraft_doc::Node>;
+    type Bend = GlyphBend;
+    type Node = vectorcraft_doc::Node;
+
+    fn image_transform(image: &Self::Image) -> Affine {
+        image.xf
+    }
+    fn image_node(image: &Self::Image, xf: Affine) -> Self::Node {
+        let im = vectorcraft_doc::ImageObject {
+            key: image.blob.content_key(),
+            width: image.width,
+            height: image.height,
+            xf,
+            link: None,
+            placement: Default::default(),
+            pixels: Some(Arc::new(image.blob.clone())),
+        };
+        vectorcraft_doc::Node::new(vectorcraft_doc::NodeId(u64::MAX), vectorcraft_doc::NodeKind::Image(Box::new(im)))
+    }
+    fn colour_node(colour: &Self::Colour, xf: Affine) -> Self::Node {
+        let mut art = (**colour).clone();
+        art.transform(xf, true);
+        art
+    }
 }
+
+/// One laid-out glyph.
+pub type PositionedGlyph = craft_text::positioned::PositionedGlyph<GlyphArtwork>;
 
 /// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
 /// left end, y down from the baseline) goes to `P(s + x · step / advance) + (y + rise) · N` there,
@@ -209,86 +159,6 @@ pub struct GlyphBend {
     pub advance: f64,
     /// How far down the type moves off the path (Align to Path).
     pub rise: f64,
-}
-
-impl PositionedGlyph {
-    /// The glyph's caret stops in logical order: its first byte, its ligature carets
-    /// ([`Self::carets`]) and its end, each with how far along its own width ([`Self::width`]) from
-    /// its logical leading edge the caret stands, 0 to 1.
-    fn width_stops(&self) -> impl Iterator<Item = (usize, f64)> + '_ {
-        std::iter::once((self.byte, 0.0)).chain(self.carets.iter().copied()).chain(std::iter::once((self.byte + self.len, 1.0)))
-    }
-    /// The glyph's caret stops in logical order, each with its distance in text space from the
-    /// logical leading edge of a span `extent` long that holds the glyph (its advance, or its
-    /// cluster's): 0 at its first byte and `extent` at its end. A ligature caret stands at its place
-    /// in the glyph's own width ([`Self::width`]), which starts [`Self::width_start`] right of the
-    /// glyph's left edge; the rest of the space the advance adds lies to the right of that width,
-    /// after the last ligature caret left to right, and before the first one right to left.
-    /// Negative kerning or tracking makes the advance shorter than the width, or zero or negative,
-    /// and a ligature caret then stands past the end of the advance.
-    fn stops_along(&self, extent: f64) -> impl Iterator<Item = (usize, f64)> + '_ {
-        let (width, start) = if self.width > 0.0 && self.width.is_finite() {
-            (self.width, if self.width_start.is_finite() { self.width_start } else { 0.0 })
-        } else {
-            (extent, 0.0)
-        };
-        let ends = (self.byte, self.byte + self.len);
-        self.width_stops().map(move |(b, f)| {
-            if b == ends.0 {
-                (b, 0.0)
-            } else if b == ends.1 {
-                (b, extent)
-            } else if self.rtl {
-                (b, extent - start - (1.0 - f) * width)
-            } else {
-                (b, start + f * width)
-            }
-        })
-    }
-    /// The distance in text space from the logical leading edge of a span `extent` long that holds
-    /// the glyph (its advance, or its cluster's) to the caret for byte `byte`: 0 at its first byte,
-    /// `extent` at its end, a ligature caret's place at that caret's byte ([`Self::stops_along`],
-    /// which can lie outside 0 to `extent`), and in proportion to the bytes between two stops.
-    pub fn caret_offset(&self, byte: usize, extent: f64) -> f64 {
-        if byte <= self.byte || self.len == 0 {
-            return 0.0;
-        }
-        let mut from = (self.byte, 0.0);
-        for (b, d) in self.stops_along(extent).skip(1) {
-            if byte <= b {
-                let span = b.saturating_sub(from.0).max(1) as f64;
-                return from.1 + (d - from.1) * (byte - from.0) as f64 / span;
-            }
-            from = (b, d);
-        }
-        extent
-    }
-    /// The glyph's colour bitmap, and the transform from its pixels to text space.
-    pub fn placed_image(&self) -> Option<(&Arc<GlyphImage>, Affine)> {
-        self.image.as_ref().map(|i| (i, self.xf * i.xf))
-    }
-    /// The glyph's colour bitmap as an image object placed through `to_doc` (text space → where it
-    /// goes), holding its pixels ([`vectorcraft_doc::ImageObject::pixels`]), without an id.
-    pub fn placed_image_node(&self, to_doc: Affine) -> Option<vectorcraft_doc::Node> {
-        let (image, to_text) = self.placed_image()?;
-        let im = vectorcraft_doc::ImageObject {
-            key: image.blob.content_key(),
-            width: image.width,
-            height: image.height,
-            xf: to_doc * to_text,
-            link: None,
-            placement: Default::default(),
-            pixels: Some(Arc::new(image.blob.clone())),
-        };
-        Some(vectorcraft_doc::Node::new(vectorcraft_doc::NodeId(u64::MAX), vectorcraft_doc::NodeKind::Image(Box::new(im))))
-    }
-    /// The glyph's colour art placed through `to_doc` (text space → where they go): a copy of
-    /// [`Self::colour`], transformed, its nodes without ids.
-    pub fn placed_colour(&self, to_doc: Affine) -> Option<vectorcraft_doc::Node> {
-        let mut art = (**self.colour.as_ref()?).clone();
-        art.transform(to_doc * self.xf, true);
-        Some(art)
-    }
 }
 
 /// One line of laid-out text.
