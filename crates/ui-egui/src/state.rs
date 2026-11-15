@@ -791,6 +791,9 @@ pub struct UiState {
     /// dialog opens on them (#1152).
     #[serde(default)]
     pub offset_path: Value,
+    /// The Smart Punctuation fields confirmed last (null: never used): its dialog opens on them.
+    #[serde(default)]
+    pub smart_punctuation: Value,
     /// The Average & Join fields confirmed last (`to`; null: never used): its dialog opens on them.
     #[serde(default)]
     pub average_join: Value,
@@ -1230,6 +1233,7 @@ impl Default for UiState {
             dxf_options: Value::Null,
             eps_options: Value::Null,
             offset_path: Value::Null,
+            smart_punctuation: Value::Null,
             average_join: Value::Null,
             recolor_preserve: Value::Null,
             simplify: Value::Null,

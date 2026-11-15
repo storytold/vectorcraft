@@ -79,18 +79,29 @@ fn the_source_stays_as_it_is() {
     assert!(s.doc().unwrap().is_dirty(), "the new document is unsaved");
 }
 
-/// An index that names no state, or is not a whole number, is an error and changes nothing: no
-/// document, no step and no Untitled number is used up.
+/// An index that names no state (`no history state N`), or is not a whole number ("`index` must be
+/// a whole number"), is an error and changes nothing: no document, no step and no Untitled number
+/// is used up.
 #[test]
 fn a_bad_index_is_an_error_and_changes_nothing() {
     let mut s = three_rectangles_one_undone();
     let source = s.doc().unwrap().doc.clone();
     let untitled = s.peek_untitled();
-    let bad: [Value; 8] = [json!(4), json!(99), json!(-1), json!(1.5), json!("1"), json!(true), json!([1]), json!(u64::MAX)];
-    for index in bad {
+    let bad: [(Value, bool); 8] = [
+        (json!(4), true),
+        (json!(99), true),
+        (json!(u64::MAX), true),
+        (json!(-1), false),
+        (json!(1.5), false),
+        (json!("1"), false),
+        (json!(true), false),
+        (json!([1]), false),
+    ];
+    for (index, whole) in bad {
         let e = s.execute(CMD, &json!({ "index": index })).unwrap_err();
         assert!(matches!(e, EngineError::BadParams { .. }), "{index}: {e}");
-        assert!(e.to_string().contains(&format!("no history state {index}")), "{e}");
+        let want = if whole { format!("no history state {index}") } else { "`index` must be a whole number".to_string() };
+        assert_eq!(e.to_string(), format!("invalid parameters for `{CMD}`: {want}"), "{index}");
         assert_eq!(s.documents().len(), 1, "{index}");
         assert_eq!(steps(&s), (2, 1), "{index}");
         assert!(Arc::ptr_eq(&s.doc().unwrap().doc, &source), "{index}");

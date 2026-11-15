@@ -67,6 +67,13 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if let Some(art) = painted_art(symbols, n) {
         return art.visual_bounds_with(symbols).map(|r| with_raster_reach(symbols, n, r));
     }
+    // Copies that each carry the raster effects listed before their Transform effect reach as far
+    // as each copy's raster effects paint, and the raster effects after it spread them all.
+    if effects::outer_effects(n).len() < n.appearance.effects.len()
+        && let Some(art) = effects::reshape(Some(symbols.document()), n, None)
+    {
+        return cull_bounds(symbols, &art);
+    }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
     let (g, carry) = effected_path_carrying(symbols.document(), n, &bp);
