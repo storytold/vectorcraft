@@ -5115,6 +5115,73 @@ fn an_instance_in_a_symbols_art_is_placed_from_the_canvas() {
     assert_eq!(instance_box(&doc, &a[0]), Rect::new(58.0, 53.0, 62.0, 57.0));
 }
 
+/// Files of versions 10 to 13 place an instance by a `TransformMatrix` that takes the symbol's art
+/// to the canvas (y down): the instance stays live and lands where the `RTransformMatrix` of a
+/// newer file puts it, on the page and in a symbol's art.
+#[test]
+fn an_instance_placed_on_the_canvas_by_an_older_file_stays_live() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let older = |name: &str, m: [f64; 6]| {
+        let [a, b, c, d, e, f] = m;
+        format!("/SymbolInstance :\n({name}) /SymbolRef ,\n{a} {b} {c} {d} {e} {f} /TransformMatrix\n;\n")
+    };
+    let page = older("Dot", [1.0, 0.0, 0.0, 1.0, 8111.0, 8192.0]) + &older("Dot", [2.0, 0.0, 0.0, 2.0, 8191.0, 8192.0]);
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Dot", &dot(), 5)), layer(&page));
+    let doc = read_ok(&body).doc;
+    let a = art(&doc);
+    assert_eq!(a.len(), 2);
+    assert!(a.iter().all(|n| matches!(n.kind, NodeKind::SymbolInstance { .. })), "{a:#?}");
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(18.0, 48.0, 22.0, 52.0));
+    assert_eq!(instance_box(&doc, &a[1]), Rect::new(96.0, 46.0, 104.0, 54.0));
+    // Turned and scaled, as the newer file writes the same instance: canvas x is art x + 8091 and
+    // canvas y is 8242 - art y, so the second row of the matrix changes sign.
+    let turned = [1.299, -0.4, 0.75, 0.6928, 8111.0, 8192.0];
+    let newer = [1.299, 0.4, 0.75, -0.6928, 20.0, 50.0];
+    let older_doc =
+        read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Dot", &dot(), 5)), layer(&older("Dot", turned)))).doc;
+    let newer_doc =
+        read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Dot", &dot(), 5)), layer(&instance("Dot", newer)))).doc;
+    let xf = |d: &Document| match &art(d)[0].kind {
+        NodeKind::SymbolInstance { xf, .. } => xf.as_coeffs(),
+        k => panic!("{k:?}"),
+    };
+    let (o, n) = (xf(&older_doc), xf(&newer_doc));
+    assert!(o.iter().zip(n).all(|(a, b)| (a - b).abs() < 1e-9), "{o:?} {n:?}");
+    // In a symbol's art the matrix takes the art to the symbol's own space: Dot at (10, 5) in Pair's
+    // art, which the page instance puts at (50, 50).
+    let nested = older("Dot", [1.0, 0.0, 0.0, 1.0, 10.0, 5.0]);
+    let defs = symbols(&(symbol("Dot", &dot(), 5) + &symbol("Pair", &nested, 1)));
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{defs}{}", layer(&older("Pair", [1.0, 0.0, 0.0, 1.0, 8141.0, 8192.0])));
+    let doc = read_ok(&body).doc;
+    let a = art(&doc);
+    assert_eq!(instance_box(&doc, &a[0]), Rect::new(58.0, 53.0, 62.0, 57.0));
+    // One document saved in both forms: the template box's center is (100.5, 99.5), so art space's
+    // origin is at canvas (8091, 8291). Dot sits at (5, 2.5) in Pair's art, and the page instance
+    // puts Pair at (57, 145.5). Both instances get the newer file's matrices, coefficient by
+    // coefficient.
+    let saved = |inner: String, pair: String| {
+        let defs = symbols(&(symbol("Dot", &dot(), 5) + &symbol("Pair", &inner, 1)));
+        read_ok(&format!("%AI3_TemplateBox: 100.5 99.5 100.5 99.5\n{defs}{}", layer(&pair))).doc
+    };
+    let older_doc = saved(older("Dot", [1.0, 0.0, 0.0, 1.0, 5.0, 2.5]), older("Pair", [1.0, 0.0, 0.0, 1.0, 8148.0, 8145.5]));
+    let newer_doc = saved(instance("Dot", [1.0, 0.0, 0.0, -1.0, -8086.0, 8288.5]), instance("Pair", [1.0, 0.0, 0.0, -1.0, 57.0, 145.5]));
+    fn first_xf(n: &Node) -> Option<[f64; 6]> {
+        match &n.kind {
+            NodeKind::SymbolInstance { xf, .. } => Some(xf.as_coeffs()),
+            _ => n.children()?.iter().find_map(|c| first_xf(c)),
+        }
+    }
+    let both = |d: &Document| (xf(d), first_xf(&d.symbols[1].art).expect("Dot's instance in Pair's art"));
+    let ((op, on), (np, nn)) = (both(&older_doc), both(&newer_doc));
+    assert!(op.iter().zip(np).all(|(a, b)| (a - b).abs() < 1e-9), "{op:?} {np:?}");
+    assert!(on.iter().zip(nn).all(|(a, b)| (a - b).abs() < 1e-9), "{on:?} {nn:?}");
+    // Without a template box the canvas's place isn't known: the instance isn't read, though Dot is
+    // defined and the same instance with a template box is read above.
+    let defs = symbols(&symbol("Dot", &dot(), 5));
+    let e = read(stream(&format!("{defs}{}", layer(&older("Dot", [1.0, 0.0, 0.0, 1.0, 8111.0, 8192.0])))).as_bytes());
+    assert!(e.is_err_and(|e| e.contains("symbols")));
+}
+
 #[test]
 fn an_image_in_a_symbols_art_is_placed_from_the_canvas() {
     // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242). The
