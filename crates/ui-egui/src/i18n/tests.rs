@@ -423,6 +423,27 @@ fn brazilian_portuguese_spells_relink_and_process_color() {
     assert!(message(pt, "`{name}` is a process colour: tints apply to global and spot colours").to_lowercase().contains("cor de processo"));
 }
 
+/// Every Greek row that names a knockout says διάτρηση, never αποκοπή, which stays for clipping
+/// and cutting.
+#[test]
+fn greek_rows_use_one_term_for_knockout() {
+    let el = Lang::from_code("el").expect("el registered");
+    let (entries, _) = parse_entries(el.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let greek = translation.to_lowercase();
+        let knockout_term = greek.contains("διάτρη") || greek.contains("διατρ");
+        if src.to_lowercase().contains("knockout") && (greek.contains("αποκοπ") || !knockout_term) {
+            wrong.push(format!("knockout in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Greek rows use the wrong term:\n{}", wrong.len(), wrong.join("\n"));
+    assert_eq!(tr(el, "Knockout Group"), "Ομάδα διάτρησης");
+    assert_eq!(tr(el, "Page Knockout Group"), "Ομάδα διάτρησης σελίδας");
+    assert_eq!(tr(el, "Opacity & Mask Define Knockout Shape"), "Η αδιαφάνεια και η μάσκα καθορίζουν το σχήμα διάτρησης");
+    assert_eq!(tr(el, "Clip Group"), "Ομάδα αποκοπής");
+}
+
 #[test]
 fn font_height_reference_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
