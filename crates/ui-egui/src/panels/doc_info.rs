@@ -432,6 +432,23 @@ mod tests {
         assert!(err.contains("category `colors`"), "{err}");
     }
 
+    /// Document Info › Objects shows the selection's area beside its length, in the General
+    /// unit squared.
+    #[test]
+    fn objects_show_the_area_in_the_general_unit_squared() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+        let objects = crate::tests_labels::painted_text(&mut app, |app, ui| {
+            set_pstate(ui.ctx(), "docinfo-category", "objects".to_string());
+            set_pstate(ui.ctx(), "docinfo-sel", true);
+            show(app, ui);
+        });
+        assert!(objects.contains("Path Length") && objects.contains("300 pt"), "{objects}");
+        assert!(objects.contains("Area") && objects.contains("5000 pt²"), "{objects}");
+    }
+
     /// Brushes shows each brush's type, and a brush the Brushes panel does not hold, in the
     /// interface language; the saved report keeps them in English.
     #[test]

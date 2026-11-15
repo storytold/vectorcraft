@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), objectArea: pt² (the paths' total filled area, compound paths' holes subtracted by winding, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
             has_doc,
             info
         ),
@@ -231,6 +231,7 @@ fn sections(
                     // The paths' total length, in the document's units, right after their count.
                     if let Some(at) = rows.iter().position(|(label, _)| label == "Paths") {
                         rows.insert(at + 1, ("Path Length".into(), u.format(info["pathLength"].as_f64().unwrap_or(0.0))));
+                        rows.insert(at + 2, ("Area".into(), u.format_square(info["objectArea"].as_f64().unwrap_or(0.0))));
                     }
                     rows
                 }
@@ -490,6 +491,13 @@ fn draws(n: &Node) -> bool {
     n.visible && n.opacity > 0.0
 }
 
+/// The filled area of `path` in square points: its subpaths' signed areas
+/// ([`vectorcraft_geom::SubPath::signed_area`], an open one closed with a line), added with
+/// their signs so holes subtract by winding.
+fn path_area(path: &vectorcraft_geom::PathData) -> f64 {
+    path.subpaths.iter().map(|sp| sp.signed_area()).sum()
+}
+
 /// The object of `d` at index path `path`, with whether the groups and layers around it draw
 /// ([`draws`]).
 fn node_and_drawn<'a>(d: &'a Document, path: &[usize]) -> Option<(&'a Node, bool)> {
@@ -570,6 +578,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // The paths' total length, as Document Info › Objects shows it (the length of a cut line, a
     // strip of LEDs along the letters, #1958).
     let mut path_length = 0.0;
+    // The paths' total filled area in square points, as Document Info › Objects shows it beside
+    // the length.
+    let mut object_area = 0.0;
     let mut fonts = BTreeSet::new();
     let mut images: BTreeMap<String, Value> = BTreeMap::new();
     let mut image_rows: Vec<ImageRow> = vec![];
@@ -610,6 +621,10 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // The objects the walk has visited: a selection can hold a group and objects inside it, and each object counts once.
     // The set holds each object's address, so two objects that share an id (as a damaged file can hold) count as two.
     let mut seen: HashSet<*const Node> = HashSet::new();
+    // The compound path members whose area their compound path already counted, so the walk does
+    // not count them again. A member visited without its compound path (selected on its own)
+    // still counts.
+    let mut area_skip: HashSet<*const Node> = HashSet::new();
     // The members of the document's compound paths: the compound path's own fills and strokes paint them.
     let mut members: HashSet<*const Node> = HashSet::new();
     d.walk(|n| {
@@ -641,9 +656,26 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     if l.is_finite() {
                         path_length += l;
                     }
+                    // Hidden and locked paths count, as they do for the length; guides matched
+                    // above and never reach here.
+                    if !area_skip.contains(&std::ptr::from_ref(n)) {
+                        let a = path_area(path);
+                        if a.is_finite() {
+                            object_area += a.abs();
+                        }
+                    }
                     Some("paths")
                 }
-                NodeKind::Compound { .. } => Some("compoundPaths"),
+                NodeKind::Compound { children, .. } => {
+                    // The members' signed areas together, so holes cut by the front paths (which
+                    // `object.compoundPath.make` runs against the backmost) subtract by winding.
+                    let a: f64 = children.iter().filter_map(|c| c.path_data()).map(path_area).filter(|a| a.is_finite()).sum();
+                    if a.is_finite() {
+                        object_area += a.abs();
+                    }
+                    area_skip.extend(children.iter().map(|c| std::ptr::from_ref(&**c)));
+                    Some("compoundPaths")
+                }
                 NodeKind::Text(t) => {
                     for run in &t.runs {
                         fonts.insert((run.style.font_family.clone(), run.style.font_style.clone(), run.style.font_version.clone()));
@@ -762,6 +794,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "document": document_summary(d),
         "objects": counts,
         "pathLength": path_length,
+        "objectArea": object_area,
         "fonts": font_names,
         "fontDetails": font_entries,
         "images": images,
@@ -924,7 +957,7 @@ mod tests {
         s.execute("select.set", &json!({"ids": [line]})).unwrap();
         assert!((length(&mut s, json!({"selectionOnly": true})) - 72.0).abs() < 1e-6);
         let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
-        assert_eq!(rows, json!([["Paths", "1"], ["Path Length", "25.4 mm"]]));
+        assert_eq!(rows, json!([["Paths", "1"], ["Path Length", "25.4 mm"], ["Area", "0 mm²"]]));
         // A compound path's pieces are paths: their lengths count.
         let other = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 5, "height": 5})).unwrap()["id"].clone();
         s.execute("select.set", &json!({"ids": [rect, other]})).unwrap();
@@ -933,6 +966,45 @@ mod tests {
         // Nothing with no paths, and no length row.
         s.execute("select.none", &json!({})).unwrap();
         assert_eq!(length(&mut s, json!({"selectionOnly": true})), 0.0);
+    }
+
+    /// Document Info › Objects gives the paths' total filled area in square points: a 100 × 50
+    /// pt rectangle is 5,000 pt², a compound path's hole subtracts by winding, a guide is left
+    /// out while a hidden path still counts, as for the length. The Objects rows show it beside
+    /// the length in the General unit squared, updating with the selection.
+    #[test]
+    fn info_gives_the_paths_total_area() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        let rect = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap()["id"].clone();
+        let area = |s: &mut Session, p: Value| s.execute("document.info", &p).unwrap()["objectArea"].as_f64().unwrap();
+        assert!((area(&mut s, json!({})) - 5000.0).abs() < 1e-6);
+        // A compound path's hole subtracts: a 20 × 10 rect inside leaves 4,800.
+        let hole = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 10})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [rect, hole]})).unwrap();
+        s.execute("object.compoundPath.make", &json!({})).unwrap();
+        assert!((area(&mut s, json!({})) - 4800.0).abs() < 1e-6);
+        // The Objects rows show the area beside the length, updating with the selection.
+        let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
+        assert_eq!(rows, json!([["Paths", "2"], ["Path Length", "360 pt"], ["Area", "4800 pt²"], ["Compound Paths", "1"]]));
+        // A guide is left out, like for the length; a hidden path still counts.
+        let guide = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(guide)).unwrap().kind {
+            *g = true;
+        }
+        assert!((area(&mut s, json!({})) - 4800.0).abs() < 1e-6);
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(guide)).unwrap().kind {
+            *g = false;
+        }
+        d.node_mut(NodeId(guide)).unwrap().visible = false;
+        assert!((area(&mut s, json!({})) - 4900.0).abs() < 1e-6);
+        // Nothing with no paths, and no area row.
+        s.execute("select.none", &json!({})).unwrap();
+        assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
+        let rows = s.execute("document.info", &json!({"selectionOnly": true, "category": "objects"})).unwrap()["sections"][0]["rows"].clone();
+        assert!(rows.as_array().unwrap().iter().all(|r| r[0] != "Area"), "{rows}");
     }
 
     /// Document Info › Brushes lists the brushes the art's strokes use, each once with its type, and
