@@ -164,6 +164,7 @@
 	Align to Artboard	Alinhar à Mesa de Trabalho
 	Align to Glyph Bounds	Alinhar aos Limites do Glifo
 	Align to Key Object	Alinhar ao Objeto-Chave
+	Align to Key Anchor	Alinhar ao Ponto de Ancoragem-Chave
 	Align to Page	Alinhar à Página
 	Align to Path	Alinhar ao Caminho
 	Align to Selection	Alinhar à Seleção
@@ -3505,6 +3506,11 @@ imageTrace	Outline	Contorno
 	NTSC Colors	Cores NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Política RGB:
+	CMYK Policy:	Política CMYK:
+	Preserve Embedded Profiles	Preservar perfis incorporados
+	Convert to Working Space	Converter para espaço de trabalho
+	Preserve Numbers	Preservar números
 	Texture	Textura
 	Craquelure…	Craquelê…
 	Grain…	Granulação…
@@ -5353,6 +5359,8 @@ axis	Both	Ambos
 	Kana	Kana
 	Numerals	Números
 	Scale at Center	Dimensionar a partir do centro
+	Delete Set	Excluir conjunto
+	Direct Entry	Entrada direta
 	Up/Down:	Para Cima/Para Baixo:
 	Left/Right:	Esquerda/Direita:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko Para Cima/Para Baixo
@@ -6509,6 +6517,7 @@ axis	Y Axis	Eixo Y
 @msg	stops must be in order of `offset`	as paradas devem estar em ordem de `offset`
 @msg	the document has no pattern {pattern}	o documento não tem o padrão {pattern}
 @msg	the document has no swatch {n}	o documento não tem a amostra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requer uma parada vinculada a uma amostra de cor spot
 @msg	the output	a saída
 @msg	the path has no anchor points	o caminho não tem pontos de ancoragem
 @msg	too many anchor points (limit {MAX_ANCHORS})	pontos de ancoragem demais (limite {MAX_ANCHORS})

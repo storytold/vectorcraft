@@ -894,6 +894,11 @@
 	NTSC Colors	NTSC ფერები
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB წესი:
+	CMYK Policy:	CMYK წესი:
+	Preserve Embedded Profiles	ჩაშენებული პროფილების შენარჩუნება
+	Convert to Working Space	სამუშაო სივრცეში გადაყვანა
+	Preserve Numbers	რიცხვების შენარჩუნება
 	CMYK	CMYK
 	Texture	ტექსტურა
 	Craquelure…	კრაკელიური…
@@ -1366,6 +1371,7 @@ lighting	Light	სინათლე
 	Align to Artboard	სამუშაო დაფაზე სწორება
 	Align to Glyph Bounds	გლიფის საზღვრებზე სწორება
 	Align to Key Object	საკვანძო ობიექტზე სწორება
+	Align to Key Anchor	საკვანძო საყრდენ წერტილზე სწორება
 	Align to Selection	მონიშნულზე სწორება
 	Align To:	სწორება:
 	Cancel Key Object	საკვანძო ობიექტის გაუქმება
@@ -1556,6 +1562,8 @@ digits	Malayalam	მალაიალამური
 	Kana	კანა
 	Numerals	ციფრები
 	Scale at Center	ცენტრიდან მასშტაბირება
+	Delete Set	ნაკრების წაშლა
+	Direct Entry	პირდაპირი შეყვანა
 	Up/Down:	ზემოთ/ქვემოთ:
 	Left/Right:	მარცხნივ/მარჯვნივ:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko ზემოთ/ქვემოთ
@@ -6549,6 +6557,7 @@ axis	Y Axis	Y ღერძი
 @msg	stops must be in order of `offset`	გადასვლის წერტილები `offset`-ის მიხედვით უნდა იყოს დალაგებული
 @msg	the document has no pattern {pattern}	დოკუმენტს არ აქვს პატერნი {pattern}
 @msg	the document has no swatch {n}	დოკუმენტს არ აქვს ფერის ნიმუში {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` მოითხოვს გადასვლის წერტილს, რომელიც სპოტ-ფერის ნიმუშთანაა დაკავშირებული
 @msg	the output	გამოტანა
 @msg	the path has no anchor points	ტრაექტორიას საყრდენი წერტილები არ აქვს
 @msg	too many anchor points (limit {MAX_ANCHORS})	ძალიან ბევრი საყრდენი წერტილი (ლიმიტი {MAX_ANCHORS})

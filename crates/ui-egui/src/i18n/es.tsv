@@ -160,6 +160,7 @@
 	Align to Artboard	Alinear con la mesa de trabajo
 	Align to Glyph Bounds	Alinear con los límites del glifo
 	Align to Key Object	Alinear con el objeto clave
+	Align to Key Anchor	Alinear con el punto de ancla clave
 	Align to Page	Alinear con la página
 	Align to Path	Alinear con el trazado
 	Align to Selection	Alinear con la selección
@@ -3787,6 +3788,8 @@ digits	Malayalam	Malayálam
 	Kana	Kana
 	Numerals	Números
 	Scale at Center	Escalar desde el centro
+	Delete Set	Eliminar juego
+	Direct Entry	Entrada directa
 	Up/Down:	Arriba/abajo:
 	Left/Right:	Izquierda/derecha:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko arriba/abajo
@@ -5396,6 +5399,11 @@ axis	Both	Ambos
 @msg	Imported library {name}	Biblioteca {name} importada
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Norma RGB:
+	CMYK Policy:	Norma CMYK:
+	Preserve Embedded Profiles	Conservar perfiles incrustados
+	Convert to Working Space	Convertir en espacio de trabajo
+	Preserve Numbers	Conservar números
 	Texture	Textura
 	Craquelure…	Craquelado…
 	Grain…	Granulado…
@@ -6539,6 +6547,7 @@ axis	Y Axis	Eje Y
 @msg	stops must be in order of `offset`	las paradas deben estar en orden de `offset`
 @msg	the document has no pattern {pattern}	el documento no tiene el motivo {pattern}
 @msg	the document has no swatch {n}	el documento no tiene la muestra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requiere una parada vinculada a una muestra de tinta plana
 @msg	the output	la salida
 @msg	the path has no anchor points	el trazado no tiene puntos de ancla
 @msg	too many anchor points (limit {MAX_ANCHORS})	demasiados puntos de ancla (límite {MAX_ANCHORS})

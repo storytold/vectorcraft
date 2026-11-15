@@ -161,6 +161,7 @@
 	Align to Artboard	Aligner sur le plan de travail
 	Align to Glyph Bounds	Aligner sur les limites du glyphe
 	Align to Key Object	Aligner sur l’objet clé
+	Align to Key Anchor	Aligner sur le point d’ancrage clé
 	Align to Page	Aligner sur la page
 	Align to Path	Aligner sur le tracé
 	Align to Selection	Aligner sur la sélection
@@ -3779,6 +3780,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Chiffres
 	Scale at Center	Mettre à l’échelle depuis le centre
+	Delete Set	Supprimer le jeu
+	Direct Entry	Saisie directe
 	Up/Down:	Haut/bas :
 	Left/Right:	Gauche/droite :
 	Tate-chu-yoko Up/Down	Tate-chu-yoko haut/bas
@@ -5401,6 +5404,11 @@ axis	Both	Les deux
 @msg	Imported library {name}	Bibliothèque {name} importée
 	RGB:	RVB :
 	CMYK:	CMJN :
+	RGB Policy:	Règle RVB :
+	CMYK Policy:	Règle CMJN :
+	Preserve Embedded Profiles	Conserver les profils incorporés
+	Convert to Working Space	Convertir en espace de travail
+	Preserve Numbers	Conserver les valeurs numériques
 	Texture	Texture
 	Craquelure…	Craquelure…
 	Grain…	Grain…
@@ -6589,6 +6597,7 @@ axis	Y Axis	Axe Y
 @msg	stops must be in order of `offset`	les étapes doivent être classées par `offset`
 @msg	the document has no pattern {pattern}	le document n’a pas de motif {pattern}
 @msg	the document has no swatch {n}	le document n’a pas de nuance {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` exige une étape liée à une nuance de ton direct
 @msg	the output	la sortie
 @msg	the path has no anchor points	le tracé n’a aucun point d’ancrage
 @msg	too many anchor points (limit {MAX_ANCHORS})	trop de points d’ancrage (limite {MAX_ANCHORS})
