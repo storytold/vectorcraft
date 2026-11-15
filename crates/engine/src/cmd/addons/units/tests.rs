@@ -72,6 +72,8 @@ fn values_read_as_number_fields_read_them() {
     assert!(near(pt(&mut s, json!({"value": "1,5", "unit": "in"})), 108.0));
     // Each number of a sum reads its own separator.
     assert!(near(pt(&mut s, json!({"value": "100.5 mm-0,5", "unit": "mm"})), 100.0 * 72.0 / 25.4));
+    // A comma in a sum is a decimal comma, as in the number fields: 1,500+2 is 3.5.
+    assert!(near(pt(&mut s, json!({"value": "1,500+2", "unit": "mm"})), 3.5 * 72.0 / 25.4));
     // A sum of 128 signs still reads.
     assert!(near(pt(&mut s, json!({"value": format!("1{}", "+1".repeat(128))})), 129.0));
 }
@@ -145,11 +147,6 @@ fn bad_values_and_units_are_refused() {
         // A thousands comma is refused, as the number fields refuse it.
         json!({"value": "1,000 mm"}),
         json!({"value": "1,000.5"}),
-        // So is a thousands comma in any number of a sum.
-        json!({"value": "1,000 mm+1 mm"}),
-        json!({"value": "1 mm+1,000 mm"}),
-        json!({"value": "+1,000"}),
-        json!({"value": "2*1,000"}),
         // A long expression is refused instead of exhausting the stack.
         json!({"value": format!("1{}", "+1".repeat(200_000))}),
         json!({"value": format!("1{}", "+1".repeat(129))}),
