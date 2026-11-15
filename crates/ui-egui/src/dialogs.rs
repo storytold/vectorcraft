@@ -122,6 +122,7 @@ pub(crate) mod shapes;
 pub mod shortcut_import;
 pub(crate) mod simplify_slider;
 pub mod slices;
+pub mod smart_punctuation;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
 pub mod svg_filter;
@@ -157,9 +158,10 @@ pub use export_as::{export_selection, open as open_export_as};
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
-    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
-    import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
-    saved_options as screen_saved_options, saved_rows as screen_saved_rows, settings_format as screen_settings_format,
+    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, artboard_name_editing as export_artboard_name_editing,
+    export_preset as screen_export_preset, formats as screen_formats, import_presets as screen_import_presets,
+    open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
+    saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
 pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
@@ -430,6 +432,7 @@ registry! {
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
+    SmartPunctuation: [smart_punctuation::KIND] => smart_punctuation::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,

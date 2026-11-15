@@ -21,7 +21,7 @@ use usvg::{ImageHrefResolver, ImageKind, roxmltree};
 use vectorcraft_doc::LinkInfo;
 use vectorcraft_doc::links::missing_placeholder;
 
-use super::{Edits, depth, href};
+use super::{Edits, budget, depth, href};
 use crate::{ImportOptions, MAX_ELEMENT_DEPTH, MAX_SVGZ, SvgError};
 
 /// Most nested SVG images an imported SVG may decode (#3564).
@@ -74,6 +74,12 @@ pub(in crate::import) struct Files {
     /// The CMYK TIFF stored in place of a turned CMYK image, by the address of the PNG usvg got
     /// (kept here too, so the address stays its own).
     cmyk: Mutex<HashMap<usize, (Bytes, Bytes)>>,
+    /// What usvg makes of the SVG and of the SVG images read so far, all together ([`budget`]):
+    /// elements, bytes of copied style values and selector tests.
+    spent: Mutex<budget::Cost>,
+    /// Why an SVG image refused the whole SVG: what usvg would make of it is past [`budget`]'s
+    /// limits. The first one.
+    refused: Mutex<Option<SvgError>>,
 }
 
 /// Encoded image bytes, shared.
@@ -128,6 +134,9 @@ struct Reading<'a, 'w> {
     /// SVG links to aren't counted.
     svg_reads: usize,
     svg_text: u64,
+    /// What the linked SVG files measured for their links make, all together ([`budget`]); of one
+    /// past what is left, the selector tests it made.
+    measured: budget::Cost,
 }
 
 impl Reading<'_, '_> {
@@ -248,8 +257,17 @@ impl Files {
     /// relinked.
     pub(in crate::import) fn read(svg: &str, xml: &roxmltree::Document, opts: &ImportOptions, edits: &mut Edits, warnings: &mut Vec<String>) -> Self {
         let mut files = Files::default();
-        let mut reading =
-            Reading { opts, warnings, placeholder: None, by_file: HashMap::new(), active: vec![], placed: false, svg_reads: 0, svg_text: 0 };
+        let mut reading = Reading {
+            opts,
+            warnings,
+            placeholder: None,
+            by_file: HashMap::new(),
+            active: vec![],
+            placed: false,
+            svg_reads: 0,
+            svg_text: 0,
+            measured: budget::Cost::default(),
+        };
         files.sources = files.links_of(svg, xml, opts.folder, None, edits, &mut reading);
         files
     }
@@ -377,6 +395,19 @@ impl Files {
         // Read from its own handle: the text stays borrowed while `svg` may be given back.
         let text = svg.text.clone();
         let Ok(xml) = super::parse(&text) else { return Outcome::shown(Source::Svg(svg)) };
+        // Measured before the style cascade of `depth::height`, as an SVG image is when usvg
+        // reads it ([`Files::svg_tree`]), which then refuses one past the limits, within what the
+        // linked SVG files measured before it left: past it, its links aren't read, and the
+        // selector tests it made still count.
+        let (result, tests) = budget::check_spending(&xml, budget::Cost::LIMITS.less(reading.measured), left);
+        match result {
+            Ok(cost) => reading.measured = reading.measured.add(cost),
+            Err(e) => {
+                reading.measured.tests = reading.measured.tests.saturating_add(tests);
+                reading.placed |= matches!(e, SvgError::TooDeep(_));
+                return Outcome::shown(Source::Svg(svg));
+            }
+        }
         let Some(height) = depth::height(&xml, left) else {
             reading.placed = true;
             return Outcome::shown(Source::Svg(svg));
@@ -479,6 +510,27 @@ impl Files {
         notes
     }
 
+    /// What usvg makes of the SVG holding the images ([`budget::check`]): its images make at most
+    /// what is left of [`budget::Cost::LIMITS`].
+    pub(in crate::import) fn spent_by_svg(&self, spent: budget::Cost) {
+        self.set_spent(spent);
+    }
+
+    fn spent(&self) -> budget::Cost {
+        self.spent.lock().map(|s| *s).unwrap_or(budget::Cost::LIMITS)
+    }
+
+    fn set_spent(&self, spent: budget::Cost) {
+        if let Ok(mut s) = self.spent.lock() {
+            *s = spent;
+        }
+    }
+
+    /// The error of the first SVG image past [`budget`]'s limits, which refuses the SVG holding it.
+    pub(in crate::import) fn refused(&self) -> Option<SvgError> {
+        self.refused.lock().ok().and_then(|r| r.clone())
+    }
+
     fn note_text(&self, svg: &str) {
         if svg.contains("<text") {
             self.text.store(true, Ordering::Relaxed);
@@ -559,6 +611,10 @@ impl Files {
 
     /// [`Files::svg`]'s image once it is counted.
     fn svg_tree(&self, text: &str, file: Option<Arc<SvgFile>>, opts: &usvg::Options) -> Option<ImageKind> {
+        // The SVG holding it is refused already: no more images are read.
+        if self.refused().is_some() {
+            return None;
+        }
         // Measured as the SVG holding it is (`import`): the text before the XML reader.
         let used = self.depth.load(Ordering::Relaxed);
         let left = MAX_ELEMENT_DEPTH.saturating_sub(used);
@@ -566,9 +622,25 @@ impl Files {
             return leave_out(&self.too_deep, true);
         }
         let xml = super::parse(text).ok()?;
+        // What usvg would make of it, measured as the SVG holding it is (`import`), before the
+        // style cascade of `depth::height`; its elements, copied styles and selector tests count
+        // with theirs while usvg reads it, and only when it decodes. Too deep, it is left out;
+        // past the other limits, the whole SVG is refused.
+        let spent = self.spent();
+        let cost = match budget::check(&xml, budget::Cost::LIMITS.less(spent), left) {
+            Ok(cost) => cost,
+            Err(SvgError::TooDeep(_)) => return leave_out(&self.too_deep, true),
+            Err(e) => {
+                if let Ok(mut refused) = self.refused.lock() {
+                    refused.get_or_insert(e);
+                }
+                return None;
+            }
+        };
         let Some(height) = depth::height(&xml, left) else { return leave_out(&self.too_deep, true) };
         // usvg's parser would overflow on it, as on the SVG holding it (`import`).
         super::convolve_matrices_ok(&xml).ok()?;
+        self.set_spent(spent.add(cost));
         self.depth.store(used + height, Ordering::Relaxed);
         let within = self.within.lock().ok().map(|mut w| w.push(file)).is_some();
         // usvg's `Tree::from_data_nested`, except that hrefs to files go to the resolver.
@@ -592,7 +664,11 @@ impl Files {
             w.pop();
         }
         self.depth.store(used, Ordering::Relaxed);
-        let tree = tree.ok()?;
+        let Ok(tree) = tree else {
+            // Left out: neither it nor the images inside it count.
+            self.set_spent(spent);
+            return None;
+        };
         self.note_text(text);
         Some(ImageKind::SVG(tree))
     }
@@ -894,10 +970,42 @@ mod tests {
             placed: false,
             svg_reads: reads,
             svg_text: text,
+            measured: budget::Cost::default(),
         };
         let mut files = Files::default();
         files.sources = files.links_of(&svg, &xml, opts.folder, None, &mut Edits::default(), &mut reading);
         (log.into_inner().unwrap(), files)
+    }
+
+    /// The linked SVG files measured for their links share the limits: each of these keeps about
+    /// 40 MB of declarations in the import's own cascade (its `:not()` rule), so the second one is
+    /// shown without its links, and neither it nor the cascade reads them.
+    #[test]
+    fn linked_svg_files_share_the_limits_for_their_links() {
+        let file = |png: &str| {
+            let groups = "<g/>".repeat(400);
+            let rule = format!("g:not(.x){{font-family:{}}}", "a".repeat(100_000));
+            format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><style>{rule}</style>{groups}<image href="{png}" width="1" height="1"/></svg>"#)
+                .into_bytes()
+        };
+        let served = [("a.svg", file("a.png")), ("b.svg", file("b.png")), ("a.png", png()), ("b.png", png())];
+        let (log, _) = read_links(&["a.svg"], &served, 0, 0);
+        assert_eq!(log, ["a.svg", "a.png"]);
+        let (log, _) = read_links(&["a.svg", "b.svg"], &served, 0, 0);
+        assert_eq!(log, ["a.svg", "a.png", "b.svg"]);
+    }
+
+    /// A linked SVG file past the limits alone (a `<use>` chain past the element limit) is shown
+    /// without its links, and the linked SVG files after it still get what it left.
+    #[test]
+    fn a_linked_svg_file_past_the_limits_leaves_the_others_their_links() {
+        let links: String = (1..=20).map(|i| format!(r##"<g id="g{i}"><use href="#g{0}"/><use href="#g{0}"/></g>"##, i - 1)).collect();
+        let chain = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><defs><rect id="g0" width="1" height="1"/>{links}</defs><use href="#g20"/><image href="a.png" width="1" height="1"/></svg>"##
+        );
+        let served = [("a.svg", chain.into_bytes()), ("b.svg", linking(&["b.png"])), ("a.png", png()), ("b.png", png())];
+        let (log, _) = read_links(&["a.svg", "b.svg"], &served, 0, 0);
+        assert_eq!(log, ["a.svg", "b.svg", "b.png"]);
     }
 
     fn png() -> Vec<u8> {
