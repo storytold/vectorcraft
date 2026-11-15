@@ -298,6 +298,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         }
         return true;
     }
+    // Check Spelling…: dialog to walk through unknown words.
+    if id == crate::dialogs::check_spelling::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::check_spelling::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
     // Edit Views…: the saved views in a list, to rename or delete.
     if id == "view.saved.edit" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::edit_views::open(app) {
