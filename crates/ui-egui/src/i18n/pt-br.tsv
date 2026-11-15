@@ -5315,6 +5315,9 @@ axis	Both	Ambos
 	Windows	Windows
 	Working CMYK (don't tag)	CMYK de Trabalho (não marcar)
 	Working RGB (don't tag)	RGB de Trabalho (não marcar)
+	Don't Color Manage This Document	Não gerenciar as cores deste documento
+	Working RGB: {name}	RGB de Trabalho: {name}
+	Working CMYK: {name}	CMYK de Trabalho: {name}
 	Workspace {i}	Espaço de Trabalho {i}
 	Yellow	Amarelo
 	[Normal Character Style]	[Estilo de Caractere Normal]

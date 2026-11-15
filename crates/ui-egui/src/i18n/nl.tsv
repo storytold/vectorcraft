@@ -2492,6 +2492,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Zwartpuntcompensatie gebruiken
 	Working CMYK (don't tag)	Werk-CMYK (niet taggen)
 	Working RGB (don't tag)	Werk-RGB (niet taggen)
+	Don't Color Manage This Document	Geen kleurbeheer voor dit document
+	Working RGB: {name}	Werk-RGB: {name}
+	Working CMYK: {name}	Werk-CMYK: {name}
 	{name} (spot)	{name} (spotkleur)
 	Add to Profiles…	Toevoegen aan profielen…
 	Align Stroke to Center	Lijn in het midden uitlijnen

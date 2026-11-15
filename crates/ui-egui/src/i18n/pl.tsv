@@ -2092,6 +2092,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Użyj kompensacji punktu czerni
 	Working CMYK (don't tag)	Roboczy CMYK (bez znacznika)
 	Working RGB (don't tag)	Roboczy RGB (bez znacznika)
+	Don't Color Manage This Document	Nie zarządzaj kolorem tego dokumentu
+	Working RGB: {name}	Roboczy RGB: {name}
+	Working CMYK: {name}	Roboczy CMYK: {name}
 	{name} (spot)	{name} (dodatkowy)
 	Add to Profiles…	Dodaj do profili…
 	Align Stroke to Center	Wyrównaj obrys do środka

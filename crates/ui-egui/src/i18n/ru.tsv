@@ -4077,6 +4077,9 @@ digits	Malayalam	Малаялам
 	Working CMYK	Рабочий CMYK
 	Working CMYK (don't tag)	Рабочий CMYK (без пометки)
 	Working RGB (don't tag)	Рабочий RGB (без пометки)
+	Don't Color Manage This Document	Не управлять цветом этого документа
+	Working RGB: {name}	Рабочий RGB: {name}
+	Working CMYK: {name}	Рабочий CMYK: {name}
 	Workspace	Рабочая среда
 	Workspace {i}	Рабочая среда {i}
 	Wrinkle Tool	Инструмент «Морщины»

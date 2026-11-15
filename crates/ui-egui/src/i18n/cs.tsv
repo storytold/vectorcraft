@@ -2174,6 +2174,9 @@ digits	Malayalam	Malajálamské
 	Use Black Point Compensation	Použít kompenzaci černého bodu
 	Working CMYK (don't tag)	Pracovní CMYK (neoznačovat)
 	Working RGB (don't tag)	Pracovní RGB (neoznačovat)
+	Don't Color Manage This Document	Nespravovat barvy tohoto dokumentu
+	Working RGB: {name}	Pracovní RGB: {name}
+	Working CMYK: {name}	Pracovní CMYK: {name}
 	{name} (spot)	{name} (přímá)
 	Add to Profiles…	Přidat do profilů…
 	Align Stroke to Center	Zarovnat tah na střed

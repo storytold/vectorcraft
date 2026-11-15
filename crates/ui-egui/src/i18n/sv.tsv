@@ -3966,6 +3966,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	Arbets-CMYK
 	Working CMYK (don't tag)	Arbets-CMYK (tagga inte)
 	Working RGB (don't tag)	Arbets-RGB (tagga inte)
+	Don't Color Manage This Document	Färghantera inte det här dokumentet
+	Working RGB: {name}	Arbets-RGB: {name}
+	Working CMYK: {name}	Arbets-CMYK: {name}
 	Workspace	Arbetslayout
 	Workspace {i}	Arbetslayout {i}
 	Wrinkle Tool	Skrynkelverktyg

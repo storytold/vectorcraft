@@ -1903,6 +1903,9 @@ digits	Malayalam	მალაიალამური
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
 	Working RGB (don't tag)	სამუშაო RGB (ტეგის გარეშე)
+	Don't Color Manage This Document	ამ დოკუმენტის ფერების მართვის გარეშე
+	Working RGB: {name}	სამუშაო RGB: {name}
+	Working CMYK: {name}	სამუშაო CMYK: {name}
 	{name} (spot)	{name} (სპოტ)
 	Add to Profiles…	პროფილებში დამატება…
 	Align Stroke to Center	კონტურის ცენტრზე სწორება

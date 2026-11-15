@@ -2583,6 +2583,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Brug sortpunktskompensation
 	Working CMYK (don't tag)	Arbejds-CMYK (mærk ikke)
 	Working RGB (don't tag)	Arbejds-RGB (mærk ikke)
+	Don't Color Manage This Document	Farvestyr ikke dette dokument
+	Working RGB: {name}	Arbejds-RGB: {name}
+	Working CMYK: {name}	Arbejds-CMYK: {name}
 	{name} (spot)	{name} (spotfarve)
 	Add to Profiles…	Tilføj til profiler…
 	Align Stroke to Center	Justér kontur til midten

@@ -4085,6 +4085,9 @@ effect	Points	Точки
 	Working CMYK	Робочий CMYK
 	Working CMYK (don't tag)	Робочий CMYK (без позначки)
 	Working RGB (don't tag)	Робочий RGB (без позначки)
+	Don't Color Manage This Document	Не керувати кольором цього документа
+	Working RGB: {name}	Робочий RGB: {name}
+	Working CMYK: {name}	Робочий CMYK: {name}
 	Workspace	Робоче середовище
 	Workspace {i}	Робоче середовище {i}
 	Wrinkle Tool	Інструмент «Зморшки»

@@ -4786,6 +4786,9 @@ mark-style	Japanese	Japán
 	Working CMYK	Munka-CMYK
 	Working CMYK (don't tag)	Munka-CMYK (címke nélkül)
 	Working RGB (don't tag)	Munka-RGB (címke nélkül)
+	Don't Color Manage This Document	Ne legyen színkezelés ebben a dokumentumban
+	Working RGB: {name}	Munka-RGB: {name}
+	Working CMYK: {name}	Munka-CMYK: {name}
 	Working RGB	Munka-RGB
 	Workspace	Munkaterület
 	Workspace {i}	Munkaterület {i}

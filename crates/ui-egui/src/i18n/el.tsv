@@ -4431,6 +4431,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Width Tool	Πλάτος (Width Tool)
 	Working CMYK (don't tag)	Χώρος εργασίας CMYK (χωρίς ετικέτα)
 	Working RGB (don't tag)	Χώρος εργασίας RGB (χωρίς ετικέτα)
+	Don't Color Manage This Document	Χωρίς διαχείριση χρωμάτων για αυτό το έγγραφο
+	Working RGB: {name}	Χώρος εργασίας RGB: {name}
+	Working CMYK: {name}	Χώρος εργασίας CMYK: {name}
 	Workspace {i}	Χώρος εργασίας {i}
 	Wrinkle Tool	Πτυχώσεις (Wrinkle Tool)
 	Write Layers	Εγγραφή επιπέδων

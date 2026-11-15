@@ -3825,6 +3825,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMYK'de çalışıyor
 	Working CMYK (don't tag)	CMYK çalışıyor (etiketlemeyin)
 	Working RGB (don't tag)	Çalışan RGB (etiketlemeyin)
+	Don't Color Manage This Document	Bu belgede renk yönetimi yapma
+	Working RGB: {name}	Çalışma RGB'si: {name}
+	Working CMYK: {name}	Çalışma CMYK'sı: {name}
 	Workspace	Çalışma Alanı
 	Workspace {i}	Çalışma Alanı {i}
 	Wrinkle Tool	Kırışıklık Aracı

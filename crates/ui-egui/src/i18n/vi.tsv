@@ -4460,6 +4460,9 @@ mark-style	Japanese	Kiểu Nhật
 	Working CMYK	CMYK làm việc
 	Working CMYK (don't tag)	CMYK làm việc (không gắn thẻ)
 	Working RGB (don't tag)	RGB làm việc (không gắn thẻ)
+	Don't Color Manage This Document	Không quản lý màu cho tài liệu này
+	Working RGB: {name}	RGB làm việc: {name}
+	Working CMYK: {name}	CMYK làm việc: {name}
 	Workspace	Không gian làm việc
 	Workspace {i}	Không gian làm việc {i}
 	Wrinkle Tool	Công cụ nhăn

@@ -2143,6 +2143,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Koristi kompenzaciju crne tačke
 	Working CMYK (don't tag)	Radni CMYK (bez oznake)
 	Working RGB (don't tag)	Radni RGB (bez oznake)
+	Don't Color Manage This Document	Ne upravljaj bojama ovog dokumenta
+	Working RGB: {name}	Radni RGB: {name}
+	Working CMYK: {name}	Radni CMYK: {name}
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Dodaj u profile…
 	Align Stroke to Center	Poravnaj potez po sredini

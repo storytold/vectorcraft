@@ -3953,6 +3953,9 @@ digits	Malayalam	Малаялам
 	Working CMYK	Работен CMYK
 	Working CMYK (don't tag)	Работен CMYK (без етикет)
 	Working RGB (don't tag)	Работен RGB (без етикет)
+	Don't Color Manage This Document	Без управление на цветовете за този документ
+	Working RGB: {name}	Работен RGB: {name}
+	Working CMYK: {name}	Работен CMYK: {name}
 	Workspace	Работно пространство
 	Workspace {i}	Работно пространство {i}
 	Wrinkle Tool	Инструмент „Набръчкване“
