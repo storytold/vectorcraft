@@ -4717,6 +4717,12 @@ theme	Appearance	Erscheinungsbild
 @msg	no PNG encoder	kein PNG-Encoder
 @msg	no active document	kein aktives Dokument
 @msg	no active perspective plane	keine aktive Perspektivebene
+@msg	the perspective grid is hidden	das Perspektivenraster ist ausgeblendet
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Die automatische Ebenenpositionierung ist ausgeschaltet: Schalten Sie anchorPoint oder gridlineIntersection ein (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint muss true oder false sein
+@msg	gridlineIntersection must be true or false	gridlineIntersection muss true oder false sein
+@msg	tolerance must be 0 or more	tolerance muss 0 oder größer sein
+@msg	give `at` or `clear`, not both	geben Sie `at` oder `clear` an, nicht beides
 @msg	no anchor points selected	keine Ankerpunkte ausgewählt
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien
 @msg	no artboard	keine Zeichenfläche

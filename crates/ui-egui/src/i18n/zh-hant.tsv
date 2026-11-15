@@ -2388,6 +2388,12 @@ file-filter	Templates	範本
 @msg	no preset editor	沒有預設集編輯器
 @msg	no perspective grid preset named `{name}`	沒有名為 `{name}` 的透視格點預設集
 @msg	no active perspective plane	沒有作用中的透視平面
+@msg	the perspective grid is hidden	透視格點已隱藏
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	自動平面定位已關閉：請開啟 anchorPoint 或 gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint 必須是 true 或 false
+@msg	gridlineIntersection must be true or false	gridlineIntersection 必須是 true 或 false
+@msg	tolerance must be 0 or more	tolerance 必須大於或等於 0
+@msg	give `at` or `clear`, not both	請提供 `at` 或 `clear`，不能同時提供兩者
 @msg	plane must be left, right or ground	plane 必須是 left、right 或 ground
 @msg	missing `id` (see plugin.list)	未提供 `id` (請參閱 plugin.list)
 @msg	no plug-in {id} is installed	未安裝增效模組 {id}

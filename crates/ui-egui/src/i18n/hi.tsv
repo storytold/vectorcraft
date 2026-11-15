@@ -7413,6 +7413,12 @@ antiAlias	Sharp	शार्प
 @msg	no active data set	कोई सक्रिय डेटा सेट नहीं
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
+@msg	the perspective grid is hidden	पर्सपेक्टिव ग्रिड छिपा हुआ है
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	स्वचालित प्लेन पोज़िशनिंग बंद है: anchorPoint या gridlineIntersection चालू करें (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint को true या false होना चाहिए
+@msg	gridlineIntersection must be true or false	gridlineIntersection को true या false होना चाहिए
+@msg	tolerance must be 0 or more	tolerance को 0 या अधिक होना चाहिए
+@msg	give `at` or `clear`, not both	`at` या `clear` दें, दोनों नहीं
 @msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है
 @msg	no appearance item {index}	कोई उपस्थिति आइटम {index}

@@ -5273,6 +5273,12 @@ imageTrace	Outline	Kontur
 @msg	no PNG encoder	ingen PNG-encoder
 @msg	no active document	intet aktivt dokument
 @msg	no active perspective plane	intet aktivt perspektivplan
+@msg	the perspective grid is hidden	perspektivgitteret er skjult
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatisk placering af plan er slået fra: slå anchorPoint eller gridlineIntersection til (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint skal være true eller false
+@msg	gridlineIntersection must be true or false	gridlineIntersection skal være true eller false
+@msg	tolerance must be 0 or more	tolerance skal være 0 eller mere
+@msg	give `at` or `clear`, not both	angiv `at` eller `clear`, ikke begge
 @msg	no anchor points selected	ingen ankerpunkter er markeret
 @msg	no app to open files here	ingen app til at åbne filer her
 @msg	no artboard	ingen tegneflade

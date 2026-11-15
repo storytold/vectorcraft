@@ -4742,6 +4742,12 @@ imageTrace	Outline	轮廓
 @msg	no preset editor	没有预设编辑器
 @msg	no perspective grid preset named `{name}`	没有名为 `{name}` 的透视网格预设
 @msg	no active perspective plane	没有活动的透视平面
+@msg	the perspective grid is hidden	透视网格已隐藏
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	自动平面定位已关闭：请打开 anchorPoint 或 gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint 必须为 true 或 false
+@msg	gridlineIntersection must be true or false	gridlineIntersection 必须为 true 或 false
+@msg	tolerance must be 0 or more	tolerance 必须大于或等于 0
+@msg	give `at` or `clear`, not both	请给出 `at` 或 `clear`，不能两者都给
 @msg	plane must be left, right or ground	plane 必须是 left、right 或 ground
 @msg	missing `id` (see plugin.list)	缺少 `id` (请参阅 plugin.list)
 @msg	no plug-in {id} is installed	未安装增效工具 {id}

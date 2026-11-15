@@ -4843,6 +4843,12 @@ axis	Both	Оба
 @msg	no PNG encoder	нет кодера PNG
 @msg	no active document	нет активного документа
 @msg	no active perspective plane	нет активной плоскости перспективы
+@msg	the perspective grid is hidden	сетка перспективы скрыта
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Автоматическое размещение плоскости выключено: включите anchorPoint или gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint должно быть true или false
+@msg	gridlineIntersection must be true or false	gridlineIntersection должно быть true или false
+@msg	tolerance must be 0 or more	tolerance должно быть 0 или больше
+@msg	give `at` or `clear`, not both	укажите `at` или `clear`, но не оба
 @msg	no anchor points selected	опорные точки не выделены
 @msg	no app to open files here	здесь нет приложения для открытия файлов
 @msg	no artboard	нет монтажной области

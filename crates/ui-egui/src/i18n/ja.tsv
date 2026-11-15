@@ -5061,6 +5061,12 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no preset editor	プリセットの編集ダイアログが開いていません
 @msg	no perspective grid preset named `{name}`	`{name}` という名前の遠近グリッドプリセットが見つかりません
 @msg	no active perspective plane	アクティブな遠近面がありません
+@msg	the perspective grid is hidden	遠近グリッドが非表示になっています
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	遠近面の自動配置がオフになっています: anchorPoint または gridlineIntersection をオンにしてください (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint には true または false を指定してください
+@msg	gridlineIntersection must be true or false	gridlineIntersection には true または false を指定してください
+@msg	tolerance must be 0 or more	tolerance には 0 以上の値を指定してください
+@msg	give `at` or `clear`, not both	`at` または `clear` のどちらか一方を指定してください
 @msg	plane must be left, right or ground	plane には left、right、ground のいずれかを指定してください
 @msg	missing `id` (see plugin.list)	`id` が指定されていません (plugin.list を参照)
 @msg	no plug-in {id} is installed	プラグイン {id} はインストールされていません

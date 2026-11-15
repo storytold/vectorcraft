@@ -4763,6 +4763,12 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no PNG encoder	δεν υπάρχει κωδικοποιητής PNG
 @msg	no active document	δεν υπάρχει ενεργό έγγραφο
 @msg	no active perspective plane	δεν υπάρχει ενεργό επίπεδο προοπτικής
+@msg	the perspective grid is hidden	το πλέγμα προοπτικής είναι κρυφό
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Η αυτόματη τοποθέτηση επιπέδου είναι απενεργοποιημένη: ενεργοποιήστε το anchorPoint ή το gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	το anchorPoint πρέπει να είναι true ή false
+@msg	gridlineIntersection must be true or false	το gridlineIntersection πρέπει να είναι true ή false
+@msg	tolerance must be 0 or more	το tolerance πρέπει να είναι 0 ή μεγαλύτερο
+@msg	give `at` or `clear`, not both	δώστε `at` ή `clear`, όχι και τα δύο
 @msg	no anchor points selected	δεν έχουν επιλεγεί σημεία αγκύρωσης
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ
 @msg	no artboard	δεν υπάρχει πίνακας σχεδίασης

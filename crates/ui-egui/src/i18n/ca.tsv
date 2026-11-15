@@ -5942,6 +5942,12 @@ digits	Malayalam	Malaiàlam
 @msg	New Window isn't available yet: a document opens in one window	Finestra nova encara no està disponible: un document s’obre en una sola finestra
 @msg	no active document	no hi ha cap document actiu
 @msg	no active perspective plane	no hi ha cap pla de perspectiva actiu
+@msg	the perspective grid is hidden	la quadrícula de perspectiva està oculta
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	El posicionament automàtic del pla està desactivat: activeu anchorPoint o gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint ha de ser true o false
+@msg	gridlineIntersection must be true or false	gridlineIntersection ha de ser true o false
+@msg	tolerance must be 0 or more	tolerance ha de ser 0 o més
+@msg	give `at` or `clear`, not both	indiqueu `at` o `clear`, no tots dos
 @msg	no anchor points selected	no hi ha cap punt d’ancoratge seleccionat
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers
 @msg	no artboard	no hi ha tauler

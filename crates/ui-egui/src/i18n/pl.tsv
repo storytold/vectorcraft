@@ -4936,6 +4936,12 @@ imageTrace	Outline	Kontur
 @msg	no PNG encoder	brak kodera PNG
 @msg	no active document	brak aktywnego dokumentu
 @msg	no active perspective plane	brak aktywnej płaszczyzny perspektywy
+@msg	the perspective grid is hidden	siatka perspektywy jest ukryta
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatyczne pozycjonowanie płaszczyzny jest wyłączone: włącz anchorPoint lub gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint musi mieć wartość true lub false
+@msg	gridlineIntersection must be true or false	gridlineIntersection musi mieć wartość true lub false
+@msg	tolerance must be 0 or more	tolerance musi wynosić 0 lub więcej
+@msg	give `at` or `clear`, not both	podaj `at` albo `clear`, nie oba naraz
 @msg	no anchor points selected	nie zaznaczono punktów kontrolnych
 @msg	no app to open files here	brak aplikacji do otwierania plików
 @msg	no artboard	brak obszaru kompozycji

@@ -4988,6 +4988,12 @@ theme	Appearance	외관
 @msg	no preset editor	프리셋 편집기가 없습니다
 @msg	no perspective grid preset named `{name}`	`{name}`이라는 원근 격자 프리셋이 없습니다
 @msg	no active perspective plane	활성 원근 평면이 없습니다
+@msg	the perspective grid is hidden	원근 격자가 숨겨져 있습니다
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	자동 평면 배치가 꺼져 있습니다: anchorPoint 또는 gridlineIntersection을 켜세요 (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint는 true 또는 false여야 합니다
+@msg	gridlineIntersection must be true or false	gridlineIntersection은 true 또는 false여야 합니다
+@msg	tolerance must be 0 or more	tolerance는 0 이상이어야 합니다
+@msg	give `at` or `clear`, not both	`at`과 `clear` 중 하나만 지정하세요
 @msg	plane must be left, right or ground	plane은 left, right 또는 ground여야 합니다
 @msg	missing `id` (see plugin.list)	`id`가 없습니다(plugin.list 참조)
 @msg	no plug-in {id} is installed	플러그인 {id}이(가) 설치되어 있지 않습니다

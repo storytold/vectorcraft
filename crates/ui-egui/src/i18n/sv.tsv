@@ -4707,6 +4707,12 @@ axis	Both	Båda
 @msg	no PNG encoder	ingen PNG-kodare
 @msg	no active document	inget aktivt dokument
 @msg	no active perspective plane	inget aktivt perspektivplan
+@msg	the perspective grid is hidden	perspektivrutnätet är dolt
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatisk planplacering är avstängd: slå på anchorPoint eller gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint måste vara true eller false
+@msg	gridlineIntersection must be true or false	gridlineIntersection måste vara true eller false
+@msg	tolerance must be 0 or more	tolerance måste vara 0 eller mer
+@msg	give `at` or `clear`, not both	ange `at` eller `clear`, inte båda
 @msg	no anchor points selected	inga ankarpunkter är markerade
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta

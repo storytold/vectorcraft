@@ -3813,6 +3813,55 @@ fn dataset_import_repeated_column_error_is_translated() {
     }
 }
 
+/// The errors of Automatic Plane Positioning (`perspective.plane.infer`) and of its two options
+/// (`perspective.widget.options`) have their own row in every language that translates every
+/// message, and the status bar shows them translated with the parameter names kept.
+#[test]
+fn automatic_plane_positioning_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let mut errors = vec![];
+    for (cmd, p, want, kept) in [
+        ("perspective.plane.infer", json!({"at": [0, 0], "tolerance": -1}), "tolerance must be 0 or more", &["tolerance"][..]),
+        ("perspective.plane.infer", json!({"at": [0, 0], "clear": true}), "give `at` or `clear`, not both", &["`at`", "`clear`"][..]),
+        ("perspective.widget.options", json!({"anchorPoint": "yes"}), "anchorPoint must be true or false", &["anchorPoint"][..]),
+        (
+            "perspective.widget.options",
+            json!({"gridlineIntersection": 1}),
+            "gridlineIntersection must be true or false",
+            &["gridlineIntersection"][..],
+        ),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+        errors.push((e.to_string(), want, kept));
+    }
+    s.execute("perspective.grid.show", &json!({"visible": false})).unwrap();
+    let hidden = "the perspective grid is hidden";
+    let e = s.execute("perspective.plane.infer", &json!({"at": [0, 0]})).unwrap_err();
+    assert!(matches!(&e, EngineError::Other(msg) if msg == hidden), "{e}");
+    errors.push((e.to_string(), hidden, &[][..]));
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "ground"})).unwrap();
+    s.execute("perspective.widget.options", &json!({"anchorPoint": false, "gridlineIntersection": false})).unwrap();
+    let off = "Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)";
+    let e = s.execute("perspective.plane.infer", &json!({"at": [0, 0]})).unwrap_err();
+    assert!(matches!(&e, EngineError::Other(msg) if msg == off), "{e}");
+    errors.push((e.to_string(), off, &["anchorPoint", "gridlineIntersection", "(perspective.widget.options)"][..]));
+    let literals = message_literals();
+    for (e, want, kept) in &errors {
+        assert!(literals.contains(*want), "{want}");
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            assert!(lang.catalog().exact_message(want).is_some(), "{code} has no row for {want}");
+            let shown = message(lang, e);
+            assert!(!shown.contains(want) && kept.iter().all(|k| shown.contains(k)), "{code}: {shown}");
+        }
+    }
+}
+
 /// The scan reads the refusals `script.run`'s `param(msg)` gives, and not the arguments of a type's
 /// own function of that name.
 #[test]

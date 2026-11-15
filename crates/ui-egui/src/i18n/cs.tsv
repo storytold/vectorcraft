@@ -5113,6 +5113,12 @@ imageTrace	Outline	Obrys
 @msg	no PNG encoder	chybí kodér PNG
 @msg	no active document	žádný aktivní dokument
 @msg	no active perspective plane	žádná aktivní perspektivní rovina
+@msg	the perspective grid is hidden	perspektivní mřížka je skrytá
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatické umístění roviny je vypnuté: zapněte anchorPoint nebo gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint musí být true nebo false
+@msg	gridlineIntersection must be true or false	gridlineIntersection musí být true nebo false
+@msg	tolerance must be 0 or more	tolerance musí být 0 nebo více
+@msg	give `at` or `clear`, not both	zadejte `at` nebo `clear`, ne obojí
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha

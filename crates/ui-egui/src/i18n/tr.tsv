@@ -4539,6 +4539,12 @@ axis	Both	Her İkisi
 @msg	no PNG encoder	PNG kodlayıcı yok
 @msg	no active document	etkin belge yok
 @msg	no active perspective plane	aktif perspektif düzlemi yok
+@msg	the perspective grid is hidden	perspektif ızgarası gizli
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Otomatik düzlem konumlandırma kapalı: anchorPoint veya gridlineIntersection seçeneğini açın (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint true veya false olmalıdır
+@msg	gridlineIntersection must be true or false	gridlineIntersection true veya false olmalıdır
+@msg	tolerance must be 0 or more	tolerance 0 veya daha büyük olmalıdır
+@msg	give `at` or `clear`, not both	`at` veya `clear` verin, ikisini birden değil
 @msg	no anchor points selected	bağlantı noktası seçilmedi
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok

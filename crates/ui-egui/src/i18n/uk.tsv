@@ -4831,6 +4831,12 @@ axis	Both	Обидві
 @msg	no PNG encoder	немає кодера PNG
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
+@msg	the perspective grid is hidden	сітку перспективи приховано
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Автоматичне розміщення площини вимкнено: увімкніть anchorPoint або gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint має бути true або false
+@msg	gridlineIntersection must be true or false	gridlineIntersection має бути true або false
+@msg	tolerance must be 0 or more	tolerance має бути 0 або більше
+@msg	give `at` or `clear`, not both	укажіть `at` або `clear`, але не обидва
 @msg	no anchor points selected	опорні точки не виділені
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області

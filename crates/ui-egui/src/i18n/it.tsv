@@ -4847,6 +4847,12 @@ axis	Both	Entrambi
 @msg	no PNG encoder	nessun codificatore PNG
 @msg	no active document	nessun documento attivo
 @msg	no active perspective plane	nessun piano prospettico attivo
+@msg	the perspective grid is hidden	la griglia prospettica è nascosta
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Il posizionamento automatico del piano è disattivato: attiva anchorPoint o gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint deve essere true o false
+@msg	gridlineIntersection must be true or false	gridlineIntersection deve essere true o false
+@msg	tolerance must be 0 or more	tolerance deve essere 0 o maggiore
+@msg	give `at` or `clear`, not both	indica `at` o `clear`, non entrambi
 @msg	no anchor points selected	nessun punto di ancoraggio selezionato
 @msg	no app to open files here	nessuna app per aprire file qui
 @msg	no artboard	nessuna tavola da disegno
