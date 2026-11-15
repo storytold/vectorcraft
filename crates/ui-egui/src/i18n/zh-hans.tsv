@@ -7927,6 +7927,7 @@ breakText	Glyphs	字形
 @msg	Image Trace failed: {e}	图像描摹失败：{e}
 @msg	Image Trace finished, but its document was closed	图像描摹已完成，但其文档已关闭
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	图像描摹已完成，但图像或其设置在此期间发生了更改：请重新描摹
+@msg	Image Trace finished, but its document was reverted: trace it again	图像描摹已完成，但其文档已恢复：请重新描摹
 @msg	Invalid dimension offset	尺寸标注的偏移无效
 @msg	Invalid point	点无效
 @msg	Join: a subpath went missing	连接：有一条子路径丢失

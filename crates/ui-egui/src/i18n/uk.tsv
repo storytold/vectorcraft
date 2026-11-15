@@ -7410,6 +7410,7 @@ breakText	Glyphs	Гліфи
 @msg	Image Trace failed: {e}	Трасування зображення не вдалося: {e}
 @msg	Image Trace finished, but its document was closed	Трасування зображення завершено, але його документ закрито
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Трасування зображення завершено, але зображення або його параметри тим часом змінилися: виконайте трасування ще раз
+@msg	Image Trace finished, but its document was reverted: trace it again	Трасування зображення завершено, але його документ було повернуто до збереженої версії: виконайте трасування ще раз
 @msg	Import SVG Filter reads SVG files, not SVGZ	Імпорт фільтра SVG читає файли SVG, а не SVGZ
 @msg	Invalid dimension offset	Неприпустиме зміщення розміру
 @msg	Invalid point	Неприпустима точка

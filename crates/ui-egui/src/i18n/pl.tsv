@@ -7943,6 +7943,7 @@ breakText	Glyphs	Glify
 @msg	Image Trace failed: {e}	Obrys obrazu nie powiódł się: {e}
 @msg	Image Trace finished, but its document was closed	Obrys obrazu został ukończony, ale jego dokument został zamknięty
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Obrys obrazu został ukończony, ale obraz lub jego ustawienia zmieniły się w międzyczasie: obrysuj go ponownie
+@msg	Image Trace finished, but its document was reverted: trace it again	Obrys obrazu został ukończony, ale jego dokument został przywrócony: obrysuj go ponownie
 @msg	Join: a subpath went missing	Połącz: brakuje ścieżki podrzędnej
 @msg	Lock Workspace is not available in VectorCraft	Polecenie Zablokuj obszar roboczy nie jest dostępne w programie VectorCraft
 @msg	Move Panel to New Window is not available: floating panels stay in the main window	Polecenie Przenieś panel do nowego okna nie jest dostępne: panele pływające pozostają w oknie głównym

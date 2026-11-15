@@ -7650,6 +7650,7 @@ breakText	Glyphs	Glyphen
 @msg	Image Trace failed: {e}	Bildnachzeichner fehlgeschlagen: {e}
 @msg	Image Trace finished, but its document was closed	Bildnachzeichner abgeschlossen, aber sein Dokument wurde geschlossen
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Bildnachzeichner abgeschlossen, aber das Bild oder seine Einstellungen haben sich inzwischen geändert: Zeichnen Sie es erneut nach
+@msg	Image Trace finished, but its document was reverted: trace it again	Bildnachzeichner abgeschlossen, aber sein Dokument wurde auf die letzte Version zurückgesetzt: Zeichnen Sie es erneut nach
 @msg	Invalid dimension offset	Ungültiger Bemaßungsversatz
 @msg	Invalid point	Ungültiger Punkt
 @msg	Join: a subpath went missing	Zusammenfügen: Ein Teilpfad ist verloren gegangen

@@ -5726,6 +5726,7 @@ imageTrace	Outline	Contour
 @msg	Image Trace failed: {e}	Afbeelding traceren is mislukt: {e}
 @msg	Image Trace finished, but its document was closed	Afbeelding traceren is voltooid, maar het document ervan is gesloten
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Afbeelding traceren is voltooid, maar de afbeelding of de instellingen ervan zijn intussen gewijzigd: traceer de afbeelding opnieuw
+@msg	Image Trace finished, but its document was reverted: trace it again	Afbeelding traceren is voltooid, maar het document ervan is teruggezet: traceer de afbeelding opnieuw
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG-filter importeren leest SVG-bestanden, geen SVGZ
 @msg	Invalid dimension offset	Ongeldige verschuiving van de maatlijn
 @msg	Invalid point	Ongeldig punt

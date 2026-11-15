@@ -7866,6 +7866,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	Image Trace failed: {e}	O Rastreamento de Imagem falhou: {e}
 @msg	Image Trace finished, but its document was closed	O Rastreamento de Imagem terminou, mas o documento dele foi fechado
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	O Rastreamento de Imagem terminou, mas a imagem ou as configurações dela mudaram nesse meio-tempo: rastreie-a novamente
+@msg	Image Trace finished, but its document was reverted: trace it again	O Rastreamento de Imagem terminou, mas o documento dele foi revertido: rastreie-a novamente
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importar Filtro SVG lê arquivos SVG, não SVGZ
 @msg	Invalid dimension offset	Deslocamento de cota inválido
 @msg	Invalid point	Ponto inválido
