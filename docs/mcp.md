@@ -8347,21 +8347,44 @@ flat image. The rest are VectorCraft's own rules:
 - `file.place.queue` and `file.place.info` take `layers` and `hiddenLayers` too.
 
 `document.psdInfo` reads a PSD or PSB file without opening it: its `format` (`psd` or `psb`), the canvas `width`
-and `height` in pixels, and the counts `layers` (group markers left out), `hiddenLayers` and `groups`. A file
-without layer records, or whose layer records can't be read, has `layers: 0`. A file that is not a PSD or PSB file
-is an error.
+and `height` in pixels, and the counts `layers` (group markers left out), `hiddenLayers`, `groups` and `slices`
+(the slices `importSlices` brings in). A file without layer records, or whose layer records can't be read, has
+`layers: 0`; a file without slices, or whose slices can't be read, has `slices: 0`. A file that is not a PSD or PSB
+file is an error.
 
-In the app, File › Open of a PSD or PSB file with two or more layers shows PSD Import Options: Convert Layers to
-Objects (with Import Hidden Layers) or Flatten Layers to a Single Image. File › Place shows the same dialog for
-such a file placed without Link, and so does a file dropped on the canvas with Shift held. The dialog starts from
-the choices made last, at first Convert Layers to Objects without hidden layers. A file with fewer than two
-layers, a file placed with Link, and `document.open` and `file.place` run as commands don't show it. Several files
-placed together without Link load the place cursor without asking, and each PSD or PSB file among them comes in
-with the choices made last.
+`importSlices` brings a PSD or PSB file's slices in as user slices (Object › Slice), which Save for Web exports.
+The [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
+keep the slices a file holds, and offer it only for a file that is opened or embedded. The slices are read from
+image resource 1050 as the
+[Photoshop File Formats Specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/) describes it,
+in version 6 and in the descriptor of versions 7 and 8. The rest are VectorCraft's own rules:
+
+- `document.open` takes `importSlices`, default true, with the layers as objects and with `layers: false` alike.
+  The slices lie over the canvas, each clipped to it.
+- `file.place` takes `importSlices`, default true when the file is embedded and false when it is linked;
+  `importSlices: true` with a linked file is an error. The slices move and scale with the placed art, in the same
+  undo step, and the reply lists their ids in `slices`. `file.place.info` counts them in `slices`, and
+  `file.place.queue` takes `importSlices` too.
+- Each slice keeps its name, its type (Image or No Image), its link, target, message, alternative text and
+  background color, and a No Image slice keeps its cell text (plain text escaped as HTML). Text alignment isn't
+  read. A slice that follows a layer comes in as a user slice over the rectangle the file stores for it.
+- Slices the file generated automatically are left out: the document lays out its own auto slices around the
+  others. A slice wholly outside the canvas, or without a size, is left out with a warning, and so are slices that
+  can't be read; the file's art comes in either way. A file without slices brings no warning.
+
+In the app, File › Open of a PSD or PSB file with two or more layers, or with slices, shows PSD Import Options:
+Convert Layers to Objects (with Import Hidden Layers) or Flatten Layers to a Single Image, and Import Slices, which
+is offered only for a file with slices and applies to either choice. File › Place shows the same dialog for such a
+file placed without Link, and so does a file dropped on the canvas with Shift held. The dialog starts from the
+choices made last, at first Convert Layers to Objects without hidden layers, with Import Slices. A file with fewer
+than two layers and no slices, a file placed with Link, and `document.open` and `file.place` run as commands don't
+show it. Several files placed together without Link load the place cursor without asking, and each PSD or PSB file
+among them comes in with the choices made last.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/poster.psd","layers":true,"hiddenLayers":true}}}
 {"name":"run_command","arguments":{"command":"document.psdInfo","params":{"path":"/tmp/poster.psd"}}}
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/poster.psd","importSlices":false}}}
 ```
 
 A PSD or PSB file that names a clipping path (the saved path its clipping path resource names, in the

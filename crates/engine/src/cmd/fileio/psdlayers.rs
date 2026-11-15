@@ -1551,10 +1551,13 @@ pub struct PsdInfo {
     pub hidden: usize,
     /// The layer groups.
     pub groups: usize,
+    /// The slices that come in with `importSlices` (those generated automatically, and those
+    /// outside the canvas, left out).
+    pub slices: usize,
 }
 
-/// What PSD or PSB file `bytes` holds, read from its header and layer records without decoding any
-/// pixels. A file without layer records, or whose layer records can't be read, has no layers: it
+/// What PSD or PSB file `bytes` holds, read from its header, its slices and its layer records
+/// without decoding any pixels. A file without layer records, or whose layer records can't be read, has no layers: it
 /// opens and places as its merged image.
 pub fn info(bytes: &[u8]) -> Result<PsdInfo, String> {
     let mut r = Reader::new(bytes);
@@ -1568,6 +1571,7 @@ pub fn info(bytes: &[u8]) -> Result<PsdInfo, String> {
         layers: layers.clone().count(),
         hidden: layers.filter(|r| r.hidden).count(),
         groups: records.iter().filter(|r| matches!(r.divider, 1 | 2)).count(),
+        slices: super::psdslices::count(bytes),
     })
 }
 
@@ -1584,5 +1588,6 @@ pub(super) fn psd_info(_: &mut Session, p: &Value) -> crate::cmd::Result<Value> 
         "layers": i.layers,
         "hiddenLayers": i.hidden,
         "groups": i.groups,
+        "slices": i.slices,
     }))
 }

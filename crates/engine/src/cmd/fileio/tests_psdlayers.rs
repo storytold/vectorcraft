@@ -1191,7 +1191,7 @@ fn psd_info_counts_the_layers_without_opening_the_file() {
     let mut s = Session::new();
     let info = |s: &mut Session, f: &[u8]| s.execute("document.psdInfo", &json!({"dataBase64": vectorcraft_format::base64_encode(f)}));
     let r = info(&mut s, &file(8, 8, &stack(), 8, false, false)).unwrap();
-    assert_eq!(r, json!({"format": "psd", "width": 8, "height": 8, "layers": 5, "hiddenLayers": 1, "groups": 2}));
+    assert_eq!(r, json!({"format": "psd", "width": 8, "height": 8, "layers": 5, "hiddenLayers": 1, "groups": 2, "slices": 0}));
     let r = info(&mut s, &file(4, 2, &[layer("x", [0, 0, 2, 2], [9, 9, 9, 255])], 16, true, true)).unwrap();
     assert_eq!((&r["format"], &r["width"], &r["height"], &r["layers"]), (&json!("psb"), &json!(4), &json!(2), &json!(1)), "{r}");
     // Layer records that can't be read count as no layers: the file opens as its merged image.

@@ -819,7 +819,7 @@ pub struct UiState {
     /// never used).
     #[serde(default)]
     pub dxf_import: Value,
-    /// The PSD Import Options chosen last (layers, hiddenLayers; null: never used).
+    /// The PSD Import Options chosen last (layers, hiddenLayers, importSlices; null: never used).
     #[serde(default)]
     pub psd_import: Value,
     /// The Home screen is shown over the open documents (`app.home`): the active document's uid

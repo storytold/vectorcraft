@@ -152,8 +152,9 @@ fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, 
     if crate::dialogs::dxf_import::offer_place(app, p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
     }
-    // A PSD file with several layers that the user embeds asks for its import options. A place
-    // run as a command (MCP, scripts) places at once and takes `layers` itself.
+    // A PSD file with several layers or with slices that the user embeds asks for its import
+    // options. A place run as a command (MCP, scripts) places at once and takes `layers` and
+    // `importSlices` itself.
     if matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, p) {
         return Ok(json!({ "dialog": crate::dialogs::psd_import::KIND }));
     }
