@@ -5200,6 +5200,8 @@ effect	Soft	Меко
 	Step up or down	Стъпка нагоре или надолу
 	Drag values or labels. Double-click a value to type.	Плъзнете стойности или етикети. Кликнете двукратно върху стойност за въвеждане.
 	Drag rings to rotate. Shift snaps to 15°.	Плъзнете пръстените за завъртане. Shift прилепва към 15°.
+	Track cube	Куб за завъртане
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Плъзнете стена, ръб или пръстена за завъртане. Shift завърта около една ос на екрана.
 	Drag the light, or its rings. Shift snaps to 15°.	Плъзнете светлината или нейните пръстени. Shift прилепва към 15°.
 	Keep visible surfaces only when expanding	Запазване само на видимите повърхности при разширяване
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Изрязване на закритата геометрия при разширяване на оформлението. Живият преглед запазва цялата повърхност. Прозрачните бои и повърхности, надвишаващи границите на видимост, запазват всички лица.
