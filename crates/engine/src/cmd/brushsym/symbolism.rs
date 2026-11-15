@@ -281,7 +281,8 @@ impl Grid {
 /// Symbol Set Density `to` packs them, from the density each set was created at or last given
 /// (`from` for a set without one): each instance moves along the line from the middle of its set's
 /// instances, to [`spacing`]`(to) / `[`spacing`]` of the set's density` of its distance from it.
-/// The sets moved then have density `to`. One undo step, and none when no instance moves.
+/// Every selected set then has density `to`, also one whose instances do not move. One undo step,
+/// and none when no instance moves and every set already has density `to`.
 pub(super) fn symbol_set_density(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "symbol.setDensity";
     let density = |key: &str| match p.get(key) {
@@ -311,10 +312,17 @@ pub(super) fn symbol_set_density(s: &mut Session, p: &Value) -> Result<Value> {
     let mut changed: Vec<NodeId> = vec![];
     for set in &sets {
         // A set packs from the density it was created at or last given, else from `from`.
-        let ratio = spacing(to) / spacing(set_density_of(d, *set).unwrap_or(from));
+        let own = set_density_of(d, *set);
+        let ratio = spacing(to) / spacing(own.unwrap_or(from));
+        // A set takes density `to` even when none of its instances moves (one instance, or each
+        // locked or on top of the others), so a later change packs it from `to`.
+        let restamp = own != Some(to);
         let centers: Vec<(NodeId, Point)> =
             d.node(*set).and_then(|n| n.children()).into_iter().flatten().filter_map(|c| Some((c.id, instance_center(c)?))).collect();
         if centers.len() < 2 {
+            if restamp {
+                changed.push(*set);
+            }
             continue;
         }
         let middle = (centers.iter().fold(Vec2::ZERO, |sum, (_, c)| sum + c.to_vec2()) / centers.len() as f64).to_point();
@@ -323,12 +331,12 @@ pub(super) fn symbol_set_density(s: &mut Session, p: &Value) -> Result<Value> {
         moves.extend(
             centers.iter().filter(|(id, _)| editable(*id)).map(|(id, c)| (*id, (*c - middle) * (ratio - 1.0))).filter(|(_, v)| v.hypot() > 1e-9),
         );
-        if moves.len() > before {
+        if moves.len() > before || restamp {
             changed.push(*set);
         }
     }
     drop(editable);
-    if !moves.is_empty() {
+    if !changed.is_empty() {
         s.edit("Symbol Set Density", |d, _| {
             for (id, v) in &moves {
                 if let Some(n) = d.node_mut(*id) {

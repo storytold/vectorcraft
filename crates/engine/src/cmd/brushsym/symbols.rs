@@ -1202,7 +1202,9 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                             None => {
                                 let cur = n.appearance.fill().filter(|f| f.paint == paint).map(|f| f.opacity).unwrap_or(0.0);
                                 let step = match (tool.as_str(), method) {
-                                    ("style", Method::Random) => (share / 2.0) as f32,
+                                    // Random: the instance's share of the style, scaled by the
+                                    // brush strength there.
+                                    ("style", Method::Random) => (share / 2.0 * w.min(1.0)) as f32,
                                     ("style", _) => 1.0,
                                     _ => (0.15 * w * share) as f32,
                                 };

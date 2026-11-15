@@ -191,6 +191,24 @@ fn random_changes_each_instance_by_its_own_share() {
     assert_eq!(grown(Some("random")), random);
 }
 
+/// With Method Random the Symbol Styler gives each instance its share of the style scaled by the
+/// brush strength: at Intensity 1 a tenth of what it gives at Intensity 10.
+#[test]
+fn random_style_follows_the_brush_strength() {
+    let styled = |intensity: u32| {
+        let mut s = session();
+        let ids = [(200.0, 150.0), (201.0, 150.0), (200.0, 151.0), (199.0, 150.0), (200.0, 149.0)].map(|(x, y)| dot(&mut s, x, y));
+        let p = json!({"tool": "style", "points": [[200, 150]], "radius": 1000, "intensity": intensity, "method": "random", "color": "#ff0000"});
+        adjust(&mut s, p);
+        ids.map(|id| f64::from(node(&s, id).appearance.fill().map_or(0.0, |f| f.opacity)))
+    };
+    let (full, low) = (styled(10), styled(1));
+    assert!(full.iter().any(|o| *o > 0.05), "{full:?}");
+    for (f, l) in full.iter().zip(&low) {
+        assert!((l - f * 0.1).abs() < 1e-3, "{low:?} against {full:?}");
+    }
+}
+
 /// A `method` that is none of the three is an error and changes nothing; the Symbol Shifter takes
 /// one and shifts as it does without.
 #[test]
@@ -456,15 +474,11 @@ fn set_density_spaces_the_instances_of_a_symbol_set() {
     let r = s.execute("symbol.setDensity", &json!({"from": 9, "to": 5, "ids": [set.0, set.0]})).unwrap();
     assert_eq!(r, json!({"ids": [set.0], "count": 8}));
     assert!(centers(&s).iter().zip(&was).all(|(a, b)| a.distance(*b) < 1e-9));
-    // The density the set has (5, a `from` of 7 notwithstanding), or a set of one instance: no
-    // instance moves and no undo step is added.
+    // The density the set has (5, a `from` of 7 notwithstanding): no instance moves and no undo
+    // step is added.
     let steps = undo_len(&s);
     assert_eq!(s.execute("symbol.setDensity", &json!({"from": 7, "to": 5})).unwrap(), json!({"ids": [], "count": 0}));
-    s.select(|_, sel| sel.clear()).unwrap();
-    let one = NodeId(s.execute("symbol.spray", &json!({"name": "Dot", "points": [[300, 40]]})).unwrap()["id"].as_u64().unwrap());
-    let steps_with_one = undo_len(&s);
-    assert_eq!(s.execute("symbol.setDensity", &json!({"from": 1, "to": 10, "ids": [one.0]})).unwrap(), json!({"ids": [], "count": 0}));
-    assert_eq!((steps_with_one, undo_len(&s)), (steps + 1, steps + 1));
+    assert_eq!(undo_len(&s), steps);
     // Undo puts a spaced set back.
     s.execute("symbol.setDensity", &json!({"from": 5, "to": 1, "id": set.0})).unwrap();
     assert!(centers(&s)[0].distance(was[0]) > 1.0);
@@ -506,6 +520,31 @@ fn set_density_starts_from_the_density_a_set_was_sprayed_at() {
     .unwrap();
     s.execute("symbol.setDensity", &json!({"from": 5, "to": 9, "ids": [group.0]})).unwrap();
     assert!((center(&s, a).x - (150.0 - 50.0 * 0.25 / 0.65)).abs() < 1e-9, "{:?}", center(&s, a));
+}
+
+/// A set of one instance takes the new density without moving, as one undo step, so a later change
+/// packs it from that density; setting the density it already has adds no undo step.
+#[test]
+fn set_density_gives_a_set_of_one_instance_the_new_density() {
+    let mut s = session();
+    let set = NodeId(s.execute("symbol.spray", &json!({"name": "Dot", "points": [[100, 150]], "radius": 4})).unwrap()["id"].as_u64().unwrap());
+    let steps = undo_len(&s);
+    assert_eq!(s.execute("symbol.setDensity", &json!({"from": 5, "to": 9, "ids": [set.0]})).unwrap(), json!({"ids": [set.0], "count": 0}));
+    assert_eq!(undo_len(&s), steps + 1);
+    assert_eq!(s.execute("symbol.setDensity", &json!({"from": 5, "to": 9, "ids": [set.0]})).unwrap(), json!({"ids": [], "count": 0}));
+    assert_eq!(undo_len(&s), steps + 1);
+    // A second instance, then from the set's 9 to 5: 0.65 / 0.25 of each distance from the middle.
+    s.select(|_, sel| sel.set([set])).unwrap();
+    s.execute("symbol.spray", &json!({"name": "Dot", "points": [[200, 150]], "radius": 4, "density": 9})).unwrap();
+    let ids = members(&s, set);
+    assert_eq!(ids.len(), 2);
+    let was: Vec<Point> = ids.iter().map(|id| center(&s, *id)).collect();
+    let middle = Point::new((was[0].x + was[1].x) / 2.0, (was[0].y + was[1].y) / 2.0);
+    s.execute("symbol.setDensity", &json!({"from": 5, "to": 5, "ids": [set.0]})).unwrap();
+    for (id, before) in ids.iter().zip(&was) {
+        let want = middle + (*before - middle) * (0.65 / 0.25);
+        assert!(center(&s, *id).distance(want) < 1e-9, "{before:?} -> {:?}", center(&s, *id));
+    }
 }
 
 /// A locked instance of the set stays where it is, and the others move.
