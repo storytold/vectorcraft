@@ -31,26 +31,18 @@ fn rgba_within(bytes: &[u8], max: u64) -> Option<image::RgbaImage> {
     Some(reader.decode().ok()?.into_rgba8())
 }
 
-/// An image file's stored size in pixels, read from its header without decoding any pixels:
-/// PNG's IHDR and a JPEG's frame through craft-image-codecs, other formats through the image
-/// crate's header readers (as before), with craft-image-codecs' header probe last. Not turned by
-/// an EXIF orientation. `None` when no header gives a size.
+/// An image file's stored size in pixels, read from its header by craft-image-codecs without
+/// decoding any pixels: PNG's IHDR, a JPEG's frame, a TIFF's first full-resolution page, a
+/// still or animated WebP's canvas, BMP's header ([`craft_image_codecs::probe_allocation_size`],
+/// with no size limit), and a GIF's logical screen and the other formats' headers
+/// ([`craft_image_codecs::probe_size`]). Not turned by an EXIF orientation. `None` when no header
+/// gives a size.
 pub fn header_size(bytes: &[u8]) -> Option<(u32, u32)> {
-    if bytes.len() >= 24 && bytes.starts_with(b"\x89PNG\r\n\x1a\n") && &bytes[12..16] == b"IHDR" {
-        let w = u32::from_be_bytes(bytes[16..20].try_into().ok()?);
-        let h = u32::from_be_bytes(bytes[20..24].try_into().ok()?);
-        return Some((w, h));
+    if craft_image_codecs::detect(bytes) == Some(craft_image_codecs::Format::Gif) {
+        // A GIF frame may be larger than the logical screen the image crate gave as its size.
+        return craft_image_codecs::probe_size(bytes).ok();
     }
-    if bytes.starts_with(&[0xFF, 0xD8])
-        && let Some(j) = craft_image_codecs::jpeg_info(bytes)
-    {
-        return Some((j.width, j.height));
-    }
-    image::ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()
-        .ok()
-        .and_then(|r| r.into_dimensions().ok())
-        .or_else(|| craft_image_codecs::probe_size(bytes).ok())
+    craft_image_codecs::probe_allocation_size(bytes).ok().or_else(|| craft_image_codecs::probe_size(bytes).ok())
 }
 
 impl ImageBlob {
