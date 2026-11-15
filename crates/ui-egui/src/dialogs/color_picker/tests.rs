@@ -774,3 +774,14 @@ fn compact_picker_shrinks_then_scrolls_without_enlarging_the_window() {
         assert!(app.ui.dialog.is_none());
     }
 }
+
+#[test]
+fn native_lab_entry_in_color_picker() {
+    let mut app = app();
+    app.run("ui.colorPicker", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("color".into(), json!({"l": 70.0, "a": -25.0, "b": 40.0}));
+    let p = picked(d);
+    assert_eq!(p.color, Color::lab(70.0, -25.0, 40.0));
+    assert!(matches!(p.color, Color::Lab { .. }));
+}

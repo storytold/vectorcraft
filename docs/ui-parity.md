@@ -498,7 +498,7 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 
 - [x] Home screen (part of #4684, shared UI with PhotoCraft): the welcome, New / Open buttons and Community block are centred, and the large Discord button takes the theme's accent instead of Discord's colour; the layout and wording of the preset cards and Recent Files are unchanged. Still open from #4684: shortcut hints on the buttons, PhotoCraft's PRO and STUDIO themes, the Preferences layout (search box, theme swatches, Apply) and the title bar.
 
-- [x] Recolor Artwork › Assign: double-click a row's new color to pick it in the Color Picker, in the model it was picked in (part of #4028); a Lab new color is kept but can't be typed yet (the picker's Lab fields work in RGB); Lab entry, swatch libraries and the row menu remain.
+- [x] Recolor Artwork › Assign: double-click a row's new color to pick it in the Color Picker, in the model it was picked in, with native Lab entry, swatch libraries access in the picker, and row context menu options (Pick from Swatches, Limit to Library) (#4028).
 
 - [x] Recolor Artwork › Color Theme Picker: with the button beside the tabs on, a click on the canvas takes the color palette of an object or image, a drag takes the palette of the art inside its marquee, and Shift adds more picks; the rows that aren't excluded take the palette as their new colors and the art previews them ([Recolor artwork](https://helpx.adobe.com/illustrator/desktop/manage-colors/modify-colors/recolor-artwork.html)). The number and order of the picked colors are VectorCraft's own rule (`recolor.pickTheme`). Tests: `theme_picks_give_the_rows_the_palette_of_the_art_picked` and `the_theme_picker_takes_clicks_and_shift_drags_on_the_canvas` in `crates/ui-egui/src/dialogs/recolor.rs`, `theme_picker_*` in `crates/engine/src/tests/recolor.rs`.
 
@@ -547,6 +547,7 @@ before release (#6373). [Paint faces and edges](https://helpx.adobe.com/illustra
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-16 | minor | Recolor Artwork › Assign: native Lab entry in the Color Picker, swatch libraries access in the picker, and row context menu options (Pick from Swatches, Limit to Library) (#4028). Scores and estimates unchanged. |
 | 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
 | 2026-11-12 | minor | Numeric fields: a focus click released more than 1 pt from its press keeps the caret; a tap within 1 pt still selects the whole value (#6659, follow-up to #1326). Scores and estimates unchanged. |
 | 2026-11-12 | minor | Remove Background for a selected image in the Contextual Task Bar, Properties › Quick Actions and the Control bar, which runs at once with its defaults. Scores and estimates unchanged. |
