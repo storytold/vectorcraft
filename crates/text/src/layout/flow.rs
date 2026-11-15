@@ -474,7 +474,9 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
                         &para.tabs,
                         ind_l,
                         hyphenate,
-                        para.burasagari,
+                        // A right-to-left paragraph draws a burasagari mark inside its line
+                        // ([`prepare_line_geometry`]): the line ends where it fits with the mark.
+                        if *rtl { Burasagari::None } else { para.burasagari },
                         para.kinsoku,
                         ty,
                         *hanging,
