@@ -2979,6 +2979,38 @@ changes neither option. Behavior reference: [View artwork](https://helpx.adobe.c
 {"name":"invoke_menu","arguments":{"command":"ui.navigatorPanelOptions","params":{"color":"Light Blue","solidDashes":true}}}
 ```
 
+## Info panel
+
+`info.readout` takes no params and returns what Window › Info shows for the selection and the tool in use:
+`{tool, width?, height?, readout?}`. `tool` is the active tool's id. `width` and `height` are the sides of the
+selection's bounding box in points (of the box around the anchors selected with Direct Selection when there are
+some), measured as the `usePreviewBounds` preference says, and are left out with nothing selected. `readout` is left
+out unless the tool has something of its own to show:
+
+- `{kind: "drag", dx, dy, distance, angle}` while the Selection, Direct Selection or Group Selection tool moves the
+  selection, or the Gradient tool draws a gradient vector on the art.
+- `{kind: "scale", width, height}` during a Scale tool drag, in percent.
+- `{kind: "rotate", center, angle}` and `{kind: "reflect", center, angle}` during a Rotate or Reflect tool drag.
+  `angle` is the angle turned, as `object.rotate` takes it, or the angle of the reflection axis, as `object.reflect`
+  takes its `axis`. Both are in degrees counter-clockwise.
+- `{kind: "shear", center, axis, angle}` during a Shear tool drag. `axis` is 0 for a horizontal shear and 90 for a
+  vertical one, and `angle` is the shear angle in degrees, as `object.shear` takes it.
+- `{kind: "brush", brush}` while the Paintbrush is the tool. `brush` is the brush it paints with, or null.
+
+Lengths are in points. A drag's `angle` is in degrees counter-clockwise from the x axis. `center` is the center of the
+selection's bounding box as the drag has carried it, in document coordinates. A param is an error. In the app's panel, X and Y show the
+pointer's position from the rulers' zero point, or `center` during a Rotate, Reflect or Shear tool drag. W and H show
+the selection's size, `dx` and `dy` during a drag (with the distance and the angle under them), or the Scale tool's
+percentages. The Zoom tool adds the view's magnification and the Paintbrush its brush's name. Several selected objects
+show only the fill, stroke and type values they share, and Show Options adds a tint's swatch and percentage and the
+name of a gradient's swatch. The number formats, the rows shown between drags and the Direct Selection and Group
+Selection readouts are VectorCraft's own. Behavior reference: the Info panel overview in the
+[archived user guide](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=76).
+
+```json
+{"name":"run_command","arguments":{"command":"info.readout","params":{}}}
+```
+
 ## Tools panel placement
 
 By default the docked Tools panel sits at the window's left edge, outside any panels docked on the left.
