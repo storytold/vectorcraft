@@ -670,14 +670,20 @@ fn key_anchor(s: &mut Session, id: Option<NodeId>, guide: Option<usize>, v: &Val
         return Err(bad(C, "give `anchor` or `guide`, not both"));
     }
     let id = id.ok_or_else(|| bad(C, "`anchor` needs `id`, the path the point is on"))?;
-    let sel = &s.doc()?.selection;
-    if sel.segments.contains_key(&id) || !sel.anchors.get(&id).is_some_and(|set| set.contains(&r)) {
+    let st = s.doc()?;
+    let sel = &st.selection;
+    let on_path = st.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.subpaths.get(r.0).is_some_and(|sp| r.1 < sp.anchors.len()));
+    if !on_path || sel.segments.contains_key(&id) || !sel.anchors.get(&id).is_some_and(|set| set.contains(&r)) {
         return Err(bad(C, format!("anchor [{}, {}] of object {id} is not a selected anchor point", r.0, r.1)));
     }
-    s.select(|_, sel| sel.key_anchor = Some((id, r)))?;
-    if s.doc()?.selection.key_anchor.is_none() {
+    // Check the new key on a copy first, so a request that fails leaves the key as it was.
+    let mut trial = sel.clone();
+    trial.key_anchor = Some((id, r));
+    trial.prune(&st.doc);
+    if trial.key_anchor.is_none() {
         return Err(bad(C, "select another anchor point to align to the key anchor"));
     }
+    s.select(|_, sel| sel.key_anchor = Some((id, r)))?;
     key_result(s)
 }
 

@@ -147,3 +147,16 @@ fn select_key_rejects_an_anchor_that_cannot_be_the_key() {
     assert!(err(&mut s, json!({"id": a.0, "anchor": [0, 0]})).contains("is not a selected anchor point"));
     assert_eq!(key_anchor(&s), None, "the key stays as it was");
 }
+
+#[test]
+fn a_rejected_select_key_keeps_the_key_anchor() {
+    let mut s = session();
+    let a = path(&mut s, "M100 40 L200 60 L150 160 Z");
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0], [0, 9]], "mode": "set"})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "add"})).unwrap();
+    assert_eq!(key_anchor(&s), Some((a, (0, 1))));
+    // [0, 9] is in the selection but not on the path.
+    let err = s.execute("select.key", &json!({"id": a.0, "anchor": [0, 9]})).expect_err("a point the path does not have").to_string();
+    assert!(err.contains("is not a selected anchor point"), "{err}");
+    assert_eq!(key_anchor(&s), Some((a, (0, 1))), "the key stays as it was");
+}
