@@ -12562,6 +12562,58 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 {"name":"run_command","arguments":{"command":"addon.document.symbolsFromLayers","params":{"replace":true}}}
 ```
 
+## Packaging Tools add-on
+
+Packaging Tools is a built-in add-on for the dielines of boxes and other folded packaging. Its commands are
+`addon.packaging.setRole`, `addon.packaging.roles` and `addon.packaging.setRoleSwatch`. In the desktop app, Object ›
+Plug-ins › Packaging Tools › Fold Lines opens the Fold Lines panel, and Make Cut Line, Make Crease Line, Make Partial Cut
+Line and Make Perforation Line run `addon.packaging.setRole` on the selection.
+
+### Fold line roles
+
+A fold line has one of four roles: Cut (`cut`), Crease (`crease`), Partial Cut (`partialCut`) and Perforation
+(`perforation`). A path, compound path or live shape has a role when its top stroke is painted with the role's swatch, at
+any tint. Each document has a role table that names the swatch of each role, stored in the document under
+`packagingRoles` as `{"cut": "Cut", "crease": "Crease", "partialCut": "Partial Cut", "perforation": "Perforation"}`. A
+role the table leaves out, or names with something other than a string, uses the swatch named after the role. When
+`swatch.edit` renames a role's swatch, the table names the swatch by its new name and the role stays with it; another
+role whose swatch did not exist yet and had that name moves to a new name ("Crease 2"). When `swatch.edit` turns Global
+off for a role's swatch, which unlinks its strokes, the role moves to a new name, and the next `addon.packaging.setRole`
+makes that swatch. When `swatch.merge` merges a role's swatch into a global swatch that carries no role, the kept swatch
+takes the role. Native files keep the table and the strokes. PDF prints a role line on the separation of its swatch when
+the swatch is a spot color, as the default role swatches are; a role carried by a global process color is written as an
+ordinary color with no separation of its own. SVG, DXF and HP-GL keep the stroke's color, so the default role swatches
+come out as four colors, and as four pens in HP-GL without a pen table.
+
+`addon.packaging.setRole` (`{role: cut|crease|partialCut|perforation|none, ids?, overprint?: true}`) gives the role to
+each path, compound path and live shape among the objects (the selection by default), through groups and clip groups.
+Objects that are locked or hidden, in a locked or hidden group or layer, or on a locked artboard are left out and
+counted as skipped, also when `ids` names them. The top stroke is painted with the role's swatch at 100% and shown if
+it was hidden, a path without a stroke gets a 1 pt stroke, and the stroke overprints unless `overprint` is false. When
+the document lacks the role's swatch, the command makes it as a global spot swatch in the document's color mode: Cut 100%
+magenta, Crease 100% cyan, Partial Cut 100% yellow and Perforation 50% magenta and 50% cyan (VectorCraft's own defaults).
+When a color group, or a swatch that can't carry a role such as a process color that is not global, has the swatch's
+name, the swatch is named "Cut 2" (and so on) and the role table names it. `none` takes the role away: the stroke keeps
+the color it shows, no longer linked to the swatch, and stops overprinting. Text, images, symbol instances and other
+objects are skipped and counted. The command fails with an unknown role and when the objects hold no path it can change. One undo
+step, none when nothing changes. Result: `{ids, changed, skipped}`.
+
+`addon.packaging.roles` (`{ids?}`) returns `{roles: [{role, name, swatch, exists, count}], scope, selected}`: each role's
+swatch, whether the document has it, and how many of the objects have the role. It counts the selection, or every object
+of the document while nothing is selected and `ids` is left out (`scope` says which). Locked and hidden objects are
+counted in every scope, and an object is counted once when both it and its group are given. The Fold Lines panel shows
+these counts; clicking a role gives the selected paths that role. With nothing selected the panel says so.
+
+`addon.packaging.setRoleSwatch` (`{role, swatch}`) makes another global or spot color swatch carry the role. Objects
+stroked with the old swatch keep their color and no longer have the role. It fails with a missing swatch, a gradient or
+pattern swatch, a process color that is not global, a tint swatch, `[None]`, `[Registration]` and a swatch another role
+has. One undo step, none when the role already has that swatch. Result: `{role, swatch, changed}`. The Fold Lines
+panel's menu opens it as Role Swatches….
+
+```json
+{"name":"run_command","arguments":{"command":"addon.packaging.setRole","params":{"role":"crease"}}}
+```
+
 ## Image Tools add-on
 
 Image Tools is a built-in add-on for placed images: its commands are `addon.image.removeBackground`,

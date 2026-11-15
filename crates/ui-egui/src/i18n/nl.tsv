@@ -9629,3 +9629,20 @@ breakText	Glyphs	Glyphs
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor JPEG (maximaal 65535 pixels per zijde): verlaag de resolutie
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor Targa (maximaal 65535 pixels per zijde): verlaag de resolutie
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels is te groot voor PSD (maximaal {MAX_SIDE} pixels per zijde): verlaag de resolutie
+	Packaging Tools	Verpakkingsgereedschap
+	Fold Lines	Vouwlijnen
+	Make Cut Line	Snijlijn maken
+	Make Crease Line	Rillijn maken
+	Make Partial Cut Line	Halve snijlijn maken
+	Make Perforation Line	Perforatielijn maken
+	Make Fold Line	Vouwlijn maken
+	Role Swatches…	Stalen van lijnsoorten…
+	Role Swatches	Stalen van lijnsoorten
+	Role	Lijnsoort
+	Cut Line	Snijlijn
+	Crease Line	Rillijn
+	Partial Cut Line	Halve snijlijn
+	Perforation Line	Perforatielijn
+	No objects are selected.	Er zijn geen objecten geselecteerd.
+	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
+	Remove Fold Line Role	Lijnsoort verwijderen

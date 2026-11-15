@@ -9244,4 +9244,21 @@ breakText	Glyphs	字符
 @msg	{v} is not an asset id	{v} 不是資產 ID
 @msg	{what} can't be intertwined	{what} 無法交織
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} 連同出血和標記無法容納於紙張
+	Packaging Tools	包裝工具
+	Fold Lines	摺線
+	Make Cut Line	設為切割線
+	Make Crease Line	設為壓痕線
+	Make Partial Cut Line	設為半切線
+	Make Perforation Line	設為打孔線
+	Make Fold Line	設為摺線
+	Role Swatches…	線條類型色票…
+	Role Swatches	線條類型色票
+	Role	線條類型
+	Cut Line	切割線
+	Crease Line	壓痕線
+	Partial Cut Line	半切線
+	Perforation Line	打孔線
+	No objects are selected.	未選取任何物件。
+	Open a document to mark its fold lines.	開啟文件以標記其摺線。
+	Remove Fold Line Role	移除線條類型
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小

@@ -9867,4 +9867,21 @@ font-script	Japanese	იაპონური
 	Nest Shapes…	ფორმების განლაგება…
 	Nest Shapes	ფორმების განლაგება
 	Roll	რულონი
+	Packaging Tools	შეფუთვის ხელსაწყოები
+	Fold Lines	მოკეცვის ხაზები
+	Make Cut Line	ჭრის ხაზად გადაქცევა
+	Make Crease Line	ბიგის ხაზად გადაქცევა
+	Make Partial Cut Line	ნაწილობრივი ჭრის ხაზად გადაქცევა
+	Make Perforation Line	პერფორაციის ხაზად გადაქცევა
+	Make Fold Line	მოკეცვის ხაზად გადაქცევა
+	Role Swatches…	ხაზის ტიპების ფერის ნიმუშები…
+	Role Swatches	ხაზის ტიპების ფერის ნიმუშები
+	Role	ხაზის ტიპი
+	Cut Line	ჭრის ხაზი
+	Crease Line	ბიგის ხაზი
+	Partial Cut Line	ნაწილობრივი ჭრის ხაზი
+	Perforation Line	პერფორაციის ხაზი
+	No objects are selected.	ობიექტები არ არის მონიშნული.
+	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მოსანიშნად.
+	Remove Fold Line Role	ხაზის ტიპის მოხსნა
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
