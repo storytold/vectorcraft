@@ -2235,6 +2235,8 @@ antiAlias	Sharp	Nítido
 	Proof Setup	Configuração de Prova
 	Properties	Propriedades
 	Proportional Metrics	Métrica Proporcional
+	H or V Style	Estilo Horizontal ou Vertical
+	Roman Italics	Itálico Romano
 	Insert Aki Left	Inserir Aki à Esquerda
 	Insert Aki Right	Inserir Aki à Direita
 	Tsume	Tsume
@@ -6724,6 +6726,13 @@ axis	Y Axis	Eixo Y
 	Graphite Pencil	Lápis de Grafite
 	Wax Crayon	Giz de Cera
 	Charcoal Dust	Pó de Carvão
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuitos tecnológicos
+	Circuit Trace	Trilha de circuito
+	Bus Lines	Linhas de barramento
+	Terminal Nodes	Nós terminais
+
 	Notched Ribbon	Fita Entalhada
 	Double Line	Linha Dupla
 	Wave	Onda
@@ -9321,7 +9330,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	unexpected resources	recursos inesperados
 @msg	unknown CMYK profile `{name}`	perfil CMYK desconhecido `{name}`
 @msg	unknown File Info field `{k}`	campo de Informações do Arquivo desconhecido `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	recurso OpenType desconhecido `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefixe com - para desativar; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt aceitam o número de uma alternativa como `tag=N` com N de 0 a {_1}, como `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	recurso OpenType desconhecido `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefixe com - para desativar; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt aceitam o número de uma alternativa como `tag=N` com N de 0 a {_1}, como `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	recurso OpenType desconhecido `{t}` em featureChanges (as tags que `features` aceita)
 @msg	unknown PDF preset `{name}` (presets: {_1})	predefinição de PDF desconhecida `{name}` (predefinições: {_1})
 @msg	unknown Warp style	estilo de Deformação desconhecido

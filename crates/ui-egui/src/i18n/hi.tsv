@@ -444,6 +444,13 @@ antiAlias	Sharp	शार्प
 	Graphite Pencil	ग्रेफाइट पेंसिल
 	Wax Crayon	मोम क्रेयॉन
 	Charcoal Dust	चारकोल धूल
+
+# Original procedural circuit brushes.
+	Tech Circuit	टेक सर्किट
+	Circuit Trace	सर्किट पथ
+	Bus Lines	बस रेखाएँ
+	Terminal Nodes	टर्मिनल नोड
+
 	Notched Ribbon	नोकदार रिबन
 	Double Line	दोहरी लाइन
 	Wave	लहर
@@ -3702,6 +3709,8 @@ antiAlias	Sharp	शार्प
 	Properties	प्रॉपर्टीज़
 	Proportional Lining	आनुपातिक लाइनिंग
 	Proportional Metrics	आनुपातिक मीट्रिक
+	H or V Style	क्षैतिज या ऊर्ध्वाधर शैली
+	Roman Italics	रोमन इटैलिक
 	Insert Aki Left	बाईं ओर आकी जोड़ें
 	Insert Aki Right	दाईं ओर आकी जोड़ें
 	Tsume	त्सुमे
