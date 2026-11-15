@@ -615,3 +615,34 @@ fn a_clip_groups_own_fill_stays_in_the_clip_when_its_clipping_type_strokes() {
     assert!(clipped.iter().skip(1).any(|c| yellow_in(c)), "the group's fill paints inside the clip: {clipped:?}");
     assert!(!children.iter().skip(1).any(|c| yellow_in(c)), "{children:?}");
 }
+
+#[test]
+fn a_clip_groups_own_gradient_spans_the_clip_when_its_clipping_type_strokes() {
+    // A clip group with an unplaced linear gradient fill of its own and an Offset Path effect,
+    // clipped by type with a stroke whose Transform effect moves it 60 pt right: the gradient
+    // spans the region the clipping path clips to.
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::WHITE)];
+    let unplaced = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let mut ty = painted_type(3, false, false);
+    ty.appearance = Appearance::basic(Paint::None, green(), 2.0).into();
+    for item in &mut ty.appearance.items {
+        if let vectorcraft_doc::AppearanceItem::Stroke(s) = item {
+            s.effects.push(fx("distort.transform", json!({"moveH": 60})));
+        }
+    }
+    let mut group = clip_group(2, ty);
+    group.appearance =
+        Appearance { effects: vec![fx("path.offsetPath", json!({"offset": 0}))], ..Appearance::basic(unplaced, Paint::None, 0.0) }.into();
+    let canvas = crate::evaluate_container(None, &group).unwrap();
+    let NodeKind::Group { children, clip: false } = &canvas.kind else { panic!("not a group around the clip: {canvas:?}") };
+    let NodeKind::Group { children: clipped, clip: true } = &children[0].kind else { panic!("no clip group first: {children:?}") };
+    let region = clip_outline(&clipped[0]).expect("the type clips").0.bounding_box();
+    let fill = clipped.iter().skip(1).find_map(|c| match c.appearance.fill_paint() {
+        Paint::Gradient(g) => g.geom,
+        _ => None,
+    });
+    let geom = fill.unwrap_or_else(|| panic!("no gradient fill inside the clip: {clipped:?}"));
+    let (left, right) = (geom.start.x.min(geom.end.x), geom.start.x.max(geom.end.x));
+    assert!((left - region.x0).abs() < 0.5 && (right - region.x1).abs() < 0.5, "the gradient {geom:?} spans the clip {region:?}");
+}

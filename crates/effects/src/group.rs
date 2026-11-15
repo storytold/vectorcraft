@@ -883,11 +883,10 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         // strokes ([`crate::reshape::painted_type_clip`]): its own fills and strokes paint inside
         // that clip group.
         let wrapped = n.clips() && !m.clips();
-        let shapes = match m.children().and_then(|ch| ch.first()).filter(|_| wrapped) {
-            Some(inner) => member_shapes(doc, inner),
-            None => member_shapes(doc, &m),
+        let (shapes, bounds) = match m.children().and_then(|ch| ch.first()).filter(|_| wrapped) {
+            Some(inner) => (member_shapes(doc, inner), inner.geometric_bounds()),
+            None => (member_shapes(doc, &m), m.geometric_bounds()),
         };
-        let bounds = m.geometric_bounds();
         let art =
             |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
         let (below, above) = m.appearance.split_contents();
