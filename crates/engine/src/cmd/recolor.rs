@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Randomize Colors",
             [],
             None,
-            "{map: rows as recolor.apply, order?: true (shuffle the new colours among the rows that aren't excluded and hold current colours), saturationBrightness?: false (random saturation and brightness, hue kept), seed?: 0; an excluded row, and a row whose from is empty, keeps its new colour} → {map: the rows with their new colours as keys}",
+            "{map: rows as recolor.apply (an excluded row, or a row whose from is empty, keeps its new color), order?: true (shuffle the new colours among the rows that aren't excluded and hold current colors), saturationBrightness?: false (random saturation and brightness, hue kept), seed?: 0} → {map: the rows with their new colours as keys}",
             always,
             randomize
         ),
