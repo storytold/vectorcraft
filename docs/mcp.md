@@ -7287,8 +7287,10 @@ color first.
 
 A global or spot swatch whose name the document gives another colour is a conflict: `clipboard.conflicts` lists
 them, and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
-pasted swatch comes in renamed) or one answer per name. Pasting back into the document the objects came from uses
-its resources as they are now and raises no conflict.
+pasted swatch comes in renamed) or one answer per name. When a merged swatch turns a pie's wedge from light to dark
+or back, the legend labels in that pie's wedges take the contrast a redraw gives them (white on a dark wedge, black on
+a light one), unless the legend labels have a fill of their own. Pasting back into the document the objects came from
+uses its resources as they are now and raises no conflict.
 
 Placement: `edit.paste {center}` centres the objects on a point (the app passes the view centre), else offsets them
 by `dx`/`dy` (the Paste Offset preference). With nothing selected, `edit.pasteInFront` / `edit.pasteInBack` put them
