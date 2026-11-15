@@ -8455,7 +8455,8 @@ that can be edited or released. `file.place` answers `image`, the id of the imag
 [import options help page](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
 says that a file imported as one flattened image keeps the document's clipping path when it has one. `links.update`
 and `links.relink` read the file's pixels again and leave the clip group and its clipping path as they are. Files that name no clipping path, or name a path
-they don't have, come in as a plain image.
+they don't have, come in as a plain image. `file.place` with `replace` on such a clip group puts a new image, clipped or
+not, at the scale and rotation of the image in the group.
 
 `document.open` converts a PSD or PSB file's layers to objects. In
 [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html),
