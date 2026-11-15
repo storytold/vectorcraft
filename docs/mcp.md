@@ -6300,18 +6300,42 @@ path and label, with its id when the row shows it, and the key runs what a click
 {id}`. A removed plug-in's row goes away and its key runs nothing; its shortcut stays saved and applies again when a
 plug-in with the same id is installed.
 
-`shortcuts.exportText {path?}` saves the current set's shortcut list as a UTF-8 text file, as Edit › Keyboard
-Shortcuts › Export Text… does with the dialog's set as edited so far. The file starts with a "Keyboard Shortcuts" line
-and a "Set:" line with the set's name, followed by a Tools section and a Menu Commands section. Each section lists the
-rows Edit › Keyboard Shortcuts lists, in its order and with names as it shows them: one line per row, with the name, a
-tab and the shortcuts as the dialog shows them on the current platform. A row with no shortcut ends after the tab.
-Without `path` a save dialog asks for the file. A `path` that is not a string, or a file that cannot be written,
-returns an error, and nothing is written. The layout is VectorCraft's own. The reference app's [Export keyboard
-shortcuts list as a text document](https://helpx.adobe.com/illustrator/desktop/get-started/preferences-and-settings/export-keyboard-shortcuts-list.html)
+`shortcuts.exportText {path?, format?, pageSize?}` saves the current set's shortcut list as a UTF-8 text file, as
+Edit › Keyboard Shortcuts › Export Text… does with the dialog's set as edited so far. The file starts with a "Keyboard
+Shortcuts" line and a "Set:" line with the set's name, followed by a Tools section and a Menu Commands section. Each
+section lists the rows Edit › Keyboard Shortcuts lists, in its order and with names as it shows them: one line per
+row, with the name, a tab and the shortcuts as the dialog shows them on the current platform. A row with no shortcut
+ends after the tab. Without `path` a save dialog asks for the file. A `path` that is not a string, or a file that
+cannot be written, returns an error, and nothing is written. The layout is VectorCraft's own. The reference app's
+[Export keyboard shortcuts list as a text document](https://helpx.adobe.com/illustrator/desktop/get-started/preferences-and-settings/export-keyboard-shortcuts-list.html)
 page describes saving the list from the Keyboard Shortcuts dialog as a text file, and does not describe its layout.
+
+`format` picks the file: `"text"` (the default) writes the text file above and `"sheet"` a printable shortcut sheet
+as a PDF. A `path` is written as given, in the format `format` names, or as text without `format`. In the desktop
+app, without `path`, the save dialog offers both formats (Text and Shortcut sheet, Text first) unless `format` names
+one, and the file type picked in it decides. When `format` names a format, or the dialog reports the type picked, the
+name the dialog returns gets that format's extension (`.txt` or `.pdf`): one of these extensions is replaced, and the
+extension is added to any other name. When that names a file that is already there, a question asks before replacing
+it. The web app downloads the format `format` names, text without it. With no file dialog, file writer or download,
+the command returns the file: the text file as `text`, the sheet in base64 as `pdf`. A `format` other than `"text"`
+or `"sheet"`, or a `pageSize` other than `"letter"` or `"a4"` (lowercase), returns an error, and nothing is written.
+
+The shortcut sheet lists the rows that have a shortcut in groups: the Tools rows under the Tools group, then each
+top-level menu as a group, in the order the dialog first lists a command of it, with the command named without its
+top-level menu. The group names, command names and shortcuts are in the UI language, as the dialog shows them. Each
+group has a colored band with its name, and below it the rows, the shortcut on the left and the name on the right. The
+groups flow down four columns of landscape pages and onto more pages when they do not fit. `pageSize` is `"letter"`
+(792 × 612 pt) or `"a4"` (841.89 × 595.28 pt). Without it the sheet is on A4 when the current document prints on A4
+(its print settings, or, with none saved, a first artboard of A4 size), and on Letter otherwise. Each page is titled
+with "Keyboard Shortcuts" and the set's name. A group that continues in the next column repeats its band there. A row
+with several shortcuts has a line for each, kept in one column unless the row is taller than a column. A shortcut is
+never shortened: one too wide for its column is set smaller. A name too long for its column ends in "…". The type is
+Source Sans 3, which VectorCraft bundles and which has the macOS modifier symbols (⌃ ⌥ ⇧ ⌘). Characters it does not
+have are drawn in another font the app has loaded, when one has them. The layout is VectorCraft's own.
 
 ```json
 {"name":"run_command","arguments":{"command":"shortcuts.exportText","params":{"path":"/Users/me/Shortcuts.txt"}}}
+{"name":"run_command","arguments":{"command":"shortcuts.exportText","params":{"path":"/Users/me/Shortcuts.pdf","format":"sheet","pageSize":"a4"}}}
 ```
 
 The desktop app adds its active artboard, the one the Artboards panel highlights, to the `object.align`,
