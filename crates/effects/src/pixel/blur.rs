@@ -1,6 +1,6 @@
 //! Blur › Radial Blur and Smart Blur (Normal, Edge Only and Overlay Edge).
 
-use vectorcraft_geom::{Affine, Point, Vec2};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::{PixelSpace, Px16, box_blur, pick, to8, to16};
 
@@ -29,13 +29,31 @@ fn bilinear(buf: &[Px16], w: usize, h: usize, x: f64, y: f64) -> [f32; 4] {
     std::array::from_fn(|i| a[i] * wa + b[i] * wb + c[i] * wc + d[i] * wd)
 }
 
-/// Radial Blur: the average of the content turned (spin) or scaled (zoom) about the centre over
-/// evenly spaced steps spanning `amount`. Each pass averages the previous result with itself
-/// turned both ways by half the last step, so `passes` passes average 2^`passes` samples at two
-/// lookups a pixel each.
-pub(super) fn radial(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, amount: f64, zoom: bool, passes: u32) {
+/// How far Radial Blur's Blur Center `center` (0..1 across and down `bounds`) lies from the
+/// farthest corner of `bounds`, and from its nearest side.
+pub(super) fn center_reach(bounds: Rect, center: [f64; 2]) -> (f64, f64) {
+    // The share of the width (height) on the far side of the center, doubled: 1 at the middle.
+    let far = |f: f64| 1.0 + (2.0 * f - 1.0).abs();
+    let (w, h) = (bounds.width(), bounds.height());
+    let near = ((2.0 - far(center[0])) * w).min((2.0 - far(center[1])) * h);
+    (0.5 * (far(center[0]) * w).hypot(far(center[1]) * h), 0.5 * near)
+}
+
+/// Where Radial Blur's Blur Center `center` (0..1 across and down the object's bounds) lies in the
+/// document: the object's centre at (0.5, 0.5).
+pub(super) fn blur_center(space: &PixelSpace, center: [f64; 2]) -> Point {
+    let shift = Vec2::new((center[0] - 0.5) * space.size.x, (center[1] - 0.5) * space.size.y);
+    if shift.x.is_finite() && shift.y.is_finite() { space.center + shift } else { space.center }
+}
+
+/// Radial Blur: the average of the content turned (spin) or scaled (zoom) about the Blur Center
+/// (`center`, [`blur_center`]) over evenly spaced steps spanning `amount`. Each pass averages the
+/// previous result with itself turned both ways by half the last step, so `passes` passes average
+/// 2^`passes` samples at two lookups a pixel each.
+#[allow(clippy::too_many_arguments)] // the effect's four options
+pub(super) fn radial(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, amount: f64, zoom: bool, passes: u32, center: [f64; 2]) {
     // The centre in pixel index coordinates (pixel centres at whole numbers).
-    let c = space.to_doc.inverse() * space.center - Vec2::new(0.5, 0.5);
+    let c = space.to_doc.inverse() * blur_center(space, center) - Vec2::new(0.5, 0.5);
     if !(c.x.is_finite() && c.y.is_finite()) {
         return;
     }
