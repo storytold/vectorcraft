@@ -901,6 +901,9 @@ pub use brushsym::reset_transformation_changes;
 /// Data window reads files by it too).
 pub use variablecmds::utf16_order_without_mark;
 
+/// The Variables panel's sort (`variable.sort`) and its rows in that order.
+pub use variablecmds::{VariableSort, VariableSortKey, variable_order};
+
 /// Command ids kept only so older scripts keep working: `(alias, the command it duplicates)`.
 /// They run as before but the command palette leaves them out (it lists the command once).
 pub const ALIASES: &[(&str, &str)] = &[("object.convertDocumentColorMode", "file.documentColorMode")];

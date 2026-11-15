@@ -135,6 +135,7 @@
 	Align to Artboard	An Zeichenfläche ausrichten
 	Align to Glyph Bounds	An Glyphenbegrenzung ausrichten
 	Align to Key Object	An Basisobjekt ausrichten
+	Align to Key Anchor	An Basisankerpunkt ausrichten
 	Align to Page	An Seite ausrichten
 	Align to Path	An Pfad ausrichten
 	Align to Selection	An Auswahl ausrichten
@@ -1055,7 +1056,8 @@ font-technology	Variable	Variabel
 	Every (minutes)	Alle (Minuten)
 	Every option is at its default.	Alle Optionen haben ihren Standardwert.
 	Every option matches {base}.	Alle Optionen entsprechen {base}.
-	Every-line Composer	Alle-Zeilen-Setzer
+	Middle Eastern & South Asian Every-line Composer	Alle-Zeilen-Setzer (Naher Osten und Südasien)
+	Standard Every-line Composer	Standard-Alle-Zeilen-Setzer
 	Exact dash lengths	Exakte Strichlängen
 	Exceptions (comma separated)	Ausnahmen (durch Kommas getrennt)
 	Exclude	Schnittmenge entfernen
@@ -1392,6 +1394,14 @@ file-filter	Templates	Vorlagen
 	Previous Artboard	Vorherige Zeichenfläche
 	Next Artboard	Nächste Zeichenfläche
 	Last Artboard	Letzte Zeichenfläche
+	Status Bar Show	In Statusleiste anzeigen
+	Artboard Name	Name der Zeichenfläche
+	Current Tool	Aktuelles Werkzeug
+	Date and Time	Datum und Uhrzeit
+	Number of Undos	Anzahl der Rückgängig-Schritte
+	Document Color Profile	Farbprofil des Dokuments
+	Undos	Rückgängig
+	Redos	Wiederholen
 	Go To Link	Gehe zu Verknüpfung
 	GPL palettes keep solid colours only, as RGB.	GPL-Paletten enthalten nur einfarbige Farben, als RGB.
 	GPU Performance	GPU-Leistung
@@ -1411,6 +1421,40 @@ file-filter	Templates	Vorlagen
 	Graph	Diagramm
 	Graph Data	Diagrammdaten
 	Graph Type	Diagrammtyp
+	Graph Options	Diagrammoptionen
+	Left Axis	Linke Achse
+	Right Axis	Rechte Achse
+	Category Axis	Kategorieachse
+	Separate Scales	Getrennte Skalen
+	Add Drop Shadow	Schlagschatten hinzufügen
+	Add Legend Across Top	Legende oben hinzufügen
+	First Row in Front	Erste Zeile vorne
+	First Column in Front	Erste Spalte vorne
+	Legend	Legende
+	Column Width	Säulenbreite
+	Bar Width	Balkenbreite
+	Cluster Width	Gruppenbreite
+	Mark Data Points	Datenpunkte markieren
+	Connect Data Points	Datenpunkte verbinden
+	Edge-to-Edge Lines	Linien von Kante zu Kante
+	Draw Filled Lines	Gefüllte Linien zeichnen
+	Tick Values	Teilstrichwerte
+	Override Calculated Values	Berechnete Werte überschreiben
+	Divisions	Teilungen
+	Tick Marks	Teilstriche
+	Tick Marks per Division	Teilstriche pro Teilung
+	Draw Tick Marks Between Labels	Teilstriche zwischen Beschriftungen zeichnen
+	Add Labels	Beschriftungen hinzufügen
+	Maximum must be more than Minimum.	Das Maximum muss größer als das Minimum sein.
+	Column Graph	Säulendiagramm
+	Stacked Column Graph	Gestapeltes Säulendiagramm
+	Bar Graph	Balkendiagramm
+	Stacked Bar Graph	Gestapeltes Balkendiagramm
+	Line Graph	Liniendiagramm
+	Area Graph	Flächendiagramm
+	Scatter Graph	Streudiagramm
+	Pie Graph	Kreisdiagramm
+	Radar Graph	Netzdiagramm
 	Graph Design	Diagrammdesign
 	Graph Marker	Diagrammmarkierung
 	New Design	Neues Design
@@ -2023,6 +2067,7 @@ file-filter	Templates	Vorlagen
 	Menu Dialog	Menüdialog
 	Merge	Zusammenfügen
 	Merge colors into one row	Farben in einer Zeile zusammenführen
+	New Row	Neue Zeile
 	Merge Graphic Styles	Grafikstile zusammenfügen
 	Merge Graphic Styles…	Grafikstile zusammenfügen…
 	Merge Layers	Ebenen zusammenfügen
@@ -3390,7 +3435,8 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Einfaches öffnendes Anführungszeichen
 	Single Quotes:	Einfache Anführungszeichen:
 	Single Right Quotation Mark	Einfaches schließendes Anführungszeichen
-	Single-line Composer	Einzeilen-Setzer
+	Middle Eastern & South Asian Single-line Composer	Einzeilen-Setzer (Naher Osten und Südasien)
+	Standard Single-line Composer	Standard-Einzeilen-Setzer
 	Toggle Line Composer	Zeilensetzer umschalten
 	Sixth Space	Sechstelgeviert-Leerzeichen
 	Size	Größe
@@ -3708,6 +3754,8 @@ effect	Points	Punkte
 	Kana	Kana
 	Numerals	Ziffern
 	Scale at Center	Von der Mitte aus skalieren
+	Delete Set	Satz löschen
+	Direct Entry	Direkteingabe
 	Up/Down:	Oben/Unten:
 	Left/Right:	Links/Rechts:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko oben/unten
@@ -5348,6 +5396,11 @@ theme	Appearance	Erscheinungsbild
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Die Hauptfarbe wird zur Konturfarbe. Die anderen Farben wandern ebenso weit um den Farbkreis wie die Hauptfarbe und behalten ihre Sättigung und Helligkeit.
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-Richtlinie:
+	CMYK Policy:	CMYK-Richtlinie:
+	Preserve Embedded Profiles	Eingebettete Profile beibehalten
+	Convert to Working Space	In Arbeitsfarbraum konvertieren
+	Preserve Numbers	Werte beibehalten
 # PSD files.
 @msg	not a PSD file	keine PSD-Datei
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus
@@ -5406,6 +5459,7 @@ theme	Appearance	Erscheinungsbild
 	Texture Image	Strukturbild
 	Canvas	Leinwand
 	Highlight Variable	Variable hervorheben
+	Sort Variables	Variablen sortieren
 	New Variable	Neue Variable
 	Delete Variable	Variable löschen
 	Lock Variables	Variablen sperren
@@ -6156,6 +6210,7 @@ axis	Y Axis	Y-Achse
 @msg	stops must be in order of `offset`	die Farbstopps müssen nach `offset` geordnet sein
 @msg	the document has no pattern {pattern}	das Dokument hat kein Muster {pattern}
 @msg	the document has no swatch {n}	das Dokument hat kein Farbfeld {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` erfordert einen Farbstopp, der mit einem Volltonfarbfeld verknüpft ist
 @msg	the output	die Ausgabe
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
@@ -7224,6 +7279,7 @@ breakText	Glyphs	Glyphen
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` für dieses {kind}-Dialogfeld muss eines der folgenden sein: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` hat mehr als {MAX_ANSWERS} Antworten
 @msg	`answers` is larger than 1 MiB	`answers` ist größer als 1 MiB
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` ist nur für einen Lauf ohne jemanden, der gefragt werden kann: In der App beantwortet die Person jeden Dialog
 @msg	`answers` must be a list of answers	`answers` muss eine Liste von Antworten sein
 @msg	`artboard` must be the index of an artboard of the document	`artboard` muss der Index einer Zeichenfläche des Dokuments sein
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` muss [x, y] sein
@@ -7255,6 +7311,7 @@ breakText	Glyphs	Glyphen
 @msg	`name` must be a name that is not empty	`name` muss ein nicht leerer Name sein
 @msg	`name` must not be empty	`name` darf nicht leer sein
 @msg	`origin` must be [x, y] in points	`origin` muss [x, y] in Punkt sein
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` muss [a, b, c, d] sein, jeweils von -1000 bis 1000, mit a·d - b·c mindestens 0,001 von 0 entfernt
 @msg	`picks` must be an array (got {v})	`picks` muss ein Array sein (erhalten: {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` muss 1 bis {MAX_PICKS} Auswahlen enthalten (erhalten: {_1})
 @msg	`radius` must be 0 or more	`radius` muss 0 oder größer sein
@@ -7612,6 +7669,7 @@ breakText	Glyphs	Glyphen
 @msg	Image Trace failed: {e}	Bildnachzeichner fehlgeschlagen: {e}
 @msg	Image Trace finished, but its document was closed	Bildnachzeichner abgeschlossen, aber sein Dokument wurde geschlossen
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Bildnachzeichner abgeschlossen, aber das Bild oder seine Einstellungen haben sich inzwischen geändert: Zeichnen Sie es erneut nach
+@msg	Image Trace finished, but its document was reverted: trace it again	Bildnachzeichner abgeschlossen, aber sein Dokument wurde auf die letzte Version zurückgesetzt: Zeichnen Sie es erneut nach
 @msg	Invalid dimension offset	Ungültiger Bemaßungsversatz
 @msg	Invalid point	Ungültiger Punkt
 @msg	Join: a subpath went missing	Zusammenfügen: Ein Teilpfad ist verloren gegangen
@@ -8026,7 +8084,7 @@ breakText	Glyphs	Glyphen
 @msg	column: true floats the whole column and takes no onto, above or below	column: true macht die ganze Spalte schwebend und nimmt kein onto, above oder below
 @msg	command must be a shape.* command	command muss ein shape.*-Befehl sein
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` fehlt
-@msg	composer must be "singleLine" or "everyLine"	composer muss „singleLine“ oder „everyLine“ sein
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer muss „singleLine“, „everyLine“, „standardSingleLine“ oder „standardEveryLine“ sein
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	zusammengesetzte Formen nehmen Pfade, zusammengesetzte Pfade, Gruppen, zusammengesetzte Formen, Text, Angleichungen und Verzerrungshüllen
 @msg	compound {_1} must contain exactly one open path to join	zusammengesetzter Pfad {_1} muss genau einen offenen Pfad zum Zusammenfügen enthalten
 @msg	connect end must be "start" or "end"	connect end muss „start“ oder „end“ sein
@@ -8957,7 +9015,8 @@ breakText	Glyphs	Glyphen
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-Dateien haben keine Transparenz, und die Datei hätte {what}: Reduzieren Sie sie zuerst (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind}-Bilder können nicht geöffnet werden (siehe document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` ist keine der Auswahlmöglichkeiten
-@msg	{k} has control characters{_1}	{k} enthält Steuerzeichen{_1}
+@msg	{k} has control characters	{k} enthält Steuerzeichen
+@msg	{k} has control characters or line breaks	{k} enthält Steuerzeichen oder Zeilenumbrüche
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} ist zu lang (höchstens {MAX_TEXT} Zeichen)
 @msg	{k} must be > 0	{k} muss > 0 sein
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} muss eine Zahl (pt) oder eine Länge wie „210 mm“ sein

@@ -1,7 +1,7 @@
 //! The own controls of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) in the
 //! compact 3D dialog: the extrude and bevel options, or the revolve options, on the Object tab
-//! (Rotate (Classic) has none), and the surface with its lights, highlight, blend steps and shading
-//! color on the Lighting tab. Position (presets, rotation, perspective) is the Rotation tab every 3D
+//! (Rotate (Classic) has none), and the surface with its lights, highlight, blend steps, shading
+//! color and Preserve Spot Colors on the Lighting tab. Position (presets, rotation, perspective) is the Rotation tab every 3D
 //! effect shares.
 
 use serde_json::{Value, json};
@@ -41,8 +41,8 @@ pub(super) fn revolve_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
 }
 
 /// The surface, then for Diffuse and Plastic the lights, Ambient Light, the highlight (Plastic
-/// only, and not for Rotate (Classic), which has no Plastic surface), Blend Steps and Shading Color;
-/// Draw Hidden Faces last, for Extrude & Bevel (Classic) (Revolve (Classic) draws every face, and
+/// only, and not for Rotate (Classic), which has no Plastic surface), Blend Steps, Shading Color and
+/// Preserve Spot Colors (unavailable while Shading Color is Custom); Draw Hidden Faces last, for Extrude & Bevel (Classic) (Revolve (Classic) draws every face, and
 /// Rotate (Classic)'s plane is seen from either side).
 pub(super) fn surface_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     let id = d.str("__effect");
@@ -69,9 +69,11 @@ pub(super) fn surface_controls(ui: &mut egui::Ui, d: &mut Dialog) {
         }
         number(ui, d, "blendSteps", tl!("Blend Steps"), (1.0, 256.0), "", 0, None);
         choice(ui, d, "shadingColor", tl!("Shading Color"), &options_of(effect, "shadingColor"));
-        if d.str("shadingColor") == "custom" {
+        let custom = d.str("shadingColor") == "custom";
+        if custom {
             shading_custom(ui, d);
         }
+        ui.add_enabled_ui(!custom, |ui| toggle(ui, d, "preserveSpotColors", tl!("Preserve Spot Colors"), false));
     });
     if id == CLASSIC_EXTRUDE {
         toggle(ui, d, "drawHiddenFaces", tl!("Draw Hidden Faces"), false);
