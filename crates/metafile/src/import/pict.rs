@@ -24,7 +24,7 @@ use std::io::Cursor;
 
 use vectorcraft_geom::{Affine, BezPath, FillRule, Point, Rect, Shape, Vec2, shapes};
 
-use super::{BAD_IMAGE, BrushObj, FontObj, PS_GEOMETRIC, PenObj, Player, SRCCOPY, TOO_MANY_PIXELS, crop, round_rect};
+use super::{BAD_IMAGE, FontObj, PS_GEOMETRIC, PenObj, Player, SRCCOPY, TOO_MANY_PIXELS, crop, round_rect};
 use crate::dib::{self, Rgba};
 use crate::{Imported, Kind};
 
@@ -600,7 +600,7 @@ impl Pict {
         let base = Affine::translate(-frame.origin().to_vec2());
         let artboard = Rect::new(0.0, 0.0, frame.width(), frame.height());
         // A picture's coordinates map straight onto the document, as a WMF's do.
-        let p = Player::new(Kind::Wmf, base, 25.4 / 72.0, artboard);
+        let p = Player::new(Kind::Wmf, base, artboard);
         Self {
             p,
             frame,
@@ -783,7 +783,7 @@ impl Pict {
     /// Fill `bp` (picture space) with `color`.
     fn fill(&mut self, mut bp: BezPath, color: [u8; 3], rule: FillRule) {
         bp.apply_affine(self.p.xf());
-        self.p.dc.brush = BrushObj::Solid(color);
+        self.p.dc.brush = color;
         self.p.dc.fill_rule = rule;
         self.p.draw(bp, true, false);
     }

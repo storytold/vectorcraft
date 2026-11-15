@@ -489,8 +489,11 @@ impl<'a> Scene<'a> {
             self.warn(TOO_LARGE);
             return;
         }
+        // Off the region, an object is still written when brush art painted along its brushed
+        // strokes, or those of the objects in it, can reach the region.
+        let off = |b: Rect, reach: f64| !overlaps(b.inflate(1.0 + reach, 1.0 + reach), self.o.region);
         match n.visual_bounds_with(&self.symbols) {
-            Some(b) if !force && !overlaps(b.inflate(1.0, 1.0), self.o.region) => return,
+            Some(b) if !force && off(b, 0.0) && off(b, vectorcraft_brush::reach_within(n)) => return,
             None if !n.is_container() => return,
             _ => {}
         }
