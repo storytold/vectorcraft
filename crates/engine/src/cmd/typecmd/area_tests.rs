@@ -1589,6 +1589,40 @@ fn proportional_metrics_is_a_character_attribute_saved_only_when_on() {
     assert!(!serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().proportional_metrics);
 }
 
+/// H or V Style (`hkna`) and Roman Italics (`ital`, OpenType panel menu, East Asian options) are
+/// feature tags of the characters: set on a range and turned off again, kept by a character style
+/// and in a saved document, on or off only (`hkna=2` is refused and changes nothing).
+#[test]
+fn kana_style_and_roman_italics_are_character_features() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "かなAB"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.features.clone())).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    // か and な are 3 bytes each.
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 6, "features": ["hkna"]})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 6, "end": 8, "featureChanges": ["ital"]})).unwrap();
+    assert_eq!(runs(&s), [("かな".to_string(), vec!["hkna".to_string()]), ("AB".to_string(), vec!["ital".to_string()])]);
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &saved.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs.iter().map(|r| r.style.features.clone()).collect::<Vec<_>>(), [vec!["hkna".to_string()], vec!["ital".to_string()]]);
+    let before = runs(&s);
+    for bad in [json!({"id": id, "features": ["hkna=2"]}), json!({"id": id, "featureChanges": ["ital=1"]})] {
+        let e = s.execute("text.setRangeStyle", &bad).unwrap_err().to_string();
+        assert!(e.contains("unknown OpenType feature"), "{e}");
+    }
+    assert_eq!(runs(&s), before);
+    s.execute("text.setRangeStyle", &json!({"id": id, "featureChanges": ["-hkna", "-ital"]})).unwrap();
+    assert!(runs(&s).iter().all(|(_, f)| f.is_empty()), "{:?}", runs(&s));
+    s.execute("charStyle.new", &json!({"name": "Kana", "attrs": {"features": ["hkna", "ital"]}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Kana", "id": id})).unwrap();
+    assert!(runs(&s).iter().all(|(_, f)| *f == ["hkna", "ital"]), "{:?}", runs(&s));
+    let e = s.execute("charStyle.new", &json!({"name": "Bad", "attrs": {"features": ["ital=2"]}})).unwrap_err().to_string();
+    assert!(e.contains("unknown OpenType feature `ital=2`"), "{e}");
+}
+
 /// Tate-chu-yoko (Character panel menu, East Asian options): a character attribute, saved only
 /// when on. Documents written before it read as off.
 #[test]
@@ -1923,6 +1957,55 @@ fn standard_vertical_roman_is_a_character_attribute_saved_only_when_on() {
     assert!(s.execute("text.setRangeStyle", &json!({"id": id, "standardVerticalRoman": "true"})).is_err());
     s.execute("text.setFormat", &json!({"standardVerticalRoman": false})).unwrap();
     assert!(runs(&s).iter().all(|r| !r.style.standard_vertical_roman));
+}
+
+/// The East Asian glyph form (Glyphs panel menu) is one character attribute, `glyphForm`: one
+/// form replaces another, "default" (Revert To Default Forms) takes it away, and it is saved
+/// only when set. A call that changes nothing records no undo step, an unknown form is refused,
+/// and character styles carry it.
+#[test]
+fn glyph_form_is_one_character_attribute_saved_only_when_set() {
+    use vectorcraft_doc::GlyphForm;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "亜唖芦"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let forms = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.glyph_form)).collect::<Vec<_>>();
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("glyphForm").is_none());
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "glyphForm": "jis78"})).unwrap();
+    assert_eq!(forms(&s), [("亜".into(), GlyphForm::Default), ("唖".into(), GlyphForm::Jis78), ("芦".into(), GlyphForm::Default)]);
+    assert_eq!(serde_json::to_value(&runs(&s)[1].style).unwrap()["glyphForm"], "jis78");
+    // Saved and reopened as it was.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs.iter().map(|r| (r.text.clone(), r.style.glyph_form)).collect::<Vec<_>>(), forms(&s));
+    // Another form replaces it: one form at a time.
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"glyphForm": "fullWidth"})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::FullWidth));
+    let n = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"glyphForm": "fullWidth"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), n, "nothing changed, no undo step");
+    for bad in [json!("jis2004"), json!(78), json!(true), json!("Traditional")] {
+        let e = s.execute("text.setFormat", &json!({"glyphForm": bad})).unwrap_err().to_string();
+        assert!(e.contains("`glyphForm` must be one of \"traditional\""), "{bad}: {e}");
+        assert!(s.execute("text.setRangeStyle", &json!({"id": id, "glyphForm": bad})).is_err(), "{bad}");
+    }
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::FullWidth), "a refused call changes nothing");
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style)["glyphForm"], "fullWidth");
+    s.execute("text.setFormat", &json!({"glyphForm": "default"})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::Default));
+    assert!(serde_json::to_value(&runs(&s)[0].style).unwrap().get("glyphForm").is_none());
+    // A character style carries the form.
+    s.execute("charStyle.new", &json!({"name": "Old forms", "attrs": {"glyphForm": "jis83"}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Old forms", "id": id})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::Jis83));
+    assert!(s.execute("charStyle.new", &json!({"name": "Bad", "attrs": {"glyphForm": "jis2004"}})).is_err());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::Default));
 }
 
 /// No Break is a character attribute, saved only when on.

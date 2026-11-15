@@ -44,6 +44,8 @@ font-technology	Variable	가변
 	x-Height	x 높이
 	ICF Box	ICF 박스
 	Proportional Metrics	비례 메트릭
+	H or V Style	가로 또는 세로 스타일
+	Roman Italics	로마자 이탤릭
 	Insert Aki Left	앞 아키 삽입
 	Insert Aki Right	뒤 아키 삽입
 	Tsume	츠메
@@ -456,6 +458,18 @@ digits	Malayalam	말라얄람어
 	Title Case	제목 대소문자
 	Sentence case	문장 대소문자
 	Smart Punctuation…	스마트 문장 부호…
+	Smart Punctuation	스마트 문장 부호
+	ff, fi, ffi Ligatures	ff, fi, ffi 합자
+	ff, fl, ffl Ligatures	ff, fl, ffl 합자
+	Smart Quotes	스마트 따옴표
+	Smart Spaces	스마트 공백
+	En, Em Dashes	엔 대시 및 엠 대시
+	Ellipses	줄임표
+	Expert Fractions	전문가 분수
+	Replace In	바꿀 범위
+	Selected Text Only	선택한 텍스트만
+	Entire Document	전체 문서
+	Report Results	결과 보고
 	Create Outlines	윤곽선 만들기
 	Optical Margin Alignment	시각적 여백 정렬
 	Dynamic Text	동적 텍스트
@@ -1547,6 +1561,9 @@ antiAlias	Sharp	날카롭게
 	The selected character's font is not available.	선택한 문자의 글꼴을 사용할 수 없습니다.
 	No alternates for the selected character.	선택한 문자의 대체 글리프가 없습니다.
 	Double-click to replace	더블클릭하여 바꾸기
+	Click to replace	클릭하여 바꾸기
+	Show all alternates in the Glyphs panel	글리프 패널에서 모든 대체 글리프 표시
+	Show Character Alternates	문자의 대체 글리프 표시
 	Select one character with the Type tool first.	먼저 문자 도구로 문자 하나를 선택하세요.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph}은(는) {font}의 글리프이며, 선택한 텍스트의 글꼴({text_font})의 것이 아닙니다.
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph}은(는) {base}(U+{base_code})의 {place} 글리프입니다. 선택한 문자는 {sel}(U+{code})입니다.
@@ -1824,6 +1841,7 @@ antiAlias	Sharp	날카롭게
 	Format	형식
 	Format Options	형식 옵션
 	Format Settings	형식 설정
+	Format Settings…	형식 설정…
 	Format:	형식:
 	Formats:	형식:
 	Fractions	분수
@@ -2061,6 +2079,7 @@ antiAlias	Sharp	날카롭게
 	Images:	이미지:
 	Import Keyboard Shortcuts…	단축키 가져오기…
 	Import PDF	PDF 가져오기
+	Import PDF pages as links	PDF 페이지를 링크로 가져오기
 	Import PDF Presets	PDF 프리셋 가져오기
 	Import Perspective Grid Presets	원근 격자 프리셋 가져오기
 	Import Print Presets	인쇄 프리셋 가져오기
@@ -3746,6 +3765,7 @@ gradient-kind	Radial	방사형
 	Convert To Outlines	윤곽선으로 변환
 	Copy All Objects	모든 개체 복사
 	Copy Fonts Used in the Document	문서에 사용된 글꼴 복사
+	Copy Info	정보 복사
 	Copy Links	링크 복사
 	Couldn't copy to the system clipboard: {e}	시스템 클립보드로 복사할 수 없습니다: {e}
 	Couldn't paste from the clipboard: {e}	클립보드에서 붙여넣을 수 없습니다: {e}
@@ -4011,6 +4031,7 @@ file-filter	Templates	템플릿
 	Small Thumbnails	작은 축소판
 	Smooth Color	부드러운 색상
 	Social Square Post 1080×1080	소셜 정사각형 게시물 1080×1080
+	Sort by Size	크기순 정렬
 	Sort by Status	상태순 정렬
 	Specified Distance	지정 거리
 	Specified Steps	지정 단계
@@ -4227,6 +4248,7 @@ theme	Appearance	외관
 	Free Transform	자유 변형
 	Perspective Distort	원근 왜곡
 	Radial Blur…	방사형 흐림…
+	Blur Center	흐림 중심
 	Smart Blur…	스마트 흐림…
 	Sharpen	선명하게
 	Unsharp Mask…	언샤프 마스크…
@@ -5118,6 +5140,7 @@ theme	Appearance	외관
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
+@msg	Copied the link info	링크 정보를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
 @msg	unknown highlight `{h}`	알 수 없는 강조 `{h}`
@@ -6261,7 +6284,7 @@ axis	Y Axis	Y축
 @plural	Result: {n}|Results: {n}	결과: {n}
 @msg	select one object	개체 하나를 선택하십시오
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	전체 편집은 패스, 컴파운드 패스, 심볼 인스턴스 및 이들의 그룹에서 작동합니다
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(회전하거나 반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오
 @msg	Global Edit is off	전체 편집이 꺼져 있습니다
 @msg	only an object of the Global Edit other than the one it started from can be left out	전체 편집을 시작한 개체가 아닌 전체 편집의 개체만 제외할 수 있습니다
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
@@ -7058,6 +7081,9 @@ breakText	Glyphs	글리프
 	Open Tutorial Sample	튜토리얼 샘플 열기
 	Finish Tutorial	튜토리얼 완료
 	Next Tutorial	다음 튜토리얼
+	Show Learn Tab	학습 탭 표시
+	Show Skill	기술 표시
+	Back One Level	한 단계 뒤로
 	Back to Skills	기술로 돌아가기
 @msg	tutorial `{id}` has no practice sample	튜토리얼 `{id}`에 연습용 샘플이 없습니다
 @msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)
@@ -7098,6 +7124,9 @@ breakText	Glyphs	글리프
 	Grommets	아일렛
 	Grommet Inset	가장자리에서 아일렛까지 거리
 	Diameter	지름
+	Nest Shapes…	도형 네스팅…
+	Nest Shapes	도형 네스팅
+	Roll	롤
 
 # Messages of the 3D effects, image export, color profiles, swatch exchange files, color books, DXF import,
 # path operations, libraries, scripts and zip files.
@@ -8605,6 +8634,8 @@ breakText	Glyphs	글리프
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 파일이 너무 커서 문자로 가져올 수 없습니다(최대 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG를 확장하면 중첩된 SVG 이미지가 {0}개보다 많아집니다
 @msg	the SVG expands to more than {0} objects	SVG를 확장하면 개체가 {0}개보다 많아집니다
+@msg	the SVG's style sheets take too long to match	SVG의 스타일 시트를 대조하는 데 시간이 너무 오래 걸립니다
+@msg	the SVG's styles expand to more than {0} MB	SVG의 스타일을 확장하면 {0}MB를 넘습니다
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	SVG 파일이 {MAX_IMPORT_BYTES}바이트보다 큽니다
 @msg	the SVG has no drawable objects	SVG에 그릴 수 있는 개체가 없습니다
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 파일의 압축을 풀면 {_1} MB를 넘습니다
@@ -8832,7 +8863,7 @@ breakText	Glyphs	글리프
 @msg	unexpected resources	예상하지 못한 리소스
 @msg	unknown CMYK profile `{name}`	알 수 없는 CMYK 프로파일 `{name}`
 @msg	unknown File Info field `{k}`	알 수 없는 파일 정보 필드 `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	알 수 없는 OpenType 기능 `{t}`(liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt. 끄려면 앞에 -를 붙이세요. swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt는 대체 글리프 번호를 `tag=N` 형식으로 받으며 N은 0에서 {_1} 사이입니다. 예: `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	알 수 없는 OpenType 기능 `{t}`(liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital. 끄려면 앞에 -를 붙이세요. swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt는 대체 글리프 번호를 `tag=N` 형식으로 받으며 N은 0에서 {_1} 사이입니다. 예: `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	featureChanges의 알 수 없는 OpenType 기능 `{t}`(`features`가 받는 태그를 사용하세요)
 @msg	unknown PDF preset `{name}` (presets: {_1})	알 수 없는 PDF 프리셋 `{name}`(프리셋: {_1})
 @msg	unknown Warp style	알 수 없는 왜곡 스타일

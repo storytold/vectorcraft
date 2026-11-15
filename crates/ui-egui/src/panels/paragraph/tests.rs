@@ -1060,7 +1060,9 @@ fn reset_panel_leaves_an_undo_group_open_in_another_document() {
     // The second document is open before the group begins, so switching to it opens no group in it.
     app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
     assert_eq!(app.session.active_index(), Some(1));
-    app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap();
+    let b = app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap()["id"].clone();
+    // A reset that changes nothing records no step, so B starts away from the panel's defaults.
+    app.run("text.setFormat", json!({"id": b, "mojikumi": "none"})).unwrap();
     app.session.set_active(0);
     app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
     app.run("text.setFormat", json!({"id": a, "mojikumi": "none"})).unwrap();

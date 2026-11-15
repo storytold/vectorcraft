@@ -13,13 +13,14 @@
 //!   lines or gradients, so clipped art is written whole, images over white, dashes as separate
 //!   lines and gradients and patterns as one colour (each loss comes back as a warning).
 //!
-//! [`import`] reads either format back into a document of one artboard (the picture's frame) and
-//! one layer: paths with fills and strokes, clipping, images and text. Records it doesn't read are
-//! skipped, with one warning. [`import_pict`] reads QuickDraw pictures (PICT, versions 1 and 2)
-//! into the same kind of document.
+//! [`import`] reads either format (an EMF with its EMF+ records too, through `craft_metafile`)
+//! into a document of one artboard (the picture's frame) and one layer: paths with fills and
+//! strokes, clipping, images and text. Records it doesn't read are skipped, with one warning.
+//! [`import_pict`] reads QuickDraw pictures (PICT, versions 1 and 2) into the same kind of
+//! document.
 //!
-//! - `bytes`: little-endian writing and bounds-checked reading.
-//! - `dib`: device-independent bitmaps, both ways.
+//! - `bytes`: little-endian writing.
+//! - `dib`: device-independent bitmaps for the writers.
 //! - `scene`: the document walk both writers share.
 //! - `emf`, `wmf`: the writers.
 //! - `import`: the readers.
