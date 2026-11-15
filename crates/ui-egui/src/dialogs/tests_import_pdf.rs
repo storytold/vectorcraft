@@ -83,6 +83,47 @@ fn all_pages_and_a_crop_box() {
     assert_eq!(artboard_widths(&app), [10.0, 40.0, 30.0]);
 }
 
+/// Each layer's objects in the active document: placed documents (true) or not.
+fn placed_pages(app: &VectorcraftApp) -> Vec<bool> {
+    let doc = &app.session.active().unwrap().doc;
+    doc.layers.iter().flat_map(|l| l.children().cloned().unwrap_or_default()).map(|n| matches!(n.kind, NodeKind::PlacedDocument(_))).collect()
+}
+
+#[test]
+fn import_pdf_pages_as_links_opens_each_page_linked() {
+    let dir = vectorcraft_testkit::TempDir::new("import-pdf-link-pages");
+    let path = dir.join("three.pdf").to_string_lossy().into_owned();
+    std::fs::write(&path, three_pages()).unwrap();
+    let mut app = app();
+    io::open_bytes(&mut app, &path, &three_pages(), Some(path.clone())).unwrap();
+    assert_eq!(field(&app, "linkPages"), false, "off by default");
+    frame(&mut app);
+    set(&mut app, "linkPages", json!(true));
+    set(&mut app, "allPages", json!(false));
+    set(&mut app, "range", json!("1, 3"));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(artboard_widths(&app), [100.0, 300.0]);
+    assert_eq!(placed_pages(&app), [true, true]);
+    // A file given without its path, or opened with a password, can't link its pages: they open as art.
+    io::open_bytes(&mut app, "three.pdf", &three_pages(), None).unwrap();
+    set(&mut app, "linkPages", json!(true));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert_eq!(placed_pages(&app), [false, false, false]);
+    let two = pdf(&[PdfPage::new(10.0, 10.0, "0 g 0 0 5 5 re f"), PdfPage::new(20.0, 10.0, "0 g 0 0 5 5 re f")], Some("pw"));
+    let locked = dir.join("two.pdf").to_string_lossy().into_owned();
+    std::fs::write(&locked, &two).unwrap();
+    io::open_bytes(&mut app, &locked, &two, Some(locked.clone())).unwrap();
+    set(&mut app, "password", json!("pw"));
+    confirm(&mut app).unwrap();
+    set(&mut app, "linkPages", json!(true));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert_eq!(placed_pages(&app), [false, false]);
+}
+
 #[test]
 fn single_page_pdfs_open_directly() {
     let mut app = app();

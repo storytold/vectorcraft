@@ -20,7 +20,7 @@ use text::TextSlots;
 
 pub use depth::MAX_ELEMENT_DEPTH;
 pub(crate) use depth::xml_too_deep;
-pub use files::MAX_NESTED_SVG_IMAGES;
+pub use files::{MAX_DATA_URL_BYTES, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT};
 pub(crate) use fx::BLEND;
 
 /// Most objects an imported SVG may expand to: a guard against `<use>` and nested-image
@@ -38,18 +38,18 @@ pub(super) use importer::PT_PER_IN;
 use importer::SymbolMade;
 pub(super) use layers::DEFAULT_FONT_SIZE;
 pub(crate) use layers::SUBLAYER;
-use layers::{RootUnits, inkscape_pages, promote_sublayers, root_layer_name};
+use layers::{RootUnits, inkscape_pages, promote_sublayers, root_layer_name, root_title};
 pub(super) use prepass::Edits;
 use prepass::{Extras, labels, prepass};
 pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
 
+mod budget;
 mod css;
 mod css_transform;
 mod depth;
 mod files;
 mod fx;
 mod linear_rgb;
-mod spread;
 mod symbol_units;
 mod text;
 mod vector_effect;
@@ -110,6 +110,8 @@ pub(crate) fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) 
         return Err(too_deep());
     }
     let xml = parse(svg)?;
+    // Before the style cascade of `depth::height`, as `import` measures it.
+    budget::check(&xml, budget::Cost::LIMITS, depth::MAX_ELEMENT_DEPTH)?;
     if depth::height(&xml, depth::MAX_ELEMENT_DEPTH).is_none() {
         return Err(too_deep());
     }
@@ -118,6 +120,17 @@ pub(crate) fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) 
 
 /// The document SVG text `svg` holds, read with `opts`, and the warnings about what it couldn't keep.
 pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Result<(Document, Vec<String>), SvgError> {
+    import_finding(svg, opts, max_nodes, &HashSet::new()).map(|(doc, warnings, _)| (doc, warnings))
+}
+
+/// [`import`], also finding the object made of each element whose id `wanted` lists (the first
+/// object named after it), by element id.
+pub(crate) fn import_finding(
+    svg: &str,
+    opts: &ImportOptions,
+    max_nodes: usize,
+    wanted: &HashSet<String>,
+) -> Result<(Document, Vec<String>, crate::Found), SvgError> {
     // Before anything reads the tree: the XML reader, usvg, and what is made of its tree, all by
     // recursion.
     let too_deep = || SvgError::TooDeep(depth::MAX_ELEMENT_DEPTH);
@@ -126,10 +139,14 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         return Err(too_deep());
     }
     let xml = parse(svg)?;
+    // Before the style cascade of `depth::height` and the prepass, which keeps the declarations of
+    // each element it reads; measured again below on the text usvg reads when that differs.
+    let spent = budget::check(&xml, budget::Cost::LIMITS, depth::MAX_ELEMENT_DEPTH)?;
     let Some(height) = depth::height(&xml, depth::MAX_ELEMENT_DEPTH) else {
         return Err(too_deep());
     };
     let (svg, found) = prepass(svg, &scan.markers, &xml, opts)?;
+    let rewritten = matches!(svg, Cow::Owned(_));
     // The prepass's edits are in the text: the XML is read again only when it made any.
     let xml = match &svg {
         Cow::Borrowed(_) => xml,
@@ -144,7 +161,14 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let mut warnings = found.warnings;
     let text_xml = found.text_source.as_deref().map(parse).transpose()?;
     let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
+    // Before usvg copies what `<use>`s show and the style values of each copy: the text usvg reads.
+    let spent = match &src {
+        Cow::Borrowed(_) if !rewritten => spent,
+        Cow::Borrowed(_) => budget::check(&xml, budget::Cost::LIMITS, usize::MAX)?,
+        Cow::Owned(prepared) => budget::check(&parse(prepared)?, budget::Cost::LIMITS, usize::MAX)?,
+    };
     let files = found.files;
+    files.spent_by_svg(spent);
     let tree = {
         let opt = usvg::Options {
             dpi: units.dpi as f32,
@@ -154,10 +178,16 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         };
         usvg::Tree::from_str(&src, &opt).map_err(|e| SvgError::Parse(e.to_string()))?
     };
+    if let Some(err) = files.refused() {
+        return Err(err);
+    }
     let size = tree.size();
     let k = units.k;
     let mut doc = Document::new(size.width() as f64 * k, size.height() as f64 * k);
     doc.units = units.unit;
+    // The file's own title, when it gives one, is the document's File Info title; the document's
+    // name stays what `Document::new` gave it, for the caller to name after the file.
+    doc.metadata.title = root_title(xml.root_element());
     let mut im = Importer {
         doc,
         warnings,
@@ -175,7 +205,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         symbol_suffixes: HashMap::new(),
         pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
-        filter_sources: fx::sources(&xml, &scan.markers),
+        filter_sources: fx::sources(&xml, &scan.markers, |h| files.data_href(h)),
         files,
         non_scaling: found.non_scaling,
         data: found.data,
@@ -189,6 +219,8 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         max_nodes,
         error: None,
         nested_svg_images: 0,
+        wanted: wanted.clone(),
+        found: HashMap::new(),
     };
     im.doc.svg_scripts = found.scripts;
     if im.files.nested_text() {
@@ -301,7 +333,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         }
     }
     im.doc.limit_depth_noting(&mut im.warnings);
-    Ok((im.doc, im.warnings))
+    Ok((im.doc, im.warnings, im.found))
 }
 
 struct Importer {
@@ -363,4 +395,8 @@ struct Importer {
     error: Option<SvgError>,
     /// How many nested SVG images were converted so far.
     nested_svg_images: usize,
+    /// The element ids whose objects [`import_finding`] looks for.
+    wanted: HashSet<String>,
+    /// The object made of each element `wanted` lists, by its id.
+    found: HashMap<String, NodeId>,
 }

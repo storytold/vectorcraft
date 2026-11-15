@@ -131,6 +131,37 @@ fn pdf_layers_import_back_as_layers() {
     }
 }
 
+/// A hidden layer written as a PDF layer places the live effects of its instances' symbol art,
+/// also in a PDF/A-2b file at PDF 1.4 whose 17,000 pt page has it written as PDF 1.6: the symbol's
+/// square from x = 10 to 40, which a Transform effect moves 100 pt right, is written from x = 110
+/// to 140.
+#[test]
+fn a_hidden_layer_places_symbol_art_effects_when_a_long_page_raises_the_version() {
+    let mut d = Document::new(17_000.0, 300.0);
+    d.layers.clear();
+    let mut square = rect(&mut d, 10.0, RED);
+    square.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: json!({"moveH": 100.0}), visible: true });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: square.into() });
+    let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let mut l = Node::layer(d.alloc_id(), "Hidden", LayerColor::Preset(0));
+    l.visible = false;
+    if let NodeKind::Layer { children, .. } = &mut l.kind {
+        children.push(instance.into());
+    }
+    d.layers.push(l.into());
+    for compatibility in [Compatibility::Pdf14, Compatibility::Pdf16] {
+        let settings = PdfSettings { standard: Standard::PdfA2b, compatibility, create_layers: true, ..PdfSettings::default() };
+        let r = export_with_report(&d, &PdfOptions { settings, created: Some(1_791_200_000), ..Default::default() }).unwrap();
+        assert!(r.bytes.starts_with(b"%PDF-1.6"), "{compatibility:?}");
+        let back = import_with_report(&r.bytes, &ImportOptions::default()).unwrap().document;
+        let hidden = back.layers.iter().find(|l| l.name.as_deref() == Some("Hidden")).expect("the hidden layer");
+        let art = hidden.children().unwrap();
+        assert_eq!(art.len(), 1, "{compatibility:?}");
+        let b = art[0].geometric_bounds().unwrap();
+        assert!((b.x0 - 110.0).abs() < 0.1 && (b.x1 - 140.0).abs() < 0.1, "{compatibility:?}: {b:?}");
+    }
+}
+
 /// The rows of `nodes` in paint order, depth first: `depth name visible` for layers, `depth fill`
 /// for art.
 fn tree(nodes: &[std::sync::Arc<Node>], depth: usize, out: &mut Vec<String>) {
@@ -212,15 +243,15 @@ fn without_pdf_layers_the_layers_are_plain_page_content() {
         oc_properties(&r.bytes, None, |props, _| has = props.is_some());
         assert_eq!(has, v["createLayers"] == json!(true) && warning.is_none(), "{v}");
         match warning {
-            Some(w) => assert!(r.warnings.iter().any(|x| x.contains(w)), "{v}: {:?}", r.warnings),
-            None => assert!(r.warnings.is_empty(), "{v}: {:?}", r.warnings),
+            Some(w) => assert!(r.setting_notes.iter().any(|x| x.contains(w)), "{v}: {:?}", r.setting_notes),
+            None => assert!(r.warnings.is_empty() && r.setting_notes.is_empty(), "{v}: {:?} {:?}", r.warnings, r.setting_notes),
         }
     }
     // A knockout page group draws objects, not layers.
     d.page_knockout = true;
     let r = export(&d, json!({"createLayers": true}));
     oc_properties(&r.bytes, None, |props, _| assert!(props.is_none()));
-    assert!(r.warnings.iter().any(|w| w.contains("knockout page group")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("knockout page group")), "{:?}", r.setting_notes);
 }
 
 #[test]

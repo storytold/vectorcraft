@@ -98,7 +98,7 @@ fn check_string_room(interp: &mut Interp, len: usize) -> JsResult<()> {
 
 /// Pushes `item` onto `list`, first holding the bytes of the list's new capacity when it must
 /// grow.
-fn push_held<T>(interp: &mut Interp, held: &mut HeldBytes, list: &mut Vec<T>, item: T) -> JsResult<()> {
+pub(crate) fn push_held<T>(interp: &mut Interp, held: &mut HeldBytes, list: &mut Vec<T>, item: T) -> JsResult<()> {
     if list.len() == list.capacity() {
         let more = list.capacity().max(4);
         held.add(interp, more.saturating_mul(size_of::<T>()))?;
@@ -109,10 +109,11 @@ fn push_held<T>(interp: &mut Interp, held: &mut HeldBytes, list: &mut Vec<T>, it
 }
 
 /// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that copy's
-/// bytes are reserved and added to the heap, and its units charged as fuel, first.
+/// bytes are reserved and added to the heap, and its units charged as fuel, first. The rope stays
+/// rooted while the copy is reserved, so what it holds is still counted.
 pub(crate) fn flat_charged(interp: &mut Interp, s: &Str) -> JsResult<Rc<[u16]>> {
     if s.is_rope() {
-        reserve_units(interp, s.len())?;
+        interp.rooted(&[Value::String(s.clone())], |interp| reserve_units(interp, s.len()))?;
     }
     Ok(s.flat())
 }
@@ -179,7 +180,7 @@ fn clamp(n: f64, len: usize) -> usize {
 
 /// The first index at `from` or after where `needle` occurs in `hay`. Every position tried takes
 /// fuel.
-fn find(interp: &mut Interp, hay: &[u16], needle: &[u16], from: usize) -> JsResult<Option<usize>> {
+pub(crate) fn find(interp: &mut Interp, hay: &[u16], needle: &[u16], from: usize) -> JsResult<Option<usize>> {
     if needle.len() > hay.len() {
         return Ok(None);
     }

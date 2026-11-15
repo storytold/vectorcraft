@@ -293,13 +293,21 @@ fn artboard_guides_round_trip_and_canvas_guides_save_as_before() {
     use vectorcraft_doc::Guide;
     let mut d = Document::new(100.0, 100.0);
     let id = d.artboards[0].id;
-    d.guides = vec![Guide::new(true, 10.0), Guide { artboard: Some(id), ..Guide::new(false, 20.0) }];
+    d.add_ruler_guide(&Guide::new(true, 10.0));
+    d.add_ruler_guide(&Guide { artboard: Some(id), ..Guide::new(false, 20.0) });
     let mut v = json_of(&save(&d, false));
-    assert_eq!(v["document"]["guides"], json!([{"vertical": true, "pos": 10.0}, {"vertical": false, "pos": 20.0, "artboard": id}]));
-    assert_eq!(load(&save(&d, false)).unwrap().guides, d.guides);
+    let lines: Vec<_> = v["document"]["guides"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| json!({"vertical": g["vertical"], "pos": g["pos"], "artboard": g.get("artboard")}))
+        .collect();
+    assert_eq!(lines, [json!({"vertical": true, "pos": 10.0, "artboard": null}), json!({"vertical": false, "pos": 20.0, "artboard": id})]);
+    assert_eq!(load(&save(&d, false)).unwrap().ruler_guides(), d.ruler_guides());
     v["document"]["guides"] = json!([{"vertical": false, "pos": 20.0}]);
     let old = load(&serde_json::to_vec(&v).unwrap()).unwrap();
-    assert_eq!(old.guides, [Guide::new(false, 20.0)]);
+    let old_lines: Vec<_> = old.ruler_guides().into_iter().map(|g| (g.vertical, g.pos, g.artboard)).collect();
+    assert_eq!(old_lines, [(false, 20.0, None)]);
 }
 
 #[test]

@@ -211,23 +211,46 @@ pub(crate) fn verify(pdf: &[u8], standard: Standard) -> Result<(), PdfError> {
     Ok(())
 }
 
-/// `pdf` without its streams' data (dictionaries and the rest of the syntax), so that what is
-/// looked for there isn't found in image or font bytes.
+/// `pdf` without its streams' data, the text of its literal strings and its comments (dictionaries
+/// and the rest of the syntax), so that what is looked for there isn't found in image or font
+/// bytes, or in a string such as the file identifier, whose base64 hash can hold `/BM`.
 fn without_streams(pdf: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(pdf.len().min(1 << 20));
     let mut at = 0;
-    while let Some(s) = find(pdf, b"stream", at) {
-        let data = s + b"stream".len();
-        // `endstream` itself, or a stream keyword that isn't one (inside a name or string).
-        if (s >= 3 && pdf.get(s - 3..s) == Some(b"end")) || !pdf.get(data).is_some_and(|b| matches!(b, b'\r' | b'\n')) {
-            out.extend_from_slice(pdf.get(at..data).unwrap_or_default());
-            at = data;
-            continue;
+    while let Some(&b) = pdf.get(at) {
+        match b {
+            // A literal string: parentheses nest, and a backslash escapes the next byte.
+            b'(' => {
+                out.extend_from_slice(b"()");
+                let mut depth = 0usize;
+                at += 1;
+                while let Some(&c) = pdf.get(at) {
+                    at += 1;
+                    match c {
+                        b'\\' => at += 1,
+                        b'(' => depth += 1,
+                        b')' if depth == 0 => break,
+                        b')' => depth -= 1,
+                        _ => {}
+                    }
+                }
+            }
+            // A comment, to the end of its line.
+            b'%' => at += pdf.get(at..).unwrap_or_default().iter().take_while(|c| !matches!(c, b'\r' | b'\n')).count(),
+            // A stream keyword (not `endstream`, and followed by its end of line): its data is left out.
+            b's' if pdf.get(at..at + 6) == Some(b"stream")
+                && !(at >= 3 && pdf.get(at - 3..at) == Some(b"end"))
+                && pdf.get(at + 6).is_some_and(|c| matches!(c, b'\r' | b'\n')) =>
+            {
+                out.extend_from_slice(b"stream");
+                at = find(pdf, b"endstream", at + 6).unwrap_or(pdf.len());
+            }
+            _ => {
+                out.push(b);
+                at += 1;
+            }
         }
-        out.extend_from_slice(pdf.get(at..data).unwrap_or_default());
-        at = find(pdf, b"endstream", data).unwrap_or(pdf.len());
     }
-    out.extend_from_slice(pdf.get(at..).unwrap_or_default());
     out
 }
 

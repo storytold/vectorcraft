@@ -353,6 +353,50 @@ fn the_folder_is_read_at_the_first_frame_and_when_the_window_becomes_active() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// A macOS menu bar that reports a menu opening at its next drain when `0` is set.
+struct Opens(std::rc::Rc<std::cell::Cell<bool>>);
+
+impl native_menu::Backend for Opens {
+    fn sync(&mut self, _: &native_menu::MenuBar) {}
+    fn drain(&mut self) -> Vec<native_menu::Event> {
+        if self.0.replace(false) { vec![native_menu::Event::Opened] } else { Vec::new() }
+    }
+}
+
+#[test]
+fn a_menu_of_the_macos_menu_bar_opening_reads_the_folder_again() {
+    let dir = folder("native-open");
+    let mut app = app(&dir);
+    write(&dir, "first.js", "");
+    read(&app);
+    let opens = std::rc::Rc::new(std::cell::Cell::new(false));
+    app.services.native_menu = Some(native_menu::NativeMenu::new(Box::new(Opens(opens.clone()))));
+    let ctx = egui::Context::default();
+    let mut frame = |opened: bool| {
+        opens.set(opened);
+        assert_eq!(app.services.native_menu.as_mut().map(native_menu::NativeMenu::take_keys), Some(Vec::new()));
+        native_menu::run(&mut app, &ctx);
+        scripts_menu::wait();
+        native_menu::layout(&app).bar
+    };
+    let listed = |bar: &native_menu::MenuBar| {
+        let file = bar.menus.iter().find(|m| m.title == "File").unwrap();
+        let scripts = file.children.iter().find_map(|n| match n {
+            Node::Submenu { label, children } if label == "Scripts" => Some(children.as_slice()),
+            _ => None,
+        });
+        scripts.unwrap_or_default().iter().filter_map(|n| if let Node::Item(it) = n { Some(it.label.clone()) } else { None }).collect::<Vec<_>>()
+    };
+    // While the window stays active and no menu opens, the folder is left alone.
+    write(&dir, "second.js", "");
+    let bar = frame(false);
+    assert_eq!(listed(&bar)[..1], ["first"], "{:?}", listed(&bar));
+    assert!(!listed(&bar).iter().any(|l| l == "second"), "{:?}", listed(&bar));
+    let bar = frame(true);
+    assert_eq!(listed(&bar)[..2], ["first", "second"], "{:?}", listed(&bar));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn a_read_asked_for_during_another_runs_when_that_one_ends() {
     let dir = folder("pending");

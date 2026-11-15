@@ -29,8 +29,8 @@ fn panels_draw_and_apply_headless() {
         out.textures_delta.clear();
     }
     app.run("charStyle.apply", target(&app, Kind::Char, json!({"name": "Big"}))).unwrap();
-    let (name, attrs) = current(&app, Kind::Char).unwrap();
-    assert_eq!((name.as_deref(), attrs["size"].as_f64()), (Some("Big"), Some(30.0)));
+    let (style, _) = text_style(&app).unwrap();
+    assert_eq!((current(&app, Kind::Char), style.size), (Some(Some("Big".to_string())), 30.0));
 }
 
 #[test]
@@ -184,6 +184,44 @@ fn dragging_a_style_onto_delete_deletes_it() {
     }
 }
 
+/// A secondary or middle drag of a style row onto Create New Style or Delete carries no row and
+/// runs nothing; a primary drag still deletes.
+#[test]
+fn only_a_primary_drag_carries_a_style_row() {
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, _) = drag_app();
+        let ctx = egui::Context::default();
+        let before = styles(&mut app, kind);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let commands = app.run_count;
+        for pointer in [egui::PointerButton::Secondary, egui::PointerButton::Middle] {
+            for from_right in [40.0, 12.0] {
+                let button = std::cell::Cell::new(egui::Pos2::ZERO);
+                let mut draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+                    ui.set_width(280.0);
+                    let right = ui.max_rect().right();
+                    show(app, ui, kind);
+                    button.set(egui::pos2(right - from_right, ui.min_rect().bottom() - 12.0));
+                };
+                frame_events(&ctx, &mut app, vec![], &mut draw);
+                let row = text_rect(&frame_events(&ctx, &mut app, vec![], &mut draw), "Body").center();
+                let press = |pos, pressed| egui::Event::PointerButton { pos, button: pointer, pressed, modifiers: Default::default() };
+                frame_events(&ctx, &mut app, vec![egui::Event::PointerMoved(row), press(row, true)], &mut draw);
+                frame_events(&ctx, &mut app, vec![egui::Event::PointerMoved(row + vec2(0.0, 12.0))], &mut draw);
+                let to = button.get();
+                frame_events(&ctx, &mut app, vec![egui::Event::PointerMoved(to)], &mut draw);
+                assert!(!egui::DragAndDrop::has_any_payload(&ctx), "{}: a {pointer:?} drag carries no row", kind.what());
+                frame_events(&ctx, &mut app, vec![press(to, false)], &mut draw);
+                frame_events(&ctx, &mut app, vec![], &mut draw);
+            }
+        }
+        assert_eq!((app.run_count, styles(&mut app, kind)), (commands, before.clone()), "{}: nothing runs", kind.what());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "no undo step");
+        assert!(drag_row_onto_footer(&ctx, &mut app, kind, "Body", 12.0, false), "{} Styles: Delete is outlined", kind.what());
+        assert_eq!(styles(&mut app, kind).len(), before.len() - 1, "{}: a primary drag deletes Body", kind.what());
+    }
+}
+
 fn capture_app() -> (VectorcraftApp, NodeId, egui::Context) {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
@@ -261,9 +299,9 @@ fn click_label(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, mut d
     app.run_count.wrapping_sub(before)
 }
 
-/// Double-clicking a user character style's row opens its Character Style Options once: the first
-/// click applies the style to the selected text, the second opens the dialog without applying it
-/// again. A paragraph style's row opens none, and the built-in Normal style opens none either.
+/// Double-clicking a user style's row opens its Character or Paragraph Style Options once: the
+/// first click applies the style to the selected text, the second opens the dialog without applying
+/// it again.
 #[test]
 fn double_clicking_a_character_style_row_opens_its_options() {
     for kind in [Kind::Char, Kind::Para] {
@@ -290,10 +328,10 @@ fn double_clicking_a_character_style_row_opens_its_options() {
             assert_eq!(app.run_count.wrapping_sub(before), 2, "one apply and the dialog");
         } else {
             let d = dialog.expect("double-clicking a Paragraph Style's row opens its options");
-            assert_eq!(d.kind, "command");
-            assert_eq!(d.str("__command"), "paraStyle.rename");
-            assert_eq!(d.str("__label"), "Paragraph Style Options");
-            // One apply from the first click and the rename dialog from the second.
+            assert_eq!(d.kind, "paraStyleOptions");
+            assert_eq!(d.str("__style"), "Body");
+            assert_eq!(d.str("section"), "general");
+            // One apply from the first click and the dialog from the second.
             assert_eq!(app.run_count.wrapping_sub(before), 2, "one apply and the dialog");
         }
     }
@@ -780,6 +818,74 @@ fn the_styles_are_listed_once_per_document_version() {
     }
 }
 
+/// The style names of `id`'s runs (`Kind::Para`: of its paragraphs).
+fn frame_style_names(app: &VectorcraftApp, kind: Kind, id: u64) -> Vec<Option<String>> {
+    match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) if kind == Kind::Char => t.runs.iter().map(|r| r.style.style_name.clone()).collect(),
+        NodeKind::Text(t) => (0..t.paragraph_count()).map(|i| t.para_at(i).style_name.clone()).collect(),
+        _ => panic!("not text"),
+    }
+}
+
+/// With the Selection tool a selected frame of threaded text stands for its whole story, in both
+/// panels: no row shows as the current style while a locked or hidden frame has another style, a
+/// row click applies the style to every frame in one undo step and leaves other type alone, the
+/// row shows "+" while a hidden frame overrides the style, and an Alt-click clears that override.
+#[test]
+fn selection_tool_styles_reach_every_frame_of_the_story() {
+    use egui::Modifiers;
+    for kind in [Kind::Char, Kind::Para] {
+        let what = kind.what();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog.\n".repeat(12);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+        let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        app.run("object.lock", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        app.run("object.hide", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Plain"})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Second", "attrs": {}})).unwrap();
+        app.run(&format!("{}.apply", kind.prefix()), json!({"name": "Second", "ids": [c]})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        for id in [a, b, c] {
+            assert!(!frame_style_names(&app, kind, id).is_empty(), "frame {id} holds text");
+        }
+        assert_eq!(current(&app, kind), None, "{what} Styles: the hidden frame has another style");
+
+        let ctx = egui::Context::default();
+        let rows = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            ui.set_width(280.0);
+            show(app, ui, kind);
+        };
+        let undo = app.session.doc().unwrap().history.undo.len();
+        click_text_held(&ctx, &mut app, "Plain", Modifiers::NONE, rows);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{what} Styles: one undo step");
+        for id in [a, b, c] {
+            assert!(frame_style_names(&app, kind, id).iter().all(|n| n.as_deref() == Some("Plain")), "{what} Styles: frame {id}");
+        }
+        assert!(frame_style_names(&app, kind, other).iter().all(Option::is_none), "{what} Styles: other type keeps its style");
+        assert_eq!(current(&app, kind), Some(Some("Plain".to_string())));
+
+        app.run("text.setFormat", json!({"ids": [c], "kerning": 40, "composer": "singleLine"})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
+        assert!(shown.lines().any(|line| line == "Plain+"), "{what} Styles: the hidden frame's override shows: {shown}");
+        // A new context, so that this click does not count as the second click of a double-click.
+        click_text_held(&egui::Context::default(), &mut app, "Plain+", Modifiers::ALT, rows);
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
+        assert!(shown.lines().any(|line| line == "Plain"), "{what} Styles: Alt-click clears the override: {shown}");
+        app.run("edit.undo", json!({})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
+        assert!(shown.lines().any(|line| line == "Plain+"), "{what} Styles: undo brings the override back: {shown}");
+    }
+}
+
 /// A row dragged from the highlighted styles carries all of them: dropped on Create New Style it
 /// duplicates each in one undo step and highlights the copies, and dropped on Delete it deletes each
 /// but the Normal style in one undo step and clears the highlight. A row from outside the highlight
@@ -1007,11 +1113,15 @@ fn new_character_style_without_selection_uses_japanese_defaults() {
     assert!(!crate::dialogs::char_style_options::edited_attrs(dialog).unwrap().contains_key("charAlign"));
     crate::dialogs::cancel(&mut app);
 
+    let defaults = vectorcraft_engine::cmd::textstyles::default_new_style_attrs(&app.session, true);
     crate::dialogs::new_text_style::open(&mut app, true, json!({})).unwrap();
-    let dialog = app.ui.dialog.as_ref().unwrap();
-    assert!(dialog.fields["__target"].get("attrs").is_none());
-    assert!(dialog.fields.get("__attrs").is_none());
-    crate::dialogs::cancel(&mut app);
+    let dialog = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(dialog.fields["__target"]["attrs"], Value::Object(defaults.clone()));
+    assert_eq!(crate::dialogs::para_style_options::edited_attrs(dialog).unwrap(), defaults);
+    dialog.fields.insert("name".into(), json!("Lead"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let style = app.session.doc().unwrap().doc.para_styles.iter().find(|style| style.name == "Lead").unwrap();
+    assert_eq!(style.attrs, defaults, "the new style has the paragraph defaults for the interface language");
 }
 
 /// The dialog highlights its new style and scrolls the matching panel to its row.
@@ -1159,7 +1269,7 @@ fn alt_clicking_new_paragraph_style_asks_for_its_name() {
     assert!(app.session.doc().unwrap().doc.para_styles.is_empty(), "no style is added before OK");
     set_name(&mut app, "Body Copy");
     crate::dialogs::confirm(&mut app).unwrap();
-    let (_, attrs) = current(&app, Kind::Para).unwrap();
+    let attrs = textstyles::para_attrs(&text_style(&app).unwrap().1);
     let doc = &app.session.doc().unwrap().doc;
     assert_eq!(doc.para_styles.iter().map(|s| (s.name.as_str(), &s.attrs)).collect::<Vec<_>>(), [("Body Copy", &attrs)]);
 

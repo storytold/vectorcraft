@@ -424,6 +424,93 @@ fn blend_replace_spine_follows_path() {
     assert!(first.distance(Point::new(100.0, 300.0)) < 1.0, "{first:?}");
 }
 
+/// #6809: after Replace Spine, moving a key object moves the drawn key and its end of the spine,
+/// not only the key's selection outline.
+#[test]
+fn moving_a_key_of_a_replaced_spine_blend_moves_what_is_drawn() {
+    let mut s = session();
+    let (a, _, g) = blend(&mut s, json!({"steps": 5}));
+    let arc = id_of(&s.execute("path.create", &json!({"d": "M100 300 C100 245 145 200 200 200 C255 200 300 245 300 300"})).unwrap());
+    sel(&mut s, &[g, arc]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    let center = |n: &Node| n.geometric_bounds().unwrap().center();
+    let before = steps_of(&s, g);
+    assert!(center(&before[0]).distance(Point::new(100.0, 300.0)) < 1e-6);
+    // Direct Selection picks the key inside the blend; the drag moves it.
+    sel(&mut s, &[a]);
+    s.execute("object.move", &json!({"dx": -50, "dy": 40})).unwrap();
+    let key = center(&node(&s, a));
+    assert!(key.distance(Point::new(50.0, 340.0)) < 1e-6, "{key:?}");
+    let after = steps_of(&s, g);
+    assert_eq!(after.len(), before.len());
+    let drawn = center(&after[0]);
+    assert!(drawn.distance(key) < 1e-6, "the key is drawn where it was moved to: {drawn:?}, outline at {key:?}");
+    assert!(center(&after[1]).distance(center(&before[1])) > 1.0, "the first step follows the moved key");
+    let last = center(&after[after.len() - 1]);
+    assert!(last.distance(Point::new(300.0, 300.0)) < 1e-6, "the other key stays put: {last:?}");
+    // Undo puts the key back on the spine as Replace Spine left it.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let back = steps_of(&s, g);
+    assert!(center(&back[0]).distance(Point::new(100.0, 300.0)) < 1e-6);
+    assert!(center(&back[1]).distance(center(&before[1])) < 1e-6);
+}
+
+/// #6809 on a closed spine, where both end keys start on its first point: moving the first key
+/// moves its end of the spine without dragging the last key's end along.
+#[test]
+fn moving_the_first_key_of_a_closed_replaced_spine_blend_moves_what_is_drawn() {
+    let mut s = session();
+    let (a, _, g) = blend(&mut s, json!({"steps": 5}));
+    let square = id_of(&s.execute("path.create", &json!({"d": "M100 100 L300 100 L300 300 L100 300 Z"})).unwrap());
+    sel(&mut s, &[g, square]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    let center = |n: &Node| n.geometric_bounds().unwrap().center();
+    let before = steps_of(&s, g);
+    assert!(center(&before[0]).distance(Point::new(100.0, 100.0)) < 1e-6);
+    sel(&mut s, &[a]);
+    s.execute("object.move", &json!({"dx": -50, "dy": -40})).unwrap();
+    let key = center(&node(&s, a));
+    assert!(key.distance(Point::new(50.0, 60.0)) < 1e-6, "{key:?}");
+    let after = steps_of(&s, g);
+    assert_eq!(after.len(), before.len());
+    let drawn = center(&after[0]);
+    assert!(drawn.distance(key) < 1e-6, "the key is drawn where it was moved to: {drawn:?}, outline at {key:?}");
+    assert!(center(&after[1]).distance(center(&before[1])) > 1.0, "the first step follows the moved key");
+    let last = center(&after[after.len() - 1]);
+    assert!(last.distance(Point::new(100.0, 100.0)) < 1e-6, "the other key stays put: {last:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let back = steps_of(&s, g);
+    assert!(center(&back[0]).distance(Point::new(100.0, 100.0)) < 1e-6);
+    assert!(center(&back[1]).distance(center(&before[1])) < 1e-6);
+}
+
+/// #6809 on a closed spine pinned by a spine edit: the end keys get points of their own, so
+/// moving the first key afterwards still moves only its end.
+#[test]
+fn moving_the_first_key_of_a_pinned_closed_spine_blend_moves_what_is_drawn() {
+    let mut s = session();
+    let (a, _, g) = blend(&mut s, json!({"steps": 5}));
+    let square = id_of(&s.execute("path.create", &json!({"d": "M100 100 L300 100 L300 300 L100 300 Z"})).unwrap());
+    sel(&mut s, &[g, square]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    // Dragging a corner away from the keys pins the spine to them.
+    s.execute("object.blend.spine.moveAnchor", &json!({"id": g.0, "anchor": 2, "x": 320, "y": 320})).unwrap();
+    let NodeKind::Blend { spec, .. } = node(&s, g).kind else { panic!() };
+    assert_eq!(spec.key_anchors.len(), 2, "{:?}", spec.key_anchors);
+    let center = |n: &Node| n.geometric_bounds().unwrap().center();
+    let before = steps_of(&s, g);
+    sel(&mut s, &[a]);
+    s.execute("object.move", &json!({"dx": -50, "dy": -40})).unwrap();
+    let key = center(&node(&s, a));
+    assert!(key.distance(Point::new(50.0, 60.0)) < 1e-6, "{key:?}");
+    let after = steps_of(&s, g);
+    assert_eq!(after.len(), before.len());
+    let drawn = center(&after[0]);
+    assert!(drawn.distance(key) < 1e-6, "the key is drawn where it was moved to: {drawn:?}, outline at {key:?}");
+    let last = center(&after[after.len() - 1]);
+    assert!(last.distance(Point::new(100.0, 100.0)) < 1e-6, "the other key stays put: {last:?}");
+}
+
 #[test]
 fn blend_align_to_path_rotates_steps() {
     let mut s = session();
@@ -483,8 +570,8 @@ fn envelope_warp_make_and_content_stays_inside_bounds() {
     let pts = all_anchors(&out);
     assert!(pts.len() > 4, "curves are subdivided");
     assert!(pts.iter().all(|p| b.contains(*p)), "{b:?}");
-    // It really is bent: the sides moved down.
-    assert!(pts.iter().any(|p| p.y > 201.0));
+    // It really is bent: the top corners swung out past the sides.
+    assert!(pts.iter().any(|p| p.x < 99.0) && pts.iter().any(|p| p.x > 301.0));
 }
 
 #[test]
@@ -554,6 +641,32 @@ fn envelope_top_object_shares_a_side_by_control_polygon_length() {
     let near = |c: Point| pts.iter().map(|p| p.distance(c)).fold(f64::INFINITY, f64::min);
     assert!(near(Point::new(482.6, 106.37)) < 0.5, "the middle of the top: {pts:?}");
     assert!(near(Point::new(500.0, 200.0)) < 0.5, "the middle of the bottom: {pts:?}");
+}
+
+#[test]
+fn envelope_top_object_keeps_its_look_when_anchors_are_added() {
+    // Add Anchor Points splits each segment of the top object in two without changing its shape.
+    // The top curve's parameter runs fast at its start, so its halves have control polygons of
+    // different lengths; the envelope still bends the two rectangles as the unsplit curve does.
+    let made = |add_anchors: bool| {
+        let mut s = session();
+        let left = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+        let right = rect(&mut s, 200.0, 100.0, 100.0, 100.0);
+        let d = "M400 100 C520 40 590 70 600 100 L600 200 L400 200 Z";
+        let t = id_of(&s.execute("path.create", &json!({ "d": d })).unwrap());
+        if add_anchors {
+            sel(&mut s, &[t]);
+            s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
+            assert_eq!(node(&s, t).path_data().map(|p| p.anchor_count()), Some(8));
+        }
+        sel(&mut s, &[left, right, t]);
+        let e = id_of(&s.execute("object.envelope.makeWithTopObject", &json!({})).unwrap());
+        all_anchors(&live::expand_live(&node(&s, e)))
+    };
+    let (plain, split) = (made(false), made(true));
+    assert_eq!(plain.len(), split.len());
+    let off = plain.iter().zip(&split).map(|(p, q)| p.distance(*q)).fold(0.0, f64::max);
+    assert!(off < 1e-6, "the art moves by up to {off} pt");
 }
 
 #[test]
@@ -1049,7 +1162,12 @@ fn mesh_points_move_and_colour_together() {
         assert!(s.execute("object.mesh.movePoints", &p).is_err(), "{p}");
     }
     assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "points": [0, 9], "color": "#000000"})).is_err());
-    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before, n), "nothing changed");
+    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before.clone(), n), "nothing changed");
+    // A call that changes no point records no undo step.
+    s.execute("object.mesh.movePoints", &json!({"id": a.0, "points": [], "dx": 1, "dy": 1})).unwrap();
+    s.execute("object.mesh.movePoints", &json!({"id": a.0, "points": [0, 1], "dx": 0, "dy": 0})).unwrap();
+    s.execute("object.mesh.setPointColor", &json!({"id": a.0, "points": [2, 6], "color": "#0000ff", "opacity": 0.25})).unwrap();
+    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before, n), "no change, no undo step");
 }
 
 #[test]
@@ -1095,6 +1213,47 @@ fn mesh_add_line_on_the_edge_from_just_outside() {
     assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(140.0, 200.0)) < 0.5);
     assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 202})).is_err(), "no tolerance: outside");
     assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 210, "tolerance": 3})).is_err(), "past the tolerance");
+}
+
+/// `object.mesh.addLine` and Create Gradient Mesh `at` a point exactly on the outline add their
+/// lines there with no tolerance, on the bottom and right edges as on the top and left ones.
+#[test]
+fn mesh_add_line_exactly_on_the_edge_needs_no_tolerance() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let r = s.execute("object.mesh.create", &json!({"at": [50, 100]})).unwrap();
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (1, 2), "a column through the bottom edge");
+    assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(50.0, 100.0)) < 0.5);
+    for (x, y) in [(100.0, 30.0), (20.0, 0.0), (0.0, 80.0)] {
+        let r = s.execute("object.mesh.addLine", &json!({"id": a.0, "x": x, "y": y})).unwrap();
+        let p = mesh_of(&s, a).points[r["index"].as_u64().unwrap() as usize].p;
+        assert!(p.distance(Point::new(x, y)) < 0.5, "({x}, {y}): {p:?}");
+    }
+    assert_eq!((mesh_of(&s, a).rows, mesh_of(&s, a).cols), (3, 3));
+    let n = undo_len(&s);
+    assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 60, "y": 100.01})).is_err(), "just outside");
+    assert_eq!(undo_len(&s), n, "nothing changed");
+}
+
+/// `object.mesh.addLine` at a point that is already a mesh point (a corner, a point on an edge or
+/// inside) adds no line and records no undo step; with a new `color` there it is one step.
+#[test]
+fn mesh_add_line_at_a_mesh_point_records_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    let (before, n) = (mesh_of(&s, a), undo_len(&s));
+    for (x, y) in [(0.0, 0.0), (100.0, 100.0), (50.0, 100.0), (100.0, 50.0), (50.0, 50.0)] {
+        let r = s.execute("object.mesh.addLine", &json!({"id": a.0, "x": x, "y": y})).unwrap();
+        let p = mesh_of(&s, a).points[r["index"].as_u64().unwrap() as usize].p;
+        assert!(p.distance(Point::new(x, y)) < 0.5, "({x}, {y}): {p:?}");
+        assert_eq!((mesh_of(&s, a), undo_len(&s)), (before.clone(), n), "({x}, {y}): nothing changed");
+    }
+    s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 100, "y": 100, "color": "#00ff00"})).unwrap();
+    assert_eq!(undo_len(&s), n + 1, "a new color is a step");
 }
 
 /// A mesh point `index`, and `rows`, `cols` or `columns` for Create Gradient Mesh, that is not a

@@ -15,22 +15,28 @@ use crate::{FilePick, Services, VectorcraftApp, dialogs};
 
 mod export;
 mod open;
+mod read_only_save;
 mod save;
+
+#[cfg(test)]
+mod tests_read_only_save;
 
 pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, export_pdf, hide_exports, reveal, save_command_output};
 pub(crate) use export::{
-    export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
+    EXPORT_SELECTION, export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
+    selection_path,
 };
 pub(crate) use open::report_installed;
-pub(crate) use open::{EXPORT_PRESETS, import_presets, open_with_on, opened};
+pub(crate) use open::{EXPORT_PRESETS, import_presets, open_notes, open_with_on, opened, opened_after_notice, show_opened};
 pub use open::{
     MAX_RECENT_FILES, OpensAs, ask_revert, install_module, install_plugin, new_from_template, note_recent, open_bytes, open_dialog, open_document,
     open_path, open_path_with, open_reporting, open_with, opens_as, place_bytes, recent_files, report_open_error,
 };
 #[cfg(test)]
 pub(crate) use open::{open_file, opened_with_notes};
+pub(crate) use save::save_current;
 pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
-pub(crate) use save::{export_path, is_web, report_saved, target_path, write_named, write_reporting, write_to};
+pub(crate) use save::{export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to};
 #[cfg(test)]
 pub(crate) use save::{report_write_error, saved_status};
 
@@ -78,6 +84,127 @@ mod tests {
         // An agent's `file.open {path}` gets the error back and no dialog.
         assert!(app.run("file.open", json!({"path": "/docs/gone.ai"})).is_err());
         assert!(app.ui.dialog.is_none());
+    }
+
+    /// A file opened with a note about its page first and a note that its layers weren't read
+    /// second: the status bar names the layers note, counts both, and keeps both, the layers note
+    /// first, for its hover. Two notes of what was left out keep the order the import gave them,
+    /// and an open without notes leaves the message and the notes an earlier open left.
+    #[test]
+    fn an_open_names_the_note_of_what_was_left_out_first() {
+        use vectorcraft_testkit::ai;
+        let (mut app, _) = app();
+        let damaged = b"%AI12_CompressedData not zlib";
+        let notes = notes_of;
+        let pdf = ai::pdf(damaged, "0 g 150 20 100 60 re f");
+        let r = open_bytes(&mut app, "damaged.pdf", &pdf, None).unwrap();
+        let [page, layers] = &notes(&r)[..] else { panic!("two notes: {r}") };
+        assert!(layers.contains("layers weren't read") && !page.contains("layers weren't read"), "{r}");
+        assert_eq!(app.ui.status, opened_with_notes(2, layers));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![layers.clone(), page.clone()])));
+
+        let r = open_bytes(&mut app, "damaged.ai", &ai::ai(damaged, ai::page_pdf()), None).unwrap();
+        let both = notes(&r);
+        assert_eq!(both.len(), 2, "{r}");
+        assert_eq!(app.ui.status, opened_with_notes(2, &both[0]));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), both)));
+
+        let r = open_document(&mut app, "page.pdf", &pdf, None, &json!({"editingData": false})).unwrap();
+        let [only] = &notes(&r)[..] else { panic!("one note: {r}") };
+        assert_eq!(app.ui.status, opened_with_notes(1, only));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![only.clone()])));
+
+        let clean = br#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="10" height="10"/></svg>"#;
+        open_bytes(&mut app, "damaged.pdf", &pdf, None).unwrap();
+        let shown = (app.ui.status.clone(), app.ui.status_notes.clone());
+        let r = open_bytes(&mut app, "clean.svg", clean, None).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{r}");
+        assert_eq!((app.ui.status.clone(), app.ui.status_notes.clone()), shown);
+    }
+
+    /// A file opened with two notes and a modified linked file while Update Links doesn't ask: the
+    /// status bar shows the line about the linked file, then counts the notes and names the first
+    /// of what was left out, and keeps both notes, in that order, for its hover.
+    #[test]
+    fn an_open_with_modified_links_keeps_link_notice_and_import_notes_reachable() {
+        let (mut app, _) = app();
+        let pdf = vectorcraft_testkit::ai::pdf(b"%AI12_CompressedData not zlib", "0 g 150 20 100 60 re f");
+        let r = open_bytes(&mut app, "damaged.pdf", &pdf, None).unwrap();
+        let [page, layers] = &notes_of(&r)[..] else { panic!("two notes: {r}") };
+        app.session.prefs.update_links = "manually".into();
+        let mut linked = r.clone();
+        linked["modifiedLinks"] = json!([{ "ids": [1] }]);
+        opened(&mut app, &linked);
+        let notice = dialogs::missing_links::changed_on_disk_status(1);
+        assert_eq!(app.ui.status, opened_after_notice(&notice, 2, layers));
+        assert!(app.ui.status.starts_with(&notice) && app.ui.status.ends_with(&opened_with_notes(2, layers)), "{}", app.ui.status);
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![layers.clone(), page.clone()])));
+        assert!(app.ui.dialog.is_none());
+    }
+
+    /// File › New from Template… shows the notes of the file it opens, as File › Open does.
+    #[test]
+    fn new_from_template_preserves_open_warnings() {
+        let (mut app, _) = app();
+        let pdf = vectorcraft_testkit::ai::pdf(b"%AI12_CompressedData not zlib", "0 g 150 20 100 60 re f");
+        app.services.read = Some(Box::new(move |_: &str| Ok(pdf.clone())));
+        let r = new_from_template(&mut app, Some("/templates/damaged.pdf".into())).unwrap();
+        let [page, layers] = &notes_of(&r)[..] else { panic!("two notes: {r}") };
+        assert_eq!(app.ui.status, opened_with_notes(2, layers));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![layers.clone(), page.clone()])));
+    }
+
+    /// A save and an export with several notes: the status bar names the first, counts them, and
+    /// keeps every one of them, in the reply's order, for its hover. A save without notes keeps
+    /// none.
+    #[test]
+    fn a_save_and_an_export_keep_every_note_for_the_hover() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let r = app.run("file.save", json!({"path": "/out/a.svg", "compress": true})).unwrap();
+        let notes = notes_of(&r);
+        assert_eq!(notes.len(), 2, "{r}");
+        assert!(notes[0].starts_with("SVG keeps the artwork but not everything"), "{r}");
+        assert_eq!(app.ui.status, saved_status("/out/a.svg", &r));
+        assert!(app.ui.status.contains("with 2 notes"), "{}", app.ui.status);
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+
+        app.run("file.save", json!({"path": "/out/b.vectorcraft"})).unwrap();
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Saved /out/b.vectorcraft", &None));
+
+        // A PDF export of a knockout group whose soft masks would draw a brushed stroke, and of type
+        // in a font that isn't installed.
+        app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+        let lower = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        let upper = app.run("shape.rectangle", json!({"x": 25, "y": 15, "width": 30, "height": 20})).unwrap()["id"].clone();
+        app.run("brush.apply", json!({"ids": [upper], "name": "3 pt. Round"})).unwrap();
+        app.run("object.setProps", json!({"ids": [lower, upper], "opacity": 50, "knockoutShape": true})).unwrap();
+        app.run("select.set", json!({"ids": [lower, upper]})).unwrap();
+        app.run("object.group", json!({})).unwrap();
+        app.run("transparency.set", json!({"knockout": "on"})).unwrap();
+        let r = export(&mut app, Some("pdf"), Some("/out/c.pdf".into()), &json!({})).unwrap();
+        let notes = notes_of(&r);
+        assert_eq!(notes.len(), 2, "{r}");
+        assert!(notes.iter().any(|n| n.contains("brushed strokes")), "{r}");
+        assert_eq!(app.ui.status, exported_with_notes("/out/c.pdf", notes.len(), &notes[0]));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+    }
+
+    /// An export whose encoder notes an option it didn't apply (lossy WebP) before what the file
+    /// loses (type in a font that isn't installed): the status bar names what the file loses, and
+    /// the hover lists it first.
+    #[test]
+    fn an_export_names_what_the_file_loses_before_a_note_on_the_options() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+        let r = export(&mut app, Some("webp"), Some("/out/d.webp".into()), &json!({"lossless": false})).unwrap();
+        let notes = notes_of(&r);
+        assert_eq!(notes.len(), 2, "{r}");
+        assert!(notes[0].contains("Nonexistent Sans Probe"), "{r}");
+        assert!(notes[1].starts_with("lossy WebP"), "{r}");
+        assert_eq!(app.ui.status, exported_with_notes("/out/d.webp", 2, &notes[0]));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 
     /// #1685: a save or an export that can't write its file says so in a dialog that names the
@@ -310,11 +437,38 @@ mod tests {
         app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
         app.services.pick_save = Some(Box::new(|_: &FilePick| Some("/tmp/sel.svg".into())));
-        assert_eq!(app.run("document.exportSelection", json!({})).unwrap()["path"], "/tmp/sel.svg");
+        app.run("document.exportSelection", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("svgOptions"), "the picked format's options follow");
+        assert_eq!(crate::dialogs::confirm(&mut app).unwrap()["path"], "/tmp/sel.svg");
         app.run("document.exportSelection", json!({"path": "/tmp/sel.png"})).unwrap();
         let w = written.borrow();
         assert!(String::from_utf8_lossy(&w[0].1).contains("<svg"), "SVG from the picked name");
         assert_eq!(&w[1].1[1..4], b"PNG", "PNG from the given path");
+    }
+
+    /// An option skips the options dialog, but without `path` the save panel still picks the file.
+    #[test]
+    fn export_selection_with_an_option_and_no_path_asks_for_the_file_only() {
+        let (mut app, written) = app();
+        app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
+        let asked = Rc::new(RefCell::new(0));
+        let count = asked.clone();
+        app.services.pick_save = Some(Box::new(move |_: &FilePick| {
+            *count.borrow_mut() += 1;
+            Some("/tmp/sel.png".into())
+        }));
+        let r = app.run("document.exportSelection", json!({"scale": 2})).unwrap();
+        assert_eq!(*asked.borrow(), 1, "the save panel picks the file");
+        assert!(app.ui.dialog.is_none(), "no options dialog follows");
+        assert_eq!(r["path"], "/tmp/sel.png");
+        assert_eq!(&written.borrow()[0].1[1..4], b"PNG");
+        app.run("document.exportSelection", json!({"path": "/tmp/sel2.png", "scale": 2})).unwrap();
+        assert_eq!(*asked.borrow(), 1, "a path writes without the save panel");
+        let w = written.borrow();
+        assert_eq!(w.len(), 2);
+        assert_eq!(w[0].0, "/tmp/sel.png", "the picked file");
+        assert_eq!(w[1].0, "/tmp/sel2.png", "the given path");
     }
 
     #[test]

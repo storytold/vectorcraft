@@ -1,7 +1,10 @@
 //! Object → Flatten Transparency: transparent art becomes opaque art that looks the same.
 //!
-//! The targets (`ids` or the selection) split into groups of overlapping objects. Groups without
-//! transparency stay as they are (their type and strokes are outlined on request). The others are
+//! The targets (`ids` or the selection) split into groups: each object with transparency with the
+//! objects it overlaps, and the objects without transparency whose stacking order with a member
+//! would change when the group takes its topmost object's place. Objects without transparency
+//! that overlap only others without it stay as they are (their type and strokes are outlined on
+//! request), as do groups without transparency. The others are
 //! cut into atomic regions: the faces of the planar arrangement of every fill, outlined stroke and
 //! clipping path in them ([`po::regions`]). The same paints cover each whole region, so its colour
 //! is exact: those paints composited as the renderer composites them ([`Composer`], blend modes by

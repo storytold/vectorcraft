@@ -125,7 +125,7 @@ fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> 
 /// label: a recent file, a saved view, a font, a user library or preset, a custom workspace, a
 /// plug-in, an SVG filter, a script of the Scripts folder? Such names are shown as they are, never
 /// translated (a workspace the user calls "Layers" stays "Layers").
-pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
+pub(crate) fn shows_a_name(id: &str, label: &str) -> bool {
     const SLOTS: [&str; 8] = [
         "file.openRecent",
         "view.goto",

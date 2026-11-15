@@ -157,7 +157,8 @@ pub(super) fn align_lines(obj: &mut TextObject) {
         return;
     }
     let lines = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), obj).lines;
-    let w = lines.iter().map(|l| l.x1 - l.x0).filter(|w| w.is_finite()).fold(0.0, f64::max);
+    // Each line as wide as VectorCraft aligns it: without the tracking after its last character.
+    let w = lines.iter().map(|l| l.x1 - l.trailing - l.x0).filter(|w| w.is_finite()).fold(0.0, f64::max);
     if !(w > 0.0 && w < 1e6) {
         return;
     }

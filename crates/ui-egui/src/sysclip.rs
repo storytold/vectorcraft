@@ -85,6 +85,12 @@ impl ClipboardRead {
 /// thread and the handle lives and dies there, so the handle needn't be `Send`.
 pub type ClipboardProbeFactory = Box<dyn FnOnce() -> Box<dyn SystemClipboard> + Send>;
 
+/// How long quitting waits for the probe's thread ([`ClipboardProbeFactory`]) to drop its handle
+/// before the app drops its own: 27 s, VectorCraft's own bound. A host's handle should finish a
+/// look and its own teardown within it, or the app's handle may not be the last one dropped; a
+/// handle that never lets go still lets the app quit after this wait.
+pub const CLIPBOARD_PROBE_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(27);
+
 /// The Copy or Cut whose formats go to the system clipboard ([`VectorcraftApp::publish_clipboard`]).
 #[derive(Default)]
 pub(crate) struct Publishing {
@@ -183,7 +189,10 @@ impl VectorcraftApp {
             }
             return;
         }
-        let (clip, svg, pdf) = (self.session.clipboard.clone(), self.session.prefs.copy_as_svg, self.session.prefs.copy_as_pdf);
+        // An SVG that would name a linked image's file outside the read roots of the automation
+        // that asked for the Copy is left out (decided now: the formats are made later).
+        let svg = self.session.prefs.copy_as_svg && !self.session.clipboard_svg_refused();
+        let (clip, pdf) = (self.session.clipboard.clone(), self.session.prefs.copy_as_pdf);
         let latest = self.clipboard_publishing.latest.clone();
         let n = latest.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
         self.clipboard_publishing.pending = true;

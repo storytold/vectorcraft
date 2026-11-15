@@ -2,6 +2,7 @@
 //! `document.export {format: emf|wmf}` and Export As (one picture of an artboard, or one per
 //! artboard with Use Artboards; raster effects as images, rendered at the document's raster
 //! effects resolution), `document.open` and File → Place (one artboard, the picture's frame).
+//! QuickDraw pictures (PICT) open and place the same way; they are never written.
 
 use serde_json::Value;
 use vectorcraft_doc::Document;
@@ -51,4 +52,10 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>, kin
 pub(super) fn import(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
     let i = vectorcraft_metafile::import(bytes).map_err(super::err)?;
     Ok((i.document, i.warnings))
+}
+
+/// A QuickDraw picture's document and the import's warnings.
+pub(super) fn import_pict(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
+    let p = vectorcraft_metafile::import_pict(bytes).map_err(super::err)?;
+    Ok((p.document, p.warnings))
 }

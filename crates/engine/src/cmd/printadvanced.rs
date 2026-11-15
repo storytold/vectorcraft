@@ -48,12 +48,13 @@ pub(crate) fn prepare(cmd: &str, doc: &Document, set: &PrintSettings, saved: &[F
     Ok(Some(flatten_document(&printed, &o)?.unwrap_or_else(|| printed.into_owned())))
 }
 
-/// Leave guide paths out of `nodes` (the renderer draws them; they never print).
+/// Leave guides out of `nodes`: guide paths (the renderer draws them; they never print) and ruler
+/// guides.
 fn drop_guides(nodes: &mut Vec<Arc<Node>>) {
     fn has_guides(n: &Node) -> bool {
-        matches!(n.kind, NodeKind::Path { guide: true, .. }) || n.children().is_some_and(|c| c.iter().any(|c| has_guides(c)))
+        n.is_guide() || n.children().is_some_and(|c| c.iter().any(|c| has_guides(c)))
     }
-    nodes.retain(|n| !matches!(n.kind, NodeKind::Path { guide: true, .. }));
+    nodes.retain(|n| !n.is_guide());
     for n in nodes.iter_mut().filter(|n| has_guides(n)) {
         if let Some(children) = Arc::make_mut(n).children_mut() {
             drop_guides(children);

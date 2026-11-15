@@ -1,24 +1,29 @@
 use super::flow::flow;
 use super::region::Region;
-use super::{Affine, Ctx, Punct, Range, Rect, SGlyph, Tcy, TextLayout, TextObject, VerticalAlign, continues_cluster, is_cjk, punct};
+use super::{Affine, Ctx, Mojikumi, Punct, Range, Rect, SGlyph, Tcy, TextLayout, TextObject, VerticalAlign, continues_cluster, is_cjk, punct};
 
 /// System Layout on or Fractional Widths off: each character that takes space advances by a whole
 /// number of points, at least one, so small type does not collapse onto itself. A zero advance (a
 /// tate-chu-yoko continuation, a zero-width mark) stays zero. Right to left, a cluster with manual
 /// kerning moves by the difference the kerning makes to its rounded advance, so the rounding
 /// changes the space before the next character in reading order and not the space after the one
-/// before it.
+/// before it. Each side of the Insert Aki is rounded to whole points on its own and added to the
+/// rounded advance, so justification keeps it at that width.
 pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
     let whole = |adv: f64| if adv.is_finite() && adv > 0.0 { adv.round().max(1.0) } else { adv };
+    let points = |aki: f64| if aki.is_finite() { aki.round() } else { 0.0 };
     for cluster in glyphs.chunk_by_mut(|a, b| continues_cluster(Some(a), Some(b))) {
-        // The cluster's last glyph carries the manual kerning in its advance.
-        let (adv, shift) = cluster.last().map_or((0.0, 0.0), |g| (g.adv, g.kern_shift));
+        // The cluster's last glyph carries the manual kerning and the Insert Aki in its advance.
+        let (adv, shift) = cluster.last().map_or((0.0, 0.0), |g| (g.adv - g.aki, g.kern_shift - g.aki_shift));
         let rounded_shift = Some(whole(adv) - whole(adv - shift)).filter(|s| s.is_finite()).unwrap_or(shift);
         for g in cluster {
-            g.adv = whole(g.adv);
-            if shift != 0.0 {
-                g.kern_shift = rounded_shift;
-            }
+            // The space before the character and the space after it are each rounded.
+            let aki_shift = points(g.aki_shift);
+            let aki = if g.aki == 0.0 { 0.0 } else { aki_shift + points(g.aki - g.aki_shift) };
+            g.adv = whole(g.adv - g.aki) + aki;
+            g.kern_shift = if shift != 0.0 { rounded_shift } else { g.kern_shift - g.aki_shift } + aki_shift;
+            g.aki = aki;
+            g.aki_shift = aki_shift;
         }
     }
 }
@@ -33,9 +38,13 @@ pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
 /// before the automatic digit rule. A marked block moves by the Tate-chu-yoko Settings Up/Down
 /// and Left/Right of its first character; an automatic block does not move.
 /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
-pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> TcyStyle) {
+///
+/// With `whole` (System Layout on or Fractional Widths off), each side of a block's Insert Aki is
+/// set in whole points ([`whole_character_widths`]).
+pub(super) fn tate_chu_yoko(g: &mut [SGlyph], whole: bool, style: impl Fn(&SGlyph) -> TcyStyle) {
     let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).marked).collect();
-    let digits: Vec<bool> = g.iter().map(|gl| gl.inline.is_none() && gl.ch.is_ascii_digit()).collect();
+    // Digits marked Warichu are stacked with their block, not set across the column.
+    let digits: Vec<bool> = g.iter().map(|gl| gl.inline.is_none() && gl.ch.is_ascii_digit() && !style(gl).warichu).collect();
     let mut i = 0;
     while i < g.len() {
         if manual.get(i).copied().unwrap_or(false) {
@@ -44,7 +53,7 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> TcyStyl
                 end += 1;
             }
             let first = style(&g[i]);
-            place_tcy_block(&mut g[i..end], first.size, (first.up, first.right));
+            place_tcy_block(&mut g[i..end], first.size, (first.up, first.right), whole);
             i = end;
             continue;
         }
@@ -58,44 +67,145 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], style: impl Fn(&SGlyph) -> TcyStyl
         }
         if (2..=3).contains(&(end - i)) {
             let em = style(&g[i]).size;
-            place_tcy_block(&mut g[i..end], em, (0.0, 0.0));
+            place_tcy_block(&mut g[i..end], em, (0.0, 0.0), whole);
         }
         i = end;
     }
 }
 
 /// What [`tate_chu_yoko`] reads from a glyph's character style: its size, whether it is marked
-/// Tate-chu-yoko, and its Tate-chu-yoko Settings Up/Down and Left/Right in points.
+/// Tate-chu-yoko, its Tate-chu-yoko Settings Up/Down and Left/Right in points, and whether it is
+/// set as warichu (marked Warichu, and not on a path).
 pub(super) struct TcyStyle {
     pub size: f64,
     pub marked: bool,
     pub up: f64,
     pub right: f64,
+    pub warichu: bool,
 }
 
 /// Lay `g` across one em of the column, moved by `(up, right)` points. The first glyph takes the
-/// em; the rest share its cell.
-fn place_tcy_block(g: &mut [SGlyph], em: f64, (up, right): (f64, f64)) {
-    let width: f64 = g.iter().map(|gl| gl.adv).sum();
+/// em; the rest share its cell. The Insert Aki of the block's first character is space above and
+/// below the block, and the Insert Aki of its other characters is left out: the block is set
+/// down the column that much further, and its last glyph carries the space in its advance. With
+/// `whole`, the space above and the space below are each rounded to whole points.
+fn place_tcy_block(g: &mut [SGlyph], em: f64, (up, right): (f64, f64), whole: bool) {
+    let Some(first) = g.first() else { return };
+    let (byte, before) = (first.byte, first.aki_shift);
+    let aki: f64 = g.iter().filter(|gl| gl.byte == byte).map(|gl| gl.aki).sum();
+    let points = |v: f64| {
+        if !whole {
+            v
+        } else if v.is_finite() {
+            v.round()
+        } else {
+            0.0
+        }
+    };
+    let (before, aki) = (points(before), points(before) + points(aki - before));
+    let width: f64 = g.iter().map(|gl| gl.adv - gl.aki).sum();
     let squeeze = if width > em && width > 0.0 { em / width } else { 1.0 };
+    let last = g.len() - 1;
     let mut ink = 0.0;
     for (k, gl) in g.iter_mut().enumerate() {
-        let adv = gl.adv;
-        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze, up, right });
-        gl.adv = if k == 0 { em } else { 0.0 };
+        let adv = gl.adv - gl.aki;
+        gl.tcy = Some(Tcy { pen: if k == 0 { 0.0 } else { em }, ink, width, squeeze, up: up - before, right });
+        gl.kern_shift -= gl.aki_shift;
+        gl.aki_shift = 0.0;
+        gl.aki = if k == last { aki } else { 0.0 };
+        gl.adv = if k == 0 { em } else { 0.0 } + gl.aki;
         ink += adv;
     }
 }
 
 /// Half an em of `g`'s size when it is full-width Japanese punctuation of kind `kind` (its
-/// advance an em, give or take a tenth), the space that mojikumi can take off.
+/// advance an em, give or take a tenth), the space that mojikumi can take off. Not inside a
+/// tate-chu-yoko or warichu block, which is set as one piece.
 pub(super) fn punct_half(g: &SGlyph, kind: Punct) -> Option<f64> {
     // A glyph Proportional Metrics re-spaced has no empty half left to take off (#966).
-    if punct(g.ch)? != kind || g.tcy.is_some() || g.proportional {
+    if punct(g.ch)? != kind || g.tcy.is_some() || g.wari.is_some() || g.proportional {
         return None;
     }
     let em = g.face.units_per_em();
     ((g.face.advance(g.gid) - em).abs() <= em * 0.1).then_some(em * 0.5 * g.sx)
+}
+
+/// A quarter em of `g`'s size when it is a full-width Japanese middle dot (・, its advance an em,
+/// give or take a tenth): the space on each side of the dot that a Mojikumi set can take off.
+pub(super) fn dot_quarter(g: &SGlyph) -> Option<f64> {
+    if g.ch != '・' || g.tcy.is_some() || g.proportional {
+        return None;
+    }
+    let em = g.face.units_per_em();
+    ((g.face.advance(g.gid) - em).abs() <= em * 0.1).then_some(em * 0.25 * g.sx)
+}
+
+/// What a paragraph's Mojikumi set does to its characters. The five predefined sets other than
+/// Line-end Punctuation Half Width follow VectorCraft's own spacing rules, built on the help
+/// page's one-line description of each set
+/// (<https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-mojikumi-for-japanese-text-composition.html>).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct MojikumiRules {
+    /// Consecutive punctuation shares one half-em space ([`compress_punctuation`]).
+    pub share: bool,
+    /// Every opening and closing bracket, comma and full stop is set half width, and a middle dot
+    /// loses the quarter em on each side of it ([`halve_punctuation`]).
+    pub half: bool,
+    /// An opening bracket starting a line is set flush with the line's start.
+    pub flush_start: bool,
+    /// A closing bracket, comma or full stop ending a line is set half width.
+    pub half_end: bool,
+    /// A middle dot ending a line loses the quarter em after it.
+    pub dot_end: bool,
+    /// A quarter em between Japanese and Latin letters or digits ([`space_japanese_and_latin`]),
+    /// taken off again at a line's end.
+    pub wakan: bool,
+}
+
+impl MojikumiRules {
+    pub(super) fn of(set: Mojikumi) -> Self {
+        let none = Self::default();
+        match set {
+            Mojikumi::None | Mojikumi::YakumonoZenkaku => none,
+            Mojikumi::LineEndHalf => Self { share: true, flush_start: true, half_end: true, wakan: true, ..none },
+            Mojikumi::YakumonoHankaku => Self { half: true, wakan: true, ..none },
+            Mojikumi::GyomatsuYakumonoHankaku => Self { flush_start: true, half_end: true, dot_end: true, wakan: true, ..none },
+            Mojikumi::GyomatsuYakumonoZenkaku => Self { wakan: true, ..none },
+        }
+    }
+
+    /// The rules a line's end follows: a right-to-left line keeps its punctuation's width there
+    /// and only loses the space between Japanese and Latin text.
+    pub(super) fn at_line_end(self, rtl: bool) -> Self {
+        if rtl { Self { half_end: false, dot_end: false, ..self } } else { self }
+    }
+
+    /// Whether a line ending at some character can be set narrower than its characters' advances.
+    pub(super) fn trims_line_end(&self) -> bool {
+        self.half_end || self.dot_end || self.wakan
+    }
+}
+
+/// YakumonoHankaku: every full-width opening bracket loses the half-em space before it, every
+/// closing bracket, comma and full stop the half-em space after it, and every middle dot a quarter
+/// em on each side. Returns which glyphs lost the space after them (a line ending in one takes
+/// nothing more off).
+pub(super) fn halve_punctuation(sg: &mut [SGlyph]) -> Vec<bool> {
+    let mut lost_after = vec![false; sg.len()];
+    for (g, lost) in sg.iter_mut().zip(lost_after.iter_mut()) {
+        if let Some(h) = punct_half(g, Punct::Closing) {
+            g.adv -= h;
+            *lost = true;
+        } else if let Some(h) = punct_half(g, Punct::Opening) {
+            g.adv -= h;
+            g.lead += h;
+        } else if let Some(q) = dot_quarter(g) {
+            g.adv -= 2.0 * q;
+            g.lead += q;
+            *lost = true;
+        }
+    }
+    lost_after
 }
 
 /// Mojikumi (JLREQ 3.1.4): consecutive punctuation shares one half-em space. A closing bracket,
@@ -126,7 +236,7 @@ pub(super) fn compress_punctuation(sg: &mut [SGlyph]) -> Vec<bool> {
 }
 
 /// The space between Japanese and Latin letters or digits (JLREQ 3.2.2: a quarter em of the
-/// Japanese characters' size), with Line-end Punctuation Half Width.
+/// Japanese characters' size), with the Mojikumi sets that add it ([`MojikumiRules::wakan`]).
 const WAKAN_AKI: f64 = 0.25;
 
 /// A Japanese character for the space next to Latin text: kana and kanji (and full-width
@@ -146,12 +256,12 @@ fn is_japanese_letter(c: char) -> bool {
 }
 
 impl TextLayout {
-    /// Whether Line-end Punctuation Half Width (Mojikumi) can set type laid out as this layout
-    /// differently from Mojikumi None: `text`, the type's plain text, or one of the layout's list
-    /// markers holds Japanese punctuation or a Japanese letter, the only characters it spaces.
-    /// When it holds neither, the type lays out the same with either setting.
+    /// Whether a Mojikumi set can set type laid out as this layout differently from Mojikumi
+    /// None: `text`, the type's plain text, or one of the layout's list markers holds Japanese
+    /// punctuation, a middle dot or a Japanese letter, the only characters the sets space. When it
+    /// holds none of them, the type lays out the same with any set.
     pub fn mojikumi_applies(&self, text: &str) -> bool {
-        let spaced = |c: char| punct(c).is_some() || is_japanese_letter(c);
+        let spaced = |c: char| punct(c).is_some() || c == '・' || is_japanese_letter(c);
         text.chars().any(spaced) || self.markers.iter().any(|m| m.text.chars().any(spaced))
     }
 }
@@ -169,7 +279,7 @@ pub(super) fn space_japanese_and_latin(sg: &mut [SGlyph]) -> Vec<f64> {
     for j in 1..sg.len() {
         let (before, after) = sg.split_at_mut(j);
         let (Some(a), Some(b)) = (before.last_mut(), after.first()) else { continue };
-        if a.tcy.is_some() || b.tcy.is_some() {
+        if a.tcy.is_some() || b.tcy.is_some() || a.wari.is_some() || b.wari.is_some() {
             continue;
         }
         let japanese = if is_japanese_letter(a.ch) && is_latin_letter(b.ch) {
@@ -190,9 +300,9 @@ pub(super) fn space_japanese_and_latin(sg: &mut [SGlyph]) -> Vec<f64> {
     added
 }
 
-/// The size of `g`'s em, in points.
+/// The size of `g`'s em, in points. A warichu glyph has the em of the line its block sits in.
 pub(super) fn glyph_em(g: &SGlyph) -> f64 {
-    g.face.units_per_em() * g.sy
+    g.wari.map_or(g.face.units_per_em() * g.sy, |w| w.em)
 }
 
 /// How far up (line space) Character Alignment `a` moves glyph `g` on a line whose largest em is

@@ -210,6 +210,38 @@ fn save_as_goes_on_with_the_path_picked() {
     assert_eq!(*written.borrow(), ["/art/poster.svg"]);
 }
 
+/// Save as PDF with View PDF after Saving, asked for by automation without a path: the save panel
+/// it opened answers as automation's, so the PDF is written but not opened in the viewer, even
+/// when a person picked the file. The person's own Save as PDF opens it.
+#[test]
+fn a_pdf_automation_asked_for_is_not_opened_when_its_save_panel_answers() {
+    let opened = Rc::new(RefCell::new(Vec::<String>::new()));
+    let u = opened.clone();
+    let mut services =
+        Services { dialogs_are_sheets: true, open_url: Some(Box::new(move |p: &str| u.borrow_mut().push(p.to_string()))), ..Default::default() };
+    let (shown, written) = off_the_ui_thread(&mut services);
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    let view = json!({"viewAfterSaving": true});
+
+    app.ui.answering_control = true;
+    let _ = app.run("file.export.pdf", view.clone());
+    app.ui.answering_control = false;
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
+    shown.answer(&["/art/automated.pdf"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/art/automated.pdf"]);
+    assert!(opened.borrow().is_empty(), "{:?}", opened.borrow());
+
+    let _ = app.run("file.export.pdf", view);
+    shown.answer(&["/art/mine.pdf"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/art/automated.pdf", "/art/mine.pdf"]);
+    assert_eq!(opened.borrow().len(), 1, "{:?}", opened.borrow());
+    assert!(opened.borrow()[0].ends_with("/art/mine.pdf"), "{:?}", opened.borrow());
+}
+
 #[test]
 fn a_dialogs_folder_button_fills_its_field_when_the_picker_answers() {
     let (mut app, shown, _) = app();
@@ -334,18 +366,17 @@ fn load_variable_library_asks_off_the_ui_thread() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// The Variables panel menu's Save Variable Library… is enabled once the document has a text
-/// variable, and then asks off the UI thread: the library is written
-/// to the path the dialog answers, Load Variable Library reads it back, and the warning about the
-/// visibility variable it left out shows in the status bar.
+/// The Variables panel menu's Save Variable Library… is enabled once the document has a variable,
+/// of any kind, and then asks off the UI thread: the library is written to the path the dialog
+/// answers, and Load Variable Library reads back its visibility and text variables.
 #[test]
 fn save_variable_library_asks_off_the_ui_thread() {
     let (mut app, shown, _) = app();
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-    app.run("variable.define", json!({"name": "Shown", "kind": "visibility"})).unwrap();
-    // Without a text variable the item is disabled and asks for no file.
+    // Without a variable the item is disabled and asks for no file.
     click(&mut app, "Save Variable Library…", crate::panels::variables::menu);
     assert!(shown.requests().is_empty(), "{:?}", shown.requests());
+    app.run("variable.define", json!({"name": "Shown", "kind": "visibility"})).unwrap();
     app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
     app.run("dataset.new", json!({"name": "A", "values": {"Name": "x", "Shown": true}})).unwrap();
     let dir = vectorcraft_testkit::temp_dir("picks-save-variable-library");
@@ -360,10 +391,11 @@ fn save_variable_library_asks_off_the_ui_thread() {
     assert!(!library.exists(), "nothing is written before the dialog answers");
     shown.answer(&[&library.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(app.ui.status, "variables that aren't text were left out: visibility (1)");
     let xml = std::fs::read_to_string(&library).unwrap_or_else(|e| panic!("{e}: {}", app.ui.status));
     let loaded = app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
-    assert_eq!((loaded["variables"].clone(), loaded["names"].clone()), (json!(["Name"]), json!(["A"])));
+    assert_eq!((loaded["variables"].clone(), loaded["names"].clone()), (json!(["Shown", "Name"]), json!(["A"])));
+    let values = &app.session.doc().unwrap().doc.variables.datasets[0].values;
+    assert_eq!(values.get("Shown"), Some(&vectorcraft_doc::DataValue::Visible(true)));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -539,7 +571,7 @@ fn preset_dialogs_export_asks_off_the_ui_thread() {
 #[test]
 fn a_sheets_answer_given_its_extension_asks_before_replacing() {
     let (mut app, shown, written) = app();
-    app.services.exists = Some(Box::new(|p: &str| p == "/art/card.vectorcraft"));
+    app.services.exists = Some(std::sync::Arc::new(|p: &str| p == "/art/card.vectorcraft"));
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     assert!(app.run("file.save", json!({})).is_err());
     shown.answer(&["/art/card"]);
@@ -566,7 +598,7 @@ fn a_preset_dialogs_export_asks_before_replacing_over_it() {
             w.borrow_mut().push(path.to_string());
             Ok(())
         })),
-        exists: Some(Box::new(|_: &str| true)),
+        exists: Some(std::sync::Arc::new(|_: &str| true)),
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
@@ -828,6 +860,28 @@ fn save_changes_answers_for_its_own_document() {
     assert_eq!(app.session.documents().iter().map(|d| d.uid).collect::<Vec<_>>(), [uids[2]], "A closed, C untouched");
     let d = app.ui.dialog.as_ref().expect("Save Changes asks about C next");
     assert_eq!((d.kind.as_str(), &d.fields["uid"]), (crate::unsaved::KIND, &json!(uids[2])));
+}
+
+/// Closing a modified background tab whose Save opens a Save dialog: once the dialog answers,
+/// the document closes and the document that was in front before the question is in front again.
+#[test]
+fn save_changes_answered_by_a_save_dialog_keeps_the_front_document() {
+    let (mut app, shown, written) = with_dialogs(false);
+    // A clean and in front, B modified and untitled, C clean.
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.session.set_active(0);
+    let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+    app.run("file.close", json!({"index": 1})).unwrap();
+    assert!(crate::dialogs::confirm(&mut app).is_err());
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
+    shown.answer(&["/art/b.vectorcraft"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/art/b.vectorcraft"], "{}", app.ui.status);
+    assert_eq!(app.session.documents().iter().map(|d| d.uid).collect::<Vec<_>>(), [uids[0], uids[2]]);
+    assert_eq!(app.session.active().map(|d| d.uid), Some(uids[0]), "A is in front again");
 }
 
 /// A dialog asked for while another is open is refused, and the status bar says so rather than

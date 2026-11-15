@@ -234,11 +234,10 @@ impl<'a> Reader<'a> {
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
         let mut node = self.new_node(kind, &gs);
-        // A ruler guide is written as a straight `(N) *` guide path on its layer.
+        // A ruler guide is written as a straight `(N) *` guide path on its layer, shown or hidden.
         if guide
             && op == "N"
             && !hidden
-            && !gs.hidden
             && !clip
             && self.pattern.is_none()
             && matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))
@@ -370,15 +369,18 @@ impl<'a> Reader<'a> {
 
     // ---- images ----------------------------------------------------------------------------
 
-    /// The samples after `XI`, its operands on the stack.
-    pub(super) fn image(&mut self, data: &[u8]) -> Result<(), String> {
+    /// The samples after `XI`, its operands on the stack; `hidden` when they are on `%_` lines.
+    pub(super) fn image(&mut self, data: &[u8], hidden: bool) -> Result<(), String> {
         let vals = self.operands();
         // Operands that came before an `XI` on their own line.
         let vals = match self.raster.as_mut().and_then(|r| r.operands.take()) {
             Some(before) if !vals.iter().any(|v| matches!(v, V::Arr(_))) => before,
             _ => vals,
         };
-        self.image_from(vals, data, false)
+        self.image_hidden = hidden;
+        let read = self.image_from(vals, data, false);
+        self.image_hidden = false;
+        read
     }
 
     /// The matrix and the numbers of an image's operands (`[a b c d tx ty] llx lly urx ury w h bits
@@ -713,7 +715,8 @@ impl<'a> Reader<'a> {
 
     /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
     /// `alpha` (its alpha channel, one byte a pixel) as its opacity mask when it hides part of the
-    /// image, and `colorize` as the color that colorizes it.
+    /// image, and `colorize` as the color that colorizes it. It is on `%_` lines when its samples
+    /// are ([`Self::image`]).
     fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32), colorize: Option<Paint>) -> Result<(), String> {
         // The matrix is an art-space matrix (y up) applied to the pixels with their rows running
         // downwards, (u, -v): pixels → (u, -v) → art space. Flipping the matrix's result instead
@@ -735,7 +738,8 @@ impl<'a> Reader<'a> {
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
         let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
-        self.add_image_colorized(im, mask, colorize, false)
+        // An image on `%_` lines is the copy of a styled object, as the other objects there are.
+        self.add_image_colorized(im, mask, colorize, self.image_hidden)
     }
 
     /// An image that isn't read is left out, with `warning`; in a symbol's art, the symbol isn't

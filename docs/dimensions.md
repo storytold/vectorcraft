@@ -15,8 +15,17 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   path's length. A press on an anchor picks it when the pointer moves less than 8 pixels
   before the release; a longer drag drags out the dimension of the segment under the pointer. A
   curved segment is measured from end to end. With Smart Guides on, both points also snap into line with other objects'
-  anchors and centres, and the second onto the construction guides through the first; the guides
-  show while hovering, before each click.
+  anchors and centres. With Snap to Perpendicular or Snap to Tangent on, the second point also
+  snaps onto a segment where the line from the first meets it square or grazes a curve. When the
+  first point was picked on an anchor, the second also snaps onto the construction guides through
+  it; any other first point has no construction guides through it. The guides
+  show while hovering, before each click. VectorCraft's own rules decide where a point lands: an
+  anchor within 8 pixels takes it first; a point on a guide stays on the guide where the pointer
+  is, except that it moves onto a segment within the Smart Guides snapping tolerance, or, on a
+  construction guide or a Snap to Glyph guide that runs at an angle, onto the place where that
+  guide crosses another object's alignment line within twice that tolerance; a point that no
+  anchor, guide, grid or pixel snapping places lands on the closest point of a segment within 8
+  pixels.
   A linear dimension is aligned, horizontal or vertical, as the
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
   describes: after the second click, clicking again places an aligned dimension, and moving the
@@ -61,7 +70,8 @@ Measurements follow the art they measure through moves, scaling and anchor and h
 undo and redo included. When the art is reflected, the line of a linked linear dimension goes to
 the reflected side, as far past the outermost point as before. This does not happen for art whose
 anchors and handles all lie on one line, such as a straight line, which a half turn puts in the
-same place as a reflection. Deleting the art, changing its number of anchors or whether it is
+same place as a reflection. An unlinked aligned dimension that is reflected, or scaled by a
+negative factor, has its line on the reflected side of its points. Deleting the art, changing its number of anchors or whether it is
 closed, turning an angle's arm into a curve, or making a measured circle or arc no longer circular
 leaves its dimensions where they were, no longer linked, in the same undo step, rather than
 attaching them to a different edge. Undo links them again. A linked dimension moved on its own

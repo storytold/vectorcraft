@@ -131,6 +131,10 @@ fn lzw(raw: &[u8]) -> Res<(Vec<u8>, usize)> {
     }
 }
 
+/// Most pixels a DCTDecode JPEG may have: twice the most an image is read with, so every image that
+/// was read before is still read.
+const MAX_DCT_PIXELS: u64 = 1 << 27;
+
 /// A JPEG's pixels (gray, RGB or CMYK, 8 bits) with its channel count, and how many bytes of
 /// `raw` it took. A CMYK JPEG gives its samples as stored, for the image's Decode array to read
 /// (Adobe's CMYK JPEGs store them inverted, which a Decode array of `[1 0 1 0 1 0 1 0]` undoes).
@@ -142,6 +146,12 @@ fn dct(raw: &[u8]) -> Res<(Vec<u8>, usize, u8)> {
         && let Some(inks) = ImageBlob::new("image/jpeg", jpeg.to_vec()).cmyk()
     {
         return Ok((inks.data.into_iter().map(|v| 255 - v).collect(), end, 4));
+    }
+    // The header's size is checked before the decoder allocates for it (a progressive JPEG keeps its
+    // coefficients besides its output).
+    let size = image::ImageReader::with_format(std::io::Cursor::new(jpeg), image::ImageFormat::Jpeg).into_dimensions();
+    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > MAX_DCT_PIXELS) {
+        return Err(PsError::Limit("decoded data is too large"));
     }
     let img = image::load_from_memory_with_format(jpeg, image::ImageFormat::Jpeg).map_err(|_| PsError::Ps("ioerror", "DCTDecode".into()))?;
     if img.color().channel_count() == 1 { Ok((img.to_luma8().into_raw(), end, 1)) } else { Ok((img.to_rgb8().into_raw(), end, 3)) }

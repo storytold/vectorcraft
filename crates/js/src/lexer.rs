@@ -47,13 +47,30 @@ pub struct Lexer<'s> {
     preprocessor_lines: bool,
     /// The deepest nesting of groups a regular expression literal may have.
     max_depth: usize,
+    /// Read the E4X punctuators `..`, `::` and `@`.
+    e4x: bool,
 }
 
 impl<'s> Lexer<'s> {
     /// A lexer of `src`. `preprocessor_lines` turns on the reading of preprocessor lines;
     /// `max_depth` limits how deeply a regular expression literal's groups may nest.
     pub fn new(src: &'s [u16], preprocessor_lines: bool, max_depth: usize) -> Self {
-        Self { src, pos: 0, line: 1, line_start: 0, blank_line: true, preprocessor_lines, max_depth }
+        Self { src, pos: 0, line: 1, line_start: 0, blank_line: true, preprocessor_lines, max_depth, e4x: false }
+    }
+
+    /// The same lexer, reading the E4X punctuators when `e4x` is true.
+    pub fn with_e4x(mut self, e4x: bool) -> Self {
+        self.e4x = e4x;
+        self
+    }
+
+    /// Moves to source offset `pos`, at the given line and column (both from 1), after the parser
+    /// has read an XML literal up to there.
+    pub(crate) fn seek(&mut self, pos: usize, line: u32, column: u32) {
+        self.pos = pos;
+        self.line = line;
+        self.line_start = pos.saturating_sub(column.saturating_sub(1) as usize);
+        self.blank_line = false;
     }
 
     /// The code unit at `pos`, as a code point value.
@@ -578,6 +595,9 @@ impl<'s> Lexer<'s> {
     fn punct(&mut self) -> Option<Punct> {
         let rest = &self.src[self.pos..];
         for (spelling, punct) in Punct::ALL {
+            if !self.e4x && matches!(punct, Punct::DotDot | Punct::ColonColon | Punct::At) {
+                continue;
+            }
             let bytes = spelling.as_bytes();
             if rest.len() >= bytes.len() && rest.iter().zip(bytes).all(|(&u, &b)| u == u16::from(b)) {
                 self.pos += bytes.len();

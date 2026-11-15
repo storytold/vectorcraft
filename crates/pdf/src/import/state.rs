@@ -62,6 +62,13 @@ pub(super) struct GlyphRun {
 /// swatch made for it.
 pub(super) type PatternReadings = (u32, Vec<(Vec<Paint>, String)>);
 
+/// A run of Type 3 glyph graphics preserved inside a named group.
+#[derive(Clone, Debug)]
+pub(super) struct Type3Run {
+    pub(super) nodes: Vec<Arc<Node>>,
+    pub(super) group: Option<usize>,
+}
+
 /// Builder state a nested interpretation (soft mask, pattern cell) starts afresh and gives back.
 pub(super) struct Saved {
     pub(super) stack: Vec<Frame>,
@@ -69,6 +76,7 @@ pub(super) struct Saved {
     pub(super) blend: BlendMode,
     pub(super) mask: Option<Arc<MaskSpec>>,
     pub(super) page: Rect,
+    pub(super) type3_run: Option<Type3Run>,
 }
 
 pub(super) struct Builder<'p> {
@@ -80,11 +88,19 @@ pub(super) struct Builder<'p> {
     pub(super) blend: BlendMode,
     pub(super) page: Rect,
     pub(super) glyphs: Option<GlyphRun>,
+    pub(super) type3_run: Option<Type3Run>,
     pub(super) text: Option<TextLine>,
+    /// The glyphs of the open line of type (`text`) that show, each as the outline it would be
+    /// kept as: what the line becomes when its type wouldn't draw as the file does
+    /// ([`super::reshaped`]).
+    pub(super) text_glyphs: Vec<GlyphRun>,
     pub(super) text_as: TextAs,
     pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,
     pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
+    /// The scale factors of each decoded raster by its key: drawn again, it is placed from them
+    /// without its pixels being decoded and converted again.
+    pub(super) raster_scales: HashMap<u128, (f32, f32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
     pub(super) cmyk_keys: HashSet<u128>,
     /// Images in a Separation space, by key: the paint of their ink, or `None` when they open in
@@ -217,6 +233,23 @@ const HAIRLINE: f64 = 0.25;
 /// Document width of the stroke `p` drawn at `scale`: `0 w` becomes a [`HAIRLINE`].
 pub(super) fn line_width(p: &StrokeProps, scale: f64) -> f64 {
     if p.line_width == 0.0 { HAIRLINE } else { p.line_width as f64 * scale }
+}
+
+/// Do strokes `a` and `b` draw alike: both unstroked, or the same width, caps, joins, miter limit
+/// and dashes ([`stroke_layer`] takes all of them)?
+pub(super) fn same_stroke(a: Option<&StrokeProps>, b: Option<&StrokeProps>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            a.line_width == b.line_width
+                && a.line_cap == b.line_cap
+                && a.line_join == b.line_join
+                && a.miter_limit == b.miter_limit
+                && a.dash_array == b.dash_array
+                && a.dash_offset == b.dash_offset
+        }
+        _ => false,
+    }
 }
 
 pub(super) fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f64) -> StrokeLayer {

@@ -204,6 +204,76 @@ fn glyphs_and_artboards_flyouts_keep_user_sizes() {
     }
 }
 
+/// An icon flyout's top edge and its free top corner (the canvas-side one) resize it upward:
+/// the bottom and the icon-column edge stay, and the new top is kept when the flyout closes
+/// and reopens and in a saved layout. The docking action that saves it is one VectorCraft
+/// accepts (#1094).
+#[test]
+fn an_icon_flyout_grows_upward_from_its_top_edge_and_free_corner() {
+    assert!(known(&Action::MoveFlyoutTop { panel: "glyphs".into(), offset: Some(-40.0) }));
+    let mut h = Harness::new();
+    let icon = h.hit(&Hit::Icon("glyphs".into())).unwrap().center();
+    h.click(icon);
+    for _ in 0..30 {
+        h.frame(vec![]);
+    }
+    let rect = |h: &Harness| {
+        let id = area_id().with("flyout");
+        let left = h.ctx.read_response(id.with("resize-left")).unwrap().rect;
+        let bottom = h.ctx.read_response(id.with("resize-bottom")).unwrap().rect;
+        let top = h.ctx.read_response(id.with("resize-top")).unwrap().rect;
+        Rect::from_min_max(pos2(left.left(), top.top()), pos2(bottom.right() + 12.0, bottom.bottom()))
+    };
+    let before = rect(&h);
+    assert!(before.top() > 200.0, "room above the Glyphs flyout: {before:?}");
+    for (at, cursor) in [
+        (pos2(before.center().x, before.top() + 2.0), egui::CursorIcon::ResizeVertical),
+        (before.left_top() + vec2(2.0, 2.0), egui::CursorIcon::ResizeNwSe),
+    ] {
+        h.frame(vec![Event::PointerMoved(at)]);
+        h.frame(vec![]);
+        assert_eq!(h.cursor, cursor, "at {at:?}, frame {before:?}");
+    }
+    let from = pos2(before.center().x, before.top() + 2.0);
+    h.drag(from, from - vec2(0.0, 80.0));
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let raised = rect(&h);
+    assert!((raised.top() - (before.top() - 80.0)).abs() < 1.0, "{before:?} -> {raised:?}");
+    assert_eq!(raised.bottom(), before.bottom());
+    assert_eq!(raised.right(), before.right(), "the icon-column edge stays anchored");
+    let from = raised.left_top() + vec2(2.0, 2.0);
+    h.drag(from, from + vec2(-60.0, -20.0));
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let grown = rect(&h);
+    assert!((grown.width() - raised.width() - 60.0).abs() < 1.0, "{raised:?} -> {grown:?}");
+    assert!((grown.top() - (raised.top() - 20.0)).abs() < 1.0, "{raised:?} -> {grown:?}");
+    assert_eq!(grown.bottom(), before.bottom());
+    assert_eq!(grown.right(), before.right());
+    h.click(icon);
+    assert_eq!(craft_ui::docking::flyout::<String>(&h.ctx, area_id()), None);
+    h.click(icon);
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    assert_eq!(rect(&h), grown, "reopened where it was");
+    let saved = serde_json::to_string(&h.layout()).unwrap();
+    assert!(saved.contains("flyout_offset"));
+    let mut restored = Harness::new();
+    restored.app.ui.docking = Some(serde_json::from_str(&saved).unwrap());
+    for _ in 0..3 {
+        restored.frame(vec![]);
+    }
+    restored.click(restored.hit(&Hit::Icon("glyphs".into())).unwrap().center());
+    for _ in 0..3 {
+        restored.frame(vec![]);
+    }
+    assert_eq!(rect(&restored), grown, "saved layout");
+}
+
 /// Footer controls stay at the resized panel's bottom, including empty or short lists.
 /// The same shared footer is used by the other icon panels and library windows.
 #[test]
@@ -346,6 +416,28 @@ fn a_character_field_shortcut_brings_the_floating_character_panel_forward() {
     }
 }
 
+/// With the panels hidden by Tab, a Character field shortcut shows the dock with the floating
+/// Character panel, so the field it focuses can be seen.
+#[test]
+fn a_character_field_shortcut_shows_the_panels_tab_hid() {
+    let mut h = Harness::new();
+    let id = h.app.run("text.create", json!({"x": 20, "y": 50, "text": "AVAX"})).unwrap()["id"].clone();
+    h.app.run("select.set", json!({"ids": [id]})).unwrap();
+    h.app.run("window.panel.float", json!({"panel": "character"})).unwrap();
+    h.frame(vec![]);
+    let rect = floating_window(&h.layout(), "character").map(|w| w.rect);
+    h.app.run("window.dock", json!({})).unwrap();
+    assert!(!visible(&h.app.ui, "character"));
+    h.app.run("type.highlightKerning", json!({})).unwrap();
+    assert!(h.app.ui.dock && visible(&h.app.ui, "character"), "the panel shows");
+    assert_eq!(floating_window(&h.layout(), "character").map(|w| w.rect), rect, "where it was");
+    // In Presentation Mode the shortcut still focuses the field, and the panel shows when the mode ends.
+    h.app.ui.screen_mode = 3;
+    assert_eq!(h.app.run("type.highlightTracking", json!({})).unwrap(), json!({"field": "tracking"}));
+    h.app.ui.screen_mode = 0;
+    assert!(visible(&h.app.ui, "character"), "the panel stays in place");
+}
+
 #[test]
 fn the_dock_collapses_to_icons_and_back() {
     let mut h = Harness::new();
@@ -374,6 +466,200 @@ fn tab_hides_the_panels_and_the_canvas_keeps_drawing() {
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.tab("properties").is_some());
+}
+
+/// Hide the panels with Tab and settle; returns the canvas rect with every panel hidden.
+fn hide_with_tab(h: &mut Harness) -> Rect {
+    h.app.run("window.dock", json!({})).unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_none());
+    h.app.canvas_rect.expect("the canvas draws")
+}
+
+/// Frames with the pointer still, for `secs` of the harness clock.
+fn wait(h: &mut Harness, secs: f64) {
+    let until = h.time + secs;
+    while h.time < until {
+        h.frame(vec![]);
+    }
+}
+
+#[test]
+fn resting_on_the_right_edge_shows_the_hidden_panels_over_the_canvas_until_the_pointer_leaves() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    let edge = pos2(SCREEN.right() - 2.0, 500.0);
+    h.frame(vec![Event::PointerMoved(edge)]);
+    wait(&mut h, peek::DELAY / 2.0);
+    assert!(h.tab("properties").is_none(), "the panels wait for the pointer to rest");
+    wait(&mut h, peek::DELAY);
+    let tab = h.tab("properties").expect("resting on the edge shows the right-hand panels");
+    assert!(h.hit(&Hit::Icon("swatches".into())).is_some(), "the icon column shows with them");
+    assert!(!h.app.ui.dock, "the panels stay hidden for good");
+    assert_eq!(h.app.canvas_rect, Some(wide), "the canvas keeps its size, so the art stays where it is");
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], json!("right"));
+    h.frame(vec![Event::PointerMoved(tab.center())]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_some(), "they stay while the pointer is over them");
+    h.frame(vec![Event::PointerMoved(wide.center())]);
+    wait(&mut h, peek::GRACE / 2.0);
+    assert!(h.tab("properties").is_some(), "a short trip away keeps them");
+    wait(&mut h, peek::GRACE);
+    assert!(h.tab("properties").is_none(), "away from them, they hide again");
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], Value::Null);
+}
+
+#[test]
+fn a_press_on_the_canvas_while_the_panels_show_from_the_edge_does_not_reach_the_art_under_them() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    h.app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    h.frame(vec![]);
+    fn selected(app: &VectorcraftApp) -> bool {
+        !app.session.active().unwrap().selection.is_empty()
+    }
+    assert!(selected(&h.app));
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap(), json!("right"));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let tab = h.tab("properties").expect("the right-hand panels show");
+    assert!(tab.left() < wide.right(), "they cover the canvas's right edge");
+    assert_eq!(h.app.canvas_rect, Some(wide));
+    // A click in the panels, where the canvas lies under them, leaves the selection.
+    h.click(pos2(tab.center().x, wide.bottom() - 40.0));
+    assert!(selected(&h.app), "the canvas under the panels takes no click");
+    // A click on the uncovered canvas away from the art deselects it, as it always does.
+    h.click(pos2(wide.left() + 40.0, wide.bottom() - 40.0));
+    assert!(!selected(&h.app));
+}
+
+#[test]
+fn the_canvas_keeps_the_hidden_panels_size_when_the_window_resizes_or_the_panels_show_at_once() {
+    let mut h = Harness::new();
+    // Shown before any frame has drawn the panels hidden.
+    h.app.run("window.dock", json!({})).unwrap();
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap(), json!("right"));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_some());
+    let wide = h.app.canvas_rect.unwrap();
+    h.app.run("window.panels.peek", json!({"side": null})).unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.app.canvas_rect, Some(wide), "the canvas had the size it has with every panel hidden");
+    // A narrower window while they show.
+    h.app.run("window.panels.peek", json!({"side": "right"})).unwrap();
+    let narrow = Rect::from_min_max(SCREEN.min, pos2(SCREEN.right() - 200.0, SCREEN.bottom()));
+    for _ in 0..3 {
+        h.time += 0.05;
+        h.run(egui::RawInput { time: Some(h.time), screen_rect: Some(narrow), ..Default::default() });
+    }
+    assert!(h.tab("properties").is_some());
+    let canvas = h.app.canvas_rect.unwrap();
+    assert!((canvas.width() - (wide.width() - 200.0)).abs() < 1.0, "{canvas:?} follows the window, under the panels");
+}
+
+#[test]
+fn panels_held_by_a_press_hide_after_its_release_away_from_them() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.right() - 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    let tab = h.tab("properties").expect("the panels show");
+    let body = pos2(tab.center().x, wide.bottom() - 40.0);
+    h.frame(vec![Event::PointerMoved(body), button(body, true)]);
+    h.frame(vec![Event::PointerMoved(wide.center())]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_some(), "a held button keeps them");
+    h.frame(vec![button(wide.center(), false)]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_none(), "released away from them, they hide");
+}
+
+#[test]
+fn a_drag_to_the_edge_or_a_pointer_on_the_left_edge_shows_nothing() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    // The default layout docks no panel on the left.
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.left() + 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    assert!(h.tab("properties").is_none());
+    // A drag that reaches the right edge holds a button down.
+    h.frame(vec![Event::PointerMoved(wide.center()), button(wide.center(), true)]);
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.right() - 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    assert!(h.tab("properties").is_none(), "a drag never shows them");
+    h.frame(vec![button(pos2(SCREEN.right() - 2.0, 500.0), false)]);
+}
+
+#[test]
+fn tab_while_the_panels_show_from_the_edge_shows_them_for_good() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.right() - 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    assert!(h.tab("properties").is_some());
+    h.app.run("window.dock", json!({})).unwrap();
+    h.frame(vec![Event::PointerMoved(wide.center())]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.app.ui.dock && h.tab("properties").is_some());
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], Value::Null);
+}
+
+#[test]
+fn shift_tab_hidden_panels_show_from_the_edge_too() {
+    let mut h = Harness::new();
+    h.app.run("window.panels", json!({})).unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_none());
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.right() - 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    assert!(h.tab("properties").is_some());
+}
+
+#[test]
+fn window_panels_peek_rejects_what_it_cannot_show_and_changes_nothing() {
+    let mut h = Harness::new();
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap_err(), "the panels are not hidden");
+    hide_with_tab(&mut h);
+    for side in [json!("up"), json!(1), json!(true), json!("Right")] {
+        assert_eq!(h.app.run("window.panels.peek", json!({"side": side})).unwrap_err(), "`side` must be left, right or null", "{side}");
+    }
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "left"})).unwrap_err(), "no panels are docked on the left side");
+    assert_eq!(h.app.run("window.panels.peek", json!({})).unwrap(), Value::Null, "nothing to hide");
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_none() && !h.app.ui.dock);
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap(), json!("right"));
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_some(), "the panels stay while the pointer has not moved");
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": null})).unwrap(), Value::Null);
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_none());
+    h.app.ui.screen_mode = 3;
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap_err(), "panels can't be shown in Presentation Mode");
+    h.app.ui.screen_mode = 0;
+}
+
+#[test]
+fn edge_panels_are_the_docked_panels_on_each_side_of_the_canvas() {
+    let layout = default_from(DockTab::ALL[0], &[], false, None, None);
+    let right = peek::edge_panels(&layout, peek::Edge::Right);
+    assert!(right.contains(&"properties".to_string()) && right.contains(&"swatches".to_string()));
+    assert!(!right.contains(&CANVAS.to_string()));
+    assert!(peek::edge_panels(&layout, peek::Edge::Left).is_empty());
+    let mirrored = Layout {
+        root: Some(Node::Split {
+            axis: craft_ui::layout::SplitAxis::Horizontal,
+            size: craft_ui::layout::SplitSize::FixedFirst(310.0),
+            first: Box::new(Node::Tabs { panels: vec!["layers".to_string()], active: 0 }),
+            second: Box::new(Node::Tabs { panels: vec![CANVAS.to_string()], active: 0 }),
+        }),
+        floating: Vec::new(),
+    };
+    assert_eq!(peek::edge_panels(&mirrored, peek::Edge::Left), ["layers"]);
+    assert!(peek::edge_panels(&mirrored, peek::Edge::Right).is_empty());
 }
 
 #[test]
@@ -1110,6 +1396,144 @@ fn panel_function_keys_toggle_icon_flyouts_and_floating_groups() {
     h.app.run("window.panel.dock", json!({"panel": "layers"})).unwrap();
     h.press(egui::Key::F7, egui::Modifiers::NONE);
     assert!(!showing(&h.app.ui, "layers"), "the expanded dock also toggles");
+}
+
+/// Window › Layers: the menu item's command and params.
+fn window_layers() -> Value {
+    json!({"panel": "layers", "toggle": true})
+}
+
+fn checked(h: &Harness, params: &Value) -> Option<bool> {
+    crate::menus::checked(&h.app, "window.panel", params)
+}
+
+/// With the panels hidden by Tab, Window › Layers has no check mark, and choosing it shows the dock
+/// with Layers where it was instead of closing the tab; the toolbar and the Control bar stay hidden
+/// until the next Tab shows them.
+#[test]
+fn window_panel_from_tab_hidden_dock_reveals_named_front_tab() {
+    let mut h = Harness::new();
+    let item = window_layers();
+    h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
+    assert_eq!(checked(&h, &item), Some(true));
+    let before = h.layout();
+    h.app.ui.toolbar = true;
+    h.app.ui.control_bar = true;
+    h.app.run("window.dock", json!({})).unwrap();
+    assert!(!h.app.ui.dock && !h.app.ui.toolbar && !h.app.ui.control_bar);
+    assert_eq!(checked(&h, &item), Some(false), "no check mark while Tab hides the panels");
+    h.app.run("window.panel", item.clone()).unwrap();
+    assert!(h.app.ui.dock && visible(&h.app.ui, "layers"), "Layers shows");
+    assert_eq!(h.layout(), before, "in its place");
+    assert!(!h.app.ui.toolbar && !h.app.ui.control_bar, "the toolbar and the Control bar stay hidden");
+    assert_eq!(checked(&h, &item), Some(true));
+    h.app.run("window.dock", json!({})).unwrap();
+    assert!(h.app.ui.dock && h.app.ui.toolbar && h.app.ui.control_bar, "the next Tab shows the bars the first Tab hid");
+    h.app.run("window.panel", item.clone()).unwrap();
+    assert!(!h.layout().contains(&"layers".to_string()), "a visible panel closes");
+    assert!(h.layout().contains(&"properties".to_string()), "only the panel named");
+    assert_eq!(checked(&h, &item), Some(false));
+}
+
+/// With the panels hidden by Shift+Tab, Window › Layers and its plain command show a floating
+/// Layers panel again where it was instead of closing it.
+#[test]
+fn window_panel_from_shift_tab_hidden_floating_window_reveals_it() {
+    let mut h = Harness::new();
+    let item = window_layers();
+    h.app.run("window.panel.float", json!({"panel": "layers"})).unwrap();
+    h.frame(vec![]);
+    let rect = floating_window(&h.layout(), "layers").map(|w| w.rect);
+    assert!(rect.is_some());
+    h.app.ui.toolbar = true;
+    h.app.ui.control_bar = true;
+    for params in [item.clone(), json!({"panel": "layers"})] {
+        h.app.run("window.panels", json!({})).unwrap();
+        assert!(!h.app.ui.dock && h.app.ui.toolbar && h.app.ui.control_bar);
+        assert_eq!(checked(&h, &item), Some(false), "{params}: no check mark while Shift+Tab hides the panels");
+        h.app.run("window.panel", params.clone()).unwrap();
+        assert!(h.app.ui.dock && visible(&h.app.ui, "layers"), "{params}: Layers shows");
+        assert_eq!(floating_window(&h.layout(), "layers").map(|w| w.rect), rect, "{params}: where it was");
+    }
+}
+
+/// While the dock is hidden, Window › Layers opens a flyout that was open in the icon column
+/// instead of putting it away; a closed panel comes back and a background tab comes to the front.
+/// With the dock showing, choosing the checked item again hides only that panel.
+#[test]
+fn window_panel_hidden_iconic_and_closed_cases() {
+    let mut h = Harness::new();
+    let item = window_layers();
+    h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
+    h.app.run("window.panel", item.clone()).unwrap();
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"));
+    assert_eq!(checked(&h, &item), Some(true));
+    h.app.ui.dock = false;
+    assert_eq!(checked(&h, &item), Some(false), "no check mark with the dock hidden");
+    h.app.run("window.panel", item.clone()).unwrap();
+    assert!(h.app.ui.dock, "the dock shows");
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"), "the flyout stays open");
+    assert_eq!(checked(&h, &item), Some(true));
+    h.app.run("window.panel", item.clone()).unwrap();
+    assert_eq!(h.app.ui.open_panel, None, "a visible flyout puts away");
+
+    let mut h = Harness::new();
+    let libraries = json!({"panel": "libraries", "toggle": true});
+    h.app.run("window.panel.close", json!({"panel": "libraries"})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "properties"})).unwrap();
+    h.app.run("window.dock", json!({})).unwrap();
+    assert_eq!((checked(&h, &libraries), checked(&h, &item)), (Some(false), Some(false)));
+    h.app.run("window.panel", libraries.clone()).unwrap();
+    assert!(h.app.ui.dock && visible(&h.app.ui, "libraries"), "a closed panel comes back");
+    h.app.run("window.panel", item.clone()).unwrap();
+    assert!(visible(&h.app.ui, "layers") && !visible(&h.app.ui, "properties"), "a background tab comes to the front");
+    assert_eq!((checked(&h, &libraries), checked(&h, &item)), (Some(false), Some(true)), "the tab in front is checked");
+}
+
+/// F7 with the panels hidden by Tab shows the dock with the Layers group instead of hiding the
+/// group; the next F7 hides it.
+#[test]
+fn function_key_from_tab_hidden_dock_reveals_named_group() {
+    let mut h = Harness::new();
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(visible(&h.app.ui, "layers"));
+    let before = h.layout();
+    h.app.run("window.dock", json!({})).unwrap();
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(h.app.ui.dock && visible(&h.app.ui, "layers"), "F7 shows the hidden group");
+    assert_eq!(h.layout(), before);
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(["properties", "layers", "libraries"].iter().all(|panel| !h.layout().contains(&panel.to_string())), "the next press hides the group");
+}
+
+/// Presentation Mode hides every panel: no panel is checked, `window.panel` fails and changes
+/// nothing, and F7 is ignored. The other full screen modes show the panels as Normal does.
+#[test]
+fn presentation_panel_command_reports_unavailable_without_mutating_layout() {
+    let mut h = Harness::new();
+    let item = window_layers();
+    h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
+    h.app.run("window.panel.close", json!({"panel": "swatches"})).unwrap();
+    h.app.run("view.presentation", json!({})).unwrap();
+    assert_eq!(h.app.ui.screen_mode, 3);
+    assert_eq!(checked(&h, &item), Some(false), "no check mark in Presentation Mode");
+    let before = (h.layout(), h.app.ui.dock, h.app.ui.open_panel.clone(), h.app.ui.docking_hidden.len());
+    for params in [item.clone(), json!({"panel": "layers"}), json!({"panel": "swatches"}), json!({"panel": "brushes"})] {
+        let error = h.app.run("window.panel", params.clone()).unwrap_err();
+        assert_eq!(error, "panels can't be shown in Presentation Mode", "{params}");
+        assert_eq!((h.layout(), h.app.ui.dock, h.app.ui.open_panel.clone(), h.app.ui.docking_hidden.len()), before, "{params} changed nothing");
+    }
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert_eq!(h.app.ui.screen_mode, 3);
+    assert_eq!(h.layout(), before.0, "F7 is ignored");
+    for mode in [1, 2] {
+        h.app.run("view.screenMode", json!({"mode": mode})).unwrap();
+        assert_eq!(checked(&h, &item), Some(true), "mode {mode}");
+        h.app.run("window.panel", item.clone()).unwrap();
+        assert!(!visible(&h.app.ui, "layers"), "mode {mode}: the checked item hides the panel");
+        h.app.run("window.panel", item.clone()).unwrap();
+        assert!(visible(&h.app.ui, "layers"), "mode {mode}: and shows it again");
+    }
 }
 
 #[test]

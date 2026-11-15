@@ -1,10 +1,11 @@
 //! Character Styles and Paragraph Styles panels (one implementation, two kinds).
 //!
-//! Click a style to apply it to the selected text (or the Type tool's selected characters);
-//! Alt-click applies it and clears overrides. Double-clicking a character style's row opens its
-//! Character Style Options (`ui.charStyleOptions`), as the panel menu does; a paragraph style's row
-//! opens its Paragraph Style Options, the rename dialog the panel menu opens. The style of the
-//! selection is highlighted, with a "+" when the text overrides some of its attributes. New makes
+//! Click a style to apply it to the selected text (every frame of each selected threaded story) or
+//! the Type tool's selected characters; Alt-click applies it and clears overrides. Double-clicking a
+//! character style's row opens its Character Style Options (`ui.charStyleOptions`), as the panel
+//! menu does; a paragraph style's row opens its Paragraph Style Options (`ui.paraStyleOptions`).
+//! The style all of that text has is highlighted, with a "+" when some of the text overrides some
+//! of its attributes; text in several styles highlights none. New makes
 //! a style from the selected text; Alt-click on New first asks for its name (`ui.newCharStyle`,
 //! `ui.newParaStyle`).
 
@@ -15,8 +16,9 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::{fileio, textstyles};
 
-use super::character::{end_typing, text_editing, text_style};
+use super::character::{end_typing, shared, text_editing, text_style};
 use super::memo::Memo;
+use super::paragraph::shared_para;
 use super::{alt_held, pstate, selection_len, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
@@ -32,6 +34,7 @@ impl Kind {
     fn prefix(self) -> &'static str {
         if self == Kind::Char { "charStyle" } else { "paraStyle" }
     }
+    #[cfg(test)]
     fn what(self) -> &'static str {
         if self == Kind::Char { "Character" } else { "Paragraph" }
     }
@@ -171,14 +174,25 @@ thread_local! {
     static LISTED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-/// The selection's style name (Normal when none) and every one of its attributes, written as a
-/// style holds them, if text is selected.
-fn current(app: &VectorcraftApp, kind: Kind) -> Option<(Option<String>, Map<String, Value>)> {
-    let (c, p) = text_style(app)?;
-    Some(match kind {
-        Kind::Char => (c.style_name.clone(), textstyles::char_attrs(&c)),
-        Kind::Para => (p.style_name.clone(), textstyles::para_attrs(&p)),
-    })
+/// The style name (`None`: the Normal style) that every character the panel acts on has (paragraph
+/// styles: every paragraph), with the Selection tool in every frame of the selected stories;
+/// `None` when they differ or no type is selected.
+fn current(app: &VectorcraftApp, kind: Kind) -> Option<Option<String>> {
+    match kind {
+        Kind::Char => shared(app, |s| s.style_name.clone()),
+        Kind::Para => shared_para(app, |p| p.style_name.clone()),
+    }
+}
+
+/// Whether any character (paragraph styles: paragraph) the panel acts on differs from the style
+/// attributes `attrs` in one of them.
+fn has_overrides(app: &VectorcraftApp, kind: Kind, attrs: &Map<String, Value>) -> bool {
+    let differs = |m: Map<String, Value>| attrs.iter().any(|(k, v)| m.get(k) != Some(v));
+    let same = match kind {
+        Kind::Char => shared(app, |s| differs(textstyles::char_attrs(s))),
+        Kind::Para => shared_para(app, |p| differs(textstyles::para_attrs(p))),
+    };
+    same != Some(false)
 }
 
 /// Parameters targeting the selection: the Type tool's selected characters (paragraph styles: the
@@ -195,14 +209,19 @@ fn target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
 }
 
 /// [`target`] for applying a style: after Select All in threaded text, all the text of every
-/// frame of the story.
+/// frame of the story; with the Selection tool, every frame of the selected stories
+/// ([`super::character::selected_stories`]).
 fn apply_target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
+    if text_editing(app).is_none() {
+        super::character::target_selected_stories(app, &mut p);
+        return p;
+    }
     match super::character::text_story(app) {
-        Some(story) if text_editing(app).is_some() => {
+        Some(story) => {
             p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>());
             p
         }
-        _ => target(app, kind, p),
+        None => target(app, kind, p),
     }
 }
 
@@ -228,17 +247,11 @@ fn row_look(is_cur: bool, in_highlight: bool, hovered: bool, t: &Tokens) -> (Opt
     (fill, is_cur && in_highlight)
 }
 
-/// Opens `name`'s options: Character Style Options for a character style, or the Paragraph Style
-/// Options the Paragraph Styles panel menu opens, which rename the style (`ui.paramDialog` runs
-/// `paraStyle.rename`).
+/// Opens `name`'s options: Character Style Options for a character style, Paragraph Style Options
+/// for a paragraph style.
 fn open_style_options(app: &mut VectorcraftApp, kind: Kind, name: &str) {
-    if kind == Kind::Char {
-        app.run("ui.charStyleOptions", json!({ "name": name })).ok();
-    } else {
-        let label = format!("{} Style Options", kind.what());
-        app.run("ui.paramDialog", json!({ "command": format!("{}.rename", kind.prefix()), "label": label, "params": { "name": name, "to": name } }))
-            .ok();
-    }
+    let command = if kind == Kind::Char { "ui.charStyleOptions" } else { "ui.paraStyleOptions" };
+    app.run(command, json!({ "name": name })).ok();
 }
 
 /// The style list and its New and Delete buttons. Shift-click highlights every style from the
@@ -247,11 +260,10 @@ fn open_style_options(app: &mut VectorcraftApp, kind: Kind, name: &str) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let t = Tokens::get(ui.ctx());
     let all = styles(app, kind);
-    let cur = current(app, kind);
     let normal = all.first().map(|s| s.0.clone()).unwrap_or_default();
-    let cur_name = cur.as_ref().map(|(n, _)| n.clone().unwrap_or_else(|| normal.clone()));
+    let cur_name = current(app, kind).map(|n| n.unwrap_or_else(|| normal.clone()));
     let mut clicked: Option<(String, egui::Modifiers)> = None;
-    // A double-clicked Character Style's row, whose options open after the list is laid out.
+    // A double-clicked style's row, whose options open after the list is laid out.
     let mut options: Option<String> = None;
     // Set on a double-click's second click, which must not apply the style again.
     let mut double_click = false;
@@ -275,10 +287,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     widgets::list_box(ui, |ui| {
         for (name, attrs, _) in &all {
             let is_cur = cur_name.as_deref() == Some(name.as_str());
-            // Overrides: an attribute the style sets that the selection doesn't match.
-            let overridden = is_cur && cur.as_ref().is_some_and(|(_, m)| attrs.iter().any(|(k, v)| m.get(k) != Some(v)));
+            // Overrides: an attribute the style sets that some of the text doesn't match.
+            let overridden = is_cur && has_overrides(app, kind, attrs);
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click_and_drag());
-            if resp.drag_started() {
+            if resp.drag_started_by(egui::PointerButton::Primary) {
                 egui::DragAndDrop::set_payload(ui.ctx(), RowDrag { kind, name: name.clone() });
             }
             if scroll_to.as_deref() == Some(name.as_str()) {
@@ -299,7 +311,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             if resp.clicked() {
                 clicked = Some((name.clone(), ui.input(|i| i.modifiers)));
             }
-            // A double-click on a user character style opens its Character Style Options, as the
+            // A double-click on a user style opens its Character or Paragraph Style Options, as the
             // panel menu's item does; with Shift, Cmd/Ctrl or Alt held it only follows the click
             // rules. The second click never applies the style again, also on the Normal style,
             // which has no options to open.
@@ -315,7 +327,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     if scroll_to.is_some() {
         set_pstate::<Option<String>>(ui.ctx(), kind.scroll_key(), None);
     }
-    let has_text = cur.is_some();
+    let has_text = text_style(app).is_some();
     if let Some((name, m)) = clicked {
         sel = super::swatches::click_selection(ui, kind.anchor_key(), sel, &listed, &name, m);
         // Shift and Cmd/Ctrl clicks only highlight, as in the Graphic Styles panel. The second
@@ -386,7 +398,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let normal = if kind == Kind::Char { "[Normal Character Style]" } else { "[Normal Paragraph Style]" };
     let user = sel.as_ref().is_some_and(|s| s != normal);
     let doomed: Vec<&String> = many.iter().filter(|s| *s != normal).collect();
-    let has_text = current(app, kind).is_some() || selection_len(app) > 0;
+    let has_text = text_style(app).is_some() || selection_len(app) > 0;
     let p = kind.prefix();
     if menu_item(ui, &crate::i18n::fmt(tl!("New {kind} Style…"), &[("kind", kind.what_label())]), true, false) {
         // A later typing preview must not restore the document from before this capture.

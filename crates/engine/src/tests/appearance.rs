@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
-use vectorcraft_doc::{AppearanceItem, FillLayer, Node};
+use vectorcraft_doc::{AppearanceItem, FillLayer, LineJoin, Node};
 
 use crate::*;
 
@@ -183,6 +183,48 @@ fn group_rows_are_the_groups_own_stack() {
     run(&mut s, "appearance.setActiveItem", json!({"index": null}));
     run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
     assert_eq!(fill_paint(&node(&s, b), 0).color().unwrap().to_hex(), "#00ff00");
+}
+
+/// #6739: `stroke.set` without an item on a group with a stroke row of its own edits that row;
+/// its members, which have no stroke (as paths a PDF import brings in), are left alone instead of
+/// each getting a black 1 pt stroke. Options alone never make a stroke visible: a row created for
+/// a join has no paint, while a weight still gives the usual black stroke.
+#[test]
+fn stroke_options_on_a_group_with_its_own_stroke_edit_that_stroke() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 100.0), rect(&mut s, 250.0));
+    for id in [a, b] {
+        run(&mut s, "appearance.removeItem", json!({"ids": [id.0], "index": 1}));
+        assert!(node(&s, id).appearance.stroke().is_none(), "the member has no stroke row");
+    }
+    let g = NodeId(run(&mut s, "object.group", json!({"ids": [a.0, b.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({"ids": [g.0]}));
+    run(&mut s, "appearance.setItem", json!({"ids": [g.0], "index": 0, "color": "#ffffff", "weight": 2}));
+    let r = run(&mut s, "stroke.set", json!({"ids": [g.0], "join": "round"}));
+    assert_eq!(r["objects"], 1, "{r}");
+    let gs = node(&s, g).appearance.stroke().unwrap().clone();
+    assert_eq!((gs.join, gs.width, gs.paint.color().map(|c| c.to_hex())), (LineJoin::Round, 2.0, Some("#ffffff".to_string())));
+    for id in [a, b] {
+        assert!(node(&s, id).appearance.stroke().is_none(), "a member keeps no stroke");
+    }
+    // A group without a stroke of its own still reaches its members; for a join alone the row
+    // made on each has no paint, so nothing becomes visible.
+    let (c, d) = (rect(&mut s, 400.0), rect(&mut s, 550.0));
+    for id in [c, d] {
+        run(&mut s, "appearance.removeItem", json!({"ids": [id.0], "index": 1}));
+    }
+    let h = NodeId(run(&mut s, "object.group", json!({"ids": [c.0, d.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "stroke.set", json!({"ids": [h.0], "join": "bevel"}));
+    for id in [c, d] {
+        let st = node(&s, id).appearance.stroke().cloned().expect("a stroke row for the join");
+        assert_eq!((st.paint, st.join), (Paint::None, LineJoin::Bevel), "no paint for a join alone");
+    }
+    // A weight is a visible stroke: an object without one gets the black stroke, as before.
+    let e = rect(&mut s, 700.0);
+    run(&mut s, "appearance.removeItem", json!({"ids": [e.0], "index": 1}));
+    run(&mut s, "stroke.set", json!({"ids": [e.0], "weight": 3}));
+    let st = node(&s, e).appearance.stroke().cloned().unwrap();
+    assert_eq!((st.paint, st.width), (Paint::solid(Color::BLACK), 3.0));
 }
 
 #[test]

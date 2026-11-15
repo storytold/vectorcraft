@@ -32,7 +32,7 @@ fn open(app: &mut VectorcraftApp, kind: &str, fields: serde_json::Value) {
 }
 
 fn objects(app: &VectorcraftApp) -> usize {
-    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+    app.session.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.iter().filter(|c| !c.is_ruler_guide()).count())).sum()
 }
 
 #[test]
@@ -428,6 +428,7 @@ fn dialogs_do_not_stretch_to_the_screen() {
         ("ui.colorGuideOptions", json!({})),
         ("ui.colorBalanceDialog", json!({})),
         ("ui.saturateDialog", json!({})),
+        ("ui.indexedColorDialog", json!({})),
         ("ui.saveSwatchLibrary", json!({})),
         ("ui.flattenTransparencyDialog", json!({})),
         ("ui.expandDialog", json!({})),
@@ -570,11 +571,11 @@ fn split_into_grid_opens_at_the_selections_size_and_previews() {
     ]);
     frame(&mut app, Default::default());
     // The preview: 2 × 3 cells and the guides along their edges, not yet an undo step.
-    assert_eq!((objects(&app), app.session.doc().unwrap().doc.guides.len()), (6, 10));
+    assert_eq!((objects(&app), app.session.doc().unwrap().doc.ruler_guides().len()), (6, 10));
     assert!(app.session.in_interaction());
     confirm(&mut app).unwrap();
     let st = app.session.doc().unwrap();
-    assert_eq!((objects(&app), st.doc.guides.len(), st.history.undo.len()), (6, 10, undo + 1));
+    assert_eq!((objects(&app), st.doc.ruler_guides().len(), st.history.undo.len()), (6, 10, undo + 1));
     assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
     // Cancel rolls a preview back.
     app.run("select.all", json!({})).unwrap();
@@ -2289,7 +2290,13 @@ fn dialog_sliders_report_the_numbers_their_fields_show() {
     app.run("tool.options", json!({"tool": "smooth"})).unwrap();
     set(&mut app, "fidelity", json!(0.25));
     let shown = tree(|ui| show(&mut app, ui.ctx()));
-    assert_eq!(slider_value(&shown, "Fidelity:"), v(0.25, (0.05, 20.0), "0.25pt"));
+    assert_eq!(slider_value(&shown, "Fidelity:"), v(0.25, (0.05, 20.0), "0.25px"), "the Smooth tool's Fidelity is on screen (#4671)");
+    // The Blob Brush's Fidelity is in points.
+    app.ui.dialog = None;
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    set(&mut app, "fidelity", json!(2.5));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Fidelity:"), v(2.5, (0.01, 20.0), "2.5pt"));
     app.ui.dialog = None;
     app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
     app.run("ui.colorPicker", json!({})).unwrap();

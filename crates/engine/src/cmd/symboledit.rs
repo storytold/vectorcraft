@@ -19,7 +19,7 @@ use vectorcraft_doc::symbol_overrides::SymbolOverride;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection, SymbolEdit, SymbolRegistration};
 use vectorcraft_geom::{Affine, Point};
 
-use super::brushsym::{natural_size, place_xf};
+use super::brushsym::{fit_parts, natural_size, place_xf};
 use super::{EngineError, Result, Session, bad, number_or, object_param, ok, str_param};
 
 /// The name of the undo step that enters symbol editing mode.
@@ -248,7 +248,7 @@ pub(crate) fn leave(s: &mut Session, _: &Value) -> Result<Value> {
 /// the instance editing was entered from. The symbol already holds the layer's art ([`sync`]).
 pub(crate) fn finish(d: &mut Document, sel: &mut Selection) {
     let Some(se) = d.symbol_edit.take() else { return };
-    let _ = d.remove(se.layer);
+    let _ = d.remove_edit_layer(se.layer);
     match se.instance.filter(|i| d.node(*i).is_some()) {
         Some(i) => sel.set([i]),
         None => sel.clear(),
@@ -425,8 +425,8 @@ fn each_changed_instance(n: &mut Node, name: &str, f: &mut dyn FnMut(&mut Vec<Sy
 }
 
 /// Each instance's appearance changes to objects of symbol `name`'s art follow those objects
-/// through an edit of the editing layer (see [`follow_paths`]), and keep only the changes to
-/// objects the art still has. That covers the instances on the layers and in the art of the
+/// through an edit of the editing layer (see [`follow_paths`]), and keep only the changes the art
+/// still draws ([`fit_parts`]). That covers the instances on the layers and in the art of the
 /// document's other symbols, graph designs, pattern tiles (the tiles pattern editing's Cancel puts
 /// back included) and brushes, opacity-mask art included. The editing layer holds no instance of
 /// the symbol, since [`sync`] refuses one.
@@ -435,7 +435,7 @@ fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: 
     let mut follow = |o: &mut Vec<SymbolOverride>| {
         follow_paths(o, old, new);
         match &art {
-            Some(art) => vectorcraft_doc::symbol_overrides::retain_parts(o, art),
+            Some(art) => fit_parts(o, art),
             None => o.clear(),
         }
     };
@@ -480,18 +480,24 @@ fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: 
 /// an instance of the symbol itself.
 pub(crate) fn sync(before: &Document, d: &mut Document) -> Result<()> {
     let Some(se) = d.symbol_edit.clone() else { return Ok(()) };
-    let art: Option<Vec<Arc<Node>>> = d.node(se.layer).and_then(|l| l.children().cloned());
+    // The layer's art: ruler guides on it are not part of the symbol.
+    let art_of = |d: &Document| -> Option<Vec<Arc<Node>>> {
+        d.node(se.layer).and_then(|l| l.children()).map(|ch| ch.iter().filter(|c| !c.is_ruler_guide()).cloned().collect())
+    };
+    let art = art_of(d);
     let (Some(art), Some(index)) = (art, d.symbols.iter().position(|x| x.name == se.symbol)) else {
         d.symbol_edit = None;
-        let _ = d.remove(se.layer);
+        let _ = d.remove_edit_layer(se.layer);
         return Ok(());
     };
     // Entering, and edits that left the layer's art alone, write nothing.
     let same = |b: &[Arc<Node>]| b.len() == art.len() && b.iter().zip(&art).all(|(a, b)| Arc::ptr_eq(a, b));
     let (old, old_group) = match before.symbol_edit.as_ref().filter(|b| b.layer == se.layer) {
         None => return Ok(()),
-        Some(_) if before.node(se.layer).and_then(|l| l.children()).is_some_and(|b| same(b)) => return Ok(()),
-        Some(b) => (before.node(se.layer).and_then(|l| l.children().cloned()).unwrap_or_default(), b.group),
+        Some(b) => match art_of(before) {
+            Some(old) if same(&old) => return Ok(()),
+            old => (old.unwrap_or_default(), b.group),
+        },
     };
     if art.iter().any(|n| holds_symbol(d, n, &se.symbol, &mut HashSet::new())) {
         return Err(EngineError::Other("a symbol can't hold an instance of itself".into()));

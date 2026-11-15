@@ -1,5 +1,6 @@
-//! Swatches panel: proxy, Recent Colors, find field, thumbnail grid (15.5 pt tiles on a 17 pt pitch)
-//! or list, colour groups as folders, None/Registration first, bottom bar and panel menu.
+//! Swatches panel: proxy, Recent Colors (hidden by the panel menu's Show Recent Colors), find
+//! field, thumbnail grid (15.5 pt tiles on a 17 pt pitch) or list, colour groups as folders,
+//! None/Registration first, bottom bar and panel menu.
 //!
 //! Swatches drag to reorder, into and out of colour groups (`swatch.move`) and onto art (the active
 //! proxy's paint command with the object's id) and onto the Gradient panel's ramp; a Fill/Stroke

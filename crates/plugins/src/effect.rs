@@ -552,7 +552,7 @@ mod tests {
         // Traps on a long input.
         let first = "(if (i32.gt_u (local.get $il) (i32.const 4096)) (then unreachable))";
         let src = crate::wat::with_imports(&manifest, "", first, r#"{"objects":[]}"#);
-        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         let doc = Document::new(100.0, 100.0);
         let line = |n: usize| PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false));
         let draw =
@@ -583,7 +583,7 @@ mod tests {
         // Traps on a long input.
         let first = "(if (i32.gt_u (local.get $il) (i32.const 4096)) (then unreachable))";
         let src = crate::wat::with_imports(&manifest, "", first, &output);
-        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         let doc = Document::new(100.0, 100.0);
         let line = |n: usize| PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false));
         let draw =
@@ -647,7 +647,7 @@ mod tests {
         crate::safe_mode::set_active(None);
         const ID: &str = "test.effect.budget";
         let src = crate::wat::returning(&crate::wat::manifest(ID, "effect", "{}"), r#"{"objects":[]}"#);
-        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         // Each run takes 900 ms by this clock (it is read before and after each run).
         let view = crate::deferred::Deferrals::with_clock(stepping(450));
         let ran = view.view(|| (0..4).map(|i| drawn(ID, &line(i + 2), i)).collect::<Vec<_>>());
@@ -677,7 +677,7 @@ mod tests {
         const ID: &str = "test.effect.deferfailed";
         // Runs to its instruction budget.
         let src = crate::wat::spinning(&crate::wat::manifest(ID, "effect", "{}"), 1_000_000_000, r#"{"objects":[]}"#);
-        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         let view = crate::deferred::Deferrals::with_clock(stepping(1));
         assert!(!view.view(|| drawn(ID, &line(2), 0)));
         assert!(last_error(ID).is_some());
@@ -712,9 +712,9 @@ mod tests {
         const FAST: &str = "test.effect.cutshort.fast";
         let src = crate::wat::spinning(&crate::wat::manifest(ID, "effect", "{}"), 10_000_000, r#"{"objects":[]}"#);
         let limits = Limits { fuel_base: 1_000_000_000, ..Limits::default() };
-        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), limits).unwrap());
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), limits).unwrap()).unwrap();
         let fast = crate::wat::returning(&crate::wat::manifest(FAST, "effect", "{}"), r#"{"objects":[]}"#);
-        registry::install(crate::Plugin::load(&wat::parse_str(&fast).unwrap(), Limits::default()).unwrap());
+        registry::install(crate::Plugin::load(&wat::parse_str(&fast).unwrap(), Limits::default()).unwrap()).unwrap();
         // The first run starts the budget at 0 ms and ends at 1,999: the next has 1 ms left, and
         // ten million steps take longer.
         let reads = Arc::new(std::sync::atomic::AtomicU64::new(0));
@@ -737,7 +737,7 @@ mod tests {
         let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         crate::safe_mode::set_active(None);
         let src = crate::wat::spinning(&crate::wat::manifest("test.effect.cancelled", "effect", "{}"), 1_000_000_000, r#"{"objects":[]}"#);
-        let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         let ran_first =
             || RUNS.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|r| matches!(r.get(&plugin.serial()), Some(Runs::Done)));
         let draw = || {
@@ -777,7 +777,7 @@ mod tests {
             crate::safe_mode::parse_marker(&std::fs::read(&json[0]).unwrap())
         };
         let src = crate::wat::returning(&crate::wat::manifest("test.effect.overlap", "effect", "{}"), r#"{"objects":[]}"#);
-        let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         let named = Some(crate::safe_mode::Item::of(&plugin));
         assert_eq!(marker(), None);
 

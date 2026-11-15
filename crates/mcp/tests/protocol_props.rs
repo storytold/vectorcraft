@@ -4,6 +4,9 @@
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod common;
+
+use common::TempFolder;
 use proptest::prelude::*;
 use serde_json::{Value, json};
 use vectorcraft_doc::Document;
@@ -98,7 +101,7 @@ fn tool_definitions_are_valid() {
 
 #[test]
 fn every_tool_survives_empty_and_junk_arguments() {
-    let dir = vectorcraft_testkit::temp_dir("mcp-junk");
+    let dir = TempFolder::new("mcp-junk");
     let safe = dir.join("junk.vectorcraft").to_string_lossy().to_string();
     let mut failures = vec![];
     for t in tool_definitions() {
@@ -169,7 +172,7 @@ proptest! {
         tail in junk_tail(),
         tool in prop::sample::select(vec!["open_file", "save_file", "export", "screenshot"]),
     ) {
-        let base = vectorcraft_testkit::temp_dir("mcp-confined");
+        let base = TempFolder::new("mcp-confined");
         let root = base.join("a/b/c/root");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::create_dir_all(base.join("outside")).unwrap();

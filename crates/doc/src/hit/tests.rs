@@ -110,6 +110,252 @@ fn half_clipped(d: &mut Document) -> (Node, Node) {
     (mask, art)
 }
 
+/// A stand-in for the engine's [`ClipRegion`]: with an effect named `test.move` in the clipping
+/// path, its first shape moved 100 pt right; with one named `test.empty`, no region left to clip
+/// by; without either, no geometry effect.
+fn moved_clip_region(clip: &Node) -> Option<Option<(BezPath, FillRule)>> {
+    let (mut moves, mut empty) = (false, false);
+    clip.walk(&mut |n| {
+        moves |= n.appearance.effects.iter().any(|e| e.visible && e.id == "test.move");
+        empty |= n.appearance.effects.iter().any(|e| e.visible && e.id == "test.empty");
+    });
+    if empty {
+        return Some(None);
+    }
+    if !moves {
+        return None;
+    }
+    Some(clip_regions(clip).into_iter().next().map(|(mut bp, rule)| {
+        bp.apply_affine(vectorcraft_geom::Affine::translate((100.0, 0.0)));
+        (bp, rule)
+    }))
+}
+
+/// A visible effect named `test.move`, which [`moved_clip_region`] reads as moving the region.
+fn test_move() -> crate::Effect {
+    crate::Effect { id: "test.move".into(), params: serde_json::json!({}), visible: true }
+}
+
+/// Clicks inside a clip group whose clipping path has a live effect fall in the region the
+/// registered [`ClipRegion`] gives it. The pointer moving over it evaluates the region once, and
+/// again after the clipping path changes; a clipping path without effects is not evaluated.
+#[test]
+fn clicks_in_a_clip_group_evaluate_its_clipping_paths_region_once_until_it_changes() {
+    set_clip_region(moved_clip_region);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mut mask, art) = half_clipped(&mut d);
+    mask.appearance.effects.push(crate::Effect { id: "test.move".into(), params: serde_json::json!({}), visible: true });
+    let (g, mask_id, art_id) = (d.alloc_id(), mask.id, art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let evaluated = || CLIPS_EVALUATED.with(std::cell::Cell::get);
+    let before = evaluated();
+    let leaf = |d: &Document, x: f64| hit_test(d, Point::new(x, 50.0), HitOptions::default()).map(|h| h.leaf);
+    for x in [148.0, 150.0, 152.0] {
+        assert_eq!(leaf(&d, x), Some(art_id), "in the moved region");
+    }
+    assert_eq!(leaf(&d, 50.0), None, "the clipping path's own place");
+    assert_eq!(evaluated(), before + 1);
+    // Outline mode draws no effects: the art's edge shows within the clipping path's own shape.
+    let outline = HitOptions { outline: true, ..HitOptions::default() };
+    assert_eq!(hit_test(&d, Point::new(50.0, 0.5), outline).map(|h| h.leaf), Some(art_id), "outline mode");
+    // So with a marquee across the art's left edge: in the view, only in Outline view. The
+    // clipping path's own left edge lies there too, and counts in both.
+    let edge = Rect::new(-5.0, 40.0, 5.0, 60.0);
+    assert_eq!(marquee_in_view(&d, edge, None, true, false), [mask_id]);
+    assert_eq!(marquee_in_view(&d, edge, None, true, true), [mask_id, art_id]);
+    // `marquee_in` measures by the plain shapes, as its callers clip by them.
+    assert!(marquee_in(d.node(g).unwrap(), edge).is_some());
+    // Hidden, the effect no longer moves the region.
+    d.node_mut(mask_id).unwrap().appearance.effects[0].visible = false;
+    assert_eq!(leaf(&d, 50.0), Some(art_id));
+    assert_eq!(leaf(&d, 150.0), None);
+    assert_eq!(evaluated(), before + 1);
+    // Shown again and widened, the region is evaluated again.
+    let mask = d.node_mut(mask_id).unwrap();
+    mask.appearance.effects[0].visible = true;
+    if let NodeKind::Path { path, .. } = &mut mask.kind {
+        *path = shapes::rectangle(Rect::new(0.0, 0.0, 90.0, 100.0));
+    }
+    assert_eq!(leaf(&d, 180.0), Some(art_id));
+    assert_eq!(leaf(&d, 195.0), None);
+    assert_eq!(evaluated(), before + 2);
+}
+
+/// A marquee around a clipping path that an effect moved into the middle of large art touches the
+/// clipping path on the edge of its moved region, in a clip group and in a clipping layer.
+#[test]
+fn a_marquee_touches_a_moved_clipping_path_on_its_region() {
+    set_clip_region(moved_clip_region);
+    let parts = |d: &mut Document| {
+        let mut mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 20.0, 60.0, 60.0)), Appearance::default());
+        mask.appearance.effects.push(crate::Effect { id: "test.move".into(), params: serde_json::json!({}), visible: true });
+        let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 300.0, 300.0)), Appearance::default_art());
+        (mask, art)
+    };
+    // Around the moved region (120..160) and the clipping path's own place, inside the art.
+    let around = Rect::new(10.0, 10.0, 170.0, 70.0);
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    let (mask, art) = parts(&mut d);
+    let (g, mask_id) = (d.alloc_id(), mask.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    assert_eq!(marquee(&d, around, None, false), [g]);
+    assert_eq!(marquee(&d, around, None, true), [mask_id]);
+    // Only over the clipping path's own place, the marquee misses the region but touches the
+    // clipping path's anchors, which a click on its outline also finds.
+    let own = Rect::new(10.0, 10.0, 70.0, 70.0);
+    assert_eq!(marquee(&d, own, None, false), [g]);
+    assert_eq!(marquee(&d, own, None, true), [mask_id]);
+    // Away from both, nothing.
+    assert!(marquee(&d, Rect::new(70.0, 10.0, 110.0, 70.0), None, true).is_empty());
+
+    let mut d = Document::new(400.0, 400.0);
+    let top = d.layers[0].id;
+    let (mask, art) = parts(&mut d);
+    let mask_id = mask.id;
+    let mut sublayer = (*d.layers[0]).clone();
+    sublayer.id = d.alloc_id();
+    if let NodeKind::Layer { children, clip, .. } = &mut sublayer.kind {
+        (*children, *clip) = (vec![Arc::new(mask), Arc::new(art)], true);
+    }
+    d.insert(Some(top), 0, sublayer).unwrap();
+    assert_eq!(marquee(&d, around, None, false), [mask_id]);
+}
+
+/// A clipping layer whose Preview is off draws its art in outline: clicks, the objects at a point
+/// and marquees count its clipping path by its plain shape, without the effect that moves it.
+#[test]
+fn a_clipping_layer_with_preview_off_counts_its_plain_clipping_path() {
+    set_clip_region(moved_clip_region);
+    let mut d = Document::new(300.0, 200.0);
+    let top = d.layers[0].id;
+    let (mut mask, art) = half_clipped(&mut d);
+    mask.appearance.effects.push(crate::Effect { id: "test.move".into(), params: serde_json::json!({}), visible: true });
+    let art_id = art.id;
+    let mut sublayer = (*d.layers[0]).clone();
+    sublayer.id = d.alloc_id();
+    if let NodeKind::Layer { children, clip, preview, .. } = &mut sublayer.kind {
+        (*children, *clip, *preview) = (vec![Arc::new(mask), Arc::new(art)], true, false);
+    }
+    d.insert(Some(top), 0, sublayer).unwrap();
+    // The art's top edge, within the clipping path's own shape.
+    let p = Point::new(50.0, 0.5);
+    assert_eq!(hit_test(&d, p, HitOptions::default()).map(|h| h.leaf), Some(art_id));
+    assert_eq!(objects_at(&d, p, HitOptions::default(), None).first(), Some(&art_id));
+    assert!(marquee(&d, Rect::new(45.0, -5.0, 55.0, 5.0), None, true).contains(&art_id));
+}
+
+/// The pointer moving over empty canvas past more clip groups with live effects than the regions
+/// kept measures each group's box once: the boxes are kept for every clip group.
+#[test]
+fn hovers_past_many_clip_groups_evaluate_each_clipping_path_once() {
+    set_clip_region(moved_clip_region);
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    for i in 0..(2 * CLIPS_KEPT) {
+        let x = 20.0 * i as f64;
+        let mut mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::default());
+        mask.appearance.effects.push(crate::Effect { id: "test.move".into(), params: serde_json::json!({}), visible: true });
+        let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 0.0, x + 20.0, 10.0)), Appearance::default_art());
+        let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(art)]);
+        clip.set_clips(true);
+        d.insert(Some(l), 0, clip).unwrap();
+    }
+    let evaluated = || CLIPS_EVALUATED.with(std::cell::Cell::get);
+    let empty = Point::new(500.0, 500.0);
+    assert!(hit_test(&d, empty, HitOptions::default()).is_none());
+    let first = evaluated();
+    for _ in 0..3 {
+        assert!(hit_test(&d, empty, HitOptions::default()).is_none());
+    }
+    assert_eq!(evaluated(), first);
+}
+
+/// With more clip groups with live effects than the boxes kept, a new box replaces only as many
+/// others as it needs room for: the next hover finds most of the boxes and evaluates few regions.
+#[test]
+fn hovers_past_more_clip_groups_than_the_boxes_kept_evaluate_few_again() {
+    set_clip_region(moved_clip_region);
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let groups = CLIP_BOXES_KEPT + 64;
+    let mut members = Vec::with_capacity(groups);
+    for i in 0..groups {
+        let x = (i % 100) as f64 * 5.0;
+        let y = (i / 100) as f64 * 5.0;
+        let mut mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 2.0, y + 2.0)), Appearance::default());
+        mask.appearance.effects.push(test_move());
+        let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 4.0, y + 2.0)), Appearance::default_art());
+        let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(art)]);
+        clip.set_clips(true);
+        members.push(Arc::new(clip));
+    }
+    if let Some(children) = d.node_mut(l).and_then(|n| n.children_mut()) {
+        *children = members;
+    }
+    let evaluated = || CLIPS_EVALUATED.with(std::cell::Cell::get);
+    let empty = Point::new(900.0, 900.0);
+    assert!(hit_test(&d, empty, HitOptions::default()).is_none());
+    let first = evaluated();
+    assert!(hit_test(&d, empty, HitOptions::default()).is_none());
+    let again = evaluated() - first;
+    assert!(again < groups / 8, "{again} of {groups} regions evaluated again");
+}
+
+/// Every test of a clip group by its clipping path follows the region a live effect moved it to:
+/// the selected art hidden by the mask, a click into a group holding the clip group, the locked
+/// objects under the pointer, and, below a clipping layer whose Preview is on, art on a sublayer
+/// whose Preview is off, which is clicked in outline while the layer above clips by its region.
+#[test]
+fn every_clip_test_follows_the_moved_region() {
+    set_clip_region(moved_clip_region);
+    let (moved, own) = (Point::new(150.0, 50.0), Point::new(50.0, 50.0));
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mut mask, art) = half_clipped(&mut d);
+    mask.appearance.effects.push(test_move());
+    let (g, art_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    let outer = Node::group(d.alloc_id(), vec![Arc::new(clip)]);
+    d.insert(Some(l), 0, outer.clone()).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(selected_hidden_at(&d, own, opt, &[art_id]), Some(art_id), "hidden at the clipping path's own place");
+    assert_eq!(selected_hidden_at(&d, moved, opt, &[art_id]), None, "shown in the moved region");
+    let symbols = d.symbol_boxes();
+    assert_eq!(hit_any(&outer, moved, opt, &symbols), Some(HitKind::Fill));
+    assert_eq!(hit_any(&outer, own, opt, &symbols), None);
+    d.node_mut(art_id).unwrap().locked = true;
+    assert_eq!(locked_objects_at(&d, moved, opt), [art_id]);
+    assert!(locked_objects_at(&d, own, opt).is_empty());
+
+    // A clipping layer holding the mask and a sublayer whose Preview is off, with the art.
+    let mut d = Document::new(300.0, 200.0);
+    let top = d.layers[0].id;
+    let (mut mask, art) = half_clipped(&mut d);
+    mask.appearance.effects.push(test_move());
+    let art_id = art.id;
+    let mut sublayer = (*d.layers[0]).clone();
+    sublayer.id = d.alloc_id();
+    if let NodeKind::Layer { children, preview, .. } = &mut sublayer.kind {
+        (*children, *preview) = (vec![Arc::new(art)], false);
+    }
+    d.insert(Some(top), 0, sublayer).unwrap();
+    d.insert(Some(top), 0, mask).unwrap();
+    d.node_mut(top).unwrap().set_clips(true);
+    // The art's top edge, at the clipping path's own place and in the moved region.
+    let (own, moved) = (Point::new(50.0, 0.5), Point::new(150.0, 0.5));
+    assert!(hit_test(&d, own, opt).is_none());
+    assert_eq!(hit_test(&d, moved, opt).map(|h| h.leaf), Some(art_id));
+    assert_eq!(selected_hidden_at(&d, own, opt, &[art_id]), Some(art_id));
+    assert_eq!(selected_hidden_at(&d, moved, opt, &[art_id]), None);
+}
+
 /// The art a mask hides counts only for a selected object: there a click hits nothing, and the
 /// selection tools grab the selection by that art. Not where the art shows (the click hits it),
 /// beyond the art, for the clip group selected as a whole, nor for art a click can't hit (locked,
@@ -450,7 +696,7 @@ fn a_marquee_meets_blends_and_envelopes_by_their_box() {
         envelope,
         NodeKind::Envelope {
             content,
-            kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true }),
+            kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 }),
             fidelity: 100.0,
             editing: false,
             options: Default::default(),
@@ -1192,7 +1438,7 @@ fn objects_at_edit_contents_uses_general_order() {
         d.alloc_id(),
         NodeKind::Envelope {
             content: vec![inner(a), inner(b)],
-            kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true }),
+            kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 }),
             fidelity: 100.0,
             editing: true,
             options: Default::default(),
@@ -1549,6 +1795,172 @@ fn an_object_a_clipping_layer_in_symbol_art_hides_is_not_picked_there() {
     assert!((b.x1 - 100.0).abs() < 1e-6, "the layer's outline is cut to the mask: {b:?}");
 }
 
+/// In a dynamic symbol's art, an object in a clipping layer whose clipping path has a live effect
+/// is picked and outlined in the region the effect gives the clipping path. In Outline view, and
+/// when Preview is off for the layer in the art or for the layer the instance is on, the plain
+/// clipping path counts, as the canvas draws it. An effect that leaves no region leaves no outline.
+#[test]
+fn a_symbol_part_follows_the_region_its_clipping_layers_effects_give_it() {
+    set_clip_region(moved_clip_region);
+    // The instance of a symbol whose art is a clipping layer; `preview` is the Preview of that
+    // layer and of the document layer the instance is on.
+    let instance = |effect: &str, preview: [bool; 2]| {
+        let mut d = Document::new(300.0, 200.0);
+        if let NodeKind::Layer { preview: p, .. } = &mut Arc::make_mut(&mut d.layers[0]).kind {
+            *p = preview[1];
+        }
+        let l = d.layers[0].id;
+        let (mut mask, art) = half_clipped(&mut d);
+        mask.appearance.effects.push(crate::Effect { id: effect.into(), ..test_move() });
+        let mut layer = Node::layer(d.alloc_id(), "Masked", crate::LayerColor::Preset(2));
+        if let NodeKind::Layer { children, preview: p, .. } = &mut layer.kind {
+            (*children, *p) = (vec![Arc::new(mask), Arc::new(art)], preview[0]);
+        }
+        layer.set_clips(true);
+        let root = Node::group(d.alloc_id(), vec![Arc::new(layer)]);
+        d.symbols.push(crate::Symbol { dynamic: true, name: "Clipped".into(), art: Arc::new(root) });
+        let inst = d.alloc_id();
+        d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Clipped".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+        (d, inst)
+    };
+    let outline_box = |d: &Document, inst: NodeId, opt: HitOptions| {
+        let o = symbol_part_outline_in_view(d, d.node(inst).unwrap(), &[0, 1], opt).unwrap();
+        vectorcraft_geom::kurbo::Shape::bounding_box(&o)
+    };
+    let opt = HitOptions::default();
+    let (d, inst) = instance("test.move", [true, true]);
+    let n = d.node(inst).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(150.0, 50.0), opt), Some(vec![0, 1]), "in the moved region");
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 50.0), opt), None, "where the clipping path was");
+    let b = outline_box(&d, inst, opt);
+    assert!((b.x0 - 100.0).abs() < 1e-6 && (b.x1 - 200.0).abs() < 1e-6, "the outline is cut to the moved region: {b:?}");
+    let b = outline_box(&d, inst, HitOptions { outline: true, ..opt });
+    assert!(b.x0.abs() < 1e-6 && (b.x1 - 100.0).abs() < 1e-6, "in Outline view, to the plain clipping path: {b:?}");
+    // With Preview off, the art's top edge counts within the plain clipping path.
+    for (preview, what) in [([false, true], "the layer in the art"), ([true, false], "the layer the instance is on")] {
+        let (d, inst) = instance("test.move", preview);
+        let n = d.node(inst).unwrap();
+        assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 0.5), opt), Some(vec![0, 1]), "on the edge the canvas draws, Preview off for {what}");
+        assert_eq!(symbol_part_at(&d, n, Point::new(150.0, 0.5), opt), None, "past the plain clipping path, Preview off for {what}");
+        let b = outline_box(&d, inst, opt);
+        assert!(b.x0.abs() < 1e-6 && (b.x1 - 100.0).abs() < 1e-6, "Preview off for {what}: the plain clipping path: {b:?}");
+    }
+    // An effect that leaves the clipping path no region hides the art: no pick and no outline.
+    let (d, inst) = instance("test.empty", [true, true]);
+    let n = d.node(inst).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 50.0), opt), None);
+    assert!(symbol_part_outline(&d, n, &[0, 1]).unwrap().elements().is_empty(), "nothing is drawn, so nothing is outlined");
+}
+
+/// A symbol instance whose art holds a clip group or a clipping layer with a live effect that moves
+/// its clipping path is clicked, and touched by a marquee, where the moved region shows the art past
+/// the art's box: inside a group, nested in another symbol's art, moved and scaled. In Outline view,
+/// below a layer whose Preview is off, where the art is hidden and where no region is left, only the
+/// box counts.
+#[test]
+fn a_symbol_instance_is_hit_where_a_moved_clipping_path_in_its_art_shows_the_art() {
+    use vectorcraft_geom::Affine;
+    set_clip_region(moved_clip_region);
+    // `effect` on the clipping path of a clip group (a clipping layer with `layer`), whose art is
+    // shown when `shown`; `xf` places the instance, which with `nest` shows a symbol whose art holds
+    // an instance of the clipped symbol. The instance is in a group: the group, the instance.
+    let build = |effect: &str, xf: Affine, nest: bool, shown: bool, layer: bool| {
+        let mut d = Document::new(600.0, 400.0);
+        let l = d.layers[0].id;
+        let (mut mask, mut art) = half_clipped(&mut d);
+        mask.appearance.effects.push(crate::Effect { id: effect.into(), ..test_move() });
+        art.visible = shown;
+        let mut clip = if layer {
+            let mut layer = Node::layer(d.alloc_id(), "Masked", crate::LayerColor::Preset(2));
+            if let NodeKind::Layer { children, .. } = &mut layer.kind {
+                *children = vec![Arc::new(mask), Arc::new(art)];
+            }
+            layer
+        } else {
+            Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(art)])
+        };
+        clip.set_clips(true);
+        let root = Node::group(d.alloc_id(), vec![Arc::new(clip)]);
+        d.symbols.push(crate::Symbol { dynamic: false, name: "Clipped".into(), art: Arc::new(root) });
+        let mut symbol = "Clipped";
+        if nest {
+            let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Clipped".into(), xf: Affine::IDENTITY });
+            let root = Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+            d.symbols.push(crate::Symbol { dynamic: false, name: "Outer".into(), art: Arc::new(root) });
+            symbol = "Outer";
+        }
+        let (g, inst) = (d.alloc_id(), d.alloc_id());
+        let instance = Node::new(inst, NodeKind::SymbolInstance { symbol: symbol.into(), xf });
+        d.insert(Some(l), 0, Node::group(g, vec![Arc::new(instance)])).unwrap();
+        (d, g, inst)
+    };
+    let opt = HitOptions::default();
+    let outline = HitOptions { outline: true, ..opt };
+    let at = |d: &Document, x: f64, y: f64, opt: HitOptions| hit_test(d, Point::new(x, y), opt).map(|h| h.leaf);
+    // Across the art's top edge in the moved region, and past the art's right end.
+    let (edge, past) = (Rect::new(140.0, -5.0, 160.0, 5.0), Rect::new(240.0, -5.0, 260.0, 5.0));
+    for layer in [false, true] {
+        let (d, g, inst) = build("test.move", Affine::IDENTITY, false, true, layer);
+        assert_eq!(at(&d, 150.0, 50.0, opt), Some(inst), "in the moved region, layer {layer}");
+        assert_eq!(hit_test(&d, Point::new(150.0, 50.0), opt).map(|h| h.top_object(None)), Some(g));
+        assert_eq!(at(&d, 50.0, 50.0, opt), Some(inst), "in the box");
+        assert_eq!(at(&d, 250.0, 50.0, opt), None, "past the art");
+        assert_eq!(at(&d, 150.0, 150.0, opt), None, "below the art");
+        assert_eq!(at(&d, 150.0, 50.0, outline), None, "Outline view draws the plain clipping path");
+        assert_eq!(marquee(&d, edge, None, false), [g], "layer {layer}");
+        assert_eq!(marquee(&d, edge, None, true), [inst], "layer {layer}");
+        assert!(marquee(&d, past, None, false).is_empty());
+        assert!(marquee_in_view(&d, edge, None, false, true).is_empty(), "Outline view");
+    }
+    // Preview off for the layer the instance is on.
+    let (mut d, _, _) = build("test.move", Affine::IDENTITY, false, true, false);
+    if let NodeKind::Layer { preview, .. } = &mut Arc::make_mut(&mut d.layers[0]).kind {
+        *preview = false;
+    }
+    assert_eq!(at(&d, 150.0, 50.0, opt), None, "Preview off");
+    assert!(marquee(&d, edge, None, false).is_empty(), "Preview off");
+    // Moved, scaled (the region moves 100 pt from the placed clipping path) and nested.
+    let (d, _, inst) = build("test.move", Affine::translate((10.0, 20.0)), false, true, false);
+    assert_eq!(at(&d, 160.0, 70.0, opt), Some(inst), "moved");
+    let (d, _, inst) = build("test.move", Affine::scale(2.0), false, true, false);
+    assert_eq!(at(&d, 250.0, 100.0, opt), Some(inst), "scaled");
+    assert_eq!(at(&d, 350.0, 100.0, opt), None, "scaled, past the region");
+    let (d, g, inst) = build("test.move", Affine::IDENTITY, true, true, false);
+    assert_eq!(at(&d, 150.0, 50.0, opt), Some(inst), "nested");
+    assert_eq!(marquee(&d, edge, None, false), [g], "nested");
+    // Hidden art, and an effect that leaves no region: clicks find only the box. The marquee still
+    // touches the moved clipping path on the edge of its region, as in a clip group, unless no
+    // region is left.
+    for (effect, shown) in [("test.move", false), ("test.empty", true)] {
+        let (d, g, inst) = build(effect, Affine::IDENTITY, false, shown, false);
+        assert_eq!(at(&d, 150.0, 50.0, opt), None, "{effect}, shown {shown}");
+        assert_eq!(at(&d, 50.0, 50.0, opt), Some(inst), "{effect}, shown {shown}: in the box");
+        let touched: &[NodeId] = if shown { &[] } else { &[g] };
+        assert_eq!(marquee(&d, edge, None, false), touched, "{effect}, shown {shown}");
+    }
+}
+
+/// A click on the stroke of a symbol's art where it paints past the instance's box selects the
+/// instance; past the stroke, and in Outline view, it does not.
+#[test]
+fn a_symbol_instance_is_hit_on_the_stroke_of_its_art_past_its_box() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    // A 20 pt stroke reaches 10 pt past the 0..100 square.
+    let look = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 20.0);
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), look);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Stroked".into(), art: Arc::new(art) });
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::IDENTITY;
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Stroked".into(), xf })).unwrap();
+    let at = |x: f64, opt: HitOptions| hit_test(&d, Point::new(x, 50.0), opt).map(|h| h.leaf);
+    assert_eq!(at(108.0, HitOptions::default()), Some(inst), "on the stroke past the box");
+    assert_eq!(at(50.0, HitOptions::default()), Some(inst), "in the box");
+    assert_eq!(at(116.0, HitOptions::default()), None, "past the stroke");
+    assert_eq!(at(108.0, HitOptions { outline: true, ..HitOptions::default() }), None, "Outline view");
+}
+
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than
 /// [`crate::MAX_SYMBOL_NODES`] objects of, Direct Selection picks and outlines nothing, as the
 /// canvas draws nothing of it. At the art's natural size the same art is picked.
@@ -1584,6 +1996,53 @@ fn symbol_art_past_the_object_limit_picks_nothing() {
     let n = d.node(natural).unwrap();
     assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 75.0), opt), Some(vec![0]));
     assert!(symbol_part_outline(&d, n, &[0]).is_some());
+}
+
+/// Picking and outlining an object of a 9-slice instance's art, and placing that art, read the
+/// symbol list once for each call, however many instances the art holds.
+#[test]
+fn picking_in_9_slice_art_reads_the_symbol_list_once() {
+    let mut d = Document::new(400.0, 400.0);
+    for i in 0..2_000 {
+        let dot = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art());
+        d.symbols.push(crate::Symbol { dynamic: false, name: format!("Dot {i}"), art: Arc::new(dot) });
+    }
+    // A frame, a group of 20 squares in its top left cell, and 20 instances of the dots across
+    // the guides.
+    let square = |d: &mut Document, x: f64, y: f64| {
+        Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 4.0, y + 4.0)), Appearance::default_art()))
+    };
+    let corner: Vec<_> = (0..20).map(|i| square(&mut d, f64::from(i % 5) * 4.0, f64::from(i / 5) * 4.0)).collect();
+    let dot = |d: &mut Document, i: u32| {
+        let xf = vectorcraft_geom::Affine::translate((f64::from(i) * 4.5 + 5.0, 48.0)) * vectorcraft_geom::Affine::scale(4.0);
+        Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: format!("Dot {i}"), xf }))
+    };
+    let across: Vec<_> = (0..20).map(|i| dot(&mut d, i)).collect();
+    let frame = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art()));
+    let mut kids = vec![frame, Arc::new(Node::group(d.alloc_id(), corner))];
+    kids.extend(across);
+    let root = Node::group(d.alloc_id(), kids);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Panel".into(), art: Arc::new(root) });
+    d.set_symbol_nine_slice("Panel", Some(crate::SymbolNineSlice::default()));
+    let xf = vectorcraft_geom::Affine::scale_non_uniform(2.0, 1.5);
+    let inst = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Panel".into(), xf });
+    let art = d.symbols[2_000].art.clone();
+    let symbols = d.symbols.len();
+    let read = || crate::symbols::SYMBOLS_READ.with(std::cell::Cell::get);
+    let reads = |f: &dyn Fn()| {
+        let before = read();
+        f();
+        read() - before
+    };
+    // Picking also tests the placed art with boxes of its own, as a click outside symbols does.
+    let n = reads(&|| assert_eq!(symbol_part_at(&d, &inst, Point::new(2.0, 2.0), HitOptions::default()).map(|p| p[0]), Some(1)));
+    assert!(n <= 2 * symbols, "picking read {n} symbols");
+    let n = reads(&|| assert!(symbol_part_outline(&d, &inst, &[2]).is_some()));
+    assert!(n <= symbols, "outlining read {n} symbols");
+    let n = reads(&|| assert!(d.place_symbol_art("Panel", &art, xf).is_some()));
+    assert!(n <= symbols, "placing read {n} symbols");
+    let n = reads(&|| assert!(d.place_symbol_art_unclipped("Panel", &art, xf).is_some()));
+    assert!(n <= symbols, "placing without clips read {n} symbols");
 }
 
 /// A clip group that lies in one 9-slice cell is moved by that cell as one piece, everything in it

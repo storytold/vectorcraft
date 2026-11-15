@@ -447,7 +447,7 @@ impl Parts<'_> {
     /// Node `n` (a top-level layer, or with Maximum Editability anything in one) and its parts.
     fn add(&mut self, n: &Node) {
         // Templates and guides aren't artwork.
-        if matches!(n.kind, NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. }) || !(n.visible || self.o.hidden_layers) {
+        if n.is_template() || n.is_guide() || !(n.visible || self.o.hidden_layers) {
             return;
         }
         let (hidden, opacity) = (!n.visible, opacity_byte(n.opacity));

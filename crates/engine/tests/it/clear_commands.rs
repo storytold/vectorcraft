@@ -177,12 +177,12 @@ fn clear_guides_and_empty_explicit_targets_keep_their_separate_behavior() {
     s.execute("edit.clear", &json!({"ids": []})).unwrap();
     assert_eq!(s.active().unwrap().history.undo.len(), history);
     assert_eq!(s.active().unwrap().selection, selection);
-    assert_eq!(s.active().unwrap().doc.guides.len(), 1);
+    assert_eq!(s.active().unwrap().doc.ruler_guides().len(), 1);
     s.execute("edit.clear", &json!({})).unwrap();
-    assert!(s.active().unwrap().doc.guides.is_empty());
+    assert!(s.active().unwrap().doc.ruler_guides().is_empty());
     assert!(s.active().unwrap().doc.node(a).is_some());
     s.execute("edit.undo", &json!({})).unwrap();
-    assert_eq!(s.active().unwrap().doc.guides.len(), 1);
+    assert_eq!(s.active().unwrap().doc.ruler_guides().len(), 1);
 }
 
 #[test]

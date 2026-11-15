@@ -166,8 +166,18 @@ fn an_error_names_the_script_its_place_and_kind() {
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
     assert!(run(&mut s, "app.activeDocument;").unwrap_err().to_string().contains("`vc`"));
-    assert!(run(&mut s, "#targetengine x\n1").unwrap_err().to_string().contains("unsupported script directive: #targetengine"));
+    assert!(run(&mut s, "#targetengine 9x\n1").unwrap_err().to_string().contains("#targetengine needs a name of letters, digits and _"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
+}
+
+/// An error raised where the run has no place for it, such as in code `eval` compiled, is named
+/// with the script and its kind alone, with one colon after the script's name.
+#[test]
+fn an_error_without_a_place_names_the_script_and_kind() {
+    let mut s = two_docs();
+    let e = run(&mut s, "eval(\"throw new TypeError('no')\");").unwrap_err().to_string();
+    assert_eq!(s.script_report().unwrap()["line"], 0);
+    assert_eq!(e, "t.js: TypeError: no (thrown)");
 }
 
 #[test]
@@ -279,6 +289,11 @@ fn a_failed_run_puts_back_the_choices_its_commands_made() {
         {command: 'no.such', params: {}}]}); } catch (e) {}";
     run(&mut s, source).unwrap();
     assert_eq!(s.global_edit_options, before, "the failed command's choice went back");
+
+    let source = "vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10}); \
+        if (vc.run('select.similar', {by: 'opacity'}).by !== 'opacity') throw new Error('not run'); throw new Error('x');";
+    assert!(matches!(run(&mut s, source), Err(e) if !format!("{e:?}").contains("not run")));
+    assert_eq!(s.select_similar, "all", "the Select Similar Objects attribute went back");
 
     assert!(!s.caps_lock);
     assert!(run(&mut s, "vc.run('view.capsLock', {on: true}); throw new Error('x');").is_err());
@@ -842,6 +857,30 @@ fn a_person_can_let_a_growing_run_go_on_or_stop_it() {
     assert!(!s.script_waiting());
     assert!(s.script_pump().unwrap().is_err());
     TEST_GROWTH.with(|g| g.set(None));
+    assert_eq!(state(&s), before);
+}
+
+#[test]
+fn a_run_waiting_to_grow_stops_at_the_next_slice_once_its_work_is_canceled() {
+    TEST_GROWTH.with(|g| g.set(Some(20)));
+    let mut s = two_docs();
+    let before = state(&s);
+    s.script_frames = true;
+    run(&mut s, "for (var i = 0; i < 25; i++) vc.run('shape.rectangle', {x:i,y:1,width:1,height:1});").unwrap();
+    let token = crate::cancel::CancelToken::new();
+    for _ in 0..1_000 {
+        if s.script_waiting() {
+            break;
+        }
+        assert!(crate::cancel::scope(&token, None, || s.script_pump()).is_none());
+    }
+    assert!(s.script_waiting());
+    token.cancel();
+    let ended = crate::cancel::scope(&token, None, || s.script_pump());
+    TEST_GROWTH.with(|g| g.set(None));
+    assert!(ended.expect("the run goes on waiting for Continue").is_err());
+    assert_eq!(s.script_report().unwrap()["kind"], "stopped");
+    assert!(!s.script_running());
     assert_eq!(state(&s), before);
 }
 

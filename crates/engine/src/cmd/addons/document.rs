@@ -132,8 +132,10 @@ fn export_all_open(s: &mut Session, p: &Value) -> Result<Value> {
     let active = s.active;
     for i in 0..s.docs.len() {
         // Each document in turn is the one Save a Copy writes; switching tabs this way leaves every
-        // document's tool and interaction alone, and the active one comes back below.
+        // document's tool and interaction alone, and the active one comes back below. Its colors
+        // are written through its own profiles.
         s.active = Some(i);
+        s.sync_front_profiles();
         let Ok(st) = s.doc() else { continue };
         let title = st.doc.title.clone();
         let stem = fileio::file_stem(st.path.as_deref().unwrap_or(&title));
@@ -160,15 +162,16 @@ fn export_all_open(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     s.active = active;
+    s.sync_front_profiles();
     Ok(json!({ "files": files, "failed": failed, "format": format.id }))
 }
 
 /// `n` with each layer in it, and itself, made a group of the same art and clipping (a symbol holds
-/// no layers).
+/// no layers, and no ruler guides: a layer's are left out).
 fn without_layers(n: &Node) -> Node {
     let mut n = n.clone();
     if let NodeKind::Layer { children, clip, .. } = &n.kind {
-        n.kind = NodeKind::Group { children: children.clone(), clip: *clip };
+        n.kind = NodeKind::Group { children: children.iter().filter(|c| !c.is_ruler_guide()).cloned().collect(), clip: *clip };
     }
     if let Some(children) = n.children_mut() {
         for c in children.iter_mut().filter(|c| matches!(c.kind, NodeKind::Layer { .. })) {
@@ -203,8 +206,10 @@ fn symbols_from_layers(s: &mut Session, p: &Value) -> Result<Value> {
     let (mut made, mut skipped) = (vec![], vec![]);
     for layer in layers.iter().filter_map(|id| d.layers.iter().find(|l| l.id == *id)) {
         let name = layer.display_name();
-        let roots: Vec<NodeId> = layer.children().map(|c| c.iter().map(|n| n.id).collect()).unwrap_or_default();
-        let art = match layer.children().map(Vec::as_slice).unwrap_or_default() {
+        // The layer's ruler guides stay where they are.
+        let children: Vec<Arc<Node>> = layer.children().into_iter().flatten().filter(|n| !n.is_ruler_guide()).cloned().collect();
+        let roots: Vec<NodeId> = children.iter().map(|n| n.id).collect();
+        let art = match children.as_slice() {
             [] => None,
             [one] => Some(without_layers(one)),
             many => Some(without_layers(&Node::group(NodeId(0), many.to_vec()))),

@@ -15,6 +15,9 @@ use super::{
     Ordering, Size,
 };
 
+/// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
+const MAX_POSTSCRIPT_FACES: usize = 16;
+
 impl FontDb {
     /// The family's own name and the style for a name given in a document: any of a family's
     /// names (`ヒラギノ角ゴシック` is Hiragino Sans), a legacy family name (`Hiragino Sans W6` with its
@@ -139,6 +142,33 @@ impl FontDb {
         let (family, style) = face?;
         self.face(&family, &style)?;
         loaded(self)
+    }
+
+    /// Every installed face that [`find_postscript`](Self::find_postscript) could give for `name`
+    /// (its PostScript name ignoring case and anything but letters and digits), its answer first,
+    /// then the others in load order, at most 16 in all: copies of one font in
+    /// other families (`SampleSerif` beside `Sample Serif`) or versions, and names that differ
+    /// only in case. Each family that has one is loaded from the system fonts whole, as
+    /// [`versions`](Self::versions) loads one. Empty when no installed font has the name.
+    pub fn postscript_faces(&self, name: &str) -> Vec<Arc<FontFace>> {
+        let Some(first) = self.find_postscript(name) else { return vec![] };
+        let key = norm(name);
+        let mut families: Vec<String> = vec![first.family.clone()];
+        if let Some(v) = self.aliases.read().unwrap_or_else(|e| e.into_inner()).get(&key) {
+            for a in v.iter().filter(|a| a.paired.is_none() && a.style.is_some()) {
+                if families.len() < MAX_POSTSCRIPT_FACES && !families.iter().any(|f| f.eq_ignore_ascii_case(&a.family)) {
+                    families.push(a.family.clone());
+                }
+            }
+        }
+        for family in &families {
+            self.load_family_files(family);
+        }
+        let mut out = vec![first.clone()];
+        let faces = self.read_faces();
+        let others = faces.iter().filter(|f| f.id != first.id && f.keys.postscript.contains(&key));
+        out.extend(others.take(MAX_POSTSCRIPT_FACES - 1).cloned());
+        out
     }
 
     /// The (family, style) of the installed face whose PostScript name is `name` (ignoring ASCII
@@ -482,7 +512,7 @@ impl FontDb {
     /// Load a system font covering `c` (preferred fallback families first, then any cataloged
     /// file under 40 MB). Returns true if one was loaded. Misses are remembered.
     #[cfg(not(target_arch = "wasm32"))]
-    fn system_fallback(&self, c: char) -> bool {
+    pub(super) fn system_fallback(&self, c: char) -> bool {
         if c.is_control() || c.is_whitespace() {
             return false;
         }
@@ -500,6 +530,13 @@ impl FontDb {
             if !self.is_loaded(fam) && self.load_cataloged(fam) && covered(self) {
                 return true;
             }
+        }
+        {
+            let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+            if sys.file_searches >= super::names::MAX_FILE_SEARCHES {
+                return false;
+            }
+            sys.file_searches += 1;
         }
         let mut paths: Vec<PathBuf> = self.read_catalog().values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
         paths.sort();

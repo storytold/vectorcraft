@@ -333,6 +333,34 @@ fn batch_trace_folder_traces_and_saves_each_image() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A layered PSD is traced as its merged image: a white layer under a black square gives the
+/// square's shape, not a trace of the white layer alone.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn batch_trace_folder_traces_a_layered_psd_as_its_merged_image() {
+    const C: &str = "addon.document.batchTraceFolder";
+    let dir = folder("batch-trace-psd");
+    let (src, out) = (dir.join("in"), dir.join("out"));
+    std::fs::create_dir_all(&src).unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 24, "height": 24})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 24, "height": 24})).unwrap();
+    s.execute("layer.new", &json!({"name": "Square"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 6, "y": 6, "width": 12, "height": 12})).unwrap();
+    let psd = s.execute("document.export", &json!({"format": "psd"})).unwrap();
+    std::fs::write(src.join("two.psd"), vectorcraft_format::base64_decode(psd["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    let r =
+        s.execute(C, &json!({"folder": src, "destinationFolder": out, "format": "svg", "preset": "Black and White Logo", "expand": true})).unwrap();
+    assert_eq!(r["traced"].as_array().unwrap().len(), 1, "{r}");
+    let svg = std::fs::read_to_string(out.join("two.svg")).unwrap();
+    assert!(svg.contains("fill=\"#000000\""), "the black square is traced: {svg}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Batch Trace Folder rejects optional values with the wrong type before opening images.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]

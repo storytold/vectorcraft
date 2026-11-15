@@ -121,6 +121,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Blend Vertically", "edit.colors.blendVertically"),
                         c("Convert to CMYK", "edit.colors.toCMYK"),
                         c("Convert to Grayscale", "edit.colors.toGrayscale"),
+                        c("Convert to Indexed Color…", "ui.indexedColorDialog"),
                         c("Convert to RGB", "edit.colors.toRGB"),
                         c("Invert Colors", "edit.colors.invert"),
                         cp(
@@ -162,6 +163,23 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Vertical Align Top", "object.align", json!({"vertical": "top"})),
                         cp("Vertical Align Center", "object.align", json!({"vertical": "center"})),
                         cp("Vertical Align Bottom", "object.align", json!({"vertical": "bottom"})),
+                    ],
+                ),
+                // The Align panel's Distribute Objects and Distribute Spacing buttons: each item runs
+                // what a click on its button runs (`crate::panels::align::run_button`).
+                sub(
+                    "Distribute",
+                    vec![
+                        c("Horizontal Distribute Left", "align.distributeHorizontalLeft"),
+                        c("Horizontal Distribute Center", "align.distributeHorizontalCenter"),
+                        c("Horizontal Distribute Right", "align.distributeHorizontalRight"),
+                        Sep,
+                        c("Vertical Distribute Top", "align.distributeVerticalTop"),
+                        c("Vertical Distribute Center", "align.distributeVerticalCenter"),
+                        c("Vertical Distribute Bottom", "align.distributeVerticalBottom"),
+                        Sep,
+                        c("Horizontal Distribute Space", "align.distributeHorizontalSpace"),
+                        c("Vertical Distribute Space", "align.distributeVerticalSpace"),
                     ],
                 ),
                 Sep,
@@ -396,8 +414,23 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     PATH_EFFECTS
                         .iter()
                         .map(|&(label, effect)| cp(label, "type.pathOptions", json!({ "effect": effect })))
-                        .chain([Sep, c("Type on a Path Options…", "type.pathOptions")])
+                        .chain([
+                            Sep,
+                            c("Center on Top", "type.pathCenter.top"),
+                            c("Center on Bottom", "type.pathCenter.bottom"),
+                            Sep,
+                            c("Type on a Path Options…", "type.pathOptions"),
+                        ])
                         .collect(),
+                ),
+                c("Dynamic Text", "type.dynamicText"),
+                sub(
+                    "Dynamic Text Presets",
+                    vec![
+                        cp("Circle", "type.dynamicTextPreset", json!({"preset": "circle"})),
+                        cp("Arch", "type.dynamicTextPreset", json!({"preset": "arch"})),
+                        cp("Bow", "type.dynamicTextPreset", json!({"preset": "bow"})),
+                    ],
                 ),
                 sub(
                     "Threaded Text",
@@ -420,7 +453,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Sentence case", "type.changeCase", json!({"case": "sentence"})),
                     ],
                 ),
-                cp("Smart Punctuation…", "type.smartPunctuation", json!({"quotes": true, "dashes": true, "ellipsis": true, "scope": "selection"})),
+                c("Smart Punctuation…", "type.smartPunctuation"),
                 sub(
                     "Bullets and Numbering",
                     vec![
@@ -490,6 +523,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Slices", "select.object.slices"),
                         c("Stray Points", "select.object.strayPoints"),
                         c("Open Paths", "select.object.openPaths"),
+                        c("Not Aligned to Pixel Grid", "select.object.notAlignedToPixelGrid"),
                         Sep,
                         c("All Text Objects", "select.object.textObjects"),
                         c("Point Text Objects", "select.object.pointText"),
@@ -657,6 +691,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Image Trace", "imageTrace"),
                 panel("Info", "info"),
                 panel("Layers", "layers"),
+                cp("Learn", "window.learn", json!({})),
                 panel("Libraries", "libraries"),
                 panel("Links", crate::panels::links::ID),
                 panel("Magic Wand", "magicWand"),
@@ -711,6 +746,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Search Commands…", "help.commandPalette"),
                 todos("VectorCraft Help…", "F1"),
                 c("Safe Mode…", "help.safeMode"),
+                c("Copy Troubleshooting Info", "help.copyTroubleshootingInfo"),
                 Sep,
                 c("Check for Updates…", "help.checkForUpdates"),
                 c("About VectorCraft", "help.about"),

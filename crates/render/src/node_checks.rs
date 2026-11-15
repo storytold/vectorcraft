@@ -1,4 +1,4 @@
-use super::{Affine, AppearanceItem, Arc, BezPath, Document, Node, NodeKind, StrokeLayer, brush_fx, effects};
+use super::{Affine, AppearanceItem, Arc, Document, Node, NodeKind, Rect, StrokeLayer, brush_fx, effects};
 
 /// Most pixels from the origin that a shape handed to the rasterizer may reach, or a stroke be
 /// wide. A document's art stays within 4 million points, 2.6 billion pixels at the closest zoom.
@@ -6,10 +6,11 @@ use super::{Affine, AppearanceItem, Arc, BezPath, Document, Node, NodeKind, Stro
 /// for more memory than there is, either of which ends the app: it is left undrawn.
 const MAX_DEVICE: f64 = 1e10;
 
-/// Can shape `bp` of `n` be drawn through `view`: its control points (finite) within
-/// [`MAX_DEVICE`] pixels, and its visible strokes no wider?
-pub(crate) fn drawable(bp: &BezPath, view: Affine, n: &Node) -> bool {
-    let b = view.transform_rect_bbox(bp.control_box());
+/// Can a shape of `n` whose control points have the box `control` (`BezPath::control_box`) be
+/// drawn through `view`: its control points (finite) within [`MAX_DEVICE`] pixels, and its visible
+/// strokes no wider?
+pub(crate) fn drawable(control: Rect, view: Affine, n: &Node) -> bool {
+    let b = view.transform_rect_bbox(control);
     let scale = view.determinant().abs().sqrt();
     let widest = n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(st) = i { Some(st.width) } else { None }).fold(0.0, f64::max);
     [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_DEVICE) && (widest * scale).is_finite() && widest * scale <= MAX_DEVICE
@@ -108,9 +109,11 @@ pub(crate) fn holds_instance(n: &Node) -> bool {
 }
 
 /// Is `a` left out of a frame `doc` draws with `opts`, before any culling: hidden, a template or
-/// guide the view hides, drawn hidden, or the instance its symbol is being edited from?
+/// guide the view hides, a ruler guide (the canvas draws those), drawn hidden, or the instance its
+/// symbol is being edited from?
 pub(crate) fn left_out(opts: &crate::RenderOptions, doc: &vectorcraft_doc::Document, a: &Node) -> bool {
-    let view_item = (opts.skip_templates || opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
+    let view_item = a.is_ruler_guide()
+        || (opts.skip_templates || opts.hide_templates) && matches!(a.kind, NodeKind::Layer { template: true, .. })
         || (opts.skip_templates || opts.hide_guides) && matches!(a.kind, NodeKind::Path { guide: true, .. });
     !a.visible || view_item || opts.hidden.contains(&a.id) || edited_instance(opts, doc, a.id)
 }

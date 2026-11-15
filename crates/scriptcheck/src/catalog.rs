@@ -152,7 +152,7 @@ features! {
     DirectiveInclude "directive.include" Language,
     DirectiveOther "directive.other" Language,
     DirectiveTarget "directive.target" Language,
-    DirectiveTargetengine "directive.targetengine" HostOnly,
+    DirectiveTargetengine "directive.targetengine" Language,
     Dollar "dollar" Language,
     DollarEnv "dollar.env" Files,
     DollarEvalFile "dollar.evalFile" Files,

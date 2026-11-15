@@ -636,17 +636,22 @@ impl<'a> Reader<'a> {
     /// A symbol instance (`/SymbolInstance`): the symbol its `SymbolRef` names, placed by its
     /// `RTransformMatrix`, hidden and locked as the state says. In a symbol's art the matrix is
     /// written about the canvas point of art space's origin, and the name is the file's until the
-    /// symbols are checked ([`Self::check_symbols`]). An instance of a symbol that wasn't read, one
-    /// whose appearance differs from its symbol's, or one placed only by a `Matrix` or `Transform`,
-    /// comes in as the page draws it, within the symbol's box placed by the matrix when the box is
-    /// known.
+    /// symbols are checked ([`Self::check_symbols`]). Files of versions 10 to 13 place an instance
+    /// by a `TransformMatrix` instead, which takes the symbol's art to the canvas (y down); in a
+    /// symbol's art, it takes the art to that symbol's space. The reader converts it with the canvas
+    /// point of art space's origin, from the template box. An instance of a symbol that wasn't
+    /// read, one whose appearance differs from its symbol's, or one placed only by a `Matrix` or
+    /// `Transform`, comes in as the page draws it, within the symbol's box placed by the matrix
+    /// when the box is known.
     fn symbol_instance(&mut self, o: &Obj) -> Result<(), String> {
         let name = self.names.entry(o, "SymbolRef");
         let affine = |n: &[f64]| match n {
             [a, b, c, d, e, f] if [a, b, c, d, e, f].iter().all(|v| v.is_finite()) => Some(super::Affine::new([*a, *b, *c, *d, *e, *f])),
             _ => None,
         };
-        let live = affine(&o.nums("RTransformMatrix"));
+        // The canvas → art space: y turned up about the canvas point of art space's origin.
+        let from_canvas = self.canvas_origin().map(|o| super::Affine::new([1.0, 0.0, 0.0, -1.0, -o.x, o.y]));
+        let live = affine(&o.nums("RTransformMatrix")).or_else(|| Some(from_canvas? * affine(&o.nums("TransformMatrix"))?));
         let boxed_only = live.is_none();
         let matrix = live.or_else(|| {
             o.get("Matrix")
@@ -913,7 +918,18 @@ impl<'a> Reader<'a> {
         let mut plain = drawn.clone();
         (plain.visible, plain.opacity) = (true, 1.0);
         let page = self.page_in_doc();
-        if !crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent) {
+        let mut alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+        // In Edit Contents, a grid that draws the contents elsewhere than the drawn art is checked
+        // again moved onto that art.
+        if !alike
+            && self.envelope_checks > 0
+            && let Some(kind) = crate::import::ai::envelope::moved_onto(&shown, &plain)
+        {
+            self.envelope_checks -= 1;
+            (envelope.kind, shown.kind) = (kind.clone(), kind);
+            alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+        }
+        if !alike {
             self.warn(crate::import::ai::envelope::DRAWN);
             return;
         }

@@ -76,7 +76,15 @@ pub fn gradient_params(g: &GradientPaint) -> Value {
         v["dither"] = json!(true);
     }
     if !g.gradient.method.is_classic() {
-        v["method"] = json!(g.gradient.method.label().to_lowercase());
+        v["method"] = json!(g.gradient.method.id());
+    }
+    // A freeform gradient has no ends to spread past (`paint.setFill` refuses a spread for one).
+    if g.gradient.is_spread() {
+        v["spread"] = json!(g.gradient.spread.label().to_lowercase());
+    }
+    // A gradient that pads keeps its count for later.
+    if g.gradient.repeat_count() != 1 {
+        v["repeats"] = json!(g.gradient.repeat_count());
     }
     v
 }
