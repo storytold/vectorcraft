@@ -8250,6 +8250,7 @@ breakText	Glyphs	Glyphes
 @msg	colour groups can't go into colour groups	un groupe de couleurs ne peut pas aller dans un groupe de couleurs
 @msg	colour, mode and spot apply to solid-colour swatches only	couleur, mode et ton direct s’appliquent uniquement aux nuances de couleur unie
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	ligne {line}, colonne {column} : le fichier de données de graphe `{path}` pour `{var}` est un chemin relatif : indiquez `base` ou un chemin absolu
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	ligne {line}, colonne {column} : le fichier de données de graphe `{path}` pour `{var}` n’est pas suivi : {r}
 @msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	ligne {line}, colonne {column} : impossible de lire le fichier de données de graphe pour `{var}` : {e}
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	ligne {line}, colonne {column} : le fichier de données de graphe `{path}` pour `{var}` dépasse {MAX_GRAPH_DATA_FILE} octets
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	ligne {line}, colonne {column} : le fichier de données de graphe `{path}` pour `{var}` donne une valeur de graphe de plus de {MAX_GRAPH_CSV} octets

@@ -6308,6 +6308,7 @@ imageTrace	Outline	Contour
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode en spot gelden alleen voor stalen met een effen kleur
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	regel {line}, kolom {column}: het grafiekgegevensbestand `{path}` voor `{var}` is een relatief pad: geef `base` of een absoluut pad op
 @msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	regel {line}, kolom {column}: het grafiekgegevensbestand voor `{var}` kan niet worden gelezen: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	regel {line}, kolom {column}: het grafiekgegevensbestand `{path}` voor `{var}` wordt niet gevolgd: {r}
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	regel {line}, kolom {column}: het grafiekgegevensbestand `{path}` voor `{var}` is groter dan {MAX_GRAPH_DATA_FILE} bytes
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	regel {line}, kolom {column}: het grafiekgegevensbestand `{path}` voor `{var}` geeft een grafiekwaarde langer dan {MAX_GRAPH_CSV} bytes
 @msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	regel {line}, kolom {column}: de grafiekgegevensbestanden bevatten samen meer dan {MAX_GRAPH_FILES_TOTAL} bytes

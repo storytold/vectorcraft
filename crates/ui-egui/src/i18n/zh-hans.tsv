@@ -8348,6 +8348,7 @@ breakText	Glyphs	字形
 @msg	colour, mode and spot apply to solid-colour swatches only	colour、mode 和 spot 只适用于纯色色板
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	第 {line} 行，第 {column} 列：`{var}` 的图表数据文件 `{path}` 是相对路径：请提供 `base` 或绝对路径
 @msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	第 {line} 行，第 {column} 列：无法读取 `{var}` 的图表数据文件：{e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	第 {line} 行，第 {column} 列：未跟随 `{var}` 的图表数据文件 `{path}`：{r}
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	第 {line} 行，第 {column} 列：`{var}` 的图表数据文件 `{path}` 超过 {MAX_GRAPH_DATA_FILE} 字节
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	第 {line} 行，第 {column} 列：`{var}` 的图表数据文件 `{path}` 得到的图表值超过 {MAX_GRAPH_CSV} 字节
 @msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	第 {line} 行，第 {column} 列：图表数据文件总计超过 {MAX_GRAPH_FILES_TOTAL} 字节

@@ -3486,10 +3486,14 @@ already walks Image Trace. Short agent entry points:
   at most 1 MB; tab-separated when any line holds a tab, else comma-separated; the first row holds the series labels
   and the first column the category labels; UTF-16 by the rule below, else UTF-8. The data becomes the data set's
   graph value, which `dataset.select` applies as `graph.setData` applies it, so the graph gets the data that Import
-  Data and Apply give it. A relative path is taken from `dataset.import`'s `base` folder, else from the folder of the
-  CSV file at `path`; with neither (`csv`, `data` or `dataBase64` and no `base`), it fails the import. This is
-  VectorCraft's own rule. A file that is missing, can't be read or is larger than 1 MB, a file that gives a graph value
-  longer than 256 KB, and `%` columns whose files and graph values hold more than 256 MB in all fail the import with
+  Data and Apply give it. The files are read at import. A relative path is taken from `dataset.import`'s `base`
+  folder, else from the folder of the CSV file at `path`; with neither (`csv`, `data` or `dataBase64` and no `base`),
+  it fails the import. This is VectorCraft's own rule, and it differs from an `@` column's: an image path is kept as
+  the cell gives it, and a relative one is taken from the document's folder when a data set is selected. A `%` path is
+  followed as an image path is: a path on another computer, or on a network share other than the one `base` or the
+  CSV file is on, a device, and a URL other than a `file:` URL without a host fail the import with the line, the
+  column and the reason, and no file is read. A file that is missing, can't be read or is larger than 1 MB, a file
+  that gives a graph value longer than 256 KB, and `%` columns whose files and graph values hold more than 256 MB in all fail the import with
   the line and the column, and the document is left as it was. Each file is read once per import, however many cells
   name it, and counts once toward the 256 MB; each cell's graph value counts every time. `dataset.export` writes a
   visibility variable's header as `#Shown` and an image variable's as `@Photo`, and a text or graph variable's as its

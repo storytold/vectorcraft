@@ -8390,6 +8390,7 @@ breakText	Glyphs	Glyfy
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode a spot platí jen pro položky vzorníku s plnou barvou
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` je zadán relativní cestou: zadejte `base` nebo absolutní cestu
 @msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	řádek {line}, sloupec {column}: soubor dat grafu pro `{var}` nelze přečíst: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` se nenačítá: {r}
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` je větší než {MAX_GRAPH_DATA_FILE} bajtů
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	řádek {line}, sloupec {column}: soubor dat grafu `{path}` pro `{var}` dává hodnotu grafu delší než {MAX_GRAPH_CSV} bajtů
 @msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	řádek {line}, sloupec {column}: soubory dat grafu obsahují celkem více než {MAX_GRAPH_FILES_TOTAL} bajtů

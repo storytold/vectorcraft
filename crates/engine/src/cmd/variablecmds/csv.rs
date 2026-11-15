@@ -397,27 +397,31 @@ struct GraphFiles {
 /// The graph value of a `%` column's cell `path` on file line `line`, in 1-based `column`, for the
 /// graph variable `var`: the graph data file at `path` (taken from the folder `base` when
 /// relative), read as Graph Data's Import Data reads one ([`crate::cmd::graph::graph_csv_from_file`]),
-/// or no value for an empty cell. A relative path without `base`, a file that can't be read or is
-/// larger than 1 MB, a file that gives a graph value longer than [`MAX_GRAPH_CSV`] bytes and more
-/// than [`MAX_GRAPH_FILES_TOTAL`] bytes in all are refused, with the line and the column.
+/// or no value for an empty cell. The path is followed as an image variable's path is
+/// ([`crate::cmd::fileio::document_path`]): only files on this computer, or on the network share
+/// `base` is on, are read. A relative path without `base`, a path on another computer or share, a
+/// device or a URL, a file that can't be read or is larger than 1 MB, a file that gives a graph
+/// value longer than [`MAX_GRAPH_CSV`] bytes and more than [`MAX_GRAPH_FILES_TOTAL`] bytes in all
+/// are refused, with the line and the column.
 fn graph_file_value(files: &mut GraphFiles, path: &str, base: Option<&str>, var: &str, (line, column): (usize, usize)) -> Result<Option<DataValue>> {
     const C: &str = "dataset.import";
     let path = path.trim();
     if path.is_empty() {
         return Ok(None);
     }
-    let full = match base {
-        _ if std::path::Path::new(path).is_absolute() => path.to_string(),
-        Some(base) => std::path::Path::new(base).join(path).to_string_lossy().into_owned(),
-        None => {
-            return Err(bad(
-                C,
-                format!(
-                    "line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path"
-                ),
-            ));
-        }
-    };
+    // Without `base`, a path that stays relative once a `file:` URL is read is refused here, so the
+    // error says what to give.
+    if base.is_none() && craft_docpath::resolve(path, None).is_ok_and(|p| !p.is_absolute()) {
+        return Err(bad(
+            C,
+            format!("line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path"),
+        ));
+    }
+    // `document_path` takes a relative path from the folder of a document; any file name in `base`
+    // stands for the CSV there.
+    let document = base.map(|base| std::path::Path::new(base).join("data sets.csv").to_string_lossy().into_owned());
+    let full = crate::cmd::fileio::document_path(path, document.as_deref())
+        .map_err(|r| bad(C, format!("line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}")))?;
     let csv = match files.read.get(&full) {
         Some(csv) => csv.clone(),
         None => {

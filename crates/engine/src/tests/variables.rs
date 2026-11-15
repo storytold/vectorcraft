@@ -2229,6 +2229,46 @@ fn datasets_csv_refuses_unreadable_graph_data_files() {
     assert!(matches!(&value, Some(vectorcraft_doc::DataValue::Graph(c)) if c.contains('2')), "{value:?}");
 }
 
+/// A `%` column's path is followed as an image variable's path is: a path on another computer (a
+/// UNC path or a `file:` URL with a host) or a URL other than `file:` refuses the import with the
+/// line and column and the reason, before any file is read, and leaves the variables and data sets
+/// as they were. A relative path inside the CSV's folder is still read, and so is a `file:` URL
+/// without a host when no folder is given.
+#[test]
+fn datasets_csv_refuses_graph_data_files_on_other_computers() {
+    let dir = Folder::new("vars-csv-graph-network");
+    write(&dir.file("sub/ok.txt"), b"\tA\nX\t1\n");
+    let path = dir.file("data.csv");
+    write(&path, b"Name,%Chart\na,sub/ok.txt\n");
+    let base = dir.0.to_string_lossy().into_owned();
+
+    let mut s = session();
+    let imp = s.execute("dataset.import", &json!({"path": path})).unwrap();
+    assert_eq!(imp["imported"], 1);
+    let value = s.doc().unwrap().doc.variables.datasets[0].values.get("Chart").cloned();
+    assert!(matches!(&value, Some(vectorcraft_doc::DataValue::Graph(c)) if c.contains('A')), "{value:?}");
+    // A `file:` URL without a host is a path on this computer, read without a folder to take it from.
+    let file = dir.file("sub/ok.txt").replace('\\', "/");
+    let url = if file.starts_with('/') { format!("file://{file}") } else { format!("file:///{file}") };
+    let imp = s.execute("dataset.import", &json!({"csv": format!("%Chart\n{url}")})).unwrap();
+    assert_eq!(imp["imported"], 1, "{url}");
+    let before = s.doc().unwrap().doc.variables.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cell, reason) in [
+        (r"\\server\share\ok.txt", "the path is on another computer"),
+        ("//server/share/ok.txt", "the path is on another computer"),
+        ("file://server/share/ok.txt", "the path is on another computer"),
+        ("https://example.com/ok.txt", "the link is not a file path"),
+    ] {
+        let want = format!("line 3, column 2: the graph data file `{cell}` for `Chart` isn't followed: {reason}");
+        let p = json!({"csv": format!("Name,%Chart\na,sub/ok.txt\nb,{cell}"), "base": base});
+        let e = s.execute("dataset.import", &p).unwrap_err().to_string();
+        assert!(e.contains(&want), "{cell}: {e}");
+        assert_eq!(s.doc().unwrap().doc.variables, before, "{cell}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{cell}");
+    }
+}
+
 /// Two header cells that name one variable, by the same name or by a name and its prefix, are
 /// refused with both columns, and the import changes nothing.
 #[test]

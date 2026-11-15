@@ -7705,6 +7705,7 @@ axis	Y Axis	Y ekseni
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode ve spot yalnızca düz renkli renk örnekleri için geçerlidir
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	satır {line}, sütun {column}: `{var}` için `{path}` grafik veri dosyası göreli bir yoldur: `base` ya da mutlak bir yol verin
 @msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	satır {line}, sütun {column}: `{var}` için grafik veri dosyası okunamıyor: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	satır {line}, sütun {column}: `{var}` için `{path}` grafik veri dosyası izlenmiyor: {r}
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	satır {line}, sütun {column}: `{var}` için `{path}` grafik veri dosyası {MAX_GRAPH_DATA_FILE} bayttan büyük
 @msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	satır {line}, sütun {column}: `{var}` için `{path}` grafik veri dosyası {MAX_GRAPH_CSV} bayttan uzun bir grafik değeri veriyor
 @msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	satır {line}, sütun {column}: grafik veri dosyaları toplamda {MAX_GRAPH_FILES_TOTAL} bayttan fazla
