@@ -34,6 +34,10 @@ pub fn decode_alpha(bytes: &[u8]) -> Result<Option<(u32, u32, Vec<u8>)>, TraceEr
             RasterColorType::GrayAlpha | RasterColorType::Rgba | RasterColorType::CmykAlpha => true,
             RasterColorType::Rgb => info.channels > 3,
             RasterColorType::Gray => info.channels > 1,
+            // The shared TIFF inspector reports the base photometric type even
+            // when an ExtraSamples channel carries alpha.
+            RasterColorType::Cmyk => info.channels > 4,
+            RasterColorType::Lab => info.channels > 3,
             RasterColorType::Indexed => true,
             _ => false,
         };
@@ -320,5 +324,22 @@ mod tests {
         assert_eq!(decode_alpha(&encoded(&rgb, Format::Png)).unwrap(), None);
         assert_eq!(decode_alpha(&encoded(&rgb, Format::Jpeg)).unwrap(), None);
         assert!(decode_alpha(b"not an image").is_err());
+    }
+
+    #[test]
+    fn decode_alpha_preserves_cmyk_and_lab_tiff_extra_samples() {
+        use craft_image_codecs::{ChannelLayout, Format, Image};
+        for (layout, samples) in
+            [(ChannelLayout::CmykA, vec![10, 20, 30, 40, 0, 50, 60, 70, 80, 255]), (ChannelLayout::LabA, vec![128, 128, 128, 0, 192, 128, 128, 255])]
+        {
+            let img = Image::from_u8(2, 1, layout, samples).unwrap();
+            assert_eq!(decode_alpha(&encoded(&img, Format::Tiff)).unwrap(), Some((2, 1, vec![0, 255])), "{layout:?}");
+        }
+        for (layout, samples) in
+            [(ChannelLayout::Cmyk, vec![10, 20, 30, 40, 50, 60, 70, 80]), (ChannelLayout::Lab, vec![128, 128, 128, 192, 128, 128])]
+        {
+            let img = Image::from_u8(2, 1, layout, samples).unwrap();
+            assert_eq!(decode_alpha(&encoded(&img, Format::Tiff)).unwrap(), None, "{layout:?}");
+        }
     }
 }
