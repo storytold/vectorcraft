@@ -255,9 +255,12 @@ the suite) keep the agent to the folders you give it:
   paths kept of them and each data set's image, in every symbol, pattern, graph design and brush, used or not,
   colorized or not, and a stored brush entry that does not read as a brush is refused too, since its links
   cannot be checked. Otherwise the images of the art the file writes,
-  in opacity masks and in the symbols, patterns and brushes that art uses, are checked: hidden layers and
-  objects only with `hiddenLayers` (a save keeps them unless it is `false`), and template layers and the
-  layer of opacity-mask or symbol editing mode never. `selectedOnly` and `document.exportSelection` check the
+  in opacity masks, in the art drawn for placed documents and in the symbols, patterns and brushes that art
+  uses, are checked: hidden layers and objects only with `hiddenLayers` (a save keeps them unless it is
+  `false`), also inside symbols, patterns and graph designs, and template layers and the layer of
+  opacity-mask or symbol editing mode never. With `profile: "tiny12"` the file leaves out opacity masks, and
+  their images are not checked. An object whose effect SVG has no filter for is checked as the image the file
+  draws of it. `selectedOnly` and `document.exportSelection` check the
   selected objects only, and `clipboard.exportSvg` checks the copied objects, following a relative path from
   the document they came from while it is open; in a frame a request drives, Copy then puts no SVG on the
   system clipboard. An image whose pixels the document holds exports embedded, and a URL is not checked.
