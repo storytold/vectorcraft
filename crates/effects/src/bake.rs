@@ -369,17 +369,27 @@ fn bake_object(d: &mut Document, n: &Node) -> Option<Node> {
         };
         // Instances baked inside the art of others stop at the depth limit, or once their art
         // passes the objects one export bakes that way: an instance of a symbol whose art holds
-        // instances of itself is kept as it is there.
+        // instances of itself is kept as it is there. The symbol's art is held in the count while
+        // it bakes, so the instances inside it bake only within what is left; the art it bakes to,
+        // with what its effects add, then takes its place in the count, or the instance stays as it
+        // is and gives its objects back when that art does not fit.
         let instance = matches!(n.kind, NodeKind::SymbolInstance { .. });
-        if instance && INSTANCE_DEPTH.with(|c| c.get()) > 0 {
+        let nested = instance && INSTANCE_DEPTH.with(|c| c.get()) > 0;
+        let before = NESTED_NODES.with(|c| c.get());
+        if nested {
             let count = symbol.as_ref().map_or(0, |a| a.count() as u64);
-            let spent = NESTED_NODES.with(|c| c.get()).saturating_add(count);
+            let spent = before.saturating_add(count);
             if INSTANCE_DEPTH.with(|c| c.get()) >= vectorcraft_doc::depth::MAX_DEPTH || spent > crate::SYMBOL_ART_MAX_NODES {
                 return None;
             }
             NESTED_NODES.with(|c| c.set(spent));
         }
-        let m = reshape(Some(d), n, symbol.as_ref())?;
+        let Some(m) = reshape(Some(d), n, symbol.as_ref()) else {
+            if nested {
+                NESTED_NODES.with(|c| c.set(before));
+            }
+            return None;
+        };
         if instance {
             INSTANCE_DEPTH.with(|c| c.set(c.get() + 1));
         }
@@ -387,7 +397,16 @@ fn bake_object(d: &mut Document, n: &Node) -> Option<Node> {
         if instance {
             INSTANCE_DEPTH.with(|c| c.set(c.get() - 1));
         }
-        return Some(baked.unwrap_or(m));
+        let baked = baked.unwrap_or(m);
+        if nested {
+            let spent = before.saturating_add(baked.count() as u64);
+            if spent > crate::SYMBOL_ART_MAX_NODES {
+                NESTED_NODES.with(|c| c.set(before));
+                return None;
+            }
+            NESTED_NODES.with(|c| c.set(spent));
+        }
+        return Some(baked);
     }
     // Symbol instances whose art draws live effects, when the caller asks for them: the art
     // placed, then baked. When the baked art passes the export's budget, or would draw too deep
