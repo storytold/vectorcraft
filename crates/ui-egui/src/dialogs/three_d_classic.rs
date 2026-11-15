@@ -277,6 +277,9 @@ struct CubeDrag {
     fields: serde_json::Map<String, Value>,
     /// The last pass that drew the cube during the gesture.
     pass: u64,
+    /// The cube the gesture started on. The 3D and Materials panel and a 3D dialog can each show
+    /// a cube at the same time, and only this one follows the gesture.
+    owner: Id,
 }
 
 impl CubeDrag {
@@ -285,6 +288,12 @@ impl CubeDrag {
     fn live(&self, pass: u64) -> bool {
         self.pass.saturating_add(1) >= pass
     }
+}
+
+/// The track cube of the dialog or panel of kind `kind`. The 3D and Materials panel and a 3D
+/// dialog can show a cube at the same time, each with its own keyboard focus.
+pub(super) fn cube_id(kind: &str) -> Id {
+    Id::unique(("three-d-track-cube", kind))
 }
 
 fn cube_drag_id() -> Id {
@@ -359,7 +368,7 @@ pub(super) fn track_cube(ui: &mut egui::Ui, d: &mut Dialog) {
         label(ui, name);
         let (rect, _) = ui.allocate_exact_size(Vec2::splat(CUBE_BOX), Sense::hover());
         let enabled = ui.is_enabled() && !mixed;
-        let id = Id::unique("three-d-track-cube");
+        let id = cube_id(&d.kind);
         let resp = ui.interact(rect, id, if enabled { Sense::click_and_drag() } else { Sense::hover() });
         let center = rect.center();
         let value = format!("X {:.2}°, Y {:.2}°, Z {:.2}°", now[0], now[1], now[2]);
@@ -375,14 +384,24 @@ pub(super) fn track_cube(ui: &mut egui::Ui, d: &mut Dialog) {
             ui.ctx().memory_mut(|m| m.stop_text_input());
             let matrix = rotation(now);
             let pass = ui.ctx().cumulative_pass_nr();
-            let drag = CubeDrag { grip: grip_at(matrix, center, origin), matrix, origin, last: origin, lock: None, fields: d.fields.clone(), pass };
+            let drag = CubeDrag {
+                grip: grip_at(matrix, center, origin),
+                matrix,
+                origin,
+                last: origin,
+                lock: None,
+                fields: d.fields.clone(),
+                pass,
+                owner: id,
+            };
             ui.data_mut(|m| m.insert_temp(cube_drag_id(), drag));
         }
         if enabled && (resp.drag_started() || resp.clicked()) {
             resp.request_focus();
         }
         let pass = ui.ctx().cumulative_pass_nr();
-        let mut drag = ui.data(|m| m.get_temp::<CubeDrag>(cube_drag_id()));
+        // A gesture on the other cube (the panel's or the dialog's) is left to that cube.
+        let mut drag = ui.data(|m| m.get_temp::<CubeDrag>(cube_drag_id())).filter(|g| g.owner == id);
         if drag.as_ref().is_some_and(|g| !g.live(pass)) {
             ui.data_mut(|m| m.remove::<CubeDrag>(cube_drag_id()));
             drag = None;
@@ -404,7 +423,8 @@ pub(super) fn track_cube(ui: &mut egui::Ui, d: &mut Dialog) {
                 ui.data_mut(|m| m.insert_temp(cube_drag_id(), current.clone()));
             }
         }
-        if resp.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+        // Only this cube's gesture ends here; the other cube may still have the release to handle.
+        if drag.is_some() && (resp.drag_stopped() || !ui.input(|i| i.pointer.primary_down())) {
             ui.data_mut(|m| m.remove::<CubeDrag>(cube_drag_id()));
         }
         if enabled && resp.has_focus() {

@@ -61,6 +61,11 @@ impl Harness {
         self.ctx.read_response(Id::unique(id)).unwrap().rect
     }
 
+    /// The open dialog's track cube.
+    fn cube_id(&self) -> Id {
+        super::super::three_d_classic::cube_id(&self.app.ui.dialog.as_ref().unwrap().kind)
+    }
+
     fn click(&mut self, p: Pos2) {
         self.frame(vec![Event::PointerMoved(p), button(p, true)]);
         self.frame(vec![button(p, false)]);
@@ -484,7 +489,7 @@ fn the_track_cube_turns_the_classic_effects_live_in_one_undo_step() {
     h.settle();
     h.rect("Off-Axis Front");
     let start = ["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k));
-    let cube = h.response("three-d-track-cube");
+    let cube = h.ctx.read_response(h.cube_id()).unwrap().rect;
     // A face, dragged right: the object turns, the document previews it, and the preset is Custom.
     h.drag(cube.center(), vec2(30.0, 0.0));
     let turned = ["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k));
@@ -513,7 +518,7 @@ fn the_track_cube_turns_the_classic_effects_live_in_one_undo_step() {
     assert!(h.value("rotationZ") > turned[2], "clockwise: {} -> {}", turned[2], h.value("rotationZ"));
     // With the keyboard focus (the drags gave it), Right turns about the screen's vertical axis.
     let z = h.value("rotationZ");
-    assert!(h.ctx.memory(|m| m.has_focus(Id::unique("three-d-track-cube"))), "the drag gave the cube the keyboard focus");
+    assert!(h.ctx.memory(|m| m.has_focus(h.cube_id())), "the drag gave the cube the keyboard focus");
     h.frame(vec![Event::Key { key: egui::Key::PageUp, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
     h.settle();
     assert!((h.value("rotationZ") - (z - 1.0)).abs() < 0.011, "Page Up turns 1° counterclockwise");
@@ -535,11 +540,11 @@ fn the_track_cube_is_off_while_a_rotation_is_mixed() {
     let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_ROTATE, vec2(1400.0, 1000.0));
     h.app.ui.dialog.as_mut().unwrap().fields.insert("rotationX".into(), Value::Null);
     h.settle();
-    let cube = h.response("three-d-track-cube");
+    let cube = h.ctx.read_response(h.cube_id()).unwrap().rect;
     h.drag(cube.center(), vec2(30.0, 0.0));
     let d = h.app.ui.dialog.as_ref().unwrap();
     assert_eq!(d.fields.get("rotationX"), Some(&Value::Null));
-    assert!(!h.ctx.read_response(Id::unique("three-d-track-cube")).unwrap().sense.senses_drag());
+    assert!(!h.ctx.read_response(h.cube_id()).unwrap().sense.senses_drag());
 }
 
 #[test]
