@@ -375,3 +375,35 @@ fn malformed_and_degenerate_inputs_are_bounded() {
     assert!(revolve(&p, Rect::new(f64::NAN, 0.0, 1.0, 1.0), Revolve::default()).is_err());
     assert!(revolve(&PathData::default(), b, Revolve::default()).unwrap().is_empty());
 }
+
+/// A revolved face carries its plane: the depth it gives at each corner of its drawing is the
+/// corner's view-space depth, with and without perspective. A face whose corners lie off one plane,
+/// or with a corner at or past the eye, has none.
+#[test]
+fn a_revolved_face_measures_its_depth_on_its_plane() {
+    let o = Revolve { rotation_x: -30.0, rotation_y: 25.0, ..Default::default() }.sanitized();
+    let origin = Point::new(50.0, 80.0);
+    let light = V3(0.0, 0.0, 1.0);
+    let [a, b, c, d] = [V3(-20.0, -10.0, 5.0), V3(20.0, -12.0, -15.0), V3(25.0, 15.0, -20.0), V3(-18.0, 14.0, 4.0)];
+    // The fourth corner moved onto the plane of the first three.
+    let n = b.sub(a).cross(c.sub(a));
+    let d = V3(d.0, d.1, a.2 - (n.0 * (d.0 - a.0) + n.1 * (d.1 - a.1)) / n.2);
+    let flat = [a, b, c, d];
+    for eye in [None, Some(400.0)] {
+        let face = project_face(&flat, None, o, origin, eye, light).unwrap().unwrap();
+        let plane = face.plane.unwrap();
+        for (p, v) in face.points.iter().zip(&flat) {
+            let depth = plane.depth_at(*p).unwrap();
+            assert!((depth - v.2).abs() < 1e-6, "{eye:?}: {depth} against {}", v.2);
+        }
+        let twisted = [a, b, c, V3(d.0, d.1, d.2 + 1.0)];
+        assert!(project_face(&twisted, None, o, origin, eye, light).unwrap().unwrap().plane.is_none(), "{eye:?}");
+    }
+    let past = [a, b, V3(c.0, c.1, 500.0)];
+    assert!(project_face(&past, None, o, origin, Some(400.0), light).unwrap().unwrap().plane.is_none());
+    assert!(project_face(&past, None, o, origin, Some(1000.0), light).unwrap().unwrap().plane.is_some());
+    // Every face of a revolved profile of straight edges has one.
+    let (p, b) = cylinder();
+    let faces = revolve(&p, b, Revolve { rotation_x: -30.0, perspective: 35.0, ..Default::default() }).unwrap();
+    assert!(!faces.is_empty() && faces.iter().all(|f| f.plane.is_some()));
+}

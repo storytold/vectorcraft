@@ -26,7 +26,8 @@
 //! Before a run starts, its preprocessor lines are read ([`include`]): included files take the
 //! place of their lines, and an error in one is reported at its own file, line and column.
 //! `$.evalFile(path)` runs another file in the same global environment and gives its last value,
-//! `$.fileName` is the file being run and `$.includePath` the `#includepath` list.
+//! `$.fileName` is the file of the code that reads it (the file being run for code that `eval` or
+//! `Function` compiled) and `$.includePath` the `#includepath` list.
 //!
 //! A run writes to the Script Console with `$.write` and `$.writeln`, and `vc.log` adds a line
 //! there too. The session's console gets a start line, the run's output, its uncaught error, an end
@@ -162,6 +163,9 @@ pub(crate) struct Request {
     pub name_given: bool,
     /// The file the script was read from, which its included files are read beside.
     pub file: Option<String>,
+    /// The real path of `file` as the read of `source` found it, which the included files are then
+    /// read beside instead of looking `file` up again.
+    pub checked_real: Option<std::path::PathBuf>,
     pub source: String,
     pub args: Map<String, Value>,
     pub fuel: u64,
@@ -428,7 +432,7 @@ struct World {
 }
 
 /// The choices outside the documents that a script's commands can change: the preferences, the
-/// global edit options, the recent URLs, the chosen gradient stop, freeform point and appearance
+/// global edit options, the Select Similar Objects attribute, the recent URLs, the chosen gradient stop, freeform point and appearance
 /// item, the Eyedropper's sample, the envelope defaults and the Caps Lock state.
 #[derive(Clone)]
 struct Choices {
@@ -436,6 +440,7 @@ struct Choices {
     caps_lock: bool,
     eyedropper_sample: Option<Arc<vectorcraft_doc::Node>>,
     global_edit_options: cmd::globaledit::Options,
+    select_similar: &'static str,
     recent_urls: Vec<String>,
     gradient_stop: Option<(usize, cmd::gradient::StopOwner)>,
     freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
@@ -450,6 +455,7 @@ impl Choices {
             caps_lock: s.caps_lock,
             eyedropper_sample: s.eyedropper_sample.clone(),
             global_edit_options: s.global_edit_options.clone(),
+            select_similar: s.select_similar,
             recent_urls: s.recent_urls.clone(),
             gradient_stop: s.gradient_stop,
             freeform_point: s.freeform_point,
@@ -463,6 +469,7 @@ impl Choices {
         s.caps_lock = self.caps_lock;
         s.eyedropper_sample = self.eyedropper_sample;
         s.global_edit_options = self.global_edit_options;
+        s.select_similar = self.select_similar;
         s.recent_urls = self.recent_urls;
         s.gradient_stop = self.gradient_stop;
         s.freeform_point = self.freeform_point;
@@ -476,6 +483,7 @@ impl Choices {
         swap(&mut self.caps_lock, &mut s.caps_lock);
         swap(&mut self.eyedropper_sample, &mut s.eyedropper_sample);
         swap(&mut self.global_edit_options, &mut s.global_edit_options);
+        swap(&mut self.select_similar, &mut s.select_similar);
         swap(&mut self.recent_urls, &mut s.recent_urls);
         swap(&mut self.gradient_stop, &mut s.gradient_stop);
         swap(&mut self.freeform_point, &mut s.freeform_point);
@@ -1813,7 +1821,7 @@ impl Session {
         self.script_high_water.retain(|uid, _| open.contains(uid));
         self.script_stop.clear();
         self.script_report = None;
-        let mut files = include::Files::new(request.file.as_deref(), include::Files::jsinclude_env());
+        let mut files = include::Files::new(request.file.as_deref(), request.checked_real, include::Files::jsinclude_env());
         let expanded = files.expand_script(&request.source);
         let name = match &expanded {
             Ok(include::Expanded { name: Some(name), .. }) if !request.name_given => name.clone(),

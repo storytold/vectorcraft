@@ -661,8 +661,9 @@ pub fn has_container_appearance(n: &Node) -> bool {
 /// The regions a group's or layer's own fills and strokes paint, in document space, each with its
 /// fill rule: every visible member path and compound path, type as its glyph outlines and live
 /// objects evaluated; a compound shape as its area, with the symbol instances among its members
-/// as their symbols' art from `doc`; the members of a clip group or clipping layer without its
-/// clipping path. Images, other symbol instances and guides add nothing. A Repeat counts the
+/// as their symbols' art from `doc`; a clip group or clipping layer (`n` itself or one among its
+/// members) as the region its clipping path clips to ([`crate::clip::clip_outline`]), so members
+/// it hides add nothing. Images, other symbol instances and guides add nothing. A Repeat counts the
 /// Repeats in the art of `doc`'s symbols that its instances show toward its instance budget.
 pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRule)> {
     fn push(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
@@ -690,8 +691,14 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         }
     }
     fn members(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
-        let clip = usize::from(n.clips());
-        for c in n.children().into_iter().flatten().skip(clip) {
+        // A clip group shows its members only inside its clipping path: its outline is that
+        // region, not the clipped members' own shapes, which may reach far outside it (#7289).
+        if n.clips() {
+            let clip = n.children().and_then(|ch| ch.first());
+            out.extend(clip.and_then(|c| crate::clip::clip_outline(c)).map(|(bp, rule)| (PathData::from_bezpath(&bp), rule)));
+            return;
+        }
+        for c in n.children().into_iter().flatten() {
             push(doc, c, out);
         }
     }
@@ -734,35 +741,75 @@ fn item_art(id: NodeId, item: &AppearanceItem, shapes: &[(PathData, FillRule)], 
     Some(g)
 }
 
-/// Whether a sublayer among the members of `n`, or among its groups' members, holds a ruler guide.
-fn sublayer_guides(n: &Node) -> bool {
-    n.children().is_some_and(|ch| ch.iter().any(|c| c.holds_ruler_guides() || (!c.is_layer() && sublayer_guides(c))))
+/// The members of a container that [`take_held_guides`] visits, by index, each with the same for
+/// its own members. A ruler guide's entry is empty, whether its container is a layer or a group; a
+/// container's is not.
+#[derive(Default)]
+struct HeldGuides(Vec<(usize, HeldGuides)>);
+
+/// The members of `n` that are ruler guides (`is_guide`), and those holding one at any depth, in
+/// order. Every member at every depth is looked at once: a sublayer or group with no guide of its
+/// own is still looked into, and a guide directly in a group counts as one in a layer does. A
+/// member holding no guide gets no entry.
+fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> HeldGuides {
+    let mut held = vec![];
+    for (i, c) in n.children().into_iter().flatten().enumerate() {
+        if is_guide(c) {
+            held.push((i, HeldGuides::default()));
+            continue;
+        }
+        let inner = held_guides(c, is_guide);
+        if !inner.0.is_empty() {
+            held.push((i, inner));
+        }
+    }
+    HeldGuides(held)
 }
 
-/// Move the ruler guides of the sublayers among the members of `n`, and among its groups'
-/// members, to `out`, in order. A guide taken from a hidden or locked sublayer, or from one inside
-/// such a sublayer or group, is hidden or locked itself. Only containers holding one are copied.
-fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, hidden: bool, locked: bool) {
+/// Move the ruler guides of `n` and of its members that [`held_guides`] found (`held`) to `out`:
+/// those of `n` first, in order, then those of each member in turn. A guide taken from a hidden or
+/// locked container, or from one inside such a container, is hidden or locked itself. Only the
+/// containers in `held` are copied, and only those are visited.
+fn take_held_guides(n: &mut Node, held: HeldGuides, out: &mut Vec<Arc<Node>>, hidden: bool, locked: bool) {
     let Some(ch) = n.children_mut() else { return };
-    for c in ch.iter_mut().filter(|c| c.holds_ruler_guides() || (!c.is_layer() && sublayer_guides(c))) {
+    let (mut own, mut deeper) = (vec![], vec![]);
+    for (i, inner) in held.0 {
+        if inner.0.is_empty() {
+            own.push(i);
+            continue;
+        }
+        let Some(c) = ch.get_mut(i) else { continue };
         let c = Arc::make_mut(c);
         let (hidden, locked) = (hidden || !c.visible, locked || c.locked);
-        if c.is_layer()
-            && let Some(lc) = c.children_mut()
-        {
-            let (taken, art): (Vec<_>, Vec<_>) = std::mem::take(lc).into_iter().partition(|g| g.is_ruler_guide());
-            *lc = art;
-            out.extend(taken.into_iter().map(|mut g| {
-                if hidden || locked {
-                    let g = Arc::make_mut(&mut g);
-                    g.visible &= !hidden;
-                    g.locked |= locked;
-                }
-                g
-            }));
-        }
-        take_sublayer_guides(c, out, hidden, locked);
+        take_held_guides(c, inner, &mut deeper, hidden, locked);
     }
+    if !own.is_empty() {
+        let mut own = own.into_iter().peekable();
+        for (i, mut c) in std::mem::take(ch).into_iter().enumerate() {
+            if own.next_if_eq(&i).is_none() {
+                ch.push(c);
+                continue;
+            }
+            if hidden || locked {
+                let g = Arc::make_mut(&mut c);
+                g.visible &= !hidden;
+                g.locked |= locked;
+            }
+            out.push(c);
+        }
+    }
+    out.append(&mut deeper);
+}
+
+/// Move the ruler guides of `n` and those held at any depth by the sublayers and groups among its
+/// members to `out`, in order: a container's own guides, then those of its members. A sublayer or
+/// group with no guide of its own still gives up those of its members. A guide taken from a hidden
+/// or locked sublayer or group, or from one inside such a container, is hidden or locked itself.
+/// Each member at every depth is looked at once (`is_guide`), and only containers holding a guide
+/// are copied.
+fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl Fn(&Node) -> bool) {
+    let held = held_guides(n, is_guide);
+    take_held_guides(n, held, out, false, false);
 }
 
 /// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
@@ -785,12 +832,15 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         return None;
     }
     let mut m = n.clone();
-    // A layer's ruler guides take no part: they go back above the evaluated art at the end.
-    let mut guides = m.children_mut().map(|ch| ch.split_off(Node::guide_run_start(ch))).unwrap_or_default();
-    // So do its sublayers' guides, which would otherwise go with the art the effects replace or
-    // copy: they stay on this layer, hidden and locked as their sublayers were.
-    if m.is_layer() && (pathfinder || !fx.is_empty()) {
-        take_sublayer_guides(&mut m, &mut guides, false, false);
+    // Its ruler guides take no part: they go back above the evaluated art at the end. With effects
+    // that replace or copy the art, so do its guides among the art and those in its sublayers and
+    // groups, which would otherwise go with that art: they stay on `n`, in order, hidden and
+    // locked as their containers were.
+    let mut guides = vec![];
+    if pathfinder || !fx.is_empty() {
+        take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
+    } else if let Some(ch) = m.children_mut() {
+        guides = ch.split_off(Node::guide_run_start(ch));
     }
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
@@ -838,9 +888,13 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
 /// Replace each visible member of `n` with geometry or Pathfinder effects of its own, at every
 /// depth of its groups and layers, by the art it draws ([`evaluate_container`],
 /// [`crate::reshape::own_effects_art`]), so the geometry effects of `n` reshape what its members
-/// draw. A clip group's clipping path stays as it is, and so do images, symbol instances and the
-/// other objects that `own_effects_art` leaves alone, and a group or layer with a 3D effect with
-/// everything in it. Calls nested in one another, through the
+/// draw. A clip group's clipping path only takes the geometry effects in it into its geometry
+/// ([`crate::clip::with_clip_effects_applied_while`]), and the members of a clipping group or
+/// compound path count toward the limit below. A group or layer in a clipping path that has
+/// geometry effects of its own is walked twice, once for its members' effects and once for its
+/// own, and its members count each time. Images, symbol instances and the other objects
+/// that `own_effects_art` leaves alone stay as they are, and so does a group or layer with a 3D
+/// effect with everything in it. Calls nested in one another, through the
 /// groups and layers it walks and the art it evaluates (symbol art and Pathfinder members
 /// included), stop at [`vectorcraft_doc::depth::MAX_DEPTH`] deep, and together they replace at
 /// most [`crate::SYMBOL_ART_MAX_NODES`] members: past either limit, members stay as they are.
@@ -848,6 +902,13 @@ pub(crate) fn members_as_drawn(doc: Option<&Document>, n: &mut Node) {
     let Some(_frame) = DrawnFrame::enter() else { return };
     let clip = usize::from(n.clips());
     let Some(ch) = n.children_mut() else { return };
+    // The clipping path's own geometry effects shape it before the effects around it do.
+    if clip == 1
+        && let Some(first) = ch.first_mut()
+        && let Some(applied) = crate::clip::with_clip_effects_applied_while(first, DrawnFrame::take_member)
+    {
+        *first = Arc::new(applied);
+    }
     for c in ch.iter_mut().skip(clip).filter(|c| c.visible) {
         if !DrawnFrame::take_member() {
             return;

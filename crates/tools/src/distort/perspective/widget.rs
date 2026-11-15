@@ -50,17 +50,44 @@ impl WidgetCorner {
     }
 }
 
-/// Perspective Grid Options: whether the Plane Switching Widget shows, and where.
+/// Perspective Grid Options: whether the Plane Switching Widget shows, and where, and what
+/// Automatic Plane Positioning takes a point from ([`super::infer`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WidgetOptions {
     pub show: bool,
     pub position: WidgetCorner,
+    /// Automatic Plane Positioning › Anchor Point of Perspective Artwork.
+    pub anchor_point: bool,
+    /// Automatic Plane Positioning › Intersection of Gridlines.
+    pub gridline_intersection: bool,
 }
 
 impl Default for WidgetOptions {
     fn default() -> Self {
-        Self { show: true, position: WidgetCorner::TopLeft }
+        Self { show: true, position: WidgetCorner::TopLeft, anchor_point: true, gridline_intersection: true }
+    }
+}
+
+impl WidgetOptions {
+    /// What Automatic Plane Positioning takes a point from.
+    pub fn targets(self) -> PlaneTargets {
+        PlaneTargets { anchors: self.anchor_point, gridlines: self.gridline_intersection }
+    }
+}
+
+/// What Automatic Plane Positioning takes a point from: the anchor points of art in perspective,
+/// the gridline intersections of the planes that show.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PlaneTargets {
+    pub anchors: bool,
+    pub gridlines: bool,
+}
+
+impl PlaneTargets {
+    pub const ALL: Self = Self { anchors: true, gridlines: true };
+    pub fn any(self) -> bool {
+        self.anchors || self.gridlines
     }
 }
 

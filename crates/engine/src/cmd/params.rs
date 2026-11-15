@@ -10,7 +10,7 @@
 //! save or Export for Screens: those are checked against the options of the formats the command
 //! can write, in `marks`, `bleed` and the other objects too ([`check_export_options`]); and in the
 //! objects of an array whose keys `MEMBER_KEYS` lists, such as the `items` of
-//! `object.setLiveShape`.
+//! `object.setLiveShape` and `addon.pathtools.cornerSet`.
 //!
 //! [`Session::execute`] answers a key the description doesn't name with a parameter error
 //! ([`check_params`]), for every caller (the app, the control channel, MCP, the CLI) and for the
@@ -183,7 +183,7 @@ pub(crate) fn accepted_keys(doc: &'static str) -> Option<Vec<&'static str>> {
 
 /// Does the description `doc` name `key` as a parameter (its own keys, and those of the commands
 /// its `…` entries name)?
-pub(crate) fn takes_key(doc: &'static str, key: &str) -> bool {
+pub fn takes_key(doc: &'static str, key: &str) -> bool {
     doc_keys(doc).is_ok_and(|parsed| parsed.keys.contains(&key)) || accepted(doc, 0).is_some_and(|keys| keys.contains(&key))
 }
 
@@ -256,6 +256,22 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
     }
 }
 
+/// Parameters a command takes instead of one another: (command, key, other key). Giving both,
+/// neither null, is a parameter error ([`check_exclusive_keys`]).
+const EXCLUSIVE_KEYS: &[(&str, &str, &str)] = &[("addon.pathtools.cornerSet", "items", "ids"), ("addon.pathtools.cornerRemove", "items", "ids")];
+
+/// `params` of command `id` give at most one of each pair in [`EXCLUSIVE_KEYS`], or the parameter
+/// error naming the pair.
+fn check_exclusive_keys(id: &str, params: &Value) -> Result<()> {
+    let given = |key: &str| params.get(key).filter(|v| !v.is_null());
+    for (_, key, other) in EXCLUSIVE_KEYS.iter().filter(|(c, ..)| *c == id) {
+        if given(key).is_some() && given(other).is_some() {
+            return Err(bad(id, format!("give `{key}` or `{other}`, not both")));
+        }
+    }
+    Ok(())
+}
+
 /// The parameter error of command `id` for `key`, which isn't one of `keys`: with the nearest of
 /// them, or all of them.
 pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
@@ -273,7 +289,11 @@ pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError 
 
 /// Commands whose params hold an array of objects with keys of their own: the command, the key of
 /// the array and the keys each of its objects takes.
-const MEMBER_KEYS: &[(&str, &str, &[&str])] = &[("object.setLiveShape", "items", &["id", "corners"])];
+const MEMBER_KEYS: &[(&str, &str, &[&str])] = &[
+    ("object.setLiveShape", "items", &["id", "corners"]),
+    ("addon.pathtools.cornerSet", "items", &["id", "anchors"]),
+    ("addon.pathtools.cornerRemove", "items", &["id", "anchors"]),
+];
 
 /// Each object in the arrays [`MEMBER_KEYS`] names for command `id` has only the keys it lists, or
 /// the parameter error naming the first other one with its place (`items[0].corner`), and the
@@ -349,6 +369,12 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     {
         return Err(bad(id, "`origin` must be [x, y] in points"));
     }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(axes) = given.get("axes")
+        && vectorcraft_render::effects::svg_filter::valid_axes(axes).is_none()
+    {
+        return Err(bad(id, "`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0"));
+    }
     // Its name is the filter's id.
     if effect == vectorcraft_render::effects::SVG_FILTER && given.contains_key("name") && !given.contains_key("xml") {
         return Err(bad(id, "an SVG filter is named by its id: give `xml` with `name`"));
@@ -362,7 +388,8 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
         return Err(bad(id, format!("`version` must be 0 or {newest}")));
     }
     check_effect_color(id, effect, params)?;
-    check_effect_channel(id, effect, params)
+    check_effect_channel(id, effect, params)?;
+    check_effect_center(id, effect, params)
 }
 
 /// The type of the values in `params` of effect `effect`, as command `id` was given them: a key
@@ -403,9 +430,9 @@ fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
 /// A value of the type effect `effect` reads for `key`, a parameter its params description names
 /// without a dialog default: the earlier 3D Perspective and light (`perspective`, `lightAzimuth`,
 /// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
-/// and a Gaussian Blur's `linear` is true or false. A Glass or Texturizer `textureImage`, an SVG
-/// filter's `name` and `xml`, a Warp's `version` and the `style` of Crop Marks have checks of their
-/// own; they aren't listed.
+/// and a Gaussian Blur's `linear` is true or false. A Glass, Texturizer or Rough Pastels
+/// `textureImage`, an SVG filter's `name` and `xml`, a Warp's `version` and the `style` of Crop
+/// Marks have checks of their own; they aren't listed.
 pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
     use vectorcraft_render::effects;
     let number = || Some(Value::from(0.0));
@@ -480,6 +507,22 @@ pub(crate) fn check_effect_channel(id: &str, effect: &str, params: &Value) -> Re
     Err(bad(id, format!("`{key}` must be one of {}", vectorcraft_render::effects::CHANNELS.join(", "))))
 }
 
+/// The Blur Center (`centerX`, `centerY`) in `params` of Radial Blur (`effect`), as command `id`
+/// was given it: a parameter error unless each is a number from 0 to 1 (a share of the object's
+/// bounds). `effect.apply` and `effect.setParams` run this themselves before they edit, as they
+/// run [`check_effect_channel`].
+pub(crate) fn check_effect_center(id: &str, effect: &str, params: &Value) -> Result<()> {
+    if effect != "blur.radial" {
+        return Ok(());
+    }
+    for key in ["centerX", "centerY"] {
+        if params.get(key).is_some_and(|v| !v.as_f64().is_some_and(|x| (0.0..=1.0).contains(&x))) {
+            return Err(bad(id, format!("`{key}` must be a number from 0 to 1")));
+        }
+    }
+    Ok(())
+}
+
 /// Commands whose params aren't checked yet (#1442): they read keys in ways the audit of the
 /// descriptions couldn't follow (a list of keys in a loop, a whole object read as settings), so
 /// their descriptions aren't proven to name every key they take. Sorted; take a command out once
@@ -492,7 +535,6 @@ pub const UNCHECKED: &[&str] = &[
     "assets.settings.set",
     "attributes.info",
     "attributes.set",
-    "brush.freehand",
     "css.export",
     "css.generate",
     "css.selection",
@@ -848,9 +890,9 @@ fn check_export_options(id: &str, params: &Value) -> Result<()> {
     check_option_keys(id, "", given, &keys, why_not, &trees)
 }
 
-/// [`check_keys`] for an engine command, the steps of a `command.batch` or an `action.batch` included,
-/// [`check_effect_params`] for the effect `effect.apply` adds and [`check_export_options`] for an
-/// export. A command the engine doesn't have passes: running it reports that.
+/// [`check_keys`], [`check_exclusive_keys`] and [`check_member_keys`] for an engine command, the steps of a `command.batch` or an
+/// `action.batch` included, [`check_effect_params`] for the effect `effect.apply` adds and
+/// [`check_export_options`] for an export. A command the engine doesn't have passes: running it reports that.
 pub fn check_params(id: &str, params: &Value) -> Result<()> {
     check_params_in(id, params, false)
 }
@@ -869,6 +911,7 @@ fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
         return Ok(());
     }
     check_keys(id, spec.params, params)?;
+    check_exclusive_keys(id, params)?;
     check_member_keys(id, params)?;
     if in_batch {
         crate::schemas::check(spec, params, false)?;

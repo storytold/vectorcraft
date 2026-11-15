@@ -19,8 +19,8 @@ use super::edit::{outermost, selected_roots};
 use super::pathops::{remove_each, separate};
 use super::swatch::{anchor, names_param};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, cmd, color_param, find_command, has_doc, has_selection, id_param, named_ids, number_or, ok,
-    str_param, switch_or,
+    CommandSpec, Result, Session, bad, check_numbers, cmd, color_param, find_command, has_doc, has_selection, named_ids, number_or, ok, str_param,
+    switch_or,
 };
 use crate::EngineError;
 
@@ -180,7 +180,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paintbrush",
             [],
             None,
-            "{…params as path.freehand, brush} paint a freehand stroke with a brush → {id}",
+            "{…params as path.freehand, brush?: name} paint a freehand stroke with a brush; without `brush` (or with null) the plain path is drawn; a `brush` that names no brush in the document, a `style` other than \"pencil\" or \"brush\", a `brush` for a path with no stroke (a continued or redrawn path without one, or a new filled \"pencil\" path while the stroke is None) and an unknown key are errors and nothing is drawn; the path and its brush are one undo step → {id}",
             has_doc,
             brush_freehand
         ),
@@ -226,7 +226,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Link to Symbol",
             [],
             None,
-            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask; a hidden or locked instance's art stays hidden or locked and is not selected → {ids}",
+            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask and its own bounding box (square after Reset Bounding Box); a hidden or locked instance's art stays hidden or locked and is not selected → {ids}",
             has_selection,
             symbol_break_link
         ),

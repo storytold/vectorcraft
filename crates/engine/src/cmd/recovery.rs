@@ -999,8 +999,9 @@ impl RecoveryJob {
     pub fn write(&self) -> std::result::Result<Value, String> {
         let store = self.store.as_ref();
         let doc = self.save.doc();
-        // A linked image keeps its preview, as a save writes it.
-        let linked = doc.linked_only_images();
+        // A linked image keeps its preview, as a save writes it (the images in the stored brushes'
+        // art counted too).
+        let linked = super::links::with_brush_art(doc).linked_only_images();
         let mut lean = Document::clone(doc);
         let blobs = std::mem::take(&mut lean.images);
         let enc = self.save.encode_doc(&lean).map_err(|e| e.to_string())?;
@@ -1176,6 +1177,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             modified: None,
             notes: Vec::new(),
             lossy_source: None,
+            kept: serde_json::Map::new(),
         };
         let save = fileio::job_for(s, st, plan)?;
         let meta = Meta {

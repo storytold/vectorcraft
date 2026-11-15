@@ -481,8 +481,10 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas),
             self.state.take(),
             self.gs.replace(Xy::OPAQUE),
-            self.clip.take(),
+            (self.clip.take(), std::mem::take(&mut self.shown)),
             self.block_end,
+            // The tile's masks' objects are written with their art styles, those of no other art.
+            (std::mem::replace(&mut self.styled, self.pattern_styled.get(name).cloned().unwrap_or_default()), self.mask_level.take()),
         );
         // `Bg` places a gradient in a pattern's tile as on the canvas, mirrored top to bottom: its
         // placement is worked out in the tile's space turned y up.
@@ -505,7 +507,15 @@ impl Writer<'_> {
         self.hidden -= 1;
         self.nest -= 1;
         let art;
-        (art, (self.to_art, self.grad_space, self.canvas), self.state, self.gs, self.clip, self.block_end) = saved;
+        (
+            art,
+            (self.to_art, self.grad_space, self.canvas),
+            self.state,
+            self.gs,
+            (self.clip, self.shown),
+            self.block_end,
+            (self.styled, self.mask_level),
+        ) = saved;
         let art = std::mem::replace(&mut self.body, art);
         self.defining.pop();
         if self.left_out_since(before) {

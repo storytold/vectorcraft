@@ -1,5 +1,5 @@
-//! CAD interchange: a hand-written ASCII DXF writer (versions R12 to 2018) and reader, and an
-//! HP-GL/2 plot file reader and writer.
+//! CAD interchange: a hand-written ASCII DXF writer (versions R12 to 2018) and a reader on
+//! `craft_dxf::model`, and an HP-GL/2 plot file reader and writer.
 //!
 //! [`export`] writes the visible art of a document into one DXF drawing: each layer becomes a DXF
 //! layer (hidden ones switched off, locked ones locked, non-printing ones not plotted), paths
@@ -11,7 +11,7 @@
 //! What DXF can't hold (blending modes, opacity masks, raster effects, gradients, patterns,
 //! clipping) is approximated or left out, and each such loss comes back as a warning.
 //!
-//! [`import()`] reads an ASCII DXF drawing (any version) into a document: see [`import`].
+//! [`import()`] reads a DXF drawing (ASCII or binary, any version) into a document: see [`import`].
 //! [`hpgl::import`] reads an HP-GL plotter file, and [`hpgl::export`] writes one: see [`hpgl`].
 //!
 //! - `aci`: the 256-colour index palette and the nearest index of a colour.
@@ -428,7 +428,9 @@ pub fn export(doc: &Document, opts: &DxfOptions) -> Result<DxfOutput, String> {
     if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) {
         return Err("the export region is not finite".into());
     }
-    let baked = vectorcraft_effects::bake_document(doc);
+    // Symbols' art is placed without clipping, as the scene places it.
+    let baked =
+        vectorcraft_effects::bake_document_placing_symbols(doc, false, vectorcraft_effects::WrittenLayers { hidden: true, non_printing: true });
     let doc = baked.as_ref().unwrap_or(doc);
     Ok(scene::Scene::new(doc, opts).run())
 }

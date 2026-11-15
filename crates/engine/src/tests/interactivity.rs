@@ -253,3 +253,91 @@ fn events_and_files_survive_a_native_round_trip_and_reach_svg() {
     assert!(svg.contains(" onclick=\"show(&quot;menu&quot;) &amp;&amp; x &lt; 1\""), "{svg}");
     assert!(svg.contains("<script xlink:href=\"menu.js\"/>"), "{svg}");
 }
+
+/// A caller confined to read roots: every SVG and SVGZ output of a document that links a
+/// JavaScript file outside them is refused before a file or folder is written, with an error that
+/// names no file or folder, and the document keeps the link.
+#[test]
+fn confined_svg_output_refuses_a_linked_javascript_file_outside_the_read_roots() {
+    let away = crate::tests_links::Folder::new("svg-script-away");
+    let home = crate::tests_links::Folder::new("svg-script-home");
+    let script = away.file("menu.js");
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgInteractivity.addFile", json!({"file": script}));
+    run(&mut s, "assets.add", json!({"ids": [a.0]}));
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned(), "menu.js".to_string()];
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = crate::file_access::confine(Some(&roots), || s.execute(cmd, &p)).expect_err(cmd).to_string();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{cmd} {p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{cmd} {p} names {h}: {e}");
+        }
+    };
+    let out = home.file("out");
+    for format in ["svg", "svgz"] {
+        let file = |name: &str| home.file(&format!("{name}.{format}"));
+        refused(&mut s, "document.serialize", json!({"format": format}));
+        refused(&mut s, "document.export", json!({"format": format}));
+        refused(&mut s, "document.export", json!({"format": format, "path": file("export")}));
+        refused(&mut s, "document.export", json!({"format": format, "selectedOnly": true}));
+        refused(&mut s, "document.exportSelection", json!({"format": format, "path": file("selection")}));
+        refused(&mut s, "document.save", json!({"path": file("save")}));
+        refused(&mut s, "file.saveAs", json!({"format": format, "path": file("save-as")}));
+        refused(&mut s, "file.saveCopy", json!({"format": format, "path": file("copy")}));
+        refused(&mut s, "document.exportForScreens", json!({"folder": out, "formats": [{"format": "png"}, {"format": format}]}));
+        refused(&mut s, "document.exportForScreens", json!({"zip": true, "formats": [{"format": format}]}));
+        refused(&mut s, "assets.export", json!({"folder": out, "formats": [{"format": format}]}));
+    }
+    // A document saved as SVG saves as SVG again without a path: its file is left as it was.
+    let own = home.file("own.svg");
+    run(&mut s, "file.saveAs", json!({"path": own}));
+    let before = std::fs::read(&own).unwrap();
+    rect(&mut s, 50.0);
+    refused(&mut s, "document.save", json!({}));
+    assert_eq!(std::fs::read(&own).unwrap(), before);
+    let written: Vec<_> = std::fs::read_dir(&home.0).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(written, ["own.svg"]);
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [script]);
+}
+
+/// A confined caller's SVG keeps every linked JavaScript file it may read, as stored: a file inside
+/// the read roots, a path relative to the document's folder that leads inside them, and a URL. A
+/// caller without roots writes a file outside them too.
+#[test]
+fn svg_output_keeps_linked_javascript_files_a_caller_may_read() {
+    let away = crate::tests_links::Folder::new("svg-script-kept-away");
+    let home = crate::tests_links::Folder::new("svg-script-kept-home");
+    let inside = home.file("menu.js");
+    let url = "https://example.com/scripts/menu.js";
+    let mut s = session();
+    rect(&mut s, 10.0);
+    for file in [inside.as_str(), "lib/tools.js", url] {
+        run(&mut s, "svgInteractivity.addFile", json!({"file": file}));
+    }
+    run(&mut s, "file.saveAs", json!({"path": home.file("doc.vectorcraft")}));
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let svg = |s: &mut Session, format: &str| {
+        let r = crate::file_access::confine(Some(&roots), || s.execute("document.serialize", &json!({"format": format}))).unwrap();
+        match r["text"].as_str() {
+            Some(text) => text.to_string(),
+            None => {
+                let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+                assert!(vectorcraft_svg::is_svgz(&bytes), "gzip magic");
+                vectorcraft_svg::text_of(&bytes).unwrap().into_owned()
+            }
+        }
+    };
+    for format in ["svg", "svgz"] {
+        let text = svg(&mut s, format);
+        for file in [inside.as_str(), "lib/tools.js", url] {
+            assert!(text.contains(&format!("<script xlink:href=\"{file}\"/>")), "{format} {file}: {text}");
+        }
+    }
+    // Without roots, a file outside them is written as stored.
+    let outside = away.file("menu.js");
+    run(&mut s, "svgInteractivity.addFile", json!({"file": outside}));
+    let text = run(&mut s, "document.serialize", json!({"format": "svg"}))["text"].as_str().unwrap().to_string();
+    assert!(text.contains(&format!("<script xlink:href=\"{outside}\"/>")), "{text}");
+}

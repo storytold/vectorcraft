@@ -1,8 +1,10 @@
 //! A selection dragged across document tabs remains editable and leaves its source intact.
 
+use std::sync::Arc;
+
 use egui::{Context, Id, Response};
 use serde_json::json;
-use vectorcraft_doc::NodeId;
+use vectorcraft_doc::{Document, NodeId};
 use vectorcraft_geom::Point;
 
 use crate::{VectorcraftApp, canvas, widgets};
@@ -19,7 +21,11 @@ struct Origin {
 struct Artwork {
     origin: Origin,
     ids: Vec<NodeId>,
-    revision: u64,
+    /// The source document when the drag left it. The drag ends when the source's content differs
+    /// from it ([`vectorcraft_engine::DocState::same_content`]). A redraw that raises its revision
+    /// (another document's assigned color profiles brought to the front) and a change that is not
+    /// an edit (its type measured again) keep it.
+    source: Arc<Document>,
     target: u64,
 }
 
@@ -75,7 +81,7 @@ pub(crate) fn cleanup(app: &VectorcraftApp, ctx: &Context) {
         }
     });
     if let Some(art) = egui::DragAndDrop::payload::<Artwork>(ctx) {
-        let valid = app.session.documents().iter().any(|d| d.uid == art.origin.uid && d.revision == art.revision)
+        let valid = app.session.documents().iter().any(|d| d.uid == art.origin.uid && d.same_content(&art.source))
             && app.session.active().is_some_and(|d| d.uid == art.target);
         let cancel = ctx.input(|i| {
             !i.focused
@@ -143,13 +149,14 @@ pub(crate) fn hover_tab(app: &mut VectorcraftApp, resp: &Response, win: crate::d
             return true;
         }
         // Alt-drag previews use temporary duplicate ids; only the restored originals travel.
-        let ids = app.session.active().map(|d| d.selection.objects.clone()).unwrap_or_default();
+        let Some((ids, source)) = app.session.active().map(|d| (d.selection.objects.clone(), d.doc.clone())) else {
+            return true;
+        };
         if ids.is_empty() {
             return true;
         }
         canvas::end_document_drag(ctx);
-        let revision = app.session.active().map(|d| d.revision).unwrap_or_default();
-        egui::DragAndDrop::set_payload(ctx, Artwork { origin, ids, revision, target: uid });
+        egui::DragAndDrop::set_payload(ctx, Artwork { origin, ids, source, target: uid });
     }
     if transfer && let Some(art) = egui::DragAndDrop::payload::<Artwork>(ctx) {
         let mut art = (*art).clone();

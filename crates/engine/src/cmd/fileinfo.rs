@@ -146,7 +146,11 @@ fn text(k: &str, v: &Value, multiline: bool) -> Result<String> {
         return Err(bad(C, format!("{k} is too long (at most {MAX_TEXT} characters)")));
     }
     if s.chars().any(|c| c.is_control() && !(multiline && matches!(c, '\n' | '\r' | '\t'))) {
-        return Err(bad(C, format!("{k} has control characters{}", if multiline { "" } else { " or line breaks" })));
+        return Err(if multiline {
+            bad(C, format!("{k} has control characters"))
+        } else {
+            bad(C, format!("{k} has control characters or line breaks"))
+        });
     }
     Ok(s.to_string())
 }

@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use super::layers::{Layers, parallel_map_at_most};
 use super::params::{Method, Mode, TraceParams};
 use super::raster::{Raster, TraceError};
-use super::{AtomicUsize, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, gradient, group, logo, quantize, smooth};
+use super::{AtomicUsize, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, deblock, gradient, group, logo, quantize, smooth};
 
 /// One traced shape: an outer contour plus its holes, filled with `color`, or (with `stroke`)
 /// lines stroked with it.
@@ -209,9 +209,21 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
         Some(name) if params.ignore_white => Some(logo::parse_hex(name).ok_or_else(|| TraceError::BadPalette(name.clone()))?),
         _ => None,
     };
-    // A photo is traced from a copy with its noise smoothed away (see `smooth`).
-    let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img)).then(|| smooth::smoothed(img));
-    let img = smoothed.as_ref().unwrap_or(img);
+    // A JPEG's 8 x 8 block edges are smoothed away first (see `deblock`).
+    let strength = match params.mode {
+        Mode::BlackAndWhite => deblock::BLACK_AND_WHITE,
+        _ if params.colors > 16 => deblock::MANY_COLORS,
+        _ => deblock::FEW_COLORS,
+    };
+    // A photo is traced from a copy with its noise smoothed away (see `smooth`); the deblocked copy is
+    // dropped once it is smoothed.
+    let photo = |img: &Raster| params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img);
+    let prepared = match deblock::deblocked(img, strength) {
+        Some(deblocked) if photo(&deblocked) => Some(smooth::smoothed(&deblocked)),
+        Some(deblocked) => Some(deblocked),
+        None => photo(img).then(|| smooth::smoothed(img)),
+    };
+    let img = prepared.as_ref().unwrap_or(img);
     go_on()?;
     // Gradients are found first and kept out of the palette: no colour is spent on bands of them.
     // Grayscale finds them in the image's grays (as its flat colours are), so their stops are gray.

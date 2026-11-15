@@ -9,6 +9,7 @@ description = "VectorCraft CAD interchange: a hand-written ASCII DXF writer (R12
 workspace = true
 
 [dependencies]
+craft-dxf = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

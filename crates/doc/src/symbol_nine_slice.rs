@@ -463,8 +463,13 @@ impl NineSliceMap {
     ///
     /// Strokes keep their weight, as they do for any instance.
     pub fn place(&self, art: &Node, doc: &Document) -> Node {
-        let boxes = doc.symbol_boxes().quick();
-        self.place_at(art, &boxes, 0)
+        self.place_with(art, &doc.symbol_boxes().quick())
+    }
+
+    /// [`Self::place`] with the instances in `art` measured by `boxes`, quick boxes or boxes
+    /// measuring symbol art.
+    pub(crate) fn place_with(&self, art: &Node, boxes: &SymbolBoxes) -> Node {
+        self.place_at(art, boxes, 0)
     }
 
     /// [`Self::place`] without clip groups, for writers that do not apply clipping (DXF, WMF):
@@ -480,16 +485,25 @@ impl NineSliceMap {
     /// object drawn in clip groups counts one group plus a clip path and a copy for each cell its
     /// box reaches. That is never more than [`MAX_SLICE_GROWTH`] for each object of `art`.
     pub fn most_placed(&self, art: &Node, doc: &Document) -> u64 {
-        let boxes = doc.symbol_boxes().quick();
-        self.most_at(art, &boxes, 0)
+        self.most_placed_with(art, &doc.symbol_boxes().quick())
+    }
+
+    /// [`Self::most_placed`] with the instances in `art` measured by `boxes`, quick boxes or boxes
+    /// measuring symbol art.
+    pub(crate) fn most_placed_with(&self, art: &Node, boxes: &SymbolBoxes) -> u64 {
+        self.most_at(art, boxes, 0)
     }
 
     /// The affine map that [`Self::place`] and [`Self::place_unclipped`] move object `n` by as one
     /// piece, with everything in it: the map of the cell its box lies in, or of the cell at the
     /// origin when it has no box. `None` when its box crosses a guide.
     pub fn one_cell(&self, n: &Node, doc: &Document) -> Option<Affine> {
-        let boxes = doc.symbol_boxes().quick();
-        let Some(b) = n.geometric(Some(&boxes)).map(|b| self.natural.transform_rect_bbox(b)).filter(|b| finite(*b)) else {
+        self.one_cell_with(n, &doc.symbol_boxes().quick())
+    }
+
+    /// [`Self::one_cell`] with the instances in `n` measured by `boxes`.
+    pub(crate) fn one_cell_with(&self, n: &Node, boxes: &SymbolBoxes) -> Option<Affine> {
+        let Some(b) = n.geometric(Some(boxes)).map(|b| self.natural.transform_rect_bbox(b)).filter(|b| finite(*b)) else {
             return Some(self.cell_at(Point::ZERO));
         };
         let (cols, rows) = (self.x.cells(b.x0, b.x1), self.y.cells(b.y0, b.y1));
@@ -499,6 +513,11 @@ impl NineSliceMap {
     /// [`Self::most_placed`] for [`Self::place_unclipped`]: the most objects it makes of `art`.
     pub fn most_placed_unclipped(&self, art: &Node, doc: &Document) -> u64 {
         Self { clips: false, ..*self }.most_placed(art, doc)
+    }
+
+    /// This map placing without clip groups, as [`Self::place_unclipped`] does.
+    pub(crate) fn unclipped(&self) -> Self {
+        Self { clips: false, ..*self }
     }
 
     /// [`Self::most_placed`] for `n` at nesting depth `depth`, following [`Self::place_at`].
@@ -614,6 +633,8 @@ impl NineSliceMap {
     /// `n`, whose box at the natural size is `b`, drawn in each cell it reaches: a clip group of
     /// the cell around a copy placed by the cell's map, all in a group with `n`'s id. `n` placed
     /// by `center` when it draws symbol art ([`draws_symbol_art`]), and in [`Self::place_unclipped`].
+    /// The clip groups and clip paths take the angle of the cell map that places them. The group
+    /// and each copy keep `n`'s box angle, turned by the map that places them.
     ///
     /// The drop shadows, outer glows and blurs ([`PAINTED_EFFECTS`]) at the end of `n`'s own
     /// effects, after its last other visible effect, go on that group with its opacity, blending
@@ -647,11 +668,15 @@ impl NineSliceMap {
                 area.transform(local);
                 let mut clip = Node::new(NodeId(0), NodeKind::Path { path: area, rule: FillRule::NonZero, live: None, clipping: true, guide: false });
                 clip.appearance = Appearance::default().into();
+                clip.bbox_angle = crate::orient::transformed_angle(0.0, local);
                 let copy = transformed(n, local * self.natural);
-                cells.push(Arc::new(Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(copy)], clip: true })));
+                let mut cell = Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(copy)], clip: true });
+                cell.bbox_angle = crate::orient::transformed_angle(0.0, local);
+                cells.push(Arc::new(cell));
             }
         }
         let mut out = Node::group(n.id, cells);
+        out.bbox_angle = crate::orient::transformed_angle(n.bbox_angle, center);
         out.visible = n.visible;
         out.locked = n.locked;
         out.name = n.name.clone();
@@ -665,7 +690,7 @@ impl NineSliceMap {
 }
 
 /// `n` moved by `a`, its strokes at their own weight.
-fn transformed(n: &Node, a: Affine) -> Node {
+pub(crate) fn transformed(n: &Node, a: Affine) -> Node {
     let mut out = n.clone();
     out.transform(a, false);
     out
@@ -759,10 +784,7 @@ impl Document {
     /// `None` when the symbol has no guides or the instance is at its natural size. The guides cut
     /// the art's box with the instances in it measured by their own art.
     pub fn symbol_slice_map(&self, name: &str, xf: Affine) -> Option<NineSliceMap> {
-        let guides = self.symbol_nine_slice(name)?;
-        let sym = self.symbols.iter().find(|s| s.name == name)?;
-        let art = self.symbol_boxes().quick().art_bounds(name).or_else(|| sym.art.geometric_bounds())?;
-        NineSliceMap::new(guides, art, self.symbol_natural_xf(name), xf)
+        self.symbol_boxes().quick().slice_map(name, xf)
     }
 
     /// [`Self::symbol_slice_map`] with the guides cutting `art`, the symbol's art box already
@@ -776,9 +798,10 @@ impl Document {
     /// it has them ([`NineSliceMap::place`]), otherwise by `xf`. `None` when placing it through
     /// the guides could make more than [`MAX_SYMBOL_NODES`] objects ([`NineSliceMap::most_placed`]).
     pub fn place_symbol_art(&self, name: &str, art: &Node, xf: Affine) -> Option<Node> {
-        match self.symbol_slice_map(name, xf) {
-            Some(m) if m.most_placed(art, self) > MAX_SYMBOL_NODES => None,
-            Some(m) => Some(m.place(art, self)),
+        let boxes = self.symbol_boxes().quick();
+        match boxes.slice_map(name, xf) {
+            Some(m) if m.most_placed_with(art, &boxes) > MAX_SYMBOL_NODES => None,
+            Some(m) => Some(m.place_with(art, &boxes)),
             None => Some(transformed(art, xf)),
         }
     }
@@ -789,8 +812,8 @@ impl Document {
     pub fn edited_nine_slice(&self) -> Option<EditedNineSlice> {
         let se = self.symbol_edit.as_ref()?;
         let guides = self.symbol_nine_slice(&se.symbol)?;
-        let sym = self.symbols.iter().find(|s| s.name == se.symbol)?;
-        let art = self.symbol_boxes().quick().art_bounds(&se.symbol).or_else(|| sym.art.geometric_bounds())?;
+        let boxes = self.symbol_boxes().quick();
+        let art = boxes.art_bounds(&se.symbol).or_else(|| boxes.symbol_art(&se.symbol)?.geometric_bounds())?;
         let natural = self.symbol_natural_xf(&se.symbol);
         let b = natural.transform_rect_bbox(art);
         if !finite(b) || b.width() <= 1e-9 || b.height() <= 1e-9 || natural.determinant().abs() < 1e-18 {
@@ -805,8 +828,9 @@ impl Document {
     /// [`Self::place_symbol_art`] for writers that do not apply clipping
     /// ([`NineSliceMap::place_unclipped`]).
     pub fn place_symbol_art_unclipped(&self, name: &str, art: &Node, xf: Affine) -> Option<Node> {
-        match self.symbol_slice_map(name, xf) {
-            Some(m) => (m.most_placed_unclipped(art, self) <= MAX_SYMBOL_NODES).then(|| m.place_unclipped(art, self)),
+        let boxes = self.symbol_boxes().quick();
+        match boxes.slice_map(name, xf).map(|m| m.unclipped()) {
+            Some(m) => (m.most_placed_with(art, &boxes) <= MAX_SYMBOL_NODES).then(|| m.place_with(art, &boxes)),
             None => Some(transformed(art, xf)),
         }
     }

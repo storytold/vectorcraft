@@ -92,6 +92,19 @@ struct ImageCode {
 }
 
 impl ImageCode {
+    /// A hash of everything that is written for the image: equal images have equal keys.
+    fn content_key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (&self.prelude, &self.dict, self.filter, self.op, &self.ascii).hash(&mut h);
+        h.finish()
+    }
+
+    /// Is everything written for `other` the same as for this image?
+    fn same_image(&self, other: &ImageCode) -> bool {
+        self.prelude == other.prelude && self.dict == other.dict && self.filter == other.filter && self.op == other.op && self.ascii == other.ascii
+    }
+
     /// The operators and data that draw the image where it is placed.
     fn push_inline(&self, s: &mut String) {
         s.push_str(&self.prelude);
@@ -253,6 +266,17 @@ pub(crate) struct Scene<'a> {
     images: HashMap<String, Option<usize>>,
     /// The source key and solid paint together identify a colorized encoding.
     colorized_images: HashMap<(String, String), Option<usize>>,
+    /// Image keys whose encoding didn't fit under the page limit → how much its first placement
+    /// adds to the body. The image is encoded again only once the page has room for that.
+    too_large_images: HashMap<String, usize>,
+    /// The same for colorized encodings, by `colorized_images`' keys.
+    too_large_colorized: HashMap<(String, String), usize>,
+    /// How many times an image or a colorized image was encoded.
+    #[cfg(test)]
+    encodes: usize,
+    /// Freeform gradients' images by [`ImageCode::content_key`] → their indices in `codes`: a field
+    /// encoded the same as one already kept draws from it.
+    fields: HashMap<u64, Vec<usize>>,
     /// The encoded images.
     codes: Vec<ImageCode>,
     /// Where in `body` each placement of an encoded image goes (in order) and the index of its code.
@@ -281,6 +305,11 @@ impl<'a> Scene<'a> {
             brushes: None,
             images: HashMap::new(),
             colorized_images: HashMap::new(),
+            too_large_images: HashMap::new(),
+            too_large_colorized: HashMap::new(),
+            #[cfg(test)]
+            encodes: 0,
+            fields: HashMap::new(),
             codes: vec![],
             placements: vec![],
             pending: 0,
@@ -294,6 +323,30 @@ impl<'a> Scene<'a> {
     pub fn with_max_body(mut self, max: usize) -> Self {
         self.max_body = max;
         self
+    }
+
+    /// [`Self::run`], with how many placements draw each encoded image the scene kept, and the
+    /// indices in `codes` that its image, colorized-image and field caches name.
+    #[cfg(test)]
+    pub fn run_with_codes(mut self) -> (Page, Vec<usize>, Vec<usize>) {
+        let doc = self.doc;
+        for l in &doc.layers {
+            self.node(l, false);
+        }
+        let uses = self.codes.iter().map(|c| c.uses).collect();
+        let cached = self.images.values().chain(self.colorized_images.values()).flatten().chain(self.fields.values().flatten()).copied().collect();
+        (self.page(), uses, cached)
+    }
+
+    /// [`Self::run`], with how many times the scene encoded an image or a colorized image.
+    #[cfg(test)]
+    pub fn run_counting_encodes(mut self) -> (Page, usize) {
+        let doc = self.doc;
+        for l in &doc.layers {
+            self.node(l, false);
+        }
+        let encodes = self.encodes;
+        (self.page(), encodes)
     }
 
     pub fn run(mut self) -> Page {
@@ -472,13 +525,16 @@ impl<'a> Scene<'a> {
             self.warn(TOO_LARGE);
             return;
         }
+        // Off the region, an object is still written when brush art painted along its brushed
+        // strokes, or those of the objects in it, can reach the region.
+        let off = |b: Rect, reach: f64| !overlaps(b.inflate(1.0 + reach, 1.0 + reach), self.o.region);
         match n.visual_bounds_with(&self.symbols) {
-            Some(b) if !force && !overlaps(b.inflate(1.0, 1.0), self.o.region) => return,
+            Some(b) if !force && off(b, 0.0) && off(b, vectorcraft_brush::reach_within(n)) => return,
             None if !n.is_container() => return,
             _ => {}
         }
         self.note_losses(n);
-        let (was, placed) = (self.body.len(), self.placements.len());
+        let (was, placed, codes) = (self.body.len(), self.placements.len(), self.codes.len());
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 children.iter().for_each(|c| self.node(c, false));
@@ -511,7 +567,7 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
+                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n), *xf)
                 {
                     self.nest += 1;
                     self.node(&art, true);
@@ -536,6 +592,7 @@ impl<'a> Scene<'a> {
         if self.size() > self.max_body {
             self.body.truncate(was);
             self.unplace(placed);
+            self.forget_codes(codes);
             self.warn(TOO_LARGE);
         }
     }
@@ -913,18 +970,21 @@ impl<'a> Scene<'a> {
     /// process inks the stops use, in CMYK order, and the spot inks, in the order the stops name
     /// them. Paper white adds no ink, a gray stop is black ink, and a spot stop's process plates
     /// print with its ink. An off-center midpoint is a stop
-    /// with the inks halfway between its two stops. `None` for a gradient without a spot ink, and,
-    /// with a warning, for one whose inks can't be kept or that is mixed by the Perceptual method
-    /// or around the hue wheel; it is then written in process colors.
+    /// with the inks halfway between its two stops. Stop opacity is left out, so the stops that
+    /// color a stretch ([`vectorcraft_color::Gradient::reached_stops`]) name the inks, a spot ink
+    /// only above a tint of 0 or with process plates; the others are written with no ink. `None` for a gradient without a
+    /// spot ink, and, with a warning, for one whose inks can't be kept or that is mixed by the
+    /// Perceptual method or around the hue wheel; it is then written in process colors.
     fn ink_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<(GradientSpace, RawStops)> {
         let doc = self.doc;
         let spot_of = |s: &vectorcraft_color::GradientStop| -> Option<String> {
             s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot)).map(str::to_string)
         };
+        let reached = g.reached_stops();
         // The spot inks, collected up to one more than a DeviceN space can hold.
         let mut names: Vec<String> = vec![];
-        for s in &g.stops {
-            if let Some(n) = spot_of(s)
+        for (s, &r) in g.stops.iter().zip(&reached) {
+            if let Some(n) = spot_of(s).filter(|_| r && (s.tint > 0.0 || s.plates.is_some()))
                 && !names.contains(&n)
             {
                 names.push(n);
@@ -953,9 +1013,10 @@ impl<'a> Scene<'a> {
         };
         // Each stop's ink coverage: the four process inks, then one tint per spot ink.
         let mut inks: Vec<Vec<f32>> = Vec::with_capacity(g.stops.len());
-        for s in &g.stops {
+        for (s, &r) in g.stops.iter().zip(&reached) {
             let mut v = vec![0.0; 4 + names.len()];
             match spot_of(s) {
+                _ if !r => {}
                 Some(n) => {
                     if let Some(i) = names.iter().position(|m| *m == n) {
                         v[4 + i] = unit(s.tint);
@@ -1098,7 +1159,10 @@ impl<'a> Scene<'a> {
         // keep no swatch links: the warning [`Self::ink_stops`] gives the others.
         if g.gradient.method.is_hue() && g.gradient.is_spread() && g.gradient.spread == vectorcraft_color::GradientSpread::Reflect {
             let doc = self.doc;
-            if g.gradient.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
+            let spot = |s: &vectorcraft_color::GradientStop| {
+                (s.tint > 0.0 || s.plates.is_some()) && s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))
+            };
+            if g.gradient.stops.iter().zip(g.gradient.reached_stops()).any(|(s, r)| r && spot(s)) {
                 self.warn(SPOT_GRADIENTS_HUE);
             }
         }
@@ -1364,6 +1428,14 @@ impl<'a> Scene<'a> {
         if !(long > 1e-9 && long.is_finite()) {
             return;
         }
+        let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
+        if !invertible(place) {
+            return;
+        }
+        if self.size().saturating_add(64) > self.max_body {
+            self.warn(TOO_LARGE);
+            return;
+        }
         let k = (self.doc.raster_effects_ppi / 72.0).min(MAX_FIELD_PX / long);
         let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_FIELD_PX) as u16;
         let (cols, rows) = (along(area.width()), along(area.height()));
@@ -1383,10 +1455,41 @@ impl<'a> Scene<'a> {
             let rgba: Vec<u8> = field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
             self.encode_image(&rgba, w, h)
         };
-        let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
-        if let Some(image) = image {
-            self.place_inline(&image, place);
+        let Some(image) = image else { return };
+        let key = image.content_key();
+        let found =
+            self.fields.get(&key).and_then(|bucket| bucket.iter().copied().find(|&i| self.codes.get(i).is_some_and(|c| c.same_image(&image))));
+        let i = match found {
+            Some(i) => i,
+            None => {
+                // A field that can't be placed isn't kept.
+                if self.size().saturating_add(image.inline_len).saturating_add(64) > self.max_body {
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let i = self.add_code(image);
+                self.fields.entry(key).or_default().push(i);
+                i
+            }
+        };
+        self.place_image(i, place);
+    }
+
+    /// Forget the encoded images after the first `n` codes that no placement draws any longer, and
+    /// the cache entries that name them: placed images, colorized images and fields. A code that a
+    /// placement still draws keeps itself and every code before it.
+    fn forget_codes(&mut self, n: usize) {
+        let keep = self.codes.iter().rposition(|c| c.uses > 0).map_or(n, |last| n.max(last + 1));
+        if keep >= self.codes.len() {
+            return;
         }
+        self.codes.truncate(keep);
+        self.images.retain(|_, e| e.is_none_or(|i| i < keep));
+        self.colorized_images.retain(|_, e| e.is_none_or(|i| i < keep));
+        self.fields.retain(|_, bucket| {
+            bucket.retain(|&i| i < keep);
+            !bucket.is_empty()
+        });
     }
 
     /// A placed image (`blob`, cached under `key`): its pixel grid of `width` × `height` placed
@@ -1399,7 +1502,28 @@ impl<'a> Scene<'a> {
         let encoded = match self.images.get(key) {
             Some(e) => *e,
             None => {
-                let e = self.decode_image(blob).and_then(|img| self.encode_image(img.as_raw(), img.width(), img.height())).map(|c| self.add_code(c));
+                // An image turned away at the page limit is encoded again only once it fits.
+                if let Some(&len) = self.too_large_images.get(key) {
+                    if self.size().saturating_add(len).saturating_add(64) > self.max_body {
+                        self.warn(TOO_LARGE);
+                        return;
+                    }
+                    self.too_large_images.remove(key);
+                }
+                #[cfg(test)]
+                {
+                    self.encodes += 1;
+                }
+                let code = self.decode_image(blob).and_then(|img| self.encode_image(img.as_raw(), img.width(), img.height()));
+                // An image that can't be placed isn't kept.
+                if let Some(c) = &code
+                    && self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body
+                {
+                    self.too_large_images.insert(key.to_string(), c.inline_len);
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let e = code.map(|c| self.add_code(c));
                 self.images.insert(key.to_string(), e);
                 e
             }
@@ -1431,7 +1555,28 @@ impl<'a> Scene<'a> {
         let encoded = match self.colorized_images.get(&cache) {
             Some(e) => *e,
             None => {
-                let e = self.encode_colorized(blob, paint).map(|c| self.add_code(c));
+                // An image turned away at the page limit is encoded again only once it fits.
+                if let Some(&len) = self.too_large_colorized.get(&cache) {
+                    if self.size().saturating_add(len).saturating_add(64) > self.max_body {
+                        self.warn(TOO_LARGE);
+                        return;
+                    }
+                    self.too_large_colorized.remove(&cache);
+                }
+                #[cfg(test)]
+                {
+                    self.encodes += 1;
+                }
+                let code = self.encode_colorized(blob, paint);
+                // An image that can't be placed isn't kept.
+                if let Some(c) = &code
+                    && self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body
+                {
+                    self.too_large_colorized.insert(cache, c.inline_len);
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let e = code.map(|c| self.add_code(c));
                 self.colorized_images.insert(cache, e);
                 e
             }
@@ -1592,21 +1737,6 @@ impl<'a> Scene<'a> {
         if let Some(code) = self.codes.get_mut(i) {
             code.uses += 1;
         }
-        self.line("Q");
-    }
-
-    /// Draw `code`, an image drawn nowhere else, on the unit square mapped by `place`.
-    fn place_inline(&mut self, code: &ImageCode, place: Affine) {
-        if !invertible(place) {
-            return;
-        }
-        if self.size().saturating_add(code.inline_len).saturating_add(64) > self.max_body {
-            self.warn(TOO_LARGE);
-            return;
-        }
-        self.line("q");
-        let _ = writeln!(self.body, "{} cm", ps::matrix(place));
-        code.push_inline(&mut self.body);
         self.line("Q");
     }
 

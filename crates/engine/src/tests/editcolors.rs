@@ -109,6 +109,48 @@ fn saturate_keeps_a_color_it_does_not_change() {
     assert_eq!(paint(&s, b), cmyk);
 }
 
+/// An Edit Colors pass, a Blend or Recolor Artwork that changes nothing records no undo step, and the
+/// step that redo would bring back stays; one that changes a color still records one.
+#[test]
+fn edit_colors_that_change_nothing_record_no_undo_step() {
+    let mut s = session();
+    let gray = rect(&mut s, json!("#808080"));
+    let a = rect(&mut s, json!("#ff0000"));
+    let b = rect(&mut s, json!("#808080"));
+    let c = rect(&mut s, json!("#0000ff"));
+    s.execute("select.set", &json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    s.execute("edit.colors.blendFrontToBack", &json!({})).unwrap();
+    // A step for redo to bring back.
+    s.execute("edit.colors.invert", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let history = |s: &Session| {
+        let h = &s.doc().unwrap().history;
+        (h.undo.len(), h.redo.len())
+    };
+    let before = history(&s);
+    assert_eq!(before.1, 1, "one step to redo");
+    let doc = s.doc().unwrap().doc.clone();
+    let cases = [
+        ("edit.colors.invert", json!({"fill": false, "stroke": false})),
+        ("edit.colors.saturate", json!({"intensity": 0})),
+        ("edit.colors.toRGB", json!({})),
+        ("edit.colors.adjustBalance", json!({"mode": "rgb", "r": 0})),
+        ("edit.colors.blendFrontToBack", json!({})),
+        ("recolor.apply", json!({"map": {"#ff0000": "#ff0000"}})),
+        // The complement of a gray is the same gray.
+        ("paint.complement", json!({"ids": [gray.0], "stroke": false})),
+        ("addon.color.filter", json!({"effect": "addon.color.invert", "fill": false, "stroke": false})),
+    ];
+    for (id, p) in cases {
+        let v = s.execute(id, &p).unwrap();
+        assert_eq!(v["changed"], 0, "{id}");
+        assert_eq!(history(&s), before, "{id}: no undo step, and redo is kept");
+        assert_eq!(s.doc().unwrap().doc, doc, "{id}: the document is unchanged");
+    }
+    s.execute("edit.colors.invert", &json!({})).unwrap();
+    assert_eq!(history(&s), (before.0 + 1, 0), "a pass that changes colors is one undo step");
+}
+
 /// Adjust Color Balance refuses a channel that is not a number, which it would otherwise read as 0.
 #[test]
 fn adjust_balance_refuses_a_channel_that_is_not_a_number() {
