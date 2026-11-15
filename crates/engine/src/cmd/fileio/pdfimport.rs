@@ -217,8 +217,11 @@ fn page_options(page: usize, o: &LoadOptions) -> ImportOptions {
 /// `document.open` with `linkPages`: the pages `o` picks of the PDF (or PDF-compatible `.ai` or
 /// `.ait`) `name`, read from `path`, as a document holding one placed document per page, linked to
 /// that page of the file as File › Place with Link places one ([`document::source`]). Each page
-/// gets an artboard of its `o.crop` box (its art's bounds for `bounding`, a blank page's crop box), in a row from the left
-/// with the gap a PDF's artboards open with, and a layer named after the page. The document opens
+/// gets an artboard of its `o.crop` box (its art's bounds for `bounding`, a blank page's crop box;
+/// a PDF-compatible `.ai` asked for its crop box gets its trim box, as it opens), in a row from the
+/// left with the gap a PDF's artboards open with, and a layer named after the page. On its trim box,
+/// a page shows its bleed box round the artboard, and the document's bleed is the pages' bleed (the
+/// widest on each side). The document opens
 /// in CMYK when most of the pages read in CMYK, unless `o.color_mode` names a mode. Refused without a
 /// path, for any other file, with a password (a linked page is read again without one), with
 /// `textAs: outlines` (a linked page shows the file's own type) and for a file over
@@ -247,6 +250,8 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
         Some(range) => parse_range(range, count).map_err(|e| err(format!("pages: {e}")))?,
     };
     let bounding = o.crop == CropTo::Bounding;
+    // A PDF-compatible `.ai` asked for its crop box opens on its trim boxes ([`LoadOptions::import_options`]).
+    let crop = if o.crop == CropTo::Crop && opened.has_illustrator_data() { CropTo::Trim } else { o.crop };
     let mut doc = Document::new(1.0, 1.0);
     let board = doc.artboards.first().cloned().ok_or_else(|| err("a new document has no artboard"))?;
     doc.artboards.clear();
@@ -261,7 +266,11 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
     for (i, &index) in picked.iter().enumerate() {
         let page = index as u32 + 1;
         let file_once = document::SharedFile { bytes: &shared, hash: &hash, opened: &opened };
-        let read = |bounding| document::shared_source(name, file_once, Some(path), page, bounding, document::page_box(o.crop), C);
+        // On its trim box, a page shows its bleed box, the artboard on the trim box inside it, so
+        // the art in the bleed shows and prints as bleed.
+        let bleed = if crop == CropTo::Trim { opened.page_bleed(index) } else { None };
+        let page_box = if bleed.is_some() { vectorcraft_doc::PageBox::Bleed } else { document::page_box(crop) };
+        let read = |bounding| document::shared_source(name, file_once, Some(path), page, bounding, page_box, C);
         // A blank page has no art's bounds: it keeps its crop box, as opening it as art does.
         let (s, bounding) = match read(bounding) {
             Err(e) if bounding && e.to_string().contains("has no art to place") => (read(false)?, false),
@@ -273,9 +282,14 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
             return Err(bad(C, format!("linkPages: `{file}` isn't a PDF or a PDF-compatible .ai file")));
         }
         cmyk_pages += usize::from(s.color_mode == ColorMode::Cmyk);
+        // The document's bleed is the widest of the pages' on each side.
+        let [top, bottom, left, right] = bleed.unwrap_or_default();
+        for (side, b) in doc.setup.bleed.iter_mut().zip([top, bottom, left, right]) {
+            *side = side.max(b.min(vectorcraft_doc::setup::MAX_BLEED));
+        }
         let mut node = document::node(&mut doc, &s, LinkInfo { page: Some(page), ..link.clone() }, bounding);
         if let NodeKind::PlacedDocument(p) = &mut node.kind {
-            p.xf = Affine::translate((x, 0.0));
+            p.xf = Affine::translate((x - left, -top));
         }
         node.name = Some(file.clone());
         let mut layer = Node::layer(doc.alloc_id(), &format!("Page {page}"), LayerColor::Preset((i % 27) as u8));
@@ -283,7 +297,7 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
             children.push(Arc::new(node));
         }
         doc.layers.push(Arc::new(layer));
-        let rect = Rect::new(x, 0.0, x + s.frame.width(), s.frame.height());
+        let rect = Rect::new(x, 0.0, x + s.frame.width() - left - right, s.frame.height() - top - bottom);
         doc.artboards.push(Artboard { id: i as u32 + 1, name: format!("Artboard {}", i + 1), rect, ..board.clone() });
         x = rect.x1 + gap;
         for w in s.warnings {

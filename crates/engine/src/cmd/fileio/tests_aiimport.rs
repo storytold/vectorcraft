@@ -1181,6 +1181,30 @@ fn link_pages_refuses_an_ai_file_saved_without_its_pdf_part() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// `document.open` with `linkPages` opens a PDF-compatible `.ai` asked for its crop box on its trim
+/// box, as it opens as art, showing its bleed box round the artboard, which is the document's bleed.
+#[test]
+fn link_pages_open_an_ai_file_on_its_trim_box_with_its_bleed() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpagestrim-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("trimmed.ai");
+    let boxes = "/TrimBox [10 10 190 90] /BleedBox [4 2 196 98]";
+    std::fs::write(&path, ai::ai_with(&compressed(&ai::sample_data()), "0 g 10 10 40 40 re f", boxes)).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path, "linkPages": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let board = doc.artboards[0].rect;
+    assert_eq!((board.width(), board.height()), (180.0, 80.0), "the trim box");
+    assert_eq!(doc.setup.bleed, [8.0, 8.0, 6.0, 6.0], "top, bottom, left, right");
+    // The page shows its bleed box, so the art in the bleed is kept.
+    let placed = doc.layers[0].children().unwrap()[0].clone();
+    let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("{:?}", placed.kind) };
+    assert_eq!((p.width, p.height, p.page_box), (192.0, 96.0, vectorcraft_doc::PageBox::Bleed));
+    assert_eq!(p.xf.translation(), vectorcraft_geom::Vec2::new(-6.0, -8.0), "the trim box on the artboard");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// A page of text alone, as text-only art has in its PDF part: no path is painted.
 const TEXT_ART: &str = "BT /F1 36 Tf 10 40 Td (Text only) Tj ET";
 

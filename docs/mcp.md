@@ -1280,7 +1280,9 @@ such a page opens from that data at the page's size.
 `linkPages: true` (File › Open's Import PDF dialog: Import PDF pages as links) opens each page `pages` picks as a
 placed document linked to that page of the file, as `file.place` with `link` places one, instead of as editable art.
 Each page gets an artboard of its `cropTo` box (`bounding`: its art's bounds; a blank page gets its crop box), in a row from the left 36 pt apart, and
-a layer named after the page (`Page 2`). The document opens in CMYK when most of those pages are painted mostly in
+a layer named after the page (`Page 2`). A PDF-compatible `.ai` with `cropTo: "crop"` gets its trim boxes, as it does
+when it opens as art. A page on its trim box shows its bleed box round the artboard, and the pages give the document
+their bleed. The document opens in CMYK when most of those pages are painted mostly in
 CMYK, unless `colorMode` names a mode. All the pages' objects share one copy of the file. The Links panel lists each
 page, and `links.embed` makes a page editable art.
 `document.open` refuses `linkPages` for a file that is not a PDF or a PDF-compatible `.ai`, for a file given as
