@@ -702,6 +702,19 @@ fn press_modifiers(i: &egui::InputState, key: Key) -> Modifiers {
         .unwrap_or(i.modifiers)
 }
 
+/// Backquote held when `key` last went down, before any later transitions in the frame.
+fn backquote_at_press(i: &egui::InputState, key: Key) -> bool {
+    let mut held = i.key_down(Key::Backtick);
+    for event in i.events.iter().rev() {
+        match event {
+            egui::Event::Key { key: k, pressed: true, .. } if *k == key => return held,
+            egui::Event::Key { key: Key::Backtick, pressed, repeat: false, .. } => held = !*pressed,
+            _ => {}
+        }
+    }
+    i.key_down(Key::Backtick)
+}
+
 /// Apply arrow-key movement and clear selected art when no text editor owns input, unless a Layers
 /// or Appearance row has Delete/Backspace (`rows_keys`).
 fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context, rows_keys: bool) {
@@ -709,9 +722,14 @@ fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context, rows_keys: boo
     let arrows = [(Key::ArrowLeft, -1.0, 0.0), (Key::ArrowRight, 1.0, 0.0), (Key::ArrowUp, 0.0, -1.0), (Key::ArrowDown, 0.0, 1.0)];
     for (k, dx, dy) in arrows {
         // The modifiers held when the key went down, as `claimed_tool_keys` reads them.
-        let m = ctx.input(|i| press_modifiers(i, k));
+        let (m, patterns_only) = ctx.input(|i| (press_modifiers(i, k), backquote_at_press(i, k)));
         if ctx.input_mut(|i| i.consume_key(m, k)) && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides()) {
-            let _ = app.run("object.nudge", json!({"dx": dx, "dy": dy, "big": m.shift, "copy": m.alt}));
+            let mut params = json!({"dx": dx, "dy": dy, "big": m.shift, "copy": m.alt});
+            if patterns_only {
+                params["objects"] = json!(false);
+                params["patterns"] = json!(true);
+            }
+            let _ = app.run("object.nudge", params);
         }
     }
     // Delete / Backspace clear the selection.
