@@ -882,10 +882,11 @@ placement they set there. A stroke weight and dashes are stored as the label sho
 scaled. When the characters of labels of one kind change differently, the frontmost label sets what the kind keeps. On
 a pie with Legends in Wedges, a fill a command sets on the legend labels is drawn on every wedge, black included, until
 that command is undone; a size, font or stroke change does not set one. Before that, their fill is stored only when
-every legend label the command reaches ends up with the same fill. Otherwise they are drawn again in black, or white on
-a dark wedge. `paint.default` stores the black fill and no stroke for the kind of each label it reaches, also when the
-label already showed them. What they change on a graph's axis lines, tick marks and radar rings is stored as described
-below.
+every legend label the command reaches ends up with the same fill. The recolor commands also need to be given the legend
+labels themselves: a recolor given the graph or a group that holds it does not store their fill. When their fill is not
+stored, they are drawn again in black, or white on a dark wedge. `paint.default` stores the black fill and no stroke for
+the kind of each label it reaches, also when the label already showed them. What these commands change on a graph's
+axis lines, tick marks and radar rings is stored as described below.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
@@ -906,9 +907,10 @@ kind of label: the paint, weight, opacity and blend mode of its topmost visible 
 their place relative to the Characters row, and the label's object opacity and blend mode. They store them even when the
 label already showed them, but an edit of a hidden row that leaves the topmost visible rows as they were stores nothing. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
 an `appearance.copyFrom` (Eyedropper) pick of transparency store only the label's object opacity and blend mode;
-`appearance.copyFrom` with `append` stores the rows. When the graph is drawn again, every label of that kind gets what
-is stored, with a placed gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and
-`legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
+`appearance.copyFrom` with `append` stores the rows, and the object opacity and blend mode only when it also applies
+the object's transparency. `graphicStyle.apply` with `add` stores the rows and leaves the object opacity and blend
+mode the kind keeps. When the graph is drawn again, every label of that kind gets what is stored, with a placed
+gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and `legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
 joins, dashes) and effects applied with `effect.*` are not stored. When labels of one kind are edited together, the
 last one in the order of the targets (`ids` as given, otherwise paint order) sets what the kind keeps.
 `appearance.copyFrom` onto the whole text of a label also stores the character attributes it applies and, from type,
@@ -925,12 +927,17 @@ opacity and blend mode. `paint.setFill`, `paint.setStroke` and the recolor comma
 graph, its Axes group or a group that holds the graph, so the lines keep the paint those commands give a whole graph.
 The other commands store them when given the line itself, and the `appearance.*` and graphic style commands and
 `transparency.set` with an `item` also when given the Axes group, as described above. `transparency.set` without an
-`item` and `object.setProps` store only the object opacity and blend mode. `appearance.copyFrom` stores the rows when it
-picks up a paint, a stroke weight or a row's opacity and blend mode, or adds rows with `append`; any other pick stores
-only the object opacity and blend mode, when it picks them up. The recolor commands and `paint.swap` store a line's rows when they change them. The
-other commands store them even when the line already showed them, except that rows equal to a kind's default stroke
-(0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved, and an edit of a hidden row that
-leaves the topmost visible rows as they were stores nothing. When one command reaches several lines of one kind, the frontmost line in
+`item` and `object.setProps` store only the object opacity and blend mode. `appearance.clear`, `appearance.transfer`,
+`graphicStyle.apply`, `graphicStyle.redefine`, and `appearance.copyFrom` with every attribute picked up and applied or
+with `append`, store a line's rows even when the line already showed them. The other commands, an `appearance.copyFrom`
+of some attributes included, store only what they change on a line's rows; the kind keeps its other attributes, also
+when the line still shows different ones until the graph is drawn again. An `appearance.copyFrom` that does not apply
+the object's transparency, and `graphicStyle.apply` with `add`, leave the object opacity and blend mode a kind keeps as
+they are, also when the line still shows other ones. `paint.default` stores the default fill and stroke rows for a
+line's kind even when the line already showed them, and leaves the object opacity and blend mode the kind keeps. Rows
+equal to a kind's default stroke (0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved, and
+an edit of a hidden row that leaves the topmost visible rows as they were stores nothing. When one command reaches
+several lines of one kind, the frontmost line in
 paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and
 each line fits it when the graph is drawn again. The graph saves the rows as `axisRows` and `ringRows` in its label
 styles. Other stroke options (caps, joins, miter limit, alignment, dashes and arrowheads), rows below the topmost one of

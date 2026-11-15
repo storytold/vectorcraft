@@ -989,7 +989,7 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
             }
             // The swap writes the paint of the topmost fill and stroke, not their opacity.
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (false, false), true, false);
-            let labels = super::graph::capture_label_changes(&before, d, &ids, false);
+            let labels = super::graph::capture_label_changes(&before, d, &ids, false, None);
             Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
         })?;
     }
@@ -1019,13 +1019,14 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, false);
-            // The graph keeps the default paint for every label and line of a kind it reached, also when one already
-            // showed it.
+            // The graph keeps the default paint for every label of a kind it reached, and the default fill and stroke rows
+            // for every line of a kind it reached, also when one already showed them; the object opacity a line kind keeps
+            // stays.
             let labels = super::graph::capture_label_styles(d, &ids, &|st| {
                 st.fill = Paint::solid(Color::BLACK);
                 st.stroke = Paint::None;
             });
-            let lines = super::graph::capture_line_rows(d, &ids);
+            let lines = super::graph::capture_line_fill_stroke_rows(d, &ids);
             Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels || lines))
         })?;
     }
