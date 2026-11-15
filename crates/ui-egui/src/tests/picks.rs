@@ -457,7 +457,7 @@ fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
     click(&mut app, "Export Text…", dialogs);
     match shown.requests().as_slice() {
         [PickRequest::Save(pick)] => {
-            assert_eq!(pick.filters, FilePick::filters([("Text", &["txt"][..]), ("Shortcut sheet", &["pdf"][..])]))
+            assert_eq!(pick.filters, FilePick::filters([("Text", &["txt"][..]), ("Shortcut sheet", &["pdf"][..]), ("CSV", &["csv"][..])]))
         }
         other => panic!("{other:?}"),
     }
@@ -476,13 +476,15 @@ fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("shortcuts"), "the dialog stays open");
 }
 
-/// The file type picked in Export Text…'s save dialog picks the file: the PDF sheet for a name
-/// typed with `.pdf`, and for a type the dialog reports with a name typed without an extension,
-/// that type's file under the name with its extension.
+/// The file type picked in Export Text…'s save dialog picks the file: the PDF sheet or the CSV file
+/// for a name typed with `.pdf` or `.csv`, and for a type the dialog reports with a name typed
+/// without an extension, that type's file under the name with its extension.
 #[test]
 fn keyboard_shortcuts_export_text_writes_the_format_picked_in_its_save_dialog() {
     for (answer, path, start) in [
         (&["/keys/list.pdf"][..], "/keys/list.pdf", &b"%PDF-"[..]),
+        (&["/keys/list.csv"][..], "/keys/list.csv", &b"\xef\xbb\xbfGroup,Command,Shortcut\r\n"[..]),
+        (&["/keys/table", "csv"][..], "/keys/table.csv", &b"\xef\xbb\xbfGroup,Command,Shortcut\r\n"[..]),
         (&["/keys/sheet", "pdf"][..], "/keys/sheet.pdf", &b"%PDF-"[..]),
         (&["/keys/plain", "txt"][..], "/keys/plain.txt", &b"Keyboard Shortcuts\n"[..]),
     ] {

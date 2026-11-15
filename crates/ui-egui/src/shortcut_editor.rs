@@ -1209,16 +1209,19 @@ pub enum TextFormat {
     Text,
     /// The printable shortcut sheet as a PDF ([`crate::shortcut_sheet::sheet_pdf`]).
     Sheet,
+    /// A CSV file of [`export_sections`] ([`crate::shortcut_sheet::csv`]).
+    Csv,
 }
 
 impl TextFormat {
-    pub const ALL: [Self; 2] = [Self::Text, Self::Sheet];
+    pub const ALL: [Self; 3] = [Self::Text, Self::Sheet, Self::Csv];
 
     /// The `format` param's value.
     pub fn name(self) -> &'static str {
         match self {
             Self::Text => "text",
             Self::Sheet => "sheet",
+            Self::Csv => "csv",
         }
     }
 
@@ -1226,6 +1229,7 @@ impl TextFormat {
         match self {
             Self::Text => "txt",
             Self::Sheet => "pdf",
+            Self::Csv => "csv",
         }
     }
 
@@ -1234,6 +1238,7 @@ impl TextFormat {
         let label = match self {
             Self::Text => "Text",
             Self::Sheet => "Shortcut sheet",
+            Self::Csv => "CSV",
         };
         crate::FilePick::filter(label, &[self.extension()])
     }
@@ -1266,10 +1271,10 @@ impl TextFormat {
 /// The section name for menu commands no menu holds, as Export Text's heading has it.
 const MENU_COMMANDS: &str = "Menu Commands";
 
-/// Export Text's rows in sections, for the shortcut sheet: Tools, then one section per top-level
-/// menu in the order the dialog first lists a command of it, with the names and shortcuts as the
-/// dialog shows them, each name without its top-level menu. Every row the dialog lists is there,
-/// with an empty shortcut when it has none.
+/// Export Text's rows in sections, for the shortcut sheet and the CSV file: Tools, then one section
+/// per top-level menu in the order the dialog first lists a command of it, with the names and
+/// shortcuts as the dialog shows them, each name without its top-level menu. Every row the dialog
+/// lists is there, with an empty shortcut when it has none.
 pub fn export_sections(overrides: &Overrides) -> Vec<crate::shortcut_sheet::Section> {
     use crate::shortcut_sheet::{Row, Section};
     let snapshot = snapshot();
@@ -1305,6 +1310,7 @@ fn export_text_file(format: TextFormat, set: &str, overrides: &Overrides, page: 
             let title = format!("{} · {}", tl!("Keyboard Shortcuts"), shown_set_name(set));
             crate::shortcut_sheet::sheet_pdf(&title, &export_sections(overrides), page)
         }
+        TextFormat::Csv => Ok(crate::shortcut_sheet::csv(&export_sections(overrides), ["Group", "Command", "Shortcut"]).into_bytes()),
     }
 }
 
@@ -2420,12 +2426,45 @@ mod tests {
         assert!(sheet_as_named.1.starts_with(b"%PDF-"));
         written.borrow_mut().clear();
         let mut err = |p: Value| app.run("shortcuts.exportText", p);
-        assert_eq!(err(json!({"path": "/a/x", "format": "xlsx"})), Err("`format` must be one of text, sheet".to_string()));
-        assert_eq!(err(json!({"path": "/a/x", "format": "Sheet"})), Err("`format` must be one of text, sheet".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "format": "xlsx"})), Err("`format` must be one of text, sheet, csv".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "format": "Sheet"})), Err("`format` must be one of text, sheet, csv".to_string()));
         assert_eq!(err(json!({"path": "/a/x", "format": 3})), Err("`format` must be a string".to_string()));
         assert_eq!(err(json!({"path": "/a/x", "pageSize": "legal"})), Err("`pageSize` must be one of letter, a4".to_string()));
         assert_eq!(err(json!({"path": "/a/x", "pageSize": "A4"})), Err("`pageSize` must be one of letter, a4".to_string()));
         assert!(written.borrow().is_empty());
+    }
+
+    /// `format: "csv"` writes the CSV file: the `Group,Command,Shortcut` header, then a record per
+    /// row the dialog lists, every group and row of [`export_sections`] once. Without a file it
+    /// comes back under `text`.
+    #[test]
+    fn export_text_command_writes_a_csv_file() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<(String, Vec<u8>)>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let (returned, files, sections) = with_steady_plugins(|| {
+            app.services.write = None;
+            written.borrow_mut().clear();
+            let returned = app.run("shortcuts.exportText", json!({"format": "csv"}));
+            let w = written.clone();
+            app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+                w.borrow_mut().push((path.to_string(), b.to_vec()));
+                Ok(())
+            }));
+            app.run("shortcuts.exportText", json!({"path": "/a/list.csv", "format": "csv"})).unwrap();
+            (returned, written.borrow().clone(), export_sections(&app.ui.shortcut_overrides))
+        });
+        let [(path, bytes)] = files.as_slice() else { panic!("{} files", files.len()) };
+        assert_eq!(path, "/a/list.csv");
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        assert_eq!(returned.unwrap()["text"].as_str(), Some(text.as_str()), "the same file without a writer");
+        assert_eq!(text, crate::shortcut_sheet::csv(&sections, ["Group", "Command", "Shortcut"]));
+        assert!(text.starts_with("\u{feff}Group,Command,Shortcut\r\nTools,"), "{text}");
+        let records = text.matches("\r\n").count();
+        assert_eq!(records, 1 + sections.iter().map(|s| s.rows.len()).sum::<usize>(), "a header and a record per row");
+        for s in &sections {
+            assert!(text.contains(&format!("\r\n{},", s.title)), "no {} group", s.title);
+        }
     }
 
     /// With no `pageSize` the sheet is on A4 when the current document prints on A4: its print
@@ -2477,6 +2516,9 @@ mod tests {
         assert_eq!(TextFormat::with_extension("/a/list", TextFormat::Sheet), "/a/list.pdf");
         assert_eq!(TextFormat::with_extension("/a/list.txt", TextFormat::Sheet), "/a/list.pdf");
         assert_eq!(TextFormat::with_extension("/a/list", TextFormat::Text), "/a/list.txt");
+        assert_eq!(TextFormat::picked("/a/list.CSV", None), TextFormat::Csv);
+        assert_eq!(TextFormat::picked("/a/list", Some("csv")), TextFormat::Csv);
+        assert_eq!(TextFormat::with_extension("/a/list.pdf", TextFormat::Csv), "/a/list.csv");
         assert_eq!(TextFormat::with_extension("/a/list.PDF", TextFormat::Sheet), "/a/list.PDF");
         assert_eq!(TextFormat::with_extension("/a/v1.2", TextFormat::Sheet), "/a/v1.2.pdf");
     }

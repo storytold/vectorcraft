@@ -91,7 +91,7 @@ fn save_panels_show_the_file_type_they_write() {
     app.run("shortcuts.exportText", json!({})).unwrap();
     assert_eq!(
         last_shown(&shown),
-        FilePick::filters([("Text", &["txt"][..]), ("Shortcut sheet", &["pdf"][..])]),
+        FilePick::filters([("Text", &["txt"][..]), ("Shortcut sheet", &["pdf"][..]), ("CSV", &["csv"][..])]),
         "Keyboard Shortcuts › Export Text…"
     );
     app.run("shortcuts.exportText", json!({"format": "sheet"})).unwrap();

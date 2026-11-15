@@ -1,9 +1,10 @@
-//! Keyboard Shortcuts › Export Text…'s printable shortcut sheet.
+//! Keyboard Shortcuts › Export Text…'s printable shortcut sheet and CSV file.
 //!
 //! The rows come from [`crate::shortcut_editor::export_sections`]: a Tools section and one section
 //! per top-level menu. The sheet lists the rows that have a shortcut, each section under a colored
 //! band with the shortcut on the left and the name on the right, flowed down columns of landscape
-//! pages, and is written as a PDF by laying it out as a document.
+//! pages, and is written as a PDF by laying it out as a document. The CSV file lists every row
+//! ([RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.txt) quoting, CRLF line ends).
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeId, NodeKind, TextObject};
@@ -53,6 +54,41 @@ impl PageSize {
             Self::A4 => (841.89, 595.28),
         }
     }
+}
+
+/// Whether a spreadsheet would read `s` as a formula: it starts with `=`, `+`, `-` or `@` and has
+/// more after it, or starts with a tab or a carriage return.
+fn reads_as_formula(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some('=' | '+' | '-' | '@') => chars.next().is_some(),
+        Some('\t' | '\r') => true,
+        _ => false,
+    }
+}
+
+/// A CSV field: a field a spreadsheet would read as a formula starts with an apostrophe, and a
+/// field with a comma, a double quote or a line break is quoted, with each double quote doubled.
+fn csv_field(s: &str) -> String {
+    let s = if reads_as_formula(s) { format!("'{s}") } else { s.to_string() };
+    if s.contains([',', '"', '\n', '\r']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s }
+}
+
+/// The CSV file: a byte order mark, so spreadsheets read it as UTF-8, a header row of `headers`,
+/// then one `section,name,shortcut` record per row, each ending in CRLF.
+pub fn csv(sections: &[Section], headers: [&str; 3]) -> String {
+    let mut out = String::from("\u{feff}");
+    let mut record = |fields: [&str; 3]| {
+        out += &fields.map(csv_field).join(",");
+        out += "\r\n";
+    };
+    record(headers);
+    for s in sections {
+        for r in &s.rows {
+            record([&s.title, &r.name, &r.shortcut]);
+        }
+    }
+    out
 }
 
 /// Section band colors, in turn.
@@ -344,6 +380,38 @@ mod tests {
             };
             assert!(doc.artboards.iter().any(on), "{b:?} is off the pages");
         }
+    }
+
+    /// A field with a comma, a double quote or a line break is quoted, with its double quotes
+    /// doubled; other fields are written as they are, and each record ends in CRLF.
+    #[test]
+    fn csv_quotes_fields_with_commas_quotes_and_line_breaks() {
+        let sections = [
+            Section { title: "Edit".into(), rows: vec![row("Paste in Front, Place", "Ctrl+F"), row("Say \"Hi\"", "")] },
+            Section { title: "Two\nLines".into(), rows: vec![row("Plain", "Ctrl+,")] },
+        ];
+        let text = csv(&sections, ["Group", "Command", "Shortcut"]);
+        assert_eq!(
+            text,
+            "\u{feff}Group,Command,Shortcut\r\nEdit,\"Paste in Front, Place\",Ctrl+F\r\nEdit,\"Say \"\"Hi\"\"\",\r\n\"Two\nLines\",Plain,\"Ctrl+,\"\r\n"
+        );
+    }
+
+    /// A field a spreadsheet would read as a formula starts with an apostrophe; a lone `+`, `-`,
+    /// `=` or `@` key and other fields are written as they are.
+    #[test]
+    fn csv_keeps_fields_from_reading_as_formulas() {
+        let sections = [Section {
+            title: "Plug-ins".into(),
+            rows: vec![row("=HYPERLINK(\"x\")", "+"), row("@Sum", "-"), row("-Minus", "- · Ctrl+-"), row("Tab\tName", "=")],
+        }];
+        let text = csv(&sections, ["Group", "Command", "Shortcut"]);
+        assert_eq!(
+            text,
+            "\u{feff}Group,Command,Shortcut\r\nPlug-ins,\"'=HYPERLINK(\"\"x\"\")\",+\r\nPlug-ins,'@Sum,-\r\nPlug-ins,'-Minus,'- · Ctrl+-\r\nPlug-ins,Tab\tName,=\r\n"
+        );
+        assert_eq!(csv_field("\tx"), "'\tx");
+        assert_eq!(csv_field("\rx"), "\"'\rx\"");
     }
 
     /// The sheet lists the rows that have a shortcut and leaves out the others, and a section with

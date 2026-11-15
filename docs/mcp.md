@@ -6310,15 +6310,16 @@ cannot be written, returns an error, and nothing is written. The layout is Vecto
 [Export keyboard shortcuts list as a text document](https://helpx.adobe.com/illustrator/desktop/get-started/preferences-and-settings/export-keyboard-shortcuts-list.html)
 page describes saving the list from the Keyboard Shortcuts dialog as a text file, and does not describe its layout.
 
-`format` picks the file: `"text"` (the default) writes the text file above and `"sheet"` a printable shortcut sheet
-as a PDF. A `path` is written as given, in the format `format` names, or as text without `format`. In the desktop
-app, without `path`, the save dialog offers both formats (Text and Shortcut sheet, Text first) unless `format` names
-one, and the file type picked in it decides. When `format` names a format, or the dialog reports the type picked, the
-name the dialog returns gets that format's extension (`.txt` or `.pdf`): one of these extensions is replaced, and the
-extension is added to any other name. When that names a file that is already there, a question asks before replacing
-it. The web app downloads the format `format` names, text without it. With no file dialog, file writer or download,
-the command returns the file: the text file as `text`, the sheet in base64 as `pdf`. A `format` other than `"text"`
-or `"sheet"`, or a `pageSize` other than `"letter"` or `"a4"` (lowercase), returns an error, and nothing is written.
+`format` picks the file: `"text"` (the default) writes the text file above, `"sheet"` a printable shortcut sheet as a
+PDF and `"csv"` a CSV file. A `path` is written as given, in the format `format` names, or as text without `format`.
+In the desktop app, without `path`, the save dialog offers the three formats (Text, Shortcut sheet and CSV, Text first)
+unless `format` names one, and the file type picked in it decides. When `format` names a format, or the dialog reports
+the type picked, the name the dialog returns gets that format's extension (`.txt`, `.pdf` or `.csv`): one of these
+extensions is replaced, and the extension is added to any other name. When that names a file that is already there, a
+question asks before replacing it. The web app downloads the format `format` names, text without it. With no file
+dialog, file writer or download, the command returns the file: the text file and the CSV file as `text`, the sheet in
+base64 as `pdf`. A `format` other than `"text"`, `"sheet"` or `"csv"`, or a `pageSize` other than `"letter"` or
+`"a4"` (lowercase), returns an error, and nothing is written.
 
 The shortcut sheet lists the rows that have a shortcut in groups: the Tools rows under the Tools group, then each
 top-level menu as a group, in the order the dialog first lists a command of it, with the command named without its
@@ -6332,6 +6333,12 @@ with several shortcuts has a line for each, kept in one column unless the row is
 never shortened: one too wide for its column is set smaller. A name too long for its column ends in "…". The type is
 Source Sans 3, which VectorCraft bundles and which has the macOS modifier symbols (⌃ ⌥ ⇧ ⌘). Characters it does not
 have are drawn in another font the app has loaded, when one has them. The layout is VectorCraft's own.
+
+The CSV file is UTF-8 with a byte order mark, with CRLF line ends and fields quoted as
+[RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.txt) describes. Its header row is `Group,Command,Shortcut` in every
+UI language. Each row the dialog lists has one record, in the sheet's groups and with names and shortcuts in the UI
+language, and a row with no shortcut has an empty Shortcut field. A field that starts with `=`, `+`, `-` or `@` and has
+more after it, or that starts with a tab or a carriage return, starts with an apostrophe (`'`).
 
 ```json
 {"name":"run_command","arguments":{"command":"shortcuts.exportText","params":{"path":"/Users/me/Shortcuts.txt"}}}
