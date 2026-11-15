@@ -5783,6 +5783,15 @@ outline of the area a drag covers takes, at each step, the tip the pen's reading
 value shows as the value itself there, since the release draws it.
 `tool.setOption {tool: "eraser"}` takes the same keys.
 
+`path.eraseRegion {rect: [x, y, width, height]}` takes a rectangle in place of `points` and erases everything inside
+it from the paths (selected, or all), as an Alt-drag with the Eraser does ([Eraser tool
+reference](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=133)).
+Closed shapes lose the rectangle's area, and open paths are cut where they cross its edges. The tip's size, angle,
+roundness and variations do not apply. A width or height of 0 or less, a value that is not a finite number, or
+`points` and `rect` together is refused, and when nothing is erased no undo step is added. In the desktop app an
+Alt-drag with the Eraser draws the marquee from the press point to the pointer, Alt+Shift keeps it square on its
+larger side, and Escape cancels it.
+
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
 naming the key; the document does not change and no undo step is recorded: `t`, `dx` and `dy` in
 `path.reshapeSegment` and `object.blend.spine.reshapeSegment`; `x`, `y` and `t` in `path.curvatureEdit`; `x` and `y`

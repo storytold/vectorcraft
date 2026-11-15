@@ -2032,6 +2032,82 @@ fn eraser_and_knife_exec_on_release() {
     assert!(matches!(&a[0], Action::Exec(c, v) if c == "path.knife" && v["points"].as_array().unwrap().len() == 3));
 }
 
+/// An Alt-drag with the Eraser shows a marquee from the press point to the pointer, without the
+/// tip outline, and the release erases that rectangle; a drag back up and left gives the same
+/// kind of rectangle, measured from its top-left corner.
+#[test]
+fn eraser_alt_drag_draws_a_marquee_and_erases_the_rectangle() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let mut t = GestureTool::new("eraser");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 170.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 190.0).with_mods(alt));
+    assert_eq!(t.overlays(&cx), vec![Overlay::Marquee(Rect::new(50.0, 150.0, 250.0, 190.0))]);
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 200.0).with_mods(alt));
+    assert_eq!(acts, vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [50.0, 150.0, 200.0, 50.0]}))]);
+    assert!(!t.busy() && t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Marquee(_))));
+    // A click erases nothing.
+    let acts = drag_held(&mut t, &cx, &[(250.0, 200.0)], alt);
+    assert!(acts.iter().all(Vec::is_empty), "a click: {acts:?}");
+    // Alt only at the press is enough, and the drag can go up and left of the press point.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 250.0, 200.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 100.0, 120.0));
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 120.0));
+    assert_eq!(acts, vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [100.0, 120.0, 150.0, 80.0]}))]);
+    // Without Alt the drag is a stroke.
+    let acts = drag(&mut t, &cx, &[(50.0, 150.0), (250.0, 150.0)], Mods::default());
+    assert!(matches!(&acts[2][0], Action::Exec(c, v) if c == "path.eraseRegion" && v.get("rect").is_none() && v["points"].is_array()));
+}
+
+/// Alt+Shift keeps the Eraser's marquee square on its larger side, in the direction the pointer
+/// went; Shift can be pressed or let go during the drag.
+#[test]
+fn eraser_alt_shift_drag_keeps_the_marquee_square() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let alt_shift = Mods { alt: true, shift: true, ..Mods::default() };
+    let mut t = GestureTool::new("eraser");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(alt_shift));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 260.0, 170.0).with_mods(alt_shift));
+    assert_eq!(t.overlays(&cx), vec![Overlay::Marquee(Rect::new(200.0, 140.0, 260.0, 200.0))]);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 260.0, 170.0).with_mods(alt));
+    assert_eq!(t.overlays(&cx), vec![Overlay::Marquee(Rect::new(200.0, 170.0, 260.0, 200.0))], "Shift let go");
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 190.0, 280.0).with_mods(alt_shift));
+    assert_eq!(acts, vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [120.0, 200.0, 80.0, 80.0]}))]);
+    // A drag along one axis gives a square too.
+    let acts = drag_held(&mut t, &cx, &[(100.0, 100.0), (100.0, 140.0)], alt_shift);
+    assert_eq!(acts[2], vec![Action::Exec("path.eraseRegion".into(), json!({"rect": [100.0, 100.0, 40.0, 40.0]}))]);
+}
+
+/// A marquee that encloses no area erases nothing, and Escape during the drag cancels the marquee:
+/// the release that follows sends nothing.
+#[test]
+fn eraser_marquee_click_or_escape_erases_nothing() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let mut t = GestureTool::new("eraser");
+    let acts = drag_held(&mut t, &cx, &[(100.0, 100.0), (100.0, 160.0)], alt);
+    assert!(acts.iter().all(Vec::is_empty), "a drag along one axis: {acts:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(alt));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 200.0).with_mods(alt));
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![]);
+    assert!(!t.busy() && t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Marquee(_))));
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 200.0).with_mods(alt)), vec![]);
+    // The next plain drag erases a stroke.
+    let acts = drag(&mut t, &cx, &[(50.0, 150.0), (250.0, 150.0)], Mods::default());
+    assert!(matches!(&acts[2][0], Action::Exec(c, v) if c == "path.eraseRegion" && v["points"].is_array()));
+}
+
 /// The points of the Knife's release command.
 fn knife_points(acts: &[Action]) -> Vec<(f64, f64)> {
     let Some(Action::Exec(c, v)) = acts.first() else { panic!("{acts:?}") };
