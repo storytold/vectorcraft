@@ -973,7 +973,10 @@ the path a stroke draws, continues or merges into is not selected afterwards), `
 off by default, and while it is on a stroke merges only with selected blobs), `closeWithin` and `editWithin`
 (screen pixels, 0 turns it off; Pencil, Paintbrush), `size` (pt; Blob Brush, Eraser), and `angle`
 (°, −180 to 180; 0) and `roundness` (%, 0 to 100 for the Blob Brush, where 0 is drawn as 0.1, and 1 to 100 for
-the Eraser; 100) of the tip (Blob Brush, Eraser); the tip keeps its angle on the page along a stroke. `ui.dialog.confirm` runs
+the Eraser; 100) of the tip (Blob Brush, Eraser); the tip keeps its angle on the page along a stroke. `sizeMode` and
+`sizeVariation` (pt) vary the size (Blob Brush: `fixed` or `pressure`). The Eraser also has `angleMode`,
+`angleVariation` (°, 0 to 180), `roundnessMode` and `roundnessVariation` (%, 0 to 100), and its three modes are each
+`fixed`, `random`, `pressure`, `tilt`, `bearing` or `rotation`, as `path.eraseRegion` takes them. `ui.dialog.confirm` runs
 `tool.setOption {tool, values}`.
 
 `ui.pointer` events also take `holdMs` (0..60000): the pointer then holds still that long, button down, before the
