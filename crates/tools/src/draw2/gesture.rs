@@ -190,6 +190,8 @@ pub struct GestureTool {
     /// Which way the pen leaned at the last point of the stroke where it leaned 1° or more from
     /// upright ([`super::pen_bearing`]), for the Eraser's tip outline.
     bearing: Option<f64>,
+    /// `bearing` as it was at each of `poses`, for the outline of the area the Eraser's drag covers.
+    bearings: Vec<Option<f64>>,
     /// The length of the stroke, in points.
     length: f64,
     /// The outline of the area a Blob Brush or Eraser drag covers, as far as it is built
@@ -871,6 +873,7 @@ impl GestureTool {
             tip_at: None,
             light: false,
             bearing: None,
+            bearings: vec![],
             length: 0.0,
             area: Cell::new(None),
             area_pending: Cell::new(false),
@@ -938,6 +941,7 @@ impl GestureTool {
             let pose = ev.pen.map(PenPose::sanitized);
             self.bearing = pose.and_then(super::pen_bearing).or(self.bearing);
             self.poses.push(pose);
+            self.bearings.push(self.bearing);
         }
     }
 
@@ -959,6 +963,9 @@ impl GestureTool {
             None if had_bearing => self.poses.iter().rev().find_map(|q| q.and_then(super::pen_bearing)),
             None => self.bearing,
         };
+        if let Some(b) = self.bearings.last_mut() {
+            *b = self.bearing;
+        }
     }
 
     /// Would a press with `m` held draw a straight Pencil line? Shift or Alt held, unless Alt lends
@@ -1046,6 +1053,7 @@ impl GestureTool {
         self.shift_line = None;
         self.light = false;
         self.bearing = None;
+        self.bearings.clear();
         self.length = 0.0;
         self.area.set(None);
         self.area_pending.set(false);
@@ -1106,12 +1114,32 @@ impl GestureTool {
         matches!(self.id, "blobBrush" | "eraser")
     }
 
-    /// The pen pressure of each point of a Blob Brush or Eraser stroke whose Size varies with
-    /// Pressure, when a pen pressed less than fully anywhere along it (a stroke without pressure
-    /// keeps its Size).
-    fn size_pressures(&self) -> Option<&[f32]> {
-        let pressed = self.pressures.len() == self.points.len() && self.light;
-        (self.tip_modes()[2] == Variation::Pressure && !self.smoothing && pressed).then_some(self.pressures.as_slice())
+    /// Which of the tip's angle, roundness and size vary along a Blob Brush or Eraser stroke: those
+    /// on a mode the pen gave a reading for anywhere along it (a pressure less than full, a tilt, a
+    /// bearing or a rotation). Random draws one value from the whole drag at the release, and the
+    /// outline shows the value itself.
+    fn tip_varies(&self) -> [bool; 3] {
+        let n = self.points.len();
+        let (pressed, posed) = (self.light && self.pressures.len() == n, self.poses.len() == n);
+        let reads = |mode: Variation| match mode {
+            Variation::Pressure => pressed,
+            Variation::Tilt => posed && self.poses.iter().flatten().any(|q| q.tilt.is_some()),
+            Variation::Bearing => posed && self.bearings.iter().any(Option::is_some),
+            Variation::Rotation => posed && self.poses.iter().flatten().any(|q| q.rotation.is_some()),
+            Variation::Fixed | Variation::Random => false,
+        };
+        if self.smoothing {
+            return [false; 3];
+        }
+        self.tip_modes().map(reads)
+    }
+
+    /// The tip at point `i` of the stroke, as `path.eraseRegion` reads the pen there: the pressure
+    /// once the pen has pressed less than fully, the tilt and rotation of the point, and the
+    /// bearing of the last point up to it that the pen leaned 1° or more at ([`Self::tip_for`]).
+    fn tip_of_point(&self, i: usize) -> [f64; 3] {
+        let pressure = if self.light { self.pressures.get(i).map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
+        self.tip_for(pressure, self.poses.get(i).copied().flatten(), self.bearings.get(i).copied().flatten())
     }
 
     /// How the tip's angle, roundness and size vary: the Eraser's three modes, the Blob Brush's
@@ -1137,12 +1165,20 @@ impl GestureTool {
     /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed and a
     /// pen that gives no reading, the values themselves. The Blob Brush's are its own values.
     fn tip_now(&self) -> [f64; 3] {
-        let base = [self.angle, self.roundness, self.size];
         if self.id != "eraser" || !self.active {
-            return base;
+            return [self.angle, self.roundness, self.size];
         }
         let pressure = if self.light { self.pressures.last().map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
-        let controls = super::pen_controls(pressure, self.poses.last().copied().flatten(), self.bearing);
+        self.tip_for(pressure, self.poses.last().copied().flatten(), self.bearing)
+    }
+
+    /// The tip's angle, roundness and size for a pen at `pressure` held as `pose`, leaning toward
+    /// `bearing`: each value on a mode that follows the pen goes from the value less its Variation
+    /// to the value plus it ([`super::pen_controls`]); for Random, Fixed and what the pen does not
+    /// give, the values themselves.
+    fn tip_for(&self, pressure: f64, pose: Option<PenPose>, bearing: Option<f64>) -> [f64; 3] {
+        let base = [self.angle, self.roundness, self.size];
+        let controls = super::pen_controls(pressure, pose, bearing);
         let variations = [self.angle_variation, self.roundness_variation, self.size_variation];
         let mut out = base;
         for (i, (v, mode)) in out.iter_mut().zip(self.tip_modes()).enumerate() {
@@ -1653,31 +1689,39 @@ impl Tool for GestureTool {
         };
         let color = if self.id == "eraser" { [0x80, 0x80, 0x80] } else { FEEDBACK };
         // A tip that is not round shows the outline of the area it covers, each step of the drag
-        // as wide as the pen pressed there with Size set to Pressure. So does a round Blob Brush
-        // tip: a line as wide as the brush would end square, where the stroke it adds is round at
-        // both ends (#4343). The outline is built a bounded amount per call ([`AreaPreview`]).
-        if matches!(self.id, "eraser" | "blobBrush") && (self.roundness < 100.0 || self.id == "blobBrush") && !self.smoothing {
-            let pressures = self.size_pressures();
+        // with the tip the pen gives there on the modes that follow the pen. So does a round Blob
+        // Brush tip: a line as wide as the brush would end square, where the stroke it adds is
+        // round at both ends (#4343). The outline is built a bounded amount per call ([`AreaPreview`]).
+        let [angle_varies, roundness_varies, size_varies] = self.tip_varies();
+        // An angle varies the tip only when it is not round.
+        let shaped = roundness_varies || (angle_varies && self.roundness < 100.0);
+        if matches!(self.id, "eraser" | "blobBrush") && (self.roundness < 100.0 || shaped || self.id == "blobBrush") && !self.smoothing {
             let key = AreaKey {
                 blob: self.id == "blobBrush",
                 size: self.size,
-                variation: self.size_variation,
+                variation: if size_varies { self.size_variation } else { 0.0 },
                 angle: self.angle,
                 roundness: self.roundness,
-                pressure: pressures.is_some(),
+                varies: shaped || size_varies,
+                shaped,
+                modes: self.tip_modes(),
+                variations: [self.angle_variation, self.roundness_variation, self.size_variation],
             };
             let mut area = self.area.take().filter(|a| a.fits(key, &self.points)).unwrap_or_else(|| AreaPreview::new(key, self.points[0]));
-            area.step(&self.points, pressures);
+            area.step(&self.points, &|i| {
+                let [angle, roundness, size] = self.tip_of_point(i);
+                [angle, roundness, if size_varies { size } else { self.size }]
+            });
             let paths = area.paths(&self.points);
             o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0 }));
             o.extend(paths.live.into_iter().map(|path| Overlay::Path { path, color, width: 1.0, dashed: false }));
             self.area_pending.set(area.pending(&self.points));
             self.area.set(Some(area));
-        } else if let Some(pressures) = self.size_pressures() {
-            // With Size set to Pressure, each step of the drag shows as wide as the pen pressed there.
-            for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
-                let pressure = f64::from(p[0] + p[1]) / 2.0;
-                let width = super::pressure_size(self.size, self.size_variation, pressure) * cx.zoom;
+        } else if size_varies {
+            // With Size on a mode that follows the pen, each step of the drag shows as wide as the
+            // tip the pen gives at its ends.
+            for (j, seg) in self.points.windows(2).enumerate() {
+                let width = (self.tip_of_point(j)[2] + self.tip_of_point(j + 1)[2]) / 2.0 * cx.zoom;
                 o.push(Overlay::Path { path: polyline(seg), color, width: width as f32, dashed: false });
             }
         } else {
