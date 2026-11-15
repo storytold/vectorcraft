@@ -974,9 +974,10 @@ fn alternates_popup(ui: &mut Ui, face: &vectorcraft_text::FontFace, c: Option<ch
 /// A pick in the pop-up of character `c`'s cell, whose glyph is `gid` ([`alternates_popup`]).
 /// The cell's own glyph inserts the character as a double-click on the cell does
 /// ([`insert_character`]). An alternate needs the Type tool's caret or selection in text set in
-/// `face`: when the selection is exactly one `c`, that character is drawn with the glyph; else `c`
-/// goes in at the caret, in place of the selection, and is drawn with it, the two as one undo
-/// step. The glyph goes on as a double-click in Show › Alternates for Current Selection puts it
+/// `face`: when the selection is exactly one `c` in one type object, that character is drawn with
+/// the glyph; else `c` goes in at the caret, in place of the selection (with the rest of a
+/// threaded story that Select All selected), and is drawn with it, the two as one undo step. The
+/// glyph goes on as a double-click in Show › Alternates for Current Selection puts it
 /// ([`draw_selected_with`]). An Arabic presentation form goes in as its base letter, as a
 /// double-click on its cell puts it, drawn with the glyph where the font gives it that glyph in its
 /// word. Without a caret, with text in another font, or with a glyph the character cannot be drawn
@@ -1006,7 +1007,10 @@ fn insert_alternate(app: &mut VectorcraftApp, ctx: &egui::Context, face: &vector
     let c = base_letter(face, c, gid).unwrap_or(c);
     // Typing in progress stays a step of its own.
     super::character::end_typing(app);
-    let one = selected_target(app).is_some_and(|t| t.ch == c && (a.min(b), a.max(b)) == (t.byte, t.byte + c.len_utf8()));
+    // After Select All in a threaded story, the other frames' text goes too, as typing removes it,
+    // even when the edited frame holds only `c`.
+    let story = super::character::text_story(app).unwrap_or_default();
+    let one = story.is_empty() && selected_target(app).is_some_and(|t| t.ch == c && (a.min(b), a.max(b)) == (t.byte, t.byte + c.len_utf8()));
     if one {
         draw_selected_with(app, face, c, picked);
         return;
@@ -1017,8 +1021,6 @@ fn insert_alternate(app: &mut VectorcraftApp, ctx: &egui::Context, face: &vector
     if !open {
         app.session.begin_named_undo_group(None);
     }
-    // After Select All in a threaded story, the other frames' text goes too, as typing removes it.
-    let story = super::character::text_story(app).unwrap_or_default();
     put_alternate(app, face, c, picked, editing, (a.min(b), a.max(b)), &story);
     if !open && let Some(st) = app.session.active_mut() {
         st.undo_group = None;
@@ -2118,6 +2120,44 @@ mod tests {
         assert_eq!(texts, "a", "status: {}", app.ui.status);
         let first = [a, b, c].into_iter().find(|id| !plain(&app, *id).is_empty()).expect("a frame with the character");
         assert_eq!(glyph_ids(&app, &json!(first)), [u2]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// After Select All in a threaded story whose first frame holds only the picked character, a
+    /// pick still replaces the whole story's text: the other frames' text goes too.
+    #[test]
+    fn a_pick_replaces_a_threaded_story_whose_first_frame_holds_one_character() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+        let [_, u2, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        // The first frame is wide enough for the "a" only; the ideographs flow on to the second.
+        let area = json!({"x": 10, "y": 10, "text": "a中中中", "size": 12, "area": {"width": 16, "height": 16}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        for id in [a, b] {
+            app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        }
+        let plain = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("text"),
+        };
+        assert_eq!((plain(&app, a), plain(&app, b)), ("a".to_string(), "中中中".to_string()));
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        assert_eq!(super::super::character::text_editing(&app), Some((NodeId(a), 0, 1)), "the selection is the one character");
+        assert_eq!(super::super::character::text_story(&app).map(|s| s.len()), Some(2), "the whole story is selected");
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-subset", 1usize);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        let texts: String = [a, b].iter().map(|id| plain(&app, *id)).collect();
+        assert_eq!(texts, "a", "status: {}", app.ui.status);
+        assert_eq!(glyph_ids(&app, &json!(a)), [u2]);
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
     }
 
