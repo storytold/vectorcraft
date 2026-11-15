@@ -55,8 +55,8 @@ pub use read::{
     palette, read_beside, read_in, symbols, variables,
 };
 pub(crate) use read::{
-    MAX_NODES as MAX_EDITING_OBJECTS, MAX_SYMBOLS, join_and, read_art_style, read_over_page, read_style_list, slot_frame, slot_of, style_moves_with,
-    symbol_art_member,
+    MAX_NODES as MAX_EDITING_OBJECTS, MAX_SYMBOLS, join_and, read_art_style, read_over_page, read_program, read_style_list, slot_frame, slot_of,
+    style_moves_with, symbol_art_member,
 };
 
 pub(crate) use read::is_look_slot;

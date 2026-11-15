@@ -246,6 +246,21 @@ the suite) keep the agent to the folders you give it:
   without a path of a document whose own format is SVG or SVGZ), `file.exportAs`, and the SVG Options dialog's
   Show Code. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
   person at the keyboard exports it as stored.
+- The same SVG and SVGZ outputs are refused with "a linked image file is outside the read roots", which names no
+  file or folder, when the file would name a linked image's file outside the read roots (a path, a `file:` URL,
+  or a relative path taken from the document's folder). An `<image>` names the file with `images: "link"`, and
+  with `embed` when the document holds no pixels for the image. An image colorized with a solid fill names
+  no file when its pixels are gray (the file gets the colorized pixels) or missing (the file leaves it out).
+  With `preserveEditing`, the document the SVG carries names every linked image and placed file, the relative
+  paths kept of them and each data set's image, in every symbol, pattern, graph design and brush, used or not,
+  colorized or not, and a stored brush entry that does not read as a brush is refused too, since its links
+  cannot be checked. Otherwise the images of the art the file writes,
+  in opacity masks and in the symbols, patterns and brushes that art uses, are checked: hidden layers and
+  objects only with `hiddenLayers` (a save keeps them unless it is `false`), and template layers and the
+  layer of opacity-mask or symbol editing mode never. `selectedOnly` and `document.exportSelection` check the
+  selected objects only, and `clipboard.exportSvg` checks the copied objects, following a relative path from
+  the document they came from while it is open; in a frame a request drives, Copy then puts no SVG on the
+  system clipboard. An image whose pixels the document holds exports embedded, and a URL is not checked.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
@@ -846,9 +861,13 @@ given), `threeD.mapGraphic`,
 do not use the Appearance panel's active row. When the first object given is design art, rows and effects given with
 `aligned: true` are rows of its stack in `appearance.setItem`, `appearance.removeItem`, `appearance.duplicateItem`,
 `transparency.set` with an `item`, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit,
-move or remove an effect: each other object edits the row or effect equal to it, and an object without one is left as
-it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they do
-for a row no object has, and the other commands are an error. `appearance.moveItem`, `effect.move` and
+move or remove an effect, `paint.setFill`, `paint.setStroke`, `paint.invert`, `paint.complement`, `paint.lastColor` and
+`paint.lastGradient` with an `item`, `stroke.set`, `stroke.setAdvanced`, `paint.editGradient`, `paint.setGradientGeom` and the `paint.freeform.*` commands
+that edit points and lines: each other object edits the row or effect equal to it, and an object without one is left
+as it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they
+do for a row no object has, and the other commands are an error. The paint, stroke and gradient commands are also an
+error when the art's row is not the kind of row they edit, and `paint.editGradient`, `paint.setGradientGeom` and the
+`paint.freeform.*` commands without `stroke` edit the kind of the art's row. `appearance.moveItem`, `effect.move` and
 `appearance.duplicateItem` with `to` are an error when the art's stack differs from the other objects', and
 `appearance.duplicateItem` with `to` is also an error when two or more other objects are given, as it is without the
 art. To change the art, edit the design with `graph.design`.
@@ -1060,6 +1079,11 @@ styles and brushes.
 `color.removeProfile`, `view.proofSetup`, `view.proofColors`, `view.overprintPreview`, `view.separationsPreview` and
 `swatch.setSpot` reject a param of the wrong type, such as `"bpc": "no"`, `"on": 1`, `"to": 5` or `"colors": "#fff"`,
 and change nothing. Omitting a param or giving null keeps its default.
+The Separations panel's Assign rows (where Edit › Assign Profile… goes) act on the profile of the document's color
+mode: Don't Color Manage This Document runs `edit.assignProfile` with null for that model (no profile, so the colors
+show through the working space), Working RGB or Working CMYK with the working space's name (that profile stays
+assigned when the working space changes), and Profile with another profile of that kind. A choice the document
+already has runs nothing, and the other model's profile stays as it is.
 
 SVG import keeps what the canvas edits live. `<pattern>` becomes a pattern swatch. A `<symbol>` with `<use>` becomes a
 symbol (named after its `data-name`, else its id) with an instance per `<use>`; a `<use>` that shows it differently
@@ -1129,7 +1153,8 @@ gradient meshes whose every point is at 0% opacity, and paths without effects wh
 An image or a mesh with a Crop Marks effect, or with a Vector Halftone effect that makes dots, is measured.
 Such objects in the art of a symbol are left out of its instances too, and an instance whose symbol holds nothing
 else is left out. In the art of a dynamic symbol, an object that an instance's fill, stroke or opacity makes
-the plot draw is measured.
+the plot draw is measured. The art of an instance that goes through 9-slice guides is placed through them first, and
+such objects are then left out of the placed art.
 A document whose only visible art is left out is refused, and Export As refuses an HP-GL plot of it before the save
 dialog. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
 is in VectorCraft Default), the export comes back with a warning that says so. A `.ai` export with
@@ -1297,8 +1322,10 @@ opens at its size in points, the file's numbers times the `UserUnit` (one above 
 such a page opens from that data at the page's size.
 `linkPages: true` (File › Open's Import PDF dialog: Import PDF pages as links) opens each page `pages` picks as a
 placed document linked to that page of the file, as `file.place` with `link` places one, instead of as editable art.
-Each page gets an artboard of its `cropTo` box (`bounding`: its art's bounds), in a row from the left 36 pt apart, and
-a layer named after the page (`Page 2`). The document opens in CMYK when most of those pages are painted mostly in
+Each page gets an artboard of its `cropTo` box (`bounding`: its art's bounds; a blank page gets its crop box), in a row from the left 36 pt apart, and
+a layer named after the page (`Page 2`). A PDF-compatible `.ai` with `cropTo: "crop"` gets its trim boxes, as it does
+when it opens as art. A page on its trim box shows its bleed box round the artboard, and the pages give the document
+their bleed; the artboards are then 36 pt apart plus the bleed on both sides. The document opens in CMYK when most of those pages are painted mostly in
 CMYK, unless `colorMode` names a mode. All the pages' objects share one copy of the file. The Links panel lists each
 page, and `links.embed` makes a page editable art.
 `document.open` refuses `linkPages` for a file that is not a PDF or a PDF-compatible `.ai`, for a file given as
@@ -2571,6 +2598,9 @@ The rest of this section is VectorCraft's own rules:
   `The Scripts folder cannot be read`.
 - A listed file is checked again when it is chosen. A file that is gone, is no longer a `.js` or `.jsx` file under
   the folder, or is or lies behind a link ends with `the script is no longer in the Scripts folder`, and nothing runs.
+  The file is read once for that check, and the text that read checked is the text that runs; its `#include` lines
+  and `$.evalFile` read in the folder that read found. `script.run {path, installed: true}` runs a listed script the
+  same way.
 - The web build has no Scripts folder, and neither has a run with `VECTORCRAFT_NO_PREFS` set.
 
 `script.listInstalled {}` returns the same listing: `{folder, scripts: [{path, label, folders}], truncated,
@@ -2804,6 +2834,22 @@ template layer, on a locked artboard while nothing is isolated, or outside the i
 such as a symbol instance just placed, is not passed over for being on a locked artboard while it stays selected. When
 the selection holds no other object, they return the error "nothing selected".
 
+`select.similar {by?}` is the Control bar's Select Similar Objects button and the Select Similar Options menu beside it
+([help](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=165)). It selects the
+objects like the first selected object by `by` and returns `{count, by}`. `by` is `fillColor`, `fillAndStroke`,
+`strokeColor`, `strokeWeight`, `opacity`, `blendingMode`, `appearance`, `graphicStyle`, `shapeType` or
+`symbolInstance`, which runs the `select.same.*` command of that name, or `all`, which selects the objects whose fill
+and stroke colors, stroke weight, opacity and blending mode all match (tints, compound paths and Live Paint faces as
+`select.same.fillColor`); Select › Reselect repeats `all` as `all`. The menu's items, their order and what `all`
+compares are VectorCraft's own. A `by` given is kept for the session once the selection is made, and the menu checks
+it; without `by` the command uses the kept one, `all` until one is given. Any other `by` is an error that keeps the
+selection and the kept attribute, and an error of the `select.same.*` command it runs (for example "the selection has
+no graphic style") keeps the kept attribute too. It needs a selection and records no undo step; the journal records the
+attribute used, so a recorded action repeats it, and a script run that fails puts the kept attribute back. The button
+and the menu show while something is selected and the
+Object Options group is on, at the right end of the bar after the X, Y, W and H fields. They take only the room the
+other controls leave, so the bar leaves them out, together, before any other control.
+
 `select.object.allOnSameLayers` selects the objects on the layers and sublayers of the selected objects that can be
 selected. A selected object that is hidden or locked, inside a hidden or locked group or layer, on a template layer, on
 a locked artboard while nothing is isolated, or outside the isolated group adds no layer. When the selection holds no
@@ -2931,6 +2977,38 @@ changes neither option. Behavior reference: [View artwork](https://helpx.adobe.c
 
 ```json
 {"name":"invoke_menu","arguments":{"command":"ui.navigatorPanelOptions","params":{"color":"Light Blue","solidDashes":true}}}
+```
+
+## Info panel
+
+`info.readout` takes no params and returns what Window › Info shows for the selection and the tool in use:
+`{tool, width?, height?, readout?}`. `tool` is the active tool's id. `width` and `height` are the sides of the
+selection's bounding box in points (of the box around the anchors selected with Direct Selection when there are
+some), measured as the `usePreviewBounds` preference says, and are left out with nothing selected. `readout` is left
+out unless the tool has something of its own to show:
+
+- `{kind: "drag", dx, dy, distance, angle}` while the Selection, Direct Selection or Group Selection tool moves the
+  selection, or the Gradient tool draws a gradient vector on the art.
+- `{kind: "scale", width, height}` during a Scale tool drag, in percent.
+- `{kind: "rotate", center, angle}` and `{kind: "reflect", center, angle}` during a Rotate or Reflect tool drag.
+  `angle` is the angle turned, as `object.rotate` takes it, or the angle of the reflection axis, as `object.reflect`
+  takes its `axis`. Both are in degrees counter-clockwise.
+- `{kind: "shear", center, axis, angle}` during a Shear tool drag. `axis` is 0 for a horizontal shear and 90 for a
+  vertical one, and `angle` is the shear angle in degrees, as `object.shear` takes it.
+- `{kind: "brush", brush}` while the Paintbrush is the tool. `brush` is the brush it paints with, or null.
+
+Lengths are in points. A drag's `angle` is in degrees counter-clockwise from the x axis. `center` is the center of the
+selection's bounding box as the drag has carried it, in document coordinates. A param is an error. In the app's panel, X and Y show the
+pointer's position from the rulers' zero point, or `center` during a Rotate, Reflect or Shear tool drag. W and H show
+the selection's size, `dx` and `dy` during a drag (with the distance and the angle under them), or the Scale tool's
+percentages. The Zoom tool adds the view's magnification and the Paintbrush its brush's name. Several selected objects
+show only the fill, stroke and type values they share, and Show Options adds a tint's swatch and percentage and the
+name of a gradient's swatch. The number formats, the rows shown between drags and the Direct Selection and Group
+Selection readouts are VectorCraft's own. Behavior reference: the Info panel overview in the
+[archived user guide](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=76).
+
+```json
+{"name":"run_command","arguments":{"command":"info.readout","params":{}}}
 ```
 
 ## Tools panel placement
@@ -4087,6 +4165,26 @@ it as a path. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) 
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"shadow":true,"shadowPosition":"below","shadowDistance":10,"shadowBounds":150}}}}
 ```
 
+## 3D render mode
+
+Revolve, Extrude & Bevel, Inflate and Rotate take `render`, an object whose `mode` is `"shaded"` (the default) or
+`"wireframe"` (**Window › 3D and Materials** › Render Settings › Wireframe), set with `effect.apply` or
+`effect.setParams` in one undo step. In wireframe mode the effect stays live and draws the edges of the faces it
+builds instead of its shaded surface: each edge once, in the paths [Expand as Wireframes](#expand-as-wireframes)
+gives for the 3D effect, with a 0.5 pt black stroke, round joins and no fill (VectorCraft's own choice), and no shadow or graphics.
+The edges are drawn whatever the opacity, blending mode or opacity mask of the fills, strokes and group members; the
+object's own opacity, blending mode and opacity mask apply to them as a whole.
+Geometry effects after the 3D effect reshape the drawn edges. Expand as Wireframes reshapes each face before it
+joins the edges, so with such an effect its paths can differ from the drawn ones. The mode is saved in the native file, SVG and PDF exports
+draw the edges, and `effect.expandAppearance` keeps them as paths. Past 1,000,000 edges the source path is drawn, as
+it is for a solid past its limits. A `render` that is not an object, a key other than `mode`, another mode, and
+`render` on Extrude & Bevel (Classic), Revolve (Classic) or Rotate (Classic) are refused before the document
+changes. See [three-d.md](three-d.md#3d-and-materials-panel).
+
+```json
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"render":{"mode":"wireframe"}}}}}
+```
+
 ## 3D object type
 
 `effect.setParams {index: int, threeDType: "plane" | "extrude" | "revolve" | "inflate", params?, item?, ids?, aligned?}`
@@ -4869,6 +4967,14 @@ and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` st
 `object.pattern.edit` edits the pattern that fills or strokes a selected object, and `pattern.options` changes the
 pattern being edited; each returns an error when there is no such pattern. `pattern.delete` requires `name`.
 
+With `pattern.options {moveTileWithArt: true}` (Move Tile with Art), a move of all of the tile art in pattern editing
+mode moves the tile by the same offset: `object.move`, `object.nudge`, `object.transform` with a translation, and drags
+with the Selection tool. A move of only some of the art, a move of direct-selected anchors, a copy, a rotation and a
+scale leave the tile where it is. The option is off for a new pattern and works the same with `sizeTileToArt` on. These
+details are VectorCraft's own rules; the help page says only that the option moves the tile along with the art
+(<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/edit-patterns.html>).
+`pattern.list` reports it as `moveTileWithArt`. A `pattern.options` call that changes nothing records no undo step.
+
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"patternTileEdgeColor","value":"#ff4f4f"}}}
@@ -5526,11 +5632,28 @@ moves that point alone as the focal point, with or without Shift (Shift keeps th
 focal points stay highlighted where it left them; Escape during a drag puts the path back and keeps them, and
 switching to another tool clears them.
 
+`path.eraseRegion` (the Eraser) takes a variation mode for each of its tip's values, as the variation menus of
+Eraser Tool Options set them ([Erase paths using the Eraser
+tool](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/erase-paths-using-eraser-tool.html)):
+`angleMode` with `angleVariation` (degrees, 0 to 180), `roundnessMode` with `roundnessVariation` (percent, 0 to 100)
+and `sizeMode` with `sizeVariation` (points, 0 or more), each `"fixed"` (the default), `"random"`, `"pressure"`,
+`"tilt"`, `"bearing"` or `"rotation"`. A value that varies takes up to its variation either way. Random draws one
+value for the drag. Pressure goes from the value less the variation where the pen presses lightest to the value plus
+it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright. Bearing and
+Rotation go from less at −180° to more at 180° of the way the pen leans or its barrel turns. The tip at each point of
+the drag takes what the pen read there (the points' pressure, tilt and rotation, as `path.freehand` takes them); a
+drag without that reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way
+Tilt, Bearing and Rotation run, and the value itself without a reading are VectorCraft's own rules.
+The command refuses another mode, and a variation below 0 or past its range, and erases nothing. In the desktop app
+the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases.
+`tool.setOption {tool: "eraser"}` takes the same keys.
+
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
 naming the key; the document does not change and no undo step is recorded: `t`, `dx` and `dy` in
 `path.reshapeSegment` and `object.blend.spine.reshapeSegment`; `x`, `y` and `t` in `path.curvatureEdit`; `x` and `y`
 in `path.convertAnchor`; `t` in `path.insertAnchor`; `fidelity` and the `within` of `redraw` in `path.freehand` (and in
-`brush.freehand`, which runs it); `size`, `sizeVariation`, `angle` and `roundness` in `path.eraseRegion`;
+`brush.freehand`, which runs it); `size`, `sizeVariation`, `angle`, `angleVariation`, `roundness` and
+`roundnessVariation` in `path.eraseRegion`;
 `size`, `sizeVariation`, `angle`, `roundness` and `fidelity` in `path.blob`; `width` in `path.eraseSegments`;
 `radius` and `fidelity` in `path.smoothRegion`; `tolerance` in `path.joinScrub`; `dx` and `dy` in `path.moveAnchors`;
 and `dx`, `dy`, `tol` and `radius` in `path.reshape`. A null is read as a key left out. `path.convertAnchor` refuses
@@ -5693,7 +5816,17 @@ the colour bars are process, spot and black-tint patches. Layers whose Print opt
 The Output and Advanced sections convert colours and write real text. `output: {conversion, destination}` converts
 every colour into the destination profile's model (`destination`; CMYK of another profile too) or only the colours of
 the other model (`preserveNumbers`: colours already in it keep their numbers); grey stays grey, images are converted
-too and printer's marks are not. The destination is any profile `edit.colorSettings` lists (default: the document's
+too and printer's marks are not. With `destination` and an sRGB destination, a gray or RGB image that carries an
+ICC profile is converted from that profile to sRGB with the color settings' intent and written without
+it, at 16 bits a sample when it has them, is not resampled or recompressed and the file is PDF 1.5 or later (an image
+whose profile the color engine can't read, or whose pixels can't be decoded, keeps its profile, with a warning); without
+conversion it keeps its profile. With `destination` and a CMYK destination, or an RGB one other than sRGB that images
+are converted to, an RGB image that carries an ICC profile is converted from that profile to sRGB with the same intent
+and then to the destination, instead of having its numbers read as sRGB (a profile the color engine can't read leaves
+them read as sRGB, with a warning); a gray image keeps its profile, as gray is not converted. An RGB destination other
+than sRGB that is the document's own RGB profile leaves RGB colors and RGB images as they are, so a tagged RGB image keeps its profile
+there.
+`preserveNumbers` still reads an image's numbers as sRGB. The destination is any profile `edit.colorSettings` lists (default: the document's
 for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
 `edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
 the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve (PDF/A, PDF/X-3 and PDF/X-4 files are
@@ -6819,7 +6952,8 @@ where it is.
 `window.control.options {group, visible?}` (desktop app) turns a group of the Control bar's options on (`visible:
 true`), off (`false`) or toggles it (omitted), and returns `{group, visible}`. The groups are `snapping` (the Snapping
 menu), `anchors` (Convert and Anchors), `toolOptions` (the active tool's options), `objectOptions` (Isolate Selected
-Object or Exit Isolation Mode, the envelope controls and the symbol instance controls), `imageOptions` (a selected
+Object or Exit Isolation Mode, the envelope controls, the symbol instance controls and Select Similar Objects),
+`imageOptions` (a selected
 image's or Image Trace object's controls), `fillStroke` (the fill and stroke chips, Stroke and its weight and width
 profile), `opacity`, `graphicStyle` (Style, Recolor Artwork and Global Edit Options), `character`, `paragraph`,
 `verticalAlignment` (area type's vertical alignment), `alignDistribute`, `transform` (the Transform link and the X/Y/W/H
@@ -6946,6 +7080,23 @@ with `pointer_gesture` (a click places at 100% with the top-left corner there, a
 `press_key` (Left/Right/Up/Down cycle, Escape discards the current file). `file.place`, `file.place.queue` and
 `file.place.info` refuse, of the keys each one takes, a `link`, `replace` or `template` that is not true or false and a `thumbnail` that is not a
 number, naming the key, and place nothing; null is the same as leaving the key out.
+
+In the app, `file.place` asks for a file's import options before placing it: a text file without `text` (Text Import
+Options), a DXF drawing without `dxf` (DXF Import Options), and a PDF, `.ai` or `.ait` file with several pages or a
+password and no `page` (Place PDF). `showImportOptions: false` places such a file without asking, with the options
+last confirmed in its dialog: the text options, and the DXF fit, lineweight, centering and layer choices with the
+drawing at 1:1 in its own unit. A PDF is placed on page 1 (or `page`) and its crop box, and an encrypted PDF given no
+`password` still asks for the password. A `showImportOptions` that is not true or false is refused, and nothing is placed. The
+Place dialog (File › Place, or `file.place {paths}`) has a Show Import Options checkbox after Link, Template and
+Replace ([Place multiple files in a document](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/place-multiple-files-in-a-document.html)).
+It is on by default and saved with the preferences. On, each file that has import options asks for them before it is
+placed, also each file of the place cursor when it is clicked or dragged (Cancel leaves that file unplaced). A click on
+a PDF or DXF file places it as its options place it with `at` at the center of the box the click gave (a PDF's page at
+its own size, a DXF drawing at its scale, or on the artboard there when fitted or not centered), and a drag to any other
+size fits it into the dragged box (a drag to exactly the file's queued size gives the place tool the same box as a click and
+is placed as one). Off, each
+file is placed with the options last confirmed for its format. The default, and the options a file is placed with
+when the checkbox is off, are VectorCraft's own choices.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/photo.jpg","at":[300,200]}}}
@@ -8363,7 +8514,8 @@ that can be edited or released. `file.place` answers `image`, the id of the imag
 [import options help page](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
 says that a file imported as one flattened image keeps the document's clipping path when it has one. `links.update`
 and `links.relink` read the file's pixels again and leave the clip group and its clipping path as they are. Files that name no clipping path, or name a path
-they don't have, come in as a plain image.
+they don't have, come in as a plain image. `file.place` with `replace` on such a clip group puts a new image, clipped or
+not, at the scale and rotation of the image in the group.
 
 `document.open` converts a PSD or PSB file's layers to objects. In
 [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html),
@@ -9271,13 +9423,20 @@ as outlines.
 `fwid`, `hwid`, `twid` or `qwid` ([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)),
 or `"default"`, the font's default glyphs. A character holds one form at a time, so setting one replaces another. The
 text keeps its characters, and a character the font has no glyph of that form for keeps its own. Runs that differ only
-in their form are shaped as one piece of text. The form is saved only when it is not `"default"`, character styles
-carry it, PDF draws the glyphs the canvas draws, and live SVG text writes it in `font-feature-settings`. Another value
-is refused with `` `glyphForm` must be one of "traditional", … ``. One undo step, and a `text.setFormat` call that
-gives the form the characters already have records none. With Show East Asian Options on, the Glyphs panel menu lists
-the ten forms and Revert To Default Forms: a form is checked when every selected character has it, choosing it again
-does nothing, and it is disabled when none of the faces that draw the selected text, fallback faces included, has a
-feature for it.
+in their form are shaped as one piece of text. A form other than `"default"` also takes away the characters' glyph
+choice (`text.setGlyphAlternate`), which would otherwise keep drawing its own glyph; `"default"` keeps it. The four
+width forms set the characters on a fixed width, so Proportional Metrics (`palt`) is not applied with them and the
+font's pair kerning (`kern`, `apkn`) is turned off, in shaping and in SVG output (`font-kerning: none`);
+`proportionalMetrics` and `kerning` keep their values. The form is saved only when it is not `"default"`, character
+styles carry it, PDF draws the glyphs the canvas draws, and live SVG text writes it in `font-feature-settings`. Another
+value is refused with `` `glyphForm` must be one of "traditional", … ``. One undo step, and a `text.setFormat` call
+that gives the form the characters already have records none. With Show East Asian Options on, the Glyphs panel menu
+lists the ten forms and Revert To Default Forms. They act on the Type tool's selected range, all the text of the object
+at a caret, or all the text of the selected type objects. A form is checked when every one of those characters has
+it, and choosing it again does nothing unless one of them has a glyph choice, which the form takes away. A form is
+disabled when none of the faces that draw the selected text, fallback faces included, has a feature for it: a `GSUB` feature, or for the width
+forms a `GSUB` or `GPOS` feature
+([fwid](https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid)).
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"glyphForm":"jis78"}}}

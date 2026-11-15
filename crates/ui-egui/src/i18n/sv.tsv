@@ -1164,6 +1164,7 @@ font-technology	Variable	Variabla
 	Rotate (Classic)…	Rotera (klassisk)…
 	Surface	Yta
 	Wireframe	Trådram
+	Render Settings	Renderingsinställningar
 	No Shading	Ingen skuggning
 	Plastic	Plast
 	Highlight Intensity	Högdagerintensitet
@@ -3342,6 +3343,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Sjättedelsblanksteg
 	Size	Storlek
 	Size Tile to Art	Anpassa rutans storlek efter grafiken
+	Move Tile with Art	Flytta rutan med grafiken
 	Size/Leading	Storlek/radavstånd
 	Size:	Storlek:
 	Ridges per segment:	Åsar per segment:
@@ -3533,6 +3535,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Byt plats på fyllning och kontur (Shift+X)
 	Swap start and end arrowheads	Byt plats på start- och slutpilspets
 	Swap the selected object for the file, keeping its place and transform	Ersätt det markerade objektet med filen och behåll dess placering och transformering
+	Show Import Options	Visa importalternativ
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Fråga efter importalternativ för varje PDF-, DXF- eller textfil innan den placeras; av: använd de senast valda alternativen
 	Stylistic Alternates	Stilistiska alternativ
 	Swash	Swash
 	Swatch Conflict	Färgrutekonflikt
@@ -3622,6 +3626,48 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Sammansatta typsnitt
 	Export Composite Fonts	Exportera sammansatta typsnitt
 	Import Composite Fonts	Importera sammansatta typsnitt
+@msg	each font must be {name, parts}	varje typsnitt måste vara {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	okänd nyckel `{k}`; ett typsnitt tar name och parts
+@msg	each font needs a name	varje typsnitt behöver ett namn
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan inte vara namnet på ett sammansatt typsnitt (1 till {COMPOSITE_NAME_MAX} tecken, inga styrtecken)
+@msg	`{name}`: parts must be an object	`{name}`: parts måste vara ett objekt
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: okänd klass `{k}`; klasserna är kanji, kana, punctuation, symbols, roman och numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} måste vara ett objekt
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: okänd nyckel `{k}` i {_1}
+@msg	`{name}`: give the kanji part	`{name}`: ange delen kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ett dokument har högst {COMPOSITE_FONTS_MAX} sammansatta typsnitt
+@msg	two composite fonts are named `{_1}`	två sammansatta typsnitt heter `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` är namnet på ett installerat typsnitt
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} använder `{font}`, ett sammansatt typsnitt
+@msg	give fonts: [{name, parts}…]	ange fonts: [{name, parts}…]
+@msg	path is empty	path är tom
+@msg	fonts must be a list of composite fonts	fonts måste vara en lista med sammansatta typsnitt
+@msg	names must be strings	names måste vara strängar
+@msg	no composite font named `{n}`	inget sammansatt typsnitt heter `{n}`
+@msg	names must be a list of names	names måste vara en lista med namn
+@msg	no composite fonts to export	inga sammansatta typsnitt att exportera
+@msg	not a composite fonts file: {e}	inte en fil med sammansatta typsnitt: {e}
+@msg	not a composite fonts file: no compositeFonts list	inte en fil med sammansatta typsnitt: ingen lista compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	filen innehåller fler än {COMPOSITE_FONTS_MAX} sammansatta typsnitt
+@msg	the file is larger than 4 MB	filen är större än 4 MB
+@msg	dataBase64 is not base64	dataBase64 är inte base64
+@msg	give one of path, data or dataBase64	ange path, data eller dataBase64
+@msg	the file holds no composite fonts	filen innehåller inga sammansatta typsnitt
+@msg	the file holds two composite fonts named `{_1}`	filen innehåller två sammansatta typsnitt som heter `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` kan inte vara namnet på ett sammansatt typsnitt
+@msg	{k}: give a font	{k}: ange ett typsnitt
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: ange ett typsnitt
+@msg	{k}: size must be {_1} to {_2}%	{k}: size måste vara {_1} till {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size måste vara {_1} till {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline måste vara {_1} till {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline måste vara {_1} till {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skalan måste vara {_1} till {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skalan måste vara {_1} till {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: bara kana, roman och numerals kan skalas
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: bara kana, roman och numerals kan skalas
+@msg	{k}: only kana can be scaled at the center	{k}: bara kana kan skalas från mitten
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: bara kana kan skalas från mitten
+@msg	no composite font	inget sammansatt typsnitt
 	Delete Font	Ta bort typsnitt
 	Kanji	Kanji
 	Kana	Kana
@@ -3968,6 +4014,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	Arbets-CMYK
 	Working CMYK (don't tag)	Arbets-CMYK (tagga inte)
 	Working RGB (don't tag)	Arbets-RGB (tagga inte)
+	Don't Color Manage This Document	Färghantera inte det här dokumentet
+	Working RGB: {name}	Arbets-RGB: {name}
+	Working CMYK: {name}	Arbets-CMYK: {name}
 	Workspace	Arbetslayout
 	Workspace {i}	Arbetslayout {i}
 	Wrinkle Tool	Skrynkelverktyg
@@ -5485,6 +5534,7 @@ lighting	Light	Ljus
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en grupps fyllning eller linje ritar ingenting att exportera
 @msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Extrudera och fasa, Rotera runt axel, Blås upp eller Rotera)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` måste vara ett objekt som bara innehåller `mode`, med värdet shaded eller wireframe
 @msg	its 3D effect builds no solid	dess 3D-effekt bygger ingen solid
 @msg	bevel must be none or one of {_1}	bevel måste vara none eller något av {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan inte bygga solider av den här teckningen: dess symbolinstanser, blandningar och urklippsgrupper innehåller för många objekt
@@ -5993,6 +6043,9 @@ theme	Appearance	Utseende
 	Softness	Mjukhet
 	Ambient Light	Omgivande ljus
 	Light behind the object	Ljus bakom objektet
+	Move Light to Back	Flytta ljus bakåt
+	Move Light to Front	Flytta ljus framåt
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Dra ett ljus för att flytta det. Piltangenterna flyttar ljuset med fokus; Skift flyttar det 15° i taget.
 	Shadows	Skuggor
 	Distance from Object	Avstånd från objektet
 	Shadow Bounds	Skuggans gränser
@@ -6669,6 +6722,8 @@ axis	Y Axis	Y-axel
 	Create New Set	Skapa ny uppsättning
 	Stop Global Edit	Avsluta global redigering
 	Global Edit Options	Alternativ för global redigering
+	Select Similar Objects	Markera liknande objekt
+	Select Similar Options	Alternativ för att markera liknande
 	Leave Out of Global Edit	Uteslut från global redigering
 	Match	Matcha
 	On Artboards	På ritytor
