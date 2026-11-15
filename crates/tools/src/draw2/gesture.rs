@@ -1841,8 +1841,14 @@ impl Tool for GestureTool {
             "angle" => c::number(key, v, -180.0, 180.0),
             "roundness" => c::number(key, v, if self.id == "blobBrush" { 0.0 } else { 1.0 }, 100.0),
             "editWithin" | "closeWithin" => c::number(key, v, 0.0, 100.0),
-            "sizeMode" => c::one_of(key, v, &["fixed", "pressure"]),
-            _ => c::boolean(key, v),
+            "angleVariation" => c::number(key, v, 0.0, 180.0),
+            "roundnessVariation" => c::number(key, v, 0.0, 100.0),
+            // The Blob Brush's Size is Fixed or Pressure; the Eraser's Angle, Roundness and Size
+            // take any mode (`set_option`).
+            "sizeMode" if self.id != "eraser" => c::one_of(key, v, &[Variation::Fixed.id(), Variation::Pressure.id()]),
+            "sizeMode" | "angleMode" | "roundnessMode" => c::one_of(key, v, &Variation::ALL.map(Variation::id)),
+            "fill" | "altSmooth" | "livePreview" | "liveFit" | "keepSelected" | "mergeOnlySelection" => c::boolean(key, v),
+            _ => Err(c::unknown(key)),
         }
     }
 }

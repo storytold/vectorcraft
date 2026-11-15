@@ -159,6 +159,39 @@ mod tests {
         assert!(string_or_null("prev", &json!(3)).is_err());
     }
 
+    /// Every tool takes back the options it reports, each on its own and all together: a dialog's
+    /// OK sends every field the tool showed it. The state a tool reports and doesn't take (the
+    /// picked mesh points, the text being edited, the pins, the queue of files to place) is left
+    /// out.
+    #[test]
+    fn every_tool_takes_the_options_it_reports() {
+        const TYPE: &[&str] = &["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath"];
+        const READ_ONLY: &[(&[&str], &[&str])] = &[
+            (&["directSelection", "groupSelection", "lasso", "mesh", "magicWand"], &["meshPoints"]),
+            (TYPE, &["editing"]),
+            (&["puppetWarp"], &["pins", "selected"]),
+            // With nothing queued, `current` (0) is no file's index either.
+            (&["place"], &["count", "current", "name", "width", "height", "names"]),
+        ];
+        let read_only = |id: &str, k: &str| READ_ONLY.iter().any(|(ids, keys)| ids.contains(&id) && keys.contains(&k));
+        let extra = ["place", "dimension"];
+        let mut refused = Vec::new();
+        for id in crate::catalog::all_tools().map(|t| t.id).chain(extra) {
+            let tool = crate::create(id);
+            let Some(mut options) = tool.options().as_object().cloned() else { continue };
+            options.retain(|k, _| !read_only(id, k));
+            for (k, v) in &options {
+                if let Err(e) = tool.check_option(k, v) {
+                    refused.push(format!("tool `{id}`, option `{k}` = {v}: {e}"));
+                }
+            }
+            if let Err(e) = check_values(tool.as_ref(), &options) {
+                refused.push(e);
+            }
+        }
+        assert!(refused.is_empty(), "{}", refused.join("\n"));
+    }
+
     #[test]
     fn set_option_params_reads_the_tool_and_the_options() {
         let p = json!({"tool": "smooth", "key": "fidelity", "value": 2, "values": {"x": 1}});
