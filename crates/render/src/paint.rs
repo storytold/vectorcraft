@@ -260,7 +260,7 @@ fn reduction(bytes: &[u8], allowance: u64) -> Option<Reduction> {
     let to = fitted_dims(w, h, allowance)?;
     // A PNG that isn't interlaced or animated (and upright in pre-pixel EXIF) is read a row at a time when the reader's buffers fit the allowance.
     let row_scratch = if format == image::ImageFormat::Png {
-        let streamed = craft_image_codecs::PngDecodeRows::new_streaming(bytes, &craft_image_codecs::Limits::default())
+        let streamed = craft_image_codecs::PngDecodeRows::new_streaming(bytes, &png_streaming_limits(allowance))
             .ok()
             .filter(|dec| dec.streamable())
             .and_then(|dec| png_row_scratch(&dec.header()));
@@ -274,6 +274,13 @@ fn reduction(bytes: &[u8], allowance: u64) -> Option<Reduction> {
         d.total_bytes().saturating_add(band)
     });
     (rows || d.total_bytes() <= allowance).then_some(Reduction { size: (w, h), to, rows, scratch })
+}
+
+/// Streaming retains rows, not the declared full image. Preserve the renderer's source-pixel
+/// allowance even when RGBA16's declared samples exceed the shared whole-image default budget.
+/// Row scratch and the reduced pixmap are admitted separately before decoding starts.
+fn png_streaming_limits(source_pixels: u64) -> craft_image_codecs::Limits {
+    craft_image_codecs::Limits { max_width: u32::MAX, max_height: u32::MAX, max_pixels: source_pixels, max_alloc: source_pixels.saturating_mul(8) }
 }
 
 /// How many rows of an image decoded whole [`reduced_pixmap`] converts to RGBA at a time.
@@ -372,7 +379,7 @@ fn reduced_pixmap(bytes: &[u8], r: &Reduction) -> Result<vello_cpu::Pixmap, Unde
 
 /// `bytes` read and shrunk as [`reduced_pixmap`] says.
 fn shrunk(bytes: &[u8], r: &Reduction) -> Option<vello_cpu::Pixmap> {
-    shrunk_with_png_limits(bytes, r, &craft_image_codecs::Limits::default())
+    shrunk_with_png_limits(bytes, r, &png_streaming_limits(allowance()))
 }
 
 fn shrunk_with_png_limits(bytes: &[u8], r: &Reduction, png_limits: &craft_image_codecs::Limits) -> Option<vello_cpu::Pixmap> {
@@ -669,6 +676,31 @@ mod tests {
         assert_eq!(room_for(MAX_DECODE_ALLOC + 1, 2 * MAX_DECODE_ALLOC), Err(Undecoded::Unreadable));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC + 1), Err(Undecoded::NoRoom));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC), Ok(()));
+    }
+
+    #[test]
+    fn streaming_header_accepts_rgba16_above_whole_image_default() {
+        // Header-only fixture: opening the stream checks declared size without allocating or
+        // decoding the 1.2 GB canvas. Padding meets the decoder's compressed-size plausibility
+        // bound; no rows are requested from this deliberately incomplete image.
+        let (w, h) = (10_000u32, 15_000u32);
+        let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+        let ihdr = [&b"IHDR"[..], &w.to_be_bytes(), &h.to_be_bytes(), &[16, 6, 0, 0, 0]].concat();
+        let mut idat = b"IDAT\x78\x9c".to_vec();
+        idat.resize(1_200_000, 0);
+        for chunk in [&ihdr[..], &idat, b"IEND"] {
+            bytes.extend((chunk.len() as u32 - 4).to_be_bytes());
+            bytes.extend(chunk);
+            let mut crc = flate2::Crc::new();
+            crc.update(chunk);
+            bytes.extend(crc.sum().to_be_bytes());
+        }
+        let default = craft_image_codecs::Limits { max_alloc: 1 << 30, max_pixels: 150_000_000, ..Default::default() };
+        assert!(craft_image_codecs::PngDecodeRows::new_streaming(&bytes, &default).is_err());
+        let rows = craft_image_codecs::PngDecodeRows::new_streaming(&bytes, &png_streaming_limits(150_000_000)).unwrap();
+        assert_eq!((rows.header().width, rows.header().height), (w, h));
+        assert!(rows.streamable());
+        assert!(craft_image_codecs::PngDecodeRows::new_streaming(&bytes, &png_streaming_limits(149_999_999)).is_err());
     }
 
     #[test]
