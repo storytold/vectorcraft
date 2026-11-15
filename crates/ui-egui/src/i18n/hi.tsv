@@ -4718,6 +4718,7 @@ antiAlias	Sharp	शार्प
 	Show Tile Edge	टाइल एज
 	Show Tints/Shades	शो टिंट्स / शेड्स
 	Show Tool Group Labels	टूल ग्रुप लेबल दिखाएं
+	Show Tool Cards	टूल कार्ड दिखाएँ
 	Show Tool Tips	टूल युक्तियाँ दिखाएँ
 	Show Toolbar	शो टूलबार
 	Show Transparency Grid	पारदर्शिता ग्रिड दिखाएँ
@@ -9205,3 +9206,35 @@ theme	Appearance	अपीयरेंस
 	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	पूरे ऑब्जेक्ट और समूह चुनता है, ताकि उन्हें खिसकाया, आकार बदला या घुमाया जा सके।
+	Selects anchor points and path segments to reshape a path.	पाथ का आकार बदलने के लिए एंकर पॉइंट और पाथ सेगमेंट चुनता है।
+	Draws paths point by point, with straight segments and smooth curves.	सीधे सेगमेंट और चिकने वक्रों के साथ बिंदु-दर-बिंदु पाथ बनाता है।
+	Draws smooth curves through the points you click.	आपके क्लिक किए गए बिंदुओं से होकर चिकने वक्र बनाता है।
+	Adds text at a point, or in a frame you drag.	किसी बिंदु पर, या आपके द्वारा खींचे गए फ़्रेम में टेक्स्ट जोड़ता है।
+	Draws rectangles and squares.	आयत और वर्ग बनाता है।
+	Draws rectangles with rounded corners.	गोल कोनों वाले आयत बनाता है।
+	Draws ellipses and circles.	दीर्घवृत्त और वृत्त बनाता है।
+	Draws polygons with sides of equal length.	बराबर लंबाई की भुजाओं वाले बहुभुज बनाता है।
+	Draws stars.	तारे बनाता है।
+	Turns objects around a reference point.	ऑब्जेक्ट को किसी संदर्भ बिंदु के चारों ओर घुमाता है।
+	Flips objects across an axis through a reference point.	ऑब्जेक्ट को संदर्भ बिंदु से होकर जाने वाले अक्ष पर पलटता है।
+	Resizes objects from a reference point.	संदर्भ बिंदु से ऑब्जेक्ट का आकार बदलता है।
+	Slants objects from a reference point.	संदर्भ बिंदु से ऑब्जेक्ट को तिरछा करता है।
+	Moves the view of the document.	दस्तावेज़ के दृश्य को खिसकाता है।
+	Magnifies or reduces the view.	दृश्य को बड़ा या छोटा करता है।
+	Copies the color and other attributes of one object to the selection.	एक ऑब्जेक्ट का रंग और अन्य गुण चयन पर कॉपी करता है।
+	Sets the direction and length of a gradient.	ग्रेडिएंट की दिशा और लंबाई सेट करता है।
+	Creates, selects and resizes artboards.	आर्टबोर्ड बनाता है, चुनता है और उनका आकार बदलता है।
+	Changes the width of a stroke along its length.	स्ट्रोक की चौड़ाई उसकी लंबाई के साथ बदलता है।
+	Bends art by dragging pins placed on it.	आर्ट पर लगाए गए पिन खींचकर उसे मोड़ता है।
+	Pushes the outlines of paths in the direction you drag.	पाथ की रूपरेखा को उस दिशा में धकेलता है जिधर आप खींचते हैं।
+	Twists the outlines of paths into swirls.	पाथ की रूपरेखा को भँवरों में मरोड़ता है।
+	Pulls the outlines of paths in toward the brush.	पाथ की रूपरेखा को ब्रश की ओर अंदर खींचता है।
+	Pushes the outlines of paths out from the brush.	पाथ की रूपरेखा को ब्रश से बाहर की ओर धकेलता है।
+	Adds curved details along the outlines of paths.	पाथ की रूपरेखा के साथ घुमावदार विवरण जोड़ता है।
+	Adds spiky details along the outlines of paths.	पाथ की रूपरेखा के साथ नुकीले विवरण जोड़ता है।
+	Adds wrinkles along the outlines of paths.	पाथ की रूपरेखा के साथ सिलवटें जोड़ता है।
+	Moves, copies and resizes objects on the perspective grid.	पर्सपेक्टिव ग्रिड पर ऑब्जेक्ट को खिसकाता, कॉपी करता और उनका आकार बदलता है।
+	Makes a series of steps between two or more objects.	दो या अधिक ऑब्जेक्ट के बीच चरणों की एक शृंखला बनाता है।
+	Places dimension lines that show measured lengths.	मापी गई लंबाई दिखाने वाली आयाम रेखाएँ लगाता है।

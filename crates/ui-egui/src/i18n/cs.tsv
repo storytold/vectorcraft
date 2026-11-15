@@ -4082,6 +4082,7 @@ theme	Appearance	Motiv
 	Show Pixel Grid (Above 600% Zoom)	Zobrazit mřížku obrazových bodů (nad 600 %)
 	Show Slice Numbers	Zobrazit čísla řezů
 	Show The Home Screen When No Documents Are Open	Zobrazit domovskou obrazovku, když nejsou otevřeny dokumenty
+	Show Tool Cards	Zobrazovat karty nástrojů
 	Show Tool Tips	Zobrazovat popisky nástrojů
 	Size/Leading	Velikost/proklad
 	Snapping Tolerance	Tolerance přichytávání
@@ -9613,3 +9614,35 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Vybírá celé objekty a skupiny, abyste je mohli přesunout, změnit jejich velikost nebo je otočit.
+	Selects anchor points and path segments to reshape a path.	Vybírá kotevní body a segmenty cesty, abyste mohli změnit tvar cesty.
+	Draws paths point by point, with straight segments and smooth curves.	Kreslí cesty bod po bodu, s rovnými segmenty a hladkými křivkami.
+	Draws smooth curves through the points you click.	Kreslí hladké křivky procházející body, na které kliknete.
+	Adds text at a point, or in a frame you drag.	Přidá text v bodě nebo v rámečku, který natáhnete.
+	Draws rectangles and squares.	Kreslí obdélníky a čtverce.
+	Draws rectangles with rounded corners.	Kreslí obdélníky se zaoblenými rohy.
+	Draws ellipses and circles.	Kreslí elipsy a kruhy.
+	Draws polygons with sides of equal length.	Kreslí mnohoúhelníky se stejně dlouhými stranami.
+	Draws stars.	Kreslí hvězdy.
+	Turns objects around a reference point.	Otáčí objekty kolem referenčního bodu.
+	Flips objects across an axis through a reference point.	Zrcadlí objekty podle osy procházející referenčním bodem.
+	Resizes objects from a reference point.	Mění velikost objektů od referenčního bodu.
+	Slants objects from a reference point.	Zkosí objekty od referenčního bodu.
+	Moves the view of the document.	Posouvá zobrazení dokumentu.
+	Magnifies or reduces the view.	Zvětšuje nebo zmenšuje zobrazení.
+	Copies the color and other attributes of one object to the selection.	Zkopíruje barvu a další atributy jednoho objektu do výběru.
+	Sets the direction and length of a gradient.	Nastaví směr a délku přechodu.
+	Creates, selects and resizes artboards.	Vytváří, vybírá a mění velikost pracovních ploch.
+	Changes the width of a stroke along its length.	Mění šířku tahu podél jeho délky.
+	Bends art by dragging pins placed on it.	Ohýbá kresbu tažením špendlíků, které na ni umístíte.
+	Pushes the outlines of paths in the direction you drag.	Posouvá obrysy cest ve směru tažení.
+	Twists the outlines of paths into swirls.	Zkroutí obrysy cest do vírů.
+	Pulls the outlines of paths in toward the brush.	Stahuje obrysy cest směrem ke štětci.
+	Pushes the outlines of paths out from the brush.	Vytlačuje obrysy cest směrem od štětce.
+	Adds curved details along the outlines of paths.	Přidává zaoblené detaily podél obrysů cest.
+	Adds spiky details along the outlines of paths.	Přidává ostré detaily podél obrysů cest.
+	Adds wrinkles along the outlines of paths.	Přidává vrásky podél obrysů cest.
+	Moves, copies and resizes objects on the perspective grid.	Přesouvá, kopíruje a mění velikost objektů v perspektivní mřížce.
+	Makes a series of steps between two or more objects.	Vytvoří řadu kroků mezi dvěma nebo více objekty.
+	Places dimension lines that show measured lengths.	Umísťuje kótovací čáry, které ukazují naměřené délky.

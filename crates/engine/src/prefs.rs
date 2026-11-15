@@ -31,6 +31,9 @@ pub struct Prefs {
     pub disable_auto_add_delete: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
+    /// General › Show Tool Cards: with tool tips on, a tool button's tool tip is a card with what the
+    /// tool does and its keys, for tools that have a description.
+    pub show_tool_cards: bool,
     /// Other Script… warns before it runs a chosen script.
     pub show_external_script_warning: bool,
     pub anti_aliased_artwork: bool,
@@ -395,6 +398,7 @@ impl Default for Prefs {
             disable_auto_add_delete: false,
             use_precise_cursors: false,
             show_tool_tips: true,
+            show_tool_cards: false,
             show_external_script_warning: true,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,

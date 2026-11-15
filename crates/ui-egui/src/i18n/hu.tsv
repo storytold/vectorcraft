@@ -4095,6 +4095,7 @@ mark-style	Japanese	Japán
 	Show Tile Edge	Csempeszél megjelenítése
 	Show Tints/Shades	Világosabb/sötétebb árnyalatok
 	Show Tool Group Labels	Eszközcsoportok címkéinek megjelenítése
+	Show Tool Cards	Eszközkártyák megjelenítése
 	Show Tool Tips	Elemleírások megjelenítése
 	Show Transparency Grid	Átlátszósági rács megjelenítése
 	Show Video Rulers	Videovonalzók megjelenítése
@@ -9601,3 +9602,35 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Teljes objektumokat és csoportokat jelöl ki áthelyezéshez, átméretezéshez vagy forgatáshoz.
+	Selects anchor points and path segments to reshape a path.	Horgonypontokat és útvonalszakaszokat jelöl ki egy útvonal alakjának módosításához.
+	Draws paths point by point, with straight segments and smooth curves.	Pontról pontra rajzol útvonalakat egyenes szakaszokkal és sima görbékkel.
+	Draws smooth curves through the points you click.	Sima görbéket rajzol a kattintott pontokon keresztül.
+	Adds text at a point, or in a frame you drag.	Szöveget ad hozzá egy pontban vagy egy kihúzott keretben.
+	Draws rectangles and squares.	Téglalapokat és négyzeteket rajzol.
+	Draws rectangles with rounded corners.	Lekerekített sarkú téglalapokat rajzol.
+	Draws ellipses and circles.	Ellipsziseket és köröket rajzol.
+	Draws polygons with sides of equal length.	Egyenlő hosszúságú oldalú sokszögeket rajzol.
+	Draws stars.	Csillagokat rajzol.
+	Turns objects around a reference point.	Objektumokat forgat egy referenciapont körül.
+	Flips objects across an axis through a reference point.	Objektumokat tükröz egy referenciaponton átmenő tengelyre.
+	Resizes objects from a reference point.	Objektumokat méretez át egy referenciaponttól.
+	Slants objects from a reference point.	Objektumokat dönt meg egy referenciaponttól.
+	Moves the view of the document.	A dokumentum nézetét mozgatja.
+	Magnifies or reduces the view.	Nagyítja vagy kicsinyíti a nézetet.
+	Copies the color and other attributes of one object to the selection.	Egy objektum színét és egyéb jellemzőit másolja a kijelölésre.
+	Sets the direction and length of a gradient.	Beállítja egy színátmenet irányát és hosszát.
+	Creates, selects and resizes artboards.	Rajztáblákat hoz létre, jelöl ki és méretez át.
+	Changes the width of a stroke along its length.	Egy körvonal szélességét módosítja a hossza mentén.
+	Bends art by dragging pins placed on it.	A rajzot a rá helyezett tűk húzásával hajlítja.
+	Pushes the outlines of paths in the direction you drag.	Az útvonalak körvonalát a húzás irányába tolja.
+	Twists the outlines of paths into swirls.	Az útvonalak körvonalát örvényekké csavarja.
+	Pulls the outlines of paths in toward the brush.	Az útvonalak körvonalát az ecset felé húzza.
+	Pushes the outlines of paths out from the brush.	Az útvonalak körvonalát kifelé tolja az ecsettől.
+	Adds curved details along the outlines of paths.	Ívelt részleteket ad az útvonalak körvonala mentén.
+	Adds spiky details along the outlines of paths.	Tüskés részleteket ad az útvonalak körvonala mentén.
+	Adds wrinkles along the outlines of paths.	Ráncokat ad az útvonalak körvonala mentén.
+	Moves, copies and resizes objects on the perspective grid.	Objektumokat mozgat, másol és méretez át a perspektivikus rácson.
+	Makes a series of steps between two or more objects.	Lépések sorozatát hozza létre két vagy több objektum között.
+	Places dimension lines that show measured lengths.	Méretvonalakat helyez el, amelyek mért hosszakat mutatnak.

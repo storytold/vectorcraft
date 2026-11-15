@@ -4563,6 +4563,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Thumbnails	顯示縮圖
 	Show Tile Edge	顯示拼貼邊緣
 	Show Tints/Shades	顯示淺色調/深色調
+	Show Tool Cards	顯示工具卡片
 	Show Tool Tips	顯示工具提示
 	Show Transparency Grid	顯示透明度格點
 	Show Video Rulers	顯示視訊尺標
@@ -9262,3 +9263,35 @@ breakText	Glyphs	字符
 	Open a document to mark its fold lines.	開啟文件以標記其摺線。
 	Remove Fold Line Role	移除線條類型
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	選取整個物件和群組，以移動、縮放或旋轉它們。
+	Selects anchor points and path segments to reshape a path.	選取錨點和路徑區段，以改變路徑的形狀。
+	Draws paths point by point, with straight segments and smooth curves.	逐點繪製路徑，包括直線區段和平滑曲線。
+	Draws smooth curves through the points you click.	繪製通過所按各點的平滑曲線。
+	Adds text at a point, or in a frame you drag.	在某一點或拖曳出的框架中加入文字。
+	Draws rectangles and squares.	繪製矩形和正方形。
+	Draws rectangles with rounded corners.	繪製圓角矩形。
+	Draws ellipses and circles.	繪製橢圓形和圓形。
+	Draws polygons with sides of equal length.	繪製各邊等長的多邊形。
+	Draws stars.	繪製星形。
+	Turns objects around a reference point.	繞著參考點旋轉物件。
+	Flips objects across an axis through a reference point.	沿通過參考點的軸鏡射物件。
+	Resizes objects from a reference point.	從參考點縮放物件。
+	Slants objects from a reference point.	從參考點傾斜物件。
+	Moves the view of the document.	移動文件的檢視。
+	Magnifies or reduces the view.	放大或縮小檢視。
+	Copies the color and other attributes of one object to the selection.	將一個物件的顏色和其他屬性複製到選取的物件。
+	Sets the direction and length of a gradient.	設定漸層的方向和長度。
+	Creates, selects and resizes artboards.	建立、選取工作區域並調整其大小。
+	Changes the width of a stroke along its length.	沿筆畫的長度改變其寬度。
+	Bends art by dragging pins placed on it.	拖曳放在圖稿上的圖釘來彎曲圖稿。
+	Pushes the outlines of paths in the direction you drag.	沿拖曳方向推動路徑的輪廓。
+	Twists the outlines of paths into swirls.	將路徑的輪廓扭轉成漩渦。
+	Pulls the outlines of paths in toward the brush.	將路徑的輪廓向筆刷收縮。
+	Pushes the outlines of paths out from the brush.	將路徑的輪廓從筆刷向外膨脹。
+	Adds curved details along the outlines of paths.	沿路徑的輪廓加入弧形細節。
+	Adds spiky details along the outlines of paths.	沿路徑的輪廓加入尖刺細節。
+	Adds wrinkles along the outlines of paths.	沿路徑的輪廓加入皺褶。
+	Moves, copies and resizes objects on the perspective grid.	在透視格點上移動、複製和縮放物件。
+	Makes a series of steps between two or more objects.	在兩個或多個物件之間產生一系列步驟。
+	Places dimension lines that show measured lengths.	放置顯示測量長度的尺寸線。

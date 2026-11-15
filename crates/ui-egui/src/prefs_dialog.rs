@@ -330,6 +330,9 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, force: bool) {
         app.canvas.key = None;
         ctx.data_mut(|d| d.insert_temp(id, Some(want)));
     }
+    let cards =
+        crate::toolbar::card::CardPrefs { on: app.session.prefs.show_tool_cards, animated_zoom: crate::canvas::animated_zoom(&app.session.prefs) };
+    crate::toolbar::card::set_prefs(ctx, cards);
     let z = app.session.prefs.ui_scaling.clamp(0.75, 2.0) as f32;
     if (ctx.zoom_factor() - z).abs() > 1e-3 {
         ctx.set_zoom_factor(z);
@@ -519,6 +522,10 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
             // unless a unit is Picas.
             PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {
                 ui.add_enabled_ui(picas_in_use(d), |ui| bool_row(ui, d, sp.key, sp.label));
+            }
+            // General › Show Tool Cards replaces the tool tips: dimmed while Show Tool Tips is off.
+            PrefKind::Bool if sp.key == "showToolCards" => {
+                ui.add_enabled_ui(d.bool("showToolTips"), |ui| bool_row(ui, d, sp.key, sp.label));
             }
             // Performance › Animated Zoom needs GPU Performance: dimmed while it is off.
             PrefKind::Bool if sp.key == "animatedZoom" => {

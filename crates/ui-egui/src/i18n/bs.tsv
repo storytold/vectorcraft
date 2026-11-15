@@ -3984,6 +3984,7 @@ theme	Appearance	Izgled
 	Show Pixel Grid (Above 600% Zoom)	Prikaži mrežu piksela (iznad 600% zumiranja)
 	Show Slice Numbers	Prikaži brojeve isječaka
 	Show The Home Screen When No Documents Are Open	Prikaži početni ekran kad nijedan dokument nije otvoren
+	Show Tool Cards	Prikaži kartice alata
 	Show Tool Tips	Prikaži opise alata
 	Size/Leading	Veličina/prored
 	Snapping Tolerance	Tolerancija hvatanja
@@ -7071,3 +7072,35 @@ shape	Open	Otvoren
 	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
 	Remove Fold Line Role	Ukloni vrstu linije
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Odabire cijele objekte i grupe radi pomjeranja, promjene veličine ili rotacije.
+	Selects anchor points and path segments to reshape a path.	Odabire sidrene tačke i segmente putanje radi promjene oblika putanje.
+	Draws paths point by point, with straight segments and smooth curves.	Crta putanje tačku po tačku, s ravnim segmentima i glatkim krivuljama.
+	Draws smooth curves through the points you click.	Crta glatke krivulje kroz tačke na koje kliknete.
+	Adds text at a point, or in a frame you drag.	Dodaje tekst u tački ili u okviru koji povučete.
+	Draws rectangles and squares.	Crta pravougaonike i kvadrate.
+	Draws rectangles with rounded corners.	Crta pravougaonike sa zaobljenim uglovima.
+	Draws ellipses and circles.	Crta elipse i krugove.
+	Draws polygons with sides of equal length.	Crta mnogouglove sa stranicama jednake dužine.
+	Draws stars.	Crta zvijezde.
+	Turns objects around a reference point.	Rotira objekte oko referentne tačke.
+	Flips objects across an axis through a reference point.	Zrcali objekte preko ose koja prolazi kroz referentnu tačku.
+	Resizes objects from a reference point.	Mijenja veličinu objekata od referentne tačke.
+	Slants objects from a reference point.	Naginje objekte od referentne tačke.
+	Moves the view of the document.	Pomjera prikaz dokumenta.
+	Magnifies or reduces the view.	Uvećava ili umanjuje prikaz.
+	Copies the color and other attributes of one object to the selection.	Kopira boju i druge atribute jednog objekta na odabir.
+	Sets the direction and length of a gradient.	Postavlja smjer i dužinu gradijenta.
+	Creates, selects and resizes artboards.	Kreira i odabire radne površine i mijenja im veličinu.
+	Changes the width of a stroke along its length.	Mijenja širinu poteza duž njegove dužine.
+	Bends art by dragging pins placed on it.	Savija crtež povlačenjem pribadača postavljenih na njega.
+	Pushes the outlines of paths in the direction you drag.	Gura obrise putanja u smjeru u kojem povlačite.
+	Twists the outlines of paths into swirls.	Uvija obrise putanja u vrtloge.
+	Pulls the outlines of paths in toward the brush.	Privlači obrise putanja prema četkici.
+	Pushes the outlines of paths out from the brush.	Gura obrise putanja prema van od četkice.
+	Adds curved details along the outlines of paths.	Dodaje zakrivljene detalje duž obrisa putanja.
+	Adds spiky details along the outlines of paths.	Dodaje šiljaste detalje duž obrisa putanja.
+	Adds wrinkles along the outlines of paths.	Dodaje bore duž obrisa putanja.
+	Moves, copies and resizes objects on the perspective grid.	Pomjera, kopira i mijenja veličinu objekata na mreži perspektive.
+	Makes a series of steps between two or more objects.	Pravi niz koraka između dva ili više objekata.
+	Places dimension lines that show measured lengths.	Postavlja kotne linije koje prikazuju izmjerene dužine.

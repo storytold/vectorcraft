@@ -3476,6 +3476,7 @@ digits	Malayalam	Малаялам
 	Show Thumbnails	Показать миниатюры
 	Show Tile Edge	Показать край плитки
 	Show Tints/Shades	Показать оттенки/тени
+	Show Tool Cards	Показывать карточки инструментов
 	Show Tool Tips	Показывать подсказки
 	Show Transparency Grid	Показать сетку прозрачности
 	Show Video Rulers	Показать видео-линейки
@@ -9709,3 +9710,35 @@ shape	Open	Открытый
 	Remove Fold Line Role	Убрать тип линии
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Выделяет объекты и группы целиком, чтобы перемещать, масштабировать или поворачивать их.
+	Selects anchor points and path segments to reshape a path.	Выделяет опорные точки и сегменты контура, чтобы изменить форму контура.
+	Draws paths point by point, with straight segments and smooth curves.	Рисует контуры точка за точкой, с прямыми сегментами и плавными кривыми.
+	Draws smooth curves through the points you click.	Рисует плавные кривые через точки, по которым вы щёлкаете.
+	Adds text at a point, or in a frame you drag.	Добавляет текст в точке или в рамке, которую вы растягиваете.
+	Draws rectangles and squares.	Рисует прямоугольники и квадраты.
+	Draws rectangles with rounded corners.	Рисует прямоугольники со скруглёнными углами.
+	Draws ellipses and circles.	Рисует эллипсы и окружности.
+	Draws polygons with sides of equal length.	Рисует многоугольники с равными сторонами.
+	Draws stars.	Рисует звёзды.
+	Turns objects around a reference point.	Поворачивает объекты вокруг опорной точки.
+	Flips objects across an axis through a reference point.	Зеркально отражает объекты относительно оси, проходящей через опорную точку.
+	Resizes objects from a reference point.	Масштабирует объекты от опорной точки.
+	Slants objects from a reference point.	Наклоняет объекты от опорной точки.
+	Moves the view of the document.	Перемещает вид документа.
+	Magnifies or reduces the view.	Увеличивает или уменьшает масштаб вида.
+	Copies the color and other attributes of one object to the selection.	Копирует цвет и другие атрибуты одного объекта на выделение.
+	Sets the direction and length of a gradient.	Задаёт направление и длину градиента.
+	Creates, selects and resizes artboards.	Создаёт, выделяет и масштабирует монтажные области.
+	Changes the width of a stroke along its length.	Изменяет ширину обводки по её длине.
+	Bends art by dragging pins placed on it.	Изгибает графику перетаскиванием булавок, расставленных на ней.
+	Pushes the outlines of paths in the direction you drag.	Сдвигает очертания контуров в направлении перетаскивания.
+	Twists the outlines of paths into swirls.	Закручивает очертания контуров в вихри.
+	Pulls the outlines of paths in toward the brush.	Стягивает очертания контуров к кисти.
+	Pushes the outlines of paths out from the brush.	Раздувает очертания контуров от кисти наружу.
+	Adds curved details along the outlines of paths.	Добавляет изогнутые детали вдоль очертаний контуров.
+	Adds spiky details along the outlines of paths.	Добавляет острые детали вдоль очертаний контуров.
+	Adds wrinkles along the outlines of paths.	Добавляет складки вдоль очертаний контуров.
+	Moves, copies and resizes objects on the perspective grid.	Перемещает, копирует и масштабирует объекты на сетке перспективы.
+	Makes a series of steps between two or more objects.	Создаёт ряд переходов между двумя или более объектами.
+	Places dimension lines that show measured lengths.	Размещает размерные линии с измеренными длинами.

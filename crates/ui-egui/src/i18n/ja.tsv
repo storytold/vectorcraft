@@ -3279,6 +3279,7 @@ mark-style	Japanese	日本式
 	Show Thumbnails	サムネールを表示
 	Show Tile Edge	タイルの境界線を表示
 	Show Tints/Shades	ティント／シェードを表示
+	Show Tool Cards	ツールカードを表示
 	Show Tool Tips	ツールヒントを表示
 	Show Vivid/Muted	ビビッド／ソフトを表示
 	Show Warm/Cool	暖色／寒色を表示
@@ -9312,3 +9313,35 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	オブジェクトやグループ全体を選択して、移動、サイズ変更、回転を行います。
+	Selects anchor points and path segments to reshape a path.	アンカーポイントとパスのセグメントを選択して、パスの形を変えます。
+	Draws paths point by point, with straight segments and smooth curves.	直線のセグメントと滑らかな曲線で、パスを 1 点ずつ描きます。
+	Draws smooth curves through the points you click.	クリックした点を通る滑らかな曲線を描きます。
+	Adds text at a point, or in a frame you drag.	クリックした位置、またはドラッグした枠の中にテキストを追加します。
+	Draws rectangles and squares.	長方形と正方形を描きます。
+	Draws rectangles with rounded corners.	角の丸い長方形を描きます。
+	Draws ellipses and circles.	楕円と円を描きます。
+	Draws polygons with sides of equal length.	辺の長さが等しい多角形を描きます。
+	Draws stars.	スターを描きます。
+	Turns objects around a reference point.	基準点を中心にオブジェクトを回転します。
+	Flips objects across an axis through a reference point.	基準点を通る軸でオブジェクトを反転します。
+	Resizes objects from a reference point.	基準点からオブジェクトのサイズを変更します。
+	Slants objects from a reference point.	基準点からオブジェクトを傾けます。
+	Moves the view of the document.	ドキュメントの表示を移動します。
+	Magnifies or reduces the view.	表示を拡大または縮小します。
+	Copies the color and other attributes of one object to the selection.	あるオブジェクトのカラーなどの属性を選択範囲にコピーします。
+	Sets the direction and length of a gradient.	グラデーションの方向と長さを設定します。
+	Creates, selects and resizes artboards.	アートボードを作成、選択、サイズ変更します。
+	Changes the width of a stroke along its length.	線の幅を長さに沿って変えます。
+	Bends art by dragging pins placed on it.	アートに置いたピンをドラッグして曲げます。
+	Pushes the outlines of paths in the direction you drag.	パスの輪郭をドラッグした方向に押し出します。
+	Twists the outlines of paths into swirls.	パスの輪郭を渦巻き状にねじります。
+	Pulls the outlines of paths in toward the brush.	パスの輪郭をブラシの方へ引き寄せます。
+	Pushes the outlines of paths out from the brush.	パスの輪郭をブラシから外側へ押し出します。
+	Adds curved details along the outlines of paths.	パスの輪郭に沿って弧状の細部を加えます。
+	Adds spiky details along the outlines of paths.	パスの輪郭に沿ってとがった細部を加えます。
+	Adds wrinkles along the outlines of paths.	パスの輪郭に沿ってしわを加えます。
+	Moves, copies and resizes objects on the perspective grid.	遠近グリッド上でオブジェクトを移動、コピー、サイズ変更します。
+	Makes a series of steps between two or more objects.	2 つ以上のオブジェクトの間に一連のステップを作ります。
+	Places dimension lines that show measured lengths.	測った長さを示す寸法線を配置します。

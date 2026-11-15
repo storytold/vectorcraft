@@ -3553,6 +3553,7 @@
 	Show Tile Edge	ટાઇલ કિનારી બતાવો
 	Show Tints/Shades	ટિન્ટ/શેડ બતાવો
 	Show Tool Group Labels	ટૂલ ગ્રૂપ લેબલ બતાવો
+	Show Tool Cards	ટૂલ કાર્ડ બતાવો
 	Show Tool Tips	ટૂલ ટિપ્સ બતાવો
 	Show Toolbar	ટૂલબાર બતાવો
 	Show Transparency Grid	પારદર્શિતા ગ્રિડ બતાવો
@@ -4798,3 +4799,35 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	આખા ઑબ્જેક્ટ અને જૂથો પસંદ કરે છે, જેથી તેમને ખસેડી, તેમનું કદ બદલી કે ફેરવી શકાય.
+	Selects anchor points and path segments to reshape a path.	પાથનો આકાર બદલવા માટે એન્કર બિંદુઓ અને પાથ સેગમેન્ટ પસંદ કરે છે.
+	Draws paths point by point, with straight segments and smooth curves.	સીધા સેગમેન્ટ અને સરળ વળાંકો સાથે બિંદુ-દર-બિંદુ પાથ દોરે છે.
+	Draws smooth curves through the points you click.	તમે ક્લિક કરો તે બિંદુઓમાંથી પસાર થતા સરળ વળાંકો દોરે છે.
+	Adds text at a point, or in a frame you drag.	કોઈ બિંદુ પર અથવા તમે ખેંચો તે ફ્રેમમાં ટેક્સ્ટ ઉમેરે છે.
+	Draws rectangles and squares.	લંબચોરસ અને ચોરસ દોરે છે.
+	Draws rectangles with rounded corners.	ગોળ ખૂણાવાળા લંબચોરસ દોરે છે.
+	Draws ellipses and circles.	લંબવર્તુળ અને વર્તુળ દોરે છે.
+	Draws polygons with sides of equal length.	સરખી લંબાઈની બાજુઓવાળા બહુકોણ દોરે છે.
+	Draws stars.	તારા દોરે છે.
+	Turns objects around a reference point.	ઑબ્જેક્ટને સંદર્ભ બિંદુની આસપાસ ફેરવે છે.
+	Flips objects across an axis through a reference point.	ઑબ્જેક્ટને સંદર્ભ બિંદુમાંથી પસાર થતી ધરી પર ઉલટાવે છે.
+	Resizes objects from a reference point.	સંદર્ભ બિંદુથી ઑબ્જેક્ટનું કદ બદલે છે.
+	Slants objects from a reference point.	સંદર્ભ બિંદુથી ઑબ્જેક્ટને ત્રાંસા કરે છે.
+	Moves the view of the document.	દસ્તાવેજના દૃશ્યને ખસેડે છે.
+	Magnifies or reduces the view.	દૃશ્યને મોટું અથવા નાનું કરે છે.
+	Copies the color and other attributes of one object to the selection.	એક ઑબ્જેક્ટનો રંગ અને અન્ય લક્ષણો પસંદગી પર કૉપિ કરે છે.
+	Sets the direction and length of a gradient.	ગ્રેડિયન્ટની દિશા અને લંબાઈ સેટ કરે છે.
+	Creates, selects and resizes artboards.	આર્ટબોર્ડ બનાવે છે, પસંદ કરે છે અને તેમનું કદ બદલે છે.
+	Changes the width of a stroke along its length.	સ્ટ્રોકની પહોળાઈ તેની લંબાઈ સાથે બદલે છે.
+	Bends art by dragging pins placed on it.	આર્ટ પર મૂકેલી પિન ખેંચીને તેને વાળે છે.
+	Pushes the outlines of paths in the direction you drag.	પાથની રૂપરેખાને તમે ખેંચો તે દિશામાં ધકેલે છે.
+	Twists the outlines of paths into swirls.	પાથની રૂપરેખાને વમળોમાં મરોડે છે.
+	Pulls the outlines of paths in toward the brush.	પાથની રૂપરેખાને બ્રશ તરફ અંદર ખેંચે છે.
+	Pushes the outlines of paths out from the brush.	પાથની રૂપરેખાને બ્રશથી બહારની તરફ ધકેલે છે.
+	Adds curved details along the outlines of paths.	પાથની રૂપરેખા સાથે વળાંકવાળી વિગતો ઉમેરે છે.
+	Adds spiky details along the outlines of paths.	પાથની રૂપરેખા સાથે અણીદાર વિગતો ઉમેરે છે.
+	Adds wrinkles along the outlines of paths.	પાથની રૂપરેખા સાથે કરચલીઓ ઉમેરે છે.
+	Moves, copies and resizes objects on the perspective grid.	પરસ્પેક્ટિવ ગ્રિડ પર ઑબ્જેક્ટને ખસેડે છે, કૉપિ કરે છે અને તેમનું કદ બદલે છે.
+	Makes a series of steps between two or more objects.	બે કે વધુ ઑબ્જેક્ટ વચ્ચે પગલાંની એક શ્રેણી બનાવે છે.
+	Places dimension lines that show measured lengths.	માપેલી લંબાઈ બતાવતી પરિમાણ રેખાઓ મૂકે છે.

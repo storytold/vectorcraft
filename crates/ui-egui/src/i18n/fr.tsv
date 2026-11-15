@@ -3436,6 +3436,7 @@ digits	Malayalam	Malayalam
 	Show Thumbnails	Afficher les vignettes
 	Show Tile Edge	Afficher le bord du carreau
 	Show Tints/Shades	Afficher les teintes claires/foncées
+	Show Tool Cards	Afficher les fiches d’outils
 	Show Tool Tips	Afficher les info-bulles
 	Show Transparency Grid	Afficher la grille de transparence
 	Show Video Rulers	Afficher les règles vidéo
@@ -9599,3 +9600,35 @@ breakText	Glyphs	Glyphes
 	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
 	Remove Fold Line Role	Supprimer le type de ligne
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Sélectionne des objets et des groupes entiers pour les déplacer, les redimensionner ou les faire pivoter.
+	Selects anchor points and path segments to reshape a path.	Sélectionne des points d’ancrage et des segments de tracé pour modifier la forme d’un tracé.
+	Draws paths point by point, with straight segments and smooth curves.	Dessine des tracés point par point, avec des segments droits et des courbes lisses.
+	Draws smooth curves through the points you click.	Dessine des courbes lisses passant par les points sur lesquels vous cliquez.
+	Adds text at a point, or in a frame you drag.	Ajoute du texte en un point ou dans un cadre que vous faites glisser.
+	Draws rectangles and squares.	Dessine des rectangles et des carrés.
+	Draws rectangles with rounded corners.	Dessine des rectangles aux angles arrondis.
+	Draws ellipses and circles.	Dessine des ellipses et des cercles.
+	Draws polygons with sides of equal length.	Dessine des polygones dont les côtés sont de même longueur.
+	Draws stars.	Dessine des étoiles.
+	Turns objects around a reference point.	Fait pivoter des objets autour d’un point de référence.
+	Flips objects across an axis through a reference point.	Retourne des objets par rapport à un axe passant par un point de référence.
+	Resizes objects from a reference point.	Redimensionne des objets à partir d’un point de référence.
+	Slants objects from a reference point.	Incline des objets à partir d’un point de référence.
+	Moves the view of the document.	Déplace la vue du document.
+	Magnifies or reduces the view.	Agrandit ou réduit la vue.
+	Copies the color and other attributes of one object to the selection.	Copie la couleur et les autres attributs d’un objet vers la sélection.
+	Sets the direction and length of a gradient.	Définit la direction et la longueur d’un dégradé.
+	Creates, selects and resizes artboards.	Crée, sélectionne et redimensionne des plans de travail.
+	Changes the width of a stroke along its length.	Modifie l’épaisseur d’un contour sur sa longueur.
+	Bends art by dragging pins placed on it.	Déforme l’illustration en faisant glisser des épingles placées dessus.
+	Pushes the outlines of paths in the direction you drag.	Pousse les contours des tracés dans la direction du glissement.
+	Twists the outlines of paths into swirls.	Tord les contours des tracés en tourbillons.
+	Pulls the outlines of paths in toward the brush.	Resserre les contours des tracés vers le pinceau.
+	Pushes the outlines of paths out from the brush.	Gonfle les contours des tracés à partir du pinceau.
+	Adds curved details along the outlines of paths.	Ajoute des détails arrondis le long des contours des tracés.
+	Adds spiky details along the outlines of paths.	Ajoute des détails pointus le long des contours des tracés.
+	Adds wrinkles along the outlines of paths.	Ajoute des plis le long des contours des tracés.
+	Moves, copies and resizes objects on the perspective grid.	Déplace, copie et redimensionne des objets sur la grille de perspective.
+	Makes a series of steps between two or more objects.	Crée une série d’étapes entre deux objets ou plus.
+	Places dimension lines that show measured lengths.	Place des lignes de cote qui indiquent des longueurs mesurées.

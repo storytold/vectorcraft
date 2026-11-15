@@ -3301,6 +3301,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Thumbnails	显示缩略图
 	Show Tile Edge	显示拼贴边缘
 	Show Tints/Shades	显示浅色调/深色调
+	Show Tool Cards	显示工具卡片
 	Show Tool Tips	显示工具提示
 	Show Transparency Grid	显示透明网格
 	Show Video Rulers	显示视频标尺
@@ -9452,3 +9453,35 @@ breakText	Glyphs	字形
 	Open a document to mark its fold lines.	打开文档以标记其折线。
 	Remove Fold Line Role	移除线条类型
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	选择整个对象和编组，以移动、缩放或旋转它们。
+	Selects anchor points and path segments to reshape a path.	选择锚点和路径段，以改变路径的形状。
+	Draws paths point by point, with straight segments and smooth curves.	逐点绘制路径，包括直线段和平滑曲线。
+	Draws smooth curves through the points you click.	绘制经过所点击各点的平滑曲线。
+	Adds text at a point, or in a frame you drag.	在某一点或拖出的文本框中添加文字。
+	Draws rectangles and squares.	绘制矩形和正方形。
+	Draws rectangles with rounded corners.	绘制圆角矩形。
+	Draws ellipses and circles.	绘制椭圆和圆形。
+	Draws polygons with sides of equal length.	绘制各边等长的多边形。
+	Draws stars.	绘制星形。
+	Turns objects around a reference point.	围绕参考点旋转对象。
+	Flips objects across an axis through a reference point.	沿经过参考点的轴镜像对象。
+	Resizes objects from a reference point.	从参考点缩放对象。
+	Slants objects from a reference point.	从参考点倾斜对象。
+	Moves the view of the document.	移动文档的视图。
+	Magnifies or reduces the view.	放大或缩小视图。
+	Copies the color and other attributes of one object to the selection.	将一个对象的颜色和其他属性复制到所选对象。
+	Sets the direction and length of a gradient.	设置渐变的方向和长度。
+	Creates, selects and resizes artboards.	创建、选择画板并调整其大小。
+	Changes the width of a stroke along its length.	沿描边的长度改变其宽度。
+	Bends art by dragging pins placed on it.	拖动放在图稿上的图钉来弯曲图稿。
+	Pushes the outlines of paths in the direction you drag.	沿拖动方向推动路径的轮廓。
+	Twists the outlines of paths into swirls.	将路径的轮廓扭转成漩涡。
+	Pulls the outlines of paths in toward the brush.	将路径的轮廓向画笔收缩。
+	Pushes the outlines of paths out from the brush.	将路径的轮廓从画笔向外膨胀。
+	Adds curved details along the outlines of paths.	沿路径的轮廓添加弧形细节。
+	Adds spiky details along the outlines of paths.	沿路径的轮廓添加尖刺细节。
+	Adds wrinkles along the outlines of paths.	沿路径的轮廓添加皱褶。
+	Moves, copies and resizes objects on the perspective grid.	在透视网格上移动、复制和缩放对象。
+	Makes a series of steps between two or more objects.	在两个或多个对象之间生成一系列步骤。
+	Places dimension lines that show measured lengths.	放置显示测量长度的尺寸线。

@@ -352,7 +352,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                         app.select_tool(shown.id);
                     }
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(shown)));
-                    resp.on_hover_text(tip(shown));
+                    card::hover(resp, shown, card::Side::Beside, Some(tip(shown)));
                 }
             });
             i += row.len();
@@ -877,6 +877,9 @@ fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Op
             ui.painter().galley(pos2(r.right() - ROW_END - sc.size().x, r.center().y - sc.size().y / 2.0), sc, color);
         }
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(tool)));
+        // A row already shows the name and shortcut: its card adds the rest, and without one it has
+        // no tool tip.
+        let resp = card::hover(resp, tool, card::Side::Row, None);
         if resp.clicked() {
             chosen = Some(tool.id);
         }
@@ -945,7 +948,7 @@ fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: O
         let ir = egui::Rect::from_center_size(r.center(), vec2(18.0, 18.0));
         icons::paint(ui, icons::tool_icon(tool.icon), ir, if active == tool.id { t.text_strong } else { t.icon });
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), active == tool.id, tip(tool)));
-        if resp.on_hover_text(tip(tool)).clicked() {
+        if card::hover(resp, tool, card::Side::Below, Some(tip(tool))).clicked() {
             chosen = Some(tool.id);
         }
         if locate == Some(tool.id) {
@@ -1182,5 +1185,6 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     fit.separator(ui);
 }
 
+pub(crate) mod card;
 #[cfg(test)]
 pub(crate) mod tests;

@@ -2876,6 +2876,7 @@ digits	Malayalam	Malaiala
 	Show Thumbnails	Mostrar Miniaturas
 	Show Tile Edge	Mostrar Borda do Bloco
 	Show Tints/Shades	Mostrar Tons/Sombras
+	Show Tool Cards	Mostrar Cartões de Ferramenta
 	Show Tool Tips	Mostrar Dicas de Ferramenta
 	Show Transparency Grid	Mostrar Grade de Transparência
 	Show Video Rulers	Mostrar Réguas de Vídeo
@@ -9684,3 +9685,35 @@ swatch	Yellow Green	Verde-amarelado
 	No objects are selected.	Nenhum objeto selecionado.
 	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
 	Remove Fold Line Role	Remover Tipo de Linha
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Seleciona objetos e grupos inteiros para movê-los, redimensioná-los ou girá-los.
+	Selects anchor points and path segments to reshape a path.	Seleciona pontos de ancoragem e segmentos de caminho para remodelar um caminho.
+	Draws paths point by point, with straight segments and smooth curves.	Desenha caminhos ponto a ponto, com segmentos retos e curvas suaves.
+	Draws smooth curves through the points you click.	Desenha curvas suaves que passam pelos pontos em que você clica.
+	Adds text at a point, or in a frame you drag.	Adiciona texto em um ponto ou em um quadro que você arrasta.
+	Draws rectangles and squares.	Desenha retângulos e quadrados.
+	Draws rectangles with rounded corners.	Desenha retângulos com cantos arredondados.
+	Draws ellipses and circles.	Desenha elipses e círculos.
+	Draws polygons with sides of equal length.	Desenha polígonos com lados de mesmo comprimento.
+	Draws stars.	Desenha estrelas.
+	Turns objects around a reference point.	Gira objetos em torno de um ponto de referência.
+	Flips objects across an axis through a reference point.	Reflete objetos em um eixo que passa por um ponto de referência.
+	Resizes objects from a reference point.	Redimensiona objetos a partir de um ponto de referência.
+	Slants objects from a reference point.	Inclina objetos a partir de um ponto de referência.
+	Moves the view of the document.	Move a visualização do documento.
+	Magnifies or reduces the view.	Amplia ou reduz a visualização.
+	Copies the color and other attributes of one object to the selection.	Copia a cor e outros atributos de um objeto para a seleção.
+	Sets the direction and length of a gradient.	Define a direção e o comprimento de um degradê.
+	Creates, selects and resizes artboards.	Cria, seleciona e redimensiona mesas de trabalho.
+	Changes the width of a stroke along its length.	Altera a largura de um traçado ao longo do seu comprimento.
+	Bends art by dragging pins placed on it.	Deforma a arte arrastando alfinetes colocados nela.
+	Pushes the outlines of paths in the direction you drag.	Empurra os contornos dos caminhos na direção em que você arrasta.
+	Twists the outlines of paths into swirls.	Torce os contornos dos caminhos em espirais.
+	Pulls the outlines of paths in toward the brush.	Puxa os contornos dos caminhos em direção ao pincel.
+	Pushes the outlines of paths out from the brush.	Empurra os contornos dos caminhos para fora a partir do pincel.
+	Adds curved details along the outlines of paths.	Adiciona detalhes curvos ao longo dos contornos dos caminhos.
+	Adds spiky details along the outlines of paths.	Adiciona detalhes pontiagudos ao longo dos contornos dos caminhos.
+	Adds wrinkles along the outlines of paths.	Adiciona rugas ao longo dos contornos dos caminhos.
+	Moves, copies and resizes objects on the perspective grid.	Move, copia e redimensiona objetos na grade de perspectiva.
+	Makes a series of steps between two or more objects.	Cria uma série de etapas entre dois ou mais objetos.
+	Places dimension lines that show measured lengths.	Insere linhas de cota que mostram comprimentos medidos.

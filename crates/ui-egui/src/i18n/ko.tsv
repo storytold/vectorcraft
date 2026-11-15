@@ -3268,6 +3268,7 @@ mark-style	Japanese	일본식
 	Show Thumbnails	축소판 표시
 	Show Tile Edge	타일 가장자리 표시
 	Show Tints/Shades	밝은/어두운 색조 표시
+	Show Tool Cards	도구 카드 표시
 	Show Tool Tips	도구 설명 표시
 	Show Vivid/Muted	선명/탁한 색상 표시
 	Show Warm/Cool	따뜻한/차가운 색상 표시
@@ -9208,3 +9209,35 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	개체와 그룹 전체를 선택하여 이동하거나 크기를 조정하거나 회전합니다.
+	Selects anchor points and path segments to reshape a path.	기준점과 패스 세그먼트를 선택하여 패스의 모양을 바꿉니다.
+	Draws paths point by point, with straight segments and smooth curves.	직선 세그먼트와 부드러운 곡선으로 패스를 한 점씩 그립니다.
+	Draws smooth curves through the points you click.	클릭한 점을 지나는 부드러운 곡선을 그립니다.
+	Adds text at a point, or in a frame you drag.	한 점에 또는 드래그한 프레임 안에 텍스트를 추가합니다.
+	Draws rectangles and squares.	직사각형과 정사각형을 그립니다.
+	Draws rectangles with rounded corners.	모서리가 둥근 직사각형을 그립니다.
+	Draws ellipses and circles.	타원과 원을 그립니다.
+	Draws polygons with sides of equal length.	변의 길이가 같은 다각형을 그립니다.
+	Draws stars.	별을 그립니다.
+	Turns objects around a reference point.	기준점을 중심으로 개체를 회전합니다.
+	Flips objects across an axis through a reference point.	기준점을 지나는 축을 기준으로 개체를 반사합니다.
+	Resizes objects from a reference point.	기준점에서 개체의 크기를 조정합니다.
+	Slants objects from a reference point.	기준점에서 개체를 기울입니다.
+	Moves the view of the document.	문서 보기를 이동합니다.
+	Magnifies or reduces the view.	보기를 확대하거나 축소합니다.
+	Copies the color and other attributes of one object to the selection.	한 개체의 색상과 기타 속성을 선택 항목에 복사합니다.
+	Sets the direction and length of a gradient.	그레이디언트의 방향과 길이를 설정합니다.
+	Creates, selects and resizes artboards.	아트보드를 만들고 선택하고 크기를 조정합니다.
+	Changes the width of a stroke along its length.	선의 폭을 길이를 따라 바꿉니다.
+	Bends art by dragging pins placed on it.	아트에 놓은 핀을 드래그하여 구부립니다.
+	Pushes the outlines of paths in the direction you drag.	패스의 윤곽을 드래그하는 방향으로 밀어냅니다.
+	Twists the outlines of paths into swirls.	패스의 윤곽을 소용돌이 모양으로 비틉니다.
+	Pulls the outlines of paths in toward the brush.	패스의 윤곽을 브러시 쪽으로 끌어당깁니다.
+	Pushes the outlines of paths out from the brush.	패스의 윤곽을 브러시에서 바깥쪽으로 밀어냅니다.
+	Adds curved details along the outlines of paths.	패스의 윤곽을 따라 곡선 모양의 세부를 추가합니다.
+	Adds spiky details along the outlines of paths.	패스의 윤곽을 따라 뾰족한 세부를 추가합니다.
+	Adds wrinkles along the outlines of paths.	패스의 윤곽을 따라 주름을 추가합니다.
+	Moves, copies and resizes objects on the perspective grid.	원근 격자에서 개체를 이동, 복사하고 크기를 조정합니다.
+	Makes a series of steps between two or more objects.	두 개 이상의 개체 사이에 일련의 단계를 만듭니다.
+	Places dimension lines that show measured lengths.	측정한 길이를 보여 주는 치수선을 배치합니다.

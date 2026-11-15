@@ -1351,7 +1351,7 @@ fn slot_button(ui: &mut egui::Ui, t: &Tokens, p: &Press, slot: &[String], action
     }
     let tip = crate::toolbar::tip(shown);
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, &tip));
-    resp.on_hover_text(tip);
+    crate::toolbar::card::hover(resp, shown, crate::toolbar::card::Side::Beside, Some(tip));
     Some((rect, shown.id))
 }
 

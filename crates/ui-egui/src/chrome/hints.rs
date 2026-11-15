@@ -206,6 +206,17 @@ pub(super) fn hint_segments(tool: &str) -> Vec<(Cow<'static, str>, bool)> {
             &search
         }
     };
+    shown_segments(segments)
+}
+
+/// The hint bar's segments for `tool` as [`hint_segments`] shows them, the Zoom tool's for animated
+/// zoom when `animated_zoom` is on; none for a tool without a hint of its own.
+pub(crate) fn tool_hint(tool: &str, animated_zoom: bool) -> Option<Vec<(Cow<'static, str>, bool)>> {
+    let tool = if tool == "zoom" && animated_zoom { ANIMATED_ZOOM_HINT } else { tool };
+    hint_for(tool).map(shown_segments)
+}
+
+fn shown_segments(segments: &[(&'static str, bool)]) -> Vec<(Cow<'static, str>, bool)> {
     segments
         .iter()
         .map(|&(text, bold)| {

@@ -4311,6 +4311,7 @@ theme	Appearance	Vormgeving
 	Show Pixel Grid (Above 600% Zoom)	Pixelraster weergeven (boven 600% zoom)
 	Show Slice Numbers	Slicenummers weergeven
 	Show The Home Screen When No Documents Are Open	Startscherm tonen als er geen documenten geopend zijn
+	Show Tool Cards	Gereedschapskaarten tonen
 	Show Tool Tips	Tooltips tonen
 	Size/Leading	Tekengrootte/Regelafstand
 	Snapping Tolerance	Snapping-tolerantie
@@ -9646,3 +9647,35 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Selecteert hele objecten en groepen om ze te verplaatsen, te schalen of te draaien.
+	Selects anchor points and path segments to reshape a path.	Selecteert ankerpunten en padsegmenten om de vorm van een pad te wijzigen.
+	Draws paths point by point, with straight segments and smooth curves.	Tekent paden punt voor punt, met rechte segmenten en vloeiende curven.
+	Draws smooth curves through the points you click.	Tekent vloeiende curven door de punten waarop u klikt.
+	Adds text at a point, or in a frame you drag.	Voegt tekst toe op een punt of in een kader dat u sleept.
+	Draws rectangles and squares.	Tekent rechthoeken en vierkanten.
+	Draws rectangles with rounded corners.	Tekent rechthoeken met afgeronde hoeken.
+	Draws ellipses and circles.	Tekent ellipsen en cirkels.
+	Draws polygons with sides of equal length.	Tekent veelhoeken met zijden van gelijke lengte.
+	Draws stars.	Tekent sterren.
+	Turns objects around a reference point.	Draait objecten rond een referentiepunt.
+	Flips objects across an axis through a reference point.	Spiegelt objecten over een as door een referentiepunt.
+	Resizes objects from a reference point.	Schaalt objecten vanaf een referentiepunt.
+	Slants objects from a reference point.	Schuint objecten af vanaf een referentiepunt.
+	Moves the view of the document.	Verschuift de weergave van het document.
+	Magnifies or reduces the view.	Vergroot of verkleint de weergave.
+	Copies the color and other attributes of one object to the selection.	Kopieert de kleur en andere kenmerken van een object naar de selectie.
+	Sets the direction and length of a gradient.	Stelt de richting en lengte van een verloop in.
+	Creates, selects and resizes artboards.	Maakt, selecteert en schaalt tekengebieden.
+	Changes the width of a stroke along its length.	Wijzigt de breedte van een contour over de lengte ervan.
+	Bends art by dragging pins placed on it.	Buigt illustraties door er geplaatste spelden te slepen.
+	Pushes the outlines of paths in the direction you drag.	Duwt de omtrekken van paden in de richting waarin u sleept.
+	Twists the outlines of paths into swirls.	Draait de omtrekken van paden tot wervelingen.
+	Pulls the outlines of paths in toward the brush.	Trekt de omtrekken van paden naar het penseel toe.
+	Pushes the outlines of paths out from the brush.	Duwt de omtrekken van paden van het penseel af naar buiten.
+	Adds curved details along the outlines of paths.	Voegt gebogen details toe langs de omtrekken van paden.
+	Adds spiky details along the outlines of paths.	Voegt puntige details toe langs de omtrekken van paden.
+	Adds wrinkles along the outlines of paths.	Voegt rimpels toe langs de omtrekken van paden.
+	Moves, copies and resizes objects on the perspective grid.	Verplaatst, kopieert en schaalt objecten op het perspectiefraster.
+	Makes a series of steps between two or more objects.	Maakt een reeks stappen tussen twee of meer objecten.
+	Places dimension lines that show measured lengths.	Plaatst maatlijnen die gemeten lengten tonen.

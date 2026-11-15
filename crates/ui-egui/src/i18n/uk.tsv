@@ -3479,6 +3479,7 @@ digits	Malayalam	Малаялам
 	Show Thumbnails	Показати мініатюри
 	Show Tile Edge	Показати край плитки
 	Show Tints/Shades	Показати відтінки/тіні
+	Show Tool Cards	Показувати картки інструментів
 	Show Tool Tips	Показувати підказки
 	Show Transparency Grid	Показати сітку прозорості
 	Show Video Rulers	Показати відео-лінійки
@@ -9220,3 +9221,35 @@ breakText	Glyphs	Гліфи
 	No objects are selected.	Об’єкти не виділено.
 	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
 	Remove Fold Line Role	Прибрати тип лінії
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Виділяє об’єкти й групи цілком, щоб переміщувати, масштабувати або обертати їх.
+	Selects anchor points and path segments to reshape a path.	Виділяє опорні точки й сегменти контуру, щоб змінити форму контуру.
+	Draws paths point by point, with straight segments and smooth curves.	Малює контури точка за точкою, з прямими сегментами й плавними кривими.
+	Draws smooth curves through the points you click.	Малює плавні криві через точки, на яких ви клацаєте.
+	Adds text at a point, or in a frame you drag.	Додає текст у точці або в рамці, яку ви розтягуєте.
+	Draws rectangles and squares.	Малює прямокутники й квадрати.
+	Draws rectangles with rounded corners.	Малює прямокутники із заокругленими кутами.
+	Draws ellipses and circles.	Малює еліпси й кола.
+	Draws polygons with sides of equal length.	Малює багатокутники з рівними сторонами.
+	Draws stars.	Малює зірки.
+	Turns objects around a reference point.	Обертає об’єкти навколо опорної точки.
+	Flips objects across an axis through a reference point.	Дзеркально відбиває об’єкти відносно осі, що проходить через опорну точку.
+	Resizes objects from a reference point.	Масштабує об’єкти від опорної точки.
+	Slants objects from a reference point.	Нахиляє об’єкти від опорної точки.
+	Moves the view of the document.	Переміщує вигляд документа.
+	Magnifies or reduces the view.	Збільшує або зменшує масштаб вигляду.
+	Copies the color and other attributes of one object to the selection.	Копіює колір та інші атрибути одного об’єкта на виділення.
+	Sets the direction and length of a gradient.	Задає напрямок і довжину градієнта.
+	Creates, selects and resizes artboards.	Створює, виділяє й масштабує монтажні області.
+	Changes the width of a stroke along its length.	Змінює ширину обведення вздовж його довжини.
+	Bends art by dragging pins placed on it.	Згинає графіку перетягуванням шпильок, розставлених на ній.
+	Pushes the outlines of paths in the direction you drag.	Зсуває обриси контурів у напрямку перетягування.
+	Twists the outlines of paths into swirls.	Закручує обриси контурів у вихори.
+	Pulls the outlines of paths in toward the brush.	Стягує обриси контурів до пензля.
+	Pushes the outlines of paths out from the brush.	Роздуває обриси контурів від пензля назовні.
+	Adds curved details along the outlines of paths.	Додає вигнуті деталі вздовж обрисів контурів.
+	Adds spiky details along the outlines of paths.	Додає гострі деталі вздовж обрисів контурів.
+	Adds wrinkles along the outlines of paths.	Додає складки вздовж обрисів контурів.
+	Moves, copies and resizes objects on the perspective grid.	Переміщує, копіює й масштабує об’єкти на сітці перспективи.
+	Makes a series of steps between two or more objects.	Створює ряд переходів між двома або більше об’єктами.
+	Places dimension lines that show measured lengths.	Розміщує розмірні лінії з виміряними довжинами.

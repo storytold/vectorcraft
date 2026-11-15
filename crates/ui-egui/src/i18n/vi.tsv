@@ -3843,6 +3843,7 @@ mark-style	Japanese	Kiểu Nhật
 	Show Tile Edge	Hiện cạnh ô
 	Show Tints/Shades	Hiện tông/bóng màu
 	Show Tool Group Labels	Hiện nhãn nhóm công cụ
+	Show Tool Cards	Hiện thẻ công cụ
 	Show Tool Tips	Hiện chú thích công cụ
 	Show Transparency Grid	Hiện lưới trong suốt
 	Show Video Rulers	Hiện thước video
@@ -7424,3 +7425,35 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Chọn toàn bộ đối tượng và nhóm để di chuyển, đổi kích thước hoặc xoay chúng.
+	Selects anchor points and path segments to reshape a path.	Chọn điểm neo và đoạn đường dẫn để thay đổi hình dạng một đường dẫn.
+	Draws paths point by point, with straight segments and smooth curves.	Vẽ đường dẫn từng điểm một, với các đoạn thẳng và đường cong mượt.
+	Draws smooth curves through the points you click.	Vẽ đường cong mượt đi qua các điểm bạn nhấp.
+	Adds text at a point, or in a frame you drag.	Thêm văn bản tại một điểm hoặc trong một khung bạn kéo.
+	Draws rectangles and squares.	Vẽ hình chữ nhật và hình vuông.
+	Draws rectangles with rounded corners.	Vẽ hình chữ nhật bo góc.
+	Draws ellipses and circles.	Vẽ hình elip và hình tròn.
+	Draws polygons with sides of equal length.	Vẽ đa giác có các cạnh dài bằng nhau.
+	Draws stars.	Vẽ ngôi sao.
+	Turns objects around a reference point.	Xoay đối tượng quanh một điểm tham chiếu.
+	Flips objects across an axis through a reference point.	Lật đối tượng qua một trục đi qua điểm tham chiếu.
+	Resizes objects from a reference point.	Đổi kích thước đối tượng từ một điểm tham chiếu.
+	Slants objects from a reference point.	Làm nghiêng đối tượng từ một điểm tham chiếu.
+	Moves the view of the document.	Di chuyển khung nhìn của tài liệu.
+	Magnifies or reduces the view.	Phóng to hoặc thu nhỏ khung nhìn.
+	Copies the color and other attributes of one object to the selection.	Sao chép màu và các thuộc tính khác của một đối tượng sang vùng chọn.
+	Sets the direction and length of a gradient.	Đặt hướng và độ dài của một dải chuyển sắc.
+	Creates, selects and resizes artboards.	Tạo, chọn và đổi kích thước bảng vẽ.
+	Changes the width of a stroke along its length.	Thay đổi độ rộng của nét dọc theo chiều dài của nó.
+	Bends art by dragging pins placed on it.	Uốn hình vẽ bằng cách kéo các ghim đặt trên đó.
+	Pushes the outlines of paths in the direction you drag.	Đẩy đường viền của đường dẫn theo hướng bạn kéo.
+	Twists the outlines of paths into swirls.	Xoắn đường viền của đường dẫn thành các vòng xoáy.
+	Pulls the outlines of paths in toward the brush.	Kéo đường viền của đường dẫn vào phía cọ.
+	Pushes the outlines of paths out from the brush.	Đẩy đường viền của đường dẫn ra xa cọ.
+	Adds curved details along the outlines of paths.	Thêm chi tiết cong dọc theo đường viền của đường dẫn.
+	Adds spiky details along the outlines of paths.	Thêm chi tiết nhọn dọc theo đường viền của đường dẫn.
+	Adds wrinkles along the outlines of paths.	Thêm nếp nhăn dọc theo đường viền của đường dẫn.
+	Moves, copies and resizes objects on the perspective grid.	Di chuyển, sao chép và đổi kích thước đối tượng trên lưới phối cảnh.
+	Makes a series of steps between two or more objects.	Tạo một loạt bước chuyển giữa hai hoặc nhiều đối tượng.
+	Places dimension lines that show measured lengths.	Đặt các đường kích thước hiển thị độ dài đo được.

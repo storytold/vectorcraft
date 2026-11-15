@@ -3410,6 +3410,7 @@ digits	Malayalam	Malayalam
 	Show Thumbnails	Miniaturen einblenden
 	Show Tile Edge	Kachelkante einblenden
 	Show Tints/Shades	Aufhellungen/Abdunklungen einblenden
+	Show Tool Cards	Werkzeugkarten anzeigen
 	Show Tool Tips	Tooltips anzeigen
 	Show Transparency Grid	Transparenzraster einblenden
 	Show Video Rulers	Videolineale einblenden
@@ -9211,3 +9212,35 @@ breakText	Glyphs	Glyphen
 	No objects are selected.	Es sind keine Objekte ausgewählt.
 	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
 	Remove Fold Line Role	Linienart entfernen
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Wählt ganze Objekte und Gruppen aus, um sie zu verschieben, zu skalieren oder zu drehen.
+	Selects anchor points and path segments to reshape a path.	Wählt Ankerpunkte und Pfadsegmente aus, um einen Pfad umzuformen.
+	Draws paths point by point, with straight segments and smooth curves.	Zeichnet Pfade Punkt für Punkt, mit geraden Segmenten und glatten Kurven.
+	Draws smooth curves through the points you click.	Zeichnet glatte Kurven durch die Punkte, die Sie klicken.
+	Adds text at a point, or in a frame you drag.	Fügt Text an einem Punkt oder in einem aufgezogenen Rahmen ein.
+	Draws rectangles and squares.	Zeichnet Rechtecke und Quadrate.
+	Draws rectangles with rounded corners.	Zeichnet Rechtecke mit abgerundeten Ecken.
+	Draws ellipses and circles.	Zeichnet Ellipsen und Kreise.
+	Draws polygons with sides of equal length.	Zeichnet Polygone mit gleich langen Seiten.
+	Draws stars.	Zeichnet Sterne.
+	Turns objects around a reference point.	Dreht Objekte um einen Referenzpunkt.
+	Flips objects across an axis through a reference point.	Spiegelt Objekte an einer Achse durch einen Referenzpunkt.
+	Resizes objects from a reference point.	Skaliert Objekte von einem Referenzpunkt aus.
+	Slants objects from a reference point.	Neigt Objekte von einem Referenzpunkt aus.
+	Moves the view of the document.	Verschiebt die Ansicht des Dokuments.
+	Magnifies or reduces the view.	Vergrößert oder verkleinert die Ansicht.
+	Copies the color and other attributes of one object to the selection.	Überträgt die Farbe und andere Attribute eines Objekts auf die Auswahl.
+	Sets the direction and length of a gradient.	Legt Richtung und Länge eines Verlaufs fest.
+	Creates, selects and resizes artboards.	Erstellt, wählt und skaliert Zeichenflächen.
+	Changes the width of a stroke along its length.	Ändert die Breite einer Kontur entlang ihrer Länge.
+	Bends art by dragging pins placed on it.	Verbiegt Bildmaterial durch Ziehen von Pins, die darauf gesetzt sind.
+	Pushes the outlines of paths in the direction you drag.	Schiebt die Umrisse von Pfaden in die Richtung, in die Sie ziehen.
+	Twists the outlines of paths into swirls.	Verdreht die Umrisse von Pfaden zu Wirbeln.
+	Pulls the outlines of paths in toward the brush.	Zieht die Umrisse von Pfaden zum Pinsel hin zusammen.
+	Pushes the outlines of paths out from the brush.	Drückt die Umrisse von Pfaden vom Pinsel weg nach außen.
+	Adds curved details along the outlines of paths.	Fügt den Umrissen von Pfaden gebogene Details hinzu.
+	Adds spiky details along the outlines of paths.	Fügt den Umrissen von Pfaden spitze Details hinzu.
+	Adds wrinkles along the outlines of paths.	Fügt den Umrissen von Pfaden Falten hinzu.
+	Moves, copies and resizes objects on the perspective grid.	Verschiebt, kopiert und skaliert Objekte im Perspektivenraster.
+	Makes a series of steps between two or more objects.	Erzeugt eine Reihe von Stufen zwischen zwei oder mehr Objekten.
+	Places dimension lines that show measured lengths.	Platziert Bemaßungslinien, die gemessene Längen anzeigen.

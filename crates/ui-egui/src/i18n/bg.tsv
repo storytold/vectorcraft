@@ -3351,6 +3351,7 @@ digits	Malayalam	Малаялам
 	Show Thumbnails	Показване на миниатюри
 	Show Tile Edge	Показване на ръба на плочката
 	Show Tints/Shades	Показване на нюанси/затъмнения
+	Show Tool Cards	Показване на карти на инструментите
 	Show Tool Tips	Показване на подсказки
 	Show Transparency Grid	Показване на шахматна дъска за прозрачност
 	Show Video Rulers	Показване на видеолинийки
@@ -7018,3 +7019,35 @@ breakText	Glyphs	Глифи
 	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
 	Remove Fold Line Role	Премахни вида на линията
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Избира цели обекти и групи, за да ги премествате, оразмерявате или завъртате.
+	Selects anchor points and path segments to reshape a path.	Избира опорни точки и сегменти от път, за да промените формата на пътя.
+	Draws paths point by point, with straight segments and smooth curves.	Рисува пътища точка по точка, с прави сегменти и плавни криви.
+	Draws smooth curves through the points you click.	Рисува плавни криви през точките, върху които щраквате.
+	Adds text at a point, or in a frame you drag.	Добавя текст в точка или в рамка, която изтегляте.
+	Draws rectangles and squares.	Рисува правоъгълници и квадрати.
+	Draws rectangles with rounded corners.	Рисува правоъгълници със закръглени ъгли.
+	Draws ellipses and circles.	Рисува елипси и окръжности.
+	Draws polygons with sides of equal length.	Рисува многоъгълници с равни страни.
+	Draws stars.	Рисува звезди.
+	Turns objects around a reference point.	Завърта обекти около опорна точка.
+	Flips objects across an axis through a reference point.	Огледално обръща обекти спрямо ос през опорна точка.
+	Resizes objects from a reference point.	Оразмерява обекти от опорна точка.
+	Slants objects from a reference point.	Наклонява обекти от опорна точка.
+	Moves the view of the document.	Премества изгледа на документа.
+	Magnifies or reduces the view.	Увеличава или намалява изгледа.
+	Copies the color and other attributes of one object to the selection.	Копира цвета и другите атрибути на един обект върху избраното.
+	Sets the direction and length of a gradient.	Задава посоката и дължината на градиент.
+	Creates, selects and resizes artboards.	Създава, избира и оразмерява работни площи.
+	Changes the width of a stroke along its length.	Променя ширината на щрих по дължината му.
+	Bends art by dragging pins placed on it.	Огъва графиката чрез плъзгане на поставени върху нея карфици.
+	Pushes the outlines of paths in the direction you drag.	Избутва очертанията на пътищата в посоката на плъзгане.
+	Twists the outlines of paths into swirls.	Усуква очертанията на пътищата във вихри.
+	Pulls the outlines of paths in toward the brush.	Придърпва очертанията на пътищата към четката.
+	Pushes the outlines of paths out from the brush.	Избутва очертанията на пътищата навън от четката.
+	Adds curved details along the outlines of paths.	Добавя извити детайли по очертанията на пътищата.
+	Adds spiky details along the outlines of paths.	Добавя остри детайли по очертанията на пътищата.
+	Adds wrinkles along the outlines of paths.	Добавя гънки по очертанията на пътищата.
+	Moves, copies and resizes objects on the perspective grid.	Премества, копира и оразмерява обекти в перспективната мрежа.
+	Makes a series of steps between two or more objects.	Създава поредица от стъпки между два или повече обекта.
+	Places dimension lines that show measured lengths.	Поставя размерни линии, които показват измерени дължини.

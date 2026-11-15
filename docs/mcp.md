@@ -6541,6 +6541,9 @@ wheel zooms about the pointer, Shift-wheel scrolls up and down, Cmd/Ctrl-wheel s
 `ui.wheel` turns the wheel), `trackpadRotateView` (on by default: a two-finger rotation on a Mac trackpad, in the
 macOS app or in Safari, turns the view about the pointer once it reaches 5°; with it off, the gesture does not turn
 the view), `zoomToSelection` (on: Zoom In and Zoom Out centre the selection), `showToolTips`,
+`showToolCards` (off by default: with `showToolTips` on, resting the pointer on a tool button shows a card with what
+the tool does and the keys its hint-bar text lists, for the tools that have a description; a press, drag, key,
+modifier key, scroll or pinch puts the card away),
 `anchorSize` (1–7), `gridColor`, `gridStyle`, `gridsInBack`, `guideColor`, `guideStyle`, `showPixelGrid` (on by
 default: in View › Pixel Preview at 600% zoom and above, a line at every document pixel over the art),
 `recentFontsCount`, `antiAliasedArtwork` (on by default; off, the canvas draws the art with hard edges — a pixel is

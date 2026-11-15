@@ -3364,6 +3364,7 @@ digits	Malayalam	Malayalam
 	Show Thumbnails	Visa miniatyrer
 	Show Tile Edge	Visa rutkant
 	Show Tints/Shades	Visa ljusa/mörka toner
+	Show Tool Cards	Visa verktygskort
 	Show Tool Tips	Visa verktygstips
 	Show Transparency Grid	Visa transparensrutnät
 	Show Video Rulers	Visa videolinjaler
@@ -9283,3 +9284,35 @@ digits	Hindi	Hindi
 	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
 	Remove Fold Line Role	Ta bort linjetyp
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Markerar hela objekt och grupper för att flytta, skala eller rotera dem.
+	Selects anchor points and path segments to reshape a path.	Markerar ankarpunkter och bansegment för att ändra formen på en bana.
+	Draws paths point by point, with straight segments and smooth curves.	Ritar banor punkt för punkt, med raka segment och mjuka kurvor.
+	Draws smooth curves through the points you click.	Ritar mjuka kurvor genom punkterna du klickar på.
+	Adds text at a point, or in a frame you drag.	Lägger till text vid en punkt eller i en ram som du drar upp.
+	Draws rectangles and squares.	Ritar rektanglar och kvadrater.
+	Draws rectangles with rounded corners.	Ritar rektanglar med rundade hörn.
+	Draws ellipses and circles.	Ritar ellipser och cirklar.
+	Draws polygons with sides of equal length.	Ritar polygoner med lika långa sidor.
+	Draws stars.	Ritar stjärnor.
+	Turns objects around a reference point.	Roterar objekt runt en referenspunkt.
+	Flips objects across an axis through a reference point.	Spegelvänder objekt över en axel genom en referenspunkt.
+	Resizes objects from a reference point.	Skalar objekt från en referenspunkt.
+	Slants objects from a reference point.	Lutar objekt från en referenspunkt.
+	Moves the view of the document.	Flyttar vyn av dokumentet.
+	Magnifies or reduces the view.	Förstorar eller förminskar vyn.
+	Copies the color and other attributes of one object to the selection.	Kopierar färgen och andra attribut från ett objekt till markeringen.
+	Sets the direction and length of a gradient.	Anger riktning och längd för en gradient.
+	Creates, selects and resizes artboards.	Skapar, markerar och skalar ritytor.
+	Changes the width of a stroke along its length.	Ändrar bredden på en kontur längs dess längd.
+	Bends art by dragging pins placed on it.	Böjer teckningar genom att dra i nålar som placerats på dem.
+	Pushes the outlines of paths in the direction you drag.	Skjuter banornas konturer i den riktning du drar.
+	Twists the outlines of paths into swirls.	Vrider banornas konturer till virvlar.
+	Pulls the outlines of paths in toward the brush.	Drar banornas konturer in mot penseln.
+	Pushes the outlines of paths out from the brush.	Skjuter banornas konturer ut från penseln.
+	Adds curved details along the outlines of paths.	Lägger till böjda detaljer längs banornas konturer.
+	Adds spiky details along the outlines of paths.	Lägger till spetsiga detaljer längs banornas konturer.
+	Adds wrinkles along the outlines of paths.	Lägger till rynkor längs banornas konturer.
+	Moves, copies and resizes objects on the perspective grid.	Flyttar, kopierar och skalar objekt på perspektivrutnätet.
+	Makes a series of steps between two or more objects.	Skapar en serie steg mellan två eller flera objekt.
+	Places dimension lines that show measured lengths.	Placerar måttlinjer som visar uppmätta längder.

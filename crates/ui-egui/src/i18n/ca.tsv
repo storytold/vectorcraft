@@ -4380,6 +4380,7 @@ digits	Malayalam	Malaiàlam
 	Show Tile Edge	Mostra la vora del mosaic
 	Show Tints/Shades	Mostra els tons/ombres
 	Show Tool Group Labels	Mostra les etiquetes dels grups d’eines
+	Show Tool Cards	Mostra les fitxes d’eines
 	Show Tool Tips	Mostra els consells d’eines
 	Show Transparency Grid	Mostra la quadrícula de transparència
 	Show Video Rulers	Mostra les regles de vídeo
@@ -7793,3 +7794,35 @@ breakText	Glyphs	Glifs
 	Open a document to mark its fold lines.	Obre un document per marcar-ne les línies de plegat.
 	Remove Fold Line Role	Elimina el tipus de línia
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Selecciona objectes i grups sencers per moure’ls, canviar-ne la mida o girar-los.
+	Selects anchor points and path segments to reshape a path.	Selecciona punts d’ancoratge i segments de traçat per canviar la forma d’un traçat.
+	Draws paths point by point, with straight segments and smooth curves.	Dibuixa traçats punt a punt, amb segments rectes i corbes suaus.
+	Draws smooth curves through the points you click.	Dibuixa corbes suaus que passen pels punts on feu clic.
+	Adds text at a point, or in a frame you drag.	Afegeix text en un punt o dins d’un marc que arrossegueu.
+	Draws rectangles and squares.	Dibuixa rectangles i quadrats.
+	Draws rectangles with rounded corners.	Dibuixa rectangles amb les cantonades arrodonides.
+	Draws ellipses and circles.	Dibuixa el·lipses i cercles.
+	Draws polygons with sides of equal length.	Dibuixa polígons amb els costats de la mateixa longitud.
+	Draws stars.	Dibuixa estrelles.
+	Turns objects around a reference point.	Gira objectes al voltant d’un punt de referència.
+	Flips objects across an axis through a reference point.	Reflecteix objectes respecte d’un eix que passa per un punt de referència.
+	Resizes objects from a reference point.	Canvia la mida d’objectes des d’un punt de referència.
+	Slants objects from a reference point.	Inclina objectes des d’un punt de referència.
+	Moves the view of the document.	Desplaça la vista del document.
+	Magnifies or reduces the view.	Amplia o redueix la vista.
+	Copies the color and other attributes of one object to the selection.	Copia el color i altres atributs d’un objecte a la selecció.
+	Sets the direction and length of a gradient.	Defineix la direcció i la longitud d’un degradat.
+	Creates, selects and resizes artboards.	Crea, selecciona i canvia la mida de les taules de treball.
+	Changes the width of a stroke along its length.	Canvia l’amplada d’un traç al llarg de la seva longitud.
+	Bends art by dragging pins placed on it.	Doblega la il·lustració arrossegant agulles col·locades a sobre.
+	Pushes the outlines of paths in the direction you drag.	Empeny els contorns dels traçats en la direcció en què arrossegueu.
+	Twists the outlines of paths into swirls.	Retorça els contorns dels traçats en remolins.
+	Pulls the outlines of paths in toward the brush.	Atreu els contorns dels traçats cap al pinzell.
+	Pushes the outlines of paths out from the brush.	Empeny els contorns dels traçats cap enfora des del pinzell.
+	Adds curved details along the outlines of paths.	Afegeix detalls corbs al llarg dels contorns dels traçats.
+	Adds spiky details along the outlines of paths.	Afegeix detalls punxeguts al llarg dels contorns dels traçats.
+	Adds wrinkles along the outlines of paths.	Afegeix arrugues al llarg dels contorns dels traçats.
+	Moves, copies and resizes objects on the perspective grid.	Mou, copia i canvia la mida d’objectes a la quadrícula de perspectiva.
+	Makes a series of steps between two or more objects.	Crea una sèrie de passos entre dos o més objectes.
+	Places dimension lines that show measured lengths.	Col·loca línies de cota que mostren longituds mesurades.

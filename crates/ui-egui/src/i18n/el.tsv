@@ -4015,6 +4015,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Show Thumbnails	Εμφάνιση μικρογραφιών
 	Show Tile Edge	Εμφάνιση ακμής πλακιδίου
 	Show Tints/Shades	Εμφάνιση αποχρώσεων/σκιάσεων
+	Show Tool Cards	Εμφάνιση καρτών εργαλείων
 	Show Tool Tips	Εμφάνιση συμβουλών εργαλείων
 	Show Transparency Grid	Εμφάνιση πλέγματος διαφάνειας
 	Show Video Rulers	Εμφάνιση χαράκων βίντεο
@@ -7767,3 +7768,35 @@ breakText	Glyphs	Γλύφοι
 	Open a document to mark its fold lines.	Ανοίξτε ένα έγγραφο για να σημειώσετε τις γραμμές δίπλωσής του.
 	Remove Fold Line Role	Αφαίρεση τύπου γραμμής
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Επιλέγει ολόκληρα αντικείμενα και ομάδες για μετακίνηση, αλλαγή μεγέθους ή περιστροφή.
+	Selects anchor points and path segments to reshape a path.	Επιλέγει σημεία αγκύρωσης και τμήματα διαδρομής για αλλαγή του σχήματος μιας διαδρομής.
+	Draws paths point by point, with straight segments and smooth curves.	Σχεδιάζει διαδρομές σημείο προς σημείο, με ευθύγραμμα τμήματα και ομαλές καμπύλες.
+	Draws smooth curves through the points you click.	Σχεδιάζει ομαλές καμπύλες που περνούν από τα σημεία που κάνετε κλικ.
+	Adds text at a point, or in a frame you drag.	Προσθέτει κείμενο σε ένα σημείο ή σε ένα πλαίσιο που σύρετε.
+	Draws rectangles and squares.	Σχεδιάζει ορθογώνια και τετράγωνα.
+	Draws rectangles with rounded corners.	Σχεδιάζει ορθογώνια με στρογγυλεμένες γωνίες.
+	Draws ellipses and circles.	Σχεδιάζει ελλείψεις και κύκλους.
+	Draws polygons with sides of equal length.	Σχεδιάζει πολύγωνα με πλευρές ίσου μήκους.
+	Draws stars.	Σχεδιάζει αστέρια.
+	Turns objects around a reference point.	Περιστρέφει αντικείμενα γύρω από ένα σημείο αναφοράς.
+	Flips objects across an axis through a reference point.	Αντικατοπτρίζει αντικείμενα ως προς έναν άξονα που περνά από ένα σημείο αναφοράς.
+	Resizes objects from a reference point.	Αλλάζει το μέγεθος αντικειμένων από ένα σημείο αναφοράς.
+	Slants objects from a reference point.	Πλαγιάζει αντικείμενα από ένα σημείο αναφοράς.
+	Moves the view of the document.	Μετακινεί την προβολή του εγγράφου.
+	Magnifies or reduces the view.	Μεγεθύνει ή σμικρύνει την προβολή.
+	Copies the color and other attributes of one object to the selection.	Αντιγράφει το χρώμα και άλλα χαρακτηριστικά ενός αντικειμένου στην επιλογή.
+	Sets the direction and length of a gradient.	Ορίζει την κατεύθυνση και το μήκος ενός ντεγκραντέ.
+	Creates, selects and resizes artboards.	Δημιουργεί, επιλέγει και αλλάζει το μέγεθος πινάκων σχεδίασης.
+	Changes the width of a stroke along its length.	Αλλάζει το πλάτος ενός περιγράμματος κατά μήκος του.
+	Bends art by dragging pins placed on it.	Λυγίζει το σχέδιο σύροντας καρφίτσες τοποθετημένες πάνω του.
+	Pushes the outlines of paths in the direction you drag.	Σπρώχνει τα σχήματα των διαδρομών προς την κατεύθυνση που σύρετε.
+	Twists the outlines of paths into swirls.	Συστρέφει τα σχήματα των διαδρομών σε δίνες.
+	Pulls the outlines of paths in toward the brush.	Τραβά τα σχήματα των διαδρομών προς το πινέλο.
+	Pushes the outlines of paths out from the brush.	Σπρώχνει τα σχήματα των διαδρομών προς τα έξω από το πινέλο.
+	Adds curved details along the outlines of paths.	Προσθέτει καμπύλες λεπτομέρειες κατά μήκος των σχημάτων των διαδρομών.
+	Adds spiky details along the outlines of paths.	Προσθέτει αιχμηρές λεπτομέρειες κατά μήκος των σχημάτων των διαδρομών.
+	Adds wrinkles along the outlines of paths.	Προσθέτει ζάρες κατά μήκος των σχημάτων των διαδρομών.
+	Moves, copies and resizes objects on the perspective grid.	Μετακινεί, αντιγράφει και αλλάζει το μέγεθος αντικειμένων στο πλέγμα προοπτικής.
+	Makes a series of steps between two or more objects.	Δημιουργεί μια σειρά βημάτων ανάμεσα σε δύο ή περισσότερα αντικείμενα.
+	Places dimension lines that show measured lengths.	Τοποθετεί γραμμές διαστάσεων που δείχνουν μετρημένα μήκη.

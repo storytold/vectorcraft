@@ -4415,6 +4415,7 @@ theme	Appearance	Udseende
 	Show Pixel Grid (Above 600% Zoom)	Vis pixelgitter (over 600 % zoom)
 	Show Slice Numbers	Vis udsnitsnumre
 	Show The Home Screen When No Documents Are Open	Vis startskærmen, når ingen dokumenter er åbne
+	Show Tool Cards	Vis værktøjskort
 	Show Tool Tips	Vis værktøjstips
 	Size/Leading	Størrelse/linjeafstand
 	Snapping Tolerance	Snap-tolerance
@@ -7703,3 +7704,35 @@ breakText	Glyphs	Glyffer
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Markerer hele objekter og grupper for at flytte, skalere eller rotere dem.
+	Selects anchor points and path segments to reshape a path.	Markerer ankerpunkter og kurvesegmenter for at ændre formen på en kurve.
+	Draws paths point by point, with straight segments and smooth curves.	Tegner kurver punkt for punkt, med lige segmenter og bløde buer.
+	Draws smooth curves through the points you click.	Tegner bløde buer gennem de punkter, du klikker på.
+	Adds text at a point, or in a frame you drag.	Tilføjer tekst ved et punkt eller i en ramme, du trækker.
+	Draws rectangles and squares.	Tegner rektangler og kvadrater.
+	Draws rectangles with rounded corners.	Tegner rektangler med afrundede hjørner.
+	Draws ellipses and circles.	Tegner ellipser og cirkler.
+	Draws polygons with sides of equal length.	Tegner polygoner med lige lange sider.
+	Draws stars.	Tegner stjerner.
+	Turns objects around a reference point.	Roterer objekter om et referencepunkt.
+	Flips objects across an axis through a reference point.	Spejler objekter over en akse gennem et referencepunkt.
+	Resizes objects from a reference point.	Skalerer objekter fra et referencepunkt.
+	Slants objects from a reference point.	Skråtstiller objekter fra et referencepunkt.
+	Moves the view of the document.	Flytter visningen af dokumentet.
+	Magnifies or reduces the view.	Forstørrer eller formindsker visningen.
+	Copies the color and other attributes of one object to the selection.	Kopierer farven og andre egenskaber fra ét objekt til markeringen.
+	Sets the direction and length of a gradient.	Angiver retning og længde for en gradient.
+	Creates, selects and resizes artboards.	Opretter, markerer og skalerer tegneflader.
+	Changes the width of a stroke along its length.	Ændrer bredden på en streg langs dens længde.
+	Bends art by dragging pins placed on it.	Bøjer grafik ved at trække i nåle, der er placeret på den.
+	Pushes the outlines of paths in the direction you drag.	Skubber kurvers omrids i den retning, du trækker.
+	Twists the outlines of paths into swirls.	Snor kurvers omrids til hvirvler.
+	Pulls the outlines of paths in toward the brush.	Trækker kurvers omrids ind mod penslen.
+	Pushes the outlines of paths out from the brush.	Skubber kurvers omrids ud fra penslen.
+	Adds curved details along the outlines of paths.	Tilføjer buede detaljer langs kurvers omrids.
+	Adds spiky details along the outlines of paths.	Tilføjer spidse detaljer langs kurvers omrids.
+	Adds wrinkles along the outlines of paths.	Tilføjer rynker langs kurvers omrids.
+	Moves, copies and resizes objects on the perspective grid.	Flytter, kopierer og skalerer objekter på perspektivgitteret.
+	Makes a series of steps between two or more objects.	Laver en række trin mellem to eller flere objekter.
+	Places dimension lines that show measured lengths.	Placerer målelinjer, der viser målte længder.

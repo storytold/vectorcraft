@@ -5720,6 +5720,7 @@ theme	Appearance	იერსახე
 	Show Pixel Grid (Above 600% Zoom)	პიქსელური ბადის ჩვენება (600%-ზე მეტ მასშტაბზე)
 	Show Slice Numbers	ნაჭრების ნომრების ჩვენება
 	Show The Home Screen When No Documents Are Open	საწყისი ეკრანის ჩვენება, როცა დოკუმენტი არ არის გახსნილი
+	Show Tool Cards	ხელსაწყოების ბარათების ჩვენება
 	Show Tool Tips	მინიშნებების ჩვენება
 	Size/Leading	ზომა/სტრიქონთა დაშორება
 	Snapping Tolerance	მიბმის დაშვება
@@ -9885,3 +9886,35 @@ font-script	Japanese	იაპონური
 	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მოსანიშნად.
 	Remove Fold Line Role	ხაზის ტიპის მოხსნა
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	მთლიანად მონიშნავს ობიექტებსა და ჯგუფებს მათი გადასაადგილებლად, ზომის შესაცვლელად ან მოსაბრუნებლად.
+	Selects anchor points and path segments to reshape a path.	მონიშნავს საყრდენ წერტილებსა და ტრაექტორიის სეგმენტებს ტრაექტორიის ფორმის შესაცვლელად.
+	Draws paths point by point, with straight segments and smooth curves.	ხატავს ტრაექტორიებს წერტილ-წერტილ, სწორი სეგმენტებითა და გლუვი მრუდებით.
+	Draws smooth curves through the points you click.	ხატავს გლუვ მრუდებს იმ წერტილებზე გავლით, რომლებზეც დააწკაპუნებთ.
+	Adds text at a point, or in a frame you drag.	ამატებს ტექსტს წერტილში ან ჩარჩოში, რომელსაც გაჭიმავთ.
+	Draws rectangles and squares.	ხატავს მართკუთხედებსა და კვადრატებს.
+	Draws rectangles with rounded corners.	ხატავს მომრგვალებულკუთხიან მართკუთხედებს.
+	Draws ellipses and circles.	ხატავს ელიფსებსა და წრეებს.
+	Draws polygons with sides of equal length.	ხატავს ტოლგვერდა მრავალკუთხედებს.
+	Draws stars.	ხატავს ვარსკვლავებს.
+	Turns objects around a reference point.	აბრუნებს ობიექტებს საორიენტაციო წერტილის გარშემო.
+	Flips objects across an axis through a reference point.	სარკისებურად ასახავს ობიექტებს საორიენტაციო წერტილზე გამავალი ღერძის მიმართ.
+	Resizes objects from a reference point.	ცვლის ობიექტების ზომას საორიენტაციო წერტილიდან.
+	Slants objects from a reference point.	ახრის ობიექტებს საორიენტაციო წერტილიდან.
+	Moves the view of the document.	გადააადგილებს დოკუმენტის ხედს.
+	Magnifies or reduces the view.	ადიდებს ან ამცირებს ხედს.
+	Copies the color and other attributes of one object to the selection.	აკოპირებს ერთი ობიექტის ფერსა და სხვა ატრიბუტებს მონიშნულზე.
+	Sets the direction and length of a gradient.	აყენებს გრადიენტის მიმართულებასა და სიგრძეს.
+	Creates, selects and resizes artboards.	ქმნის, მონიშნავს და ცვლის სამუშაო დაფების ზომას.
+	Changes the width of a stroke along its length.	ცვლის კონტურის სისქეს მისი სიგრძის გასწვრივ.
+	Bends art by dragging pins placed on it.	ღუნავს ნახატს მასზე დასმული ქინძისთავების გადათრევით.
+	Pushes the outlines of paths in the direction you drag.	უბიძგებს ტრაექტორიების მოხაზულობას გადათრევის მიმართულებით.
+	Twists the outlines of paths into swirls.	ხვევს ტრაექტორიების მოხაზულობას გრიგალებად.
+	Pulls the outlines of paths in toward the brush.	იზიდავს ტრაექტორიების მოხაზულობას ფუნჯისკენ.
+	Pushes the outlines of paths out from the brush.	უბიძგებს ტრაექტორიების მოხაზულობას ფუნჯიდან გარეთ.
+	Adds curved details along the outlines of paths.	ამატებს მრუდ დეტალებს ტრაექტორიების მოხაზულობის გასწვრივ.
+	Adds spiky details along the outlines of paths.	ამატებს წვეტიან დეტალებს ტრაექტორიების მოხაზულობის გასწვრივ.
+	Adds wrinkles along the outlines of paths.	ამატებს ნაოჭებს ტრაექტორიების მოხაზულობის გასწვრივ.
+	Moves, copies and resizes objects on the perspective grid.	გადააადგილებს, აკოპირებს და ცვლის ობიექტების ზომას პერსპექტივის ბადეზე.
+	Makes a series of steps between two or more objects.	ქმნის საფეხურების რიგს ორ ან მეტ ობიექტს შორის.
+	Places dimension lines that show measured lengths.	სვამს ზომის ხაზებს, რომლებიც გაზომილ სიგრძეებს აჩვენებს.

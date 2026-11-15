@@ -3749,6 +3749,7 @@ theme	Appearance	Tampilan
 	Show Pixel Grid (Above 600% Zoom)	Tampilkan grid piksel (di atas zoom 600%)
 	Show Slice Numbers	Tampilkan nomor irisan
 	Show The Home Screen When No Documents Are Open	Tampilkan layar beranda saat tidak ada dokumen terbuka
+	Show Tool Cards	Tampilkan kartu alat
 	Show Tool Tips	Tampilkan tips alat
 	Size/Leading	Ukuran/Leading
 	Snapping Tolerance	Toleransi kancing
@@ -7033,3 +7034,35 @@ breakText	Glyphs	Glif
 	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
 	Remove Fold Line Role	Hapus jenis garis
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Memilih objek dan grup utuh untuk dipindahkan, diubah ukurannya, atau diputar.
+	Selects anchor points and path segments to reshape a path.	Memilih titik jangkar dan segmen jalur untuk mengubah bentuk jalur.
+	Draws paths point by point, with straight segments and smooth curves.	Menggambar jalur titik demi titik, dengan segmen lurus dan lengkungan halus.
+	Draws smooth curves through the points you click.	Menggambar lengkungan halus melalui titik yang Anda klik.
+	Adds text at a point, or in a frame you drag.	Menambahkan teks di suatu titik atau di dalam bingkai yang Anda seret.
+	Draws rectangles and squares.	Menggambar persegi panjang dan persegi.
+	Draws rectangles with rounded corners.	Menggambar persegi panjang dengan sudut membulat.
+	Draws ellipses and circles.	Menggambar elips dan lingkaran.
+	Draws polygons with sides of equal length.	Menggambar poligon dengan sisi yang sama panjang.
+	Draws stars.	Menggambar bintang.
+	Turns objects around a reference point.	Memutar objek di sekitar titik referensi.
+	Flips objects across an axis through a reference point.	Mencerminkan objek terhadap sumbu yang melalui titik referensi.
+	Resizes objects from a reference point.	Mengubah ukuran objek dari titik referensi.
+	Slants objects from a reference point.	Memiringkan objek dari titik referensi.
+	Moves the view of the document.	Menggeser tampilan dokumen.
+	Magnifies or reduces the view.	Memperbesar atau memperkecil tampilan.
+	Copies the color and other attributes of one object to the selection.	Menyalin warna dan atribut lain dari satu objek ke pilihan.
+	Sets the direction and length of a gradient.	Mengatur arah dan panjang gradien.
+	Creates, selects and resizes artboards.	Membuat, memilih, dan mengubah ukuran artboard.
+	Changes the width of a stroke along its length.	Mengubah lebar stroke di sepanjang panjangnya.
+	Bends art by dragging pins placed on it.	Membengkokkan karya seni dengan menyeret pin yang dipasang padanya.
+	Pushes the outlines of paths in the direction you drag.	Mendorong garis luar jalur ke arah yang Anda seret.
+	Twists the outlines of paths into swirls.	Memelintir garis luar jalur menjadi pusaran.
+	Pulls the outlines of paths in toward the brush.	Menarik garis luar jalur ke arah kuas.
+	Pushes the outlines of paths out from the brush.	Mendorong garis luar jalur keluar dari kuas.
+	Adds curved details along the outlines of paths.	Menambahkan detail melengkung di sepanjang garis luar jalur.
+	Adds spiky details along the outlines of paths.	Menambahkan detail runcing di sepanjang garis luar jalur.
+	Adds wrinkles along the outlines of paths.	Menambahkan kerutan di sepanjang garis luar jalur.
+	Moves, copies and resizes objects on the perspective grid.	Memindahkan, menyalin, dan mengubah ukuran objek pada kisi perspektif.
+	Makes a series of steps between two or more objects.	Membuat serangkaian langkah di antara dua objek atau lebih.
+	Places dimension lines that show measured lengths.	Menempatkan garis dimensi yang menunjukkan panjang hasil pengukuran.

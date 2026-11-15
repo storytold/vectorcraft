@@ -4006,6 +4006,7 @@ theme	Appearance	Ulkoasu
 	Show Pixel Grid (Above 600% Zoom)	Näytä pikseliruudukko (yli 600 %:n zoomaus)
 	Show Slice Numbers	Näytä viipaleiden numerot
 	Show The Home Screen When No Documents Are Open	Näytä aloitusnäyttö, kun asiakirjoja ei ole avoinna
+	Show Tool Cards	Näytä työkalukortit
 	Show Tool Tips	Näytä työkaluvihjeet
 	Size/Leading	Koko/riviväli
 	Snapping Tolerance	Tartuntatoleranssi
@@ -7850,3 +7851,35 @@ breakText	Glyphs	Merkit
 	Open a document to mark its fold lines.	Avaa asiakirja, niin voit merkitä sen taittoviivat.
 	Remove Fold Line Role	Poista viivatyyppi
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Valitsee kokonaisia objekteja ja ryhmiä niiden siirtämistä, koon muuttamista tai kiertämistä varten.
+	Selects anchor points and path segments to reshape a path.	Valitsee ankkuripisteitä ja polun osia polun muodon muuttamista varten.
+	Draws paths point by point, with straight segments and smooth curves.	Piirtää polkuja piste kerrallaan suorin osin ja pehmein kaarin.
+	Draws smooth curves through the points you click.	Piirtää pehmeitä kaaria napsauttamiesi pisteiden kautta.
+	Adds text at a point, or in a frame you drag.	Lisää tekstiä pisteeseen tai vetämääsi kehykseen.
+	Draws rectangles and squares.	Piirtää suorakulmioita ja neliöitä.
+	Draws rectangles with rounded corners.	Piirtää pyöristettykulmaisia suorakulmioita.
+	Draws ellipses and circles.	Piirtää ellipsejä ja ympyröitä.
+	Draws polygons with sides of equal length.	Piirtää monikulmioita, joiden sivut ovat yhtä pitkiä.
+	Draws stars.	Piirtää tähtiä.
+	Turns objects around a reference point.	Kiertää objekteja viitepisteen ympäri.
+	Flips objects across an axis through a reference point.	Peilaa objekteja viitepisteen kautta kulkevan akselin yli.
+	Resizes objects from a reference point.	Muuttaa objektien kokoa viitepisteestä.
+	Slants objects from a reference point.	Vinouttaa objekteja viitepisteestä.
+	Moves the view of the document.	Siirtää asiakirjan näkymää.
+	Magnifies or reduces the view.	Suurentaa tai pienentää näkymää.
+	Copies the color and other attributes of one object to the selection.	Kopioi yhden objektin värin ja muut määritteet valintaan.
+	Sets the direction and length of a gradient.	Asettaa liukuvärin suunnan ja pituuden.
+	Creates, selects and resizes artboards.	Luo ja valitsee piirtoalustoja ja muuttaa niiden kokoa.
+	Changes the width of a stroke along its length.	Muuttaa viivan leveyttä sen pituudella.
+	Bends art by dragging pins placed on it.	Taivuttaa kuvitusta vetämällä siihen asetettuja nastoja.
+	Pushes the outlines of paths in the direction you drag.	Työntää polkujen ääriviivoja vetosuuntaan.
+	Twists the outlines of paths into swirls.	Kiertää polkujen ääriviivat pyörteiksi.
+	Pulls the outlines of paths in toward the brush.	Vetää polkujen ääriviivoja siveltimeen päin.
+	Pushes the outlines of paths out from the brush.	Työntää polkujen ääriviivoja ulospäin siveltimestä.
+	Adds curved details along the outlines of paths.	Lisää kaarevia yksityiskohtia polkujen ääriviivoihin.
+	Adds spiky details along the outlines of paths.	Lisää piikikkäitä yksityiskohtia polkujen ääriviivoihin.
+	Adds wrinkles along the outlines of paths.	Lisää ryppyjä polkujen ääriviivoihin.
+	Moves, copies and resizes objects on the perspective grid.	Siirtää, kopioi ja muuttaa objektien kokoa perspektiiviruudukossa.
+	Makes a series of steps between two or more objects.	Luo sarjan välivaiheita kahden tai useamman objektin välille.
+	Places dimension lines that show measured lengths.	Lisää mittaviivoja, jotka näyttävät mitatut pituudet.

@@ -3234,6 +3234,7 @@ digits	Malayalam	Malayalam
 	Show Thumbnails	Küçük Resimleri Göster
 	Show Tile Edge	Döşeme Kenarını Göster
 	Show Tints/Shades	Renk Tonlarını/Gölgeleri Göster
+	Show Tool Cards	Araç Kartlarını Göster
 	Show Tool Tips	Araç İpuçlarını Göster
 	Show Transparency Grid	Şeffaflık Izgarasını Göster
 	Show Video Rulers	Video Cetvellerini Göster
@@ -9567,3 +9568,35 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Selects whole objects and groups to move, resize or rotate them.	Taşımak, yeniden boyutlandırmak veya döndürmek için nesnelerin ve grupların tamamını seçer.
+	Selects anchor points and path segments to reshape a path.	Bir yolu yeniden şekillendirmek için bağlantı noktalarını ve yol parçalarını seçer.
+	Draws paths point by point, with straight segments and smooth curves.	Düz parçalar ve yumuşak eğrilerle noktadan noktaya yollar çizer.
+	Draws smooth curves through the points you click.	Tıkladığınız noktalardan geçen yumuşak eğriler çizer.
+	Adds text at a point, or in a frame you drag.	Bir noktaya veya sürükleyerek çizdiğiniz bir çerçeveye metin ekler.
+	Draws rectangles and squares.	Dikdörtgenler ve kareler çizer.
+	Draws rectangles with rounded corners.	Köşeleri yuvarlatılmış dikdörtgenler çizer.
+	Draws ellipses and circles.	Elipsler ve daireler çizer.
+	Draws polygons with sides of equal length.	Kenarları eşit uzunlukta çokgenler çizer.
+	Draws stars.	Yıldızlar çizer.
+	Turns objects around a reference point.	Nesneleri bir referans noktası etrafında döndürür.
+	Flips objects across an axis through a reference point.	Nesneleri bir referans noktasından geçen bir eksene göre yansıtır.
+	Resizes objects from a reference point.	Nesneleri bir referans noktasından yeniden boyutlandırır.
+	Slants objects from a reference point.	Nesneleri bir referans noktasından eğer.
+	Moves the view of the document.	Belgenin görünümünü kaydırır.
+	Magnifies or reduces the view.	Görünümü büyütür veya küçültür.
+	Copies the color and other attributes of one object to the selection.	Bir nesnenin rengini ve diğer niteliklerini seçime kopyalar.
+	Sets the direction and length of a gradient.	Bir degradenin yönünü ve uzunluğunu ayarlar.
+	Creates, selects and resizes artboards.	Çalışma yüzeyleri oluşturur, seçer ve yeniden boyutlandırır.
+	Changes the width of a stroke along its length.	Bir konturun genişliğini uzunluğu boyunca değiştirir.
+	Bends art by dragging pins placed on it.	Üzerine yerleştirilen raptiyeleri sürükleyerek resmi büker.
+	Pushes the outlines of paths in the direction you drag.	Yolların dış hatlarını sürüklediğiniz yöne iter.
+	Twists the outlines of paths into swirls.	Yolların dış hatlarını girdaplar halinde büker.
+	Pulls the outlines of paths in toward the brush.	Yolların dış hatlarını fırçaya doğru çeker.
+	Pushes the outlines of paths out from the brush.	Yolların dış hatlarını fırçadan dışarı doğru iter.
+	Adds curved details along the outlines of paths.	Yolların dış hatları boyunca kavisli ayrıntılar ekler.
+	Adds spiky details along the outlines of paths.	Yolların dış hatları boyunca sivri ayrıntılar ekler.
+	Adds wrinkles along the outlines of paths.	Yolların dış hatları boyunca kırışıklıklar ekler.
+	Moves, copies and resizes objects on the perspective grid.	Perspektif ızgarasındaki nesneleri taşır, kopyalar ve yeniden boyutlandırır.
+	Makes a series of steps between two or more objects.	İki veya daha fazla nesne arasında bir dizi adım oluşturur.
+	Places dimension lines that show measured lengths.	Ölçülen uzunlukları gösteren ölçü çizgileri yerleştirir.
