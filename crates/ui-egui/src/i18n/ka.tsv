@@ -6706,6 +6706,7 @@ font-technology	Variable	ცვლადი
 @msg	plug-in failed: {0}	პლაგინის შეცდომა: {0}
 @msg	plug-in manifest: {0}	პლაგინის მანიფესტი: {0}
 @msg	plug-in output: {0}	პლაგინის შედეგი: {0}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	plug-in parameters: {0}	პლაგინის პარამეტრები: {0}
 @msg	plug-in trapped: {0}	პლაგინი ავარიულად შეჩერდა: {0}
 @msg	print settings are not an object	ბეჭდვის პარამეტრები ობიექტი არ არის
