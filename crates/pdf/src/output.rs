@@ -10,8 +10,11 @@
 //!   colours of the other model (and Lab ones), keeping the numbers of those already in it.
 //!   Grey stays grey. Images (and freeform gradients' images) are converted the same way, pixel
 //!   by pixel (CMYK images too: they keep their numbers unless converted, see [`CmykPixels`]);
-//!   printer's marks are not. The destination is a profile name; empty, the document's
-//!   profile for its colour mode.
+//!   printer's marks are not. With `destination` and an sRGB destination, a gray or RGB image
+//!   that carries an ICC profile is converted from it to sRGB with the same intent and written
+//!   without it ([`ColorOut::image_srgb_intent`]); without conversion it keeps its
+//!   profile. The destination is a profile name; empty, the document's profile for its colour
+//!   mode.
 //! - Profiles ([`ProfileInclusion`]): with `all`, with `destination`, and with `taggedSource` on a
 //!   document that was assigned profiles, colours are written in ICC-based colour spaces: CMYK
 //!   with the CMYK profile in effect (the destination when converting to CMYK, else the
@@ -50,6 +53,8 @@ struct Dest {
     keep: bool,
     /// The destination is sRGB (what images are).
     srgb: bool,
+    /// Convert to Destination was asked for (not Preserve Numbers, nor PDF/X-1a's own conversion).
+    destination: bool,
 }
 
 /// How an export writes colours (see the module documentation).
@@ -233,11 +238,12 @@ impl ColorOut {
             };
             let cms = Cms::new(&settings).map_err(|e| PdfError::BadSetting(format!("output.destination: {e}")))?;
             // PDF/X-1a converts without being asked: as Preserve Numbers does.
-            let keep = set.output.conversion != ColorConversion::Destination || cms::canonical_name(&own) == name;
+            let destination = set.output.conversion == ColorConversion::Destination;
+            let keep = !destination || cms::canonical_name(&own) == name;
             if model == Model::Cmyk {
                 out.cmyk_profile = name.clone();
             }
-            out.dest = Some(Dest { srgb: name == cms::SRGB, cms, model, keep });
+            out.dest = Some(Dest { srgb: name == cms::SRGB, cms, model, keep, destination });
         }
         out.tagged = matches!(set.standard, Standard::PdfA2b | Standard::PdfX3 | Standard::PdfX4)
             || (!set.standard.cmyk_only()
@@ -336,6 +342,14 @@ impl ColorOut {
                 }
             })
             .as_ref()
+    }
+
+    /// The intent a gray or RGB image that carries an ICC profile is converted from it to sRGB
+    /// with ([`crate::images::recode`]): the colour settings' intent, with Convert to Destination
+    /// and an sRGB destination, also when the document's RGB space is sRGB. `None` otherwise:
+    /// such an image keeps its profile.
+    pub(crate) fn image_srgb_intent(&self) -> Option<Intent> {
+        self.dest.as_ref().filter(|d| d.destination && d.model == Model::Rgb && d.srgb).map(|_| self.intent)
     }
 
     /// The CMYK profile CMYK image `blob` is tagged with ([`crate::images::cmyk_icc`]): the one it
