@@ -563,8 +563,10 @@ fn paint_edits_of_design_art_alone_leave_the_defaults() {
         json!({"ids": [art.0], "item": "top"}),
         json!({"ids": [art.0], "item": fill, "aligned": "yes"}),
         json!({"ids": [art.0], "item": fill, "target": "nowhere"}),
+        json!({"ids": [art.0], "target": "nowhere"}),
     ] {
         assert!(s.execute("paint.invert", &bad).is_err(), "{bad}");
+        assert!(s.execute("paint.complement", &bad).is_err(), "{bad}");
     }
     // So is an `item` the art has no row for, in each command that leaves the art out.
     let steps = s.doc().unwrap().history.undo.len();

@@ -1098,6 +1098,8 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
         ItemTarget::Item { .. } => super::appearance::reference_of(s, p, item, cmd)?,
         ItemTarget::Top => None,
     };
+    // Read before the check below too: `targets` reads no `target` for the topmost fill or stroke.
+    let contents = super::appearance::targets_contents(p)?;
     let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
     // Only design art was given or selected: nothing changes, the defaults and remembered colors included.
     if ids.is_empty() {
@@ -1128,7 +1130,6 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
         // objects change as their paint targets do (a compound path's member stands for the compound path). Design art
         // inside a given graph or series group is left out.
         ItemTarget::Top => {
-            let contents = super::appearance::targets_contents(p)?;
             let mut roots = vec![];
             for id in &ids {
                 let n = s.doc()?.doc.node(*id);
