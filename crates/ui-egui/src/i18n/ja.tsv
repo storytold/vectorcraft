@@ -570,6 +570,7 @@ digits	Malayalam	マラヤーラム数字
 	Rotate (Classic)…	回転（クラシック）…
 	Surface	表面
 	Wireframe	ワイヤーフレーム
+	Render Settings	レンダリング設定
 	No Shading	陰影なし
 	Plastic	プラスチック
 	Highlight Intensity	ハイライトの強さ
@@ -1076,6 +1077,7 @@ digits	Malayalam	マラヤーラム数字
 	Align to Artboard	アートボードに整列
 	Align to Glyph Bounds	字形の境界に整列
 	Align to Key Object	キーオブジェクトに整列
+	Align to Key Anchor	キーアンカーポイントに整列
 	Align to Page	ページに沿う
 	Align to Path	パスに沿う
 	Align to Selection	選択範囲に整列
@@ -1942,6 +1944,7 @@ antiAlias	Sharp	シャープ
 	Highlight Alternate Glyphs	代替字形をハイライト
 	Highlight Rows	行をハイライト
 	Highlight Variable	変数をハイライト表示
+	Sort Variables	変数を並べ替え
 	Highlight Substituted Fonts	置換フォントをハイライト
 	Highlight Substituted Glyphs	置換字形をハイライト
 	Highlight anchors on mouse over	マウスオーバー時にアンカーをハイライト
@@ -2321,6 +2324,7 @@ antiAlias	Sharp	シャープ
 	Merge Selected	選択レイヤーを結合
 	Merge Swatches	スウォッチを統合
 	Merge colors into one row	カラーを 1 行に統合
+	New Row	新規行
 	Mesh Tool	メッシュツール
 	Message:	メッセージ:
 	Metadata:	メタデータ:
@@ -3857,6 +3861,40 @@ file-filter	Templates	テンプレート
 	Gradient (. or Shift+.)	グラデーション (. または Shift+.)
 	Graph Data	グラフデータ
 	Graph Type	グラフの種類
+	Graph Options	グラフオプション
+	Left Axis	左軸
+	Right Axis	右軸
+	Category Axis	項目軸
+	Separate Scales	目盛りを別にする
+	Add Drop Shadow	ドロップシャドウを追加
+	Add Legend Across Top	凡例を上に表示
+	First Row in Front	最初の行を前面に
+	First Column in Front	最初の列を前面に
+	Legend	凡例
+	Column Width	棒の幅
+	Bar Width	横棒の幅
+	Cluster Width	グループの幅
+	Mark Data Points	データポイントにマーカーを表示
+	Connect Data Points	データポイントを線でつなぐ
+	Edge-to-Edge Lines	端から端までの線
+	Draw Filled Lines	線を塗りつぶして描く
+	Tick Values	目盛りの値
+	Override Calculated Values	計算値を上書き
+	Divisions	分割数
+	Tick Marks	目盛り
+	Tick Marks per Division	分割ごとの目盛り
+	Draw Tick Marks Between Labels	ラベルの間に目盛りを描く
+	Add Labels	ラベルを追加
+	Maximum must be more than Minimum.	最大値は最小値より大きくしてください。
+	Column Graph	棒グラフ
+	Stacked Column Graph	積み上げ棒グラフ
+	Bar Graph	横向き棒グラフ
+	Stacked Bar Graph	横向き積み上げ棒グラフ
+	Line Graph	折れ線グラフ
+	Area Graph	面グラフ
+	Scatter Graph	散布図
+	Pie Graph	円グラフ
+	Radar Graph	レーダーチャート
 	Graph Design	グラフのデザイン
 	Graph Marker	グラフのマーカー
 	New Design	新規デザイン
@@ -4077,11 +4115,55 @@ file-filter	Templates	テンプレート
 	Composite Fonts	合成フォント
 	Export Composite Fonts	合成フォントを書き出し
 	Import Composite Fonts	合成フォントを読み込み
+@msg	each font must be {name, parts}	各フォントは {name, parts} の形にしてください
+@msg	unknown key `{k}`; a font takes name and parts	`{k}` は不明なキーです。フォントに使えるのは name と parts です
+@msg	each font needs a name	各フォントには名前が必要です
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` は合成フォントの名前にできません (1～{COMPOSITE_NAME_MAX} 文字、制御文字なし)
+@msg	`{name}`: parts must be an object	`{name}`: parts はオブジェクトにしてください
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: `{k}` は不明なクラスです。クラスは kanji、kana、punctuation、symbols、roman、numerals です
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} はオブジェクトにしてください
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1} の `{k}` は不明なキーです
+@msg	`{name}`: give the kanji part	`{name}`: kanji の部分を指定してください
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	1 つのドキュメントに置ける合成フォントは {COMPOSITE_FONTS_MAX} 個までです
+@msg	two composite fonts are named `{_1}`	`{_1}` という名前の合成フォントが 2 つあります
+@msg	`{_1}` is the name of an installed font	`{_1}` はインストール済みのフォントの名前です
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} に合成フォントの `{font}` が設定されています
+@msg	give fonts: [{name, parts}…]	fonts を指定してください: [{name, parts}…]
+@msg	path is empty	path が空です
+@msg	fonts must be a list of composite fonts	fonts は合成フォントのリストにしてください
+@msg	names must be strings	names は文字列にしてください
+@msg	no composite font named `{n}`	`{n}` という合成フォントはありません
+@msg	names must be a list of names	names は名前のリストにしてください
+@msg	no composite fonts to export	書き出す合成フォントがありません
+@msg	not a composite fonts file: {e}	合成フォントのファイルではありません: {e}
+@msg	not a composite fonts file: no compositeFonts list	合成フォントのファイルではありません: compositeFonts のリストがありません
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	ファイルに {COMPOSITE_FONTS_MAX} 個を超える合成フォントがあります
+@msg	the file is larger than 4 MB	ファイルが 4 MB を超えています
+@msg	dataBase64 is not base64	dataBase64 が base64 ではありません
+@msg	give one of path, data or dataBase64	path、data、dataBase64 のいずれかを指定してください
+@msg	the file holds no composite fonts	ファイルに合成フォントがありません
+@msg	the file holds two composite fonts named `{_1}`	ファイルに `{_1}` という名前の合成フォントが 2 つあります
+@msg	`{_1}` can't name a composite font	`{_1}` は合成フォントの名前にできません
+@msg	{k}: give a font	{k}: フォントを指定してください
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: フォントを指定してください
+@msg	{k}: size must be {_1} to {_2}%	{k}: size は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size は {_1}～{_2}% にしてください
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline は {_1}～{_2}% にしてください
+@msg	{k}: scale must be {_1} to {_2}%	{k}: 比率は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: 比率は {_1}～{_2}% にしてください
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: 比率を変更できるのは kana、roman、numerals だけです
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: 比率を変更できるのは kana、roman、numerals だけです
+@msg	{k}: only kana can be scaled at the center	{k}: 中央を基準に比率を変更できるのは kana だけです
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: 中央を基準に比率を変更できるのは kana だけです
+@msg	no composite font	合成フォントがありません
 	Delete Font	フォントを削除
 	Kanji	漢字
 	Kana	かな
 	Numerals	数字
 	Scale at Center	中心から拡大・縮小
+	Delete Set	セットを削除
+	Direct Entry	直接入力
 	Up/Down:	上下:
 	Left/Right:	左右:
 	Tate-chu-yoko Up/Down	縦中横の上下
@@ -5408,6 +5490,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Imported library {name}	ライブラリ {name} を読み込みました
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB ポリシー:
+	CMYK Policy:	CMYK ポリシー:
+	Preserve Embedded Profiles	埋め込まれたプロファイルを保持
+	Convert to Working Space	作業用スペースに変換
+	Preserve Numbers	カラー値を保持
 	Texture	テクスチャ
 	Craquelure…	クラッキング…
 	Grain…	粒状…
@@ -5684,6 +5771,7 @@ lighting	Light	ライト
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	グループの塗りまたは線にある 3D 効果には書き出せる描画がありません
 @msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	オブジェクトに 3D 効果 (押し出しとベベル、回転体、膨張、回転) がありません
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` は `mode` だけを持ち、その値が shaded または wireframe のオブジェクトにしてください
 @msg	its 3D effect builds no solid	3D 効果からソリッドが作成されません
 @msg	bevel must be none or one of {_1}	bevel には none または {_1} のいずれかを指定してください
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} はこのアートからソリッドを作成できません。シンボルインスタンス、ブレンド、クリッピンググループに含まれるオブジェクトが多すぎます

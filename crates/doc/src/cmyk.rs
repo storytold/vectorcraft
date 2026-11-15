@@ -525,8 +525,8 @@ fn planar<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -
 }
 
 /// The samples of the `n` pixels of the TIFF `d` reads, `per` to a pixel (the number its color
-/// type has), pixel by pixel and 8 bits each (16-bit samples to their high byte), whether the file
-/// stores each pixel's samples together or one plane per channel. `None` when they don't decode to
+/// type has), pixel by pixel and 8 bits each (16-bit samples rounded to the nearest), whether the
+/// file stores each pixel's samples together or one plane per channel. `None` when they don't decode to
 /// that many samples, which includes images whose planes together need more than the decoder's
 /// limit (256 MiB of samples), and, before any decoding, files with more than
 /// [`MAX_EXTRA_SAMPLES_PIXEL`] samples a pixel, files whose samples aren't unsigned integers (a
@@ -535,7 +535,7 @@ fn planar<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -
 pub(crate) fn read_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Vec<u8>> {
     Some(match read_samples_at_depth(d, n, per)? {
         Samples::Eight(v) => v,
-        Samples::Sixteen(v) => v.iter().map(|s| (s >> 8) as u8).collect(),
+        Samples::Sixteen(v) => v.iter().map(|&s| u8::try_from((u32::from(s) + 128) / 257).unwrap_or(u8::MAX)).collect(),
     })
 }
 
