@@ -328,9 +328,20 @@ fn top_object_grid(path: &PathData, corners: Option<[u32; 4]>) -> Option<(usize,
     let read = Coons::from_top_object(&outline, Some(corners))?;
     let [tl, tr, br, bl] = coons.corners();
     let reach = tl.distance(br).max(tr.distance(bl)).max(1.0) * TOP_OBJECT_TOLERANCE;
-    const STEPS: usize = 8;
-    let at = |i: usize| i as f64 / STEPS as f64;
-    let same = (0..=STEPS).all(|j| (0..=STEPS).all(|i| coons.eval(at(i), at(j)).distance(read.eval(at(i), at(j))) <= reach));
+    // Each side of both patches runs straight between the places the sides have points
+    // ([`Coons::places`]), so two matching sides lie furthest apart at one of those places. A point
+    // inside a patch blends its four sides and corners, so where every side lies within a third of
+    // `reach` of the other patch's, the patches lie within `reach` of each other everywhere.
+    let merge = |a: Vec<f64>, b: Vec<f64>| {
+        let mut v = [a, b].concat();
+        v.sort_by(f64::total_cmp);
+        v.dedup();
+        v
+    };
+    let ([cu, cv], [ru, rv]) = (coons.places(), read.places());
+    let (us, vs) = (merge(cu, ru), merge(cv, rv));
+    let near = |u: f64, v: f64| coons.eval(u, v).distance(read.eval(u, v)) <= reach / 3.0;
+    let same = us.iter().all(|&u| near(u, 0.0) && near(u, 1.0)) && vs.iter().all(|&v| near(0.0, v) && near(1.0, v));
     same.then_some((rows, cols, pts))
 }
 

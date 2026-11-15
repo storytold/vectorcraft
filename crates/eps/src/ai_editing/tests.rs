@@ -10633,6 +10633,25 @@ fn a_top_object_whose_split_side_would_map_another_way_is_written_as_its_art() {
     assert!(matches!(back.kind, NodeKind::Group { .. }), "{back:#?}");
 }
 
+/// A top object whose split side would map the content another way only between the places of an
+/// even grid of eighths is written as its art too: a bottom side of a long straight segment, which is
+/// split, and a short curve in its last eighth, which the reader then samples at fewer points.
+#[test]
+fn a_top_object_whose_split_side_differs_between_eighths_is_written_as_its_art() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut path = uneven_top_object(3);
+    path.truncate(5);
+    path.curve_to((168.0, 85.0), (164.0, 85.0), (162.0, 90.0));
+    path.line_to((30.0, 90.0));
+    path.close_path();
+    let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&path), corners: None };
+    let doc = envelope_doc(kind, 50.0, false, EnvelopeOptions::NEW);
+    assert!(!program(&doc).contains("AIDeformOptionsKey"));
+    let (back, warnings, _) = envelope_back(&doc);
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(matches!(back.kind, NodeKind::Group { .. }), "{back:#?}");
+}
+
 /// An envelope with its contents in an opacity mask's art is written as its art there, and an
 /// envelope in a group stays live.
 #[test]
