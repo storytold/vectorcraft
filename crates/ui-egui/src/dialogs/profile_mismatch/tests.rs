@@ -53,6 +53,17 @@ fn open_confirmed_under_roots(app: &mut VectorcraftApp, tagged: &[u8]) {
     assert!(app.session.doc().unwrap().opened_by.is_some(), "installed under the roots of the caller that confirmed");
 }
 
+/// Cancel on the paste question pastes nothing, and a null `profileMismatch` asks as leaving it out
+/// does. `count` counts the active document's objects.
+fn paste_canceled(app: &mut VectorcraftApp, count: impl Fn(&VectorcraftApp) -> usize) {
+    let before = count(app);
+    for params in [json!({}), json!({ "profileMismatch": null })] {
+        assert_eq!(app.run("edit.paste", params.clone()).unwrap(), json!({ "dialog": PASTE_KIND }), "{params} asks");
+        super::super::cancel(app);
+        assert_eq!(count(app), before);
+    }
+}
+
 /// Another document becomes the active one while the paste question is open: OK pastes nothing, into
 /// neither document, and the document the paste was asked in is active again afterward. `count`
 /// counts the active document's objects.
@@ -236,10 +247,7 @@ fn opening_and_pasting_ask_about_profiles() {
     assert!(app.ui.dialog.is_none());
     // Cancel pastes nothing; with the box off nothing asks.
     let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
-    let before = count(&app);
-    app.run("edit.paste", json!({})).unwrap();
-    super::super::cancel(&mut app);
-    assert_eq!(count(&app), before);
+    paste_canceled(&mut app, count);
     paste_asked_before_another_document_is_active(&mut app, count);
     drop_asks_as_paste_does(&mut app, count);
     let before = count(&app);

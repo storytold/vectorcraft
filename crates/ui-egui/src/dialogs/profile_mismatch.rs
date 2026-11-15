@@ -199,7 +199,8 @@ pub(crate) fn settle(app: &mut VectorcraftApp) {
 /// pasted or dropped colors come from another profile, open the dialog instead and answer
 /// `{dialog}`.
 pub fn ask_paste(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<DialogResult> {
-    if params.get("profileMismatch").is_some() || !cms::working_settings().ask_mismatch_paste {
+    // A null choice is no choice, as the paste commands read it.
+    if params.get("profileMismatch").is_some_and(|v| !v.is_null()) || !cms::working_settings().ask_mismatch_paste {
         return None;
     }
     let mismatches = paste_mismatches(app, command, params).filter(|a| !a.is_empty())?;
