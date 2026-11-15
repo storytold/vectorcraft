@@ -7114,6 +7114,82 @@ fn a_graphic_style_added_to_a_label_or_axis_line_keeps_the_opacity_its_kind_keep
     }
 }
 
+/// A graphic style that shows only a fill, added on top of a graph label's or axis line's appearance, keeps its fill for
+/// the kind and leaves the stroke the kind keeps from another label or line, though the one it is added to still shows
+/// its old stroke.
+#[test]
+fn a_fill_only_graphic_style_added_to_a_label_or_axis_line_keeps_the_stroke_its_kind_keeps() {
+    for label in [true, false] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setFill", &json!({"ids": [rect.0], "color": "#00ff00"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [rect.0], "index": top_row(&s, rect, false), "visible": false})).unwrap();
+        s.execute("graphicStyle.new", &json!({"id": rect.0, "name": "Green"})).unwrap();
+        let (first, second) = if label {
+            (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"))
+        } else {
+            let lines = line_nodes(&s, id);
+            (lines[0].id, lines[1].id)
+        };
+        if label {
+            s.execute("appearance.addStroke", &json!({"ids": [first.0]})).unwrap();
+            let at = top_row(&s, first, false);
+            s.execute("appearance.setItem", &json!({"ids": [first.0], "index": at, "color": "#0000ff", "weight": 2})).unwrap();
+        } else {
+            s.execute("paint.setStroke", &json!({"ids": [first.0], "color": "#0000ff"})).unwrap();
+            assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+        }
+        s.execute("graphicStyle.apply", &json!({"name": "Green", "ids": [second.0], "add": true})).unwrap();
+        if label {
+            let looks = redrawn_label_rows(&mut s, id);
+            for q in ["Q1", "Q2", "Q3"] {
+                let (rows, _) = rows_of(&looks, q);
+                assert!(rows.iter().any(|r| r.0 && r.1 == "#00ff00"), "{q}: {rows:?}");
+                assert!(rows.iter().any(|r| !r.0 && r.1 == "#0000ff"), "{q}: {rows:?}");
+                assert!(!rows.iter().any(|r| r.1 == "#ff0000"), "{q}: {rows:?}");
+            }
+        } else {
+            let looks = redrawn_line_looks(&mut s, id);
+            assert!(looks.iter().all(|l| l.0 == "#0000ff"), "{looks:?}");
+            let fills: Vec<Option<String>> = line_nodes(&s, id).iter().map(|n| n.appearance.fill_paint().color().map(|c| c.to_hex())).collect();
+            assert!(fills.iter().all(|f| f.as_deref() == Some("#00ff00")), "{fills:?}");
+        }
+    }
+}
+
+/// A graphic style that shows only a fill, added on top of a graph label, leaves the stroke its kind keeps below the
+/// characters there, and the added fill paints above the characters, though the label it is added to has no row below
+/// them.
+#[test]
+fn a_fill_only_graphic_style_added_to_a_label_keeps_the_kind_stroke_below_the_characters() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [rect.0], "color": "#00ff00"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [rect.0], "index": top_row(&s, rect, false), "visible": false})).unwrap();
+    s.execute("graphicStyle.new", &json!({"id": rect.0, "name": "Green"})).unwrap();
+    let (q1, q2) = (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"));
+    s.execute("appearance.addStroke", &json!({"ids": [q1.0]})).unwrap();
+    let at = top_row(&s, q1, false);
+    s.execute("appearance.setItem", &json!({"ids": [q1.0], "index": at, "color": "#0000ff", "weight": 2})).unwrap();
+    s.execute("appearance.moveItem", &json!({"ids": [q1.0], "from": "contents", "to": at + 1})).unwrap();
+    s.execute("graphicStyle.apply", &json!({"name": "Green", "ids": [q2.0], "add": true})).unwrap();
+    let looks = redrawn_label_rows(&mut s, id);
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    for q in ["Q1", "Q2", "Q3"] {
+        let (rows, _) = rows_of(&looks, q);
+        assert_eq!(rows.iter().map(|r| (r.0, r.1.as_str())).collect::<Vec<_>>(), [(false, "#0000ff"), (true, "#00ff00")], "{q}");
+        let label =
+            group(&n, "Axes").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == q)).unwrap().clone();
+        assert_eq!(label.appearance.contents_at(), 1, "{q}: the stroke paints below the characters and the fill above them");
+    }
+}
+
 /// An Eyedropper pick with `append` and without the object's transparency on a graph label keeps the object opacity its
 /// kind keeps from another label, though the label it is applied to still shows 100%.
 #[test]

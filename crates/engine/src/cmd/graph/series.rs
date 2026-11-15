@@ -825,6 +825,9 @@ enum Keep {
     Object,
     /// The fill and stroke rows; the object opacity and blend mode stay as the kind keeps them.
     Rows,
+    /// The fill row (`fill`) and the stroke row (`stroke`) of an edit that put new rows of those kinds on top of the stack;
+    /// the other kind of row and the object opacity and blend mode stay as the kind keeps them.
+    Added { fill: bool, stroke: bool },
 }
 
 /// `shown` with the parts of the rows `kept` keeps that `keep` leaves as they are.
@@ -840,6 +843,33 @@ fn keep_rows(kept: vectorcraft_doc::LabelRows, shown: vectorcraft_doc::LabelRows
             let mut shown = shown;
             (shown.paint.opacity, shown.paint.blend) = (kept.paint.opacity, kept.paint.blend);
             shown
+        }
+        Keep::Added { fill: false, stroke: false } => kept,
+        Keep::Added { fill, stroke } => {
+            // Whether the kept row of the kind the edit did not add paints below the characters: the kept rows, from the
+            // bottom, are the stroke and the fill (in the order `stroke_under` gives) and the bottom `below` of them paint
+            // below the characters.
+            let other_below = {
+                let present = |f: bool| if f { kept.paint.fill.is_some() } else { kept.paint.stroke.is_some() };
+                let order = if kept.stroke_under { [false, true] } else { [true, false] };
+                let at = order.iter().filter(|f| present(**f)).position(|f| *f != fill);
+                at.is_some_and(|at| at < usize::from(kept.below.unwrap_or(0)))
+            };
+            let (mut rows, s) = (kept, &shown.paint);
+            if fill {
+                (rows.paint.fill, rows.paint.fill_opacity, rows.paint.fill_blend) = (s.fill.clone(), s.fill_opacity, s.fill_blend);
+            }
+            if stroke {
+                (rows.paint.stroke, rows.paint.stroke_width, rows.paint.stroke_opacity, rows.paint.stroke_blend) =
+                    (s.stroke.clone(), s.stroke_width, s.stroke_opacity, s.stroke_blend);
+            }
+            // The added row paints above the characters and above a kept row of the other kind, which keeps its place.
+            (rows.below, rows.stroke_under) = match (fill, stroke) {
+                (true, false) => (other_below.then_some(1), rows.paint.stroke.is_some()),
+                (false, true) => (other_below.then_some(1), false),
+                (true, true) | (false, false) => (shown.below, shown.stroke_under),
+            };
+            rows
         }
     }
 }
@@ -972,6 +1002,14 @@ pub(crate) fn capture_label_object_opacity(doc: &mut Document, ids: &[NodeId]) -
 /// the graph keeps changed.
 pub(crate) fn capture_label_fill_stroke_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
     store_label_rows(doc, ids, Keep::Rows)
+}
+
+/// [`capture_label_fill_stroke_rows`] for an edit that put a new fill row (`fill`) or stroke row (`stroke`) on top of
+/// graph labels and graph lines `ids`: only those kinds of row are kept for every label or line of their kind, and the
+/// other kind stays as the kind keeps it, also when a label or line still shows another one until the graph is drawn
+/// again. Returns whether what the graph keeps changed.
+pub(crate) fn capture_label_added_rows(doc: &mut Document, ids: &[NodeId], (fill, stroke): (bool, bool)) -> bool {
+    store_label_rows(doc, ids, Keep::Added { fill, stroke })
 }
 
 /// Would [`capture_label_object_opacity`] change what a graph keeps for labels `ids`? Reads the document without copying

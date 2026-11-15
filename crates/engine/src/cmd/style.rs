@@ -364,6 +364,9 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             let shows = |kind: bool| g.appearance.items.iter().any(|it| it.is_fill() == kind && it.visible());
             let kinds = (shows(true), shows(false));
             super::appearance::capture_series_writes(&before, d, &ids, kinds, kinds, false, false);
+            // A label or graph line keeps those kinds of row for its kind. A style added on top leaves the object opacity
+            // and blend mode, so the kind keeps its own.
+            super::graph::capture_label_added_rows(d, &ids, kinds);
         } else {
             d.graphic_style_id(i);
             let g = d.graphic_styles[i].clone();
@@ -373,12 +376,7 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             }
             super::appearance::clear_stood_for(d, &groups);
             super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, true);
-        }
-        // A label or graph line keeps its new rows for its kind. A style added on top leaves the object opacity and blend
-        // mode, so the kind keeps its own.
-        if add {
-            super::graph::capture_label_fill_stroke_rows(d, &ids);
-        } else {
+            // A label or graph line keeps its new rows for its kind.
             super::graph::capture_label_rows(d, &ids);
         }
         Ok(())
