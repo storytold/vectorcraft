@@ -164,6 +164,17 @@ pub struct CacheKey {
     /// The display profile the frame is converted into ([`crate::display_profile::DisplayProfile::key`]),
     /// 0 for none.
     pub display: u64,
+    /// The paper under the art that translucent art is blended with before the conversion
+    /// ([`crate::display_profile::convert_over`]). None without a display profile, and in Outline.
+    pub backdrop: Option<std::sync::Arc<crate::display_profile::Backdrop>>,
+}
+
+impl CacheKey {
+    /// [`Self::backdrop`] with the zoom its grid's cells are measured at, as
+    /// [`crate::display_profile::convert_over`] takes it.
+    pub(crate) fn over(&self) -> Option<(&crate::display_profile::Backdrop, f64)> {
+        self.backdrop.as_deref().map(|b| (b, self.zoom))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

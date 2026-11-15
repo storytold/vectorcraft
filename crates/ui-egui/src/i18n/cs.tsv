@@ -990,6 +990,7 @@
 
 # Photoshop-style raster effects (Effect menu, their dialogs).
 	Radial Blur…	Radiální rozostření…
+	Blur Center	Střed rozostření
 	Smart Blur…	Chytré rozostření…
 	Sharpen	Zostření
 	Unsharp Mask…	Maska rozostření…
@@ -2734,6 +2735,7 @@ digits	Malayalam	Malajálamské
 	Transparent Background	Průhledné pozadí
 	Choose…	Vybrat…
 	Copy Fonts Used in the Document	Kopírovat písma použitá v dokumentu
+	Copy Info	Kopírovat informace
 	Copy Links	Kopírovat propojené soubory
 	Create Report	Vytvořit zprávu
 	Fonts whose licence doesn't allow embedding are not copied.	Písma, jejichž licence nepovoluje vkládání, se nekopírují.
@@ -4703,6 +4705,7 @@ imageTrace	Outline	Obrys
 @msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
+@msg	Copied the link info	Informace o propojení zkopírovány
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty
 @msg	Couldn't copy to the system clipboard: {e}	Nelze kopírovat do systémové schránky: {e}
 @msg	Couldn't open {name}: {e}	{name} nelze otevřít: {e}
@@ -9032,6 +9035,7 @@ breakText	Glyphs	Glyfy
 @msg	the RTF file is too large to place as type (at most {_1} MB)	soubor RTF je příliš velký na umístění jako text (nejvýše {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG se rozvine na více než {0} vnořených obrázků SVG
 @msg	the SVG expands to more than {0} objects	SVG se rozvine na více než {0} objektů
+@msg	the SVG's style sheets take too long to match	porovnání šablon stylů SVG trvá příliš dlouho
 @msg	the SVG's styles expand to more than {0} MB	styly SVG se rozvinou na více než {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	soubor SVG je větší než {MAX_IMPORT_BYTES} bajtů
 @msg	the SVG has no drawable objects	SVG nemá žádné vykreslitelné objekty

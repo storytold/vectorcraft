@@ -647,8 +647,8 @@ sampler.
 | `inspect_document` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | Artboards (with `color`, `#rrggbb`, for one with a background color), layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
 | `select_tool` | `{tool}` | `selection`, `directSelection`, `pen`, `rectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, … |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. The options are below. |
 | `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. Polygons and stars take `rotation` in degrees clockwise (0: a corner or point straight up). `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. Returns `{applied, objects}`: `objects` is the number of objects painted, as the `objects` of the `paint.setFill`, `paint.setStroke` and `stroke.set` replies (the largest of them): a selected group counts the objects inside it. When it is 0, a `note` says that only the paint for new art changed. |
@@ -1127,8 +1127,9 @@ follows as after Export As: Save PDF without its Artboards section, SVG Options 
 options, EPS Options, DXF Options without Export Selected Art Only, Text Export Options with Selection Only on, or an
 exporter plug-in's parameters. Other formats are written at once. OK writes the selection alone, cropped to it, as
 `document.exportSelection` writes it, with the chosen options. While a dialog is open the call returns `null`, and
-OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). To
-write without a dialog, pass `path` or any option. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
+OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). Any
+option skips the options dialog, but without `path` the save panel still picks the file. To write without a
+dialog, pass `path`. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
@@ -1733,6 +1734,16 @@ one opens as before and draws it as `rgb`:
 ```json
 {"id": "effect.setParams", "params": {"index": 0, "params": {"channel": "alpha"}}}
 → invalid parameters for `effect.setParams`: `channel` must be one of rgb, red, green, blue
+```
+
+Radial Blur's Blur Center, `centerX` and `centerY`, must each be a number from 0 to 1: the share of the object's bounds
+across from its left edge and down from its top edge (0.5 each, the object's center, by default). The effect turns or
+zooms about that point, which moves and scales with the object. `effect.apply` and `effect.setParams` refuse any other
+value themselves in the same way, and a document saved with one draws it at the nearest edge:
+
+```json
+{"id": "effect.setParams", "params": {"index": 0, "params": {"centerX": 1.5}}}
+→ invalid parameters for `effect.setParams`: `centerX` must be a number from 0 to 1
 ```
 
 A number outside the range the effect documents is still stored as given and clamped when the effect draws. A
@@ -3343,32 +3354,48 @@ already walks Image Trace. Short agent entry points:
   `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
   is XML whose `variableSets` element holds `variableSet` elements, each with a `variables` element of `variable`
   elements (`varName`, `trait`) and a `sampleDataSets` element of `sampleDataSet` elements (`dataSetName`). Every
-  data set is deleted, and every variable of the document is deleted with its bindings and values, except a text
-  variable the library also declares: it keeps its bindings, so selecting one of the library's data sets changes the
-  objects bound to it. Then the library's other variables whose `trait` is `textcontent` are defined as text
-  variables, unbound. In each data set, the element named
-  after a text variable gives its value: the text of its `p` elements, one paragraph each. An element without a `p`
-  element gives no value. Variables of other kinds are left out with their values: the reply lists them in `skipped`
-  (`name`, `trait`), and its `warning` names each `trait` with its count. The reply's `deleted` and `deletedDataSets`
+  data set is deleted, and every variable of the document is deleted with its bindings and values, except a variable
+  the library also declares with the same kind: it keeps its bindings, so selecting one of the library's data sets
+  changes the objects bound to it. Then the library's other variables are defined, unbound, with the kind their
+  `trait` gives: `textcontent` is text, `visibility` is visibility, `fileref` (a linked file) is image and
+  `graphdata` is graph. A variable without a `trait`, or with one VectorCraft doesn't know, is defined of unknown
+  kind and takes no values. In each data set, the element named after a variable gives its value:
+  - text: the text of its `p` elements, one paragraph each; an element without a `p` element gives no value;
+  - visibility: `true` or `false`, in any case;
+  - image: a file's absolute path (from `/`, `\\` or a drive's root) or a `file:` URL of one, whose `%XX` escapes
+    are decoded; the file isn't read, so a library can name files that aren't there;
+  - graph: a `data` element. Its optional `propertyRow` holds a corner cell and then the series names, and each `row`
+    of its `values` holds the row's category in a first `value` whose `key` is `name`, then a `value` per series. A
+    value that is empty, marked `type="string"` or not a number is a blank. The data is read as the CSV
+    `graph.setData` takes, at most 256 KiB of it. Graph data with more than 10,000 rows or 256 series, which a
+    graph doesn't hold, is refused, by `variable.saveLibrary` too. `variable.saveLibrary` also refuses graph data
+    with neither rows nor series, which loads back as no value.
+
+  Visibility, image and graph values are read without the white space round them, and an element holding only white
+  space gives no value. The reply's `variables` lists the library's variables, and `deleted` and `deletedDataSets`
   list the variables and data sets the load deleted. While the variables are locked, a library that would delete or
-  define a variable fails with "variables are locked". The reply is `{variables, deleted, deletedDataSets, names,
-  skipped, warning?}`. A library larger than 8 MiB, one whose elements nest more than 256 deep, and one with more
+  define a variable fails with "variables are locked". The reply is `{variables, deleted, deletedDataSets, names}`. A
+  library larger than 8 MiB, one whose elements nest more than 256 deep, and one with more
   than 256 variables or 1,000 data sets are refused. Its document type declaration may hold an external identifier,
   comments, processing instructions and up to 64 entity declarations whose values are plain text (no `<`, `&` or
   `%`). A declaration that holds anything else, and entity references that expand the library past 8 MiB, are
-  refused. So are a variable or data set declared twice and a value for a variable the library doesn't declare.
-  `variable.saveLibrary {path?}` (the panel menu's Save Variable Library…) writes the document's text variables and
-  every data set as a variable library in the layout `variable.loadLibrary` reads: a `variable` element with
-  `varName` and `trait="textcontent"` for each text variable, and a `sampleDataSet` element with `dataSetName` for
-  each data set, holding an element named after each text variable it has a value for, with one `p` element per line
-  of the value. Loading the file gives back the same text variables, data set names and text values. Variables of
-  other kinds are left out with their values: the reply lists them in `skipped` (`name`, `kind`), and its `warning`
-  names each kind with its count. Saving is refused for a document without a text variable, for a text variable whose
-  name isn't an XML name (it starts with a letter or `_` and holds only letters, digits, `-`, `_` and `.`), for a
-  data set whose name or text value holds a control character, for a data set name with white space at either end,
-  for a name longer than 255 characters or used twice, and past `variable.loadLibrary`'s caps (256 variables, 1,000
-  data sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets, skipped, warning?}`;
-  with it, the file is written and the reply is `{path, variables, datasets, skipped, warning?}`.
+  refused. So are a variable or data set declared twice, a value for a variable the library doesn't declare, and a
+  value that doesn't fit its variable's kind.
+  `variable.saveLibrary {path?}` (the panel menu's Save Variable Library…) writes the document's variables and every
+  data set as a variable library in the layout `variable.loadLibrary` reads: a `variable` element with `varName` for
+  each variable, with the `trait` and `category` of its kind (`textcontent` and `&ns_flows;`, `visibility` and
+  `&ns_vars;`, `fileref` and `&ns_vars;`, `graphdata` and `&ns_graphs;`; neither for a variable of unknown kind), and
+  a `sampleDataSet` element with `dataSetName` for each data set, holding an element named after each variable it has
+  a value for. A text value is written with one `p` element per line, a visibility value as `true` or `false`, an
+  image value as its path (a path from the root of a Unix file system as a `file:///` URL), and a graph value as a
+  `data` element, with a blank category marked `type="string"`. Loading the file gives back the same variables with their kinds, data set names and values; graph
+  data comes back in the CSV form Graph Data writes. Saving is refused for a document without a variable, for a
+  variable whose name isn't an XML name (it starts with a letter or `_` and holds only letters, digits, `-`, `_` and
+  `.`; a variable of unknown kind has no values, so its name isn't checked), for a name or value that holds a control
+  character, for a name with white space at either end, for a name longer than 255 characters or used twice, for an
+  image value that isn't a file's absolute path, and past `variable.loadLibrary`'s caps (256 variables, 1,000 data
+  sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets}`; with it, the file is written and the reply
+  is `{path, variables, datasets}`.
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
   action on every file in a folder or every data set (the Actions panel menu's Batch…). Override Save and Override
@@ -3745,6 +3772,31 @@ already walks Image Trace. Short agent entry points:
   `livePaint.strokeEdge` when an edge is within 4 screen pixels of the pointer and `livePaint.fill` otherwise, and
   Shift-click runs `livePaint.fill`. With both off, a click runs nothing. With `highlight` off, the face or edge under
   the pointer is not outlined.
+  A double-click runs the command a click there runs with `scope: "connected"`, and a triple-click with
+  `scope: "samePaint"`; Alt held runs nothing, and so does Cmd/Ctrl (`mods.cmd`), whose presses go to the selection
+  tool Cmd lends. With Space held (`mods.space`, the view tools), a press, a
+  double-click or a triple-click runs nothing, and a move outlines no face or edge. On a face, `connected` fills the face and every face reached from it
+  across edges that draw no stroke (an edge that is hidden or fully transparent, or whose strokes are each hidden,
+  without paint, 0 pt wide or fully transparent); a stroked edge, a hidden face, a gap
+  that Gap Detection closes and the group's outside stop it. `samePaint` fills every face
+  of the group, joined to it or not, whose fill is the `match` paint. On an edge, `connected` paints the edge and the
+  edges joined to it end to end that draw with the stroke paint `match`, and `samePaint` paints every edge of the
+  group that draws with that stroke paint; the stroke's weight is not compared. An edge draws with the paint of its
+  topmost stroke that is shown, with paint, above 0 pt and not fully transparent, and with none when the edge is fully
+  transparent or has no such stroke. Each click of a double-click or triple-click runs as it
+  arrives and is its own undo step. `match` is the paint the face or edge had before the first of the double-click's
+  two clicks or the triple-click's three that painted it, or before the double-click when the triple-click's double-click
+  reached it, so the clicks before the last do not change what it matches;
+  a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. An edge takes the
+  paint and weight in its topmost stroke that is shown, or in a new stroke above the others when it has none. These rules
+  for what faces and edges join and what paints match are VectorCraft's own. The help page describes the gestures:
+  https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html.
+  `livePaint.fill {scope}` and `livePaint.strokeEdge {scope}` take `scope` as `"one"` (the default), `"connected"` or
+  `"samePaint"`; any other value is an error and changes nothing. `match` is a paint in the model JSON that
+  `document.node {id}` writes for an appearance's paints (`{"type": "none"}` for none), taken only with a scope that compares paints, and
+  defaults to the face's fill or the stroke paint the edge draws with. `livePaint.fill` refuses a `scope` other than `"one"` with
+  `points`. Both replies add `count`, the number of faces or edges the click reaches, including those that already had the
+  paint.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
   keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
   `paint.setStroke` when the Stroke proxy is in front) with the color swatch before or after the active paint in the
@@ -3761,7 +3813,8 @@ already walks Image Trace. Short agent entry points:
   objects; otherwise it returns an error and does not merge the objects.
   A Live Paint command that changes nothing records no undo step, keeps the redo steps, leaves a saved document saved
   and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has the paint,
-  `livePaint.strokeEdge` when the edge already has the paint and the width, `livePaint.gapOptions` (and the Gap Options
+  `livePaint.strokeEdge` when the topmost shown stroke of each edge it reaches already has the paint and the width,
+  `livePaint.gapOptions` (and the Gap Options
   dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
   `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
   colors and the last color as they are. `livePaint.gapOptions` makes a group's faces again, with new ids, only when it adds a path or when Gap Detection is turned on or off or given a new size while it is on.
@@ -5223,7 +5276,7 @@ The Attributes panel (`window.panel {panel: "attributes"}`, Cmd+F11) reads `attr
 objects differ) and `recentUrls`. `attributes.set {overprintFill?, overprintStroke?, showCenter?, imageMap?, url?,
 note?, ids?}` sets them in one undo step; `path.setFillRule {rule: "nonZero"|"evenOdd"}` sets the fill rule of the
 paths and compound paths, and `path.reverse {reversed?}` makes subpaths run counter-clockwise (true) or clockwise
-(false). When every subpath of a path turns alike, its strokes' width profiles (left and right swapped) and pen
+(false). When every subpath of a path or compound path turns alike, its strokes' width profiles (left and right swapped) and pen
 pressure, tilt, bearing and rotation turn with it, so the strokes draw as before. SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
 
 ```json
@@ -6226,8 +6279,9 @@ Color on (HDR or Automatic Color Management) and macOS windows are converted by 
 again. In a Wayland session, and where no profile is set or the profile is not an RGB display profile of at most 1 MiB,
 the canvas stays sRGB. The app reads the display again every 10 seconds and when the window moves to another display.
 Exports, `ui.render`, the document, panels and thumbnails are not converted; with Proof Colors on, the proof is drawn
-first and then converted. The art is converted before it is drawn over the converted paper, so the blend of a
-translucent object or an antialiased edge with the paper can differ slightly from a conversion of the blended color.
+first and then converted. Translucent art and the antialiased edges of art over an artboard's paper or the
+transparency grid are blended with it in sRGB, and the blend is converted; over the pasteboard and in Outline the art
+is converted on its own.
 `ui.inspect` returns `displayProfile`: `{enabled, display, source, profile, from, applied, reason,
 osManaged}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
 `pending` or `unsupported`, `applied` says whether the canvas is converted, and `reason` says why not.
@@ -7578,6 +7632,12 @@ bounds; `clip` puts it in a clip group of the old bounds when it is larger). The
 except for a placed document, which opens in a tab. With the preference `editOriginalSystemDefaults` (Preferences ›
 File Handling › Use System Defaults for Edit Original, on by default) off, Edit Original opens a raster image in the app
 that made it, PhotoCraft, where it is installed, and anything else in the system's default app (#5236).
+The UI command `links.copyInfo {ids?}` (the panel menu's Copy Info) copies the file names of images and placed
+documents `ids` to the clipboard, one per line in the order given, and returns `{text, names}`. Without `ids` (or with
+`ids: null`, as for the other `ids` commands) it copies the selected ones, and the rows outside the layer tree picked in
+the panel, in the order `links.list` gives them; the panel menu passes the selected rows in the order the panel shows
+them. An embedded image gives the name its row shows. An id that is not an image or a placed document, a
+malformed `ids`, or nothing to copy is an error, and the clipboard is left as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"links.list","params":{"show":"missing"}}}

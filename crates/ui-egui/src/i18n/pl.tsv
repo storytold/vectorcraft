@@ -931,6 +931,7 @@
 	Free Transform	Swobodne przekształcanie
 	Perspective Distort	Zniekształcenie perspektywiczne
 	Radial Blur…	Rozmycie promieniste…
+	Blur Center	Środek rozmycia
 	Smart Blur…	Inteligentne rozmycie…
 	Sharpen	Wyostrzanie
 	Unsharp Mask…	Maska wyostrzająca…
@@ -2647,6 +2648,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Przezroczyste tło
 	Choose…	Wybierz…
 	Copy Fonts Used in the Document	Kopiuj czcionki użyte w dokumencie
+	Copy Info	Kopiuj informacje
 	Copy Links	Kopiuj łącza
 	Create Report	Utwórz raport
 	Fonts whose licence doesn't allow embedding are not copied.	Czcionki, których licencja nie zezwala na osadzanie, nie są kopiowane.
@@ -4527,6 +4529,7 @@ imageTrace	Outline	Kontur
 @msg	there is no script engine named {name}	nie ma silnika skryptów o nazwie {name}
 @msg	Running a script	Uruchamianie skryptu
 @msg	Copied the script report	Skopiowano raport skryptu
+@msg	Copied the link info	Skopiowano informacje o łączu
 @msg	Corners edits the corners of a path	Narożniki edytuje narożniki ścieżki
 @msg	Couldn't copy to the system clipboard: {e}	Nie udało się skopiować do schowka systemowego: {e}
 @msg	Couldn't open {name}: {e}	Nie udało się otworzyć {name}: {e}
@@ -8883,6 +8886,7 @@ breakText	Glyphs	Glify
 @msg	the RTF file is too large to place as type (at most {_1} MB)	plik RTF jest zbyt duży, aby umieścić go jako tekst (najwyżej {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG rozwija się do ponad {0} zagnieżdżonych obrazów SVG
 @msg	the SVG expands to more than {0} objects	SVG rozwija się do ponad {0} obiektów
+@msg	the SVG's style sheets take too long to match	dopasowanie arkuszy stylów SVG trwa zbyt długo
 @msg	the SVG's styles expand to more than {0} MB	style SVG rozwijają się do ponad {0} MB
 @msg	the SVG has no drawable objects	SVG nie zawiera obiektów, które można narysować
 @msg	the SVGZ file unpacks to more than {_1} MB	plik SVGZ po rozpakowaniu ma ponad {_1} MB
