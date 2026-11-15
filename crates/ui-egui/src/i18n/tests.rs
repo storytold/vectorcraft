@@ -4359,6 +4359,21 @@ fn pdfx_bleed_warning_is_translated() {
     }
 }
 
+/// The warning about art that reaches the trim edge but stops short of the bleed is translated in
+/// every complete-message catalog, for one object and for more, alone and in the status bar's note.
+#[test]
+fn short_of_bleed_warning_is_translated() {
+    for n in [1, 3, 5, 21] {
+        let w = vectorcraft_engine::cmd::fileio::pdf::short_of_bleed_warning(n).expect("a warning");
+        let status = format!("Saved /tmp/a.pdf with 1 note: {w}");
+        for code in COMPLETE_MESSAGES {
+            for shown in [message(Lang::from_code(code).expect("registered"), &w), message(Lang::from_code(code).expect("registered"), &status)] {
+                assert!(!shown.contains("trim edge") && !shown.contains("short of") && shown.contains(&n.to_string()), "{code}: {shown}");
+            }
+        }
+    }
+}
+
 /// The errors of saving, renaming and deleting a tracing preset are translated in every language
 /// that translates every message.
 #[test]

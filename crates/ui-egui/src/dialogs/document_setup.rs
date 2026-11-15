@@ -7,13 +7,16 @@
 //! tab's `colorMode`, `convertColors`, `rgbProfile` and `cmykProfile` (null: the working space).
 //! OK runs `document.setup` with them: one undo step. When the Color tab changed something, OK runs
 //! `document.setup`, `edit.assignProfile` and `file.documentColorMode` in one `command.batch`,
-//! and the document's changes are still one undo step. On an error the dialog stays open.
+//! and the document's changes are still one undo step. On an error the dialog stays open. When OK
+//! raises the bleed on a side, the status bar counts the objects that reach an artboard's trim edge
+//! on a side OK raised but stop short of the new bleed there.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms::ProfileKind;
-use vectorcraft_doc::setup::{GRID_COLOR_PRESETS, LANGUAGES};
+use vectorcraft_doc::setup::{GRID_COLOR_PRESETS, LANGUAGES, bleed_in_range};
 use vectorcraft_doc::{ColorMode, GridSize, Quotes, Unit};
 use vectorcraft_engine::cmd::colormgmt::doc_profiles;
+use vectorcraft_engine::cmd::fileio::pdf;
 
 use super::{DialogSpec, form};
 use crate::state::Dialog;
@@ -102,6 +105,7 @@ fn color_commands(app: &VectorcraftApp, d: &Dialog) -> Result<Vec<Value>, String
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let params: Map<String, Value> = d.fields.iter().filter(|(k, _)| !UI_ONLY.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
     let color = color_commands(app, d)?;
+    let before = app.session.active().map(|st| st.doc.setup.bleed);
     let r = if color.is_empty() {
         app.run("document.setup", Value::Object(params))
     } else {
@@ -110,8 +114,22 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     };
     if r.is_ok() {
         app.ui.dialog = None;
+        if let Some(note) = before.and_then(|b| short_of_bleed_note(app, b)) {
+            app.status(note);
+        }
     }
     r
+}
+
+/// The status note after OK raised the bleed on a side from `before`: how many objects reach an
+/// artboard's trim edge on a side whose bleed grew but stop short of the new bleed there. `None`
+/// when no side grew or no object stops short.
+fn short_of_bleed_note(app: &VectorcraftApp, before: [f64; 4]) -> Option<String> {
+    let doc = &app.session.active()?.doc;
+    // In the range the PDF pages keep the document's bleed to.
+    let (bleed, before) = (bleed_in_range(doc.setup.bleed), bleed_in_range(before));
+    let raised: [f64; 4] = std::array::from_fn(|i| if bleed[i] > before[i] { bleed[i] } else { 0.0 });
+    pdf::short_of_bleed_warning(pdf::short_of_bleed(doc, raised, None, false))
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
@@ -426,6 +444,51 @@ mod tests {
         app.ui.dialog.as_mut().unwrap().fields.insert("bleed".into(), json!(500));
         assert!(crate::dialogs::confirm(&mut app).is_err());
         assert!(app.ui.dialog.is_some());
+    }
+
+    /// OK with a larger bleed shows how many objects reach the trim edge but stop short of it; a
+    /// smaller bleed, or a larger one that no object falls short of, shows no such note.
+    #[test]
+    fn ok_with_a_larger_bleed_counts_the_art_short_of_it() {
+        let short = |app: &VectorcraftApp| app.ui.status.contains("short of the bleed");
+        let ok_with_sides = |app: &mut VectorcraftApp, bleed: [f64; 4]| {
+            app.status("");
+            app.run("file.documentSetup", json!({})).unwrap();
+            app.ui.dialog.as_mut().unwrap().fields.insert("bleed".into(), json!(bleed));
+            crate::dialogs::confirm(app).unwrap();
+        };
+        let ok_with_bleed = |app: &mut VectorcraftApp, bleed: f64| ok_with_sides(app, [bleed; 4]);
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        // A background that fills a 4 pt bleed on the top, left and right.
+        let id = app.run("shape.rectangle", json!({"x": -4, "y": -4, "width": 208, "height": 50})).unwrap()["id"].clone();
+        app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+        ok_with_bleed(&mut app, 4.0);
+        assert!(!short(&app), "{}", app.ui.status);
+        ok_with_bleed(&mut app, 9.0);
+        assert_eq!(app.ui.status, "1 object reaches the trim edge but stops short of the bleed");
+        ok_with_bleed(&mut app, 6.0);
+        assert!(!short(&app), "{}", app.ui.status);
+        // Only the sides whose bleed grows count: the background stops short at the top, left and
+        // right, so a larger bottom bleed alone shows no note, and a larger top bleed does.
+        ok_with_sides(&mut app, [6.0, 12.0, 6.0, 6.0]);
+        assert!(!short(&app), "{}", app.ui.status);
+        ok_with_sides(&mut app, [12.0, 12.0, 6.0, 6.0]);
+        assert!(short(&app), "{}", app.ui.status);
+        // Art inside the trim falls short of no bleed.
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        ok_with_bleed(&mut app, 9.0);
+        assert!(!short(&app), "{}", app.ui.status);
+        assert_eq!(app.session.active().unwrap().doc.setup.bleed, [9.0; 4]);
+        // A bleed that isn't a number, as a file can hold, counts as none before OK, as in the PDF.
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 200, "height": 50})).unwrap();
+        std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc).setup.bleed = [f64::NAN; 4];
+        ok_with_bleed(&mut app, 9.0);
+        assert_eq!(app.ui.status, "1 object reaches the trim edge but stops short of the bleed");
     }
 
     /// Highlight Substituted Fonts is in Preferences › Type, so the General tab shows only the

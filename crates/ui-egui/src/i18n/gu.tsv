@@ -4348,6 +4348,7 @@ antiAlias	Sharp	શાર્પ
 	Gurmukhi	ગુરમુખી
 @plural	Result: {n}|Results: {n}	પરિણામ: {n}|પરિણામો: {n}
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	દસ્તાવેજ એવી બ્લીડ સેટ કરે છે જે આ PDF/X ફાઇલ છોડી દે છે: "દસ્તાવેજની બ્લીડ સેટિંગ્સ વાપરો" ચાલુ કરો
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} ઑબ્જેક્ટ ટ્રિમ કિનારી સુધી પહોંચે છે પણ બ્લીડ પહેલાં અટકી જાય છે|{n} ઑબ્જેક્ટ ટ્રિમ કિનારી સુધી પહોંચે છે પણ બ્લીડ પહેલાં અટકી જાય છે
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} સાચવ્યું, {n} નોંધ સાથે: {first}|{path} સાચવ્યું, {n} નોંધો સાથે: {first}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{folder} માં {n} ફાઇલ ({note}) પેકેજ થઈ|{folder} માં {n} ફાઇલો ({note}) પેકેજ થઈ
 @msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} ફાઇલ પેકેજ થઈ {note}|{n} ફાઇલો પેકેજ થઈ {note}

@@ -569,6 +569,25 @@ fn include_bleed_pdfx_rows_do_not_warn_about_the_bleed() {
     assert!(warned(&export(&mut s, json!({"includeBleed": true, "selection": "one", "formats": row}))));
 }
 
+/// A PDF row with the document's bleed warns about art that stops short of it on an artboard's
+/// page, but not on a page Include Bleed grows or on a page of a selection's bounds.
+#[test]
+fn pdf_rows_warn_about_art_short_of_the_bleed_on_artboard_pages_only() {
+    let mut s = session(1);
+    s.execute("document.setup", &json!({"bleed": 6})).unwrap();
+    // Against the artboard's top edge.
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 40, "height": 10})).unwrap();
+    let warned = |r: &Value| r["warnings"].as_array().unwrap().iter().any(|w| super::pdf::is_short_of_bleed(w.as_str().unwrap()));
+    let row = json!([{"format": "pdf", "bleed": {"useDocument": true}}]);
+    assert!(warned(&export(&mut s, json!({"formats": row}))));
+    assert!(!warned(&export(&mut s, json!({"includeBleed": true, "formats": row}))));
+    assert!(!warned(&export(&mut s, json!({"selection": "one", "formats": row}))));
+    // Without a document bleed, Include Bleed doesn't grow the artboard, so a row's own bleed warns.
+    s.execute("document.setup", &json!({"bleed": 0})).unwrap();
+    let row = json!([{"format": "pdf", "bleed": {"top": 6, "bottom": 6, "left": 6, "right": 6}}]);
+    assert!(warned(&export(&mut s, json!({"includeBleed": true, "formats": row}))));
+}
+
 #[test]
 fn png_8_rows_write_indexed_colour() {
     let mut s = session(1);

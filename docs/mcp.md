@@ -5984,6 +5984,20 @@ information (title, artboard, export date in UTC) are drawn in Registration (`/S
 the colour bars are process, spot and black-tint patches. Layers whose Print option is off (`layer.setProps
 {printable: false}`) are left out unless `includeNonPrinting` (or `createLayers`) is on.
 
+VectorCraft also checks the art against the bleed. When a page has a bleed, the export warns with a count of the
+objects that reach the trim edge (within 0.5 pt) on a side whose bleed is more than 0.5 pt but end before the bleed
+edge, for example `3 objects reach the trim edge but stop short of the bleed`. The check measures each object on the
+visible layers (a group counts as one) by its visual bounds, strokes included. It measures a clip group or a clipping
+layer by the art inside the clipping path's geometric bounds and by the fill and stroke the clipping path paints
+itself. It leaves out hidden objects, guides, objects at 0% opacity and paths with no fill or stroke. It does not
+measure objects with brushed strokes or an opacity mask, area type, type on a path, or groups that hold one of them.
+It leaves out template layers, layers with an opacity mask, and layers that don't print unless `includeNonPrinting` is
+on. The export writes the art and the page boxes unchanged. A page of the
+art's bounds (`useArtboards: false`) does not warn. Export for Screens does not warn for a PDF row when Include Bleed
+grows the artboards, or for a page of assets, layers or a selection. `.ai` saves do not warn. When OK in File ›
+Document Setup raises the bleed on a side, the status bar counts the objects that stop short of the new bleed on the
+sides OK raised, on every artboard.
+
 ```json
 {"name":"run_command","arguments":{"command":"document.exportPdf","params":{"path":"/tmp/press.pdf","preset":"Press Quality","marks":{"trim":true,"registration":true,"colorBars":true,"pageInfo":true}}}}
 ```

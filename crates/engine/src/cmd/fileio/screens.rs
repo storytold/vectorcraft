@@ -1237,10 +1237,16 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
     // Include Bleed: a grown artboard already holds the bleed. Assets, layers and a selection are
     // written on a page of their own bounds, which it doesn't grow.
     let bleed_on_page = o.include_bleed && o.assets.is_none() && o.layers.is_none() && o.selection.is_none();
+    // A grown artboard's trim edge is the bleed edge, and a page of its art's bounds has every
+    // object at its edge: neither says whether art stops short of the bleed.
+    let artboard_page = o.assets.is_none() && o.layers.is_none() && o.selection.is_none();
     let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
+        // Include Bleed grows the artboards only when the document has a bleed.
+        let trim_on_page = artboard_page && !(o.include_bleed && doc.setup.has_bleed());
         // The steps are the files: an encoder's own steps (artboards, pages) are not reported.
         let (bytes, given) = vectorcraft_doc::cancel::quiet(|| encode_with_notes(doc, format, options))?;
-        for n in given.into_iter().filter(|n| !(bleed_on_page && n.text == super::pdf::BLEED_LEFT_OUT)) {
+        let shown = |n: &Note| !(bleed_on_page && n.text == super::pdf::BLEED_LEFT_OUT) && (trim_on_page || !super::pdf::is_short_of_bleed(&n.text));
+        for n in given.into_iter().filter(shown) {
             add_note(&mut notes, n);
         }
         Ok(bytes)
