@@ -1076,6 +1076,8 @@
 	Step up or down	O krok nahoru nebo dolů
 	Drag values or labels. Double-click a value to type.	Upravte hodnoty přetažením čísel nebo popisků. Dvojím kliknutím na hodnotu ji zadáte.
 	Drag rings to rotate. Shift snaps to 15°.	Otáčejte přetažením prstenců. Shift nastaví kroky po 15°.
+	Track cube	Otočná krychle
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Otáčejte přetažením stěny, hrany nebo prstence. Shift otáčí kolem jedné osy obrazovky.
 	Drag the light, or its rings. Shift snaps to 15°.	Přetáhněte světlo nebo jeho prstence. Shift nastaví kroky po 15°.
 lighting	Light	Světlo
 	Keep visible surfaces only when expanding	Při rozložení ponechat pouze viditelné povrchy

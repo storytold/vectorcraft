@@ -5872,6 +5872,8 @@ effect	Vertical	垂直
 	Step up or down	逐级增减
 	Drag values or labels. Double-click a value to type.	拖动数值或标签。双击数值即可输入。
 	Drag rings to rotate. Shift snaps to 15°.	拖动圆环旋转。按住 Shift 以 15° 为步长调整。
+	Track cube	旋转立方体
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	拖动面、边或圆环进行旋转。按住 Shift 绕一个屏幕轴旋转。
 	Drag the light, or its rings. Shift snaps to 15°.	拖动光源或圆环。按住 Shift 以 15° 为步长调整。
 lighting	Light	光源
 	Keep visible surfaces only when expanding	扩展时仅保留可见表面

@@ -1227,6 +1227,8 @@ font-technology	Variable	Változó
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Húzz ide grafikát, színeket és szövegstílusokat, hogy más dokumentumokban is használhasd őket. A könyvtárak ezen a gépen tárolódnak, fiók nem kell hozzájuk.
 	Drag onto art to apply this appearance	Grafikára húzva alkalmazza ezt a megjelenést
 	Drag rings to rotate. Shift snaps to 15°.	Forgatáshoz húzd a gyűrűket. Shift: illesztés 15°-onként.
+	Track cube	Forgatókocka
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Forgatáshoz húzz egy lapot, egy élt vagy a gyűrűt. Shift: forgatás egy képernyőtengely körül.
 	Drag the art to move it on the paper	Húzd a grafikát a papíron való áthelyezéshez
 	Drag the light, or its rings. Shift snaps to 15°.	Húzd a fényt vagy a gyűrűit. Shift: illesztés 15°-onként.
 	Drag to float as a toolbar	Húzd el, hogy önálló eszköztárként lebegjen

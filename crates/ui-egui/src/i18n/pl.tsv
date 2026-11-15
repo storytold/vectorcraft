@@ -1014,6 +1014,8 @@
 	Step up or down	Zwiększ lub zmniejsz o krok
 	Drag values or labels. Double-click a value to type.	Przeciągaj wartości lub etykiety. Kliknij dwukrotnie wartość, aby ją wpisać.
 	Drag rings to rotate. Shift snaps to 15°.	Przeciągaj pierścienie, aby obracać. Shift przyciąga co 15°.
+	Track cube	Kostka obrotu
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Przeciągnij ścianę, krawędź lub pierścień, aby obracać. Shift obraca wokół jednej osi ekranu.
 	Drag the light, or its rings. Shift snaps to 15°.	Przeciągaj światło lub jego pierścienie. Shift przyciąga co 15°.
 lighting	Light	Światło
 	Keep visible surfaces only when expanding	Przy rozszerzaniu zachowaj tylko widoczne powierzchnie

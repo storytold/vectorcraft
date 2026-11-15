@@ -1057,6 +1057,8 @@
 	Step up or down	Askel ylös tai alas
 	Drag values or labels. Double-click a value to type.	Vedä arvoja tai nimiöitä. Kirjoita arvo kaksoisnapsauttamalla.
 	Drag rings to rotate. Shift snaps to 15°.	Kierrä vetämällä renkaita. Vaihto kohdistaa 15°:n välein.
+	Track cube	Kiertokuutio
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Kierrä vetämällä tahkoa, särmää tai rengasta. Vaihto kiertää yhden näytön akselin ympäri.
 	Drag the light, or its rings. Shift snaps to 15°.	Vedä valoa tai sen renkaita. Vaihto kohdistaa 15°:n välein.
 lighting	Light	Valo
 	Keep visible surfaces only when expanding	Säilytä laajennettaessa vain näkyvät pinnat
