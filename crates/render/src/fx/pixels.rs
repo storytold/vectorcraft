@@ -241,7 +241,10 @@ impl Renderer {
             outline: feather_outline(&chain, content, content.reach.origin()),
         });
         let (center, extent) = (content.reach.center(), 0.5 * content.reach.width().hypot(content.reach.height()));
-        let space = effects::PixelSpace { to_doc, px, center, channels, line, extent };
+        // The Blur Center lies in the object's bounds; a split stack's later part spreads `reach`
+        // evenly, so the centre stays the same.
+        let size = content.object.size().to_vec2();
+        let space = effects::PixelSpace { to_doc, px, center, size, channels, line, extent };
         let (wz, hz) = (wu as usize, hu as usize);
         // What the content covers after the effects run so far: Rasterize makes its image over it.
         let mut bounds = content.bounds.unwrap_or(content.reach);
@@ -708,6 +711,7 @@ impl Renderer {
                 owner: None,
                 cache: Some((j + 1) << 8),
                 reach: ib.inflate(outset, outset),
+                object: ib.inflate(outset, outset),
                 outline: Some((&outline, orule)),
                 bounds,
                 kept: None,
