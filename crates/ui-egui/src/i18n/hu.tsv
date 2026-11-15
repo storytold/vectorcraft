@@ -9069,6 +9069,7 @@ breakText	Glyphs	Glifák
 @msg	the character's size can't be measured	a karakter mérete nem mérhető meg
 @msg	the code runs past its last instruction	a kód túlfut az utolsó utasításán
 @msg	the compound shape is too complex to expand	az összetett alakzat túl bonyolult a kibontáshoz
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	egy vonal vagy más nyitott útvonal, amely nem zár közre területet, nem ad területet az összetett alakzathoz; a felvételéhez előbb alkalmazza rá az Objektum › Útvonal › Körvonal útvonallá alakítása parancsot
 @msg	the container of the listed objects is gone	a felsorolt objektumok tárolója már nincs meg
 @msg	the copy `{user_id}` can't be read as a library	a másolat nem olvasható be könyvtárként: `{user_id}`
 @msg	the copy would leave the canvas	a másolat kikerülne a vászonról

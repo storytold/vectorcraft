@@ -9059,6 +9059,7 @@ breakText	Glyphs	Glyphes
 @msg	the character's size can't be measured	la taille du caractère ne peut pas être mesurée
 @msg	the code runs past its last instruction	le code s’exécute au-delà de sa dernière instruction
 @msg	the compound shape is too complex to expand	la forme composée est trop complexe pour être décomposée
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	une ligne ou un autre tracé ouvert qui n’entoure aucune surface n’ajoute aucune surface à la forme composée ; pour l’inclure, appliquez-lui d’abord Objet › Tracé › Vectoriser le contour
 @msg	the container of the listed objects is gone	le conteneur des objets listés a disparu
 @msg	the copy `{user_id}` can't be read as a library	la copie `{user_id}` ne peut pas être lue comme une bibliothèque
 @msg	the copy would leave the canvas	la copie sortirait de la zone de travail

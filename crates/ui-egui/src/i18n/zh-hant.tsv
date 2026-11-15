@@ -8945,6 +8945,7 @@ breakText	Glyphs	字符
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	工作區域無法容納於畫布：請減少工作區域、縮小間距或縮小尺寸
 @msg	the character's size can't be measured	無法測量字元的大小
 @msg	the compound shape is too complex to expand	複合形狀過於複雜，無法展開
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	直線或其他不圍成區域的開放路徑不會為複合形狀增加任何區域；若要納入，請先對其套用「物件 › 路徑 › 外框筆畫」
 @msg	the container of the listed objects is gone	所列物件的容器已不存在
 @msg	the copy `{user_id}` can't be read as a library	複本 `{user_id}` 無法讀取為資料庫
 @msg	the copy would leave the canvas	複本會超出畫布

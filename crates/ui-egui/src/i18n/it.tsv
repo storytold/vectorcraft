@@ -8791,6 +8791,7 @@ breakText	Glyphs	Glifi
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	le tavole da disegno non entrano nell'area di lavoro: usa meno tavole da disegno, una spaziatura minore o una dimensione più piccola
 @msg	the character's size can't be measured	impossibile misurare la dimensione del carattere
 @msg	the compound shape is too complex to expand	la forma composta è troppo complessa da espandere
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	una linea o un altro tracciato aperto che non racchiude alcuna area non aggiunge alcuna area alla forma composta; per includerlo, applica prima Oggetto › Tracciato › Contorna traccia
 @msg	the container of the listed objects is gone	il contenitore degli oggetti elencati non esiste più
 @msg	the copy `{user_id}` can't be read as a library	la copia `{user_id}` non può essere letta come libreria
 @msg	the copy would leave the canvas	la copia uscirebbe dall'area di lavoro

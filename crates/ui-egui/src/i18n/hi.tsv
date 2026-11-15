@@ -8229,6 +8229,7 @@ antiAlias	Sharp	शार्प
 @msg	the CMYK image couldn't be written	CMYK इमेज को नहीं लिखा जा सकता
 @msg	the Color Picker is not open	रंग पिकर खुला नहीं है
 @msg	the compound shape is too complex to expand	मिश्रित आकार का विस्तार करने के लिए बहुत जटिल है
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	कोई रेखा या अन्य खुला पाथ जो कोई क्षेत्र नहीं घेरता, मिश्रित आकार में कोई क्षेत्र नहीं जोड़ता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
 @msg	the compressed file unpacks to more than {_1} MB	संकुचित फ़ाइल {_1} MB से अधिक के लिए अनपैक
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	संपीड़ित फ़ाइल खुलकर उससे बड़ी हो जाती है जितना VectorCraft पढ़ता है (डॉक्यूमेंट के {_1} MB, हर इमेज के {_2} MB)
 @msg	the container of the listed objects is gone	सूचीबद्ध ऑब्जेक्ट्स का कंटेनर चला गया है

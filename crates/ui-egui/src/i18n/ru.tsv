@@ -9179,6 +9179,7 @@ shape	Open	Открытый
 @msg	the character's size can't be measured	размер символа невозможно измерить
 @msg	the code runs past its last instruction	код выполняется дальше своей последней инструкции
 @msg	the compound shape is too complex to expand	составная фигура слишком сложна, чтобы её разобрать
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	линия или другой открытый контур, не охватывающий площади, не добавляет площади к составной фигуре; чтобы включить его, сначала примените к нему Объект › Контур › Обвести обводку
 @msg	the container of the listed objects is gone	контейнер перечисленных объектов больше не существует
 @msg	the copy `{user_id}` can't be read as a library	копию `{user_id}` невозможно прочитать как библиотеку
 @msg	the copy would leave the canvas	копия вышла бы за пределы холста

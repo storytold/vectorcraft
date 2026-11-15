@@ -8793,6 +8793,7 @@ breakText	Glyphs	Гліфи
 @msg	the character's size can't be measured	розмір символу не можна виміряти
 @msg	the code runs past its last instruction	код виконується далі своєї останньої інструкції
 @msg	the compound shape is too complex to expand	складена фігура занадто складна для розбирання
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	лінія чи інший відкритий контур, що не охоплює площі, не додає площі до складеної фігури; щоб включити його, спершу застосуйте до нього Об’єкт › Контур › Обвести обведення
 @msg	the container of the listed objects is gone	контейнера перелічених об’єктів більше немає
 @msg	the copy `{user_id}` can't be read as a library	копію `{user_id}` не вдалося прочитати як бібліотеку
 @msg	the copy would leave the canvas	копія вийшла б за межі полотна

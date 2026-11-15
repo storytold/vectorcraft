@@ -9017,6 +9017,7 @@ breakText	Glyphs	字形
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	画板在画布上放不下：请减少画板、缩小间距或减小尺寸
 @msg	the character's size can't be measured	无法测量该字符的大小
 @msg	the compound shape is too complex to expand	复合形状过于复杂，无法扩展
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	直线或其他不围成区域的开放路径不会为复合形状增加任何区域；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
 @msg	the container of the listed objects is gone	所列对象的容器已不存在
 @msg	the copy `{user_id}` can't be read as a library	副本 `{user_id}` 无法作为库读取
 @msg	the copy would leave the canvas	副本会超出画布

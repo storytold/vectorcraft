@@ -9259,6 +9259,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	the character's size can't be measured	não é possível medir o tamanho do caractere
 @msg	the code runs past its last instruction	o código passa da última instrução
 @msg	the compound shape is too complex to expand	a forma composta é complexa demais para expandir
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	uma linha ou outro caminho aberto que não envolve nenhuma área não acrescenta nenhuma área à forma composta; para incluí-lo, aplique primeiro Objeto › Caminho › Contornar Traçado a ele
 @msg	the container of the listed objects is gone	o contêiner dos objetos listados não existe mais
 @msg	the copy `{user_id}` can't be read as a library	a cópia `{user_id}` não pode ser lida como uma biblioteca
 @msg	the copy would leave the canvas	a cópia sairia da tela

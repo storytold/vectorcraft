@@ -5076,7 +5076,9 @@ envelopes) the members of one live compound shape, each in shape mode `mode` (`"
 as its steps, an envelope as its distorted art, an object with a warp or another geometry effect as it draws, each
 updated when the member is edited), painted with its own
 appearance, which it takes from the topmost member not in Subtract (with every member subtracting, the backmost); a
-fill or stroke given to it or to a member paints the compound shape. The members stay editable (Direct Selection,
+fill or stroke given to it or to a member paints the compound shape. Open paths are closed, so a straight line encloses
+no area and contributes no area to the shape. When a member is or holds such a path, the reply's `warning` says so
+and names Object › Path › Outline Stroke. The members stay editable (Direct Selection,
 the Layers panel, isolation mode). `object.compoundShape.setMode {mode, ids?}` sets the mode of the members the
 selection is or is in, `object.compoundShape.release` gives the members back as they were, and
 `object.compoundShape.expand` turns each compound shape into the path, or compound path, of its area. A saved file

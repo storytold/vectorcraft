@@ -8741,6 +8741,7 @@ breakText	Glyphs	Glyphen
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	die Zeichenflächen passen nicht auf die Arbeitsfläche: weniger Zeichenflächen, weniger Abstand oder eine kleinere Größe
 @msg	the character's size can't be measured	die Größe des Zeichens kann nicht gemessen werden
 @msg	the compound shape is too complex to expand	die zusammengesetzte Form ist zu komplex zum Umwandeln
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	eine Linie oder ein anderer offener Pfad, der keine Fläche umschließt, trägt keine Fläche zur zusammengesetzten Form bei; um ihn einzubeziehen, wenden Sie zuerst Objekt › Pfad › Konturlinie darauf an
 @msg	the container of the listed objects is gone	der Container der aufgelisteten Objekte ist nicht mehr vorhanden
 @msg	the copy `{user_id}` can't be read as a library	die Kopie `{user_id}` kann nicht als Bibliothek gelesen werden
 @msg	the copy would leave the canvas	die Kopie würde die Arbeitsfläche verlassen

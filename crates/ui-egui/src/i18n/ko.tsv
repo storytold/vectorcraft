@@ -8796,6 +8796,7 @@ breakText	Glyphs	글리프
 @msg	the character's size can't be measured	글자의 크기를 잴 수 없습니다
 @msg	the code runs past its last instruction	코드가 마지막 명령을 지나 실행됩니다
 @msg	the compound shape is too complex to expand	컴파운드 모양이 너무 복잡해서 확장할 수 없습니다
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	영역을 둘러싸지 않는 선이나 기타 열린 패스는 컴파운드 모양에 영역을 더하지 않습니다. 포함하려면 먼저 개체 › 패스 › 선 윤곽선화를 적용하세요
 @msg	the container of the listed objects is gone	나열한 개체의 컨테이너가 없어졌습니다
 @msg	the copy `{user_id}` can't be read as a library	복사본 `{user_id}`을(를) 라이브러리로 읽을 수 없습니다
 @msg	the copy would leave the canvas	복사본이 캔버스를 벗어납니다

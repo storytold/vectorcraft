@@ -861,6 +861,9 @@ pub use xform::{AppearanceAttrs, EyedropperAttrs, EyedropperOptions, FillAttrs, 
 /// The shape modes of the selected compound-shape members (the Pathfinder panel lights theirs).
 pub use compoundshape::selected_member_modes;
 
+/// Make Compound Shape's warning when a member is an open path that encloses no area.
+pub use compoundshape::OPEN_PATHS_ADD_NO_AREA;
+
 /// Pathfinder Options (`Prefs::pathfinder`).
 pub use pathops::{PATHFINDER_PRECISION_RANGE, PathfinderOptions};
 

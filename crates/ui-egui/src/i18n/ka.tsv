@@ -1553,6 +1553,7 @@
 @msg	the color book is cut short	ფერთა წიგნი შეკვეცილია
 @msg	the color book's names take more than {_1} MB	ფერთა წიგნის სახელები {_1} MB-ზე მეტს იკავებს
 @msg	the compound shape is too complex to expand	შედგენილი ფიგურა ზედმეტად რთულია გასაშლელად
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	ხაზი ან სხვა ღია ტრაექტორია, რომელიც ფართობს არ შემოსაზღვრავს, შედგენილ ფიგურას ფართობს არ უმატებს; მის ჩასართავად ჯერ გამოიყენეთ ობიექტი › ტრაექტორია › კონტურის ფიგურად გარდაქმნა
 @msg	the container of the listed objects is gone	ჩამოთვლილი ობიექტების კონტეინერი აღარ არსებობს
 @msg	the copy `{user_id}` can't be read as a library	ასლის `{user_id}` ბიბლიოთეკად წაკითხვა შეუძლებელია
 @msg	the copy would leave the canvas	ასლი ტილოს გარეთ გავიდოდა

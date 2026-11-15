@@ -7119,6 +7119,7 @@ imageTrace	Outline	Contour
 @msg	the character's size can't be measured	de grootte van het teken kan niet worden gemeten
 @msg	the code runs past its last instruction	de code loopt voorbij de laatste instructie
 @msg	the compound shape is too complex to expand	de samengestelde vorm is te complex om uit te breiden
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	een lijn of ander open pad dat geen oppervlak omsluit, voegt geen oppervlak toe aan de samengestelde vorm; pas er eerst Object › Pad › Contour omzetten op toe om het op te nemen
 @msg	the container of the listed objects is gone	de container van de vermelde objecten is verdwenen
 @msg	the copy `{user_id}` can't be read as a library	de kopie `{user_id}` kan niet als bibliotheek worden gelezen
 @msg	the copy would leave the canvas	de kopie zou buiten het canvas vallen

@@ -7992,6 +7992,7 @@ axis	Y Axis	Y 軸
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	アートボードがキャンバスに収まりません: アートボードの数を減らすか、間隔またはサイズを小さくしてください
 @msg	the character's size can't be measured	文字のサイズを計測できません
 @msg	the compound shape is too complex to expand	複合シェイプが複雑すぎて拡張できません
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	領域を囲まない直線などのオープンパスは、複合シェイプに領域を加えません。含めるには、先にそのパスに「オブジェクト › パス › パスのアウトライン」を適用してください
 @msg	the container of the listed objects is gone	指定したオブジェクトを含むコンテナがなくなりました
 @msg	the copy `{user_id}` can't be read as a library	コピー `{user_id}` をライブラリとして読み込めません
 @msg	the copy would leave the canvas	コピーがキャンバスからはみ出します

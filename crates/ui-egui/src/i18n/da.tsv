@@ -7681,3 +7681,4 @@ breakText	Glyphs	Glyffer
 	Nest Shapes	Pak figurer tæt
 	Roll	Rulle
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	en linje eller anden åben kurve, der ikke omslutter noget område, tilføjer intet område til den sammensatte figur; anvend først Objekt › Kurve › Streg til kontur på den for at tage den med

@@ -9198,6 +9198,7 @@ breakText	Glyphs	Glyfy
 @msg	the character's size can't be measured	velikost znaku nelze změřit
 @msg	the code runs past its last instruction	kód běží za svou poslední instrukci
 @msg	the compound shape is too complex to expand	složený tvar je příliš složitý na rozložení
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	čára nebo jiná otevřená cesta, která neohraničuje žádnou plochu, nepřidá složenému tvaru žádnou plochu; chcete-li ji zahrnout, použijte na ni nejprve Objekt › Cesta › Převést tah na obrys
 @msg	the container of the listed objects is gone	kontejner uvedených objektů už neexistuje
 @msg	the copy `{user_id}` can't be read as a library	kopii `{user_id}` nelze přečíst jako knihovnu
 @msg	the copy would leave the canvas	kopie by opustila plátno
