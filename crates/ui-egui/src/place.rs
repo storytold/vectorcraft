@@ -61,7 +61,7 @@ pub fn is_document(name: &str) -> bool {
 #[derive(Default)]
 pub struct PlaceState {
     /// Web: the bytes of the files picked for the Place dialog, by name.
-    picked: Vec<(String, Vec<u8>)>,
+    pub(crate) picked: Vec<(String, Vec<u8>)>,
     /// The loaded cursor's thumbnails by file name.
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
@@ -74,7 +74,24 @@ pub struct PlaceState {
     queue_asks: bool,
     /// The loaded cursor's files by name, with the size a click places them at.
     queue_sizes: Vec<(String, f64, f64)>,
+    /// The engine's count of cursor loads ([`vectorcraft_engine::Session::place_queue_loads`]) when
+    /// `queue_asks` and `queue_sizes` were set: a later load (`tool.setOption`, a script) clears them.
+    queue_load: u64,
+    /// The import options dialog a click of the cursor opened (the token in its params'
+    /// [`ASKED`]), with the automation roots the cursor was loaded in: its OK, pressed outside any
+    /// roots, places the file within them. Cleared when the cursor is loaded again.
+    asked: Option<(u64, std::sync::Arc<vectorcraft_engine::file_access::AutomationRoots>)>,
 }
+
+/// The `file.place` param that ties an import options dialog's OK to the click of the place cursor
+/// that opened it ([`PlaceState::asked`]); hidden from the dialog's fields and removed before the
+/// file is placed.
+const ASKED: &str = "__placeCursorAsk";
+
+/// The `file.place` param that keeps where a file dropped on a canvas goes (`{doc, reverts}`, as
+/// [`DropAt`]) through the import options dialog the drop opened, so its OK places the file in that
+/// document; hidden from the dialog's fields and removed before the file is placed.
+const DROPPED: &str = "__dropTarget";
 
 /// A place cursor thumbnail: decoded when the cursor is loaded, uploaded when first drawn (and
 /// again in a new graphics context).
@@ -113,10 +130,11 @@ fn engine(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Value, String
 
 /// File → Place… (`file.place`): with a file (`path` or `name` + `dataBase64`), place it, centred
 /// in the view unless `at`, `rect` or `replace` say otherwise (a text file without `text` options,
-/// a DXF drawing without `dxf` options and a PDF with several pages or a password and no `page`
-/// ask for them first, unless `showImportOptions: false` places them with the options confirmed
-/// last); with `paths`, the Place dialog for them; with neither, pick the files first. The file is
-/// read and placed at once (MCP, scripts).
+/// a DXF drawing without `dxf` options, a PSD file embedded without `layers` (when the user places
+/// it) and a PDF with several pages or a password and no `page` ask for them first, unless
+/// `showImportOptions: false` places them with the options confirmed last); with `paths`, the
+/// Place dialog for them; with neither, pick the files first. The file is read and placed at once
+/// (MCP, scripts).
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     place_file(app, p, Read::AtOnce)
 }
@@ -136,7 +154,37 @@ enum Read {
     ForUser { dropped: bool },
 }
 
-fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
+fn place_file(app: &mut VectorcraftApp, p: &Value, mut read: Read) -> Result<Value, String> {
+    // A file dropped on a canvas, and the OK of the import options its drop asked for, go to the
+    // document it was dropped on, which becomes active again; not when that document has closed or
+    // been reverted since.
+    if let Some(target) = p.get(DROPPED) {
+        let field = |k: &str| target.get(k).and_then(Value::as_u64);
+        let Some(i) = app.session.documents().iter().position(|st| Some(st.uid) == field("doc")) else {
+            return Err("the document it was dropped on was closed".into());
+        };
+        if app.session.documents().get(i).is_some_and(|st| Some(st.reverts) != field("reverts")) {
+            return Err("the document it was dropped on was reverted".into());
+        }
+        app.session.set_active(i);
+        if let Read::ForUser { .. } = read {
+            read = Read::ForUser { dropped: true };
+        }
+    }
+    // The OK of import options a click of the place cursor asked for places within the roots the
+    // cursor was loaded in. A caller with roots of its own places within those.
+    let Some(token) = p.get(ASKED) else { return place_file_in(app, p, read) };
+    forget_older_queue(app);
+    let Some(roots) = app.place.asked.as_ref().filter(|(t, _)| Some(*t) == token.as_u64()).map(|(_, r)| r.clone()) else {
+        return Err("the place cursor that asked for these import options is no longer loaded".into());
+    };
+    if vectorcraft_engine::file_access::current().is_some() {
+        return place_file_in(app, p, read);
+    }
+    vectorcraft_engine::file_access::confine(Some(&roots), || place_file_in(app, p, read))
+}
+
+fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
     let show = match p.get("showImportOptions") {
         None | Some(Value::Null) => None,
         Some(Value::Bool(b)) => Some(*b),
@@ -155,6 +203,7 @@ fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, 
         if let Some(dxf) = crate::dialogs::dxf_import::last_options(app, &p) {
             p["dxf"] = dxf;
         }
+        crate::dialogs::psd_import::last_options(app, &mut p);
     }
     if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
         return Ok(crate::dialogs::text_import::open(app, &p));
@@ -183,10 +232,20 @@ fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, 
     if ask && crate::dialogs::dxf_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
     }
+    // A PSD file with several layers or with slices that the user embeds asks for its import
+    // options. A place run as a command (MCP, scripts) places at once and takes `layers` and
+    // `importSlices` itself.
+    if ask && matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, &p) {
+        return Ok(json!({ "dialog": crate::dialogs::psd_import::KIND }));
+    }
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
         && let Some(v) = app.view()
     {
         p["at"] = json!([v.center.x, v.center.y]);
+    }
+    if let Some(o) = p.as_object_mut() {
+        o.remove(ASKED);
+        o.remove(DROPPED);
     }
     match read {
         Read::ForUser { dropped } if crate::placing::available(app) => {
@@ -380,9 +439,15 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
             let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
             let mut q = json!({ "paths": paths, "files": files, "link": link, "template": template });
             if !ask {
-                // Each text file and DXF drawing in the cursor takes the options confirmed last.
+                // Each text file, DXF drawing and embedded PSD file in the cursor takes the options
+                // confirmed last.
                 q["text"] = crate::dialogs::text_import::last_options(app);
                 q["dxf"] = crate::dialogs::dxf_import::remembered(app);
+                if !link || paths.is_empty() {
+                    // Files from bytes have no file to link to; they may carry the dialog's Link.
+                    q["link"] = json!(false);
+                    crate::dialogs::psd_import::queue_options(app, &mut q);
+                }
             }
             queue_files(app, &q, Read::ForUser { dropped: false }, ask)
         }
@@ -425,10 +490,19 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     // Read within the automation roots of whoever loaded the cursor, even on a click of the person
     // at the keyboard: an agent's queue reaches no file it wasn't given.
     let roots = app.session.place_queue_roots();
+    forget_older_queue(app);
     vectorcraft_engine::file_access::confine(roots.as_ref(), || {
         if app.place.queue_asks {
+            let mut p = clicked_at_full_size(app, p);
+            // The import options it may ask for keep the token, and their OK places within the
+            // same roots ([`place_file`]).
+            app.place.asked = roots.clone().map(|r| {
+                static TOKEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+                let token = TOKEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                p[ASKED] = json!(token);
+                (token, r)
+            });
             // Placing shows its own errors in the status bar.
-            let p = clicked_at_full_size(app, p);
             let _ = place_file(app, &p, Read::ForUser { dropped: false });
         } else if crate::placing::available(app) {
             if let Err(e) = crate::placing::start(app, p, false) {
@@ -438,6 +512,16 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
             let _ = engine(app, "file.place", p);
         }
     });
+}
+
+/// The cursor was loaded again since [`show_thumbnails`] (`tool.setOption` with a `queue`, a
+/// script): its files no longer ask for their import options, and their queued sizes are unknown.
+fn forget_older_queue(app: &mut VectorcraftApp) {
+    if app.place.queue_load != app.session.place_queue_loads() {
+        app.place.queue_asks = false;
+        app.place.queue_sizes.clear();
+        app.place.asked = None;
+    }
 }
 
 /// The params of a cursor click (`rect` at the file's queued size) on a PDF or DXF file, whose
@@ -467,7 +551,9 @@ fn clicked_at_full_size(app: &VectorcraftApp, p: &Value) -> Value {
 /// The cursor's thumbnails and its files' sizes from `file.place.queue`'s reply `r` once the cursor
 /// is loaded; `asks`: its files ask for their import options when placed.
 pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value, asks: bool) {
+    app.place.queue_load = app.session.place_queue_loads();
     app.place.queue_asks = asks;
+    app.place.asked = None;
     app.place.queue_sizes = r["files"]
         .as_array()
         .into_iter()
@@ -555,29 +641,20 @@ pub type DropFile = (String, Option<String>, Vec<u8>);
 /// Files dropped on the window, each placed on a canvas or opened (and added to Open Recent
 /// Files) as its target says: the placed ones first, so the last document opened is the one
 /// shown. A file for a canvas goes to the document it was dropped on, which becomes active again;
-/// it isn't placed when that document has closed or been reverted since.
+/// it isn't placed when that document has closed or been reverted since, and neither is it by the
+/// OK of an import options dialog the drop opened ([`DROPPED`]).
 pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile)>) {
     files.sort_by_key(|(target, _)| *target == DropTarget::Open);
     for (target, (name, path, bytes)) in files {
-        if let DropTarget::Place(d) = target {
-            let Some(i) = app.session.documents().iter().position(|st| st.uid == d.doc) else {
-                app.status(format!("Couldn't place {name}: the document it was dropped on was closed"));
-                continue;
-            };
-            if app.session.documents().get(i).is_some_and(|st| st.reverts != d.reverts) {
-                app.status(format!("Couldn't place {name}: the document it was dropped on was reverted"));
-                continue;
-            }
-            app.session.set_active(i);
-        }
         let r = match target {
-            DropTarget::Place(DropAt { at, embed, .. }) => {
+            DropTarget::Place(DropAt { doc, reverts, at, embed }) => {
                 let mut p = match &path {
                     Some(path) => json!({ "path": path }),
                     None => json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes) }),
                 };
                 p["at"] = json!([at.x, at.y]);
                 p["link"] = json!(!embed);
+                p[DROPPED] = json!({ "doc": doc, "reverts": reverts });
                 place_file(app, &p, Read::ForUser { dropped: true }).map(|_| ())
             }
             DropTarget::Open => match path.as_deref() {
@@ -664,35 +741,60 @@ pub fn image_summary(i: &Value) -> (String, String) {
 
 /// The Control bar for the one selected image: Linked File or Embedded, its file name, colour mode
 /// and effective resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask,
-/// Crop Image and Remove Background. Whether one image is selected.
-pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
+/// Crop Image and Remove Background. Whether one image is selected. A file name the row has no room
+/// for is left out alone; after it, each control shows only while the row has room for it and
+/// `reserve` after it, and the controls after one left out are left out too.
+pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui, reserve: f32) -> bool {
     let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
     let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return false };
     let t = Tokens::get(ui.ctx());
     // The file name is a link: its menu relinks (replaces) the image and reaches the Links
     // panel's other actions for it.
-    let resp = ui
-        .add(egui::Label::new(egui::RichText::new(&name).size(12.0).color(t.accent).underline()).sense(egui::Sense::click()))
-        .on_hover_cursor(egui::CursorIcon::PointingHand);
-    egui::Popup::menu(&resp).show(|ui| link_menu(app, ui, id, linked));
-    ui.separator();
-    ui.label(egui::RichText::new(details).size(12.0).color(t.text_dim));
-    ui.separator();
-    link_buttons(app, ui, id, linked, &name, None);
-    crate::panels::image_trace::trace_button(app, ui, crate::panels::image_trace::TRACE_BUTTON_W);
+    let name_text = egui::RichText::new(&name).size(12.0).color(t.accent).underline();
+    if crate::chrome::Fit::new(reserve).room(ui, &[widgets::text_width(ui, name_text.clone())]) {
+        let resp = ui.add(egui::Label::new(name_text).sense(egui::Sense::click())).on_hover_cursor(egui::CursorIcon::PointingHand);
+        egui::Popup::menu(&resp).show(|ui| link_menu(app, ui, id, linked));
+        crate::chrome::group_separator(ui);
+    }
+    let mut fit = crate::chrome::Fit::new(reserve);
+    let details = egui::RichText::new(details).size(12.0).color(t.text_dim);
+    if fit.room(ui, &[widgets::text_width(ui, details.clone())]) {
+        ui.label(details);
+    }
+    fit.separator(ui);
+    link_buttons(app, ui, id, linked, &name, LinkButtons::Fit(&mut fit));
+    // The Image Trace button grows past its usual width for a longer translated label.
+    let arrow = widgets::SPLIT_ARROW;
+    let trace = widgets::flat_button_fit_width(ui, tl!("Image Trace"), crate::panels::image_trace::TRACE_BUTTON_W - arrow) + arrow;
+    if fit.room(ui, &[trace]) {
+        crate::panels::image_trace::trace_button(app, ui, trace);
+    }
     for (label, cmd, w) in [
         (tl!("Mask"), "object.maskImage", 52.0),
         (tl!("Crop Image"), "ui.cropImage", 84.0),
         (tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND, 128.0),
     ] {
-        if widgets::flat_button(ui, label, w).clicked() {
+        if fit.room(ui, &[widgets::flat_button_fit_width(ui, label, w)]) && widgets::flat_button_fit(ui, label, w).clicked() {
             crate::menus::invoke(app, cmd, json!({}));
         }
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
     true
 }
+
+/// How [`link_buttons`] sizes its buttons.
+pub(crate) enum LinkButtons<'a> {
+    /// Each button is this wide (Properties).
+    Width(f32),
+    /// Each button fits its label and shows only while the Control bar's row has room for it.
+    Fit(&'a mut crate::chrome::Fit),
+}
+
+/// The least widths of the Embed, Edit Original and Unembed… buttons fitted to their labels.
+const EMBED_WIDTH: f32 = 60.0;
+const EDIT_ORIGINAL_WIDTH: f32 = 92.0;
+const UNEMBED_WIDTH: f32 = 80.0;
 
 /// The menu of the Control bar's file name for image `id`: Replace… (another file takes the
 /// image's place with its own aspect ratio; an embedded image becomes linked), Go To Link, Edit
@@ -721,17 +823,22 @@ fn link_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool)
 }
 
 /// Embed (and Edit Original) for linked image `id`, Unembed… for an embedded one named `name`
-/// (Control bar, Properties). The buttons are `width` wide, or fit their labels.
-pub fn link_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool, name: &str, width: Option<f32>) {
-    let w = |fit: f32| width.unwrap_or(fit);
+/// (Control bar, Properties), sized as `size` says.
+pub(crate) fn link_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool, name: &str, mut size: LinkButtons) {
+    let mut button = |ui: &mut egui::Ui, label: &str, least: f32| match &mut size {
+        LinkButtons::Width(w) => widgets::flat_button(ui, label, *w).clicked(),
+        LinkButtons::Fit(fit) => {
+            fit.room(ui, &[widgets::flat_button_fit_width(ui, label, least)]) && widgets::flat_button_fit(ui, label, least).clicked()
+        }
+    };
     if linked {
-        if widgets::flat_button(ui, tl!("Embed"), w(60.0)).clicked() {
+        if button(ui, tl!("Embed"), EMBED_WIDTH) {
             app.run("links.embed", json!({ "ids": [id] })).ok();
         }
-        if widgets::flat_button(ui, tl!("Edit Original"), w(92.0)).clicked() {
+        if button(ui, tl!("Edit Original"), EDIT_ORIGINAL_WIDTH) {
             crate::menus::invoke(app, "links.editOriginal", json!({ "id": id }));
         }
-    } else if widgets::flat_button(ui, tl!("Unembed…"), w(80.0)).clicked() {
+    } else if button(ui, tl!("Unembed…"), UNEMBED_WIDTH) {
         crate::panels::links::unembed(app, id, name);
     }
 }

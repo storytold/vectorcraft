@@ -8,8 +8,12 @@
 //! whose OK sets it in the model it was picked in), the color mode menu and its sliders (HSB, RGB,
 //! CMYK or Lab, and Tint when the new color is a spot color of the library), which edit the
 //! first selected row's new color (once they have, OK gives the art each new color in its own
-//! model), Merge and Separate, Randomize order or
-//! saturation and brightness, Reset, the Method and Limit to Library (its folder button imports a
+//! model), New Row (a row with no current colors above the first selected row, or at the top,
+//! with that row's new color; it recolors nothing until Merge moves colors into it), Merge and
+//! Separate, Randomize order or
+//! saturation and brightness, Find (with it on, the art of the selected rows shows as the preview
+//! shows it, their current colors with Preview off, and the rest of the selected art shows its
+//! current colors dimmed; a second click shows the art as before), Reset, the Method and Limit to Library (its folder button imports a
 //! library file and limits to it; a library's colours apply as its swatches: a spot colour stays a
 //! spot colour, and joins the document's swatches). Edit tab: a hue and
 //! saturation wheel with a marker per new colour (drag one; with linked handles they all turn and
@@ -48,7 +52,8 @@
 //! `globalAdjust` in every slider mode), `display` (the Edit tab's `smooth`, `segmented` or `bars`;
 //! unset: `smooth`), `themePicker` (the Color Theme Picker is on), `themePicks` (its picks, as
 //! `recolor.pickTheme`'s `picks`; a new list recolors the rows), `weights` (one per row, as
-//! `recolor.weigh`'s; a new list moves the rows' current colors toward them). Changing `colors`, a
+//! `recolor.weigh`'s; a new list moves the rows' current colors toward them), `findColors` (Find is
+//! on; it shows the art so on the Assign tab, with art and rows selected). Changing `colors`, a
 //! preserve flag or `limitTo` reduces the rows again (and drops `weights`).
 
 use egui::{Rect, Sense, Ui, pos2, vec2};
@@ -161,7 +166,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         "preserveWhite": kept("preserveWhite", true), "preserveBlack": kept("preserveBlack", true),
         "preserveGrays": kept("preserveGrays", false), "limitTo": limit,
         "group": group, "groupName": if new_group { Some(NEW_GROUP) } else { group }, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
-        "preview": true, THEME_PICKER: false, THEME_PICKS: [], WEIGHTS: null, "__art": art, "__assign": assign, "__newGroup": new_group,
+        "preview": true, THEME_PICKER: false, THEME_PICKS: [], WEIGHTS: null, FIND: false, "__art": art, "__assign": assign, "__newGroup": new_group,
     });
     let mut d = Dialog::new(KIND, fields);
     // Without art the rows are there from the start: limit them now (art's rows snap as they reduce).
@@ -215,6 +220,8 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
             }
             snap(app, d, &mut rows);
             d.fields.insert("rows".into(), Value::Array(rows));
+            // Find dims the preserved colors with the rows that aren't selected.
+            d.fields.insert(PRESERVED.into(), r["preserved"].clone());
             d.fields.insert("__sel".into(), json!([]));
             // The new rows hold no slider edit.
             d.fields.remove(COMPS);
@@ -566,9 +573,11 @@ fn selection(d: &Dialog) -> Vec<usize> {
 fn apply_params(d: &Dialog) -> Value {
     let rs = rows(d);
     let group = d.fields.get("group").and_then(Value::as_str).map(|g| {
-        let rest =
-            d.fields.get("__assign").and_then(Value::as_array).filter(|_| d.bool("__art")).map_or(&[][..], |a| a.get(rs.len()..).unwrap_or_default());
-        let colors: Vec<&Value> = rs.iter().map(|r| &r["to"]).chain(rest).collect();
+        // A row made with New Row that holds no current colors gives the group no color.
+        let filled: Vec<&Value> = rs.iter().filter(|r| !r["from"].as_array().is_some_and(Vec::is_empty)).map(|r| &r["to"]).collect();
+        let assign = d.fields.get("__assign").and_then(Value::as_array).filter(|_| d.bool("__art"));
+        let rest = assign.map_or(&[][..], |a| a.get(filled.len()..).unwrap_or_default());
+        let colors: Vec<&Value> = filled.into_iter().chain(rest).collect();
         let name = d.str("groupName");
         let rename = (!name.trim().is_empty() && name != g).then_some(name);
         json!({"group": g, "groupColors": colors, "rename": rename})
@@ -584,6 +593,102 @@ fn apply_params(d: &Dialog) -> Value {
         p.extend(g.into_iter().filter(|(_, v)| !v.is_null()));
     }
     p
+}
+
+/// The Find button's field, and the tint of its current color that the art of the rows that
+/// aren't selected shows while it is on (VectorCraft's own amount: [`Color::tinted`]).
+const FIND: &str = "findColors";
+const FIND_DIM: f32 = 0.25;
+/// The tints tried when a dimmed color is one a selected row lists: [`FIND_DIM`] and each lighter
+/// one a percent apart, down to 1%.
+const FIND_TRIES: usize = 25;
+/// The colors of the art that the rows leave out (Preserve White, Black and Grays), as
+/// `recolor.reduce` returned them.
+const PRESERVED: &str = "__preserved";
+
+/// A row's current color as `recolor.apply` matches it: an exact color (its key, parsed whatever
+/// its case or spacing), or `Err` with the hex of a "#rrggbb" entry, which matches every color
+/// shown as that hex.
+type FindEntry = Result<ColorKey, String>;
+
+fn find_entry(k: &Value) -> Option<FindEntry> {
+    match k.as_str() {
+        Some(s) => ColorKey::parse(s).map(Ok).or_else(|| color_value(k).map(|c| Err(c.to_hex()))),
+        None => color_value(k).map(|c| Ok(ColorKey::of(&c))),
+    }
+}
+
+/// While Find is on, on the Assign tab with art and rows selected: what the art previews instead of
+/// [`apply_params`], as `command.batch` parameters. A first `recolor.apply` gives each current color
+/// of the rows that aren't selected, and each preserved color, its [`FIND_DIM`] tint, or the nearest lighter one when that is a
+/// color a selected row lists (a color a selected row also lists stays);
+/// with Preview on, a second recolors the selected rows as [`apply_params`] would (the other rows
+/// excluded, no color group rewritten). None otherwise, and when there is nothing to dim with
+/// Preview off. OK still applies [`apply_params`].
+fn find_params(d: &Dialog) -> Option<Value> {
+    if !d.bool(FIND) || !d.bool("__art") || d.str("tab") == "edit" {
+        return None;
+    }
+    let rs = rows(d);
+    let sel: Vec<usize> = selection(d).into_iter().filter(|i| *i < rs.len()).collect();
+    if sel.is_empty() {
+        return None;
+    }
+    let keys = |r: &Value| r["from"].as_array().cloned().unwrap_or_default();
+    let found: Vec<Value> = sel.iter().flat_map(|&i| keys(&rs[i])).collect();
+    // The selected rows' entries as `recolor.apply` reads them: exact colors and "#rrggbb" ones.
+    let found: Vec<FindEntry> = found.iter().filter_map(find_entry).collect();
+    let found_keys: Vec<ColorKey> = found.iter().filter_map(|e| e.as_ref().ok().copied()).collect();
+    let found_hex_entries: Vec<String> = found.iter().filter_map(|e| e.as_ref().err().cloned()).collect();
+    let found_hex: Vec<String> = found.iter().map(|e| e.as_ref().map_or_else(Clone::clone, |k| k.color().to_hex())).collect();
+    // A dimmed color must not be one the second step recolors (by its key, or by its hex as a
+    // "#rrggbb" entry matches): the nearest lighter tint that is none of them is taken instead.
+    let dimmed = |c: Color| {
+        (0..FIND_TRIES)
+            .map(|n| c.tinted(FIND_DIM - n as f32 * 0.01))
+            .find(|t| !found_keys.contains(&ColorKey::of(t)) && !found_hex_entries.contains(&t.to_hex()))
+            .map(|t| key(&t))
+    };
+    // The current colors of the rows that aren't selected, and the preserved colors.
+    let preserved = d.fields.get(PRESERVED).and_then(Value::as_array).cloned().unwrap_or_default();
+    let others = rs.iter().enumerate().filter(|(i, _)| !sel.contains(i)).flat_map(|(_, r)| keys(r)).chain(preserved);
+    let mut dim = serde_json::Map::new();
+    // A color a selected row lists stays, and so does one shown as the same hex when either entry is
+    // "#rrggbb" (it matches both). Two keys of the same hex are separate colors.
+    let listed = |k: &Value| match find_entry(k) {
+        Some(Ok(key)) => found_keys.contains(&key) || found_hex_entries.contains(&key.color().to_hex()),
+        Some(Err(hex)) => found_hex.contains(&hex),
+        None => false,
+    };
+    for k in others.filter(|k| !listed(k)) {
+        // A string entry keeps its own form ("#rrggbb" matches by hex); a color value goes by its key.
+        let name = match k.as_str() {
+            Some(s) => Some(s.to_string()),
+            None => color_value(&k).map(|c| ColorKey::of(&c).to_string()),
+        };
+        if let (Some(to), Some(name)) = (color_value(&k).and_then(dimmed), name) {
+            dim.insert(name, to);
+        }
+    }
+    let mut commands = vec![];
+    if !dim.is_empty() {
+        commands.push(json!({"command": CMD, "params": {"map": dim}}));
+    }
+    if d.bool("preview") {
+        let mut p = apply_params(d);
+        let mut only = rs;
+        for (_, r) in only.iter_mut().enumerate().filter(|(i, _)| !sel.contains(i)) {
+            r["exclude"] = json!(true);
+        }
+        p["map"] = Value::Array(only);
+        if let Some(p) = p.as_object_mut() {
+            for k in ["group", "groupColors", "rename"] {
+                p.remove(k);
+            }
+        }
+        commands.push(json!({"command": CMD, "params": p}));
+    }
+    (!commands.is_empty()).then(|| json!({"commands": commands}))
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
@@ -646,7 +751,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     }
     sync(app, d);
     if d.bool("__art") {
-        form::preview(app, ui, d, "Recolor Artwork", CMD, apply_params(d));
+        match find_params(d) {
+            // Find shows the art so with Preview off too.
+            Some(p) => {
+                ui.add_space(8.0);
+                form::preview_check(ui, d);
+                form::preview_now(app, d, "Recolor Artwork", "command.batch", p);
+            }
+            None => form::preview(app, ui, d, "Recolor Artwork", CMD, apply_params(d)),
+        }
     }
     if let Some(c) = pick.and_then(|i| Some((i, to_color(rows(d).get(i)?)?))) {
         *d = super::color_picker::over_recolor(d, c.1, c.0);
@@ -778,6 +891,10 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                         let x = cur.left() + j as f32 * w;
                         chip(ui, Rect::from_min_max(pos2(x, cur.top()), pos2(x + w - if w > 4.0 { 2.0 } else { 0.0 }, cur.bottom())), *c, false);
                     }
+                    // A row made with New Row shows an empty slot until colors are merged into it.
+                    if from.is_empty() {
+                        ui.painter().rect_stroke(cur, 1.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+                    }
                     if cr.clicked() {
                         clicked = Some(i);
                     }
@@ -826,6 +943,14 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
     }
     ui.add_space(4.0);
     ui.horizontal(|ui| {
+        // New Row is available only with art.
+        if widgets::icon_button_enabled(ui, "plus", tl!("New Row"), false, d.bool("__art"), 24.0).clicked() {
+            let at = new_row(rows, &sel);
+            d.fields.insert("__sel".into(), json!([at]));
+            // The slider edit was kept for a row index that now names another row.
+            d.fields.remove(COMPS);
+            changed = true;
+        }
         let can_merge = sel.len() > 1;
         if widgets::icon_button_enabled(ui, "combine", tl!("Merge colors into one row"), false, can_merge, 24.0).clicked() {
             merge(rows, &sel);
@@ -857,6 +982,10 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                     Err(e) => app.status(e.to_string()),
                 }
             }
+        }
+        let finding = d.bool(FIND);
+        if widgets::icon_button_enabled(ui, "search", tl!("Find the selected colors in the artwork"), finding, d.bool("__art"), 24.0).clicked() {
+            d.fields.insert(FIND.into(), json!(!finding));
         }
         if widgets::icon_button(ui, "rotate-ccw", tl!("Reset the rows to the artwork's colors"), false, 24.0).clicked() {
             d.fields.remove("__reduced");
@@ -1218,6 +1347,16 @@ fn separate(rows: &mut Vec<Value>, sel: &[usize]) {
     *rows = out;
 }
 
+/// New Row: insert a row with no current colors above the first selected row, or at the top
+/// when none is selected, and return its index. Its new color is the new color of the row it goes
+/// above (black without one). It recolors nothing until current colors are merged into it.
+fn new_row(rows: &mut Vec<Value>, sel: &[usize]) -> usize {
+    let at = sel.iter().copied().filter(|i| *i < rows.len()).min().unwrap_or(0);
+    let to = rows.get(at).and_then(to_color).unwrap_or_default();
+    rows.insert(at, json!({"from": [], "to": key(&to)}));
+    at
+}
+
 /// The rows the Edit tab shows: those with a new colour, not excluded.
 fn active_rows(rows: &[Value]) -> Vec<usize> {
     (0..rows.len()).filter(|i| !excluded(&rows[*i]) && to_color(&rows[*i]).is_some()).collect()
@@ -1540,6 +1679,35 @@ mod tests {
         assert_eq!(r.len(), 2);
     }
 
+    /// New Row goes above the first selected row with that row's new color, or at the top; it has
+    /// no current colors, and a merge with it as the first selected row fills it.
+    #[test]
+    fn a_new_row_goes_above_the_selection_and_takes_merged_colors() {
+        let mut r = rows();
+        assert_eq!(new_row(&mut r, &[2, 1]), 1);
+        assert_eq!(r.len(), 4);
+        assert_eq!(r[1], json!({"from": [], "to": "rgb 0 0 255"}));
+        assert_eq!(r[2]["from"], json!(["rgb 0 0 255", "rgb 0 0 128"]), "the selected row moved down");
+        merge(&mut r, &[1, 3]);
+        assert_eq!(r[1], json!({"from": ["rgb 0 255 0"], "to": "rgb 0 0 255"}));
+        assert_eq!(new_row(&mut r, &[]), 0);
+        assert_eq!(r[0], json!({"from": [], "to": "rgb 255 0 0"}));
+        let mut none = vec![];
+        assert_eq!(new_row(&mut none, &[5]), 0);
+        assert_eq!(none, vec![json!({"from": [], "to": key(&Color::BLACK)})]);
+    }
+
+    /// Opened on a color group, OK rewrites it with the new colors of the rows that hold current
+    /// colors, then the group's colors no such row took: an empty row gives it no color.
+    #[test]
+    fn an_empty_row_gives_the_group_no_color() {
+        let mut r = rows();
+        new_row(&mut r, &[]);
+        let fields = json!({"rows": r, "group": "Trio", "__art": true, "__assign": ["rgb 255 0 0", "rgb 0 0 255", "rgb 0 255 0", "rgb 9 9 9"]});
+        let p = apply_params(&Dialog::new("recolor", fields));
+        assert_eq!(p["groupColors"], json!(["rgb 255 0 0", "rgb 0 0 255", "rgb 0 255 0", "rgb 9 9 9"]));
+    }
+
     /// Randomize after a seed past `u64::MAX` keeps the largest seed.
     #[test]
     fn next_seed_holds_at_the_largest() {
@@ -1825,6 +1993,35 @@ mod tests {
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "the art is unchanged: no undo step");
     }
 
+    /// A row made with New Row recolors nothing while it is empty, and OK keeps it; the blue art's
+    /// color merged into it takes its new color, in the preview and at OK.
+    #[test]
+    fn colors_merged_into_a_new_row_take_its_new_color() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let [red, blue] = theme_setup(&mut app, &ctx);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let set_rows = |app: &mut VectorcraftApp, rs: Vec<Value>| {
+            app.ui.dialog.as_mut().unwrap().fields.insert("rows".into(), Value::Array(rs));
+        };
+        let mut rs = super::rows(app.ui.dialog.as_ref().unwrap());
+        let at = new_row(&mut rs, &[]);
+        rs[at]["to"] = json!("rgb 0 255 0");
+        set_rows(&mut app, rs.clone());
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#ff0000".into(), "#0000ff".into()), "an empty row recolors nothing");
+        let b = rs.iter().position(|r| r["from"] == json!([BLUE])).unwrap();
+        merge(&mut rs, &[at, b]);
+        // A second empty row stays empty and is sent at OK too.
+        new_row(&mut rs, &[]);
+        set_rows(&mut app, rs);
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert_eq!(fill_hex(&app, blue), "#00ff00", "the art previews the merge");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#ff0000".into(), "#00ff00".into()));
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
     const RED: &str = "rgb 255 0 0";
     const PURPLE: &str = "rgb 128 0 204";
     const BLUE: &str = "rgb 0 0 255";
@@ -2018,6 +2215,172 @@ mod tests {
         assert_eq!(picks.as_array().map(Vec::len), Some(2), "{picks}");
         assert!(picks[1].get("rect").is_some(), "{picks}");
         assert_eq!(new_colors(&app), [json!("rgb 0 255 0"), json!("rgb 255 255 0")]);
+    }
+
+    /// Find previews nothing of its own while it is off, on the Edit tab, without art or without a
+    /// selected row. On, a first `recolor.apply` dims each current color of the other rows (a color
+    /// a selected row also lists stays), and with Preview on a second recolors the selected rows
+    /// alone, without rewriting the color group.
+    #[test]
+    fn find_dims_the_colors_of_the_rows_not_selected() {
+        let mut d = Dialog::new(
+            KIND,
+            json!({"rows": rows(), "__art": true, "preview": true, "method": "exact", "limitTo": "", "group": "G", "groupName": "H", "__sel": [0]}),
+        );
+        assert_eq!(find_params(&d), None, "off");
+        d.fields.insert(FIND.into(), json!(true));
+        let dim = |k: &str| key(&color_value(&json!(k)).unwrap().tinted(FIND_DIM));
+        let p = find_params(&d).expect("on");
+        let cmds = p["commands"].as_array().unwrap();
+        assert_eq!(cmds.len(), 2);
+        assert_eq!(cmds[0]["command"], CMD);
+        assert_eq!(
+            cmds[0]["params"]["map"],
+            json!({"rgb 0 0 255": dim("rgb 0 0 255"), "rgb 0 0 128": dim("rgb 0 0 128"), "rgb 0 255 0": dim("rgb 0 255 0")})
+        );
+        assert_eq!(dim("rgb 0 0 255"), json!("rgb 191.25 191.25 255"), "a quarter of the color, the rest white");
+        let second = &cmds[1]["params"];
+        assert_eq!(second["map"][0], rows()[0], "the selected row recolors as it would");
+        assert_eq!((second["map"][1]["exclude"].clone(), second["map"][2]["exclude"].clone()), (json!(true), json!(true)));
+        assert!(second.get("group").is_none() && second.get("rename").is_none(), "{second}");
+        // A color that a selected row lists as a hex stays.
+        let mut e = d.clone();
+        let mut rs = rows();
+        rs[0]["from"] = json!(["#0000ff"]);
+        e.fields.insert("rows".into(), json!(rs));
+        let map = find_params(&e).unwrap()["commands"][0]["params"]["map"].clone();
+        assert!(map.get("rgb 0 0 255").is_none() && map.get("rgb 0 0 128").is_some(), "{map}");
+        // A color a selected row lists by its key keeps only that color: another key of the same hex
+        // dims, and a hex entry of it stays (it would dim the selected color too).
+        let mut e = d.clone();
+        let mut rs = rows();
+        rs[0]["from"] = json!(["rgb 191 191 255"]);
+        rs[1]["from"] = json!(["rgb 191.25 191.25 255", "#bfbfff"]);
+        e.fields.insert("rows".into(), json!(rs));
+        let map = find_params(&e).unwrap()["commands"][0]["params"]["map"].clone();
+        assert!(map.get("rgb 191.25 191.25 255").is_some() && map.get("#bfbfff").is_none(), "{map}");
+        // A key is read whatever its case or spacing, as `recolor.apply` reads it.
+        let mut e = d.clone();
+        let mut rs = rows();
+        rs[0]["from"] = json!(["RGB  191 191 255"]);
+        rs[1]["from"] = json!(["rgb 191 191 255", "rgb 0 0 128"]);
+        e.fields.insert("rows".into(), json!(rs));
+        let map = find_params(&e).unwrap()["commands"][0]["params"]["map"].clone();
+        assert!(map.get("rgb 191 191 255").is_none() && map.get("rgb 0 0 128").is_some(), "{map}");
+        // The preserved colors dim too.
+        let mut e = d.clone();
+        e.fields.insert(PRESERVED.into(), json!(["rgb 0 0 0"]));
+        assert_eq!(find_params(&e).unwrap()["commands"][0]["params"]["map"]["rgb 0 0 0"], dim("rgb 0 0 0"));
+        // A color given as a value instead of a string dims under its key, as `recolor.apply` reads it.
+        let mut e = d.clone();
+        let mut rs = rows();
+        rs[1]["from"] = json!([[0.0, 0.0, 1.0], {"c": 0, "m": 100, "y": 100, "k": 0}]);
+        e.fields.insert("rows".into(), json!(rs));
+        let map = find_params(&e).unwrap()["commands"][0]["params"]["map"].clone();
+        assert_eq!(map["rgb 0 0 255"], dim("rgb 0 0 255"), "{map}");
+        assert_eq!(map["cmyk 0 100 100 0"], dim("cmyk 0 100 100 0"), "{map}");
+        // A color a selected row lists is not dimmed; with Preview off only the dimming runs.
+        let mut rs = rows();
+        rs[2]["from"] = json!(["rgb 0 255 0", "rgb 255 0 0"]);
+        d.fields.insert("rows".into(), json!(rs));
+        d.fields.insert("preview".into(), json!(false));
+        let p = find_params(&d).unwrap();
+        assert_eq!(p["commands"].as_array().map(Vec::len), Some(1));
+        assert!(p["commands"][0]["params"]["map"].get("rgb 255 0 0").is_none(), "{p}");
+        // A dimmed color that a selected row lists would be recolored with it: a lighter tint is taken.
+        let mut rs = rows();
+        rs[0]["from"] = json!(["rgb 255 0 0", "rgb 191.25 191.25 255"]);
+        d.fields.insert("rows".into(), json!(rs));
+        let p = find_params(&d).unwrap();
+        let to = color_value(&p["commands"][0]["params"]["map"]["rgb 0 0 255"]).unwrap();
+        assert_eq!(to.to_hex(), "#c2c2ff", "{p}");
+        // So is one that a selected "#rrggbb" entry matches by its hex.
+        rs[0]["from"] = json!(["rgb 255 0 0", "#bfbfff"]);
+        d.fields.insert("rows".into(), json!(rs));
+        let p = find_params(&d).unwrap();
+        let to = color_value(&p["commands"][0]["params"]["map"]["rgb 0 0 255"]).unwrap();
+        assert_eq!(to.to_hex(), "#c2c2ff", "{p}");
+        // When the twenty tints from 25% through 6% are all listed, the 5% tint is taken.
+        let blue = color_value(&json!("rgb 0 0 255")).unwrap();
+        let tint = |n: usize| key(&blue.tinted(FIND_DIM - n as f32 * 0.01));
+        let mut from = vec![json!("rgb 255 0 0")];
+        from.extend((0..20).map(tint));
+        rs[0]["from"] = json!(from);
+        d.fields.insert("rows".into(), json!(rs));
+        let p = find_params(&d).unwrap();
+        assert_eq!(p["commands"][0]["params"]["map"]["rgb 0 0 255"], tint(20), "{p}");
+        // Another key of the same hex matches only itself, so the tint is kept.
+        rs[0]["from"] = json!(["rgb 255 0 0", "rgb 191 191 255"]);
+        d.fields.insert("rows".into(), json!(rs));
+        let p = find_params(&d).unwrap();
+        assert_eq!(p["commands"][0]["params"]["map"]["rgb 0 0 255"], dim("rgb 0 0 255"), "{p}");
+        // Every row selected with Preview off: nothing to show.
+        d.fields.insert("__sel".into(), json!([0, 1, 2]));
+        assert_eq!(find_params(&d), None);
+        for (k, v) in [("__sel", json!([])), ("__sel", json!([7])), ("tab", json!("edit")), ("__art", json!(false))] {
+            let mut e = d.clone();
+            e.fields.insert("preview".into(), json!(true));
+            e.fields.insert("__sel".into(), json!([0]));
+            e.fields.insert(k.into(), v.clone());
+            assert_eq!(find_params(&e), None, "{k}: {v}");
+        }
+    }
+
+    /// In the dialog, Find with the red art's row selected shows the red art's new color and the
+    /// blue art dimmed, with Preview off the red art's own color; off again, the art shows as the
+    /// preview has it. Cancel leaves the art as it was with no undo step, and OK with Find on
+    /// applies the rows to all the art, as one undo step.
+    #[test]
+    fn find_shows_the_selected_rows_art_and_dims_the_rest() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let [red, blue] = theme_setup(&mut app, &ctx);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let set = |app: &mut VectorcraftApp, k: &str, v: Value| {
+            app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+        };
+        let rs = json!([{"from": ["rgb 255 0 0"], "to": "rgb 0 255 0"}, {"from": ["rgb 0 0 255"], "to": "rgb 255 255 0"}]);
+        set(&mut app, "rows", rs.clone());
+        set(&mut app, "__sel", json!([0]));
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        let fills = |app: &VectorcraftApp| (fill_hex(app, red), fill_hex(app, blue));
+        assert_eq!(fills(&app), ("#00ff00".into(), "#ffff00".into()), "off: the preview");
+        set(&mut app, FIND, json!(true));
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert_eq!(fills(&app), ("#00ff00".into(), "#bfbfff".into()), "on: the other art dimmed");
+        set(&mut app, "preview", json!(false));
+        frame(&mut app, &ctx, 0.3, vec![], 0);
+        assert_eq!(fills(&app), ("#ff0000".into(), "#bfbfff".into()), "Preview off: the current colors");
+        set(&mut app, "__sel", json!([1]));
+        frame(&mut app, &ctx, 0.4, vec![], 0);
+        assert_eq!(fills(&app), ("#ffbfbf".into(), "#0000ff".into()), "the other row selected");
+        set(&mut app, FIND, json!(false));
+        frame(&mut app, &ctx, 0.5, vec![], 0);
+        assert_eq!(fills(&app), ("#ff0000".into(), "#0000ff".into()), "off with Preview off: the art as it is");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "Find records no undo step");
+        set(&mut app, FIND, json!(true));
+        frame(&mut app, &ctx, 0.6, vec![], 0);
+        crate::dialogs::cancel(&mut app);
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(fills(&app), ("#ff0000".into(), "#0000ff".into()), "Cancel: the art as it was");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        // A black square joins the selection: Preserve Black leaves it out of the rows.
+        let black = square(&mut app, 70.0, "#000000");
+        let undo = app.session.doc().unwrap().history.undo.len();
+        app.run("select.set", json!({"ids": [red, blue, black]})).unwrap();
+        app.run("ui.recolorDialog", json!({})).unwrap();
+        set(&mut app, "method", json!(Method::Exact.id()));
+        frame(&mut app, &ctx, 1.0, vec![], 0);
+        set(&mut app, "rows", rs);
+        set(&mut app, "__sel", json!([0]));
+        set(&mut app, FIND, json!(true));
+        frame(&mut app, &ctx, 1.1, vec![], 0);
+        assert_eq!(fills(&app), ("#00ff00".into(), "#bfbfff".into()));
+        assert_eq!(fill_hex(&app, black), "#bfbfbf", "the preserved black dims too");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(fills(&app), ("#00ff00".into(), "#ffff00".into()), "OK applies the rows to all the art");
+        assert_eq!(fill_hex(&app, black), "#000000", "and keeps the preserved black");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
     }
 
     /// In a CMYK document colors opened alone are saved as a new color group in their own model.

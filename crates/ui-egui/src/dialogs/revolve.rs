@@ -37,10 +37,12 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let id = d.str("__effect");
             let defaults = vectorcraft_effects::default_params(&id).unwrap_or(json!({}));
-            // Reset all resets the shape, view and light; the mapped graphics stay.
+            // Reset all resets the shape, view and light; the mapped graphics and the render
+            // settings stay.
             let defaults = match defaults {
                 Value::Object(mut m) => {
                     m.remove(vectorcraft_effects::GRAPHICS);
+                    m.remove(vectorcraft_effects::RENDER);
                     Value::Object(m)
                 }
                 other => other,
@@ -260,7 +262,8 @@ fn extrude_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     });
 }
 
-/// Rotation presets, rotation and perspective for Extrude & Bevel, Inflate and Rotate.
+/// Rotation presets, rotation and perspective for Extrude & Bevel, Inflate and Rotate, and the
+/// classic 3D effects, which have the track cube below the presets.
 fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     heading(ui, tl!("Rotation"));
     let names = [
@@ -294,6 +297,9 @@ fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.extend([("rotationX".into(), json!(x)), ("rotationY".into(), json!(y)), ("rotationZ".into(), json!(z))]);
         }
     });
+    if vectorcraft_effects::is_classic_three_d(&d.str("__effect")) {
+        super::three_d_classic::track_cube(ui, d);
+    }
     for (key, name) in [("rotationX", tl!("Rotation X")), ("rotationY", tl!("Rotation Y")), ("rotationZ", tl!("Rotation Z"))] {
         number(ui, d, key, name, (-180.0, 180.0), "°", 2, None);
     }

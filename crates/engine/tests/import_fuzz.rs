@@ -1672,6 +1672,9 @@ fn action_set(bytes: &[u8]) -> Result<(), TestCaseError> {
         prop_assert!(actions.iter().all(|a| a["steps"].as_array().map_or(0, Vec::len) <= 10_000));
         prop_assert!(actions.iter().map(|a| a["steps"].as_array().map_or(0, Vec::len)).sum::<usize>() <= 100_000);
         prop_assert!(r["unread"].as_array().map_or(0, Vec::len) <= 1000);
+        let steps = || actions.iter().flat_map(|a| a["steps"].as_array().cloned().unwrap_or_default());
+        prop_assert!(steps().all(|s| s["values"].as_array().map_or(0, Vec::len) as u64 <= s["params"].as_u64().unwrap_or(0)));
+        prop_assert!(steps().map(|s| s["values"].as_array().map_or(0, Vec::len)).sum::<usize>() <= 100_000);
     }
     Ok(())
 }
@@ -1690,6 +1693,8 @@ fn arb_aia_token() -> impl Strategy<Value = Vec<u8>> {
             "/localizedName",
             "/isOn",
             "/value",
+            "/key",
+            "/type",
             "/x",
             "/version",
         ])
@@ -1699,6 +1704,7 @@ fn arb_aia_token() -> impl Strategy<Value = Vec<u8>> {
         "[a-z ()\\\\]{0,12}".prop_map(|t| format!("({t})").into_bytes()),
         prop::sample::select(vec!["(", ")", "\\", "[ 2 4142 ]", "[ 3 41 4", "[ 1 zz ]", "[", "]", "< 2 0a0b >", "<", ">", "2.5"])
             .prop_map(|t| t.as_bytes().to_vec()),
+        prop::sample::select(vec!["[ 2 c328 ]", "(ustring)", "(boolean)"]).prop_map(|t| t.as_bytes().to_vec()),
         prop::sample::select(vec!["{", "}", "\r\n", "\r", "\n"]).prop_map(|t| t.as_bytes().to_vec()),
         prop::sample::select(vec![vec![0u8], vec![0xFF, 0xFE], vec![0xC3]]),
     ]
@@ -1835,6 +1841,7 @@ proptest! {
     /// Mutated copies of the PSD and PSB samples never crash opening them with their layers, hidden
     /// ones too: the PSD's layer records, channel lengths and data, and the PSB's layer count.
     /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`.)
+    /// Neither does `document.psdInfo`, nor placing them with their layers as objects.
     #[test]
     fn mutated_layered_psds_open_without_panics(which in 6usize..8, cut in 0usize..1_000_000, edits in prop::collection::vec((0usize..1_000_000, any::<u8>()), 0..12)) {
         let (name, mut bytes) = raster_samples().swap_remove(which);
@@ -1849,6 +1856,10 @@ proptest! {
             let mut s = vectorcraft_engine::Session::new();
             let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "hiddenLayers": true});
             let _ = no_panic(s.execute("document.open", &p));
+            let _ = no_panic(s.execute("document.psdInfo", &p));
+            let _ = no_panic(s.execute("file.new", &json!({})));
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "layers": true, "hiddenLayers": true});
+            let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
     }
