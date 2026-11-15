@@ -1940,6 +1940,27 @@ fn a_symbol_instance_is_hit_where_a_moved_clipping_path_in_its_art_shows_the_art
     }
 }
 
+/// A click on the stroke of a symbol's art where it paints past the instance's box selects the
+/// instance; past the stroke, and in Outline view, it does not.
+#[test]
+fn a_symbol_instance_is_hit_on_the_stroke_of_its_art_past_its_box() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    // A 20 pt stroke reaches 10 pt past the 0..100 square.
+    let look = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 20.0);
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), look);
+    let art = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Stroked".into(), art: Arc::new(art) });
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::IDENTITY;
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Stroked".into(), xf })).unwrap();
+    let at = |x: f64, opt: HitOptions| hit_test(&d, Point::new(x, 50.0), opt).map(|h| h.leaf);
+    assert_eq!(at(108.0, HitOptions::default()), Some(inst), "on the stroke past the box");
+    assert_eq!(at(50.0, HitOptions::default()), Some(inst), "in the box");
+    assert_eq!(at(116.0, HitOptions::default()), None, "past the stroke");
+    assert_eq!(at(108.0, HitOptions { outline: true, ..HitOptions::default() }), None, "Outline view");
+}
+
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than
 /// [`crate::MAX_SYMBOL_NODES`] objects of, Direct Selection picks and outlines nothing, as the
 /// canvas draws nothing of it. At the art's natural size the same art is picked.
