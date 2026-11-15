@@ -182,6 +182,49 @@ fn errors_leave_the_document_and_defaults_alone() {
     assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
 }
 
+/// Select characters of `t` with the Type tool.
+fn select_characters(s: &mut Session, t: NodeId) {
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": t.0, "anchor": 0, "caret": 2}));
+}
+
+/// While the Type tool has characters selected, `paint.proxies` answers no opacity even when the
+/// type object has a fill row of its own that the Appearance panel has active, since
+/// `paint.setFill {opacity}` would give the opacity to the characters.
+#[test]
+fn with_characters_selected_the_proxy_answers_no_opacity() {
+    let mut s = session();
+    let t = text(&mut s);
+    select(&mut s, &[t]);
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    let row = node(&s, t).appearance.items.iter().position(|it| it.is_fill()).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": row})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 100.0, "the type object's own fill row");
+    select_characters(&mut s, t);
+    let e = s.execute("paint.setFill", &json!({"opacity": 40})).unwrap_err();
+    assert!(e.to_string().contains("type characters have no opacity of their own"), "{e}");
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+}
+
+/// While the Type tool has characters selected, an object named by `id` takes the opacity and the
+/// paint, and the characters keep theirs.
+#[test]
+fn with_characters_selected_an_id_takes_the_opacity() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0);
+    let t = text(&mut s);
+    select(&mut s, &[t]);
+    select_characters(&mut s, t);
+    let before = node(&s, t);
+    s.execute("paint.setFill", &json!({"id": r.0, "opacity": 40})).unwrap();
+    assert!((fill_opacity(&s, r) - 0.4).abs() < 1e-6);
+    s.execute("paint.setStroke", &json!({"id": r.0, "color": "#ff0000", "opacity": 30})).unwrap();
+    let stroke = node(&s, r).appearance.stroke().unwrap().clone();
+    assert!((stroke.opacity - 0.3).abs() < 1e-6);
+    assert_eq!(stroke.paint, Paint::solid(Color::rgb8(255, 0, 0)));
+    assert_eq!(node(&s, t), before, "the characters keep their paint");
+}
+
 /// A type object whose characters take the paint is left alone beside a rectangle that takes the
 /// opacity, with no error; alone, it answers the characters error.
 #[test]

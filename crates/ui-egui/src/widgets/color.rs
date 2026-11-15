@@ -545,8 +545,9 @@ pub fn channel_slider_valued(
 /// the rail of [`color_slider_stepped`] does: a click or a drag gives it the keyboard focus, and
 /// while it has the focus ↑ and → raise the number `shown` holds and ↓ and ← lower it. When not
 /// `marked`, the rail draws no arrows and screen readers read 0, as [`hue_ring`] does, while the
-/// keys and actions still step from `shown`. Returns the new value from 0 to 1 that a click or a
-/// drag gives, its phase, and the number in `shown`'s units that a key or an action gives.
+/// keys and actions still step from `shown`, and a set value applies even when it equals `shown`'s
+/// number. Returns the new value from 0 to 1 that a click or a drag gives, its phase, and the
+/// number in `shown`'s units that a key or an action gives.
 #[allow(clippy::too_many_arguments)]
 pub fn channel_slider_stepped(
     ui: &mut Ui,
@@ -558,10 +559,22 @@ pub fn channel_slider_stepped(
     size: Vec2,
     track: &dyn Fn(f32) -> Color32,
 ) -> (Option<f32>, Live, Option<f64>) {
+    use egui::accesskit::{Action, ActionData};
     let id = id_with(ui.scope_id(), id);
     let read = if marked { shown.clone() } else { shown.as_ref().map(|s| SliderValue { value: 0.0, text: None, ..s.clone() }) };
     let (resp, picked, phase) = channel_rail(ui, id, name, read, value, marked, size, track);
-    let stepped = slider_keys(ui, &resp, shown);
+    let unmarked = shown.as_ref().filter(|_| !marked && ui.is_enabled()).map(|s| s.value);
+    let mut stepped = slider_keys(ui, &resp, shown);
+    // Without a marker there is no color yet, so a set value applies even when it leaves the number
+    // as it was.
+    if stepped.is_none()
+        && let Some(v) = unmarked
+        && ui.input(|i| {
+            i.accesskit_action_requests(resp.id, Action::SetValue).any(|r| matches!(r.data, Some(ActionData::NumericValue(n)) if n.is_finite()))
+        })
+    {
+        stepped = Some(v);
+    }
     (picked, phase, stepped.filter(|_| picked.is_none()))
 }
 

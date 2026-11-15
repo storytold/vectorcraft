@@ -194,6 +194,28 @@ fn without_a_selected_stop_the_first_takes_the_opacity() {
     assert!((o[0] - 0.3).abs() < 1e-6 && (o[1] - 1.0).abs() < 1e-6, "{o:?}");
 }
 
+/// The hue picked last for a white gradient stop stays on the ring after the row sets the stop's
+/// opacity.
+#[test]
+fn an_opacity_edit_keeps_the_hue_picked_for_a_white_stop() {
+    let mut app = app();
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.setFill", json!({"gradient": {"stops": stops, "start": [10, 35], "end": [60, 35]}})).unwrap();
+    app.select_tool("gradient");
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    let mut h = harness(app);
+    let ring = |h: &Harness<'static, VectorcraftApp>| h.get_by_label("Hue ring").accesskit_node().numeric_value();
+    let (target_node, target_tree) = h.get_by_label("Hue ring").accesskit_node().locate();
+    let data = Some(ActionData::NumericValue(120.0));
+    h.event(Event::AccessKitActionRequest(ActionRequest { target_node, target_tree, action: Action::SetValue, data }));
+    h.run_steps(2);
+    assert_eq!(ring(&h), Some(120.0), "the ring shows the hue picked for white");
+    action(&mut h, Action::SetValue, Some(ActionData::NumericValue(30.0)));
+    let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
+    assert!((g.gradient.stops[0].opacity - 0.3).abs() < 1e-6, "{:?}", g.gradient.stops);
+    assert_eq!(ring(&h), Some(120.0), "the ring keeps the hue after the opacity edit");
+}
+
 /// A drag across the slider previews and ends as one undo step named Opacity.
 #[test]
 fn a_drag_is_one_undo_step() {

@@ -445,7 +445,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if app.ui.color_wheel.opacity {
         let shown = color.unwrap_or(app.session.last_solid);
+        let owner = color.map(|c| Owner::of(app, &tgt, c));
         opacity_row(app, ui, &tgt, &shown);
+        // An opacity edit of a gradient stop or point changes the gradient its owner holds, and the
+        // HSB picked last stays with the new gradient.
+        if let (Some(c), Some(was)) = (color, owner)
+            && let Some((remembered, rgb, hsb)) = pstate::<Option<(Owner, [f32; 3], [f32; 3])>>(ui.ctx(), MEMORY)
+            && remembered == was
+        {
+            let now = Owner::of(app, &tgt, c);
+            if now != was {
+                set_pstate(ui.ctx(), MEMORY, Some((now, rgb, hsb)));
+            }
+        }
     }
     let Some((hsb, phase)) = pick else { return };
     let behind = super::alt_held(ui);
