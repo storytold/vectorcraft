@@ -4543,7 +4543,10 @@ the others turn by the same hue). `limitTo` snaps new colours to a swatch librar
 `limitTo` and gives `group` no color, and `recolor.randomize` and `recolor.weigh` keep it. A row without `from`, or with
 a current color that is not a color, is refused. With art selected, the Recolor Artwork dialog's New Row button (beside
 Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click another row and Merge to move its colors into it. An
-empty row does not count toward Colors. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
+empty row does not count toward Colors. While it is empty, the dialog's Edit tab does not show it (its sliders edit
+the base color when the empty row is selected), the harmony rules,
+linked moves and the Color Theme Picker leave its new color as it is, and Save All Colors and a new color group saved
+from colors alone leave its new color out. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
 linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
 step (art linked to its global swatches follows), and `recolor.apply` with `group` recolours the art and rewrites the
@@ -4585,7 +4588,7 @@ objects are read. As VectorCraft's own rule, each object read weighs the same, s
 among its pixels; the vector art a symbol instance places counts as one object, and each image it places counts on
 its own), and similar colors merge (k-means in Lab) into at most `colors` (1 to 64, default 5), each shown by its
 most used color in its own model. Picks that touch no art return no colors. In the Recolor Artwork dialog the picks are the `themePicks` field: the rows that aren't
-excluded take the palette as their new colors in row order, the colors repeating when the rows outnumber them.
+excluded and hold current colors take the palette as their new colors in row order, the colors repeating when the rows outnumber them.
 
 ```json
 {"name":"run_command","arguments":{"command":"recolor.pickTheme","params":{"picks":[{"at":[120,80]},{"rect":[200,40,320,140]}],"colors":4}}}
@@ -4611,7 +4614,7 @@ bar sits under the Edit tab's wheel: each row with a share is a part as wide as 
 the largest first. Dragging the edge between two parts moves width between them, and when the drag ends the widths
 become the `weights` field, which moves the rows' current colors and previews the result. The New Color Group menu
 beside the link button runs `swatch.newGroup` right away, as its own undo step: Save All Colors saves the new colors
-of the rows that are not excluded, in row order, and Save Prominent Colors saves the bar's colors in the bar's order.
+of the rows that are not excluded and hold current colors, in row order, and Save Prominent Colors saves the bar's colors in the bar's order.
 
 ```json
 {"name":"run_command","arguments":{"command":"recolor.weigh","params":{"map":[{"from":["rgb 255 0 0","rgb 128 0 204"],"to":"#00ff00"},{"from":["rgb 0 0 255"],"to":"#ffff00"}],"weights":[1,1]}}}
