@@ -154,6 +154,7 @@
 	Align to Artboard	Вирівняти по монтажній області
 	Align to Glyph Bounds	Вирівняти за межами гліфа
 	Align to Key Object	Вирівняти за ключовим об’єктом
+	Align to Key Anchor	Вирівняти за ключовою опорною точкою
 	Align to Page	Вирівняти за сторінкою
 	Align to Path	Вирівняти за контуром
 	Align to Selection	Вирівняти за виділенням
@@ -1188,6 +1189,7 @@ font-technology	Variable	Варіативні
 	Rotate (Classic)…	Поворот (класичний)…
 	Surface	Поверхня
 	Wireframe	Каркас
+	Render Settings	Параметри рендерингу
 	No Shading	Без затінення
 	Plastic	Пластик
 	Highlight Intensity	Інтенсивність відблиску
@@ -1434,6 +1436,40 @@ file-filter	Templates	Шаблони
 	Graph	Діаграма
 	Graph Data	Дані діаграми
 	Graph Type	Тип діаграми
+	Graph Options	Параметри діаграми
+	Left Axis	Ліва вісь
+	Right Axis	Права вісь
+	Category Axis	Вісь категорій
+	Separate Scales	Окремі шкали
+	Add Drop Shadow	Додати тінь
+	Add Legend Across Top	Додати легенду вгорі
+	First Row in Front	Перший рядок попереду
+	First Column in Front	Перший стовпець попереду
+	Legend	Легенда
+	Column Width	Ширина стовпця
+	Bar Width	Ширина смуги
+	Cluster Width	Ширина групи
+	Mark Data Points	Позначати точки даних
+	Connect Data Points	З'єднувати точки даних
+	Edge-to-Edge Lines	Лінії від краю до краю
+	Draw Filled Lines	Малювати заповнені лінії
+	Tick Values	Значення поділок
+	Override Calculated Values	Замінити обчислені значення
+	Divisions	Поділки
+	Tick Marks	Позначки поділок
+	Tick Marks per Division	Позначок на поділку
+	Draw Tick Marks Between Labels	Малювати позначки між підписами
+	Add Labels	Додати підписи
+	Maximum must be more than Minimum.	Максимум має бути більшим за мінімум.
+	Column Graph	Стовпчикова діаграма
+	Stacked Column Graph	Стовпчикова діаграма з накопиченням
+	Bar Graph	Лінійчата діаграма
+	Stacked Bar Graph	Лінійчата діаграма з накопиченням
+	Line Graph	Графік
+	Area Graph	Діаграма з областями
+	Scatter Graph	Точкова діаграма
+	Pie Graph	Кругова діаграма
+	Radar Graph	Пелюсткова діаграма
 	Graph Design	Дизайн діаграми
 	Graph Marker	Маркер діаграми
 	New Design	Новий дизайн
@@ -1554,6 +1590,7 @@ file-filter	Templates	Шаблони
 	Highlight anchors on mouse over	Виділяти опорні точки при наведенні
 	Highlight Rows	Виділяти рядки
 	Highlight Variable	Підсвітити змінну
+	Sort Variables	Сортувати змінні
 	Highlight Substituted Fonts	Виділяти замінені шрифти
 	Highlight Substituted Glyphs	Виділяти замінені гліфи
 	History	Історія
@@ -2048,6 +2085,7 @@ file-filter	Templates	Шаблони
 	Menu Dialog	Діалогове вікно меню
 	Merge	Об’єднати
 	Merge colors into one row	Об’єднати кольори в один рядок
+	New Row	Новий рядок
 	Merge Graphic Styles	Об’єднати графічні стилі
 	Merge Graphic Styles…	Об’єднати графічні стилі…
 	Merge Layers	Об’єднати шари
@@ -3742,11 +3780,55 @@ effect	Points	Точки
 	Composite Fonts	Складені шрифти
 	Export Composite Fonts	Експорт складених шрифтів
 	Import Composite Fonts	Імпорт складених шрифтів
+@msg	each font must be {name, parts}	кожен шрифт має бути у вигляді {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	невідомий ключ `{k}`; шрифт приймає name і parts
+@msg	each font needs a name	кожен шрифт повинен мати назву
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` не може бути назвою складеного шрифту (від 1 до {COMPOSITE_NAME_MAX} символів, без керівних символів)
+@msg	`{name}`: parts must be an object	`{name}`: parts має бути об’єктом
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: невідомий клас `{k}`; класи: kanji, kana, punctuation, symbols, roman і numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} має бути об’єктом
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: невідомий ключ `{k}` у {_1}
+@msg	`{name}`: give the kanji part	`{name}`: вкажіть частину kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	документ містить щонайбільше {COMPOSITE_FONTS_MAX} складених шрифтів
+@msg	two composite fonts are named `{_1}`	два складені шрифти мають назву `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` є назвою встановленого шрифту
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} використовує `{font}`, а це складений шрифт
+@msg	give fonts: [{name, parts}…]	вкажіть fonts: [{name, parts}…]
+@msg	path is empty	path порожній
+@msg	fonts must be a list of composite fonts	fonts має бути списком складених шрифтів
+@msg	names must be strings	names мають бути рядками
+@msg	no composite font named `{n}`	немає складеного шрифту з назвою `{n}`
+@msg	names must be a list of names	names має бути списком назв
+@msg	no composite fonts to export	немає складених шрифтів для експорту
+@msg	not a composite fonts file: {e}	це не файл складених шрифтів: {e}
+@msg	not a composite fonts file: no compositeFonts list	це не файл складених шрифтів: немає списку compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	у файлі понад {COMPOSITE_FONTS_MAX} складених шрифтів
+@msg	the file is larger than 4 MB	файл більший за 4 МБ
+@msg	dataBase64 is not base64	dataBase64 не у форматі base64
+@msg	give one of path, data or dataBase64	вкажіть path, data або dataBase64
+@msg	the file holds no composite fonts	у файлі немає складених шрифтів
+@msg	the file holds two composite fonts named `{_1}`	у файлі два складені шрифти з назвою `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` не може бути назвою складеного шрифту
+@msg	{k}: give a font	{k}: вкажіть шрифт
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: вкажіть шрифт
+@msg	{k}: size must be {_1} to {_2}%	{k}: size має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size має бути від {_1} до {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline має бути від {_1} до {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: масштаб має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: масштаб має бути від {_1} до {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: масштабувати можна лише kana, roman і numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: масштабувати можна лише kana, roman і numerals
+@msg	{k}: only kana can be scaled at the center	{k}: масштабувати від центру можна лише kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: масштабувати від центру можна лише kana
+@msg	no composite font	немає складеного шрифту
 	Delete Font	Видалити шрифт
 	Kanji	Кандзі
 	Kana	Кана
 	Numerals	Цифри
 	Scale at Center	Масштабувати від центру
+	Delete Set	Видалити набір
+	Direct Entry	Пряме введення
 	Up/Down:	Вгору/вниз:
 	Left/Right:	Ліворуч/праворуч:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko вгору/вниз
@@ -5372,6 +5454,11 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Imported library {name}	Імпортовано бібліотеку {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Правило RGB:
+	CMYK Policy:	Правило CMYK:
+	Preserve Embedded Profiles	Зберігати вбудовані профілі
+	Convert to Working Space	Перетворювати в робочий простір
+	Preserve Numbers	Зберігати числа
 	Texture	Текстура
 	Craquelure…	Кракелюри…
 	Grain…	Зерно…
@@ -5643,6 +5730,7 @@ lighting	Light	Світло
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-ефект на заливці або обведенні групи не малює нічого для експорту
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	об’єкт не має 3D-ефекту (Видавлювання та фаска, Обертання, Надування або Повернути)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` має бути об’єктом лише з полем `mode` зі значенням shaded або wireframe
 @msg	its 3D effect builds no solid	його 3D-ефект не будує тіла
 @msg	bevel must be none or one of {_1}	bevel має бути none або одним з: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: не вдається побудувати тіла з цієї ілюстрації: її екземпляри символів, переходи та відсічні групи містять забагато об’єктів
@@ -6141,6 +6229,7 @@ axis	Y Axis	Вісь Y
 @msg	stops must be in order of `offset`	точки переходу мають іти в порядку `offset`
 @msg	the document has no pattern {pattern}	у документі немає візерунка {pattern}
 @msg	the document has no swatch {n}	у документі немає зразка {n}
+@msg	`plates` requires a stop linked to a spot swatch	для `plates` потрібна точка переходу, пов’язана зі зразком плашкового кольору
 @msg	the output	виведення
 @msg	the path has no anchor points	контур не має опорних точок
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})

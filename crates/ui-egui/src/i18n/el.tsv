@@ -140,6 +140,7 @@
 	Align to Artboard	Στοίχιση ως προς τον πίνακα σχεδίασης
 	Align to Glyph Bounds	Στοίχιση στα όρια των γλυφών
 	Align to Key Object	Στοίχιση ως προς το βασικό αντικείμενο
+	Align to Key Anchor	Στοίχιση ως προς το βασικό σημείο αγκύρωσης
 	Align to Page	Στοίχιση ως προς τη σελίδα
 	Align to Path	Στοίχιση ως προς τη διαδρομή
 	Align to Selection	Στοίχιση ως προς την επιλογή
@@ -1129,6 +1130,7 @@ font-technology	Variable	Μεταβλητές
 	Rotate (Classic)…	Περιστροφή (κλασικό)…
 	Surface	Επιφάνεια
 	Wireframe	Συρματόπλεγμα
+	Render Settings	Ρυθμίσεις απόδοσης
 	No Shading	Χωρίς σκίαση
 	Plastic	Πλαστικό
 	Highlight Intensity	Ένταση ανταύγειας
@@ -1340,6 +1342,40 @@ font-technology	Variable	Μεταβλητές
 	Graph	Γράφημα
 	Graph Data	Δεδομένα γραφήματος
 	Graph Type	Τύπος γραφήματος
+	Graph Options	Επιλογές γραφήματος
+	Left Axis	Αριστερός άξονας
+	Right Axis	Δεξιός άξονας
+	Category Axis	Άξονας κατηγοριών
+	Separate Scales	Ξεχωριστές κλίμακες
+	Add Drop Shadow	Προσθήκη εξωτερικής σκιάς
+	Add Legend Across Top	Προσθήκη υπομνήματος στο επάνω μέρος
+	First Row in Front	Πρώτη γραμμή μπροστά
+	First Column in Front	Πρώτη στήλη μπροστά
+	Legend	Υπόμνημα
+	Column Width	Πλάτος στήλης
+	Bar Width	Πλάτος ράβδου
+	Cluster Width	Πλάτος ομάδας
+	Mark Data Points	Σήμανση σημείων δεδομένων
+	Connect Data Points	Σύνδεση σημείων δεδομένων
+	Edge-to-Edge Lines	Γραμμές από άκρη σε άκρη
+	Draw Filled Lines	Σχεδίαση γεμισμένων γραμμών
+	Tick Values	Τιμές υποδιαιρέσεων
+	Override Calculated Values	Αντικατάσταση υπολογισμένων τιμών
+	Divisions	Διαιρέσεις
+	Tick Marks	Σημάδια υποδιαίρεσης
+	Tick Marks per Division	Σημάδια ανά διαίρεση
+	Draw Tick Marks Between Labels	Σχεδίαση σημαδιών ανάμεσα στις ετικέτες
+	Add Labels	Προσθήκη ετικετών
+	Maximum must be more than Minimum.	Το μέγιστο πρέπει να είναι μεγαλύτερο από το ελάχιστο.
+	Column Graph	Γράφημα στηλών
+	Stacked Column Graph	Γράφημα στοιβαγμένων στηλών
+	Bar Graph	Ραβδόγραμμα
+	Stacked Bar Graph	Στοιβαγμένο ραβδόγραμμα
+	Line Graph	Γραμμικό γράφημα
+	Area Graph	Γράφημα περιοχής
+	Scatter Graph	Διάγραμμα διασποράς
+	Pie Graph	Κυκλικό γράφημα
+	Radar Graph	Αραχνοειδές γράφημα
 	Graph Design	Σχεδίαση γραφήματος
 	Graph Marker	Δείκτης γραφήματος
 	New Design	Νέο σχέδιο
@@ -1459,6 +1495,7 @@ font-technology	Variable	Μεταβλητές
 	Highlight anchors on mouse over	Επισήμανση σημείων αγκύρωσης με το ποντίκι
 	Highlight Rows	Επισήμανση γραμμών
 	Highlight Variable	Επισήμανση μεταβλητής
+	Sort Variables	Ταξινόμηση μεταβλητών
 	Highlight Substituted Fonts	Επισήμανση υποκατεστημένων γραμματοσειρών
 	Highlight Substituted Glyphs	Επισήμανση υποκατεστημένων γλύφων
 	History	Ιστορικό
@@ -3020,6 +3057,7 @@ theme	Appearance	Εμφάνιση
 	Menu Dialog	Παράθυρο μενού
 	Merge	Συγχώνευση
 	Merge colors into one row	Συγχώνευση χρωμάτων σε μία γραμμή
+	New Row	Νέα γραμμή
 	Merge Graphic Styles	Συγχώνευση στυλ γραφικών
 	Merge Graphic Styles…	Συγχώνευση στυλ γραφικών…
 	Merge Selected	Συγχώνευση επιλεγμένων
@@ -4210,11 +4248,55 @@ digits	Malayalam	Μαλαγιάλαμ
 	Composite Fonts	Σύνθετες γραμματοσειρές
 	Export Composite Fonts	Εξαγωγή σύνθετων γραμματοσειρών
 	Import Composite Fonts	Εισαγωγή σύνθετων γραμματοσειρών
+@msg	each font must be {name, parts}	κάθε γραμματοσειρά πρέπει να είναι {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	άγνωστο κλειδί `{k}`· μια γραμματοσειρά δέχεται name και parts
+@msg	each font needs a name	κάθε γραμματοσειρά χρειάζεται όνομα
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	το `{raw}` δεν μπορεί να είναι όνομα σύνθετης γραμματοσειράς (1 έως {COMPOSITE_NAME_MAX} χαρακτήρες, χωρίς χαρακτήρες ελέγχου)
+@msg	`{name}`: parts must be an object	`{name}`: το parts πρέπει να είναι αντικείμενο
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: άγνωστη κλάση `{k}`· οι κλάσεις είναι kanji, kana, punctuation, symbols, roman και numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: το {_1} πρέπει να είναι αντικείμενο
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: άγνωστο κλειδί `{k}` στο {_1}
+@msg	`{name}`: give the kanji part	`{name}`: δώστε το τμήμα kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ένα έγγραφο περιέχει το πολύ {COMPOSITE_FONTS_MAX} σύνθετες γραμματοσειρές
+@msg	two composite fonts are named `{_1}`	δύο σύνθετες γραμματοσειρές ονομάζονται `{_1}`
+@msg	`{_1}` is the name of an installed font	το `{_1}` είναι όνομα εγκατεστημένης γραμματοσειράς
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: το {_2} χρησιμοποιεί την `{font}`, που είναι σύνθετη γραμματοσειρά
+@msg	give fonts: [{name, parts}…]	δώστε fonts: [{name, parts}…]
+@msg	path is empty	το path είναι κενό
+@msg	fonts must be a list of composite fonts	το fonts πρέπει να είναι λίστα σύνθετων γραμματοσειρών
+@msg	names must be strings	τα names πρέπει να είναι συμβολοσειρές
+@msg	no composite font named `{n}`	δεν υπάρχει σύνθετη γραμματοσειρά με όνομα `{n}`
+@msg	names must be a list of names	το names πρέπει να είναι λίστα ονομάτων
+@msg	no composite fonts to export	δεν υπάρχουν σύνθετες γραμματοσειρές για εξαγωγή
+@msg	not a composite fonts file: {e}	δεν είναι αρχείο σύνθετων γραμματοσειρών: {e}
+@msg	not a composite fonts file: no compositeFonts list	δεν είναι αρχείο σύνθετων γραμματοσειρών: δεν υπάρχει λίστα compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	το αρχείο περιέχει περισσότερες από {COMPOSITE_FONTS_MAX} σύνθετες γραμματοσειρές
+@msg	the file is larger than 4 MB	το αρχείο είναι μεγαλύτερο από 4 MB
+@msg	dataBase64 is not base64	το dataBase64 δεν είναι base64
+@msg	give one of path, data or dataBase64	δώστε path, data ή dataBase64
+@msg	the file holds no composite fonts	το αρχείο δεν περιέχει σύνθετες γραμματοσειρές
+@msg	the file holds two composite fonts named `{_1}`	το αρχείο περιέχει δύο σύνθετες γραμματοσειρές με όνομα `{_1}`
+@msg	`{_1}` can't name a composite font	το `{_1}` δεν μπορεί να είναι όνομα σύνθετης γραμματοσειράς
+@msg	{k}: give a font	{k}: δώστε γραμματοσειρά
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: δώστε γραμματοσειρά
+@msg	{k}: size must be {_1} to {_2}%	{k}: το size πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: το size πρέπει να είναι από {_1} έως {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: το baseline πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: το baseline πρέπει να είναι από {_1} έως {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: η κλίμακα πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: η κλίμακα πρέπει να είναι από {_1} έως {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: μόνο τα kana, roman και numerals αλλάζουν κλίμακα
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: μόνο τα kana, roman και numerals αλλάζουν κλίμακα
+@msg	{k}: only kana can be scaled at the center	{k}: μόνο το kana αλλάζει κλίμακα από το κέντρο
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: μόνο το kana αλλάζει κλίμακα από το κέντρο
+@msg	no composite font	καμία σύνθετη γραμματοσειρά
 	Delete Font	Διαγραφή γραμματοσειράς
 	Kanji	Κάντζι
 	Kana	Κάνα
 	Numerals	Αριθμοί
 	Scale at Center	Κλιμάκωση από το κέντρο
+	Delete Set	Διαγραφή συνόλου
+	Direct Entry	Άμεση καταχώριση
 	Up/Down:	Πάνω/Κάτω:
 	Left/Right:	Αριστερά/Δεξιά:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko πάνω/κάτω
@@ -5292,6 +5374,11 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	Imported library {name}	Εισήχθη η βιβλιοθήκη {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Πολιτική RGB:
+	CMYK Policy:	Πολιτική CMYK:
+	Preserve Embedded Profiles	Διατήρηση ενσωματωμένων προφίλ
+	Convert to Working Space	Μετατροπή στον χώρο εργασίας
+	Preserve Numbers	Διατήρηση αριθμών
 	System Title Bar	Γραμμή τίτλου συστήματος
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
@@ -5410,6 +5497,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα για εξαγωγή
 @msg	The 3D object is too complex to export	Το αντικείμενο 3D είναι πολύ σύνθετο για εξαγωγή
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	το αντικείμενο δεν έχει εφέ 3D (Εξώθηση και λοξότμηση, Περιστροφή γύρω από άξονα, Φούσκωμα ή Περιστροφή)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	το `render` πρέπει να είναι αντικείμενο που περιέχει μόνο `mode`, με τιμή shaded ή wireframe
 @msg	its 3D effect builds no solid	το εφέ 3D του δεν δημιουργεί στερεό
 @msg	bevel must be none or one of {_1}	το bevel πρέπει να είναι none ή ένα από τα {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: δεν μπορούν να δημιουργηθούν στερεά από αυτό το σχέδιο· οι παρουσίες συμβόλων, οι αναμείξεις και οι ομάδες αποκοπής του περιέχουν πάρα πολλά αντικείμενα
@@ -6491,6 +6579,7 @@ axis	Y Axis	Άξονας Y
 @msg	stops must be in order of `offset`	τα σημεία χρώματος πρέπει να είναι ταξινομημένα κατά `offset`
 @msg	the document has no pattern {pattern}	το έγγραφο δεν έχει μοτίβο {pattern}
 @msg	the document has no swatch {n}	το έγγραφο δεν έχει δείγμα χρώματος {n}
+@msg	`plates` requires a stop linked to a spot swatch	το `plates` απαιτεί σημείο χρώματος συνδεδεμένο με δείγμα πλακάτου χρώματος
 @msg	the output	η έξοδος
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})

@@ -109,6 +109,7 @@
 	Align to Artboard	对齐画板
 	Align to Glyph Bounds	对齐到字形边界
 	Align to Key Object	对齐关键对象
+	Align to Key Anchor	对齐关键锚点
 	Align to Page	对齐页面
 	Align to Path	对齐路径
 	Align to Selection	对齐选区
@@ -1125,6 +1126,7 @@ antiAlias	Sharp	锐利
 	Rotate (Classic)…	旋转 (经典)…
 	Surface	表面
 	Wireframe	线框
+	Render Settings	渲染设置
 	No Shading	无底纹
 	Plastic	塑料
 	Highlight Intensity	高光强度
@@ -1369,6 +1371,40 @@ file-filter	Templates	模板
 	Graph	图表
 	Graph Data	图表数据
 	Graph Type	图表类型
+	Graph Options	图表选项
+	Left Axis	左轴
+	Right Axis	右轴
+	Category Axis	类别轴
+	Separate Scales	分开刻度
+	Add Drop Shadow	添加投影
+	Add Legend Across Top	在顶部添加图例
+	First Row in Front	第一行在前
+	First Column in Front	第一列在前
+	Legend	图例
+	Column Width	列宽
+	Bar Width	条形宽度
+	Cluster Width	簇宽度
+	Mark Data Points	标记数据点
+	Connect Data Points	连接数据点
+	Edge-to-Edge Lines	边到边线条
+	Draw Filled Lines	绘制填充线
+	Tick Values	刻度值
+	Override Calculated Values	覆盖计算值
+	Divisions	刻度数
+	Tick Marks	刻度线
+	Tick Marks per Division	每个刻度的刻度线数
+	Draw Tick Marks Between Labels	在标签之间绘制刻度线
+	Add Labels	添加标签
+	Maximum must be more than Minimum.	最大值必须大于最小值。
+	Column Graph	柱形图
+	Stacked Column Graph	堆积柱形图
+	Bar Graph	条形图
+	Stacked Bar Graph	堆积条形图
+	Line Graph	折线图
+	Area Graph	面积图
+	Scatter Graph	散点图
+	Pie Graph	饼图
+	Radar Graph	雷达图
 	Graph Design	图表设计
 	Graph Marker	图表标记
 	New Design	新建设计
@@ -1925,6 +1961,7 @@ file-filter	Templates	模板
 	Menu Dialog	菜单对话框
 	Merge	合并
 	Merge colors into one row	将颜色合并为一行
+	New Row	新建行
 	Merge Graphic Styles	合并图形样式
 	Merge Graphic Styles…	合并图形样式…
 	Merge Layers	合并图层
@@ -3563,11 +3600,55 @@ digits	Malayalam	马拉雅拉姆数字
 	Composite Fonts	复合字体
 	Export Composite Fonts	导出复合字体
 	Import Composite Fonts	导入复合字体
+@msg	each font must be {name, parts}	每个字体都必须是 {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	未知键 `{k}`；字体可用的键为 name 和 parts
+@msg	each font needs a name	每个字体都需要名称
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` 不能用作复合字体的名称（1 到 {COMPOSITE_NAME_MAX} 个字符，不含控制字符）
+@msg	`{name}`: parts must be an object	`{name}`：parts 必须是对象
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`：未知类别 `{k}`；类别为 kanji、kana、punctuation、symbols、roman 和 numerals
+@msg	`{name}`: {_1} must be an object	`{name}`：{_1} 必须是对象
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`：{_1} 中有未知键 `{k}`
+@msg	`{name}`: give the kanji part	`{name}`：请指定 kanji 部分
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	一个文档最多保存 {COMPOSITE_FONTS_MAX} 个复合字体
+@msg	two composite fonts are named `{_1}`	有两个复合字体都名为 `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` 是已安装字体的名称
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`：{_2} 使用了复合字体 `{font}`
+@msg	give fonts: [{name, parts}…]	请指定 fonts：[{name, parts}…]
+@msg	path is empty	path 为空
+@msg	fonts must be a list of composite fonts	fonts 必须是复合字体列表
+@msg	names must be strings	names 必须是字符串
+@msg	no composite font named `{n}`	没有名为 `{n}` 的复合字体
+@msg	names must be a list of names	names 必须是名称列表
+@msg	no composite fonts to export	没有可导出的复合字体
+@msg	not a composite fonts file: {e}	不是复合字体文件：{e}
+@msg	not a composite fonts file: no compositeFonts list	不是复合字体文件：没有 compositeFonts 列表
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	文件包含超过 {COMPOSITE_FONTS_MAX} 个复合字体
+@msg	the file is larger than 4 MB	文件大于 4 MB
+@msg	dataBase64 is not base64	dataBase64 不是 base64
+@msg	give one of path, data or dataBase64	请指定 path、data 或 dataBase64 之一
+@msg	the file holds no composite fonts	文件不含复合字体
+@msg	the file holds two composite fonts named `{_1}`	文件中有两个复合字体都名为 `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` 不能用作复合字体的名称
+@msg	{k}: give a font	{k}：请指定字体
+@msg	`{name}`: {k}: give a font	`{name}`: {k}：请指定字体
+@msg	{k}: size must be {_1} to {_2}%	{k}：size 必须为 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}：size 必须为 {_1}% 到 {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}：baseline 必须为 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}：baseline 必须为 {_1}% 到 {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}：缩放必须为 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}：缩放必须为 {_1}% 到 {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}：只有 kana、roman 和 numerals 可以缩放
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}：只有 kana、roman 和 numerals 可以缩放
+@msg	{k}: only kana can be scaled at the center	{k}：只有 kana 可以从中心缩放
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}：只有 kana 可以从中心缩放
+@msg	no composite font	没有复合字体
 	Delete Font	删除字体
 	Kanji	汉字
 	Kana	假名
 	Numerals	数字
 	Scale at Center	从中心缩放
+	Delete Set	删除集
+	Direct Entry	直接输入
 	Up/Down:	上/下：
 	Left/Right:	左/右：
 	Tate-chu-yoko Up/Down	纵中横上/下
@@ -5275,6 +5356,11 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	None (Color Preview)	无 (颜色预览)
 	Preserve	保留
 	CMYK:	CMYK：
+	RGB Policy:	RGB 策略：
+	CMYK Policy:	CMYK 策略：
+	Preserve Embedded Profiles	保留嵌入的配置文件
+	Convert to Working Space	转换为工作空间
+	Preserve Numbers	保留数值
 	Art & Illustration	艺术和插画
 	Branding	品牌
 	Film & Video	影片和视频
@@ -5454,6 +5540,7 @@ font-technology	Variable	可变
 	High Performance (discrete)	高性能 (独立显卡)
 	Highlight Rows	突出显示行
 	Highlight Variable	突出显示变量
+	Sort Variables	对变量排序
 	Lock Others	锁定其他
 	Merge Selected	合并所选图层
 	Move Rows	移动行
@@ -5917,6 +6004,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
 @msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必须是只含 `mode` 的对象，值为 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
 @msg	bevel must be none or one of {_1}	bevel 必须是 none 或 {_1} 之一
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}无法从此图稿生成实体：其符号实例、混合和剪切组包含的对象过多
@@ -6374,6 +6462,7 @@ axis	Y Axis	Y 轴
 @msg	stops must be in order of `offset`	色标必须按 `offset` 排序
 @msg	the document has no pattern {pattern}	文档中没有图案 {pattern}
 @msg	the document has no swatch {n}	文档中没有色板 {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` 需要链接到专色色板的渐变色标
 @msg	the output	输出
 @msg	the path has no anchor points	路径没有锚点
 @msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
