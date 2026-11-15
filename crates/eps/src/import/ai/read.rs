@@ -8,7 +8,8 @@
 //!   next layers: a clipping group in each layer, read by [`masks`].
 //! - Ruler guides: a straight `(N) *` guide path, directly on a layer, that runs across the whole
 //!   canvas (16,383 points around the template box's centre) or from edge to edge of one artboard
-//!   is a ruler guide on that layer ([`Document::guides`]); other guide paths stay paths.
+//!   is a ruler guide on that layer ([`Document::guides`]), shown or hidden, with the path's name,
+//!   lock and visibility; other guide paths stay paths.
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
 //!   with `W` clips); a group's transparency and name follow its end. A wraparound group `*w` …
 //!   `*W` (version 7 specification §15.4.2) is a group whose objects other than its type wrap
@@ -214,6 +215,9 @@ pub struct Structure {
     pub text_patterns: HashMap<String, Paint>,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
+    /// The data's symbols are at their own size, whatever its scale: VectorCraft wrote it (its
+    /// `%%Creator` is [`crate::ai_editing::CREATOR_TEXT`]).
+    pub symbols_own_size: bool,
     /// The objects by their XML id (`AI10_ArtUID`), a text object by its slot's id: `None` for an
     /// id two objects have.
     pub xml_ids: HashMap<String, Option<NodeId>>,
@@ -437,8 +441,8 @@ struct BrushesKept {
     read: (usize, usize),
     /// Which of [`Reader::brush_drafts`] are kept as brushes.
     kept: Vec<bool>,
-    /// The art an Art brush draws as the file does.
-    bending: HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length.
+    bending: HashMap<String, f64>,
 }
 
 struct Reader<'a> {
@@ -598,6 +602,10 @@ struct Reader<'a> {
     compound_groups: HashSet<NodeId>,
     /// Groups of a text object and its look (see [`Self::style_marker`]), which aren't a look.
     text_looks: HashSet<NodeId>,
+    /// Objects followed by samples of the pen (`(…) Xt n XD`), which aren't read: such an object
+    /// whose style has a Calligraphic brush that varies with the pen keeps its drawn look (see
+    /// [`Self::style_marker`]).
+    pen_samples: HashSet<NodeId>,
     /// The gradient mesh being read (`/Mesh X!` … `/End X!`), and whether it started on a `%_` line.
     mesh: Option<(super::mesh::MeshReader, bool)>,
     /// The art styles (`%AI9_BeginArtStyles`), by name.
@@ -643,6 +651,8 @@ struct Reader<'a> {
     page_art: bool,
     /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
     canvas_scale: f64,
+    /// [`Structure::symbols_own_size`], from the header's `%%Creator`.
+    symbols_own_size: bool,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
@@ -790,6 +800,7 @@ impl<'a> Reader<'a> {
             ruler_guides: HashMap::new(),
             compound_groups: HashSet::new(),
             text_looks: HashSet::new(),
+            pen_samples: HashSet::new(),
             group_ended: false,
             mesh_ended: false,
             layer_state: None,
@@ -817,6 +828,7 @@ impl<'a> Reader<'a> {
             large_canvas: None,
             page_art: false,
             canvas_scale: 1.0,
+            symbols_own_size: false,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),

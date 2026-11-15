@@ -13,6 +13,7 @@
 	Edge Brightness	Яркост на ръба
 	Smoothness	Гладкост
 	Radial Blur…	Лъчезарно размазване…
+	Blur Center	Център на размазването
 	Smart Blur…	Интелигентно размазване…
 	Sharpen	Изостряне
 	Unsharp Mask…	Контурна маска…
@@ -630,6 +631,7 @@ font-technology	Variable	Променливи
 	Copy All Styles	Копиране на всички стилове
 	Copy Color Value (Hex)	Копиране на цветова стойност (Hex)
 	Copy Fonts Used in the Document	Копиране на шрифтовете, използвани в документа
+	Copy Info	Копиране на информация
 	Copy Links	Копиране на връзките
 	Copy Selected Style	Копиране на избрания стил
 	Copy to User Defined	Копиране в потребителски
@@ -691,6 +693,8 @@ font-technology	Variable	Променливи
 	Crop Image	Изрязване на изображение
 	Image Tools	Инструменти за изображения
 	Remove Background…	Премахване на фона…
+	Draw (Pencil)	Рисуване (Молив)
+	Place Image	Вмъкване на изображение
 	Remove Background	Премахване на фона
 	Background	Фон
 	Edge Color	Цвят на ръба
@@ -887,6 +891,9 @@ font-technology	Variable	Променливи
 	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
 	No alternates for the selected character.	Няма алтернативи за избрания знак.
 	Double-click to replace	Двойно щракване за замяна
+	Click to replace	Щракване за замяна
+	Show all alternates in the Glyphs panel	Показване на всички алтернативи в панела „Глифи“
+	Show Character Alternates	Показване на алтернативите на знака
 	Select one character with the Type tool first.	Първо изберете един знак с инструмента „Текст“.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} е глиф на {font}, а не на шрифта, с който е зададен избраният текст ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} принадлежи на {base} (U+{base_code}) {place}; избраният от вас знак е {sel} (U+{code}).
@@ -1283,6 +1290,7 @@ font-technology	Variable	Променливи
 	Format	Формат
 	Format Options	Опции за формат
 	Format Settings	Настройки на формата
+	Format Settings…	Настройки на формата…
 	Format:	Формат:
 	Formats:	Формати:
 	Fractional Widths	Дробни ширини
@@ -1629,6 +1637,7 @@ font-technology	Variable	Променливи
 	Images:	Изображения:
 	Import Keyboard Shortcuts…	Импортиране на клавишни комбинации…
 	Import PDF	Импортиране на PDF
+	Import PDF pages as links	Импортиране на страниците на PDF като връзки
 	Import PDF Presets	Импортиране на PDF предварителни настройки
 	Import Perspective Grid Presets	Импортиране на предварителни настройки за перспективна мрежа
 	Import Print Presets	Импортиране на предварителни настройки за печат
@@ -2587,6 +2596,7 @@ font-technology	Variable	Променливи
 	Proportional Metrics	Пропорционални метрики
 	Insert Aki Left	Вмъкване на аки отляво
 	Insert Aki Right	Вмъкване на аки отдясно
+	Tsume	Цуме
 	Character Direction	Посока на знаците
 	Digits	Цифри
 	Arabic	Арабски
@@ -3346,6 +3356,18 @@ digits	Malayalam	Малаялам
 	Smart Guides (View → Smart Guides)	Интелигентни водачи (Изглед → Интелигентни водачи)
 	Smart Guides (⌘U)	Интелигентни водачи (⌘U)
 	Smart Punctuation…	Интелигентна пунктуация…
+	Smart Punctuation	Интелигентна пунктуация
+	ff, fi, ffi Ligatures	Лигатури ff, fi, ffi
+	ff, fl, ffl Ligatures	Лигатури ff, fl, ffl
+	Smart Quotes	Интелигентни кавички
+	Smart Spaces	Интелигентни интервали
+	En, Em Dashes	Средни и дълги тирета
+	Ellipses	Многоточия
+	Expert Fractions	Експертни дроби
+	Replace In	Замяна в
+	Selected Text Only	Само избрания текст
+	Entire Document	Целия документ
+	Report Results	Отчет за резултатите
 	Smooth	Гладък
 	Corner	Ъгъл
 	Relative	Относителен
@@ -3376,6 +3398,7 @@ digits	Malayalam	Малаялам
 	Solid	Плътен
 	Sort by Kind	Сортиране по вид
 	Sort by Name	Сортиране по име
+	Sort by Size	Сортиране по размер
 	Sort by Status	Сортиране по състояние
 	Source code on GitHub	Изходен код в GitHub
 	Source Sans 3	Source Sans 3
@@ -4161,6 +4184,7 @@ axis	Both	И двете
 	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Този скрипт добави изключително много обекти. Да продължи ли, или да се спре и да се отменят промените му?
 @msg	Copied the script report	Копиран е отчетът за скрипта
+@msg	Copied the link info	Информацията за връзката е копирана
 @msg	Corners edits the corners of a path	Ъглите редактират ъглите на пътя
 @msg	Couldn't copy to the system clipboard: {e}	Неуспешно копиране в системния клипборд: {e}
 @msg	Couldn't open {name}: {e}	Неуспешно отваряне на {name}: {e}
@@ -4703,11 +4727,11 @@ axis	Both	И двете
 @msg	unknown effect `{id}`	непознат ефект `{id}`
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})
-@msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (точки, линии)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, ромбовиден, свободна форма)
+@msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	непознат акцент `{h}`
 @msg	unknown option `{path}.{k}`	непозната опция `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	непознат панел `{raw}`
 @msg	unknown preference `{key}`	непозната настройка `{key}`
 @msg	Preferences imported.	Настройките са импортирани.
@@ -4725,7 +4749,7 @@ axis	Both	И двете
 @msg	`{key}` must be an object	`{key}` трябва да бъде обект
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` се изпълнява самостоятелно, а не като стъпка от пакет
 @msg	unknown preset (one of {_1})	непозната предварителна настройка (една от {_1})
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (висока, средна, ниска или запазена: вижте flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (high, medium, low или запазена: вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	непозната предварителна настройка `{name}` (вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	непозната предварителна настройка `{name}` (вижте webExport.presets.list)
 @msg	unknown side `{other}` (left|right|top|bottom)	непозната страна `{other}` (left|right|top|bottom)
@@ -5028,6 +5052,7 @@ effect	Soft	Меко
 	VectorCraft Title Bar on Every Desktop	Заглавна лента на VectorCraft на всеки работен плот
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Докато е зададена, променливата на средата VECTORCRAFT_TITLEBAR избира заглавната лента.
 	System Title Bar takes precedence over this option while it is on.	Докато е включена, „Заглавна лента на системата“ има предимство пред тази опция.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Докато „Заглавна лента на VectorCraft на всеки работен плот“ е изключена, този работен плот изчертава заглавната лента на прозореца независимо дали тази опция е включена.
 	Value Axis	Ос на стойностите
 	On Left Side	От лявата страна
 	On Right Side	От дясната страна
@@ -6058,6 +6083,8 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Playback Options…	Опции за възпроизвеждане…
+	Button Mode	Режим с бутони
+	No actions.	Няма действия.
 	Insert Stop…	Вмъкване на спиране…
 	Insert Stop	Вмъкване на спиране
 	Record Stop	Записване на спиране
@@ -6855,11 +6882,20 @@ breakText	Glyphs	Глифи
 	Open Tutorial Sample	Отваряне на примерния файл на урока
 	Finish Tutorial	Завършване на урок
 	Next Tutorial	Следващ урок
+	Show Learn Tab	Показване на раздел в Обучение
+	Show Skill	Показване на умение
+	Back One Level	Едно ниво назад
 	Back to Skills	Обратно към уменията
 @msg	tutorial `{id}` has no practice sample	урокът `{id}` няма примерен файл за упражнение
 @msg	open the practice sample of `{id}` first (see learn.openSample)	първо отворете примерния файл за упражнение на `{id}` (вижте learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	първо завършете `{id}` (вижте learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` е последният урок в своето умение
+	Reset progress	Нулиране на напредъка
+	Mark Tutorial Step	Отбелязване на стъпка от урока
+	Reset Learn Progress	Нулиране на напредъка в обучението
+@msg	missing `step` (see learn.show)	липсва `step` (вижте learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` трябва да е номер на стъпка от 0 до {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` е завършен (вижте learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновяване на отложените ефекти
@@ -6882,3 +6918,6 @@ breakText	Glyphs	Глифи
 	Grommets	Капси
 	Grommet Inset	Отстъп на капсите от ръба
 	Diameter	Диаметър
+	Nest Shapes…	Подреждане на форми…
+	Nest Shapes	Подреждане на форми
+	Roll	Ролка

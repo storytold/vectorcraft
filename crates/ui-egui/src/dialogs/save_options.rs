@@ -253,7 +253,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
         // Version first; the legacy version takes only its own options.
         let legacy = legacy_ai(d);
-        let mut rows: Vec<&FormatOption> = shown(f).filter(|o| LEGACY_ONLY.contains(&o.name) == legacy || o.name == "aiVersion").collect();
+        let mut rows: Vec<&FormatOption> = shown(f).filter(|o| fileio::file_reads(f, legacy, o.name)).collect();
         // EPS's PostScript level comes last, as in Export's EPS Options.
         rows.sort_by_key(|o| (o.name != "aiVersion", f.id == "eps" && o.name == "level"));
         for o in rows {
@@ -268,10 +268,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     false
 }
-
-/// The `.ai` options only the legacy version takes (and the only ones it takes, besides the
-/// version).
-const LEGACY_ONLY: &[&str] = &["transparentImages", "hiddenObjects", "outlineText"];
 
 /// Is a `.ai` file to be saved in the legacy version 7 (`aiVersion: "7"`)?
 fn legacy_ai(d: &Dialog) -> bool {
@@ -615,9 +611,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         return Err("name the file".into());
     }
     let path = if d.bool("__pick") { with_extension(path.trim(), f) } else { path };
+    // Only the options the file reads: a `.ai` file's version takes its own (when the document's
+    // own file is a `.ai`, the save remembers the others as they were).
+    let legacy = legacy_ai(d);
     let mut options: Map<String, Value> = f
         .options
         .iter()
+        .filter(|o| fileio::file_reads(f, legacy, o.name))
         .filter_map(|o| d.fields.get(o.name).filter(|v| !v.is_null() && v.as_str() != Some("")).map(|v| (o.name.to_string(), v.clone())))
         .collect();
     if uncompressed(d) {

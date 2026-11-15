@@ -683,7 +683,7 @@ impl<'a> Scene<'a> {
                 {
                     // Symbols holding instances of symbols are written in full for each instance,
                     // empty or not: every instance's art counts against one budget for the export.
-                    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                    let art = vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n);
                     let count = art.count_with_masks() as u64;
                     // Counted as `place_symbol_art_unclipped` places it: no clip groups.
                     let most = doc.symbol_slice_map(symbol, *xf).map_or(count, |m| m.most_placed_unclipped(&art, doc));

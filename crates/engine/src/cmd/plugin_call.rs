@@ -101,12 +101,30 @@ const FILE_WORDS: &[&str] = &[
     "clipboard",
 ];
 
-/// Param keys that name a file or a folder.
-const FILE_KEYS: &[&str] =
-    &["path", "paths", "file", "files", "folder", "folders", "dir", "directory", "destinationFolder", "sourceFolder", "url", "diffPath"];
+/// Param keys that name a file or a folder, each by its whole name, the folder preferences
+/// `prefs.set {values}` takes included: a command that adds a key naming one adds it here. A key
+/// that only ends like one (`alignToPath`, `linksFolder`, `sortPaths`) names none, nor do `folders`
+/// (how an export groups its files) and `url` (a web link).
+const FILE_KEYS: &[&str] = &[
+    "path",
+    "paths",
+    "file",
+    "files",
+    "folder",
+    "dir",
+    "directory",
+    "destinationFolder",
+    "sourceFolder",
+    "diffPath",
+    "fontsFolder",
+    "pluginsFolder",
+    "recoveryFolder",
+    "templatesFolder",
+];
 
 /// The keys in [`FILE_KEYS`] that name a folder.
-const FOLDER_KEYS: &[&str] = &["folder", "folders", "dir", "directory", "destinationFolder", "sourceFolder"];
+const FOLDER_KEYS: &[&str] =
+    &["folder", "dir", "directory", "destinationFolder", "sourceFolder", "fontsFolder", "pluginsFolder", "recoveryFolder", "templatesFolder"];
 
 /// What a param key that names a place on disk names there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -132,7 +150,83 @@ pub fn key_location(key: &str) -> Option<Location> {
 /// What `key` names on disk in command `spec`: [`key_location`], or `None` when [`NOT_FILES`]
 /// names it for `spec` (it names part of the document there).
 pub fn location_in(spec: &CommandSpec, key: &str) -> Option<Location> {
-    if NOT_FILES.contains(&(spec.id, key)) { None } else { key_location(key) }
+    ParamsPlace::top(Some(spec)).member(key, None).1
+}
+
+/// A place in the params of a command. What a key names on disk depends on the command and on the
+/// keys above it: [`key_location`], less a key [`NOT_FILES`] names for the command at the top of its
+/// params and one at the end of a [`NESTED_NOT_FILES`] key list. A walk of params starts at
+/// [`ParamsPlace::top`] and goes down with [`ParamsPlace::member`] and [`ParamsPlace::item`].
+#[derive(Clone, Copy, Debug)]
+pub struct ParamsPlace {
+    /// The command whose params these are; `None` for a command that isn't known.
+    command: Option<&'static str>,
+    /// Whether this is the top of the params.
+    top: bool,
+    /// The keys of a [`NESTED_NOT_FILES`] list still to follow below this place.
+    trail: Option<&'static [&'static str]>,
+}
+
+impl ParamsPlace {
+    /// The top of the params of `spec`, or of a command that isn't known (`None`), where every key in
+    /// [`FILE_KEYS`] names a file or a folder.
+    pub fn top(spec: Option<&CommandSpec>) -> ParamsPlace {
+        ParamsPlace { command: spec.map(|s| s.id), top: true, trail: None }
+    }
+
+    /// The top of the params of the command with id `id` ([`ParamsPlace::top`]).
+    pub fn of(id: &str) -> ParamsPlace {
+        ParamsPlace::top(super::find_command(id))
+    }
+
+    /// The top of the params of the command that object `fields` calls, when it is a call
+    /// (`{command | id: <command id>, params}`, as a `command.batch` step or a control request is):
+    /// the place of its `params` member ([`ParamsPlace::member`]).
+    pub fn carried(fields: &serde_json::Map<String, Value>) -> Option<ParamsPlace> {
+        if !fields.contains_key("params") {
+            return None;
+        }
+        let id = fields.get("command").or_else(|| fields.get("id")).and_then(Value::as_str)?;
+        super::find_command(id).map(|spec| ParamsPlace::top(Some(spec)))
+    }
+
+    /// The top of the params of the command that array `items` records, when it is a recorded step
+    /// (`[command id, params]`): the place of its item 1 ([`ParamsPlace::item`]).
+    pub fn step(items: &[Value]) -> Option<ParamsPlace> {
+        match items {
+            [Value::String(id), Value::Object(_)] => super::find_command(id).map(|spec| ParamsPlace::top(Some(spec))),
+            _ => None,
+        }
+    }
+
+    /// The place of member `key` of an object here, with what `key` names on disk there. `carried` is
+    /// [`ParamsPlace::carried`] of that object: its `params` member is then the top of that command's
+    /// params, and names no file.
+    pub fn member(self, key: &str, carried: Option<ParamsPlace>) -> (ParamsPlace, Option<Location>) {
+        if key == "params"
+            && let Some(inner) = carried
+        {
+            return (inner, None);
+        }
+        let rest = if self.top {
+            let id = self.command;
+            NESTED_NOT_FILES.iter().find(|(c, keys)| Some(*c) == id && keys.first() == Some(&key)).map(|(_, keys)| keys.get(1..).unwrap_or_default())
+        } else {
+            self.trail.filter(|keys| keys.first() == Some(&key)).map(|keys| keys.get(1..).unwrap_or_default())
+        };
+        let document = (self.top && self.command.is_some_and(|id| NOT_FILES.contains(&(id, key)))) || rest.is_some_and(<[&str]>::is_empty);
+        let place = ParamsPlace { command: self.command, top: false, trail: rest.filter(|keys| !keys.is_empty()) };
+        (place, if document { None } else { key_location(key) })
+    }
+
+    /// The place of item `index` of an array here. `step` is [`ParamsPlace::step`] of that array: its
+    /// item 1 is then the top of that command's params.
+    pub fn item(self, index: usize, step: Option<ParamsPlace>) -> ParamsPlace {
+        match step {
+            Some(inner) if index == 1 => inner,
+            _ => ParamsPlace { command: self.command, top: false, trail: None },
+        }
+    }
 }
 
 /// The param keys of `spec` that name a file or a folder, with what they name: the keys in
@@ -158,9 +252,6 @@ pub(crate) const NOT_FILES: &[(&str, &str)] = &[
     ("symbol.instance.setAppearance", "path"),
     ("symbol.instance.selectPart", "path"),
     ("object.objectsOnPath.attach", "path"),
-    ("attributes.set", "url"),
-    ("object.slice.options", "url"),
-    ("document.exportForScreens", "folders"),
 ];
 
 /// Commands and the keys from the top of their params down to a key in [`FILE_KEYS`] that, there,
@@ -251,34 +342,24 @@ pub(crate) fn names_key(text: &str, key: &str) -> bool {
     })
 }
 
-/// Does `args`, the arguments of a call of command `id`, carry a key in [`FILE_KEYS`] at any depth
-/// (in objects and in arrays), such as an effect's `textureImage.path`? Only a key [`NOT_FILES`]
-/// names for `id`, at the top level, and one at the end of a [`NESTED_NOT_FILES`] key list for
-/// `id`, aren't counted. The walk keeps its own stack, so deep arguments can't overflow the
-/// thread's.
+/// Does `args`, the arguments of a call of command `id`, carry a key that names a file or a folder at
+/// any depth (in objects and in arrays, [`ParamsPlace`]), such as an effect's `textureImage.path`?
+/// Only a key [`NOT_FILES`] names for `id`, at the top level, and one at the end of a
+/// [`NESTED_NOT_FILES`] key list for `id`, aren't counted. A call or a recorded step inside `args`
+/// is read as part of `id`'s arguments, not as the command it names. The walk keeps its own stack,
+/// so deep arguments can't overflow the thread's.
 fn names_file(id: &str, args: &Value) -> bool {
-    // Each value, whether it is the params themselves, and the keys of a NESTED_NOT_FILES list
-    // still to follow below it.
-    let mut stack: Vec<(&Value, bool, Option<&[&str]>)> = vec![(args, true, None)];
-    while let Some((v, top, trail)) = stack.pop() {
+    let mut stack: Vec<(&Value, ParamsPlace)> = vec![(args, ParamsPlace::of(id))];
+    while let Some((v, place)) = stack.pop() {
         match v {
-            Value::Array(a) => stack.extend(a.iter().map(|x| (x, false, None))),
+            Value::Array(a) => stack.extend(a.iter().enumerate().map(|(i, x)| (x, place.item(i, None)))),
             Value::Object(o) => {
                 for (k, x) in o {
-                    let k = k.as_str();
-                    let rest = if top {
-                        NESTED_NOT_FILES
-                            .iter()
-                            .find(|(c, keys)| *c == id && keys.first() == Some(&k))
-                            .map(|(_, keys)| keys.get(1..).unwrap_or_default())
-                    } else {
-                        trail.filter(|keys| keys.first() == Some(&k)).map(|keys| keys.get(1..).unwrap_or_default())
-                    };
-                    let document = (top && NOT_FILES.contains(&(id, k))) || rest.is_some_and(<[&str]>::is_empty);
-                    if FILE_KEYS.contains(&k) && !document {
+                    let (below, location) = place.member(k, None);
+                    if location.is_some() {
                         return true;
                     }
-                    stack.push((x, false, rest.filter(|keys| !keys.is_empty())));
+                    stack.push((x, below));
                 }
             }
             _ => {}
@@ -638,7 +719,13 @@ mod tests {
         assert!(names_file("effect.apply", &texture));
         assert!(names_file("effect.setParams", &texture));
         assert!(names_file("effect.apply", &json!({"params": {"layers": [{"name": "a"}, {"folder": "/tmp"}]}})));
-        assert!(names_file("select.all", &json!([[[{"url": "file:///etc/hosts"}]]])));
+        assert!(names_file("select.all", &json!([[[{"file": "file:///etc/hosts"}]]])));
+        // A web link and an export's grouping name no file.
+        assert!(!names_file("attributes.set", &json!({"url": "https://example.com/a"})));
+        assert!(!names_file("object.move", &json!({"opts": {"folders": "rows", "alignToPath": "baseline"}})));
+        // A call nested in the arguments doesn't vouch for its own keys.
+        assert!(names_file("object.move", &json!({"opts": {"command": "object.setLiveShape", "params": {"path": "/tmp/x"}}})));
+        assert!(names_file("object.move", &json!({"opts": ["object.setLiveShape", {"path": "/tmp/x"}]})));
         assert!(!names_file("effect.apply", &json!({"effect": "distort.glass", "params": {"distortion": 5, "textureImage": "frosted"}})));
         assert!(!names_file("object.move", &json!({"dx": 5, "dy": 0, "ids": [1, 2], "opts": {"copy": false}})));
         // `path` is the path text is set on in text.createInPath, but only as its own param.
@@ -647,7 +734,13 @@ mod tests {
         assert!(names_file("object.move", &json!({"path": [[0, 0]]})));
         // object.setLiveShape takes no `path`; its description says "on any path:" in its prose.
         assert!(names_file("object.setLiveShape", &json!({"path": "/tmp/x"})));
-        // Image Trace's path fidelity setting, only inside its tracing settings.
+    }
+
+    /// Image Trace's path fidelity setting `paths` names no file, but only inside its tracing
+    /// settings.
+    #[test]
+    fn image_trace_paths_name_no_file_only_in_its_settings() {
+        use serde_json::json;
         for id in ["imageTrace.make", "imageTrace.makeAndExpand"] {
             assert!(!names_file(id, &json!({"preset": "Default", "params": {"mode": "color", "paths": 50}})));
             assert!(!names_file(id, &json!({"savedPreset": {"paths": 50, "corners": 75}})));
@@ -658,7 +751,12 @@ mod tests {
             assert!(names_file(id, &json!({"options": {"paths": 50}})));
         }
         assert!(names_file("object.move", &json!({"params": {"paths": 50}})));
-        // A custom arrowhead's outline in stroke.set, only where stroke.set takes one.
+    }
+
+    /// A custom arrowhead's outline `path` names no file, but only where stroke.set takes one.
+    #[test]
+    fn a_custom_arrowhead_outline_names_no_file_only_in_stroke_set() {
+        use serde_json::json;
         let outline = json!({"subpaths": []});
         assert!(!names_file("stroke.set", &json!({"endArrow": {"Custom": {"name": "A", "path": outline}}})));
         assert!(!names_file("stroke.set", &json!({"startArrow": {"Custom": {"name": "A", "path": outline}}, "endArrow": "Triangle"})));
@@ -668,7 +766,12 @@ mod tests {
         assert!(names_file("stroke.set", &json!({"options": {"endArrow": {"Custom": {"path": "/tmp/x"}}}})));
         assert!(names_file("stroke.set", &json!({"endArrow": [{"Custom": {"path": "/tmp/x"}}]})));
         assert!(names_file("object.move", &json!({"endArrow": {"Custom": {"path": "/tmp/x"}}})));
-        // Deep nesting is walked without recursion.
+    }
+
+    /// A file key under deep nesting is found, and the walk doesn't recurse.
+    #[test]
+    fn a_file_key_is_found_under_deep_nesting() {
+        use serde_json::json;
         let mut deep = json!({"file": "/tmp/x"});
         for _ in 0..10_000 {
             deep = Value::Array(vec![deep]);
@@ -726,9 +829,46 @@ mod tests {
             assert!(found.iter().all(|(k, l)| (*l == Location::Folder) == FOLDER_KEYS.contains(k)), "{}: {found:?}", spec.id);
             assert!(denied(spec).is_some() || found.is_empty(), "{} names {found:?} but a plug-in may call it", spec.id);
         }
-        assert_eq!(key_location("url"), Some(Location::File));
+        assert_eq!(key_location("url"), None);
+        assert_eq!(key_location("folders"), None);
+        assert_eq!(key_location("linksFolder"), None);
         assert_eq!(key_location("sourceFolder"), Some(Location::Folder));
         assert_eq!(key_location("pathData"), None);
+    }
+
+    /// A key keeps the meaning its command gives it at every depth: a call (`{command, params}`) and a
+    /// recorded step (`[command id, params]`) carry their command's exceptions down, and a custom
+    /// arrowhead's outline is part of the document only at its own place in `stroke.set`.
+    #[test]
+    fn a_params_place_follows_its_command() {
+        use serde_json::json;
+        let at = |place: ParamsPlace, keys: &[&str]| {
+            let mut place = place;
+            let mut location = None;
+            for k in keys {
+                (place, location) = place.member(k, None);
+            }
+            location
+        };
+        assert_eq!(at(ParamsPlace::of("text.createInPath"), &["path"]), None);
+        assert_eq!(at(ParamsPlace::of("text.createInPath"), &["options", "path"]), Some(Location::File));
+        assert_eq!(at(ParamsPlace::of("stroke.set"), &["endArrow", "Custom", "path"]), None);
+        assert_eq!(at(ParamsPlace::of("stroke.set"), &["endArrow", "Custom", "file"]), Some(Location::File));
+        assert_eq!(at(ParamsPlace::of("no.such.command"), &["path"]), Some(Location::File));
+        assert_eq!(at(ParamsPlace::top(None), &["destinationFolder"]), Some(Location::Folder));
+        let call = json!({"command": "text.createInPath", "params": {"path": [[0, 0]]}});
+        let carried = call.as_object().and_then(ParamsPlace::carried);
+        let (inner, location) = ParamsPlace::of("command.batch").member("params", carried);
+        assert_eq!(location, None);
+        assert_eq!(inner.member("path", None).1, None);
+        assert_eq!(ParamsPlace::carried(&serde_json::Map::new()).map(|_| ()), None);
+        let unknown = json!({"command": "no.such.command", "params": {}});
+        assert!(unknown.as_object().and_then(ParamsPlace::carried).is_none());
+        let step = [json!("text.createInPath"), json!({"path": [[0, 0]]})];
+        let place = ParamsPlace::top(None).item(1, ParamsPlace::step(&step));
+        assert_eq!(place.member("path", None).1, None);
+        assert_eq!(ParamsPlace::top(None).item(0, ParamsPlace::step(&step)).member("path", None).1, Some(Location::File));
+        assert!(ParamsPlace::step(&[json!("text.createInPath")]).is_none());
     }
 
     /// A file key counts as a command's param only where its description takes it: not a word in

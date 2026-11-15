@@ -427,6 +427,7 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     super::params::check_effect_color(C, id, &params)?;
     super::params::check_effect_channel(C, id, &params)?;
+    super::params::check_effect_center(C, id, &params)?;
     // Crop Marks take their style from the preferences when applied.
     if id == effects::CROP_MARKS && params.get("style").is_none() {
         params["style"] = json!(s.crop_mark_style().id());
@@ -718,7 +719,7 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
 /// sets its Warp style (`warpStyle`), its 3D type (`threeDType`) or visibility (`visible`), as one
 /// undo step. They are checked as `effect.apply` checks them, and a visible 3D effect must still
 /// fit; a hidden one has its given values checked. → `{ids}`.
-fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
+pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
     let mut params = p.get("params").cloned().unwrap_or(Value::Null);
@@ -740,6 +741,7 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     for effect in &edited {
         super::params::check_effect_color(C, effect, &params)?;
         super::params::check_effect_channel(C, effect, &params)?;
+        super::params::check_effect_center(C, effect, &params)?;
     }
     if edited.iter().any(|e| texture_load_effect(e)) {
         load_texture(&mut params, C)?;
@@ -865,8 +867,8 @@ fn load_texture(params: &mut Value, cmd: &str) -> Result<()> {
 /// Has `n` an appearance Expand Appearance turns into objects: a path that isn't basic (several
 /// fills or strokes, effects, transparency of a fill or stroke, a brush), a group or layer with
 /// fills, strokes or effects of its own or such members, other objects with effects, type with
-/// fills or strokes of its own, or a symbol instance whose active fill or stroke has a geometry
-/// effect ([`effects::has_item_geometry`])?
+/// fills or strokes of its own, or a symbol instance whose active fill or stroke has a geometry or
+/// raster effect ([`effects::has_item_geometry`], [`effects::has_instance_row_raster`])?
 pub(crate) fn expandable(n: &Node) -> bool {
     expandable_except(n, &[])
 }
@@ -883,7 +885,9 @@ pub(crate) fn expandable_except(n: &Node, skip: &[NodeId]) -> bool {
             !n.appearance.items.is_empty() || !n.appearance.effects.is_empty() || children.iter().any(|c| expandable_except(c, skip))
         }
         NodeKind::Text(_) => !n.appearance.items.is_empty() || !n.appearance.effects.is_empty(),
-        NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => effects::has_item_geometry(n) || !n.appearance.effects.is_empty(),
+        NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
+            effects::has_item_geometry(n) || effects::has_instance_row_raster(n) || !n.appearance.effects.is_empty()
+        }
         _ => !n.appearance.effects.is_empty(),
     }
 }

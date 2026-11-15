@@ -9,6 +9,7 @@ description = "VectorCraft Encapsulated PostScript: a hand-written EPS writer (P
 workspace = true
 
 [dependencies]
+craft-eps = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

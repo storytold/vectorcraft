@@ -18,7 +18,7 @@ use vectorcraft_geom::Rect;
 
 use super::super::{EngineError, NodeId, Result, Session, bad, bool_or, str_param};
 use super::encode::{add_note, single_artboard};
-use super::export::{export_crop, isolated, selected_artwork, without_artboards};
+use super::export::{export_crop, export_reads, isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
 use super::{
     ARTBOARD_PARAMS, ArtboardPick, Format, Note, artboard_file_names_keeping_dots, create_dir, distinct_names_by, encode_with_notes, merge,
@@ -524,6 +524,77 @@ fn rows_of(s: &Session, p: &Value, preset: Option<&str>) -> Result<Vec<Row>> {
     Ok(rows)
 }
 
+/// A note for each option of a format row (`formats`) or of a format's `settings` in the request
+/// `asked` that some format takes but the file the row writes, or every row of that format writes,
+/// doesn't read (`{format: png, quality: 80}`), in the wording of a save's note and named as the
+/// request names it (`formats[0].quality`, `settings.png.quality`). The rows and settings the
+/// export writes with are those of `p` (`asked` with a preset or the remembered settings laid
+/// under it). A row's own keys (`scale`, `suffix`…), the keys the export reads for every format
+/// (`includeArtboardFill`, `richBlack`, `params`) and an artboard choice (the export picks the
+/// artboards) get none, and so does an exporter plug-in's format.
+pub(crate) fn unused_option_notes(asked: &Value, p: &Value) -> Vec<String> {
+    let listed = |k: &str| super::FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).any(|o| o.name == k);
+    let own = |k: &str| {
+        ROW_KEYS.contains(&k) || ARTBOARD_PARAMS.contains(&k) || matches!(k, "useArtboards" | "includeArtboardFill" | "richBlack" | "params")
+    };
+    // The keys of `given` that `f`, writing with `options` (the format's settings and the row's
+    // own), doesn't read.
+    let unread = |f: &Format, given: &Map<String, Value>, options: &Value| -> Vec<String> {
+        if vectorcraft_plugins::export::by_format(f.id).is_some() {
+            return Vec::new();
+        }
+        let legacy = super::save::legacy_file(C, f, options);
+        given.iter().filter(|(k, v)| !v.is_null() && !own(k) && listed(k) && !export_reads(f, legacy, k)).map(|(k, _)| k.clone()).collect()
+    };
+    let note = |key: String, f: &Format, options: &Value| super::save::unused_option_note(&key, &super::save::written_as(C, f, options));
+    let settings = p.get("settings").and_then(Value::as_object);
+    let of_format = |id: &str| settings.and_then(|s| s.get(id)).and_then(Value::as_object).cloned().unwrap_or_default();
+    // A row's format and the options it writes with.
+    let row_of = |row: &Value| -> Option<(&'static Format, Value)> {
+        let (Some(row), Ok(f)) = (row.as_object(), writable(C, Some(str_param(row, "format").unwrap_or("png")), None)) else { return None };
+        let mut options = of_format(f.id);
+        options.extend(row.iter().map(|(k, v)| (k.clone(), v.clone())));
+        Some((f, Value::Object(options)))
+    };
+    let mut out: Vec<String> = Vec::new();
+    if let Some(Value::Array(rows)) = asked.get("formats") {
+        for (i, row) in rows.iter().enumerate() {
+            let (Some((f, options)), Some(given)) = (row_of(row), row.as_object()) else { continue };
+            out.extend(unread(f, given, &options).into_iter().map(|k| note(format!("formats[{i}].{k}"), f, &options)));
+        }
+    }
+    // The rows written, each with its own keys: a format's settings are read as each of its rows
+    // writes them (a row may name another `.ai` version), else as they are.
+    let written: Vec<(&Format, Value, Map<String, Value>)> = match p.get("formats") {
+        Some(Value::Array(rows)) => {
+            rows.iter().filter_map(|row| row_of(row).map(|(f, options)| (f, options, row.as_object().cloned().unwrap_or_default()))).collect()
+        }
+        _ => Vec::new(),
+    };
+    for (id, given) in asked.get("settings").and_then(Value::as_object).into_iter().flatten() {
+        let (Some(given), Ok(f)) = (given.as_object(), writable(C, Some(id), None)) else { continue };
+        let mut rows: Vec<(&Value, Option<&Map<String, Value>>)> =
+            written.iter().filter(|(g, ..)| g.id == f.id).map(|(_, o, row)| (o, Some(row))).collect();
+        let alone = Value::Object(of_format(f.id));
+        if rows.is_empty() {
+            rows.push((&alone, None));
+        }
+        let unread_by: Vec<Vec<String>> = rows.iter().map(|(o, _)| unread(f, given, o)).collect();
+        // A setting a row reads and doesn't give itself is used. One no row uses is noted when a
+        // row doesn't read it, naming the first such row's file.
+        for (k, v) in given {
+            // A row's own key, null too, replaces the setting.
+            let overridden = |row: Option<&Map<String, Value>>| row.is_some_and(|r| r.contains_key(k));
+            let used = rows.iter().zip(&unread_by).any(|((_, row), u)| !u.contains(k) && !overridden(*row));
+            let unread_row = rows.iter().zip(&unread_by).find(|(_, u)| u.contains(k));
+            if let (false, false, Some(((options, _), _))) = (v.is_null(), used, unread_row) {
+                out.push(note(format!("settings.{id}.{k}"), f, options));
+            }
+        }
+    }
+    out
+}
+
 /// Check the export settings in `p` (formats, preset, settings…) as an export would read them.
 pub(crate) fn check_settings(s: &Session, p: &Value) -> Result<()> {
     rows_of(s, p, ScreenParams::of(p)?.preset.as_deref()).map(|_| ())
@@ -646,9 +717,10 @@ impl Output {
 pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
     // A folder the client gave, as against the one its `exportPreset` keeps.
     let given = p.get("folder").is_some();
+    let asked = p;
     let p = with_preset(s, p)?;
     let hidden = if given { None } else { str_param(&p, "folder").filter(|f| !f.is_empty() && !super::access::shown(f)) };
-    let mut r = export(s, &p).map_err(|e| match hidden {
+    let mut r = export(s, &p, asked).map_err(|e| match hidden {
         Some(folder) => super::access::naming_in_error(e, folder),
         None => e,
     })?;
@@ -1022,9 +1094,12 @@ pub(crate) fn with_export_preset(s: &Session, cmd: &str, settings: &mut Map<Stri
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
 /// so do different files that would share a name, with or without the `name` pattern. The reply's
 /// `warnings` lists every warning the encoders give for the files, each once, what the files lose
-/// first ([`super::note_texts`]).
-pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
+/// first ([`super::note_texts`]), and a note for each option of the request `asked` (`p` before a
+/// preset or the remembered settings were laid under it) that the files the rows write don't read
+/// ([`unused_option_notes`]).
+pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value> {
     check_passwords(p)?;
+    let unused = unused_option_notes(asked, p);
     let o = ScreenParams::of(p)?;
     let rows = rows_of(s, p, o.preset.as_deref())?;
     o.one_source()?;
@@ -1054,7 +1129,7 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     // Include Artboard Fill off: the encoders leave the background colors out.
     let fill = if o.include_artboard_fill == Some(false) { json!({ "includeArtboardFill": false }) } else { json!({}) };
     let rows = rows.into_iter().map(|r| Row { options: merge(with_black_output(s, &r.options), fill.clone()), ..r }).collect();
-    let export = ScreenExport { cmd: C, o, rows, naming, items, hidden: None };
+    let export = ScreenExport { cmd: C, o, rows, naming, items, unused, hidden: None };
     match &mut s.screens_hand_off {
         Some(slot) => {
             *slot = Some(export);
@@ -1075,6 +1150,8 @@ pub struct ScreenExport {
     rows: Vec<Row>,
     naming: Naming,
     items: Vec<Item>,
+    /// The notes on options the files don't read ([`unused_option_notes`]).
+    unused: Vec<String>,
     /// The export folder and the name the request that prepared the export may see it by, when the
     /// folder came from the `exportPreset` and is outside that request's read roots: the reply and
     /// the errors of [`ScreenExport::write`] name it as [`export_for_screens`] does.
@@ -1139,14 +1216,17 @@ impl ScreenExport {
 
 /// [`ScreenExport::write`].
 fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
-    let ScreenExport { o, rows, naming, items, .. } = export;
+    let ScreenExport { o, rows, naming, items, unused, .. } = export;
     let folder = o.folder.as_deref().filter(|f| !f.is_empty());
     if let Some(dir) = folder {
         create_dir(dir)?;
     }
     let mut out = Output::default();
-    // The encoders' notes for every file, each once.
+    // The notes on the options, then the encoders' notes for every file, each once.
     let mut notes: Vec<Note> = Vec::new();
+    for text in unused {
+        add_note(&mut notes, Note::setting(text));
+    }
     // Include Bleed: a grown artboard already holds the bleed. Assets, layers and a selection are
     // written on a page of their own bounds, which it doesn't grow.
     let bleed_on_page = o.include_bleed && o.assets.is_none() && o.layers.is_none() && o.selection.is_none();

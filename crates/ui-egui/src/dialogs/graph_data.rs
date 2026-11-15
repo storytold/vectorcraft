@@ -32,6 +32,8 @@ const MAX_COLS: usize = MAX_GRAPH_SERIES + 1;
 const MIN_ROWS: usize = 8;
 const MIN_COLS: usize = 6;
 const MAX_CELL: usize = 256;
+/// The largest file Import Data reads, 1 MB (1,048,576 bytes), the same as Import Data Sets'.
+const MAX_IMPORT_BYTES: usize = 1 << 20;
 /// The Cell Style limits (Adjust column width and decimal digits).
 const MAX_DECIMALS: u64 = 10;
 const MAX_WIDTH: u64 = 20;
@@ -147,7 +149,10 @@ pub(crate) fn grid_from_text(text: &str) -> Grid {
 }
 
 /// A text file's bytes as text: UTF-16 with its byte-order mark (spreadsheets' "Unicode Text"),
-/// else UTF-8 without one.
+/// else UTF-16 without one when the bytes hold NUL bytes and Import Data Sets' rule gives them a
+/// byte order ([`vectorcraft_engine::cmd::utf16_order_without_mark`]), else UTF-8 with or without
+/// one. UTF-16 is read as it is after a byte-order mark: an odd last byte is left out, and an
+/// unpaired surrogate reads as U+FFFD.
 pub(crate) fn decode(bytes: &[u8]) -> String {
     let utf16 = |rest: &[u8], le: bool| {
         let units: Vec<u16> = rest.as_chunks::<2>().0.iter().map(|p| if le { u16::from_le_bytes(*p) } else { u16::from_be_bytes(*p) }).collect();
@@ -157,7 +162,10 @@ pub(crate) fn decode(bytes: &[u8]) -> String {
         [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
         [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
         [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
-        _ => String::from_utf8_lossy(bytes).into_owned(),
+        _ => match bytes.contains(&0).then(|| vectorcraft_engine::cmd::utf16_order_without_mark(bytes)).flatten() {
+            Some(le) => utf16(bytes, le),
+            None => String::from_utf8_lossy(bytes).into_owned(),
+        },
     }
 }
 
@@ -332,9 +340,16 @@ fn revert(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
 fn import(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Text", &["txt", "tsv", "csv"])], ..Default::default() };
     let path = crate::picks::open(app, &pick).ok_or("cancelled")?;
-    // The button is off where files can't be read.
-    let Some(read) = app.services.read.as_ref() else { return Ok(()) };
-    let bytes = read(&path)?;
+    // One byte past the limit tells a larger file apart without reading all of it.
+    let bytes = match (&app.services.read_head, &app.services.read) {
+        (Some(read_head), _) => read_head(&path, MAX_IMPORT_BYTES + 1)?,
+        (None, Some(read)) => read(&path)?,
+        // The button is off where files can't be read.
+        (None, None) => return Ok(()),
+    };
+    if bytes.len() > MAX_IMPORT_BYTES {
+        return Err("the file is larger than 1 MB".into());
+    }
     replace_grid(d, grid_from_text(&decode(&bytes)));
     Ok(())
 }
@@ -518,6 +533,28 @@ mod tests {
     }
 
     #[test]
+    fn utf16_without_a_byte_order_mark_reads_by_its_line_breaks() {
+        let text = "\tSales é\r\nQ1\t1\n";
+        let le: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let be: Vec<u8> = text.encode_utf16().flat_map(u16::to_be_bytes).collect();
+        assert_eq!(decode(&le), text, "little-endian");
+        assert_eq!(decode(&be), text, "big-endian");
+        assert_eq!(grid_from_text(&decode(&le)), g(&[&["", "Sales é"], &["Q1", "1"]]));
+        // One row has no line break: the side of each unit that holds the NUL byte gives the order.
+        for (bytes, order) in [(b"\0Q\x001\0\t\x002".to_vec(), "big-endian"), (b"Q\x001\0\t\x002\0".to_vec(), "little-endian")] {
+            assert_eq!(decode(&bytes), "Q1\t2", "one line, {order}");
+        }
+        // A file cut short by one byte, or with an unpaired surrogate, reads as it would after a
+        // byte-order mark.
+        assert_eq!(decode(&[le.as_slice(), &[0x0A]].concat()), text, "odd length");
+        assert_eq!(decode(&[le.as_slice(), &[0x00, 0xD8]].concat()), format!("{text}\u{FFFD}"), "unpaired surrogate");
+        // A line break in both byte orders leaves the order unknown, and UTF-8 with a stray NUL
+        // byte isn't UTF-16: both read as UTF-8, as before.
+        assert_eq!(decode(&[0x0A, 0, 0, 0x0A]), "\n\0\0\n");
+        assert_eq!(decode(b"a,b\n1,2\0"), "a,b\n1,2\0");
+    }
+
+    #[test]
     fn a_sheet_sent_wider_and_taller_than_a_graph_is_cut_to_one() {
         // One long row and one long column: their product would be ten billion cells.
         let mut grid: Grid = vec![vec!["1".to_string(); 100_000]];
@@ -525,6 +562,46 @@ mod tests {
         let p = data_from_grid(&grid);
         assert_eq!(p["rows"].as_array().unwrap().len(), MAX_ROWS - 1);
         assert_eq!(p["series"].as_array().unwrap().len(), MAX_COLS - 1);
+    }
+
+    /// Import Data reads a file no further than one byte past 1 MB where the host can read part of
+    /// a file: a larger file is refused with the sheet left as it was, and a file at the limit is
+    /// read. Where the host only reads whole files, a larger file is refused too.
+    #[test]
+    fn import_data_refuses_a_file_larger_than_its_limit() {
+        use std::{cell::RefCell, collections::HashMap, rc::Rc};
+        let (mut app, _) = app_with(",a\nQ1,1", "column");
+        open(&mut app).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        let at_limit = [b"\tb\nQ2\t2\n".as_slice(), &vec![b' '; MAX_IMPORT_BYTES - 8]].concat();
+        let files: HashMap<String, Vec<u8>> =
+            [("/big.txt".to_string(), vec![b'1'; MAX_IMPORT_BYTES + 1]), ("/limit.txt".to_string(), at_limit)].into();
+        let files = Rc::new(files);
+        let picked = Rc::new(RefCell::new(String::new()));
+        let p = picked.clone();
+        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(p.borrow().clone())));
+        app.services.read = Some(Box::new(|_: &str| Err("the whole file was read".to_string())));
+        let asked = Rc::new(RefCell::new(vec![]));
+        let (f, a) = (files.clone(), asked.clone());
+        app.services.read_head = Some(Box::new(move |path: &str, max: usize| {
+            a.borrow_mut().push(max);
+            Ok(f.get(path).ok_or("no such file")?.iter().copied().take(max).collect())
+        }));
+        let before = grid(&d);
+        *picked.borrow_mut() = "/big.txt".into();
+        assert_eq!(import(&mut app, &mut d), Err("the file is larger than 1 MB".to_string()));
+        assert_eq!(grid(&d), before, "the sheet is left as it was");
+        *picked.borrow_mut() = "/limit.txt".into();
+        import(&mut app, &mut d).unwrap();
+        assert_eq!((cell_at(&d, 0, 1), cell_at(&d, 1, 0)), ("b", "Q2"));
+        assert_eq!(*asked.borrow(), [MAX_IMPORT_BYTES + 1; 2], "each read stops one byte past the limit");
+        // A host that reads only whole files.
+        app.services.read_head = None;
+        let f = files.clone();
+        app.services.read = Some(Box::new(move |path: &str| Ok(f.get(path).ok_or("no such file")?.clone())));
+        *picked.borrow_mut() = "/big.txt".into();
+        assert_eq!(import(&mut app, &mut d), Err("the file is larger than 1 MB".to_string()));
+        assert_eq!(cell_at(&d, 0, 1), "b");
     }
 
     #[test]

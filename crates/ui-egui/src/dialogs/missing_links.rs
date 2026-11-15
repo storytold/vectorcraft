@@ -43,32 +43,67 @@ fn ids(rows: &[Value]) -> Vec<Value> {
 /// then about its modified ones, then about the fonts it opened without
 /// ([`super::missing_fonts`]). The web reads no linked files, so missing ones just show their
 /// previews there. The status bar shows what it says about the linked files followed by the open's
-/// `notes` ([`crate::io::show_opened`]).
+/// `notes` ([`crate::io::show_opened`]). On the web, with both missing and modified files and
+/// Update Links not asking, the line about the missing files comes first and the line about the
+/// modified ones is the first of the notes.
 pub fn after_open(app: &mut VectorcraftApp, r: &Value, notes: Vec<String>) {
     after_open_for(app, r, notes, cfg!(target_arch = "wasm32"));
 }
 
-fn after_open_for(app: &mut VectorcraftApp, r: &Value, notes: Vec<String>, web: bool) {
+fn after_open_for(app: &mut VectorcraftApp, r: &Value, mut notes: Vec<String>, web: bool) {
     // The fonts' dialog waits for these questions (one dialog at a time).
     super::missing_fonts::after_open(app, r);
     let rows = |k: &str| r[k].as_array().cloned().unwrap_or_default();
     let (missing, modified) = (rows("missingLinks"), ids(&rows("modifiedLinks")));
     let notice = if missing.is_empty() || web {
-        let unreadable = (!missing.is_empty()).then(|| {
-            crate::i18n::msg_n(
-                missing.len() as u64,
-                "{n} linked file can't be read here: its preview shows",
-                "{n} linked files can't be read here: their previews show",
-                &[],
-            )
-        });
-        ask_update(app, modified).or(unreadable)
+        let unreadable = (!missing.is_empty()).then(|| unreadable_status(missing.len()));
+        match (ask_update(app, modified), unreadable) {
+            (Some(changed), Some(unreadable)) => {
+                notes.insert(0, changed);
+                Some(unreadable)
+            }
+            (changed, unreadable) => changed.or(unreadable),
+        }
     } else {
         open(app, missing, modified, &notes);
         None
     };
     crate::io::show_opened(app, notice, notes);
     super::settle(app);
+}
+
+/// The status bar's line for `n` linked files the web can't read.
+fn unreadable_status(n: usize) -> String {
+    crate::i18n::msg_n(
+        n as u64,
+        "{n} linked file can't be read here: its preview shows",
+        "{n} linked files can't be read here: their previews show",
+        &[],
+    )
+}
+
+/// What the linked files of a document that opened (`document.open`'s result `r`) need, without
+/// asking yet → the status bar's lines about them, the missing files to ask about and the ids of
+/// the modified images to offer for update ([`ask_next`]). The web reads no linked files, so the
+/// missing ones get a line there; without Update Links: Ask When Modified the modified ones get a
+/// line instead of the offer.
+pub(crate) fn questions(app: &VectorcraftApp, r: &Value) -> (Vec<String>, Vec<Value>, Vec<Value>) {
+    questions_for(app, r, cfg!(target_arch = "wasm32"))
+}
+
+fn questions_for(app: &VectorcraftApp, r: &Value, web: bool) -> (Vec<String>, Vec<Value>, Vec<Value>) {
+    let rows = |k: &str| r[k].as_array().cloned().unwrap_or_default();
+    let (mut missing, mut modified) = (rows("missingLinks"), ids(&rows("modifiedLinks")));
+    let mut lines = vec![];
+    if web && !missing.is_empty() {
+        lines.push(unreadable_status(missing.len()));
+        missing.clear();
+    }
+    if !modified.is_empty() && app.session.prefs.update_links != "askWhenModified" {
+        lines.push(changed_on_disk_status(modified.len()));
+        modified.clear();
+    }
+    (lines, missing, modified)
 }
 
 fn open(app: &mut VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>, notes: &[String]) {
@@ -85,7 +120,7 @@ pub(super) fn notes(d: &Dialog) -> Vec<String> {
 /// Ask about the missing files `rest`, one at a time, then offer the modified ones `modified` for
 /// update. A line about the modified files is followed by the open's `notes`
 /// ([`crate::io::show_opened`]).
-pub(super) fn ask_next(app: &mut VectorcraftApp, rest: Vec<Value>, modified: Vec<Value>, notes: Vec<String>) {
+pub(crate) fn ask_next(app: &mut VectorcraftApp, rest: Vec<Value>, modified: Vec<Value>, notes: Vec<String>) {
     if rest.is_empty() {
         app.ui.dialog = None;
         if let Some(notice) = ask_update(app, modified) {
@@ -309,6 +344,23 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// A restored document's linked files: the web gets a line about the missing ones, and
+    /// without Update Links: Ask When Modified the modified ones get a line; the rest are asked
+    /// about.
+    #[test]
+    fn the_questions_about_linked_files_wait_or_become_lines() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let r = json!({ "missingLinks": [{"name": "a.png", "path": "/x/a.png", "ids": [1]}], "modifiedLinks": [{"ids": [2]}, {"ids": [3]}] });
+        app.session.prefs.update_links = "askWhenModified".into();
+        assert_eq!(questions_for(&app, &r, false), (vec![], r["missingLinks"].as_array().unwrap().clone(), vec![json!(2), json!(3)]));
+        let changed = "2 linked images changed on disk: Update Links shows the new versions".to_string();
+        app.session.prefs.update_links = "manually".into();
+        assert_eq!(questions_for(&app, &r, false), (vec![changed.clone()], r["missingLinks"].as_array().unwrap().clone(), vec![]));
+        let unreadable = "1 linked file can't be read here: its preview shows".to_string();
+        assert_eq!(questions_for(&app, &r, true), (vec![unreadable, changed], vec![], vec![]));
+        assert!(app.ui.dialog.is_none(), "nothing is asked yet");
+    }
+
     /// The question about modified linked files uses the form the language's plural rule picks for
     /// the count.
     #[test]
@@ -344,6 +396,43 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         after_open_for(&mut app, &json!({ "missingLinks": missing }), vec![], true);
         assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), (notice, &None));
+    }
+
+    /// On the web, an open with linked files it can't read and modified ones, with Update Links
+    /// not asking: the status bar shows the line about the unreadable files and counts the line
+    /// about the modified ones as the first note, ahead of the open's notes, and keeps them all
+    /// for its hover. With Ask When Modified the update question opens and the line about the
+    /// unreadable files stays.
+    #[test]
+    fn a_web_open_with_unreadable_and_modified_links_keeps_both_lines() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.session.prefs.update_links = "manually".into();
+        let missing = json!([{ "name": "a.png", "path": "/gone/a.png", "ids": [1] }, { "name": "b.png", "path": "/gone/b.png", "ids": [2] }]);
+        let r = json!({ "missingLinks": missing, "modifiedLinks": [{ "ids": [3] }] });
+        let unreadable = "2 linked files can't be read here: their previews show";
+        let changed = changed_on_disk_status(1);
+
+        let notes = vec!["a note".to_string(), "another note".to_string()];
+        after_open_for(&mut app, &r, notes.clone(), true);
+        let kept = [vec![changed.clone()], notes].concat();
+        assert_eq!(app.ui.status, crate::io::opened_after_notice(unreadable, 3, &changed));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), kept)));
+        assert!(app.ui.dialog.is_none());
+
+        after_open_for(&mut app, &r, vec![], true);
+        assert_eq!(app.ui.status, crate::io::opened_after_notice(unreadable, 1, &changed));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![changed.clone()])));
+
+        // One kind of line alone shows as before.
+        after_open_for(&mut app, &json!({ "modifiedLinks": [{ "ids": [3] }] }), vec![], true);
+        assert_eq!((app.ui.status.clone(), &app.ui.status_notes), (changed, &None));
+
+        app.session.prefs.update_links = "askWhenModified".into();
+        after_open_for(&mut app, &r, vec![], true);
+        let d = app.ui.dialog.as_ref().expect("asks");
+        assert_eq!((d.kind.as_str(), d.str("__command")), (super::super::confirm::KIND, "links.update".to_string()));
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), (unreadable, &None));
     }
 
     /// The line about modified linked files that follows the Linked File Not Found dialog keeps the

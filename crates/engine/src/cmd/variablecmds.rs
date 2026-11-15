@@ -9,8 +9,8 @@
 //! before an image variable); import replaces the datasets, names the rows Data Set 1, 2…,
 //! also reads tab-separated files, and reads header cells that define new variables (`#` for
 //! visibility, `@` for image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
-//! text variables and data sets of a variable library, the XML file of the reference app's Save
-//! Variable Library, and `variable.saveLibrary` writes the text variables and data sets as one.
+//! variables and data sets of a variable library, the XML file of the reference app's Save
+//! Variable Library, and `variable.saveLibrary` writes the variables and data sets as one.
 //! Agents reach every command through `run_command`, like all engine commands.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -26,6 +26,7 @@ use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids
 mod csv;
 mod library;
 
+pub use csv::utf16_order_without_mark;
 use csv::{MAX_GRAPH_CSV, dataset_export, dataset_import};
 pub(crate) use library::{give_svg_library, svg_library};
 use library::{load_library, save_library};
@@ -867,7 +868,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path? | data? | dataBase64? | csv?} replace every dataset with the rows of a CSV, comma- or tab-separated, in UTF-16 with a byte-order mark, UTF-8 or else Windows-1252 (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. An import that leaves the variables and data sets as they were adds no undo step → {imported, names, defined, deletedDataSets}",
+            "{path? | data? | dataBase64? | csv?} replace every dataset with the rows of a CSV, comma- or tab-separated, in UTF-16 (with a byte-order mark, or without one when at least half of its two-byte units hold a NUL byte and only one byte order reads a line break; any other file with NUL bytes is refused), UTF-8 or else Windows-1252 (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. An import that leaves the variables and data sets as they were adds no undo step → {imported, names, defined, deletedDataSets}",
             has_doc,
             dataset_import
         ),
@@ -885,7 +886,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Variable Library…",
             ["Window", "Variables"],
             None,
-            "{path? | xml? | dataBase64?} replace the document's variables and data sets with a variable library's (XML: `variableSets` › `variableSet` › `variables` of `variable` elements with `varName` and `trait`, and `sampleDataSets` of `sampleDataSet` elements with `dataSetName`) in one undo step (none when the document already holds what the library gives). Every data set is deleted, and every variable of the document is deleted with its bindings and values except a text variable the library also declares, which keeps its bindings; then the library's other variables whose `trait` is `textcontent` are defined as text variables, unbound, and each data set takes a value for a variable from the `p` elements of the element named after it, one paragraph each. Variables of other kinds are left out and named in `skipped` and `warning`. Refused while the variables are locked when it would delete or define a variable → {variables, deleted, deletedDataSets, names, skipped, warning?}",
+            "{path? | xml? | dataBase64?} replace the document's variables and data sets with a variable library's (XML: `variableSets` › `variableSet` › `variables` of `variable` elements with `varName` and `trait`, and `sampleDataSets` of `sampleDataSet` elements with `dataSetName`) in one undo step (none when the document already holds what the library gives). Every data set is deleted, and every variable of the document is deleted with its bindings and values except a variable the library also declares with the same kind, which keeps its bindings; then the library's other variables are defined, unbound, with the kind of their `trait`: `textcontent` text, `visibility` visibility, `fileref` image, `graphdata` graph, and any other or none unknown (no values). Each data set takes a variable's value from the element named after it: a text value from its `p` elements, one paragraph each; a visibility value from `true` or `false`; an image value from a file's absolute path or a `file:` URL (the file isn't read); a graph value from a `data` element (`propertyRow` series names, `values` › `row` with a first `value` key=\"name\" category), read as the CSV graph.setData takes. A value that doesn't fit its kind is refused. Refused while the variables are locked when it would delete or define a variable → {variables, deleted, deletedDataSets, names}",
             has_doc,
             load_library
         ),
@@ -894,7 +895,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Variable Library…",
             ["Window", "Variables"],
             None,
-            "{path?} write the document's text variables and every data set as a variable library, the XML that variable.loadLibrary reads: a `variable` element with `varName` and `trait=\"textcontent\"` per text variable, and a `sampleDataSet` element with `dataSetName` per data set, holding an element named after each text variable it has a value for, with one `p` element per line of the value. Variables of other kinds are left out with their values and named in `skipped` and `warning`. Refused without a text variable, for a text variable whose name isn't an XML name (letters, digits, `-`, `_` and `.`, starting with a letter or `_`), for a data set name or value that holds a control character, for a data set name with white space at either end, for a name longer than 255 characters or used twice, and past variable.loadLibrary's caps (256 variables, 1,000 data sets, 8 MiB). Without path → {xml, variables, datasets, skipped, warning?}; with it → {path, variables, datasets, skipped, warning?}",
+            "{path?} write the document's variables and every data set as a variable library, the XML that variable.loadLibrary reads: a `variable` element with `varName` per variable, with the `trait` of its kind (`textcontent`, `visibility`, `fileref` for image, `graphdata` for graph; none for an unknown kind), and a `sampleDataSet` element with `dataSetName` per data set, holding an element named after each variable it has a value for: one `p` element per line of a text value, `true` or `false`, an image's path (a `file:///` URL for a path from a Unix root), or graph data as a `data` element. Refused without a variable, for a variable whose name isn't an XML name (letters, digits, `-`, `_` and `.`, starting with a letter or `_`; not asked of an unknown kind), for a name or value that holds a control character, for a name with white space at either end, for a name longer than 255 characters or used twice, for an image value that isn't a file's absolute path, and past variable.loadLibrary's caps (256 variables, 1,000 data sets, 8 MiB). Without path → {xml, variables, datasets}; with it → {path, variables, datasets}",
             has_doc,
             save_library
         ),

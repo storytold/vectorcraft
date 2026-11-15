@@ -46,9 +46,7 @@ pub(crate) use driver::{fit_passes, layout_faces_per_call};
 pub(crate) use on_path::{layout_trying_each_start, path_arrangements};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
 
-#[cfg(test)]
-pub(crate) use driver::envelope_ink_inputs;
-pub use driver::{envelope_ink, register_envelope_ink};
+pub use driver::{envelope_ink, layout_inputs, register_envelope_ink};
 
 const EPS: f64 = 1e-6;
 
@@ -338,6 +336,8 @@ impl Ctx<'_> {
         tab.kern_shift = 0.0;
         tab.aki_shift = 0.0;
         tab.aki = 0.0;
+        tab.tsume_shift = 0.0;
+        tab.tsume = 0.0;
         tab.tcy = None;
         tab.wari = None;
         tab.vpal = None;
@@ -655,6 +655,8 @@ impl Ctx<'_> {
         k.kern_shift = 0.0;
         k.aki_shift = 0.0;
         k.aki = 0.0;
+        k.tsume_shift = 0.0;
+        k.tsume = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
@@ -715,6 +717,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -781,6 +785,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,

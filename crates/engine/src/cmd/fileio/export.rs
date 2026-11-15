@@ -32,24 +32,23 @@ pub fn unused_option_notes(cmd: &str, f: &Format, p: &Value) -> Vec<String> {
     }
     let listed = |k: &str| super::FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).any(|o| o.name == k);
     let written = super::save::written_as(cmd, f, p);
-    let legacy = f.id == "ai" && super::legacy_ai::wanted(cmd, f, p).unwrap_or(false);
-    let reads = |k: &str| match (f.id, k) {
-        // A legacy `.ai` file is not a PDF: it reads its own options only.
-        ("ai", _) if legacy => super::legacy_ai::reads(k),
-        // The other `.ai` files don't read the legacy file's options, and `preserveEditing` is
-        // on for them whatever is given.
-        ("ai", "preserveEditing") => false,
-        ("ai", _) if super::legacy_ai::LEGACY_ONLY.contains(&k) => false,
-        // An export writes one file: only a save writes each artboard to a file of its own, and
-        // a native file's `range` names those files.
-        ("vectorcraft" | "template" | "ai", "separateArtboards") | ("vectorcraft" | "template", "range") => false,
-        _ => super::save::reads_option(f, k),
-    };
+    let legacy = super::save::legacy_file(cmd, f, p);
     given
         .iter()
-        .filter(|(k, v)| !v.is_null() && !EXPORT_PARAMS.contains(&k.as_str()) && listed(k) && !reads(k))
+        .filter(|(k, v)| !v.is_null() && !EXPORT_PARAMS.contains(&k.as_str()) && listed(k) && !export_reads(f, legacy, k))
         .map(|(k, _)| super::save::unused_option_note(k, &written))
         .collect()
+}
+
+/// Does the file an export writes in `f` read option `key`, `legacy` when it is a legacy `.ai`
+/// file? As a save's file does ([`super::save::file_reads`]), except that an export writes one
+/// file: only a save writes each artboard to a file of its own, and a native file's `range` names
+/// those files.
+pub(super) fn export_reads(f: &Format, legacy: bool, key: &str) -> bool {
+    match (f.id, key) {
+        ("vectorcraft" | "template" | "ai", "separateArtboards") | ("vectorcraft" | "template", "range") => false,
+        _ => super::save::file_reads(f, legacy, key),
+    }
 }
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
@@ -296,8 +295,14 @@ fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(C
 /// ([`isolated`]), with one artboard: their crop. With `text`, the objects alone on one layer, so a
 /// text export holds the type of the selected objects and not that of a clipping path around them.
 fn selection(s: &mut Session, cmd: &str, text: bool) -> Result<(Document, vectorcraft_geom::Rect)> {
-    let ids = selected_artwork(s)?;
-    let doc = &s.doc()?.doc;
+    selection_doc(s.doc()?, cmd, text)
+}
+
+/// The document an Export Selection of `st` writes and its crop, as `document.exportSelection`
+/// writes it ([`selection`]); `cmd` names the command in the error when nothing selected draws.
+pub fn selection_doc(st: &DocState, cmd: &str, text: bool) -> Result<(Document, vectorcraft_geom::Rect)> {
+    let ids = artwork_of(st);
+    let doc = &st.doc;
     let (mut d, bounds) = isolated(doc, &ids, "Selection").ok_or_else(|| bad(cmd, "select something to export"))?;
     if text {
         let mut layer = Node::layer(d.alloc_id(), "Selection", vectorcraft_doc::LayerColor::Preset(0));
@@ -313,12 +318,16 @@ fn selection(s: &mut Session, cmd: &str, text: bool) -> Result<(Document, vector
 /// layers are guides and are left out. With an object of a dynamic symbol instance's art selected,
 /// the instance is exported whole.
 pub(crate) fn selected_artwork(s: &Session) -> Result<Vec<NodeId>> {
-    let st = s.doc()?;
+    Ok(artwork_of(s.doc()?))
+}
+
+/// [`selected_artwork`] of document `st`.
+fn artwork_of(st: &DocState) -> Vec<NodeId> {
     let ids = edit::roots_of(&st.doc, st.selection.in_paint_order(&st.doc));
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
     // On a template layer or sublayer, at any depth.
     let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));
-    Ok(ids.into_iter().filter(|id| !on_template(*id)).collect())
+    ids.into_iter().filter(|id| !on_template(*id)).collect()
 }
 
 /// The crop of an export of objects `ids` of `doc` alone ([`isolated`]): the bounds the renderer

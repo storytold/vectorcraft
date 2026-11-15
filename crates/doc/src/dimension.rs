@@ -815,6 +815,10 @@ impl Dimension {
             if self.line_between_points() && !old.line_between_points() {
                 self.keep_gap(&old);
             }
+        } else if self.mode == DimensionMode::Linear && xf.determinant() < 0.0 && (self.b - self.a).hypot() > 1e-9 {
+            // A reflection turns the left normal of a → b to the other side, so an aligned
+            // dimension's line stays on the reflected side of its points.
+            self.offset = -self.offset;
         }
         if self.mode == DimensionMode::Linear {
             self.length = self.measured();
