@@ -7,7 +7,8 @@ use vectorcraft_doc::{Appearance, Document, Effect, Node, NodeId};
 use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, SubPath, shapes};
 
 use crate::geometry::{Budget, MAX_EFFECT_LINES, apply_geometry_carrying_within};
-use crate::{Carry, GeomContext, RasterFx, apply_geometry_carrying, bake_document, expand_outlined, raster_effects};
+use crate::pixel::{Light, StrokeDirection};
+use crate::{Carry, GeomContext, PixelFx, RasterFx, apply_geometry_carrying, bake_document, expand_outlined, raster_effects};
 
 fn fx(id: &str, params: Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
@@ -434,6 +435,230 @@ fn pixel_filter_sizes_scale_with_the_transform_after_them() {
     let drawn = raster_effects(&effects);
     assert!(matches!(drawn.first(), Some(RasterFx::Pixel(crate::PixelFx::ColoredPencil { width, .. })) if (width - 10.0).abs() < 1e-9), "{drawn:?}");
     assert!(matches!(drawn.get(1), Some(RasterFx::Pixel(crate::PixelFx::PaintDaubs { size, .. })) if (size - 20.0).abs() < 1e-9), "{drawn:?}");
+}
+
+/// The light direction of the first pixel filter `effects` draw, if it has one.
+fn drawn_light(effects: &[Effect]) -> Option<Light> {
+    raster_effects(effects).into_iter().find_map(|r| match r {
+        RasterFx::Pixel(
+            PixelFx::Underpainting { light, .. }
+            | PixelFx::RoughPastels { light, .. }
+            | PixelFx::ConteCrayon { light, .. }
+            | PixelFx::BasRelief { light, .. }
+            | PixelFx::Plaster { light, .. }
+            | PixelFx::Texturizer { light, .. },
+        ) => Some(light),
+        _ => None,
+    })
+}
+
+/// The stroke direction of the first pixel filter `effects` draw, if it has one.
+fn drawn_strokes(effects: &[Effect]) -> Option<StrokeDirection> {
+    raster_effects(effects).into_iter().find_map(|r| match r {
+        RasterFx::Pixel(PixelFx::SprayedStrokes { direction, .. } | PixelFx::GraphicPen { direction, .. }) => Some(direction),
+        _ => None,
+    })
+}
+
+/// The screen angles of the first Color Halftone `effects` draw.
+fn drawn_screens(effects: &[Effect]) -> [f64; 4] {
+    match raster_effects(effects).into_iter().next() {
+        Some(RasterFx::Pixel(PixelFx::ColorHalftone { angles, .. })) => angles,
+        other => panic!("expected a Color Halftone, got {other:?}"),
+    }
+}
+
+/// A Bas Relief lit from `light`, then a Transform effect with `params`: the light it draws with.
+fn relief_then(light: &str, params: Value) -> Option<Light> {
+    drawn_light(&[fx("sketch.basRelief", json!({ "lightDirection": light })), transform(params)])
+}
+
+/// A light direction before a Transform effect turns and reflects with the art (y down on the
+/// page), to the nearest of the eight directions, the clockwise one at a tie.
+#[test]
+fn bas_relief_light_follows_rotation_and_reflection() {
+    assert_eq!(relief_then("top", json!({"rotate": 90})), Some(Light::Left));
+    assert_eq!(relief_then("top", json!({"reflectY": true})), Some(Light::Bottom));
+    assert_eq!(relief_then("top", json!({"reflectX": true})), Some(Light::Top));
+    assert_eq!(relief_then("left", json!({"reflectX": true})), Some(Light::Right));
+    // 22.5° clockwise lies halfway between Top and Top Right; 22.5° counterclockwise halfway
+    // between Top and Top Left.
+    assert_eq!(relief_then("top", json!({"rotate": -22.5})), Some(Light::TopRight));
+    assert_eq!(relief_then("top", json!({"rotate": 22.5})), Some(Light::Top));
+    assert_eq!(relief_then("top", json!({"rotate": 30})), Some(Light::TopLeft));
+    // A turn of 90° counterclockwise, from each direction.
+    for (from, to) in [
+        ("bottom", Light::Right),
+        ("bottomLeft", Light::BottomRight),
+        ("left", Light::Bottom),
+        ("topLeft", Light::BottomLeft),
+        ("top", Light::Left),
+        ("topRight", Light::TopLeft),
+        ("right", Light::Top),
+        ("bottomRight", Light::TopRight),
+    ] {
+        assert_eq!(relief_then(from, json!({"rotate": 90})), Some(to), "{from}");
+    }
+    // Every filter with a light direction, and Bas Relief's default light (Bottom).
+    for id in ["artistic.underpainting", "artistic.roughPastels", "sketch.conteCrayon", "sketch.basRelief", "sketch.plaster", "texture.texturizer"] {
+        let effects = [fx(id, json!({"lightDirection": "top"})), transform(json!({"rotate": 90}))];
+        assert_eq!(drawn_light(&effects), Some(Light::Left), "{id}");
+    }
+    assert_eq!(drawn_light(&[fx("sketch.basRelief", json!({})), transform(json!({"rotate": 90}))]), Some(Light::Right));
+    // The Transform effects after the filter turn it together, with one rounding at the end.
+    let twice = [fx("sketch.basRelief", json!({"lightDirection": "top"})), transform(json!({"rotate": -22.5})), transform(json!({"rotate": -22.5}))];
+    assert_eq!(drawn_light(&twice), Some(Light::TopRight));
+}
+
+/// A stroke direction before a Transform effect turns and reflects with the art, to the nearest
+/// of the four, a stroke and its reverse being the same, the clockwise one at a tie.
+#[test]
+fn stroke_axis_follows_transform() {
+    let strokes = |id: &str, way: Option<&str>, params: Value| {
+        let p = way.map_or(json!({}), |w| json!({ "strokeDirection": w }));
+        drawn_strokes(&[fx(id, p), transform(params)])
+    };
+    let sprayed = "brushStrokes.sprayedStrokes";
+    let pen = "sketch.graphicPen";
+    assert_eq!(strokes(sprayed, Some("horizontal"), json!({"rotate": 90})), Some(StrokeDirection::Vertical));
+    assert_eq!(strokes(sprayed, Some("vertical"), json!({"rotate": 90})), Some(StrokeDirection::Horizontal));
+    assert_eq!(strokes(pen, Some("rightDiagonal"), json!({"rotate": 90})), Some(StrokeDirection::LeftDiagonal));
+    assert_eq!(strokes(pen, Some("rightDiagonal"), json!({"reflectX": true})), Some(StrokeDirection::LeftDiagonal));
+    assert_eq!(strokes(pen, Some("leftDiagonal"), json!({"reflectY": true})), Some(StrokeDirection::RightDiagonal));
+    assert_eq!(strokes(pen, None, json!({"rotate": 90})), Some(StrokeDirection::LeftDiagonal));
+    assert_eq!(strokes(sprayed, Some("horizontal"), json!({"rotate": -22.5})), Some(StrokeDirection::LeftDiagonal));
+    assert_eq!(strokes(sprayed, Some("horizontal"), json!({"rotate": 22.5})), Some(StrokeDirection::Horizontal));
+    assert_eq!(strokes(sprayed, Some("horizontal"), json!({"rotate": -44})), Some(StrokeDirection::LeftDiagonal));
+    assert_eq!(strokes(sprayed, Some("horizontal"), json!({"rotate": 180})), Some(StrokeDirection::Horizontal));
+}
+
+fn near4(a: [f64; 4], b: [f64; 4]) -> bool {
+    a.iter().zip(b).all(|(p, q)| (p - q).abs() < 1e-6)
+}
+
+/// Color Halftone's screen angles before a Transform effect turn and reflect with the art.
+#[test]
+fn halftone_channels_follow_rotation_and_reflection() {
+    let screens = |p: Value, transforms: &[Value]| {
+        let mut effects = vec![fx("pixelate.colorHalftone", p)];
+        effects.extend(transforms.iter().cloned().map(transform));
+        drawn_screens(&effects)
+    };
+    let defaults = screens(json!({}), &[json!({"rotate": 90})]);
+    assert!(near4(defaults, [198.0, 252.0, 180.0, 135.0]), "{defaults:?}");
+    let reflected = screens(json!({"channel1": 45, "channel2": 30, "channel3": 0, "channel4": 270}), &[json!({"reflectX": true})]);
+    assert!(near4(reflected, [135.0, 150.0, 180.0, 270.0]), "{reflected:?}");
+    let flipped = screens(json!({"channel1": 45, "channel2": 30, "channel3": 0, "channel4": 270}), &[json!({"reflectY": true})]);
+    assert!(near4(flipped, [315.0, 330.0, 0.0, 90.0]), "{flipped:?}");
+    // One Transform effect reflects, then turns; two apply in the order they are listed.
+    let p = json!({"channel1": 10.5, "channel2": -30, "channel3": 0, "channel4": 359.25});
+    let one = screens(p.clone(), &[json!({"rotate": 30, "reflectX": true})]);
+    assert!(near4(one, [199.5, 240.0, 210.0, 210.75]), "{one:?}");
+    let two = screens(p, &[json!({"rotate": 30}), json!({"reflectX": true})]);
+    assert!(near4(two, [139.5, 180.0, 150.0, 150.75]), "{two:?}");
+}
+
+/// Only the visible Transform effects listed after a filter that move the art once turn its
+/// direction; a hidden filter turns too, and a zero scale leaves it as it is.
+#[test]
+fn only_earlier_visible_single_map_effects_follow() {
+    let relief = fx("sketch.basRelief", json!({"lightDirection": "top"}));
+    assert_eq!(drawn_light(&[transform(json!({"rotate": 90})), relief.clone()]), Some(Light::Top));
+    for params in [
+        json!({"rotate": 90, "objects": false}),
+        json!({"rotate": 90, "copies": 1}),
+        json!({"rotate": 90, "random": true}),
+        json!({"scaleH": 0, "scaleV": 0}),
+    ] {
+        assert_eq!(drawn_light(&[relief.clone(), transform(params.clone())]), Some(Light::Top), "{params}");
+    }
+    let mut hidden = transform(json!({"rotate": 90}));
+    hidden.visible = false;
+    assert_eq!(drawn_light(&[relief.clone(), hidden]), Some(Light::Top));
+    let zero = [fx("pixelate.colorHalftone", json!({"channel1": 20})), transform(json!({"scaleH": 0, "scaleV": 0}))];
+    assert!(near4(drawn_screens(&zero), [20.0, 162.0, 90.0, 45.0]), "{:?}", drawn_screens(&zero));
+    // A hidden filter kept when the Transform effect is applied draws turned once it is shown.
+    let mut off = relief;
+    off.visible = false;
+    let kept = crate::raster::without_geometry(&[off, transform(json!({"rotate": 90}))]);
+    assert_eq!(kept.len(), 1);
+    let mut shown = kept[0].clone();
+    shown.visible = true;
+    assert_eq!(drawn_light(&[shown]), Some(Light::Left));
+}
+
+/// The light direction of every Bas Relief drawn on `n` and the nodes under it, from the object's
+/// effects and from each fill's and stroke's.
+fn lights_in(n: &Node) -> Vec<Light> {
+    let mut out = vec![];
+    n.walk(&mut |m| {
+        let lists = std::iter::once(&m.appearance.effects).chain(m.appearance.items.iter().map(|i| i.effects()));
+        for list in lists {
+            out.extend(drawn_light(list));
+        }
+    });
+    out
+}
+
+/// The canvas, a fill's own effects, a group's members and export turn the light the same way.
+#[test]
+fn nested_and_baked_directions_match_canvas() {
+    let relief = || fx("sketch.basRelief", json!({"lightDirection": "top"}));
+    let turn = || transform(json!({"rotate": 90}));
+    // A fill's own Transform effect, and the object's Transform effect over its fill.
+    let fill = fill_square(31, vec![relief(), turn()]);
+    let item = fill.appearance.items.first().unwrap();
+    assert_eq!(drawn_light(item.effects()), Some(Light::Left));
+    let mut over = fill_square(32, vec![relief()]);
+    over.appearance.effects = vec![turn()];
+    let item = over.appearance.items.first().unwrap();
+    assert_eq!(drawn_light(&crate::item_effects_in(&over.appearance.effects, item.effects())), Some(Light::Left));
+    // A fill's own turn of 30° and the object's turn of 30° make 60°, rounded once: Top Left, not
+    // Left (Top Left after the first turn, then Left after the second).
+    let thirty = || transform(json!({"rotate": 30}));
+    let mut both = fill_square(37, vec![relief(), thirty()]);
+    both.appearance.effects = vec![thirty()];
+    let item = both.appearance.items.first().unwrap();
+    assert_eq!(drawn_light(&crate::item_effects_in(&both.appearance.effects, item.effects())), Some(Light::TopLeft));
+    // A group's Transform effect over a member's own filter and its fill's.
+    let g = group(33, vec![square(34, vec![relief()]), fill_square(35, vec![relief()])], vec![turn()]);
+    let art = crate::evaluate_container(None, &g).unwrap();
+    assert_eq!(lights_in(&art), vec![Light::Left; 2]);
+    // Baked for export: the Transform effect is applied and the filter keeps the turned light.
+    let mut d = Document::new(800.0, 800.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, square(36, vec![relief(), turn()])).unwrap();
+    d.insert(Some(layer), 1, g).unwrap();
+    let baked = bake_document(&d).unwrap();
+    let b = baked.node(NodeId(36)).unwrap();
+    assert!(!b.appearance.effects.iter().any(|e| e.id == "distort.transform"), "{:?}", b.appearance.effects);
+    assert_eq!(drawn_light(&b.appearance.effects), Some(Light::Left));
+    for id in [34, 35] {
+        assert_eq!(lights_in(baked.node(NodeId(id)).unwrap()), vec![Light::Left], "{id}");
+    }
+}
+
+/// A member's light under two nested groups that each turn 30° turns 60° in all, rounded once:
+/// Top Left, not Left (Top Left after the inner group's turn, then Left after the outer one's).
+#[test]
+fn nested_group_turns_round_the_light_once() {
+    let relief = || fx("sketch.basRelief", json!({"lightDirection": "top"}));
+    let thirty = || transform(json!({"rotate": 30}));
+    let inner = group(41, vec![square(42, vec![relief()]), fill_square(43, vec![relief()])], vec![thirty()]);
+    let outer = group(40, vec![inner], vec![thirty()]);
+    let art = crate::evaluate_container(None, &outer).unwrap();
+    assert_eq!(lights_in(&art), vec![Light::TopLeft; 2]);
+    let mut d = Document::new(800.0, 800.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, outer).unwrap();
+    let baked = bake_document(&d).unwrap();
+    for id in [42, 43] {
+        assert_eq!(lights_in(baked.node(NodeId(id)).unwrap()), vec![Light::TopLeft], "{id}");
+    }
+    // Three groups make 90°: Left, not Bottom Left.
+    let three = group(44, vec![group(45, vec![group(46, vec![square(47, vec![relief()])], vec![thirty()])], vec![thirty()])], vec![thirty()]);
+    let art = crate::evaluate_container(None, &three).unwrap();
+    assert_eq!(lights_in(&art), vec![Light::Left]);
 }
 
 /// A Transform effect after a 3D effect that makes copies or moves at random holds back the shadow

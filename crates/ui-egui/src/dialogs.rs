@@ -22,6 +22,7 @@ pub mod brush_options;
 pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
+pub mod check_spelling;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -462,6 +463,7 @@ registry! {
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     EditViews: [edit_views::KIND] => edit_views::SPEC,
     EditCustomDictionary: [custom_dictionary::KIND] => custom_dictionary::SPEC,
+    CheckSpelling: [check_spelling::KIND] => check_spelling::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,

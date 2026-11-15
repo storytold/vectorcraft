@@ -1560,6 +1560,7 @@ file-filter	Templates	Шаблони
 	Show smooth color wheel	Показати плавне колірне коло
 	Show segmented color wheel	Показати сегментоване колірне коло
 	Show color bars	Показати колірні смуги
+	Find the selected colors in the artwork	Знайти вибрані кольори в малюнку
 	Harmony Sets	Набори гармонії
 	Height	Висота
 	Height:	Висота:
@@ -2766,6 +2767,8 @@ mark-style	Japanese	Японський
 	Insert Aki Left	Вставити акі ліворуч
 	Insert Aki Right	Вставити акі праворуч
 	Tsume	Цуме
+	Adjust Horizontal Diacritic Position	Налаштувати горизонтальне положення діакритичних знаків
+	Adjust Vertical Diacritic Position	Налаштувати вертикальне положення діакритичних знаків
 	Character Direction	Напрямок символів
 	Digits	Цифри
 	Arabic	Арабські
@@ -9209,3 +9212,20 @@ breakText	Glyphs	Гліфи
 	Nest Shapes…	Розкладка фігур…
 	Nest Shapes	Розкладка фігур
 	Roll	Рулон
+	Packaging Tools	Інструменти пакування
+	Fold Lines	Лінії згину
+	Make Cut Line	Зробити лінією різу
+	Make Crease Line	Зробити лінією біговки
+	Make Partial Cut Line	Зробити лінією надрізу
+	Make Perforation Line	Зробити лінією перфорації
+	Make Fold Line	Зробити лінією згину
+	Role Swatches…	Зразки типів ліній…
+	Role Swatches	Зразки типів ліній
+	Role	Тип лінії
+	Cut Line	Лінія різу
+	Crease Line	Лінія біговки
+	Partial Cut Line	Лінія надрізу
+	Perforation Line	Лінія перфорації
+	No objects are selected.	Об’єкти не виділено.
+	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
+	Remove Fold Line Role	Прибрати тип лінії

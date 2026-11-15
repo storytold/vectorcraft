@@ -227,12 +227,18 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
         let Some(p0) = pts.first_mut() else { return Err(bad(C, "needs points")) };
         *p0 = end;
         if pts.len() < 2 {
-            // No stroke to add: the brush alone changes, when it is not the path's already.
+            // No stroke to add: the brush alone changes, when it is not the path's already, and the
+            // path is selected or deselected as a longer continuation leaves it.
             if let Some(name) = brush_name
                 && s.doc()?.doc.node(target).and_then(|n| n.appearance.stroke()).is_some_and(|st| st.brush.as_deref() != Some(name))
             {
-                s.edit("Paintbrush", |d, _| {
+                s.edit("Paintbrush", |d, sel| {
                     set_brush(d, target, name);
+                    if keep_selected {
+                        sel.set([id]);
+                    } else {
+                        sel.remove(id);
+                    }
                     Ok(())
                 })?;
             }
