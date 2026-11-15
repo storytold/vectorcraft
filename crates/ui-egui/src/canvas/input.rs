@@ -5,8 +5,8 @@ use super::drag::{
     tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
-    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, rotate_about, scroll_view, touch_gestures, trackpad_turn,
-    wheel, whole_pixels, zoom_about,
+    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, pan_ppp, rotate_about, scroll_view, touch_gestures,
+    trackpad_turn, wheel, whole_pixels, zoom_about,
 };
 use super::{Color32, Drag, Mods, Point, PointerEvent, PointerKind, Pos2, Shape, Stroke, Ui, VectorcraftApp, View, Xf, json};
 
@@ -133,6 +133,8 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             drag_released(app, ui, &f, d, release_pos(ui, button).unwrap_or(p));
         }
     } else if let Some(p) = hover_tool
+        // A press on an artboard's name starts no drag: the moves while it is held are not hover.
+        && !(pointer.primary_down() && ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id()).is_some()))
         && (pointer.is_moving() || mods_changed || !was_over || tool_switched || (context_changed && app.session.tool_wants_rehover()))
     {
         let ev = PointerEvent {
@@ -178,6 +180,12 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         && let Some(p) = at
     {
         double_click(app, ui, &f, p);
+    }
+    if resp.triple_clicked()
+        && !f.modal
+        && let Some(p) = at
+    {
+        triple_click(app, ui, &f, p);
     }
     if drag.is_some() || pointer.is_moving() || mods_changed {
         ui.ctx().request_repaint();
@@ -361,7 +369,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
     let ui_zoom = app.canvas_ui_zoom;
     match d {
         Drag::Pan { start, center, .. } => {
-            let ppp = ui.ctx().pixels_per_point();
+            let ppp = pan_ppp(app, ui);
             if let Some(vm) = app.view_mut() {
                 vm.center = center;
                 pan_pixels(vm, (ppp, ui_zoom), whole_pixels(p - start, ppp));
@@ -589,6 +597,23 @@ fn double_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
             }
         }
     }
+}
+
+/// A triple-click at `p`: the tool gets it, unless it is on an artboard's name.
+fn triple_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
+    let Pointing { m, space, xf, view, .. } = *f;
+    if artboard_name_at(app, ui, &xf, p).is_some() {
+        return;
+    }
+    let ev = PointerEvent {
+        kind: PointerKind::TripleClick,
+        pos: xf.to_doc(p),
+        mods: mods(m, space),
+        backquote: ui.input(|i| i.key_down(egui::Key::Backtick)),
+        pressure: 1.0,
+        pen: None,
+    };
+    dispatch(app, &ev, view);
 }
 
 /// Where `button` went up in this frame, if it did.

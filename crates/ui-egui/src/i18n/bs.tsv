@@ -513,6 +513,7 @@
 	Rotate (Classic)…	Rotiraj (klasično)…
 	Surface	Površina
 	Wireframe	Žičani model
+	Render Settings	Postavke renderovanja
 	No Shading	Bez sjenčenja
 	Plastic	Plastika
 	Highlight Intensity	Intenzitet odsjaja
@@ -971,6 +972,7 @@
 	Free Transform	Slobodna transformacija
 	Perspective Distort	Izobličenje perspektive
 	Radial Blur…	Radijalno zamućenje…
+	Blur Center	Središte zamućenja
 	Smart Blur…	Pametno zamućenje…
 	Sharpen	Izoštri
 	Unsharp Mask…	Maska izoštravanja…
@@ -1583,6 +1585,8 @@ lighting	Light	Svjetlo
 	Leading	Prored
 	No Break	Bez preloma
 	Proportional Metrics	Proporcionalna metrika
+	H or V Style	Horizontalni ili vertikalni stil
+	Roman Italics	Latinični kurziv
 	Insert Aki Left	Umetni aki lijevo
 	Insert Aki Right	Umetni aki desno
 	Tsume	Tsume
@@ -2100,6 +2104,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Prikaži granice uzorka boje
 	Show Tile Edge	Prikaži ivicu pločice
 	Size Tile to Art	Prilagodi pločicu crtežu
+	Move Tile with Art	Pomjeri pločicu s crtežom
 	Tile Type:	Vrsta pločice:
 	Top in Front	Vrh naprijed
 	V Spacing:	Okomiti razmak:
@@ -2142,6 +2147,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Koristi kompenzaciju crne tačke
 	Working CMYK (don't tag)	Radni CMYK (bez oznake)
 	Working RGB (don't tag)	Radni RGB (bez oznake)
+	Don't Color Manage This Document	Ne upravljaj bojama ovog dokumenta
+	Working RGB: {name}	Radni RGB: {name}
+	Working CMYK: {name}	Radni CMYK: {name}
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Dodaj u profile…
 	Align Stroke to Center	Poravnaj potez po sredini
@@ -2699,6 +2707,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Prozirna pozadina
 	Choose…	Odaberi…
 	Copy Fonts Used in the Document	Kopiraj fontove korištene u dokumentu
+	Copy Info	Kopiraj informacije
 	Copy Links	Kopiraj veze
 	Create Report	Kreiraj izvještaj
 	Fonts whose licence doesn't allow embedding are not copied.	Fontovi čija licenca ne dozvoljava ugrađivanje ne kopiraju se.
@@ -2749,6 +2758,8 @@ digits	Malayalam	Malajalam
 	Keep a link to an image file instead of only embedding it	Zadrži vezu na slikovnu datoteku umjesto samo ugrađivanja
 	Place onto a new locked, dimmed template layer below the current layer	Postavi na novi zaključani, zatamnjeni sloj predloška ispod trenutnog sloja
 	Swap the selected object for the file, keeping its place and transform	Zamijeni odabrani objekat datotekom, zadržavajući njegovo mjesto i transformaciju
+	Show Import Options	Prikaži opcije uvoza
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pitaj za opcije uvoza svake PDF, DXF ili tekstualne datoteke prije postavljanja; isključeno: koriste se posljednje odabrane opcije
 	On: one locked object showing the document, updated when it changes.	Uključeno: jedan zaključani objekat koji prikazuje dokument, ažuriran kad se on promijeni.
 	Off: an editable copy of its art, embedded in this document.	Isključeno: kopija njegovog crteža koja se može uređivati, ugrađena u ovaj dokument.
 	Images: link to the file instead of only embedding it.	Slike: poveži s datotekom umjesto samo ugrađivanja.
@@ -4546,6 +4557,7 @@ imageTrace	Outline	Obris
 	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Ova skripta je dodala veoma mnogo objekata. Nastaviti, ili je zaustaviti i poništiti ono što je uradila?
 @msg	Copied the script report	Izvještaj skripte kopiran
+@msg	Copied the link info	Informacije o vezi kopirane
 @msg	Corners edits the corners of a path	Uglovi uređuje uglove putanje
 @msg	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}
@@ -5792,6 +5804,9 @@ mark-style	Japanese	Japanski
 	Softness	Mekoća
 	Ambient Light	Ambijentalno svjetlo
 	Light behind the object	Svjetlo iza objekta
+	Move Light to Back	Pomjeri svjetlo iza
+	Move Light to Front	Pomjeri svjetlo naprijed
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Prevucite svjetlo da ga pomjerite. Tipke sa strelicama pomjeraju fokusirano svjetlo; Shift ga pomjera za 15°.
 	Shadows	Sjene
 	Distance from Object	Udaljenost od objekta
 	Shadow Bounds	Granice sjene
@@ -6180,6 +6195,8 @@ axis	Y Axis	Y osa
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
+	Select Similar Objects	Odaberi slične objekte
+	Select Similar Options	Opcije odabira sličnih
 	Leave Out of Global Edit	Isključi iz globalnog uređivanja
 	Match	Podudaranje
 	On Artboards	Na radnim pločama
@@ -6302,6 +6319,13 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tehnički sklopovi
+	Circuit Trace	Vod sklopa
+	Bus Lines	Linije sabirnice
+	Terminal Nodes	Priključni čvorovi
+
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
 	Wave	Talas

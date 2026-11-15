@@ -1700,6 +1700,7 @@ fn filters_set_effects_and_stroke_styles() {
         ("test.engine.badn", json!([{"id": "plugin.test.engine.fx", "params": {"n": "two"}}]), "`n`"),
         ("test.engine.file", json!([{"id": "distort.glass", "params": {"textureImage": {"path": "/etc/hosts"}}}]), "textureImage"),
         ("test.engine.file2", json!([{"id": "texture.texturizer", "params": {"textureImage": {"path": "/etc/hosts"}}}]), "textureImage"),
+        ("test.engine.file3", json!([{"id": "artistic.roughPastels", "params": {"textureImage": {"path": "/etc/hosts"}}}]), "textureImage"),
         ("test.engine.two3d", json!([{"id": "threeD.extrude"}, {"id": "threeD.extrude"}]), "one 3D effect"),
     ] {
         let e = filter(&mut s, name, fx).unwrap_err().to_string();

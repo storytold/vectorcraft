@@ -739,6 +739,7 @@ font-technology	Variable	Biến thiên
 	Copy Color Value (Hex)	Sao chép giá trị màu (Hex)
 	Copy Fonts Used in the Document	Sao chép phông đã dùng trong tài liệu
 	Copy into the document's folder	Sao chép vào thư mục tài liệu
+	Copy Info	Sao chép thông tin
 	Copy Links	Sao chép liên kết
 	Copy only fonts you own or are licensed to install.	Chỉ sao chép phông chữ bạn sở hữu hoặc có giấy phép cài đặt.
 	Copy Selected Style	Sao chép kiểu đã chọn
@@ -1363,6 +1364,7 @@ font-technology	Variable	Biến thiên
 	Rotate (Classic)…	Xoay (cổ điển)…
 	Surface	Bề mặt
 	Wireframe	Khung dây
+	Render Settings	Cài đặt kết xuất
 	No Shading	Không tô bóng
 	Plastic	Nhựa
 	Highlight Intensity	Cường độ điểm sáng
@@ -3016,6 +3018,8 @@ mark-style	Japanese	Kiểu Nhật
 	Proof Setup	Thiết lập thử nghiệm
 	Properties	Thuộc tính
 	Proportional Metrics	Số liệu theo tỷ lệ
+	H or V Style	Kiểu ngang hoặc dọc
+	Roman Italics	Nghiêng Roman
 	Insert Aki Left	Chèn aki bên trái
 	Insert Aki Right	Chèn aki bên phải
 	Tsume	Tsume
@@ -3047,6 +3051,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial	Hướng tâm
 	Radial Blur	Mờ hướng tâm
 	Radial Blur…	Mờ hướng tâm…
+	Blur Center	Tâm làm mờ
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
 	Organic Fades	Mờ dần tự nhiên
@@ -3808,6 +3813,7 @@ mark-style	Japanese	Kiểu Nhật
 	Sixth Space	Dấu cách 1/6
 	Size	Kích thước
 	Size Tile to Art	Kích thước ô theo đối tượng
+	Move Tile with Art	Di chuyển ô cùng đối tượng
 	Size/Leading	Cỡ chữ/Giãn dòng
 	Size:	Kích thước:
 	Size: {size}  Tracking: {tracking}	Kích thước: {size}  Giãn chữ: {tracking}
@@ -4020,6 +4026,8 @@ mark-style	Japanese	Kiểu Nhật
 	Swap Fill and Stroke (Shift+X)	Đổi màu tô và nét (Shift+X)
 	Swap start and end arrowheads	Đổi đầu mũi tên bắt đầu và kết thúc
 	Swap the selected object for the file, keeping its place and transform	Thay đối tượng đã chọn bằng tệp, giữ nguyên vị trí và biến đổi
+	Show Import Options	Hiện tùy chọn nhập
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Hỏi tùy chọn nhập của từng tệp PDF, DXF hoặc văn bản trước khi đặt; khi tắt, dùng các tùy chọn đã chọn gần nhất
 	Stylistic Alternates	Ký tự thay thế theo phong cách
 	Swash	Swash
 	Swatch Conflict	Xung đột mẫu màu
@@ -4081,6 +4089,48 @@ mark-style	Japanese	Kiểu Nhật
 	Composite Fonts	Phông chữ tổ hợp
 	Export Composite Fonts	Xuất phông chữ tổ hợp
 	Import Composite Fonts	Nhập phông chữ tổ hợp
+@msg	each font must be {name, parts}	mỗi phông chữ phải là {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	khóa không xác định `{k}`; một phông chữ nhận name và parts
+@msg	each font needs a name	mỗi phông chữ cần có tên
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` không thể là tên phông chữ tổ hợp (từ 1 đến {COMPOSITE_NAME_MAX} ký tự, không có ký tự điều khiển)
+@msg	`{name}`: parts must be an object	`{name}`: parts phải là một đối tượng
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: lớp không xác định `{k}`; các lớp là kanji, kana, punctuation, symbols, roman và numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} phải là một đối tượng
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: khóa không xác định `{k}` trong {_1}
+@msg	`{name}`: give the kanji part	`{name}`: hãy cung cấp phần kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	một tài liệu chứa tối đa {COMPOSITE_FONTS_MAX} phông chữ tổ hợp
+@msg	two composite fonts are named `{_1}`	có hai phông chữ tổ hợp cùng tên `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` là tên của một phông chữ đã cài đặt
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} dùng `{font}`, một phông chữ tổ hợp
+@msg	give fonts: [{name, parts}…]	hãy cung cấp fonts: [{name, parts}…]
+@msg	path is empty	path trống
+@msg	fonts must be a list of composite fonts	fonts phải là danh sách phông chữ tổ hợp
+@msg	names must be strings	names phải là chuỗi
+@msg	no composite font named `{n}`	không có phông chữ tổ hợp nào tên `{n}`
+@msg	names must be a list of names	names phải là danh sách tên
+@msg	no composite fonts to export	không có phông chữ tổ hợp nào để xuất
+@msg	not a composite fonts file: {e}	không phải tệp phông chữ tổ hợp: {e}
+@msg	not a composite fonts file: no compositeFonts list	không phải tệp phông chữ tổ hợp: không có danh sách compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	tệp chứa hơn {COMPOSITE_FONTS_MAX} phông chữ tổ hợp
+@msg	the file is larger than 4 MB	tệp lớn hơn 4 MB
+@msg	dataBase64 is not base64	dataBase64 không phải base64
+@msg	give one of path, data or dataBase64	hãy cung cấp path, data hoặc dataBase64
+@msg	the file holds no composite fonts	tệp không chứa phông chữ tổ hợp nào
+@msg	the file holds two composite fonts named `{_1}`	tệp chứa hai phông chữ tổ hợp cùng tên `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` không thể là tên phông chữ tổ hợp
+@msg	{k}: give a font	{k}: hãy cung cấp một phông chữ
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: hãy cung cấp một phông chữ
+@msg	{k}: size must be {_1} to {_2}%	{k}: size phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size phải từ {_1} đến {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline phải từ {_1} đến {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: tỷ lệ phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: tỷ lệ phải từ {_1} đến {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: chỉ kana, roman và numerals mới co giãn được
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: chỉ kana, roman và numerals mới co giãn được
+@msg	{k}: only kana can be scaled at the center	{k}: chỉ kana mới co giãn từ tâm được
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: chỉ kana mới co giãn từ tâm được
+@msg	no composite font	không có phông chữ tổ hợp
 	Delete Font	Xóa phông chữ
 	Kanji	Kanji
 	Kana	Kana
@@ -4458,6 +4508,9 @@ mark-style	Japanese	Kiểu Nhật
 	Working CMYK	CMYK làm việc
 	Working CMYK (don't tag)	CMYK làm việc (không gắn thẻ)
 	Working RGB (don't tag)	RGB làm việc (không gắn thẻ)
+	Don't Color Manage This Document	Không quản lý màu cho tài liệu này
+	Working RGB: {name}	RGB làm việc: {name}
+	Working CMYK: {name}	CMYK làm việc: {name}
 	Workspace	Không gian làm việc
 	Workspace {i}	Không gian làm việc {i}
 	Wrinkle Tool	Công cụ nhăn
@@ -4694,6 +4747,9 @@ theme	Appearance	Giao diện
 @msg	automation path rejected: cannot resolve {path}: {e}	đường dẫn tự động bị từ chối: không thể phân giải {path}: {e}
 @msg	automation path rejected: outside the read root {root}: {path}	đường dẫn tự động bị từ chối: ngoài thư mục gốc đọc {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	đường dẫn tự động bị từ chối: ngoài các thư mục gốc đọc {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	một tệp JavaScript được liên kết nằm ngoài các thư mục gốc đọc
+@msg	the library's file is outside the read roots	tệp của thư viện nằm ngoài các thư mục gốc đọc
+@msg	{file} names more than one linked JavaScript file	{file} khớp với nhiều hơn một tệp JavaScript được liên kết
 @msg	automation path rejected: outside the write root {root}: {path}	đường dẫn tự động bị từ chối: ngoài thư mục gốc ghi {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	đường dẫn tự động bị từ chối: ngoài các thư mục gốc ghi {roots}: {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	đường dẫn tự động bị từ chối: duyệt cha bên dưới thư mục không tồn tại: {path}
@@ -4860,6 +4916,7 @@ theme	Appearance	Giao diện
 @msg	there is no script engine named {name}	không có bộ máy tập lệnh nào tên {name}
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
+@msg	Copied the link info	Đã sao chép thông tin liên kết
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
 @msg	could not decode image: {0}	không thể giải mã ảnh: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Không thể sao chép vào khay nhớ tạm hệ thống: {e}
@@ -5077,6 +5134,7 @@ theme	Appearance	Giao diện
 @msg	no library `{key}` (see {list})	không có thư viện `{key}` (xem {list})
 @msg	No linked files to look for	Không có tệp liên kết để tìm kiếm
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Liên kết nằm trong ký hiệu, thiết kế biểu đồ, họa tiết hoặc mặt nạ độ mờ và không có vị trí trên canvas
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	hình vẽ của một thiết kế biểu đồ trong một chuỗi dữ liệu của biểu đồ được vẽ lại từ thiết kế: hãy sửa thiết kế để thay đổi nó
 @msg	no Live Paint edge near that point	không có cạnh tô trực tiếp gần điểm đó
 @msg	no Live Paint face at that point	không có mặt tô trực tiếp tại điểm đó
 @msg	no native format	không có định dạng gốc
@@ -5277,6 +5335,7 @@ theme	Appearance	Giao diện
 @msg	result would exceed the canvas (coordinates out of range)	kết quả sẽ vượt quá vùng vẽ (tọa độ ngoài phạm vi)
 @msg	objects can't be nested more than 32 deep	không thể lồng các đối tượng sâu quá 32 cấp
 @msg	the SVG's elements are nested more than {0} deep	các phần tử SVG lồng nhau sâu quá {0} cấp
+@msg	the SVG's style sheets take too long to match	việc so khớp các biểu định kiểu của SVG mất quá nhiều thời gian
 @msg	the SVG's styles expand to more than {0} MB	các kiểu của SVG khi mở rộng chiếm hơn {0} MB
 @msg	Save for Web: the image is empty	Lưu cho Web: ảnh trống
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Lưu ghi {_1}, không phải {_2}: dùng document.export cho các định dạng khác
@@ -5398,6 +5457,7 @@ theme	Appearance	Giao diện
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` phải là một đối tượng chỉ chứa `mode`, với giá trị shaded hoặc wireframe
 @msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
 @msg	bevel must be none or one of {_1}	bevel phải là none hoặc một trong {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} không thể tạo khối từ hình vẽ này: các phiên bản ký hiệu, hòa trộn và nhóm cắt của nó chứa quá nhiều đối tượng
@@ -5698,6 +5758,9 @@ theme	Appearance	Giao diện
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
+	Move Light to Back	Đưa ánh sáng ra sau
+	Move Light to Front	Đưa ánh sáng ra trước
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Kéo một nguồn sáng để di chuyển nó. Phím mũi tên di chuyển nguồn sáng đang có tiêu điểm; Shift di chuyển theo bước 15°.
 	Shadows	Bóng đổ
 	Distance from Object	Khoảng cách từ đối tượng
 	Shadow Bounds	Giới hạn bóng
@@ -6294,6 +6357,8 @@ axis	Y Axis	Trục Y
 	Create New Set	Tạo bộ mới
 	Stop Global Edit	Dừng chỉnh sửa toàn cục
 	Global Edit Options	Tùy chọn chỉnh sửa toàn cục
+	Select Similar Objects	Chọn các đối tượng tương tự
+	Select Similar Options	Tùy chọn chọn đối tượng tương tự
 	Leave Out of Global Edit	Loại khỏi chỉnh sửa toàn cục
 	Match	Khớp
 	On Artboards	Trên các bảng vẽ
@@ -6416,6 +6481,13 @@ axis	Y Axis	Trục Y
 	Graphite Pencil	Bút chì than chì
 	Wax Crayon	Bút sáp màu
 	Charcoal Dust	Bụi than
+
+# Original procedural circuit brushes.
+	Tech Circuit	Mạch công nghệ
+	Circuit Trace	Đường mạch
+	Bus Lines	Đường bus
+	Terminal Nodes	Nút đầu cuối
+
 	Notched Ribbon	Dải băng khía
 	Double Line	Đường đôi
 	Wave	Sóng

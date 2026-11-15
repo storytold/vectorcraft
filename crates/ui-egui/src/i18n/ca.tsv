@@ -930,6 +930,7 @@ antiAlias	Sharp	Nítid
 	Copy Guide	Copia la guia
 	Copy in Perspective	Copia en perspectiva
 	Copy into the document's folder	Copia a la carpeta del document
+	Copy Info	Copia la informació
 	Copy Links	Copia els enllaços
 	Copy only fonts you own or are licensed to install.	Copia només els tipus de lletra que tinguis o que tinguis llicència per instal·lar.
 	Copy Report	Copia l’informe
@@ -1625,6 +1626,7 @@ antiAlias	Sharp	Nítid
 	Rotate (Classic)…	Gira (clàssic)…
 	Surface	Superfície
 	Wireframe	Filferro
+	Render Settings	Configuració de renderització
 	No Shading	Sense ombra
 	Plastic	Plàstic
 	Highlight Intensity	Intensitat de la brillantor
@@ -1853,6 +1855,8 @@ digits	Malayalam	Malaiàlam
 	Global Adjust	Ajust global
 	Global Brush Dimensions	Dimensions globals del pinzell
 	Global Edit Options	Opcions globals d’edició
+	Select Similar Objects	Selecciona objectes similars
+	Select Similar Options	Opcions de selecció de similars
 	Leave Out of Global Edit	Exclou de l’edició global
 	Global Process Color	Color de procés global
 	Global Process Color, CMYK	Color de procés global, CMYK
@@ -2338,6 +2342,9 @@ digits	Malayalam	Malaiàlam
 	Ligatures are off while the text is tracked.	Les lligadures estan desactivades mentre el text té espaiat.
 	Light	Clar
 	Light behind the object	Llum darrere de l’objecte
+	Move Light to Back	Mou la llum al darrere
+	Move Light to Front	Mou la llum al davant
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Arrossegueu una llum per moure-la. Les tecles de fletxa mouen la llum amb el focus; Maj la mou de 15° en 15°.
 	Shadows	Ombres
 	Distance from Object	Distància de l’objecte
 	Shadow Bounds	Límits de l’ombra
@@ -3361,6 +3368,8 @@ digits	Malayalam	Malaiàlam
 	Proof Setup	Configuració de prova
 	Properties	Propietats
 	Proportional Metrics	Mètriques proporcionals
+	H or V Style	Estil horitzontal o vertical
+	Roman Italics	Cursiva romana
 	Insert Aki Left	Insereix aki a l'esquerra
 	Insert Aki Right	Insereix aki a la dreta
 	Tsume	Tsume
@@ -3396,6 +3405,7 @@ digits	Malayalam	Malaiàlam
 	Radial	Radial
 	Radial Blur	Desenfocament radial
 	Radial Blur…	Desenfocament radial…
+	Blur Center	Centre del desenfocament
 	Radial Dividers:	Divisors radials:
 	Radial Glows	Resplendors radials
 	Radial Gradient	Degradat radial
@@ -3968,6 +3978,13 @@ digits	Malayalam	Malaiàlam
 	Graphite Pencil	Llapis de grafit
 	Wax Crayon	Cera de colors
 	Charcoal Dust	Pols de carbó
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuits tecnològics
+	Circuit Trace	Pista de circuit
+	Bus Lines	Línies de bus
+	Terminal Nodes	Nodes terminals
+
 	Notched Ribbon	Cinta dentada
 	Double Line	Línia doble
 	Wave	Ona
@@ -4338,6 +4355,7 @@ digits	Malayalam	Malaiàlam
 	Sixth Space	Espai de sisena part
 	Size	Mida
 	Size Tile to Art	Ajusta la mida del mosaic a l’art
+	Move Tile with Art	Mou el mosaic amb l’art
 	Size/Leading	Mida/Interlineat
 	Size:	Mida:
 	Size: {size}  Tracking: {tracking}	Mida: {size}  Espaiat: {tracking}
@@ -4587,6 +4605,8 @@ digits	Malayalam	Malaiàlam
 	Swap Fill and Stroke (Shift+X)	Intercanvia el farciment i el traç (Maj+X)
 	Swap start and end arrowheads	Intercanvia les puntes de fletxa inicial i final
 	Swap the selected object for the file, keeping its place and transform	Substitueix l’objecte seleccionat pel fitxer, mantenint-ne la posició i la transformació
+	Show Import Options	Mostra les opcions d’importació
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demana les opcions d’importació de cada fitxer PDF, DXF o de text abans de col·locar-lo; desactivat: s’usen les últimes opcions triades
 	Stylistic Alternates	Alternatives estilístiques
 	Swash	Volada
 	Swatch Conflict	Conflicte de mostres
@@ -4669,6 +4689,48 @@ digits	Malayalam	Malaiàlam
 	Composite Fonts	Tipus de lletra compostos
 	Export Composite Fonts	Exporta tipus de lletra compostos
 	Import Composite Fonts	Importa tipus de lletra compostos
+@msg	each font must be {name, parts}	cada tipus de lletra ha de ser {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	clau desconeguda `{k}`; un tipus de lletra admet name i parts
+@msg	each font needs a name	cada tipus de lletra necessita un nom
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no pot anomenar un tipus de lletra compost (d’1 a {COMPOSITE_NAME_MAX} caràcters, sense caràcters de control)
+@msg	`{name}`: parts must be an object	`{name}`: parts ha de ser un objecte
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: classe desconeguda `{k}`; les classes són kanji, kana, punctuation, symbols, roman i numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} ha de ser un objecte
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: clau desconeguda `{k}` a {_1}
+@msg	`{name}`: give the kanji part	`{name}`: indiqueu la part kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un document conté com a màxim {COMPOSITE_FONTS_MAX} tipus de lletra compostos
+@msg	two composite fonts are named `{_1}`	dos tipus de lletra compostos es diuen `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` és el nom d’un tipus de lletra instal·lat
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, un tipus de lletra compost
+@msg	give fonts: [{name, parts}…]	indiqueu fonts: [{name, parts}…]
+@msg	path is empty	path és buit
+@msg	fonts must be a list of composite fonts	fonts ha de ser una llista de tipus de lletra compostos
+@msg	names must be strings	names ha de contenir cadenes
+@msg	no composite font named `{n}`	cap tipus de lletra compost anomenat `{n}`
+@msg	names must be a list of names	names ha de ser una llista de noms
+@msg	no composite fonts to export	cap tipus de lletra compost per exportar
+@msg	not a composite fonts file: {e}	no és un fitxer de tipus de lletra compostos: {e}
+@msg	not a composite fonts file: no compositeFonts list	no és un fitxer de tipus de lletra compostos: no hi ha cap llista compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	el fitxer conté més de {COMPOSITE_FONTS_MAX} tipus de lletra compostos
+@msg	the file is larger than 4 MB	el fitxer ocupa més de 4 MB
+@msg	dataBase64 is not base64	dataBase64 no és base64
+@msg	give one of path, data or dataBase64	indiqueu path, data o dataBase64
+@msg	the file holds no composite fonts	el fitxer no conté cap tipus de lletra compost
+@msg	the file holds two composite fonts named `{_1}`	el fitxer conté dos tipus de lletra compostos anomenats `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` no pot anomenar un tipus de lletra compost
+@msg	{k}: give a font	{k}: indiqueu un tipus de lletra
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: indiqueu un tipus de lletra
+@msg	{k}: size must be {_1} to {_2}%	{k}: size ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size ha d’estar entre {_1} i {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline ha d’estar entre {_1} i {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: l’escala ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: l’escala ha d’estar entre {_1} i {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: només kana, roman i numerals es poden escalar
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: només kana, roman i numerals es poden escalar
+@msg	{k}: only kana can be scaled at the center	{k}: només kana es pot escalar des del centre
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: només kana es pot escalar des del centre
+@msg	no composite font	cap tipus de lletra compost
 	Delete Font	Suprimeix el tipus de lletra
 	Kanji	Kanji
 	Kana	Kana
@@ -5150,6 +5212,9 @@ digits	Malayalam	Malaiàlam
 	Working CMYK	CMYK de treball
 	Working CMYK (don't tag)	CMYK de treball (sense etiquetar)
 	Working RGB (don't tag)	RGB de treball (sense etiquetar)
+	Don't Color Manage This Document	No gestionis el color d'aquest document
+	Working RGB: {name}	RGB de treball: {name}
+	Working CMYK: {name}	CMYK de treball: {name}
 	Working RGB	RGB de treball
 	Workspace	Espai de treball
 	Workspace {i}	Espai de treball {i}
@@ -5429,6 +5494,9 @@ digits	Malayalam	Malaiàlam
 @msg	automation path rejected: cannot resolve {path}: {e}	camí d’automatització rebutjat: no es pot resoldre {path}: {e}
 @msg	automation path rejected: outside the read root {root}: {path}	camí d’automatització rebutjat: fora de l’arrel de lectura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	camí d’automatització rebutjat: fora de les arrels de lectura {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	un fitxer JavaScript enllaçat és fora de les arrels de lectura
+@msg	the library's file is outside the read roots	el fitxer de la biblioteca és fora de les arrels de lectura
+@msg	{file} names more than one linked JavaScript file	{file} correspon a més d’un fitxer JavaScript enllaçat
 @msg	automation path rejected: outside the write root {root}: {path}	camí d’automatització rebutjat: fora de l’arrel d’escriptura {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	camí d’automatització rebutjat: fora de les arrels d’escriptura {roots}: {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	camí d’automatització rebutjat: recorregut ascendent per sota d’una carpeta que no existeix: {path}
@@ -5599,6 +5667,7 @@ digits	Malayalam	Malaiàlam
 @msg	there is no script engine named {name}	no hi ha cap motor d'scripts anomenat {name}
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
+@msg	Copied the link info	S’ha copiat la informació de l’enllaç
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
 @msg	could not decode image: {0}	no s’ha pogut descodificar la imatge: {0}
 @msg	Couldn't copy to the system clipboard: {e}	No s’ha pogut copiar al porta-retalls del sistema: {e}
@@ -5855,6 +5924,7 @@ digits	Malayalam	Malaiàlam
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})
 @msg	No linked files to look for	No hi ha fitxers enllaçats per buscar
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	L’enllaç és dins d’un símbol, un disseny de gràfic, un motiu o una màscara d’opacitat i no té lloc al llenç
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	la il·lustració d’un disseny de gràfic en una sèrie d’un gràfic es torna a dibuixar a partir del disseny: editeu el disseny per canviar-la
 @msg	no Live Paint edge near that point	no hi ha cap aresta de pintura interactiva a prop d’aquell punt
 @msg	no Live Paint face at that point	no hi ha cap cara de pintura interactiva en aquell punt
 @msg	no native format	no hi ha format natiu
@@ -6192,6 +6262,7 @@ digits	Malayalam	Malaiàlam
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
 @msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objecte no té cap efecte 3D (Extrudeix i bisella, Revoluciona, Infla o Gira)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` ha de ser un objecte que només contingui `mode`, amb el valor shaded o wireframe
 @msg	its 3D effect builds no solid	el seu efecte 3D no construeix cap sòlid
 @msg	bevel must be none or one of {_1}	bevel ha de ser none o un de {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no pot construir sòlids a partir d’aquesta il·lustració: les seves instàncies de símbol, fusions i grups de retall contenen massa objectes
@@ -6352,6 +6423,7 @@ digits	Malayalam	Malaiàlam
 @msg	the spine has no segments	l’espina no té segments
 @msg	the stroke has no weight	el traç no té gruix
 @msg	the SVG's elements are nested more than {0} deep	els elements de l’SVG estan imbricats a més de {0} nivells de profunditat
+@msg	the SVG's style sheets take too long to match	fer coincidir els fulls d’estil de l’SVG triga massa
 @msg	the SVG's styles expand to more than {0} MB	els estils de l’SVG s’expandeixen a més de {0} MB
 @msg	the target layer is locked or hidden	la capa de destinació està blocada o amagada
 @msg	the thumbnail image is malformed	la imatge de la miniatura està mal formada
