@@ -33,7 +33,7 @@ craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e
 craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
 # WMF, EMF and EMF+ reader (craft-libs#778).
 craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
-craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "e2dc681a3" }
+craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "9a9b89e9e" }
 craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "e2dc681a3" }
 craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "e2dc681a3" }
 craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "e2dc681a3" }
