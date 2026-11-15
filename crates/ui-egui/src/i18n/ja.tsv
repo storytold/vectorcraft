@@ -5755,6 +5755,9 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+	Move Light to Back	ライトを背面へ
+	Move Light to Front	ライトを前面へ
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	ライトをドラッグして移動します。矢印キーでフォーカスのあるライトを移動し、Shift キーで 15° ずつ移動します。
 	Shadows	シャドウ
 	Distance from Object	オブジェクトからの距離
 	Shadow Bounds	シャドウの範囲

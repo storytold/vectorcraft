@@ -5673,6 +5673,9 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	Move Light to Back	조명을 뒤로 이동
+	Move Light to Front	조명을 앞으로 이동
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	조명을 드래그하여 이동합니다. 화살표 키로 포커스된 조명을 이동하고, Shift 키를 누르면 15°씩 이동합니다.
 	Shadows	그림자
 	Distance from Object	개체로부터의 거리
 	Shadow Bounds	그림자 범위

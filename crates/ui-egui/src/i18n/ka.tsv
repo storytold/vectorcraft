@@ -5648,6 +5648,9 @@ imageTrace	Outline	კონტური
 	In the File	ფაილში
 	Keys	კლავიშები
 	Light behind the object	სინათლე ობიექტის უკან
+	Move Light to Back	სინათლის უკან გადატანა
+	Move Light to Front	სინათლის წინ გადატანა
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	გადაათრიეთ სინათლე მის გადასაადგილებლად. ისრიანი ღილაკები ფოკუსირებულ სინათლეს ამოძრავებს; Shift-ით 15°-იანი ბიჯით.
 	Shadows	ჩრდილები
 	Distance from Object	მანძილი ობიექტიდან
 	Shadow Bounds	ჩრდილის საზღვრები

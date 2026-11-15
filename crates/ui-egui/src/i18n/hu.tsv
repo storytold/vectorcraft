@@ -6078,6 +6078,9 @@ imageTrace	Outline	Körvonal
 	Softness	Lágyság
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
+	Move Light to Back	Fény hátra
+	Move Light to Front	Fény előre
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Húzzon egy fényt az áthelyezéséhez. A nyílbillentyűk a fókuszban lévő fényt mozgatják; Shifttel 15°-onként.
 	Shadows	Árnyékok
 	Distance from Object	Távolság az objektumtól
 	Shadow Bounds	Árnyék határai

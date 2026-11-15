@@ -6091,6 +6091,9 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+	Move Light to Back	Placer la lumière derrière
+	Move Light to Front	Placer la lumière devant
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Faites glisser une lumière pour la déplacer. Les touches fléchées déplacent la lumière active ; Maj par pas de 15°.
 	Shadows	Ombres
 	Distance from Object	Distance de l'objet
 	Shadow Bounds	Limites de l'ombre

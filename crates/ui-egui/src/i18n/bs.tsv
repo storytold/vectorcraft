@@ -5792,6 +5792,9 @@ mark-style	Japanese	Japanski
 	Softness	Mekoća
 	Ambient Light	Ambijentalno svjetlo
 	Light behind the object	Svjetlo iza objekta
+	Move Light to Back	Pomjeri svjetlo iza
+	Move Light to Front	Pomjeri svjetlo naprijed
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Prevucite svjetlo da ga pomjerite. Tipke sa strelicama pomjeraju fokusirano svjetlo; Shift ga pomjera za 15°.
 	Shadows	Sjene
 	Distance from Object	Udaljenost od objekta
 	Shadow Bounds	Granice sjene

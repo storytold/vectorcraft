@@ -5677,6 +5677,9 @@ effect	Soft	Weich
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+	Move Light to Back	Licht nach hinten
+	Move Light to Front	Licht nach vorne
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Ziehen Sie ein Licht, um es zu verschieben. Die Pfeiltasten verschieben das fokussierte Licht; mit Umschalt in Schritten von 15°.
 	Shadows	Schatten
 	Distance from Object	Abstand vom Objekt
 	Shadow Bounds	Schattenbegrenzung

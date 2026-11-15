@@ -2338,6 +2338,9 @@ digits	Malayalam	Malaiàlam
 	Ligatures are off while the text is tracked.	Les lligadures estan desactivades mentre el text té espaiat.
 	Light	Clar
 	Light behind the object	Llum darrere de l’objecte
+	Move Light to Back	Mou la llum al darrere
+	Move Light to Front	Mou la llum al davant
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Arrossegueu una llum per moure-la. Les tecles de fletxa mouen la llum amb el focus; Maj la mou de 15° en 15°.
 	Shadows	Ombres
 	Distance from Object	Distància de l’objecte
 	Shadow Bounds	Límits de l’ombra

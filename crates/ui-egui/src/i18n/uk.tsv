@@ -5692,6 +5692,9 @@ lighting	Light	Світло
 	Softness	М'якість
 	Ambient Light	Навколишнє світло
 	Light behind the object	Світло позаду об'єкта
+	Move Light to Back	Перемістити світло назад
+	Move Light to Front	Перемістити світло вперед
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Перетягніть світло, щоб перемістити його. Клавіші зі стрілками переміщують вибране світло; із Shift — кроками по 15°.
 	Shadows	Тіні
 	Distance from Object	Відстань від об'єкта
 	Shadow Bounds	Межі тіні

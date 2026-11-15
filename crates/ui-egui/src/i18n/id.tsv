@@ -5439,6 +5439,9 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	Move Light to Back	Pindahkan Cahaya ke Belakang
+	Move Light to Front	Pindahkan Cahaya ke Depan
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Seret cahaya untuk memindahkannya. Tombol panah memindahkan cahaya yang difokuskan; Shift memindahkannya 15°.
 	Shadows	Bayangan
 	Distance from Object	Jarak dari objek
 	Shadow Bounds	Batas bayangan

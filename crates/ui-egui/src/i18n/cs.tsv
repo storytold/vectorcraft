@@ -6095,6 +6095,9 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+	Move Light to Back	Přesunout světlo dozadu
+	Move Light to Front	Přesunout světlo dopředu
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Přetažením světlo přesunete. Šipky posouvají světlo s fokusem; se Shiftem po 15°.
 	Shadows	Stíny
 	Distance from Object	Vzdálenost od objektu
 	Shadow Bounds	Hranice stínu
