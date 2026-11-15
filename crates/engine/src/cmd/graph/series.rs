@@ -1443,25 +1443,68 @@ pub(crate) fn capture_line_changes(before: &Document, doc: &mut Document, ids: &
 /// of a kind take the frontmost one's paint. Called inside the same edit, so they undo together. Returns whether kept
 /// rows changed.
 pub(crate) fn capture_line_paint_writes(doc: &mut Document, written: &[(NodeId, usize)]) -> bool {
+    let paint = RowWrites { paint: true, ..RowWrites::NONE };
+    capture_line_row_writes(doc, written, paint, paint)
+}
+
+/// Which attributes of a fill or stroke row an edit wrote, for [`capture_line_row_writes`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct RowWrites {
+    /// The paint.
+    pub paint: bool,
+    /// The weight (a stroke row only).
+    pub weight: bool,
+    /// The row's opacity.
+    pub opacity: bool,
+    /// The row's blend mode.
+    pub blend: bool,
+}
+
+impl RowWrites {
+    /// No attribute.
+    pub const NONE: RowWrites = RowWrites { paint: false, weight: false, opacity: false, blend: false };
+}
+
+/// [`capture_line_paint_writes`] for the attributes `fill` says of a written fill row and `stroke` says of a written
+/// stroke row: each is kept for every line of the kind as the line shows it, also when the line already showed it, in
+/// place of what its kind keeps from another line.
+pub(crate) fn capture_line_row_writes(doc: &mut Document, written: &[(NodeId, usize)], fill: RowWrites, stroke: RowWrites) -> bool {
     let ids: Vec<NodeId> = written.iter().map(|(id, _)| *id).collect();
     let mut changed = false;
     for (id, graph, line) in lines_of(doc, &ids) {
         let Some(n) = doc.node(id) else { continue };
         let items = &n.appearance.items;
-        let wrote = |fill: bool| items.iter().rposition(|it| it.is_fill() == fill && it.visible()).is_some_and(|at| written.contains(&(id, at)));
-        let (fill, stroke) = (wrote(true), wrote(false));
-        if !fill && !stroke {
+        let wrote = |kind: bool| items.iter().rposition(|it| it.is_fill() == kind && it.visible()).is_some_and(|at| written.contains(&(id, at)));
+        let on_fill = if wrote(true) { fill } else { RowWrites::NONE };
+        let on_stroke = if wrote(false) { stroke } else { RowWrites::NONE };
+        if on_fill == RowWrites::NONE && on_stroke == RowWrites::NONE {
             continue;
         }
         let shown = label_rows(n).unwrap_or_default().paint;
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let slot = line_slot(&mut spec.label_styles, line);
         let mut rows = slot.clone().unwrap_or_else(|| line.default_rows());
-        if fill {
-            rows.paint.fill = shown.fill;
+        let k = &mut rows.paint;
+        if on_fill.paint {
+            k.fill = shown.fill;
         }
-        if stroke {
-            rows.paint.stroke = shown.stroke;
+        if on_fill.opacity {
+            k.fill_opacity = shown.fill_opacity;
+        }
+        if on_fill.blend {
+            k.fill_blend = shown.fill_blend;
+        }
+        if on_stroke.paint {
+            k.stroke = shown.stroke;
+        }
+        if on_stroke.weight {
+            k.stroke_width = shown.stroke_width;
+        }
+        if on_stroke.opacity {
+            k.stroke_opacity = shown.stroke_opacity;
+        }
+        if on_stroke.blend {
+            k.stroke_blend = shown.stroke_blend;
         }
         let kept = (rows != line.default_rows()).then_some(rows);
         changed |= *slot != kept;

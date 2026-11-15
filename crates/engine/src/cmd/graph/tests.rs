@@ -8271,6 +8271,134 @@ fn a_stroke_written_to_an_axis_line_that_shows_it_is_kept() {
     });
 }
 
+/// A stroke added to an axis line whose stroke shows the paint the new one takes is kept for every axis line, in place of
+/// the stroke the kind keeps from another line.
+#[test]
+fn a_stroke_added_to_an_axis_line_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+    s.execute("appearance.addStroke", &json!({"ids": [lines[1].id.0]})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| (l.0.as_str(), l.1) == ("#000000", 1.0)), "the added 1 pt black stroke: {looks:?}");
+}
+
+/// An Eyedropper pick of the stroke color, weight or transparency alone onto an axis line that already shows what it
+/// writes is kept for every axis line, in place of what the kind keeps from another line.
+#[test]
+fn an_eyedropper_pick_an_axis_line_already_shows_is_kept() {
+    let stroke_row = |n: &vectorcraft_doc::Node| n.appearance.items.iter().rposition(|it| !it.is_fill()).unwrap();
+    let cases = [("color", json!({"color": "#ff0000"})), ("weight", json!({"weight": 2})), ("transparency", json!({"opacity": 40}))];
+    every_case(cases, |(attr, edit)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#000000"})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [rect.0], "weight": 0.5})).unwrap();
+        let lines = line_nodes(&s, id);
+        let mut p = edit.clone();
+        p["ids"] = json!([lines[0].id.0]);
+        match *attr {
+            "color" => s.execute("paint.setStroke", &p),
+            "weight" => s.execute("stroke.set", &p),
+            _ => {
+                p["index"] = json!(stroke_row(&lines[0]));
+                s.execute("appearance.setItem", &p)
+            }
+        }
+        .unwrap();
+        let shown = line_nodes(&s, id)[1].clone();
+        assert_eq!(line_look(&shown), ("#000000".into(), 0.5, 1.0), "{attr}: the other lines show the default until the graph is drawn again");
+        let fill = json!({"color": false, "transparency": false, "overprint": false});
+        let mut stroke = json!({"color": false, "transparency": false, "overprint": false, "weight": false, "cap": false, "join": false, "miter": false, "dash": false});
+        stroke[*attr] = json!(true);
+        let apply = json!({"appearance": {"transparency": false, "fill": fill, "stroke": stroke}, "character": false, "paragraph": false});
+        s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [lines[1].id.0], "apply": apply})).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| *l == ("#000000".into(), 0.5, 1.0)), "{attr}: {looks:?}");
+        let opacities: Vec<f32> = line_nodes(&s, id).iter().map(|n| n.appearance.items[stroke_row(n)].opacity()).collect();
+        assert!(opacities.iter().all(|o| *o == 1.0), "{attr}: {opacities:?}");
+    });
+}
+
+/// A stroke color, weight or opacity set with `appearance.setItem`, or a weight set with `stroke.set`, on an axis line
+/// that already shows it is kept for every axis line, in place of what the kind keeps from another line.
+#[test]
+fn a_row_attribute_set_on_an_axis_line_that_shows_it_is_kept() {
+    let stroke_row = |n: &vectorcraft_doc::Node| n.appearance.items.iter().rposition(|it| !it.is_fill()).unwrap();
+    let cases = [
+        ("appearance.setItem", json!({"color": "#ff0000"}), json!({"color": "#000000"})),
+        ("appearance.setItem", json!({"weight": 2}), json!({"weight": 0.5})),
+        ("appearance.setItem", json!({"opacity": 40}), json!({"opacity": 100})),
+        ("stroke.set", json!({"weight": 2}), json!({"weight": 0.5})),
+    ];
+    every_case(cases, |(cmd, kept, shown)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        for (line, values) in [(&lines[0], kept), (&lines[1], shown)] {
+            let mut p = values.clone();
+            p["ids"] = json!([line.id.0]);
+            if *cmd == "appearance.setItem" {
+                p["index"] = json!(stroke_row(line));
+            }
+            s.execute(cmd, &p).unwrap();
+        }
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| *l == ("#000000".into(), 0.5, 1.0)), "{cmd} {shown}: {looks:?}");
+        let opacities: Vec<f32> = line_nodes(&s, id).iter().map(|n| n.appearance.items[stroke_row(n)].opacity()).collect();
+        assert!(opacities.iter().all(|o| *o == 1.0), "{cmd} {shown}: {opacities:?}");
+    });
+}
+
+/// `appearance.setItem` of a row's opacity alone on an axis line keeps the blend mode the kind keeps from another line,
+/// and of its blend mode alone the opacity; a null weight or opacity writes nothing and adds no undo step.
+#[test]
+fn a_row_attribute_set_on_an_axis_line_keeps_the_others_its_kind_keeps() {
+    let stroke_row = |n: &vectorcraft_doc::Node| n.appearance.items.iter().rposition(|it| !it.is_fill()).unwrap();
+    let row = |n: &vectorcraft_doc::Node| {
+        let it = &n.appearance.items[stroke_row(n)];
+        (it.opacity(), it.blend())
+    };
+    let cases = [
+        (json!({"blend": "multiply"}), json!({"opacity": 100}), (1.0, BlendMode::Multiply)),
+        (json!({"opacity": 40}), json!({"blend": "normal"}), (0.4, BlendMode::Normal)),
+    ];
+    every_case(cases, |(kept, shown, want)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        for (line, values) in [(&lines[0], kept), (&lines[1], shown)] {
+            let mut p = values.clone();
+            p["ids"] = json!([line.id.0]);
+            p["index"] = json!(stroke_row(line));
+            s.execute("appearance.setItem", &p).unwrap();
+        }
+        redrawn_line_looks(&mut s, id);
+        let rows: Vec<(f32, BlendMode)> = line_nodes(&s, id).iter().map(row).collect();
+        assert!(rows.iter().all(|r| *r == *want), "{shown}: {rows:?}");
+    });
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    for key in ["weight", "opacity"] {
+        let mut p = json!({"ids": [lines[1].id.0], "index": stroke_row(&lines[1])});
+        p[key] = serde_json::Value::Null;
+        s.execute("appearance.setItem", &p).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "a null value adds no undo step");
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ff0000"));
+}
+
 #[test]
 fn pie_names_and_wedge_labels_keep_their_style() {
     let mut s = Session::new();
