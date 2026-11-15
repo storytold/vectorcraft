@@ -242,9 +242,20 @@ pub(super) fn upload(app: &mut VectorcraftApp, ctx: &egui::Context, img: vectorc
     }
 }
 
+/// The device pixels a point that the art's frame of a canvas `size` points across renders at:
+/// the display's `ppp`, lowered when a side of the frame would be more than `max_side` pixels, the
+/// largest texture side the display supports (egui's `max_texture_side`). The frame is then drawn
+/// scaled up over the canvas, at a lower resolution.
+pub(super) fn frame_ppp(size: egui::Vec2, ppp: f32, max_side: usize) -> f32 {
+    let longest = size.x.max(size.y) * ppp;
+    let max = max_side.clamp(1, usize::from(u16::MAX)) as f32;
+    if longest.round() <= max { ppp } else { ppp * (max / longest) }
+}
+
 /// Pixel Preview: the whole document pixels (x0, y0, x1, y1) under the canvas, rotated view
-/// included. None when the view is degenerate.
-pub(super) fn pixel_region(xf: &Xf) -> Option<[i64; 4]> {
+/// included. None when the view is degenerate, or when a side of the region is more than
+/// `max_side` pixels, the largest texture side the display supports.
+pub(super) fn pixel_region(xf: &Xf, max_side: usize) -> Option<[i64; 4]> {
     let r = xf.rect;
     let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()].map(|p| xf.to_doc(p));
     let (mut x0, mut y0, mut x1, mut y1) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
@@ -253,6 +264,7 @@ pub(super) fn pixel_region(xf: &Xf) -> Option<[i64; 4]> {
     }
     let (x0, y0, x1, y1) = (x0.floor(), y0.floor(), x1.ceil(), y1.ceil());
     // A document pixel is bigger than a screen pixel here, so the region is about canvas-sized.
-    let ok = [x0, y0, x1, y1].iter().all(|c| c.is_finite() && c.abs() < 1e9) && x1 > x0 && y1 > y0 && x1 - x0 <= 16384.0 && y1 - y0 <= 16384.0;
+    let max = max_side.min(16384) as f64;
+    let ok = [x0, y0, x1, y1].iter().all(|c| c.is_finite() && c.abs() < 1e9) && x1 > x0 && y1 > y0 && x1 - x0 <= max && y1 - y0 <= max;
     ok.then_some([x0 as i64, y0 as i64, x1 as i64, y1 as i64])
 }
