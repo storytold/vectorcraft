@@ -1056,7 +1056,8 @@ font-technology	Variable	Variabel
 	Every (minutes)	Alle (Minuten)
 	Every option is at its default.	Alle Optionen haben ihren Standardwert.
 	Every option matches {base}.	Alle Optionen entsprechen {base}.
-	Every-line Composer	Alle-Zeilen-Setzer
+	Middle Eastern & South Asian Every-line Composer	Alle-Zeilen-Setzer (Naher Osten und Südasien)
+	Standard Every-line Composer	Standard-Alle-Zeilen-Setzer
 	Exact dash lengths	Exakte Strichlängen
 	Exceptions (comma separated)	Ausnahmen (durch Kommas getrennt)
 	Exclude	Schnittmenge entfernen
@@ -1393,6 +1394,14 @@ file-filter	Templates	Vorlagen
 	Previous Artboard	Vorherige Zeichenfläche
 	Next Artboard	Nächste Zeichenfläche
 	Last Artboard	Letzte Zeichenfläche
+	Status Bar Show	In Statusleiste anzeigen
+	Artboard Name	Name der Zeichenfläche
+	Current Tool	Aktuelles Werkzeug
+	Date and Time	Datum und Uhrzeit
+	Number of Undos	Anzahl der Rückgängig-Schritte
+	Document Color Profile	Farbprofil des Dokuments
+	Undos	Rückgängig
+	Redos	Wiederholen
 	Go To Link	Gehe zu Verknüpfung
 	GPL palettes keep solid colours only, as RGB.	GPL-Paletten enthalten nur einfarbige Farben, als RGB.
 	GPU Performance	GPU-Leistung
@@ -3421,7 +3430,8 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Einfaches öffnendes Anführungszeichen
 	Single Quotes:	Einfache Anführungszeichen:
 	Single Right Quotation Mark	Einfaches schließendes Anführungszeichen
-	Single-line Composer	Einzeilen-Setzer
+	Middle Eastern & South Asian Single-line Composer	Einzeilen-Setzer (Naher Osten und Südasien)
+	Standard Single-line Composer	Standard-Einzeilen-Setzer
 	Toggle Line Composer	Zeilensetzer umschalten
 	Sixth Space	Sechstelgeviert-Leerzeichen
 	Size	Größe
@@ -8066,7 +8076,7 @@ breakText	Glyphs	Glyphen
 @msg	column: true floats the whole column and takes no onto, above or below	column: true macht die ganze Spalte schwebend und nimmt kein onto, above oder below
 @msg	command must be a shape.* command	command muss ein shape.*-Befehl sein
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` fehlt
-@msg	composer must be "singleLine" or "everyLine"	composer muss „singleLine“ oder „everyLine“ sein
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer muss „singleLine“, „everyLine“, „standardSingleLine“ oder „standardEveryLine“ sein
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	zusammengesetzte Formen nehmen Pfade, zusammengesetzte Pfade, Gruppen, zusammengesetzte Formen, Text, Angleichungen und Verzerrungshüllen
 @msg	compound {_1} must contain exactly one open path to join	zusammengesetzter Pfad {_1} muss genau einen offenen Pfad zum Zusammenfügen enthalten
 @msg	connect end must be "start" or "end"	connect end muss „start“ oder „end“ sein

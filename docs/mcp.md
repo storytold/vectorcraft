@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-14 · **Change:** Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+> **Last updated:** 2026-11-14 · **Change:** `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 >
 > Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 
@@ -6636,6 +6636,22 @@ Reset Rotate View is the command `view.rotateReset`:
 the angle the selected objects share (`selectionRotation` in `document.inspect`, 0 when their angles differ), so their
 bounding box is square to the window. It returns `{angle}`, and with nothing selected it returns "nothing selected".
 
+`view.statusBarShow` (desktop app, the Show menu that a click on the status bar's info field opens) chooses what that
+field shows, with `show` set to one of these values:
+
+- `artboardName`: the name of the artboard the status bar's navigator shows.
+- `currentTool`: the name of the tool in use. This is the default.
+- `dateTime`: the date and time, as `2026-11-15 14:03`. The desktop app shows local time, and the web build shows UTC
+  with ` UTC` after it.
+- `undos`: the active document's undo and redo step counts, as `Undos: 3  Redos: 1`.
+- `colorProfile`: the profile the active document's colors use. That is the profile assigned for its color mode
+  (Edit › Assign Profile), or that mode's working space (Edit › Color Settings) when none is assigned or the
+  assigned one is not available.
+
+It returns the value set. The choice is kept with the UI state. A missing or other `show` fails with
+``` `show` must be one of artboardName, currentTool, dateTime, undos, colorProfile ``` and leaves the choice as it was.
+Without a document, the readouts that need one show a dash.
+
 The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
 default view) and to the mouse; they change what the tools show and how far a target pulls, and only Construction
 Guides change where a snapped point lands:
@@ -7185,10 +7201,12 @@ with `pointer_gesture` (a click places at 100% with the top-left corner there, a
 number, naming the key, and place nothing; null is the same as leaving the key out.
 
 In the app, `file.place` asks for a file's import options before placing it: a text file without `text` (Text Import
-Options), a DXF drawing without `dxf` (DXF Import Options), and a PDF, `.ai` or `.ait` file with several pages or a
-password and no `page` (Place PDF). `showImportOptions: false` places such a file without asking, with the options
-last confirmed in its dialog: the text options, and the DXF fit, lineweight, centering and layer choices with the
-drawing at 1:1 in its own unit. A PDF is placed on page 1 (or `page`) and its crop box, and an encrypted PDF given no
+Options), a DXF drawing without `dxf` (DXF Import Options), a PDF, `.ai` or `.ait` file with several pages or a
+password and no `page` (Place PDF), and a PSD or PSB file embedded without `layers` that has two layers or more or
+slices (Place PSD). `showImportOptions: false` places such a file without asking, with the options last confirmed in
+its dialog: the text options, the DXF fit, lineweight, centering and layer choices with the drawing at 1:1 in its own
+unit, and the PSD conversion, hidden-layer and Import Slices choices. A PDF is placed on page 1 (or `page`) and its
+crop box, and an encrypted PDF given no
 `password` still asks for the password. A `showImportOptions` that is not true or false is refused, and nothing is placed. The
 Place dialog (File › Place, or `file.place {paths}`) has a Show Import Options checkbox after Link, Template and
 Replace ([Place multiple files in a document](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/place-multiple-files-in-a-document.html)).
@@ -8617,6 +8635,65 @@ flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, R
 A document with transparency keeps it. `file.place {path}` links the file like any image (`links.update` reads it
 again when it changes); Multichannel files are refused.
 
+`file.place` with `layers: true` embeds a PSD or PSB file's layers as objects instead, and `hiddenLayers: true`
+brings the hidden layers in, hidden. The
+[PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
+offer the conversion and the hidden layers only for a file that is opened or embedded, and a linked file shows its
+flat image. The rest are VectorCraft's own rules:
+
+- The layers are read as `document.open` reads them (below) and placed as one group named after the file. A layer
+  becomes an image and a layer group becomes a group, each with the layer's name, visibility, opacity, blend mode
+  and opacity mask. A Pass Through group is not isolated; a group in any other mode is.
+- The group takes the place the merged image would take: `at` centers the file's canvas and `rect` fits it. When
+  layers reach past the canvas, hidden layers included, the group is a clip group whose clipping path is the canvas.
+- The layers are never linked. With `layers: true`, `link` is false unless it is given, and `link: true` is an
+  error.
+- `hiddenLayers: true` without `layers: true` is an error.
+- A file without layers is embedded as its merged image, and so is a file whose layers are all left out, with the
+  import's warnings. A file whose layers can't be read is embedded as its merged image with a warning.
+- `file.place.queue` and `file.place.info` take `layers` and `hiddenLayers` too.
+
+`document.psdInfo` reads a PSD or PSB file without opening it: its `format` (`psd` or `psb`), the canvas `width`
+and `height` in pixels, and the counts `layers` (group markers left out), `hiddenLayers`, `groups` and `slices`
+(the slices `importSlices` brings in). A file without layer records, or whose layer records can't be read, has
+`layers: 0`; a file without slices, or whose slices can't be read, has `slices: 0`. A file that is not a PSD or PSB
+file is an error.
+
+`importSlices` brings a PSD or PSB file's slices in as user slices (Object › Slice), which Save for Web exports.
+The [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
+keep the slices a file holds, and offer it only for a file that is opened or embedded. The slices are read from
+image resource 1050 as the
+[Photoshop File Formats Specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/) describes it,
+in version 6 and in the descriptor of versions 7 and 8. The rest are VectorCraft's own rules:
+
+- `document.open` takes `importSlices`, default true, with the layers as objects and with `layers: false` alike.
+  The slices lie over the canvas, each clipped to it.
+- `file.place` takes `importSlices`, default true when the file is embedded and false when it is linked;
+  `importSlices: true` with a linked file is an error. The slices move and scale with the placed art, in the same
+  undo step, and the reply lists their ids in `slices`. `file.place.info` counts them in `slices`, and
+  `file.place.queue` takes `importSlices` too.
+- Each slice keeps its name, its type (Image or No Image), its link, target, message, alternative text and
+  background color, and a No Image slice keeps its cell text (plain text escaped as HTML). Text alignment isn't
+  read. A slice that follows a layer comes in as a user slice over the rectangle the file stores for it.
+- Slices the file generated automatically are left out: the document lays out its own auto slices around the
+  others. A slice wholly outside the canvas, or without a size, is left out with a warning, and so are slices that
+  can't be read; the file's art comes in either way. A file without slices brings no warning.
+
+In the app, File › Open of a PSD or PSB file with two or more layers, or with slices, shows PSD Import Options:
+Convert Layers to Objects (with Import Hidden Layers) or Flatten Layers to a Single Image, and Import Slices, which
+is offered only for a file with slices and applies to either choice. File › Place shows the same dialog for such a
+file placed without Link, and so does a file dropped on the canvas with Shift held. The dialog starts from the
+choices made last, at first Convert Layers to Objects without hidden layers, with Import Slices. A file with fewer
+than two layers and no slices, a file placed with Link, and `document.open` and `file.place` run as commands don't
+show it. Several files placed together without Link load the place cursor without asking, and each PSD or PSB file
+among them comes in with the choices made last.
+
+```json
+{"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/poster.psd","layers":true,"hiddenLayers":true}}}
+{"name":"run_command","arguments":{"command":"document.psdInfo","params":{"path":"/tmp/poster.psd"}}}
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/poster.psd","importSlices":false}}}
+```
+
 A PSD or PSB file that names a clipping path (the saved path its clipping path resource names, in the
 [published PSD file format specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/)) places, and
 opens as its merged image (`layers: false`, a file with no layers, or a file whose layers can't be read), inside a clip group whose clipping
@@ -8676,8 +8753,7 @@ Each layer's pixels must fit the memory allowed for one image, and the pixels of
 canvases the merges make, must together fit eight times that; a file past either limit opens as its merged image,
 with a warning. The canvases one step of a merge holds at once must also fit the memory allowed for one image; when
 they don't, the layer that needed the merge comes in alone, with a warning: in the Normal mode, or as a layer of its
-own instead of clipped. File › Open in the app has no PSD import options dialog: it converts the layers and leaves
-hidden layers out.
+own instead of clipped.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/poster.psd","hiddenLayers":true}}}
@@ -10379,7 +10455,7 @@ The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `ta
   100000 pt); it is disabled at 256 stops or when a stop is already at that position. Delete Tab removes the selected
   stop, and Clear All Tabs leaves the style with no stops, which it then sets. OK sorts the stops by
   position; of two stops at one position it keeps the one edited last.
-- Composition: `composer` (`singleLine` or `everyLine`) and the `roman_hanging` checkbox.
+- Composition: `composer` (`singleLine`, `everyLine`, `standardSingleLine` or `standardEveryLine`) and the `roman_hanging` checkbox.
 - Hyphenation: the `hyphenate` checkbox, `words_longer_than`, `after_first`, `before_last`, `hyphen_limit`,
   `hyphenation_zone` and the `hyphenate_capitalized` checkbox. The options are inactive while Hyphenation is off, and
   Hyphenation Zone is inactive with the Every-line Composer.
@@ -11362,9 +11438,17 @@ of the group in the Layers panel (`layer.move`).
 
 ## Paragraph composer
 
-`text.setFormat {ids?, composer: "singleLine"|"everyLine"}` sets how a text object's lines are broken (the Paragraph
-panel menu's Single-line and Every-line Composer; stored in the paragraph attributes as `para.composer`, saved only
-when it is Single-line). Every-line, the default, picks the breaks of the whole paragraph together in area type:
+`text.setFormat {ids?, composer: "singleLine"|"everyLine"|"standardSingleLine"|"standardEveryLine"}` sets how a text
+object's lines are broken and whether complex scripts are shaped (the Paragraph panel menu's four composers: Middle
+Eastern & South Asian Single-line and Every-line, and Standard Single-line and Every-line; stored in the paragraph
+attributes as `para.composer`, saved only when it is not Every-line, which is the default and what all type used before the
+Standard composers existed). `singleLine` and `everyLine` shape Indic, Arabic and Hebrew type with the font's layout
+tables, as all type is set; `standardSingleLine` and `standardEveryLine` break lines the same way but set such type
+glyph by glyph as the font maps its characters (no conjuncts, reordering, mark placement or joining forms), for legacy
+fonts that keep a script on Latin character codes. The scripts a Standard composer leaves unshaped are Indic, Arabic and the
+other joining scripts (Syriac, N'Ko, Mongolian, Adlam…) and Hebrew; Latin, Greek, Cyrillic, CJK, Thai and the rest keep their
+kerning and ligatures under every composer. Letters left unshaped do not join, so Insert Kashidas adds no tatweel between them. An older VectorCraft cannot open a file that uses a Standard composer. `.ai`, EPS and PDF files carry no composer.
+Every-line, the default, picks the breaks of the whole paragraph together in area type:
 justified text gets even word spacing, ragged text (left, centre or right aligned) an even rag, so it may move a word
 that fits to the next line to avoid a lone short word on the last line or a full line next to a short one.
 Single-line fills each line as far as it goes. Point type and type on a path have no line width, so both composers
@@ -11384,8 +11468,10 @@ new height and broken again in the room there. When that leaves the taller chara
 set at its own height where the room there is no narrower, with the words before that character that fit there, and
 otherwise stays where it was placed.
 The UI command `type.lineComposer` (Cmd+Alt+Shift+C, in remote mode `press_key {key: "C", mods: {cmd: true, alt: true,
-shift: true}}` or `invoke_menu`) sets `singleLine` when every paragraph of the selected type (or every paragraph the
-Type tool's selection touches) uses Every-line, else `everyLine`, and returns the composer it set.
+shift: true}}` or `invoke_menu`) sets the Single-line form when every paragraph of the selected type (or every paragraph the
+Type tool's selection touches) uses an Every-line one, else the Every-line form. Paragraphs that all use a Standard composer
+keep it (`standardSingleLine` or `standardEveryLine`); any other mix takes the Middle Eastern & South Asian one (`singleLine`
+or `everyLine`). It returns the composer it set.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"ids":[7],"composer":"singleLine"}}}

@@ -1048,7 +1048,10 @@ font-technology	Variable	Değişken
 	Every (minutes)	Her (dakika)
 	Every option is at its default.	Her seçenek varsayılan değerdedir.
 	Every option matches {base}.	Her seçenek {base} ile eşleşir.
-	Every-line Composer	Her Satır Bestecisi
+	Middle Eastern & South Asian Single-line Composer	Tek Satır Oluşturucu (Orta Doğu ve Güney Asya)
+	Middle Eastern & South Asian Every-line Composer	Her Satır Bestecisi (Orta Doğu ve Güney Asya)
+	Standard Single-line Composer	Standart Tek Satır Oluşturucu
+	Standard Every-line Composer	Standart Her Satır Bestecisi
 	Exact dash lengths	Tam çizgi uzunlukları
 	Exceptions (comma separated)	İstisnalar (virgülle ayrılmış)
 	Exclude	Hariç tut
@@ -3251,7 +3254,6 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Tek Sol Tırnak İşareti
 	Single Quotes:	Tek Alıntılar:
 	Single Right Quotation Mark	Tek Sağ Tırnak İşareti
-	Single-line Composer	Tek Satır Oluşturucu
 	Toggle Line Composer	Satır Oluşturucuyu Değiştir
 	Sixth Space	Altıncı Uzay
 	Size	Boyut
@@ -6135,6 +6137,14 @@ theme	Appearance	Görünüm
 	JavaScript:	JavaScript:
 	Large Gaps	Büyük Boşluklar
 	Last Artboard	Son Çalışma Yüzeyi
+	Status Bar Show	Durum Çubuğunda Göster
+	Artboard Name	Çalışma Yüzeyi Adı
+	Current Tool	Geçerli Araç
+	Date and Time	Tarih ve Saat
+	Number of Undos	Geri Alma Sayısı
+	Document Color Profile	Belge Renk Profili
+	Undos	Geri Al
+	Redos	Yinele
 	Levels	Düzeyler
 	Library Panel Options	Kütüphane Paneli Seçenekleri
 	Link JavaScript Files…	JavaScript Dosyalarını Bağla…
@@ -7700,7 +7710,7 @@ axis	Y Axis	Y ekseni
 @msg	column: true floats the whole column and takes no onto, above or below	column: true tüm sütunu yüzdürür ve onto, above veya below almaz
 @msg	command must be a shape.* command	command bir shape.* komutu olmalıdır
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` eksik
-@msg	composer must be "singleLine" or "everyLine"	composer "singleLine" veya "everyLine" olmalıdır
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer "singleLine", "everyLine", "standardSingleLine" veya "standardEveryLine" olmalıdır
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	bileşik şekiller yolları, bileşik yolları, grupları, bileşik şekilleri, metni, karışımları ve zarfları alır
 @msg	compound {_1} must contain exactly one open path to join	bileşik {_1}, birleştirilecek tam olarak bir açık yol içermelidir
 @msg	connect needs a path other than the one extended	connect için uzatılan yoldan başka bir yol gerekir

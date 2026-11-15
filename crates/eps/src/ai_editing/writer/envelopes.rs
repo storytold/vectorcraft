@@ -411,9 +411,10 @@ impl Writer<'_> {
         self.hidden -= 1;
         self.nest -= 1;
         // The distorted art, which takes the envelope's lock, visibility, transparency, name and
-        // opacity mask.
+        // opacity mask. The reader opens the envelope live, wrapping type by its bounds, so its text
+        // wrap options stay in the art's dictionary.
         self.state(n.locked, !n.visible);
-        self.drawn_art(n, xy, None);
+        self.drawn_art(n, xy, None, false);
         if !opened || outlines || self.left_out_since(charges) {
             let lines = self.body.split_off(start);
             self.give_back(charges, &lines);
