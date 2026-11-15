@@ -814,7 +814,7 @@ mod tests {
         for decay in [20.0, 30.0, 50.0, 80.0, 95.0] {
             for clockwise in [true, false] {
                 let p = spiral(center, 100.0, decay, 8, clockwise);
-                let anchors = &p.subpaths[0].anchors;
+                let anchors = &p.subpaths[0].anchors.to_vec();
                 let k = (decay / 100.0_f64).ln() / TAU;
                 let mut worst = 0.0_f64;
                 for pair in anchors.windows(2) {

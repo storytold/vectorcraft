@@ -61,8 +61,10 @@ impl Source {
 
 /// Each `<filter>` element with an id, as written, by id, with the document's style sheets read
 /// once for all of them. A source is checked and read by usvg only when art uses it, once.
-/// `markers` is the text with its data URLs left out ([`super::depth::prescan`]).
-pub(super) fn sources(xml: &roxmltree::Document, markers: &str) -> HashMap<String, Source> {
+/// `markers` is the text with its data URLs left out ([`super::depth::prescan`]). `href` gives the
+/// href, as written, of each key the prepass wrote in place of an `<feImage>` href
+/// ([`super::files::Files::data_href`]): the source holds that href.
+pub(super) fn sources(xml: &roxmltree::Document, markers: &str, href: impl Fn(&str) -> Option<Arc<str>>) -> HashMap<String, Source> {
     if !markers.contains("<filter") && !markers.contains(":filter") {
         return HashMap::new();
     }
@@ -74,11 +76,38 @@ pub(super) fn sources(xml: &roxmltree::Document, markers: &str) -> HashMap<Strin
         .filter_map(|(order, n)| {
             let id = n.attribute("id")?.to_string();
             let primitives = n.children().filter(roxmltree::Node::is_element).map(|p| p.tag_name().name().to_string()).collect();
-            let xml = vectorcraft_effects::svg_filter::element_xml(n, text)?;
+            let xml = hrefs_as_written(n, vectorcraft_effects::svg_filter::element_xml(n, text)?, &href);
             let styled = vectorcraft_effects::svg_filter::depends_on_styles(n, &styles);
             Some((id, Source { xml, primitives, order, styled, ..Default::default() }))
         })
         .collect()
+}
+
+/// `xml`, the text of filter `n` ([`vectorcraft_effects::svg_filter::element_xml`]), with each
+/// `<feImage>` href that `href` gives a written href for put back as written, XML-escaped.
+fn hrefs_as_written(n: roxmltree::Node, mut xml: String, href: &impl Fn(&str) -> Option<Arc<str>>) -> String {
+    // `element_xml` adds namespace declarations to the start tag only, ahead of every child.
+    let (start, end) = (n.range().start, n.range().end);
+    let Some(shift) = xml.len().checked_sub(end - start) else { return xml };
+    let mut written: Vec<_> = n
+        .descendants()
+        .filter(|p| p.is_element() && p.tag_name().name() == "feImage")
+        .flat_map(|p| p.attributes())
+        .filter(|a| a.name() == "href" && matches!(a.namespace(), None | Some("http://www.w3.org/1999/xlink")))
+        .filter_map(|a| {
+            let r = a.range_value();
+            // A value written through an entity lies outside the element's text: it stays.
+            (r.start > start && r.end < end).then_some(())?;
+            Some((r.start - start + shift..r.end - start + shift, a.value(), href(a.value())?))
+        })
+        .collect();
+    written.sort_by_key(|(r, ..)| std::cmp::Reverse(r.start));
+    for (r, key, h) in written {
+        if xml.get(r.clone()) == Some(key) {
+            xml.replace_range(r, &crate::xml_escape(&h));
+        }
+    }
+    xml
 }
 
 /// The element name of primitive `k` (`feGaussianBlur`).
@@ -113,19 +142,22 @@ fn source_of<'a>(filter: &Filter, sources: &'a HashMap<String, Source>) -> Optio
 /// XML from `sources` ([`sources`]), in user space mapped to the document by `ts`. `None` when one
 /// isn't there, looks different outside the document, or isn't a filter the effect draws
 /// ([`vectorcraft_effects::svg_filter::check`]), or
-/// when `ts` turns or skews the user space or scales it past what the effect measures (0.001 to
-/// 1000 points to a unit). Where `ts` moves the user space is the effect's `origin`.
+/// when `ts` scales the user space past what the effect measures (0.001 to 1000 points to a unit,
+/// as the square root of its area scale) or stretches its axes past what the effect's `axes` hold.
+/// Where `ts` moves the user space is the effect's `origin`; a user space that `ts` turns, skews
+/// or scales unevenly keeps those directions in the effect's `axes`, so the filter runs in the
+/// element's own user space as SVG 1.1 defines it (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>).
 pub(super) fn kept(filters: &[Arc<Filter>], ts: Affine, sources: &HashMap<String, Source>) -> Option<Vec<Effect>> {
-    let [a, b, c, d, e, f] = ts.as_coeffs();
-    if b != 0.0 || c != 0.0 || !(0.001..=1000.0).contains(&a) || (a - d).abs() > 1e-9 * a.abs().max(1.0) || !e.is_finite() || !f.is_finite() {
-        return None;
-    }
+    let space = vectorcraft_effects::svg_filter::user_space(ts)?;
     filters
         .iter()
         .map(|filter| {
             // A filter styled by the document is left out rather than drawn differently.
             let source = source_of(filter, sources).filter(|s| !s.styled)?;
-            let params = json!({ "name": source.name()?, "xml": source.xml, "scale": a, "origin": [e, f] });
+            let mut params = json!({ "name": source.name()?, "xml": source.xml, "scale": space.scale, "origin": space.origin });
+            if let Some(axes) = space.axes {
+                params["axes"] = json!(axes);
+            }
             Some(Effect { id: vectorcraft_effects::SVG_FILTER.into(), params, visible: true })
         })
         .collect()
