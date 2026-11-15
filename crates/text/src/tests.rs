@@ -2810,6 +2810,28 @@ fn kurikaeshi_moji_shori_draws_the_repeated_character_at_a_line_start() {
     assert_eq!(gid_of(&on, "々す\n".len()), glyph('々'), "the next paragraph's first mark keeps its glyph");
 }
 
+/// Kurikaeshi Moji Shori: a paragraph with a repeat mark at the start of each of many lines is laid
+/// out in one scan of its text, not one scan of everything before each line.
+#[test]
+fn kurikaeshi_moji_shori_scans_a_paragraph_once() {
+    use crate::shape::repeat_scanned;
+    use crate::test_fonts::{REPEAT_MARK_FAMILY, repeat_mark_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(repeat_mark_font().expect("test font"));
+    let st = CharStyle { size: 20.0, font_family: REPEAT_MARK_FAMILY.into(), font_style: "Regular".into(), ..CharStyle::default() };
+    let face = db.style_face(&st).expect("face");
+    let text = format!("時{}", "\u{2028}々".repeat(2000));
+    let mut t = TextObject::point(Point::ZERO, &text, st);
+    t.para.kurikaeshi_moji_shori = true;
+    let before = repeat_scanned();
+    let l = layout(&db, &t);
+    let scanned = repeat_scanned() - before;
+    assert!(scanned <= 2 * text.len(), "{scanned} bytes scanned for a paragraph of {}", text.len());
+    // Every line's 々 is still drawn as 時.
+    assert_eq!(l.repeat_marks.len(), 2000);
+    assert!(l.glyphs.iter().filter(|g| g.byte > 0 && text.get(g.byte..).is_some_and(|s| s.starts_with('々'))).all(|g| g.gid == face.glyph_for('時')));
+}
+
 /// Bunri-Kinshi: a justified line spreads its room over the gaps between its CJK characters but not
 /// over the gap inside a vertical kana repeat mark, and still fills its width.
 #[test]

@@ -13,7 +13,8 @@ use super::{
     is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
 use crate::justify::is_format_control;
-use crate::shape::{keep_inseparable_pairs, keep_korean_words, repeated_char, shape_range};
+use crate::shape::{keep_inseparable_pairs, keep_korean_words, repeat_base, repeated_char, shape_range};
+use std::cell::Cell;
 
 /// Does paragraph `para` push characters in (Kinsoku Shori Type Push In First or Push Out First,
 /// with kinsoku on)?
@@ -216,6 +217,9 @@ struct ParagraphData<'a, 'text> {
     /// Kurikaeshi Moji Shori: the character before a `continued` paragraph in the frames before
     /// ([`TextObject::first_para_lead`]).
     lead: Option<char>,
+    /// Kurikaeshi Moji Shori: the byte the paragraph's text has been scanned to for the character a
+    /// repeat mark could stand for, and that character so far ([`ParagraphData::repeat_base_before`]).
+    repeat_scan: Cell<(usize, Option<char>)>,
     sg: Vec<SGlyph>,
     compressed: Vec<bool>,
     wakan: Vec<f64>,
@@ -232,6 +236,21 @@ struct ParagraphData<'a, 'text> {
     hyphen_limit: usize,
     mirror: bool,
     regions: Option<&'a [Region]>,
+}
+
+impl ParagraphData<'_, '_> {
+    /// Kurikaeshi Moji Shori: the character a repeat mark at byte `at` of `text` could stand for,
+    /// the last one before it in the paragraph that [`repeat_base`] takes, or else the paragraph's
+    /// `lead`. Lines are laid out in order, so each call scans on from where the call before it
+    /// stopped; a byte before that starts the scan again at the paragraph's start. None when `at`
+    /// does not fall on a character boundary after the paragraph's start.
+    fn repeat_base_before(&self, text: &str, at: usize) -> Option<Option<char>> {
+        let (from, base) = self.repeat_scan.get();
+        let (from, base) = if from <= at { (from, base) } else { (self.pr.start, self.lead) };
+        let base = repeat_base(text.get(from..at)?).or(base);
+        self.repeat_scan.set((at, base));
+        Some(base)
+    }
 }
 
 fn prepare_paragraph<'a, 'text>(
@@ -327,14 +346,16 @@ fn prepare_paragraph<'a, 'text>(
     let zone = if cx.opts.composer.unwrap_or(para.composer).is_single_line() { para.hyphenation.zone } else { 0.0 };
     let hyphen_limit = usize::try_from(para.hyphenation.hyphen_limit).unwrap_or(usize::MAX);
     let mirror = mirrors_indents(para, rtl, cx.vertical);
+    let lead = t.first_para_lead.filter(|_| continued);
     ParagraphData {
         para,
+        repeat_scan: Cell::new((pr.start, lead)),
         pr,
         marker_text,
         bidi,
         rtl,
         continued,
-        lead: t.first_para_lead.filter(|_| continued),
+        lead,
         sg,
         compressed,
         wakan,
@@ -1277,18 +1298,18 @@ fn emit_line_glyph(
 }
 
 /// Kurikaeshi Moji Shori (Paragraph panel menu): the glyph drawn in place of `g`, the first glyph of
-/// a line of the paragraph starting at byte `para_start`, when `g` is a repeat mark, and the
-/// character it shows: the character [`repeated_char`] gives, shaped in the mark's style with the
-/// type's features (so vertical type gets the font's vertical forms), from the same face, with the
-/// mark's advance and place, so the line breaks stay as they are. None when `g` is no repeat mark,
-/// belongs to a tate-chu-yoko or warichu block, nothing before it in the paragraph fits, or the face
-/// draws the character with no glyph or with more than one. `lead` stands before a paragraph that
-/// continues from the frame before ([`TextObject::first_para_lead`]).
-fn repeat_mark_glyph(cx: &Ctx<'_>, para_start: usize, lead: Option<char>, g: &SGlyph) -> Option<(SGlyph, char)> {
-    if g.tcy.is_some() || g.wari.is_some() || g.inline.is_some() {
+/// a line of `paragraph`, when `g` is a repeat mark, and the character it shows: the character
+/// [`repeated_char`] gives, shaped in the mark's style with the type's features (so vertical type
+/// gets the font's vertical forms), from the same face, with the mark's advance and place, so the
+/// line breaks stay as they are. None when `g` is no repeat mark, belongs to a tate-chu-yoko or
+/// warichu block, nothing before it in the paragraph fits, or the face draws the character with no
+/// glyph or with more than one. The paragraph's `lead` stands before a paragraph that continues
+/// from the frame before ([`TextObject::first_para_lead`]).
+fn repeat_mark_glyph(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, g: &SGlyph) -> Option<(SGlyph, char)> {
+    if g.tcy.is_some() || g.wari.is_some() || g.inline.is_some() || !matches!(g.ch, '々' | 'ゝ' | 'ゞ' | 'ヽ' | 'ヾ') {
         return None;
     }
-    let c = repeated_char(lead, cx.text.get(para_start..g.byte)?, g.ch)?;
+    let c = repeated_char(paragraph.repeat_base_before(cx.text, g.byte)?, "", g.ch)?;
     let mut buf = [0; 4];
     let s: &str = c.encode_utf8(&mut buf);
     let mut shaped = Vec::with_capacity(1);
@@ -1305,7 +1326,7 @@ fn line_start_repeat(cx: &mut Ctx<'_>, paragraph: &ParagraphData<'_, '_>, first:
         return None;
     }
     let g = paragraph.sg.get(first)?;
-    let (glyph, c) = repeat_mark_glyph(cx, paragraph.pr.start, paragraph.lead, g)?;
+    let (glyph, c) = repeat_mark_glyph(cx, paragraph, g)?;
     cx.out.repeat_marks.push((g.byte, c));
     Some(glyph)
 }

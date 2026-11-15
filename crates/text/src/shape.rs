@@ -456,7 +456,21 @@ pub fn inseparable(a: char, b: char) -> bool {
 /// paragraph continues from the frame before the result for the text before it
 /// (`TextObject::first_para_lead`).
 pub fn repeat_base(text: &str) -> Option<char> {
+    #[cfg(test)]
+    REPEAT_SCANNED.with(|c| c.set(c.get() + text.len()));
     text.chars().rev().find(|&c| !matches!(c, '々' | 'ゝ' | 'ゞ' | 'ヽ' | 'ヾ' | '\u{2028}' | '\u{3099}' | '\u{309A}'))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many bytes of text [`repeat_base`] was given on this thread.
+    static REPEAT_SCANNED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: how many bytes of text [`repeat_base`] has been given on this thread.
+#[cfg(test)]
+pub(crate) fn repeat_scanned() -> usize {
+    REPEAT_SCANNED.get()
 }
 
 /// Kurikaeshi Moji Shori: the character the repeat mark `mark` stands for after the text `before`
