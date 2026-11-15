@@ -37,8 +37,16 @@ const XMP_EXT: &str = "xmp";
 /// Width of the text fields.
 const FIELD: f32 = 320.0;
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("File Info").into(), body, confirm, min_width: 500.0, max_width: Some(500.0), ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("File Info").into(),
+    body,
+    confirm,
+    // OK and Enter wait while a template being imported waits for its merge choice.
+    ok_enabled: Some(|_, d| !d.fields.get(IMPORT).is_some_and(Value::is_object)),
+    min_width: 500.0,
+    max_width: Some(500.0),
+    ..DialogSpec::FORM
+};
 
 /// Open File Info on the active document's.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
@@ -168,7 +176,9 @@ fn templates_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 /// Save Metadata Template…: the fields as they are in the dialog, to a file picked in a save
-/// dialog that starts in the metadata templates folder.
+/// dialog that starts in the metadata templates folder. A name typed without `.xmp` takes it, so
+/// the templates list shows the file; a file already there under that name is replaced only after
+/// a question.
 fn save_template(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     let mut d2 = d.clone();
     add_keywords(&mut d2);
@@ -176,7 +186,12 @@ fn save_template(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String>
     let name = format!("{}.{XMP_EXT}", d2.str("title").trim());
     let pick = FilePick { name, folder, ..xmp_pick() };
     // None: canceled, or the dialog is still open off the UI thread and runs this again.
-    let Some(path) = crate::picks::save(app, &pick) else { return Ok(()) };
+    let Some(picked) = crate::picks::save(app, &pick) else { return Ok(()) };
+    let path = if picked.to_ascii_lowercase().ends_with(&format!(".{XMP_EXT}")) { picked.clone() } else { format!("{picked}.{XMP_EXT}") };
+    // The save dialog did not ask about the completed name: ask here, and the answer runs this again.
+    if path != picked && crate::picks::ask_to_replace(app, PickRequest::Save(pick), &picked, None, &path) {
+        return Ok(());
+    }
     app.run("file.info.saveTemplate", json!({ "path": path, "fields": form::params(&d2) })).map(|_| ())
 }
 
@@ -448,5 +463,47 @@ mod tests {
         let st = app.session.active().unwrap();
         assert_eq!((st.doc.metadata.author.as_str(), st.doc.metadata.rating), ("Ada", 3));
         assert_eq!(st.history.undo.len(), 1);
+    }
+
+    #[test]
+    fn ok_waits_for_the_merge_choice_of_a_template_being_imported() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        let ok = |app: &VectorcraftApp, d: &crate::state::Dialog| super::SPEC.ok_enabled.is_none_or(|f| f(app, d));
+        assert!(ok(&app, &d));
+        d.fields.insert(super::IMPORT.into(), json!({"name": "Studio"}));
+        assert!(!ok(&app, &d), "OK and Enter wait while the merge choice is shown");
+        d.fields.remove(super::IMPORT);
+        assert!(ok(&app, &d));
+    }
+
+    #[test]
+    fn a_template_saved_without_an_extension_gets_xmp_and_is_listed() {
+        let dir = vectorcraft_testkit::TempDir::new("ui-file-info-save-ext");
+        let folder = dir.join("Metadata Templates");
+        let typed = folder.join("Studio").to_string_lossy().into_owned();
+        let services = crate::Services {
+            write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
+            exists: Some(std::sync::Arc::new(|p: &str| std::path::Path::new(p).exists())),
+            pick_save: Some(Box::new(move |_: &crate::FilePick| Some(typed.clone()))),
+            ..Default::default()
+        };
+        let mut app = VectorcraftApp::new(Session::new(), services);
+        app.session.attach_metadata_templates_dir(folder.clone());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("ui.fileInfoDialog", json!({})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        d.fields.insert("author".into(), json!("Ada"));
+        crate::picks::in_dialog(&mut app, &mut d, super::save_template).unwrap();
+        assert!(folder.join("Studio.xmp").is_file() && !folder.join("Studio").exists(), "the typed name takes .xmp");
+        let listed = app.session.execute("file.info.templates", &json!({})).unwrap();
+        assert!(listed.to_string().contains("Studio"), "{listed}");
+        // A file already there under the completed name is not replaced without asking.
+        std::fs::write(folder.join("Studio.xmp"), b"kept").unwrap();
+        crate::picks::in_dialog(&mut app, &mut d, super::save_template).unwrap();
+        assert_eq!(std::fs::read(folder.join("Studio.xmp")).unwrap(), b"kept");
+        assert_eq!(d.kind, crate::dialogs::confirm::REPLACE, "the dialog asks before replacing it");
     }
 }
