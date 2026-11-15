@@ -869,6 +869,188 @@ fn aligned_rows_of_a_graph_designs_art_and_a_different_stack_are_not_moved() {
     assert_eq!(paints, [art_was.items[1].paint().clone(), art_was.items[0].paint().clone(), art_was.items[1].paint().clone()]);
 }
 
+/// An `item` given with `aligned: true` and the art of a graph design in a series first is a row of the art's stack in the
+/// paint and stroke commands: each other object edits the row equal to it, and a row the art does not have as a fill or
+/// stroke as edited, or that no other object has, is an error that leaves the document and its undo history as they are.
+#[test]
+fn aligned_paint_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objects() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let green = Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+    // The art's row 1 is the blue fill the mark has as row 0, and its row 2 the black stroke the mark has as row 1.
+    let (mut s, _, art, mark) = aligned_design_art();
+    let black = rows(&s, mark).items[1].clone();
+    s.edit("Stroke", |d, _| {
+        d.node_mut(art).unwrap().appearance.items.push(black.clone());
+        Ok(())
+    })
+    .unwrap();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    let fill = |s: &mut Session, cmd: &str, p: serde_json::Value| {
+        s.execute(cmd, &p).unwrap();
+        let now = rows(s, mark);
+        assert_eq!(rows(s, art), art_was, "{cmd}");
+        assert_ne!(now.items[0], mark_was.items[0], "{cmd} edits the mark's blue fill");
+        assert_eq!(now.items[1], mark_was.items[1], "{cmd} leaves the mark's stroke");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(rows(s, mark), mark_was, "{cmd} is one undo step");
+        now
+    };
+    let ids = [art.0, mark.0];
+    let now = fill(&mut s, "paint.setFill", json!({"ids": ids, "item": 1, "aligned": true, "color": "#00ff00"}));
+    assert_eq!(now.items[0].paint(), &green);
+    let now = fill(&mut s, "paint.invert", json!({"ids": ids, "item": 1, "aligned": true}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color(), "the inverted color is the last color, not the art's");
+    let now = fill(&mut s, "paint.lastColor", json!({"ids": ids, "item": 1, "aligned": true, "stroke": false}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color());
+    // Without `aligned`, the art is left out and the item is a row of the mark.
+    let now = fill(&mut s, "paint.invert", json!({"ids": ids, "item": 0}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color(), "the mark's inverted color is the last color, not the art's");
+    s.last_solid = vectorcraft_color::Color::rgb(0.5, 0.5, 0.5);
+    let now = fill(&mut s, "paint.complement", json!({"ids": ids, "item": 0}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color(), "the mark's complement is the last color, not the art's");
+    let now = fill(&mut s, "paint.editGradient", json!({"ids": ids, "item": 1, "aligned": true, "kind": "linear"}));
+    let Paint::Gradient(g) = now.items[0].paint() else { panic!("{:?}", now.items[0].paint()) };
+    assert_eq!(&s.last_gradient, &**g, "the mark's new gradient is the last gradient");
+    let now = fill(&mut s, "paint.lastGradient", json!({"ids": ids, "item": 1, "aligned": true, "stroke": false}));
+    assert!(matches!(now.items[0].paint(), Paint::Gradient(_)));
+
+    let stroke = |s: &mut Session, cmd: &str, p: serde_json::Value| {
+        s.execute(cmd, &p).unwrap();
+        let now = rows(s, mark);
+        assert_eq!(rows(s, art), art_was, "{cmd}");
+        assert_eq!(now.items[0], mark_was.items[0], "{cmd} leaves the mark's fill");
+        assert_ne!(now.items[1], mark_was.items[1], "{cmd} edits the mark's stroke");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(rows(s, mark), mark_was, "{cmd} is one undo step");
+        now
+    };
+    let now = stroke(&mut s, "paint.setStroke", json!({"ids": ids, "item": 2, "aligned": true, "color": "#00ff00"}));
+    assert_eq!(now.items[1].paint(), &green);
+    let now = stroke(&mut s, "stroke.set", json!({"ids": ids, "item": 2, "aligned": true, "weight": 5}));
+    assert_eq!(now.stroke_at(Some(1)).unwrap().width, 5.0);
+    let now = stroke(&mut s, "stroke.setAdvanced", json!({"ids": ids, "item": 2, "aligned": true, "arrowScale": [200, 200]}));
+    assert_eq!(now.stroke_at(Some(1)).unwrap().arrow_scale, (200.0, 200.0));
+    // Without `stroke`, the kind of the art's row is edited.
+    let now = stroke(&mut s, "paint.editGradient", json!({"ids": ids, "item": 2, "aligned": true, "kind": "linear"}));
+    assert!(matches!(now.items[1].paint(), Paint::Gradient(_)));
+    fill(&mut s, "paint.complement", json!({"ids": ids, "item": 1, "aligned": true, "stroke": false}));
+
+    let steps = s.doc().unwrap().history.undo.len();
+    for (cmd, p, said) in [
+        ("stroke.set", json!({"ids": ids, "item": 1, "aligned": true, "weight": 5}), "appearance item 1 is not a stroke"),
+        ("paint.setFill", json!({"ids": ids, "item": 2, "aligned": true, "color": "#00ff00"}), "appearance item 2 is not a fill"),
+        ("paint.setFill", json!({"ids": ids, "item": 0, "aligned": true, "color": "#00ff00"}), "no appearance item 0"),
+        ("paint.setFill", json!({"ids": ids, "item": 9, "aligned": true, "color": "#00ff00"}), "no appearance item 9"),
+        // The art alone: no other object has the row.
+        ("paint.setFill", json!({"ids": [art.0], "item": 9, "aligned": true, "color": "#00ff00"}), "no appearance item 9"),
+        ("paint.setFill", json!({"ids": [art.0], "item": 1, "aligned": true, "color": "#00ff00"}), "no appearance item 1"),
+        ("stroke.set", json!({"ids": [art.0], "item": 1, "aligned": true, "weight": 5}), "appearance item 1 is not a stroke"),
+        ("paint.editGradient", json!({"ids": [art.0], "item": 1, "aligned": true, "kind": "linear"}), "no appearance item 1"),
+        // The weight steps take no row: they step each object's active or top stroke.
+        ("stroke.weightUp", json!({"ids": ids, "item": 2}), "unknown parameter `item`"),
+        ("stroke.weightUp", json!({"ids": ids, "aligned": true}), "unknown parameter `aligned`"),
+        ("stroke.weightDown", json!({"ids": ids, "item": 2}), "unknown parameter `item`"),
+        ("stroke.weightDown", json!({"ids": ids, "aligned": true}), "unknown parameter `aligned`"),
+    ] {
+        let defaults = format!("{:?}", (&s.paint.fill, &s.paint.stroke, &s.last_gradient));
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(said), "{cmd}: {e}");
+        assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was.clone()), "{cmd}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+        assert_eq!(format!("{:?}", (&s.paint.fill, &s.paint.stroke, &s.last_gradient)), defaults, "{cmd}");
+    }
+
+    // An object with no row equal to the art's is left out of what the commands report as edited.
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let rect = *s.doc().unwrap().selection.subjects().first().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [rect.0], "color": "#ff00ff"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff00ff"})).unwrap();
+    let rect_was = rows(&s, rect);
+    let ids = [art.0, mark.0, rect.0];
+    for (cmd, p, key, said) in [
+        ("paint.setFill", json!({"ids": ids, "item": 1, "aligned": true, "color": "#00ff00"}), "objects", json!(1)),
+        ("stroke.set", json!({"ids": ids, "item": 2, "aligned": true, "weight": 5}), "objects", json!(1)),
+        ("paint.editGradient", json!({"ids": ids, "item": 1, "aligned": true, "kind": "linear"}), "ids", json!([mark.0])),
+        ("paint.setGradientGeom", json!({"ids": ids, "item": 1, "aligned": true, "start": [0, 0], "end": [10, 40]}), "ids", json!([mark.0])),
+    ] {
+        if cmd == "paint.setGradientGeom" {
+            s.execute("paint.editGradient", &json!({"ids": [mark.0], "item": 0, "kind": "linear"})).unwrap();
+            let gradient = rows(&s, mark).items[0].clone();
+            s.edit("Gradient", |d, _| {
+                d.node_mut(art).unwrap().appearance.items[1] = gradient.clone();
+                Ok(())
+            })
+            .unwrap();
+        }
+        let r = s.execute(cmd, &p).unwrap();
+        assert_eq!(r[key], said, "{cmd}: {r}");
+        assert_eq!(rows(&s, rect), rect_was, "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+
+    // A gradient spanning the selection spans only the objects that take it: a distant object without an equal row does
+    // not move it.
+    s.execute("shape.rectangle", &json!({"x": 5000, "y": 5000, "width": 10, "height": 10})).unwrap();
+    let far = *s.doc().unwrap().selection.subjects().first().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [far.0], "color": "#ff00ff"})).unwrap();
+    let far_was = rows(&s, far);
+    let gradient = json!({"stops": [{"offset": 0, "color": "#000000"}, {"offset": 1, "color": "#ffffff"}]});
+    let mut placed = Vec::new();
+    for ids in [vec![art.0, mark.0], vec![art.0, mark.0, far.0]] {
+        s.execute("paint.setFill", &json!({"ids": ids, "item": 1, "aligned": true, "gradient": gradient, "span": "selection"})).unwrap();
+        placed.push(rows(&s, mark).items[0].clone());
+        assert_eq!(rows(&s, far), far_was);
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert!(matches!(placed[0].paint(), Paint::Gradient(_)));
+    assert_eq!(placed[1], placed[0]);
+}
+
+/// The gradient and freeform gradient commands read an `item` given with `aligned: true` and the art of a graph design in
+/// a series first as a row of the art's stack, as the paint commands do.
+#[test]
+fn aligned_gradient_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objects() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    for kind in ["linear", "freeform"] {
+        let (mut s, _, art, mark) = aligned_design_art();
+        // The mark's fill and the art's equal row become the same gradient.
+        s.execute("paint.editGradient", &json!({"ids": [mark.0], "item": 0, "kind": kind})).unwrap();
+        let gradient = rows(&s, mark).items[0].clone();
+        // A yellow fill above the mark's gradient is the mark's row 1, as the gradient is the art's row 1.
+        let mut yellow = gradient.clone();
+        *yellow.paint_mut() = Paint::solid(vectorcraft_color::Color::rgb(1.0, 1.0, 0.0));
+        s.edit("Gradient", |d, _| {
+            d.node_mut(art).unwrap().appearance.items[1] = gradient.clone();
+            d.node_mut(mark).unwrap().appearance.items.insert(1, yellow.clone());
+            Ok(())
+        })
+        .unwrap();
+        let ids = [art.0, mark.0];
+        let edits = if kind == "linear" {
+            vec![
+                ("paint.setGradientGeom", json!({"ids": ids, "item": 1, "aligned": true, "start": [0, 0], "end": [10, 40]})),
+                ("paint.editGradient", json!({"ids": ids, "item": 1, "aligned": true, "kind": "radial"})),
+            ]
+        } else {
+            vec![("paint.freeform.addPoint", json!({"ids": ids, "item": 1, "aligned": true, "at": [5, 5]}))]
+        };
+        for (cmd, p) in edits {
+            let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+            s.execute(cmd, &p).unwrap();
+            let now = rows(&s, mark);
+            assert_eq!(rows(&s, art), art_was, "{cmd}");
+            assert_ne!(now.items[0], mark_was.items[0], "{cmd} edits the mark's gradient fill");
+            assert_eq!(now.items[1..], mark_was.items[1..], "{cmd}");
+            s.execute("edit.undo", &json!({})).unwrap();
+            // The edited gradient is the last gradient (paint.setGradientGeom does not set it).
+            if cmd != "paint.setGradientGeom" {
+                let Paint::Gradient(g) = now.items[0].paint() else { panic!("{cmd}") };
+                assert_eq!(&s.last_gradient, &**g, "{cmd}: the mark's edited gradient is the last gradient");
+            }
+        }
+    }
+}
+
 /// The Contents row of a graph design's copy and of a group whose stack differs is not moved with `aligned: true`, as
 /// the rows are not.
 #[test]
