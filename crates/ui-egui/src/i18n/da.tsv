@@ -267,6 +267,18 @@
 @msg	the HEIC or HEIF file can't be read	HEIC- eller HEIF-filen kan ikke læses
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC- eller HEIF-filen indeholder en billedtype, der ikke kan læses
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- og HEIF-billeder kan ikke åbnes i denne version
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	tegninger fra CDR {version} kan ikke åbnes: VectorCraft læser version 1 til 27
+@msg	this CDR drawing can't be read ({why})	denne CDR-tegning kan ikke læses ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	tekst, bitmaps, blandinger, konturer, penselstrøg og andre CDR-objekter, som VectorCraft endnu ikke læser, blev udeladt
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-udfyldninger med forløb, mønster, tekstur og PostScript blev udeladt
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	farver i CDR-farvemodeller, som VectorCraft ikke læser, blev åbnet som sorte
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-biblioteksfarver, som tegningen kun gemmer som et nummer, blev åbnet som sorte spotfarver
+@msg	CDR outline arrowheads were left out	pilespidser på CDR-konturer blev udeladt
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-kuverter blev ikke anvendt, og figurerne under dem beholder deres omrids
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-linser og objektgennemsigtighed blev ikke anvendt, og objekterne, de ligger på, vises uigennemsigtige
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	dele af tegningen, der er indlejret for dybt eller ligger ud over importgrænserne, blev udeladt
+@msg	damaged parts of the drawing were left out	beskadigede dele af tegningen blev udeladt
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CDR-sider, der er længere end 163.830 pt, blev åbnet i den længde, og grafik nær deres kanter ligger uden for tegnefladen
 @msg	the JPEG XL file is cut short	JPEG XL-filen er afkortet
 @msg	the JPEG XL container is too large to read	JPEG XL-containeren er for stor til at blive læst
 @msg	CMYK JPEG XL images can't be read	CMYK-billeder i JPEG XL kan ikke læses
