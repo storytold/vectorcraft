@@ -1146,6 +1146,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-metafile"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=6d620e971e820b517b11a99cad040ebac670e1e2#6d620e971e820b517b11a99cad040ebac670e1e2"
+dependencies = [
+ "encoding_rs",
+ "image",
+ "kurbo 0.13.1",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "craft-pdf"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=d6cd7836d364177661b0ae17f48a0805e83a5f32#d6cd7836d364177661b0ae17f48a0805e83a5f32"
@@ -2202,7 +2213,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
 dependencies = [
  "color_quant",
- "weezl",
+ "weezl 0.1.12",
 ]
 
 [[package]]
@@ -5984,7 +5995,7 @@ dependencies = [
  "flate2",
  "half",
  "quick-error 2.0.1",
- "weezl",
+ "weezl 0.1.12",
  "zune-jpeg",
 ]
 
@@ -6490,6 +6501,7 @@ checksum = "977d0a4abdef933f424a99fe09f95576e089b90aebc6f016a3bc813762493e91"
 dependencies = [
  "base64 0.23.1",
  "data-url",
+ "flate2",
  "fontdb",
  "harfrust 0.12.0",
  "imagesize 0.15.0",
@@ -6673,18 +6685,18 @@ name = "vectorcraft-doc"
 version = "0.24.1"
 dependencies = [
  "chrono",
- "craft-image-codecs",
- "craft-stream-codecs",
- "craft-tiff",
- "flate2",
+ "hayro-ccitt",
  "image",
+ "jpeg-encoder",
  "kurbo 0.13.1",
  "proptest",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "tiff",
  "vectorcraft-color",
  "vectorcraft-geom 0.24.1",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -6719,13 +6731,13 @@ dependencies = [
  "craft-image-codecs",
  "craft-jxl",
  "craft-proof",
+ "craft-xml",
  "crc32fast",
  "flate2",
  "image",
  "kurbo 0.13.1",
  "log",
  "proptest",
- "roxmltree 0.21.2",
  "rustix 1.1.6",
  "ruzstd",
  "same-file",
@@ -6798,6 +6810,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "vectorcraft-brush",
  "vectorcraft-doc",
  "vectorcraft-geom 0.24.1",
  "vectorcraft-testkit",
@@ -6860,6 +6873,7 @@ name = "vectorcraft-metafile"
 version = "0.24.1"
 dependencies = [
  "craft-image-codecs",
+ "craft-metafile",
  "image",
  "kurbo 0.13.1",
  "vectorcraft-brush",
@@ -6902,16 +6916,17 @@ dependencies = [
  "craft-image-codecs",
  "craft-pdf",
  "craft-stream-codecs",
+ "craft-xml",
  "flate2",
  "getrandom 0.4.3",
  "image",
+ "jpeg-encoder",
  "krilla",
  "kurbo 0.13.1",
  "log",
  "md-5",
  "objc2-core-foundation",
  "objc2-core-graphics",
- "roxmltree 0.21.2",
  "serde",
  "serde_json",
  "sha2",
@@ -6973,6 +6988,7 @@ dependencies = [
  "vello_common",
  "vello_cpu",
  "wat",
+ "weezl 0.2.1",
  "winsafe",
 ]
 
@@ -6991,6 +7007,7 @@ dependencies = [
  "craft-docpath",
  "craft-image-codecs",
  "craft-svg",
+ "data-url",
  "flate2",
  "image",
  "kurbo 0.13.1",
@@ -7002,6 +7019,7 @@ dependencies = [
  "svgtypes 0.16.1",
  "thiserror 2.0.21",
  "unicode-bidi",
+ "usvg 0.48.1",
  "vectorcraft-brush",
  "vectorcraft-color",
  "vectorcraft-doc",
@@ -7080,6 +7098,7 @@ dependencies = [
 name = "vectorcraft-trace"
 version = "0.24.1"
 dependencies = [
+ "craft-image-codecs",
  "image",
  "kurbo 0.13.1",
  "serde",
@@ -7093,6 +7112,7 @@ name = "vectorcraft-ui-egui"
 version = "0.24.1"
 dependencies = [
  "bytemuck",
+ "chrono",
  "craft-image-codecs",
  "craft-keymap",
  "craft-ui",
@@ -7574,6 +7594,12 @@ name = "weezl"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
+
+[[package]]
+name = "weezl"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4ca08e5ef825b65b056d9efbd95c8750683f0a6d0466d02e96dc2e4e360f3d2"
 
 [[package]]
 name = "wgpu"

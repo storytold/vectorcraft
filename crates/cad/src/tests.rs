@@ -862,6 +862,7 @@ fn image_and_fill_doc(fill: Paint) -> Document {
         )
         .unwrap(),
         craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
     )
     .unwrap();
     let mut d = doc_with(|d| {
@@ -1332,6 +1333,7 @@ fn images_link_png_or_jpeg_files() {
         )
         .unwrap(),
         craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
     )
     .unwrap();
     let mut d = doc_with(|d| {

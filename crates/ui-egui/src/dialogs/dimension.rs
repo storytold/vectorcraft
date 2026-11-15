@@ -232,11 +232,15 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     Ok(r)
 }
 
-/// The Dimension tool's strip: the kind of dimension, and Tool Options.
-pub fn controls(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// The Dimension tool's strip: the kind of dimension, and Tool Options. In the Control bar
+/// (`reserve` given), each button shows only while the row has room for it and `reserve` after it,
+/// and the buttons after one left out are left out too; the floating strip (`None`) shows them all.
+pub fn controls(app: &mut VectorcraftApp, ui: &mut Ui, reserve: Option<f32>) {
+    let mut fit = reserve.map(crate::chrome::Fit::new);
+    let mut room = |ui: &Ui, text: &str| fit.as_mut().is_none_or(|f| f.room(ui, &[button_width(ui, text)]));
     let mode = app.session.tool_options()["mode"].as_str().unwrap_or("linear").to_owned();
     for (id, label) in [("linear", "Linear"), ("angular", "Angular"), ("radial", "Radial")] {
-        if ui.selectable_label(mode == id, tl!(label)).clicked() {
+        if room(ui, tl!(label)) && ui.selectable_label(mode == id, tl!(label)).clicked() {
             // Switching away cancels previews and unfinished picks.
             if let Err(e) = app
                 .run("tool.select", json!({"tool":"selection"}))
@@ -247,11 +251,18 @@ pub fn controls(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     }
-    if ui.button(tl!("Tool Options…")).clicked()
+    if room(ui, tl!("Tool Options…"))
+        && ui.button(tl!("Tool Options…")).clicked()
         && let Err(e) = open(app)
     {
         app.ui.status = e;
     }
+}
+
+/// The width `ui.button` and `ui.selectable_label` give `text`: the text and the button padding on
+/// both sides.
+fn button_width(ui: &Ui, text: &str) -> f32 {
+    widgets::text_width(ui, RichText::new(text).text_style(egui::TextStyle::Button)) + 2.0 * ui.spacing().button_padding.x
 }
 
 /// Always available while measuring, including workspaces with the main Control bar hidden.
@@ -265,7 +276,7 @@ pub fn floating(app: &mut VectorcraftApp, ctx: &egui::Context) {
         .resizable(false)
         .collapsible(false)
         .show(ctx, |ui| {
-            ui.horizontal(|ui| controls(app, ui));
+            ui.horizontal(|ui| controls(app, ui, None));
             let mode = app.session.tool_options()["mode"].as_str().unwrap_or("linear").to_owned();
             let hint = match mode.as_str() {
                 "angular" => "Drag out from a corner, or click two straight lines, then click to place.",

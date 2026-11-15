@@ -20,16 +20,17 @@ use std::fmt::Write;
 
 use kurbo::{ParamCurveArclen, PathSeg};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::text::MAX_AKI;
 use vectorcraft_doc::{
-    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, LineCap, LineJoin, Mojikumi, Node, NodeId, NodeKind, ParaDirection,
-    ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
+    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, Kinsoku, KinsokuShoriType, LineCap, LineJoin, Mojikumi, Node, NodeId,
+    NodeKind, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
 };
 use vectorcraft_geom::{Affine, PathData, Point};
 
 use crate::ps;
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, Insert Aki, paragraph alignment, indents, space before and after, hyphenation on or off, right-to-left direction, Kinsoku set, Kinsoku Shori Type, Burasagari and Bunri-Kinshi (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -159,6 +160,10 @@ fn fines(v: &[f64]) -> V {
 fn dict(pairs: Vec<(u32, V)>) -> V {
     V::Dict(pairs)
 }
+
+/// The document's Kinsoku sets, in order, each by its name: a paragraph's key 27 is its set's index
+/// here (0 Hard, 1 Soft), as the reader's `kinsoku_sets` reads them.
+const KINSOKU_SETS: [&str; 2] = ["PhotoshopKinsokuHard", "PhotoshopKinsokuSoft"];
 
 /// A resource set: its resources, each `<< /0 resource >>`, and its display list.
 fn set(resources: Vec<V>, display: bool) -> V {
@@ -326,6 +331,12 @@ fn end_read_as_none(t: &TextObject) -> bool {
     !closed(&segs) && end < 1.0 - 1e-9 && place_on(&segs, end) >= segs.len() as f64 - 0.02
 }
 
+/// Insert Aki Left or Right `v` as the text document holds it: 0 to [`MAX_AKI`] in 1/1000 em, and 0
+/// for a value that is not a number.
+fn held_aki(v: f64) -> f64 {
+    if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) }
+}
+
 /// Has type `t` attributes the text document leaves out ([`TYPE_ATTRIBUTES`])?
 pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
     // Small capitals are read back at Document Setup's default size.
@@ -360,6 +371,8 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             tate_chu_yoko: s.tate_chu_yoko,
             // Key 35 holds one of the two: a Tate-chu-yoko run is read back without the other.
             standard_vertical_roman: s.standard_vertical_roman && !s.tate_chu_yoko,
+            aki_left: held_aki(s.aki_left),
+            aki_right: held_aki(s.aki_right),
             ..CharStyle::default()
         }
     };
@@ -392,7 +405,6 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
         }
         let hangul =
             text.chars().any(|c| matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{AC00}'..='\u{D7FF}' | '\u{FFA0}'..='\u{FFDC}'));
-        let pairs = text.chars().zip(text.chars().skip(1)).any(|(a, b)| vectorcraft_text::inseparable(a, b));
         let held = ParaStyle {
             justify: p.justify,
             left_indent: p.left_indent,
@@ -402,16 +414,16 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             space_after: p.space_after,
             hyphenate: p.hyphenate,
             direction: p.direction.filter(|d| *d == ParaDirection::RightToLeft),
-            // The composition of Japanese punctuation new type gets (Line-end Punctuation Half
-            // Width, Standard burasagari) isn't reported: it changes no other script's lines.
+            // The Mojikumi set new type gets (Line-end Punctuation Half Width) isn't reported: it
+            // changes no other script's lines.
             mojikumi: if p.mojikumi == Mojikumi::LineEndHalf { p.mojikumi } else { ParaStyle::default().mojikumi },
-            burasagari: if p.burasagari == Burasagari::Standard { p.burasagari } else { ParaStyle::default().burasagari },
+            kinsoku: p.kinsoku,
+            kinsoku_type: p.kinsoku_type,
+            burasagari: p.burasagari,
+            bunri_kinshi: p.bunri_kinshi,
             // The text document has no Korean Line Break Anywhere: it reads back off, which
             // changes only the lines of a paragraph with Hangul in it.
             korean_line_break_anywhere: p.korean_line_break_anywhere && !hangul,
-            // Nor Bunri-Kinshi: it reads back off, which changes only the lines of a paragraph
-            // with an inseparable pair in it.
-            bunri_kinshi: p.bunri_kinshi && !pairs,
             ..ParaStyle::default()
         };
         *p != held
@@ -431,7 +443,13 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
                 // The text document holds the Ascent first baseline by leaving it out, without a minimum.
                 || (t.area.first_baseline == FirstBaseline::Ascent && t.area.first_baseline_min != 0.0)))
         || (matches!(t.kind, TextKind::OnPath { .. })
-            && (t.path_effect != PathEffect::default() || t.path_align != PathAlign::default() || t.path_spacing != 0.0 || end_read_as_none(t)))
+            && (t.path_effect != PathEffect::default()
+                || t.path_align != PathAlign::default()
+                || t.path_spacing != 0.0
+                || end_read_as_none(t)
+                // The writer writes type that starts before its open path starting at the
+                // path's start.
+                || t.kind.starts_before_path()))
 }
 
 /// Key 35 of a run in style `st`, as the reader's `Texts::style` reads it: 3 for Tate-chu-yoko, 1
@@ -606,6 +624,15 @@ fn place_on(segments: &[[f64; 8]], f: f64) -> f64 {
     segments.len() as f64
 }
 
+/// Where the text document ended at some point ([`TextDoc::written`]).
+#[derive(Clone, Copy)]
+pub(in crate::ai_editing) struct TextMark {
+    at: (usize, usize, usize, usize, usize),
+    values: usize,
+    lost: bool,
+    planned: usize,
+}
+
 /// The text document being written.
 #[derive(Default)]
 pub(in crate::ai_editing) struct TextDoc {
@@ -677,6 +704,14 @@ impl TextDoc {
         };
         d.push((12, V::Int(caps)));
         d.push((35, V::Int(baseline_direction(st))));
+        // Insert Aki Left and Right in 1/1000 em, as the reader reads keys 49 and 50. No key is no
+        // space added: neither the stories' character attributes nor `[Normal Character Style]` set one.
+        for (key, v) in [(49, st.aki_left), (50, st.aki_right)] {
+            let v = held_aki(v);
+            if v > 0.0 {
+                d.push((key, real(v)));
+            }
+        }
         let fill = solid(&st.fill).flatten();
         // A stroke of no width keeps its paint.
         let stroke = solid(&st.stroke).flatten();
@@ -724,6 +759,32 @@ impl TextDoc {
             (4, len(p.space_before)),
             (5, len(p.space_after)),
             (9, V::Bool(p.hyphenate)),
+            (23, V::Bool(p.bunri_kinshi)),
+            (
+                24,
+                V::Int(match p.burasagari {
+                    Burasagari::None => 0,
+                    Burasagari::Standard => 1,
+                    Burasagari::Forced => 2,
+                }),
+            ),
+            (
+                25,
+                V::Int(match p.kinsoku_type {
+                    KinsokuShoriType::PushInFirst => 0,
+                    KinsokuShoriType::PushOutFirst => 1,
+                    KinsokuShoriType::PushOutOnly => 2,
+                }),
+            ),
+            // The Kinsoku set: `/nil` for None, else its index in the document's sets ([`KINSOKU_SETS`]).
+            (
+                27,
+                match p.kinsoku {
+                    Kinsoku::None => V::Name("nil"),
+                    Kinsoku::Hard => V::Int(0),
+                    Kinsoku::Soft => V::Int(1),
+                },
+            ),
         ];
         if rtl {
             d.push((33, V::Int(1)));
@@ -1000,6 +1061,24 @@ impl TextDoc {
         self.threaded.get(&id).copied()
     }
 
+    /// Where the text document written so far ends, for [`Self::take_back`].
+    pub(in crate::ai_editing) fn written(&self) -> TextMark {
+        TextMark { at: self.mark(), values: self.doc_values, lost: self.lost, planned: self.planned.len() }
+    }
+
+    /// Take the frames, stories and fonts added since `m` out again, with what they counted. Where
+    /// a thread was planned since, its frames name its story, so nothing is taken out.
+    pub(in crate::ai_editing) fn take_back(&mut self, m: TextMark) {
+        if self.planned.len() != m.planned {
+            return;
+        }
+        let (frames, stories, bytes, text, fonts) = m.at;
+        self.frames.truncate(frames);
+        self.stories.truncate(stories);
+        self.fonts.truncate(fonts);
+        (self.doc_bytes, self.text_bytes, self.doc_values, self.lost) = (bytes, text, m.values, m.lost);
+    }
+
     /// Whether a thread written since the last call has attributes the text document leaves out.
     pub(in crate::ai_editing) fn take_lost(&mut self) -> bool {
         std::mem::take(&mut self.lost)
@@ -1060,7 +1139,7 @@ impl TextDoc {
             (1, set(fonts, true)),
             (2, empty()),
             (3, empty()),
-            (4, empty()),
+            (4, set(KINSOKU_SETS.iter().map(|name| dict(vec![(0, V::Str((*name).into()))])).collect(), false)),
             (5, set(vec![normal_char], true)),
             (6, set(vec![normal_para], true)),
             (8, set(self.frames.iter().map(clone_v).collect(), false)),

@@ -56,7 +56,7 @@ pub(crate) fn outlined_text(n: &Node) -> Option<Node> {
 }
 
 /// `to` (art made from `from`) with `from`'s name, transparency, opacity mask and effects.
-fn carry(from: &Node, mut to: Node) -> Node {
+pub(crate) fn carry(from: &Node, mut to: Node) -> Node {
     to.name = from.name.clone();
     to.opacity = from.opacity;
     to.blend = from.blend;

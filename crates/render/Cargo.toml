@@ -23,6 +23,8 @@ craft-gif = { workspace = true }
 craft-image-codecs = { workspace = true }
 craft-stream-codecs = { workspace = true }
 flate2 = { workspace = true }
+# TIFF LZW compression (MIT OR Apache-2.0).
+weezl = "0.2"
 log = { workspace = true }
 # Combining marks inside a lam-alef cluster (MIT OR Apache-2.0; already used by vectorcraft-text).
 unicode-general-category = "1"

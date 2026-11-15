@@ -597,6 +597,7 @@ fn declared_embedded_and_linked_images_have_distinct_metadata_and_pixel_omission
     let gray = craft_image_codecs::encode(
         &craft_image_codecs::Image::from_raw(2, 2, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![90; 4]).unwrap(),
         craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
     )
     .unwrap();
     for (blob, mode) in [(ImageBlob::png(gray), "gray"), (ImageBlob::png(b"not an image".to_vec()), "unknown")] {

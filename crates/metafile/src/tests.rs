@@ -72,6 +72,7 @@ pub(crate) fn png_claiming(w: u32, h: u32) -> Vec<u8> {
     let mut png = craft_image_codecs::encode(
         &craft_image_codecs::Image::from_raw(1, 1, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![0]).unwrap(),
         craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
     )
     .unwrap();
     png[16..20].copy_from_slice(&w.to_be_bytes());

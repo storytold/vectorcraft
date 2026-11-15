@@ -142,7 +142,7 @@ pub fn encode(px: &[u8], width: u32, height: u32, quality: u8, ppi: Option<f64>,
     }
     if o.embed_icc {
         let icc = cms::icc_bytes(&o.color_model.profile()).map_err(|e| format!("JPEG colour profile: {e}"))?;
-        img.icc = Some(icc);
+        img.icc = Some(icc.to_vec());
     }
     let (jpeg_format, jpeg_progressive_scans) = match o.method {
         Method::Baseline => (JpegFormat::Baseline, None),

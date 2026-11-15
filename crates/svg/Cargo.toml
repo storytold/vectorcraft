@@ -20,6 +20,8 @@ vectorcraft-brush = { workspace = true }
 vectorcraft-text = { workspace = true }
 vectorcraft-pathops = { workspace = true }
 kurbo = { workspace = true }
+# Image elements still go through usvg's image href resolution (src/import/files.rs, src/import/budget.rs).
+usvg = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 # Live effect params read from filters.
@@ -28,6 +30,8 @@ serde_json = { workspace = true }
 flate2 = { workspace = true }
 image = { workspace = true }
 craft-image-codecs = { workspace = true }
+# Image data URLs decoded as usvg decodes them, within a byte limit (MIT OR Apache-2.0; already used by usvg).
+data-url = "0.3.2"
 # Colour / transform / length parsing for the <text> fallback (MIT OR Apache-2.0; already used by usvg).
 svgtypes = "0.16"
 simplecss = "0.2.2"

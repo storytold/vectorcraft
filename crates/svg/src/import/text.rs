@@ -379,24 +379,29 @@ fn clip_uses(
             Some(s) => own_transform(&cx.css, s),
             None => t.attribute("transform").unwrap_or("").to_string(),
         };
-        // One element can carry one clip path. The text's own clip path is in the text's user space
-        // and wins; a clip path of the `<use>` is in the `<use>`'s, so the text's transform moves
-        // to the importer instead.
-        let clipped = |n: XNode| cx.css.own(n, "clip-path").is_some_and(|v| v.trim() != "none");
+        // One element can carry one clip path. The text's own clip path is in the text's user space;
+        // a clip path of the `<use>` is in the `<use>`'s. With only the `<use>`'s, the text's
+        // transform moves to the importer. With both, the placeholder's clip path is one that
+        // holds both ([`both_clips`]).
+        let clipped = |n: XNode| cx.css.own(n, "clip-path").filter(|v| v.trim() != "none");
         let id = format!("{}{i}-{k}", slots.prefix);
-        let transform = if style_t.is_some_and(clipped) {
-            if clipped(style_u) {
-                let label = u.attribute("id").map_or_else(|| "a use of a text".to_string(), |id| format!("'{id}'"));
-                warnings.push(format!("clip path of {label} in a clip path ignored: the text's own applies"));
-            }
-            format!("{placed} {text_xf}")
-        } else {
-            slots.inner.insert(id.clone(), parse_transform(Some(&text_xf)));
-            placed
-        };
         let props = clip_props(&cx.css, style_t, Some(style_u));
         let mut out = String::new();
-        clip_placeholder(&mut out, q, &id, &transform, &props, u, marker);
+        match (style_t.and_then(clipped), clipped(style_u)) {
+            (Some(text_clip), Some(use_clip)) => {
+                let both = both_clips(&mut out, q, &id, &text_clip, &use_clip, parse_transform(Some(&text_xf)), marker);
+                let props = match (both, props.split_once(';')) {
+                    (Some(both), Some((_, rest))) => format!("clip-path:url(#{both});{rest}"),
+                    _ => props,
+                };
+                clip_placeholder(&mut out, q, &id, &format!("{placed} {text_xf}"), &props, u, marker);
+            }
+            (Some(_), None) => clip_placeholder(&mut out, q, &id, &format!("{placed} {text_xf}"), &props, u, marker),
+            (None, _) => {
+                slots.inner.insert(id.clone(), parse_transform(Some(&text_xf)));
+                clip_placeholder(&mut out, q, &id, &placed, &props, u, marker);
+            }
+        }
         // Another `<use>` can still show this one by its id: a copy of it stays in a `<defs>`, which
         // the clip path leaves out, with the properties style rules gave it written out.
         if u.attribute("id").is_some() {
@@ -655,6 +660,42 @@ fn clip_placeholder(out: &mut String, q: &str, id: &str, transform: &str, props:
     let _ = write!(out, " d=\"M{} {}H{}V{}H{}Z\"/>", b.x0, b.y0, b.x1, b.y1, b.x0);
 }
 
+/// Write, in a `<defs>` (which a clip path leaves out), a clip path for the placeholder `id` of a
+/// text with bounds `b` and transform `text_xf` shown by a `<use>`, when both have a clip path:
+/// it clips by the text's clip path `text_clip` in the text's user space and by the `<use>`'s
+/// `use_clip` in the `<use>`'s, each on a rectangle over the text's bounds there, so a clip path in
+/// bounding box units measures the text. Its id, or `None` when `text_xf` can't be inverted (the
+/// text then draws nothing).
+fn both_clips(out: &mut String, q: &str, id: &str, text_clip: &str, use_clip: &str, text_xf: Affine, b: Rect) -> Option<String> {
+    let det = text_xf.determinant();
+    if !det.is_finite() || det == 0.0 {
+        return None;
+    }
+    let [a, b2, c, d, e, f] = text_xf.inverse().as_coeffs();
+    let ub = text_xf.transform_rect_bbox(b);
+    let (id_u, id_t) = (format!("{id}-u"), format!("{id}-t"));
+    let rect = |out: &mut String, clip: &str, r: Rect| {
+        let _ = write!(
+            out,
+            "<{q}path style=\"transform:{IDENTITY};clip-path:{};display:inline\" d=\"M{} {}H{}V{}H{}Z\"/>",
+            xml_escape(clip),
+            r.x0,
+            r.y0,
+            r.x1,
+            r.y1,
+            r.x0
+        );
+    };
+    // The `<use>`'s clip path, moved back by the inverse of the text's transform from the
+    // placeholder's user space to the `<use>`'s.
+    let _ = write!(out, "<{q}defs><{q}clipPath id=\"{}\" style=\"transform:matrix({a} {b2} {c} {d} {e} {f})\">", xml_escape(&id_u));
+    rect(out, use_clip, ub);
+    let _ = write!(out, "</{q}clipPath><{q}clipPath id=\"{}\" style=\"clip-path:url(#{})\">", xml_escape(&id_t), xml_escape(&id_u));
+    rect(out, text_clip, b);
+    let _ = write!(out, "</{q}clipPath></{q}defs>");
+    Some(id_t)
+}
+
 /// Write the placeholder group for text `t` (namespace prefix `q`), slot `index`, with the text's
 /// id when `with_id`.
 #[allow(clippy::too_many_arguments)]
@@ -718,7 +759,15 @@ struct Ctx {
     /// The path each `<textPath>` read so far follows ([`Self::text_path`]); `None` where it has
     /// no usable one. The styles of a `<use>` instance share it, so each path is found and parsed
     /// once however many `<use>` elements show its text.
-    paths: Rc<RefCell<HashMap<roxmltree::NodeId, Option<Rc<BezPath>>>>>,
+    paths: Rc<RefCell<HashMap<roxmltree::NodeId, Option<Rc<FollowedPath>>>>>,
+}
+
+/// The path a `<textPath>` follows ([`Ctx::text_path`]).
+struct FollowedPath {
+    path: BezPath,
+    /// The `pathLength` of the element the `<textPath>` points at, 0 or greater; `None` when the
+    /// `<textPath>` has its own `path` or the element has no such value.
+    author_length: Option<f64>,
 }
 
 #[cfg(test)]
@@ -1132,7 +1181,7 @@ impl Ctx {
 
     /// The path a `<textPath>` follows, in the text's user space. It is read from the file once
     /// ([`Self::paths`]).
-    fn text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<Rc<BezPath>> {
+    fn text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<Rc<FollowedPath>> {
         if let Some(known) = self.paths.borrow().get(&tp.id()) {
             return known.clone();
         }
@@ -1144,13 +1193,14 @@ impl Ctx {
     /// How many elements the path of `<textPath>` `tp` has, when a text built so far follows it
     /// ([`Self::text_path`]); 0 for any other node.
     fn path_elements(&self, tp: XNode) -> usize {
-        self.paths.borrow().get(&tp.id()).and_then(|p| p.as_deref()).map_or(0, |p| p.elements().len())
+        self.paths.borrow().get(&tp.id()).and_then(|p| p.as_deref()).map_or(0, |p| p.path.elements().len())
     }
 
     /// Find and parse the path `<textPath>` `tp` follows.
-    fn read_text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<BezPath> {
+    fn read_text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<FollowedPath> {
         #[cfg(test)]
         TEXT_PATH_READS.set(TEXT_PATH_READS.get() + 1);
+        let mut author_length = None;
         let mut bp = match tp.attribute("path") {
             Some(d) => BezPath::from_svg(d).ok()?,
             None => {
@@ -1162,6 +1212,8 @@ impl Ctx {
                 };
                 let mut bp = BezPath::from_svg(&d).ok()?;
                 bp.apply_affine(parse_transform(el.attribute("transform")));
+                author_length =
+                    el.attribute("pathLength").and_then(|v| v.trim().parse::<f64>().ok()).filter(|l| l.is_finite() && *l >= 0.0).map(f64::abs);
                 bp
             }
         };
@@ -1169,7 +1221,7 @@ impl Ctx {
             bp = bp.reverse_subpaths();
         }
         let usable = bp.segments().next().is_some();
-        usable.then_some(bp)
+        usable.then_some(FollowedPath { path: bp, author_length })
     }
 
     /// The equivalent path of a basic shape (SVG 2 › Basic Shapes), as path data: what a
@@ -1418,7 +1470,8 @@ impl Ctx {
         let mut obj = TextObject::point(Point::ZERO, "", CharStyle::default());
         let mut breaks: Vec<Break> = vec![];
         let mut para_styles: Vec<ParaStyle> = vec![];
-        if let Some((tp, bp)) = path {
+        if let Some((tp, followed)) = path {
+            let bp = &followed.path;
             // Along the path: dx is extra advance, dy shifts off the path.
             let mut off = 0.0;
             for i in 0..n {
@@ -1430,19 +1483,50 @@ impl Ctx {
             }
             let len: f64 = bp.segments().map(|s| s.arclen(1e-4)).sum();
             let em = self.font_size(tp);
-            let offset = tp.attribute("startOffset").and_then(|v| self.length(v, em, len)).unwrap_or(0.0) + dx[0];
+            // `startOffset` as a share of the path's length. A percentage is of the path's computed
+            // length. Any other length is in the units of the referenced element's `pathLength`
+            // when it has one, and a `pathLength` of 0 puts any offset other than 0 infinitely far
+            // along (SVG 2 › Paths › The pathLength attribute). An offset infinitely far along
+            // starts as far past the path's end, or before its start, as type may go.
+            let share = tp
+                .attribute("startOffset")
+                .and_then(|v| {
+                    let o = self.length(v, em, len)?;
+                    let share = match followed.author_length {
+                        Some(p) if !v.trim().ends_with('%') => {
+                            if o == 0.0 {
+                                0.0
+                            } else {
+                                o / p
+                            }
+                        }
+                        _ => o / len,
+                    };
+                    Some(if share.is_infinite() { vectorcraft_doc::PATH_LEAD_MAX.copysign(share) } else { share })
+                })
+                .unwrap_or(0.0);
             let width = if anchor > 0.0 { advance(&point_text(&cells)) } else { 0.0 };
             // On a path of one closed subpath, text that starts before the path's start or past its
-            // end wraps around the path. Otherwise it starts at the path's start or end.
-            let path = PathData::from_bezpath(&bp);
+            // end wraps around the path. On an open path text may start before the path's start,
+            // and its characters before the start are not drawn; text that starts past the end
+            // starts at the end. Other paths start it at the path's start or end.
+            let path = PathData::from_bezpath(bp);
             let wraps = path.subpaths.len() == 1 && path.is_closed();
+            let open = !path.is_closed();
             let wrap = |s: f64| {
                 // `rem_euclid` can round a tiny negative value up to 1.
                 let s = s.rem_euclid(1.0);
                 if s < 1.0 { s } else { 0.0 }
             };
-            let start =
-                Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| if wraps { wrap(s) } else { s.clamp(0.0, 1.0) });
+            let start = Some(share + (dx[0] - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| {
+                if wraps {
+                    wrap(s)
+                } else if open {
+                    s.clamp(-vectorcraft_doc::PATH_LEAD_MAX, 1.0)
+                } else {
+                    s.clamp(0.0, 1.0)
+                }
+            });
             obj.kind = TextKind::OnPath { path, start, end: None };
             obj.xf = Affine::IDENTITY;
         } else if vertical {

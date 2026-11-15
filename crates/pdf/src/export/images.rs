@@ -138,6 +138,8 @@ impl Exporter<'_> {
         }
         let doc = self.doc;
         let out = self.out.clone();
+        let profiles = !out.standard.cmyk_only();
+        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit });
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
             if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk {
@@ -147,12 +149,14 @@ impl Exporter<'_> {
                 let icc = out.cmyk_image_icc(blob);
                 crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, icc.as_deref())
             } else {
-                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels())
+                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles, to_srgb)
             };
-            if let Some(w) = r.warning {
+            let img = r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles));
+            // An image left out gets the warning below instead.
+            for w in [r.warning, r.note].into_iter().flatten().filter(|_| img.is_some()) {
                 self.warn(w);
             }
-            r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit))
+            img
         });
         if img.is_none() {
             self.warn(UNDECODED);
@@ -296,34 +300,51 @@ pub(super) fn png_16_bit(bytes: &[u8]) -> bool {
 /// PNG `bytes` at 8 bits a sample: decoded, and encoded again as gray or RGB, with alpha when the
 /// source has it, and with the source's ICC profile. `None` when it can't be decoded.
 pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
-    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image as CodecImage, Limits, SampleType};
-    let decoded = craft_image_codecs::decode_as_with(Format::Png, bytes, &Limits::default()).ok()?;
-    let (w, h) = decoded.dimensions();
-    let icc = decoded.icc.clone();
-    let (layout, data) = match (decoded.layout(), decoded.sample_type()) {
-        (l @ (ChannelLayout::Gray | ChannelLayout::GrayA | ChannelLayout::Rgb | ChannelLayout::Rgba), SampleType::U8) => (l, decoded.into_data()),
-        (l @ (ChannelLayout::Gray | ChannelLayout::GrayA | ChannelLayout::Rgb | ChannelLayout::Rgba), SampleType::U16) => {
-            let u8s: Vec<u8> = decoded.to_u16_samples()?.into_iter().map(|s| ((u32::from(s) * 255 + 32767) / 65535) as u8).collect();
-            (l, u8s)
-        }
-        _ => return None,
+    use image::{ColorType, DynamicImage, ImageDecoder, ImageEncoder};
+    let mut decoder = image::codecs::png::PngDecoder::new(std::io::Cursor::new(bytes)).ok()?;
+    let icc = decoder.icc_profile().ok().flatten();
+    let img = DynamicImage::from_decoder(decoder).ok()?;
+    let img = match img.color() {
+        ColorType::L8 | ColorType::L16 => DynamicImage::ImageLuma8(img.into_luma8()),
+        ColorType::La8 | ColorType::La16 => DynamicImage::ImageLumaA8(img.into_luma_alpha8()),
+        ColorType::Rgb8 | ColorType::Rgb16 => DynamicImage::ImageRgb8(img.into_rgb8()),
+        _ => DynamicImage::ImageRgba8(img.into_rgba8()),
     };
-    let out = CodecImage::from_raw(w, h, layout, SampleType::U8, data).ok()?.with_icc(icc);
-    craft_image_codecs::encode(&out, Format::Png, &EncodeOptions::default()).ok()
+    let mut png = vec![];
+    let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
+    if let Some(icc) = icc {
+        encoder.set_icc_profile(icc).ok()?;
+    }
+    img.write_with_encoder(encoder).ok()?;
+    Some(png)
 }
 
 /// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
-/// other formats decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG of 16 bits a
-/// sample is written at 8 bits ([`png_8_bit`]).
-pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool) -> Option<Image> {
+/// other formats (a TIFF) decoded with their 16-bit samples and, when `profiles` allows it (not in
+/// PDF/X-1a), the ICC profile they carry ([`crate::images::decoded_image`]). Without `profiles`, an
+/// image that carries a gray or RGB profile is written without it, and so is one whose gray or RGB
+/// profile is malformed ([`crate::images::valid_icc`]): a JPEG with its data unchanged, an image of
+/// another format decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG or another image of
+/// 16 bits a sample is written at 8 bits ([`png_8_bit`]).
+pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool, profiles: bool) -> Option<Image> {
     // The header's size first: the writer's decoders allocate what it declares, and the encoded
     // bytes of an image that is far larger than any the app reads may be a few kilobytes.
-    let dims = craft_image_codecs::probe_size(&blob.bytes).ok();
-    if dims.is_some_and(|(w, h)| u64::from(w) * u64::from(h) > crate::images::MAX_EMBED_PIXELS) {
+    let size = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions();
+    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > crate::images::MAX_EMBED_PIXELS) {
         return None;
     }
     let bytes = blob.bytes.as_ref().clone();
+    // The PDF writer keeps a gray or RGB image's ICC profile: without `profiles`, or when the
+    // profile is malformed, such a JPEG is written without its profile, and an image of another
+    // format is decoded and written without it. The color space is read from the header's bytes
+    // 16..20 even in a profile cut short, as the PDF writer reads it.
+    let strip = crate::images::source_icc(&bytes).is_some_and(|icc| match icc.get(16..20) {
+        Some(space @ (b"GRAY" | b"RGB ")) => !profiles || <[u8; 4]>::try_from(space).is_ok_and(|s| !crate::images::valid_icc(&icc, s)),
+        _ => false,
+    });
     let direct = match blob.mime.as_str() {
+        "image/jpeg" | "image/jpg" if strip => Image::from_jpeg_with_icc(bytes.clone().into(), None, interpolate).ok(),
+        _ if strip => None,
         "image/png" if !sixteen_bit && png_16_bit(&bytes) => png_8_bit(&bytes).and_then(|png| Image::from_png(png.into(), interpolate).ok()),
         "image/png" => Image::from_png(bytes.clone().into(), interpolate).ok(),
         "image/jpeg" | "image/jpg" => Image::from_jpeg(bytes.clone().into(), interpolate).ok(),
@@ -331,11 +352,7 @@ pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixtee
         "image/webp" => Image::from_webp(bytes.clone().into(), interpolate).ok(),
         _ => None,
     };
-    direct.or_else(|| {
-        let decoded = craft_image_codecs::decode(&bytes).ok()?;
-        let (w, h) = decoded.dimensions();
-        Some(Image::from_rgba8(decoded.to_rgba8(), w, h))
-    })
+    direct.or_else(|| crate::images::decoded_image(&bytes, interpolate, sixteen_bit, profiles))
 }
 
 #[cfg(test)]
@@ -348,15 +365,13 @@ mod tests {
     #[test]
     fn an_image_whose_header_declares_far_more_pixels_than_the_app_reads_is_left_out() {
         // A real 8 × 8 PNG whose IHDR (width, height at 16..24) claims 65535 × 65535, with its CRC fixed.
-        let img =
-            craft_image_codecs::Image::from_raw(8, 8, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, vec![0; 8 * 8 * 3])
-                .unwrap();
-        let mut png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+        let mut png = vec![];
+        image::DynamicImage::ImageRgb8(image::RgbImage::new(8, 8)).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
         png[16..24].copy_from_slice(&[0, 0, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF]);
         let crc =
             !png[12..29].iter().fold(!0u32, |c, b| (0..8).fold(c ^ u32::from(*b), |c, _| if c & 1 == 1 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 }));
         png[29..33].copy_from_slice(&crc.to_be_bytes());
-        assert!(super::embed(&ImageBlob::png(png), false, true).is_none());
+        assert!(super::embed(&ImageBlob::png(png), false, true, true).is_none());
     }
 
     #[test]
@@ -385,9 +400,8 @@ mod tests {
     #[test]
     fn colorized_and_grid_masked_images_are_made_once_for_every_size_without_downsampling() {
         let gray = |pixels: Vec<u8>| {
-            let img = craft_image_codecs::Image::from_raw(2, 2, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, pixels)
-                .unwrap();
-            let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+            let mut png = vec![];
+            image::GrayImage::from_raw(2, 2, pixels).unwrap().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
             ImageBlob::png(png)
         };
         let mut doc = Document::new(100.0, 100.0);

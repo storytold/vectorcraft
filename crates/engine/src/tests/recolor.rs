@@ -303,6 +303,62 @@ fn methods_and_bad_params() {
     assert!(s.execute("recolor.apply", &json!({"map": {}})).is_err(), "needs art or a group");
 }
 
+/// A row with no current colors (Recolor Artwork's New Row) recolors nothing, and records no
+/// undo step on its own; beside it the other rows recolor as before, and the weights and
+/// randomize keep it. A row without `from`, or with a bad current color, is still refused.
+#[test]
+fn an_empty_row_recolors_nothing() {
+    let mut s = session();
+    let red = rect(&mut s, json!("#ff0000"));
+    let blue = rect(&mut s, json!("#0000ff"));
+    select_all(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let empty = json!({"from": [], "to": "rgb 0 255 0"});
+    let r = run(&mut s, "recolor.apply", json!({"map": [empty]}));
+    assert_eq!(r["changed"], json!(0));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    let map = json!([empty, {"from": ["rgb 0 0 255"], "to": "rgb 255 255 0"}]);
+    let w = run(&mut s, "recolor.weigh", json!({"map": map}));
+    assert_eq!(w["map"], map, "the rows as given");
+    assert_eq!(w["shares"], json!([0.0, 100.0]));
+    let shuffled = run(&mut s, "recolor.randomize", json!({"map": map, "seed": 1}));
+    assert_eq!(shuffled["map"][0]["from"], json!([]));
+    run(&mut s, "recolor.apply", json!({"map": map}));
+    assert_eq!((fill(&s, red).to_hex(), fill(&s, blue).to_hex()), ("#ff0000".into(), "#ffff00".into()));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    for bad in [json!([{"to": "rgb 0 255 0"}]), json!([{"from": ["nonsense"], "to": "rgb 0 255 0"}])] {
+        assert!(s.execute("recolor.apply", &json!({"map": bad})).is_err(), "{bad}");
+    }
+}
+
+/// An empty row adds no library swatch with `limitTo`, and gives a rewritten group no color: the
+/// group keeps one color per row that holds current colors.
+#[test]
+fn an_empty_row_adds_no_swatch_and_no_group_color() {
+    let mut s = session();
+    rect(&mut s, json!("#ff0000"));
+    rect(&mut s, json!("#0000ff"));
+    select_all(&mut s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let swatches = s.doc().unwrap().doc.swatches.len();
+    let r = run(&mut s, "recolor.apply", json!({"map": [{"from": [], "to": "#ff0033"}], "limitTo": "web-safe-216"}));
+    assert_eq!(r["swatches"], json!([]), "{r}");
+    assert_eq!(s.doc().unwrap().doc.swatches.len(), swatches);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    run(&mut s, "swatch.newGroup", json!({"name": "Pair", "colors": ["#ff0000", "#0000ff"]}));
+    select_all(&mut s);
+    let map = json!([
+        {"from": [], "to": "rgb 0 255 0"},
+        {"from": ["rgb 255 0 0"], "to": "rgb 255 0 0"},
+        {"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"},
+    ]);
+    run(&mut s, "recolor.apply", json!({"map": map, "group": "Pair"}));
+    let d = &s.doc().unwrap().doc;
+    let g = d.swatch_groups.iter().find(|g| g.name == "Pair").unwrap();
+    let hexes: Vec<String> = g.swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+    assert_eq!(hexes, ["#ff0000", "#0000ff"]);
+}
+
 #[test]
 fn randomize_shuffles_new_colours_and_skips_excluded_rows() {
     let mut s = session();

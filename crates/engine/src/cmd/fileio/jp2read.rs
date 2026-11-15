@@ -38,7 +38,8 @@ pub(super) fn decode(bytes: &[u8], max_alloc: u64) -> Result<image::RgbaImage, S
         return Err("the JPEG 2000 file can't be read".into());
     }
     let limits = Limits { max_alloc, max_pixels: max_alloc / 4, ..Limits::default() };
-    let image = craft_image_codecs::decode_as_with(Format::Jp2, bytes, &limits).map_err(|e| match e {
+    let opts = craft_image_codecs::DecodeOptions { limits, ..craft_image_codecs::DecodeOptions::default() };
+    let image = craft_image_codecs::decode_as_with(Format::Jp2, bytes, &opts).map_err(|e| match e {
         CodecError::LimitExceeded(_) => "an image is too large to draw".to_string(),
         CodecError::Unsupported { .. } => "the JPEG 2000 file has an unsupported color space or JPX content".to_string(),
         _ => "the JPEG 2000 file can't be read".to_string(),

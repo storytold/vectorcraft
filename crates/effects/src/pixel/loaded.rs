@@ -101,7 +101,7 @@ impl LoadedTexture {
     /// `None` when `png` isn't a PNG or holds no pixels.
     /// `None` too when its gray levels would take the live textures past [`MAX_LIVE`].
     fn from_png(png: &[u8]) -> Option<Self> {
-        let (w, h) = png_ihdr_size(png)?;
+        let (w, h) = Self::png_ihdr_size(png)?;
         let gray = (w as usize).checked_mul(h as usize)?;
         if LIVE.load(Ordering::Relaxed).saturating_add(gray) > MAX_LIVE {
             return None;

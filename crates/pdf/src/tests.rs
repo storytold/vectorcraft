@@ -246,6 +246,77 @@ fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(-15.0, 30.0, 5.0, 70.0), 0.01), "{:?}", l[0].geometric_bounds());
 }
 
+/// A 200 × 100 pt document whose 3 pt. Round brush paints a 20 pt round nib.
+fn doc_with_wide_nib() -> Document {
+    let mut d = doc(200.0, 100.0);
+    let mut lib = vectorcraft_brush::library(&d);
+    let Some(vectorcraft_brush::BrushKind::Calligraphic(c)) = lib.iter_mut().find(|b| b.name == "3 pt. Round").map(|b| &mut b.kind) else {
+        panic!("the 3 pt. Round brush")
+    };
+    c.size = 20.0;
+    vectorcraft_brush::store(&mut d, &lib);
+    d
+}
+
+/// A line from (`x`, 40) to (`x`, 60) with a 1 pt black stroke, painted by the 3 pt. Round brush
+/// when `brushed`.
+fn nib_line(x: f64, brushed: bool) -> Node {
+    let mut stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    if brushed {
+        stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    }
+    Node::path(NodeId(0), shapes::line((x, 40.0).into(), (x, 60.0).into()), stroke)
+}
+
+#[test]
+fn a_path_whose_brush_art_reaches_the_page_is_written() {
+    // The line at x = -5 lies left of the page, and the 20 pt nib paints 10 pt either side of it,
+    // onto the page: alone, in a group, in a knockout group and as a compound path.
+    let compound = |n: Node| {
+        let mut c = Node::new(NodeId(0), NodeKind::Compound { children: vec![Arc::new(nib_line(-5.0, false))], rule: FillRule::NonZero });
+        c.appearance = n.appearance;
+        c
+    };
+    let knockout = |n: Node| {
+        let mut g = Node::group(NodeId(0), vec![Arc::new(n), Arc::new(rect_node(Rect::new(150.0, 10.0, 170.0, 30.0), Color::rgb(0.0, 0.0, 1.0)))]);
+        g.knockout = vectorcraft_doc::Knockout::On;
+        g
+    };
+    let group = |n: Node| Node::group(NodeId(0), vec![Arc::new(n)]);
+    let wraps: [(&str, &dyn Fn(Node) -> Node); 4] =
+        [("path", &|n| n), ("group", &group), ("knockout group", &knockout), ("compound path", &compound)];
+    for (what, wrap) in wraps {
+        let mut d = doc_with_wide_nib();
+        add(&mut d, wrap(nib_line(-5.0, true)));
+        let out = roundtrip(&d);
+        let nib: Vec<Rect> = leaves(&out).iter().filter_map(|n| n.geometric_bounds()).filter(|b| b.x1 < 100.0).collect();
+        assert_eq!(nib.len(), 1, "{what}: the nib's art, {nib:?}");
+        assert!(close(nib[0], Rect::new(-15.0, 30.0, 5.0, 70.0), 0.01), "{what}: {nib:?}");
+    }
+    // Without its brush, or 100 pt left of the page, where the nib does not reach it, the line is
+    // left out.
+    for line in [nib_line(-5.0, false), nib_line(-100.0, true)] {
+        let mut d = doc_with_wide_nib();
+        add(&mut d, line);
+        assert!(leaves(&roundtrip(&d)).is_empty());
+    }
+    // A clipping path left of the page keeps the nib's art off it.
+    let mut d = doc_with_wide_nib();
+    let clip = Node::new(
+        NodeId(0),
+        NodeKind::Path {
+            path: shapes::rectangle(Rect::new(-30.0, 0.0, -2.0, 100.0)),
+            rule: FillRule::NonZero,
+            live: None,
+            clipping: true,
+            guide: false,
+        },
+    );
+    add(&mut d, Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(nib_line(-5.0, true))], clip: true }));
+    let out = roundtrip(&d);
+    assert!(leaves(&out).is_empty(), "{:?}", leaves(&out));
+}
+
 /// The live effects in a symbol's art apply where the instance places the art, as on the canvas:
 /// the symbol's square at (10, 40), which a Transform effect moves 100 pt right, is written at
 /// (110, 40).

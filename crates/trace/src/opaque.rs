@@ -3,7 +3,7 @@
 
 use vectorcraft_geom::{Affine, PathData};
 
-use crate::raster::{MAX_PIXELS, fit_size, gif_first_frame_pixels};
+use crate::raster::{MAX_PIXELS, fit_size, gif_first_frame_pixels, trace_header};
 use crate::{Mode, Raster, TraceError, TraceParams, trace_within};
 
 /// The most pixels [`opaque_outline`] traces: a larger image is reduced to this many first,
@@ -24,9 +24,9 @@ pub const ALPHA_MAX_DECODE_BYTES: u64 = 256 << 20;
 /// than [`MAX_PIXELS`] (64 megapixels), or whose samples take more than [`ALPHA_MAX_DECODE_BYTES`],
 /// gives [`TraceError::TooLarge`] before it is decoded.
 pub fn decode_alpha(bytes: &[u8]) -> Result<Option<(u32, u32, Vec<u8>)>, TraceError> {
-    use craft_image_codecs::{ChannelLayout, DecodeOptions, Limits, RasterColorType, SampleType, decode_with, inspect_raster};
+    use craft_image_codecs::{ChannelLayout, DecodeOptions, Limits, RasterColorType, SampleType, decode_with};
     let decode_err = |e: craft_image_codecs::CodecError| TraceError::Decode(e.to_string());
-    if let Some(info) = inspect_raster(bytes).map_err(decode_err)? {
+    if let Some(info) = trace_header(bytes, MAX_PIXELS, ALPHA_MAX_DECODE_BYTES)? {
         if info.width == 0 || info.height == 0 {
             return Err(TraceError::Empty);
         }
@@ -34,6 +34,10 @@ pub fn decode_alpha(bytes: &[u8]) -> Result<Option<(u32, u32, Vec<u8>)>, TraceEr
             RasterColorType::GrayAlpha | RasterColorType::Rgba | RasterColorType::CmykAlpha => true,
             RasterColorType::Rgb => info.channels > 3,
             RasterColorType::Gray => info.channels > 1,
+            // The shared TIFF inspector reports the base photometric type even
+            // when an ExtraSamples channel carries alpha.
+            RasterColorType::Cmyk => info.channels > 4,
+            RasterColorType::Lab => info.channels > 3,
             RasterColorType::Indexed => true,
             _ => false,
         };
@@ -49,10 +53,8 @@ pub fn decode_alpha(bytes: &[u8]) -> Result<Option<(u32, u32, Vec<u8>)>, TraceEr
     } else if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
         return Err(TraceError::TooLarge { width: 0, height: 0, max: MAX_PIXELS >> 20 });
     }
-    let opts = DecodeOptions {
-        limits: Limits { max_pixels: MAX_PIXELS, max_alloc: ALPHA_MAX_DECODE_BYTES, ..Limits::default() },
-        ..DecodeOptions::default()
-    };
+    let opts =
+        DecodeOptions { keep_orientation: true, limits: Limits { max_pixels: MAX_PIXELS, max_alloc: ALPHA_MAX_DECODE_BYTES, ..Limits::default() } };
     let img = decode_with(bytes, &opts).map_err(decode_err)?;
     let (w, h) = (img.width(), img.height());
     if w == 0 || h == 0 {
@@ -322,5 +324,22 @@ mod tests {
         assert_eq!(decode_alpha(&encoded(&rgb, Format::Png)).unwrap(), None);
         assert_eq!(decode_alpha(&encoded(&rgb, Format::Jpeg)).unwrap(), None);
         assert!(decode_alpha(b"not an image").is_err());
+    }
+
+    #[test]
+    fn decode_alpha_preserves_cmyk_and_lab_tiff_extra_samples() {
+        use craft_image_codecs::{ChannelLayout, Format, Image};
+        for (layout, samples) in
+            [(ChannelLayout::CmykA, vec![10, 20, 30, 40, 0, 50, 60, 70, 80, 255]), (ChannelLayout::LabA, vec![128, 128, 128, 0, 192, 128, 128, 255])]
+        {
+            let img = Image::from_u8(2, 1, layout, samples).unwrap();
+            assert_eq!(decode_alpha(&encoded(&img, Format::Tiff)).unwrap(), Some((2, 1, vec![0, 255])), "{layout:?}");
+        }
+        for (layout, samples) in
+            [(ChannelLayout::Cmyk, vec![10, 20, 30, 40, 50, 60, 70, 80]), (ChannelLayout::Lab, vec![128, 128, 128, 192, 128, 128])]
+        {
+            let img = Image::from_u8(2, 1, layout, samples).unwrap();
+            assert_eq!(decode_alpha(&encoded(&img, Format::Tiff)).unwrap(), None, "{layout:?}");
+        }
     }
 }

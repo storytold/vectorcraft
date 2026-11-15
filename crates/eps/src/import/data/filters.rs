@@ -154,15 +154,12 @@ fn dct(raw: &[u8]) -> Res<(Vec<u8>, usize, u8)> {
         Err(_) => return Err(PsError::Ps("ioerror", "DCTDecode".into())),
     };
     if img.layout() == craft_image_codecs::ChannelLayout::Gray {
-        let (w, h) = img.dimensions();
         let gray = if img.sample_type() == craft_image_codecs::SampleType::U8 {
             img.into_data()
         } else {
             img.to_rgba8().chunks_exact(4).map(|p| p[0]).collect()
         };
-        if gray.len() == (w as usize) * (h as usize) {
-            return Ok((gray, end, 1));
-        }
+        return Ok((gray, end, 1));
     }
     let rgb: Vec<u8> = img.to_rgba8().chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
     Ok((rgb, end, 3))
@@ -379,7 +376,8 @@ pub(super) fn fax_settings(d: Option<&DictRef>) -> Res<CcittParams> {
     } else if k == 0.0 {
         0
     } else {
-        k.min(f64::from(i64::MAX)) as i64
+        // `as` saturates: a K past i64::MAX is read as i64::MAX.
+        k as i64
     };
     Ok(CcittParams {
         k: k_val,

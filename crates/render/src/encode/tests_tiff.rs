@@ -69,7 +69,7 @@ fn lzw_is_smaller_and_decodes_the_same() {
     assert_eq!(pixels(&lzw), px, "transparency kept as an alpha channel");
     assert_eq!(pixels(&plain), px);
     let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &lzw).unwrap();
-    assert_eq!(img.data(), px.as_slice());
+    assert_eq!(img.data(), px);
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn colour_models_write_their_samples() {
     assert_eq!(d.u16(tags::PHOTOMETRIC), Some(5), "separated");
     assert_eq!(d.u16(332), Some(1), "CMYK inks");
     let cmyk_img = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &cmyk).unwrap();
-    assert_eq!(cmyk_img.data(), inks.as_slice());
+    assert_eq!(cmyk_img.data(), inks);
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn resolution_tags_and_the_profile() {
         let file = t::encode_samples(&px, 4, 4, ppi, &opts(ColorModel::Rgb)).unwrap();
         let d = ifd0(&file);
         for tag in [tags::X_RESOLUTION, tags::Y_RESOLUTION] {
-            let Some(craft_tiff::Value::Rationals(v)) = d.value(tag) else { panic!("rational") };
+            let Some(craft_tiff::Value::Rational(v)) = d.value(tag) else { panic!("rational") };
             assert_eq!(v.as_slice(), &[rational]);
         }
         assert_eq!(d.u16(tags::RESOLUTION_UNIT), Some(2), "inches");
@@ -126,7 +126,8 @@ fn resolution_tags_and_the_profile() {
     for model in ColorModel::ALL {
         let src = if model == ColorModel::Cmyk { vec![0; 64] } else { px.clone() };
         let file = t::encode_samples(&src, 4, 4, 72.0, &TiffOptions { embed_icc: true, ..opts(model) }).unwrap();
-        let icc = ifd0(&file).bytes(tags::ICC_PROFILE).unwrap();
+        let ifd = ifd0(&file);
+        let icc = ifd.bytes(tags::ICC_PROFILE).unwrap();
         assert_eq!(&icc[36..40], b"acsp", "{model:?}: an ICC profile");
         let space: &[u8; 4] = match model {
             ColorModel::Rgb => b"RGB ",
@@ -169,8 +170,13 @@ fn packbits_and_bilevel_images_decode() {
     assert_eq!(d.u16(tags::COMPRESSION), Some(32773));
     // The decoder turns WhiteIsZero into black-is-zero.
     let dec = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &file).unwrap();
-    assert_eq!(dec.width, 10);
-    assert_eq!(dec.height, 3);
+    assert_eq!(dec.width(), 10);
+    assert_eq!(dec.height(), 3);
+    assert_eq!(
+        dec.data(),
+        [0, 255, 0, 255, 0, 255, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255],
+        "WhiteIsZero samples are inverted and row padding is ignored"
+    );
     // A buffer that doesn't match the size is refused, not written.
     let short = Image { data: &rows[..5], ..image };
     assert!(t::write(&short, &Layout { byte_order: ByteOrder::Little, compression: Compression::None, ppi: 72.0, icc: None }).is_err());

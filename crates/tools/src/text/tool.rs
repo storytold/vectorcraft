@@ -113,6 +113,7 @@ impl Tool for TypeTool {
                 }
                 vec![]
             }
+            PointerKind::TripleClick => vec![],
             PointerKind::Move => {
                 // The type being edited is no target: its guides would only point at itself.
                 self.snap.hover(cx, ev.pos, self.editing.as_slice(), None);

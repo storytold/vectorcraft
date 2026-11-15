@@ -81,6 +81,29 @@ fn junk_is_rejected() {
     assert_eq!(s.doc().unwrap().doc.metadata, DocMetadata { created: s.doc().unwrap().doc.metadata.created, ..Default::default() });
 }
 
+/// A control character inside a value is refused with the field's rule: Description and Copyright
+/// Notice take line breaks and tabs, the other text fields and each keyword in a list take none.
+#[test]
+fn control_characters_are_refused_with_the_field_rule() {
+    let mut s = session();
+    for (params, msg) in [
+        (json!({"description": "a\u{7}b"}), "description has control characters"),
+        (json!({"copyrightNotice": "a\u{0}b"}), "copyrightNotice has control characters"),
+        (json!({"title": "a\nb"}), "title has control characters or line breaks"),
+        (json!({"author": "a\rb"}), "author has control characters or line breaks"),
+        (json!({"authorTitle": "a\tb"}), "authorTitle has control characters or line breaks"),
+        (json!({"copyrightUrl": "a\u{7}b"}), "copyrightUrl has control characters or line breaks"),
+        (json!({"keywords": ["ok", "a\nb"]}), "keywords has control characters or line breaks"),
+    ] {
+        match s.execute("file.info", &params) {
+            Err(EngineError::BadParams { cmd, msg: got }) => assert_eq!((cmd.as_str(), got.as_str()), ("file.info", msg), "{params}"),
+            other => panic!("{params}: {other:?}"),
+        }
+    }
+    s.execute("file.info", &json!({"description": "two\nlines\tand a tab", "copyrightNotice": "a\r\nb"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.metadata.description, "two\nlines\tand a tab");
+}
+
 #[test]
 fn file_info_round_trips_and_old_files_load() {
     let mut s = session();

@@ -131,7 +131,7 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if super::heifread::is_heif(bytes) {
         return format("heif");
     }
-    if let Some(f) = craft_image_codecs::detect(bytes).and_then(image_format) {
+    if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
     }
     // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
@@ -157,28 +157,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     by_name
 }
 
-/// The readable raster format behind a `craft_image_codecs` format.
-fn image_format(f: craft_image_codecs::Format) -> Option<&'static Format> {
-    let ext = match f {
-        craft_image_codecs::Format::Png => "png",
-        craft_image_codecs::Format::Jpeg => "jpg",
-        craft_image_codecs::Format::Gif => "gif",
-        craft_image_codecs::Format::WebP => "webp",
-        craft_image_codecs::Format::Tiff => "tiff",
-        craft_image_codecs::Format::Bmp => "bmp",
-        craft_image_codecs::Format::Tga => "tga",
-        craft_image_codecs::Format::Ico => "ico",
-        craft_image_codecs::Format::Qoi => "qoi",
-        craft_image_codecs::Format::Hdr => "hdr",
-        craft_image_codecs::Format::OpenExr => "exr",
-        craft_image_codecs::Format::Avif => "avif",
-        craft_image_codecs::Format::Jxl => "jxl",
-        craft_image_codecs::Format::Heif => "heic",
-        craft_image_codecs::Format::Jp2 => "jp2",
-        craft_image_codecs::Format::Psd => "psd",
-        _ => return None,
-    };
-    format(ext).filter(|f| f.read && f.raster)
+/// The readable raster format behind an `image` crate format.
+fn image_format(f: image::ImageFormat) -> Option<&'static Format> {
+    f.extensions_str().iter().find_map(|e| format(e)).filter(|f| f.read && f.raster)
 }
 
 /// Why a file carrying editing data (an SVG or PDF saved with Preserve Editing) opened as plain
@@ -412,8 +393,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 return Err(err(format!("can't open `{}`: {}", file_name(name), crate::cmd::place::dcs::LINK_ONLY)));
             }
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
+            // A `.ai` keeps the artboard its header gives; an EPS comes in on its page.
+            let import = if matches!(format.id, "ai" | "ait") { vectorcraft_eps::import_ai } else { vectorcraft_eps::import_names };
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
+                let r = import(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
                     .map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?
@@ -545,17 +528,26 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
         // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
-        "psd" | "psb" if opts.layers => {
-            let cms = vectorcraft_color::cms::active();
-            match super::psdlayers::import(bytes, opts.hidden_layers, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)) {
-                Ok(Some((doc, warnings))) => (doc, warnings, false),
-                Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
-                Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
-            }
-        }
+        "psd" | "psb" if opts.layers => match super::psdlayers::import_active(bytes, opts.hidden_layers) {
+            Ok(Some((doc, warnings))) => (doc, warnings, false),
+            Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
+            Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
+        },
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
+    // A PSD or PSB file's slices become user slices over its canvas (`importSlices`, default on),
+    // whether its layers or its merged image came in.
+    if matches!(format.id, "psd" | "psb")
+        && opts.import_slices
+        && let Some(canvas) = doc.artboards.first().map(|a| a.rect)
+    {
+        let (slices, notes) = super::psd_slices(bytes, canvas);
+        for (rect, options) in slices {
+            crate::cmd::slices::add_slice(&mut doc, rect, options);
+        }
+        warnings.extend(notes);
+    }
     // A PDF, `.ai` or `.ait` read from its pages or its editing copy, not restored from the document
     // it carries, opens with the File Info it gives (a PostScript `.ai` gives none).
     if matches!(format.id, "pdf" | "ai" | "ait")
@@ -677,6 +669,17 @@ pub struct ReadFile {
     path: Option<String>,
     /// What became of its linked files.
     links: Resolved,
+    /// Whether the color management policies changed the document ([`apply_policies`]).
+    policy_changed: bool,
+}
+
+/// Edit › Color Settings: the color management policies keep, take off or convert from the
+/// profiles the document `loaded` holds is tagged with, and their notes go to its warnings →
+/// whether they changed the document.
+fn apply_policies(loaded: &mut Loaded) -> bool {
+    let (notes, changed) = crate::cmd::colormgmt::apply_open_policies(&mut loaded.doc);
+    loaded.warnings.extend(notes);
+    changed
 }
 
 #[cfg(test)]
@@ -697,19 +700,50 @@ impl ReadFile {
 /// ([`super::importer`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let mut loaded = match super::importer::pick(name, bytes, p)? {
-        Some(plugin) => super::importer::load(name, bytes, &plugin, p)?,
-        None => load_with(name, bytes, &opts)?,
+    let (mut loaded, policy_changed) = if opts.link_pages {
+        let mut loaded = linked_pages(name, bytes, path.as_deref(), &opts)?;
+        let changed = apply_policies(&mut loaded);
+        (loaded, changed)
+    } else {
+        match super::importer::pick(name, bytes, p)? {
+            Some(plugin) => {
+                let mut loaded = super::importer::load(name, bytes, &plugin, p)?;
+                let changed = apply_policies(&mut loaded);
+                (loaded, changed)
+            }
+            None => {
+                // The color mode `p` asks for converts the colors after the policies did, through
+                // the profiles the document keeps.
+                let mut loaded = load_with(name, bytes, &LoadOptions { color_mode: None, ..opts.clone() })?;
+                let changed = apply_policies(&mut loaded);
+                if let Some(mode) = opts.color_mode.filter(|m| *m != loaded.doc.color_mode) {
+                    let doc = &mut loaded.doc;
+                    vectorcraft_color::cms::with_active(super::super::colormgmt::doc_cms(doc), || {
+                        super::super::colormgmt::set_color_mode(doc, mode, true, None, opts.grays);
+                    });
+                }
+                (loaded, changed)
+            }
+        }
     };
     let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
-    Ok(ReadFile { loaded, opts, path, links })
+    Ok(ReadFile { loaded, opts, path, links, policy_changed })
+}
+
+/// The PDF `name` (`bytes`, read from `path`) opened with `linkPages`: its pages as placed documents
+/// linked to them ([`super::pdfimport::linked_pages`]), named after the file.
+fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, opts: &LoadOptions) -> Result<Loaded> {
+    let (mut doc, warnings) = super::pdfimport::linked_pages(name, bytes, path, opts)?;
+    doc.title = file_name(name);
+    let format = detect(name, bytes).ok_or_else(|| err(format!("can't open `{}`: not a PDF", file_name(name))))?;
+    Ok(Loaded { doc, format, warnings, restored: false, converted: false, preview_only: false, editing_data: false, native_pdf_compatible: None })
 }
 
 /// The second half of [`open_bytes_with`]: open a file [`read_for_open`] read as the new active
 /// document → `document.open`'s result.
 pub fn open_read(s: &mut Session, file: ReadFile) -> Result<Value> {
-    open_loaded(s, file.loaded, file.links, file.path, &file.opts, false)
+    open_loaded(s, file.loaded, file.links, file.path, &file.opts, false, file.policy_changed)
 }
 
 /// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
@@ -721,14 +755,24 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
             "only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first",
         ));
     }
+    let policy_changed = apply_policies(&mut loaded);
     let base = crate::cmd::links::LinkBase::file(path);
     let links = crate::cmd::links::resolve(&mut loaded.doc, base, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
-    open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true)
+    open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true, policy_changed)
 }
 
-/// Make a loaded file the new active document; `links` is what became of its linked files, and
-/// `opts` are the options it was read with.
-fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
+/// Make a loaded file the new active document; `links` is what became of its linked files, `opts`
+/// are the options it was read with, and `policy_changed` says whether the color management
+/// policies changed it (it then opens with unsaved changes).
+fn open_loaded(
+    s: &mut Session,
+    loaded: Loaded,
+    links: Resolved,
+    path: Option<String>,
+    opts: &LoadOptions,
+    as_template: bool,
+    policy_changed: bool,
+) -> Result<Value> {
     let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } =
         loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
@@ -769,6 +813,9 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     let converted = saves_back && converted && s.prefs.append_converted;
     let index = s.add_document(doc, path);
     let st = s.doc_mut()?;
+    if policy_changed {
+        st.mark_unsaved();
+    }
     if let Some(pdf) = native_pdf_compatible {
         st.save_options.insert("pdfCompatible".into(), json!(pdf));
     }
@@ -843,12 +890,23 @@ pub(crate) use vectorcraft_doc::MAX_RASTER_ALLOC;
 /// says so; the pixels aren't read): Open, Place and the Links panel say it ([`size_note`], #1479).
 /// `None` for images within the allowance, and for bytes that aren't an image.
 pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
+    use image::ImageDecoder as _;
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
         return Some(format!("an image of {w} × {h} pixels is too large to draw"));
     }
-    let (w, h) = craft_image_codecs::probe_size(bytes).ok().or_else(|| ImageBlob::new("", bytes.to_vec()).header_size())?;
+    let reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    let format = reader.format()?;
+    let d = reader.into_decoder().ok()?;
+    let (w, h) = d.dimensions();
+    // The allowance also counts the pixels as RGBA: an image of fewer than 4 bytes a pixel (gray,
+    // gray with alpha, RGB) takes more than the decoder counts (#1717).
     let rgba_over = u64::from(w) * u64::from(h) > MAX_RASTER_ALLOC / 4;
-    rgba_over.then(|| format!("an image of {w} × {h} pixels is too large to draw"))
+    let samples_over = d.total_bytes() > MAX_RASTER_ALLOC;
+    // The renderer can stream a non-interlaced PNG a row at a time when those buffers fit. Its
+    // full decoded byte count can exceed the allowance even though drawing it at native size is
+    // safe; use the renderer's decision for that case instead of warning from total_bytes alone.
+    let png_streams_at_size = samples_over && format == image::ImageFormat::Png && vectorcraft_render::reduced_size(bytes) == Some((w, h));
+    (rgba_over || (samples_over && !png_streams_at_size)).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
 }
 
 /// What Open, Place and the Links panel say of encoded image `bytes` that [`too_large_note`] is
@@ -858,7 +916,7 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
 pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
     let note = too_large_note(bytes)?;
     let Some(drawn) = vectorcraft_render::reduced_size(bytes) else { return Some(note) };
-    let (w, h) = craft_image_codecs::probe_size(bytes).ok().or_else(|| ImageBlob::new("", bytes.to_vec()).header_size())?;
+    let (w, h) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()?;
     (drawn != (w, h)).then(|| format!("an image of {w} × {h} pixels is shown at reduced size"))
 }
 
@@ -866,7 +924,9 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// they are, with their ink amounts ([`ImageBlob::cmyk`]), except that ones storing one plane per
 /// ink are written again with their inks together ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]);
 /// CMYK TIFFs with an alpha channel, which the decoder can't read, become RGBA in the active color
-/// settings' CMYK, as do CMYK Photoshop documents, whose merged image is read ([`psdread`]).
+/// settings' CMYK, whichever of their extra channels is the alpha
+/// ([`vectorcraft_doc::cmyk::extra_samples_tiff_rgba`]), as do CMYK Photoshop documents, whose
+/// merged image is read ([`psdread`]).
 /// 1-bit TIFFs compressed with CCITT Group 3, which the decoder can't read either, become RGBA
 /// too ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]).
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read
@@ -914,15 +974,17 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if super::pxrread::is_pxr(bytes) {
         return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
-    let detected = craft_image_codecs::detect(bytes);
-    let kind = if detected.is_none() && super::tgaread::is_targa(bytes) {
-        Some(craft_image_codecs::Format::Tga)
-    } else if detected.is_none() && super::pcxread::is_pcx(bytes) {
+    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
+    if reader.format().is_none() && super::tgaread::is_targa(bytes) {
+        reader.set_format(image::ImageFormat::Tga);
+    }
+    if reader.format().is_none() && super::pcxread::is_pcx(bytes) {
         return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
-    } else {
-        detected
-    };
-    let kind = kind.ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
+    }
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(MAX_RASTER_ALLOC);
+    reader.limits(limits);
+    let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     // A photo whose EXIF orientation turns or flips it (a camera held upright) is stored as it is
     // seen, so it places the way it was taken (#4284); the others keep their own bytes.
@@ -943,10 +1005,7 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         _ => None,
     };
     if let Some(kept) = kept {
-        let (width, height) = craft_image_codecs::probe_size(bytes)
-            .ok()
-            .or_else(|| ImageBlob::new("", bytes.to_vec()).header_size())
-            .ok_or_else(|| err("could not read image dimensions"))?;
+        let (width, height) = reader.into_dimensions().map_err(err)?;
         return stored(kept, f.mime, (width, height), ppi);
     }
     let extra_samples = || {
@@ -960,52 +1019,21 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         None => match (f.id == "tiff").then(|| vectorcraft_doc::cmyk::group3_tiff_rgba(bytes)).flatten() {
             Some(read) => image::DynamicImage::ImageRgba8(read.map_err(err)?),
             None => {
-                let mut opts = craft_image_codecs::DecodeOptions::default();
-                opts.limits.max_alloc = MAX_RASTER_ALLOC;
-                // `max_alloc` checks the actual decoded sample size (including 16-bit RGBA).
-                // Keep the former 1-billion-pixel ceiling; the RGBA allowance is separately
-                // applied by `size_note` and the image placement path.
-                opts.limits.max_pixels = 1 << 30;
-                opts.keep_orientation = true;
-                let decoded = craft_image_codecs::decode_as_with(kind, bytes, &opts).map_err(|e| match e {
-                    craft_image_codecs::CodecError::LimitExceeded(_) => err("image is too large to draw"),
-                    _ => err(e),
-                })?;
-                let (w, h) = decoded.dimensions();
+                use image::ImageDecoder as _;
+                let mut decoder = reader.into_decoder().map_err(err)?;
+                // The allowance counts the decoded samples and the RGBA pixels they become (#1717).
+                let (w, h) = decoder.dimensions();
+                if decoder.total_bytes() > MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > MAX_RASTER_ALLOC {
+                    return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
+                }
+                // A profile the decoder can't read leaves the image without one. The image decoder
+                // reads a TIFF's tags within the size of its pixels, so a small TIFF's profile is
+                // read by the TIFF decoder itself.
                 icc = match f.id {
                     "tiff" => vectorcraft_doc::cmyk::tiff_icc_profile(bytes),
-                    _ => decoded.icc.clone(),
+                    _ => decoder.icc_profile().ok().flatten(),
                 };
-                match (decoded.layout(), decoded.sample_type()) {
-                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => image::DynamicImage::ImageLuma8(
-                        image::GrayImage::from_raw(w, h, decoded.into_data()).ok_or_else(|| err("invalid gray buffer"))?,
-                    ),
-                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => image::DynamicImage::ImageLumaA8(
-                        image::GrayAlphaImage::from_raw(w, h, decoded.into_data()).ok_or_else(|| err("invalid gray alpha buffer"))?,
-                    ),
-                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
-                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(w, h, decoded.into_data()).ok_or_else(|| err("invalid rgb buffer"))?)
-                    }
-                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U16) => {
-                        let s = decoded.to_u16_samples().ok_or_else(|| err("invalid gray16 buffer"))?;
-                        image::DynamicImage::ImageLuma16(image::ImageBuffer::from_raw(w, h, s).ok_or_else(|| err("invalid gray16 buffer"))?)
-                    }
-                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U16) => {
-                        let s = decoded.to_u16_samples().ok_or_else(|| err("invalid graya16 buffer"))?;
-                        image::DynamicImage::ImageLumaA16(image::ImageBuffer::from_raw(w, h, s).ok_or_else(|| err("invalid graya16 buffer"))?)
-                    }
-                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U16) => {
-                        let s = decoded.to_u16_samples().ok_or_else(|| err("invalid rgb16 buffer"))?;
-                        image::DynamicImage::ImageRgb16(image::ImageBuffer::from_raw(w, h, s).ok_or_else(|| err("invalid rgb16 buffer"))?)
-                    }
-                    (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U16) => {
-                        let s = decoded.to_u16_samples().ok_or_else(|| err("invalid rgba16 buffer"))?;
-                        image::DynamicImage::ImageRgba16(image::ImageBuffer::from_raw(w, h, s).ok_or_else(|| err("invalid rgba16 buffer"))?)
-                    }
-                    _ => image::DynamicImage::ImageRgba8(
-                        image::RgbaImage::from_raw(w, h, decoded.to_rgba8()).ok_or_else(|| err("invalid rgba buffer"))?,
-                    ),
-                }
+                image::DynamicImage::from_decoder(decoder).map_err(err)?
             }
         },
     };
@@ -1035,63 +1063,15 @@ fn png_takes_icc(img: &image::DynamicImage, icc: &[u8]) -> bool {
 /// `img` stored as a PNG that keeps the file's resolution and carries `icc`, the ICC profile its
 /// colors are in. `img` has samples a PNG holds: 8 or 16 bits of gray or RGB, with or without alpha.
 pub(super) fn as_png(img: impl Into<image::DynamicImage>, icc: Option<Vec<u8>>, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
-    use image::DynamicImage as D;
+    use image::ImageEncoder as _;
     let img: image::DynamicImage = img.into();
     let size = (img.width(), img.height());
-    let (w, h) = size;
-    let u16_bytes = |v: Vec<u16>| v.into_iter().flat_map(u16::to_ne_bytes).collect::<Vec<u8>>();
-    let raw = match img {
-        D::ImageLuma8(b) => {
-            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw())
-        }
-        D::ImageLumaA8(b) => {
-            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw())
-        }
-        D::ImageRgb8(b) => {
-            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw())
-        }
-        D::ImageRgba8(b) => {
-            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw())
-        }
-        D::ImageLuma16(b) => craft_image_codecs::Image::from_raw(
-            w,
-            h,
-            craft_image_codecs::ChannelLayout::Gray,
-            craft_image_codecs::SampleType::U16,
-            u16_bytes(b.into_raw()),
-        ),
-        D::ImageLumaA16(b) => craft_image_codecs::Image::from_raw(
-            w,
-            h,
-            craft_image_codecs::ChannelLayout::GrayA,
-            craft_image_codecs::SampleType::U16,
-            u16_bytes(b.into_raw()),
-        ),
-        D::ImageRgb16(b) => craft_image_codecs::Image::from_raw(
-            w,
-            h,
-            craft_image_codecs::ChannelLayout::Rgb,
-            craft_image_codecs::SampleType::U16,
-            u16_bytes(b.into_raw()),
-        ),
-        D::ImageRgba16(b) => craft_image_codecs::Image::from_raw(
-            w,
-            h,
-            craft_image_codecs::ChannelLayout::Rgba,
-            craft_image_codecs::SampleType::U16,
-            u16_bytes(b.into_raw()),
-        ),
-        other => craft_image_codecs::Image::from_raw(
-            w,
-            h,
-            craft_image_codecs::ChannelLayout::Rgba,
-            craft_image_codecs::SampleType::U8,
-            other.into_rgba8().into_raw(),
-        ),
+    let mut png = Vec::new();
+    let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
+    if let Some(icc) = icc {
+        encoder.set_icc_profile(icc).map_err(err)?;
     }
-    .map_err(err)?
-    .with_icc(icc);
-    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).map_err(err)?;
+    img.write_with_encoder(encoder).map_err(err)?;
     let png = match ppi {
         Some(r) => super::ppi::with_png_resolution(&png, r),
         None => png,
@@ -1125,10 +1105,12 @@ pub fn texture_image(bytes: &[u8]) -> Result<String> {
             LoadedTexture::from_rgba(inks.width, inks.height, &rgba)
         }
         None => {
-            let mut opts = craft_image_codecs::DecodeOptions::default();
-            opts.limits.max_alloc = MAX_RASTER_ALLOC;
-            let img = craft_image_codecs::decode_with(&blob.bytes, &opts).map_err(err)?;
-            LoadedTexture::from_rgba(img.width(), img.height(), &img.to_rgba8())
+            let mut reader = image::ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().map_err(err)?;
+            let mut limits = image::Limits::default();
+            limits.max_alloc = Some(MAX_RASTER_ALLOC);
+            reader.limits(limits);
+            let img = reader.decode().map_err(err)?.to_rgba8();
+            LoadedTexture::from_rgba(img.width(), img.height(), img.as_raw())
         }
     };
     texture.and_then(|t| t.to_stored()).ok_or_else(|| err("the image can't be read as a texture"))
@@ -1152,14 +1134,30 @@ pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
     let layer = d.layers[0].id;
     let id = d.alloc_id();
     let xf = Affine::scale_non_uniform(sx, sy);
-    let mut n = Node::new(
+    let n = Node::new(
         id,
         NodeKind::Image(Box::new(ImageObject { key: key.clone(), width, height, xf, link: None, placement: Default::default(), pixels: None })),
     );
+    let mut n = file_clipped(&mut d, n, psdread::clipping_path(bytes));
     n.name = Some(name.to_string());
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;
     Ok(d)
+}
+
+/// Image `image` of `d` clipped by `clip`, the clipping path its file names in the image's pixel
+/// space (a PSD or PSB file's, [`psdread::clipping_path`]): a clip group of that path (even-odd,
+/// with no paint) and the image. Without one the image stays as it is.
+pub(crate) fn file_clipped(d: &mut Document, image: Node, clip: Option<vectorcraft_geom::PathData>) -> Node {
+    let (Some(mut path), NodeKind::Image(im)) = (clip, &image.kind) else { return image };
+    path.transform(im.xf);
+    let none = vectorcraft_color::Paint::None;
+    let mut clip = Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance::basic(none.clone(), none, 0.0));
+    if let NodeKind::Path { clipping, rule, .. } = &mut clip.kind {
+        *clipping = true;
+        *rule = vectorcraft_geom::FillRule::EvenOdd;
+    }
+    Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(clip), std::sync::Arc::new(image)], clip: true })
 }
 
 /// Does this import note say that the file has something the document doesn't?

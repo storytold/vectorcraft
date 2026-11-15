@@ -41,8 +41,19 @@ impl<'a> Reader<'a> {
     }
 
     /// `X=` in a `/Mask` dictionary: the opacity mask's art starts, read until its `X+`
-    /// ([`Self::end_mask`]).
+    /// ([`Self::end_mask`]). In an envelope's dictionary, its `AIDeformArtKey` block starts
+    /// ([`Reader::envelope_blocks`]).
     fn open_mask_object(&mut self, hidden: bool) -> Result<(), String> {
+        if let Some(Frame { kind: Kind::Obj(o), .. }) = self.frames.last()
+            && o.ty == "ArtDictionary"
+            && o.get("AIDeformOptionsKey").is_some()
+        {
+            // One entry for each open dictionary, however many `X=` it has.
+            if self.envelope_blocks.last() != Some(&self.frames.len()) {
+                self.envelope_blocks.push(self.frames.len());
+            }
+            return Ok(());
+        }
         if !matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(o), .. }) if o.ty == "Mask") {
             // `X=` also introduces legacy text frame art, read by `text_frames`.
             return Ok(());
@@ -61,6 +72,22 @@ impl<'a> Reader<'a> {
             (self.pending_unread_fill, self.pending_unread_stroke) = (f.pending_unread_fill, f.pending_unread_stroke);
         }
         self.open(Kind::Mask, hidden)
+    }
+
+    /// `X+`: a dictionary's art block ends. The block of a dictionary whose `X=` opened no frame (an
+    /// envelope's, in an opacity mask's art too) ends with the dictionary still innermost; an opacity
+    /// mask's ends its art ([`Self::end_mask`]).
+    fn end_block(&mut self) -> Result<(), String> {
+        if matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(_), .. })) {
+            if self.envelope_blocks.last() == Some(&self.frames.len()) {
+                self.envelope_blocks.pop();
+            }
+            return Ok(());
+        }
+        if self.frames.iter().any(|f| matches!(f.kind, Kind::Mask)) {
+            return self.end_mask();
+        }
+        Ok(())
     }
 
     /// `LB`: a graph started in this layer that hasn't ended doesn't go on past it; the layer ends.
@@ -159,8 +186,7 @@ impl<'a> Reader<'a> {
             }
             ";" => return self.end_obj(),
             "X=" => return self.open_mask_object(hidden),
-            "X+" if self.frames.iter().any(|f| matches!(f.kind, Kind::Mask)) => return self.end_mask(),
-            "X+" => return Ok(()),
+            "X+" => return self.end_block(),
             _ => {}
         }
         self.state_block_continues(w);
