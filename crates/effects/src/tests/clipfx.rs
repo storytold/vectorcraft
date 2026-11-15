@@ -460,6 +460,40 @@ fn a_painted_clipping_paths_fill_and_stroke_effects_apply_before_the_effects_aro
 }
 
 #[test]
+fn a_painted_clipping_paths_stroke_keeps_the_width_its_transform_scales_it_to() {
+    // A compound clipping path with a 2 pt stroke whose Transform scales strokes to 200 % without
+    // transforming the object: the export paints the stroke at 4 pt.
+    let square = Node::path(NodeId(4), shapes::rectangle(Rect::new(50.0, 50.0, 150.0, 150.0)), Appearance::default());
+    let mut clip = Node::new(NodeId(3), NodeKind::Compound { children: vec![Arc::new(square)], rule: vectorcraft_geom::FillRule::NonZero });
+    clip.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 2.0).into();
+    let scale = json!({"scaleH": 200, "scaleV": 200, "objects": false, "strokes": true});
+    for item in &mut clip.appearance.items {
+        if let vectorcraft_doc::AppearanceItem::Stroke(s) = item {
+            s.effects.push(fx("distort.transform", scale.clone()));
+        }
+    }
+    fn widths(n: &Node, out: &mut Vec<f64>) {
+        for item in &n.appearance.items {
+            if let vectorcraft_doc::AppearanceItem::Stroke(s) = item {
+                out.push(s.width);
+            }
+        }
+        n.children().into_iter().flatten().for_each(|c| widths(c, out));
+    }
+    let mut d = Document::new(400.0, 400.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, clip_group(2, clip)).unwrap();
+    let baked = baked_clip(&d);
+    let stroke = baked.clip_paint().stroke.unwrap();
+    let mut found = vec![];
+    widths(&stroke, &mut found);
+    assert!(!found.is_empty() && found.iter().all(|w| (w - 4.0).abs() < 1e-6), "{found:?} {stroke:?}");
+    // The stroke is still drawn where the path lies, as the Transform does not move the object.
+    let bounds = stroke.geometric_bounds().unwrap();
+    assert!((bounds.x0 - 50.0).abs() < 0.5 && (bounds.width() - 100.0).abs() < 0.5, "{bounds:?}");
+}
+
+#[test]
 fn a_baked_clipping_path_gives_its_pieces_ids_of_their_own() {
     // An unpainted clipping path whose fill and stroke have Transform effects, in a clip group
     // without effects: the export bakes it into a piece for each, every object with its own id.

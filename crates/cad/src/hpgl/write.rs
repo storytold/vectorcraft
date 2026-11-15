@@ -596,6 +596,9 @@ struct Walk<'a> {
     clips: Vec<Region>,
     /// The points those masks hold ([`MAX_MASK_POINTS`]).
     mask_points: usize,
+    /// Set while the stroke pieces of a clipping path whose fill paints are drawn: they close, as
+    /// its fill closes its outline.
+    closing: bool,
     runs: Vec<Run>,
     points: usize,
     clip_tests: u64,
@@ -624,6 +627,7 @@ impl<'a> Walk<'a> {
             tolerance,
             clips: vec![],
             mask_points: 0,
+            closing: false,
             runs: vec![],
             points: 0,
             clip_tests: 0,
@@ -855,9 +859,15 @@ impl<'a> Walk<'a> {
         }
         // Drawn whole where its stroke paints: a fill closes its outline, and type's characters
         // without a stroke are drawn too. Pieces of a clipping path whose fill and stroke effects
-        // were applied are drawn in its stroke pieces alone.
+        // were applied are drawn in its stroke pieces alone, closed where its fill paints.
         if let Some(stroke) = &paint.stroke {
-            self.node(if first.extras().clip_pieces { stroke } else { first }, false);
+            if first.extras().clip_pieces {
+                let closing = std::mem::replace(&mut self.closing, paint.fill.as_ref().is_some_and(fills_in_pieces));
+                self.node(stroke, false);
+                self.closing = closing;
+            } else {
+                self.node(first, false);
+            }
         }
     }
 
@@ -877,7 +887,8 @@ impl<'a> Walk<'a> {
 
     /// A path drawn in its color: the topmost stroke's that paints, else the topmost fill's that
     /// paints (visible, with a paint and some opacity). A filled path's every subpath is closed,
-    /// as its fill closes it, also when its stroke gives the color.
+    /// as its fill closes it, also when its stroke gives the color, and so is each stroke piece
+    /// of a clipping path whose fill paints ([`Walk::closing`]).
     fn shape(&mut self, n: &Node, bp: &BezPath) {
         if bp.elements().is_empty() {
             return;
@@ -899,7 +910,7 @@ impl<'a> Walk<'a> {
             (None, None) => return,
         };
         let rgb = self.flat(paint);
-        self.draw(rgb, bp, fill.is_some());
+        self.draw(rgb, bp, fill.is_some() || self.closing);
     }
 
     /// `bp` drawn in `rgb`: flattened (with `close` every subpath closed), then cut and added.
@@ -1153,6 +1164,12 @@ fn top_stroke(n: &Node) -> Option<&StrokeLayer> {
 /// with it and the groups around it shown and not fully transparent.
 fn strokes_in_pieces(n: &Node) -> bool {
     n.children().is_some_and(|ch| ch.iter().filter(|c| c.visible && c.opacity > 0.0).any(|c| top_stroke(c).is_some() || strokes_in_pieces(c)))
+}
+
+/// Whether a member of `n`, at any depth of its groups, has a fill that paints ([`top_fill`]),
+/// with it and the groups around it shown and not fully transparent.
+fn fills_in_pieces(n: &Node) -> bool {
+    n.children().is_some_and(|ch| ch.iter().filter(|c| c.visible && c.opacity > 0.0).any(|c| top_fill(c).is_some() || fills_in_pieces(c)))
 }
 
 /// The paint of the topmost fill of `n` that paints: visible, with a paint and some opacity.

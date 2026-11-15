@@ -91,6 +91,17 @@ fn clip_effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Nod
             .iter()
             .zip(&p.appearance.items)
             .map(|(item, carried)| {
+                // A fill or stroke whose Transform effect scales strokes or moves patterns is drawn
+                // through its art, as an export bakes such a path ([`crate::reshape`]).
+                let mut whole = Node::path(n.id, g.clone(), Appearance { items: vec![carried.clone()], ..Default::default() });
+                if let NodeKind::Path { rule: r, .. } = &mut whole.kind {
+                    *r = rule;
+                }
+                if crate::has_transform_art(&whole)
+                    && let Some(art) = crate::reshape(None, &whole, None)
+                {
+                    return std::sync::Arc::new(art);
+                }
                 let (ig, mut it) = crate::bake::apply_item(item, carried, &g, &ctx);
                 crate::bake::clear_item_effects(&mut it);
                 let mut piece = Node::path(n.id, ig, Appearance { items: vec![it], ..Default::default() });
