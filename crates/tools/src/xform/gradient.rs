@@ -582,7 +582,7 @@ impl Tool for GradientTool {
                 let at = a.stop_point(cx, i).unwrap_or(ev.pos);
                 vec![Self::select_stop(i), Action::Dialog("gradientStop".into(), json!({ "index": i, "x": at.x, "y": at.y }))]
             }
-            PointerKind::Move => vec![],
+            PointerKind::Move | PointerKind::TripleClick => vec![],
         }
     }
 
