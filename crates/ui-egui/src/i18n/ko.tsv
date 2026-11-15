@@ -3862,6 +3862,8 @@ file-filter	Templates	템플릿
 	Gradient (. or Shift+.)	그레이디언트 (. 또는 Shift+.)
 	Graph Data	그래프 데이터
 	Graph Type	그래프 유형
+	Graph Type…	그래프 유형…
+	Graph Data…	그래프 데이터…
 	Graph Options	그래프 옵션
 	Left Axis	왼쪽 축
 	Right Axis	오른쪽 축
