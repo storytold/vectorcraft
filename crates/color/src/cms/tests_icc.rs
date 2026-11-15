@@ -49,6 +49,28 @@ fn gray_is_srgb_toned() {
 }
 
 #[test]
+fn many_pixels_convert_as_each_one_does() {
+    let p = IccProfile::from_bytes(None, &icc_bytes(DISPLAY_P3).unwrap()).unwrap();
+    let px = [[1.0f32, 0.0, 0.0], [0.2, 0.6, 0.9], [0.5, 0.5, 0.5], [0.0, 1.0, 0.0]];
+    for intent in Intent::ALL {
+        let v: Vec<f32> = px.iter().flatten().copied().collect();
+        let mut dst = vec![0.0; v.len()];
+        p.to_srgb_pixels(&v, &mut dst, intent).unwrap();
+        for (i, rgb) in px.iter().enumerate() {
+            let one = p.to_srgb(rgb, intent).unwrap();
+            assert!(dst[i * 3..i * 3 + 3].iter().zip(one).all(|(a, b)| (a - b).abs() < 1e-5), "{intent:?} {rgb:?}: {dst:?} vs {one:?}");
+        }
+    }
+    // Lengths that aren't whole pixels, or a destination of another size, are refused.
+    assert!(p.to_srgb_pixels(&[0.5; 4], &mut [0.0; 3], Intent::Perceptual).is_none());
+    assert!(p.to_srgb_pixels(&[0.5; 3], &mut [0.0; 6], Intent::Perceptual).is_none());
+    let gray = IccProfile::from_bytes(None, &icc_bytes(GRAY).unwrap()).unwrap();
+    let mut dst = [0.0; 6];
+    gray.to_srgb_pixels(&[0.25, 0.75], &mut dst, Intent::RelativeColorimetric).unwrap();
+    assert!(dst.iter().zip([0.25, 0.25, 0.25, 0.75, 0.75, 0.75]).all(|(a, b)| (a - b).abs() < 0.01), "{dst:?}");
+}
+
+#[test]
 fn encoded_profiles_are_reproducible() {
     assert_eq!(icc::builtin_rgb_bytes(DISPLAY_P3).unwrap(), icc::builtin_rgb_bytes(DISPLAY_P3).unwrap());
 }
