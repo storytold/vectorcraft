@@ -6,6 +6,7 @@
 startup | Noto Sans Arabic | Regular
 startup | Noto Sans Thai | Regular
 startup | Noto Sans Georgian | Regular
+startup | Noto Sans Tamil | Regular
 background | Cairo | Regular
 background | Tajawal | ExtraLight
 background | Tajawal | Light

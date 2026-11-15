@@ -563,7 +563,7 @@ pub(crate) fn craft_font_name(f: &vectorcraft_text::CraftFont) -> String {
     format!("craft-fonts {} {}", f.family, f.style)
 }
 
-/// The Japanese, Georgian and Devanagari craft-fonts faces (when built with `CRAFT_FONTS_DIR`) as fallbacks at
+/// The Japanese, Georgian, Devanagari and Tamil craft-fonts faces (when built with `CRAFT_FONTS_DIR`) as fallbacks at
 /// the end of every family, after the app's own fonts and before the installed fonts `ui_fonts`
 /// adds: BIZ UDPGothic first (bold first in the semibold family), then the Mincho faces, then Noto
 /// Sans Georgian. Each face sits on the baseline of the first face of the family it is in (see
@@ -573,7 +573,7 @@ fn add_craft_fonts(fonts: &mut FontDefinitions) {
     let mut copies: std::collections::HashMap<(FontFamily, String), String> = std::collections::HashMap::new();
     for f in vectorcraft_text::CRAFT_FONTS
         .iter()
-        .filter(|f| f.is_japanese() || f.is_georgian() || f.scripts.contains(&"Deva") || f.scripts.contains(&"Gujr"))
+        .filter(|f| f.is_japanese() || f.is_georgian() || f.scripts.contains(&"Deva") || f.scripts.contains(&"Gujr") || f.scripts.contains(&"Taml"))
     {
         let name = craft_font_name(f);
         for (copy, data, families) in crate::ui_fonts::baseline_copies(fonts, &name, &FontData::from_static(f.bytes)) {
@@ -593,6 +593,7 @@ fn add_craft_fonts(fonts: &mut FontDefinitions) {
         stack.extend(vectorcraft_text::craft_fonts::georgian_ui_fonts().into_iter().map(copy));
         stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Deva")).map(copy));
         stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Gujr")).map(copy));
+        stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Taml")).map(copy));
     }
 }
 
