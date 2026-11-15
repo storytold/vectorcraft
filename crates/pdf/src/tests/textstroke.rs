@@ -105,4 +105,20 @@ fn imported_stroked_type_keeps_the_files_cap_join_and_miter_limit() {
     let runs = styles("0 0 0 RG 4 w BT 1 Tr /F1 60 Tf 40 110 Td 1 j (WA) Tj 0 j (VE) Tj 0 Tr ET");
     let joins: Vec<_> = runs.iter().map(|s| s.stroke_join).collect();
     assert_eq!(joins, [LineJoin::Round, LineJoin::Miter]);
+    // Filled and stroked a glyph at a time: the next glyph's fill joins the run before it, and its
+    // stroke, with another join, restyles that glyph alone.
+    for mode in ["2", "6"] {
+        let content = format!("0 g 0 0 0 RG 4 w BT {mode} Tr /F1 60 Tf 40 110 Td 1 j (W) Tj 0 j (A) Tj 0 Tr ET");
+        let runs = styles(&content);
+        let d = import(&page(&content)).unwrap();
+        let mut text = String::new();
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                text.push_str(&t.plain_text());
+            }
+        });
+        assert_eq!(text, "WA", "{content}");
+        let joins: Vec<_> = runs.iter().map(|s| (!s.stroke.is_none()).then_some(s.stroke_join)).collect();
+        assert_eq!(joins, [Some(LineJoin::Round), Some(LineJoin::Miter)], "{content}: {runs:?}");
+    }
 }

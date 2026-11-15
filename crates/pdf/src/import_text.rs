@@ -205,6 +205,9 @@ pub(crate) struct TextLine {
     /// Runs of glyphs drawn alike: their look, how far the file raised them off the line's
     /// baseline (points, up; text rise, `Ts`), their text.
     runs: Vec<(Look, f64, String)>,
+    /// Where the last glyph's text starts in the last run (bytes): a stroke over that glyph
+    /// alone restyles only its text ([`stroke_last`](Self::stroke_last)).
+    last_start: usize,
     /// The bytes of text the horizontal glyphs added to `runs` so far (counted as they come: a
     /// sum over the runs for each glyph is quadratic when every glyph is a run).
     text_bytes: usize,
@@ -275,6 +278,7 @@ impl TextLine {
             last_size: at.size,
             baseline: vec![],
             runs: vec![],
+            last_start: 0,
             text_bytes: 0,
             slots: vec![],
             authored: vec![],
@@ -321,6 +325,7 @@ impl TextLine {
         let size = self.at.size.max(at.size);
         let Some((last, _, run)) = self.runs.last_mut() else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
+            self.last_start = 0;
             self.record_actual_fill(look, at, content);
             self.authored.extend(text.chars().map(|_| content.authored()));
             (self.upright, self.next, self.last) = (Some(upright), at.origin + down * at.size, at.origin);
@@ -352,9 +357,11 @@ impl TextLine {
             && (matches!(content, TextContent::Pen)
                 || (!matches!(content, TextContent::Actual(_)) && !self.authored.last().copied().unwrap_or(false)))
         {
+            self.last_start = run.len();
             run.push_str(text);
         } else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
+            self.last_start = 0;
         }
         self.record_actual_fill(look, at, content);
         self.authored.extend(text.chars().map(|_| content.authored()));
@@ -443,12 +450,15 @@ impl TextLine {
                 && (*last_shift - shift).abs() < 1e-3
                 && (pen || (!matches!(content, TextContent::Actual(_)) && !self.authored.last().copied().unwrap_or(false)))
             {
+                self.last_start = run.len();
                 run.push_str(text);
             } else {
                 self.runs.push((look.clone(), shift, text.to_string()));
+                self.last_start = 0;
             }
         } else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
+            self.last_start = 0;
         }
         self.record_actual_fill(look, at, content);
         self.text_bytes = self.text_bytes.saturating_add(text.len());
@@ -519,13 +529,34 @@ impl TextLine {
         Some(bp)
     }
 
-    /// A stroke (`stroke`: paint, width, cap, join and miter limit) over the glyph just drawn at `at` in `font` (fill
-    /// and stroke rendering), which `overprint`s or not: the run is stroked. `false`: it isn't
-    /// that glyph.
+    /// A stroke (`stroke`: paint, width, cap, join and miter limit) over the glyph just drawn at
+    /// `at` in `font` (fill and stroke rendering), which `overprint`s or not: that glyph is
+    /// stroked. `false`: it isn't that glyph.
+    ///
+    /// A filled glyph joins a run of the same fill whatever its stroke ([`Look::takes`]), so the
+    /// run can hold glyphs before it that are stroked otherwise or not at all: then the glyph's
+    /// text becomes a run of its own with this stroke, and the glyphs before it keep theirs
+    /// (#7741). The line's text is the same either way, so the characters' slots, gaps and
+    /// authored flags, kept along the whole line, still line up.
     pub fn stroke_last(&mut self, font: u128, at: Placement, stroke: TypeStroke, overprint: bool) -> bool {
-        let Some((look, ..)) = self.runs.last_mut().filter(|(l, ..)| l.font == font && (at.origin - self.last).hypot() < self.at.size * 1e-3) else {
+        let start = self.last_start;
+        let Some((look, shift, text)) =
+            self.runs.last_mut().filter(|(l, ..)| l.font == font && (at.origin - self.last).hypot() < self.at.size * 1e-3)
+        else {
             return false;
         };
+        let same = look.stroke.as_ref() == Some(&stroke) && look.overprint_stroke == overprint;
+        // Only the last glyph's text in the run (`start` within it, on a character boundary):
+        // split it off. A run of that glyph alone is stroked whole, as before.
+        if !same && start > 0 && start < text.len() && text.is_char_boundary(start) {
+            let tail = text.split_off(start);
+            let mut own = look.clone();
+            (own.stroke, own.overprint_stroke) = (Some(stroke), overprint);
+            let shift = *shift;
+            self.runs.push((own, shift, tail));
+            self.last_start = 0;
+            return true;
+        }
         (look.stroke, look.overprint_stroke) = (Some(stroke), overprint);
         true
     }
