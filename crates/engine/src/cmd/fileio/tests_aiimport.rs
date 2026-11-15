@@ -966,7 +966,7 @@ fn an_ai_file_opens_its_variable_library() {
                 {"name": "v_file", "kind": "image", "bindings": 0},
                 {"name": "v_graph", "kind": "graph", "bindings": 0},
                 {"name": "v_unbound", "kind": "unknown", "bindings": 0},
-            ], "locked": true})
+            ], "locked": true, "sort": {"by": "none", "descending": false}})
         );
         let r = s.execute("dataset.list", &json!({})).unwrap();
         assert_eq!(r["active"], "ds_two", "{r}");
@@ -1158,6 +1158,91 @@ fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
     assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
     let e = s.execute("file.place", &json!({"name": "plain.ai", "dataBase64": plain})).unwrap_err().to_string();
     assert!(e.contains("placeholder"), "{e}");
+}
+
+/// `document.open` with `linkPages` refuses a `.ai` saved without PDF compatibility, whose page is
+/// only a placeholder, and opens a PDF-compatible one.
+#[test]
+fn link_pages_refuses_an_ai_file_saved_without_its_pdf_part() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpages-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let file = |name: &str, page: &str| {
+        let path = d.join(name);
+        std::fs::write(&path, ai::ai(&compressed(&ai::sample_data()), page)).unwrap();
+        path.to_string_lossy().to_string()
+    };
+    let (plain, compatible) = (file("plain.ai", PLACEHOLDER), file("compatible.ai", "0 g 10 10 40 40 re f"));
+    let mut s = Session::new();
+    let e = s.execute("document.open", &json!({"path": plain, "linkPages": true})).unwrap_err().to_string();
+    assert!(e.contains("isn't a PDF or a PDF-compatible .ai file"), "{e}");
+    assert!(s.documents().is_empty(), "nothing opened");
+    s.execute("document.open", &json!({"path": compatible, "linkPages": true})).unwrap();
+    assert!(s.doc().unwrap().doc.has_placed());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// `document.open` with `linkPages` opens a PDF-compatible `.ai` asked for its crop box on its trim
+/// box, as it opens as art, showing its bleed box round the artboard, which is the document's bleed.
+#[test]
+fn link_pages_open_an_ai_file_on_its_trim_box_with_its_bleed() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpagestrim-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("trimmed.ai");
+    let boxes = "/TrimBox [10 10 190 90] /BleedBox [4 2 196 98]";
+    std::fs::write(&path, ai::ai_with(&compressed(&ai::sample_data()), "0 g 10 10 40 40 re f", boxes)).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path, "linkPages": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let board = doc.artboards[0].rect;
+    assert_eq!((board.width(), board.height()), (180.0, 80.0), "the trim box");
+    assert_eq!(doc.setup.bleed, [8.0, 8.0, 6.0, 6.0], "top, bottom, left, right");
+    // The page shows its bleed box, so the art in the bleed is kept.
+    let placed = doc.layers[0].children().unwrap()[0].clone();
+    let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("{:?}", placed.kind) };
+    assert_eq!((p.width, p.height, p.page_box), (192.0, 96.0, vectorcraft_doc::PageBox::Bleed));
+    assert_eq!(p.xf.translation(), vectorcraft_geom::Vec2::new(-6.0, -8.0), "the trim box on the artboard");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn link_pages_on_their_trim_boxes_keep_the_bleed_between_the_artboards() {
+    // Two 100 pt trim boxes: the first with 60 pt of bleed on each side, the second with 80 pt on
+    // its left, more than the largest document bleed (72 pt).
+    let entries = format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {} 0 R /NumBlock 1 >> >> >>", first_extra(2));
+    let first = PdfPage {
+        bleed: Some([0.0, 0.0, 220.0, 220.0]),
+        trim: Some([60.0, 60.0, 160.0, 160.0]),
+        entries,
+        ..PdfPage::new(220.0, 220.0, "0 g 0 0 220 220 re f")
+    };
+    let second = PdfPage {
+        bleed: Some([0.0, 0.0, 240.0, 220.0]),
+        trim: Some([80.0, 60.0, 180.0, 160.0]),
+        ..PdfPage::new(240.0, 220.0, "0 g 0 0 240 220 re f")
+    };
+    let d = std::env::temp_dir().join(format!("vc-ailinkpagesgap-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("pages.ai");
+    std::fs::write(&path, pdf_with(&[first, second], &["<< /Length 4 >>\nstream\ndata\nendstream"], None)).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path, "linkPages": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.setup.bleed, [60.0, 60.0, 72.0, 60.0], "top, bottom, left, right");
+    // The first page's bleed ends at 160; the second's starts 36 pt later, 80 pt left of its trim box.
+    let boards: Vec<(f64, f64)> = doc.artboards.iter().map(|a| (a.rect.x0, a.rect.x1)).collect();
+    assert_eq!(boards, [(0.0, 100.0), (276.0, 376.0)]);
+    let shown: Vec<f64> = doc
+        .layers
+        .iter()
+        .map(|l| match &l.children().unwrap()[0].kind {
+            NodeKind::PlacedDocument(p) => p.xf.translation().x,
+            k => panic!("{k:?}"),
+        })
+        .collect();
+    assert_eq!(shown, [-60.0, 196.0], "each page's bleed box round its artboard");
+    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A page of text alone, as text-only art has in its PDF part: no path is painted.

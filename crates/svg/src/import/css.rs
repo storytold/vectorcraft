@@ -556,10 +556,12 @@ impl Styles {
     }
 
     /// The properties rules with a `:not()` set on `n`, each with its value after the cascade.
+    /// Only the rules [`Index::candidates`] gives for `n` are tested, as in [`Styles::matched_bytes`].
     pub(super) fn set_by_not_rules(&self, n: XNode) -> Vec<(String, String)> {
         let declared = self.declared(n);
         let mut out: Vec<(String, String)> = Vec::new();
-        for r in self.rules.iter().filter(|r| r.selector.has_not() && r.selector.matches(n)) {
+        let rules = self.index.candidates(n).into_iter().filter_map(|i| self.rules.get(i));
+        for r in rules.filter(|r| r.selector.has_not() && r.selector.matches(n)) {
             for (k, ..) in r.decls.iter() {
                 if !out.iter().any(|(o, _)| o == k)
                     && let Some(v) = declared.get(k)
