@@ -6761,6 +6761,159 @@ fn hidden_and_nested_mask_art_keep_live_offset_path() {
     }
 }
 
+/// An image 60 × 40 points at (10, 10) whose opacity mask, of `art`, doesn't clip.
+fn masked_image_node(doc: &mut Document, art: Node) -> Node {
+    let im = image_node(doc, ImageBlob::png(rgb_png()), (3, 2), Affine::new([60.0, 0.0, 0.0, 40.0, 10.0, 10.0]), None);
+    with_mask(im, art)
+}
+
+/// A red square from (10, 10) to (70, 50) whose opacity mask, of `art`, doesn't clip.
+fn masked_square(doc: &mut Document, art: Node) -> Node {
+    let sq = square(doc, Rect::new(10.0, 10.0, 70.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+    with_mask(sq, art)
+}
+
+/// `n` with an opacity mask of `art` that doesn't clip.
+fn with_mask(mut n: Node, art: Node) -> Node {
+    n.extras_mut().mask = Some(OpacityMask { art: Arc::new(art), clip: false, invert: false, disabled: false, linked: true }.into());
+    n
+}
+
+/// The opacity mask art of the first object with one in `n`, its masks' art included.
+fn mask_art_in(n: &Node) -> Option<Arc<Node>> {
+    let mut art = None;
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+        if art.is_none()
+            && let Some(mask) = m.extras().mask.as_ref()
+        {
+            art = Some(mask.art.clone());
+        }
+    });
+    art
+}
+
+/// The Offset Path distance of `n`'s one live effect, when that is all it has.
+fn offset_path_of(n: &Node) -> Option<f64> {
+    match n.appearance.effects.as_slice() {
+        [e] if e.id == "path.offsetPath" => e.params.get("offset").and_then(serde_json::Value::as_f64),
+        _ => None,
+    }
+}
+
+/// The opacity mask art of an image in a symbol's art keeps its live effects as an art style: a
+/// black path with Offset Path reads back with the effect live on the definition's mask art, when
+/// the mask's art root is hidden and when the symbol is used inside another symbol's art too, and
+/// both instances draw as they did.
+#[test]
+fn a_symbols_mask_art_keeps_live_offset_path() {
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 6.0}));
+    let made = |effects: Vec<vectorcraft_doc::Effect>, case: &str| {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut grown = styled_rect(&mut doc, "Grown", Rect::new(25.0, 20.0, 45.0, 40.0), solid(Color::BLACK), Paint::None, effects);
+        grown.visible = case != "hidden";
+        let im = masked_image_node(&mut doc, grown);
+        doc.symbols.push(Symbol { dynamic: false, name: "Picture".into(), art: Arc::new(im) });
+        let mut used = "Picture";
+        if case == "nested" {
+            let inner = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Picture".into(), xf: Affine::translate((5.0, 0.0)) });
+            let dot = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::rgb(1.0, 0.0, 0.0));
+            let frame = group(&mut doc, vec![inner, dot], false);
+            doc.symbols.push(Symbol { dynamic: false, name: "Frame".into(), art: Arc::new(frame) });
+            used = "Frame";
+        }
+        for x in [0.0, 100.0] {
+            let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: used.into(), xf: Affine::translate((x, 20.0)) });
+            doc.insert(Some(layer), usize::MAX, instance).unwrap();
+        }
+        doc
+    };
+    for case in ["shown", "hidden", "nested"] {
+        let doc = made(vec![offset.clone()], case);
+        assert!(pixels_apart(&doc, &made(vec![], case)) > 0, "{case}: the effect draws nothing");
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{case}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let picture = back.symbols.iter().find(|s| s.name == "Picture").unwrap_or_else(|| panic!("{case}: {:?}", back.symbols));
+        let art = mask_art_in(&picture.art).unwrap_or_else(|| panic!("{case}: no masked image in {:?}", picture.art.kind));
+        assert_eq!(offset_path_of(&art), Some(6.0), "{case}: {:?}", art.appearance.effects);
+        assert_eq!(pixels_apart(&doc, &back), 0, "{case}");
+    }
+}
+
+/// The opacity mask art of a square in a pattern's tile keeps its live effects as an art style: the
+/// tile's black path with Offset Path reads back with the effect live, and the pattern fill draws as
+/// it did.
+#[test]
+fn a_pattern_tiles_mask_art_keeps_live_offset_path() {
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 6.0}));
+    let made = |effects: Vec<vectorcraft_doc::Effect>| {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let grown = styled_rect(&mut doc, "Grown", Rect::new(25.0, 20.0, 45.0, 40.0), solid(Color::BLACK), Paint::None, effects);
+        let sq = masked_square(&mut doc, grown);
+        let tile = Rect::new(0.0, 0.0, 80.0, 60.0);
+        doc.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Masked", vec![Arc::new(sq)]) });
+        let fill = Paint::Pattern { pattern: "Masked".into(), xf: Affine::IDENTITY };
+        let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 160.0, 60.0)), Appearance::basic(fill, Paint::None, 0.0));
+        doc.insert(Some(layer), usize::MAX, filled).unwrap();
+        doc
+    };
+    let doc = made(vec![offset]);
+    assert!(pixels_apart(&doc, &made(vec![])) > 0, "the effect draws nothing");
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let def = back.pattern("Masked").unwrap_or_else(|| panic!("{:?}", back.patterns.iter().map(|p| &p.name).collect::<Vec<_>>()));
+    let art = def.art.iter().find_map(|a| mask_art_in(a)).expect("a masked image in the tile");
+    assert_eq!(offset_path_of(&art), Some(6.0), "{:?}", art.appearance.effects);
+    assert_eq!(pixels_apart(&doc, &back), 0);
+}
+
+/// Each opacity mask's art keeps its own art style: masks on the layers, in a symbol's art and in a
+/// pattern's tile with different Offset Path distances read back with their own distances, and a
+/// symbol's mask art with an effect no art style holds (Roughen) reads back without a live effect.
+#[test]
+fn mask_art_styles_stay_with_their_own_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let masked = |doc: &mut Document, effect: vectorcraft_doc::Effect| {
+        let grown = styled_rect(doc, "Grown", Rect::new(25.0, 20.0, 45.0, 40.0), solid(Color::BLACK), Paint::None, vec![effect]);
+        masked_image_node(doc, grown)
+    };
+    let by = |d: f64| fx("path.offsetPath", serde_json::json!({"offset": d}));
+    let on_layer = masked(&mut doc, by(3.0));
+    doc.insert(Some(layer), usize::MAX, on_layer).unwrap();
+    let picture = masked(&mut doc, by(6.0));
+    doc.symbols.push(Symbol { dynamic: false, name: "Picture".into(), art: Arc::new(picture) });
+    let rough = masked(&mut doc, fx("distort.roughen", serde_json::json!({"size": 6.0, "relative": false, "points": "corner"})));
+    doc.symbols.push(Symbol { dynamic: false, name: "Rough".into(), art: Arc::new(rough) });
+    for (symbol, x) in [("Picture", 100.0), ("Rough", 120.0)] {
+        let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf: Affine::translate((x, 40.0)) });
+        doc.insert(Some(layer), usize::MAX, instance).unwrap();
+    }
+    let grown = styled_rect(&mut doc, "Grown", Rect::new(25.0, 20.0, 45.0, 40.0), solid(Color::BLACK), Paint::None, vec![by(9.0)]);
+    let tile = masked_square(&mut doc, grown);
+    doc.patterns.push(vectorcraft_doc::PatternDef {
+        tile: Rect::new(0.0, 0.0, 80.0, 60.0),
+        ..vectorcraft_doc::PatternDef::new("Masked", vec![Arc::new(tile)])
+    });
+    let fill = Paint::Pattern { pattern: "Masked".into(), xf: Affine::IDENTITY };
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 60.0, 80.0, 100.0)), Appearance::basic(fill, Paint::None, 0.0));
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let back = read_back(&doc);
+    let symbol_art = |name: &str| {
+        let s = back.symbols.iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name}: {:?}", back.symbols));
+        mask_art_in(&s.art).unwrap_or_else(|| panic!("{name}: no masked image"))
+    };
+    assert_eq!(offset_path_of(&image_mask_art(&back)), Some(3.0));
+    assert_eq!(offset_path_of(&symbol_art("Picture")), Some(6.0));
+    let tile = back.pattern("Masked").and_then(|p| p.art.iter().find_map(|a| mask_art_in(a))).expect("a masked image in the tile");
+    assert_eq!(offset_path_of(&tile), Some(9.0));
+    let rough = symbol_art("Rough");
+    assert!(rough.appearance.effects.is_empty(), "{:?}", rough.appearance.effects);
+}
+
 /// A geometry effect on an opacity mask's art that no art style holds (Roughen) is applied to the
 /// art written, so the mask reads back drawing what it drew, but for pixels on its edge that the
 /// written points' rounding moves.
@@ -6898,6 +7051,142 @@ fn a_filled_even_odd_object_is_written_as_its_drawn_look() {
     let n = &back.layers[0].children().unwrap()[0];
     assert!(matches!(n.kind, NodeKind::Path { rule: FillRule::EvenOdd, .. }), "{n:?}");
     assert_eq!(n.extras().graphic_style, None);
+}
+
+/// Links to graphic styles in pattern tiles count toward the warning about lost links: a tile's
+/// object linked to a style, which is written without its link, warns; and so does an object on the
+/// layers that loses its link while a tile's opacity mask art keeps its own.
+#[test]
+fn pattern_tile_style_links_count_toward_lost_links() {
+    let made = |linked_tile: bool| {
+        let mut doc = Document::new(200.0, 100.0);
+        let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+        let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+        g.id = 7;
+        doc.graphic_styles.push(g);
+        let mut linked = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(25.0, 20.0, 45.0, 40.0)), ap.clone());
+        linked.extras_mut().graphic_style = Some(7);
+        let art = if linked_tile {
+            linked
+        } else {
+            // An even-odd path is written without its link (see the test above).
+            let mut lost = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 10.0, 140.0, 40.0)), ap);
+            lost.extras_mut().graphic_style = Some(7);
+            if let NodeKind::Path { rule, .. } = &mut lost.kind {
+                *rule = FillRule::EvenOdd;
+            }
+            put(&mut doc, lost);
+            masked_square(&mut doc, linked)
+        };
+        doc.patterns.push(vectorcraft_doc::PatternDef {
+            tile: Rect::new(0.0, 0.0, 80.0, 60.0),
+            ..vectorcraft_doc::PatternDef::new("Linked", vec![Arc::new(art)])
+        });
+        let fill = Paint::Pattern { pattern: "Linked".into(), xf: Affine::IDENTITY };
+        let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 50.0, 80.0, 100.0)), Appearance::basic(fill, Paint::None, 0.0));
+        put(&mut doc, filled);
+        doc
+    };
+    for linked_tile in [true, false] {
+        let doc = made(linked_tile);
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{linked_tile}: {:?}", out.warnings);
+    }
+    let back = read_back(&made(false));
+    let tile = back.pattern("Linked").and_then(|p| p.art.iter().find_map(|a| mask_art_in(a))).expect("a masked square in the tile");
+    assert!(tile.extras().graphic_style.is_some(), "the tile's mask art keeps its link");
+}
+
+/// An opacity mask's art linked to a graphic style reads back linked to it.
+#[test]
+fn opacity_mask_art_keeps_its_graphic_style_link() {
+    let mut doc = Document::new(200.0, 100.0);
+    let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+    g.id = 7;
+    doc.graphic_styles.push(g);
+    let mut linked = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(25.0, 20.0, 45.0, 40.0)), ap);
+    linked.extras_mut().graphic_style = Some(7);
+    let sq = masked_square(&mut doc, linked);
+    put(&mut doc, sq);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let art = mask_art_in(&back.layers[0]).expect("a masked square");
+    let id = art.extras().graphic_style.expect("the mask's art keeps its link");
+    assert_eq!(back.graphic_style_by_id(id).map(|g| g.name.as_str()), Some("Solid"));
+}
+
+/// A link written in a pattern tile's opacity mask art that the object limit then leaves out with
+/// the rest of the tile is not counted as kept: at every limit where the style isn't written, the
+/// export warns that the link is lost.
+#[test]
+fn mask_art_links_left_out_at_the_object_limit_are_reported_lost() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+    g.id = 7;
+    doc.graphic_styles.push(g);
+    let mut linked = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(25.0, 20.0, 45.0, 40.0)), ap);
+    linked.extras_mut().graphic_style = Some(7);
+    let mut art = vec![Arc::new(masked_square(&mut doc, linked))];
+    for i in 0..6 {
+        let x = 2.0 + 12.0 * f64::from(i);
+        art.push(Arc::new(square(&mut doc, Rect::new(x, 52.0, x + 8.0, 58.0), Color::rgb(0.0, 0.0, 1.0))));
+    }
+    doc.patterns.push(vectorcraft_doc::PatternDef { tile: Rect::new(0.0, 0.0, 80.0, 60.0), ..vectorcraft_doc::PatternDef::new("Linked", art) });
+    let fill = Paint::Pattern { pattern: "Linked".into(), xf: Affine::IDENTITY };
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 80.0, 60.0)), Appearance::basic(fill, Paint::None, 0.0));
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let mut left_out = 0;
+    for max in 1..40 {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        let text = String::from_utf8_lossy(&out.program).into_owned();
+        if !text.contains("(Solid) XW") {
+            left_out += 1;
+            assert!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{max}: {:?}", out.warnings);
+        }
+    }
+    assert!(left_out > 0 && left_out < 39, "{left_out}");
+}
+
+/// The links of opacity masks' art in a symbol no instance uses and in a pattern only the Swatches
+/// panel holds are written with those definitions, after the layers, and count as kept: no warning
+/// about lost links.
+#[test]
+fn mask_art_links_in_unused_definitions_are_not_reported_lost() {
+    let mut doc = Document::new(200.0, 100.0);
+    let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+    g.id = 7;
+    doc.graphic_styles.push(g);
+    let linked = |doc: &mut Document| {
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(25.0, 20.0, 45.0, 40.0)), ap.clone());
+        n.extras_mut().graphic_style = Some(7);
+        masked_square(doc, n)
+    };
+    let unused = linked(&mut doc);
+    doc.symbols.push(Symbol { dynamic: false, name: "Unused".into(), art: Arc::new(unused) });
+    let tile = linked(&mut doc);
+    doc.patterns.push(vectorcraft_doc::PatternDef {
+        tile: Rect::new(0.0, 0.0, 80.0, 60.0),
+        ..vectorcraft_doc::PatternDef::new("Swatch only", vec![Arc::new(tile)])
+    });
+    let swatch = Swatch {
+        name: "Swatch only".into(),
+        paint: Paint::Pattern { pattern: "Swatch only".into(), xf: Affine::IDENTITY },
+        global: false,
+        spot: false,
+    };
+    swatches_plus(&mut doc, vec![swatch]);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let symbol = back.symbols.iter().find(|s| s.name == "Unused").and_then(|s| mask_art_in(&s.art)).expect("the unused symbol's mask art");
+    assert!(symbol.extras().graphic_style.is_some(), "the symbol's mask art keeps its link");
+    let tile = back.pattern("Swatch only").and_then(|p| p.art.iter().find_map(|a| mask_art_in(a))).expect("the swatch's mask art");
+    assert!(tile.extras().graphic_style.is_some(), "the pattern's mask art keeps its link");
 }
 
 /// A compound path filled by the non-zero rule keeps its effects, its gradient fill and its link to
