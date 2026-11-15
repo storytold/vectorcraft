@@ -514,6 +514,42 @@ pub(crate) fn set_pstate<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, 
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(("panel-state", key)), v));
 }
 
+/// `ui.panelView {panel, view?}`: set the view of the Swatches, Graphic Styles or Symbols panel
+/// (`panel`: swatches, graphicStyles or symbols), as the view items of its panel menu do; without
+/// `view`, answer the current one. An unknown panel or view is an error, and then nothing changes.
+/// → {panel, view}
+pub(crate) fn set_view(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    fn given<T: serde::de::DeserializeOwned>(p: &Value, err: &str) -> Result<Option<T>, String> {
+        match p.get("view") {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => serde_json::from_value(v.clone()).map(Some).map_err(|_| err.to_string()),
+        }
+    }
+    let ui = &mut app.ui;
+    let (panel, view) = match p.get("panel").and_then(Value::as_str) {
+        Some("swatches") => {
+            if let Some(v) = given(p, "`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList")? {
+                ui.swatches_view = v;
+            }
+            ("swatches", json!(ui.swatches_view))
+        }
+        Some("graphicStyles") => {
+            if let Some(v) = given(p, "`view` is thumbnail, smallList or largeList")? {
+                ui.graphic_styles_view = v;
+            }
+            ("graphicStyles", json!(ui.graphic_styles_view))
+        }
+        Some("symbols") => {
+            if let Some(v) = given(p, "`view` is thumbnail, smallList or largeList")? {
+                ui.symbols_view = v;
+            }
+            ("symbols", json!(ui.symbols_view))
+        }
+        _ => return Err("`panel` is swatches, graphicStyles or symbols".to_string()),
+    };
+    Ok(json!({ "panel": panel, "view": view }))
+}
+
 /// Whether the panel whose state is `key` has the keyboard for its rows (Delete and Backspace
 /// remove its highlighted rows): it took it with a click on a row ([`set_row_keys`]) and kept it in
 /// every frame since, so it lapses when the panel isn't drawn.
