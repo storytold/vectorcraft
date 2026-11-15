@@ -27,7 +27,9 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Vec2};
 
 use crate::distort::{transform_move, transform_offsets};
 use crate::group::{has_own_paint, paints};
-use crate::reshape::{as_art, clipping_text_outline, dressed, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
+use crate::reshape::{
+    as_art, clipping_text_outline, dressed, geometry_effects, glyph_outlines, outline_nested_text, paint_type_clip, reshape_leaves,
+};
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
     has_instance_row_raster, has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, reshape,
@@ -689,6 +691,9 @@ fn moved_type_group(n: &Node) -> Option<Node> {
 /// them. `None` when no type stays type.
 fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
     fn keep(d: &Document, n: &mut Node, moves: &[serde_json::Value], clipping: bool, kept: &mut bool) {
+        if !clipping {
+            paint_type_clip(Some(d), n);
+        }
         let clips = n.clips();
         let Some(ch) = n.children_mut() else { return };
         for (i, c) in ch.iter_mut().enumerate() {

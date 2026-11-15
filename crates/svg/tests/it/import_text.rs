@@ -300,6 +300,38 @@ fn text_path_becomes_type_on_a_path() {
 }
 
 #[test]
+fn text_path_start_offset_is_scaled_by_the_path_length() {
+    // A path 400 long whose pathLength is 100: a startOffset of 50 lies 200 along it. A
+    // percentage stays a share of the computed length. Huge values of both still give their
+    // ratio. With a pathLength of 0, an offset of 0 stays at the start and any other offset lies
+    // past the end, as does an offset too large to scale on a short path.
+    let d = open(
+        r##"<path id="p" d="M0 100 H400" pathLength="100" fill="none" stroke="black"/>
+        <path id="z" d="M0 200 H400" pathLength="0" fill="none" stroke="black"/>
+        <path id="h" d="M0 300 H400" pathLength="1e308" fill="none" stroke="black"/>
+        <path id="s" d="M0 400 H0.1" pathLength="1e-10" fill="none" stroke="black"/>
+        <text font-size="10"><textPath href="#p" startOffset="50">Half</textPath></text>
+        <text font-size="10"><textPath href="#p" startOffset="25%">Quarter</textPath></text>
+        <text font-size="10"><textPath href="#h" startOffset="5e307">Huge</textPath></text>
+        <text font-size="10"><textPath href="#z" startOffset="0">Zero</textPath></text>
+        <text font-size="10"><textPath href="#z" startOffset="50">Fifty</textPath></text>
+        <text font-size="10"><textPath href="#s" startOffset="1e308">Past</textPath></text>"##,
+    );
+    let t = texts(&d);
+    assert_eq!(t.len(), 6);
+    let start_of = |t: &TextObject| match t.kind {
+        TextKind::OnPath { start, .. } => start,
+        _ => panic!("{:?}", t.kind),
+    };
+    assert!(close(start_of(t[0]), 0.5, 1e-9), "{}", start_of(t[0]));
+    assert!(close(start_of(t[1]), 0.25, 1e-9), "{}", start_of(t[1]));
+    assert!(close(start_of(t[2]), 0.5, 1e-9), "{}", start_of(t[2]));
+    assert_eq!(start_of(t[3]), 0.0);
+    assert_eq!(start_of(t[4]), 1.0);
+    assert_eq!(start_of(t[5]), 1.0);
+}
+
+#[test]
 fn text_on_a_closed_path_wraps_past_the_path_start() {
     // A closed path 400 long: text anchored before its start, or offset past its end, wraps
     // around the path instead of stopping at its start or end.

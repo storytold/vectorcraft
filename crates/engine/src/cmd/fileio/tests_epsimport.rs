@@ -277,3 +277,17 @@ fn ps_and_epsf_files_open_and_place() {
     let e = writable_format(None, Some("out.ps")).unwrap_err();
     assert_eq!(e, "PostScript files can be opened but not written (see document.formats)");
 }
+
+/// A program in the legacy `.ai` format with a template box and no art size (version 3) opens as a
+/// `.ai` or `.ait` on a US Letter artboard around the box's center, and as an EPS on its bounding
+/// box.
+#[test]
+fn a_legacy_ai_program_opens_on_its_artboard_and_an_eps_on_its_page() {
+    let program = b"%!PS-Adobe-2.0 EPSF-1.2\n%%Creator: a script\n%%BoundingBox: 10 10 30 30\n%AI3_TemplateBox: 100 100 100 100\n\
+        %%EndComments\n%%BeginProlog\n/m {moveto} def /L {lineto} def /f {closepath fill} def /k {setcmykcolor} def\n\
+        %%EndProlog\n%%BeginSetup\n%%EndSetup\n0 0 0 1 k\n10 10 m\n30 10 L\n30 30 L\n10 30 L\nf\n%%PageTrailer\nshowpage\n%%Trailer\n%%EOF\n";
+    for (name, size) in [("old.ai", (612.0, 792.0)), ("old.ait", (612.0, 792.0)), ("old.eps", (20.0, 20.0))] {
+        let r = load(name, program).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(r.doc.artboards[0].rect.size(), vectorcraft_geom::Size::new(size.0, size.1), "{name}: {:?}", r.warnings);
+    }
+}

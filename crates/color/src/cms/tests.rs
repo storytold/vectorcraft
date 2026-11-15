@@ -442,3 +442,39 @@ fn a_document_gets_the_same_context_for_the_same_profiles() {
     let unknown = for_document(Some("no such profile"), Some(SRGB));
     assert_eq!(unknown.settings(), &working_settings(), "an unknown profile or one of the other model leaves the working space");
 }
+
+/// The color management policies parse from their ids, Preserve Numbers is a CMYK policy only, and
+/// settings saved before the policies existed read with the default policy.
+#[test]
+fn policies_parse_and_default_in_saved_settings() {
+    for p in Policy::CMYK {
+        assert_eq!(Policy::parse(p.id()), Some(p));
+    }
+    assert_eq!(Policy::parse("bogus"), None);
+    assert!(!Policy::RGB.contains(&Policy::PreserveNumbers));
+    let old: ColorSettings =
+        serde_json::from_str(r#"{"rgb": "sRGB IEC61966-2.1", "cmyk": "Device CMYK (uncalibrated)", "intent": "perceptual", "bpc": false}"#).unwrap();
+    assert_eq!((old.rgb_policy, old.cmyk_policy), (Policy::PreserveEmbedded, Policy::PreserveEmbedded));
+    let saved = serde_json::to_value(ColorSettings { cmyk_policy: Policy::PreserveNumbers, ..Default::default() }).unwrap();
+    assert_eq!((saved["rgbPolicy"].as_str(), saved["cmykPolicy"].as_str()), (Some("preserveEmbedded"), Some("preserveNumbers")));
+}
+
+/// Convert to Working Space keeps a color's appearance: an RGB color of a wide space converts into
+/// sRGB, and a CMYK color of one CMYK space into another, with numbers that look the same. Grey and
+/// Lab colors stay as they are.
+#[test]
+fn convert_into_keeps_the_appearance() {
+    let wide = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), cmyk: DEVICE_CMYK.into(), ..Default::default() }).unwrap();
+    let working = cms();
+    let rgb = Color::Rgb { r: 0.25, g: 0.4, b: 0.6 };
+    let moved = wide.convert_into(&working, &rgb, Intent::RelativeColorimetric);
+    assert_ne!(moved, rgb, "the numbers change");
+    assert!(de(wide.display_rgb(&rgb), working.display_rgb(&moved)) < 1.0, "{rgb:?} → {moved:?}");
+    let ink = Color::Cmyk { c: 0.2, m: 0.4, y: 0.6, k: 0.1 };
+    let moved = wide.convert_into(&working, &ink, Intent::RelativeColorimetric);
+    assert!(matches!(moved, Color::Cmyk { .. }) && moved != ink, "{ink:?} → {moved:?}");
+    assert!(delta_e2000(wide.lab(&ink), working.lab(&moved)) < 3.0, "{ink:?} → {moved:?}");
+    for c in [Color::Gray { k: 0.3 }, Color::Lab { l: 50.0, a: 10.0, b: -20.0 }] {
+        assert_eq!(wide.convert_into(&working, &c, Intent::RelativeColorimetric), c);
+    }
+}

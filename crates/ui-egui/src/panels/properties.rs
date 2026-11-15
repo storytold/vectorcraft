@@ -356,7 +356,7 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     let links = crate::panels::links::ID;
-    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, Some(w)));
+    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, crate::place::LinkButtons::Width(w)));
     ui.horizontal(|ui| {
         if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Replace…"), w).clicked() {
             crate::panels::links::replace(app, vec![id]);
@@ -631,7 +631,7 @@ fn artboard_size_controls_inner(
     let mut fit = None;
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Preset:"));
-        preset = widgets::combo(ui, "ab-preset", &current, 140.0, |ui| {
+        preset = widgets::combo(ui, "ab-preset", &current, PRESET_MENU_WIDTH, |ui| {
             let mut chosen = None;
             if let Some(enabled) = fits {
                 for (selection, label) in [(false, tl!("Fit to Artwork Bounds")), (true, tl!("Fit to Selected Art"))] {
@@ -662,6 +662,19 @@ fn artboard_size_controls_inner(
         }
     });
     (preset.map(|(w, h)| ArtboardSizeChoice::Preset(w, h)).or_else(|| orientation.map(ArtboardSizeChoice::Orientation)), fit)
+}
+
+/// The width of the artboard size row's Preset menu.
+const PRESET_MENU_WIDTH: f32 = 140.0;
+
+/// The width of the artboard size row's Portrait and Landscape buttons, 26 points each, with the
+/// 2 points between them.
+const ORIENTATION_BUTTONS_WIDTH: f32 = 2.0 * 26.0 + 2.0;
+
+/// The widths of the parts of [`artboard_size_row`] in a row, as [`crate::chrome::Fit::room`] takes
+/// them: the Preset label, its menu, and the Portrait and Landscape buttons.
+pub(crate) fn artboard_size_row_widths(ui: &Ui) -> [f32; 3] {
+    [widgets::dim_label_width(ui, tl!("Preset:")), PRESET_MENU_WIDTH, ORIENTATION_BUTTONS_WIDTH]
 }
 
 /// Artboard `i`'s Fill, its background `color`: the chip shows it (the None paint when the artboard

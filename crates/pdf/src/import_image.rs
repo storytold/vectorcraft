@@ -2,7 +2,10 @@
 //! four components. A JPEG whose Decode array inverts its samples (Adobe's CMYK JPEGs, the
 //! convention JPEG readers and the PDF writer take a CMYK JPEG to follow) is kept as it is; any
 //! other is decoded, its Decode array applied, and stored as a CMYK TIFF
-//! ([`ImageBlob::cmyk_tiff`]). A mask (`/SMask`, `/Mask`) doesn't change that: the importer
+//! ([`ImageBlob::cmyk_tiff`]). An ICC-based image keeps the CMYK profile its color space holds
+//! ([`icc_profile`]): the TIFF carries it, and a kept JPEG carries it in place of its own
+//! ([`jpeg_with_icc`]), or, when its segments can't hold it, is stored as a CMYK TIFF carrying it.
+//! A mask (`/SMask`, `/Mask`) doesn't change that: the importer
 //! carries it as the image's opacity mask ([`has_mask`]). A DeviceN image of process plates only
 //! keeps them the same way, as a CMYK image ([`process_devicen`]). An image of one ink (a
 //! Separation, or a DeviceN of one colorant) keeps it: its tints are read as a grayscale image
@@ -12,8 +15,9 @@ use craft_pdf::syntax::Filter;
 use craft_pdf::syntax::object::stream::{ImageColorSpace, ImageDecodeParams};
 use craft_pdf::syntax::object::{Array, Dict, Name, Stream};
 use vectorcraft_doc::ImageBlob;
-use vectorcraft_doc::cmyk::{Inks, MAX_CMYK_PIXELS, jpeg_components};
+use vectorcraft_doc::cmyk::{Inks, MAX_CMYK_PIXELS, jpeg_components, jpeg_with_icc};
 
+use crate::images::{MAX_ICC, valid_icc};
 use crate::import_color::ink_names;
 
 /// A CMYK image read as RGB: why.
@@ -42,6 +46,24 @@ fn cmyk_space(d: &Dict<'_>) -> bool {
     }
 }
 
+/// The profile of the image's four-component `ICCBased` color space, when it is a CMYK profile an
+/// image can be tagged with ([`valid_icc`], at most [`MAX_ICC`] bytes). `None` for other color
+/// spaces and other profiles: the image then keeps its samples untagged.
+fn icc_profile(d: &Dict<'_>) -> Option<Vec<u8>> {
+    let a = d.get::<Array<'_>>(key(d, b"ColorSpace", b"CS"))?;
+    let mut it = a.flex_iter();
+    if it.next::<Name<'_>>()?.as_ref() != b"ICCBased" {
+        return None;
+    }
+    let s = it.next::<Stream<'_>>()?;
+    if s.dict().get::<u8>(b"N") != Some(4) {
+        return None;
+    }
+    // One byte over the limit, so a longer profile reads as too long rather than cut short.
+    let icc = s.decoded_within(MAX_ICC + 1).ok()?;
+    valid_icc(&icc, *b"CMYK").then(|| icc.into_owned())
+}
+
 /// Each component's Decode range (`[0 1]` each when the array is missing or malformed).
 fn decode_ranges(d: &Dict<'_>) -> [(f32, f32); 4] {
     let mut out = [(0.0, 1.0); 4];
@@ -63,11 +85,25 @@ pub(crate) fn cmyk(st: &Stream<'_>, width: u32, height: u32) -> Result<Option<Im
         return process_devicen(st, width, height);
     }
     let ranges = decode_ranges(d);
+    let icc = icc_profile(d);
     let filters = st.filters();
     if ranges == INVERTED && matches!(filters.as_slice(), [Filter::DctDecode]) {
         let raw = st.raw_data();
         if jpeg_components(&raw) == Some(4) {
-            return Ok(Some(ImageBlob::new("image/jpeg", raw.into_owned())));
+            let jpeg = ImageBlob::new("image/jpeg", raw.into_owned());
+            // The color space's profile describes the samples, not one the JPEG carries: the JPEG
+            // carries it in place of its own, or, when its segments can't hold it, its inks go in a
+            // TIFF carrying it. A JPEG that neither can be done to stays as it is.
+            if let Some(icc) = icc.as_deref().filter(|icc| jpeg.cmyk_icc_profile().as_deref() != Some(*icc)) {
+                let tagged = jpeg_with_icc(&jpeg.bytes, icc)
+                    .map(|bytes| ImageBlob::new("image/jpeg", bytes))
+                    .filter(|b| b.cmyk_icc_profile().as_deref() == Some(icc))
+                    .or_else(|| jpeg.cmyk().and_then(|i| ImageBlob::cmyk_tiff_with_icc(&i, Some(icc))));
+                if let Some(tagged) = tagged {
+                    return Ok(Some(tagged));
+                }
+            }
+            return Ok(Some(jpeg));
         }
     }
     let bpc = d.get::<u8>(key(d, b"BitsPerComponent", b"BPC")).unwrap_or(8);
@@ -91,7 +127,7 @@ pub(crate) fn cmyk(st: &Stream<'_>, width: u32, height: u32) -> Result<Option<Im
         .chunks_exact(size * 4)
         .flat_map(|px| px.chunks_exact(size).zip(ranges).map(|(s, (lo, hi))| ((lo + value(s) * (hi - lo)).clamp(0.0, 1.0) * 255.0).round() as u8))
         .collect();
-    Inks::new(width, height, inks).and_then(|i| ImageBlob::cmyk_tiff(&i)).map(Some).ok_or(UNREAD)
+    Inks::new(width, height, inks).and_then(|i| ImageBlob::cmyk_tiff_with_icc(&i, icc.as_deref())).map(Some).ok_or(UNREAD)
 }
 
 /// An image in a spot ink read as RGB: why.

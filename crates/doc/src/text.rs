@@ -23,8 +23,8 @@ pub use char_style::{
     WARICHU_LINES, WARICHU_SCALE, WarichuAlign,
 };
 pub use composite::{
-    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
-    CompositeParts,
+    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX, CharClass,
+    CompositeClass, CompositeClasses, CompositeFont, CompositePart, CompositeParts, CustomCharSet,
 };
 pub(crate) use kinsoku_set::read_sets as read_kinsoku_sets;
 pub use kinsoku_set::{KINSOKU_BUILT_IN, KINSOKU_CATEGORY_MAX, KINSOKU_NAME_MAX, KINSOKU_SEQUENCE, KINSOKU_SETS_MAX, KinsokuSet};
