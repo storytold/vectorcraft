@@ -4408,6 +4408,18 @@ of the rows that are not excluded, in row order, and Save Prominent Colors saves
 {"name":"run_command","arguments":{"command":"recolor.weigh","params":{"map":[{"from":["rgb 255 0 0","rgb 128 0 204"],"to":"#00ff00"},{"from":["rgb 0 0 255"],"to":"#ffff00"}],"weights":[1,1]}}}
 ```
 
+The Assign tab's Find button (the dialog field `findColors`) finds the colors of the selected rows in the art
+([Advanced recolor options overview](https://helpx.adobe.com/illustrator/desktop/manage-colors/learn-color-basics/edit-colors-dialog-overview.html)).
+While it is on and rows are selected, the art of those rows shows as the preview shows it (its current colors with
+Preview off), and the rest of the selected art shows dimmed; a second click shows the art as before
+([archived help, Recolor Artwork](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=149)).
+As VectorCraft's own rules, a dimmed color is a 25% tint of its current color, or the nearest lighter tint (in steps
+of 1%) when that tint is a color a selected row lists (`recolor.apply` gives each current color of the other rows
+and the preserved colors that tint, then recolors the selected rows), a color that a selected row also lists is not
+dimmed, so art that mixes colors dims only its other colors, and nothing is dimmed on the Edit tab or with no row
+selected. Find changes only what the canvas shows: it records no undo step, Cancel leaves the art as it was, and OK
+applies every row to the art as it does with Find off.
+
 The `recolor.*` commands refuse parameters of the wrong form. A `limitTo` or `method` that is not a string gets the
 error for an unknown library or method. Other wrong-form parameters get an error that names them.
 `includeImages`, `includePatterns`, a row's `exclude`, `order`, `saturationBrightness` and the `white`, `black` and
