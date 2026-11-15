@@ -1088,6 +1088,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{objects?: [paths|shapes|text|images|effects|groups|linkedFiles|guides], layers?: [locked|hidden]} set the Layers panel's Filter (By Object, By Layer): a row stays when it is of a kind in `objects` and in a state in `layers` (its own lock or eye; an empty list takes every row), or when a row inside it stays; Search All narrows the rows further. A key left out keeps its list. The filter lasts the session and does not change the document, its open rows or the selection → {objects, layers}",
     ),
     (
+        "ui.panelView",
+        "Set Panel View",
+        "",
+        "{panel: swatches|graphicStyles|symbols, view?} set a panel's view, as the view items of its panel menu do: for swatches smallThumb|mediumThumb (the default)|largeThumb|smallList|largeList, for graphicStyles and symbols thumbnail (the default)|smallList|largeList; without `view`, answer the current one. The view lasts the session and does not change the document; an unknown panel or view is an error and changes nothing → {panel, view}",
+    ),
+    (
         "ui.tileEdgeColor",
         "Tile Edge Color…",
         "",
