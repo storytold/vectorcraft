@@ -336,6 +336,8 @@ impl Ctx<'_> {
         tab.kern_shift = 0.0;
         tab.aki_shift = 0.0;
         tab.aki = 0.0;
+        tab.tsume_shift = 0.0;
+        tab.tsume = 0.0;
         tab.tcy = None;
         tab.wari = None;
         tab.vpal = None;
@@ -624,6 +626,7 @@ impl Ctx<'_> {
             width_start,
             warichu: g.wari.map(|w| w.start),
             warichu_line: g.wari.map_or(0.0, |w| w.across),
+            off_path: false,
         });
     }
 
@@ -653,6 +656,8 @@ impl Ctx<'_> {
         k.kern_shift = 0.0;
         k.aki_shift = 0.0;
         k.aki = 0.0;
+        k.tsume_shift = 0.0;
+        k.tsume = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
@@ -713,6 +718,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -779,6 +786,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,

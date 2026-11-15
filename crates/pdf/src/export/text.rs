@@ -246,7 +246,8 @@ impl Exporter<'_> {
             // Spaces are written too (text extraction needs them); control characters and soft
             // hyphens draw nothing.
             let blank = g.outline.elements().is_empty() && !coloured;
-            if blank && !ch.is_some_and(|c| c.is_whitespace() && !c.is_control()) {
+            // Characters before the start of an open path are not drawn, spaces included.
+            if g.off_path || (blank && !ch.is_some_and(|c| c.is_whitespace() && !c.is_control())) {
                 continue;
             }
             // The glyph at the font size of its vertical scale: `frame` maps that size's glyph
@@ -325,7 +326,7 @@ impl Exporter<'_> {
         let img = match self.images.get(&cache) {
             Some(img) => img.clone(),
             None => {
-                let img = embed(&image.blob, self.interpolate, self.sixteen_bit);
+                let img = embed(&image.blob, self.interpolate, self.sixteen_bit, !self.out.standard.cmyk_only());
                 self.images.insert(cache, img.clone());
                 img
             }

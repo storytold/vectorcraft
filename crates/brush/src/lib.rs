@@ -1008,6 +1008,33 @@ pub fn has_brush(n: &Node) -> bool {
     n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some() && s.visible))
 }
 
+/// How far brush art can paint past the visual box of `n`: `16 × w + 8`, where `w` is the widest
+/// stroke of `n` (at least 1), when `n` has a visible brushed stroke with a paint; 0 when it has
+/// none, as a brushed stroke without a paint draws no brush art. This is the room the renderer and
+/// the exports leave for brush art when they cull.
+pub fn reach(n: &Node) -> f64 {
+    let paints = |i: &AppearanceItem| matches!(i, AppearanceItem::Stroke(s) if s.visible && s.brush.is_some() && !s.paint.is_none());
+    if !n.appearance.items.iter().any(paints) {
+        return 0.0;
+    }
+    let w = n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.width) } else { None }).fold(1.0, f64::max);
+    16.0 * w + 8.0
+}
+
+/// The largest [`reach`] of `n` and of the objects in it: the members of its groups, layers and
+/// live objects. Of a group or layer with a clipping path only the clipping path counts, as the
+/// clip keeps its members' brush art inside it. A compound path counts its own strokes only, as
+/// it is painted with its own appearance and not its paths'. Symbol art is not looked into
+/// ([`vectorcraft_doc::SymbolBoxes::with_brush_art`] measures it).
+pub fn reach_within(n: &Node) -> f64 {
+    let members = match &n.kind {
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => children.get(..1).unwrap_or_default(),
+        NodeKind::Compound { .. } => &[],
+        _ => n.children().map_or(&[][..], |c| &c[..]),
+    };
+    members.iter().map(|c| reach_within(c)).fold(reach(n), f64::max)
+}
+
 /// Expand a brushed path: a group of [the path with its fills and unbrushed strokes (if any
 /// paint remains), the brush art…]. Ids are 0 (the caller re-ids). `None` if not brushed.
 pub fn expand(doc: &Document, n: &Node) -> Option<Node> {
