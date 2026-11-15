@@ -7738,7 +7738,14 @@ file name, null for a built-in face; `embedding` is `allowed`, `editing`, `previ
 face is found), `imageObjects` (`[{name, width, height, linked, file}]`: the image objects in the order the
 linkedImages and embeddedImages categories list them, with the file a linked image's row shows and null for an
 embedded one), `document.unitId` (the document's units as Preferences › Units names them, such as `millimeters`, beside
-the English `document.units`), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
+the English `document.units`), `document.transparency` (`{gridSize, gridColors, gridColorsName, simulatePaper,
+flattenerPreset}`: File › Document Setup's transparency settings, the grid's size (`small`, `medium` or `large`), its
+two colors as `#rrggbb`, their preset's name or `Custom`, Simulate Colored Paper and the flattener preset, which the
+document category lists as Grid Size, Grid Colors (two custom colors by their values), Simulate Colored Paper and
+Flattener Preset), `document.selectedArtboards` (`[{index, name, width, height, x, y}]`: while the Artboard tool is the
+current tool, the artboards it has selected, in artboard order and in the document's units, with `x` and `y` those of
+the top-left corner measured from the ruler origin of the tool's active artboard; the document category lists each
+after the artboards as Artboard, Width, Height, X and Y; empty with any other tool), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
 paint or width, guides, paths with no segment, type that draws no characters, a group's or layer's own strokes, a compound path member's own strokes and an image's strokes without a
 shape left out; with `selectionOnly`, the brushes the selected
 objects' strokes use), `brushes` (`[{name, type}]`: those brushes with their types, `calligraphic`, `scatter`, `art`,

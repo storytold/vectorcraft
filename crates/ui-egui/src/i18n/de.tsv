@@ -2488,6 +2488,13 @@ file-filter	Templates	Vorlagen
 	Pathfinders:	Pathfinder:
 	Paths	Pfade
 	Path Length	Pfadlänge
+	Grid Size	Rastergröße
+	Grid Colors	Rasterfarben
+	Flattener Preset	Reduzierungsvorgabe
+	X	X
+	Y	Y
+	Orange	Orange
+	Purple	Lila
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Pfade: {paths}    Ankerpunkte: {anchors}    Farben: {colors}
 	Pattern	Muster
 	Pattern Editing	Musterbearbeitung

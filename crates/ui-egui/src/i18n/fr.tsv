@@ -2518,6 +2518,11 @@ font-technology	Variable	Variables
 	Pathfinders:	Pathfinders :
 	Paths	Tracés
 	Path Length	Longueur des tracés
+	Grid Size	Taille de la grille
+	Grid Colors	Couleurs de la grille
+	Flattener Preset	Paramètre prédéfini d’aplatissement
+	X	X
+	Y	Y
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Tracés : {paths}    Points d’ancrage : {anchors}    Couleurs : {colors}
 	Pattern	Motif
 	Pattern Editing	Modification du motif

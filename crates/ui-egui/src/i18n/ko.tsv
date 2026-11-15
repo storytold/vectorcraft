@@ -2695,6 +2695,13 @@ antiAlias	Sharp	날카롭게
 	Pathfinders:	패스파인더:
 	Paths	패스
 	Path Length	패스 길이
+	Grid Size	격자 크기
+	Grid Colors	격자 색상
+	Flattener Preset	병합 프리셋
+	X	X
+	Y	Y
+	Orange	주황
+	Purple	보라
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	패스: {paths}    앵커: {anchors}    색상: {colors}
 	Pattern Editing	패턴 편집
 	Pattern options are available in pattern editing mode.	패턴 옵션은 패턴 편집 모드에서 사용할 수 있습니다.

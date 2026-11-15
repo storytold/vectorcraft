@@ -506,13 +506,15 @@ fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
 }
 
 /// Document Info's labels: every category title, which the panel and its menu show, every count
-/// label of the Objects category, and the Document category's fixed row labels (the artboard rows
-/// show artboard names and are left out).
+/// label of the Objects category, and the Document category's fixed row labels, those of the
+/// artboard the Artboard tool has selected included (the artboard rows show artboard names and are
+/// left out).
 #[test]
 fn document_info_labels_are_in_complete_catalogs() {
     let mut session = vectorcraft_engine::Session::new();
     session.execute("file.new", &serde_json::json!({"width": 100, "height": 100})).unwrap();
     session.execute("shape.rectangle", &serde_json::json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    session.select_tool("artboard", vectorcraft_engine::ViewInfo::default()).unwrap();
     let info = session.execute("document.info", &serde_json::json!({})).unwrap();
     let sections = info["sections"].as_array().unwrap();
     let titles: Vec<&str> = sections.iter().filter_map(|s| s["title"].as_str()).collect();
@@ -527,7 +529,7 @@ fn document_info_labels_are_in_complete_catalogs() {
     let artboards = document.iter().position(|r| r[0] == "Artboards").unwrap();
     let names = artboards + 1..=artboards + document[artboards][1].as_str().unwrap().parse::<usize>().unwrap();
     let fixed: Vec<&str> = document.iter().enumerate().filter(|(k, _)| !names.contains(k)).filter_map(|(_, r)| r[0].as_str()).collect();
-    assert_eq!(fixed.len(), 9, "{fixed:?}");
+    assert_eq!(fixed.len(), 18, "{fixed:?}");
     labels.extend(fixed);
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in &labels {
@@ -538,7 +540,8 @@ fn document_info_labels_are_in_complete_catalogs() {
 
 /// The values Document Info makes and shows in the interface language: the font states and
 /// embedding permissions, the templates of the font, image, raster effects and Repeat object
-/// values, the names of gradients named by their kind, and the counted instances, rows and columns.
+/// values, the names of gradients named by their kind, the counted instances, rows and columns, and
+/// the transparency settings' values.
 #[test]
 fn document_info_values_are_in_complete_catalogs() {
     const VALUES: [&str; 20] = [
@@ -564,6 +567,17 @@ fn document_info_values_are_in_complete_catalogs() {
         "Freeform gradient",
     ];
     const COUNTED: [(&str, &str); 3] = [("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
+    // The transparency settings' values: the grid's sizes and color presets, on and off, and the
+    // built-in flattener presets.
+    let transparency = ["Small", "Medium", "Large", "On", "Off", "High Resolution", "Medium Resolution", "Low Resolution"]
+        .into_iter()
+        .chain(vectorcraft_doc::setup::GRID_COLOR_PRESETS.iter().map(|(name, _)| *name));
+    let transparency: Vec<&str> = transparency.collect();
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for value in &transparency {
+            assert!(lang.catalog().plain(value).is_some(), "{} is missing {value}", lang.code);
+        }
+    }
     let gradient_kinds: Vec<String> = vectorcraft_color::GradientKind::ALL.iter().map(|k| format!("{} gradient", k.label())).collect();
     assert!(gradient_kinds.iter().all(|k| VALUES.contains(&k.as_str())), "{gradient_kinds:?}");
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {

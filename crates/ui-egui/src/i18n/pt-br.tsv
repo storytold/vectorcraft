@@ -7433,6 +7433,11 @@ swatch	Orange Red	Vermelho-alaranjado
 	Overlay Edge	Sobreposição de bordas
 	Part of ArtCraft. MIT OR Apache-2.0. Fonts: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). Icons: Lucide (ISC) + VectorCraft.	Parte do ArtCraft. MIT OR Apache-2.0. Fontes: Source Sans 3, Inter, JetBrains Mono, Noto Sans SC (OFL). Ícones: Lucide (ISC) + VectorCraft.
 	Path Length	Comprimento do caminho
+	Grid Size	Tamanho da Grade
+	Grid Colors	Cores da Grade
+	Flattener Preset	Predefinido de achatamento
+	X	X
+	Y	Y
 	PDF/X-1a:2001	PDF/X-1a:2001
 	PDF/X-3:2002	PDF/X-3:2002
 	PDF/X-4:2010	PDF/X-4:2010

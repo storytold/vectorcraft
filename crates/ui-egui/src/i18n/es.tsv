@@ -2526,6 +2526,11 @@ font-technology	Variable	Variables
 	Pathfinders:	Buscatrazos:
 	Paths	Trazados
 	Path Length	Longitud de los trazados
+	Grid Size	Tamaño de cuadrícula
+	Grid Colors	Colores de cuadrícula
+	Flattener Preset	Preajuste del acoplador
+	X	X
+	Y	Y
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Trazados: {paths}    Anclas: {anchors}    Colores: {colors}
 	Pattern	Motivo
 	Pattern Editing	Edición de motivo

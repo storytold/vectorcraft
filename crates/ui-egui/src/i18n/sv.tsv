@@ -6207,6 +6207,11 @@ theme	Appearance	Utseende
 	Override Action "Open" Commands	Ändra åtgärdens "Öppna"-kommandon lokalt
 	Override Action "Save" Commands	Ändra åtgärdens "Spara"-kommandon lokalt
 	Path Length	Banlängd
+	Grid Size	Rutnätsstorlek
+	Grid Colors	Rutnätsfärger
+	Flattener Preset	Förinställning för tillplattning
+	X	X
+	Y	Y
 	Play:	Spela upp:
 	Save and Close	Spara och stäng
 	Stop on Errors	Stoppa vid fel

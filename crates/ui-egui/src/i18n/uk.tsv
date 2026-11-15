@@ -2556,6 +2556,13 @@ file-filter	Templates	Шаблони
 	Pathfinders:	Обробка контурів:
 	Paths	Контури
 	Path Length	Довжина контурів
+	Grid Size	Розмір сітки
+	Grid Colors	Кольори сітки
+	Flattener Preset	Набір зведення
+	X	X
+	Y	Y
+	Orange	Помаранчевий
+	Purple	Фіолетовий
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Контури: {paths} Опорні точки: {anchors} Кольори: {colors}
 	Pattern	Візерунок
 	Pattern Editing	Редагування візерунка

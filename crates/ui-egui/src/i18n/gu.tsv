@@ -4711,3 +4711,10 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Repeat Objects	પુનરાવર્તિત ઑબ્જેક્ટ્સ
 @msg	`{path}` must be one of {_1}, not {got}	`{path}` એ {_1}માંથી એક હોવું જોઈએ, {got} નહીં
 	Path Length	પાથની લંબાઈ
+	Grid Size	ગ્રિડ સાઇઝ
+	Grid Colors	ગ્રિડ રંગો
+	Flattener Preset	ફ્લેટનર પ્રીસેટ
+	X	X
+	Y	Y
+	Orange	નારંગી
+	Purple	જાંબલી

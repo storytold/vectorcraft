@@ -11,10 +11,11 @@ use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 
-/// `document.info` and what it was fetched for: (document uid, revision, selection only).
+/// `document.info` and what it was fetched for: (document uid, revision, selection only, the
+/// Artboard tool's options while it is the current tool, else null).
 #[derive(Clone, Default)]
 struct Cache {
-    key: Option<(u64, u64, bool)>,
+    key: Option<(u64, u64, bool, Value)>,
     info: Value,
 }
 
@@ -31,10 +32,12 @@ pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
     });
 }
 
-/// `document.info` with its categories, fetched again only when the document or the scope changes.
+/// `document.info` with its categories, fetched again only when the document, the scope or the
+/// artboards the Artboard tool has selected change.
 fn info(app: &mut VectorcraftApp, ctx: &egui::Context, sel_only: bool) -> Option<Value> {
+    let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
     let st = app.session.active()?;
-    let key = Some((st.uid, st.revision, sel_only));
+    let key = Some((st.uid, st.revision, sel_only, artboard_tool));
     let mut c: Cache = pstate(ctx, "docinfo-cache");
     if c.key != key {
         c.info = app.session.execute("document.info", &json!({ "selectionOnly": sel_only })).ok()?;
@@ -121,6 +124,9 @@ fn shown_value(info: &Value, id: &str, k: usize, (label, value): (&str, &str), n
                 let ppi = info["document"]["rasterEffectsPpi"].as_f64()?;
                 Some(fill(tl!("{n} ppi"), &[("n", &ppi.to_string())]))
             }
+            "Grid Size" | "Grid Colors" | "Simulate Colored Paper" | "Flattener Preset" => {
+                transparency_value(&info["document"]["transparency"], label)
+            }
             _ => None,
         },
         "brushes" => Some(brush_value(value).to_string()),
@@ -134,6 +140,40 @@ fn shown_value(info: &Value, id: &str, k: usize, (label, value): (&str, &str), n
         "gradients" => gradient_value(entry("gradientObjects")?),
         _ => None,
     }
+}
+
+/// A transparency row of Document (`label`) in the interface language, from `document.info`'s
+/// `document.transparency` (`t`): the grid's size, its colors' preset name (two custom colors stay
+/// as `document.info` gives them), Simulate Colored Paper on or off, and a built-in flattener
+/// preset's name (a saved preset's name stays as it is).
+fn transparency_value(t: &Value, label: &str) -> Option<String> {
+    let shown = match label {
+        "Grid Size" => match t["gridSize"].as_str()? {
+            "small" => tl!("Small"),
+            "medium" => tl!("Medium"),
+            "large" => tl!("Large"),
+            _ => return None,
+        },
+        "Grid Colors" => match t["gridColorsName"].as_str()? {
+            "Custom" => return None,
+            name if vectorcraft_doc::setup::GRID_COLOR_PRESETS.iter().any(|(n, _)| *n == name) => tl!(name),
+            _ => return None,
+        },
+        "Simulate Colored Paper" => {
+            if t["simulatePaper"].as_bool()? {
+                tl!("On")
+            } else {
+                tl!("Off")
+            }
+        }
+        _ => match t["flattenerPreset"].as_str()? {
+            "High Resolution" => tl!("High Resolution"),
+            "Medium Resolution" => tl!("Medium Resolution"),
+            "Low Resolution" => tl!("Low Resolution"),
+            _ => return None,
+        },
+    };
+    Some(shown.to_string())
 }
 
 /// [`crate::i18n::fill_once`]: a name that holds `{…}` text stays as it is.
@@ -551,6 +591,58 @@ mod tests {
         assert!(saved.contains("(the selection only)") && saved.contains("\nGRADIENT OBJECTS\nGlow: Linear gradient, Radial gradient\n"), "{saved}");
         let report = app.session.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
         assert!(report.contains("Units: Millimeters\n") && report.contains("Radial Repeat, 6 instances"), "{report}");
+    }
+
+    /// Document shows the transparency settings with their values in the interface language (two
+    /// custom grid colors as they are), and while the Artboard tool is the current tool the
+    /// artboards it has selected, following its selection without an edit to the document.
+    #[test]
+    fn document_shows_transparency_and_the_artboard_tools_selection() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+        app.session.execute("artboard.setProps", &json!({"index": 1, "name": "Back"})).unwrap();
+        let ctx = egui::Context::default();
+        let document = |app: &mut VectorcraftApp| {
+            let info = info(app, &ctx, false).unwrap();
+            shown_rows(&info, "document")
+        };
+        let value = |rows: &[(String, String)], label: &str| rows.iter().find(|(l, _)| l == label).map(|(_, v)| v.clone());
+        let english = document(&mut app);
+        assert_eq!(value(&english, "Grid Colors").as_deref(), Some("Light"));
+        assert_eq!(value(&english, "X"), None, "no artboard rows with another tool: {english:?}");
+        app.select_tool("artboard");
+        app.session.set_tool_option("selected", &json!([1]));
+        let rows = document(&mut app);
+        let at = rows.iter().position(|(l, v)| l == "Artboard" && v == "Back").unwrap_or_else(|| panic!("{rows:?}"));
+        assert_eq!(rows[at + 1..at + 5].iter().map(|(_, v)| v.as_str()).collect::<Vec<_>>(), ["60 pt", "80 pt", "0 pt", "0 pt"]);
+        // Selecting another artboard changes the rows, though the document did not change.
+        app.session.set_tool_option("selected", &json!([0, 1]));
+        let rows = document(&mut app);
+        assert_eq!(rows.iter().filter(|(l, _)| l == "Artboard").count(), 2, "{rows:?}");
+        assert!(rows.contains(&("X".into(), "150 pt".into())) && rows.contains(&("Y".into(), "40 pt".into())), "from artboard 1's corner: {rows:?}");
+        app.session
+            .execute(
+                "document.setup",
+                &json!({"gridSize": "large", "simulatePaper": true, "flattenerPreset": "Low Resolution", "gridColors": "Purple"}),
+            )
+            .unwrap();
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let german = document(&mut app);
+        let painted = crate::tests_labels::painted_text(&mut app, show);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let shown = |label: &str| value(&german, label).unwrap_or_else(|| panic!("no {label} in {german:?}"));
+        assert_eq!(
+            [shown("Grid Size"), shown("Grid Colors"), shown("Simulate Colored Paper"), shown("Flattener Preset")],
+            ["Groß", "Lila", "Ein", "Niedrige Auflösung"]
+        );
+        assert!(painted.contains("Rastergröße") && painted.contains("Groß") && painted.contains("Back"), "{painted}");
+        app.session.execute("document.setup", &json!({"gridColors": ["#ff0000", "#00ff00"]})).unwrap();
+        crate::i18n::set_current(de);
+        let custom = value(&document(&mut app), "Grid Colors");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(custom.as_deref(), Some("#ff0000, #00ff00"));
     }
 
     /// A Repeat object's counts take each language's plural forms, and a grid that draws fewer

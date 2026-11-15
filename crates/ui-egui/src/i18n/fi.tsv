@@ -6308,6 +6308,11 @@ mark-style	Japanese	Japanilainen
 	Edge Only	Vain reunat
 	Overlay Edge	Reunat päällä
 	Path Length	Polun pituus
+	Grid Size	Ruudukon koko
+	Grid Colors	Ruudukon värit
+	Flattener Preset	Litistyksen esiasetus
+	X	X
+	Y	Y
 swatch	[None]	[Ei mitään]
 swatch	[Registration]	[Kohdistus]
 swatch	White	Valkoinen
