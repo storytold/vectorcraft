@@ -393,8 +393,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 return Err(err(format!("can't open `{}`: {}", file_name(name), crate::cmd::place::dcs::LINK_ONLY)));
             }
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
+            // A `.ai` keeps the artboard its header gives; an EPS comes in on its page.
+            let import = if matches!(format.id, "ai" | "ait") { vectorcraft_eps::import_ai } else { vectorcraft_eps::import_names };
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
+                let r = import(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
                     .map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?
@@ -658,6 +660,17 @@ pub struct ReadFile {
     path: Option<String>,
     /// What became of its linked files.
     links: Resolved,
+    /// Whether the color management policies changed the document ([`apply_policies`]).
+    policy_changed: bool,
+}
+
+/// Edit › Color Settings: the color management policies keep, take off or convert from the
+/// profiles the document `loaded` holds is tagged with, and their notes go to its warnings →
+/// whether they changed the document.
+fn apply_policies(loaded: &mut Loaded) -> bool {
+    let (notes, changed) = crate::cmd::colormgmt::apply_open_policies(&mut loaded.doc);
+    loaded.warnings.extend(notes);
+    changed
 }
 
 #[cfg(test)]
@@ -678,17 +691,35 @@ impl ReadFile {
 /// ([`super::importer`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let mut loaded = if opts.link_pages {
-        linked_pages(name, bytes, path.as_deref(), &opts)?
+    let (mut loaded, policy_changed) = if opts.link_pages {
+        let mut loaded = linked_pages(name, bytes, path.as_deref(), &opts)?;
+        let changed = apply_policies(&mut loaded);
+        (loaded, changed)
     } else {
         match super::importer::pick(name, bytes, p)? {
-            Some(plugin) => super::importer::load(name, bytes, &plugin, p)?,
-            None => load_with(name, bytes, &opts)?,
+            Some(plugin) => {
+                let mut loaded = super::importer::load(name, bytes, &plugin, p)?;
+                let changed = apply_policies(&mut loaded);
+                (loaded, changed)
+            }
+            None => {
+                // The color mode `p` asks for converts the colors after the policies did, through
+                // the profiles the document keeps.
+                let mut loaded = load_with(name, bytes, &LoadOptions { color_mode: None, ..opts.clone() })?;
+                let changed = apply_policies(&mut loaded);
+                if let Some(mode) = opts.color_mode.filter(|m| *m != loaded.doc.color_mode) {
+                    let doc = &mut loaded.doc;
+                    vectorcraft_color::cms::with_active(super::super::colormgmt::doc_cms(doc), || {
+                        super::super::colormgmt::set_color_mode(doc, mode, true, None, opts.grays);
+                    });
+                }
+                (loaded, changed)
+            }
         }
     };
     let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
-    Ok(ReadFile { loaded, opts, path, links })
+    Ok(ReadFile { loaded, opts, path, links, policy_changed })
 }
 
 /// The PDF `name` (`bytes`, read from `path`) opened with `linkPages`: its pages as placed documents
@@ -703,7 +734,7 @@ fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, opts: &LoadOptions
 /// The second half of [`open_bytes_with`]: open a file [`read_for_open`] read as the new active
 /// document → `document.open`'s result.
 pub fn open_read(s: &mut Session, file: ReadFile) -> Result<Value> {
-    open_loaded(s, file.loaded, file.links, file.path, &file.opts, false)
+    open_loaded(s, file.loaded, file.links, file.path, &file.opts, false, file.policy_changed)
 }
 
 /// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
@@ -715,14 +746,24 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
             "only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first",
         ));
     }
+    let policy_changed = apply_policies(&mut loaded);
     let base = crate::cmd::links::LinkBase::file(path);
     let links = crate::cmd::links::resolve(&mut loaded.doc, base, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
-    open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true)
+    open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true, policy_changed)
 }
 
-/// Make a loaded file the new active document; `links` is what became of its linked files, and
-/// `opts` are the options it was read with.
-fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
+/// Make a loaded file the new active document; `links` is what became of its linked files, `opts`
+/// are the options it was read with, and `policy_changed` says whether the color management
+/// policies changed it (it then opens with unsaved changes).
+fn open_loaded(
+    s: &mut Session,
+    loaded: Loaded,
+    links: Resolved,
+    path: Option<String>,
+    opts: &LoadOptions,
+    as_template: bool,
+    policy_changed: bool,
+) -> Result<Value> {
     let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } =
         loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
@@ -763,6 +804,9 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     let converted = saves_back && converted && s.prefs.append_converted;
     let index = s.add_document(doc, path);
     let st = s.doc_mut()?;
+    if policy_changed {
+        st.mark_unsaved();
+    }
     if let Some(pdf) = native_pdf_compatible {
         st.save_options.insert("pdfCompatible".into(), json!(pdf));
     }

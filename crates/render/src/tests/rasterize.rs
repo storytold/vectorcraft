@@ -421,3 +421,99 @@ fn rasterize_fills_its_area_on_white_and_add_around_grows_it() {
     let stroked = draw(&stroked, 10.0, 400);
     assert_eq!((pixel(&stroked, 96, 105), pixel(&stroked, 93, 105)[3]), ([255; 4], 0));
 }
+
+/// Rasterize params for hard-edged pixels a point wide, with `more`.
+fn hard(more: Value) -> Value {
+    let mut p = json!({"useDocumentResolution": false, "resolution": 72, "antiAlias": "none"});
+    if let (Some(p), Some(more)) = (p.as_object_mut(), more.as_object()) {
+        p.extend(more.clone());
+    }
+    p
+}
+
+/// A Transform effect after Rasterize enlarges the image it is given: each of the image's pixels
+/// is drawn twice as wide, and so is the room around the art.
+#[test]
+fn rasterize_then_scale_uses_the_pretransform_pixels() {
+    for strokes in [false, true] {
+        let scale = ("distort.transform", json!({"scaleH": 200, "scaleV": 200, "strokes": strokes}));
+        let r = draw(&doc(triangle(), &[("rasterize", hard(json!({}))), scale.clone()], 72.0), 10.0, 400);
+        // The 20 × 20 pixels of the image over 10..30 pt, each 2 pt wide over 0..40 pt.
+        assert!(squares_are_flat(&r, 0, 20, 20), "Scale Strokes & Effects {strokes}");
+        assert_eq!((pixel(&r, 10, 10), pixel(&r, 390, 390)[3]), ([255, 0, 0, 255], 0), "Scale Strokes & Effects {strokes}");
+        // 2 pt of white around the art becomes 4 pt: from -4 pt.
+        let framed = doc(triangle(), &[("rasterize", hard(json!({"background": "white", "addAround": 2}))), scale], 72.0);
+        let opts = RenderOptions { background: None, artboards: false, ..Default::default() };
+        let r = Renderer::new().render(&framed, 600, 600, Affine::translate((100.0, 100.0)) * Affine::scale(10.0), &opts);
+        assert_eq!((pixel(&r, 65, 300), pixel(&r, 55, 300)[3]), ([255; 4], 0), "Scale Strokes & Effects {strokes}");
+        // It is measured where it is drawn: the image over the 10..30 pt art and 2 pt around it,
+        // twice as wide about its center.
+        let n = framed.layers[0].children().unwrap()[0].clone();
+        let b = crate::drawn_bounds(&framed, &n).unwrap();
+        assert!((b.x0 + 4.0).abs() < 1e-9 && (b.x1 - 44.0).abs() < 1e-9, "{b:?}");
+        assert!(crate::painted_bounds(&framed, &n).is_some_and(|p| p.x0 <= -4.0 && p.x1 >= 44.0));
+    }
+}
+
+/// A Transform effect after Rasterize turns, reflects or stretches the image it is given, its pixel
+/// grid included: the canvas draws what the art before the Transform effect draws, moved by the
+/// effect's map.
+#[test]
+fn rasterize_then_rotate_and_reflect_moves_the_pixel_grid() {
+    let about = |m: Affine| Affine::translate((20.0, 20.0)) * m * Affine::translate((-20.0, -20.0));
+    let cases = [
+        (json!({"rotate": 30}), about(Affine::rotate(-30f64.to_radians()))),
+        (json!({"reflectX": true}), about(Affine::scale_non_uniform(-1.0, 1.0))),
+        (json!({"scaleH": 200, "scaleV": 100}), about(Affine::scale_non_uniform(2.0, 1.0))),
+    ];
+    let opts = RenderOptions { background: None, artboards: false, ..Default::default() };
+    let before = doc(triangle(), &[("rasterize", hard(json!({"background": "white", "addAround": 1})))], 72.0);
+    for (params, map) in cases {
+        let fx = [("rasterize", hard(json!({"background": "white", "addAround": 1}))), ("distort.transform", params.clone())];
+        let r = draw(&doc(triangle(), &fx, 72.0), 10.0, 400);
+        let want = Renderer::new().render(&before, 400, 400, Affine::scale(10.0) * map, &opts);
+        let off = r.pixels.iter().zip(&want.pixels).filter(|(a, b)| a.abs_diff(**b) > 2).count();
+        assert_eq!(off, 0, "{params}");
+    }
+    // Twice as wide: each pixel 20 × 10 device pixels.
+    let r = draw(&doc(triangle(), &[("rasterize", hard(json!({}))), ("distort.transform", json!({"scaleH": 200, "scaleV": 100}))], 72.0), 10.0, 400);
+    let flat = (0..20 * 20).all(|k| {
+        let (x0, y0) = ((k % 20) * 20, 100 + (k / 20) * 10);
+        (0..200).all(|i| pixel(&r, x0 + i % 20, y0 + i / 20) == pixel(&r, x0, y0))
+    });
+    assert!(flat);
+}
+
+/// A Transform effect that scales the image to nothing leaves nothing to draw or measure.
+#[test]
+fn rasterize_then_nonuniform_scale_and_zero_scale_are_bounded() {
+    let fx = [("rasterize", hard(json!({"background": "white"}))), ("distort.transform", json!({"scaleH": 0, "scaleV": 100}))];
+    let d = doc(triangle(), &fx, 72.0);
+    let r = draw(&d, 10.0, 400);
+    assert!(r.pixels.chunks(4).all(|p| p[3] == 0));
+    let n = d.layers[0].children().unwrap()[0].clone();
+    assert_eq!(crate::drawn_bounds(&d, &n), None);
+    // A huge scale enlarges where the image is drawn, not the image: 20 × 20 pixels still.
+    let fx = [("rasterize", hard(json!({}))), ("distort.transform", json!({"scaleH": 10000, "scaleV": 10000}))];
+    let drawn = || crate::fx::RASTERIZED.with(std::cell::Cell::get);
+    let before = drawn();
+    let opts = RenderOptions { background: None, artboards: false, ..Default::default() };
+    let r = Renderer::new().render(&doc(triangle(), &fx, 72.0), 100, 100, Affine::translate((500.0, 500.0)), &opts);
+    assert_eq!(drawn() - before, 1);
+    // The view, around -450 pt, lies inside the image's pixel at 15..16 pt, drawn 100 pt wide
+    // about the art's center at 20 pt.
+    assert_eq!(pixel(&r, 50, 50), [255, 0, 0, 255]);
+}
+
+/// A hidden Transform effect, or one with Transform Objects off, leaves the image where it is.
+#[test]
+fn rasterize_before_a_hidden_transform_keeps_its_image() {
+    let plain = draw(&doc(triangle(), &[("rasterize", hard(json!({})))], 72.0), 10.0, 400);
+    let off =
+        draw(&doc(triangle(), &[("rasterize", hard(json!({}))), ("distort.transform", json!({"scaleH": 200, "objects": false}))], 72.0), 10.0, 400);
+    assert!(plain.pixels == off.pixels);
+    let mut hidden = doc(triangle(), &[("rasterize", hard(json!({}))), ("distort.transform", json!({"scaleH": 200}))], 72.0);
+    let l = hidden.layers[0].id;
+    Arc::make_mut(&mut hidden.children_mut(Some(l)).unwrap()[0]).appearance.effects[1].visible = false;
+    assert!(plain.pixels == draw(&hidden, 10.0, 400).pixels);
+}

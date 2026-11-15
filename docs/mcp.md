@@ -1666,10 +1666,18 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   command, so `edit.colorSettings {"cmyk": "…"}` or a preset's output intent can name it in a later run. The
   copy is what counts: the original may move or be deleted. `color.removeProfile {name}` forgets a profile and its
   copy (not while it is a working space).
-- **Color Settings** (`edit.colorSettings`): the RGB and CMYK working spaces, intent and black point
-  compensation go into `Color Settings.json` when they change, and are the active settings again at the next
-  start, after the profiles above are registered (#6335). Saved settings that name a profile that is no longer
-  there, or a damaged file, leave the defaults (logged), and the next change writes over the file.
+- **Color Settings** (`edit.colorSettings`): the RGB and CMYK working spaces, intent, black point
+  compensation and color management policies go into `Color Settings.json` when they change, and are the active
+  settings again at the next start, after the profiles above are registered (#6335). Saved settings that name a
+  profile that is no longer there, or a damaged file, leave the defaults (logged), and the next change writes over
+  the file; settings saved without policies take the default, `preserveEmbedded`. `rgbPolicy` (`off`,
+  `preserveEmbedded`, `convert`) and `cmykPolicy` (the same and `preserveNumbers`) decide what `document.open`,
+  `file.newFromTemplate` and `file.revert` do with an RGB or CMYK profile the file is tagged with that is not the
+  working space: keep it, take it off and keep the color numbers (`off`, `preserveNumbers`), or convert the colors
+  of that model into the working space with the intent and black point compensation and take it off (`convert`; a
+  profile that is not available stays). The reply's `warnings` name each profile, and a document a policy changed
+  opens with unsaved changes. A profile that is the working space stays whatever the policy. `document.open`'s
+  `colorMode` converts the colors after the policies, through the profiles the document keeps.
   `edit.assignProfile` tags the document only: colors show and convert through the profiles it assigns, and the
   working spaces and the file stay as they are. The profiles in use are those of the document in front, after
   `file.new`, `document.open`, `document.activate`, `file.close`, `file.revert`, `edit.undo`, `edit.redo` and a
@@ -1823,6 +1831,15 @@ and the action still plays. `Session::replay` plays a journal the same way. The 
 `toggle` it hides only a panel that can be seen, which is the panel the Window menu checks. While Tab or Shift+Tab
 hides the dock, no panel is checked, and the panel shows again with the dock in its earlier place; the toolbar and the
 Control bar stay as they are.
+
+While Tab or Shift+Tab hides the panels, resting the pointer for 0.3 s on a 6 pt band along the left or right edge of
+the area below the bars shows the panels docked on that side of the canvas, over the canvas's edge; the canvas keeps its
+size, so the art does not move. They hide again once the pointer has been away from them for 0.3 s, and stay while a
+flyout opened from them, a menu or a pressed button is open. Floating panels, the toolbar and the Control bar stay
+hidden, and Tab or Shift+Tab shows the panels for good. `window.panels.peek {side: "left" | "right"}` shows them as the
+pointer does, `{side: null}` hides them, and `ui.docking`'s `peek` names the side shown (null for none). The command
+refuses another side, a side with no docked panel, panels that are not hidden and Presentation Mode, and changes
+nothing.
 
 The export commands limit those keys. `document.export`, `document.exportSelection`, `document.serialize`, `app.export`
 and `file.export` refuse a key that no format takes. They accept a key that only another format takes and do not use
@@ -2002,8 +2019,9 @@ and `type.fractionalWidths`; `flip` in `type.dynamicTextPreset`; `remove` and `o
 These commands refuse a string or another value that is not a number with `` `radius` must be a number, not "2" ``,
 naming the key, and change nothing: `radius` in `shape.rectangle`; `sides` and `rotation` in `shape.polygon`;
 `radius2`, `points` and `rotation` in `shape.star`; `diameter`, `opacity`, `brightness`, `growth`, `fuzziness`,
-`rays`, `longest`, `rayFuzziness`, `rotation`, `rings`, `largest`, `x2`, `y2`, `direction`, `pathLength` and `seed`
-in `shape.flare`; `decay` and `segments` in `shape.spiral`; `rows` and `columns` in `shape.rectangularGrid`; `concentric`
+`rays`, `longest`, `rayFuzziness`, `rotation`, `rings`, `largest`, `x2`, `y2`, `direction`, `pathLength`, `seed` and
+`ringSeed` in `shape.flare` (`seed` must also be a whole number of at least 0, and `ringSeed` a whole number from
+0 to 2^53 - 1); `decay` and `segments` in `shape.spiral`; `rows` and `columns` in `shape.rectangularGrid`; `concentric`
 and `radial` in `shape.polarGrid`; `size` and the `width`, `height` and `fitMinPercent` of `area` in `text.create`;
 `size` and `fitMinPercent` in `text.createInPath`; `start`, `end`, `size`, `tracking`,
 `baselineShift`, `hScale`, `vScale`, `rotation` and `strokeWidth` in `text.setRangeStyle`; `strokeWidth` in `text.setStyle`; `start` and `end` in
@@ -2736,6 +2754,16 @@ A click with the Selection tool on a guide selected with objects runs `select.ke
 The key guide goes when it leaves the selection or no object is left selected, and an object key replaces it (and the other way round).
 It returns `{key}`, the key object's id or null, with `guide`, the key guide's index, when a guide is the key.
 `document.inspect` (the `inspect_document` tool) reports the key object as `key`, null without one, and the key guide as `keyGuide`.
+
+`select.key {id, anchor: [subpath, anchor]}` makes an anchor point selected with Direct Selection the key anchor, while at least one other point (or a path selected whole) is selected too.
+`select.anchors` with mode `add` or `toggle` and one point makes that point the key anchor when it selects it; a Shift-click on an anchor with Direct Selection runs it, and a plain click still selects that point alone.
+Aligning to the key, `object.align` moves the other selected points to the key anchor's x or y and the key anchor stays put; a pixel-aligned path is then snapped to the pixel grid, as after any other edit.
+`object.distribute {spacing}` and `object.distributeSpacing {spacing}` keep the key anchor in place and put the other points `spacing` apart, outward from it, in their order along the axis.
+With `to: "selection"` or `"artboard"`, `object.align`, `object.distribute` and `object.distributeSpacing` do not treat the key anchor as the key: it moves with the other points, as without a key anchor.
+The key anchor goes when it is deselected or deleted, when it is the only point left selected, when `select.key {}` cancels it, and when a key object or key guide replaces it.
+An anchor that is not a selected anchor point (a selected segment's end is not one) is an error, and the key stays as it was.
+The result has `keyAnchor: {id, anchor}` with a key anchor, and `document.inspect` reports it as `keyAnchor`.
+The canvas draws the key anchor as a larger filled square in a frame, and the Align panel and the Control bar then name the Align To choice Align to Key Anchor.
 The `ui.pointer` and `pointer_gesture` replies list it as `key` beside `selection`.
 The command palette lists `select.key` as Cancel Key Object and runs it without an id.
 
@@ -2977,6 +3005,38 @@ changes neither option. Behavior reference: [View artwork](https://helpx.adobe.c
 
 ```json
 {"name":"invoke_menu","arguments":{"command":"ui.navigatorPanelOptions","params":{"color":"Light Blue","solidDashes":true}}}
+```
+
+## Info panel
+
+`info.readout` takes no params and returns what Window › Info shows for the selection and the tool in use:
+`{tool, width?, height?, readout?}`. `tool` is the active tool's id. `width` and `height` are the sides of the
+selection's bounding box in points (of the box around the anchors selected with Direct Selection when there are
+some), measured as the `usePreviewBounds` preference says, and are left out with nothing selected. `readout` is left
+out unless the tool has something of its own to show:
+
+- `{kind: "drag", dx, dy, distance, angle}` while the Selection, Direct Selection or Group Selection tool moves the
+  selection, or the Gradient tool draws a gradient vector on the art.
+- `{kind: "scale", width, height}` during a Scale tool drag, in percent.
+- `{kind: "rotate", center, angle}` and `{kind: "reflect", center, angle}` during a Rotate or Reflect tool drag.
+  `angle` is the angle turned, as `object.rotate` takes it, or the angle of the reflection axis, as `object.reflect`
+  takes its `axis`. Both are in degrees counter-clockwise.
+- `{kind: "shear", center, axis, angle}` during a Shear tool drag. `axis` is 0 for a horizontal shear and 90 for a
+  vertical one, and `angle` is the shear angle in degrees, as `object.shear` takes it.
+- `{kind: "brush", brush}` while the Paintbrush is the tool. `brush` is the brush it paints with, or null.
+
+Lengths are in points. A drag's `angle` is in degrees counter-clockwise from the x axis. `center` is the center of the
+selection's bounding box as the drag has carried it, in document coordinates. A param is an error. In the app's panel, X and Y show the
+pointer's position from the rulers' zero point, or `center` during a Rotate, Reflect or Shear tool drag. W and H show
+the selection's size, `dx` and `dy` during a drag (with the distance and the angle under them), or the Scale tool's
+percentages. The Zoom tool adds the view's magnification and the Paintbrush its brush's name. Several selected objects
+show only the fill, stroke and type values they share, and Show Options adds a tint's swatch and percentage and the
+name of a gradient's swatch. The number formats, the rows shown between drags and the Direct Selection and Group
+Selection readouts are VectorCraft's own. Behavior reference: the Info panel overview in the
+[archived user guide](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=76).
+
+```json
+{"name":"run_command","arguments":{"command":"info.readout","params":{}}}
 ```
 
 ## Tools panel placement
@@ -3319,9 +3379,12 @@ already walks Image Trace. Short agent entry points:
   `brush.duplicate {name, newName?} | {names}`, `brush.freehand {…path.freehand params, brush?}`,
   `object.expandBrush {ids?}`. `brush.freehand` draws the plain path when `brush` is left out or null. It refuses a
   `brush` that is not a string with "`brush` must be a string", a name that no brush in the document has (an empty
-  name included) with "no brush named `<name>`", and a `style` other than "pencil" or "brush"; the document does not
-  change and no undo step is recorded. The Paintbrush skips a tool brush or current brush that has been deleted and
-  paints with the other, or draws the plain path when neither is in the document. A document or brush
+  name included) with "no brush named `<name>`", a `style` other than "pencil" or "brush", a `brush` for a path
+  with no stroke (a continued or redrawn path without one, or a new filled "pencil" path while the stroke is None)
+  with "cannot apply brush `<name>`: path has no stroke", and a key that neither `path.freehand` nor `brush` names
+  with "unknown parameter"; the document does not change and no undo step is recorded. A stroke drawn with a brush
+  is one undo step: Undo removes the path and its brush together. The Paintbrush skips a tool brush or current
+  brush that has been deleted and paints with the other, or draws the plain path when neither is in the document. A document or brush
   library file whose brushes repeat a name is read with the first brush of that name as stored and each later one
   numbered with the first "`<name>` 2", "`<name>` 3"… the file does not have; strokes of the name keep the first
   brush. `brush.new`,
@@ -3377,7 +3440,12 @@ already walks Image Trace. Short agent entry points:
   `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.makeGraphDynamic`
   (`variable.bind` and `variable.makeTextDynamic` refuse type that already has another text variable and name it),
   `variable.unbind`, `variable.rename`, `variable.delete`, `variable.highlight` (image values are file paths, graph
-  values CSV as `graph.setData`). `variable.lock {locked?}` (Lock Variables) locks or unlocks the variables;
+  values CSV as `graph.setData`). `variable.rename {name, newName?, kind?}` is Variable Options: it renames a
+  variable, changes its kind, or both, in one undo step, and adds none when the name and kind are the ones it has.
+  A kind change unbinds each object that can't hold the new kind (a text variable keeps type with no other text
+  variable, an image variable keeps image objects, a graph variable keeps graph roots, a visibility variable keeps
+  every object; locks and hidden layers don't unbind anything) and drops the variable's values in every data set.
+  That rule is VectorCraft's own. `variable.lock {locked?}` (Lock Variables) locks or unlocks the variables;
   without `locked` it toggles, and the lock is saved with the document. While the variables are locked,
   `variable.define`, `variable.delete`, `variable.rename`, the four `variable.make…Dynamic` commands and a
   `variable.loadLibrary` that would delete or define a variable (below) fail with "variables are locked";
@@ -3386,7 +3454,14 @@ already walks Image Trace. Short agent entry points:
   without a kind VectorCraft reads is listed with `kind: "unknown"`: it takes no values, and `variable.bind`
   refuses it. When an opened `.ai`'s layers are read, the objects it binds to its text, visibility and image
   variables come in bound when they are of the variable's kind, locked and hidden objects included, and
-  `variable.list` counts them in `bindings`.
+  `variable.list` counts them in `bindings`. `variable.sort {by: name|object|type|none, descending?}` sorts the
+  Variables panel's list, as a click on its Variables, Objects or type column header does (a second click on the
+  same header sends `descending: true`): by variable name, by the name of the bound object, or by type in
+  VectorCraft's order (text, image, graph, visibility, then unknown); `none` is the order the variables were
+  defined in. Names compare without regard to case; by object, unbound variables come first and variables bound
+  to several objects last, and ties go by name. Another `by` value, or a `descending` that is not true or false,
+  is an error. The sort is panel state, not saved and not an undo step; `variable.list` lists the variables in
+  that order and reports it as `sort: {by, descending}`.
 - Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, newName?, values?}` (`newName` also
   renames the row, in the same undo step; Edit Data Set's Name field sends it), `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
@@ -3754,6 +3829,16 @@ already walks Image Trace. Short agent entry points:
   black ring around a white disc around a black dot, black gets two groups. `layer.releaseToLayers` on the expanded group then
   gives each group a sublayer. A trace made with `autoGrouping` is refused. Expanding by color also refuses a trace
   with a live Pathfinder effect.
+  An Abutting trace with Fills (not Flat Logo) also holds a group named `Seam Fills` under its paths: for each color, a
+  stroke 1.5 image pixels wide (at the image's larger scale, when it is stretched more one way) with butt caps and round joins along the edges where a filled path of that color meets a
+  filled path drawn after it, in that color (a gradient path's stroke takes its gradient). Without it, a renderer that
+  anti-aliases each path on its own shows a light hairline along every shared edge. The traced paths and their shared
+  edges are the same with or without it, and edges against the image's border, a transparent area or a color left out
+  get no stroke. A trace whose paths have more than half of the trace's anchor limit (8,000,000, 2,000,000 on the web)
+  has no seam fills, so that paths and seam fills together stay within the limit. Both Expand commands keep the group, and `byColor` leaves it under every color's group. The strokes
+  are separate objects: after Expand, recoloring, moving or deleting a traced path leaves them as they are, and deleting
+  the group removes them. The reply's
+  `paths` and `anchors` count the traced paths only.
   With `keepColors` in `params`, the reply's `warnings` name each listed color that no traced color matches, and say
   when nothing was traced.
   `imageTrace.presets.save {name?, newName?, preset?, enhanced?, params?}` saves tracing settings as a preset kept with
@@ -3869,8 +3954,13 @@ already walks Image Trace. Short agent entry points:
   arrives and is its own undo step. `match` is the paint the face or edge had before the first of the double-click's
   two clicks or the triple-click's three that painted it, or before the double-click when the triple-click's double-click
   reached it, so the clicks before the last do not change what it matches;
-  a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. An edge takes the
-  paint and weight in its topmost stroke that is shown, or in a new stroke above the others when it has none. These rules
+  a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. A face that
+  the Bucket fills has all its fills replaced by one fill with the paint, shown, fully opaque and blending normally, in the
+  place of its topmost fill; its strokes, their order and the face's own visibility, opacity and blending mode stay as
+  they are. An edge that it strokes has all its strokes replaced the same way by one stroke with the paint and weight,
+  which keeps the dashes, caps, joins and arrowheads of the edge's topmost shown stroke (of its topmost stroke when every
+  stroke is hidden), and its fills stay as they are. A part with no fill or stroke gets a fill below its strokes or a stroke
+  above its fills. A fill or stroke of none leaves one row of none, so no fill or stroke of the part draws. These rules
   for what faces and edges join and what paints match are VectorCraft's own. The help page describes the gestures:
   https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html.
   `livePaint.fill {scope}` and `livePaint.strokeEdge {scope}` take `scope` as `"one"` (the default), `"connected"` or
@@ -3894,8 +3984,9 @@ already walks Image Trace. Short agent entry points:
   error. With `ids`, at a point on a hidden face it fills the face there of another Live Paint group among the
   objects; otherwise it returns an error and does not merge the objects.
   A Live Paint command that changes nothing records no undo step, keeps the redo steps, leaves a saved document saved
-  and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has the paint,
-  `livePaint.strokeEdge` when the topmost shown stroke of each edge it reaches already has the paint and the width,
+  and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has one fill, shown,
+  fully opaque, blending normally and with the paint (or no fill, for none), `livePaint.strokeEdge` when every edge it
+  reaches already has one such stroke with the paint and the width (at any width for none, or no stroke),
   `livePaint.gapOptions` (and the Gap Options
   dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
   `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
@@ -4133,6 +4224,26 @@ it as a path. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) 
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"shadow":true,"shadowPosition":"below","shadowDistance":10,"shadowBounds":150}}}}
 ```
 
+## 3D render mode
+
+Revolve, Extrude & Bevel, Inflate and Rotate take `render`, an object whose `mode` is `"shaded"` (the default) or
+`"wireframe"` (**Window › 3D and Materials** › Render Settings › Wireframe), set with `effect.apply` or
+`effect.setParams` in one undo step. In wireframe mode the effect stays live and draws the edges of the faces it
+builds instead of its shaded surface: each edge once, in the paths [Expand as Wireframes](#expand-as-wireframes)
+gives for the 3D effect, with a 0.5 pt black stroke, round joins and no fill (VectorCraft's own choice), and no shadow or graphics.
+The edges are drawn whatever the opacity, blending mode or opacity mask of the fills, strokes and group members; the
+object's own opacity, blending mode and opacity mask apply to them as a whole.
+Geometry effects after the 3D effect reshape the drawn edges. Expand as Wireframes reshapes each face before it
+joins the edges, so with such an effect its paths can differ from the drawn ones. The mode is saved in the native file, SVG and PDF exports
+draw the edges, and `effect.expandAppearance` keeps them as paths. Past 1,000,000 edges the source path is drawn, as
+it is for a solid past its limits. A `render` that is not an object, a key other than `mode`, another mode, and
+`render` on Extrude & Bevel (Classic), Revolve (Classic) or Rotate (Classic) are refused before the document
+changes. See [three-d.md](three-d.md#3d-and-materials-panel).
+
+```json
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"render":{"mode":"wireframe"}}}}}
+```
+
 ## 3D object type
 
 `effect.setParams {index: int, threeDType: "plane" | "extrude" | "revolve" | "inflate", params?, item?, ids?, aligned?}`
@@ -4245,6 +4356,13 @@ is tall), `bevelInside` (false adds the bevel around the shape, true carves it i
 - `shadingColor`: `black` (the default), `custom` (darkens toward `shadingCustom`, a `#rrggbb` color) or `none` (the
   paint is kept and only the highlight lightens it). `drawHiddenFaces` also draws the faces turned away from the
   viewer, behind the others.
+- `preserveSpotColors` (default false) is the Lighting tab's Preserve Spot Colors checkbox. When it is on, a fill or
+  stroke linked to a spot or global swatch stays linked on every face, so a spot color prints on its own plate in
+  separations and PDF. The highlight lowers the swatch's tint, and a face that darkens gets black at the shade's
+  strength over the swatch, multiplied and overprinting. These rules for drawing the shading are VectorCraft's own. The
+  option does nothing while `shadingColor` is `custom`, since a custom shading color cannot keep a spot color
+  ([Preserve Spot Color](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260)).
+  Unlinked colors, gradients, patterns and the Wireframe surface draw as they do with it off.
 
 The defaults are VectorCraft's own. An unknown parameter, a number out of range, a flag that is not true or false, or
 an unknown surface or shading color is refused with an error and the document is not changed.
@@ -4261,8 +4379,8 @@ for a full turn, and draws every face, back to front, with the classic surfaces.
 0..360, default 360), `cap` (true closes the profile's open ends, false leaves the surface hollow), `offset` (points,
 0..1000, default 0; the axis's distance from the profile, so a value above 0 makes a ring), `edge` (`left`, the
 default, or `right`: the edge of the profile's bounds the axis is at), `rotationX/Y/Z` and `perspectiveAngle` as
-above, and `surface`, the lights, `ambient`, `highlightIntensity`, `highlightSize`, `blendSteps`, `shadingColor` and
-`shadingCustom` as Extrude & Bevel (Classic) takes them. It has no `drawHiddenFaces`. The effect also goes on a group
+above, and `surface`, the lights, `ambient`, `highlightIntensity`, `highlightSize`, `blendSteps`, `shadingColor`,
+`shadingCustom` and `preserveSpotColors` as Extrude & Bevel (Classic) takes them. It has no `drawHiddenFaces`. The effect also goes on a group
 or layer, whose members turn about one shared axis, or on a fill or stroke. The public documentation describes the
 dialog ([Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html))
 and its Angle (0 to 360), Cap, Offset (0 to 1000) and Left Edge or Right Edge settings
@@ -4281,8 +4399,8 @@ changed.
 3D (Classic) › Rotate (Classic)…. It turns every fill and stroke as one flat plane about the center of the object's
 bounds, as `threeD.rotate` does, each in its own paint, and draws the plane from either side. Parameters:
 `rotationX/Y/Z` and `perspectiveAngle` as above; `surface` (`diffuse`, the default, lights the art softly, and
-`none` keeps the paint unlit); and the lights, `ambient`, `blendSteps`, `shadingColor` and `shadingCustom` as Extrude &
-Bevel (Classic) takes them. It has no highlight, no `drawHiddenFaces` and no shadow. The effect also goes on a group
+`none` keeps the paint unlit); and the lights, `ambient`, `blendSteps`, `shadingColor`, `shadingCustom` and
+`preserveSpotColors` as Extrude & Bevel (Classic) takes them. It has no highlight, no `drawHiddenFaces` and no shadow. The effect also goes on a group
 or layer, whose members turn about one shared center, or on a fill or stroke. The public documentation describes the
 dialog's Position and Surface settings
 ([Rotate objects in 3D](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/rotate-objects-in-3d.html)),
@@ -4380,7 +4498,11 @@ stay tints), `scaleTints` (every colour becomes a tint as light, relative to the
 darker than the row's average become tints and shades) or `hueShift` (the most saturated colour takes the new colour,
 the others turn by the same hue). `limitTo` snaps new colours to a swatch library's nearest colour;
 `recolor.randomize {map, order?, saturationBrightness?, seed?}` shuffles or varies new colours; a row with
-`exclude: true` keeps its colours. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
+`exclude: true` keeps its colours. A row's `from` may be an empty list: the row recolors nothing, adds no library swatch with
+`limitTo` and gives `group` no color, and `recolor.randomize` and `recolor.weigh` keep it. A row without `from`, or with
+a current color that is not a color, is refused. With art selected, the Recolor Artwork dialog's New Row button (beside
+Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click another row and Merge to move its colors into it. An
+empty row does not count toward Colors. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
 linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
 step (art linked to its global swatches follows), and `recolor.apply` with `group` recolours the art and rewrites the
@@ -6011,14 +6133,15 @@ With `to: "selection"` or `"key"`, or without `to`, `object.distribute` and `obj
 keep the first and last objects where they are, and `object.distribute` without `spacing` moves nothing with fewer than
 three objects. With `spacing` and a key object, `object.distribute` and `object.distributeSpacing` do not use `to`;
 with a key guide, `to` decides whether the guide is the key. With anchor points selected (Direct Selection), both commands space the points
-among themselves and do not use `to` or `artboard`.
+among themselves and do not use `artboard`; with `to: "selection"` or `"artboard"`, the key anchor is not the key, and
+all the points are spaced as without one.
 
 `object.distribute {spacing}` (the Distribute Objects buttons while the selection has a key object, `select.key`) keeps
 the key object where it is, with the compound path or selected group that contains it. It places the objects' lines
 (left edges, centers or right edges; top edges, centers or bottom edges) `spacing` points apart, outward from the key
 object's line, in their order on that line. With `spacing: 0`, every object ends on the key object's line. Two objects
-are enough. Without a key object or key guide, or with anchor points selected, `object.distribute` does not use
-`spacing`. A `spacing` that is not a number is an error.
+are enough. Without a key object, key guide or key anchor, `object.distribute` does not use `spacing`; with anchor
+points selected, it uses `spacing` only with a key anchor (`select.key {id, anchor}`). A `spacing` that is not a number is an error.
 
 `object.distribute` and `object.distributeSpacing` space the selected ruler guides across the axis (vertical guides
 for the horizontal options, horizontal guides for the vertical ones) with the selected objects, as items with no size
@@ -7057,6 +7180,11 @@ a missing one added, and one of the same name that differs is added renamed ("Ma
 added is reused), which the pasted objects follow. Linked colours show the document's swatch at their tint (a Lab
 spot colour as its Spot Colors option says). The result reports `{ids, added, merged, renamed: [{kind, from,
 to}]}`.
+
+`edit.pasteWithoutFormatting` sets the labels of a pasted graph in a new graph's label character style and
+paragraph attributes, keeping each label's alignment and where it starts. The pasted graph no longer keeps its labels' character and
+paragraph formats, so a later `graph.setData` or `graph.setType` sets the labels the same way. The rest of the
+graph's art is pasted as it was copied.
 
 A global or spot swatch whose name the document gives another colour is a conflict: `clipboard.conflicts` lists
 them, and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
@@ -8121,7 +8249,10 @@ or in `options` (`file.formatOptions {format}` lists them with their values):
 - `separateArtboards: true` also writes each artboard of `range` (`"1-3, 5"`, default `"all"`) to
   `<name>-<artboard>.<ext>` beside the file: that artboard and the art touching it. The result's `files` lists every
   file written, the master file first (without a path: `files: [{name, dataBase64}]`). 3 artboards give 4 files.
-- `includeLinked: true` keeps linked images' own pixels in the file (they stay linked), not just the previews.
+- `includeLinked: true` keeps linked images' own pixels in the file (they stay linked), not just the previews. Linked
+  images in the art of the stored brushes count as those in the layers do, and an image key that the layers or a
+  brush's art shows embedded keeps its pixels either way. A `version` older than the current one saves the placed
+  documents in a brush's art as groups of the art they show.
 - `embedProfiles` (default true) carries the ICC profiles the document is tagged with that were loaded from files;
   opening the file installs them where they are missing (a warning names one that can't be used).
 - `pdfCompatible`: native files (default true) also carry a PDF of every artboard (`pdf` in the file). This makes saves
@@ -8938,6 +9069,11 @@ Appearance panel's Characters row, not the characters' formatting) go on paths o
 below the Characters row on one path under the glyph paths, the others on one path over them, in their order and with
 their opacity, blend mode, effects and stroke settings. Their gradients that are not placed are fixed to the type's
 layout box, as the canvas paints them, so one gradient spans every glyph. The group itself has no fills or strokes.
+It takes the type object's name, opacity, blend mode, Isolate Blending, Opacity & Mask Define Knockout Shape, opacity
+mask and effects. The effects (the object's own, which apply to the type as a whole) keep their order, settings and
+hidden state and stay live on the group; none of them is copied onto the glyph paths. Geometry effects on the group
+(Warp, Free Distort, Transform) move its placed gradients with the whole outline, as they do on the type, not with each
+glyph.
 `object.expand` outlines type with this command, so Fill and Stroke expand those paths' gradients, patterns and strokes.
 
 `type.createOutlines` (Type › Create Outlines) and `effect.expandAppearance` (when it outlines type, as Expand
@@ -9402,8 +9538,19 @@ value out of range, a scale on another class, an unknown class or key, a name th
 characters, shared by two fonts (in any case) or the name of an installed font, and a part set in a composite font are
 each refused with an error, and nothing changes. A document keeps at most 256.
 
+`custom` lists a font's custom character sets
+([Customize characters in a composite font](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=348)),
+each `{name, characters?, font?, style?, size?, baseline?, hScale?, vScale?}`. A set sets the characters it lists in
+its own font, style, size, baseline and scales, ahead of their class; a value left out is the `kanji` part's. When two
+sets list a character, the later set sets it. A set's name is trimmed and unique in its font in any case. Its
+characters are each listed once, none a control character or past U+FFFF. A set may list no characters, and then sets
+none. A font keeps at most 64 sets and a set at most 8,192 characters, VectorCraft's own limits. A set name that is
+empty or shared, a character listed twice or not allowed, `scaleAtCenter` on a set, or an unknown key is refused with
+an error, and nothing changes.
+
 Type set in a composite font names it as its family (`text.setStyle {font: "My Composite"}`), and the font menus list
-composite fonts first. The layout sets each character in its class's font, a letter and its combining marks together.
+composite fonts first. The layout sets each character in its custom set's or its class's font, a letter and its
+combining marks together.
 A composite font taken out of the document leaves its type naming it, and the type shows as missing. Composite fonts
 are saved with the document. SVG and legacy `.ai` write type in one of the document's composite fonts as outlines, and
 SVG, PDF, EPS and legacy `.ai` export draw it in the font's parts also when the document was read without an open app.
@@ -9416,18 +9563,25 @@ parts its characters are drawn in, and `missingGlyphs` counts the characters tha
 characters are drawn in. `text.glyphAlternates` lists the alternates of a character from its part's font.
 
 `type.compositeFonts.export {path?, names?, fonts?}` writes the document's composite fonts (all, or those `names`
-lists), or the `fonts` given, to a `.vccomposite` file; without `path` it returns the file's text as `data`.
+lists), or the `fonts` given, to a `.vccomposite` file; without `path` it returns the file's text as `data`. Fonts
+whose file would be larger than 4 MB, the most Import reads, are refused with an error.
 `type.compositeFonts.import {path | data | dataBase64, apply?}` reads a file of at most 4 MB. With `apply` (the
 default) its fonts join the document's, replacing a font of the same name, as one undo step; with `apply: false` it
 only returns them. Opening a `.vccomposite` file imports it.
 
 Type › Composite Fonts… (shown with Show East Asian Options) opens the Composite Fonts dialog on the document's fonts:
-Font picks one, and a table sets each class's font, style, size, baseline and scales. New adds a font based on the one
-picked, Delete Font takes it out, Import… adds the fonts of a file and Export… writes the one picked. OK runs
-`type.compositeFonts.set` with every font as one undo step; a refused font keeps the dialog open.
+Font picks one, and a table sets each class's and each custom set's font, style, size, baseline and scales. New adds a
+font based on the one picked, Delete Font takes it out, Import… adds the fonts of a file and Export… writes the one
+picked. Custom shows the font's custom character sets: Character Set picks one, New adds a set based on the one picked,
+Delete Set takes it out, and Name renames it. Character › Direct Entry adds the characters typed, and Character ›
+Unicode adds the characters of hexadecimal codes (`3042`, `U+3042`, several separated by spaces or commas); Add skips
+characters the set already lists. Delete takes the character picked out of the set. OK runs `type.compositeFonts.set`
+with every font as one undo step; a refused font keeps the dialog open. `ui.dialog.set` takes `custom`, `entry` and
+`char` (the index of the character picked in the set) as soon as the dialog opens.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"},"roman":{"font":"Source Sans 3","size":95,"baseline":-2},"numerals":{"font":"Source Sans 3"}}}]}}}
+{"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"}},"custom":[{"name":"Marks","characters":"※〒","font":"Source Sans 3","size":90}]}]}}}
 ```
 
 ## Optical Margin Alignment
@@ -10568,11 +10722,18 @@ same dialog, and its OK also draws a flare there. While the center is dragged ou
 pointer's document y grows adds one degree per document point to `shape.flare`'s `rotation` (it turns
 only the rays), decreasing y subtracts the same rate, and unchanged y leaves it. This application rate is independent of event frequency; Shift held keeps
 the turn as it is. Space held keeps the turn as well. Once the center drag has passed its starting distance, and in the
-drag that places the rings' end point, Space held moves the flare at its current size. The Artboard tool's are the active artboard's Artboard Options
+drag that places the rings' end point, Space held moves the flare at its current size. In the center drag, Up and Down
+Arrow add and remove rays, and Ctrl (Command on macOS; `mods.cmd`) keeps the center's diameter as the last drag showed
+it while the drag sizes the halo: the halo's radius keeps the ratio to the pointer's distance that it had when the key
+went down, through `growth` within 0 to 300 %. Letting the key go sizes the center with the drag again, and the flare
+keeps the new `growth`. While the rings' end point is placed, Up and Down Arrow add and remove rings (0 to 50; with
+Rings off they do nothing), and each press of backquote (the ~ key; a pointer event's `backquote` turning true) sends a
+new `ringSeed`, which moves the rings along the path and keeps their count and sizes. Each new flare starts from the
+options' counts and growth, without a `ringSeed`. The Artboard tool's are the active artboard's Artboard Options
 (dialog `artboardOptions`; the Artboard tool's active artboard while it is in use, else the window's; its `x` and `y`
 are the artboard's top-left corner in document points, while the dialog shows X and Y at the reference point the
 Transform panel uses, counted from the ruler origin), a graph tool's
-the selected graph's Graph Type (an error without one), a Symbolism tool's the Symbolism Tools Options (dialog
+the selected graph's Graph Type (dialog `graphType`, described below; an error without one), a Symbolism tool's the Symbolism Tools Options (dialog
 `symbolismOptions`: `diameter` in points, `intensity` and `density` 1–10, one brush for the eight tools) and the
 Magic Wand tool's its panel. `ui.newArtboard` (Alt-click on the Artboards panel's New Artboard) opens Artboard Options
 for a new artboard, with `new: true` and the name, position and size that `artboard.new {}` would give it. OK runs
@@ -10580,6 +10741,31 @@ for a new artboard, with `new: true` and the name, position and size that `artbo
 `artboard.new` and `artboard.setProps` trim the white space around `name`, and a blank name gives the artboard its
 default name, "Artboard N" for the Nth artboard.
 A canvas-click dialog also has `preview` (initially on): tentative settings draw at the remembered click, Reset refreshes that preview, and Cancel discards it without persisting settings. OK accepts one flare as one Undo step. Toolbar-only options draw no artwork.
+
+Object › Graph › Type… (`graph.setType` without params) and a double-click on a graph tool open Graph Type (dialog
+`graphType`) for the selected graph, or for the series picked in it with Group Selection. Its fields are the options
+`graph.setType {}` returns, under the command's names for them. `legend`, `pieLegend`, `piePosition`, `pieSort`,
+`firstRowInFront`, `firstColumnInFront` and `filledLines` are held for every type, so a type picked in the dialog shows
+the options it uses. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
+value axis and of the right one. While one is on, OK sends `axisMin`, `axisMax` and `ticks` (or `rightAxisMin`,
+`rightAxisMax` and `rightTicks`), and the dialog fills the ones the graph lacks with the values the axis would be
+calculated with for the type, value axis and Separate Scales the dialog shows.
+One that was on and is turned off sends `null`, `null` and `0`, and one left off sends none of the three. `__page` is the
+page the dialog shows: `options` (Graph Options), `valueAxis` (Value Axis, or Left Axis while the value axis is on both
+sides), `rightAxis` (Right Axis, with the value axis on both sides) or `categoryAxis` (column, stacked column, bar,
+stacked bar, line and area graphs); a pie graph has the `options` page alone, and a page the type picked lacks shows
+`options`. With series picked, `type` and `valueAxis` (`left` or `right`) go to those series and the other options to
+the whole graph, as the command applies them; `type` or `valueAxis` is `null` while the picked series differ in it, and
+OK then leaves each series as it is. OK runs `graph.setType` with the fields: `legend` for every type but pie,
+and the three pie options for a pie graph. When the selection changed while the dialog was open, it also sends `id`, and
+`seriesIndexes` while series are picked and a `type` or `valueAxis` goes to them, so it changes the graph and the series
+the dialog opened on. A value axis side without a scale of its own (the right side without Separate Scales, or with
+Separate Scales a side that no series is on) shows the tick values of the scale drawn on it, and its Override Calculated
+Values is dimmed. A value of `axisMin`, `axisMax` or `ticks` (or of the right axis' three) that is not a number is sent
+as it is, and `graph.setType` refuses it. With nothing changed it closes without a step of history. An overridden value
+axis whose maximum is not more than its minimum is the error "Maximum must be more than Minimum." and the dialog stays
+open. The types the dialog dims for picked series (those that cannot go in the graph), the options it dims for a type
+and the pages it lists are VectorCraft's own rules.
 
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"flare","values":{"rays":24,"ringsOn":false}}}}
@@ -11304,9 +11490,10 @@ Plug-ins › Artwork Cleanup and in its panel (`window.panel {panel: "artworkCle
 `addon.cleanup.simplify {tolerance?, protectCorners?, ids?}` removes the anchors each selected path can do without and
 refits the handles beside each one, so the outline keeps its shape. `tolerance` runs from 1 to 100 (20 by default); the
 outline stays within tolerance × 0.02 pt of where it was, measured against the original outline, so removals don't add
-up. With `protectCorners`, anchors where the path turns by more than 30° stay. Open ends always stay. Locked and hidden
-paths, and paths in locked or hidden groups, are left out. It reports the anchor counts `before` and `after`, as one
-undo step.
+up. With `protectCorners`, anchors where the path turns by more than 30° stay. Open ends always stay. From the
+selection, locked and hidden paths, and paths in locked or hidden groups, are left out. With `ids`, it also takes the
+locked and hidden paths of the objects, groups and layers the ids name, but not paths on a locked artboard. It reports
+the paths it took as `ids` and their anchor counts `before` and `after`, as one undo step when a path changed.
 
 The health check looks for issues in the selection, or in the whole document while nothing is selected (`scope:
 "selection"|"document"` picks one). Locked and hidden objects, and the insides of live or generated art (blends,
@@ -11340,13 +11527,17 @@ envelopes, graphs, symbols), are left out.
 
 `addon.cleanup.deepUngroup {includeClipGroups?, ids?}` takes apart every level of grouping in the selection. Clipping
 groups stay whole unless `includeClipGroups` is true; their clipping paths then become plain paths. Objects keep the
-opacity of the groups they were in. Locked and hidden groups stay whole, and locked and hidden objects stay locked or
-hidden and are left out of the selection.
+opacity of the groups they were in. From the selection, locked and hidden groups stay whole. With `ids`, it also takes
+apart the locked and hidden groups the ids name and the groups inside the groups and layers they name (a named layer
+stays a layer), but not groups on a locked artboard; an object of a hidden group becomes hidden, and an object of a
+locked group becomes locked. Locked and hidden objects stay locked or hidden and are left out of the selection.
 
 `addon.cleanup.rejoin {gap?, ids?}` welds the selected open paths whose ends lie within `gap` (0 to 6 pt, 0.1 by
 default) back into paths. Each end joins one other end: where several are in reach, the one the path turns least to go
 on into. Pieces may run either way, and a chain whose ends meet closes. Each new path takes the place and paint of its
-topmost piece.
+topmost piece. With `ids`, it also takes locked and hidden open paths, but not paths on a locked artboard. Only pieces
+that are alike in being hidden and in being locked (by themselves or by a group or layer above them) join, and locked
+and hidden paths it makes are not selected.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.cleanup.check","params":{"scope":"document"}}}

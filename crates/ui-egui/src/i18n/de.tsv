@@ -135,6 +135,7 @@
 	Align to Artboard	An Zeichenfläche ausrichten
 	Align to Glyph Bounds	An Glyphenbegrenzung ausrichten
 	Align to Key Object	An Basisobjekt ausrichten
+	Align to Key Anchor	An Basisankerpunkt ausrichten
 	Align to Page	An Seite ausrichten
 	Align to Path	An Pfad ausrichten
 	Align to Selection	An Auswahl ausrichten
@@ -1164,6 +1165,7 @@ font-technology	Variable	Variabel
 	Rotate (Classic)…	Drehen (klassisch)…
 	Surface	Oberfläche
 	Wireframe	Drahtmodell
+	Render Settings	Rendereinstellungen
 	No Shading	Keine Schattierung
 	Plastic	Kunststoff
 	Highlight Intensity	Glanzpunktintensität
@@ -1410,6 +1412,40 @@ file-filter	Templates	Vorlagen
 	Graph	Diagramm
 	Graph Data	Diagrammdaten
 	Graph Type	Diagrammtyp
+	Graph Options	Diagrammoptionen
+	Left Axis	Linke Achse
+	Right Axis	Rechte Achse
+	Category Axis	Kategorieachse
+	Separate Scales	Getrennte Skalen
+	Add Drop Shadow	Schlagschatten hinzufügen
+	Add Legend Across Top	Legende oben hinzufügen
+	First Row in Front	Erste Zeile vorne
+	First Column in Front	Erste Spalte vorne
+	Legend	Legende
+	Column Width	Säulenbreite
+	Bar Width	Balkenbreite
+	Cluster Width	Gruppenbreite
+	Mark Data Points	Datenpunkte markieren
+	Connect Data Points	Datenpunkte verbinden
+	Edge-to-Edge Lines	Linien von Kante zu Kante
+	Draw Filled Lines	Gefüllte Linien zeichnen
+	Tick Values	Teilstrichwerte
+	Override Calculated Values	Berechnete Werte überschreiben
+	Divisions	Teilungen
+	Tick Marks	Teilstriche
+	Tick Marks per Division	Teilstriche pro Teilung
+	Draw Tick Marks Between Labels	Teilstriche zwischen Beschriftungen zeichnen
+	Add Labels	Beschriftungen hinzufügen
+	Maximum must be more than Minimum.	Das Maximum muss größer als das Minimum sein.
+	Column Graph	Säulendiagramm
+	Stacked Column Graph	Gestapeltes Säulendiagramm
+	Bar Graph	Balkendiagramm
+	Stacked Bar Graph	Gestapeltes Balkendiagramm
+	Line Graph	Liniendiagramm
+	Area Graph	Flächendiagramm
+	Scatter Graph	Streudiagramm
+	Pie Graph	Kreisdiagramm
+	Radar Graph	Netzdiagramm
 	Graph Design	Diagrammdesign
 	Graph Marker	Diagrammmarkierung
 	New Design	Neues Design
@@ -2022,6 +2058,7 @@ file-filter	Templates	Vorlagen
 	Menu Dialog	Menüdialog
 	Merge	Zusammenfügen
 	Merge colors into one row	Farben in einer Zeile zusammenführen
+	New Row	Neue Zeile
 	Merge Graphic Styles	Grafikstile zusammenfügen
 	Merge Graphic Styles…	Grafikstile zusammenfügen…
 	Merge Layers	Ebenen zusammenfügen
@@ -3655,11 +3692,55 @@ effect	Points	Punkte
 	Composite Fonts	Zusammengesetzte Schriften
 	Export Composite Fonts	Zusammengesetzte Schriften exportieren
 	Import Composite Fonts	Zusammengesetzte Schriften importieren
+@msg	each font must be {name, parts}	jede Schrift muss {name, parts} sein
+@msg	unknown key `{k}`; a font takes name and parts	unbekannter Schlüssel `{k}`; eine Schrift nimmt name und parts
+@msg	each font needs a name	jede Schrift braucht einen Namen
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kann keine zusammengesetzte Schrift benennen (1 bis {COMPOSITE_NAME_MAX} Zeichen, keine Steuerzeichen)
+@msg	`{name}`: parts must be an object	`{name}`: parts muss ein Objekt sein
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: unbekannte Klasse `{k}`; die Klassen sind kanji, kana, punctuation, symbols, roman und numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} muss ein Objekt sein
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: unbekannter Schlüssel `{k}` in {_1}
+@msg	`{name}`: give the kanji part	`{name}`: geben Sie den Teil kanji an
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ein Dokument enthält höchstens {COMPOSITE_FONTS_MAX} zusammengesetzte Schriften
+@msg	two composite fonts are named `{_1}`	zwei zusammengesetzte Schriften heißen `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` ist der Name einer installierten Schrift
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} ist in `{font}` gesetzt, einer zusammengesetzten Schrift
+@msg	give fonts: [{name, parts}…]	geben Sie fonts an: [{name, parts}…]
+@msg	path is empty	path ist leer
+@msg	fonts must be a list of composite fonts	fonts muss eine Liste zusammengesetzter Schriften sein
+@msg	names must be strings	names müssen Zeichenketten sein
+@msg	no composite font named `{n}`	keine zusammengesetzte Schrift namens `{n}`
+@msg	names must be a list of names	names muss eine Liste von Namen sein
+@msg	no composite fonts to export	keine zusammengesetzten Schriften zum Exportieren
+@msg	not a composite fonts file: {e}	keine Datei mit zusammengesetzten Schriften: {e}
+@msg	not a composite fonts file: no compositeFonts list	keine Datei mit zusammengesetzten Schriften: keine Liste compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	die Datei enthält mehr als {COMPOSITE_FONTS_MAX} zusammengesetzte Schriften
+@msg	the file is larger than 4 MB	die Datei ist größer als 4 MB
+@msg	dataBase64 is not base64	dataBase64 ist kein Base64
+@msg	give one of path, data or dataBase64	geben Sie path, data oder dataBase64 an
+@msg	the file holds no composite fonts	die Datei enthält keine zusammengesetzten Schriften
+@msg	the file holds two composite fonts named `{_1}`	die Datei enthält zwei zusammengesetzte Schriften namens `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` kann keine zusammengesetzte Schrift benennen
+@msg	{k}: give a font	{k}: geben Sie eine Schrift an
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: geben Sie eine Schrift an
+@msg	{k}: size must be {_1} to {_2}%	{k}: size muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size muss {_1} bis {_2} % sein
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline muss {_1} bis {_2} % sein
+@msg	{k}: scale must be {_1} to {_2}%	{k}: die Skalierung muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: die Skalierung muss {_1} bis {_2} % sein
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: nur kana, roman und numerals lassen sich skalieren
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: nur kana, roman und numerals lassen sich skalieren
+@msg	{k}: only kana can be scaled at the center	{k}: nur kana lässt sich am Mittelpunkt skalieren
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: nur kana lässt sich am Mittelpunkt skalieren
+@msg	no composite font	keine zusammengesetzte Schrift
 	Delete Font	Schrift löschen
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Ziffern
 	Scale at Center	Von der Mitte aus skalieren
+	Delete Set	Satz löschen
+	Direct Entry	Direkteingabe
 	Up/Down:	Oben/Unten:
 	Left/Right:	Links/Rechts:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko oben/unten
@@ -5300,6 +5381,11 @@ theme	Appearance	Erscheinungsbild
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Die Hauptfarbe wird zur Konturfarbe. Die anderen Farben wandern ebenso weit um den Farbkreis wie die Hauptfarbe und behalten ihre Sättigung und Helligkeit.
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-Richtlinie:
+	CMYK Policy:	CMYK-Richtlinie:
+	Preserve Embedded Profiles	Eingebettete Profile beibehalten
+	Convert to Working Space	In Arbeitsfarbraum konvertieren
+	Preserve Numbers	Werte beibehalten
 # PSD files.
 @msg	not a PSD file	keine PSD-Datei
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus
@@ -5358,6 +5444,7 @@ theme	Appearance	Erscheinungsbild
 	Texture Image	Strukturbild
 	Canvas	Leinwand
 	Highlight Variable	Variable hervorheben
+	Sort Variables	Variablen sortieren
 	New Variable	Neue Variable
 	Delete Variable	Variable löschen
 	Lock Variables	Variablen sperren
@@ -5598,6 +5685,7 @@ lighting	Light	Licht
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
 @msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	das Objekt hat keinen 3D-Effekt (Extrudieren und abgeflachte Kante, Kreiseln, Aufblasen oder Drehen)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` muss ein Objekt sein, das nur `mode` mit dem Wert shaded oder wireframe enthält
 @msg	its 3D effect builds no solid	sein 3D-Effekt erzeugt keinen Körper
 @msg	bevel must be none or one of {_1}	bevel muss none oder einer der folgenden Werte sein: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kann aus diesem Bildmaterial keine Körper erstellen: Seine Symbolinstanzen, Angleichungen und Schnittgruppen enthalten zu viele Objekte
@@ -6104,6 +6192,7 @@ axis	Y Axis	Y-Achse
 @msg	stops must be in order of `offset`	die Farbstopps müssen nach `offset` geordnet sein
 @msg	the document has no pattern {pattern}	das Dokument hat kein Muster {pattern}
 @msg	the document has no swatch {n}	das Dokument hat kein Farbfeld {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` erfordert einen Farbstopp, der mit einem Volltonfarbfeld verknüpft ist
 @msg	the output	die Ausgabe
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
@@ -8905,7 +8994,8 @@ breakText	Glyphs	Glyphen
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-Dateien haben keine Transparenz, und die Datei hätte {what}: Reduzieren Sie sie zuerst (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind}-Bilder können nicht geöffnet werden (siehe document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` ist keine der Auswahlmöglichkeiten
-@msg	{k} has control characters{_1}	{k} enthält Steuerzeichen{_1}
+@msg	{k} has control characters	{k} enthält Steuerzeichen
+@msg	{k} has control characters or line breaks	{k} enthält Steuerzeichen oder Zeilenumbrüche
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} ist zu lang (höchstens {MAX_TEXT} Zeichen)
 @msg	{k} must be > 0	{k} muss > 0 sein
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} muss eine Zahl (pt) oder eine Länge wie „210 mm“ sein
