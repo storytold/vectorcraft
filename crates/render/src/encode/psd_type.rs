@@ -6,7 +6,7 @@
 
 use vectorcraft_color::Paint;
 use vectorcraft_doc::text::TypeAntiAlias;
-use vectorcraft_doc::{CharStyle, Justify, Node, NodeKind, ParaStyle, TextKind, TextObject};
+use vectorcraft_doc::{CharStyle, Composer, Justify, Node, NodeKind, ParaStyle, TextKind, TextObject};
 use vectorcraft_geom::{Affine, Point, Rect};
 
 /// Point type that a type layer draws as `n` draws: horizontal or vertical point type with text,
@@ -18,6 +18,8 @@ use vectorcraft_geom::{Affine, Point, Rect};
 pub(super) fn editable(n: &Node) -> Option<&TextObject> {
     let NodeKind::Text(t) = &n.kind else { return None };
     let text = t.plain_text();
+    let has_cjk = text.chars().any(cjk);
+    let flat = |p: &ParaStyle| flat(p, has_cjk);
     let plain = matches!(t.kind, TextKind::Point)
         && !text.is_empty()
         && !t.system_layout
@@ -56,29 +58,46 @@ fn face(s: &CharStyle) -> Option<std::sync::Arc<vectorcraft_text::FontFace>> {
 
 /// Does paragraph `p` set only its alignment, the others being at their defaults (no indents,
 /// spacing, tabs, bullets or numbers, direction, Auto Leading, word or letter spacing, glyph scaling
-/// or hanging punctuation)? Settings that only choose where area type breaks its lines (hyphenation,
-/// kinsoku, Bunri-Kinshi, breaking Korean anywhere) and the paragraph style's name may be set.
-fn flat(p: &ParaStyle) -> bool {
+/// or hanging punctuation)? Settings that only choose where area type breaks its lines or what
+/// hangs where it breaks them (hyphenation, the single-line or every-line composer, kinsoku,
+/// Burasagari, Bunri-Kinshi, breaking Korean anywhere) and the paragraph style's name may be set,
+/// and so may Mojikumi when `cjk` is false (it spaces only Chinese, Japanese and Korean characters).
+/// A paragraph set to a Standard composer is not flat.
+fn flat(p: &ParaStyle, cjk: bool) -> bool {
     let only = ParaStyle {
         justify: p.justify,
         style_name: p.style_name.clone(),
         hyphenate: p.hyphenate,
         hyphenation: p.hyphenation.clone(),
+        composer: if matches!(p.composer, Composer::SingleLine | Composer::EveryLine) { p.composer } else { ParaStyle::default().composer },
         kinsoku: p.kinsoku,
         kinsoku_type: p.kinsoku_type,
+        burasagari: p.burasagari,
         bunri_kinshi: p.bunri_kinshi,
         korean_line_break_anywhere: p.korean_line_break_anywhere,
+        mojikumi: if cjk { ParaStyle::default().mojikumi } else { p.mojikumi },
         ..ParaStyle::default()
     };
     only == *p
 }
 
+/// Is `c` in a block of Chinese, Japanese or Korean characters or their punctuation?
+fn cjk(c: char) -> bool {
+    matches!(c, '\u{1100}'..='\u{11FF}' | '\u{2E80}'..='\u{9FFF}' | '\u{A960}'..='\u{A97F}' | '\u{AC00}'..='\u{D7FF}' | '\u{F900}'..='\u{FAFF}' | '\u{FE30}'..='\u{FE4F}' | '\u{FF00}'..='\u{FFEF}' | '\u{20000}'..='\u{3FFFF}')
+}
+
 /// Does `s` set only attributes a type layer carries (font and its version, size, leading,
 /// tracking, scaling, baseline shift, all caps, underline, strikethrough, fill), the others being
 /// at their defaults? Attributes that change nothing drawn without a stroke (the stroke's own
-/// settings, overprint, the character style's name) may be set.
+/// settings, overprint, the character style's name) may be set, and so may the language when it
+/// is the default, English: USA. The type layer does not record the language, so type in another
+/// language stays pixels.
 fn carried(s: &CharStyle) -> bool {
+    if !s.language.as_deref().is_none_or(|l| l.eq_ignore_ascii_case("en-US")) {
+        return false;
+    }
     let only = CharStyle {
+        language: s.language.clone(),
         font_family: s.font_family.clone(),
         font_style: s.font_style.clone(),
         font_version: s.font_version.clone(),

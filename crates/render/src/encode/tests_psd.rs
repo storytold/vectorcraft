@@ -562,6 +562,8 @@ fn type_a_type_layer_cant_draw_stays_pixels() {
     b.add(tabbed);
     let leading = type_node(&mut b, (40.0, 10.0), "Auto", |t| t.para.justification.auto_leading = 150.0);
     b.add(leading);
+    let standard = type_node(&mut b, (40.0, 20.0), "Std", |t| t.para.composer = vectorcraft_doc::Composer::StandardEveryLine);
+    b.add(standard);
     // Hebrew: right to left from its first strong character, so Auto alignment is right. In an
     // installed font that covers it when there is one; otherwise its font lacks it.
     let hebrew_face = vectorcraft_text::FontDb::global().face_covering('ש');
@@ -573,6 +575,8 @@ fn type_a_type_layer_cant_draw_stays_pixels() {
     b.add(hebrew);
     let tracked = type_node(&mut b, (10.0, 58.0), "Tracked", |t| t.runs[0].style.tracking = 0.5);
     b.add(tracked);
+    let british = type_node(&mut b, (70.0, 58.0), "Colour", |t| t.runs[0].style.language = Some("en-GB".into()));
+    b.add(british);
     // Drawn partly with a fallback font: the bundled fonts have no 縦.
     let fallback = type_node(&mut b, (40.0, 58.0), "A縦", |_| {});
     b.add(fallback);
@@ -661,7 +665,8 @@ fn type_layer_keeps_the_anti_aliasing_method() {
 #[test]
 fn variation_selectors_and_joiners_need_no_glyph() {
     let mut b = DocBuilder::new(100.0, 60.0);
-    let t = type_node(&mut b, (10.0, 30.0), "A\u{FE0F}\u{200D}B\u{E0100}", |_| {});
+    // In English: USA, the default language, given by its tag.
+    let t = type_node(&mut b, (10.0, 30.0), "A\u{FE0F}\u{200D}B\u{E0100}", |t| t.runs[0].style.language = Some("en-US".into()));
     b.add(t);
     let file = export(&b.build(), &opts(PsdOptions { preserve_text: true, ..PsdOptions::default() }));
     assert_eq!(parse(&file).records.iter().filter(|r| r.type_tool.is_some()).count(), 1);
