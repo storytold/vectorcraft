@@ -660,8 +660,13 @@ fn find_params(d: &Dialog) -> Option<Value> {
         None => false,
     };
     for k in others.filter(|k| !listed(k)) {
-        if let (Some(to), Some(name)) = (color_value(&k).and_then(dimmed), k.as_str()) {
-            dim.insert(name.to_string(), to);
+        // A string entry keeps its own form ("#rrggbb" matches by hex); a color value goes by its key.
+        let name = match k.as_str() {
+            Some(s) => Some(s.to_string()),
+            None => color_value(&k).map(|c| ColorKey::of(&c).to_string()),
+        };
+        if let (Some(to), Some(name)) = (color_value(&k).and_then(dimmed), name) {
+            dim.insert(name, to);
         }
     }
     let mut commands = vec![];
@@ -2265,6 +2270,14 @@ mod tests {
         let mut e = d.clone();
         e.fields.insert(PRESERVED.into(), json!(["rgb 0 0 0"]));
         assert_eq!(find_params(&e).unwrap()["commands"][0]["params"]["map"]["rgb 0 0 0"], dim("rgb 0 0 0"));
+        // A color given as a value instead of a string dims under its key, as `recolor.apply` reads it.
+        let mut e = d.clone();
+        let mut rs = rows();
+        rs[1]["from"] = json!([[0.0, 0.0, 1.0], {"c": 0, "m": 100, "y": 100, "k": 0}]);
+        e.fields.insert("rows".into(), json!(rs));
+        let map = find_params(&e).unwrap()["commands"][0]["params"]["map"].clone();
+        assert_eq!(map["rgb 0 0 255"], dim("rgb 0 0 255"), "{map}");
+        assert_eq!(map["cmyk 0 100 100 0"], dim("cmyk 0 100 100 0"), "{map}");
         // A color a selected row lists is not dimmed; with Preview off only the dimming runs.
         let mut rs = rows();
         rs[2]["from"] = json!(["rgb 0 255 0", "rgb 255 0 0"]);
