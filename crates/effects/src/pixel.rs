@@ -30,7 +30,7 @@ mod texture;
 mod video;
 
 use serde_json::Value;
-use vectorcraft_geom::{Affine, Point, Rect};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::util::{flag, num, text};
 
@@ -155,12 +155,14 @@ pub enum PixelFx {
     /// `texture_coverage` (0..40) says.
     Underpainting { brush_size: f64, texture_coverage: f64, texture: Texture, scaling: f64, relief: f64, light: Light, invert: bool },
     /// Artistic › Rough Pastels: diagonal pastel strokes `length` (0..40) long, bristle detail
-    /// (1..20), then a [`Texture`] surface scaled by `scaling` (0.5..2), in relief as strong as
-    /// `relief` (0..50) and lit from `light`; `invert` turns the surface's heights over.
+    /// (1..20), then a [`Texture`] surface (a loaded one included) scaled by `scaling` (0.5..2), in
+    /// relief as strong as `relief` (0..50) and lit from `light`; `invert` turns the surface's
+    /// heights over.
     RoughPastels { length: f64, detail: f64, texture: Texture, scaling: f64, relief: f64, light: Light, invert: bool },
-    /// Blur › Radial Blur around the object's centre: along arcs (spin, an arc of `amount`°) or
-    /// along rays (zoom, the content scaled by up to about ±`amount`/2 %), averaging 2^`passes` samples.
-    RadialBlur { amount: f64, zoom: bool, passes: u32 },
+    /// Blur › Radial Blur around its Blur Center, `center` (0..1 across and down the object's
+    /// bounds; (0.5, 0.5) the object's centre): along arcs (spin, an arc of `amount`°) or along
+    /// rays (zoom, the content scaled by up to about ±`amount`/2 %), averaging 2^`passes` samples.
+    RadialBlur { amount: f64, zoom: bool, passes: u32, center: [f64; 2] },
     /// Blur › Smart Blur (Normal mode): each pixel averaged with the neighbours within `radius`
     /// whose colour differs from its own by no more than `threshold` levels, over a grid of
     /// `samples` × `samples` neighbours at most.
@@ -314,9 +316,12 @@ pub struct PixelSpace {
     pub to_doc: Affine,
     /// The size of a pixel in document units.
     pub px: f64,
-    /// The object's centre (document coordinates): where Radial Blur blurs around, and where the
-    /// Pixelate filters' patterns are anchored (so they move with the object).
+    /// The object's centre (document coordinates): where Radial Blur blurs around by default, and
+    /// where the Pixelate filters' patterns are anchored (so they move with the object).
     pub center: Point,
+    /// The width and height of the object's bounds (document units), centred on `center`: Radial
+    /// Blur's Blur Center lies at a share of them.
+    pub size: Vec2,
     /// What the colour channels hold.
     pub channels: Channels,
     /// The height of a line of the document's raster grid (document units: 72 / Document Raster
@@ -381,7 +386,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
         "artistic.roughPastels" => PixelFx::RoughPastels {
             length: num(p, "strokeLength", 6.0).clamp(0.0, 40.0),
             detail: num(p, "strokeDetail", 10.0).clamp(1.0, 20.0),
-            texture: Texture::parse(text(p, "texture", "canvas")),
+            texture: Texture::parse_with(text(p, "texture", "canvas"), p.get(TEXTURE_IMAGE).and_then(Value::as_str)),
             scaling: num(p, "scaling", 100.0).clamp(50.0, 200.0) / 100.0,
             relief: num(p, "relief", 4.0).clamp(0.0, 50.0),
             light: Light::parse(text(p, "lightDirection", "top")),
@@ -421,6 +426,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             amount: num(p, "amount", 10.0).clamp(1.0, 100.0),
             zoom: text(p, "method", "spin").eq_ignore_ascii_case("zoom"),
             passes: quality([("draft", 4), ("good", 6), ("best", 8)], 6),
+            center: [num(p, "centerX", 0.5).clamp(0.0, 1.0), num(p, "centerY", 0.5).clamp(0.0, 1.0)],
         },
         "blur.smart" => PixelFx::SmartBlur {
             radius: num(p, "radius", 3.0).clamp(0.1, 100.0),
@@ -608,13 +614,13 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
 impl PixelFx {
     /// How far beyond `bounds` (the content's, document units) the effect can paint.
     pub fn outset(&self, bounds: Rect) -> f64 {
-        // From the centre to the farthest corner, and to the nearest side.
-        let far = 0.5 * bounds.width().hypot(bounds.height());
-        let near = 0.5 * bounds.width().min(bounds.height());
         match *self {
-            // A rotated corner reaches the circle through the corners.
-            PixelFx::RadialBlur { zoom: false, .. } => (far - near).max(0.0),
-            PixelFx::RadialBlur { amount, zoom: true, .. } => far * (blur::zoom_extent(amount).exp() - 1.0),
+            // A rotated corner reaches the circle about the Blur Center through the farthest corner.
+            PixelFx::RadialBlur { zoom: false, center, .. } => {
+                let (far, near) = blur::center_reach(bounds, center);
+                (far - near).max(0.0)
+            }
+            PixelFx::RadialBlur { amount, zoom: true, center, .. } => blur::center_reach(bounds, center).0 * (blur::zoom_extent(amount).exp() - 1.0),
             PixelFx::SmartBlur { radius, .. } => radius,
             PixelFx::AccentedEdges { .. } => 0.0,
             // Strokes reach out of the object as far as they reach into it.
@@ -786,7 +792,7 @@ impl PixelFx {
             PixelFx::RoughPastels { length, detail, ref texture, scaling, relief, light, invert } => {
                 artistic::rough_pastels(px, w, h, space, length, detail, texture, scaling, relief, light, invert)
             }
-            PixelFx::RadialBlur { amount, zoom, passes } => blur::radial(px, w, h, space, amount, zoom, passes),
+            PixelFx::RadialBlur { amount, zoom, passes, center } => blur::radial(px, w, h, space, amount, zoom, passes, center),
             PixelFx::SmartBlur { radius, threshold, samples, mode: SmartBlurMode::Normal } => {
                 blur::smart(px, w, h, to_px(radius), threshold, samples)
             }

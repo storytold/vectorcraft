@@ -19,6 +19,7 @@
 	Edge Brightness	Luminosité du bord
 	Smoothness	Lissage
 	Radial Blur…	Flou radial…
+	Blur Center	Centre du flou
 	Smart Blur…	Flou optimisé…
 	Sharpen	Renforcement
 	Unsharp Mask…	Accentuation…
@@ -160,6 +161,7 @@
 	Align to Artboard	Aligner sur le plan de travail
 	Align to Glyph Bounds	Aligner sur les limites du glyphe
 	Align to Key Object	Aligner sur l’objet clé
+	Align to Key Anchor	Aligner sur le point d’ancrage clé
 	Align to Page	Aligner sur la page
 	Align to Path	Aligner sur le tracé
 	Align to Selection	Aligner sur la sélection
@@ -646,6 +648,7 @@ font-technology	Variable	Variables
 	Copy All Styles	Copier tous les styles
 	Copy Color Value (Hex)	Copier la valeur de couleur (hex)
 	Copy Fonts Used in the Document	Copier les polices utilisées dans le document
+	Copy Info	Copier les informations
 	Copy Links	Copier les liens
 	Copy Selected Style	Copier le style sélectionné
 	Copy to User Defined	Copier dans Défini par l’utilisateur
@@ -1069,7 +1072,10 @@ font-technology	Variable	Variables
 	Every (minutes)	Toutes les (minutes)
 	Every option is at its default.	Toutes les options ont leur valeur par défaut.
 	Every option matches {base}.	Toutes les options correspondent à {base}.
-	Every-line Composer	Compositeur multiligne
+	Middle Eastern & South Asian Single-line Composer	Compositeur ligne par ligne (Moyen-Orient et Asie du Sud)
+	Middle Eastern & South Asian Every-line Composer	Compositeur multiligne (Moyen-Orient et Asie du Sud)
+	Standard Single-line Composer	Compositeur standard ligne par ligne
+	Standard Every-line Composer	Compositeur standard multiligne
 	Exact dash lengths	Longueurs de tirets exactes
 	Exceptions (comma separated)	Exceptions (séparées par des virgules)
 	Exclude	Exclusion
@@ -1178,6 +1184,7 @@ font-technology	Variable	Variables
 	Rotate (Classic)…	Rotation (classique)…
 	Surface	Surface
 	Wireframe	Fil de fer
+	Render Settings	Paramètres de rendu
 	No Shading	Sans ombrage
 	Plastic	Plastique
 	Highlight Intensity	Intensité de la brillance
@@ -1392,6 +1399,14 @@ font-technology	Variable	Variables
 	Previous Artboard	Plan de travail précédent
 	Next Artboard	Plan de travail suivant
 	Last Artboard	Dernier plan de travail
+	Status Bar Show	Afficher dans la barre d'état
+	Artboard Name	Nom du plan de travail
+	Current Tool	Outil actif
+	Date and Time	Date et heure
+	Number of Undos	Nombre d'annulations
+	Document Color Profile	Profil colorimétrique du document
+	Undos	Annulations
+	Redos	Rétablissements
 	Go To Link	Atteindre le lien
 	GPL palettes keep solid colours only, as RGB.	Les palettes GPL ne conservent que les couleurs unies, en RVB.
 	GPU Performance	Performances GPU
@@ -1411,6 +1426,40 @@ font-technology	Variable	Variables
 	Graph	Graphe
 	Graph Data	Données du graphe
 	Graph Type	Type de graphe
+	Graph Options	Options du graphe
+	Left Axis	Axe gauche
+	Right Axis	Axe droit
+	Category Axis	Axe des catégories
+	Separate Scales	Échelles distinctes
+	Add Drop Shadow	Ajouter une ombre portée
+	Add Legend Across Top	Ajouter la légende en haut
+	First Row in Front	Première ligne au premier plan
+	First Column in Front	Première colonne au premier plan
+	Legend	Légende
+	Column Width	Largeur des colonnes
+	Bar Width	Largeur des barres
+	Cluster Width	Largeur des groupes
+	Mark Data Points	Marquer les points de données
+	Connect Data Points	Relier les points de données
+	Edge-to-Edge Lines	Lignes bord à bord
+	Draw Filled Lines	Tracer des lignes pleines
+	Tick Values	Valeurs des graduations
+	Override Calculated Values	Remplacer les valeurs calculées
+	Divisions	Divisions
+	Tick Marks	Graduations
+	Tick Marks per Division	Graduations par division
+	Draw Tick Marks Between Labels	Tracer les graduations entre les étiquettes
+	Add Labels	Ajouter des étiquettes
+	Maximum must be more than Minimum.	Le maximum doit être supérieur au minimum.
+	Column Graph	Graphe à colonnes
+	Stacked Column Graph	Graphe à colonnes empilées
+	Bar Graph	Graphe à barres
+	Stacked Bar Graph	Graphe à barres empilées
+	Line Graph	Graphe linéaire
+	Area Graph	Graphe de zones
+	Scatter Graph	Graphe de dispersion
+	Pie Graph	Graphe à secteurs
+	Radar Graph	Graphe radar
 	Graph Design	Conception de graphe
 	Graph Marker	Marqueur de graphe
 	New Design	Nouvelle conception
@@ -1531,6 +1580,7 @@ font-technology	Variable	Variables
 	Highlight anchors on mouse over	Mettre en évidence les points d’ancrage au survol
 	Highlight Rows	Surligner les lignes
 	Highlight Variable	Surligner la variable
+	Sort Variables	Trier les variables
 	Highlight Substituted Fonts	Surligner les polices remplacées
 	Highlight Substituted Glyphs	Surligner les glyphes remplacés
 	History	Historique
@@ -2008,6 +2058,7 @@ font-technology	Variable	Variables
 	Menu Dialog	Boîte de dialogue du menu
 	Merge	Fusionner
 	Merge colors into one row	Fusionner les couleurs sur une ligne
+	New Row	Nouvelle ligne
 	Merge Graphic Styles	Fusionner les styles graphiques
 	Merge Graphic Styles…	Fusionner les styles graphiques…
 	Merge Layers	Fusionner les calques
@@ -2661,6 +2712,8 @@ font-technology	Variable	Variables
 	Proof Setup	Format d’épreuve
 	Properties	Propriétés
 	Proportional Metrics	Métrique proportionnelle
+	H or V Style	Style horizontal ou vertical
+	Roman Italics	Italique des caractères romains
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
 	Tsume	Tsume
@@ -3403,11 +3456,11 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Guillemet simple ouvrant
 	Single Quotes:	Guillemets simples :
 	Single Right Quotation Mark	Guillemet simple fermant
-	Single-line Composer	Compositeur ligne par ligne
 	Toggle Line Composer	Basculer le compositeur de lignes
 	Sixth Space	Espace d’un sixième
 	Size	Taille
 	Size Tile to Art	Ajuster le carreau à l’illustration
+	Move Tile with Art	Déplacer le carreau avec l’illustration
 	Size/Leading	Taille/interlignage
 	Size:	Taille :
 	Ridges per segment:	Crêtes par segment :
@@ -3599,6 +3652,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Permuter le fond et le contour (Maj+X)
 	Swap start and end arrowheads	Permuter les pointes de flèche de début et de fin
 	Swap the selected object for the file, keeping its place and transform	Remplacer l’objet sélectionné par le fichier, en conservant sa position et sa transformation
+	Show Import Options	Afficher les options d’importation
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demander les options d’importation de chaque fichier PDF, DXF ou texte avant de le placer, sinon utiliser les dernières options choisies
 	Stylistic Alternates	Variantes stylistiques
 	Swash	Lettres ornées
 	Swatch Conflict	Conflit de nuances
@@ -3688,11 +3743,55 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Polices composites
 	Export Composite Fonts	Exporter des polices composites
 	Import Composite Fonts	Importer des polices composites
+@msg	each font must be {name, parts}	chaque police doit être {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	clé inconnue `{k}` ; une police prend name et parts
+@msg	each font needs a name	chaque police doit avoir un nom
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ne peut pas nommer une police composite (1 à {COMPOSITE_NAME_MAX} caractères, sans caractères de contrôle)
+@msg	`{name}`: parts must be an object	`{name}` : parts doit être un objet
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}` : classe inconnue `{k}` ; les classes sont kanji, kana, punctuation, symbols, roman et numerals
+@msg	`{name}`: {_1} must be an object	`{name}` : {_1} doit être un objet
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}` : clé inconnue `{k}` dans {_1}
+@msg	`{name}`: give the kanji part	`{name}` : indiquez la partie kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un document contient au plus {COMPOSITE_FONTS_MAX} polices composites
+@msg	two composite fonts are named `{_1}`	deux polices composites s’appellent `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` est le nom d’une police installée
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}` : {_2} utilise `{font}`, une police composite
+@msg	give fonts: [{name, parts}…]	indiquez fonts : [{name, parts}…]
+@msg	path is empty	path est vide
+@msg	fonts must be a list of composite fonts	fonts doit être une liste de polices composites
+@msg	names must be strings	names doit contenir des chaînes
+@msg	no composite font named `{n}`	aucune police composite nommée `{n}`
+@msg	names must be a list of names	names doit être une liste de noms
+@msg	no composite fonts to export	aucune police composite à exporter
+@msg	not a composite fonts file: {e}	ce n’est pas un fichier de polices composites : {e}
+@msg	not a composite fonts file: no compositeFonts list	ce n’est pas un fichier de polices composites : pas de liste compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	le fichier contient plus de {COMPOSITE_FONTS_MAX} polices composites
+@msg	the file is larger than 4 MB	le fichier dépasse 4 Mo
+@msg	dataBase64 is not base64	dataBase64 n’est pas du base64
+@msg	give one of path, data or dataBase64	indiquez path, data ou dataBase64
+@msg	the file holds no composite fonts	le fichier ne contient aucune police composite
+@msg	the file holds two composite fonts named `{_1}`	le fichier contient deux polices composites nommées `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` ne peut pas nommer une police composite
+@msg	{k}: give a font	{k} : indiquez une police
+@msg	`{name}`: {k}: give a font	`{name}`: {k} : indiquez une police
+@msg	{k}: size must be {_1} to {_2}%	{k} : size doit être compris entre {_1} et {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k} : size doit être compris entre {_1} et {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k} : baseline doit être compris entre {_1} et {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k} : baseline doit être compris entre {_1} et {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k} : l’échelle doit être comprise entre {_1} et {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k} : l’échelle doit être comprise entre {_1} et {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k} : seuls kana, roman et numerals peuvent être mis à l’échelle
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k} : seuls kana, roman et numerals peuvent être mis à l’échelle
+@msg	{k}: only kana can be scaled at the center	{k} : seul kana peut être mis à l’échelle depuis le centre
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k} : seul kana peut être mis à l’échelle depuis le centre
+@msg	no composite font	aucune police composite
 	Delete Font	Supprimer la police
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Chiffres
 	Scale at Center	Mettre à l’échelle depuis le centre
+	Delete Set	Supprimer le jeu
+	Direct Entry	Saisie directe
 	Up/Down:	Haut/bas :
 	Left/Right:	Gauche/droite :
 	Tate-chu-yoko Up/Down	Tate-chu-yoko haut/bas
@@ -4034,6 +4133,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMJN de travail
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
 	Working RGB (don't tag)	RVB de travail (sans balise)
+	Don't Color Manage This Document	Ne pas gérer les couleurs de ce document
+	Working RGB: {name}	RVB de travail : {name}
+	Working CMYK: {name}	CMJN de travail : {name}
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
 	Wrinkle Tool	Outil Fronces
@@ -4404,8 +4506,10 @@ axis	Both	Les deux
 @msg	`name` must be the name of a script engine	`name` doit être le nom d'un moteur de script
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	le moteur de script principal est nouveau à chaque exécution et n'est jamais conservé, il ne peut donc pas être supprimé
 @msg	there is no script engine named {name}	il n'y a aucun moteur de script nommé {name}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l'application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
+@msg	Copied the link info	Informations sur le lien copiées
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
 @msg	Couldn't copy to the system clipboard: {e}	Impossible de copier dans le presse-papiers du système : {e}
 @msg	Couldn't open {name}: {e}	Impossible d’ouvrir {name} : {e}
@@ -5218,6 +5322,7 @@ axis	Both	Les deux
 @msg	every numbered name for {name} is taken in the document's folder	tous les noms numérotés pour {name} sont déjà pris dans le dossier du document
 @msg	No linked files to look for	Aucun fichier lié à rechercher
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Le lien se trouve dans un symbole, une conception de graphe, un motif ou un masque d’opacité et n’a pas de place sur le canevas
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	l’illustration d’une conception de graphe dans une série de graphe est redessinée à partir de la conception, qu’il faut modifier pour la changer
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services
@@ -5283,6 +5388,7 @@ axis	Both	Les deux
 @msg	automation filesystem access is not granted: write authority is absent: {path}	l’automatisation n’a pas accès au système de fichiers : aucune autorisation d’écriture : {path}
 @msg	automation path rejected: outside the read root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine de lecture {root} : {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines de lecture {roots} : {path}
+@msg	a linked JavaScript file is outside the read roots	un fichier JavaScript lié est hors des dossiers racines de lecture
 @msg	automation path rejected: outside the write root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine d’écriture {root} : {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines d’écriture {roots} : {path}
 @msg	automation path rejected: path is empty	chemin d’automatisation refusé : le chemin est vide
@@ -5334,6 +5440,11 @@ axis	Both	Les deux
 @msg	Imported library {name}	Bibliothèque {name} importée
 	RGB:	RVB :
 	CMYK:	CMJN :
+	RGB Policy:	Règle RVB :
+	CMYK Policy:	Règle CMJN :
+	Preserve Embedded Profiles	Conserver les profils incorporés
+	Convert to Working Space	Convertir en espace de travail
+	Preserve Numbers	Conserver les valeurs numériques
 	Texture	Texture
 	Craquelure…	Craquelure…
 	Grain…	Grain…
@@ -5606,6 +5717,7 @@ lighting	Light	Lumière
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d'un groupe ne dessine rien à exporter
 @msg	The 3D object is too complex to export	L'objet 3D est trop complexe pour être exporté
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'objet n'a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` doit être un objet ne contenant que `mode`, avec la valeur shaded ou wireframe
 @msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume
 @msg	bevel must be none or one of {_1}	bevel doit valoir none ou l’une de ces valeurs : {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ne peut pas construire de volumes à partir de cette illustration : ses occurrences de symbole, dégradés de formes et groupes de découpe contiennent trop d'objets
@@ -6116,6 +6228,9 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+	Move Light to Back	Placer la lumière derrière
+	Move Light to Front	Placer la lumière devant
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Faites glisser une lumière pour la déplacer. Les touches fléchées déplacent la lumière active ; Maj par pas de 15°.
 	Shadows	Ombres
 	Distance from Object	Distance de l'objet
 	Shadow Bounds	Limites de l'ombre
@@ -6193,6 +6308,8 @@ theme	Appearance	Apparence
 	Save Variable Library…	Enregistrer une bibliothèque de variables…
 @msg	a variable library holds text variables, and the document has none	une bibliothèque de variables contient des variables de texte, et le document n’en a aucune
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` ne peut pas être enregistrée dans une bibliothèque de variables : renommez-la pour qu’elle commence par une lettre ou `_`, sans espaces ni symboles autres que `-`, `_` et `.`
+@msg	{k} has control characters	{k} contient des caractères de contrôle
+@msg	{k} has control characters or line breaks	{k} contient des caractères de contrôle ou des sauts de ligne
 @msg	data set `{name}` holds a control character, which a variable library can't hold	le jeu de données `{name}` contient un caractère de contrôle, qu’une bibliothèque de variables ne peut pas contenir
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	le jeu de données `{name}` commence ou se termine par une espace, qu’une bibliothèque de variables ne peut pas contenir
 	Make Graph Dynamic	Rendre le graphe dynamique
@@ -6518,6 +6635,7 @@ axis	Y Axis	Axe Y
 @msg	stops must be in order of `offset`	les étapes doivent être classées par `offset`
 @msg	the document has no pattern {pattern}	le document n’a pas de motif {pattern}
 @msg	the document has no swatch {n}	le document n’a pas de nuance {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` exige une étape liée à une nuance de ton direct
 @msg	the output	la sortie
 @msg	the path has no anchor points	le tracé n’a aucun point d’ancrage
 @msg	too many anchor points (limit {MAX_ANCHORS})	trop de points d’ancrage (limite {MAX_ANCHORS})
@@ -6704,6 +6822,8 @@ axis	Y Axis	Axe Y
 	Create New Set	Créer un jeu
 	Stop Global Edit	Arrêter la modification globale
 	Global Edit Options	Options de modification globale
+	Select Similar Objects	Sélectionner les objets similaires
+	Select Similar Options	Options de sélection des objets similaires
 	Leave Out of Global Edit	Exclure de la modification globale
 	Match	Correspondance
 	On Artboards	Sur les plans de travail
@@ -6826,6 +6946,13 @@ axis	Y Axis	Axe Y
 	Graphite Pencil	Crayon graphite
 	Wax Crayon	Craie grasse
 	Charcoal Dust	Poussière de fusain
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuits techniques
+	Circuit Trace	Piste de circuit
+	Bus Lines	Lignes de bus
+	Terminal Nodes	Nœuds terminaux
+
 	Notched Ribbon	Ruban cranté
 	Double Line	Double ligne
 	Wave	Vague
@@ -7581,6 +7708,7 @@ breakText	Glyphs	Glyphes
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Échec de la vectorisation de l’image : erreur interne : son thread s’est arrêté (merci de signaler ce bogue)
 @msg	Image Trace failed: {e}	Échec de la vectorisation de l’image : {e}
 @msg	Image Trace finished, but its document was closed	La vectorisation de l’image est terminée, mais son document a été fermé
+@msg	Image Trace finished, but its document was reverted: trace it again	La vectorisation de l’image est terminée, mais son document a été rétabli à la version précédente : vectorisez-la à nouveau
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	La vectorisation de l’image est terminée, mais l’image ou ses réglages ont changé entre-temps : vectorisez-la à nouveau
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importer un filtre SVG lit les fichiers SVG, pas SVGZ
 @msg	Invalid dimension offset	Décalage de cote non valide
@@ -7753,6 +7881,7 @@ breakText	Glyphs	Glyphes
 @msg	`names` must be an array of style names	`names` doit être une liste de noms de styles
 @msg	`new` is a design name, or true	`new` est un nom de motif, ou true
 @msg	`origin` must be [x, y] in points	`origin` doit être [x, y] en points
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` doit être [a, b, c, d], chacun compris entre -1000 et 1000, avec a·d - b·c à au moins 0.001 de 0
 @msg	`path` must be a folder	`path` doit être un dossier
 @msg	`path` must be a path object	`path` doit être un objet tracé
 @msg	`picks` must be an array (got {v})	`picks` doit être une liste (reçu : {v})
@@ -8152,7 +8281,7 @@ breakText	Glyphs	Glyphes
 @msg	column: true floats the whole column and takes no onto, above or below	column: true rend flottante toute la colonne et n’accepte ni onto, ni above, ni below
 @msg	command must be a shape.* command	command doit être une commande shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}] : `command` manquant
-@msg	composer must be "singleLine" or "everyLine"	composer doit valoir "singleLine" ou "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer doit être "singleLine", "everyLine", "standardSingleLine" ou "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	les formes composées acceptent les tracés, tracés transparents, groupes, formes composées, textes, dégradés de formes et enveloppes
 @msg	compound {_1} must contain exactly one open path to join	le tracé transparent {_1} doit contenir exactement un tracé ouvert à joindre
 @msg	connect end must be "start" or "end"	l’extrémité de connect doit valoir "start" ou "end"
@@ -8918,6 +9047,7 @@ breakText	Glyphs	Glyphes
 @msg	the RTF file is too large to place as type (at most {_1} MB)	le fichier RTF est trop volumineux pour être importé comme texte (au plus {_1} Mo)
 @msg	the SVG expands to more than {0} nested SVG images	le SVG se développe en plus de {0} images SVG imbriquées
 @msg	the SVG expands to more than {0} objects	le SVG se développe en plus de {0} objets
+@msg	the SVG's style sheets take too long to match	la mise en correspondance des feuilles de style du SVG prend trop de temps
 @msg	the SVG's styles expand to more than {0} MB	les styles du SVG se développent en plus de {0} Mo
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	le fichier SVG dépasse {MAX_IMPORT_BYTES} octets
 @msg	the SVG has no drawable objects	le SVG n’a aucun objet dessinable
@@ -9137,7 +9267,7 @@ breakText	Glyphs	Glyphes
 @msg	unexpected resources	ressources inattendues
 @msg	unknown CMYK profile `{name}`	profil CMJN inconnu `{name}`
 @msg	unknown File Info field `{k}`	champ Informations sur le fichier inconnu `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	fonctionnalité OpenType inconnue `{t}` dans featureChanges (les balises qu’accepte `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	paramètre prédéfini PDF inconnu `{name}` (paramètres prédéfinis : {_1})
 @msg	unknown Warp style	style de déformation inconnu
