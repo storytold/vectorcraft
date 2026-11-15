@@ -327,6 +327,25 @@ mod tests {
     }
 
     #[test]
+    fn decode_alpha_expands_gray_and_rgb_png_transparency_keys() {
+        // Original synthetic 2x1 PNGs: first pixel matches tRNS; second is opaque.
+        // Generated from PNG chunks and zlib scanlines, without an external image asset.
+        let gray: &[u8] = &[
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 0, 0, 0, 0, 209, 73, 32, 86, 0, 0, 0, 2, 116,
+            82, 78, 83, 0, 0, 118, 147, 205, 56, 0, 0, 0, 11, 73, 68, 65, 84, 120, 156, 99, 96, 168, 7, 0, 0, 130, 0, 128, 32, 18, 25, 54, 0, 0, 0,
+            0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ];
+        let rgb: &[u8] = &[
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 2, 0, 0, 0, 123, 64, 232, 221, 0, 0, 0, 6, 116,
+            82, 78, 83, 0, 255, 0, 0, 0, 0, 164, 194, 192, 29, 0, 0, 0, 15, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 192, 240, 159, 1, 0, 7, 255,
+            1, 255, 1, 127, 137, 167, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ];
+        for bytes in [gray, rgb] {
+            assert_eq!(decode_alpha(bytes).unwrap(), Some((2, 1, vec![0, 255])));
+        }
+    }
+
+    #[test]
     fn decode_alpha_preserves_cmyk_and_lab_tiff_extra_samples() {
         use craft_image_codecs::{ChannelLayout, Format, Image};
         for (layout, samples) in
