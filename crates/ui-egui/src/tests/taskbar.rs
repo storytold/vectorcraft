@@ -314,7 +314,7 @@ fn point_type_offers_dynamic_text() {
 /// The path's anchors (its first subpath).
 fn anchors(app: &VectorcraftApp, id: u64) -> Vec<vectorcraft_geom::Anchor> {
     match kind(app, id) {
-        NodeKind::Path { path, .. } => path.subpaths[0].anchors.clone(),
+        NodeKind::Path { path, .. } => path.subpaths[0].anchors.to_vec(),
         k => panic!("not a path: {k:?}"),
     }
 }
