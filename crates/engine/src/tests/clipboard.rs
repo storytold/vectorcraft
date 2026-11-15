@@ -768,6 +768,84 @@ fn a_legend_fill_of_its_own_stays_behind_when_pasted_without_formatting() {
     assert_eq!(label(&s, p, "North").1, Paint::solid(Color::WHITE), "still white when the pie is drawn again");
 }
 
+/// A pie pasted into a document whose swatch of the same name is another color takes that color on its linked wedges
+/// (Merge), and its legend labels in those wedges take the contrast a redraw gives them there: white on a wedge that
+/// turned dark. Pasting with Add, which keeps the copied color, keeps the labels as they were.
+#[test]
+fn pie_legend_labels_follow_wedges_that_take_the_documents_swatch() {
+    let mut s = session();
+    let csv = ",North,South\nP,1,1";
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#ffff66", "global": true})).unwrap();
+    let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
+    s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
+    /// The fill of the legend label of graph `id` that says `name`.
+    fn label(s: &Session, id: NodeId, name: &str) -> Paint {
+        let mut out = None;
+        node(s, id).walk(&mut |n| {
+            if let NodeKind::Text(t) = &n.kind
+                && t.plain_text() == name
+            {
+                out = Some(t.first_style().fill.clone());
+            }
+        });
+        out.unwrap()
+    }
+    // The North wedge, black when drawn, takes the light Brand swatch, and a redraw sets its label black.
+    let mut wedges = vec![];
+    for c in node(&s, g).children().unwrap().iter().filter(|c| c.extras().series_index == Some(0)) {
+        c.walk(&mut |m| {
+            if matches!(m.kind, NodeKind::Path { .. }) {
+                wedges.push(m.id.0);
+            }
+        });
+    }
+    assert!(!wedges.is_empty());
+    s.execute("paint.setFill", &json!({"ids": wedges, "swatch": "Brand"})).unwrap();
+    s.execute("graph.setData", &json!({"id": g.0, "csv": csv})).unwrap();
+    assert_eq!(label(&s, g, "North"), Paint::solid(Color::BLACK), "black on the light wedge");
+    assert_eq!(label(&s, g, "South"), Paint::solid(Color::BLACK));
+    copy(&mut s, &[g]);
+
+    for (cmd, choice, north) in [
+        ("edit.pasteWithoutFormatting", "merge", Color::WHITE),
+        ("edit.paste", "merge", Color::WHITE),
+        ("edit.pasteWithoutFormatting", "add", Color::BLACK),
+        ("edit.paste", "add", Color::BLACK),
+    ] {
+        new_doc(&mut s);
+        s.execute("swatch.new", &json!({"name": "Brand", "color": "#202020", "global": true})).unwrap();
+        let p = ids_of(&s.execute(cmd, &json!({"swatchConflict": choice})).unwrap())[0];
+        assert_eq!(label(&s, p, "North"), Paint::solid(north), "{cmd} {choice}");
+        assert_eq!(label(&s, p, "South"), Paint::solid(Color::BLACK), "{cmd} {choice}");
+        s.execute("graph.setData", &json!({"id": p.0, "csv": csv})).unwrap();
+        assert_eq!(label(&s, p, "North"), Paint::solid(north), "{cmd} {choice}: as a redraw sets it");
+    }
+
+    // A copy of the pie in the opacity mask of a rectangle follows the same way.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let r = rect(&mut s, 10.0, 10.0, 300.0, 300.0);
+    let art = {
+        let d = doc_mut(&mut s);
+        let pie = d.node(g).unwrap().clone();
+        d.reid(&pie)
+    };
+    doc_mut(&mut s).node_mut(r).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+    copy(&mut s, &[r]);
+    new_doc(&mut s);
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#202020", "global": true})).unwrap();
+    let p = ids_of(&s.execute("edit.paste", &json!({"swatchConflict": "merge"})).unwrap())[0];
+    let mask = node(&s, p).extras().mask.as_deref().unwrap().art.clone();
+    let mut north = None;
+    mask.walk(&mut |n| {
+        if let NodeKind::Text(t) = &n.kind
+            && t.plain_text() == "North"
+        {
+            north = Some(t.first_style().fill.clone());
+        }
+    });
+    assert_eq!(north, Some(Paint::solid(Color::WHITE)), "in an opacity mask");
+}
+
 /// A two-line legend label in a narrow dark wedge, whose text sits off the wedge's middle line, stays white when its graph
 /// is pasted without formatting.
 #[test]
@@ -1032,6 +1110,68 @@ fn a_repainted_wedge_sets_its_label_color_when_pasted_without_formatting() {
     let pasted = labels(&s, p);
     s.execute("graph.setData", &json!({"id": p.0, "csv": csv})).unwrap();
     assert_eq!(pasted, labels(&s, p), "copied as {before:?}");
+}
+
+/// Wedges linked to a global swatch that the destination document gives a dark color, merged on Paste without
+/// Formatting, give their legend labels white characters, as a redraw does; added under a new name, they keep the
+/// copied light color and black labels.
+#[test]
+fn wedges_merged_into_a_dark_swatch_give_white_labels_when_pasted_without_formatting() {
+    let csv = ",North,South\nP,1,1";
+    fn labels(s: &Session, id: NodeId) -> Vec<(String, Paint)> {
+        let mut out = vec![];
+        node(s, id).walk(&mut |n| {
+            if let NodeKind::Text(t) = &n.kind
+                && ["North", "South"].contains(&t.plain_text().as_str())
+            {
+                out.push((t.plain_text(), t.first_style().fill.clone()));
+            }
+        });
+        out
+    }
+    let both = |c: Color| vec![("North".to_string(), Paint::solid(c)), ("South".to_string(), Paint::solid(c))];
+    for (conflict, expected) in [("merge", Color::WHITE), ("add", Color::BLACK)] {
+        let mut s = session();
+        let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
+        s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
+        s.execute("swatch.new", &json!({"name": "Ink", "color": "#ffffff", "global": true})).unwrap();
+        let mut wedges = vec![];
+        node(&s, g).walk(&mut |m| {
+            if let NodeKind::Path { .. } = m.kind {
+                wedges.push(m.id.0);
+            }
+        });
+        s.execute("paint.setFill", &json!({"ids": wedges, "swatch": "Ink"})).unwrap();
+        s.execute("graph.setData", &json!({"id": g.0, "csv": csv})).unwrap();
+        assert_eq!(labels(&s, g), both(Color::BLACK), "light wedges have black labels");
+        copy(&mut s, &[g]);
+        new_doc(&mut s);
+        s.execute("swatch.new", &json!({"name": "Ink", "color": "#000000", "global": true})).unwrap();
+        let p = ids_of(&s.execute("edit.pasteWithoutFormatting", &json!({"swatchConflict": conflict})).unwrap())[0];
+        let pasted = labels(&s, p);
+        assert_eq!(pasted, both(expected), "{conflict}");
+        s.execute("graph.setData", &json!({"id": p.0, "csv": csv})).unwrap();
+        assert_eq!(pasted, labels(&s, p), "{conflict}: as a redraw sets them");
+    }
+}
+
+/// An object linked to a graphic style and to a swatch merged with the document's keeps its graphic style link when
+/// pasted without formatting, and its color shows the document's swatch.
+#[test]
+fn a_merged_swatch_keeps_graphic_style_links_when_pasted_without_formatting() {
+    let mut s = session();
+    let r = swatched_rect(&mut s, "Ink", "#ffffff");
+    sel(&mut s, &[r]);
+    s.execute("graphicStyle.new", &json!({"name": "Sun"})).unwrap();
+    copy(&mut s, &[r]);
+    new_doc(&mut s);
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#000000", "global": true})).unwrap();
+    let v = s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap();
+    assert_eq!(v["merged"], 1);
+    let p = ids_of(&v)[0];
+    let style = node(&s, p).extras().graphic_style.and_then(|id| doc(&s).graphic_style_by_id(id)).map(|g| g.name.clone());
+    assert_eq!(style.as_deref(), Some("Sun"));
+    assert_eq!(fill(&s, p), linked(hex("#000000"), "Ink", 1.0));
 }
 
 /// When one pie's wedge of a series is repainted and another pie's wedge of that series is not, each pasted legend label

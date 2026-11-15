@@ -839,9 +839,15 @@ fn quick_actions_show_on_the_object_tab_only() {
 /// An app with an Extrude & Bevel square given `params`, and the panel on its Lighting tab with the
 /// accessibility tree on.
 fn lighting_app(params: Value) -> (VectorcraftApp, egui::Context) {
+    lighting_app_of("threeD.extrude", params)
+}
+
+/// An app with a square given 3D effect `effect` with `params`, and the panel on its Lighting tab
+/// with the accessibility tree on.
+fn lighting_app_of(effect: &str, params: Value) -> (VectorcraftApp, egui::Context) {
     use crate::panels::tests_appearance::{click, frame_events, text_rect};
     let mut app = app();
-    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": params})).unwrap();
+    app.run("effect.apply", json!({"effect": effect, "item": null, "params": params})).unwrap();
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     ctx.enable_accesskit();
@@ -1024,6 +1030,151 @@ fn the_arrow_keys_move_the_light_pressed_last() {
     frame_events(&ctx, &mut app, vec![], show);
     let rotations = effect(&app).1["lights"].as_array().unwrap().iter().map(|l| l["rotation"].clone()).collect::<Vec<_>>();
     assert_eq!(rotations, [json!(0.0), json!(-179.0)]);
+}
+
+/// The Lighting tab of Extrude & Bevel (Classic) has the lighting sphere: dragging its light is one
+/// undo step, the button below it moves the light behind the object, Add Light adds a light at the
+/// front center of the sphere, and Delete Light removes the selected light but never the last one.
+#[test]
+fn the_classic_lighting_tab_has_the_lighting_sphere() {
+    use crate::dialogs::revolve_lights::RADIUS;
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    use vectorcraft_effects::CLASSIC_EXTRUDE;
+    let (mut app, ctx) = lighting_app_of(CLASSIC_EXTRUDE, json!({}));
+    let (name, from) = light_node(&mut app, &ctx, 1);
+    assert_eq!(name, "Light 1: Rotation 125.3°, Height 30.0°");
+    let light = crate::dialogs::revolve_lights::lights(&crate::state::Dialog::new(
+        "x",
+        json!({"__effect": CLASSIC_EXTRUDE, "lightRotation": vectorcraft_three_d::DEFAULT_LIGHT.0, "lightHeight": 30.0}),
+    ))[0];
+    let center = from - light.offset() * RADIUS;
+    let history = undo_len(&app);
+    let rim = center + egui::vec2(RADIUS, 0.0);
+    for event in [pointer(from, None), pointer(from, Some(true)), pointer(rim, None)] {
+        frame_events(&ctx, &mut app, vec![event], show);
+    }
+    assert_eq!(merged_light(&app), (0.0, 0.0), "the light follows the pointer while it is down");
+    assert_eq!(undo_len(&app), history);
+    frame_events(&ctx, &mut app, vec![pointer(rim, Some(false))], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    assert_eq!(undo_len(&app), history + 1);
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Move Light to Back").center(), show);
+    assert_eq!(undo_len(&app), history + 2);
+    assert_eq!(effect(&app).1["lightBehind"], json!(true));
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Add Light").center(), show);
+    assert_eq!(undo_len(&app), history + 3);
+    let (name, _) = light_node(&mut app, &ctx, 2);
+    assert_eq!(name, "Light 2: Rotation 0.0°, Height 90.0°", "a new light is at the front center");
+    let count = |app: &VectorcraftApp| effect(app).1["lights"].as_array().map_or(1, Vec::len);
+    assert_eq!(count(&app), 2);
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Delete Light").center(), show);
+    assert_eq!(count(&app), 1);
+    assert_eq!(undo_len(&app), history + 4);
+    let (name, _) = light_node(&mut app, &ctx, 1);
+    assert_eq!(name, "Light 1: Rotation 0.0°, Height 0.0°, Light behind the object", "the selected light was deleted");
+    // One light stays: Delete Light does nothing then.
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Delete Light").center(), show);
+    assert_eq!(count(&app), 1);
+    assert_eq!(undo_len(&app), history + 4);
+}
+
+/// The 3D (Classic) options dialog shows the lighting sphere on its Lighting tab too, and the
+/// sphere draws a 3D (Classic) effect's lights white, since those effects shade without light color.
+#[test]
+fn the_classic_options_dialog_has_the_lighting_sphere_with_white_lights() {
+    use crate::panels::tests_appearance::frame_events;
+    use vectorcraft_effects::{CLASSIC_REVOLVE, EXTRUDE};
+    let mut app = app();
+    app.run("effect.dialog", json!({"effect": CLASSIC_REVOLVE, "item": null})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("__gizmo".into(), json!("light"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let dialog = |app: &mut VectorcraftApp, ui: &mut egui::Ui| crate::dialogs::show(app, ui.ctx());
+    frame_events(&ctx, &mut app, vec![], dialog);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialog(&mut app, ui));
+    out.textures_delta.clear();
+    let nodes: Vec<_> = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
+    assert!(
+        nodes.iter().any(|n| n.role() == egui::accesskit::Role::Slider && n.label() == Some("Light 1: Rotation 125.3°, Height 30.0°")),
+        "the dialog shows the sphere"
+    );
+    let red = json!([{"color": "#ff0000", "rotation": 0.0, "height": 30.0}]);
+    let color =
+        |effect: &str| crate::dialogs::revolve_lights::lights(&crate::state::Dialog::new("x", json!({"__effect": effect, "lights": red})))[0].color;
+    assert_eq!(color(CLASSIC_REVOLVE), egui::Color32::WHITE);
+    assert_eq!(color(EXTRUDE), egui::Color32::from_rgb(255, 0, 0));
+}
+
+fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
+    app.run("assets.list", json!({})).unwrap()["assets"].as_array().unwrap().clone()
+}
+
+/// The panel always shows Export 3D Object; it adds only the selected objects that have a 3D
+/// effect to Asset Export as 3D assets, in one undo step, selects their assets there and shows the
+/// Asset Export panel. Run again, it records nothing and still selects them.
+#[test]
+fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
+    let mut app = app();
+    assert!(painted_text(&mut app, show).contains("Export 3D Object"));
+    let ctx = egui::Context::default();
+    // Without a 3D object: an error, nothing recorded, no asset.
+    let history = undo_len(&app);
+    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    assert_eq!((undo_len(&app), assets(&mut app).len()), (history, 0));
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    app.run("layer.setProps", json!({"id": a, "name": "Box"})).unwrap();
+    assert!(painted_text(&mut app, show).contains("Export 3D Object"));
+    let plain = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    // A hidden 3D effect draws nothing to export: the object is left out like one without.
+    let hidden = app.run("shape.rectangle", json!({"x": 100, "y": 250, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("effect.setParams", json!({"index": 0, "item": null, "visible": false})).unwrap();
+    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    app.run("select.set", json!({"ids": [plain, a, hidden]})).unwrap();
+    assert_eq!(super::selected_3d_objects(&app), [a]);
+    assert!(!crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    let history = undo_len(&app);
+    super::export_3d_object(&mut app, &ctx).unwrap();
+    assert_eq!(undo_len(&app), history + 1);
+    let list = assets(&mut app);
+    assert_eq!(list.len(), 1, "{list:?}");
+    assert_eq!((list[0]["name"].clone(), list[0]["format3D"].clone()), (json!("Box"), json!("usda")));
+    let asset = list[0]["id"].as_u64().unwrap();
+    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
+    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    // Already an asset: no undo step, the same asset selected again, the panel left showing.
+    super::set_pstate(&ctx, "asset-export-selected", Vec::<u64>::new());
+    super::export_3d_object(&mut app, &ctx).unwrap();
+    assert_eq!((undo_len(&app), assets(&mut app).len()), (history + 1, 1));
+    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
+    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    // Undo takes the asset away.
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(assets(&mut app).is_empty());
+}
+
+/// A selected 3D object inside another selected 3D object is not collected on its own: the outer
+/// object's asset holds it.
+#[test]
+fn export_3d_object_leaves_out_a_3d_object_inside_another() {
+    let mut app = app();
+    let inner = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    let other = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [inner, other]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [inner, group]})).unwrap();
+    let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+    assert!(selected.contains(&inner) && selected.contains(&group), "{selected:?}");
+    assert_eq!(super::selected_3d_objects(&app), [group]);
 }
 
 #[test]

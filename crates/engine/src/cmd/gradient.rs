@@ -534,7 +534,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     // Objects were given or selected, even when all of them are graph design art left out below: the stroke mode is then
     // not one for new art.
     let selected = !ids.is_empty();
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
+    let ids = super::appearance::drop_design_art_rows(s, ids, item, !stroke, C)?;
     // How the gradient lies on a stroke (the panel's Stroke buttons).
     let mode = match str_param(p, "strokeMode") {
         None => None,
@@ -558,7 +558,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let for_default = match p.get("aspect").and_then(Value::as_f64) {
-        Some(a) if a < 0.0 && !ids.is_empty() && default_kind != Some(GradientKind::Conic) => {
+        Some(a) if a < 0.0 && selected && default_kind != Some(GradientKind::Conic) => {
             let mut q = p.clone();
             q["aspect"] = json!(-a);
             std::borrow::Cow::Owned(q)
@@ -568,7 +568,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     // A spread for selected gradients leaves a freeform default (which has no ends) as it is.
     let spreads = matches!(spread_param(p), Ok(Some(sp)) if !sp.is_pad());
     let for_default = match for_default {
-        q if spreads && !ids.is_empty() && default_kind == Some(GradientKind::Freeform) => {
+        q if spreads && selected && default_kind == Some(GradientKind::Freeform) => {
             let mut q = q.into_owned();
             if let Some(o) = q.as_object_mut() {
                 o.remove("spread");
@@ -579,8 +579,14 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let new_default = apply_gradient_edit_in_model(&default_paint, &with_stored_stops(&for_default, &default_paint, &stored), None, &|_| true, model)
         .map_err(|e| bad(C, e))?;
-    let freeform = str_param(p, "kind").and_then(GradientKind::parse) == Some(GradientKind::Freeform);
     let of = super::appearance::reference_of(s, p, item, C)?;
+    // Only design art was given or selected: nothing changes, the defaults and the remembered paint included.
+    if selected && ids.is_empty() {
+        // An aligned `item` of the art alone is still checked: a row the art lacks, or that no other object has, is an error.
+        edit_items(s, &ids, item, of, C, "Gradient", !stroke, |_, _| Ok(()))?;
+        return Ok(json!({"ids": []}));
+    }
+    let freeform = str_param(p, "kind").and_then(GradientKind::parse) == Some(GradientKind::Freeform);
     let shown_at = super::appearance::first_edited(s, item, of, &ids);
     // The objects returned: with a design's art, those with a row equal to the art's.
     let edited = edit_items(s, &ids, item, of, C, "Gradient", !stroke, |n, index| {
@@ -770,7 +776,7 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     if targets.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));
     }
-    let targets = super::appearance::drop_design_art(&s.doc()?.doc, targets);
+    let targets = super::appearance::drop_design_art_rows(s, targets, item, !stroke, C)?;
     let model = super::paint::new_color_model(s, &Value::Null);
     let of = super::appearance::reference_of(s, p, item, C)?;
     // The objects returned: with a design's art, those with a row equal to the art's.

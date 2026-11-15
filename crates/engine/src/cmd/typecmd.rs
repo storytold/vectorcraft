@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph); the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; the group keeps the object's transparency, opacity mask and effects, once; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); on type scaled unevenly, sheared or flattened, each glyph's stroke becomes a filled path over it, shaped as the canvas strokes it; the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; the group keeps the object's transparency, opacity mask and effects, once; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -619,16 +619,25 @@ fn scale_text_attributes(s: &mut Session, p: &Value) -> Result<Value> {
 /// A path (or compound path) of `outline`, a piece of type `t`'s outline in text space, painted as
 /// run `run` and placed in the document as the canvas paints it ([`paint_type_piece`]: unplaced
 /// gradients fitted to `bounds`, the layout's bounds, stroke weights scaled by the type's
-/// transform); `None` when the piece has no path.
-fn type_piece(d: &mut Document, t: &TextObject, bounds: kurbo::Rect, run: usize, outline: &kurbo::BezPath) -> Option<Node> {
+/// transform), followed by a path (or compound path) filled with the run's stroke when the type's
+/// transform is not a similarity; empty when the piece has no path.
+fn type_piece(d: &mut Document, t: &TextObject, bounds: kurbo::Rect, run: usize, outline: &kurbo::BezPath) -> Vec<Node> {
     let path = PathData::from_bezpath(outline);
     if path.is_empty() {
-        return None;
+        return vec![];
     }
     let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
     let mut node = shape_node(d, path, None);
-    vectorcraft_render::effects::paint_type_piece(&mut node, &st, bounds, t.xf);
-    Some(node)
+    let stroke = vectorcraft_render::effects::paint_type_piece(&mut node, &st, bounds, t.xf);
+    let mut out = vec![node];
+    if let Some(s) = stroke
+        && let Some(path) = s.path_data()
+    {
+        let mut filled = shape_node(d, path.clone(), None);
+        filled.appearance = s.appearance.clone();
+        out.push(filled);
+    }
+    out
 }
 
 fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
@@ -675,9 +684,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                         children.push(Arc::new(d.reid(&art)));
                         break 'glyph;
                     }
-                    if let Some(node) = type_piece(d, t, lay.bounds, g.run, &g.outline) {
-                        children.push(Arc::new(node));
-                    }
+                    children.extend(type_piece(d, t, lay.bounds, g.run, &g.outline).into_iter().map(Arc::new));
                 }
                 run_end.insert(g.run, children.len());
             }
@@ -686,10 +693,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             // nothing there either).
             let mut ruby: Vec<(usize, Arc<Node>)> = vec![];
             for g in &lay.ruby {
-                let Some(node) = type_piece(d, t, lay.bounds, g.run, &g.outline) else { continue };
                 // After the glyphs of its run and of the runs before it.
                 let at = run_end.range(..=g.run).map(|(_, end)| *end).max().unwrap_or(0);
-                ruby.push((at, Arc::new(node)));
+                ruby.extend(type_piece(d, t, lay.bounds, g.run, &g.outline).into_iter().map(|node| (at, Arc::new(node))));
             }
             ruby.sort_by_key(|(at, _)| *at);
             let mut ruby = ruby.into_iter().peekable();
@@ -711,9 +717,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
                 all.extend(bar.iter());
-                if let Some(node) = type_piece(d, t, lay.bounds, run, &bar) {
-                    children.push(Arc::new(node));
-                }
+                children.extend(type_piece(d, t, lay.bounds, run, &bar).into_iter().map(Arc::new));
             }
             // The object's own fills and strokes (not its characters') paint the whole outline:
             // those below the Characters row under the characters, the others over them, with
