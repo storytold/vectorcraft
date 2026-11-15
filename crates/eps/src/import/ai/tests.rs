@@ -10329,11 +10329,14 @@ fn a_brushed_path_with_samples_of_the_pen_keeps_its_drawn_look() {
     assert_eq!(a.len(), 1, "{a:#?}");
     assert!(matches!(a[0].kind, NodeKind::Group { .. }), "the drawn look: {a:#?}");
     assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
-    // The samples belong to the path before them: a path after them is read as it was.
-    let after = format!("{path}{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    // The samples belong to the path before them: a path after them with the same brush and no
+    // samples of its own comes in brushed.
+    let after = format!("{path}{}", brushed_path());
     let a = art(&read_ok(&format!("{def}{style}{}", layer(&after))).doc);
     assert_eq!(a.len(), 2, "{a:#?}");
-    assert!(matches!(a[1].kind, NodeKind::Path { .. }) && a[1].appearance.fill().is_some(), "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "the sampled path's drawn look: {a:#?}");
+    assert!(matches!(a[1].kind, NodeKind::Path { .. }), "the path after the samples, brushed: {a:#?}");
+    assert_eq!(a[1].appearance.stroke().and_then(|s| s.brush.as_deref()), Some("Six D"), "{a:#?}");
     // Samples with no object before them in the layer mark nothing: the path after them is read.
     let first = format!("{PEN_SAMPLES}{}", brushed_path());
     let a = art(&read_ok(&format!("{def}{style}{}", layer(&first))).doc);
