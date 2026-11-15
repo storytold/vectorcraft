@@ -294,6 +294,11 @@ impl Writer<'_> {
                 self.warn("type on a path with bullets or numbers is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
+            // Nor the character a repeat mark is drawn as in the mark's width (Kurikaeshi Moji Shori).
+            if !lay.repeat_marks.is_empty() {
+                self.warn("type on a path that starts with a repeat mark drawn as the character it repeats is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
             return self.text_on_path(n, t, path, *start);
         }
         self.note_fonts(t, &lay);

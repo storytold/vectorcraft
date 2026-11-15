@@ -941,3 +941,34 @@ fn a_repeat_mark_at_a_line_start_is_written_as_the_character_it_draws() {
         }
     }
 }
+
+/// Kurikaeshi Moji Shori: a `<textPath>` cannot draw a character in another character's width, so
+/// type on a path whose threaded frame starts with a repeat mark drawn as the character it repeats
+/// is outlined, with a warning; with the setting off it stays live text.
+#[test]
+fn a_repeat_mark_starting_a_frame_on_a_path_is_outlined() {
+    use vectorcraft_text::test_fonts::{RARE_REPEAT_MARK_FAMILY, rare_repeat_mark_font};
+    vectorcraft_text::FontDb::global().add_font(rare_repeat_mark_font().unwrap());
+    let st = CharStyle { font_family: RARE_REPEAT_MARK_FAMILY.into(), ..style(12.0) };
+    let mut line = BezPath::new();
+    line.move_to((20.0, 40.0));
+    line.line_to((280.0, 40.0));
+    for on in [false, true] {
+        let mut t = TextObject::point(Point::ZERO, "々龘々", st.clone());
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        t.para.kurikaeshi_moji_shori = on;
+        t.first_para_continues = true;
+        t.first_para_lead = Some('龘');
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let out = vectorcraft_svg::export_full(&d, &ExportOptions::default(), None);
+        let warned = out.warnings.iter().any(|w| w.contains("repeat mark"));
+        if on {
+            assert!(!out.svg.contains("<textPath") && warned, "{:?}: {}", out.warnings, out.svg);
+        } else {
+            assert!(out.svg.contains(">々龘々<") && !warned, "{:?}: {}", out.warnings, out.svg);
+        }
+    }
+}

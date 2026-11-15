@@ -9458,7 +9458,8 @@ options) turns it on or off for the paragraphs of the selected type (or `ids`, o
 range touches). On, a repeat mark that starts a line of point or area type, horizontal or vertical, or starts a frame
 of type on a path (which holds one line), is drawn as the character it repeats, so both characters show when a line break separates them. The text keeps the mark: copying,
 searching, the caret and the line breaks stay as they were, and the drawn character takes the mark's place and width.
-SVG export with live type writes the drawn character, and embeds its glyph when fonts are embedded.
+SVG export with live type writes the drawn character, and embeds its glyph when fonts are embedded; it writes type on a
+path that starts with such a mark as outlines, with a warning.
 VectorCraft's set of marks and its rules: 々 repeats a Han ideograph, ゝ and ゞ a hiragana, and ヽ and ヾ a katakana; the
 repeated character is the last one before the mark in the paragraph that is not a repeat mark, a soft return or a
 combining voicing mark (U+3099, U+309A), looking back into the frames before when threaded type continues a paragraph
