@@ -192,6 +192,72 @@ fn nested_loans_of_one_name_use_each_documents_definition() {
     assert_eq!(db.generation(), plain);
 }
 
+/// While one document's composite fonts are lent, a name only another document defines (the one
+/// the database holds, or one an outer guard lends) is no composite font: type set in it lays out
+/// as in a missing font, also after it was laid out in that definition with nothing lent.
+#[test]
+fn a_lent_document_does_not_use_another_documents_composite_font() {
+    let db = FontDb::with_font_dirs(vec![]);
+    let (a, b) = (roman_at("CF Only A", 50.0), roman_at("CF Only B", 50.0));
+    // The session registered B's font, and A's (the same definition) as well.
+    db.set_composite_font(&a);
+    db.set_composite_font(&b);
+    let half = advance(&db, "JetBrains Mono", 10.0);
+    assert!((advance(&db, "CF Only B", 20.0) - half).abs() < 1e-9);
+    let missing = advance(&db, "CF Nowhere", 20.0);
+    assert!((missing - half).abs() > 1e-6, "the missing font draws otherwise");
+    // Lending looks the name up among the installed families, which catalogs them the first time.
+    assert!(!db.has_installed_family("CF Only A"));
+    let plain = db.generation();
+    {
+        let _a = db.lend_composite_fonts(std::slice::from_ref(&a));
+        assert!(db.composite_font("CF Only A").is_some());
+        assert!(db.composite_font("cf only b").is_none());
+        assert!(db.composite_fonts_for("CF Only B", "A").is_none());
+        assert_ne!(db.generation(), plain, "type laid out with B's font is not reused");
+        assert!((advance(&db, "CF Only B", 20.0) - missing).abs() < 1e-9);
+        assert!((advance(&db, "CF Only A", 20.0) - half).abs() < 1e-9);
+        // A document placed in A that defines B's font sees only its own.
+        let _b = db.lend_composite_fonts(std::slice::from_ref(&b));
+        assert!(db.composite_font("CF Only A").is_none());
+        assert!((advance(&db, "CF Only B", 20.0) - half).abs() < 1e-9);
+    }
+    assert_eq!(db.generation(), plain);
+    assert!((advance(&db, "CF Only B", 20.0) - half).abs() < 1e-9);
+}
+
+/// A document that defines no composite font, drawn or lent as a document, uses none of the
+/// database's. A temporary document that defines none, drawn inside another document's guard,
+/// keeps that guard's fonts; with no guard at all, the database's stay in use.
+#[test]
+fn a_document_without_composite_fonts_uses_none_and_a_preview_is_unchanged() {
+    let db = FontDb::with_font_dirs(vec![]);
+    let (a, b) = (roman_at("CF Held A", 50.0), roman_at("CF Held B", 50.0));
+    db.set_composite_font(&b);
+    let half = advance(&db, "JetBrains Mono", 10.0);
+    let missing = advance(&db, "CF Nowhere Else", 20.0);
+    let plain = db.generation();
+    for lend in [FontDb::lend_composite_fonts, FontDb::lend_document_composite_fonts] {
+        let _none = lend(&db, &[]);
+        assert!(db.composite_font("CF Held B").is_none());
+        assert_ne!(db.generation(), plain);
+        assert!((advance(&db, "CF Held B", 20.0) - missing).abs() < 1e-9);
+    }
+    {
+        let _a = db.lend_composite_fonts(std::slice::from_ref(&a));
+        // A temporary document drawn inside it lends nothing and keeps A's fonts.
+        let _preview = db.lend_composite_fonts(&[]);
+        assert!(db.composite_font("CF Held A").is_some());
+        assert!(db.composite_font("CF Held B").is_none());
+        // A document placed in it that defines none uses none of A's.
+        let _placed = db.lend_document_composite_fonts(&[]);
+        assert!(db.composite_font("CF Held A").is_none());
+    }
+    assert_eq!(db.generation(), plain);
+    assert!(db.composite_font("CF Held B").is_some());
+    assert!((advance(&db, "CF Held B", 20.0) - half).abs() < 1e-9);
+}
+
 /// Two threads that lend different definitions of one name at once each lay out in their own.
 #[test]
 fn threads_lending_one_name_at_once_use_their_own_definitions() {

@@ -498,8 +498,9 @@ pub(crate) fn stood_for(own: &[NodeId], ids: &[NodeId]) -> Vec<NodeId> {
 }
 
 /// Clear Appearance on each series group a command gave a whole new appearance through its paths, so the group's own
-/// opacity, blend mode, isolation, knockout, effects and style link do not stay on top of it.
-pub(crate) fn clear_stood_for(d: &mut Document, groups: &[NodeId]) {
+/// opacity, blend mode, isolation, knockout, effects and style link do not stay on top of it. The graph stops keeping the
+/// groups' opacity, blend mode, isolation and knockout. Returns whether what a graph keeps changed.
+pub(crate) fn clear_stood_for(d: &mut Document, groups: &[NodeId]) -> bool {
     for id in groups {
         if let Some(n) = d.node_mut(*id) {
             clear(n);
@@ -507,6 +508,7 @@ pub(crate) fn clear_stood_for(d: &mut Document, groups: &[NodeId]) {
             n.extras_mut().graphic_style = None;
         }
     }
+    super::graph::capture_series_object_opacity(d, groups)
 }
 
 /// [`whole_targets`] of `cmd`, which needs at least one.
@@ -959,7 +961,7 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
                 (src.opacity, src.blend, src.isolate, src.knockout, src.knockout_shape);
             super::object::snap_if_aligned(to);
         }
-        clear_stood_for(d, &group);
+        let forgot = clear_stood_for(d, &group);
         for id in &cleared {
             if let Some(n) = d.node_mut(*id) {
                 clear(n);
@@ -978,7 +980,7 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
         // taken in paint order, so the targets are captured again on their own, after a cleared source in front of them.
         let labels = super::graph::capture_label_rows(d, &changed) | super::graph::capture_label_rows(d, &targets);
         let all: Vec<NodeId> = from.iter().chain(&targets).chain(&group).copied().collect();
-        Ok(count_changed(d, &before, &all) + usize::from(kept || painted || object || labels))
+        Ok(count_changed(d, &before, &all) + usize::from(kept || painted || object || labels || forgot))
     })?;
     s.active_appearance_item = None;
     Ok(json!({ "source": source.0, "target": target.0 }))

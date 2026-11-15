@@ -923,6 +923,32 @@ fn what_global_edit_gives_the_marks_of_another_series_group_survives_regeneratio
     assert!(series(&n, 1).children().unwrap().iter().all(|m| m.appearance.fill_paint() == given));
 }
 
+/// With a whole series group picked and Global Edit on, the opacity and blend mode set on that group reach the other
+/// series groups of the same form, and the graph stores them for those groups too.
+#[test]
+fn the_transparency_global_edit_gives_another_series_group_survives_regeneration() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    // Series without names draw no legend, so each series group holds only its columns, laid out like the other's.
+    let csv = ",,\nQ1,3,3\nQ2,5,5";
+    let made = s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap();
+    let id = NodeId(made["id"].as_u64().unwrap());
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let (first, other) = (series(&n, 0).id, series(&n, 1).id);
+    s.execute("object.isolate", &json!({"id": id.0})).unwrap();
+    s.execute("select.set", &json!({"ids": [first.0]})).unwrap();
+    let r = s.execute("select.globalEdit", &json!({})).unwrap();
+    assert!(r["ids"].as_array().unwrap().contains(&json!(other.0)), "{r}");
+    s.execute("transparency.set", &json!({"ids": [first.0], "opacity": 40, "blend": "multiply"})).unwrap();
+    let g = s.doc().unwrap().doc.node(other).unwrap().clone();
+    assert_eq!((g.opacity, g.blend), (0.4, BlendMode::Multiply), "Global Edit reaches the other group");
+    let kept = spec(&s, id).series_paints[1].clone();
+    assert_eq!((kept.group_opacity, kept.group_blend), (Some(0.4), Some(BlendMode::Multiply)));
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    assert_eq!(group_transparency(&s, id, 1).0, (0.4, BlendMode::Multiply));
+}
+
 /// A blend mode set on the top fill or stroke row of one series mark is kept by the graph and drawn on every mark of
 /// the series again; Normal forgets it.
 #[test]
@@ -2210,8 +2236,8 @@ fn appearance_commands_given_a_series_group_edit_its_marks() {
     s.execute("edit.undo", &json!({})).unwrap();
 
     let (rect, blue) = blue_style(&mut s, "Blue", false);
-    let was = spec(&s, id).series_paints;
     s.execute("object.setProps", &json!({"ids": [group.0], "opacity": 50})).unwrap();
+    let was = spec(&s, id).series_paints;
     s.execute("appearance.transfer", &json!({"source": rect.0, "target": group.0, "copy": true})).unwrap();
     assert!(series_0_group(&s, id).1);
     assert_eq!(s.doc().unwrap().doc.node(group).unwrap().opacity, 1.0, "the appearance replaces the group's own opacity");
@@ -2433,10 +2459,10 @@ fn a_graphic_style_applied_to_a_series_group_styles_its_marks() {
     let (mut s, id, marks) = stored_red_stroke();
     let (group, _) = series_0_group(&s, id);
     let (_, blue) = blue_style(&mut s, "Blue", false);
-    let was = spec(&s, id).series_paints;
     let own = json!({"ids": [group.0], "opacity": 50, "blend": "multiply", "isolate": true, "knockout": "on", "item": null});
     s.execute("transparency.set", &own).unwrap();
     s.execute("effect.apply", &json!({"ids": [group.0], "effect": "distort.twist"})).unwrap();
+    let was = spec(&s, id).series_paints;
     let g = s.doc().unwrap().doc.node(group).unwrap().clone();
     assert!(g.isolate && g.knockout != Default::default() && g.blend != vectorcraft_color::BlendMode::Normal);
     s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [group.0]})).unwrap();
@@ -2511,6 +2537,161 @@ fn redefining_a_graphic_style_keeps_an_edited_mark_of_a_linked_series_group() {
     assert_eq!((&first.appearance, first.extras().graphic_style), (&edited, None), "the edited mark keeps its look, unlinked");
     assert!(marks[1..].iter().all(|m| d.node(*m).unwrap().appearance.fill_paint() == green));
     assert!(marks[1..].iter().all(|m| d.node(*m).unwrap().extras().graphic_style == Some(style.id)));
+}
+
+/// Series `index`'s group: its object opacity and blend mode, and those of each path directly inside it.
+fn group_transparency(s: &Session, id: NodeId, index: u32) -> ((f32, BlendMode), Vec<(f32, BlendMode)>) {
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let g = series(&n, index);
+    ((g.opacity, g.blend), g.children().unwrap().iter().map(|m| (m.opacity, m.blend)).collect())
+}
+
+/// An object opacity and blend mode set on a selected series group are kept by the graph for the group: the series group
+/// has them after the graph is drawn again, the graph's data reads them back unchanged after it is written to JSON, its
+/// paths and the other series stay opaque and Normal, setting them again records no step, 100% and Normal forget them,
+/// and undo takes them back.
+#[test]
+fn an_opacity_and_blend_mode_on_a_series_group_survive_regeneration() {
+    let (mut s, id, _, _) = column_marks();
+    let (group, _) = series_0_group(&s, id);
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 40, "blend": "multiply"})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.group_opacity, kept.group_blend), (Some(0.4), Some(BlendMode::Multiply)));
+    assert_eq!((kept.opacity, kept.blend), (None, None), "the paths keep their own");
+    let restored: GraphSpec = serde_json::from_value(serde_json::to_value(spec(&s, id)).unwrap()).unwrap();
+    assert_eq!(restored, spec(&s, id));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    let normal = (1.0, BlendMode::Normal);
+    let (own, paths) = group_transparency(&s, id, 0);
+    assert_eq!(own, (0.4, BlendMode::Multiply));
+    assert!(!paths.is_empty() && paths.iter().all(|t| *t == normal), "{paths:?}");
+    let (own, paths) = group_transparency(&s, id, 1);
+    assert_eq!(own, normal);
+    assert!(paths.iter().all(|t| *t == normal), "{paths:?}");
+
+    let (group, _) = series_0_group(&s, id);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("object.setProps", &json!({"id": group.0, "opacity": 40, "blend": "multiply"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the values the group and the graph have already");
+    s.execute("object.setProps", &json!({"id": group.0, "opacity": 100, "blend": "normal"})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.group_opacity, kept.group_blend), (None, None));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"rows": [[2, 2], [3, 4]]})).unwrap();
+    assert_eq!(group_transparency(&s, id, 0).0, normal);
+    for _ in 0..4 {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert!(spec(&s, id).series_paints.is_empty(), "undo takes back the edit and what the graph stored");
+}
+
+/// Commands that clear a series group's own opacity and blend mode also remove what the graph keeps for it: Clear
+/// Appearance on the group, a graphic style applied to it and Move Appearance onto it.
+#[test]
+fn clearing_a_series_groups_opacity_forgets_what_the_graph_keeps() {
+    let kept = |s: &Session, id: NodeId| {
+        let slot = spec(s, id).series_paints[0].clone();
+        (slot.group_opacity, slot.group_blend)
+    };
+    let faded = (Some(0.5), Some(BlendMode::Screen));
+    let (mut s, id, _, _) = column_marks();
+    let (rect, _) = blue_style(&mut s, "Blue", false);
+    let (group, _) = series_0_group(&s, id);
+    s.execute("object.setProps", &json!({"id": group.0, "opacity": 50, "blend": "screen"})).unwrap();
+    assert_eq!(kept(&s, id), faded);
+    let commands = [
+        ("appearance.clear", json!({"ids": [group.0]})),
+        ("graphicStyle.apply", json!({"name": "Blue", "ids": [group.0]})),
+        ("appearance.transfer", json!({"source": rect.0, "target": group.0, "copy": true})),
+    ];
+    for (cmd, params) in commands {
+        s.execute(cmd, &params).unwrap();
+        assert_eq!(kept(&s, id), (None, None), "{cmd}");
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+        assert_eq!(group_transparency(&s, id, 0).0, (1.0, BlendMode::Normal), "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(kept(&s, id), faded, "{cmd}");
+    }
+}
+
+/// Redefining a graphic style a series group is linked to clears the group's own opacity and blend mode, and removes
+/// what the graph keeps for them.
+#[test]
+fn redefining_a_style_linked_to_a_series_group_forgets_its_kept_opacity() {
+    let (mut s, id, _, _) = column_marks();
+    let (group, _) = series_0_group(&s, id);
+    let (rect, _) = blue_style(&mut s, "Blue", false);
+    let style = s.doc().unwrap().doc.graphic_style("Blue").unwrap().clone();
+    s.edit("Link", |d, _| {
+        let i = d.graphic_style_index("Blue").unwrap();
+        (d.graphic_styles[i].opacity, d.graphic_styles[i].blend) = (0.5, BlendMode::Screen);
+        let g = d.node_mut(group).unwrap();
+        g.appearance = style.appearance.clone().into();
+        (g.opacity, g.blend) = (0.5, BlendMode::Screen);
+        g.extras_mut().graphic_style = Some(style.id);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("object.setProps", &json!({"id": group.0, "opacity": 50, "blend": "screen"})).unwrap();
+    let slot = spec(&s, id).series_paints[0].clone();
+    assert_eq!((slot.group_opacity, slot.group_blend), (Some(0.5), Some(BlendMode::Screen)));
+    assert_eq!(s.doc().unwrap().doc.node(group).unwrap().extras().graphic_style, Some(style.id), "still linked");
+    s.execute("appearance.setItem", &json!({"ids": [rect.0], "index": top_row(&s, rect, true), "color": "#00ff00"})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "id": rect.0})).unwrap();
+    let slot = spec(&s, id).series_paints.first().cloned().unwrap_or_default();
+    assert_eq!((slot.group_opacity, slot.group_blend), (None, None));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    assert_eq!(group_transparency(&s, id, 0).0, (1.0, BlendMode::Normal));
+}
+
+/// Isolate Blending, a knockout state and Knockout Shape set on a selected series group are kept by the graph for the
+/// group, through the graph being drawn again; the other series' group stays as the graph draws it, and turning them off
+/// forgets them.
+#[test]
+fn isolation_and_knockout_on_a_series_group_survive_regeneration() {
+    let (mut s, id, _, _) = column_marks();
+    let (group, _) = series_0_group(&s, id);
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    s.execute("transparency.set", &json!({"isolate": true, "knockout": "off", "knockoutShape": true})).unwrap();
+    let slot = spec(&s, id).series_paints[0].clone();
+    assert_eq!((slot.group_isolate, slot.group_knockout, slot.group_knockout_shape), (true, Some(vectorcraft_doc::Knockout::Off), true));
+    assert_eq!((slot.group_opacity, slot.group_blend, slot.opacity, slot.blend), (None, None, None, None));
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("object.setProps", &json!({"id": group.0, "isolate": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the values the group and the graph have already");
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let (g, other) = (series(&n, 0), series(&n, 1));
+    assert_eq!((g.isolate, g.knockout, g.knockout_shape), (true, vectorcraft_doc::Knockout::Off, true));
+    assert_eq!((other.isolate, other.knockout, other.knockout_shape), (false, vectorcraft_doc::Knockout::Neutral, false));
+    let (group, _) = series_0_group(&s, id);
+    s.execute("object.setProps", &json!({"id": group.0, "isolate": false, "knockout": "neutral", "knockoutShape": false})).unwrap();
+    assert!(spec(&s, id).series_paints.iter().all(|p| *p == vectorcraft_doc::SeriesPaint::default()), "nothing is kept");
+}
+
+/// Randomize Opacity and Sort Objects given a series group keep the opacity they give it for the group.
+#[test]
+fn randomize_and_sort_opacity_on_a_series_group_are_kept() {
+    let (mut s, id, _, _) = column_marks();
+    let (group, _) = series_0_group(&s, id);
+    s.execute("addon.arrange.randomizeOpacity", &json!({"ids": [group.0], "min": 30, "max": 60, "seed": 7})).unwrap();
+    let given = s.doc().unwrap().doc.node(group).unwrap().opacity;
+    assert!(given < 1.0);
+    assert_eq!(spec(&s, id).series_paints[0].group_opacity, Some(given));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    assert_eq!(group_transparency(&s, id, 0).0, (given, BlendMode::Normal));
+
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let (first, second) = (series(&n, 0).id, series(&n, 1).id);
+    s.execute("object.setProps", &json!({"id": second.0, "opacity": 80})).unwrap();
+    s.execute("addon.arrange.sort", &json!({"ids": [first.0, second.0], "by": "x", "apply": "opacity", "order": "descending"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let (a, b) = (d.node(first).unwrap().opacity, d.node(second).unwrap().opacity);
+    assert_eq!((a, b), (0.8, given), "the opacities trade places");
+    let kept = &spec(&s, id).series_paints;
+    assert_eq!((kept[0].group_opacity, kept.get(1).and_then(|k| k.group_opacity)), ((a < 1.0).then_some(a), (b < 1.0).then_some(b)));
 }
 
 /// Default Fill and Stroke on a series mark stores a white fill and a 1 pt black stroke, both opaque, on the graph.
@@ -5691,6 +5872,286 @@ fn formatting_one_label_keeps_that_kind_of_label() {
     assert!(serde_json::to_value(GraphSpec::default()).unwrap().get("labelStyles").is_none());
 }
 
+/// Character and paragraph edits that resize a graph's labels leave the plot where it is when the graph is drawn
+/// again, and a move or scale of the graph made after them is still followed.
+#[test]
+fn restyling_a_graphs_labels_leaves_the_plot_in_place() {
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
+    let redraw = |s: &mut Session, id: NodeId| s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"size": 14})).unwrap();
+    redraw(&mut s, id);
+    assert_eq!(spec(&s, id).rect, rect, "after a size change to every label");
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("text.setFormat", &json!({"ids": [c.0], "leftIndent": 20})).unwrap();
+    redraw(&mut s, id);
+    assert_eq!(spec(&s, id).rect, rect, "after an indent on the category labels");
+    let l = text_id(&s, id, "Legend", "2025");
+    s.execute("text.setStyle", &json!({"ids": [l.0], "size": 4})).unwrap();
+    redraw(&mut s, id);
+    assert_eq!(spec(&s, id).rect, rect, "after a smaller size on the legend labels");
+    // A move and a scale of the whole graph still carry the plot with them.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 40, "dy": -10})).unwrap();
+    redraw(&mut s, id);
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 40.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 - 10.0)).abs() < 1e-6, "{moved:?}");
+    assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{moved:?}");
+    s.execute("object.scale", &json!({"sx": 200, "sy": 100, "origin": [moved.x0, moved.y0]})).unwrap();
+    redraw(&mut s, id);
+    let scaled = spec(&s, id).rect;
+    assert!((scaled.width() - 2.0 * rect.width()).abs() < 1e-6 && (scaled.height() - rect.height()).abs() < 1e-6, "{scaled:?}");
+    assert!((scaled.x0 - moved.x0).abs() < 1e-6 && (scaled.y0 - moved.y0).abs() < 1e-6, "{scaled:?}");
+}
+
+/// Moving one label of a graph on its own leaves the plot where it is when the graph is drawn again.
+#[test]
+fn moving_one_label_leaves_the_plot_in_place() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    for (grp, text) in [("Legend", "2025"), ("Axes", "Q2")] {
+        let l = text_id(&s, id, grp, text);
+        s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 120, "dy": 60})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+        assert_eq!(spec(&s, id).rect, rect, "after moving {text}");
+    }
+}
+
+/// Label edits leave the plot in place in graphs whose legend swatches follow the size of the labels at the next
+/// drawing: a legend across the top, a legend after a right value axis, and legend labels of several lines. A move of
+/// the graph made after them is still followed.
+#[test]
+fn restyling_the_labels_of_a_graph_whose_legend_follows_them_leaves_the_plot_in_place() {
+    let csv = ",North|East|Coast,South|West,Inland|Hills|Lakes|Plains\nQ1,3,2,4\nQ2,5,4,1\nQ3,-1,6,2";
+    for options in [json!({"legendAcrossTop": true}), json!({"valueAxis": "right"}), json!({"valueAxis": "both"}), json!({})] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.setType", &options).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+        let rect = spec(&s, id).rect;
+        for size in [16, 5] {
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+            s.execute("text.setStyle", &json!({"size": size})).unwrap();
+            for _ in 0..2 {
+                s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+                assert_eq!(spec(&s, id).rect, rect, "{options}: labels at {size} pt");
+            }
+        }
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 30, "dy": 20})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+        let moved = spec(&s, id).rect;
+        assert!((moved.x0 - (rect.x0 + 30.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 20.0)).abs() < 1e-6, "{options}: {moved:?}");
+        assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{options}: {moved:?}");
+    }
+}
+
+/// Outlining a graph's labels leaves the plot where it is when the graph is drawn again, and a move of the graph made
+/// before them is still followed.
+#[test]
+fn outlining_a_graphs_labels_leaves_the_plot_in_place() {
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    s.execute("select.set", &json!({"ids": [text_id(&s, id, "Axes", "Q2").0, text_id(&s, id, "Legend", "2025").0]})).unwrap();
+    s.execute("type.createOutlines", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    assert_eq!(spec(&s, id).rect, rect, "after outlining labels");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 30, "dy": 15})).unwrap();
+    s.execute("select.set", &json!({"ids": [text_id(&s, id, "Axes", "Q1").0, text_id(&s, id, "Legend", "2024").0]})).unwrap();
+    s.execute("type.createOutlines", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 30.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 15.0)).abs() < 1e-6, "{moved:?}");
+    assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{moved:?}");
+    // A scale of the graph made before outlining is still followed.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 50, "origin": [moved.x0, moved.y0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [text_id(&s, id, "Axes", "Q3").0]})).unwrap();
+    s.execute("type.createOutlines", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let scaled = spec(&s, id).rect;
+    assert!((scaled.x0 - moved.x0).abs() < 1e-6 && (scaled.y0 - moved.y0).abs() < 1e-6, "{scaled:?}");
+    assert!((scaled.width() - 1.5 * rect.width()).abs() < 1e-6 && (scaled.height() - 0.5 * rect.height()).abs() < 1e-6, "{scaled:?}");
+}
+
+/// Outline Stroke on a graph's strokes leaves the plot where it is when the graph is drawn again, and a move of the
+/// graph made before it is still followed.
+#[test]
+fn outlining_a_graphs_strokes_leaves_the_plot_in_place() {
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 20, "dy": 10})).unwrap();
+    s.execute("object.path.outlineStroke", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 20.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 10.0)).abs() < 1e-6, "{moved:?}");
+    assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{moved:?}");
+}
+
+/// A graph left with only its labels, or with its labels and one vertical line, leaves the plot where it is when it is
+/// drawn again after a label edit.
+#[test]
+fn a_graph_left_with_only_its_labels_leaves_the_plot_in_place() {
+    for keep_a_line in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = spec(&s, id).rect;
+        let (mut art, mut line) = (vec![], None);
+        s.doc().unwrap().doc.node(id).unwrap().walk(&mut |n| {
+            if n.children().is_none() && !matches!(n.kind, NodeKind::Text(_)) {
+                let vertical = n.geometric_bounds().is_some_and(|b| b.width() < 1e-9 && b.height() > 1.0);
+                if keep_a_line && vertical && line.is_none() {
+                    line = n.geometric_bounds();
+                } else {
+                    art.push(n.id.0);
+                }
+            }
+        });
+        assert!(!art.is_empty() && line.is_some() == keep_a_line);
+        s.execute("select.set", &json!({"ids": art})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let left = s.doc().unwrap().doc.node(id).unwrap().clone();
+        assert_eq!(vectorcraft_doc::graph::graph_art_without_type(left.children().unwrap()), line, "{:#?}", left.children());
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 20})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+        assert_eq!(spec(&s, id).rect, rect, "keeping a line: {keep_a_line}");
+    }
+}
+
+/// A graph saved without the bounds of its art without type, left with one vertical line, keeps its plot's size when
+/// it is drawn again.
+#[test]
+fn a_graph_saved_with_only_its_whole_bounds_and_left_with_a_line_keeps_its_plot() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    let mut old = spec(&s, id);
+    old.placed_art = None;
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().extras_mut().graph = Some(Box::new(old));
+    let (mut art, mut line) = (vec![], None);
+    s.doc().unwrap().doc.node(id).unwrap().walk(&mut |n| {
+        if n.children().is_none() {
+            let vertical = !matches!(n.kind, NodeKind::Text(_)) && n.geometric_bounds().is_some_and(|b| b.width() < 1e-9 && b.height() > 1.0);
+            if vertical && line.is_none() {
+                line = Some(n.id);
+            } else {
+                art.push(n.id.0);
+            }
+        }
+    });
+    assert!(line.is_some());
+    s.execute("select.set", &json!({"ids": art})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    assert_eq!(spec(&s, id).rect, rect);
+}
+
+/// The bounds a graph measures moves on take a clipping group holding type at the bounds of its clip, so art outside the
+/// clip does not change them; a clipping group whose clip is type is measured on its other art.
+#[test]
+fn a_clipping_group_holding_type_is_measured_on_its_clip() {
+    use std::sync::Arc;
+    use vectorcraft_doc::graph::graph_art_without_type as measure;
+    use vectorcraft_geom::Affine;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let label: Arc<vectorcraft_doc::Node> =
+        group(&n, "Legend").children().unwrap().iter().find(|c| matches!(c.kind, NodeKind::Text(_))).unwrap().clone();
+    let mut paths = vec![];
+    n.walk(&mut |c| {
+        if matches!(c.kind, NodeKind::Path { .. }) {
+            paths.push(c.clone());
+        }
+    });
+    let (clip, art) = (Arc::new(paths[0].clone()), paths[1].clone());
+    let clipped = |dx: f64, first: Arc<vectorcraft_doc::Node>, second: Arc<vectorcraft_doc::Node>| {
+        let mut far = art.clone();
+        far.transform(Affine::translate((dx, 0.0)), false);
+        let mut g = vectorcraft_doc::Node::group(NodeId(999_999), vec![first, second, Arc::new(far)]);
+        if let NodeKind::Group { clip, .. } = &mut g.kind {
+            *clip = true;
+        }
+        measure(&[Arc::new(g)])
+    };
+    assert_eq!(clipped(500.0, clip.clone(), label.clone()), clip.geometric_bounds());
+    assert_eq!(clipped(500.0, clip.clone(), label.clone()), clipped(900.0, clip.clone(), label.clone()));
+    // A clip that is type leaves the other art to measure.
+    assert_ne!(clipped(500.0, label.clone(), clip.clone()), clipped(900.0, label.clone(), clip.clone()));
+    // A clip that is a clipping group holding type in its clipped art is measured on its own clip.
+    let mut inner = vectorcraft_doc::Node::group(NodeId(999_998), vec![clip.clone(), label.clone()]);
+    if let NodeKind::Group { clip, .. } = &mut inner.kind {
+        *clip = true;
+    }
+    let inner = Arc::new(inner);
+    assert_eq!(clipped(500.0, inner.clone(), label.clone()), clip.geometric_bounds());
+    assert_eq!(clipped(500.0, inner.clone(), label.clone()), clipped(900.0, inner.clone(), label.clone()));
+    // A blend holding type is measured whole, as it is drawn.
+    let blend = vectorcraft_doc::Node::new(NodeId(999_997), NodeKind::Blend { children: vec![clip.clone(), label.clone()], spec: Box::default() });
+    assert_eq!(measure(&[Arc::new(blend.clone())]), blend.geometric_bounds());
+}
+
+/// A graph whose kept bounds of its art without type have no width follows a move with the bounds of all of its art.
+#[test]
+fn a_graph_whose_art_without_type_kept_no_width_still_follows_a_move() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    let mut flat = spec(&s, id);
+    let art = flat.placed_art.unwrap();
+    flat.placed_art = Some(vectorcraft_geom::Rect::new(art.x0, art.y0, art.x0, art.y1));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().extras_mut().graph = Some(Box::new(flat));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 25, "dy": 5})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 25.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 5.0)).abs() < 1e-6, "{moved:?}");
+}
+
+/// A graph saved before it kept the bounds of its art without type follows a move made since with its old bounds.
+#[test]
+fn a_graph_saved_with_only_its_whole_bounds_still_follows_a_move() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    let mut old = serde_json::to_value(spec(&s, id)).unwrap();
+    old.as_object_mut().unwrap().remove("placedArt");
+    let old: GraphSpec = serde_json::from_value(old).unwrap();
+    assert_eq!(old.placed_art, None);
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().extras_mut().graph = Some(Box::new(old));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 25, "dy": 5})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 25.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 5.0)).abs() < 1e-6, "{moved:?}");
+    assert!(spec(&s, id).placed_art.is_some(), "the next drawing keeps the bounds of the art without type");
+}
+
 /// Each Axes and Legend text after the graph is drawn again, with its object rows (fill or stroke, color, opacity, and
 /// for a stroke its weight) and its object opacity.
 type RowLooks = Vec<(bool, String, f32, f64)>;
@@ -6798,6 +7259,93 @@ fn pie_names_and_wedge_labels_keep_their_style() {
     assert_eq!(fills, ["#00ff00", "#00ff00"], "the kept fill, also on the dark wedge");
 }
 
+/// On a pie with Legends in Wedges, a black fill given to the white legend label on the dark wedge is kept for every
+/// legend label: the graph draws it black on the dark wedge again, also after a native save and open.
+#[test]
+fn a_black_fill_set_on_a_wedge_legend_label_stays_black_on_dark_wedges() {
+    let cases = [("paint.setFill", json!({"color": "#000000"})), ("text.setStyle", json!({"fill": "#000000"})), ("edit.colors.invert", json!({}))];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, "pie", ",a,b\nP1,1,2");
+        s.execute("graph.setType", &json!({"id": id.0, "pieLegend": "wedges"})).unwrap();
+        let legend_fill = |s: &Session, text: &str| {
+            let NodeKind::Text(t) = label_node(s, id, "Legend", text).kind else { panic!("{text} is not type") };
+            t.runs[0].style.fill.color().map(|c| c.to_hex()).unwrap_or_default()
+        };
+        assert_eq!(legend_fill(&s, "a"), "#ffffff", "white on the black wedge");
+        let mut p = params.clone();
+        p["ids"] = json!([text_id(&s, id, "Legend", "a").0]);
+        s.execute(cmd, &p).unwrap();
+        assert!(spec(&s, id).label_styles.legend_fill_set, "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(!spec(&s, id).label_styles.legend_fill_set, "{cmd}: undone");
+        assert_eq!(legend_fill(&s, "a"), "#ffffff", "{cmd}: white again after the undo");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert!(spec(&s, id).label_styles.legend_fill_set, "{cmd}: redone");
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2]]})).unwrap();
+        assert_eq!((legend_fill(&s, "a"), legend_fill(&s, "b")), ("#000000".into(), "#000000".into()), "{cmd}: black on both wedges");
+        let dir = vectorcraft_testkit::TempDir::new("graph-wedge-legend");
+        let path = dir.join("pie.vectorcraft");
+        s.execute("document.save", &json!({"path": path})).unwrap();
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        assert!(spec(&s, id).label_styles.legend_fill_set, "{cmd}: kept through save and open");
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "rows": [[2, 1]]})).unwrap();
+        assert_eq!(legend_fill(&s, "a"), "#000000", "{cmd}: still black after open");
+    });
+}
+
+/// A size given to the legend labels of a pie with Legends in Wedges keeps the default black fill with it. A color mode
+/// change leaves that fill black, so the legend label on the dark wedge is still drawn white. A legend fill that is not
+/// black, in a file saved without the mark, is marked as set by the change.
+#[test]
+fn a_color_mode_change_keeps_the_default_wedge_legend_fill() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = make(&mut s, "pie", ",a,b\nP1,1,2");
+    s.execute("graph.setType", &json!({"id": id.0, "pieLegend": "wedges"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"size": 11})).unwrap();
+    s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    let styles = spec(&s, id).label_styles;
+    assert!(!styles.legend_fill_set && !styles.legend_fill_is_own(), "{styles:?}");
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2]]})).unwrap();
+    let NodeKind::Text(t) = label_node(&s, id, "Legend", "a").kind else { panic!("a is not type") };
+    assert_eq!(t.runs[0].style.fill.color().map(|c| c.to_hex()), Some("#ffffff".into()), "white on the black wedge");
+    let red = Paint::solid(vectorcraft_color::Color::from_hex("#ff0000").unwrap());
+    let styles = vectorcraft_doc::LabelStyles { legend: Some(vectorcraft_doc::CharStyle { fill: red, ..Default::default() }), ..Default::default() };
+    assert!(!styles.legend_fill_set && styles.legend_fill_is_own(), "{styles:?}");
+    s.edit("legacy", |d, _| {
+        d.node_mut(id).unwrap().extras_mut().graph.as_deref_mut().unwrap().label_styles = styles;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("file.documentColorMode", &json!({"mode": "rgb"})).unwrap();
+    assert!(spec(&s, id).label_styles.legend_fill_set, "the converted red is still the labels' own");
+}
+
+/// The default black legend fill of a graph that keeps its legend beside the marks stays the default through a color
+/// mode change, so turning on Legends in Wedges later still draws the labels on dark wedges white.
+#[test]
+fn a_color_mode_change_keeps_the_default_legend_fill_of_other_graphs() {
+    // A pie made here keeps its legend beside the pies.
+    for kind in ["column", "pie"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = make(&mut s, kind, ",a,b\nP1,1,2");
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 11})).unwrap();
+        let black = Paint::solid(vectorcraft_color::Color::BLACK);
+        let before = spec(&s, id).label_styles;
+        assert_eq!(before.legend.as_ref().map(|st| st.fill.clone()), Some(black.clone()), "{kind}: {before:?}");
+        s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+        let after = spec(&s, id).label_styles;
+        assert_eq!(after.legend.as_ref().map(|st| st.fill.clone()), Some(black), "{kind}: {after:?}");
+        assert!(!after.legend_fill_set && !after.legend_fill_is_own(), "{kind}: still the default: {after:?}");
+    }
+}
+
 #[test]
 fn labels_are_told_apart_by_where_they_come_not_by_their_text() {
     let mut s = Session::new();
@@ -7032,6 +7580,43 @@ fn a_centered_label_with_an_empty_middle_line_and_kept_leading_stays_centered() 
 }
 
 #[test]
+fn a_centered_label_with_a_line_break_in_its_text_is_set_as_with_a_bar() {
+    // A quoted CSV cell keeps its line breaks, so they reach the label as well as the `|` it is written with.
+    for (bar, quoted, text) in [("Q|1", "\"Q\n1\"", "Q\n1"), ("Q|||1", "\"Q\n||1\"", "Q\n\n\n1")] {
+        let label_middle = |s: &Session, id: NodeId| {
+            let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+            let label =
+                group(&n, "Axes").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == text)).unwrap();
+            let b = label.geometric_bounds().unwrap();
+            (b.y0 + b.y1) / 2.0
+        };
+        let drawn = |cat: &str, leading: bool| {
+            let mut s = Session::new();
+            s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+            let csv = format!(",2024,2025\n{cat},3,2\nQ2,5,4\nQ3,-1,6");
+            let id = NodeId(
+                s.execute("graph.create", &json!({"type": "bar", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+            if leading {
+                let l = text_id(&s, id, "Axes", text);
+                s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+                s.execute("text.setFormat", &json!({"autoLeading": 400})).unwrap();
+                s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+                s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+            }
+            label_middle(&s, id)
+        };
+        for leading in [false, true] {
+            let (by_bar, by_break) = (drawn(bar, leading), drawn(quoted, leading));
+            assert!((by_bar - by_break).abs() < 0.01, "{text:?} sits where {bar:?} does (kept leading: {leading}): {by_bar} {by_break}");
+        }
+        assert!((drawn(quoted, true) - drawn(quoted, false)).abs() < 0.01, "{text:?} keeps its middle with kept leading");
+    }
+}
+
+#[test]
 fn a_legend_across_top_measures_its_labels_with_system_layout() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
@@ -7224,8 +7809,8 @@ fn graph_commands_refuse_params_of_the_wrong_type() {
 }
 
 /// A `.ai` in PostScript form whose graph's records read whole (version 7 specification, appendix A)
-/// opens as a graph whose data can be edited: Graph Data redraws it on its plot. Saving it as `.ai`
-/// says its data and settings aren't written, in either form.
+/// opens as a graph whose data can be edited: Graph Data redraws it on its plot. Saving it as `.ai`,
+/// in either form, writes its records, and the file opens again with the graph's new data.
 #[test]
 fn a_graph_opened_from_ai_keeps_its_data_for_editing() {
     let graph = "%_Gs\n%_100 200 300 100 Gb\n%_5 0 0 14 0 1 0 0 6 44 Gy\n%_10 2 0 0 90 80 0 Gd\n\
@@ -7282,6 +7867,103 @@ fn a_graph_opened_from_ai_keeps_its_data_for_editing() {
         }
         let r = s.execute("file.saveAs", &p).unwrap();
         let notes = r["warnings"].as_array().cloned().unwrap_or_default();
-        assert!(notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
+        assert!(!notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
+        let mut again = Session::new();
+        again.execute("document.open", &json!({"path": dir.join(name)})).unwrap();
+        let mut graphs = vec![];
+        again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().cloned()));
+        assert_eq!(graphs.len(), 1, "{name}");
+        let g = &graphs[0];
+        assert_eq!(
+            (g.series.as_slice(), g.categories.as_slice(), g.rows.as_slice()),
+            (&after.series[..], &after.categories[..], &after.rows[..]),
+            "{name}"
+        );
+        assert_eq!(g.kind, after.kind, "{name}");
     }
+}
+
+/// A graph the graph tools draw, of each type, saved as `.ai` in either form, opens again as the same
+/// graph exactly when the save gives no warning about graphs; a column graph does.
+#[test]
+fn a_drawn_graph_saved_as_ai_opens_as_a_graph_unless_the_save_warns() {
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-save");
+    let mut live = vec![];
+    for ty in ["column", "stackedColumn", "bar", "stackedBar", "line", "area", "scatter", "pie", "radar"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,1,6";
+        let id = s.execute("graph.create", &json!({"type": ty, "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let written = spec(&s, NodeId(id));
+        for (name, version) in [("v7.ai", Some("7")), ("pdf.ai", None)] {
+            let path = dir.join(format!("{ty}-{name}"));
+            let mut p = json!({"path": path, "format": "ai"});
+            if let Some(v) = version {
+                p["aiVersion"] = json!(v);
+            }
+            let r = s.execute("file.saveAs", &p).unwrap();
+            let notes = r["warnings"].as_array().cloned().unwrap_or_default();
+            let warned = notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art")));
+            let mut again = Session::new();
+            again.execute("document.open", &json!({"path": path})).unwrap();
+            let mut graphs = vec![];
+            again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().cloned()));
+            assert_eq!(graphs.len(), usize::from(!warned), "{ty} {name}: {r}");
+            if let Some(g) = graphs.first() {
+                assert_eq!((g.kind, g.cells()), (written.kind, written.cells()), "{ty} {name}");
+                assert_eq!((g.series.as_slice(), g.categories.as_slice()), (&written.series[..], &written.categories[..]), "{ty} {name}");
+                live.push(format!("{ty} {name}"));
+            }
+        }
+    }
+    assert!(live.contains(&"column v7.ai".to_string()) && live.contains(&"column pdf.ai".to_string()), "{live:?}");
+}
+
+/// A graph opened from a `.ai` keeps the bounds of its art without type, so moving one of its labels on its own
+/// leaves the plot where it is at the first redraw.
+#[test]
+fn a_graph_opened_from_ai_measures_moves_without_its_labels() {
+    let graph = "%_Gs\n%_100 200 300 100 Gb\n%_5 0 0 14 0 1 0 0 6 44 Gy\n%_10 2 0 0 90 80 0 Gd\n\
+        %_1 () Ga\n%_0 13 0 0 0 0 0 () GA\n%_2 () Ga\n%_0 14 0 0 0 0 0 () GA\n%_4 () Ga\n%_0 14 0 0 0 0 0 () GA\n\
+        %_2 2 1 1 Gz\n%_() Gc (East) Gc (Q1) Gc 5 Gc GC\n\
+        u\nu\n0.6 0 1 0 k\n110 100 m\n110 150 L\n130 150 L\n130 100 L\nf\nU\n%_2 1 0 0 Go\n\
+        u\n0 0 0 1 K\n100 200 m\n100 100 L\n300 100 L\nS\nU\n\
+        0 To\n1 0 0 1 100 220 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Sales) Tx\nTO\nU\n%_GS\n";
+    let text = format!(
+        "%!PS-Adobe-3.0\n%%Creator: a script\n%%BoundingBox: 0 0 400 400\n%AI5_FileFormat 3\n%AI3_Cropmarks: 0 0 400 400\n%%EndComments\n\
+         %%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Graph) Ln\n0 A\n{graph}LB\n\
+         %AI5_EndLayer--\n%%PageTrailer\n%%Trailer\n%%EOF\n"
+    );
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-label");
+    let path = dir.join("graph.ai");
+    std::fs::write(&path, text).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    let (mut graphs, mut labels) = (vec![], vec![]);
+    s.doc().unwrap().doc.walk(|n| {
+        if n.extras().graph.is_some() {
+            graphs.push(n.id);
+        }
+        if matches!(&n.kind, NodeKind::Text(t) if t.plain_text() == "Sales") {
+            labels.push(n.id);
+        }
+    });
+    assert_eq!((graphs.len(), labels.len()), (1, 1));
+    let (id, label) = (graphs[0], labels[0]);
+    let before = spec(&s, id);
+    s.execute("select.set", &json!({"ids": [label.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"size": 30})).unwrap();
+    s.execute("object.move", &json!({"dx": 80, "dy": -40})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",East\nQ1,8\nQ2,2"})).unwrap();
+    let rect = spec(&s, id).rect;
+    assert_eq!(rect, before.rect, "after restyling and moving a label");
+    // A move of the whole opened graph is still followed.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 15, "dy": 25})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",East\nQ1,8\nQ2,2"})).unwrap();
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 15.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 25.0)).abs() < 1e-6, "{moved:?}");
+    assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{moved:?}");
 }
