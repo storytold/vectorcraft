@@ -4046,6 +4046,8 @@ file-filter	Templates	템플릿
 	Superscript	위 첨자
 	Swap Fill and Stroke (Shift+X)	칠과 선 바꾸기 (Shift+X)
 	Swap the selected object for the file, keeping its place and transform	선택한 개체를 파일로 바꾸되 위치와 변형은 유지합니다
+	Show Import Options	가져오기 옵션 표시
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	배치하기 전에 각 PDF, DXF 또는 텍스트 파일의 가져오기 옵션을 묻습니다. 끄면 마지막으로 선택한 옵션을 사용합니다
 	Swatch Libraries Menu	견본 라이브러리 메뉴
 	System Layout	시스템 레이아웃
 	Tabular Lining	고정폭 라이닝

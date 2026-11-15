@@ -2705,6 +2705,8 @@ digits	Malayalam	Malajalam
 	Keep a link to an image file instead of only embedding it	Zachowaj łącze do pliku obrazu zamiast tylko go osadzać
 	Place onto a new locked, dimmed template layer below the current layer	Umieść na nowej zablokowanej, przyciemnionej warstwie szablonu pod bieżącą warstwą
 	Swap the selected object for the file, keeping its place and transform	Zamień zaznaczony obiekt na plik, zachowując jego miejsce i przekształcenie
+	Show Import Options	Pokaż opcje importu
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pytaj o opcje importu każdego pliku PDF, DXF lub tekstowego przed umieszczeniem; wył.: używaj ostatnio wybranych opcji
 	On: one locked object showing the document, updated when it changes.	Wł.: jeden zablokowany obiekt pokazujący dokument, aktualizowany przy jego zmianie.
 	Off: an editable copy of its art, embedded in this document.	Wył.: edytowalna kopia jego kompozycji, osadzona w tym dokumencie.
 	Images: link to the file instead of only embedding it.	Obrazy: połącz z plikiem zamiast tylko go osadzać.

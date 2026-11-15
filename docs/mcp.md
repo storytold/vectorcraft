@@ -246,6 +246,21 @@ the suite) keep the agent to the folders you give it:
   without a path of a document whose own format is SVG or SVGZ), `file.exportAs`, and the SVG Options dialog's
   Show Code. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
   person at the keyboard exports it as stored.
+- The same SVG and SVGZ outputs are refused with "a linked image file is outside the read roots", which names no
+  file or folder, when the file would name a linked image's file outside the read roots (a path, a `file:` URL,
+  or a relative path taken from the document's folder). An `<image>` names the file with `images: "link"`, and
+  with `embed` when the document holds no pixels for the image. An image colorized with a solid fill names
+  no file when its pixels are gray (the file gets the colorized pixels) or missing (the file leaves it out).
+  With `preserveEditing`, the document the SVG carries names every linked image and placed file, the relative
+  paths kept of them and each data set's image, in every symbol, pattern, graph design and brush, used or not,
+  colorized or not, and a stored brush entry that does not read as a brush is refused too, since its links
+  cannot be checked. Otherwise the images of the art the file writes,
+  in opacity masks and in the symbols, patterns and brushes that art uses, are checked: hidden layers and
+  objects only with `hiddenLayers` (a save keeps them unless it is `false`), and template layers and the
+  layer of opacity-mask or symbol editing mode never. `selectedOnly` and `document.exportSelection` check the
+  selected objects only, and `clipboard.exportSvg` checks the copied objects, following a relative path from
+  the document they came from while it is open; in a frame a request drives, Copy then puts no SVG on the
+  system clipboard. An image whose pixels the document holds exports embedded, and a URL is not checked.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
@@ -7006,6 +7021,23 @@ with `pointer_gesture` (a click places at 100% with the top-left corner there, a
 `press_key` (Left/Right/Up/Down cycle, Escape discards the current file). `file.place`, `file.place.queue` and
 `file.place.info` refuse, of the keys each one takes, a `link`, `replace` or `template` that is not true or false and a `thumbnail` that is not a
 number, naming the key, and place nothing; null is the same as leaving the key out.
+
+In the app, `file.place` asks for a file's import options before placing it: a text file without `text` (Text Import
+Options), a DXF drawing without `dxf` (DXF Import Options), and a PDF, `.ai` or `.ait` file with several pages or a
+password and no `page` (Place PDF). `showImportOptions: false` places such a file without asking, with the options
+last confirmed in its dialog: the text options, and the DXF fit, lineweight, centering and layer choices with the
+drawing at 1:1 in its own unit. A PDF is placed on page 1 (or `page`) and its crop box, and an encrypted PDF given no
+`password` still asks for the password. A `showImportOptions` that is not true or false is refused, and nothing is placed. The
+Place dialog (File › Place, or `file.place {paths}`) has a Show Import Options checkbox after Link, Template and
+Replace ([Place multiple files in a document](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/place-multiple-files-in-a-document.html)).
+It is on by default and saved with the preferences. On, each file that has import options asks for them before it is
+placed, also each file of the place cursor when it is clicked or dragged (Cancel leaves that file unplaced). A click on
+a PDF or DXF file places it as its options place it with `at` at the center of the box the click gave (a PDF's page at
+its own size, a DXF drawing at its scale, or on the artboard there when fitted or not centered), and a drag to any other
+size fits it into the dragged box (a drag to exactly the file's queued size gives the place tool the same box as a click and
+is placed as one). Off, each
+file is placed with the options last confirmed for its format. The default, and the options a file is placed with
+when the checkbox is off, are VectorCraft's own choices.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/photo.jpg","at":[300,200]}}}
