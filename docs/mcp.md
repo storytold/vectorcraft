@@ -3787,8 +3787,13 @@ already walks Image Trace. Short agent entry points:
   arrives and is its own undo step. `match` is the paint the face or edge had before the first of the double-click's
   two clicks or the triple-click's three that painted it, or before the double-click when the triple-click's double-click
   reached it, so the clicks before the last do not change what it matches;
-  a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. An edge takes the
-  paint and weight in its topmost stroke that is shown, or in a new stroke above the others when it has none. These rules
+  a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. A face that
+  the Bucket fills has all its fills replaced by one fill with the paint, shown, fully opaque and blending normally, in the
+  place of its topmost fill; its strokes, their order and the face's own visibility, opacity and blending mode stay as
+  they are. An edge that it strokes has all its strokes replaced the same way by one stroke with the paint and weight,
+  which keeps the dashes, caps, joins and arrowheads of the edge's topmost shown stroke (of its topmost stroke when every
+  stroke is hidden), and its fills stay as they are. A part with no fill or stroke gets a fill below its strokes or a stroke
+  above its fills. A fill or stroke of none leaves one row of none, so no fill or stroke of the part draws. These rules
   for what faces and edges join and what paints match are VectorCraft's own. The help page describes the gestures:
   https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html.
   `livePaint.fill {scope}` and `livePaint.strokeEdge {scope}` take `scope` as `"one"` (the default), `"connected"` or
@@ -3812,8 +3817,9 @@ already walks Image Trace. Short agent entry points:
   error. With `ids`, at a point on a hidden face it fills the face there of another Live Paint group among the
   objects; otherwise it returns an error and does not merge the objects.
   A Live Paint command that changes nothing records no undo step, keeps the redo steps, leaves a saved document saved
-  and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has the paint,
-  `livePaint.strokeEdge` when the topmost shown stroke of each edge it reaches already has the paint and the width,
+  and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has one fill, shown,
+  fully opaque, blending normally and with the paint (or no fill, for none), `livePaint.strokeEdge` when every edge it
+  reaches already has one such stroke with the paint and the width (at any width for none, or no stroke),
   `livePaint.gapOptions` (and the Gap Options
   dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
   `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
