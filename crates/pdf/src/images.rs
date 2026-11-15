@@ -87,8 +87,8 @@ fn icc_for(icc: Option<Vec<u8>>, space: ImageColorspace) -> Option<Arc<Vec<u8>>>
     icc.filter(|icc| valid_icc(icc, want)).map(Arc::new)
 }
 
-/// The ICC profile image `bytes` carries: a TIFF's tag 34675 (read by the TIFF decoder itself,
-/// which reads tags of any size), another format's as its decoder reads it. `None` without one.
+/// The ICC profile image `bytes` carries: a TIFF's tag 34675 (read by the TIFF decoder itself, up
+/// to 16 MiB), another format's as its decoder reads it. `None` without one.
 pub(crate) fn source_icc(bytes: &[u8]) -> Option<Vec<u8>> {
     let reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
     if reader.format() == Some(ImageFormat::Tiff) {
@@ -183,8 +183,8 @@ fn lossless(
 /// it holds is still written.
 pub(crate) const MAX_EMBED_PIXELS: u64 = 1 << 27;
 
-/// The most bytes an ICC profile carried by an image is written with (16 MiB).
-const MAX_ICC: usize = 16 << 20;
+/// The most bytes an ICC profile carried by an image is written or read with (16 MiB).
+pub(crate) const MAX_ICC: usize = 16 << 20;
 
 /// The CMYK ICC profile image `blob` carries ([`ImageBlob::cmyk_icc_profile`]), when it is one a
 /// CMYK image can be tagged with ([`valid_icc`]). `None` for other images and other profiles.

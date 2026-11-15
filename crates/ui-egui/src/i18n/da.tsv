@@ -147,6 +147,18 @@
 @msg	`name` must be the name of a script engine	`name` skal være navnet på en scriptmotor
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hovedscriptmotoren er ny ved hver kørsel og bevares aldrig, så den kan ikke fjernes
 @msg	there is no script engine named {name}	der findes ingen scriptmotor med navnet {name}
+@msg	`answers` must be a list of answers	`answers` skal være en liste med svar
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har flere end {MAX_ANSWERS} svar
+@msg	`answers` is larger than 1 MiB	`answers` er større end 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	skal være et objekt med `kind` og `value`
+@msg	must have exactly `kind` and `value`	skal have præcis `kind` og `value`
+@msg	is an alert's answer, whose `value` must be "ok"	er svaret på en alert, hvis `value` skal være "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	er svaret på en confirm, hvis `value` skal være true eller false
+@msg	is longer than 16 KiB	er længere end 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	er svaret på en prompt, hvis `value` skal være en streng eller null
+@msg	must have `kind` alert, confirm or prompt	skal have `kind` alert, confirm eller prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` er kun til en kørsel uden nogen at spørge: i appen besvarer personen hver dialog
 @msg	Running a script	Kører et script
 @msg	Data Recovery can't keep copies in {path}: {e}	Datagendannelse kan ikke opbevare kopier i {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kan ikke indlæses fra {path}: {e}
@@ -429,6 +441,7 @@
 @msg	{what} points outside memory	{what} peger uden for hukommelsen
 @msg	`angle` must be a number	`angle` skal være et tal
 @msg	`aspect` must be from 0.01 to 100	`aspect` skal være fra 0,01 til 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` skal være [a, b, c, d], hver fra -1000 til 1000, med a·d - b·c mindst 0,001 fra 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` skal være "butt", "round" eller "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` skal være "nonzero" eller "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` skal være en https://-adresse på højst {MAX_HELP_URL} byte
@@ -481,6 +494,7 @@
 @msg	stops must be in order of `offset`	farvestoppene skal stå i rækkefølge efter `offset`
 @msg	the document has no pattern {pattern}	dokumentet har intet mønster {pattern}
 @msg	the document has no swatch {n}	dokumentet har ingen farveprøve {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` kræver et gradientstop, der er knyttet til en spotfarveprøve
 @msg	the output	outputtet
 @msg	the path has no anchor points	kurven har ingen ankerpunkter
 @msg	too many anchor points (limit {MAX_ANCHORS})	for mange ankerpunkter (grænse {MAX_ANCHORS})
@@ -1540,6 +1554,11 @@
 	NTSC Colors	NTSC-farver
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-politik:
+	CMYK Policy:	CMYK-politik:
+	Preserve Embedded Profiles	Bevar indlejrede profiler
+	Convert to Working Space	Konverter til arbejdsfarverum
+	Preserve Numbers	Bevar tal
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Krakelering…
@@ -2039,6 +2058,7 @@ lighting	Light	Lys
 	Align to Artboard	Juster til tegnebræt
 	Align to Glyph Bounds	Juster til glyfafgrænsning
 	Align to Key Object	Juster til nøgleobjekt
+	Align to Key Anchor	Juster til nøgleankerpunkt
 	Align to Selection	Juster til markering
 	Align To:	Juster til:
 	Cancel Key Object	Annullér nøgleobjekt
@@ -2230,6 +2250,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Tal
 	Scale at Center	Skalér fra midten
+	Delete Set	Slet sæt
+	Direct Entry	Direkte indtastning
 	Up/Down:	Op/ned:
 	Left/Right:	Venstre/højre:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko op/ned
@@ -2513,7 +2535,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Tabulære versalcifre
 	Tabular Oldstyle	Tabulære mediævalcifre
 	Titling Alternates	Titelalternativer
-	Every-line Composer	Hverlinjesætter
+	Middle Eastern & South Asian Single-line Composer	Enlinjesætter (Mellemøsten og Sydasien)
+	Middle Eastern & South Asian Every-line Composer	Hverlinjesætter (Mellemøsten og Sydasien)
+	Standard Single-line Composer	Standard-enlinjesætter
+	Standard Every-line Composer	Standard-hverlinjesætter
 	First-line Left Indent	Venstre indrykning af første linje
 	Hyphenation…	Orddeling…
 	Justification…	Justering…
@@ -2545,7 +2570,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Indstillinger for østasiatisk komposition
 	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
-	Single-line Composer	Enlinjesætter
 	Toggle Line Composer	Skift linjesætter
 	Space After Paragraph	Mellemrum efter afsnit
 	Space Before Paragraph	Mellemrum før afsnit
@@ -3365,6 +3389,7 @@ digits	Malayalam	Malayalam
 	Limit to Library:	Begræns til bibliotek:
 	Link harmony colors	Sammenkæd harmonifarver
 	Merge colors into one row	Flet farver til én række
+	New Row	Ny række
 	No colors to recolor (preserved colors are left out).	Ingen farver at omfarve (bevarede farver er udeladt).
 	Preserve:	Bevar:
 	Randomly change color order	Ændr farverækkefølgen tilfældigt
@@ -4014,6 +4039,40 @@ theme	Appearance	Udseende
 	Create Graph	Opret graf
 	Graph Data	Grafdata
 	Graph Type	Graftype
+	Graph Options	Grafindstillinger
+	Left Axis	Venstre akse
+	Right Axis	Højre akse
+	Category Axis	Kategoriakse
+	Separate Scales	Separate skalaer
+	Add Drop Shadow	Tilføj slagskygge
+	Add Legend Across Top	Tilføj forklaring øverst
+	First Row in Front	Første række forrest
+	First Column in Front	Første kolonne forrest
+	Legend	Forklaring
+	Column Width	Søjlebredde
+	Bar Width	Bjælkebredde
+	Cluster Width	Gruppebredde
+	Mark Data Points	Markér datapunkter
+	Connect Data Points	Forbind datapunkter
+	Edge-to-Edge Lines	Linjer fra kant til kant
+	Draw Filled Lines	Tegn udfyldte linjer
+	Tick Values	Afmærkningsværdier
+	Override Calculated Values	Tilsidesæt beregnede værdier
+	Divisions	Inddelinger
+	Tick Marks	Afmærkninger
+	Tick Marks per Division	Afmærkninger pr. inddeling
+	Draw Tick Marks Between Labels	Tegn afmærkninger mellem etiketter
+	Add Labels	Tilføj etiketter
+	Maximum must be more than Minimum.	Maksimum skal være større end minimum.
+	Column Graph	Søjlediagram
+	Stacked Column Graph	Stablet søjlediagram
+	Bar Graph	Bjælkediagram
+	Stacked Bar Graph	Stablet bjælkediagram
+	Line Graph	Linjediagram
+	Area Graph	Områdediagram
+	Scatter Graph	Spredningsdiagram
+	Pie Graph	Cirkeldiagram
+	Radar Graph	Radardiagram
 	Vector Halftone	Vektorraster
 	spot	spot
 	Text	Tekst
@@ -4601,6 +4660,7 @@ axis	Both	Begge
 	Replace:	Erstat:
 	Type on a Path Options	Indstillinger for tekst på kurve
 	Highlight Variable	Fremhæv variabel
+	Sort Variables	Sortér variabler
 	New Variable	Ny variabel
 	List Variables	Oplist variabler
 	Bind Variable	Tilknyt variabel
@@ -5356,6 +5416,7 @@ imageTrace	Outline	Kontur
 @msg	plug-in failed: {0}	plug-in fejlede: {0}
 @msg	plug-in manifest: {0}	plug-in-manifest: {0}
 @msg	plug-in output: {0}	plug-in-output: {0}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	plug-in parameters: {0}	plug-in-parametre: {0}
 @msg	plug-in trapped: {0}	plug-in'et blev fanget: {0}
 @msg	print settings are not an object	printindstillingerne er ikke et objekt
@@ -6268,6 +6329,8 @@ mark-style	Japanese	Japansk
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variablen `{name}` kan ikke gemmes i et variabelbibliotek: omdøb den, så den begynder med et bogstav eller `_`, uden mellemrum eller andre symboler end `-`, `_` og `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	datasættet `{name}` indeholder et kontroltegn, som et variabelbibliotek ikke kan indeholde
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	datasættet `{name}` begynder eller slutter med mellemrum, som et variabelbibliotek ikke kan indeholde
+@msg	{k} has control characters	{k} indeholder kontroltegn
+@msg	{k} has control characters or line breaks	{k} indeholder kontroltegn eller linjeskift
 @msg	variables that aren't text were left out: {kinds}	variabler, der ikke er tekst, blev udeladt: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	et nyt dokument læser ikke disse variabler tilbage med deres type: {names}
 @msg	a new document refuses this file because of these variables: {names}	et nyt dokument afviser denne fil på grund af disse variabler: {names}
@@ -6469,6 +6532,14 @@ swatch	Bright Violet	Kraftig violet
 	Color wheel	Farvehjul
 	First Artboard	Første kunstplade
 	Last Artboard	Sidste kunstplade
+	Status Bar Show	Vis i statuslinjen
+	Artboard Name	Kunstpladens navn
+	Current Tool	Aktuelt værktøj
+	Date and Time	Dato og klokkeslæt
+	Number of Undos	Antal fortrydelser
+	Document Color Profile	Dokumentets farveprofil
+	Undos	Fortrydelser
+	Redos	Gentagelser
 	Next Artboard	Næste kunstplade
 	Previous Artboard	Forrige kunstplade
 	Step up or down	Trinvis op eller ned
@@ -7611,3 +7682,4 @@ breakText	Glyphs	Glyffer
 	Nest Shapes…	Pak figurer tæt…
 	Nest Shapes	Pak figurer tæt
 	Roll	Rulle
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

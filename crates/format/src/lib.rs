@@ -52,6 +52,7 @@ use std::sync::Arc;
 use craft_vectorcraft_format::{Contents, Head, Image, ReadError, Tail};
 use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::{Deserializer, Serialize};
+use vectorcraft_brush::stored_art::StoredArt;
 use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -243,18 +244,20 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
     // version reads them.
     d.guides_to_saved();
     // Older apps don't know placed documents: they get the art the objects show, with its
-    // resources. Otherwise resources only exporting adds are never saved.
-    if version < VERSION && d.has_placed() {
-        d = d.with_placed_art().into_owned();
-        d.placed_as_groups();
-    } else {
-        d.drop_placed_resources();
-    }
+    // resources. Otherwise resources only exporting adds are never saved. The images and placed
+    // documents in the stored brushes' art count as those in the layers do.
+    let linked = with_brush_art(&mut d, |d| {
+        if version < VERSION {
+            placed_as_groups(d);
+        } else {
+            d.drop_placed_resources();
+        }
+        d.linked_only_images()
+    });
     // The art placed documents became for older versions is rounded too.
     if let Some(decimals) = o.precision {
         d.round_geometry(decimals.min(MAX_PRECISION));
     }
-    let linked = d.linked_only_images();
     // The blobs go in the file's `images` (only those the document uses).
     let blobs = std::mem::take(&mut d.images);
     if version < 3 {
@@ -275,6 +278,39 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
         None
     };
     Ok(Body { d, v1, blobs, linked })
+}
+
+/// `f` run on `d` with the art of its stored brushes set on it with the ids it is stored with
+/// ([`StoredArt::mount_as_stored`]); the brushes whose art `f` changed are then written back into
+/// the library, and the art is taken off `d` again. `f` runs on `d` as it is when no stored brush's
+/// art holds an image or a placed document, or when art is set on `d` already.
+pub fn with_brush_art<T>(d: &mut Document, f: impl FnOnce(&mut Document) -> T) -> T {
+    if !d.mounted_art.is_empty() {
+        return f(d);
+    }
+    let art = StoredArt::read(d);
+    if art.is_empty() {
+        return f(d);
+    }
+    art.mount_as_stored(d);
+    let out = f(d);
+    art.write_back(d);
+    out
+}
+
+/// Every placed document in `d`'s art, the art of its stored brushes included, replaced by a group
+/// of the art it shows, with the resources that art uses, as a save for a version older than
+/// [`VERSION`] writes it. Without a placed document, the resources only exporting adds are dropped
+/// ([`Document::drop_placed_resources`]).
+pub fn placed_as_groups(d: &mut Document) {
+    with_brush_art(d, |d| {
+        if d.has_placed() {
+            *d = d.with_placed_art().into_owned();
+            d.placed_as_groups();
+        } else {
+            d.drop_placed_resources();
+        }
+    });
 }
 
 /// Serialize a document (pretty = human-diffable) in the current version. Editing-mode working
