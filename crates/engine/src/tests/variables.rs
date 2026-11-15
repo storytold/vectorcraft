@@ -3382,3 +3382,93 @@ fn an_svg_without_readable_variable_data_opens_its_art() {
     assert!(d.variables.variables.is_empty());
     assert_eq!(vectorcraft_testkit::svg_shapes(&vectorcraft_svg::export(d, &Default::default())), 1, "the art opens");
 }
+
+/// Five variables of three kinds, defined out of every order: `beta` (text, on type named Mike),
+/// `Alpha` (visibility, on a rectangle named apple), `gamma` (image, bound to nothing), `Delta`
+/// (visibility, on two rectangles) and `Echo` (text, on type named Bravo).
+fn sortable_variables() -> Session {
+    let mut s = session();
+    let mike = text(&mut s, "m");
+    let bravo = text(&mut s, "b");
+    let apple = rect(&mut s);
+    let (r1, r2) = (rect(&mut s), rect(&mut s));
+    for (id, name) in [(mike, "Mike"), (bravo, "Bravo"), (apple, "apple")] {
+        s.execute("layer.setProps", &json!({"id": id.0, "name": name})).unwrap();
+    }
+    for (name, kind, ids) in [
+        ("beta", "text", vec![mike]),
+        ("Alpha", "visibility", vec![apple]),
+        ("gamma", "image", vec![]),
+        ("Delta", "visibility", vec![r1, r2]),
+        ("Echo", "text", vec![bravo]),
+    ] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+        if !ids.is_empty() {
+            s.execute("variable.bind", &json!({"variable": name, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        }
+    }
+    s
+}
+
+fn listed_names(s: &mut Session) -> Vec<String> {
+    let list = s.execute("variable.list", &json!({})).unwrap();
+    list["variables"].as_array().unwrap().iter().map(|v| v["name"].as_str().unwrap().to_string()).collect()
+}
+
+/// `variable.sort` orders the Variables panel's list, which `variable.list` follows, by each
+/// column: names without regard to case; by object, unbound first and several objects last; by
+/// type, text, image, graph, visibility. `descending` reverses each order, and `none` goes back
+/// to the order the variables were defined in.
+#[test]
+fn variable_sort_orders_the_list_by_each_column() {
+    let mut s = sortable_variables();
+    let defined = ["beta", "Alpha", "gamma", "Delta", "Echo"];
+    assert_eq!(listed_names(&mut s), defined);
+    assert_eq!(s.execute("variable.list", &json!({})).unwrap()["sort"], json!({"by": "none", "descending": false}));
+    for (by, order) in [
+        ("name", ["Alpha", "beta", "Delta", "Echo", "gamma"]),
+        ("object", ["gamma", "Alpha", "Echo", "beta", "Delta"]),
+        ("type", ["beta", "Echo", "gamma", "Alpha", "Delta"]),
+        ("none", defined),
+    ] {
+        let r = s.execute("variable.sort", &json!({"by": by})).unwrap();
+        assert_eq!(r, json!({"by": by, "descending": false}));
+        assert_eq!(listed_names(&mut s), order, "{by}");
+        s.execute("variable.sort", &json!({"by": by, "descending": true})).unwrap();
+        let reversed: Vec<&str> = order.iter().rev().copied().collect();
+        assert_eq!(listed_names(&mut s), reversed, "{by}, descending");
+        assert_eq!(s.execute("variable.list", &json!({})).unwrap()["sort"], json!({"by": by, "descending": true}));
+    }
+}
+
+/// The sort is panel state: it is not an undo step and does not count as a change to save, and
+/// setting the order the list already has does not redraw anything. A bad `by` or `descending`
+/// is an error that leaves the order as it was.
+#[test]
+fn variable_sort_refuses_bad_params_and_is_not_an_undo_step() {
+    let mut s = sortable_variables();
+    let steps = s.doc().unwrap().history.undo.len();
+    let dirty = s.doc().unwrap().is_dirty();
+    s.execute("variable.sort", &json!({"by": "name", "descending": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step");
+    assert_eq!(s.doc().unwrap().is_dirty(), dirty);
+    let revision = s.doc().unwrap().revision;
+    s.execute("variable.sort", &json!({"by": "name", "descending": true})).unwrap();
+    assert_eq!(s.doc().unwrap().revision, revision, "the same order changes nothing");
+
+    for (p, error) in [
+        (json!({}), "missing `by`"),
+        (json!({"by": null}), "`by` must be one of name, object, type, none"),
+        (json!({"by": "name", "descending": null}), "`descending` must be true or false"),
+        (json!({"by": "size"}), "`by` must be one of name, object, type, none"),
+        (json!({"by": "Name"}), "`by` must be one of name, object, type, none"),
+        (json!({"by": 1}), "`by` must be one of name, object, type, none"),
+        (json!({"by": "type", "descending": "yes"}), "`descending` must be true or false"),
+    ] {
+        let e = s.execute("variable.sort", &p).unwrap_err().to_string();
+        assert!(e.contains(error), "{p}: {e}");
+    }
+    let sort = s.doc().unwrap().variables_sort;
+    assert_eq!((sort.by, sort.descending), (crate::cmd::VariableSortKey::Name, true), "errors leave the order alone");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}

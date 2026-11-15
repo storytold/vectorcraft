@@ -1943,6 +1943,7 @@ antiAlias	Sharp	シャープ
 	Highlight Alternate Glyphs	代替字形をハイライト
 	Highlight Rows	行をハイライト
 	Highlight Variable	変数をハイライト表示
+	Sort Variables	変数を並べ替え
 	Highlight Substituted Fonts	置換フォントをハイライト
 	Highlight Substituted Glyphs	置換字形をハイライト
 	Highlight anchors on mouse over	マウスオーバー時にアンカーをハイライト
