@@ -8,7 +8,9 @@
 //! whose OK sets it in the model it was picked in), the color mode menu and its sliders (HSB, RGB,
 //! CMYK or Lab, and Tint when the new color is a spot color of the library), which edit the
 //! first selected row's new color (once they have, OK gives the art each new color in its own
-//! model), Merge and Separate, Randomize order or
+//! model), New Row (a row with no current colors above the first selected row, or at the top,
+//! with that row's new color; it recolors nothing until Merge moves colors into it), Merge and
+//! Separate, Randomize order or
 //! saturation and brightness, Reset, the Method and Limit to Library (its folder button imports a
 //! library file and limits to it; a library's colours apply as its swatches: a spot colour stays a
 //! spot colour, and joins the document's swatches). Edit tab: a hue and
@@ -45,8 +47,8 @@
 //! undo step. A new count of Colors keeps the picks: the new rows take them again.
 //!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
-//! color}]; a row with no current colors, `from: []`, recolors no art and adds its new color to the
-//! color group; `to: null`, no new color), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
+//! color, added?}]; a row with no current colors, `from: []`, recolors no art, and with `added: true`
+//! (a color the Add Color tool added) adds its new color to the color group; `to: null`, no new color), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
 //! `preserveGrays`, `limitTo` (library id, "document" for the document's swatches, "" for none),
 //! `group`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`,
 //! `sliderMode` (`hsb`, `rgb`, `cmyk`, `lab` or `tint`; unset: the row color's own model, HSB for
@@ -560,9 +562,14 @@ fn excluded(row: &Value) -> bool {
     row["exclude"].as_bool().unwrap_or(false)
 }
 
-/// Whether `row` has no current colors (a color added on the Edit tab).
+/// Whether `row` has no current colors (a row made with New Row, or a color added on the Edit tab).
 fn no_current(row: &Value) -> bool {
     row["from"].as_array().is_none_or(Vec::is_empty)
+}
+
+/// Whether `row` is a color added on the Edit tab (`added`), which joins the color group.
+fn is_added(row: &Value) -> bool {
+    row["added"].as_bool().unwrap_or(false)
 }
 
 /// The seed for the next Randomize: one past the last, held at `u64::MAX`.
@@ -581,15 +588,13 @@ fn selection(d: &Dialog) -> Vec<usize> {
 fn apply_params(d: &Dialog) -> Value {
     let rs = rows(d);
     let group = d.fields.get("group").and_then(Value::as_str).map(|g| {
-        let (added, took): (Vec<&Value>, Vec<&Value>) = rs.iter().partition(|r| no_current(r));
-        let rest = d
-            .fields
-            .get("__assign")
-            .and_then(Value::as_array)
-            .filter(|_| d.bool("__art"))
-            .map_or(&[][..], |a| a.get(took.len()..).unwrap_or_default());
-        let added = added.into_iter().map(|r| &r["to"]).filter(|c| !c.is_null());
-        let colors: Vec<&Value> = took.iter().map(|r| &r["to"]).chain(rest).chain(added).collect();
+        // A row made with New Row that holds no current colors gives the group no color; a color
+        // added on the Edit tab (`added`) joins it after the others.
+        let took: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).map(|r| &r["to"]).collect();
+        let assign = d.fields.get("__assign").and_then(Value::as_array).filter(|_| d.bool("__art"));
+        let rest = assign.map_or(&[][..], |a| a.get(took.len()..).unwrap_or_default());
+        let added = rs.iter().filter(|r| no_current(r) && is_added(r)).map(|r| &r["to"]).filter(|c| !c.is_null());
+        let colors: Vec<&Value> = took.into_iter().chain(rest).chain(added).collect();
         let name = d.str("groupName");
         let rename = (!name.trim().is_empty() && name != g).then_some(name);
         json!({"group": g, "groupColors": colors, "rename": rename})
@@ -799,6 +804,10 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                         let x = cur.left() + j as f32 * w;
                         chip(ui, Rect::from_min_max(pos2(x, cur.top()), pos2(x + w - if w > 4.0 { 2.0 } else { 0.0 }, cur.bottom())), *c, false);
                     }
+                    // A row made with New Row shows an empty slot until colors are merged into it.
+                    if from.is_empty() {
+                        ui.painter().rect_stroke(cur, 1.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+                    }
                     if cr.clicked() {
                         clicked = Some(i);
                     }
@@ -853,6 +862,14 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
     }
     ui.add_space(4.0);
     ui.horizontal(|ui| {
+        // New Row is available only with art.
+        if widgets::icon_button_enabled(ui, "plus", tl!("New Row"), false, d.bool("__art"), 24.0).clicked() {
+            let at = new_row(rows, &sel);
+            d.fields.insert("__sel".into(), json!([at]));
+            // The slider edit was kept for a row index that now names another row.
+            d.fields.remove(COMPS);
+            changed = true;
+        }
         let can_merge = sel.len() > 1;
         if widgets::icon_button_enabled(ui, "combine", tl!("Merge colors into one row"), false, can_merge, 24.0).clicked() {
             merge(rows, &sel);
@@ -1245,6 +1262,16 @@ fn separate(rows: &mut Vec<Value>, sel: &[usize]) {
     *rows = out;
 }
 
+/// New Row: insert a row with no current colors above the first selected row, or at the top
+/// when none is selected, and return its index. Its new color is the new color of the row it goes
+/// above (black without one). It recolors nothing until current colors are merged into it.
+fn new_row(rows: &mut Vec<Value>, sel: &[usize]) -> usize {
+    let at = sel.iter().copied().filter(|i| *i < rows.len()).min().unwrap_or(0);
+    let to = rows.get(at).and_then(to_color).unwrap_or_default();
+    rows.insert(at, json!({"from": [], "to": key(&to)}));
+    at
+}
+
 /// The rows the Edit tab shows: those with a new colour, not excluded.
 fn active_rows(rows: &[Value]) -> Vec<usize> {
     (0..rows.len()).filter(|i| !excluded(&rows[*i]) && to_color(&rows[*i]).is_some()).collect()
@@ -1280,9 +1307,10 @@ fn added_color(base: Option<Color>, h: f32, s: f32, segmented: bool) -> Color {
     base.map_or(c, |b| keep_model(b, c))
 }
 
-/// Add new color `c` as a row with no current colors, after the others. Returns its index.
+/// Add new color `c` as a row with no current colors, marked `added`, after the others. Returns
+/// its index.
 fn add_color(rows: &mut Vec<Value>, c: &Color) -> usize {
-    rows.push(json!({"from": [], "to": key(c)}));
+    rows.push(json!({"from": [], "to": key(c), "added": true}));
     rows.len() - 1
 }
 
@@ -1642,7 +1670,7 @@ mod tests {
     fn remove_color_drops_added_rows_and_empties_rows_of_art() {
         let mut r = rows();
         assert_eq!(add_color(&mut r, &Color::rgb(0.0, 1.0, 1.0)), 3);
-        assert_eq!(r[3], json!({"from": [], "to": "rgb 0 255 255"}));
+        assert_eq!(r[3], json!({"from": [], "to": "rgb 0 255 255", "added": true}));
         assert_eq!(remove_color(&mut r, 0, Some(0), true), None, "the base row stays");
         r[1]["tint"] = json!(50);
         assert_eq!(remove_color(&mut r, 1, Some(2), true), Some(2));
@@ -1671,19 +1699,15 @@ mod tests {
     }
 
     /// With a color group and art, a row without a new color removes its swatch in its place, the
-    /// group's colors no row of art took stay in theirs, and a row with no current colors adds its
-    /// new color after them.
+    /// group's colors no row of art took stay in theirs, and a color added on the Edit tab adds its
+    /// new color after them; a row made with New Row, which holds no current colors, adds none.
     #[test]
     fn apply_params_give_the_group_added_colors_and_keep_its_other_colors() {
         let mut d = Dialog::new(KIND, json!({"group": "G", "groupName": "G", "__art": true, "__assign": ["rgb 1 1 1", "rgb 2 2 2", "rgb 3 3 3"]}));
-        d.fields.insert(
-            "rows".into(),
-            json!([
-                {"from": ["rgb 255 0 0"], "to": "rgb 1 1 1"},
-                {"from": ["rgb 0 0 255"], "to": null},
-                {"from": [], "to": "rgb 9 9 9"},
-            ]),
-        );
+        let mut rs = vec![json!({"from": ["rgb 255 0 0"], "to": "rgb 1 1 1"}), json!({"from": ["rgb 0 0 255"], "to": null})];
+        new_row(&mut rs, &[]);
+        add_color(&mut rs, &Color::rgb(9.0 / 255.0, 9.0 / 255.0, 9.0 / 255.0));
+        d.fields.insert("rows".into(), json!(rs));
         assert_eq!(apply_params(&d)["groupColors"], json!(["rgb 1 1 1", null, "rgb 3 3 3", "rgb 9 9 9"]));
     }
 
@@ -1709,6 +1733,35 @@ mod tests {
         assert_eq!(r[0]["from"], json!(["rgb 255 0 0", "rgb 0 255 0"]));
         merge(&mut r, &[1, 1]);
         assert_eq!(r.len(), 2);
+    }
+
+    /// New Row goes above the first selected row with that row's new color, or at the top; it has
+    /// no current colors, and a merge with it as the first selected row fills it.
+    #[test]
+    fn a_new_row_goes_above_the_selection_and_takes_merged_colors() {
+        let mut r = rows();
+        assert_eq!(new_row(&mut r, &[2, 1]), 1);
+        assert_eq!(r.len(), 4);
+        assert_eq!(r[1], json!({"from": [], "to": "rgb 0 0 255"}));
+        assert_eq!(r[2]["from"], json!(["rgb 0 0 255", "rgb 0 0 128"]), "the selected row moved down");
+        merge(&mut r, &[1, 3]);
+        assert_eq!(r[1], json!({"from": ["rgb 0 255 0"], "to": "rgb 0 0 255"}));
+        assert_eq!(new_row(&mut r, &[]), 0);
+        assert_eq!(r[0], json!({"from": [], "to": "rgb 255 0 0"}));
+        let mut none = vec![];
+        assert_eq!(new_row(&mut none, &[5]), 0);
+        assert_eq!(none, vec![json!({"from": [], "to": key(&Color::BLACK)})]);
+    }
+
+    /// Opened on a color group, OK rewrites it with the new colors of the rows that hold current
+    /// colors, then the group's colors no such row took: an empty row gives it no color.
+    #[test]
+    fn an_empty_row_gives_the_group_no_color() {
+        let mut r = rows();
+        new_row(&mut r, &[]);
+        let fields = json!({"rows": r, "group": "Trio", "__art": true, "__assign": ["rgb 255 0 0", "rgb 0 0 255", "rgb 0 255 0", "rgb 9 9 9"]});
+        let p = apply_params(&Dialog::new("recolor", fields));
+        assert_eq!(p["groupColors"], json!(["rgb 255 0 0", "rgb 0 0 255", "rgb 0 255 0", "rgb 9 9 9"]));
     }
 
     /// Randomize after a seed past `u64::MAX` keeps the largest seed.
@@ -1994,6 +2047,35 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#ff0000".into(), "#0000ff".into()), "the excluded row kept red");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "the art is unchanged: no undo step");
+    }
+
+    /// A row made with New Row recolors nothing while it is empty, and OK keeps it; the blue art's
+    /// color merged into it takes its new color, in the preview and at OK.
+    #[test]
+    fn colors_merged_into_a_new_row_take_its_new_color() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let [red, blue] = theme_setup(&mut app, &ctx);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let set_rows = |app: &mut VectorcraftApp, rs: Vec<Value>| {
+            app.ui.dialog.as_mut().unwrap().fields.insert("rows".into(), Value::Array(rs));
+        };
+        let mut rs = super::rows(app.ui.dialog.as_ref().unwrap());
+        let at = new_row(&mut rs, &[]);
+        rs[at]["to"] = json!("rgb 0 255 0");
+        set_rows(&mut app, rs.clone());
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#ff0000".into(), "#0000ff".into()), "an empty row recolors nothing");
+        let b = rs.iter().position(|r| r["from"] == json!([BLUE])).unwrap();
+        merge(&mut rs, &[at, b]);
+        // A second empty row stays empty and is sent at OK too.
+        new_row(&mut rs, &[]);
+        set_rows(&mut app, rs);
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert_eq!(fill_hex(&app, blue), "#00ff00", "the art previews the merge");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#ff0000".into(), "#00ff00".into()));
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
     }
 
     const RED: &str = "rgb 255 0 0";

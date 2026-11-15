@@ -251,35 +251,45 @@ fn selected_instance_symbols(app: &VectorcraftApp) -> Option<Vec<String>> {
 /// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/edit-symbols.html>),
 /// and the Reset button, which gives them their symbol's scale, rotation and shear again
 /// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/transform-symbols.html>).
-pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// Edit Symbol, Replace with its menu and Reset each show only while the row has room for them and
+/// `reserve` after them, and the controls after one left out are left out too.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     let Some(symbols) = selected_instance_symbols(app) else { return };
     let Some(st) = app.session.active() else { return };
     let names: Vec<String> = st.doc.symbols.iter().map(|s| s.name.clone()).collect();
     let shared = symbols.first().filter(|first| symbols.iter().all(|s| s == *first)).cloned().unwrap_or_default();
+    let mut fit = crate::chrome::Fit::new(reserve);
     // Edit Symbol: the instances' symbol in symbol editing mode, when they share one.
     if !shared.is_empty()
+        && fit.room(ui, &[24.0])
         && widgets::icon_button(ui, "dc-place-symbol", tl!("Edit Symbol"), false, 24.0).clicked()
         && let Err(e) = app.run("symbol.edit", json!({}))
     {
         app.status(e);
     }
-    ui.label(egui::RichText::new(tl!("Replace:")).size(12.0).color(Tokens::get(ui.ctx()).text));
-    let options: Vec<&str> = names.iter().map(String::as_str).collect();
-    if let Some(name) = widgets::dropdown_names(ui, "cb-symbol-replace", &shared, &options, 140.0).and_then(|i| names.get(i))
-        && *name != shared
-        && let Err(e) = app.run("symbol.replace", json!({ "name": name }))
-    {
-        app.status(e);
+    let replace = egui::RichText::new(tl!("Replace:")).size(12.0).color(Tokens::get(ui.ctx()).text);
+    if fit.room(ui, &[widgets::text_width(ui, replace.clone()), 140.0]) {
+        ui.label(replace);
+        let options: Vec<&str> = names.iter().map(String::as_str).collect();
+        if let Some(name) = widgets::dropdown_names(ui, "cb-symbol-replace", &shared, &options, 140.0).and_then(|i| names.get(i))
+            && *name != shared
+            && let Err(e) = app.run("symbol.replace", json!({ "name": name }))
+        {
+            app.status(e);
+        }
     }
     // Reset: Reset Transformation, enabled while an instance's scale, rotation or shear differs
     // from its symbol's.
     let reset = transformed_instances_selected(app);
-    if ui.add_enabled_ui(reset, |ui| widgets::flat_button_fit(ui, tl!("Reset"), 48.0).on_hover_text(tl!("Reset Transformation"))).inner.clicked()
+    if fit.room(ui, &[widgets::flat_button_fit_width(ui, tl!("Reset"), 48.0)])
+        && ui.add_enabled_ui(reset, |ui| widgets::flat_button_fit(ui, tl!("Reset"), 48.0).on_hover_text(tl!("Reset Transformation"))).inner.clicked()
         && let Err(e) = app.run("symbol.instance.resetTransform", json!({}))
     {
         app.status(e);
     }
-    ui.add_space(4.0);
+    if ui.available_width() >= 4.0 {
+        ui.add_space(4.0);
+    }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -1325,7 +1335,7 @@ mod tests {
         let bar = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
             let mut out = ctx.run_ui(raw, |ui| {
-                ui.horizontal(|ui| control_bar(app, ui));
+                ui.horizontal(|ui| control_bar(app, ui, 0.0));
             });
             out.textures_delta.clear();
             out
@@ -1505,7 +1515,7 @@ mod tests {
         fn bar(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::Shape> {
             let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
             let mut out = ctx.run_ui(raw, |ui| {
-                ui.horizontal(|ui| control_bar(app, ui));
+                ui.horizontal(|ui| control_bar(app, ui, 0.0));
             });
             out.textures_delta.clear();
             out.shapes.into_iter().map(|c| c.shape).collect()
@@ -1601,7 +1611,7 @@ mod tests {
         let bar = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
             let mut out = ctx.run_ui(raw, |ui| {
-                ui.horizontal(|ui| control_bar(app, ui));
+                ui.horizontal(|ui| control_bar(app, ui, 0.0));
             });
             out.textures_delta.clear();
             out

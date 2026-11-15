@@ -672,6 +672,32 @@ fn anchor_points_of_one_path_align_to_each_other() {
     assert_eq!(xs(&app), [0.0, 0.0, 150.0], "to the artboard's left edge: {}", app.ui.status);
 }
 
+/// #1636: with a key anchor, the Align panel shows the key choice chosen and named Align to Key
+/// Anchor, its align button moves the other points to the key anchor, which stays, and Align to
+/// Selection lets go of it.
+#[test]
+fn a_key_anchor_is_chosen_named_and_aligned_to() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("path.create", json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap();
+    let xs = |app: &VectorcraftApp| -> Vec<f64> {
+        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        node.path_data().unwrap().anchors().map(|(_, _, a)| a.p.x).collect()
+    };
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0]], "mode": "set"})).unwrap();
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 2]], "mode": "toggle"})).unwrap();
+    let ctx = egui::Context::default();
+    let ([selection, key, _], left) = panel_buttons(&mut app, &ctx);
+    assert_eq!((align_to(&app), chosen_align_to(&mut app, &ctx)), (AlignTo::Key, vec![key]), "chosen automatically");
+    let named = tree(|ui| show(&mut app, ui));
+    assert_eq!(role_and_state(&named, "Align to Key Anchor"), (Role::Button, Some(Toggled::True)));
+    click(&ctx, &mut app, left.center(), show);
+    assert_eq!(xs(&app), [150.0, 200.0, 150.0], "to the key anchor's x: {}", app.ui.status);
+    click(&ctx, &mut app, selection.center(), show);
+    assert!(!has_key(&app), "Align to Selection lets go of the key anchor");
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+}
+
 /// #1636: the Distribute buttons work on the anchor points of one path (one object selected).
 #[test]
 fn distribute_buttons_space_the_anchor_points_of_one_path() {

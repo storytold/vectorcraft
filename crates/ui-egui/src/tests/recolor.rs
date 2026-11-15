@@ -1203,6 +1203,7 @@ fn the_add_color_tool_adds_a_row_with_no_current_colors() {
     let rows = field(h.state(), "rows");
     assert_eq!(rows.as_array().unwrap().len(), 3, "a new row: {rows}");
     assert_eq!(rows[2]["from"], json!([]), "with no current colors");
+    assert_eq!(rows[2]["added"], json!(true), "marked as an added color");
     let [hue, s, b] = new_hsb(h.state())[2];
     assert!((hue - 120.0).abs() < 1.0 && (s - 0.5).abs() < 0.01 && (b - v).abs() < 0.01, "{:?}", [hue, s, b]);
     assert_eq!(field(h.state(), "__sel"), json!([2]), "the new color is selected");
@@ -1317,7 +1318,7 @@ fn right_click_bar(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str
 fn a_color_bars_menu_removes_its_color() {
     let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
     let mut rows = field(h.state(), "rows");
-    rows.as_array_mut().unwrap().push(json!({"from": [], "to": "rgb 10 20 30"}));
+    rows.as_array_mut().unwrap().push(json!({"from": [], "to": "rgb 10 20 30", "added": true}));
     set(h.state_mut(), "rows", rows.clone());
     set(h.state_mut(), "__sel", json!([0]));
     h.run_steps(4);
