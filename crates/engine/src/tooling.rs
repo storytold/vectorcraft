@@ -255,6 +255,9 @@ impl Session {
         }
         // The Selection and Group Selection tools act on the instance whole.
         self.select_whole_instance(id);
+        // The tool lent to does not see the press: it counts as a press elsewhere for the clicks a
+        // double-click or triple-click compares.
+        self.tool.press_elsewhere();
         let lent = self.make_tool(id);
         self.selection_at_lend = self.active().map(|d| (d.uid, d.selection.clone()));
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
@@ -1084,6 +1087,12 @@ impl Session {
     /// The pointer stopped hovering for the active tool ([`vectorcraft_tools::Tool::hover_ended`]).
     pub fn tool_hover_ended(&mut self, view: ViewInfo) {
         self.with_tool_cx(view, |t, cx| t.hover_ended(cx));
+    }
+
+    /// A press on the canvas went to the view tools and not to the active tool
+    /// ([`vectorcraft_tools::Tool::press_elsewhere`]).
+    pub fn tool_press_elsewhere(&mut self) {
+        self.tool.press_elsewhere();
     }
 
     /// Whether the active tool's hover depends on what lies under a still pointer

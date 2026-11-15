@@ -957,6 +957,7 @@
 	Change Panel Layout	Ubah tata letak panel
 	Close Panel	Tutup panel
 	Collapse Panel Group	Ciutkan grup panel
+	Cycle Display Sizes	Ganti ukuran tampilan
 	Move Panel	Pindahkan panel
 	Group with	Grupkan dengan
 	Resize panels	Ubah ukuran panel
@@ -976,6 +977,8 @@
 	Reset all Revolve settings to their defaults.	Atur ulang semua pengaturan Revolusi ke defaultnya.
 	Drag values or labels. Double-click a value to type.	Seret nilai atau label. Klik dua kali pada nilai untuk mengetik.
 	Drag rings to rotate. Shift snaps to 15°.	Seret cincin untuk memutar. Shift mengunci ke kelipatan 15°.
+	Track cube	Kubus putar
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Seret sisi, tepi, atau cincin untuk memutar. Shift memutar pada satu sumbu layar.
 	Drag the light, or its rings. Shift snaps to 15°.	Seret cahaya atau cincinnya. Shift mengunci ke kelipatan 15°.
 lighting	Light	Cahaya
 	Keep visible surfaces only when expanding	Pertahankan hanya permukaan yang terlihat saat memperluas
@@ -1532,6 +1535,8 @@ lighting	Light	Cahaya
 	Insert Aki Left	Sisipkan aki kiri
 	Insert Aki Right	Sisipkan aki kanan
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Sesuaikan posisi horizontal diakritik
+	Adjust Vertical Diacritic Position	Sesuaikan posisi vertikal diakritik
 	Character Direction	Arah karakter
 	Digits	Digit
 	Arabic	Arab
@@ -2716,6 +2721,7 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Tampilkan roda warna halus
 	Show segmented color wheel	Tampilkan roda warna bersegmen
 	Show color bars	Tampilkan bilah warna
+	Find the selected colors in the artwork	Temukan warna yang dipilih di karya seni
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
 	Limit to Library:	Batasi ke pustaka:
@@ -3371,6 +3377,8 @@ theme	Appearance	Tampilan
 	Create Graph	Buat grafik
 	Graph Data	Data grafik
 	Graph Type	Jenis grafik
+	Graph Type…	Jenis grafik…
+	Graph Data…	Data grafik…
 	Graph Options	Opsi grafik
 	Left Axis	Sumbu kiri
 	Right Axis	Sumbu kanan
@@ -7010,4 +7018,21 @@ breakText	Glyphs	Glif
 	Nest Shapes…	Susun Bentuk…
 	Nest Shapes	Susun Bentuk
 	Roll	Gulungan
+	Packaging Tools	Alat kemasan
+	Fold Lines	Garis lipat
+	Make Cut Line	Jadikan garis potong
+	Make Crease Line	Jadikan garis lekuk
+	Make Partial Cut Line	Jadikan garis potong sebagian
+	Make Perforation Line	Jadikan garis perforasi
+	Make Fold Line	Jadikan garis lipat
+	Role Swatches…	Swatch jenis garis…
+	Role Swatches	Swatch jenis garis
+	Role	Jenis garis
+	Cut Line	Garis potong
+	Crease Line	Garis lekuk
+	Partial Cut Line	Garis potong sebagian
+	Perforation Line	Garis perforasi
+	No objects are selected.	Tidak ada objek yang dipilih.
+	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
+	Remove Fold Line Role	Hapus jenis garis
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

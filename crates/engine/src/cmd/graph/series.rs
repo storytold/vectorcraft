@@ -1,4 +1,5 @@
 use vectorcraft_color::BlendMode;
+use vectorcraft_doc::swatches::walk_with_masks;
 use vectorcraft_geom::Shape;
 
 use super::axis::radar_axis;
@@ -763,6 +764,68 @@ fn set_legend_fills(n: &mut Node, on_dark: &HashMap<NodeId, bool>) {
             if let NodeKind::Text(text) = &mut Arc::make_mut(t).kind {
                 text.runs.iter_mut().for_each(|r| r.style.fill = fill.clone());
             }
+        }
+    }
+}
+
+/// Whether each wedge shows a dark fill, for each pie in `n` (`n` itself or one inside it, opacity-mask art included)
+/// with Legends in Wedges whose legend labels' fill is not their own, so a redraw sets it by its wedge. Read before a
+/// paste links the pie's colors to the document's swatches, for [`follow_wedge_shades`].
+pub(crate) fn wedge_shades(n: &Node) -> HashMap<NodeId, Vec<bool>> {
+    let mut out = HashMap::new();
+    walk_with_masks(n, &mut |m| {
+        if let Some(g) = m.extras().graph.as_deref()
+            && g.kind == GraphKind::Pie
+            && g.legend
+            && g.pie_legend_in_wedges
+            && !g.label_styles.legend_fill_is_own()
+        {
+            out.insert(m.id, pie_wedges(m).iter().map(|w| w.dark).collect());
+        }
+    });
+    out
+}
+
+/// Give the legend labels of each pie in `n` that [`wedge_shades`] read as `was` the contrast a redraw sets, where a
+/// wedge now shows a fill of the other darkness: white on a dark wedge, black on a light one. Pies whose wedges all kept
+/// their darkness keep their labels as they are.
+pub(crate) fn follow_wedge_shades(n: &mut Node, was: &HashMap<NodeId, Vec<bool>>) {
+    let mut changed = vec![];
+    walk_with_masks(n, &mut |m| {
+        if let Some(before) = was.get(&m.id)
+            && pie_wedges(m).iter().map(|w| w.dark).ne(before.iter().copied())
+        {
+            changed.push(m.id);
+        }
+    });
+    if !changed.is_empty() {
+        restore_contrast(n, &changed);
+    }
+}
+
+/// Set the legend labels of the pies `ids` in `n` (`n` itself or ones inside it, opacity-mask art included) as a redraw
+/// sets them on their wedges.
+fn restore_contrast(n: &mut Node, ids: &[NodeId]) {
+    if ids.contains(&n.id) {
+        let on_dark = match n.extras().graph.as_deref() {
+            Some(g) => redrawn_on_dark(n, g).unwrap_or_else(|| legend_on_dark(n, g)),
+            None => HashMap::new(),
+        };
+        set_legend_fills(n, &on_dark);
+    }
+    let holds = |c: &Node| {
+        let mut found = false;
+        walk_with_masks(c, &mut |m| found |= ids.contains(&m.id));
+        found
+    };
+    if n.extras().mask.as_ref().is_some_and(|m| holds(&m.art))
+        && let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+    {
+        restore_contrast(Arc::make_mut(&mut m.art), ids);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        if holds(c) {
+            restore_contrast(Arc::make_mut(c), ids);
         }
     }
 }

@@ -266,8 +266,56 @@ fn images_declaring_more_than_the_allowance_are_not_decoded() {
     assert_eq!(crate::images::mask_alpha(&blob, 60_000, 60_000, false), None);
     assert_eq!(crate::images::mask_alpha(&blob, 2, 2, false), None, "another size is not decoded at all");
     let c: CompressionSettings = serde_json::from_value(json!({"gray": {"downsample": "bicubic", "ppi": 72, "abovePpi": 100}})).unwrap();
-    let r = crate::images::recode(&png, (10.0, 10.0), &c, false, None, true, None);
+    let r = crate::images::recode(&png, (10.0, 10.0), &c, false, None, crate::images::SourceProfiles::Keep, None);
     assert!(r.image.is_none(), "kept as it is");
+}
+
+/// When the Output settings convert colors, a color image beyond the decode allowance can't be
+/// kept as it is: it is unconverted, and so is one whose header can't be read. A color image
+/// whose pixel data can't be read (tagged with an ICC profile it is converted from or not) can't
+/// be written in its own colors either, and is kept as it is, as is a grey one, whose pixels
+/// aren't converted, and any image without a conversion.
+#[test]
+fn a_color_image_beyond_the_allowance_for_a_conversion_is_unconverted() {
+    use vectorcraft_color::cms::{DISPLAY_P3, GENERIC_CMYK, icc_bytes};
+    let d = doc(encoded(colour(), ImageFormat::Png), "image/png");
+    let settings: PdfSettings = serde_json::from_value(json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}})).unwrap();
+    let out = crate::output::ColorOut::new(&d, &settings).unwrap();
+    assert!(out.pixels().is_some());
+    let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: false });
+    assert!(to_srgb.is_some());
+    let c: CompressionSettings = serde_json::from_value(json!({})).unwrap();
+    let half = |mut bytes: Vec<u8>| {
+        bytes.truncate(bytes.len() / 2);
+        bytes
+    };
+    let cut = |img: DynamicImage| half(encoded(img, ImageFormat::Png));
+    let mut p3 = icc_bytes(DISPLAY_P3).unwrap().to_vec();
+    p3[8..12].copy_from_slice(&[4, 0x20, 0, 0]);
+    // `declared_png`'s header declaring RGB pixels (color type 2), with the IHDR chunk's CRC
+    // written again.
+    let mut rgb_declared = declared_png(60_000, 60_000);
+    rgb_declared[25] = 2;
+    let mut crc = flate2::Crc::new();
+    crc.update(&rgb_declared[12..29]);
+    rgb_declared[29..33].copy_from_slice(&crc.sum().to_be_bytes());
+    let cases = [
+        ("RGB declaring more than the allowance", rgb_declared, true),
+        ("RGB", cut(colour()), false),
+        ("tagged RGB", half(tagged(&colour(), &p3, ImageFormat::Png)), false),
+        ("unreadable", vec![1, 2, 3], true),
+        ("grey", cut(colour().grayscale()), false),
+        ("grey declaring more than the allowance", declared_png(60_000, 60_000), false),
+    ];
+    for (what, bytes, unconverted) in cases {
+        let r = crate::images::recode(&bytes, (72.0, 72.0), &c, false, out.pixels(), crate::images::SourceProfiles::Keep, to_srgb);
+        assert!(r.image.is_none(), "{what}");
+        assert_eq!(r.unconverted, unconverted, "{what}");
+        assert!(
+            !crate::images::recode(&bytes, (72.0, 72.0), &c, false, None, crate::images::SourceProfiles::Keep, None).unconverted,
+            "{what}, no conversion"
+        );
+    }
 }
 
 /// A version 2.1 display ICC profile for colour space `space` (`RGB ` or `GRAY`), `len` bytes in
@@ -423,6 +471,80 @@ fn pdf_x1a_keeps_a_tagged_gray_jpeg_as_jpeg() {
         assert!(dct, "{compression}: {spaces:?}");
         assert!(image_data(&bytes) == [jpeg.clone()], "{compression}: the JPEG data unchanged");
     }
+}
+
+/// With Don't Include Profiles set, a gray or RGB image is written without the ICC profile it
+/// carries: a PNG, JPEG or TIFF embedded as it is, resampled or compressed with JPEG, with alpha and
+/// at 16 bits. A JPEG kept as it is loses its `ICC_PROFILE` segments, its compressed samples
+/// unchanged. Left unset, or `null`, the setting keeps the profiles. PDF/X-4 files keep them
+/// whatever the setting says.
+#[test]
+fn a_set_dont_include_profiles_removes_image_profiles() {
+    let (rgb, gray) = (icc_profile(b"RGB ", 600), icc_profile(b"GRAY", 300));
+    let mut clear = colour().to_rgba8();
+    clear.put_pixel(0, 0, image::Rgba([10, 20, 30, 0]));
+    let deep = DynamicImage::ImageRgb16(colour().to_rgb16());
+    let export = |d: &Document, settings: Value| {
+        let mut settings: PdfSettings = serde_json::from_value(settings).unwrap();
+        settings.compression.compress_text = false;
+        export_with_report(d, &PdfOptions { settings, ..Default::default() }).unwrap()
+    };
+    let resampled =
+        json!({"color": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}, "gray": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}});
+    let jpeg = json!({"color": {"compression": "jpeg"}, "gray": {"compression": "jpeg"}});
+    let cases = [
+        ("RGB PNG", tagged(&colour(), &rgb, ImageFormat::Png), "image/png", json!({}), "DeviceRGB"),
+        ("gray PNG", tagged(&colour().grayscale(), &gray, ImageFormat::Png), "image/png", json!({}), "DeviceGray"),
+        ("RGB JPEG", tagged(&colour(), &rgb, ImageFormat::Jpeg), "image/jpeg", json!({}), "DeviceRGB"),
+        ("gray JPEG", tagged(&colour().grayscale(), &gray, ImageFormat::Jpeg), "image/jpeg", json!({}), "DeviceGray"),
+        ("RGB TIFF", tagged(&colour(), &rgb, ImageFormat::Tiff), "image/tiff", json!({}), "DeviceRGB"),
+        ("gray TIFF", tagged(&colour().grayscale(), &gray, ImageFormat::Tiff), "image/tiff", json!({}), "DeviceGray"),
+        ("RGBA TIFF", tagged(&clear.into(), &rgb, ImageFormat::Tiff), "image/tiff", json!({}), "DeviceRGB"),
+        ("16-bit TIFF", tagged(&deep, &rgb, ImageFormat::Tiff), "image/tiff", json!({}), "DeviceRGB"),
+        ("RGB PNG, resampled", tagged(&colour(), &rgb, ImageFormat::Png), "image/png", resampled.clone(), "DeviceRGB"),
+        ("gray JPEG, resampled", tagged(&colour().grayscale(), &gray, ImageFormat::Jpeg), "image/jpeg", resampled, "DeviceGray"),
+        ("RGB TIFF as JPEG", tagged(&colour(), &rgb, ImageFormat::Tiff), "image/tiff", jpeg.clone(), "DeviceRGB"),
+        ("gray TIFF as JPEG", tagged(&colour().grayscale(), &gray, ImageFormat::Tiff), "image/tiff", jpeg, "DeviceGray"),
+    ];
+    for (what, bytes, mime, compression, device) in cases {
+        let d = doc(bytes.clone(), mime);
+        // Left unset, or null, the image keeps its profile.
+        for profiles in [json!({}), json!({"profiles": null})] {
+            let r = export(&d, json!({"compression": compression.clone(), "output": profiles}));
+            let spaces = image_spaces(&r.bytes);
+            assert!(spaces.len() == 1 && spaces[0].space == "ICCBased" && spaces[0].icc.is_some(), "{what}, {profiles}: {spaces:?}");
+        }
+        let none = export(&d, json!({"compression": compression.clone(), "output": {"profiles": "none"}}));
+        assert!(none.warnings.is_empty(), "{what}: {:?}", none.warnings);
+        let spaces = image_spaces(&none.bytes);
+        assert!(spaces.len() == 1 && spaces[0].space == device && spaces[0].icc.is_none(), "{what}: {spaces:?}");
+        let data = image_data(&none.bytes);
+        assert!(data.iter().all(|d| !d.windows(12).any(|w| w == b"ICC_PROFILE\0")), "{what}: no ICC_PROFILE segment is left");
+        if mime == "image/jpeg" && compression == json!({}) {
+            // The JPEG data without its profile segments: the image decoder reads the same pixels
+            // from it, and no profile.
+            assert!(data.len() == 1 && data[0].len() < bytes.len(), "{what}: the JPEG data kept");
+            let decode = |b: &[u8]| image::load_from_memory_with_format(b, ImageFormat::Jpeg).unwrap();
+            assert!(decode(&data[0]) == decode(&bytes), "{what}: the same pixels");
+            assert!(crate::images::source_icc(&data[0]).is_none() && crate::images::source_icc(&bytes).is_some(), "{what}");
+        }
+        // PDF/X-4 tags every colour: the image keeps its profile.
+        let x4 = export(&d, json!({"standard": "pdfX4", "compatibility": "1.6", "compression": compression, "output": {"profiles": "none"}}));
+        let spaces = image_spaces(&x4.bytes);
+        assert!(spaces.len() == 1 && spaces[0].space == "ICCBased", "{what}, PDF/X-4: {spaces:?}");
+    }
+    // A JPEG whose `ICC_PROFILE` segments don't make up a profile (the first of two, the second
+    // missing) loses them too.
+    let plain = encoded(colour(), ImageFormat::Jpeg);
+    let mut part = vec![0xFF, 0xD8, 0xFF, 0xE2, 0, 30];
+    part.extend_from_slice(b"ICC_PROFILE\0");
+    part.extend_from_slice(&[1, 2]);
+    part.extend_from_slice(&rgb[..14]);
+    part.extend_from_slice(&plain[2..]);
+    assert!(crate::images::source_icc(&part).is_none(), "the decoder reads no profile");
+    let none = export(&doc(part, "image/jpeg"), json!({"output": {"profiles": "none"}}));
+    let data = image_data(&none.bytes);
+    assert!(data == [plain], "an unreadable profile: the JPEG data without its segments");
 }
 
 /// A gray or RGB TIFF that carries an ICC profile of its colour space is written in an ICC-based
@@ -778,9 +900,10 @@ fn convert_to_srgb_converts_tagged_images_from_their_profile() {
     let c: CompressionSettings = serde_json::from_value(json!({})).unwrap();
     let srgb_out = Some(crate::images::ToSrgb { intent: Intent::RelativeColorimetric, sixteen_bit: true });
     for (what, png) in [("RGB", declared(&colour(), &p3)), ("gray", declared(&colour().grayscale(), &gray))] {
-        let r = crate::images::recode(&png, (100.0, 100.0), &c, false, None, true, srgb_out);
+        let keep = crate::images::SourceProfiles::Keep;
+        let r = crate::images::recode(&png, (100.0, 100.0), &c, false, None, keep, srgb_out);
         assert!(r.image.is_none() && r.warning.is_some_and(|w| w.contains("not converted to sRGB")), "{what}: {:?}", r.warning);
-        let r = crate::images::recode(&png, (100.0, 100.0), &c, false, None, true, None);
+        let r = crate::images::recode(&png, (100.0, 100.0), &c, false, None, keep, None);
         assert!(r.image.is_none() && r.warning.is_none(), "{what}, no conversion: {:?}", r.warning);
         // Too large to embed as it is too: the export leaves it out, and says only that.
         let mut settings: PdfSettings = serde_json::from_value(to_srgb(json!({}))).unwrap();

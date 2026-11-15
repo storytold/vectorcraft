@@ -454,7 +454,7 @@ fn an_edit_of_a_graph_designs_art_is_lost_when_the_graph_is_drawn_again() {
 /// it, and edit the other objects they are given.
 #[test]
 fn paint_commands_leave_a_graph_designs_art_out() {
-    let (mut s, _, copy, art, mark) = design_art();
+    let (mut s, graph, copy, art, mark) = design_art();
     let fill = top_row(&s, art, true);
     let commands = [
         ("stroke.set", json!({"weight": 5})),
@@ -466,6 +466,7 @@ fn paint_commands_leave_a_graph_designs_art_out() {
         ("paint.swap", json!({})),
         ("paint.default", json!({})),
         ("paint.invert", json!({"item": fill, "stroke": false})),
+        ("paint.invert", json!({})),
     ];
     let (copy_was, art_was) = (look(&s, copy), look(&s, art));
     for (cmd, p) in &commands {
@@ -489,6 +490,11 @@ fn paint_commands_leave_a_graph_designs_art_out() {
     s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
     s.execute("stroke.set", &json!({"weight": 5})).unwrap();
     assert_eq!(look(&s, art), art_was);
+    // Given the whole graph, Invert recolors the marks and leaves the art.
+    let mark_was = look(&s, mark);
+    s.execute("paint.invert", &json!({"ids": [graph.0]})).unwrap();
+    assert_eq!(look(&s, art), art_was);
+    assert_ne!(look(&s, mark), mark_was);
     // A freeform gradient point is refused on the art alone.
     refused_on_design_art(&mut s, "paint.freeform.addPoint", json!({"ids": [art.0], "at": [0, 0]}));
 }
@@ -515,6 +521,182 @@ fn stroke_edits_of_selected_design_art_leave_the_new_art_stroke() {
     let mode = s.new_art_stroke().gradient_mode;
     s.execute("paint.editGradient", &json!({"kind": "linear", "stroke": true, "strokeMode": "along"})).unwrap();
     assert_eq!(s.new_art_stroke().gradient_mode, mode, "paint.editGradient");
+}
+
+/// With only the art of a graph design given or selected, the gradient, swap, default and recolor commands leave the
+/// paint for new art and the remembered colors as they are.
+#[test]
+fn paint_edits_of_design_art_alone_leave_the_defaults() {
+    let (mut s, _, _, art, _) = design_art();
+    let fill = top_row(&s, art, true);
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let defaults = |s: &Session| format!("{:?}", (&s.paint, s.last_solid, &s.last_gradient, &s.recent_colors));
+    let commands = [
+        ("paint.editGradient", json!({"kind": "linear"})),
+        ("paint.editGradient", json!({"kind": "radial", "stroke": true})),
+        ("paint.swap", json!({})),
+        ("paint.default", json!({})),
+        ("paint.invert", json!({"item": fill, "stroke": false})),
+        ("paint.complement", json!({"item": fill, "stroke": false})),
+        ("paint.invert", json!({})),
+        ("paint.complement", json!({"stroke": true})),
+        ("stroke.set", json!({"weight": 7})),
+        ("stroke.weightUp", json!({})),
+    ];
+    for (cmd, p) in &commands {
+        let was = defaults(&s);
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        s.execute(cmd, &q).unwrap();
+        assert_eq!(defaults(&s), was, "{cmd}, given");
+        // Selecting the art makes the defaults take its paint.
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        let was = defaults(&s);
+        s.execute(cmd, p).unwrap();
+        assert_eq!(defaults(&s), was, "{cmd}, selected");
+        s.execute("select.set", &json!({"ids": []})).unwrap();
+    }
+    // A bad `item`, `aligned` or `target` is still an error with only design art given.
+    for bad in [
+        json!({"ids": [art.0], "item": "top"}),
+        json!({"ids": [art.0], "item": fill, "aligned": "yes"}),
+        json!({"ids": [art.0], "item": fill, "target": "nowhere"}),
+        json!({"ids": [art.0], "target": "nowhere"}),
+    ] {
+        assert!(s.execute("paint.invert", &bad).is_err(), "{bad}");
+        assert!(s.execute("paint.complement", &bad).is_err(), "{bad}");
+    }
+    // So is an `item` the art has no row for, in each command that leaves the art out.
+    let steps = s.doc().unwrap().history.undo.len();
+    for (cmd, p) in [
+        ("paint.invert", json!({})),
+        ("stroke.set", json!({"weight": 2})),
+        ("stroke.weightUp", json!({})),
+        ("stroke.setAdvanced", json!({"swapArrows": true})),
+        ("paint.editGradient", json!({"kind": "linear"})),
+        ("paint.setGradientGeom", json!({"start": [0, 0], "end": [50, 50]})),
+        ("object.setOverprint", json!({"fill": true})),
+    ] {
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        q["item"] = json!(99);
+        assert!(s.execute(cmd, &q).is_err(), "{cmd}");
+    }
+    // The art's stroke row named without `stroke` is a stroke row: the gradient commands succeed and change nothing.
+    let stroke_row = top_row(&s, art, false);
+    for p in [json!({"kind": "linear"}), json!({"start": [0, 0], "end": [50, 50]})] {
+        let cmd = if p.get("kind").is_some() { "paint.editGradient" } else { "paint.setGradientGeom" };
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        q["item"] = json!(stroke_row);
+        s.execute(cmd, &q).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // With nothing selected, the swap still swaps the defaults.
+    let was = defaults(&s);
+    s.execute("paint.swap", &json!({})).unwrap();
+    assert_ne!(defaults(&s), was);
+}
+
+/// A spread or a negative aspect for the art of a graph design alone changes nothing, whatever kind of gradient the
+/// default fill is; a bad value is still an error.
+#[test]
+fn gradient_edits_of_design_art_alone_skip_the_default_kind_checks() {
+    let (mut s, _, _, art, _) = design_art();
+    for (default, p) in [("freeform", json!({"spread": "repeat"})), ("linear", json!({"aspect": -50}))] {
+        s.execute("select.set", &json!({"ids": []})).unwrap();
+        s.execute("paint.editGradient", &json!({"kind": default})).unwrap();
+        let (was, art_was, steps) = (format!("{:?}", s.paint), look(&s, art), s.doc().unwrap().history.undo.len());
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        s.execute("paint.editGradient", &q).unwrap_or_else(|e| panic!("{q}: {e}"));
+        assert_eq!(format!("{:?}", s.paint), was, "{default}");
+        assert_eq!(look(&s, art), art_was, "{default}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{default}");
+    }
+    assert!(s.execute("paint.editGradient", &json!({"ids": [art.0], "spread": "sideways"})).is_err());
+}
+
+/// Invert given a group around a graph recolors the group's own fill and the series marks, and leaves the art of a
+/// graph design as it is. With `target: "contents"` the group's own fill stays as it is.
+#[test]
+fn invert_of_a_group_recolors_its_own_fill_and_leaves_design_art() {
+    let (mut s, graph, _, art, mark) = design_art();
+    s.execute("select.set", &json!({"ids": [graph.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.addFill", &json!({"ids": [group.0]})).unwrap();
+    let row = top_row(&s, group, true);
+    s.execute("paint.setFill", &json!({"ids": [group.0], "item": row, "color": "#ff0000"})).unwrap();
+    let own = |s: &Session| format!("{:?}", s.doc().unwrap().doc.node(group).unwrap().appearance.items);
+    let (own_was, art_was, mark_was) = (own(&s), look(&s, art), look(&s, mark));
+    s.execute("paint.invert", &json!({"ids": [group.0]})).unwrap();
+    assert_ne!(own(&s), own_was, "the group's own fill");
+    assert_ne!(look(&s, mark), mark_was);
+    assert_eq!(look(&s, art), art_was);
+    // The color remembered is the group's own new fill, which the Fill proxy shows.
+    let Some(Paint::Solid { color, .. }) = s.doc().unwrap().doc.node(group).unwrap().proxy_paint_only(false, None).cloned() else {
+        panic!("the group's fill is not a solid color")
+    };
+    assert_eq!((s.last_solid, s.recent_colors.first().copied()), (color, Some(color)));
+    let (own_was, mark_was) = (own(&s), look(&s, mark));
+    s.execute("paint.invert", &json!({"ids": [group.0], "target": "contents"})).unwrap();
+    assert_eq!(own(&s), own_was, "target: contents");
+    assert_ne!(look(&s, mark), mark_was);
+    assert_eq!(look(&s, art), art_was);
+}
+
+/// Invert and Complement given a series group that holds only a graph design's art recolor the group's own fill and
+/// remember that color, as the last color and the newest recent color. With several such groups the color remembered
+/// is that of the first group whose fill changed.
+#[test]
+fn recoloring_a_group_of_design_art_alone_remembers_its_own_fill() {
+    // A fill of its own for `group`, painted `hex` (the color of a rectangle painted with it).
+    let paint_own = |s: &mut Session, group: NodeId, hex: &str| {
+        s.execute("appearance.addFill", &json!({"ids": [group.0]})).unwrap();
+        let t = NodeId(s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 5, "height": 5})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setFill", &json!({"ids": [t.0], "color": hex})).unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let paint = d.node(t).unwrap().proxy_paint_only(false, None).unwrap().clone();
+        d.node_mut(group).unwrap().appearance.fill_at_mut(None).unwrap().paint = paint;
+    };
+    // Series 0's group with its own fill painted `hex`.
+    let painted_series = |hex: &str| {
+        let (mut s, graph, _, art, _) = design_art();
+        let group = series(s.doc().unwrap().doc.node(graph).unwrap(), 0).id;
+        paint_own(&mut s, group, hex);
+        (s, group, art)
+    };
+    for cmd in ["paint.invert", "paint.complement"] {
+        let (mut s, group, art) = painted_series("#ff0000");
+        let fill = |s: &Session| s.doc().unwrap().doc.node(group).unwrap().proxy_paint_only(false, None).unwrap().clone();
+        let (art_was, fill_was) = (look(&s, art), fill(&s));
+        s.execute(cmd, &json!({"ids": [group.0]})).unwrap();
+        assert_eq!(look(&s, art), art_was, "{cmd}");
+        assert_ne!(fill(&s), fill_was, "{cmd}: the group's fill is recolored");
+        let Paint::Solid { color, .. } = fill(&s) else { panic!("{cmd}: the group's fill is not a solid color") };
+        assert_eq!((s.last_solid, s.recent_colors.first().copied()), (color, Some(color)), "{cmd}");
+    }
+    // A gray fill is its own complement: nothing changes, and the remembered colors stay as they were.
+    let (mut s, group, _) = painted_series("#808080");
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let remembered = |s: &Session| format!("{:?}", (s.last_solid, &s.recent_colors));
+    let was = remembered(&s);
+    assert_eq!(s.execute("paint.complement", &json!({"ids": [group.0]})).unwrap()["changed"], json!(0));
+    assert_eq!(remembered(&s), was);
+    // Both series groups hold only the design's art: a gray one first and a red one, given together.
+    let (mut s, graph, _, _, _) = design_art();
+    s.execute("graph.column", &json!({"id": graph.0, "seriesIndexes": [1], "design": "Square"})).unwrap();
+    let groups = [0, 1].map(|i| series(s.doc().unwrap().doc.node(graph).unwrap(), i).id);
+    paint_own(&mut s, groups[0], "#808080");
+    paint_own(&mut s, groups[1], "#ff0000");
+    s.execute("paint.complement", &json!({"ids": [groups[0].0, groups[1].0]})).unwrap();
+    let Some(Paint::Solid { color, .. }) = s.doc().unwrap().doc.node(groups[1]).unwrap().proxy_paint_only(false, None).cloned() else {
+        panic!("the red group's fill is not a solid color")
+    };
+    assert_eq!((s.last_solid, s.recent_colors.first().copied()), (color, Some(color)));
 }
 
 /// `transparency.set` without `item` refuses the art of a graph design in a series, and given it with other objects
@@ -594,6 +776,81 @@ fn expand_appearance_leaves_a_graph_designs_art() {
     s.execute("effect.expandAppearance", &json!({})).unwrap();
     assert_eq!(look(&s, art), art_was);
     assert!(s.doc().unwrap().doc.node(NodeId(other)).is_none_or(|m| m.appearance.effects.is_empty()));
+}
+
+/// `effect` with `params`, as `effect.apply` gives it to an object.
+fn an_effect(s: &mut Session, effect: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
+    let r = s.execute("shape.rectangle", &json!({"x": 700, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": effect, "ids": [r], "params": params})).unwrap();
+    s.doc().unwrap().doc.node(NodeId(r)).unwrap().appearance.effects[0].clone()
+}
+
+/// Expand Appearance of a graph neither lists the art of a design in a series whose own effect it leaves, nor adds an
+/// image of that effect to the document.
+#[test]
+fn expand_appearance_lists_no_design_art_and_rasterizes_none() {
+    let (mut s, id, copy, _, mark) = design_art();
+    let shadow = an_effect(&mut s, "stylize.dropShadow", json!({}));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(copy).unwrap().appearance.effects.push(shadow);
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0]})).unwrap();
+    let copy_was = look(&s, copy);
+    let images = |s: &Session| s.doc().unwrap().doc.images.len();
+    let before = images(&s);
+    s.execute("select.set", &json!({"ids": [mark.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    let per_mark = images(&s) - before;
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let expanded = s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(expanded["ids"], json!([mark.0]));
+    assert_eq!(look(&s, copy), copy_was);
+    assert_eq!(images(&s) - before, per_mark, "only the mark's shadow becomes an image");
+}
+
+/// A geometry effect of a series group that Expand Appearance bakes moves the art of a design in that series with the
+/// marks.
+#[test]
+fn expand_appearance_moves_design_art_with_its_series_groups_effect() {
+    let (mut s, id, copy, _, _) = design_art();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let group = series(&n, 0).id;
+    let shift = an_effect(&mut s, "distort.transform", json!({"moveH": 50}));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(group).unwrap().appearance.effects.push(shift);
+    let left = |s: &Session| {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        series(&n, 0).children().unwrap()[0].geometric_bounds().unwrap().x0
+    };
+    let was = left(&s);
+    assert_eq!(series(&n, 0).children().unwrap()[0].id, copy);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert!((left(&s) - was - 50.0).abs() < 1e-6, "{} then {}", was, left(&s));
+}
+
+/// The copies that a Transform effect of a series group makes of a design's art keep their own effects when Expand
+/// Appearance bakes the series group's effect, as the art they copy does.
+#[test]
+fn expand_appearance_leaves_the_effects_of_design_art_copies() {
+    let (mut s, id, copy, _, _) = design_art();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let group = series(&n, 0).id;
+    let shadow = an_effect(&mut s, "stylize.dropShadow", json!({}));
+    let copies = an_effect(&mut s, "distort.transform", json!({"moveH": 50, "copies": 2}));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(copy).unwrap().appearance.effects.push(shadow);
+    doc.node_mut(group).unwrap().appearance.effects.push(copies);
+    let shadows = |s: &Session| {
+        let mut count = 0;
+        s.doc().unwrap().doc.node(id).unwrap().walk(&mut |m| count += m.appearance.effects.iter().filter(|e| e.id == "stylize.dropShadow").count());
+        count
+    };
+    let images = |s: &Session| s.doc().unwrap().doc.images.len();
+    let before = images(&s);
+    assert_eq!(shadows(&s), 1);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(shadows(&s), 3, "the art and its two copies keep their shadows");
+    assert_eq!(images(&s), before, "no shadow becomes an image");
 }
 
 /// The commands that give rows, effects or graphic styles refuse the art of a graph design inside a series, given by
@@ -1106,6 +1363,42 @@ fn aligned_effect_indices_past_the_end_of_a_graph_designs_art_are_refused() {
     }
     // With index 0 alone, which the art has, the mark's equal effect is removed.
     s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "indices": [0], "aligned": true})).unwrap();
+    assert!(rows(&s, mark).effects.is_empty());
+}
+
+/// With a graph design's art given first and `aligned: true`, `effect.remove` and `effect.duplicate` with `indices` are an
+/// error and change nothing when one of the art's effects is one no other object has, as with that index given alone.
+#[test]
+fn aligned_effect_indices_of_a_graph_designs_art_that_no_object_has_are_refused() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let (mut s, _, art, mark) = aligned_design_art();
+    // The art has a shadow and a roughen, the mark the shadow only.
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [mark.0], "item": null})).unwrap();
+    s.edit("Effects", |d, _| {
+        let effects = d.node(mark).unwrap().appearance.effects.clone();
+        d.node_mut(art).unwrap().appearance.effects = effects;
+        d.node_mut(mark).unwrap().appearance.effects.pop();
+        Ok(())
+    })
+    .unwrap();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    let steps = s.doc().unwrap().history.undo.len();
+    for cmd in ["effect.remove", "effect.duplicate"] {
+        assert!(s.execute(cmd, &json!({"ids": [art.0, mark.0], "item": null, "index": 1, "aligned": true})).is_err(), "{cmd}");
+        let e = s.execute(cmd, &json!({"ids": [art.0, mark.0], "item": null, "indices": [0, 1], "aligned": true})).unwrap_err();
+        assert!(e.to_string().contains("no effects at indices 0, 1"), "{cmd}: {e}");
+        assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was.clone()), "{cmd}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+    }
+    // With the roughen on the mark too, both of its effects are removed.
+    s.edit("Roughen", |d, _| {
+        let roughen = d.node(art).unwrap().appearance.effects[1].clone();
+        d.node_mut(mark).unwrap().appearance.effects.push(roughen);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "indices": [0, 1], "aligned": true})).unwrap();
     assert!(rows(&s, mark).effects.is_empty());
 }
 

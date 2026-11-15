@@ -1445,6 +1445,8 @@ file-filter	Templates	Шаблони
 	Graph	Діаграма
 	Graph Data	Дані діаграми
 	Graph Type	Тип діаграми
+	Graph Type…	Тип діаграми…
+	Graph Data…	Дані діаграми…
 	Graph Options	Параметри діаграми
 	Left Axis	Ліва вісь
 	Right Axis	Права вісь
@@ -1560,6 +1562,7 @@ file-filter	Templates	Шаблони
 	Show smooth color wheel	Показати плавне колірне коло
 	Show segmented color wheel	Показати сегментоване колірне коло
 	Show color bars	Показати колірні смуги
+	Find the selected colors in the artwork	Знайти вибрані кольори в малюнку
 	Harmony Sets	Набори гармонії
 	Height	Висота
 	Height:	Висота:
@@ -2757,6 +2760,8 @@ mark-style	Japanese	Японський
 	Insert Aki Left	Вставити акі ліворуч
 	Insert Aki Right	Вставити акі праворуч
 	Tsume	Цуме
+	Adjust Horizontal Diacritic Position	Налаштувати горизонтальне положення діакритичних знаків
+	Adjust Vertical Diacritic Position	Налаштувати вертикальне положення діакритичних знаків
 	Character Direction	Напрямок символів
 	Digits	Цифри
 	Arabic	Арабські
@@ -5155,6 +5160,8 @@ axis	Both	Обидві
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
 @msg	unknown panel `{raw}`	невідома панель `{raw}`
+@msg	`{panel}` has no display sizes to cycle	панель `{panel}` не має розмірів відображення для перемикання
+@msg	the panels are not shown	панелі не показано
 @msg	panels can't be shown in Presentation Mode	у режимі презентації панелі показати не можна
 @msg	unknown preference `{key}`	невідоме налаштування `{key}`
 @msg	Preferences imported.	Налаштування імпортовано.
@@ -5530,6 +5537,7 @@ axis	Both	Обидві
 	Change Panel Layout	Змінити розташування панелей
 	Close Panel	Закрити панель
 	Collapse Panel Group	Згорнути групу панелей
+	Cycle Display Sizes	Перемкнути розміри відображення
 	Move Panel	Перемістити панель
 	Group with	Згрупувати з
 	Resize panels	Змінити розмір панелей
@@ -5573,6 +5581,8 @@ axis	Both	Обидві
 	Step up or down	Крок угору або вниз
 	Drag values or labels. Double-click a value to type.	Перетягуйте значення або підписи. Двічі клацніть значення, щоб увести його.
 	Drag rings to rotate. Shift snaps to 15°.	Перетягуйте кільця для обертання. Shift задає крок 15°.
+	Track cube	Куб обертання
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Перетягніть грань, ребро або кільце для обертання. Shift обертає навколо однієї осі екрана.
 	Drag the light, or its rings. Shift snaps to 15°.	Перетягуйте джерело світла або його кільця. Shift задає крок 15°.
 	Keep visible surfaces only when expanding	Під час розгортання зберігати лише видимі поверхні
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Обрізає приховану геометрію під час розгортання оформлення. Попередній перегляд зберігає всю поверхню. Прозорі заливки та поверхні, що перевищують обмеження видимості, зберігають усі грані.
@@ -5885,6 +5895,7 @@ lighting	Light	Світло
 	Export Data Sets…	Експортувати набори даних…
 	Load Variable Library…	Завантажити бібліотеку змінних…
 	Save Variable Library…	Зберегти бібліотеку змінних…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Імпорт» читає файл джерела даних із розширенням .csv, .tsv, .txt або .xml
 @msg	a variable library holds text variables, and the document has none	бібліотека змінних містить текстові змінні, а в документі їх немає
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	змінну `{name}` не можна зберегти в бібліотеці змінних: перейменуйте її так, щоб ім’я починалося з літери або `_` і не містило пробілів і символів, крім `-`, `_` і `.`
 @msg	{k} has control characters	{k} містить керівні символи
@@ -9198,3 +9209,20 @@ breakText	Glyphs	Гліфи
 	Nest Shapes…	Розкладка фігур…
 	Nest Shapes	Розкладка фігур
 	Roll	Рулон
+	Packaging Tools	Інструменти пакування
+	Fold Lines	Лінії згину
+	Make Cut Line	Зробити лінією різу
+	Make Crease Line	Зробити лінією біговки
+	Make Partial Cut Line	Зробити лінією надрізу
+	Make Perforation Line	Зробити лінією перфорації
+	Make Fold Line	Зробити лінією згину
+	Role Swatches…	Зразки типів ліній…
+	Role Swatches	Зразки типів ліній
+	Role	Тип лінії
+	Cut Line	Лінія різу
+	Crease Line	Лінія біговки
+	Partial Cut Line	Лінія надрізу
+	Perforation Line	Лінія перфорації
+	No objects are selected.	Об’єкти не виділено.
+	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
+	Remove Fold Line Role	Прибрати тип лінії

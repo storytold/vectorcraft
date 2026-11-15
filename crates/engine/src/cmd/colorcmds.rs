@@ -221,6 +221,8 @@ pub(crate) struct Recolor<'a> {
     patterns: HashMap<String, Option<String>>,
     new_images: Vec<(String, ImageBlob)>,
     new_patterns: Vec<PatternDef>,
+    /// Objects inside the recolored ones that keep their colors, with everything inside them.
+    skip: HashSet<NodeId>,
     changed: usize,
 }
 
@@ -236,6 +238,7 @@ impl<'a> Recolor<'a> {
             patterns: HashMap::new(),
             new_images: vec![],
             new_patterns: vec![],
+            skip: HashSet::new(),
             changed: 0,
         }
     }
@@ -254,7 +257,7 @@ impl<'a> Recolor<'a> {
 
     /// A pass that maps colors as this one does, with nothing recolored yet.
     fn again(&self) -> Self {
-        Self { links: self.links, gray_images: self.gray_images, remake: self.remake, ..Self::new(self.scope, self.f) }
+        Self { links: self.links, gray_images: self.gray_images, remake: self.remake, skip: self.skip.clone(), ..Self::new(self.scope, self.f) }
     }
 
     /// The entries of `objects` (ids, each with a flag) whose object this pass would change, other
@@ -440,10 +443,18 @@ impl ColorVisitor for Visit<'_, '_> {
     fn image(&mut self, key: &str) -> Option<String> {
         self.pass.image(self.d, key)
     }
+    fn enters(&mut self, n: &Node) -> bool {
+        !self.pass.skip.contains(&n.id)
+    }
 }
 
 pub(crate) fn recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
     run_pass(s, p, cmd, label, Recolor::new(Scope::of(p, cmd)?, f))
+}
+
+/// [`recolor`] that leaves the objects `skip` inside the recolored ones, and everything inside them, as they are.
+pub(crate) fn recolor_except(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color, skip: HashSet<NodeId>) -> Result<Value> {
+    run_pass(s, p, cmd, label, Recolor { skip, ..Recolor::new(Scope::of(p, cmd)?, f) })
 }
 
 /// [`recolor`] where `f` gives gray colors, so embedded images are stored with one gray channel.

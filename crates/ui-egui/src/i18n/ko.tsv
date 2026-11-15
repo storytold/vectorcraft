@@ -49,6 +49,8 @@ font-technology	Variable	가변
 	Insert Aki Left	앞 아키 삽입
 	Insert Aki Right	뒤 아키 삽입
 	Tsume	츠메
+	Adjust Horizontal Diacritic Position	발음 구별 기호 가로 위치 조정
+	Adjust Vertical Diacritic Position	발음 구별 기호 세로 위치 조정
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
@@ -1928,6 +1930,7 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Find the selected colors in the artwork	선택한 색상을 아트웍에서 찾기
 	Height	높이
 	Height:	높이:
 	Help › Search Commands…	도움말 › 명령 검색…
@@ -3859,6 +3862,8 @@ file-filter	Templates	템플릿
 	Gradient (. or Shift+.)	그레이디언트 (. 또는 Shift+.)
 	Graph Data	그래프 데이터
 	Graph Type	그래프 유형
+	Graph Type…	그래프 유형…
+	Graph Data…	그래프 데이터…
 	Graph Options	그래프 옵션
 	Left Axis	왼쪽 축
 	Right Axis	오른쪽 축
@@ -5035,6 +5040,8 @@ theme	Appearance	외관
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
 @msg	column must be true or a number from 1	column은 true이거나 1 이상의 숫자여야 합니다
 @msg	unknown panel `{raw}`	알 수 없는 패널 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}`에는 전환할 표시 크기가 없습니다
+@msg	the panels are not shown	패널이 표시되지 않습니다
 @msg	panels can't be shown in Presentation Mode	프레젠테이션 모드에서는 패널을 표시할 수 없습니다
 @msg	x and y must both be numbers	x와 y는 모두 숫자여야 합니다
 @msg	Downloaded {what}	{what}을(를) 다운로드했습니다
@@ -5516,6 +5523,7 @@ effect	Vertical	세로
 	Change Panel Layout	패널 레이아웃 변경
 	Close Panel	패널 닫기
 	Collapse Panel Group	패널 그룹 접기
+	Cycle Display Sizes	표시 크기 전환
 	Move Panel	패널 이동
 	Group with	함께 그룹화
 	Resize panels	패널 크기 조절
@@ -5557,6 +5565,8 @@ effect	Vertical	세로
 	Step up or down	한 단계 올리기 또는 내리기
 	Drag values or labels. Double-click a value to type.	값이나 레이블을 드래그하세요. 값을 더블클릭하면 입력할 수 있습니다.
 	Drag rings to rotate. Shift snaps to 15°.	링을 드래그해 회전하세요. Shift를 누르면 15°씩 스냅됩니다.
+	Track cube	회전 큐브
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	면, 모서리 또는 링을 드래그해 회전하세요. Shift를 누르면 화면의 한 축을 중심으로 회전합니다.
 	Drag the light, or its rings. Shift snaps to 15°.	조명이나 링을 드래그하세요. Shift를 누르면 15°씩 스냅됩니다.
 lighting	Light	광원
 	Keep visible surfaces only when expanding	확장 시 보이는 표면만 유지
@@ -5867,6 +5877,7 @@ lighting	Light	광원
 	Export Data Sets…	데이터 세트 내보내기…
 	Load Variable Library…	변수 라이브러리 불러오기…
 	Save Variable Library…	변수 라이브러리 저장…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"가져오기"는 확장자가 .csv, .tsv, .txt 또는 .xml인 데이터 소스 파일을 읽습니다
 @msg	a variable library holds text variables, and the document has none	변수 라이브러리에는 텍스트 변수가 들어가는데 문서에 텍스트 변수가 없습니다
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	변수 `{name}`은(는) 변수 라이브러리에 저장할 수 없습니다: 문자나 `_`로 시작하고 공백이나 `-`, `_`, `.` 이외의 기호가 없도록 이름을 바꾸세요
 @msg	{k} has control characters	{k}에 제어 문자가 있습니다
@@ -9186,3 +9197,20 @@ breakText	Glyphs	글리프
 @msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what}은(는) 한 장에 {MAX_COPIES_PER_SHEET}개보다 많이 인쇄됩니다: 크기를 키우세요
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}은(는) 타일 {MAX_TILES}개보다 많이 나뉘어 인쇄됩니다: 크기를 줄이세요
 @msg	{what} {i} out of range	{what} {i}이(가) 범위를 벗어났습니다
+	Packaging Tools	패키징 도구
+	Fold Lines	접는 선
+	Make Cut Line	재단선으로 만들기
+	Make Crease Line	오시선으로 만들기
+	Make Partial Cut Line	하프 컷 선으로 만들기
+	Make Perforation Line	미싱선으로 만들기
+	Make Fold Line	접는 선으로 만들기
+	Role Swatches…	선 종류 견본…
+	Role Swatches	선 종류 견본
+	Role	선 종류
+	Cut Line	재단선
+	Crease Line	오시선
+	Partial Cut Line	하프 컷 선
+	Perforation Line	미싱선
+	No objects are selected.	선택한 개체가 없습니다.
+	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
+	Remove Fold Line Role	선 종류 제거
