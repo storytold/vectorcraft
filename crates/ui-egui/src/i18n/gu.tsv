@@ -743,6 +743,7 @@
 	Copy Artboard	આર્ટબોર્ડ નકલ કરો
 	Copy Color Value (Hex)	રંગ મૂલ્યની નકલ કરો (Hex)
 	Copy Guide	ગાઇડ નકલ કરો
+	Copy Info	માહિતી નકલ કરો
 	Copy Report	રિપોર્ટ નકલ કરો
 	Copy Script Console	સ્ક્રિપ્ટ કન્સોલ નકલ કરો
 	Copy Selected	પસંદ કરેલું નકલ કરો
@@ -2770,6 +2771,7 @@
 	Radar Graph Tool	રડાર ગ્રાફ ટૂલ
 	Radial	રેડિયલ
 	Radial Blur…	રેડિયલ બ્લર…
+	Blur Center	બ્લરનું કેન્દ્ર
 	Radial Dividers:	રેડિયલ વિભાજક:
 	Radial Glows	રેડિયલ ઝગમગાટ
 	Radial Gradient	રેડિયલ ગ્રેડિઅન્ટ

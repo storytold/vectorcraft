@@ -2717,6 +2717,140 @@ fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() 
     assert_eq!(count(&mut app, red), Some(srgb));
 }
 
+/// With a display profile, translucent art and the anti-aliased edges of art over the paper are
+/// blended with the paper in sRGB before the conversion: drawn over the converted paper, each such
+/// pixel shows the converted blend. Opaque art, and art over the pasteboard, convert as before. The
+/// part an edit renders again and the render worker's frame do the same, a change of the
+/// transparency grid renders the art again, and Outline converts the art alone.
+#[test]
+fn translucent_art_over_the_paper_is_blended_before_the_display_profile() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.canvas.worker_started = true; // every frame on this thread
+    let half = app.run("shape.rectangle", json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [half], "color": "#ff0000"})).unwrap();
+    app.run("transparency.set", json!({"ids": [half], "opacity": 50})).unwrap();
+    let disc = app.run("shape.ellipse", json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [disc], "color": "#2040c0"})).unwrap();
+    // Left of the artboard, over the pasteboard.
+    let outside = app.run("shape.rectangle", json!({"x": -60, "y": 100, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [outside], "color": "#00ff00"})).unwrap();
+    app.run("transparency.set", json!({"ids": [outside], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    // The art's raster one frame uploads: where it goes ([x, y] for a part), its width and its pixels.
+    let upload = |app: &mut VectorcraftApp| -> Option<(Option<[usize; 2]>, usize, Vec<egui::Color32>)> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref()?.id();
+        let up = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            (d.pos, img.width(), img.pixels.clone())
+        });
+        delta.clear();
+        up
+    };
+    upload(&mut app).expect("the first frame");
+    let v = app.view_mut().unwrap();
+    (v.zoom, v.center) = (1.0, Point::new(120.0, 150.0));
+    let (_, width, srgb) = upload(&mut app).expect("the view at 100%");
+    let key = app.canvas.key.clone().unwrap();
+    assert!(key.backdrop.is_none(), "no display profile: nothing to blend");
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    let (_, _, shown) = upload(&mut app).expect("drawn again, converted");
+    let key = app.canvas.key.clone().unwrap();
+    assert!(key.backdrop.is_some());
+    let white = t.apply8([255; 3]);
+    // What the canvas shows of pixel `c` over the converted paper `under`, as egui blends it.
+    let over = |c: egui::Color32, under: [u8; 3]| {
+        let k = 255 - u32::from(c.a());
+        [0, 1, 2].map(|i| u32::from(c.to_array()[i]) + (u32::from(under[i]) * k + 127) / 255)
+    };
+    let plain = |s: egui::Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied(&mut px);
+        egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    let (view_w, view_h) = (key.w, key.h);
+    let (_, _, view) = frame_view(
+        None,
+        (view_w, view_h),
+        &View { zoom: key.zoom, center: Point::new(key.cx, key.cy), rotation: key.rot, ..View::default() },
+        key.ppp,
+    );
+    let to_doc = view.inverse();
+    let (mut blended, mut beside) = (0, 0);
+    for (i, (s, c)) in srgb.iter().zip(&shown).enumerate() {
+        let p = to_doc * Point::new((i % width) as f64 + 0.5, (i / width) as f64 + 0.5);
+        if s.a() == 0 || s.a() == 255 {
+            assert_eq!(*c, plain(*s), "opaque and empty pixels convert as before, at {p:?}");
+        } else if (1.0..399.0).contains(&p.x) && (1.0..299.0).contains(&p.y) {
+            let k = 255 - u32::from(s.a());
+            let mix = [0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (255 * k + 127) / 255).min(255) as u8);
+            let want = t.apply8(mix);
+            let got = over(*c, white);
+            assert!((0..3).all(|j| got[j].abs_diff(u32::from(want[j])) <= 1), "at {p:?}: {got:?} shown, {want:?} wanted");
+            blended += 1;
+        } else if p.x < -1.0 {
+            assert_eq!(*c, plain(*s), "over the pasteboard the art converts alone, at {p:?}");
+            beside += 1;
+        }
+    }
+    assert!(blended > 1000 && beside > 500, "{blended} pixels over the paper, {beside} over the pasteboard");
+    // The test tells the two apart: the fill converted alone, over the converted paper, shows another color.
+    let at = view * Point::new(200.0, 150.0);
+    let at = at.y as usize * width + at.x as usize;
+    let (s, c) = (srgb[at], shown[at]);
+    assert!((50..=205).contains(&s.a()), "the 50% fill at the center: {s:?}");
+    let alone = over(plain(s), white);
+    assert!((0..3).any(|j| alone[j].abs_diff(over(c, white)[j]) > 2), "{alone:?} and {:?}", over(c, white));
+    // The render worker's frame of the same key is the same.
+    let opts = app.canvas.shown.as_ref().unwrap().1.clone();
+    let doc = app.session.active().unwrap().doc.clone();
+    let display = app.display_profile.transform(true);
+    let job = |key: &CacheKey, doc: &std::sync::Arc<vectorcraft_doc::Document>| crate::render_worker::Job {
+        key: key.clone(),
+        doc: doc.clone(),
+        w: view_w,
+        h: view_h,
+        view,
+        opts: opts.clone(),
+        scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+        effects: Default::default(),
+        may_copy: false,
+        may_keep: false,
+        display: display.clone(),
+    };
+    let worker = crate::canvas::render_job(&mut vectorcraft_render::Renderer::new(), &mut None, &job(&key, &doc)).img;
+    let near = |a: &[u8], b: egui::Color32| a.iter().zip(b.to_array()).all(|(x, y)| x.abs_diff(y) <= 1);
+    assert!(worker.pixels.as_chunks::<4>().0.iter().zip(&shown).all(|(a, b)| near(a, *b)), "the worker's frame matches");
+    // An edit renders its part again, blended too.
+    app.run("paint.setFill", json!({"ids": [half], "color": "#0000ff"})).unwrap();
+    let (pos, part_w, part) = upload(&mut app).expect("the edit shows");
+    let [x0, y0] = pos.expect("only its part");
+    let key = app.canvas.key.clone().unwrap();
+    let doc = app.session.active().unwrap().doc.clone();
+    let whole = crate::canvas::render_job(&mut vectorcraft_render::Renderer::new(), &mut None, &job(&key, &doc)).img;
+    let whole = whole.pixels.as_chunks::<4>().0;
+    for (i, c) in part.iter().enumerate() {
+        let at = (y0 + i / part_w) * view_w as usize + x0 + i % part_w;
+        assert!(near(&whole[at], *c), "the part matches the whole frame at {at}: {c:?}, {:?}", whole[at]);
+    }
+    assert!(part.iter().filter(|c| c.a() != 0 && c.a() != 255).count() > 1000, "the blue fill is in the part");
+    // The transparency grid replaces the paper under the art: drawn again.
+    app.run("view.transparencyGrid", json!({"on": true})).unwrap();
+    assert!(upload(&mut app).is_some_and(|(pos, ..)| pos.is_none()), "the grid renders the art again");
+    assert!(app.canvas.key.as_ref().and_then(|k| k.backdrop.as_ref()).is_some_and(|b| b.grid.is_some()));
+    // Outline: the white canvas is the interface's, so the art converts alone.
+    app.run("view.outline", json!({})).unwrap();
+    upload(&mut app).expect("Outline renders again");
+    assert!(app.canvas.key.as_ref().is_some_and(|k| k.outline && k.backdrop.is_none()));
+}
+
 /// View › Hide Template (#2000): a template layer's art leaves the canvas, and Show Template
 /// draws it again, dimmed as before; each re-renders at once.
 #[test]
@@ -5525,6 +5659,74 @@ fn a_pane_draws_its_own_views_outline() {
         assert_eq!(fills.first(), Some(&canvas), "pane in Outline: {pane_outline}");
         assert_eq!(names, [name; 2], "pane in Outline: {pane_outline}");
     }
+}
+
+/// With a display profile, a split-view pane or floating window blends translucent art with the
+/// paper before the conversion, as the canvas does, and in its own Outline converts the art alone.
+#[test]
+fn a_pane_blends_translucent_art_before_the_display_profile() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    let half = app.run("shape.rectangle", json!({"x": 50, "y": 25, "width": 100, "height": 50})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [half], "color": "#ff0000"})).unwrap();
+    app.run("transparency.set", json!({"ids": [half], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    crate::doc_windows::new_window(&mut app).unwrap();
+    app.canvas.panes.worker_started = true; // every pane render on this thread
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    let ctx = egui::Context::default();
+    let other = (0, 1);
+    let slot = (app.session.documents()[0].uid, 1);
+    // The pane's raster one frame uploads, and the key it was rendered for.
+    let pane = |app: &mut VectorcraftApp| -> (Vec<egui::Color32>, CacheKey) {
+        let cell = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            panes::pane(app, ui, other, cell);
+        });
+        let (key, tex) = app.canvas.panes.shown.get(&slot).expect("the pane's render");
+        let id = tex.id();
+        let pixels = out.textures_delta.set.iter().find(|e| e.0.eq(&id)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            img.pixels.clone()
+        });
+        let key = key.clone();
+        out.textures_delta.clear();
+        (pixels.expect("the pane uploads"), key)
+    };
+    app.session.prefs.monitor_profile_display = false;
+    let (srgb, key) = pane(&mut app);
+    assert!(key.backdrop.is_none(), "no display profile: nothing to blend");
+    app.session.prefs.monitor_profile_display = true;
+    let (shown, key) = pane(&mut app);
+    assert!(key.backdrop.is_some(), "the pane's Preview blends with its paper");
+    assert_eq!(srgb.len(), shown.len());
+    let plain = |s: egui::Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied(&mut px);
+        egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    let mut blended = 0;
+    for (s, c) in srgb.iter().zip(&shown) {
+        if s.a() == 0 || s.a() == 255 {
+            assert_eq!(*c, plain(*s), "opaque and empty pixels convert as before");
+        } else {
+            assert_eq!(c.a(), s.a(), "the alpha is kept");
+            let p = plain(*s);
+            if (0..3).any(|j| c.to_array()[j].abs_diff(p.to_array()[j]) > 2) {
+                blended += 1;
+            }
+        }
+    }
+    assert!(blended > 100, "{blended} translucent pixels blended with the paper");
+    // The pane's own Outline: the art converts alone, while the current view stays in Preview.
+    crate::doc_windows::view_mut(&mut app, other).unwrap().outline = true;
+    app.view_mut().unwrap().outline = false;
+    let (_, key) = pane(&mut app);
+    assert!(key.outline && key.backdrop.is_none(), "the pane's Outline has no paper to blend with");
 }
 
 /// While the rulers' origin is dragged out of their corner, its crosshair draws over the canvas in
