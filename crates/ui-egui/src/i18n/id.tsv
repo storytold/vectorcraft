@@ -131,6 +131,19 @@
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog tidak dapat dibuka di dalam callback fungsi bawaan, getter, konversi, atau berkas yang dijalankan $.evalFile; panggil dari kode skrip itu sendiri
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: jawaban berikutnya di `answers` untuk {_1}, bukan {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` tidak memiliki jawaban tersisa untuk dialog ini
+@msg	`answers` must be a list of answers	`answers` harus berupa daftar jawaban
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` berisi lebih dari {MAX_ANSWERS} jawaban
+@msg	`answers` is larger than 1 MiB	`answers` lebih besar dari 1 MiB
+@msg	must be an object with `kind` and `value`	harus berupa objek dengan `kind` dan `value`
+@msg	must have exactly `kind` and `value`	harus memiliki tepat `kind` dan `value`
+@msg	is an alert's answer, whose `value` must be "ok"	adalah jawaban alert, yang `value`-nya harus "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	adalah jawaban confirm, yang `value`-nya harus true atau false
+@msg	is longer than 16 KiB	lebih panjang dari 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	adalah jawaban prompt, yang `value`-nya harus berupa string atau null
+@msg	must have `kind` alert, confirm or prompt	harus memiliki `kind` alert, confirm, atau prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` hanya untuk proses tanpa orang yang dapat ditanya: di aplikasi, pengguna menjawab setiap dialog
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	vc.document{place} is too large for a script	vc.document{place} terlalu besar untuk skrip
 @msg	vc.log: the log of this run is full	vc.log: log proses ini penuh
 @msg	this function's script run has ended	proses skrip fungsi ini telah berakhir
@@ -479,6 +492,7 @@
 @msg	stops must be in order of `offset`	perhentian harus berurutan menurut `offset`
 @msg	the document has no pattern {pattern}	dokumen tidak memiliki pola {pattern}
 @msg	the document has no swatch {n}	dokumen tidak memiliki swatch {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` memerlukan perhentian yang ditautkan ke swatch warna spot
 @msg	the output	keluaran
 @msg	the path has no anchor points	jalur tidak memiliki titik jangkar
 @msg	too many anchor points (limit {MAX_ANCHORS})	terlalu banyak titik jangkar (batas {MAX_ANCHORS})
@@ -6311,6 +6325,8 @@ mark-style	Japanese	Jepang
 	Save Variable Library…	Simpan pustaka variabel…
 @msg	a variable library holds text variables, and the document has none	pustaka variabel berisi variabel teks, dan dokumen tidak memilikinya
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabel `{name}` tidak dapat disimpan dalam pustaka variabel: ganti namanya agar diawali huruf atau `_`, tanpa spasi atau simbol selain `-`, `_`, dan `.`
+@msg	{k} has control characters	{k} berisi karakter kontrol
+@msg	{k} has control characters or line breaks	{k} berisi karakter kontrol atau jeda baris
 @msg	data set `{name}` holds a control character, which a variable library can't hold	himpunan data `{name}` berisi karakter kontrol, yang tidak dapat dimuat dalam pustaka variabel
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	himpunan data `{name}` diawali atau diakhiri spasi, yang tidak dapat dimuat dalam pustaka variabel
 @msg	variables that aren't text were left out: {kinds}	variabel yang bukan teks dihilangkan: {kinds}
