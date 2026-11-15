@@ -3299,6 +3299,32 @@ fn select_all_on_artboard_refuses_an_artboard_past_u32() {
     assert!(selected(&s).is_empty());
 }
 
+/// All on Active Artboard refuses an `artboard` that is not a whole number, naming the parameter,
+/// and leaves the selection as it was; a whole number past the last artboard is `no such
+/// artboard`. Left out or null, it takes the first artboard.
+#[test]
+fn select_all_on_artboard_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 2, "artboardLayout": {"layout": "row", "spacing": 0}})).unwrap();
+    let (first, second) = (rect(&mut s, 10.0, 10.0, 20.0, 20.0), rect(&mut s, 110.0, 10.0, 20.0, 20.0));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        s.execute("select.none", &json!({})).unwrap();
+        let err = s.execute("select.allOnArtboard", &json!({"artboard": bad})).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `select.allOnArtboard`: `artboard` must be a whole number", "{bad}");
+        assert!(selected(&s).is_empty(), "{bad}");
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.allOnArtboard", &json!({"artboard": 9})).unwrap_err().to_string(), "no such artboard");
+    assert!(selected(&s).is_empty());
+    for p in [json!({}), json!({"artboard": null}), json!({"artboard": 0})] {
+        s.execute("select.none", &json!({})).unwrap();
+        s.execute("select.allOnArtboard", &p).unwrap();
+        assert_eq!(selected(&s), vec![first], "{p}");
+    }
+    s.execute("select.allOnArtboard", &json!({"artboard": 1})).unwrap();
+    assert_eq!(selected(&s), vec![second]);
+}
+
 #[test]
 fn save_and_recall_selection() {
     let mut s = session();
@@ -4603,6 +4629,27 @@ fn artboard_guides_go_with_their_artboard() {
     // Cut, too.
     s.execute("artboard.cut", &json!({"index": 0})).unwrap();
     assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
+}
+
+/// `guide.add` refuses an `artboard` that is not a whole number, naming the parameter, and adds no
+/// guide; a whole number past the last artboard is `no such artboard`. Null makes a canvas guide,
+/// and a whole number an artboard guide.
+#[test]
+fn guide_add_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 900, "y": 0, "width": 400, "height": 300})).unwrap();
+    let add = |s: &mut Session, artboard: Value| s.execute("guide.add", &json!({"vertical": true, "pos": 10, "artboard": artboard}));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        let err = add(&mut s, bad.clone()).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `guide.add`: `artboard` must be a whole number", "{bad}");
+    }
+    assert_eq!(add(&mut s, json!(9)).unwrap_err().to_string(), "no such artboard");
+    assert!(s.doc().unwrap().doc.ruler_guides().is_empty());
+    add(&mut s, Value::Null).unwrap();
+    add(&mut s, json!(1)).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let boards: Vec<_> = d.ruler_guides().iter().map(|g| g.artboard).collect();
+    assert_eq!(boards, [None, Some(d.artboards[1].id)]);
 }
 
 /// #451: a guide dragged out of a ruler snaps (to the art's corners, side midpoints and anchors,

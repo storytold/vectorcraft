@@ -294,7 +294,10 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). A literal brace in a
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). A value that starts with
+  `{` is translated only when it has an exact row, so a JSON object stays as it is; a value that starts with `[` is
+  also matched against a template that starts with `[` and an index of digits, such as an effect's refusal
+  ``[{j}] `{_1}`: {why}``, so its reason is translated while a JSON array stays as it is. A literal brace in a
   row is written `{{` or `}}`, in the English and in the translation: a message made with `format!` keeps the
   doubled braces of its format string, and a plain string literal has each of its braces doubled, so the row for
   `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch, Danish and Indonesian

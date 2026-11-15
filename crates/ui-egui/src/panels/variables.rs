@@ -364,7 +364,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::menu_item(ui, tl!("New Variable…"), !locked, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
     }
-    // Variable Options renames the highlighted variable, else the first.
+    // Variable Options edits the name and kind of the highlighted variable, else the first.
     if widgets::menu_item(ui, tl!("Variable Options…"), !vars.is_empty() && !locked, false) {
         let name = highlighted.clone().or_else(|| vars.first().cloned()).unwrap_or_default();
         crate::dialogs::variables::open(app, "variable.rename", Some(&name));

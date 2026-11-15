@@ -293,7 +293,7 @@ fn bar_rect(horizontal: bool, a: f64, w: f64, v0: f64, v1: f64) -> Rect {
 }
 
 /// White text on a dark wedge.
-fn is_dark(fill: &Paint) -> bool {
+pub(super) fn is_dark(fill: &Paint) -> bool {
     fill.color().is_some_and(|c| {
         let [r, g, b] = c.to_rgb();
         0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5
