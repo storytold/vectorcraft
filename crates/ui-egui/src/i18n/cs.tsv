@@ -7365,6 +7365,24 @@ breakText	Glyphs	Glyfy
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozložit čárky na cesty
 @msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tečná kružnice…
+	Tangent Circle	Tečná kružnice
+	Circle:	Kružnice:
+@msg	`ids` names an object twice	`ids` uvádí některý objekt dvakrát
+@msg	select two or three paths or compound paths	vyberte dvě nebo tři cesty nebo složené cesty
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` musí být od 0.01 do 1000000 pt
+@msg	two shapes need a `radius`	dva tvary potřebují `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tři tvary určují poloměr samy: vynechte `radius`
+@msg	`circle` must be from 0 to 64	`circle` musí být od 0 do 64
+@msg	a shape has no outline	tvar nemá obrys
+@msg	the shapes are too complex: at most 2000 segments in all	tvary jsou příliš složité: celkem nejvýše 2000 segmentů
+@msg	these shapes take too long to search	hledání pro tyto tvary trvá příliš dlouho
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	těchto tvarů se dotýká více než 64 kružnic: mohou se jich dotýkat podél celé křivky
+@msg	no circle touches these shapes	žádná kružnice se těchto tvarů nedotýká
+@msg	`circle` is past the last circle found ({found})	`circle` je za poslední nalezenou kružnicí ({found})
+@msg	object {value} is not a path or compound path	objekt {value} není cesta ani složená cesta
+@msg	these shapes are too small to measure	tyto tvary jsou příliš malé na měření
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Nástroje dokumentu
 	Save a Timestamped Copy	Uložit kopii s datem a časem

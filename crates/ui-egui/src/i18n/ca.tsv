@@ -7361,6 +7361,24 @@ breakText	Glyphs	Glifs
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandeix els guions en camins
 @msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Cercle tangent…
+	Tangent Circle	Cercle tangent
+	Circle:	Cercle:
+@msg	`ids` names an object twice	`ids` indica un objecte dues vegades
+@msg	select two or three paths or compound paths	seleccioneu dos o tres camins o camins compostos
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` ha de ser de 0.01 a 1000000 pt
+@msg	two shapes need a `radius`	dues formes necessiten un `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	tres formes fixen el radi per si mateixes: ometeu `radius`
+@msg	`circle` must be from 0 to 64	`circle` ha de ser de 0 a 64
+@msg	a shape has no outline	una forma no té contorn
+@msg	the shapes are too complex: at most 2000 segments in all	les formes són massa complexes: com a màxim 2000 segments en total
+@msg	these shapes take too long to search	la cerca triga massa amb aquestes formes
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	més de 64 cercles toquen aquestes formes: potser les toquen al llarg de tota una corba
+@msg	no circle touches these shapes	cap cercle no toca aquestes formes
+@msg	`circle` is past the last circle found ({found})	`circle` passa de l’últim cercle trobat ({found})
+@msg	object {value} is not a path or compound path	l’objecte {value} no és un camí ni un camí compost
+@msg	these shapes are too small to measure	aquestes formes són massa petites per mesurar-les
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Eines del document
 	Save a Timestamped Copy	Desa una còpia amb data i hora

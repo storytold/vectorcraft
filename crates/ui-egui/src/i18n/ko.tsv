@@ -6956,6 +6956,24 @@ breakText	Glyphs	글리프
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	접원…
+	Tangent Circle	접원
+	Circle:	원:
+@msg	`ids` names an object twice	`ids`에 같은 오브젝트가 두 번 있습니다
+@msg	select two or three paths or compound paths	패스나 컴파운드 패스를 두 개 또는 세 개 선택하세요
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius`은(는) 0.01에서 1000000 pt 사이여야 합니다
+@msg	two shapes need a `radius`	모양 두 개에는 `radius`이(가) 필요합니다
+@msg	three shapes set the radius themselves: leave `radius` out	모양 세 개는 반지름을 스스로 정하므로 `radius`을(를) 빼세요
+@msg	`circle` must be from 0 to 64	`circle`은(는) 0에서 64 사이여야 합니다
+@msg	a shape has no outline	윤곽선이 없는 모양이 있습니다
+@msg	the shapes are too complex: at most 2000 segments in all	모양이 너무 복잡합니다: 세그먼트는 모두 합쳐 최대 2000개입니다
+@msg	these shapes take too long to search	이 모양들을 찾는 데 시간이 너무 오래 걸립니다
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	이 모양들에 닿는 원이 64개를 넘습니다: 곡선 전체를 따라 닿아 있을 수 있습니다
+@msg	no circle touches these shapes	이 모양들에 닿는 원이 없습니다
+@msg	`circle` is past the last circle found ({found})	`circle`이(가) 찾은 마지막 원을 넘었습니다({found})
+@msg	object {value} is not a path or compound path	오브젝트 {value}은(는) 패스나 컴파운드 패스가 아닙니다
+@msg	these shapes are too small to measure	이 모양들은 너무 작아서 측정할 수 없습니다
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	문서 도구
 	Save a Timestamped Copy	날짜와 시간이 붙은 사본 저장

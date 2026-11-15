@@ -963,6 +963,13 @@ fn structured_junk() {
         ("addon.pathtools.trim", json!({"points": [[0, 0], [1e7, 1e7], [-1e7, 5], [0, 0]]})),
         ("addon.pathtools.trim", json!({"points": [[0, 0], [1, "y"], null]})),
         ("addon.pathtools.trim", json!({"at": [50, 50], "tolerance": 100})),
+        // Path Precision Tools: Tangent Circle.
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3], "radius": 1e6, "circle": u64::MAX})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3, 4], "radius": f64::MIN_POSITIVE, "circle": -1})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 2], "radius": "1 mm"})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3], "radius": 0.01, "circle": 64})),
+        ("addon.pathtools.tangentCircle", json!({"ids": [2, 3, 4]})),
+        ("addon.pathtools.tangentCircle", json!({"ids": "x", "radius": f64::NAN, "circle": 1.5})),
         // Arrange Tools add-on.
         ("addon.arrange.grid", json!({"columns": u64::MAX, "gapX": 1e6, "gapY": -1e6, "centerOnArtboard": true})),
         ("addon.arrange.grid", json!({"layout": "row", "gapX": f64::MAX, "columns": -1})),

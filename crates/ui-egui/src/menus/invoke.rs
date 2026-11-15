@@ -77,6 +77,9 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
         }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
+        crate::addons::pathtools::tangent_circle::COMMAND => {
+            (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
+        }
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
         crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
         crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),

@@ -821,6 +821,7 @@ antiAlias	Sharp	शार्प
 	Chrome…	क्रोम…
 	Circle	वृत्त
 	Circle (open)	सर्किल (ओपन)
+	Circle:	वृत्त:
 	Classic	क्लासिक
 	Classic Defaults	क्लासिक डिफ़ॉल्ट
 	Clean Up	क्लीन अप
@@ -5112,6 +5113,8 @@ antiAlias	Sharp	शार्प
 	Tag (open)	टैग (ओपन)
 	Tail:	पूंछ:
 	Tamil	तमिल
+	Tangent Circle	स्पर्शी वृत्त
+	Tangent Circle…	स्पर्शी वृत्त…
 	Taper	टेपर
 	Target	लक्ष्य
 	Target Contents	लक्ष्य सामग्री
@@ -8039,6 +8042,20 @@ antiAlias	Sharp	शार्प
 @msg	select paths, or segments, to divide	विभाजित करने के लिए पाथ, या खंड चुनें
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
 @msg	Select point type	पॉइंट टाइप सिलेक्ट करें
+@msg	select two or three paths or compound paths	दो या तीन पाथ या यौगिक पाथ सिलेक्ट करें
+@msg	`ids` names an object twice	`ids` एक ऑब्जेक्ट को दो बार बताता है
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 0.01 से 1000000 pt तक होना चाहिए
+@msg	two shapes need a `radius`	दो आकृतियों के लिए `radius` चाहिए
+@msg	three shapes set the radius themselves: leave `radius` out	तीन आकृतियाँ त्रिज्या खुद तय करती हैं: `radius` न दें
+@msg	`circle` must be from 0 to 64	`circle` 0 से 64 तक होना चाहिए
+@msg	a shape has no outline	एक आकृति की कोई आउटलाइन नहीं है
+@msg	the shapes are too complex: at most 2000 segments in all	आकृतियाँ बहुत जटिल हैं: कुल मिलाकर अधिकतम 2000 सेगमेंट
+@msg	these shapes take too long to search	इन आकृतियों की खोज में बहुत ज़्यादा समय लगता है
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	इन आकृतियों को 64 से ज़्यादा वृत्त छूते हैं: शायद वे पूरे वक्र के साथ छूते हैं
+@msg	no circle touches these shapes	कोई भी वृत्त इन आकृतियों को नहीं छूता
+@msg	`circle` is past the last circle found ({found})	`circle` मिले हुए आखिरी वृत्त से आगे है ({found})
+@msg	object {value} is not a path or compound path	ऑब्जेक्ट {value} पाथ या यौगिक पाथ नहीं है
+@msg	these shapes are too small to measure	ये आकृतियाँ मापने के लिए बहुत छोटी हैं
 @msg	select rows or objects to collect	इकट्ठा करने के लिए पंक्तियों या ऑब्जेक्ट्स सिलेक्ट करें
 @msg	select segments, or paths, to add points to	पॉइंट्स जोड़ने के लिए सेगमेंट या पाथ सिलेक्ट करें
 @msg	select some type first	पहले कुछ टाइप सिलेक्ट करें
