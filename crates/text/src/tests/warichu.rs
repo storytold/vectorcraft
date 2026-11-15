@@ -433,6 +433,51 @@ fn blocks_the_bidi_order_interleaves_keep_their_places() {
     assert!(c.x < bet.x && bet.x < z.x, "{c:?} {bet:?} {z:?}");
 }
 
+/// A justified line spreads its letters with the same gap before a right-to-left block as before a
+/// left-to-right one: the block starts at the first of its glyphs the line draws.
+#[test]
+fn justification_opens_the_same_gap_before_a_right_to_left_block() {
+    for inside in ["cd", "אב"] {
+        let at = |justify: Justify| {
+            let mut t = area("", style(20.0), Rect::new(0.0, 0.0, 200.0, 400.0), justify);
+            t.runs = vec![TextRun::new("ab", style(20.0)), TextRun::new(inside, marked(20.0)), TextRun::new("z", style(20.0))];
+            let l = layout(db(), &t);
+            let x = |byte: usize| l.glyphs.iter().filter(|g| g.byte == byte).map(|g| g.origin.x).fold(f64::INFINITY, f64::min);
+            let block = l.glyphs.iter().filter(|g| g.warichu.is_some()).map(|g| g.origin.x).fold(f64::INFINITY, f64::min);
+            (x(0), x(1), block, x(2 + inside.len()))
+        };
+        let (a, b, block, z) = at(Justify::Left);
+        let (a2, b2, block2, z2) = at(Justify::JustifyAll);
+        let gap = (b2 - a2) - (b - a);
+        assert!(gap > 1.0, "{inside}: the line is spread: {gap}");
+        assert!(((block2 - b2) - (block - b) - gap).abs() < 1e-6, "{inside}: the gap before the block: {} {gap}", (block2 - b2) - (block - b));
+        assert!(((z2 - block2) - (z - block) - gap).abs() < 1e-6, "{inside}: the gap after the block: {} {gap}", (z2 - block2) - (z - block));
+    }
+}
+
+/// The caret next to a character of a block spans the band of the character's block line, not
+/// the whole line.
+#[test]
+fn the_caret_in_a_block_spans_its_block_line() {
+    let l = layout(db(), &with_block("cdef", marked(20.0)));
+    let (c, e) = (&l.glyphs[2], &l.glyphs[4]);
+    let middle = (c.origin.y + e.origin.y) * 0.5;
+    let line = &l.lines[0];
+    // "c" and "d", on the upper line.
+    for byte in [2, 3] {
+        let (top, bottom) = caret_position(&l, byte);
+        assert!((top.y - (line.baseline - line.ascent)).abs() < 1e-6 && (bottom.y - middle).abs() < 1e-6, "{byte}: {top:?} {bottom:?} {middle}");
+    }
+    // "e" and "f", on the lower line.
+    for byte in [4, 5] {
+        let (top, bottom) = caret_position(&l, byte);
+        assert!((top.y - middle).abs() < 1e-6 && (bottom.y - (line.baseline + line.descent)).abs() < 1e-6, "{byte}: {top:?} {bottom:?} {middle}");
+    }
+    // Outside the block the caret spans the line.
+    let (top, bottom) = caret_position(&l, 0);
+    assert!((top.y - (line.baseline - line.ascent)).abs() < 1e-6 && (bottom.y - (line.baseline + line.descent)).abs() < 1e-6);
+}
+
 /// A click on a block's lower line goes to that line's characters, not to the character of the
 /// upper line at the same place along the block.
 #[test]
@@ -579,6 +624,24 @@ fn a_block_of_several_fonts_keeps_the_tallest_of_them() {
     assert!((first_short.0 - first_tall.0).abs() < 1e-6 && (first_short.1 - first_tall.1).abs() < 1e-6, "{first_short:?} {first_tall:?}");
     let deepest = plain[pair.0].1.max(plain[pair.1].1);
     assert!(first_short.0 >= plain[pair.0].0 - 1e-6 && first_short.1 >= deepest - 1e-6, "{first_short:?} {plain:?}");
+}
+
+/// The line holds each block line's characters at their own height: with a wide Line Gap, the
+/// ascent of the top block line's characters and the descent of the bottom one's stay inside the
+/// line.
+#[test]
+fn a_wide_line_gap_keeps_the_outer_block_lines_inside_the_line() {
+    let small = layout(db(), &point("x", style(10.0)));
+    let (ascent, descent) = (small.lines[0].ascent, small.lines[0].descent);
+    for lines in [2, 3] {
+        let l = layout(db(), &with_block("cdefgh", CharStyle { warichu_lines: lines, warichu_gap: 20.0, ..marked(20.0) }));
+        let line = &l.lines[0];
+        let block = &l.glyphs[2..8];
+        let top = block.iter().map(|g| g.origin.y).fold(f64::INFINITY, f64::min);
+        let bottom = block.iter().map(|g| g.origin.y).fold(f64::NEG_INFINITY, f64::max);
+        assert!(line.baseline - line.ascent <= top - ascent + 1e-6, "{lines}: {} {} {top} {ascent}", line.baseline, line.ascent);
+        assert!(line.baseline + line.descent >= bottom + descent - 1e-6, "{lines}: {} {} {bottom} {descent}", line.baseline, line.descent);
+    }
 }
 
 /// Warichu Settings on characters not marked Warichu leave their shaping alone: "fi" keeps its

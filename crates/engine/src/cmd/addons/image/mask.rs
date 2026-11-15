@@ -320,7 +320,8 @@ fn fresh(doc: &Document, n: &Node, cmd: &str) -> Option<Result<(ColorMask, Optio
 
 /// After an edit from `before` (`None`: everything is new, as after a document's links are read):
 /// the color masks of images in `doc`'s art ([`Document::art_roots`]: layers, symbols, graph
-/// designs, patterns and the original of the pattern being edited, opacity mask art included)
+/// designs, patterns, the original of the pattern being edited and the art of the stored brushes
+/// while it is set on the document, opacity mask art included)
 /// whose own pixels were replaced are made again for the new pixels ([`Refresh::made`]). Only the
 /// art that changed since `before` is looked at.
 pub(crate) fn refresh(before: Option<&Document>, doc: &mut Document) {

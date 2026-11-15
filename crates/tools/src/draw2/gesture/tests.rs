@@ -22,23 +22,65 @@ fn drag_held(t: &mut GestureTool, cx: &ToolContext, pts: &[(f64, f64)], m: Mods)
     v
 }
 
-/// The Pencil's new path starts and ends on Smart Guides (#506), the points between where
-/// the hand went.
+/// The Pencil follows the hand from the press to the release: it ignores Smart Guides and Snap to Point and shows no
+/// Smart Guides, hovering or drawing over the art, with Smart Guides on or with only Snap to Point.
 #[test]
-fn pencil_ends_snap_to_smart_guides() {
+fn pencil_follows_the_hand_and_shows_no_smart_guides() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
-    let cx = cx(&d, &s, &p);
-    let mut t = GestureTool::new("pencil");
-    let acts = drag(&mut t, &cx, &[(102.0, 98.0), (151.0, 300.0), (250.0, 320.0), (198.0, 203.0)], Mods::default());
-    let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
-    assert_eq!(v["points"], json!([[100.0, 100.0], [151.0, 300.0], [250.0, 320.0], [200.0, 200.0]]));
+    let on = cx(&d, &s, &p);
+    let snap_to_point = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    // Near the corners at (100, 100) and (200, 200), within Snap to Point's 2 px of them.
+    let hand = [(101.0, 99.0), (151.0, 300.0), (250.0, 320.0), (199.0, 201.0)];
+    for cx in [&on, &snap_to_point] {
+        let mut t = GestureTool::new("pencil");
+        t.pointer(cx, &PointerEvent::new(PointerKind::Move, hand[0].0, hand[0].1));
+        assert!(t.overlays(cx).is_empty(), "hovering: {:?}", t.overlays(cx));
+        t.pointer(cx, &PointerEvent::new(PointerKind::Down, hand[0].0, hand[0].1));
+        for &(x, y) in &hand[1..] {
+            t.pointer(cx, &PointerEvent::new(PointerKind::Drag, x, y));
+            assert!(t.snap.guides().is_empty(), "drawing: {:?}", t.snap.guides());
+        }
+        let last = hand[hand.len() - 1];
+        let acts = t.pointer(cx, &PointerEvent::new(PointerKind::Up, last.0, last.1));
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(v["points"], json!(hand.map(|(x, y)| [x, y])));
+    }
     // The Paintbrush follows the hand all the way.
     let mut t = GestureTool::new("paintbrush");
-    let acts = drag(&mut t, &cx, &[(102.0, 98.0), (151.0, 300.0)], Mods::default());
+    let acts = drag(&mut t, &on, &[(102.0, 98.0), (151.0, 300.0)], Mods::default());
     let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
     assert_eq!(v["points"][0], json!([102.0, 98.0]));
+}
+
+/// Snap to Grid and Snap to Pixel are not Smart Guides: they still move the Pencil's ends (and an
+/// Alt line's), while the points between follow the hand.
+#[test]
+fn pencil_ends_still_snap_to_the_grid_and_pixels() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let grid = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let pixel = ToolContext { snap_to_pixel: true, ..cx(&d, &s, &p) };
+    let on = |cx: &ToolContext, q: (f64, f64)| match cx.snap_to_grid {
+        true => vectorcraft_geom::snap::snap_point_to_grid(Point::new(q.0, q.1), cx.grid_step()),
+        false => Point::new(q.0.round(), q.1.round()),
+    };
+    let hand = [(301.3, 302.6), (351.4, 420.2), (447.7, 452.9)];
+    for cx in [&grid, &pixel] {
+        let (first, last) = (on(cx, hand[0]), on(cx, hand[2]));
+        assert!(first != Point::new(hand[0].0, hand[0].1) && last != Point::new(hand[2].0, hand[2].1));
+        let mut t = GestureTool::new("pencil");
+        let acts = drag(&mut t, cx, &hand, Mods::default());
+        let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+        assert_eq!(v["points"], json!([[first.x, first.y], [351.4, 420.2], [last.x, last.y]]));
+        // Alt's straight line ends on the grid or a pixel too.
+        let mut t = GestureTool::new("pencil");
+        let acts = drag_held(&mut t, cx, &[hand[0], hand[2]], Mods { alt: true, ..Mods::default() });
+        let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+        assert_eq!(v["points"][1], json!([last.x, last.y]));
+    }
 }
 
 /// #852: the Paintbrush sends each point's pen pressure; a mouse (always fully pressed) and
@@ -485,10 +527,20 @@ fn blob_brush_sends_keep_selected_and_merge_only_with_selection() {
             "{acts:?}"
         );
     }
-    // The Eraser keeps Size (Fixed by default), Angle and Roundness: a round tip by default.
+    // The Eraser keeps Size, Angle and Roundness, each Fixed by default: a round tip by default.
     assert_eq!(
         GestureTool::new("eraser").options(),
-        json!({"size": 10.0, "sizeMode": "fixed", "sizeVariation": 0.0, "angle": 0.0, "roundness": 100.0})
+        json!({
+            "size": 10.0,
+            "sizeMode": "fixed",
+            "sizeVariation": 0.0,
+            "angle": 0.0,
+            "angleMode": "fixed",
+            "angleVariation": 0.0,
+            "roundness": 100.0,
+            "roundnessMode": "fixed",
+            "roundnessVariation": 0.0
+        })
     );
 }
 
@@ -693,10 +745,10 @@ fn pencil_shift_draws_a_straight_line_at_45_degree_steps() {
     }
 }
 
-/// #3799: a Shift line leaves no Smart Guides of its press on screen while it is dragged
-/// (its end doesn't snap), and Alt at its release leaves it open.
+/// #3799: a Shift line shows no Smart Guides, at its press or while it is dragged, and Alt at its
+/// release leaves it open.
 #[test]
-fn pencil_shift_line_drops_the_press_guides_and_stays_open_with_alt() {
+fn pencil_shift_line_shows_no_guides_and_stays_open_with_alt() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
@@ -704,7 +756,7 @@ fn pencil_shift_line_drops_the_press_guides_and_stays_open_with_alt() {
     let shift = Mods { shift: true, ..Default::default() };
     let mut t = GestureTool::new("pencil");
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 102.0, 98.0).with_mods(shift));
-    assert!(!t.overlays(&cx).is_empty(), "the press snaps to the corner and shows it");
+    assert!(t.snap.guides().is_empty(), "the press: {:?}", t.snap.guides());
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 140.0).with_mods(shift));
     assert!(t.overlays(&cx).is_empty(), "{:?}", t.overlays(&cx));
     let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
@@ -793,7 +845,7 @@ fn pencil_shows_the_star_before_a_press_that_draws_a_new_path() {
         }
     }
     let mut t = GestureTool::new("pencil");
-    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::Pencil, "over an end the stroke continues");
+    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::PencilContinue, "over an end the stroke continues");
     assert_eq!(t.cursor(&cx, middle, Mods::default()), Cursor::Pencil, "over the path the stroke redraws");
     assert_eq!(t.cursor(&cx, away, Mods::default()), Cursor::PencilNew, "away from the path");
     // While a stroke is drawn, the Pencil's own cursor.
@@ -838,7 +890,7 @@ fn pencil_shift_line_continues_a_selected_path_from_its_end() {
 }
 
 /// Before a press over an end of a selected open path, the Pencil shows its continuation cursor
-/// exactly when the press would draw a straight line that continues the path; away from the
+/// exactly when the press continues the path, freehand or with a straight line; away from the
 /// ends, with nothing selected, with Edit Selected Paths off, once the press is down and with
 /// the Paintbrush, it does not.
 #[test]
@@ -859,12 +911,9 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     let shift = Mods { shift: true, ..Default::default() };
     let alt = Mods { alt: true, ..Default::default() };
     let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
-    // The release's stroke: a straight line that continues the path.
-    let continues = |acts: &[Vec<Action>]| {
-        acts.last()
-            .and_then(|a| a.first())
-            .is_some_and(|a| matches!(a, Action::Preview(_, v) if v.get("extend").is_some() && v["points"].as_array().is_some_and(|q| q.len() == 2)))
-    };
+    // The release's stroke continues the path.
+    let continues =
+        |acts: &[Vec<Action>]| acts.last().and_then(|a| a.first()).is_some_and(|a| matches!(a, Action::Preview(_, v) if v.get("extend").is_some()));
     for alt_smooth in [false, true] {
         for m in [Mods::default(), shift, alt, shift_alt] {
             for (at, other_end) in [(Point::new(405.0, 303.0), (500.0, 296.0)), (Point::new(296.0, 302.0), (200.0, 310.0))] {
@@ -880,7 +929,7 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     let end = Point::new(405.0, 303.0);
     assert_eq!(t.cursor(&cx, end, shift), Cursor::PencilContinue);
     assert_eq!(t.cursor(&cx, end, alt), Cursor::PencilContinue, "Alt alone continues at any angle");
-    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::Pencil, "without Shift or Alt the stroke is freehand");
+    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::PencilContinue, "a freehand stroke continues it too");
     assert_eq!(t.cursor(&cx, Point::new(350.0, 360.0), shift), Cursor::PencilStraight, "away from the ends");
     // While the line is drawn, the Pencil's own cursor.
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, end.x, end.y).with_mods(shift));
@@ -895,6 +944,105 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     assert_eq!(GestureTool::new("pencil").cursor(&cx_none, end, shift), Cursor::PencilStraight, "nothing selected");
     assert_eq!(GestureTool::new("paintbrush").cursor(&cx, end, shift), Cursor::Paintbrush);
     assert_eq!(Cursor::PencilContinue.precise(), Cursor::Crosshair, "Use Precise Cursors");
+}
+
+/// A Pencil stroke continuing a selected path shows the continuation cursor while a release would
+/// connect it to an open end of another path selected at the press, and the closing ring while a
+/// release would close the path because the stroke ends within Close Paths When Ends Are Within
+/// of the path's other end, a straight line too; the release does what the cursor showed.
+#[test]
+fn a_continued_stroke_shows_where_it_connects_or_closes() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, pts: &[(f64, f64)]| {
+        let id = d.alloc_id();
+        let mut els = vec![vectorcraft_geom::PathEl::MoveTo(Point::new(pts[0].0, pts[0].1))];
+        els.extend(pts[1..].iter().map(|&(x, y)| vectorcraft_geom::PathEl::LineTo(Point::new(x, y))));
+        let pd = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(els));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, pd, vectorcraft_doc::Appearance::default_art())).unwrap();
+        id
+    };
+    let a = add(&mut d, &[(300.0, 300.0), (400.0, 300.0), (400.0, 400.0)]);
+    let b = add(&mut d, &[(500.0, 500.0), (600.0, 500.0)]);
+    let p = paint();
+    let mut both = Selection::default();
+    both.set([a, b]);
+    let mut cx = cx(&d, &both, &p);
+    cx.smart_guides = false;
+    cx.snap_to_point = false;
+    let none = Mods::default();
+    let shift = Mods { shift: true, ..Default::default() };
+    // Runs a stroke from `pts[0]`, giving the cursor at its last point before the release and the
+    // release's `path.freehand` parameters.
+    let run = |t: &mut GestureTool, pts: &[(f64, f64)], m: Mods| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1).with_mods(m));
+        for &(x, y) in &pts[1..] {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y).with_mods(m));
+        }
+        let (x, y) = pts[pts.len() - 1];
+        let shown = t.cursor(&cx, Point::new(x, y), m);
+        let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(m));
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+        (shown, v.clone())
+    };
+    let mut t = GestureTool::new("pencil");
+    // To the other selected path's start: it connects, and doesn't close.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (450.0, 450.0), (498.0, 502.0)], none);
+    assert_eq!(shown, Cursor::PencilContinue, "near the other path's end");
+    assert_eq!(
+        (v["extend"].clone(), v["connect"].clone(), v["closed"].clone()),
+        (json!({"id": a.0, "end": "end"}), json!({"id": b.0, "end": "start"}), json!(false))
+    );
+    // Back near the path's own start (10 px from it): the ring, and the release closes it.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 420.0), (290.0, 380.0), (292.0, 306.0)], none);
+    assert_eq!(shown, Cursor::PencilClose, "near the path's other end");
+    assert_eq!((v["extend"].clone(), v["closed"].clone()), (json!({"id": a.0, "end": "end"}), json!(true)));
+    assert!(v.get("connect").is_none(), "{v}");
+    // Farther than Close Paths When Ends Are Within (15 px): no ring, and it stays open.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 420.0), (290.0, 380.0), (290.0, 330.0)], none);
+    assert_eq!((shown, v["closed"].clone()), (Cursor::Pencil, json!(false)), "away from the other end");
+    // A straight line from the end to near the start: the ring, and it closes the path.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 350.0), (306.0, 306.0)], shift);
+    assert_eq!(shown, Cursor::PencilClose, "a straight line near the other end");
+    assert_eq!((v["points"].as_array().map(Vec::len), v["closed"].clone()), (Some(2), json!(true)));
+    // Close Paths When Ends Are Within off: neither ring nor close.
+    t.set_option("closeWithin", &json!(0.0));
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 420.0), (290.0, 380.0), (292.0, 306.0)], none);
+    assert_eq!((shown, v["closed"].clone()), (Cursor::Pencil, json!(false)), "at 0 px");
+}
+
+/// The continuation cursor tests where the release ends, after snapping, not the pointer: here
+/// Snap to Grid moves a stroke's end from 13 pt away from another selected path's end (outside Edit
+/// Selected Paths' 12 px) to 9 pt away, so the release connects, and the cursor says so.
+#[test]
+fn the_continuation_cursor_follows_the_snapped_release() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, a: (f64, f64), b: (f64, f64)| {
+        let id = d.alloc_id();
+        let els = vec![vectorcraft_geom::PathEl::MoveTo(Point::new(a.0, a.1)), vectorcraft_geom::PathEl::LineTo(Point::new(b.0, b.1))];
+        let pd = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(els));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, pd, vectorcraft_doc::Appearance::default_art())).unwrap();
+        id
+    };
+    // On the 9 pt grid.
+    let a = add(&mut d, (306.0, 306.0), (405.0, 405.0));
+    let b = add(&mut d, (504.0, 504.0), (603.0, 504.0));
+    let p = paint();
+    let mut both = Selection::default();
+    both.set([a, b]);
+    let mut cx = cx(&d, &both, &p);
+    cx.smart_guides = false;
+    cx.snap_to_point = false;
+    cx.snap_to_grid = true;
+    let mut t = GestureTool::new("pencil");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 405.0, 405.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 460.0, 450.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 517.0, 504.0));
+    assert_eq!(t.cursor(&cx, Point::new(517.0, 504.0), Mods::default()), Cursor::PencilContinue);
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 517.0, 504.0));
+    let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["connect"], json!({"id": b.0, "end": "start"}), "{v}");
 }
 
 /// #3846: Alt during a Shift line doesn't promise a close the release can't do, and with Alt
@@ -1649,10 +1797,11 @@ fn paintbrush_alt_with_a_two_anchor_curve_selected_smooths() {
     }
 }
 
-/// #3799: Alt's line starts and ends on Smart Guides as a stroke does, and pressed on an end of
-/// a selected open path it continues the path from that end to the pointer.
+/// #3799: Alt's line runs from the press to the pointer as a stroke does, snapping to nothing,
+/// and pressed on an end of a selected open path it continues the path from that end to the
+/// pointer.
 #[test]
-fn pencil_alt_line_snaps_its_ends_and_continues_a_selected_path() {
+fn pencil_alt_line_follows_the_hand_and_continues_a_selected_path() {
     let (mut d, _) = doc_with_rect();
     let alt = Mods { alt: true, ..Default::default() };
     let p = paint();
@@ -1662,7 +1811,7 @@ fn pencil_alt_line_snaps_its_ends_and_continues_a_selected_path() {
         let mut t = GestureTool::new("pencil");
         let acts = drag_held(&mut t, &cx, &[(102.0, 98.0), (151.0, 300.0), (198.0, 203.0)], alt);
         let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
-        assert_eq!(v["points"], json!([[100.0, 100.0], [200.0, 200.0]]));
+        assert_eq!(v["points"], json!([[102.0, 98.0], [198.0, 203.0]]));
     }
     let l = d.layers[0].id;
     let id = d.alloc_id();
@@ -2311,11 +2460,111 @@ fn the_blob_brush_and_the_eraser_outline_a_long_drag_a_bounded_amount_per_frame(
     }
 }
 
+/// The settled paths of the outline of a long Blob Brush or Eraser drag (each the outline of up
+/// to `BLOCK_PIECES` pieces) come back from one call to the next, at any zoom, as the same shared
+/// paths, which the host draws again without copying or flattening them. A step of the drag
+/// replaces only the paths of the pieces near it.
+#[test]
+fn the_settled_outline_of_a_long_drag_is_the_same_shared_path_each_frame() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let settled = |o: &[Overlay]| -> Vec<std::sync::Arc<BezPath>> {
+        o.iter().filter_map(|o| if let Overlay::SharedPath { path, .. } = o { Some(std::sync::Arc::clone(path)) } else { None }).collect()
+    };
+    let kept = |was: &[std::sync::Arc<BezPath>], now: &[std::sync::Arc<BezPath>]| {
+        now.iter().filter(|n| was.iter().any(|w| std::sync::Arc::ptr_eq(w, n))).count()
+    };
+    for (id, angle, roundness, pressure) in
+        [("blobBrush", 0.0, 100.0, false), ("eraser", -60.0, 30.0, false), ("blobBrush", 0.0, 100.0, true), ("eraser", 45.0, 50.0, true)]
+    {
+        let mut t = GestureTool::new(id);
+        t.set_option("size", &json!(10));
+        t.set_option("angle", &json!(angle));
+        t.set_option("roundness", &json!(roundness));
+        if pressure {
+            t.set_option("sizeMode", &json!("pressure"));
+            t.set_option("sizeVariation", &json!(4));
+        }
+        let n = if pressure { 3000 } else { 6000 };
+        long_area_drag(&mut t, &cx, n, |i| if pressure { 0.3 + 0.6 * ((i % 50) as f32 / 50.0) } else { 1.0 });
+        drain_area(&t, &cx);
+        let first = settled(&t.overlays(&cx));
+        assert!(first.len() > 1, "{id}: {} settled paths", first.len());
+        for zoom in [1.0, 4.0, 1.0] {
+            let again = settled(&t.overlays(&ToolContext { zoom, ..cx }));
+            assert_eq!(again.len(), first.len(), "{id}");
+            assert_eq!(kept(&first, &again), first.len(), "{id}: at zoom {zoom}, every settled path is the one shown before");
+        }
+        // One step more along the drag: with Size set to Pressure each path holds 64 one-segment
+        // pieces, part of one turn of the drag, and the paths far from the step stay the ones shown
+        // before. (Without it a path holds 64 pieces of 32 segments, many turns round the circle.)
+        if !pressure {
+            continue;
+        }
+        let s = n as f64;
+        let r = 150.0 + 100.0 * (s * 0.0071).sin();
+        let (x, y) = (300.0 + r * (s * 0.04).cos(), 300.0 + r * (s * 0.04).sin());
+        t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, x, y) });
+        drain_area(&t, &cx);
+        let after = settled(&t.overlays(&cx));
+        let replaced = after.len() - kept(&first, &after);
+        assert!((1..=8).contains(&replaced), "{id}: {replaced} of {} settled paths replaced", after.len());
+    }
+}
+
+/// The outline a Blob Brush or Eraser drag shows does not change what its release sends: the same
+/// drag sends the same command whether or not its outline was drawn along the way.
+#[test]
+fn drawing_the_outline_of_a_drag_does_not_change_what_its_release_sends() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    for (id, angle, roundness, pressure) in
+        [("blobBrush", 0.0, 100.0, false), ("blobBrush", 30.0, 40.0, true), ("eraser", -60.0, 30.0, false), ("eraser", 45.0, 50.0, true)]
+    {
+        let release = |drawn: bool| {
+            let mut t = GestureTool::new(id);
+            t.set_option("size", &json!(10));
+            t.set_option("angle", &json!(angle));
+            t.set_option("roundness", &json!(roundness));
+            if pressure {
+                t.set_option("sizeMode", &json!("pressure"));
+                t.set_option("sizeVariation", &json!(4));
+            }
+            for i in 0..800 {
+                let s = i as f64;
+                let r = 150.0 + 100.0 * (s * 0.0071).sin();
+                let (x, y) = (300.0 + r * (s * 0.04).cos(), 300.0 + r * (s * 0.04).sin());
+                let kind = if i == 0 { PointerKind::Down } else { PointerKind::Drag };
+                let pressure = if pressure { 0.3 + 0.6 * ((i % 50) as f32 / 50.0) } else { 1.0 };
+                t.pointer(&cx, &PointerEvent { pressure, ..PointerEvent::new(kind, x, y) });
+                if drawn {
+                    t.overlays(&cx);
+                }
+            }
+            if drawn {
+                drain_area(&t, &cx);
+            }
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 300.0))
+        };
+        let (drawn, not_drawn) = (release(true), release(false));
+        assert!(matches!(drawn.first(), Some(Action::Exec(..))), "{id}: {drawn:?}");
+        assert_eq!(drawn, not_drawn, "{id}");
+    }
+}
+
 /// Every flattened point of the paths `o` (the outline shown).
 fn shown_points(o: &[Overlay]) -> Vec<(Point, Point)> {
     let mut lines = vec![];
     for o in o {
-        let Overlay::Path { path, .. } = o else { continue };
+        let path = match o {
+            Overlay::Path { path, .. } => path,
+            Overlay::SharedPath { path, .. } => &**path,
+            _ => continue,
+        };
         let mut pen = Point::ZERO;
         let mut start = Point::ZERO;
         vectorcraft_geom::kurbo::flatten(path.elements().iter().copied(), 0.01, |el| match el {
@@ -2402,7 +2651,11 @@ fn a_long_jump_in_a_blob_brush_drag_is_outlined_a_bounded_amount_at_a_time() {
     let o = t.overlays(&cx);
     let b = o
         .iter()
-        .filter_map(|o| if let Overlay::Path { path, .. } = o { Some(vectorcraft_geom::Shape::bounding_box(path)) } else { None })
+        .filter_map(|o| match o {
+            Overlay::Path { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(path)),
+            Overlay::SharedPath { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(&**path)),
+            _ => None,
+        })
         .reduce(|a, b| a.union(b));
     let Some(b) = b else { panic!("{o:?}") };
     assert!((b.x0 + 0.5).abs() < 0.01 && (b.x1 - 20_000.5).abs() < 0.01, "{b:?}");
@@ -2523,6 +2776,161 @@ fn the_blob_brush_and_the_eraser_show_their_tip_at_the_pointer() {
         hover(&mut t, &cx, Mods::default());
         assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { width, .. } if *width == 3.0)), "{id}");
     }
+}
+
+/// Eraser Tool Options' Angle, Roundness and Size variation menus: the Eraser keeps each mode and
+/// Variation, the release sends them with the pen's readings along the drag, and while it erases
+/// its tip outline at the pointer takes the angle, roundness and size the pen gives there. The Blob
+/// Brush's Size takes Fixed and Pressure only, and it has no Angle or Roundness menus.
+#[test]
+fn the_eraser_tip_follows_its_variation_modes() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    // The bounds of the tip outline, the last two overlays (its halo and its line).
+    let tip = |t: &GestureTool| match &t.overlays(&cx)[..] {
+        [.., Overlay::Path { path: halo, width: 3.0, .. }, Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }] => {
+            assert_eq!(halo, path);
+            vectorcraft_geom::Shape::bounding_box(path)
+        }
+        o => panic!("{o:?}"),
+    };
+    let near = |b: vectorcraft_geom::Rect, want: (f64, f64, f64, f64)| {
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let mut t = GestureTool::new("eraser");
+    assert_eq!(
+        (t.options()["angleMode"].clone(), t.options()["roundnessMode"].clone(), t.options()["sizeMode"].clone()),
+        (json!("fixed"), json!("fixed"), json!("fixed")),
+        "Fixed by default"
+    );
+    for (k, v) in [
+        ("size", json!(20)),
+        ("roundness", json!(25)),
+        ("angleMode", json!("rotation")),
+        ("angleVariation", json!(90)),
+        ("roundnessMode", json!("random")),
+        ("roundnessVariation", json!(10)),
+        ("sizeMode", json!("tilt")),
+        ("sizeVariation", json!(8)),
+    ] {
+        t.set_option(k, &v);
+    }
+    let o = t.options();
+    assert_eq!(
+        [&o["angleMode"], &o["angleVariation"], &o["roundnessMode"], &o["roundnessVariation"], &o["sizeMode"], &o["sizeVariation"]],
+        [&json!("rotation"), &json!(90.0), &json!("random"), &json!(10.0), &json!("tilt"), &json!(8.0)]
+    );
+    // A mode it does not have leaves the mode as it was; a Variation is kept within its range.
+    t.set_option("angleMode", &json!("wheel"));
+    t.set_option("roundnessVariation", &json!(500));
+    assert_eq!((t.options()["angleMode"].clone(), t.options()["roundnessVariation"].clone()), (json!("rotation"), json!(100.0)));
+    t.set_option("roundnessVariation", &json!(10));
+    // Before a press the outline is the set tip: 20 by 5 pt, lying level.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 100.0, 50.0));
+    near(tip(&t), (90.0, 47.5, 110.0, 52.5));
+    // Erasing with the barrel turned half way round and the pen upright, the tip stands upright and
+    // is 28 by 7 pt; Random leaves the roundness as set.
+    let pen = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: Some(180.0) });
+    t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (196.5, 36.0, 203.5, 64.0));
+    let acts = t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(c, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(c, "path.eraseRegion");
+    assert_eq!(
+        [&v["angleMode"], &v["angleVariation"], &v["roundnessMode"], &v["roundnessVariation"], &v["sizeMode"], &v["sizeVariation"]],
+        [&json!("rotation"), &json!(90.0), &json!("random"), &json!(10.0), &json!("tilt"), &json!(8.0)]
+    );
+    assert_eq!(
+        v["points"],
+        json!([[100.0, 50.0, 0.5, 0.0, 0.0, 180.0], [200.0, 50.0, 0.5, 0.0, 0.0, 180.0]]),
+        "the pen's readings go with the points"
+    );
+    // A mouse drag, which reads no tilt or rotation, keeps the set tip.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 50.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 50.0));
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 50.0));
+    // A point without a reading after one with it goes back to the set tip there, as the release
+    // erases it.
+    t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    // The Blob Brush's Size is Fixed or Pressure, and its Angle and Roundness have no menus.
+    let mut b = GestureTool::new("blobBrush");
+    b.set_option("sizeMode", &json!("tilt"));
+    b.set_option("angleMode", &json!("rotation"));
+    assert_eq!(b.options()["sizeMode"], json!("fixed"));
+    assert!(b.options().get("angleMode").is_none() && b.options().get("roundnessVariation").is_none());
+    b.set_option("sizeMode", &json!("pressure"));
+    assert_eq!(b.options()["sizeMode"], json!("pressure"));
+}
+
+/// The Eraser's tip outline follows a pen turned in place, which adds no stroke point, and the
+/// release erases with that reading; and its size passes 1296 pt as `path.eraseRegion` sweeps it.
+#[test]
+fn the_eraser_tip_turns_in_place_and_passes_a_nib_size() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let tip = |t: &GestureTool| match &t.overlays(&cx)[..] {
+        [.., Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }] => vectorcraft_geom::Shape::bounding_box(path),
+        o => panic!("{o:?}"),
+    };
+    let near = |b: vectorcraft_geom::Rect, want: (f64, f64, f64, f64)| {
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(20)), ("roundness", json!(25)), ("angleMode", json!("rotation")), ("angleVariation", json!(90))] {
+        t.set_option(k, &v);
+    }
+    let level = Some(PenPose { tilt: None, rotation: Some(0.0) });
+    let turned = Some(PenPose { tilt: None, rotation: Some(180.0) });
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    // The barrel turns half way round with the pointer still: the tip stands upright.
+    t.pointer(&cx, &PointerEvent { pen: turned, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (197.5, 40.0, 202.5, 60.0));
+    let acts = t.pointer(&cx, &PointerEvent { pen: turned, pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["points"], json!([[100.0, 50.0, 0.5, null, null, 0.0], [200.0, 50.0, 0.5, null, null, 180.0]]));
+    // A release at the last point erases with the pose the pen has as it lifts.
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    let acts = t.pointer(&cx, &PointerEvent { pen: turned, pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["points"], json!([[100.0, 50.0, 0.5, null, null, 0.0], [200.0, 50.0, 0.5, null, null, 180.0]]));
+    // A release there that reads no pose keeps the last one.
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: turned, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    let acts = t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["points"], json!([[100.0, 50.0, 0.5, null, null, 0.0], [200.0, 50.0, 0.5, null, null, 180.0]]));
+    // With Angle on Bearing, a pen that leaned only at the last point and stands up there again
+    // leaves no bearing: the tip lies level, as set.
+    t.set_option("angleMode", &json!("bearing"));
+    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None });
+    let leaning = Some(PenPose { tilt: Some([0.0, 45.0]), rotation: None });
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: leaning, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    assert!(tip(&t).height() > 6.0, "{:?}", tip(&t));
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    // Size 1000 with a Variation of 1000 on Tilt, the pen upright: a tip 2000 pt across.
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(1000)), ("sizeMode", json!("tilt")), ("sizeVariation", json!(1000))] {
+        t.set_option(k, &v);
+    }
+    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None });
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (-800.0, -950.0, 1200.0, 1050.0));
 }
 
 #[test]

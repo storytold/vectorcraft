@@ -211,7 +211,9 @@ impl Node {
 
     /// A quick box round everything the object can paint, for culling clicks: paths and compound
     /// paths grow their geometric bounds by the farthest their strokes can reach from any path
-    /// ([`Appearance::outset`]) instead of measuring along their shape. An image's box takes in
+    /// ([`Appearance::outset`]) instead of measuring along their shape. A clip group's or a
+    /// clipping layer's box takes in the region that the live geometry effects of its clipping
+    /// path give it ([`crate::hit::set_clip_region`]). An image's box takes in
     /// the shapes its own fills and strokes paint ([`crate::hit::set_image_paint`]). Groups, layers
     /// without a clipping mask and Intertwine groups take in their members' boxes, grown by their
     /// own strokes. Symbol instances are measured as in [`Node::visual_bounds`]. A blend's box
@@ -260,6 +262,11 @@ impl Node {
             // keys and the spine.
             NodeKind::Blend { children, spec } => {
                 vectorcraft_geom::union_opt(self.visual(symbols), crate::blend::rail_reach(children, spec, symbols))
+            }
+            // The live geometry effects of a clipping path can move or grow the region it clips to
+            // past its plain shape ([`crate::hit::set_clip_region`]).
+            NodeKind::Layer { children, clip: true, .. } | NodeKind::Group { children, clip: true } => {
+                vectorcraft_geom::union_opt(self.visual(symbols), children.first().and_then(|c| crate::hit::reshaped_clip_box(c)))
             }
             _ => self.visual(symbols),
         }
@@ -823,11 +830,11 @@ impl Node {
 /// The ruler guides a layer holds: its children that are one, by index in order (each with
 /// nothing inside), and its sublayers holding one (with what they hold).
 #[derive(Debug, Default)]
-pub(super) struct HeldGuides(Vec<(usize, HeldGuides)>);
+pub(crate) struct HeldGuides(Vec<(usize, HeldGuides)>);
 
 /// The ruler guides, by `is_guide`, that `n` holds if it is a layer, or `None` when it holds
 /// none. `is_guide` looks at each child of `n` and of its sublayers once.
-pub(super) fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option<HeldGuides> {
+pub(crate) fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option<HeldGuides> {
     if !n.is_layer() {
         return None;
     }
@@ -843,7 +850,7 @@ pub(super) fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option
 
 /// Remove the ruler guides of `layer` and of its sublayers that [`held_guides`] found (`held`).
 /// Only the sublayers holding one are copied, and only those are visited.
-pub(super) fn strip_held(layer: &mut Node, held: HeldGuides) {
+pub(crate) fn strip_held(layer: &mut Node, held: HeldGuides) {
     let Some(ch) = layer.children_mut() else { return };
     let mut held = held.0.into_iter().peekable();
     let mut next = 0;
@@ -863,7 +870,7 @@ pub(super) fn strip_held(layer: &mut Node, held: HeldGuides) {
 /// Call `f` (whether it is vertical, its position) on each ruler guide of `layer` and of its
 /// sublayers that [`held_guides`] found (`held`), in the order they lie in. Only the sublayers
 /// holding one, and the guides, are copied, and only those sublayers are visited.
-pub(super) fn map_held(layer: &mut Node, held: HeldGuides, f: &mut impl FnMut(bool, &mut f64)) {
+pub(crate) fn map_held(layer: &mut Node, held: HeldGuides, f: &mut impl FnMut(bool, &mut f64)) {
     let Some(ch) = layer.children_mut() else { return };
     for (i, inner) in held.0 {
         let Some(c) = ch.get_mut(i) else { continue };

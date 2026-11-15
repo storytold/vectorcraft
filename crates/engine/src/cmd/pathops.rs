@@ -1205,6 +1205,8 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Outline Stroke", |d, sel| {
         let before = d.clone();
+        // Outlining the strokes in a graph does not move or scale its plot at the next redraw.
+        let graphs = super::graph::graphs_holding(d, &roots);
         // A dimension selected with the art it measures keeps its own lines: it is out of the
         // document while the art is outlined.
         let lifted = super::dimension::lift(d, &roots);
@@ -1224,6 +1226,7 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
         if changed == 0 || (kept && d.layers == before.layers) {
             return Err(EngineError::Other("Outline Stroke: no stroked paths selected".into()));
         }
+        super::graph::keep_placed(d, &graphs);
         sel.set(new_sel.iter().copied());
         Ok(new_sel)
     })?;
