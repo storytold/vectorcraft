@@ -2279,7 +2279,7 @@ fn svg_variable_kinds_left_out_translate_in_every_complete_catalog() {
     );
     assert_eq!(message(de, &warning("`Visibility` (1)")), "die Variablen, die kein Text sind, wurden ausgelassen: `Visibility` (1)");
     let fr = Lang::from_code("fr").expect("registered");
-    assert_eq!(message(fr, &warning("Visibility (1)")), "les variables qui ne sont pas du texte ont été ignorées : Visibilité (1)");
+    assert_eq!(message(fr, &warning("Visibility (1)")), "les variables qui ne sont pas du texte ont été ignorées\u{a0}: Visibilité (1)");
     let ja = Lang::from_code("ja").expect("registered");
     assert_eq!(
         message(ja, &warning("Visibility (1), Linked File (2), Unknown (1)")),

@@ -5146,7 +5146,7 @@ axis	Both	Les deux
 @msg	variables are locked	les variables sont verrouillées
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	plus de {MAX_CSV_ROWS} jeux de données : Importer des jeux de données en lit au plus {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	plus de {MAX_CSV_COLS} variables : Importer des jeux de données en lit au plus {MAX_CSV_COLS}
-@msg	variables that aren't text were left out: {kinds}	les variables qui ne sont pas du texte ont été ignorées : {kinds}
+@msg	variables that aren't text were left out: {kinds}	les variables qui ne sont pas du texte ont été ignorées : {kinds}
 variable-kind	Visibility	Visibilité
 variable-kind	Linked File	Fichier lié
 variable-kind	Graph Data	Données du graphe
