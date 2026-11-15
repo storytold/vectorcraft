@@ -241,13 +241,28 @@ fn object_params(d: &Dialog, keys: &[&str]) -> Map<String, Value> {
     }
 }
 
+/// What of option value `now` changed from `was`, the value it opened with: `None` when nothing
+/// did; of a range or a list of modes, the items that changed with `null` for the others, and of a
+/// colorization, the fields that changed. The paths keep their own values for the rest.
+fn changed_part(was: Option<&Value>, now: Value) -> Option<Value> {
+    match (was, now) {
+        (Some(w), n) if *w == n => None,
+        (Some(Value::Array(w)), Value::Array(n)) if w.len() == n.len() => {
+            Some(Value::Array(w.iter().zip(n).map(|(w, n)| if *w == n { Value::Null } else { n }).collect()))
+        }
+        (Some(Value::Object(w)), Value::Object(n)) => Some(Value::Object(n.into_iter().filter(|(f, v)| w.get(f) != Some(v)).collect())),
+        (_, n) => Some(n),
+    }
+}
+
 /// OK of Options of Selected Object: `brush.objectOptions` on the paths it opened for, with the
-/// values changed since it opened. The dialog closes when they are set.
+/// values changed since it opened ([`changed_part`]). The dialog closes when they are set.
 fn confirm_object(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let keys: Vec<String> = d.fields.get("__keys").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
     let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
     let opened = d.fields.get(OPENED).and_then(Value::as_object).cloned().unwrap_or_default();
-    let changed: Map<String, Value> = object_params(d, &keys).into_iter().filter(|(k, v)| opened.get(k) != Some(v)).collect();
+    let changed: Map<String, Value> =
+        object_params(d, &keys).into_iter().filter_map(|(k, v)| changed_part(opened.get(&k), v).map(|v| (k, v))).collect();
     let r = app.run("brush.objectOptions", json!({ "ids": d.fields.get(TARGETS).cloned().unwrap_or_default(), "params": changed }));
     if r.is_ok() {
         app.ui.dialog = None;

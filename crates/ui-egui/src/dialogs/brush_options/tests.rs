@@ -909,6 +909,23 @@ fn options_of_selected_object_set_one_paths_art_brush_settings() {
 }
 
 #[test]
+fn options_of_selected_object_change_only_the_values_edited_on_each_path() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Confetti");
+    let b = brushed_line(&mut app, 100.0, "Confetti");
+    app.run("brush.objectOptions", json!({"ids": [a], "params": {"size": [50, 80]}})).unwrap();
+    app.run("brush.objectOptions", json!({"ids": [b], "params": {"size": [60, 120]}})).unwrap();
+    select(&mut app, &[a, b]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    // The dialog shows the first path's values; only the smallest size is edited.
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("sizeMax", 0.0), 80.0);
+    set(&mut app, json!({"sizeMin": 40}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a)["size"], json!([40.0, 80.0]));
+    assert_eq!(own_options(&app, b)["size"], json!([40.0, 120.0]), "the second path keeps its own largest size");
+}
+
+#[test]
 fn options_of_selected_object_show_what_a_path_can_set_for_each_type() {
     let mut app = app();
     // Calligraphic: OK without a change leaves the path on the brush's settings.

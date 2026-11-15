@@ -865,12 +865,26 @@ impl BrushKind {
     }
 }
 
+/// Stroke option value `new` with each `null` item of an array taken from the same place in
+/// `current`, an array of the same length: a stroke option that changes some items of a range or a
+/// list of modes and keeps the others ([`Brush::with_stroke_options`]). Any other `new` is given as
+/// it is.
+pub fn keep_items(new: &serde_json::Value, current: &serde_json::Value) -> serde_json::Value {
+    match (new, current) {
+        (serde_json::Value::Array(n), serde_json::Value::Array(c)) if n.len() == c.len() => {
+            serde_json::Value::Array(n.iter().zip(c).map(|(n, c)| if n.is_null() { c.clone() } else { n.clone() }).collect())
+        }
+        _ => new.clone(),
+    }
+}
+
 impl Brush {
     /// The brush as a stroke whose own settings are `options` draws it: each field of
     /// [`BrushKind::stroke_option_keys`] in `options` replaces the brush's value (a `colorization`
     /// object changes only the fields it gives), and the values are kept within their ranges
-    /// ([`Brush::sanitize`]). Fields the type does not take are passed over. An error when a value
-    /// is of the wrong kind.
+    /// ([`Brush::sanitize`]). A `null` item of an array keeps the brush's item there
+    /// ([`keep_items`]). Fields the type does not take are passed over. An error when a value is of
+    /// the wrong kind.
     pub fn with_stroke_options(&self, options: &serde_json::Map<String, serde_json::Value>) -> Result<Brush, String> {
         let keys = self.kind.stroke_option_keys();
         let mut values = self.kind.option_values();
@@ -885,8 +899,11 @@ impl Brush {
                         inner.insert(f.clone(), fv.clone());
                     }
                 }
+                // Set below, once the values the modes may follow are in.
+                _ if k == "modes" => {}
                 _ => {
-                    o.insert(k.clone(), v.clone());
+                    let current = o.get(k).cloned().unwrap_or_default();
+                    o.insert(k.clone(), keep_items(v, &current));
                 }
             }
         }
@@ -899,7 +916,28 @@ impl Brush {
             c.insert("key".into(), serde_json::to_value(key).map_err(|e| e.to_string())?);
         }
         let mut b = self.clone();
-        b.kind.set_option_values(values).map_err(|e| e.to_string())?;
+        b.kind.set_option_values(values.clone()).map_err(|e| e.to_string())?;
+        if let Some(m) = options.get("modes")
+            && keys.contains(&"modes")
+        {
+            // A null item keeps the mode the brush with the other settings has: modes it leaves to
+            // its values follow the stroke's values, as they are kept within their ranges. Modes
+            // equal to those are left as the brush has them, so they keep following the values.
+            b.sanitize();
+            let current = match &b.kind {
+                BrushKind::Calligraphic(c) => serde_json::to_value(c.modes()).unwrap_or_default(),
+                BrushKind::Scatter(s) => serde_json::to_value(s.modes()).unwrap_or_default(),
+                _ => serde_json::Value::Null,
+            };
+            let modes = keep_items(m, &current);
+            if modes != current {
+                if let Some(o) = values.as_object_mut() {
+                    o.insert("modes".into(), modes);
+                }
+                b = self.clone();
+                b.kind.set_option_values(values).map_err(|e| e.to_string())?;
+            }
+        }
         b.sanitize();
         Ok(b)
     }

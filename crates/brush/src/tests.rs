@@ -2098,3 +2098,23 @@ fn stroke_options_are_checked_and_kept_within_their_ranges() {
     let odd = stroke_pieces(&doc, &brush, &path, &with_options(json!({"width": [1, 2]})));
     assert!(near(bounds(&odd).height(), 4.0, 1e-6));
 }
+
+#[test]
+fn null_stroke_option_items_keep_the_items_the_stroke_has() {
+    let map = |v: serde_json::Value| v.as_object().cloned().unwrap_or_default();
+    // A scatter brush at fixed sizes, with no modes of its own: they follow its values.
+    let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { size: (100.0, 100.0), ..Default::default() }) };
+    let BrushKind::Scatter(s) = b.with_stroke_options(&map(json!({"size": [null, 150]}))).unwrap().kind else { panic!("scatter") };
+    assert_eq!(s.size, (100.0, 150.0), "the smallest size stays the brush's");
+    // A stroke whose sizes vary keeps that random size mode when it sets only the spacing mode.
+    let e = b.with_stroke_options(&map(json!({"size": [50, 80], "modes": [null, "pressure", null, null]}))).unwrap();
+    let BrushKind::Scatter(s) = e.kind else { panic!("scatter") };
+    assert_eq!(s.modes(), [Variation::Random, Variation::Pressure, Variation::Fixed, Variation::Fixed]);
+    // The kept modes follow the values as they are kept within their ranges.
+    let c = calli(0.0, 100.0, 3.0).with_stroke_options(&map(json!({"variation": [-2, 0, 0], "modes": [null, "pressure", null]}))).unwrap();
+    let BrushKind::Calligraphic(c) = c.kind else { panic!("calligraphic") };
+    assert_eq!(c.modes(), [Variation::Fixed, Variation::Pressure, Variation::Fixed]);
+    // Modes that change nothing are no setting of the stroke's: they keep following its values.
+    let same = b.stroke_options_that_differ(&map(json!({"modes": [null, null, null, null]}))).unwrap();
+    assert!(same.is_empty(), "{same:?}");
+}

@@ -153,6 +153,29 @@ fn options_of_selected_object_change_one_path_and_leave_the_brush() {
 }
 
 #[test]
+fn options_of_selected_object_null_items_keep_each_paths_own() {
+    let mut s = session();
+    let a = line(&mut s);
+    let b = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Confetti", "ids": [a.0, b.0]})).unwrap();
+    let brush_size = s.execute("brush.get", &json!({"name": "Confetti"})).unwrap()["size"].clone();
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"size": [50, 80]}})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [b.0], "params": {"size": [60, 120]}})).unwrap();
+    let steps = undo_steps(&s);
+    // Only the smallest size changes: each path keeps its own largest size.
+    let r = s.execute("brush.objectOptions", &json!({"ids": [a.0, b.0], "params": {"size": [40, null]}})).unwrap();
+    assert_eq!(r["changed"], json!([a.0, b.0]));
+    assert_eq!(own_options(&s, a)["size"], json!([40.0, 80.0]));
+    assert_eq!(own_options(&s, b)["size"], json!([40.0, 120.0]));
+    assert_eq!(undo_steps(&s), steps + 1, "one undo step for both paths");
+    // A path without its own value keeps the brush's item.
+    let c = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Confetti", "ids": [c.0]})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [c.0], "params": {"size": [null, 150]}})).unwrap();
+    assert_eq!(own_options(&s, c)["size"], json!([brush_size[0], 150.0]), "brush size {brush_size}");
+}
+
+#[test]
 fn options_of_selected_object_keys_convert_with_the_document() {
     let mut s = session();
     let a = line(&mut s);

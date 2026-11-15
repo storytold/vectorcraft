@@ -558,7 +558,20 @@ pub(super) fn brush_object_options(s: &mut Session, p: &Value) -> Result<Value> 
             let keys = b.kind.stroke_option_keys();
             let mut merged: serde_json::Map<String, Value> =
                 own.iter().filter(|(k, _)| keys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
-            merged.extend(params.clone());
+            // A colorization object changes only the fields it gives, and a null item of an
+            // array keeps the stroke's own item (else the brush's).
+            for (k, v) in &params {
+                let next = match (merged.get(k), v) {
+                    (Some(Value::Object(mine)), Value::Object(fields)) if k == "colorization" => {
+                        let mut c = mine.clone();
+                        c.extend(fields.clone());
+                        Value::Object(c)
+                    }
+                    (Some(mine), _) => brush::keep_items(v, mine),
+                    (None, _) => v.clone(),
+                };
+                merged.insert(k.clone(), next);
+            }
             b.stroke_options_that_differ(&merged).map_err(|e| bad(C, e))?
         };
         options.get_or_insert_with(|| next.clone());

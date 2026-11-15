@@ -3424,7 +3424,9 @@ already walks Image Trace. Short agent entry points:
   `rotation_relative_to_path` and `colorization`; art `width`, `width_mode`, `width_max`, `flip_along`, `flip_across`,
   `overlap` and `colorization`; pattern `scale`, `spacing`, `fit`, `flip_along`, `flip_across` and `colorization`.
   Values outside their ranges are clamped as in `brush.options`, a `colorization` object changes only the fields it
-  gives, and a setting equal to the brush's own value is dropped. `reset: true` clears a path's settings. The command
+  gives, a `null` item of an array (`size: [40, null]`) keeps each path's own item, else the brush's, and a setting
+  equal to the brush's own value is dropped. The dialog sends only the items and fields changed in it, so editing one
+  end of a range leaves each selected path's other end as it was. `reset: true` clears a path's settings. The command
   refuses `params` together with `reset`, a selection with no brushed path, paths whose brushes are of different
   types, a bristle brush and a field the type does not take. It records one undo step, and none when nothing changes.
   `brush.options` edits still reach the settings a path does not set, `brush.apply`, a brush change in
