@@ -921,7 +921,8 @@ its own, can move or scale the plot at the next redraw. When all of a graph's ar
 the art measured has no width or no height, a redraw leaves the plot where it is and does not follow a move or scale of
 the graph. A graph opened from a `.ai` file
 saves `placedArt` too. A graph saved without `placedArt`, or with a `placedArt` that has no width or height, is
-measured on `placed`.
+measured on `placed`. `placed` includes the labels, so in such a graph moving an outermost label on its own can move or
+scale the plot at the next redraw.
 
 The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, and the paint, stroke, gradient and
 transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
