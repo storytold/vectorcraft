@@ -3,7 +3,7 @@ use super::PathBuf;
 use super::build::{instanced, style_distance, style_italic, style_weight};
 use super::cache::Catalog;
 use super::face::{FALLBACK_FAMILY, FontFace, MAX_LIVE_INSTANCES, Variation, VariationAxis};
-use super::glyph_pen::svg_drawn;
+use super::glyph_pen::{FlipPen, svg_drawn};
 #[cfg(not(target_arch = "wasm32"))]
 use super::names::SYSTEM_FALLBACKS;
 use super::names::{norm, norm_chars, script_families};
@@ -563,13 +563,12 @@ impl FontDb {
         if let Some(p) = self.outlines.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
             return p.clone();
         }
-        let path = craft_font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations())
-            .and_then(|font| font.outline_recovering(gid))
-            // The old pen kept a partial path when drawing failed. Keep that behavior while
-            // the shared implementation bounds the number of elements from untrusted fonts.
-            .map(|(path, _status)| kurbo::Affine::scale_non_uniform(1.0, -1.0) * path)
-            .unwrap_or_default();
-        let p = Arc::new(path);
+        let mut pen = FlipPen(BezPath::new());
+        if let Ok(font) = craft_font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations()) {
+            // As before, keep the prefix emitted before a malformed glyph reports an error.
+            let _ = font.draw_to(gid, &mut pen);
+        }
+        let p = Arc::new(pen.0);
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= OUTLINE_CACHE_MAX {
             cache.clear();
@@ -686,8 +685,43 @@ mod shared_outline_tests {
         assert!(result.is_err());
         assert!(!old.0.elements().is_empty());
         let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
-        let (path, status) = shared.outline_recovering(gid).unwrap();
-        assert!(status.is_err());
-        assert_eq!(kurbo::Affine::scale_non_uniform(1.0, -1.0) * path, old.0);
+        let mut streamed = FlipPen(BezPath::new());
+        assert!(shared.draw_to(gid, &mut streamed).is_err());
+        assert_eq!(streamed.0, old.0);
+    }
+
+    #[test]
+    fn large_valid_outline_matches_original_pen() {
+        let Ok(dir) = std::env::var("CRAFT_FONTS_DIR") else { return };
+        let source = std::fs::read(std::path::Path::new(&dir).join("fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf")).unwrap();
+        let source = skrifa::FontRef::new(&source).unwrap();
+        let mut program = vec![139, 139, 21];
+        for _ in 0..100_001 {
+            program.extend_from_slice(&[140, 6]);
+        }
+        program.push(14);
+        let mut cff = vec![1, 0, 4, 4, 0, 1, 1, 1, 2, b'X', 0, 1, 1, 1, 7, 29, 0, 0, 0, 25, 17, 0, 0, 0, 0];
+        cff.extend_from_slice(&[0, 1, 4]);
+        cff.extend_from_slice(&1u32.to_be_bytes());
+        cff.extend_from_slice(&((program.len() as u32) + 1).to_be_bytes());
+        cff.extend_from_slice(&program);
+        let mut builder = write_fonts::FontBuilder::new();
+        for tag in [b"head", b"maxp", b"hhea", b"hmtx"] {
+            builder.add_raw(write_fonts::types::Tag::new(tag), source.table_data(skrifa::Tag::new(tag)).unwrap().as_bytes().to_vec());
+        }
+        builder.add_raw(write_fonts::types::Tag::new(b"CFF "), cff);
+        let bytes = builder.build();
+        let f = skrifa::FontRef::new(&bytes).unwrap();
+        let mut old = FlipPen(BezPath::new());
+        f.outline_glyphs()
+            .get(GlyphId::new(0))
+            .unwrap()
+            .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old)
+            .unwrap();
+        assert!(old.0.elements().len() > 100_000);
+        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
+        let mut streamed = FlipPen(BezPath::new());
+        shared.draw_to(0, &mut streamed).unwrap();
+        assert_eq!(streamed.0, old.0);
     }
 }
