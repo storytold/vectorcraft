@@ -11,7 +11,7 @@ use vectorcraft_doc::{ExportAsset, NodeId};
 use super::edit::{roots_of, selected_roots};
 use super::fileio::{
     DEFAULT_FORMAT_3D, FORMATS_3D, SCREEN_SETTINGS_KEYS, TEXTURE_SIZE, TEXTURE_SIZES, check_screen_settings, create_dir, export_crop, export_screens,
-    image_count, mesh_file_names, mesh_files, safe_file_name, store_screen_settings, textures, with_screen_export_preset, write_file,
+    image_maps, mesh_file_names, mesh_files, safe_file_name, store_screen_settings, textures, with_screen_export_preset, write_file,
 };
 use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_param, cmd, has_doc, ok, str_param, switch_or, text_param};
 
@@ -80,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export 3D Assets",
             [],
             None,
-            "{assets?: [asset id…] (default every 3D asset), folder?, zip?, textureSize?: 128…4096 (default 1024: the pixels along the longer side of each face's texture)} each 3D asset's object as a mesh file in its format (assets.set3DFormat), named after the asset: USDA or USDZ, glTF 2.0 (one .gltf, its buffer embedded) or OBJ with its .mtl (whitespace and # in an OBJ's name become _). Every solid of the object (the fill's, each stroke's, a group's members') is a mesh with a material in the color it is painted; faces turned away from the viewer are included, at the object's 3D rotation, y up, about the point it turns about, in points (glTF: meters). The graphics mapped onto a plane or onto Extrude & Bevel's front or back cap (threeD.mapGraphic) are a PNG texture of that face: its color with the graphics drawn over it, flat and unlit, on a mesh of the face's own with texture coordinates; glTF embeds it, USDZ stores it after the layer, and OBJ and USDA write it beside them as <name>-texture-1.png… (whitespace, # and @ become _). Graphics on Revolve's side are not exported. Files that would share a name get -2, -3…; an object with a hole that crosses its face's outline or another hole, or with more than 2,000,000 triangles, or textures of more than 67,108,864 pixels in one export, is refused → {files: [path…]} (no folder: {files: [{name, dataBase64}]}, or with zip one zip as {name, dataBase64, files})",
+            "{assets?: [asset id…] (default every 3D asset), folder?, zip?, textureSize?: 128…4096 (default 1024: the pixels along the longer side of each face's texture)} each 3D asset's object as a mesh file in its format (assets.set3DFormat), named after the asset: USDA or USDZ, glTF 2.0 (one .gltf, its buffer embedded) or OBJ with its .mtl (whitespace and # in an OBJ's name become _). Every solid of the object (the fill's, each stroke's, a group's members') is a mesh with a material in the color it is painted; faces turned away from the viewer are included, at the object's 3D rotation, y up, about the point it turns about, in points (glTF: meters). The graphics mapped onto a plane or onto Extrude & Bevel's front or back cap (threeD.mapGraphic) are a PNG texture of that face: its color with the graphics drawn over it, flat and unlit, on a mesh of the face's own with texture coordinates; glTF embeds it, USDZ stores it after the layer, and OBJ and USDA write it beside them as <name>-texture-1.png… (whitespace, # and @ become _); a face that is not opaque keeps its opacity in the texture's alpha, and an OBJ also gets <name>-texture-1-opacity.png…, the alpha as gray levels for its map_d. Graphics on Revolve's side are not exported. Files that would share a name get -2, -3…; an object with a hole that crosses its face's outline or another hole, or with more than 2,000,000 triangles, or textures of more than 67,108,864 pixels in one export, is refused → {files: [path…]} (no folder: {files: [{name, dataBase64}]}, or with zip one zip as {name, dataBase64, files})",
             has_doc,
             export_3d
         ),
@@ -288,12 +288,12 @@ fn export_3d(s: &mut Session, p: &Value) -> Result<Value> {
         let parts =
             vectorcraft_render::effects::three_d_meshes_of_in(Some(d), nodes).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
         let pictures = textures(d, &parts, size, &mut pixels).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
-        let images = image_count(&pictures);
+        let images = image_maps(&pictures);
         let base = Some(safe_file_name(&a.name)).filter(|b| !b.is_empty()).unwrap_or_else(|| "Asset".into());
         let mut stem = base.clone();
         let mut k = 1;
         loop {
-            let names = mesh_file_names(&stem, format, images).map_err(|e| bad(C, e))?;
+            let names = mesh_file_names(&stem, format, &images).map_err(|e| bad(C, e))?;
             if names.iter().all(|n| !taken.contains(&n.to_lowercase())) {
                 break;
             }

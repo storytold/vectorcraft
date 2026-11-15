@@ -107,8 +107,8 @@ fn an_obj_names_its_mtl_file_without_spaces_or_comment_marks() {
     let files = plain_files("Box #1", "obj", &[square(RED)]).unwrap();
     assert_eq!(files.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Box__1.obj", "Box__1.mtl"]);
     assert!(text(&files, "Box__1.obj").starts_with("mtllib Box__1.mtl\n"));
-    assert_eq!(mesh_file_names("Box #1", "obj", 0).unwrap(), ["Box__1.obj", "Box__1.mtl"]);
-    assert_eq!(mesh_file_names("Box #1", "usda", 0).unwrap(), ["Box #1.usda"]);
+    assert_eq!(mesh_file_names("Box #1", "obj", &[]).unwrap(), ["Box__1.obj", "Box__1.mtl"]);
+    assert_eq!(mesh_file_names("Box #1", "usda", &[]).unwrap(), ["Box #1.usda"]);
 }
 
 #[test]
@@ -125,8 +125,8 @@ fn obj_and_usda_keep_coordinates_a_32_bit_float_would_merge() {
 #[test]
 fn an_unknown_format_is_refused() {
     assert!(plain_files("Box", "fbx", &[square(RED)]).is_err());
-    assert!(mesh_file_names("Box", "", 0).is_err());
-    assert_eq!(mesh_file_names("Box", "obj", 0).unwrap(), ["Box.obj", "Box.mtl"]);
+    assert!(mesh_file_names("Box", "", &[]).is_err());
+    assert_eq!(mesh_file_names("Box", "obj", &[]).unwrap(), ["Box.obj", "Box.mtl"]);
 }
 
 #[test]
@@ -140,7 +140,7 @@ fn prim_names_are_usd_identifiers() {
 /// A red square, then a blue one whose corners show picture `png` (u to the right, v down).
 fn textured(png: &[u8]) -> (Vec<SolidMesh>, Vec<Option<Texture>>) {
     let uv = vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
-    let texture = Texture { png: Arc::new(png.to_vec()), uv };
+    let texture = Texture { png: Arc::new(png.to_vec()), opacity: None, uv };
     (vec![square(RED), square(BLUE)], vec![None, Some(texture)])
 }
 
@@ -158,7 +158,7 @@ fn each_format_carries_a_textured_part_with_its_coordinates_and_picture() {
     assert_eq!(obj.lines().rfind(|l| l.starts_with("f ")), Some("f 10/4/10 11/5/11 12/6/12"));
     assert!(obj.contains("f 1//1 2//2 3//3"), "the plain part keeps no texture coordinates");
     let mtl = text(&files, "My_Box.mtl");
-    assert!(mtl.contains("newmtl Material_2\nKd 1 1 1\nd 0.5\nillum 1\nmap_Kd -clamp on My_Box-texture-1.png\n"), "{mtl}");
+    assert!(mtl.contains("newmtl Material_2\nKd 1 1 1\nd 1\nillum 1\nmap_Kd -clamp on My_Box-texture-1.png\n"), "{mtl}");
     assert_eq!(mtl.matches("map_Kd").count(), 1);
     // glTF: TEXCOORD_0 down from the top, and the picture embedded as a data URI.
     let g: Value = serde_json::from_str(&text(&mesh_files("Box", "gltf", &parts, &pictures).unwrap(), "Box.gltf")).unwrap();
@@ -173,7 +173,7 @@ fn each_format_carries_a_textured_part_with_its_coordinates_and_picture() {
     assert_eq!(first, [0.0, 1.0]);
     let material = &g["materials"][prims[1]["material"].as_u64().unwrap() as usize];
     assert_eq!(material["pbrMetallicRoughness"]["baseColorTexture"]["index"], 0);
-    assert_eq!(material["pbrMetallicRoughness"]["baseColorFactor"], serde_json::json!([1.0, 1.0, 1.0, 0.5]));
+    assert_eq!(material["pbrMetallicRoughness"]["baseColorFactor"], serde_json::json!([1.0, 1.0, 1.0, 1.0]));
     assert_eq!(g["textures"][0]["source"], 0);
     assert_eq!(g["samplers"][0]["wrapS"], 33071);
     let image = g["images"][0]["uri"].as_str().unwrap().strip_prefix("data:image/png;base64,").unwrap();
@@ -205,15 +205,45 @@ fn each_format_carries_a_textured_part_with_its_coordinates_and_picture() {
 }
 
 #[test]
+fn a_textured_face_that_is_not_opaque_takes_its_opacity_from_the_picture() {
+    let (parts, mut pictures) = textured(b"picture");
+    if let Some(t) = pictures[1].as_mut() {
+        t.opacity = Some(Arc::new(b"gray".to_vec()));
+    }
+    // OBJ: the opacity map, written after its texture, is the MTL's map_d.
+    let files = mesh_files("My Box", "obj", &parts, &pictures).unwrap();
+    let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(names, ["My_Box.obj", "My_Box.mtl", "My_Box-texture-1.png", "My_Box-texture-1-opacity.png"]);
+    assert_eq!(files[3].1, b"gray");
+    assert_eq!(mesh_file_names("My Box", "obj", &image_maps(&pictures)).unwrap(), names);
+    let mtl = text(&files, "My_Box.mtl");
+    assert!(mtl.contains("d 1\nillum 1\nmap_Kd -clamp on My_Box-texture-1.png\nmap_d -clamp on My_Box-texture-1-opacity.png\n"), "{mtl}");
+    let g: Value = serde_json::from_str(&text(&mesh_files("Box", "gltf", &parts, &pictures).unwrap(), "Box.gltf")).unwrap();
+    let material = &g["materials"][1];
+    assert_eq!((material["pbrMetallicRoughness"]["baseColorFactor"][3].as_f64(), material["alphaMode"].as_str()), (Some(1.0), Some("BLEND")));
+    let usda = mesh_files("Box", "usda", &parts, &pictures).unwrap();
+    assert_eq!(usda.len(), 2, "USD reads the opacity from the texture's alpha");
+    let u = text(&usda, "Box.usda");
+    assert!(u.contains("float inputs:opacity.connect = </Box/Materials/Material_2/Texture.outputs:a>") && u.contains("float outputs:a"), "{u}");
+    // An opaque textured face reads no opacity from its picture.
+    let (_, plain) = textured(b"picture");
+    let opaque = vec![square(RED), square([0.0, 0.0, 1.0, 1.0])];
+    let u = text(&mesh_files("Box", "usda", &opaque, &plain).unwrap(), "Box.usda");
+    assert!(!u.contains("outputs:a") && u.contains("float inputs:opacity = 1"), "{u}");
+    let mtl = text(&mesh_files("Box", "obj", &opaque, &plain).unwrap(), "Box.mtl");
+    assert!(!mtl.contains("map_d") && mtl.contains("Kd 1 1 1\nd 1\n"), "{mtl}");
+}
+
+#[test]
 fn parts_sharing_a_picture_write_it_once() {
     let (mut parts, mut pictures) = textured(b"one");
     parts.push(square(BLUE));
     pictures.push(pictures[1].clone());
-    assert_eq!(image_count(&pictures), 1);
+    assert_eq!(image_maps(&pictures), [false]);
     let files = mesh_files("Box", "obj", &parts, &pictures).unwrap();
     assert_eq!(files.len(), 3);
     assert_eq!(text(&files, "Box.mtl").matches("newmtl").count(), 2, "the blue parts share the textured material");
-    assert_eq!(mesh_file_names("Box", "usda", 2).unwrap(), ["Box.usda", "Box-texture-1.png", "Box-texture-2.png"]);
-    assert_eq!(mesh_file_names("A @b", "gltf", 2).unwrap(), ["A @b.gltf"]);
+    assert_eq!(mesh_file_names("Box", "usda", &[false, true]).unwrap(), ["Box.usda", "Box-texture-1.png", "Box-texture-2.png"]);
+    assert_eq!(mesh_file_names("A @b", "gltf", &[false, false]).unwrap(), ["A @b.gltf"]);
     assert_eq!(texture_name("A @b#c", 0), "A__b_c-texture-1.png");
 }

@@ -8336,11 +8336,14 @@ page, those turned away from the viewer included, at the object's 3D rotation, y
 about: in points (USD's layer gives `metersPerUnit`), in meters in glTF. Files that would share a name get `-2`, `-3` and so on.
 Graphics mapped onto a plane or onto Extrude & Bevel's front or back cap (`threeD.mapGraphic`) are exported as a PNG
 texture of that face: the face's color with its graphics drawn over it, flat and unlit, on a mesh of the face's own
-triangles with texture coordinates and a material that shows the texture. glTF embeds the PNG as a data URI
+triangles with texture coordinates and a material that shows the texture. A face that is not opaque keeps its opacity
+in the texture's alpha, and the graphics keep their own. glTF embeds the PNG as a data URI
 (`TEXCOORD_0`, `baseColorTexture`), USDZ stores it after the layer, USDA reads it through `primvars:st`, a
 `UsdPrimvarReader_float2` and a `UsdUVTexture` connected to the surface's `diffuseColor`, and OBJ gives `vt` coordinates
 and an MTL `map_Kd`; OBJ and USDA write the PNG beside them as `<name>-texture-1.png`, `-texture-2.png` and so on
-(whitespace, `#` and `@` become `_`). Faces with the same color, graphics and bounds share one texture. `textureSize` (128 to
+(whitespace, `#` and `@` become `_`). USD reads a face's opacity from the texture's alpha (`outputs:a`), and an OBJ
+whose face is not opaque also gets `<name>-texture-1-opacity.png`, the alpha as gray levels, for the MTL's `map_d`.
+Faces with the same color, graphics and bounds share one texture. `textureSize` (128 to
 4096, default 1024, VectorCraft's own values) is the number of pixels along the longer side of each texture; one export
 draws at most 67,108,864 texture pixels in all, and past that it is refused. Graphics on Revolve's side are not
 exported yet. The layouts follow glTF 2.0, UsdPreviewSurface (<https://openusd.org/release/spec_usdpreviewsurface.html>)

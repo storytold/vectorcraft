@@ -60,23 +60,40 @@ fn obj_stem(stem: &str) -> String {
 /// The name of texture `k` (from 0) of the object named `stem`: whitespace, `#` and `@` become `_`,
 /// so an MTL `map_Kd` line and a USD asset path name it as one word.
 fn texture_name(stem: &str, k: usize) -> String {
-    let stem: String = stem.chars().map(|c| if c.is_whitespace() || c == '#' || c == '@' { '_' } else { c }).collect();
-    format!("{stem}-texture-{}.png", k + 1)
+    format!("{}-texture-{}.png", texture_stem(stem), k + 1)
 }
 
-/// The names of the files [`mesh_files`] writes for `stem` in `format` with `images` textures: OBJ
-/// and USDA name a PNG file for each texture after them; glTF and USDZ hold theirs.
-pub(crate) fn mesh_file_names(stem: &str, format: &str, images: usize) -> Result<Vec<String>, String> {
-    let beside = |mut names: Vec<String>, stem: &str| {
-        names.extend((0..images).map(|k| texture_name(stem, k)));
+/// The name of the opacity map of texture `k` (from 0) of the object named `stem`, as
+/// [`texture_name`] names the texture.
+fn opacity_name(stem: &str, k: usize) -> String {
+    format!("{}-texture-{}-opacity.png", texture_stem(stem), k + 1)
+}
+
+/// `stem` with whitespace, `#` and `@` turned into `_`, for the names of its textures.
+fn texture_stem(stem: &str) -> String {
+    stem.chars().map(|c| if c.is_whitespace() || c == '#' || c == '@' { '_' } else { c }).collect()
+}
+
+/// The names of the files [`mesh_files`] writes for `stem` in `format` with the textures `images`
+/// ([`image_maps`]: for each, whether it has an opacity map): OBJ and USDA name a PNG file for each
+/// texture after them, and OBJ also one for each opacity map, after its texture; glTF and USDZ hold
+/// theirs.
+pub(crate) fn mesh_file_names(stem: &str, format: &str, images: &[bool]) -> Result<Vec<String>, String> {
+    let beside = |mut names: Vec<String>, stem: &str, maps: bool| {
+        for (k, map) in images.iter().enumerate() {
+            names.push(texture_name(stem, k));
+            if maps && *map {
+                names.push(opacity_name(stem, k));
+            }
+        }
         names
     };
     match format {
         "obj" => {
             let stem = obj_stem(stem);
-            Ok(beside(vec![format!("{stem}.obj"), format!("{stem}.mtl")], &stem))
+            Ok(beside(vec![format!("{stem}.obj"), format!("{stem}.mtl")], &stem, true))
         }
-        "usda" => Ok(beside(vec![format!("{stem}.usda")], stem)),
+        "usda" => Ok(beside(vec![format!("{stem}.usda")], stem, false)),
         "gltf" | "usdz" => Ok(vec![format!("{stem}.{format}")]),
         _ => {
             let key = "format";
@@ -87,22 +104,26 @@ pub(crate) fn mesh_file_names(stem: &str, format: &str, images: usize) -> Result
 
 /// A picture painted on one part of a 3D object ([`SolidMesh`]): a PNG, and for each corner of the
 /// part's mesh where it falls on the picture (0 to 1 across from the left, 0 to 1 down from the
-/// top).
+/// top). `opacity` is a grayscale PNG of the picture's alpha when some of it is not opaque.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Texture {
     pub png: Arc<Vec<u8>>,
+    pub opacity: Option<Arc<Vec<u8>>>,
     pub uv: Vec<[f64; 2]>,
 }
 
+/// A distinct picture of a 3D object: the PNG and its opacity map.
+type Picture = (Arc<Vec<u8>>, Option<Arc<Vec<u8>>>);
+
 /// The distinct pictures of `textures` in order of first use, and the index among them of each
 /// part's (`None` for a part without one).
-fn images(parts: usize, textures: &[Option<Texture>]) -> (Vec<Arc<Vec<u8>>>, Vec<Option<usize>>) {
-    let mut out: Vec<Arc<Vec<u8>>> = vec![];
+fn images(parts: usize, textures: &[Option<Texture>]) -> (Vec<Picture>, Vec<Option<usize>>) {
+    let mut out: Vec<Picture> = vec![];
     let index = (0..parts)
         .map(|k| {
             let t = textures.get(k)?.as_ref()?;
-            Some(out.iter().position(|p| Arc::ptr_eq(p, &t.png) || p == &t.png).unwrap_or_else(|| {
-                out.push(t.png.clone());
+            Some(out.iter().position(|(p, _)| Arc::ptr_eq(p, &t.png) || p == &t.png).unwrap_or_else(|| {
+                out.push((t.png.clone(), t.opacity.clone()));
                 out.len() - 1
             }))
         })
@@ -110,24 +131,27 @@ fn images(parts: usize, textures: &[Option<Texture>]) -> (Vec<Arc<Vec<u8>>>, Vec
     (out, index)
 }
 
-/// The number of distinct pictures of `textures` ([`mesh_file_names`]).
-pub(crate) fn image_count(textures: &[Option<Texture>]) -> usize {
-    images(textures.len(), textures).0.len()
+/// For each distinct picture of `textures`, whether it has an opacity map ([`mesh_file_names`]).
+pub(crate) fn image_maps(textures: &[Option<Texture>]) -> Vec<bool> {
+    images(textures.len(), textures).0.iter().map(|(_, map)| map.is_some()).collect()
 }
 
 /// The files of a 3D object named `stem` in `format` ([`FORMATS_3D`]): `(file name, bytes)`, the
-/// OBJ with its MTL after it and the PNG files of `textures` last. `textures` holds the picture of
-/// each part that has one, in the order of `parts`.
+/// OBJ with its MTL after it and the PNG files of `textures` last (an OBJ's opacity maps each after
+/// its texture). `textures` holds the picture of each part that has one, in the order of `parts`.
 pub(crate) fn mesh_files(stem: &str, format: &str, parts: &[SolidMesh], textures: &[Option<Texture>]) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let (pictures, image) = images(parts.len(), textures);
-    let names = mesh_file_names(stem, format, pictures.len())?;
-    let scene = Scene { parts, textures, image: &image, pictures: &pictures };
+    let (images, image) = images(parts.len(), textures);
+    let maps: Vec<bool> = images.iter().map(|(_, map)| map.is_some()).collect();
+    let names = mesh_file_names(stem, format, &maps)?;
+    let pictures: Vec<Arc<Vec<u8>>> = images.iter().map(|(p, _)| p.clone()).collect();
+    let scene = Scene { parts, textures, image: &image, pictures: &pictures, maps: &maps };
     let pngs = || pictures.iter().map(|p| p.as_ref().clone());
     let bytes: Vec<Vec<u8>> = match format {
         "obj" => {
             let stem = obj_stem(stem);
             let (obj, mtl) = obj(&stem, &scene);
-            [obj.into_bytes(), mtl.into_bytes()].into_iter().chain(pngs()).collect()
+            let with_maps = images.iter().flat_map(|(p, map)| std::iter::once(p.as_ref().clone()).chain(map.as_ref().map(|m| m.as_ref().clone())));
+            [obj.into_bytes(), mtl.into_bytes()].into_iter().chain(with_maps).collect()
         }
         "gltf" => vec![gltf(stem, &scene).into_bytes()],
         "usda" => std::iter::once(usda(stem, &scene).into_bytes()).chain(pngs()).collect(),
@@ -140,12 +164,14 @@ pub(crate) fn mesh_files(stem: &str, format: &str, parts: &[SolidMesh], textures
     Ok(names.into_iter().zip(bytes).collect())
 }
 
-/// The parts of an object with their pictures: `image` is each part's index among `pictures`.
+/// The parts of an object with their pictures: `image` is each part's index among `pictures`, and
+/// `maps` says for each picture whether it has an opacity map.
 struct Scene<'a> {
     parts: &'a [SolidMesh],
     textures: &'a [Option<Texture>],
     image: &'a [Option<usize>],
     pictures: &'a [Arc<Vec<u8>>],
+    maps: &'a [bool],
 }
 
 impl Scene<'_> {
@@ -244,10 +270,14 @@ fn obj(stem: &str, scene: &Scene) -> (String, String) {
                 let _ = writeln!(m, "Kd {} {} {}", num(f64::from(c[0])), num(f64::from(c[1])), num(f64::from(c[2])));
             }
         }
-        let _ = writeln!(m, "d {}", num(f64::from(c[3])));
+        // A picture's opacity map holds the opacity, as gray levels.
+        let _ = writeln!(m, "d {}", if mat.image.is_some() { "1".to_string() } else { num(f64::from(c[3])) });
         let _ = writeln!(m, "illum 1");
         if let Some(i) = mat.image {
             let _ = writeln!(m, "map_Kd -clamp on {}", texture_name(stem, i));
+            if scene.maps.get(i).copied().unwrap_or(false) {
+                let _ = writeln!(m, "map_d -clamp on {}", opacity_name(stem, i));
+            }
         }
     }
     (o, m)
@@ -306,8 +336,8 @@ fn gltf(stem: &str, scene: &Scene) -> String {
                 "doubleSided": true,
             });
             if let Some(i) = mat.image {
-                // The picture holds the color; the factor multiplies it.
-                m["pbrMetallicRoughness"]["baseColorFactor"] = json!([1.0, 1.0, 1.0, c[3]]);
+                // The picture holds the color and the opacity; the factor multiplies them.
+                m["pbrMetallicRoughness"]["baseColorFactor"] = json!([1.0, 1.0, 1.0, 1.0]);
                 m["pbrMetallicRoughness"]["baseColorTexture"] = json!({ "index": i });
             }
             if c[3] < 1.0 {
@@ -400,14 +430,20 @@ fn usda(stem: &str, scene: &Scene) -> String {
         let _ = writeln!(u, "            def Shader \"Surface\"\n            {{");
         let _ = writeln!(u, "                uniform token info:id = \"UsdPreviewSurface\"");
         match mat.image {
+            // The picture holds the color, and the opacity when the face is not opaque.
             Some(_) => {
                 let _ = writeln!(u, "                color3f inputs:diffuseColor.connect = <{at}/Texture.outputs:rgb>");
+                if c[3] < 1.0 {
+                    let _ = writeln!(u, "                float inputs:opacity.connect = <{at}/Texture.outputs:a>");
+                } else {
+                    let _ = writeln!(u, "                float inputs:opacity = 1");
+                }
             }
             None => {
                 let _ = writeln!(u, "                color3f inputs:diffuseColor = ({}, {}, {})", linear(c[0]), linear(c[1]), linear(c[2]));
+                let _ = writeln!(u, "                float inputs:opacity = {}", c[3]);
             }
         }
-        let _ = writeln!(u, "                float inputs:opacity = {}", c[3]);
         let _ = writeln!(u, "                float inputs:roughness = 1");
         let _ = writeln!(u, "                token outputs:surface\n            }}");
         if let Some(i) = mat.image {
@@ -418,7 +454,11 @@ fn usda(stem: &str, scene: &Scene) -> String {
             let _ = writeln!(u, "                token inputs:sourceColorSpace = \"sRGB\"");
             let _ = writeln!(u, "                token inputs:wrapS = \"clamp\"");
             let _ = writeln!(u, "                token inputs:wrapT = \"clamp\"");
-            let _ = writeln!(u, "                float3 outputs:rgb\n            }}");
+            let _ = writeln!(u, "                float3 outputs:rgb");
+            if c[3] < 1.0 {
+                let _ = writeln!(u, "                float outputs:a");
+            }
+            let _ = writeln!(u, "            }}");
             let _ = writeln!(u, "\n            def Shader \"Coordinates\"\n            {{");
             let _ = writeln!(u, "                uniform token info:id = \"UsdPrimvarReader_float2\"");
             let _ = writeln!(u, "                string inputs:varname = \"st\"");
@@ -438,7 +478,8 @@ fn usda(stem: &str, scene: &Scene) -> String {
 /// far, and every call of one export shares it: an error when it passes [`MAX_TEXTURE_PIXELS`].
 pub(crate) fn textures(doc: &Document, parts: &[SolidMesh], size: u32, pixels: &mut u64) -> Result<Vec<Option<Texture>>, String> {
     let mut renderer: Option<vectorcraft_render::Renderer> = None;
-    // Each picture drawn: the part it was drawn for, its bounds, and the PNG (`None`: nothing drawn).
+    // Each picture drawn: the part it was drawn for, its bounds, and the PNG with its opacity map
+    // (`None`: nothing drawn).
     let mut drawn: Vec<Drawn> = vec![];
     let mut out = vec![];
     for part in parts {
@@ -467,16 +508,16 @@ pub(crate) fn textures(doc: &Document, parts: &[SolidMesh], size: u32, pixels: &
                             ));
                         }
                         let renderer = renderer.get_or_insert_with(vectorcraft_render::Renderer::new);
-                        Some(Arc::new(picture(doc, renderer, part.color, art, (frame, scale), (w, h))?))
+                        Some(picture(doc, renderer, part.color, art, (frame, scale), (w, h))?)
                     }
                 };
                 drawn.push((part, frame, png.clone()));
                 png
             }
         };
-        out.push(png.map(|png| {
+        out.push(png.map(|(png, opacity)| {
             let uv = g.art.iter().map(|p| [(p.x - frame.x0) * scale / f64::from(w), (p.y - frame.y0) * scale / f64::from(h)]).collect();
-            Texture { png, uv }
+            Texture { png, opacity, uv }
         }));
     }
     Ok(out)
@@ -498,16 +539,17 @@ fn texture_frame(g: &MeshGraphics) -> Option<Rect> {
     g.art_bounds().filter(|r| r.width() > 1e-9 && r.height() > 1e-9 && r.width().is_finite() && r.height().is_finite())
 }
 
-/// A picture [`textures`] drew: the part, the bounds and the PNG.
-type Drawn<'a> = (&'a SolidMesh, Rect, Option<Arc<Vec<u8>>>);
+/// A picture [`textures`] drew: the part, the bounds and the PNG with its opacity map.
+type Drawn<'a> = (&'a SolidMesh, Rect, Option<Picture>);
 
 /// Do `a` and `b` draw the same graphics on their face?
 fn same_graphics(a: &MeshGraphics, b: &MeshGraphics) -> bool {
     a.face == b.face && a.center == b.center && a.graphics == b.graphics
 }
 
-/// `art` drawn over `color` (opaque) as a PNG of `w` × `h` pixels whose top left is `frame`'s top
-/// left, at `scale` pixels a point.
+/// `art` drawn over `color` (at its opacity) as a PNG of `w` × `h` pixels whose top left is `frame`'s
+/// top left, at `scale` pixels a point, with a grayscale PNG of its alpha when some of it is not
+/// opaque.
 fn picture(
     doc: &Document,
     renderer: &mut vectorcraft_render::Renderer,
@@ -515,16 +557,27 @@ fn picture(
     art: Node,
     (frame, scale): (Rect, f64),
     (w, h): (u32, u32),
-) -> Result<Vec<u8>, String> {
+) -> Result<Picture, String> {
     // The color reaches two pixels past the frame, so the picture's edge pixels are covered.
     let reach = 2.0 / scale;
     let back = Rect::new(frame.x0 - reach, frame.y0 - reach, frame.x0 + f64::from(w) / scale + reach, frame.y0 + f64::from(h) / scale + reach);
     let fill = Paint::solid(Color::rgb(color[0], color[1], color[2]));
-    let ground = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(back), Appearance::basic(fill, Paint::None, 0.0));
+    let mut ground = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(back), Appearance::basic(fill, Paint::None, 0.0));
+    ground.opacity = color[3];
     let group = Arc::new(Node::group(NodeId(0), vec![Arc::new(ground), Arc::new(art)]));
     let (pw, ph) = (u16::try_from(w).map_err(|_| "texture too large")?, u16::try_from(h).map_err(|_| "texture too large")?);
     let view = Affine::scale(scale) * Affine::translate((-frame.x0, -frame.y0));
-    renderer.render_node(doc, &group, pw, ph, view).ok_or_else(|| "the graphics could not be drawn".to_string())?.to_png()
+    let drawn = renderer.render_node(doc, &group, pw, ph, view).ok_or_else(|| "the graphics could not be drawn".to_string())?;
+    let alpha: Vec<u8> = drawn.pixels.iter().skip(3).step_by(4).copied().collect();
+    let opacity = if alpha.iter().all(|a| *a == 255) {
+        None
+    } else {
+        let gray = image::GrayImage::from_raw(w, h, alpha).ok_or("the texture's opacity could not be drawn")?;
+        let mut png = vec![];
+        gray.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| format!("PNG encoding failed: {e}"))?;
+        Some(Arc::new(png))
+    };
+    Ok((Arc::new(drawn.to_png()?), opacity))
 }
 
 #[cfg(test)]

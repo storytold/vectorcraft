@@ -274,6 +274,31 @@ fn export_3d_paints_mapped_graphics_on_their_caps_in_every_format() {
 }
 
 #[test]
+fn a_half_opaque_face_keeps_its_graphics_opaque_in_the_texture() {
+    let (mut s, asset) = mapped("usda");
+    let doc = &s.active().unwrap().doc;
+    let id = doc.asset(asset).unwrap().nodes[0];
+    let fill = doc.node(id).unwrap().appearance.items.iter().position(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "transparency.set", json!({"item": fill, "opacity": 50}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    // The graphic stays opaque where it covers the face, and the face around it is half opaque.
+    let front = &out[1].1;
+    assert_eq!(pixel(front, 64, 64), [255, 0, 0, 255]);
+    let around = pixel(front, 2, 2);
+    assert!(around[2] > 200 && (120..=135).contains(&around[3]), "{around:?}");
+    let usda = String::from_utf8(out[0].1.clone()).unwrap();
+    assert!(usda.contains("float inputs:opacity.connect"), "the texture's alpha is the opacity");
+    // An OBJ's opacity map has the alpha as gray levels.
+    run(&mut s, "assets.set3DFormat", json!({"assets": [asset], "format": "obj"}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    assert_eq!(out[3].0, "Box-texture-1-opacity.png");
+    let gray = image::load_from_memory(&out[3].1).unwrap().to_luma8();
+    assert_eq!(gray.get_pixel(64, 64).0, [255]);
+    assert!((120..=135).contains(&gray.get_pixel(2, 2).0[0]), "{:?}", gray.get_pixel(2, 2));
+}
+
+#[test]
 fn export_3d_keeps_flat_colors_without_graphics_and_refuses_bad_texture_sizes() {
     let (mut s, asset) = mapped("obj");
     for bad in [json!(64), json!(5000), json!(512.5), json!("512"), json!(-1)] {
