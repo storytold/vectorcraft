@@ -1221,10 +1221,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
 /// `digits`: not what the layout handles itself (tab, line and paragraph breaks), joiners or
 /// variation selectors.
 fn drawn_chars(cluster: &str, digits: Digits) -> impl Iterator<Item = char> + '_ {
-    cluster
-        .chars()
-        .map(move |c| digits.map(c))
-        .filter(|&c| !(c.is_control() || matches!(c, '\u{200C}' | '\u{200D}' | '\u{2028}' | '\u{FE00}'..='\u{FE0F}' | '\u{E0100}'..='\u{E01EF}')))
+    craft_font_catalog::drawable_characters(cluster, move |c| digits.map(c))
 }
 
 /// Does the face with charmap `map` have a glyph for `c` (any face does when it has no charmap)?
@@ -1236,11 +1233,14 @@ fn in_face(map: Option<&Charmap<'_>>, c: char) -> bool {
 /// first fallback face with all of them, so that a letter's marks are shaped with it and attach to
 /// it (#4491); when there is none, the face its first character takes on its own.
 fn fallback_face(db: &FontDb, primary: &Arc<FontFace>, pmap: Option<&Charmap<'_>>, cluster: &str, digits: Digits) -> Arc<FontFace> {
-    let fallback = |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic);
-    drawn_chars(cluster, digits)
-        .find_map(|c| fallback(c).filter(|f| drawn_chars(cluster, digits).all(|c| f.covers(c))))
-        .or_else(|| drawn_chars(cluster, digits).next().filter(|&c| !in_face(pmap, c)).and_then(fallback))
-        .unwrap_or_else(|| primary.clone())
+    craft_font_catalog::cluster_face(
+        cluster,
+        primary,
+        |c| digits.map(c),
+        |c| in_face(pmap, c),
+        |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic),
+        |face, c| face.covers(c),
+    )
 }
 
 /// The script `c` is shaped in: Japanese and Chinese text mixes Han, Hiragana, Katakana and
