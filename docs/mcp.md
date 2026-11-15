@@ -4199,6 +4199,13 @@ is tall), `bevelInside` (false adds the bevel around the shape, true carves it i
 - `shadingColor`: `black` (the default), `custom` (darkens toward `shadingCustom`, a `#rrggbb` color) or `none` (the
   paint is kept and only the highlight lightens it). `drawHiddenFaces` also draws the faces turned away from the
   viewer, behind the others.
+- `preserveSpotColors` (default false) is the Lighting tab's Preserve Spot Colors checkbox. When it is on, a fill or
+  stroke linked to a spot or global swatch stays linked on every face, so a spot color prints on its own plate in
+  separations and PDF. The highlight lowers the swatch's tint, and a face that darkens gets black at the shade's
+  strength over the swatch, multiplied and overprinting. These rules for drawing the shading are VectorCraft's own. The
+  option does nothing while `shadingColor` is `custom`, since a custom shading color cannot keep a spot color
+  ([Preserve Spot Color](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260)).
+  Unlinked colors, gradients, patterns and the Wireframe surface draw as they do with it off.
 
 The defaults are VectorCraft's own. An unknown parameter, a number out of range, a flag that is not true or false, or
 an unknown surface or shading color is refused with an error and the document is not changed.
@@ -4215,8 +4222,8 @@ for a full turn, and draws every face, back to front, with the classic surfaces.
 0..360, default 360), `cap` (true closes the profile's open ends, false leaves the surface hollow), `offset` (points,
 0..1000, default 0; the axis's distance from the profile, so a value above 0 makes a ring), `edge` (`left`, the
 default, or `right`: the edge of the profile's bounds the axis is at), `rotationX/Y/Z` and `perspectiveAngle` as
-above, and `surface`, the lights, `ambient`, `highlightIntensity`, `highlightSize`, `blendSteps`, `shadingColor` and
-`shadingCustom` as Extrude & Bevel (Classic) takes them. It has no `drawHiddenFaces`. The effect also goes on a group
+above, and `surface`, the lights, `ambient`, `highlightIntensity`, `highlightSize`, `blendSteps`, `shadingColor`,
+`shadingCustom` and `preserveSpotColors` as Extrude & Bevel (Classic) takes them. It has no `drawHiddenFaces`. The effect also goes on a group
 or layer, whose members turn about one shared axis, or on a fill or stroke. The public documentation describes the
 dialog ([Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html))
 and its Angle (0 to 360), Cap, Offset (0 to 1000) and Left Edge or Right Edge settings
@@ -4235,8 +4242,8 @@ changed.
 3D (Classic) › Rotate (Classic)…. It turns every fill and stroke as one flat plane about the center of the object's
 bounds, as `threeD.rotate` does, each in its own paint, and draws the plane from either side. Parameters:
 `rotationX/Y/Z` and `perspectiveAngle` as above; `surface` (`diffuse`, the default, lights the art softly, and
-`none` keeps the paint unlit); and the lights, `ambient`, `blendSteps`, `shadingColor` and `shadingCustom` as Extrude &
-Bevel (Classic) takes them. It has no highlight, no `drawHiddenFaces` and no shadow. The effect also goes on a group
+`none` keeps the paint unlit); and the lights, `ambient`, `blendSteps`, `shadingColor`, `shadingCustom` and
+`preserveSpotColors` as Extrude & Bevel (Classic) takes them. It has no highlight, no `drawHiddenFaces` and no shadow. The effect also goes on a group
 or layer, whose members turn about one shared center, or on a fill or stroke. The public documentation describes the
 dialog's Position and Surface settings
 ([Rotate objects in 3D](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/rotate-objects-in-3d.html)),
