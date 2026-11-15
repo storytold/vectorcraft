@@ -223,3 +223,152 @@ fn expand_appearance_keeps_the_shadow_as_a_path() {
         assert!((after.x0 - before.x0 - 40.0).abs() < 1e-6, "{id}: {before:?} {after:?}");
     }
 }
+
+/// A square filled red and stroked blue, its stroke as opaque as `stroke`.
+fn stroked_square(id: u64, dx: f64, stroke: f32) -> Node {
+    let mut n = square_node(id, dx);
+    n.appearance = Appearance::basic(Paint::solid(RED), Paint::solid(Color::rgb(0.1, 0.2, 0.9)), 6.0).into();
+    for item in &mut n.appearance.items {
+        if let AppearanceItem::Stroke(s) = item {
+            s.opacity = stroke;
+        }
+    }
+    n
+}
+
+/// Objects with 3D effect `id` and its shadow on (`params`): a filled and stroked square, one whose
+/// stroke is half transparent, one whose stroke is fully transparent, and a group of two members,
+/// one of them at half opacity.
+fn shadowed(id: &str, params: &Value) -> Vec<Node> {
+    let with = |mut n: Node| {
+        n.appearance.effects.push(crate::new_effect(id, params).unwrap());
+        n
+    };
+    let mut half = stroked_square(2, 200.0, 1.0);
+    half.opacity = 0.5;
+    let group = Node::group(NodeId(9), vec![Arc::new(stroked_square(1, 0.0, 1.0)), Arc::new(half)]);
+    vec![with(stroked_square(1, 0.0, 1.0)), with(stroked_square(1, 0.0, 0.5)), with(stroked_square(1, 0.0, 0.0)), with(group)]
+}
+
+/// The settings the shadows of effect `id` are compared with: the defaults, turned with
+/// perspective, and under a colored light, below the object for Extrude & Bevel, Inflate and
+/// Rotate and behind it for Revolve.
+fn shadow_settings(id: &str) -> [Value; 3] {
+    let position = if id == crate::REVOLVE { "behind" } else { "below" };
+    [
+        json!({"shadow": true}),
+        json!({"shadow": true, "rotationX": -25, "rotationY": 35, "perspective": 50, "shadowDistance": 40}),
+        json!({"shadow": true, "shadowPosition": position, "shadowDistance": 30, "lightColor": "#ff8040", "twist": 30}),
+    ]
+}
+
+/// How many solids drawing the art of `n` with effect `id` builds.
+fn solids_built(n: &Node, id: &str) -> usize {
+    let start = SOLIDS_BUILT.with(std::cell::Cell::get);
+    assert!(art(n, id).is_some(), "{id}");
+    SOLIDS_BUILT.with(std::cell::Cell::get) - start
+}
+
+/// Drawing a 3D object with its shadow on builds each of its solids once: the shadow is cast from
+/// the faces the solids drawn kept, so it builds no more solids than the art without a shadow.
+#[test]
+fn a_shadowed_3d_object_builds_each_solid_once() {
+    for id in CASTING {
+        for params in shadow_settings(id) {
+            for (lit, mut plain) in shadowed(id, &params).into_iter().zip(shadowed(id, &params)) {
+                plain.appearance.effects.iter_mut().for_each(|e| e.params["shadow"] = json!(false));
+                let mut cast = 0;
+                art(&lit, id).unwrap().walk(&mut |c| cast += usize::from(shadow_opacity(c).is_some()));
+                assert!(cast > 0, "{id} {params}");
+                let built = solids_built(&plain, id);
+                assert!(built > 0, "{id}");
+                assert_eq!(solids_built(&lit, id), built, "{id} {params}: the shadow builds no solid of its own");
+            }
+        }
+    }
+}
+
+/// The shadow of the faces Extrude & Bevel, Inflate and Rotate kept when they drew their solids,
+/// to the bit: the shadow [`cast_shadow`] casts from solids built for the shadow alone.
+#[test]
+fn the_shadow_cast_from_the_solids_drawn_is_the_shadow_of_solids_built_for_it() {
+    for id in [EXTRUDE, INFLATE, ROTATE] {
+        for params in shadow_settings(id) {
+            for n in shadowed(id, &params) {
+                let (_, fx) = solid(&n.appearance.effects).unwrap();
+                let shapes = if is_container(&n) {
+                    members(&n, "").unwrap()
+                } else {
+                    let (path, rule) = profile(&n).unwrap();
+                    vec![Profile { path, rule, items: solid_paint_sources(&n).1, opacity: 1.0, scopes: vec![] }]
+                };
+                let (drawn, _) = art_for(None, &n, fx, &shapes).unwrap();
+                let p = crate::merged_params(&fx.id, &fx.params);
+                let (caster, settings, cast) = cast_shadow(&fx.id, &p, &shapes).unwrap().unwrap();
+                let alone = shadow::scoped_art(n.id, &caster, settings, cast, has_masks(&shapes));
+                assert!(!alone.is_empty(), "{id} {params}");
+                assert_eq!(format!("{drawn:?}"), format!("{alone:?}"), "{id} {params}");
+            }
+        }
+    }
+}
+
+/// The opacity of each part of the shadow of `n` (its 3D effect's shadow on) and the shadow's art,
+/// as [`cast_shadow`] casts it from solids built for the shadow alone and as [`cast_built`] casts
+/// it from the faces the solids drawn kept.
+fn cast_parts(n: &Node) -> [(Vec<f32>, String); 2] {
+    let (_, fx) = solid(&n.appearance.effects).unwrap();
+    let shapes = if is_container(n) {
+        members(n, "").unwrap()
+    } else {
+        let (path, rule) = profile(n).unwrap();
+        vec![Profile { path, rule, items: solid_paint_sources(n).1, opacity: 1.0, scopes: vec![] }]
+    };
+    let p = crate::merged_params(&fx.id, &fx.params);
+    let (_, built) = surfaces_for(None, n, fx, &shapes, true).unwrap();
+    [cast_shadow(&fx.id, &p, &shapes), cast_built(&fx.id, &p, &shapes, built)].map(|c| {
+        let (caster, settings, cast) = c.unwrap().unwrap();
+        let inks = cast.iter().map(|(_, ink, _)| ink.opacity).collect();
+        (inks, format!("{:?}", shadow::scoped_art(n.id, &caster, settings, cast, has_masks(&shapes))))
+    })
+}
+
+/// A fill, a stroke or a member whose opacity is NaN or infinite casts no part of the shadow, as one
+/// at 0 % does, whether the shadow is cast from solids built for it or from the solids drawn; the
+/// art beside it still casts its part.
+#[test]
+fn art_whose_opacity_is_not_a_finite_number_casts_no_shadow() {
+    // The art with opacity `opacity` in one place: a square's stroke, the fill of a group's second
+    // member, and a group's second member.
+    let objects = |opacity: f32| {
+        let mut fill = square_node(2, 200.0);
+        for item in &mut fill.appearance.items {
+            if let AppearanceItem::Fill(f) = item {
+                f.opacity = opacity;
+            }
+        }
+        let mut member = square_node(2, 200.0);
+        member.opacity = opacity;
+        [
+            stroked_square(1, 0.0, opacity),
+            Node::group(NodeId(9), vec![Arc::new(square_node(1, 0.0)), Arc::new(fill)]),
+            Node::group(NodeId(9), vec![Arc::new(square_node(1, 0.0)), Arc::new(member)]),
+        ]
+    };
+    for id in [EXTRUDE, INFLATE, ROTATE] {
+        for bad in [f32::NAN, f32::INFINITY] {
+            for (i, (mut n, mut clear)) in objects(bad).into_iter().zip(objects(0.0)).enumerate() {
+                n.appearance.effects.push(crate::new_effect(id, &json!({"shadow": true})).unwrap());
+                clear.appearance.effects.push(crate::new_effect(id, &json!({"shadow": true})).unwrap());
+                let expected = cast_parts(&clear);
+                for (k, (inks, shadow)) in cast_parts(&n).into_iter().enumerate() {
+                    assert_eq!(inks, vec![1.0], "{id} {bad} object {i} cast {k}: only the opaque art casts");
+                    assert_eq!(shadow, expected[k].1, "{id} {bad} object {i} cast {k}");
+                }
+                let mut opacities = vec![];
+                art(&n, id).unwrap().walk(&mut |c| opacities.extend(shadow_opacity(c)));
+                assert_eq!(opacities, vec![0.5], "{id} {bad} object {i}");
+            }
+        }
+    }
+}

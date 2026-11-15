@@ -508,6 +508,20 @@ fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::Bez
     (runs, all, layout.bounds, colours)
 }
 
+/// Paint `piece`, a piece of type's outline in text space (glyphs, ruby glyphs or an underline or
+/// strikethrough bar), with `style`, the fills and strokes of its run, and place it in the document
+/// by `xf`, the type's transform, as the renderer paints the run: its unplaced gradients are fixed
+/// to `bounds`, the layout's bounds in text space, so every piece of the type shows the one
+/// gradient fitted across the whole layout, and the transform also scales its stroke weights and
+/// dashes and transforms its pattern tiles. Placed gradients keep their place in text space and
+/// move with the type.
+pub fn paint_type_piece(piece: &mut Node, style: &vectorcraft_doc::CharStyle, bounds: Rect, xf: Affine) {
+    let mut ap = style.appearance();
+    ap.pin_gradients(bounds);
+    piece.appearance = ap.into();
+    piece.transform(xf, vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() });
+}
+
 /// Type as glyph outlines in document space: one path per run with the run's fill and stroke,
 /// over its colour glyphs (images, art), and (when the object has its own fills/strokes) the whole
 /// outline with the object's items below the characters under them and the others over them, as
@@ -520,7 +534,6 @@ pub fn outline_text(n: &Node) -> Option<Node> {
     let NodeKind::Text(t) = &n.kind else { return None };
     let (runs, all, bounds, colours) = laid_out(t);
     let path = |bp: &kurbo::BezPath| PathData::from_bezpath(bp).transformed(t.xf);
-    let scaling = vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() };
     let mut children: Vec<Arc<Node>> = vec![];
     for (i, (bp, run)) in runs.iter().zip(&t.runs).enumerate() {
         // Colour glyphs paint themselves, under their run's fill, as the renderer paints them.
@@ -528,10 +541,8 @@ pub fn outline_text(n: &Node) -> Option<Node> {
         if bp.elements().is_empty() {
             continue;
         }
-        let mut ap = run.style.appearance();
-        ap.pin_gradients(bounds);
-        let mut piece = Node::path(n.id, PathData::from_bezpath(bp), ap);
-        piece.transform(t.xf, scaling);
+        let mut piece = Node::path(n.id, PathData::from_bezpath(bp), Appearance::default());
+        paint_type_piece(&mut piece, &run.style, bounds, t.xf);
         children.push(Arc::new(piece));
     }
     if !n.appearance.items.is_empty() && !all.elements().is_empty() {
@@ -735,9 +746,13 @@ pub(crate) fn clipping_text_outline(t: &Node) -> Option<Node> {
 
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
-/// its outlines with its visibility and effects ([`clipping_text_outline`]). The swatches and
-/// patterns that live-effect plug-ins painting their pieces name are looked up in `doc`.
+/// its outlines with its visibility and effects ([`clipping_text_outline`]), and its fills and
+/// strokes become art of their own ([`paint_type_clip`]). The swatches and patterns that
+/// live-effect plug-ins painting their pieces name are looked up in `doc`.
 pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping: bool) {
+    if !clipping {
+        paint_type_clip(doc, n);
+    }
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {
@@ -752,6 +767,36 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
         } else if c.children().is_some() {
             outline_nested_text(doc, Arc::make_mut(c), clipping);
         }
+    }
+}
+
+/// When `n` is a clip group or clipping layer whose clipping path is type that paints
+/// ([`Node::clip_paint`]), make it the art the canvas draws for it: the type's outlines clip
+/// ([`clipping_text_outline`]), its fills as art ([`as_art`]) paint behind the clipped art inside
+/// the clip, and its strokes as art paint over it, outside the clip, in a group that `n` becomes
+/// (keeping its id, name and transparency) with the clip group inside. The other members stay as
+/// they are. Hidden type paints nothing.
+pub(crate) fn paint_type_clip(doc: Option<&Document>, n: &mut Node) {
+    let Some((first, rest)) = n.children().and_then(|ch| ch.split_first()) else { return };
+    if !n.clips() || !matches!(first.kind, NodeKind::Text(_)) || !first.visible {
+        return;
+    }
+    let paint = first.clip_paint();
+    if paint.fill.is_none() && paint.stroke.is_none() {
+        return;
+    }
+    let Some(clip) = clipping_text_outline(first) else { return };
+    let art = |part: Option<Node>| part.and_then(|p| as_art(doc, &p, None)).map(Arc::new);
+    let members: Vec<Arc<Node>> = std::iter::once(Arc::new(clip)).chain(art(paint.fill)).chain(rest.iter().cloned()).collect();
+    let stroke = art(paint.stroke);
+    let id = n.id;
+    match (&mut n.kind, stroke) {
+        (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }, None) => *children = members,
+        (NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. }, Some(stroke)) => {
+            *children = vec![Arc::new(Node::new(id, NodeKind::Group { children: members, clip: true })), stroke];
+            *clip = false;
+        }
+        _ => {}
     }
 }
 

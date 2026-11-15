@@ -366,6 +366,14 @@ pub enum SvgError {
     /// nested-image expansion bombs, #3564).
     #[error("the SVG expands to more than {0} nested SVG images")]
     TooManyImages(usize),
+    /// The style values the reader would copy into the elements the SVG expands to, `<use>`
+    /// copies and SVG images included, add up to more than this many megabytes.
+    #[error("the SVG's styles expand to more than {0} MB")]
+    StylesTooLarge(usize),
+    /// Matching the style sheets' selectors against the elements the SVG expands to, `<use>`
+    /// copies and SVG images included, takes more tests than the reader allows.
+    #[error("the SVG's style sheets take too long to match")]
+    StylesTooComplex,
 }
 
 /// Export a document as an SVG string (linked images are not returned: see [`export_full`]).
@@ -525,7 +533,10 @@ pub fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) -> Resu
 }
 
 pub use glyph::glyph_art;
-pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT, MAX_NODES};
+pub use import::{
+    MAX_DATA_URL_BYTES, MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT,
+    MAX_NODES,
+};
 
 /// Import an SVG document reading the files it links to as `opts` says, also returning warnings.
 pub fn import_with(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {

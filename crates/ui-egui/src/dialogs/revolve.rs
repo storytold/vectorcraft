@@ -37,10 +37,12 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let id = d.str("__effect");
             let defaults = vectorcraft_effects::default_params(&id).unwrap_or(json!({}));
-            // Reset all resets the shape, view and light; the mapped graphics stay.
+            // Reset all resets the shape, view and light; the mapped graphics and the render
+            // settings stay.
             let defaults = match defaults {
                 Value::Object(mut m) => {
                     m.remove(vectorcraft_effects::GRAPHICS);
+                    m.remove(vectorcraft_effects::RENDER);
                     Value::Object(m)
                 }
                 other => other,
@@ -362,6 +364,10 @@ fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     // A mixed Shading leaves the light settings on, for the effects that shade.
     ui.add_enabled_ui(flag(d, "shade", true) != Some(false), |ui| {
         lighting_presets(ui, d);
+        // The panel's lighting widget; the dialog moves lights with its rings on the artboard.
+        if d.bool("__panel") {
+            super::revolve_lights::show(ui, d);
+        }
         light_list(ui, d);
         let mut selected = selected_light(d);
         let before = light_record(&selected);
@@ -429,7 +435,7 @@ const LIGHT_KEYS: [(&str, &str); 6] = [
     ("behind", "lightBehind"),
 ];
 
-fn explicit_lights(d: &Dialog) -> Option<&Vec<Value>> {
+pub(super) fn explicit_lights(d: &Dialog) -> Option<&Vec<Value>> {
     d.fields.get("lights").and_then(Value::as_array).filter(|v| !v.is_empty() && v.len() <= vectorcraft_three_d::MAX_LIGHTS)
 }
 

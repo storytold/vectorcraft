@@ -392,6 +392,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             ui.set_width(LEFT_W);
             if let Some(i) = widgets::tab_bar(ui, &[tl!("Artboards"), tl!("Assets")], tab) {
+                if i != tab
+                    && let Some((board, text, _)) = take_artboard_edit(app, d)
+                {
+                    rename_artboard(app, board, &text);
+                }
                 d.fields.insert("tab".into(), json!(TABS.get(i).copied().unwrap_or("artboards")));
             }
             ui.add_space(6.0);
@@ -521,23 +526,33 @@ fn select_options(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
     let mut boards = boards(app, d);
     let before = boards.clone();
+    let mut editing = take_artboard_edit(app, d);
+    let mut rename = None;
     let names: Vec<String> = app.session.active().map(|s| s.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
+    let ids: Vec<u32> = app.session.active().map(|s| s.doc.artboards.iter().map(|a| a.id).collect()).unwrap_or_default();
     ui.add_enabled_ui(d.str("select") != "full", |ui| {
-        tiles(ui, "efs-artboards", names.len(), list, |ui, i, r| {
-            match artboard_thumb(app, ui.ctx(), i) {
-                Some(tex) => {
-                    let sz = tex.size_vec2();
-                    let s = (r.width() / sz.x).min(r.height() / sz.y).min(1.0);
-                    let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-                    ui.painter().image(tex.id(), egui::Rect::from_center_size(r.center(), sz * s), uv, egui::Color32::WHITE);
+        tiles(
+            ui,
+            "efs-artboards",
+            names.len(),
+            list,
+            |ui, i, r| {
+                match artboard_thumb(app, ui.ctx(), i) {
+                    Some(tex) => {
+                        let sz = tex.size_vec2();
+                        let s = (r.width() / sz.x).min(r.height() / sz.y).min(1.0);
+                        let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+                        ui.painter().image(tex.id(), egui::Rect::from_center_size(r.center(), sz * s), uv, egui::Color32::WHITE);
+                    }
+                    None => {
+                        ui.painter().rect_filled(r, 2.0, egui::Color32::WHITE);
+                    }
                 }
-                None => {
-                    ui.painter().rect_filled(r, 2.0, egui::Color32::WHITE);
-                }
-            }
-            let name = names.get(i).cloned().unwrap_or_default();
-            (format!("{}  {name}", i + 1), name, boards.get(i).copied().unwrap_or(false))
-        })
+                let name = names.get(i).cloned().unwrap_or_default();
+                (format!("{}  {name}", i + 1), name, boards.get(i).copied().unwrap_or(false))
+            },
+            Some(&mut |ui, i, rect, id, name| edit_artboard_name(ui, ids.get(i).copied(), rect, id, name, &mut editing, &mut rename)),
+        )
         .into_iter()
         .for_each(|i| {
             if let Some(b) = boards.get_mut(i) {
@@ -545,12 +560,116 @@ fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, l
             }
         });
     });
+    // A field whose artboard was deleted while it was typed in is closed, so Escape reaches the dialog again.
+    if d.str("select") != "full"
+        && let Some(uid) = app.session.active().map(|s| s.uid)
+        && let Some((board, text, focus)) = editing.filter(|(board, _, _)| ids.contains(board))
+    {
+        d.fields.insert(RENAME_ARTBOARD.into(), json!((uid, board, text, focus)));
+    }
+    if let Some((board, name)) = rename {
+        rename_artboard(app, board, &name);
+    }
     if boards != before {
         set_select(d, if boards.iter().all(|b| *b) { "all" } else { "range" });
         d.fields.insert("range".into(), json!(range_text(&boards)));
         d.fields.insert("boards".into(), json!(boards));
     }
 }
+
+/// Inline editor state belongs to this dialog, not to the document or its export settings.
+const RENAME_ARTBOARD: &str = "__renameArtboard";
+
+/// Whether an artboard name is being typed in Export for Screens: a field is open for an artboard
+/// of the active document.
+pub(crate) fn artboard_name_editing(app: &VectorcraftApp, d: &Dialog) -> bool {
+    d.kind == KIND
+        && d.fields
+            .get(RENAME_ARTBOARD)
+            .and_then(|value| serde_json::from_value::<(u64, u32, String, bool)>(value.clone()).ok())
+            .zip(app.session.active())
+            .is_some_and(|((uid, board, ..), s)| s.uid == uid && s.doc.artboards.iter().any(|a| a.id == board))
+}
+
+/// The artboard being renamed (its id, so the name goes to the same artboard after the artboards
+/// change order), the name as typed, and whether the field still has to take the focus. A field
+/// opened in another document than the active one is closed.
+fn take_artboard_edit(app: &VectorcraftApp, d: &mut Dialog) -> Option<(u32, String, bool)> {
+    let doc = app.session.active().map(|s| s.uid);
+    d.fields
+        .remove(RENAME_ARTBOARD)
+        .and_then(|value| serde_json::from_value::<(u64, u32, String, bool)>(value).ok())
+        .filter(|(uid, ..)| Some(*uid) == doc)
+        .map(|(_, board, text, focus)| (board, text, focus))
+}
+
+/// The field of the artboard with id `board`, the same wherever its tile is drawn.
+fn artboard_name_field(board: u32) -> egui::Id {
+    egui::Id::unique(("efs-artboard-name", board))
+}
+
+fn rename_artboard(app: &mut VectorcraftApp, board: u32, text: &str) {
+    let name = text.trim();
+    let Some(index) = app.session.active().and_then(|s| s.doc.artboards.iter().position(|a| a.id == board && a.name != name)) else { return };
+    if !name.is_empty()
+        && let Err(err) = app.run("artboard.rename", json!({"indices": [index], "name": name}))
+    {
+        app.status(err);
+    }
+}
+
+/// The caption of the artboard with id `board`: its name field while it is renamed, else a target
+/// for the double-click that opens it → whether the click toggles the artboard's checkbox, and
+/// whether the field was drawn over the caption.
+fn edit_artboard_name(
+    ui: &mut egui::Ui,
+    board: Option<u32>,
+    rect: egui::Rect,
+    id: egui::Id,
+    name: &str,
+    editing: &mut Option<(u32, String, bool)>,
+    rename: &mut Option<(u32, String)>,
+) -> (bool, bool) {
+    if let Some((b, text, focus)) = editing.as_mut().filter(|(b, _, _)| Some(*b) == board) {
+        let field = artboard_name_field(*b);
+        let cancel = ui.input(|i| i.key_pressed(egui::Key::Escape));
+        let enter = crate::shortcuts::pressed_anew(ui.ctx(), egui::Key::Enter);
+        if enter {
+            widgets::reject_dialog_commit(ui.ctx());
+        }
+        let response = ui.put(rect, egui::TextEdit::singleline(text).id(field).font(egui::FontId::proportional(11.0)).desired_width(rect.width()));
+        if *focus {
+            widgets::focus_field(ui, field, text);
+            *focus = false;
+        } else if cancel || enter || response.lost_focus() {
+            if !cancel {
+                *rename = Some((*b, std::mem::take(text)));
+            }
+            response.surrender_focus();
+            *editing = None;
+        }
+        (false, true)
+    } else {
+        let response = ui.interact(rect, id, egui::Sense::click());
+        if let Some(board) = board
+            && response.double_clicked()
+        {
+            *editing = Some((board, name.into(), true));
+            ui.ctx().request_repaint();
+            // If both releases arrived this frame, the first click did not toggle the row.
+            // Otherwise, undo the toggle from the first click on this caption.
+            let toggle = !ui.input(|input| {
+                input.events.iter().filter(|event| {
+                    matches!(event, egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, .. } if rect.contains(*pos))
+                }).nth(1).is_some()
+            });
+            return (toggle, false);
+        }
+        (response.clicked(), false)
+    }
+}
+
+type CaptionEdit<'a> = dyn FnMut(&mut egui::Ui, usize, egui::Rect, egui::Id, &str) -> (bool, bool) + 'a;
 
 /// `count` thumbnails in a grid (or, with `list`, a list) that scrolls: `paint` draws thumbnail `i`
 /// into its rect and gives its caption, its checkbox's name and whether it is checked → the
@@ -561,6 +680,7 @@ fn tiles(
     count: usize,
     list: bool,
     mut paint: impl FnMut(&mut egui::Ui, usize, egui::Rect) -> (String, String, bool),
+    mut caption_edit: Option<&mut CaptionEdit<'_>>,
 ) -> Vec<usize> {
     let t = Tokens::get(ui.ctx());
     let mut toggled = vec![];
@@ -581,11 +701,22 @@ fn tiles(
                     let label_at = if list { egui::pos2(pic.right() + 8.0, pic.center().y) } else { egui::pos2(pic.left(), pic.bottom() + 9.0) };
                     let galley =
                         ui.painter().layout(caption, egui::FontId::proportional(11.0), t.text, if list { cell.x - side - 12.0 } else { side });
-                    ui.painter().galley(egui::pos2(label_at.x, label_at.y - galley.size().y / 2.0), galley, t.text);
+                    let label_pos = egui::pos2(label_at.x, label_at.y - galley.size().y / 2.0);
+                    let caption_clicked = if let Some(edit) = &mut caption_edit {
+                        let rect = egui::Rect::from_min_max(egui::pos2(label_at.x, r.top().max(label_at.y - 9.0)), r.right_bottom());
+                        let (clicked, field) = edit(ui, i, rect, resp.id.with("name"), &name);
+                        if !field {
+                            ui.painter().galley(label_pos, galley, t.text);
+                        }
+                        clicked
+                    } else {
+                        ui.painter().galley(label_pos, galley, t.text);
+                        false
+                    };
                     // The checkbox sits on the thumbnail's lower left corner, as Illustrator's.
                     let bx = egui::Rect::from_min_size(egui::pos2(pic.left() + 4.0, pic.bottom() - 18.0), egui::vec2(14.0, 14.0));
                     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bx));
-                    if widgets::check_box(&mut child, &name, checked, true) || resp.clicked() {
+                    if widgets::check_box(&mut child, &name, checked, true) || resp.clicked() || caption_clicked {
                         toggled.push(i);
                     }
                 }
@@ -622,18 +753,25 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
     // Asked for until its row is in view: the dialog's first frame only measures it.
     let scroll_to = d.fields.get("__scrollTo").and_then(Value::as_u64).filter(|id| shown.iter().any(|a| a.id == *id));
     let mut in_view = scroll_to.is_none();
-    let clicked = tiles(ui, "efs-assets", shown.len(), list, |ui, i, r| {
-        let Some(a) = shown.get(i) else { return (String::new(), String::new(), false) };
-        crate::panels::asset_export::paint_thumb(ui, st, a, r);
-        if scroll_to == Some(a.id) {
-            if ui.clip_rect().contains_rect(r) {
-                in_view = true;
-            } else {
-                ui.scroll_to_rect(r, Some(egui::Align::Center));
+    let clicked = tiles(
+        ui,
+        "efs-assets",
+        shown.len(),
+        list,
+        |ui, i, r| {
+            let Some(a) = shown.get(i) else { return (String::new(), String::new(), false) };
+            crate::panels::asset_export::paint_thumb(ui, st, a, r);
+            if scroll_to == Some(a.id) {
+                if ui.clip_rect().contains_rect(r) {
+                    in_view = true;
+                } else {
+                    ui.scroll_to_rect(r, Some(egui::Align::Center));
+                }
             }
-        }
-        (a.name.clone(), a.name.clone(), on.contains(&a.id))
-    });
+            (a.name.clone(), a.name.clone(), on.contains(&a.id))
+        },
+        None,
+    );
     for i in clicked {
         if let Some(a) = shown.get(i) {
             if on.contains(&a.id) {
