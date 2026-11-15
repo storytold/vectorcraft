@@ -6404,6 +6404,13 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technische Schaltungen
+	Circuit Trace	Leiterbahn
+	Bus Lines	Busleitungen
+	Terminal Nodes	Anschlussknoten
+
 	Notched Ribbon	Gekerbtes Band
 	Double Line	Doppellinie
 	Wave	Welle

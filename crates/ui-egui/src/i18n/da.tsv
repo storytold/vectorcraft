@@ -6881,6 +6881,13 @@ axis	Y Axis	Y-akse
 	Graphite Pencil	Grafitblyant
 	Wax Crayon	Vokskridt
 	Charcoal Dust	Kulstøv
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniske kredsløb
+	Circuit Trace	Kredsløbsbane
+	Bus Lines	Buslinjer
+	Terminal Nodes	Terminalpunkter
+
 	Notched Ribbon	Takket bånd
 	Double Line	Dobbelt linje
 	Wave	Bølge

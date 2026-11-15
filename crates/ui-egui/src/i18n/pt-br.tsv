@@ -6727,6 +6727,13 @@ axis	Y Axis	Eixo Y
 	Graphite Pencil	Lápis de Grafite
 	Wax Crayon	Giz de Cera
 	Charcoal Dust	Pó de Carvão
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuitos tecnológicos
+	Circuit Trace	Trilha de circuito
+	Bus Lines	Linhas de barramento
+	Terminal Nodes	Nós terminais
+
 	Notched Ribbon	Fita Entalhada
 	Double Line	Linha Dupla
 	Wave	Onda

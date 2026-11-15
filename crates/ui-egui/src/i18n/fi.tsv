@@ -6844,6 +6844,13 @@ axis	Y Axis	Y-akseli
 	Graphite Pencil	Grafiittikynä
 	Wax Crayon	Vahaliitu
 	Charcoal Dust	Hiilipöly
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniset virtapiirit
+	Circuit Trace	Piirijohdin
+	Bus Lines	Väylälinjat
+	Terminal Nodes	Liitäntäpisteet
+
 	Notched Ribbon	Lovettu nauha
 	Double Line	Kaksoisviiva
 	Wave	Aalto

@@ -8690,6 +8690,13 @@ axis	Y Axis	Y ekseni
 	Graphite Pencil	Grafit Kalem
 	Wax Crayon	Mum Boya
 	Charcoal Dust	Kömür Tozu
+
+# Original procedural circuit brushes.
+	Tech Circuit	Teknik devreler
+	Circuit Trace	Devre izi
+	Bus Lines	Veriyolu hatları
+	Terminal Nodes	Bağlantı düğümleri
+
 	Notched Ribbon	Çentikli Şerit
 	Double Line	Çift Çizgi
 	Wave	Dalga
