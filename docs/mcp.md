@@ -4427,15 +4427,16 @@ another shading color is refused with an error and the document is not changed.
 `threeD.mapArt {surface?, symbol?, x?, y?, scaleX?, scaleY?, rotation?, fit?, clearAll?, shade?, invisible?, index?, item?, ids?|id?}`
 is the Map Art… button of the Extrude & Bevel (Classic) and Revolve (Classic) dialogs. It maps a document symbol onto
 one numbered surface of each selected object's classic 3D effect, edits that map or removes it, in one undo step
-([Map artwork to a 3D object](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=185)).
+([Map artwork to a 3D object](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=189)).
 Rotate (Classic) and the other 3D effects take no map.
 
 - `surface` is a whole number from 1 to the object's surface count. Extrude & Bevel (Classic) numbers the surfaces
   through the object's solids in the order they are built: each solid's front cap and back cap, then each side wall
   from corner to corner of the outline, then the bevel above each wall. Revolve (Classic) has one surface, its swept
   side. The numbering is VectorCraft's own.
-- `symbol` names the symbol mapped onto the surface, and `null` removes the surface's map. Omitted, the surface keeps
-  its map's symbol; a surface with no map then is refused.
+- `symbol` names the symbol mapped onto the surface, and `null` removes the surface's map; `null` with `x`, `y`,
+  `scaleX`, `scaleY`, `rotation` or `fit: true` is refused. Omitted, the surface keeps its map's symbol; a surface with
+  no map then is refused.
 - `x` and `y` (points, -1000000..1000000) place the center of the art from the center of the surface laid out flat,
   `scaleX` and `scaleY` (1..10000%) scale it from the symbol's own size, and `rotation` (-360..360 degrees) turns it
   counterclockwise. A new map starts at 0, 0, 100%, 100% and 0°.

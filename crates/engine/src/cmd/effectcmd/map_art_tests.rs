@@ -132,6 +132,9 @@ fn bad_surfaces_symbols_and_values_are_refused() {
         (json!({"surface": 1, "symbol": "Mark", "x": 1e7}), "x must be a number"),
         (json!({"surface": 1, "symbol": "Mark", "y": "up"}), "y must be a number"),
         (json!({"surface": 1, "symbol": "Mark", "fit": 1}), "fit"),
+        (json!({"surface": 1, "symbol": null, "x": 4.0}), "`symbol: null` removes the map"),
+        (json!({"surface": 1, "symbol": null, "rotation": 30.0}), "`symbol: null` removes the map"),
+        (json!({"surface": 1, "symbol": null, "fit": true}), "`symbol: null` removes the map"),
         (json!({"symbol": "Mark"}), "need `surface`"),
         (json!({"fit": true}), "need `surface`"),
         (json!({"shade": "on"}), "shade"),
@@ -191,4 +194,32 @@ fn a_mapped_symbol_is_drawn_expanded_renamed_and_kept_in_use() {
         });
     }
     assert!(red > 0, "the expanded art holds the mapped symbol's red fill");
+}
+
+#[test]
+fn pasted_into_another_document_a_map_brings_its_symbol() {
+    let (mut s, id) = setup("threeD.classicExtrude");
+    s.execute("threeD.mapArt", &json!({"surface": 1, "symbol": "Mark"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    // The symbol the pasted object's map names, and the size of that symbol's art.
+    let pasted = |s: &mut Session| {
+        s.execute("edit.paste", &json!({})).unwrap();
+        let st = s.doc().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        let name = n.appearance.effects[0].params["mapArt"][0]["symbol"].as_str().unwrap().to_string();
+        let size = vectorcraft_render::effects::graphic_bounds(&st.doc, &name).map(|r| (r.width(), r.height()));
+        (name, size)
+    };
+    // A document without the symbol gets it.
+    s.execute("file.new", &json!({"width":400,"height":400})).unwrap();
+    assert_eq!(pasted(&mut s), ("Mark".to_string(), Some((11.0, 21.0))));
+    // A document whose symbol "Mark" is other art gets the copied symbol under a free name, and
+    // the map names it.
+    s.execute("file.new", &json!({"width":400,"height":400})).unwrap();
+    let other = s.execute("path.create", &json!({"d":"M0 0L50 0L50 50L0 50Z"})).unwrap()["id"].clone();
+    s.execute("threeD.addGraphic", &json!({"name": "Mark", "ids": [other]})).unwrap();
+    let (name, size) = pasted(&mut s);
+    assert_ne!(name, "Mark");
+    assert_eq!(size, Some((11.0, 21.0)));
 }

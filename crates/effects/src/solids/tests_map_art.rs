@@ -261,6 +261,37 @@ fn revolve_classic_wraps_its_map_around_the_side() {
 }
 
 #[test]
+fn invisible_geometry_leaves_out_every_member_of_a_revolved_group() {
+    let d = document();
+    let gray = Color::rgb(0.5, 0.5, 0.5);
+    let line = |id: u64, x: f64, height: f64| {
+        let mut b = BezPath::new();
+        b.move_to((x, 0.0));
+        b.line_to((x, height));
+        Arc::new(Node::path(NodeId(id), PathData::from_bezpath(&b), Appearance::basic(Paint::None, Paint::solid(gray), 1.0)))
+    };
+    // The map goes on the side of the longer member; the shorter one has none.
+    let art = |extra: Value| {
+        let mut p =
+            json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "surface": "none", "offset": 40, "mapArt": [{"surface": 1, "symbol": "Mark"}]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let mut g = Node::group(NodeId(7), vec![line(8, 100.0, 100.0), line(9, 140.0, 30.0)]);
+        g.appearance.effects.push(crate::new_effect(CLASSIC_REVOLVE, &p).unwrap());
+        crate::revolve_art_in(Some(&d), &g).unwrap()
+    };
+    let shown = art(json!({}));
+    assert!(!filled(&shown, RED).is_empty() && !filled(&shown, gray).is_empty());
+    let hidden = art(json!({"mapInvisible": true}));
+    assert!(!filled(&hidden, RED).is_empty());
+    assert!(filled(&hidden, gray).is_empty(), "no member's faces are drawn");
+    // On Wireframe the members are drawn as they are without a map.
+    let wire = art(json!({"mapInvisible": true, "surface": "wireframe"}));
+    let mut strokes = 0;
+    wire.walk(&mut |n| strokes += usize::from(n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_)))));
+    assert!(strokes > 0);
+}
+
+#[test]
 fn bad_maps_are_refused() {
     let d = document();
     let check = |id: &str, p: Value| {

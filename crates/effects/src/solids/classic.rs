@@ -250,7 +250,10 @@ pub(crate) fn stroke_width(face: &Facet, p: &Value) -> f64 {
 /// With `mapped`, a face that carries mapped art is a group of the face and that art, which the
 /// surface's opacity mask covers too. Shade Artwork gives the art its face's tone and highlight,
 /// and Invisible Geometry leaves the faces out: a face is then a group of its art alone. Wireframe
-/// draws no mapped art.
+/// draws no mapped art. Without `mapped`, `hide` leaves the faces out the same way, for a solid
+/// that shares Invisible Geometry with another solid's mapped art; Wireframe still draws.
+///
+/// Returns the group and whether its faces were left out.
 pub(crate) fn surface(
     n: &Node,
     facets: Vec<Facet>,
@@ -258,7 +261,8 @@ pub(crate) fn surface(
     (opacity, blend): (f32, BlendMode),
     p: &Value,
     mapped: Option<Mapped<'_, '_>>,
-) -> Node {
+    hide: bool,
+) -> (Node, bool) {
     let shading = classic_shading(p);
     let lights = lights(p);
     let shade = shading_color(p);
@@ -279,7 +283,7 @@ pub(crate) fn surface(
                 None => (vec![], false),
             }
         }
-        None => (vec![], false),
+        None => (vec![], hide && !wire),
     };
     let children = facets
         .into_iter()
@@ -306,7 +310,7 @@ pub(crate) fn surface(
         let coverage = Node::path(n.id, vectorcraft_geom::shapes::rectangle(bounds), Appearance::basic(mask, Paint::None, 0.0));
         group.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(coverage, true)));
     }
-    group
+    (group, invisible)
 }
 
 /// One face of a solid in paint `paint` (opaque: [`surface`] masks a gradient's transparency),

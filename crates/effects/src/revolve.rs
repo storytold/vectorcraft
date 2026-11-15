@@ -438,7 +438,10 @@ fn group_shadow(
 /// with its classic surface, as Extrude & Bevel (Classic) does. Revolve's graphics, with the
 /// symbols of `doc`, are drawn on the faces of the side ([`crate::solids::graphics::surface_parts`]):
 /// a face with a part of a graphic is a group of the face and that part. With `cast`, the sweep
-/// that draws the surface also keeps the faces its shadow is cast from ([`SolidFaces`]).
+/// that draws the surface also keeps the faces its shadow is cast from ([`SolidFaces`]). With
+/// `hide`, a Revolve (Classic) surface without mapped art leaves its faces out, as Invisible
+/// Geometry does ([`crate::solids::classic::surface`]). The last value is whether the faces were
+/// left out.
 #[allow(clippy::too_many_arguments)]
 fn surface(
     doc: Option<&Document>,
@@ -453,7 +456,8 @@ fn surface(
     expand: bool,
     copies: &mut Copies,
     cast: bool,
-) -> Option<(Vec<Drawn>, Node, Option<SolidFaces>)> {
+    hide: bool,
+) -> Option<(Vec<Drawn>, Node, Option<SolidFaces>, bool)> {
     #[cfg(test)]
     crate::solids::SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
     // A loaded file or a profile edited past the limits keeps drawing its source path instead
@@ -488,7 +492,8 @@ fn surface(
             budget: &mut budget,
             copies: &mut copies.graphics,
         });
-        return Some((drawn, crate::solids::classic::surface(n, facets, &paint, (opacity, blend), &p, mapped), kept));
+        let (art, hidden) = crate::solids::classic::surface(n, facets, &paint, (opacity, blend), &p, mapped, hide);
+        return Some((drawn, art, kept, hidden));
     }
     let colored = options.light_color != [1.0; 3] || options.lights.is_some();
     let (faces, kept) = if cast {
@@ -619,7 +624,7 @@ fn surface(
     let mut group = Node::group(n.id, children);
     group.opacity = opacity;
     group.blend = blend;
-    Some((keys, group, kept))
+    Some((keys, group, kept, false))
 }
 
 /// A face [`surface`] draws: its depth and, for [`crate::solids::surface_order`], its polygon on the
@@ -651,7 +656,7 @@ fn object_surface(
     let b = path.bounds()?;
     let (paint, opacity, blend) = paint_of(item);
     let cast = casts(fx, opacity);
-    surface(doc, n, path, b, fx_options(fx), fx, paint, opacity, blend, expand, copies, cast).map(|(_, art, kept)| (art, kept))
+    surface(doc, n, path, b, fx_options(fx), fx, paint, opacity, blend, expand, copies, cast, false).map(|(_, art, kept, _)| (art, kept))
 }
 
 /// The paint of a graphic's solid color `c` on `face`, shaded as the face shades a solid fill of
@@ -1078,19 +1083,36 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     let mapped = (fx.id == REVOLVE && !crate::solids::mapped_graphics(&p).is_empty())
         || (fx.id == CLASSIC_REVOLVE && !crate::solids::surface_maps(&p).is_empty());
     let longest = if mapped { graphics_member(&shapes, b, options) } else { None };
-    for (k, s) in shapes.iter().enumerate() {
-        let Some(item) = surface_item(&s.items) else {
-            kept.push(None);
-            continue;
-        };
+    // Member `k`'s surface, its faces left out with `hide`, with its opacity and blending mode;
+    // `None` for a member with no fill or stroke.
+    let member = |k: usize, s: &Profile, hide: bool, copies: &mut Copies| {
+        let item = surface_item(&s.items)?;
         // The opacity and blending of the member and the groups it is in apply through its scopes.
         let (paint, opacity, blend) = paint_of(item);
-        opaque &= opacity >= 1.0 && blend == Default::default() && s.scopes.is_empty();
         // A member with transparency of its own keeps every face, as a transparent object does.
         let expand = expand && s.scopes.is_empty();
         let doc = doc.filter(|_| longest == Some(k));
         let cast = casts(fx, opacity * s.opacity);
-        let (depths, art, faces) = surface(doc, n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies, cast)?;
+        Some((opacity, blend, surface(doc, n, &s.path, b, options, fx, paint, opacity, blend, expand, copies, cast, hide)))
+    };
+    // With Invisible Geometry the other members leave their faces out too, once the mapped art on
+    // the longest member's side has left that member's faces out, so it is built first.
+    let invisible = fx.id == CLASSIC_REVOLVE && doc.is_some() && p.get(crate::solids::MAP_INVISIBLE).and_then(Value::as_bool).unwrap_or(false);
+    let mut first = None;
+    if let Some(l) = longest.filter(|_| invisible)
+        && let Some(s) = shapes.get(l)
+    {
+        first = member(l, s, false, &mut copies);
+    }
+    let hide = matches!(first, Some((_, _, Some((_, _, _, true)))));
+    for (k, s) in shapes.iter().enumerate() {
+        let built = if longest == Some(k) && first.is_some() { first.take() } else { member(k, s, hide, &mut copies) };
+        let Some((opacity, blend, built)) = built else {
+            kept.push(None);
+            continue;
+        };
+        opaque &= opacity >= 1.0 && blend == Default::default() && s.scopes.is_empty();
+        let (depths, art, faces, _) = built?;
         surfaces.push((depths, art, s.scopes.as_slice()));
         kept.push(faces);
     }
@@ -1868,7 +1890,7 @@ mod tests {
                     .map(|s| {
                         let (paint, opacity, blend) = paint_of(surface_item(&s.items).unwrap());
                         let cast = casts(&fx, opacity * s.opacity);
-                        surface(None, &g, &s.path, b, options, &fx, paint, opacity, blend, false, &mut Copies::default(), cast).unwrap().2
+                        surface(None, &g, &s.path, b, options, &fx, paint, opacity, blend, false, &mut Copies::default(), cast, false).unwrap().2
                     })
                     .collect();
                 assert!(kept.iter().all(Option::is_some), "{id} {params}");
@@ -1904,7 +1926,7 @@ mod tests {
                 .map(|s| {
                     let (paint, opacity, blend) = paint_of(surface_item(&s.items).unwrap());
                     let cast = casts(&fx, opacity * s.opacity);
-                    surface(None, g, &s.path, b, options, &fx, paint, opacity, blend, false, &mut Copies::default(), cast).unwrap().2
+                    surface(None, g, &s.path, b, options, &fx, paint, opacity, blend, false, &mut Copies::default(), cast, false).unwrap().2
                 })
                 .collect();
             [group_shadow(g.id, &fx, &shapes, b, options, kept).unwrap(), group_shadow(g.id, &fx, &shapes, b, options, vec![]).unwrap()]

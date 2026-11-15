@@ -486,8 +486,8 @@ These rules are VectorCraft's own:
 
 The Extrude & Bevel (Classic) and Revolve (Classic) dialogs have a **Map Art…** button on their Object tab. It
 shows Map Art in place of the tabs until **Done**, and the dialog's Preview, OK and Cancel apply to the maps with the
-other settings ([Map artwork to a 3D object](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=185),
-[Using Illustrator CS5](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260)).
+other settings ([Map artwork to a 3D object](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=189),
+[the same section in the 2010 help](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=274)).
 Rotate (Classic) and the other 3D effects take no map. The command is `threeD.mapArt` ([mcp.md](mcp.md#map-art)).
 
 - **Surface**: the first, previous, next and last buttons and a number field pick the surface, with the count beside
@@ -506,7 +506,8 @@ Extrude & Bevel (Classic) numbers its surfaces through the object's solids in th
 solid, then each stroke's): each solid's front cap and back cap, then each side wall from corner to corner of the
 outline, then the bevel above each wall. An extruded square has six surfaces. A hollow solid has no caps to number.
 Revolve (Classic) has one surface, its swept side, unrolled around the axis as Revolve's graphics are; on a group it is
-the side of the member with the longest profile. The numbering is VectorCraft's own.
+the side of the member with the longest profile, and Invisible Geometry leaves out every member's faces. The numbering
+is VectorCraft's own.
 
 - A map's X and Y place the center of the art from the center of the surface laid out flat, so a map follows the
   center when the surface changes size. A map past the object's surface count draws nothing and stays in the effect.

@@ -1778,7 +1778,7 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
                     }
                 }
                 let art = if classic {
-                    classic::surface(n, f, &paint, (opacity, blend), &p, None)
+                    classic::surface(n, f, &paint, (opacity, blend), &p, None, false).0
                 } else {
                     surface(n, f, &paint, opacity, blend, colored, false)
                 };
@@ -1916,7 +1916,7 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
                     budget: &mut map_budget,
                     copies: &mut paint_bytes,
                 });
-                classic::surface(n, f, &paint, (opacity, blend), &p, mapped)
+                classic::surface(n, f, &paint, (opacity, blend), &p, mapped, false).0
             } else {
                 surface(n, f, &paint, opacity, blend, colored, split && shared.get(shape).copied().unwrap_or(false))
             };
