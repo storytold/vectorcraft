@@ -51,6 +51,9 @@ pub struct CanvasCache {
     /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
     /// does not draw them drops them ([`canvas::show`]).
     pub selection_marks: canvas::SelectionMarks,
+    /// The meshes the tools' shared paths (a long Blob Brush or Eraser drag's settled outline) were
+    /// drawn with in the last frame. A frame that does not draw them drops them ([`canvas::show`]).
+    pub shared_paths: canvas::SharedPaths,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds and
     /// Measure Type by Glyph Bounds).
     pub selection_box: Option<((u64, u64, vectorcraft_effects::preview::Measure), Option<vectorcraft_doc::OrientedBox>)>,
