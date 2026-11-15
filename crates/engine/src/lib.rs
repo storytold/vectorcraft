@@ -29,6 +29,7 @@ use vectorcraft_tools::{PaintDefaults, Tool};
 pub use cmd::clipboard::{Clipboard, SourceLayer};
 pub use cmd::create::constrain_click;
 pub use cmd::distortcmds::perspective_click;
+pub use cmd::graph::{GraphTypeSubject, calculated_axes as graph_calculated_axes, graph_type_subject};
 pub use cmd::params::{check_keys, check_params};
 pub use cmd::pathops::auto_simplify_level;
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
@@ -244,6 +245,8 @@ pub struct Session {
     /// keyboard: those files, and the files they link to, are read under these roots, so a queue
     /// an agent loaded never reads beyond what it was given.
     pub(crate) place_queue_roots: Option<std::sync::Arc<file_access::AutomationRoots>>,
+    /// How many times the place cursor has been loaded ([`Session::place_queue_loads`]).
+    pub(crate) place_queue_loads: u64,
     /// While [`Session::import_image_read`] runs `clipboard.importImage`: the image read for it,
     /// which the command loads instead of reading `dataBase64`; `None` otherwise.
     pub(crate) image_hand_off: Option<cmd::clipboard::ImageRead>,
@@ -344,6 +347,9 @@ pub struct Session {
     /// The Global Edit Options Start Global Edit matches with (`select.globalEditOptions`); not
     /// saved.
     pub global_edit_options: cmd::globaledit::Options,
+    /// The attribute Select Similar Objects selects by (`select.similar`), one of
+    /// [`cmd::SIMILAR`]; not saved.
+    pub select_similar: &'static str,
     /// Set while [`Session::tool_typed_text`] passes keyboard input to the active tool
     /// ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]).
     keyboard_text: bool,

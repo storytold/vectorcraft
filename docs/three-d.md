@@ -38,6 +38,21 @@ pages describe it.
   3D effect of each other selected object in place (`effect.setParams` with `threeDType`): the settings both
   effects take keep their values, and the rest start at the new effect's defaults. One click is one undo step,
   and an object whose effect already has the type does not change.
+- **Render Settings › Wireframe**, under the object types, draws each selected 3D object as the edges of its
+  faces instead of its shaded surface, as the public
+  [Render 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/render-3d-vector-artwork.html)
+  page describes for editing Depth, Taper and Twist in a mesh view. The item is checked while the first selected
+  object's effect is in wireframe mode, and choosing it turns the mode on or off for every selected Extrude & Bevel,
+  Revolve, Inflate and Rotate (`effect.setParams` with `render: {mode}`), as one undo step. The effect stays live:
+  each edit to its settings redraws the edges. The edges are the ones Expand as Wireframes gives, each once, with a
+  0.5 pt black stroke, round joins and no fill (VectorCraft's own choice). Geometry effects after the 3D effect
+  reshape the drawn edges, as they reshape shaded art. Expand as Wireframes reshapes each face before it joins the
+  edges, so with such an effect its paths can differ from the drawn ones. The mesh shows every edge whatever the
+  opacity, blending mode or opacity mask of the fills, strokes and group members, as Expand as Wireframes does;
+  the object's own opacity, blending mode and opacity mask apply to it as a whole. The shadow and the graphics are
+  not drawn.
+  The mode is saved with the effect and drawn in every output, and Expand Appearance gives the edges as paths.
+  Choosing Wireframe again draws the shaded surface. The 3D (Classic) effects keep their own Wireframe surface.
 - Below them are the Object, Rotation and Lighting tabs of the effect's options dialog, with the same controls
   and ranges, showing the 3D effect of the first selected object (its own effects first, then those of its fills
   and strokes). A changed setting goes to the 3D effect of each selected object whose effect takes that setting;
@@ -260,6 +275,29 @@ of an isometric view (each visible axis foreshortened equally). These are our ow
 each view; the dialog shows a preset's name when the angles match it and **Custom** otherwise. The new effects
 open at Off-Axis Front.
 
+## Track cube
+
+The Rotation tab of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) has a track cube below the
+presets, drawn at the current X, Y and Z rotation inside a ring
+([set 3D rotation position options](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=249)):
+
+- Dragging a face turns the object freely. With Shift, a drag across turns it about the screen's vertical axis and a
+  drag up or down about its horizontal axis, whichever the drag follows first.
+- Dragging an edge turns it about the object axis that edge runs along. The edge under the pointer shows its axis's
+  color: red for X, green for Y, blue for Z.
+- Dragging in the ring turns it in the plane of the screen.
+- The front face is blue, the top and bottom are light gray, the sides are mid gray and the back is dark gray, as
+  the help page above describes, along with the red, green and blue axis edges.
+- Escape during a drag puts the angles back. With the keyboard focus, the arrow keys turn it about the screen's
+  horizontal and vertical axes, and Page Up and Page Down turn it in the screen plane, 1° a press or 15° with Shift.
+
+The drag changes the effect's `rotationX`, `rotationY` and `rotationZ` and previews live; X, Y and Z and the
+presets follow it (**Custom** off a preset). OK keeps the change as one undo step. The angles stay between -180°
+and 180°: of the two sets of angles that give the same turn, the cube writes the one nearest the current values.
+In the 3D and Materials panel, a drag is one undo step when the pointer is released, and the cube is off while the
+selected effects hold different rotations. The cube's 0.5° per point of drag, Escape during a drag and its keyboard
+steps are VectorCraft's own.
+
 ## Perspective
 
 **Perspective** runs 0° to 160°, as the public panel options give it ("how close or far the object appears"),
@@ -382,7 +420,9 @@ Our reading:
 - Softness is not applied to the shadow, and only the first light casts one.
 - A shadow is cast from at most 327,680 faces, the solids of one object together (our own limit). Past it, a
   command is refused with "The 3D shadow is too complex; turn Shadows off or simplify the art", and a loaded
-  file draws the source path.
+  file draws the source path. A command checks the shadow from the same builds that check the solids, as
+  drawing casts it, so each solid is built once. A stroke whose solid is left out of the art (past its own
+  limits) casts no shadow.
 - Canvas, SVG and PDF exports draw the shadow, the art's bounds take it in, and Expand Appearance keeps it as a
   path below the faces. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow.
 
@@ -479,6 +519,9 @@ Commands validate the shape and the parameters before the document changes. All 
 with `symbol` (the name of a document symbol), `face` (`front` or `back`, default `front`; `threeD.rotate` and
 `threeD.revolve` take `front` only), `x` and `y` (points, default 0), `scale` (1..10000%, default 100) and `rotation` (-360..360 degrees,
 default 0). Other keys, values out of range and graphics on the other 3D effects are rejected before editing.
+All four take `render` ([3D and Materials panel](#3d-and-materials-panel)): an object whose `mode` is `shaded` (the
+default) or `wireframe`. A `render` that is not an object, a key other than `mode`, another mode, and `render` on
+the 3D (Classic) effects are rejected before editing.
 
 ## What differs from the public documentation
 
@@ -530,8 +573,13 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 - **3D (Classic)**: Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) are built, with their surface
   types and blend steps. Revolve (Classic) sweeps the surface Revolve sweeps, at 64 segments for a full turn, and draws
   every face back to front, so it has no Draw Hidden Faces setting. Rotate (Classic) turns the plane Rotate turns, seen
-  from either side, with the No Shading and Diffuse surfaces only. The track cube, map art, Turntable and 3D export
-  are separate, unbuilt items.
+  from either side, with the No Shading and Diffuse surfaces only. Preserve Spot Colors, on the Lighting tab of all
+  three, keeps a color linked to a spot or global swatch linked on every face: the highlight lowers its tint, and a
+  face that darkens gets black over it, multiplied and overprinting, so a spot color stays on its own plate. The
+  checkbox is unavailable while Shading Color is Custom
+  ([Preserve Spot Color](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260)); how
+  the faces are shaded with it is VectorCraft's own. Their Rotation tab has the track cube
+  ([Track cube](#track-cube)). Map art, Turntable and 3D export are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 

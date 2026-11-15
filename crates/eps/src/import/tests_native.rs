@@ -2197,6 +2197,34 @@ fn an_ai_file_gets_its_layers_and_the_art_outside_its_artboard() {
     assert!(!d.layers[2].visible);
 }
 
+/// A `.ai` of versions 10 to 13, whose symbol instances are placed by a `TransformMatrix` on the
+/// canvas, opens from its layers: the art outside its artboard, an instance among it, comes in,
+/// rather than the PDF part alone, which has none of it.
+#[test]
+fn an_older_ai_files_symbols_keep_its_layers_and_the_art_outside_its_artboard() {
+    // The template box's center is (50.5, 50.5): art space's origin is at canvas (8141, 8242). The
+    // instance puts Box at (150, 50) in art space, right of the artboard (x 0 to 100).
+    let instance = "/SymbolInstance :\n(Box) /SymbolRef ,\n1 0 0 1 8291 8192 /TransformMatrix\n;\n9 () XW";
+    let layers = format!(
+        "{}{}{}",
+        stroked_box_symbol(),
+        layer("Jig", true, &square(10, 10)),
+        layer("Parts", true, &format!("{}\n{instance}", square(30, 110)))
+    );
+    let art = native(&layers).replacen("%AI5_NumLayers", "%AI3_TemplateBox: 50.5 50.5 50.5 50.5\n%AI5_NumLayers", 1);
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert!(read, "{warnings:?}");
+    assert_eq!(names(&d), ["Jig", "Parts"], "{warnings:?}");
+    let parts = d.layers[1].children().unwrap();
+    let above = parts[0].visual_bounds().unwrap();
+    assert!(above.y1 <= 1e-6, "the square above the artboard is kept, outside it: {above:?}");
+    let NodeKind::SymbolInstance { symbol, .. } = &parts[1].kind else { panic!("an instance: {:?} {warnings:?}", parts[1].kind) };
+    assert_eq!(symbol, "Box");
+    let b = parts[1].visual_bounds_with(&d.symbol_boxes()).unwrap();
+    let near = [b.x0 - 149.0, b.y0 - 49.5, b.x1 - 151.0, b.y1 - 50.5].iter().all(|v| v.abs() < 0.3);
+    assert!(near, "the instance right of the artboard: {b:?}");
+}
+
 /// A `.ai` whose PDF part was read in points from a page of 10 points a unit (its `UserUnit`), and
 /// whose editing data has the page in those units: its layers come in at the page's size, ten
 /// times as large as the editing data has them, with stroke weights and dashes ten times as large.
@@ -4763,6 +4791,9 @@ fn an_eps_page_of_its_art_stays_its_page_through_the_layers() {
     assert_eq!(boards.len(), 1);
     assert!((boards[0].width() - 4.0).abs() < 1e-6 && (boards[0].height() - 4.0).abs() < 1e-6, "{boards:?}");
     assert!(boards[0].inflate(1e-6, 1e-6).contains_rect(art), "{boards:?} round {art:?}");
+    // Its private data is an EPS's editing copy, whatever the file is named.
+    let named_ai = crate::import::import_ai(&file, true, false, crate::NameEncoding::default()).unwrap();
+    assert_eq!(named_ai.document.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), boards, "{:?}", named_ai.warnings);
 }
 
 #[test]

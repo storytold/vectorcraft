@@ -1,5 +1,5 @@
 use serde_json::json;
-use vectorcraft_doc::{Document, NodeId, StrokeLayer};
+use vectorcraft_doc::{Document, FillLayer, NodeId, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, Point, Shape};
 
 use super::*;
@@ -1082,7 +1082,8 @@ fn geometry_builds(check: impl FnOnce() -> Result<(), String>) -> (usize, Result
 
 /// The check builds each solid the effect draws once, about the bounds it draws it about: one for
 /// a fill and one for each stroke, on an object, on a group's members and on an appearance item,
-/// with the shadow on or off.
+/// with the shadow on or off. With the shadow on, the shadow is cast from the faces those builds
+/// kept, so no solid is built again for it.
 #[test]
 fn the_check_builds_each_drawn_solid_once() {
     for id in [EXTRUDE, CLASSIC_EXTRUDE, INFLATE] {
@@ -1098,6 +1099,11 @@ fn the_check_builds_each_drawn_solid_once() {
         assert_eq!(geometry_builds(|| validate_three_d_at(&n, id, &json!({}), (Some(0), 0))), (1, Ok(())), "{id}: on the fill");
         let shadow = json!({"shadow": true});
         assert_eq!(geometry_builds(|| validate_solid(&n, id, &shadow)), (2, Ok(())), "{id}: with the shadow on");
+        let mut other = square_node();
+        other.id = NodeId(2);
+        let g = Node::group(NodeId(9999), vec![Arc::new(square_node()), Arc::new(other)]);
+        assert_eq!(geometry_builds(|| validate_solid(&g, id, &shadow)), (4, Ok(())), "{id}: a group with the shadow on");
+        assert_eq!(geometry_builds(|| validate_three_d_at(&n, id, &shadow, (Some(0), 0))), (1, Ok(())), "{id}: the fill with the shadow on");
     }
 }
 
@@ -2015,6 +2021,62 @@ fn a_member_in_a_transparent_gradient_keeps_the_shared_face_order() {
     }
 }
 
+/// The fills of each face of `art`: the first is the face's paint, a second the shadow over it.
+fn face_fills(art: &Node) -> Vec<Vec<FillLayer>> {
+    faces(art)
+        .iter()
+        .map(|f| {
+            f.appearance
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    AppearanceItem::Fill(f) => Some(f.clone()),
+                    AppearanceItem::Stroke(_) => None,
+                })
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn classic_preserve_spot_colors_keeps_a_linked_fill_on_every_face() {
+    let ink = Color::cmyk(0.0, 1.0, 0.0, 0.2);
+    let art = |params: Value| {
+        let mut n = classic(params);
+        n.appearance.items = vec![AppearanceItem::Fill(FillLayer::new(Paint::Solid { color: ink, swatch: Some("Ink".into()), tint: 1.0 }))];
+        solid_art(&n).unwrap()
+    };
+    let lit = json!({"preserveSpotColors": true, "highlightIntensity": 100, "highlightSize": 100, "lightHeight": 60});
+    let (mut highlighted, mut shaded) = (false, false);
+    for layers in face_fills(&art(lit)) {
+        let Paint::Solid { color, swatch: Some(name), tint } = &layers[0].paint else { panic!("the swatch is kept: {layers:?}") };
+        assert_eq!(name, "Ink");
+        assert_eq!(*color, ink.tinted(*tint), "the color is the swatch at the face's tint");
+        highlighted |= *tint < 1.0;
+        if let Some(shadow) = layers.get(1) {
+            let Some(Color::Gray { k }) = shadow.paint.color() else { panic!("black shading: {:?}", shadow.paint) };
+            assert!(k > 0.0 && k <= 1.0, "{k}");
+            assert_eq!((shadow.blend, shadow.overprint, shadow.opacity), (BlendMode::Multiply, true, 1.0));
+            shaded = true;
+        }
+        assert!(layers.len() <= 2, "{layers:?}");
+    }
+    assert!(highlighted && shaded, "the highlight lowers the tint and the shadow adds black");
+    // No shading color: the highlight only, as tints of the swatch.
+    for layers in face_fills(&art(json!({"preserveSpotColors": true, "shadingColor": "none"}))) {
+        assert!(matches!(&layers[..], [f] if matches!(&f.paint, Paint::Solid { swatch: Some(_), .. })), "{layers:?}");
+    }
+    // Off, or with a custom shading color, shaded faces are process mixes, as before.
+    for params in [json!({}), json!({"preserveSpotColors": true, "shadingColor": "custom", "shadingCustom": "#3366cc"})] {
+        let unlinked = face_fills(&art(params.clone())).iter().filter(|l| matches!(l[0].paint, Paint::Solid { swatch: None, .. })).count();
+        assert!(unlinked > 0, "{params}");
+    }
+    // An unlinked fill is shaded as it is with the option off.
+    let off: Vec<[f32; 3]> = classic_faces(json!({})).iter().map(fill_rgb).collect();
+    let on: Vec<[f32; 3]> = classic_faces(json!({"preserveSpotColors": true})).iter().map(fill_rgb).collect();
+    assert_eq!(off, on);
+}
+
 #[test]
 fn classic_parameters_are_checked() {
     let n = classic(json!({}));
@@ -2034,6 +2096,7 @@ fn classic_parameters_are_checked() {
         (json!({"highlightSize": "big"}), "`highlightSize` must be a number"),
         (json!({"cap": "yes"}), "`cap` must be true or false"),
         (json!({"drawHiddenFaces": 1}), "`drawHiddenFaces` must be true or false"),
+        (json!({"preserveSpotColors": "yes"}), "`preserveSpotColors` must be true or false"),
         (json!({"bevel": "fancy"}), "bevel must be none or one of"),
         (json!({"twist": 10}), "unknown parameter `twist`"),
         (json!({"lights": []}), "lights must contain one to ten lights"),
@@ -2110,6 +2173,7 @@ fn classic_rotate_parameters_are_checked() {
         (json!({"lightIntensity": 101}), "`lightIntensity` must be between 0 and 100 (got 101)"),
         (json!({"blendSteps": 0}), "`blendSteps` must be a whole number between 1 and 256 (got 0)"),
         (json!({"lightBehind": 1}), "`lightBehind` must be true or false"),
+        (json!({"preserveSpotColors": null}), "`preserveSpotColors` must be true or false"),
         (json!({"highlightSize": 50}), "unknown parameter `highlightSize`"),
         (json!({"drawHiddenFaces": true}), "unknown parameter `drawHiddenFaces`"),
         (json!({"shadow": true}), "unknown parameter `shadow`"),
