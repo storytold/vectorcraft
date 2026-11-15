@@ -846,9 +846,13 @@ given), `threeD.mapGraphic`,
 do not use the Appearance panel's active row. When the first object given is design art, rows and effects given with
 `aligned: true` are rows of its stack in `appearance.setItem`, `appearance.removeItem`, `appearance.duplicateItem`,
 `transparency.set` with an `item`, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit,
-move or remove an effect: each other object edits the row or effect equal to it, and an object without one is left as
-it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they do
-for a row no object has, and the other commands are an error. `appearance.moveItem`, `effect.move` and
+move or remove an effect, `paint.setFill`, `paint.setStroke`, `paint.invert`, `paint.complement`, `paint.lastColor` and
+`paint.lastGradient` with an `item`, `stroke.set`, `stroke.setAdvanced`, `paint.editGradient`, `paint.setGradientGeom` and the `paint.freeform.*` commands
+that edit points and lines: each other object edits the row or effect equal to it, and an object without one is left
+as it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they
+do for a row no object has, and the other commands are an error. The paint, stroke and gradient commands are also an
+error when the art's row is not the kind of row they edit, and `paint.editGradient`, `paint.setGradientGeom` and the
+`paint.freeform.*` commands without `stroke` edit the kind of the art's row. `appearance.moveItem`, `effect.move` and
 `appearance.duplicateItem` with `to` are an error when the art's stack differs from the other objects', and
 `appearance.duplicateItem` with `to` is also an error when two or more other objects are given, as it is without the
 art. To change the art, edit the design with `graph.design`.
@@ -2814,6 +2818,22 @@ leaves the selection empty. A selected object that is hidden or locked, inside a
 template layer, on a locked artboard while nothing is isolated, or outside the isolated group is passed over. New art,
 such as a symbol instance just placed, is not passed over for being on a locked artboard while it stays selected. When
 the selection holds no other object, they return the error "nothing selected".
+
+`select.similar {by?}` is the Control bar's Select Similar Objects button and the Select Similar Options menu beside it
+([help](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=165)). It selects the
+objects like the first selected object by `by` and returns `{count, by}`. `by` is `fillColor`, `fillAndStroke`,
+`strokeColor`, `strokeWeight`, `opacity`, `blendingMode`, `appearance`, `graphicStyle`, `shapeType` or
+`symbolInstance`, which runs the `select.same.*` command of that name, or `all`, which selects the objects whose fill
+and stroke colors, stroke weight, opacity and blending mode all match (tints, compound paths and Live Paint faces as
+`select.same.fillColor`); Select › Reselect repeats `all` as `all`. The menu's items, their order and what `all`
+compares are VectorCraft's own. A `by` given is kept for the session once the selection is made, and the menu checks
+it; without `by` the command uses the kept one, `all` until one is given. Any other `by` is an error that keeps the
+selection and the kept attribute, and an error of the `select.same.*` command it runs (for example "the selection has
+no graphic style") keeps the kept attribute too. It needs a selection and records no undo step; the journal records the
+attribute used, so a recorded action repeats it, and a script run that fails puts the kept attribute back. The button
+and the menu show while something is selected and the
+Object Options group is on, at the right end of the bar after the X, Y, W and H fields. They take only the room the
+other controls leave, so the bar leaves them out, together, before any other control.
 
 `select.object.allOnSameLayers` selects the objects on the layers and sublayers of the selected objects that can be
 selected. A selected object that is hidden or locked, inside a hidden or locked group or layer, on a template layer, on
@@ -6858,7 +6878,8 @@ where it is.
 `window.control.options {group, visible?}` (desktop app) turns a group of the Control bar's options on (`visible:
 true`), off (`false`) or toggles it (omitted), and returns `{group, visible}`. The groups are `snapping` (the Snapping
 menu), `anchors` (Convert and Anchors), `toolOptions` (the active tool's options), `objectOptions` (Isolate Selected
-Object or Exit Isolation Mode, the envelope controls and the symbol instance controls), `imageOptions` (a selected
+Object or Exit Isolation Mode, the envelope controls, the symbol instance controls and Select Similar Objects),
+`imageOptions` (a selected
 image's or Image Trace object's controls), `fillStroke` (the fill and stroke chips, Stroke and its weight and width
 profile), `opacity`, `graphicStyle` (Style, Recolor Artwork and Global Edit Options), `character`, `paragraph`,
 `verticalAlignment` (area type's vertical alignment), `alignDistribute`, `transform` (the Transform link and the X/Y/W/H
