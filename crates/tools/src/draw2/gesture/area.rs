@@ -75,6 +75,10 @@ pub(super) struct AreaKey {
     pub varies: bool,
     /// Each segment's tip has its own angle and roundness.
     pub shaped: bool,
+    /// The tips at the points take the pen's pressure there: once the pen presses less than fully,
+    /// a point pressed fully takes the tip of full pressure instead of that of a stroke without
+    /// pressure.
+    pub pressed: bool,
     /// The modes and Variations of the angle, roundness and size that the tips at the points follow.
     pub modes: [Variation; 3],
     pub variations: [f64; 3],

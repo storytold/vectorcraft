@@ -1119,8 +1119,7 @@ impl GestureTool {
     /// bearing or a rotation). Random draws one value from the whole drag at the release, and the
     /// outline shows the value itself.
     fn tip_varies(&self) -> [bool; 3] {
-        let n = self.points.len();
-        let (pressed, posed) = (self.light && self.pressures.len() == n, self.poses.len() == n);
+        let (pressed, posed) = (self.reads_pressures(), self.reads_poses());
         let reads = |mode: Variation| match mode {
             Variation::Pressure => pressed,
             Variation::Tilt => posed && self.poses.iter().flatten().any(|q| q.tilt.is_some()),
@@ -1134,12 +1133,30 @@ impl GestureTool {
         self.tip_modes().map(reads)
     }
 
+    /// Does the release read the stroke's pressures ([`Self::stroke_json`]): one for every point,
+    /// with the pen pressed less than fully somewhere? A mode set to Pressure during the drag
+    /// leaves the points before it without one.
+    fn reads_pressures(&self) -> bool {
+        self.light && self.pressures.len() == self.points.len()
+    }
+
+    /// Does the release read the stroke's tilts and rotations ([`Self::stroke_json`]): a pose for
+    /// every point? A mode set to Tilt, Bearing or Rotation during the drag leaves the points
+    /// before it without one.
+    fn reads_poses(&self) -> bool {
+        self.poses.len() == self.points.len()
+    }
+
     /// The tip at point `i` of the stroke, as `path.eraseRegion` reads the pen there: the pressure
     /// once the pen has pressed less than fully, the tilt and rotation of the point, and the
     /// bearing of the last point up to it that the pen leaned 1° or more at ([`Self::tip_for`]).
+    /// What the release does not read ([`Self::reads_pressures`], [`Self::reads_poses`]) gives
+    /// the values themselves.
     fn tip_of_point(&self, i: usize) -> [f64; 3] {
-        let pressure = if self.light { self.pressures.get(i).map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
-        self.tip_for(pressure, self.poses.get(i).copied().flatten(), self.bearings.get(i).copied().flatten())
+        let pressure = if self.reads_pressures() { self.pressures.get(i).map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
+        let (pose, bearing) =
+            if self.reads_poses() { (self.poses.get(i).copied().flatten(), self.bearings.get(i).copied().flatten()) } else { (None, None) };
+        self.tip_for(pressure, pose, bearing)
     }
 
     /// How the tip's angle, roundness and size vary: the Eraser's three modes, the Blob Brush's
@@ -1704,6 +1721,7 @@ impl Tool for GestureTool {
                 roundness: self.roundness,
                 varies: shaped || size_varies,
                 shaped,
+                pressed: self.reads_pressures() && self.tip_modes().contains(&Variation::Pressure),
                 modes: self.tip_modes(),
                 variations: [self.angle_variation, self.roundness_variation, self.size_variation],
             };

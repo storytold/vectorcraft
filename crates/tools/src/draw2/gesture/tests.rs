@@ -3030,6 +3030,80 @@ fn the_eraser_drag_area_follows_its_variation_modes() {
     }
 }
 
+/// The outline of an Eraser drag shows the tips the release erases with: once the pen presses less
+/// than fully, the steps already outlined take the tip of the pressure at their points, and a mode
+/// set to Tilt during the drag, whose tilts the release does not read, leaves the tip as set.
+#[test]
+fn the_eraser_drag_area_matches_the_release_when_pressure_or_a_mode_starts_during_the_drag() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let bounds = |t: &GestureTool| {
+        drain_area(t, &cx);
+        let o = t.overlays(&cx);
+        o.iter()
+            .filter_map(|o| match o {
+                Overlay::Path { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(path)),
+                Overlay::SharedPath { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(&**path)),
+                _ => None,
+            })
+            .reduce(|a, b| a.union(b))
+            .unwrap_or_else(|| panic!("{o:?}"))
+    };
+    let near = |b: vectorcraft_geom::Rect, want: (f64, f64, f64, f64)| {
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None });
+    let leaning = Some(PenPose { tilt: Some([45.0, 0.0]), rotation: None });
+    let press = |t: &mut GestureTool, pen: Option<PenPose>, pressure: f32, kind: PointerKind, x: f64| {
+        t.pointer(&cx, &PointerEvent { pen, pressure, ..PointerEvent::new(kind, x, 150.0) });
+    };
+
+    // A tip 20 by 5 pt lying level, its angle on Pressure by up to 90° and its Roundness on Tilt
+    // by up to 75%, so that each step has its own tip from the press on. The pen leans 45°, which
+    // keeps the Roundness at 25%.
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [
+        ("size", json!(20)),
+        ("roundness", json!(25)),
+        ("angleMode", json!("pressure")),
+        ("angleVariation", json!(90)),
+        ("roundnessMode", json!("tilt")),
+        ("roundnessVariation", json!(75)),
+    ] {
+        t.set_option(k, &v);
+    }
+    // Pressed fully, the drag reads as a stroke without pressure: the tip lies level.
+    press(&mut t, leaning, 1.0, PointerKind::Down, 50.0);
+    press(&mut t, leaning, 1.0, PointerKind::Drag, 100.0);
+    press(&mut t, leaning, 1.0, PointerKind::Drag, 150.0);
+    near(bounds(&t), (40.0, 147.5, 160.0, 152.5));
+    // The pen lifts to no pressure: the release reads full pressure at the first three points, the
+    // tip turned 90°, and none at the last, turned -90°. Every step stands upright.
+    press(&mut t, leaning, 0.0, PointerKind::Drag, 200.0);
+    near(bounds(&t), (47.5, 140.0, 202.5, 160.0));
+    press(&mut t, leaning, 0.0, PointerKind::Up, 200.0);
+
+    // The same tip with its angle on Pressure by up to 90°, pressed halfway all along, and
+    // Roundness on Tilt by up to 75% set after the first two points: the release reads no tilt,
+    // so the tip stays 20 by 5 pt lying level, though the pen stands upright, which would make it
+    // round.
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(20)), ("roundness", json!(25)), ("angleMode", json!("pressure")), ("angleVariation", json!(90))] {
+        t.set_option(k, &v);
+    }
+    press(&mut t, None, 0.5, PointerKind::Down, 50.0);
+    press(&mut t, None, 0.5, PointerKind::Drag, 100.0);
+    t.set_option("roundnessMode", &json!("tilt"));
+    t.set_option("roundnessVariation", &json!(75));
+    press(&mut t, upright, 0.5, PointerKind::Drag, 150.0);
+    near(bounds(&t), (40.0, 147.5, 160.0, 152.5));
+    let released = t.stroke_json();
+    assert!(released.as_array().is_some_and(|a| a.iter().all(|p| p.as_array().is_some_and(|p| p.len() == 3))), "{released}");
+    press(&mut t, upright, 0.5, PointerKind::Up, 150.0);
+}
+
 /// The outline of a long Eraser drag whose tip turns and changes shape with the pen is built a
 /// bounded amount per frame, and once finished it shows nothing inside the area: no point of it
 /// lies well inside the area of any step, each step with the tip halfway between those at its
