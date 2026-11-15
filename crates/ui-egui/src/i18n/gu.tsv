@@ -1241,7 +1241,6 @@
 	Every (minutes)	દર (મિનિટ)
 	Every option is at its default.	દરેક વિકલ્પ ડિફૉલ્ટ પર છે.
 	Every option matches {base}.	દરેક વિકલ્પ {base} સાથે મેળ ખાય છે.
-	Every-line Composer	એવરી-લાઇન કમ્પોઝર
 	Exact dash lengths	ચોક્કસ ડેશ લંબાઈ
 	Exceptions (comma separated)	અપવાદો (અલ્પવિરામથી અલગ)
 	Exclude	બાકાત રાખો
@@ -1908,6 +1907,14 @@
 	Lasso Tool	લાસો ટૂલ
 	Last	છેલ્લું
 	Last Artboard	છેલ્લું આર્ટબોર્ડ
+	Status Bar Show	સ્ટેટસ બારમાં બતાવો
+	Artboard Name	આર્ટબોર્ડનું નામ
+	Current Tool	વર્તમાન ટૂલ
+	Date and Time	તારીખ અને સમય
+	Number of Undos	પૂર્વવત્ કરવાની સંખ્યા
+	Document Color Profile	દસ્તાવેજની રંગ પ્રોફાઇલ
+	Undos	પૂર્વવત્
+	Redos	ફરીથી કરો
 	Last Effect: {name}	છેલ્લી ઇફેક્ટ: {name}
 	Last Effect…	છેલ્લી ઇફેક્ટ…
 	Last Page	છેલ્લું પેજ
@@ -3582,7 +3589,6 @@
 	Single Quotes:	એકલ અવતરણ ચિહ્નો:
 	Single Right Quotation Mark	જમણું એકલ અવતરણ ચિહ્ન
 	Single Word Justification:	એક શબ્દ જસ્ટિફિકેશન:
-	Single-line Composer	સિંગલ-લાઇન કમ્પોઝર
 	Sixth Space	છઠ્ઠી જગ્યા
 	Size	કદ
 	Size Tile to Art	ટાઇલનું કદ આર્ટ પ્રમાણે કરો
@@ -4765,3 +4771,8 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Repeat Objects	પુનરાવર્તિત ઑબ્જેક્ટ્સ
 @msg	`{path}` must be one of {_1}, not {got}	`{path}` એ {_1}માંથી એક હોવું જોઈએ, {got} નહીં
 	Path Length	પાથની લંબાઈ
+	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
+	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"

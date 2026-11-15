@@ -859,7 +859,9 @@ impl Exporter<'_> {
 /// Opens the blend mode and the transparency group `n` is drawn with (`container` when it is a
 /// group or layer whose children `knockout` each other). Returns how many were opened, and
 /// whether the children are to be drawn in an isolated group of their own: the knockout group of
-/// an unclipped group's elements is its isolated group too.
+/// an unclipped group's elements is its isolated group too. An opaque knockout group in Normal
+/// mode that does not isolate opens no group: its elements are drawn on the art below it, in a
+/// knockout group without `/I` when there are several.
 fn transparency(s: &mut Surface, n: &Node, page: Rect, container: bool, knockout: bool) -> (usize, bool) {
     let mut pushes = 0;
     if n.blend != BlendMode::Normal {
@@ -876,6 +878,8 @@ fn transparency(s: &mut Surface, n: &Node, page: Rect, container: bool, knockout
         } else if n.opacity < 1.0 {
             s.push_opacity(norm(n.opacity));
             pushes += 1;
+        } else if knockout && !n.isolate && n.blend == BlendMode::Normal {
+            // A knockout group that does not isolate: its elements start from the art below it.
         } else if knockout && matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
             isolated_children = true;
         } else {

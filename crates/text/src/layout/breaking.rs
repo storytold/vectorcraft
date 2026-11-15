@@ -395,8 +395,29 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
     if end >= g.len() { set(w, trailing, ink) } else { w }
 }
 
+/// Whether the cluster `j..end` is drawn last, at the right end, of the left-to-right line of
+/// glyphs `i..end`: the line's glyphs are reordered by their levels (UAX #9 L2), with each tab and
+/// the spaces before it at the paragraph's level (L1).
+fn drawn_last(g: &[SGlyph], i: usize, j: usize, end: usize) -> bool {
+    let line = g.get(i..end).unwrap_or_default();
+    let mut levels: Vec<unicode_bidi::Level> = line.iter().map(|h| h.level).collect();
+    let mut before_tab = false;
+    for (level, h) in levels.iter_mut().zip(line).rev() {
+        if h.ch == '\t' && h.len > 0 {
+            before_tab = true;
+        } else if !h.is_space() {
+            before_tab = false;
+        }
+        if before_tab {
+            *level = unicode_bidi::Level::ltr();
+        }
+    }
+    unicode_bidi::BidiInfo::reorder_visual(&levels).last().is_some_and(|&k| i + k >= j)
+}
+
 /// Greedy break: returns (end glyph index, hyphenated) for a line starting at `i` of `width`.
-/// With burasagari, a comma or full stop that doesn't fit ends the line, hanging outside it.
+/// With burasagari, a comma or full stop that doesn't fit ends the line, hanging outside it,
+/// unless No Break or Bunri-Kinshi keeps characters after it on its line.
 /// `hyphenate` holds the paragraph's Hyphenation options and the Hyphenation Zone in force when
 /// the line may hyphenate a word; a line whose text before the overflowing word already ends
 /// within the zone breaks before that word. A tab is as wide as it is set: up to its next stop
@@ -416,7 +437,9 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
 /// line holds a glyph with a negative advance and has been wider than `width` in the order of its
 /// text, it reads at most [`MAX_DRAWN_CHECKS_STEPPING_BACK`] legal breaks further, and a forced
 /// line break right after the last of them, and ends at the latest of the breaks read that fits as
-/// drawn.
+/// drawn. Such a line with a tab hangs a burasagari mark only when the mark is drawn at its right
+/// end in the visual order of the line's levels ([`drawn_last`]) and the line before the mark fits
+/// as drawn.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -543,8 +566,24 @@ pub(super) fn break_line(
         let measured = if tabbed && fits.is_some() { (ink + cluster_ink).max(stops_reached) } else { x + cluster_width };
         overflowed |= tabbed && fits.is_some() && j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS;
         if j > first && !gl.is_space() && measured - end_credit > width + EPS {
-            // It ends the line with the spaces after it.
-            if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1, kinsoku) {
+            // It ends the line with the spaces after it, when the mark is all the characters kept
+            // together (the line's last character is the mark, which is what hangs). Once the line
+            // holds a tab and is measured as drawn, the mark hangs only where it is drawn at the
+            // line's right end (its cluster is last in the line's visual order, [`drawn_last`]) and
+            // the line before it fits as drawn with no line-end trim on its last glyph; otherwise the
+            // line ends at a legal break that fits as drawn.
+            let alone = g[j..cluster_end].iter().all(|h| h.byte == gl.byte);
+            let hangs_as_drawn = || match fits.filter(|_| tabbed) {
+                None => true,
+                Some(fits) => {
+                    let mut body = j;
+                    while body > i && g[body - 1].is_space() {
+                        body -= 1;
+                    }
+                    drawn_last(g, i, j, cluster_end) && line_end_credit(g, line_end, body) == 0.0 && fits(j, false)
+                }
+            };
+            if burasagari != Burasagari::None && hangs(gl) && alone && kinsoku_allows(g, cluster_end - 1, kinsoku) && hangs_as_drawn() {
                 let mut end = cluster_end;
                 while g.get(end).is_some_and(SGlyph::is_space) {
                     end += 1;

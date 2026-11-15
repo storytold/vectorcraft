@@ -97,6 +97,7 @@ pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
+pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
@@ -417,6 +418,7 @@ registry! {
     PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
     SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
+    PsdImport: [psd_import::KIND] => psd_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
     PsdOptions: ["psdOptions"] => png_options::SPEC,

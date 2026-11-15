@@ -61,7 +61,7 @@ pub fn is_document(name: &str) -> bool {
 #[derive(Default)]
 pub struct PlaceState {
     /// Web: the bytes of the files picked for the Place dialog, by name.
-    picked: Vec<(String, Vec<u8>)>,
+    pub(crate) picked: Vec<(String, Vec<u8>)>,
     /// The loaded cursor's thumbnails by file name.
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
@@ -125,10 +125,11 @@ fn engine(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Value, String
 
 /// File → Place… (`file.place`): with a file (`path` or `name` + `dataBase64`), place it, centred
 /// in the view unless `at`, `rect` or `replace` say otherwise (a text file without `text` options,
-/// a DXF drawing without `dxf` options and a PDF with several pages or a password and no `page`
-/// ask for them first, unless `showImportOptions: false` places them with the options confirmed
-/// last); with `paths`, the Place dialog for them; with neither, pick the files first. The file is
-/// read and placed at once (MCP, scripts).
+/// a DXF drawing without `dxf` options, a PSD file embedded without `layers` (when the user places
+/// it) and a PDF with several pages or a password and no `page` ask for them first, unless
+/// `showImportOptions: false` places them with the options confirmed last); with `paths`, the
+/// Place dialog for them; with neither, pick the files first. The file is read and placed at once
+/// (MCP, scripts).
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     place_file(app, p, Read::AtOnce)
 }
@@ -181,6 +182,7 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         if let Some(dxf) = crate::dialogs::dxf_import::last_options(app, &p) {
             p["dxf"] = dxf;
         }
+        crate::dialogs::psd_import::last_options(app, &mut p);
     }
     if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
         return Ok(crate::dialogs::text_import::open(app, &p));
@@ -208,6 +210,12 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     // A DXF drawing asks for its import options.
     if ask && crate::dialogs::dxf_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
+    }
+    // A PSD file with several layers or with slices that the user embeds asks for its import
+    // options. A place run as a command (MCP, scripts) places at once and takes `layers` and
+    // `importSlices` itself.
+    if ask && matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, &p) {
+        return Ok(json!({ "dialog": crate::dialogs::psd_import::KIND }));
     }
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
         && let Some(v) = app.view()
@@ -409,9 +417,15 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
             let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
             let mut q = json!({ "paths": paths, "files": files, "link": link, "template": template });
             if !ask {
-                // Each text file and DXF drawing in the cursor takes the options confirmed last.
+                // Each text file, DXF drawing and embedded PSD file in the cursor takes the options
+                // confirmed last.
                 q["text"] = crate::dialogs::text_import::last_options(app);
                 q["dxf"] = crate::dialogs::dxf_import::remembered(app);
+                if !link || paths.is_empty() {
+                    // Files from bytes have no file to link to; they may carry the dialog's Link.
+                    q["link"] = json!(false);
+                    crate::dialogs::psd_import::queue_options(app, &mut q);
+                }
             }
             queue_files(app, &q, Read::ForUser { dropped: false }, ask)
         }
