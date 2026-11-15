@@ -550,9 +550,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     // Optical Margin Alignment setting and writing direction. When that changes the direction of a
     // frame of a restored document, the story flows through that frame's thread again. Threaded
     // frames keep their size: Auto Size is off for them. The story is laid out in the document's
-    // own composite fonts.
+    // own composite fonts, and type naming one the document does not define flows as in a missing
+    // font, also when the document defines none.
     let fonts = if doc.text_threads.is_empty() { Default::default() } else { doc.composite_fonts.clone() };
-    let lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&fonts);
+    let lent = vectorcraft_text::FontDb::global().lend_document_composite_fonts(&fonts);
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
     } else if !doc.text_threads.is_empty() {
@@ -677,13 +678,26 @@ impl ReadFile {
 /// ([`super::importer`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let mut loaded = match super::importer::pick(name, bytes, p)? {
-        Some(plugin) => super::importer::load(name, bytes, &plugin, p)?,
-        None => load_with(name, bytes, &opts)?,
+    let mut loaded = if opts.link_pages {
+        linked_pages(name, bytes, path.as_deref(), &opts)?
+    } else {
+        match super::importer::pick(name, bytes, p)? {
+            Some(plugin) => super::importer::load(name, bytes, &plugin, p)?,
+            None => load_with(name, bytes, &opts)?,
+        }
     };
     let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
     Ok(ReadFile { loaded, opts, path, links })
+}
+
+/// The PDF `name` (`bytes`, read from `path`) opened with `linkPages`: its pages as placed documents
+/// linked to them ([`super::pdfimport::linked_pages`]), named after the file.
+fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, opts: &LoadOptions) -> Result<Loaded> {
+    let (mut doc, warnings) = super::pdfimport::linked_pages(name, bytes, path, opts)?;
+    doc.title = file_name(name);
+    let format = detect(name, bytes).ok_or_else(|| err(format!("can't open `{}`: not a PDF", file_name(name))))?;
+    Ok(Loaded { doc, format, warnings, restored: false, converted: false, preview_only: false, editing_data: false, native_pdf_compatible: None })
 }
 
 /// The second half of [`open_bytes_with`]: open a file [`read_for_open`] read as the new active
@@ -850,7 +864,9 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// they are, with their ink amounts ([`ImageBlob::cmyk`]), except that ones storing one plane per
 /// ink are written again with their inks together ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]);
 /// CMYK TIFFs with an alpha channel, which the decoder can't read, become RGBA in the active color
-/// settings' CMYK, as do CMYK Photoshop documents, whose merged image is read ([`psdread`]).
+/// settings' CMYK, whichever of their extra channels is the alpha
+/// ([`vectorcraft_doc::cmyk::extra_samples_tiff_rgba`]), as do CMYK Photoshop documents, whose
+/// merged image is read ([`psdread`]).
 /// 1-bit TIFFs compressed with CCITT Group 3, which the decoder can't read either, become RGBA
 /// too ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]).
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read

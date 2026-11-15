@@ -664,6 +664,29 @@ proptest! {
         survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
     }
 
+    /// Style sheets of descendant, child, sibling and `:not()` selectors over nested groups and the
+    /// `<use>` copies of a rectangle inside them, in an SVG and in an SVG image it shows: the import
+    /// measures their matching before its own cascade and the SVG reader run.
+    #[test]
+    fn svg_hostile_selectors_over_copies_never_panic(
+        sheet in r#"([a-z.#:()>+* ]{1,24}\{fill:red\} ?){1,6}"#,
+        depth in 1usize..12,
+        copies in 0usize..4,
+    ) {
+        let groups = format!("{}<rect id=\"r\" class=\"a\" width=\"1\" height=\"1\"/>{}", "<g class=\"a\">".repeat(depth), "</g>".repeat(depth));
+        let inner = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"4\"><style>{sheet}</style>{groups}{}</svg>",
+            "<use href=\"#r\"/>".repeat(copies)
+        );
+        let image = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"4\"><image href=\"data:image/svg+xml;base64,{}\" width=\"4\" height=\"4\"/></svg>",
+            vectorcraft_svg::base64_encode(inner.as_bytes())
+        );
+        for svg in [inner, image] {
+            survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
+        }
+    }
+
     /// Clip paths made of text, of `<use>` elements showing text, and of both with shapes, each with
     /// hostile attributes, clipping art that may clip by them in turn.
     #[test]
@@ -2904,9 +2927,9 @@ fn arb_body() -> impl Strategy<Value = Vec<u8>> {
 }
 
 /// WMF record functions VectorCraft reads, and one it doesn't.
-const WMF_FUNCTIONS: [u16; 33] = [
+const WMF_FUNCTIONS: [u16; 35] = [
     0x0324, 0x0325, 0x0538, 0x041B, 0x0418, 0x061C, 0x0817, 0x081A, 0x0830, 0x0416, 0x0415, 0x02FA, 0x02FC, 0x02FB, 0x012D, 0x01F0, 0x0521, 0x0A32,
-    0x0F43, 0x0B41, 0x0940, 0x061D, 0x0213, 0x0214, 0x001E, 0x0127, 0x0106, 0x0209, 0x012E, 0x00F7, 0x01F9, 0x0142, 0x0999,
+    0x0F43, 0x0B41, 0x0940, 0x061D, 0x0213, 0x0214, 0x001E, 0x0127, 0x0106, 0x0209, 0x012E, 0x00F7, 0x01F9, 0x0142, 0x0103, 0x0104, 0x0999,
 ];
 
 proptest! {
@@ -2931,6 +2954,30 @@ proptest! {
     #[test]
     fn random_wmf_records_never_panic(records in prop::collection::vec((prop::sample::select(WMF_FUNCTIONS.to_vec()), arb_body()), 0..32)) {
         survive_metafile("WMF records", "x.wmf", &wmf_of(&records))?;
+    }
+
+    #[test]
+    fn random_headerless_wmf_records_never_panic(records in prop::collection::vec((prop::sample::select(WMF_FUNCTIONS.to_vec()), arb_body()), 0..32)) {
+        // Without the placeable header, the map and mix modes the records set decide the scale.
+        survive_metafile("headerless WMF records", "x.wmf", &wmf_of(&records)[22..])?;
+    }
+
+    #[test]
+    fn random_emf_plus_records_never_panic(records in prop::collection::vec((0x4001u16..0x403B, any::<u16>(), arb_body()), 0..32)) {
+        // One comment of EMF+ records (type, flags, data) after an EmfPlusHeader.
+        let mut plus = vec![];
+        let header = (0x4001u16, 0u16, [0xDBC0_1002u32, 0, 96, 96].iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>());
+        for (kind, flags, data) in std::iter::once(&header).chain(&records) {
+            plus.extend(kind.to_le_bytes());
+            plus.extend(flags.to_le_bytes());
+            plus.extend((12 + data.len() as u32).to_le_bytes());
+            plus.extend((data.len() as u32).to_le_bytes());
+            plus.extend(data);
+        }
+        let mut comment = (4 + plus.len() as u32).to_le_bytes().to_vec();
+        comment.extend(b"EMF+");
+        comment.extend(plus);
+        survive_metafile("EMF+ records", "x.emf", &emf_of(&[(70, comment)]))?;
     }
 
     #[test]
@@ -4329,7 +4376,8 @@ proptest! {
                 "0 R", "0 O", "0 1 1 0 K", "1 0 0 0 k", "0 0 0 0 1 0 0 Xa", "0 0 0 0 1 0 0 XA", "0.5 G", "0 g", "K", "Xa",
                 "0 J 0 j 2 w 10 M []0 d", "-1 w", "1e400 w", "0 M", "[3 -1]0 d", "[]0 d",
                 "1 0 Xd", "0 1 Xd", "1 1 Xd", "0 0 Xd", "1 Xd", "Xd", "0 1 0 0 0 Xy", "1 0.5 1 1 0 Xy", "Xy",
-                "0 Bb", "2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg", "0 BB", "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p",
+                "0 Bb", "1 Bb", "2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg", "2 (Sky) 0 0 1e400 100 1 0 0 1 0 0 Bg", "2 (Dusk) 0 0 0 100 1 0 0 1 0 0 Bg",
+                "0 BB", "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p",
                 "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P", "0 XR",
             ]).prop_map(|op| (op.to_string(), true)),
             "[ -~]{0,12}".prop_map(|text| (text, false)),
@@ -4338,9 +4386,11 @@ proptest! {
     ) {
         use vectorcraft_testkit::ai;
         let close = if closed { "/Paint ;\n/Def ;\n" } else { "" };
-        // C, a red 2 pt stroke, comes first, so that it reads whatever A holds.
+        // C, a red 2 pt stroke, comes first, so that it reads whatever A holds. The file defines the
+        // gradient Sky, which a gradient paint of A may name.
         let header = format!(
-            "%AI9_BeginArtStyles\n/KnownStyle :\n(C) /Name ,\n/SimpleStyle :\n0 R\n0 1 1 0 K\n2 w\n1 0 Xd\n/Paint ;\n/Def ;\n\
+            "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n\
+             %AI9_BeginArtStyles\n/KnownStyle :\n(C) /Name ,\n/SimpleStyle :\n0 R\n0 1 1 0 K\n2 w\n1 0 Xd\n/Paint ;\n/Def ;\n\
              /KnownStyle :\n(A) /Name ,\n/SimpleStyle :\n{}\n{close}/KnownStyle :\n(B) /Name ,\n/SimpleStyle :\n1 0 Xd\n/Paint ;\n/Def ;\n\
              %AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(A)\n(B)\n(C)\n%AI9_EndArtStyleList\n",
             ops.iter().map(|(op, _)| op.as_str()).collect::<Vec<_>>().join("\n")

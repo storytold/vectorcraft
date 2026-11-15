@@ -427,6 +427,7 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     super::params::check_effect_color(C, id, &params)?;
     super::params::check_effect_channel(C, id, &params)?;
+    super::params::check_effect_center(C, id, &params)?;
     // Crop Marks take their style from the preferences when applied.
     if id == effects::CROP_MARKS && params.get("style").is_none() {
         params["style"] = json!(s.crop_mark_style().id());
@@ -718,7 +719,7 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
 /// sets its Warp style (`warpStyle`), its 3D type (`threeDType`) or visibility (`visible`), as one
 /// undo step. They are checked as `effect.apply` checks them, and a visible 3D effect must still
 /// fit; a hidden one has its given values checked. → `{ids}`.
-fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
+pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
     let mut params = p.get("params").cloned().unwrap_or(Value::Null);
@@ -740,6 +741,7 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     for effect in &edited {
         super::params::check_effect_color(C, effect, &params)?;
         super::params::check_effect_channel(C, effect, &params)?;
+        super::params::check_effect_center(C, effect, &params)?;
     }
     if edited.iter().any(|e| texture_load_effect(e)) {
         load_texture(&mut params, C)?;

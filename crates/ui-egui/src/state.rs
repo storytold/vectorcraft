@@ -424,10 +424,11 @@ pub struct UiState {
     /// is on screen. Not saved.
     #[serde(skip)]
     pub learn_locate: Option<crate::panels::learn::locate::Locate>,
-    /// The tutorials whose practice samples were opened and the tutorials finished, kept while the
-    /// app runs.
+    /// The tutorials whose practice samples were opened, kept while the app runs.
     #[serde(skip)]
     pub learn_practice: crate::panels::learn::Practice,
+    /// The Learn panel's tutorials finished and steps marked done, saved with the preferences.
+    pub learn_progress: crate::panels::learn::progress::Progress,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -787,6 +788,9 @@ pub struct UiState {
     /// dialog opens on them (#1152).
     #[serde(default)]
     pub offset_path: Value,
+    /// The Smart Punctuation fields confirmed last (null: never used): its dialog opens on them.
+    #[serde(default)]
+    pub smart_punctuation: Value,
     /// The Average & Join fields confirmed last (`to`; null: never used): its dialog opens on them.
     #[serde(default)]
     pub average_join: Value,
@@ -1121,6 +1125,7 @@ impl Default for UiState {
             learn: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
+            learn_progress: Default::default(),
             control_bar: false,
             control_bar_bottom: false,
             control_bar_floating: false,
@@ -1224,6 +1229,7 @@ impl Default for UiState {
             dxf_options: Value::Null,
             eps_options: Value::Null,
             offset_path: Value::Null,
+            smart_punctuation: Value::Null,
             average_join: Value::Null,
             recolor_preserve: Value::Null,
             simplify: Value::Null,
