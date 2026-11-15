@@ -30,7 +30,7 @@ craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d3
 # EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
 craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
 # DXF tags, reader and writer (craft-libs#778, #926, #927).
-craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
+craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "8bd1412eaa7c0b58f3f9c401495d35fe12d6d85e" }
 # WMF, EMF and EMF+ reader (craft-libs#778).
 craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
 craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "d6cd7836d364177661b0ae17f48a0805e83a5f32" }
