@@ -8050,10 +8050,16 @@ included) become paths, and rectangles and ellipses become live shapes; a rectan
 fills and outlines keep their colors, widths, caps, joins and dashes (an outline of width 0 becomes a 0.25 pt stroke),
 an outline behind the fill becomes a stroke below the fill, and an object without a fill or outline of its own
 takes its style's. A library color that the drawing stores with its
-name and values (version 13 and later) becomes a spot swatch with its tint, and one stored only by its number opens as
-a black spot color. Text, bitmaps, blends, contours, brush strokes, other objects the reader doesn't read yet,
-fountain, pattern, texture and PostScript fills, and outline arrowheads are left out, and lenses and object
-transparency are not applied. The `warnings` of
+name and values (version 13 and later, in a fill or an outline) becomes a spot swatch with its tint, and one stored
+only by its number opens as a black spot color. An object whose winding flag is set is filled with the nonzero rule, and
+any other with even-odd. Hidden and locked layers, groups and objects open hidden and locked; when layers of one name
+merge and only some of them are hidden or locked, their art is hidden or locked object by object. Hidden guidelines go
+on a hidden layer named Hidden guides, and the other guides go on the top shown layer. A uniform
+transparency (version 13 and later) becomes the object's opacity, and its merge mode the object's blend mode.
+VectorCraft reads the stored value as the transparency in percent, 0 opaque and 100 clear, and a set winding flag as
+the nonzero rule; both are VectorCraft's own readings. Text, bitmaps, blends, contours, brush strokes, other objects the
+reader doesn't read yet, fountain, pattern, texture and PostScript fills, and outline arrowheads are left out, and
+lenses, other transparency and merge modes without a VectorCraft blend mode are not applied. The `warnings` of
 `document.open` name each of these kinds the drawing had, and say when damaged parts or parts past the import limits
 were left out. Drawings of versions after 27 are refused with a message, and so are packages that are
 encrypted, ZIP64 archives or split across files. VectorCraft doesn't write `.cdr` files.

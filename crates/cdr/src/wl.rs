@@ -8,7 +8,7 @@ use crate::bytes::{Rd, u32_at};
 use crate::geometry;
 use crate::layout::{self, Profile};
 use crate::limits::Budget;
-use crate::model::{Cap, Drawing, Geometry, Join, Layer, LayerKind, Matrix, Object, Outline, Page, Shape};
+use crate::model::{Cap, Drawing, Flags, Geometry, Join, Layer, LayerKind, Matrix, Object, Outline, Page, Shape};
 use crate::records::{self, coord, fixed};
 use crate::riff::push;
 use crate::{Error, Warning};
@@ -118,7 +118,7 @@ pub(crate) fn drawing(b: &[u8], budget: &mut Budget) -> Result<Drawing, Error> {
         push(&mut warn, Warning::Damaged);
     }
     let version = if marker == b'e' { 100 } else { 200 };
-    let layer = Layer { name: String::new(), kind: LayerKind::Drawing, objects, guides: Vec::new() };
+    let layer = Layer { name: String::new(), kind: LayerKind::Drawing, flags: Flags::default(), objects, guides: Vec::new() };
     let pages = vec![Page { size: None, layers: vec![layer] }];
     Ok(Drawing { version, page_size: page_box(b, settings, &p), pages, master: Vec::new(), guides: Vec::new(), warnings: warn })
 }
@@ -196,7 +196,7 @@ fn shape(rec: &[u8], fields: Fields, p: &Profile, budget: &mut Budget, warn: &mu
     } else {
         None
     };
-    Some(Some(Shape { geometry, matrix, fill, outline }))
+    Some(Some(Shape::new(geometry, matrix, fill, outline)))
 }
 
 /// A rectangle (R44): its width and height, then a corner radius, which is kept when it is at most

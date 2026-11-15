@@ -2,7 +2,7 @@
 //! hostile files.
 
 use proptest::prelude::*;
-use vectorcraft_cdr::model::{Cap, Color, Geometry, Join, LayerKind, Matrix, Object, Segment};
+use vectorcraft_cdr::model::{Blend, Cap, Color, Flags, Geometry, Join, LayerKind, Matrix, Object, Segment};
 use vectorcraft_cdr::synth::{self, V, chunk, list};
 use vectorcraft_cdr::{Error, Limits, Warning, read};
 
@@ -12,7 +12,7 @@ fn shapes(objects: &[Object]) -> Vec<&vectorcraft_cdr::model::Shape> {
     while let Some(o) = stack.pop() {
         match o {
             Object::Shape(s) => out.push(&**s),
-            Object::Group(kids) => stack.extend(kids.iter().rev()),
+            Object::Group { objects: kids, .. } => stack.extend(kids.iter().rev()),
             Object::Clip { container, objects } => {
                 out.push(&**container);
                 stack.extend(objects.iter().rev());
@@ -30,7 +30,7 @@ fn check_pages(d: &vectorcraft_cdr::Drawing, version: u16) {
     assert_eq!(d.pages.len(), 1, "{version}");
     let art = &d.pages[0].layers[0];
     assert_eq!((art.name.as_str(), art.kind), ("Art", LayerKind::Drawing));
-    assert!(matches!(art.objects[3], Object::Group(ref g) if g.len() == 2));
+    assert!(matches!(art.objects[3], Object::Group { objects: ref g, .. } if g.len() == 2));
     assert!(d.warnings.contains(&Warning::UnsupportedObjects));
     // The master page: its guideline every page shows, and its desktop object.
     if version >= 600 {
@@ -130,7 +130,9 @@ fn version_3_groups_place_their_objects() {
     let d = read(&drawing3(vec![outer, rect3(&[shift(7.2, 0.0)])]), Limits::default()).unwrap();
     assert!(d.warnings.is_empty(), "{:?}", d.warnings);
     let objects = &d.pages[0].layers[0].objects;
-    assert!(matches!(&objects[0], Object::Group(g) if matches!(&g[0], Object::Group(i) if i.len() == 1) && g.len() == 2));
+    assert!(
+        matches!(&objects[0], Object::Group { objects: g, .. } if matches!(&g[0], Object::Group { objects: i, .. } if i.len() == 1) && g.len() == 2)
+    );
     let s = shapes(objects);
     let close = |m: &Matrix, want: [f64; 6]| m.0.iter().zip(want).all(|(a, b)| (a - b).abs() < 0.01);
     // Its own shift, then the inner group's scale, then the outer group's shift.
@@ -159,7 +161,7 @@ fn version_3_objects_and_groups_under_an_envelope_keep_their_outlines_and_matric
     let d = read(&drawing3(vec![bent, moved, group, rect3(&[])]), Limits::default()).unwrap();
     let objects = &d.pages[0].layers[0].objects;
     assert_eq!(objects.len(), 4);
-    assert!(matches!(&objects[2], Object::Group(g) if g.len() == 1));
+    assert!(matches!(&objects[2], Object::Group { objects: g, .. } if g.len() == 1));
     let s = shapes(objects);
     assert_eq!(s.len(), 4);
     assert!(matches!(s[0].geometry, Geometry::Rect { .. }) && s[0].matrix == Matrix::IDENTITY);
@@ -832,7 +834,7 @@ fn redirect_records_that_lead_nowhere_count_toward_the_chunk_limit() {
 fn rectangles_from_version_15_give_radii_as_shares_of_half_the_shorter_side() {
     let v = V(1500);
     let mut c = synth::V(1500).rect(100.0, 50.0, 0.0);
-    // The four shares: 0.2, 0.4, 0, and 3, which the shorter side holds to 50 pt.
+    // The four shares: 0.2, 0.4, 0, and 3, which half the shorter side holds to 25 pt.
     for (k, share) in [0.2f64, 0.4, 0.0, 3.0].iter().enumerate() {
         let at = 40 + 24 * k;
         c[at..at + 8].copy_from_slice(&share.to_le_bytes());
@@ -843,16 +845,16 @@ fn rectangles_from_version_15_give_radii_as_shares_of_half_the_shorter_side() {
     let s = shapes(&d.pages[0].layers[0].objects);
     let Geometry::Rect { w, h, radii } = s[0].geometry else { panic!("{:?}", s[0].geometry) };
     assert!((w - 100.0).abs() < 1e-6 && (h - 50.0).abs() < 1e-6);
-    for (got, want) in radii.iter().zip([5.0, 10.0, 0.0, 50.0]) {
+    for (got, want) in radii.iter().zip([5.0, 10.0, 0.0, 25.0]) {
         assert!((got - want).abs() < 1e-6, "{radii:?}");
     }
-    // With the scale-with flag set the radii are inches, held to the shorter side as well.
+    // With the scale-with flag set the radii are inches, held to half the shorter side as well.
     c[32] = 1;
     let file = synth::riff(1500, &[synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 1, &[(30, c)], None)])])]);
     let d = read(&file, Limits::default()).unwrap();
     let s = shapes(&d.pages[0].layers[0].objects);
     let Geometry::Rect { radii, .. } = s[0].geometry else { panic!("{:?}", s[0].geometry) };
-    for (got, want) in radii.iter().zip([14.4, 28.8, 0.0, 50.0]) {
+    for (got, want) in radii.iter().zip([14.4, 25.0, 0.0, 25.0]) {
         assert!((got - want).abs() < 1e-6, "{radii:?}");
     }
 }
@@ -1035,7 +1037,7 @@ fn arguments_past_the_limit_leave_the_first_ones_paired_with_their_types() {
 #[test]
 fn groups_count_toward_the_object_limit() {
     fn count(objects: &[Object]) -> usize {
-        objects.iter().map(|o| 1 + if let Object::Group(kids) = o { count(kids) } else { 0 }).sum()
+        objects.iter().map(|o| 1 + if let Object::Group { objects: kids, .. } = o { count(kids) } else { 0 }).sum()
     }
     let v = V(1100);
     let rect = synth::object(v, 1, &[(30, [v.coord(1.0), v.coord(1.0), v.coord(0.0), v.coord(0.0), v.coord(0.0), v.coord(0.0)].concat())], None);
@@ -1044,7 +1046,7 @@ fn groups_count_toward_the_object_limit() {
     let d = read(&file, Limits { objects: 2, ..Limits::default() }).unwrap();
     let objects = &d.pages[0].layers[0].objects;
     assert_eq!(count(objects), 2, "{objects:?}");
-    assert!(matches!(objects.as_slice(), [Object::Group(kids)] if matches!(kids.as_slice(), [Object::Shape(_)])), "{objects:?}");
+    assert!(matches!(objects.as_slice(), [Object::Group { objects: kids, .. }] if matches!(kids.as_slice(), [Object::Shape(_)])), "{objects:?}");
     assert!(d.warnings.contains(&Warning::TooDeep));
 }
 
@@ -1289,14 +1291,22 @@ fn a_container_clips_the_group_it_names() {
 }
 
 /// The feature sample, the seed of the importer's fuzz tests, reads its style table, clipping
-/// container and lens in every version from 7 to 13, plain and compressed.
+/// container, lens, flags, winding flag, transparency and named outline color in every version
+/// from 7 to 13, plain and compressed.
 #[test]
 fn the_feature_sample_reads_its_styles_container_and_lens() {
     for version in [700, 800, 900, 1000, 1100, 1200, 1300] {
         for compress in [false, true] {
             let d = read(&synth::feature_sample(version, compress), Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
             let objects = &d.pages[0].layers[0].objects;
-            let [Object::Shape(styled), Object::Clip { objects: clipped, .. }, Object::Shape(_)] = objects.as_slice() else {
+            let [
+                Object::Shape(styled),
+                Object::Clip { objects: clipped, .. },
+                Object::Shape(_),
+                Object::Shape(flagged),
+                Object::Group { objects: grouped, flags },
+            ] = objects.as_slice()
+            else {
                 panic!("{version}: {objects:?}")
             };
             assert_eq!(styled.fill, Some(Color::Rgb([1.0, 0.0, 0.0])), "{version}");
@@ -1304,7 +1314,20 @@ fn the_feature_sample_reads_its_styles_container_and_lens() {
             let s = shapes(clipped);
             assert_eq!(s.len(), 2, "{version}");
             assert!(s[1].outline.as_ref().is_some_and(|o| o.behind_fill), "{version}");
-            assert_eq!(d.warnings, vec![Warning::Lenses], "{version} {compress}");
+            assert_eq!(flagged.flags, Flags { hidden: true, locked: true }, "{version}");
+            assert!(flagged.nonzero, "{version}");
+            assert_eq!(*flags, Flags { hidden: true, locked: false }, "{version}");
+            let named = shapes(grouped)[0].outline.as_ref().map(|o| o.color.clone());
+            // A transparency and a named outline color are read from version 13.
+            if version >= 1300 {
+                assert_eq!((flagged.opacity, flagged.blend), (0.75, Blend::Multiply), "{version}");
+                assert_eq!(named, Some(Color::Spot { name: "Sky Blue".into(), tint: 1.0, look: Some([1.0, 0.0, 0.0]) }), "{version}");
+                assert_eq!(d.warnings, vec![Warning::Lenses], "{version} {compress}");
+            } else {
+                assert_eq!((flagged.opacity, flagged.blend), (1.0, Blend::Normal), "{version}");
+                assert_eq!(named, Some(Color::Spot { name: "Spot 0:7".into(), tint: 1.0, look: None }), "{version}");
+                assert_eq!(d.warnings, vec![Warning::Lenses, Warning::SpotLooks], "{version} {compress}");
+            }
         }
     }
 }
@@ -1386,6 +1409,283 @@ fn lenses_and_transparency_are_named_in_the_warnings() {
         let d = read(&clip_drawing(version, vec![], vec![see_through]), Limits::default()).unwrap();
         assert_eq!(shapes(&d.pages[0].layers[0].objects).len(), 1, "{version}");
         assert_eq!(d.warnings, vec![Warning::Lenses], "{version}");
+    }
+}
+
+/// From version 13 a uniform transparency (a 117-byte record of version 1300 in argument 8000)
+/// gives the shape its opacity and blend mode, records of other versions before it skipped. A
+/// lens record, a value outside 0 to 100, a merge mode without a blend mode, and the record in an
+/// earlier version are not applied: the shape stays opaque, with the lenses warning.
+#[test]
+fn a_uniform_transparency_from_version_13_applies() {
+    let record = |since: u32, body: Vec<u8>| [since.to_le_bytes().to_vec(), (body.len() as u32).to_le_bytes().to_vec(), body].concat();
+    for version in [1300, 1500, 1600, 2000] {
+        let v = V(version);
+        let read_with = |arg: Vec<u8>| {
+            let d = read(&clip_drawing(version, vec![], vec![clip_rect(v, 10.0, &[(8000, arg)], [0.0, 0.0])]), Limits::default())
+                .unwrap_or_else(|e| panic!("{version}: {e}"));
+            let s = shapes(&d.pages[0].layers[0].objects)[0];
+            ((s.opacity, s.blend), d.warnings)
+        };
+        for (percent, merge, want) in [(25.0, 0, Blend::Normal), (0.0, 9, Blend::Multiply), (100.0, 28, Blend::Screen), (60.0, 36, Blend::Exclusion)]
+        {
+            let opacity = (1.0 - percent / 100.0) as f32;
+            assert_eq!(read_with(synth::transparency(percent, merge).1), ((opacity, want), vec![]), "{version} {percent} {merge}");
+        }
+        // A record of a later version comes first.
+        let later = [record(1600, vec![0; 20]), synth::transparency(25.0, 0).1].concat();
+        assert_eq!(read_with(later), ((0.75, Blend::Normal), vec![]), "{version}");
+        let opaque = ((1.0, Blend::Normal), vec![Warning::Lenses]);
+        assert_eq!(read_with(record(1300, vec![0; 84])), opaque, "{version}: a lens");
+        for bad in [150.0, -1.0, f64::NAN] {
+            assert_eq!(read_with(synth::transparency(bad, 0).1), opaque, "{version} {bad}");
+        }
+        for merge in [1, 2, 3, 6, 7, 8, 10, 13, 18, 19, 20, 27, 37, 255] {
+            assert_eq!(read_with(synth::transparency(25.0, merge).1), opaque, "{version} {merge}");
+        }
+        assert_eq!(read_with(vec![]), opaque, "{version}: empty");
+    }
+    let d =
+        read(&clip_drawing(1200, vec![], vec![clip_rect(V(1200), 10.0, &[synth::transparency(25.0, 0)], [0.0, 0.0])]), Limits::default()).unwrap();
+    assert_eq!(shapes(&d.pages[0].layers[0].objects)[0].opacity, 1.0);
+    assert_eq!(d.warnings, vec![Warning::Lenses]);
+}
+
+/// Bit 0x01 of byte 1 of a layer's, group's or object's flags hides it and bit 0x10 of byte 0
+/// locks it, in every version; a group left ungrouped at the object limit passes its flags to its
+/// objects.
+#[test]
+fn flags_hide_and_lock_layers_groups_and_objects() {
+    for version in [300, 700, 1100, 1300, 1600] {
+        let v = V(version);
+        let rect = |flags: [u8; 4]| synth::flagged(synth::object(v, 1, &[(30, v.rect(10.0, 10.0, 0.0))], None), flags);
+        let group = |flags: [u8; 4], objects: Vec<synth::Node>| {
+            let mut kids = vec![chunk(b"flgs", flags.to_vec())];
+            kids.extend(objects);
+            list(b"grp ", kids)
+        };
+        let objects = vec![
+            rect([0, 0, 0, 8]),
+            rect([0, 1, 0, 8]),
+            rect([0x10, 0, 0, 8]),
+            rect([0x10, 1, 0, 8]),
+            group([0x10, 1, 0, 0x10], vec![rect([0, 0, 0, 8])]),
+        ];
+        let layers =
+            vec![synth::layer(v, [0, 0, 0, 0x98], "Shown", objects), synth::layer(v, [0x10, 1, 0, 0x98], "Hidden", vec![rect([0, 0, 0, 8])])];
+        let file = synth::file_of(version, vec![synth::page(false, layers)]);
+        let d = read(&file, Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+        let [shown, hidden] = d.pages[0].layers.as_slice() else { panic!("{version}: {:?}", d.pages[0].layers) };
+        assert_eq!(shown.flags, Flags::default(), "{version}");
+        assert_eq!(hidden.flags, Flags { hidden: true, locked: true }, "{version}");
+        let f = |hidden: bool, locked: bool| Flags { hidden, locked };
+        let own: Vec<Flags> = shown
+            .objects
+            .iter()
+            .map(|o| match o {
+                Object::Shape(s) => s.flags,
+                Object::Group { flags, .. } => *flags,
+                Object::Clip { container, .. } => container.flags,
+            })
+            .collect();
+        assert_eq!(own, [f(false, false), f(true, false), f(false, true), f(true, true), f(true, true)], "{version}");
+        assert!(
+            matches!(&shown.objects[4], Object::Group { objects, .. } if matches!(&objects[0], Object::Shape(s) if s.flags == Flags::default())),
+            "{version}"
+        );
+        assert!(d.warnings.contains(&Warning::UnsupportedObjects) || d.warnings.is_empty(), "{version}: {:?}", d.warnings);
+        // Past the object limit the group's rectangle comes in ungrouped, hidden and locked.
+        let d = read(&file, Limits { objects: 5, ..Limits::default() }).unwrap_or_else(|e| panic!("{version}: {e}"));
+        let last = d.pages[0].layers[0].objects.last();
+        assert!(matches!(last, Some(Object::Shape(s)) if s.flags == f(true, true)), "{version}: {last:?}");
+    }
+}
+
+/// A guideline is hidden when its own object, a group around it or its layer is.
+#[test]
+fn hidden_guidelines_say_so() {
+    for version in [700, 1300, 1600] {
+        let v = V(version);
+        let guide = |flags: [u8; 4]| {
+            let mut arg = vec![0; 12];
+            arg.extend(90_000_000i32.to_le_bytes());
+            arg.extend([v.coord(36.0), v.coord(0.0)].concat());
+            synth::flagged(synth::object(v, 0x16, &[(16000, arg)], None), flags)
+        };
+        let group = list(b"grp ", vec![chunk(b"flgs", vec![0, 1, 0, 0x10]), guide([0, 0, 0, 8])]);
+        let layers = vec![
+            synth::layer(v, [0, 0, 0, 0x98], "Shown", vec![guide([0, 0, 0, 8]), guide([0, 1, 0, 8]), group]),
+            synth::layer(v, [0, 1, 0, 0x98], "Hidden", vec![guide([0, 0, 0, 8])]),
+        ];
+        let d = read(&synth::file_of(version, vec![synth::page(false, layers)]), Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+        let hidden: Vec<Vec<bool>> = d.pages[0].layers.iter().map(|l| l.guides.iter().map(|g| g.hidden).collect()).collect();
+        assert_eq!(hidden, [vec![false, true, true], vec![true]], "{version}");
+    }
+}
+
+/// Byte 0 of argument 14001 other than 0 fills the shape nonzero; 0, or no argument, fills it
+/// even-odd; an argument without its byte is damage.
+#[test]
+fn a_winding_flag_fills_nonzero() {
+    for version in [300, 700, 1200, 1600] {
+        let v = V(version);
+        let read_with = |extra: &[(u32, Vec<u8>)]| {
+            let mut args = vec![(30, v.rect(10.0, 10.0, 0.0))];
+            args.extend(extra.iter().cloned());
+            let file = synth::file_of(
+                version,
+                vec![synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 1, &args, None)])])],
+            );
+            let d = read(&file, Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+            (shapes(&d.pages[0].layers[0].objects)[0].nonzero, d.warnings)
+        };
+        assert_eq!(read_with(&[(14001, vec![1, 0, 0, 0])]), (true, vec![]), "{version}");
+        assert_eq!(read_with(&[(14001, vec![2])]), (true, vec![]), "{version}");
+        assert_eq!(read_with(&[(14001, vec![0, 0, 0, 0])]), (false, vec![]), "{version}");
+        assert_eq!(read_with(&[]), (false, vec![]), "{version}");
+        assert_eq!(read_with(&[(14001, vec![])]), (false, vec![Warning::Damaged]), "{version}");
+    }
+}
+
+/// A `cdr8` form type makes the file the 8.01 variant whatever its `vrsn` chunk names: its style
+/// table is read with the 8.01 layout.
+#[test]
+fn a_cdr8_file_whose_version_chunk_names_800_reads_as_801() {
+    let styles = [synth::Style { id: 0x10, parent: 0, fill: 0x100, outline: 0x200 }, synth::Style { id: 0x11, parent: 0x10, fill: 0, outline: 0 }];
+    for named in [800u16, 900, 1300] {
+        let table = synth::stlt(V(801), &[(0x100, 1)], &[(0x200, 2)], &styles, true);
+        let mut file = graphic_style_drawing(801, table);
+        file[8..12].copy_from_slice(b"cdr8");
+        let at = file.windows(4).position(|w| w == b"vrsn").unwrap() + 8;
+        assert_eq!(&file[at..at + 2], &801u16.to_le_bytes());
+        file[at..at + 2].copy_from_slice(&named.to_le_bytes());
+        let d = read(&file, Limits::default()).unwrap_or_else(|e| panic!("{named}: {e}"));
+        assert_eq!(d.version, 801, "{named}");
+        let s = shapes(&d.pages[0].layers[0].objects);
+        assert_eq!(s[0].fill, Some(Color::Rgb([1.0, 0.0, 0.0])), "{named}");
+        assert!(d.warnings.is_empty(), "{named}: {:?}", d.warnings);
+    }
+}
+
+/// Before version 6 an object names its style in 2 bytes, which is not damage; an argument too
+/// short for them is.
+#[test]
+fn a_style_id_before_version_6_is_two_bytes() {
+    for version in [400, 500] {
+        let v = V(version);
+        let read_with = |style: Vec<u8>| {
+            let object = synth::object(v, 1, &[(200, style), (30, v.rect(10.0, 10.0, 0.0))], None);
+            let file = synth::file_of(version, vec![synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![object])])]);
+            let d = read(&file, Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+            (shapes(&d.pages[0].layers[0].objects).len(), d.warnings)
+        };
+        assert_eq!(read_with(vec![0x10, 0]), (1, vec![]), "{version}");
+        assert_eq!(read_with(vec![0x10]), (1, vec![Warning::Damaged]), "{version}");
+    }
+}
+
+/// A hidden or locked group of `LIST clpt` hides or locks the objects a container clips from it.
+#[test]
+fn a_clipped_groups_flags_reach_its_objects() {
+    for version in [700, 1300, 1600] {
+        let v = V(version);
+        let group = list(
+            b"grp ",
+            vec![chunk(b"flgs", vec![0x10, 1, 0x80, 0x10]), chunk(b"spnd", 0x77u32.to_le_bytes().to_vec()), clip_rect(v, 10.0, &[], [0.0, 0.0])],
+        );
+        let doc = list(b"doc ", vec![synth::mcfg(v, 612.0, 792.0), list(b"clpt", vec![group])]);
+        let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![clip_rect(v, 40.0, &[synth::container(0x77)], [0.0, 0.0])])]);
+        let d = read(&synth::file_of(version, vec![doc, page]), Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+        let [Object::Clip { container, objects }] = d.pages[0].layers[0].objects.as_slice() else {
+            panic!("{version}: {:?}", d.pages[0].layers[0].objects)
+        };
+        assert_eq!(container.flags, Flags::default(), "{version}");
+        assert!(matches!(objects.as_slice(), [Object::Shape(s)] if s.flags == Flags { hidden: true, locked: true }), "{version}: {objects:?}");
+    }
+}
+
+/// Before version 6 a clipped group's `spnd` id is 2 bytes.
+#[test]
+fn a_clipped_group_id_before_version_6_is_two_bytes() {
+    for version in [400, 500] {
+        let v = V(version);
+        let rect = |w: f64, extra: Vec<(u32, Vec<u8>)>| {
+            let mut args = vec![(30, v.rect(w, w, 0.0))];
+            args.extend(extra);
+            synth::object(v, 1, &args, None)
+        };
+        let clpt = list(b"clpt", vec![list(b"grp ", vec![chunk(b"spnd", vec![0x77, 0]), rect(10.0, vec![])])]);
+        let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![rect(40.0, vec![synth::container(0x77)])])]);
+        let d = read(&synth::file_of(version, vec![list(b"doc ", vec![synth::mcfg(v, 612.0, 792.0), clpt]), page]), Limits::default())
+            .unwrap_or_else(|e| panic!("{version}: {e}"));
+        let objects = &d.pages[0].layers[0].objects;
+        assert!(matches!(objects.as_slice(), [Object::Clip { objects, .. }] if objects.len() == 1), "{version}: {objects:?}");
+        assert!(d.warnings.is_empty(), "{version}: {:?}", d.warnings);
+    }
+}
+
+/// A `trfd` entry ends at the next offset: one too short for its matrix makes the transform
+/// damage and leaves the shape in place, even when the bytes after it would read as a matrix. A
+/// table that stops before the last entry's end offset leaves that entry the rest of the record.
+#[test]
+fn a_transform_entry_ends_at_the_next_offset() {
+    for version in [400, 1100, 1300, 1600] {
+        let v = V(version);
+        let w = if version < 600 { 2 } else { 4 };
+        let moved = [1.0, 0.0, 0.0, 1.0, 72.0, 0.0];
+        let object = |trfd: Vec<u8>| {
+            let own = vec![chunk(b"loda", v.loda(1, &[(30, v.rect(10.0, 10.0, 0.0))])), list(b"trfl", vec![chunk(b"trfd", trfd)])];
+            list(b"obj ", vec![chunk(b"flgs", vec![0, 0, 0, 8]), list(b"lgob", own)])
+        };
+        let read_with = |trfd: Vec<u8>| {
+            let file = synth::file_of(version, vec![synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![object(trfd)])])]);
+            let d = read(&file, Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+            (shapes(&d.pages[0].layers[0].objects)[0].matrix.0[4], d.warnings)
+        };
+        let whole = v.trfd(&[moved]);
+        assert!((read_with(whole.clone()).0 - 72.0).abs() < 0.01, "{version}");
+        // The end offset, right after the first, made 4 bytes past the entry's start.
+        let mut short = whole.clone();
+        let start = if w == 2 {
+            usize::from(u16::from_le_bytes([short[3 * w], short[3 * w + 1]]))
+        } else {
+            u32::from_le_bytes(short[12..16].try_into().unwrap()) as usize
+        };
+        short[4 * w..5 * w].copy_from_slice(&v.word(start + 4));
+        assert_eq!(read_with(short), (0.0, vec![Warning::Damaged]), "{version}");
+        // The entry first, then a table of its start alone at the record's end.
+        let entry = whole[5 * w..].to_vec();
+        let at = 3 * w + entry.len();
+        let mut end = [v.word(at + w), v.word(1), v.word(at)].concat();
+        end.extend(entry);
+        end.extend(v.word(3 * w));
+        let (x, warnings) = read_with(end);
+        assert!((x - 72.0).abs() < 0.01 && warnings.is_empty(), "{version}: {x} {warnings:?}");
+    }
+}
+
+/// From version 13 an outline's record of type 2 that names a library color gives the outline
+/// that color; one without a name leaves the fixed color field.
+#[test]
+fn an_outline_takes_a_named_library_color_from_its_property_list() {
+    for version in [1300, 1500, 1600] {
+        let v = V(version);
+        let read_with = |props: Vec<u8>| {
+            let mut outl = v.outline(4, synth::Pen { line_type: 0, width: 1.0, cap: 0, join: 0 }, &synth::color(2, [0, 0, 0, 100]), &[]);
+            let mut record = 2u32.to_le_bytes().to_vec();
+            record.extend((props.len() as u32).to_le_bytes());
+            record.extend(props);
+            outl.splice(4..4, record);
+            let doc = list(b"doc ", vec![synth::mcfg(v, 612.0, 792.0), list(b"otlt", vec![chunk(b"outl", outl)])]);
+            let object = synth::object(v, 1, &[(10, 4u32.to_le_bytes().to_vec()), (30, v.rect(10.0, 10.0, 0.0))], None);
+            let file = synth::file_of(version, vec![doc, synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![object])])]);
+            let d = read(&file, Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+            (shapes(&d.pages[0].layers[0].objects)[0].outline.as_ref().map(|o| o.color.clone()), d.warnings)
+        };
+        let named = synth::properties(&synth::color(5, [0, 0, 255, 0]), Some("Sky Blue"));
+        assert_eq!(read_with(named), (Some(Color::Spot { name: "Sky Blue".into(), tint: 1.0, look: Some([1.0, 0.0, 0.0]) }), vec![]), "{version}");
+        let plain = synth::properties(&synth::color(5, [0, 0, 255, 0]), None);
+        assert_eq!(read_with(plain), (Some(Color::Cmyk([0.0, 0.0, 0.0, 1.0])), vec![]), "{version}");
     }
 }
 

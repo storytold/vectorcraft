@@ -546,6 +546,31 @@ fn lenses_and_transparency_are_named_in_the_warnings() {
     assert_eq!(warnings, ["CDR lenses and object transparency were not applied, and the objects they are on show opaque"]);
 }
 
+/// A uniform transparency, a winding flag and hidden and locked flags of a drawing of version 16
+/// open as the object's opacity, blend mode and fill rule and as hidden and locked nodes, without
+/// a warning.
+#[test]
+fn transparency_winding_and_flags_open_on_the_art() {
+    let v = V(1600);
+    let args = vec![(30, v.rect(10.0, 10.0, 0.0)), synth::transparency(40.0, 29), (14001, vec![1, 0, 0, 0])];
+    let object = synth::flagged(synth::object(v, 1, &args, None), [0x10, 0, 0, 8]);
+    let layers = vec![
+        synth::layer(v, [0, 0, 0, 0x98], "Shown", vec![object]),
+        synth::layer(v, [0, 1, 0, 0x98], "Hidden", vec![synth::object(v, 1, &args[..1], None)]),
+    ];
+    let file = synth::file_of(1600, vec![synth::page(false, layers)]);
+    let (doc, warnings) = super::cdr::import(&file).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    // Bottom to top: "Hidden", then "Shown".
+    let states: Vec<(String, bool)> = doc.layers.iter().map(|l| (l.name.clone().unwrap_or_default(), l.visible)).collect();
+    assert_eq!(states, [("Hidden".to_string(), false), ("Shown".to_string(), true)]);
+    let shown = doc.layers[1].children().unwrap();
+    let [n] = shown.as_slice() else { panic!("{shown:?}") };
+    assert!(matches!(n.kind, NodeKind::Path { rule: vectorcraft_doc::geom::FillRule::NonZero, .. }), "{:?}", n.kind);
+    assert!((n.opacity - 0.6).abs() < 1e-6 && n.blend == vectorcraft_color::BlendMode::Overlay, "{} {:?}", n.opacity, n.blend);
+    assert!(n.locked && n.visible);
+}
+
 #[test]
 fn other_versions_and_damaged_drawings_say_why() {
     let mut s = Session::new();

@@ -3,7 +3,7 @@
 
 use crate::bytes::Rd;
 use crate::layout::{ColorLayout, Profile};
-use crate::model::{Cap, Color, Join, Matrix, Outline};
+use crate::model::{Blend, Cap, Color, Join, Matrix, Outline};
 use crate::riff::push;
 use crate::{Limits, Warning};
 
@@ -74,7 +74,9 @@ pub(crate) fn loda<'a>(b: &'a [u8], p: &Profile, limits: &Limits, warn: &mut Vec
     Some(Loda { kind: kind as u32, args })
 }
 
-/// The matrices of a `trfd` record composed in file order, in points (R8).
+/// The matrices of a `trfd` record composed in file order, in points (R8). Each entry ends where
+/// the next offset points, and the last at the offset after it (R51); an entry too short for its
+/// matrix makes the record unreadable.
 pub(crate) fn trfd(b: &[u8], p: &Profile) -> Option<Matrix> {
     let mut r = Rd::new(b);
     let (_len, count, offsets_at) = (word(&mut r, p)?, word(&mut r, p)?, word(&mut r, p)?);
@@ -82,8 +84,12 @@ pub(crate) fn trfd(b: &[u8], p: &Profile) -> Option<Matrix> {
     let k = p.unit();
     // Each entry takes at least its offset's bytes, which bounds the count by the record's size.
     for i in 0..count.min(b.len() / p.word()) {
-        let at = word(&mut Rd::at(b, offsets_at.checked_add(i.checked_mul(p.word())?)?), p)?;
-        let mut e = Rd::at(b, at.checked_add(p.trfd_head)?);
+        let slot = offsets_at.checked_add(i.checked_mul(p.word())?)?;
+        let start = word(&mut Rd::at(b, slot), p)?;
+        // A table that stops before the last entry's end offset leaves that entry the rest of the
+        // record.
+        let end = word(&mut Rd::at(b, slot.checked_add(p.word())?), p).unwrap_or(b.len());
+        let mut e = Rd::at(b.get(start..end)?, p.trfd_head);
         if e.u16()? != 8 {
             continue;
         }
@@ -204,8 +210,8 @@ fn counted_utf16(r: &mut Rd, warn: &mut Vec<Warning>) -> Option<String> {
     Some(format!("{} {hash:016x}", String::from_utf16_lossy(&kept)))
 }
 
-/// The color of a tagged uniform fill's property list (R11): its color record, named by the
-/// library name it carries.
+/// The color of the property list of a tagged uniform fill (R11) or outline (R12): its color
+/// record, named by the library name it carries.
 fn property_color(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<Color> {
     let mut r = Rd::new(b);
     let (mut found, mut name) = (None, None);
@@ -304,6 +310,8 @@ fn tagged_body<'a>(r: &mut Rd<'a>) -> Option<&'a [u8]> {
 pub(crate) fn outline(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<(u32, Option<Outline>)> {
     let mut r = Rd::new(b);
     let id = r.u32()?;
+    // A library color named in a record of type 2, with the warnings its read gave.
+    let mut named = None;
     if p.tagged {
         let mut found = false;
         for _ in 0..MAX_OUTLINE_RECORDS {
@@ -312,7 +320,16 @@ pub(crate) fn outline(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<
                 found = true;
                 break;
             }
-            r.skip(len)?;
+            let body = r.bytes(len)?;
+            // Type 2 holds the outline's color as a property list, as a uniform fill does (R12).
+            // Only a library color with its name is taken from it; any other color comes from
+            // the fixed field below.
+            if rec == 2 {
+                let mut w = Vec::new();
+                if let Some(c @ Color::Spot { look: Some(_), .. }) = property_color(body, p, &mut w) {
+                    named = Some((c, w));
+                }
+            }
         }
         if !found {
             return None;
@@ -325,7 +342,16 @@ pub(crate) fn outline(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<
     r.skip(p.outl_after_stretch)?;
     let _nib = angle(&mut r, p)?;
     r.skip(p.outl_after_angle)?;
-    let color = color(&mut r, p, warn)?;
+    let color = match named {
+        Some((named, w)) => {
+            color(&mut r, p, &mut Vec::new())?;
+            for x in w {
+                push(warn, x);
+            }
+            named
+        }
+        None => color(&mut r, p, warn)?,
+    };
     r.skip(p.outl_after_color)?;
     let count = usize::from(r.u16()?);
     let first_dash = r.pos();
@@ -363,6 +389,58 @@ pub(crate) fn outline(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<
     // Bit 5 of the line type: scaled with the shape (R50).
     let scale_with = line_type & 0x20 != 0;
     Some((id, Some(Outline { width, color, cap, join, dashes, behind_fill, scale_with })))
+}
+
+/// The opacity and blend of argument 8000 from version 13 (R47): records of a u32 version, a u32
+/// length and a body. A body of version 1300 that is [`UNIFORM_LEN`] bytes long is a uniform
+/// transparency: an f64 at byte 61 and the merge mode at byte 77. VectorCraft reads the f64 as the
+/// transparency in percent, 0 opaque and 100 clear. `None` for any other argument, such as a lens,
+/// and for a value out of range or a merge mode without a VectorCraft blend mode.
+pub(crate) fn transparency(b: &[u8]) -> Option<(f32, Blend)> {
+    let mut r = Rd::new(b);
+    while r.left() >= 8 {
+        let (since, len) = (r.u32()?, r.u32()? as usize);
+        let body = r.bytes(len)?;
+        if since != TAG_1300 {
+            continue;
+        }
+        if body.len() != UNIFORM_LEN {
+            return None;
+        }
+        let value = Rd::at(body, 61).f64()?;
+        if !(0.0..=100.0).contains(&value) {
+            return None;
+        }
+        return Some(((1.0 - value / 100.0) as f32, blend(*body.get(77)?)?));
+    }
+    None
+}
+
+/// The length of a uniform transparency's record body (R47).
+const UNIFORM_LEN: usize = 117;
+
+/// The blend mode of a transparency's merge mode byte (R47); `None` for the modes VectorCraft has
+/// no blend mode for.
+fn blend(mode: u8) -> Option<Blend> {
+    Some(match mode {
+        0 => Blend::Normal,
+        9 => Blend::Multiply,
+        11 => Blend::Lighten,
+        12 => Blend::Darken,
+        14 => Blend::Color,
+        15 => Blend::Hue,
+        16 => Blend::Saturation,
+        17 => Blend::Luminosity,
+        24 => Blend::Difference,
+        28 => Blend::Screen,
+        29 => Blend::Overlay,
+        30 => Blend::SoftLight,
+        31 => Blend::HardLight,
+        33 => Blend::ColorDodge,
+        34 => Blend::ColorBurn,
+        36 => Blend::Exclusion,
+        _ => return None,
+    })
 }
 
 /// A name argument (R9): Windows-1252 up to a NUL before version 12, UTF-16LE from it. A name

@@ -8,7 +8,7 @@ use crate::geometry;
 use crate::inline;
 use crate::layout::{self, Profile};
 use crate::limits::Budget;
-use crate::model::{Color, Drawing, Geometry, Guideline, Layer, LayerKind, Matrix, Object, Outline, Page, Pt, Shape};
+use crate::model::{Blend, Color, Drawing, Flags, Geometry, Guideline, Layer, LayerKind, Matrix, Object, Outline, Page, Pt, Shape};
 use crate::records::{self, Loda};
 use crate::riff::{Chunk, Index, push};
 use crate::styles::Styles;
@@ -21,7 +21,7 @@ const CURVE: u32 = 3;
 const POLYGON: u32 = 0x14;
 const GUIDELINE: u32 = 0x16;
 const PATH: u32 = 0x25;
-/// Argument types (R6, R20, R21, R33).
+/// Argument types (R6, R20, R21, R33, R52).
 const ARG_OUTLINE: u32 = 10;
 const ARG_FILL: u32 = 20;
 const ARG_COORDS: u32 = 30;
@@ -31,6 +31,7 @@ const ARG_NAME: u32 = 1000;
 const ARG_LENS: u32 = 8000;
 const ARG_CONTAINER: u32 = 8005;
 const ARG_POLYGON: u32 = 11000;
+const ARG_WINDING: u32 = 14001;
 const ARG_GUIDE: u32 = 16000;
 const ARG_PAGE_SIZE: u32 = 19130;
 
@@ -97,8 +98,10 @@ pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) 
         open_clips: Vec::new(),
         clip_cut: false,
     };
+    // The `spnd` id is a u16 in files of 16-bit fields (R46).
+    let spnd = |b: &[u8]| if p.short { Rd::new(b).u16().map(u32::from) } else { Rd::new(b).u32() };
     for g in found.clpt.iter().flat_map(|c| ix.children(c)).filter(|g| g.is_list(b"grp ")) {
-        if let Some(id) = ix.children(g).iter().find(|c| &c.id == b"spnd").and_then(|c| Rd::new(ix.data(c)).u32()) {
+        if let Some(id) = ix.children(g).iter().find(|c| &c.id == b"spnd").and_then(|c| spnd(ix.data(c))) {
             cx.clips.entry(id).or_insert(g);
         }
     }
@@ -216,13 +219,39 @@ fn guideline(b: &[u8], p: &Profile) -> Option<Guideline> {
     let mut r = Rd::at(b, 12);
     let angle = f64::from(r.i32()?) / 1_000_000.0;
     let at = Pt { x: records::coord(&mut r, p)?, y: records::coord(&mut r, p)? };
-    Some(Guideline { at, angle })
+    Some(Guideline { at, angle, hidden: false })
+}
+
+/// Marks the guidelines from `from` on hidden when `flags` hide what holds them.
+fn hide_guides(guides: &mut [Guideline], from: usize, flags: Flags) {
+    if flags.hidden {
+        for g in guides.iter_mut().skip(from) {
+            g.hidden = true;
+        }
+    }
 }
 
 /// A list's flags (R19): four bytes.
 fn flags(ix: &Index, list: &Chunk) -> Option<[u8; 4]> {
     let c = ix.children(list).iter().find(|c| &c.id == b"flgs")?;
     ix.data(c).get(..4)?.try_into().ok()
+}
+
+/// Whether a layer, group or object list is hidden (bit 0x01 of byte 1) or locked (bit 0x10 of
+/// byte 0) (R19).
+fn state(ix: &Index, list: &Chunk) -> Flags {
+    flags(ix, list).map_or(Flags::default(), |[b0, b1, _, _]| Flags { hidden: b1 & 0x01 != 0, locked: b0 & 0x10 != 0 })
+}
+
+/// `o` with `f` added to its own flags: the objects of a group left ungrouped keep the group's.
+fn inherit(o: &mut Object, f: Flags) {
+    let own = match o {
+        Object::Shape(s) => &mut s.flags,
+        Object::Group { flags, .. } => flags,
+        Object::Clip { container, .. } => &mut container.flags,
+    };
+    own.hidden |= f.hidden;
+    own.locked |= f.locked;
 }
 
 /// What a layer's object type makes it (R19): 11 a grid, 12 guides, 17 the desktop, any other a
@@ -297,6 +326,10 @@ struct Frame<'i> {
     objects: Vec<Object>,
     /// Whether its objects form a group in the frame below.
     group: bool,
+    /// The group's own flags.
+    flags: Flags,
+    /// The first of the guidelines read inside it.
+    guides_from: usize,
     /// What places its objects after their own transforms: the matrices of the version 3 groups
     /// around them (R33). The identity in other versions, whose objects hold their whole transform.
     outer: Matrix,
@@ -339,27 +372,43 @@ impl<'a, 'b> Ctx<'a, 'b> {
         let name = loda.and_then(|l| l.arg(ARG_NAME).map(|b| records::name(b, &self.p, self.warn))).unwrap_or_default();
         let mut guides = Vec::new();
         let objects = self.objects(ix.children(list), &mut guides);
-        Layer { name, kind, objects, guides }
+        let flags = state(ix, list);
+        hide_guides(&mut guides, 0, flags);
+        Layer { name, kind, flags, objects, guides }
     }
 
     /// The objects of a layer's chunks, groups nested, front to back; guidelines go to `guides`.
     fn objects(&mut self, chunks: &'b [Chunk], guides: &mut Vec<Guideline>) -> Vec<Object> {
         let ix = self.ix;
-        let mut stack = vec![Frame { chunks, next: 0, objects: Vec::new(), group: false, outer: Matrix::IDENTITY }];
+        let mut stack = vec![Frame {
+            chunks,
+            next: 0,
+            objects: Vec::new(),
+            group: false,
+            flags: Flags::default(),
+            guides_from: guides.len(),
+            outer: Matrix::IDENTITY,
+        }];
         loop {
             let Some(top) = stack.last_mut() else { return Vec::new() };
             let (here, outer) = (top.chunks, top.outer);
             let Some(c) = here.get(top.next) else {
                 let Some(done) = stack.pop() else { return Vec::new() };
+                // A hidden group hides the guidelines inside it.
+                hide_guides(guides, done.guides_from, done.flags);
                 match stack.last_mut() {
                     // A group counts toward the objects a read maps; past them its objects stay,
-                    // ungrouped.
+                    // ungrouped, with the group's flags.
                     Some(parent) if done.group && !done.objects.is_empty() => {
                         if self.budget.take_object() {
-                            parent.objects.push(Object::Group(done.objects));
+                            parent.objects.push(Object::Group { objects: done.objects, flags: done.flags });
                         } else {
                             push(self.warn, Warning::TooDeep);
-                            parent.objects.extend(done.objects);
+                            let mut objects = done.objects;
+                            for o in &mut objects {
+                                inherit(o, done.flags);
+                            }
+                            parent.objects.extend(objects);
                         }
                     }
                     Some(parent) if !done.group => parent.objects.extend(done.objects),
@@ -382,14 +431,17 @@ impl<'a, 'b> Ctx<'a, 'b> {
                 }
             } else if c.is_list(b"grp ") {
                 let own = self.group_placement(c);
-                stack.push(Frame { chunks: ix.children(c), next: 0, objects: Vec::new(), group: true, outer: outer.after(&own) });
+                let flags = state(ix, c);
+                let guides_from = guides.len();
+                stack.push(Frame { chunks: ix.children(c), next: 0, objects: Vec::new(), group: true, flags, guides_from, outer: outer.after(&own) });
             } else if c.is_list(b"lnkg") {
                 // Linked groups (brush strokes, blends, contours) place their objects with a
                 // matrix of their own, which this reader doesn't apply: they are left out.
                 push(self.warn, Warning::UnsupportedObjects);
             } else if c.id == crate::riff::LIST && !c.is_list(b"lgob") {
                 // Other lists under a layer are looked through (R22).
-                stack.push(Frame { chunks: ix.children(c), next: 0, objects: Vec::new(), group: false, outer });
+                let guides_from = guides.len();
+                stack.push(Frame { chunks: ix.children(c), next: 0, objects: Vec::new(), group: false, flags: Flags::default(), guides_from, outer });
             }
         }
     }
@@ -440,18 +492,28 @@ impl<'a, 'b> Ctx<'a, 'b> {
             push(self.warn, Warning::TooDeep);
             return None;
         }
+        let flags = state(ix, list);
         if loda.kind == GUIDELINE {
-            guides.extend(loda.arg(ARG_GUIDE).and_then(|b| guideline(b, &self.p)));
+            guides.extend(loda.arg(ARG_GUIDE).and_then(|b| guideline(b, &self.p)).map(|g| Guideline { hidden: flags.hidden, ..g }));
             return None;
         }
         if self.p.inline_styles {
-            return self.inline_object(&loda, outer);
+            return self.inline_object(&loda, outer, flags);
         }
         let geometry = self.geometry(&loda)?;
-        // A lens or transparency (R47) is not applied: the shape shows opaque.
-        if loda.arg(ARG_LENS).is_some() {
-            push(self.warn, Warning::Lenses);
-        }
+        // A uniform transparency from version 13 applies (R47); a lens, and a transparency of
+        // another kind or version, is not applied: the shape shows opaque.
+        let (opacity, blend) = match loda.arg(ARG_LENS) {
+            None => (1.0, Blend::Normal),
+            Some(b) => match records::transparency(b).filter(|_| self.p.tagged) {
+                Some(t) => t,
+                None => {
+                    push(self.warn, Warning::Lenses);
+                    (1.0, Blend::Normal)
+                }
+            },
+        };
+        let nonzero = self.nonzero(&loda);
         // A transform that is there but can't be read is damage; the shape stays where it is.
         let matrix = match own_chunk(ix, list, &[b"trfd"]) {
             None => Matrix::IDENTITY,
@@ -460,8 +522,9 @@ impl<'a, 'b> Ctx<'a, 'b> {
                 Matrix::IDENTITY
             }),
         };
-        // Without a fill or outline argument of its own, an object takes its style's (R45).
-        let style = loda.arg(ARG_STYLE).and_then(|b| self.id(b));
+        // Without a fill or outline argument of its own, an object takes its style's (R45). The
+        // style id is a u16 in files of 16-bit fields.
+        let style = loda.arg(ARG_STYLE).and_then(|b| if self.p.short { self.short_id(b) } else { self.id(b) });
         let fill_id = match loda.arg(ARG_FILL) {
             Some(b) => self.id(b),
             None => style.and_then(|s| self.style_entry(s, Styles::fill)),
@@ -472,7 +535,7 @@ impl<'a, 'b> Ctx<'a, 'b> {
         };
         let fill = fill_id.and_then(|id| self.fill(id));
         let outline = outline_id.and_then(|id| self.outline(id));
-        let shape = Box::new(Shape { geometry, matrix, fill, outline });
+        let shape = Box::new(Shape { geometry, matrix, fill, outline, nonzero, opacity, blend, flags });
         // A container clips the group its argument 8005 names (R46).
         Some(match loda.arg(ARG_CONTAINER).and_then(|b| self.id(b)) {
             Some(id) => self.clip(shape, id, guides),
@@ -501,8 +564,17 @@ impl<'a, 'b> Ctx<'a, 'b> {
             guides.truncate(mark);
             return Object::Shape(container);
         }
+        // The clipped group's own flags hide or lock the objects it holds; it and the container
+        // hide its guidelines.
+        let flags = state(ix, group);
+        hide_guides(guides, mark, flags);
+        hide_guides(guides, mark, container.flags);
         if objects.is_empty() {
             return Object::Shape(container);
+        }
+        let mut objects = objects;
+        for o in &mut objects {
+            inherit(o, flags);
         }
         Object::Clip { container, objects }
     }
@@ -514,6 +586,28 @@ impl<'a, 'b> Ctx<'a, 'b> {
             push(self.warn, Warning::Damaged);
         }
         id
+    }
+
+    /// A u16 id at the start of argument `b`; an argument too short for one is damage.
+    fn short_id(&mut self, b: &[u8]) -> Option<u32> {
+        let id = Rd::new(b).u16().map(u32::from);
+        if id.is_none() {
+            push(self.warn, Warning::Damaged);
+        }
+        id
+    }
+
+    /// Whether the object's fill rule is nonzero: byte 0 of argument 14001 set (R52). Without the
+    /// argument the fill is even-odd; an argument without its byte is damage.
+    fn nonzero(&mut self, loda: &Loda) -> bool {
+        let Some(b) = loda.arg(ARG_WINDING) else { return false };
+        match b.first() {
+            Some(v) => *v != 0,
+            None => {
+                push(self.warn, Warning::Damaged);
+                false
+            }
+        }
     }
 
     /// The fill or outline record that style `id` names; a style table that doesn't parse is
@@ -530,7 +624,7 @@ impl<'a, 'b> Ctx<'a, 'b> {
 
     /// A version 3 object, whose transforms, fill and outline are arguments of its own record
     /// (R33, R34, R35). A fill or an outline that is there but can't be read is damage.
-    fn inline_object(&mut self, loda: &Loda, outer: &Matrix) -> Option<Object> {
+    fn inline_object(&mut self, loda: &Loda, outer: &Matrix, flags: Flags) -> Option<Object> {
         let own = match loda.arg(ARG_TRANSFORMS) {
             None => Matrix::IDENTITY,
             Some(arg) => self.placement(arg),
@@ -558,7 +652,9 @@ impl<'a, 'b> Ctx<'a, 'b> {
             }
             o
         });
-        Some(Object::Shape(Box::new(Shape { geometry, matrix: outer.after(&own), fill, outline })))
+        let nonzero = self.nonzero(loda);
+        let shape = Shape { nonzero, flags, ..Shape::new(geometry, outer.after(&own), fill, outline) };
+        Some(Object::Shape(Box::new(shape)))
     }
 
     fn geometry(&mut self, loda: &Loda) -> Option<Geometry> {

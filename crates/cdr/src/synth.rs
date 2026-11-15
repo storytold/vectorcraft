@@ -212,7 +212,8 @@ impl V {
         let table = head;
         let mut entries = Vec::new();
         let mut offsets = Vec::new();
-        let first = table + matrices.len() * w;
+        // The table holds one offset more than the entries: the record's end (R51).
+        let first = table + (matrices.len() + 1) * w;
         for m in matrices {
             offsets.push(first + entries.len());
             if self.0 >= 1300 {
@@ -232,6 +233,7 @@ impl V {
                 entries.extend(v.to_le_bytes());
             }
         }
+        offsets.push(first + entries.len());
         let mut out = Vec::new();
         for f in [first + entries.len(), matrices.len(), table] {
             out.extend(self.word(f));
@@ -588,10 +590,55 @@ pub fn container(id: u32) -> (u32, Vec<u8>) {
     (8005, [id, 1, 0, 1].iter().flat_map(|v| v.to_le_bytes()).collect())
 }
 
+/// The argument 8000 of a uniform transparency from version 13 (R47): one record of version 1300
+/// whose 117-byte body holds `percent` at byte 61 and `merge` at byte 77.
+pub fn transparency(percent: f64, merge: u8) -> (u32, Vec<u8>) {
+    let mut body = vec![0; 117];
+    body[61..69].copy_from_slice(&percent.to_le_bytes());
+    body[77] = merge;
+    let mut out = 1300u32.to_le_bytes().to_vec();
+    out.extend((body.len() as u32).to_le_bytes());
+    out.extend(body);
+    (8000, out)
+}
+
+/// A property list (R11, R12) of 12-byte color `color` and, when `name` is given, a type 8
+/// property with that library name.
+pub fn properties(color: &[u8; 12], name: Option<&str>) -> Vec<u8> {
+    let mut out = vec![1];
+    out.extend(12u32.to_le_bytes());
+    out.extend(color);
+    if let Some(name) = name {
+        let mut body = vec![0; 16];
+        body.extend((name.encode_utf16().count() as u32).to_le_bytes());
+        body.extend(name.encode_utf16().flat_map(u16::to_le_bytes));
+        out.push(8);
+        out.extend((body.len() as u32).to_le_bytes());
+        out.extend(body);
+    }
+    out.extend([0, 0, 0, 0, 0]);
+    out
+}
+
+/// `n` (an object, group or layer list) with its `flgs` chunk replaced by `flags` (R19).
+pub fn flagged(n: Node, flags: [u8; 4]) -> Node {
+    match n {
+        Node::List(form, kids) => {
+            let kids = kids
+                .into_iter()
+                .map(|k| if matches!(&k, Node::Chunk(id, _) if id == b"flgs") { chunk(b"flgs", flags.to_vec()) } else { k })
+                .collect();
+            Node::List(form, kids)
+        }
+        chunk => chunk,
+    }
+}
+
 /// A RIFF drawing of `version` (7 to 13) with a style table, a clipping container and a lens: a rectangle
 /// that takes its fill and outline from its style, a container that clips two rectangles, one
-/// with an outline behind the fill, and a rectangle with a lens; compressed when `compress`.
-/// Before version 7, the [`sample`].
+/// with an outline behind the fill, a rectangle with a lens, a hidden and locked rectangle with a
+/// winding flag and a uniform transparency, and a hidden group whose rectangle's outline names a
+/// library color from version 13; compressed when `compress`. Before version 7, the [`sample`].
 pub fn feature_sample(version: u16, compress: bool) -> Vec<u8> {
     if version < 700 {
         return sample(version, false);
@@ -606,6 +653,15 @@ pub fn feature_sample(version: u16, compress: bool) -> Vec<u8> {
     let style = (200, 0x10u32.to_le_bytes().to_vec());
     let clipped =
         vec![rect(30.0, vec![style.clone()], 10.0), rect(30.0, vec![(10, 3u32.to_le_bytes().to_vec()), (20, 1u32.to_le_bytes().to_vec())], -10.0)];
+    // From version 13 outline 4 names a library color in a record of type 2 (R12).
+    let mut named = v.outline(4, Pen { line_type: 0, width: 1.0, cap: 0, join: 0 }, &color(25, [7, 0, 100, 0]), &[]);
+    if version >= 1300 {
+        let props = properties(&color(5, [0, 0, 255, 0]), Some("Sky Blue"));
+        let mut record = 2u32.to_le_bytes().to_vec();
+        record.extend((props.len() as u32).to_le_bytes());
+        record.extend(props);
+        named.splice(4..4, record);
+    }
     let doc = list(
         b"doc ",
         vec![
@@ -616,6 +672,7 @@ pub fn feature_sample(version: u16, compress: bool) -> Vec<u8> {
                 vec![
                     chunk(b"outl", v.outline(2, Pen { line_type: 4, width: 2.0, cap: 1, join: 1 }, &black, &[3, 1])),
                     chunk(b"outl", v.outline(3, Pen { line_type: 0x12, width: 4.0, cap: 0, join: 0 }, &black, &[])),
+                    chunk(b"outl", named),
                 ],
             ),
             stlt(v, &[(0x100, 1)], &[(0x200, 2)], &[Style { id: 0x10, parent: 0, fill: 0x100, outline: 0x200 }], true),
@@ -625,7 +682,10 @@ pub fn feature_sample(version: u16, compress: bool) -> Vec<u8> {
     let objects = vec![
         rect(20.0, vec![style.clone()], 0.0),
         rect(40.0, vec![style.clone(), container(7)], 50.0),
-        rect(20.0, vec![style, (8000, vec![1, 0, 0, 0])], -50.0),
+        rect(20.0, vec![style.clone(), (8000, vec![1, 0, 0, 0])], -50.0),
+        // Hidden and locked, filled nonzero, 25% transparent with merge mode 9 (R19, R47, R52).
+        flagged(rect(10.0, vec![style.clone(), (14001, vec![1, 0, 0, 0]), transparency(25.0, 9)], 80.0), [0x10, 1, 0, 0x08]),
+        list(b"grp ", vec![chunk(b"flgs", vec![0, 1, 0, 0x10]), rect(10.0, vec![(10, 4u32.to_le_bytes().to_vec())], -80.0)]),
     ];
     let page = page(false, vec![layer(v, [0, 0, 0, 0x98], "Art", objects)]);
     let mut body = vec![chunk(b"vrsn", version.to_le_bytes().to_vec())];

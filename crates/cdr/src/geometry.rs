@@ -151,8 +151,8 @@ pub(crate) fn rect(b: &[u8], p: &Profile) -> Option<Geometry> {
 /// A rectangle record from version 15 (R29): width and height as f64 coordinate units, two scale
 /// factors that repeat the transform's (not applied), the scale-with flag and 7 bytes, then the
 /// four radii as f64 16 bytes apart. With the flag clear each radius is a share of half the shorter
-/// side; with it set the radius is in inches. A corner is held to the shorter side, and sizes to
-/// the range of the 32-bit coordinates of earlier versions.
+/// side; with it set the radius is in inches. A corner is held to half the shorter side, and
+/// sizes to the range of the 32-bit coordinates of earlier versions.
 fn rect_f64(b: &[u8], p: &Profile) -> Option<Geometry> {
     let mut r = Rd::new(b);
     let size = |v: f64| (v.abs() <= f64::from(i32::MAX)).then(|| v * p.unit());
@@ -168,7 +168,7 @@ fn rect_f64(b: &[u8], p: &Profile) -> Option<Geometry> {
         }
         let v = r.f64()?.abs();
         let radius = if inches { v * 72.0 } else { v * short / 2.0 };
-        *slot = radius.min(short);
+        *slot = radius.min(short / 2.0);
     }
     Some(Geometry::Rect { w, h, radii })
 }

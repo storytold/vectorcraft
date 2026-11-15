@@ -8,10 +8,10 @@ use kurbo::{Affine, BezPath, Point, Rect};
 use vectorcraft_cdr::Warning;
 use vectorcraft_cdr::model::{self as cd, Geometry};
 use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_color::{Color, Paint, Swatch};
+use vectorcraft_color::{BlendMode, Color, Paint, Swatch};
 use vectorcraft_doc::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, LineJoin, StrokeLayer};
 use vectorcraft_doc::geom::{FillRule, PathData};
-use vectorcraft_doc::{Document, Guide, LiveShape, Node, NodeKind};
+use vectorcraft_doc::{Document, Guide, Knockout, LiveShape, Node, NodeKind};
 
 /// The most nested groups mapped; the reader holds nesting well below it.
 const MAX_DEPTH: usize = 256;
@@ -32,6 +32,9 @@ pub(super) struct Builder {
     pub(super) guide_list: Vec<Guide>,
     /// Guidelines at other angles, as guide paths.
     pub(super) guide_paths: Vec<Arc<Node>>,
+    /// Hidden guidelines, as guides and guide paths of a hidden layer of their own.
+    pub(super) hidden_guides: Vec<Guide>,
+    pub(super) hidden_paths: Vec<Arc<Node>>,
     /// Colors read in each model, which picks the document's color mode.
     pub(super) cmyk: usize,
     pub(super) rgb: usize,
@@ -50,6 +53,8 @@ impl Builder {
             copies_left: super::MAX_MASTER_COPIES,
             guide_list: Vec::new(),
             guide_paths: Vec::new(),
+            hidden_guides: Vec::new(),
+            hidden_paths: Vec::new(),
             cmyk: 0,
             rgb: 0,
             spots: Vec::new(),
@@ -69,7 +74,7 @@ impl Builder {
                         self.learn_spot(c);
                     }
                 }
-                cd::Object::Group(kids) => stack.extend(kids),
+                cd::Object::Group { objects: kids, .. } => stack.extend(kids),
                 cd::Object::Clip { container, objects } => {
                     for c in container.fill.iter().chain(container.outline.iter().map(|o| &o.color)) {
                         self.learn_spot(c);
@@ -117,11 +122,12 @@ impl Builder {
         let mut out = Vec::with_capacity(objects.len());
         for o in objects.iter().rev() {
             match o {
-                cd::Object::Shape(s) => out.extend(self.shape(s, to_doc, false)),
-                cd::Object::Group(kids) => {
+                cd::Object::Shape(s) => out.extend(self.shape(s, to_doc, false).map(|n| with_flags(n, s.flags))),
+                cd::Object::Group { objects: kids, flags } => {
                     let children = self.objects_at(kids, to_doc, depth + 1);
                     if !children.is_empty() {
-                        out.push(Arc::new(Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: false })));
+                        let group = Arc::new(Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: false }));
+                        out.push(with_flags(group, *flags));
                     }
                 }
                 // A clipping group whose clipping path keeps the container's paint: its fill
@@ -140,14 +146,28 @@ impl Builder {
                     let Some(clip) = clip else { continue };
                     let mut children = vec![clip];
                     children.extend(self.objects_at(objects, to_doc, depth + 1));
-                    let group = Arc::new(Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: true }));
-                    match outline {
+                    let mut group = Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: true });
+                    // A see-through container's fill knocks out the outline behind it, so the two
+                    // parts do not add up their transparency where they overlap; the clipped
+                    // objects inside still combine as usual.
+                    let knock = outline.is_some() && (container.opacity < 1.0 || container.blend != cd::Blend::Normal);
+                    if knock {
+                        group.knockout = Knockout::Off;
+                    }
+                    let group = Arc::new(group);
+                    // The container's flags hide or lock the whole clipping group.
+                    let whole = match outline {
                         Some(outline) => {
                             let children = vec![outline, group];
-                            out.push(Arc::new(Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: false })));
+                            let mut pair = Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: false });
+                            if knock {
+                                pair.knockout = Knockout::On;
+                            }
+                            Arc::new(pair)
                         }
-                        None => out.push(group),
-                    }
+                        None => group,
+                    };
+                    out.push(with_flags(whole, container.flags));
                 }
             }
         }
@@ -181,11 +201,13 @@ impl Builder {
         if let Some(o) = s.outline.as_ref().filter(|o| !o.behind_fill) {
             items.push(AppearanceItem::Stroke(self.stroke(o, &s.matrix)));
         }
-        // A curve of several subpaths is filled with holes where they overlap: VectorCraft's own
-        // choice of rule for it.
-        let rule = FillRule::EvenOdd;
+        // Without the winding flag, a curve of several subpaths is filled with holes where they
+        // overlap: VectorCraft's own choice of rule for it.
+        let rule = if s.nonzero { FillRule::NonZero } else { FillRule::EvenOdd };
         let mut n = Node::new(self.doc.alloc_id(), NodeKind::Path { path, rule, live: live.map(Box::new), clipping, guide: false });
         n.appearance = Appearance { items, ..Appearance::default() }.into();
+        n.opacity = if s.opacity.is_finite() { s.opacity.clamp(0.0, 1.0) } else { 1.0 };
+        n.blend = blend(s.blend);
         Some(Arc::new(n))
     }
 
@@ -270,8 +292,9 @@ impl Builder {
 
     /// A guideline through `at` (document space) at `angle` degrees counterclockwise, as a guide
     /// path from edge to edge of the page `rect`, so it moves with the page's artboard. A
-    /// guideline that misses the page runs through `at` for the page's diagonal each way.
-    pub(super) fn angled_guide(&mut self, at: Point, angle: f64, rect: Rect) {
+    /// guideline that misses the page runs through `at` for the page's diagonal each way. A
+    /// `hidden` one goes with the hidden guides.
+    pub(super) fn angled_guide(&mut self, at: Point, angle: f64, rect: Rect, hidden: bool) {
         let (s, c) = angle.to_radians().sin_cos();
         // The document's y axis points down.
         let dir = kurbo::Vec2::new(c, -s);
@@ -291,7 +314,7 @@ impl Builder {
             return;
         }
         let n = Node::new(self.doc.alloc_id(), NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: true });
-        self.guide_paths.push(Arc::new(n));
+        if hidden { self.hidden_paths.push(Arc::new(n)) } else { self.guide_paths.push(Arc::new(n)) }
     }
 }
 
@@ -316,6 +339,37 @@ fn chord(at: Point, dir: kurbo::Vec2, rect: Rect) -> Option<(f64, f64)> {
 
 fn affine(m: &cd::Matrix) -> Affine {
     Affine::new(m.0)
+}
+
+fn blend(b: cd::Blend) -> BlendMode {
+    match b {
+        cd::Blend::Normal => BlendMode::Normal,
+        cd::Blend::Multiply => BlendMode::Multiply,
+        cd::Blend::Screen => BlendMode::Screen,
+        cd::Blend::Overlay => BlendMode::Overlay,
+        cd::Blend::SoftLight => BlendMode::SoftLight,
+        cd::Blend::HardLight => BlendMode::HardLight,
+        cd::Blend::ColorDodge => BlendMode::ColorDodge,
+        cd::Blend::ColorBurn => BlendMode::ColorBurn,
+        cd::Blend::Darken => BlendMode::Darken,
+        cd::Blend::Lighten => BlendMode::Lighten,
+        cd::Blend::Difference => BlendMode::Difference,
+        cd::Blend::Exclusion => BlendMode::Exclusion,
+        cd::Blend::Hue => BlendMode::Hue,
+        cd::Blend::Saturation => BlendMode::Saturation,
+        cd::Blend::Color => BlendMode::Color,
+        cd::Blend::Luminosity => BlendMode::Luminosity,
+    }
+}
+
+/// `n` hidden or locked as `flags` say; left as it is when they say neither.
+pub(super) fn with_flags(mut n: Arc<Node>, flags: cd::Flags) -> Arc<Node> {
+    if flags.hidden || flags.locked {
+        let m = Arc::make_mut(&mut n);
+        m.visible &= !flags.hidden;
+        m.locked |= flags.locked;
+    }
+    n
 }
 
 fn bez(p: &cd::Path) -> BezPath {
@@ -382,15 +436,15 @@ mod tests {
     fn a_spot_color_keeps_its_color_from_its_strongest_use() {
         let red = [1.0, 0.0, 0.0];
         let shape = |tint: f32, look: [f32; 3]| {
-            cd::Object::Shape(Box::new(cd::Shape {
-                geometry: Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
-                matrix: cd::Matrix::IDENTITY,
-                fill: Some(cd::Color::Spot { name: "Red ink".into(), tint, look: Some(look) }),
-                outline: None,
-            }))
+            cd::Object::Shape(Box::new(cd::Shape::new(
+                Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
+                cd::Matrix::IDENTITY,
+                Some(cd::Color::Spot { name: "Red ink".into(), tint, look: Some(look) }),
+                None,
+            )))
         };
         for objects in [vec![shape(0.0, [1.0; 3]), shape(1.0, red)], vec![shape(1.0, red), shape(0.0, [1.0; 3])]] {
-            let layer = cd::Layer { name: "L".into(), kind: cd::LayerKind::Drawing, objects, guides: vec![] };
+            let layer = cd::Layer { name: "L".into(), kind: cd::LayerKind::Drawing, flags: cd::Flags::default(), objects, guides: vec![] };
             let d = cd::Drawing {
                 version: 1300,
                 page_size: None,
@@ -419,14 +473,20 @@ mod tests {
     #[test]
     fn a_spot_color_named_like_a_default_swatch_stays_a_spot_color() {
         let shape = |name: &str| {
-            cd::Object::Shape(Box::new(cd::Shape {
-                geometry: Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
-                matrix: cd::Matrix::IDENTITY,
-                fill: Some(cd::Color::Spot { name: name.into(), tint: 1.0, look: Some([0.0; 3]) }),
-                outline: None,
-            }))
+            cd::Object::Shape(Box::new(cd::Shape::new(
+                Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
+                cd::Matrix::IDENTITY,
+                Some(cd::Color::Spot { name: name.into(), tint: 1.0, look: Some([0.0; 3]) }),
+                None,
+            )))
         };
-        let layer = cd::Layer { name: "L".into(), kind: cd::LayerKind::Drawing, objects: vec![shape("Black"), shape("Black 2")], guides: vec![] };
+        let layer = cd::Layer {
+            name: "L".into(),
+            kind: cd::LayerKind::Drawing,
+            flags: cd::Flags::default(),
+            objects: vec![shape("Black"), shape("Black 2")],
+            guides: vec![],
+        };
         let d = cd::Drawing {
             version: 1300,
             page_size: None,
@@ -461,13 +521,13 @@ mod tests {
     #[test]
     fn master_copies_count_their_path_segments() {
         let segments = (1..=300).map(|i| cd::Segment::Line(cd::Pt { x: f64::from(i), y: 0.0 })).collect();
-        let curve = cd::Object::Shape(Box::new(cd::Shape {
-            geometry: Geometry::Path(cd::Path { subpaths: vec![cd::SubPath { start: cd::Pt { x: 0.0, y: 0.0 }, segments, closed: false }] }),
-            matrix: cd::Matrix::IDENTITY,
-            fill: None,
-            outline: None,
-        }));
-        let master = cd::Layer { name: "M".into(), kind: cd::LayerKind::Drawing, objects: vec![curve], guides: vec![] };
+        let curve = cd::Object::Shape(Box::new(cd::Shape::new(
+            Geometry::Path(cd::Path { subpaths: vec![cd::SubPath { start: cd::Pt { x: 0.0, y: 0.0 }, segments, closed: false }] }),
+            cd::Matrix::IDENTITY,
+            None,
+            None,
+        )));
+        let master = cd::Layer { name: "M".into(), kind: cd::LayerKind::Drawing, flags: cd::Flags::default(), objects: vec![curve], guides: vec![] };
         let d = cd::Drawing {
             version: 1300,
             page_size: None,
@@ -497,13 +557,13 @@ mod tests {
             behind_fill: false,
             scale_with: false,
         };
-        let rect = cd::Object::Shape(Box::new(cd::Shape {
-            geometry: Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
-            matrix: cd::Matrix::IDENTITY,
-            fill: None,
-            outline: Some(outline),
-        }));
-        let master = cd::Layer { name: "M".into(), kind: cd::LayerKind::Drawing, objects: vec![rect], guides: vec![] };
+        let rect = cd::Object::Shape(Box::new(cd::Shape::new(
+            Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
+            cd::Matrix::IDENTITY,
+            None,
+            Some(outline),
+        )));
+        let master = cd::Layer { name: "M".into(), kind: cd::LayerKind::Drawing, flags: cd::Flags::default(), objects: vec![rect], guides: vec![] };
         let d = cd::Drawing {
             version: 1300,
             page_size: None,
@@ -536,7 +596,7 @@ mod tests {
                 behind_fill: false,
                 scale_with,
             };
-            let rect = cd::Shape { geometry: Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] }, matrix, fill: None, outline: Some(outline) };
+            let rect = cd::Shape::new(Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] }, matrix, None, Some(outline));
             let mut b = Builder::new();
             let Some(node) = b.shape(&rect, Affine::IDENTITY, false) else { panic!("{scale_with}: no shape") };
             let [AppearanceItem::Stroke(s)] = node.appearance.items.as_slice() else { panic!("{scale_with}: {:?}", node.appearance.items) };
@@ -544,6 +604,164 @@ mod tests {
             let pattern = s.dash.as_ref().map(|d| d.pattern.clone());
             assert_eq!(pattern, Some(dashes.to_vec()), "{scale_with}");
         }
+    }
+
+    /// A shape's opacity, blend mode and fill rule reach its path; a shape without them is opaque,
+    /// normal and filled even-odd.
+    #[test]
+    fn opacity_blend_and_fill_rule_reach_the_path() {
+        let square = Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] };
+        let plain = cd::Shape::new(square.clone(), cd::Matrix::IDENTITY, Some(cd::Color::Gray(1.0)), None);
+        let seen = cd::Shape { nonzero: true, opacity: 0.25, blend: cd::Blend::Multiply, ..plain.clone() };
+        let mut b = Builder::new();
+        for (s, opacity, blend, nonzero) in [(&plain, 1.0, BlendMode::Normal, false), (&seen, 0.25, BlendMode::Multiply, true)] {
+            let Some(n) = b.shape(s, Affine::IDENTITY, false) else { panic!("no shape") };
+            let NodeKind::Path { rule, .. } = &n.kind else { panic!("{:?}", n.kind) };
+            assert_eq!((n.opacity, n.blend, *rule == FillRule::NonZero), (opacity, blend, nonzero));
+        }
+        let wild = cd::Shape { opacity: f32::NAN, ..plain };
+        assert_eq!(b.shape(&wild, Affine::IDENTITY, false).map(|n| n.opacity), Some(1.0));
+    }
+
+    /// Ruler guides go on the top shown layer, or on a layer of their own when every layer is
+    /// hidden; hidden guidelines go on a hidden layer of their own.
+    #[test]
+    fn ruler_guides_stay_off_hidden_layers() {
+        let square = || cd::Shape::new(Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] }, cd::Matrix::IDENTITY, None, None);
+        let hidden = cd::Flags { hidden: true, locked: false };
+        let layer = |name: &str, flags: cd::Flags| cd::Layer {
+            name: name.into(),
+            kind: cd::LayerKind::Drawing,
+            flags,
+            objects: vec![cd::Object::Shape(Box::new(square()))],
+            guides: vec![],
+        };
+        let guides_of = |layers: Vec<cd::Layer>, hidden: bool| {
+            let d = cd::Drawing {
+                version: 1300,
+                page_size: None,
+                pages: vec![cd::Page { size: None, layers }],
+                master: vec![],
+                guides: vec![cd::Guideline { at: cd::Pt { x: 0.0, y: 0.0 }, angle: 90.0, hidden }],
+                warnings: vec![],
+            };
+            let doc = Builder::new().document(&d);
+            doc.layers
+                .iter()
+                .map(|l| {
+                    let n = l.children().map_or(0, |k| k.iter().filter(|n| matches!(n.kind, NodeKind::RulerGuide { .. })).count());
+                    (l.name.clone().unwrap_or_default(), l.visible, n)
+                })
+                .collect::<Vec<_>>()
+        };
+        // Front to back: "Top" hidden over "Base" shown.
+        let got = guides_of(vec![layer("Top", hidden), layer("Base", cd::Flags::default())], false);
+        assert_eq!(got, [("Base".to_string(), true, 1), ("Top".to_string(), false, 0)]);
+        let got = guides_of(vec![layer("Only", hidden)], false);
+        assert_eq!(got, [("Only".to_string(), false, 0), ("Guides".to_string(), true, 1)]);
+        let got = guides_of(vec![layer("Base", cd::Flags::default())], true);
+        assert_eq!(got, [("Base".to_string(), true, 0), ("Hidden guides".to_string(), false, 1)]);
+        // At the layer limit an angled guideline's path goes on the top shown layer.
+        let mut layers: Vec<cd::Layer> = (0..super::super::MAX_LAYERS).map(|i| layer(&format!("L{i}"), cd::Flags::default())).collect();
+        layers[0].flags = hidden;
+        let d = cd::Drawing {
+            version: 1300,
+            page_size: None,
+            pages: vec![cd::Page { size: None, layers }],
+            master: vec![],
+            guides: vec![cd::Guideline { at: cd::Pt { x: 0.0, y: 0.0 }, angle: 45.0, hidden: false }],
+            warnings: vec![],
+        };
+        let mut b = Builder::new();
+        let doc = b.document(&d);
+        let with_path: Vec<(bool, bool)> = doc
+            .layers
+            .iter()
+            .rev()
+            .take(2)
+            .map(|l| (l.visible, l.children().is_some_and(|k| k.iter().any(|n| matches!(n.kind, NodeKind::Path { guide: true, .. })))))
+            .collect();
+        assert_eq!(with_path, [(false, false), (true, true)]);
+        assert!(!b.notes.contains(&Warning::TooDeep));
+        // With every layer hidden as well, the guides go on the top layer with the limit warning.
+        let mut d = d;
+        for l in &mut d.pages[0].layers {
+            l.flags = hidden;
+        }
+        d.guides.push(cd::Guideline { at: cd::Pt { x: 0.0, y: 0.0 }, angle: 90.0, hidden: false });
+        let mut b = Builder::new();
+        let doc = b.document(&d);
+        assert!(doc.layers.iter().all(|l| !l.visible));
+        assert!(b.notes.contains(&Warning::TooDeep), "{:?}", b.notes);
+    }
+
+    /// A see-through container whose outline is behind its fill knocks the outline out under its
+    /// fill, and its clipping group keeps its own objects combining as usual; an opaque one leaves
+    /// the pair a plain group.
+    #[test]
+    fn a_see_through_container_with_its_outline_behind_knocks_it_out() {
+        let outline = cd::Outline {
+            width: 4.0,
+            color: cd::Color::Gray(1.0),
+            cap: cd::Cap::Butt,
+            join: cd::Join::Miter,
+            dashes: vec![],
+            behind_fill: true,
+            scale_with: false,
+        };
+        let square = || cd::Shape::new(Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] }, cd::Matrix::IDENTITY, Some(cd::Color::Gray(0.5)), None);
+        for (opacity, knockout, inner) in [(1.0, Knockout::Neutral, Knockout::Neutral), (0.5, Knockout::On, Knockout::Off)] {
+            let container = Box::new(cd::Shape { opacity, outline: Some(outline.clone()), ..square() });
+            let clip = cd::Object::Clip { container, objects: vec![cd::Object::Shape(Box::new(square()))] };
+            let nodes = Builder::new().objects(&[clip], Affine::IDENTITY);
+            let [pair] = nodes.as_slice() else { panic!("{nodes:?}") };
+            let NodeKind::Group { children, clip: false } = &pair.kind else { panic!("{:?}", pair.kind) };
+            assert_eq!(pair.knockout, knockout, "{opacity}");
+            let clipping = children.iter().find(|n| matches!(n.kind, NodeKind::Group { clip: true, .. }));
+            assert_eq!(clipping.map(|n| n.knockout), Some(inner), "{opacity}");
+        }
+    }
+
+    /// A hidden or locked shape, group or clipping container gives its node those states. A layer
+    /// is hidden or locked when every drawing layer merged into it is; otherwise only the art of
+    /// the hidden or locked drawing layer is.
+    #[test]
+    fn hidden_and_locked_flags_reach_the_nodes() {
+        let square = || cd::Shape::new(Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] }, cd::Matrix::IDENTITY, Some(cd::Color::Gray(1.0)), None);
+        let hidden = cd::Flags { hidden: true, locked: false };
+        let locked = cd::Flags { hidden: false, locked: true };
+        let objects = vec![
+            cd::Object::Shape(Box::new(cd::Shape { flags: hidden, ..square() })),
+            cd::Object::Group { objects: vec![cd::Object::Shape(Box::new(square()))], flags: locked },
+            cd::Object::Clip { container: Box::new(cd::Shape { flags: hidden, ..square() }), objects: vec![cd::Object::Shape(Box::new(square()))] },
+        ];
+        let layer =
+            |flags: cd::Flags, objects: Vec<cd::Object>| cd::Layer { name: "L".into(), kind: cd::LayerKind::Drawing, flags, objects, guides: vec![] };
+        let drawing = |pages: Vec<Vec<cd::Layer>>| cd::Drawing {
+            version: 1300,
+            page_size: None,
+            pages: pages.into_iter().map(|layers| cd::Page { size: None, layers }).collect(),
+            master: vec![],
+            guides: vec![],
+            warnings: vec![],
+        };
+        let doc = Builder::new().document(&drawing(vec![vec![layer(cd::Flags::default(), objects)]]));
+        let kids = doc.layers[0].children().unwrap();
+        // Bottom to top: the clipping group, the group, the shape.
+        let states: Vec<(bool, bool)> = kids.iter().map(|n| (n.visible, n.locked)).collect();
+        assert_eq!(states, [(false, false), (true, true), (false, false)]);
+        assert!(doc.layers[0].visible && !doc.layers[0].locked);
+        // One name on two pages: hidden on the first only, then on both.
+        let one = || vec![cd::Object::Shape(Box::new(square()))];
+        let doc = Builder::new().document(&drawing(vec![vec![layer(hidden, one())], vec![layer(cd::Flags::default(), one())]]));
+        assert_eq!(doc.layers.len(), 1);
+        assert!(doc.layers[0].visible);
+        let states: Vec<bool> = doc.layers[0].children().unwrap().iter().map(|n| n.visible).collect();
+        assert_eq!(states, [false, true]);
+        let doc = Builder::new().document(&drawing(vec![vec![layer(cd::Flags { hidden: true, locked: true }, one())], vec![layer(hidden, one())]]));
+        assert!(!doc.layers[0].visible && !doc.layers[0].locked);
+        let states: Vec<(bool, bool)> = doc.layers[0].children().unwrap().iter().map(|n| (n.visible, n.locked)).collect();
+        assert_eq!(states, [(true, true), (true, false)]);
     }
 
     /// A corner rounded in the file stays on the same corner of the page, however the rectangle's

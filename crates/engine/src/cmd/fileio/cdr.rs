@@ -1,6 +1,7 @@
 //! `.cdr` drawings of versions 1 to 27 (`.cdr`, and `.cdt` templates): the pages, layers,
 //! guidelines, groups, curves, rectangles, ellipses, arcs and polygons with uniform fills and
-//! outlines that `vectorcraft-cdr` reads, mapped to editable VectorCraft art. Pages become
+//! outlines, their hidden and locked states, fill rules and uniform transparency that
+//! `vectorcraft-cdr` reads, mapped to editable VectorCraft art. Pages become
 //! artboards side by side; layers of the same name on different pages become one layer where the
 //! pages stack them in the same order. What the
 //! reader leaves out is listed in the warnings, one line for each kind ([`note`]).
@@ -49,6 +50,8 @@ fn note(w: Warning) -> &'static str {
 const FALLBACK_PAGE: (f64, f64) = (612.0, 792.0);
 /// The layer that holds guidelines at angles other than horizontal and vertical, as guide paths.
 const GUIDES_LAYER: &str = "Guides";
+/// The hidden layer that holds hidden guidelines.
+const HIDDEN_GUIDES_LAYER: &str = "Hidden guides";
 /// The most pages read, as artboards: the most a new document may have.
 const MAX_PAGES: usize = crate::cmd::newdoc::MAX_ARTBOARDS as usize;
 /// The longest page side, in points: the longest artboard side a new document may have.
@@ -159,7 +162,7 @@ impl shapes::Builder {
         self.doc = doc;
         self.name_spots();
         // Bottom to top: the master page's layers, then the pages' in the order first seen.
-        let mut layers: Vec<(String, Vec<Arc<Node>>)> = Vec::new();
+        let mut layers: Vec<LayerOut> = Vec::new();
         // A layer is known by its name and how many layers of that name the page has below it, so
         // two layers of one name on a page stay two layers. Each key keeps every layer made for
         // it, bottom to top.
@@ -188,8 +191,8 @@ impl shapes::Builder {
                 // takes the art.
                 match by_name.get(&key).and_then(|is| is.iter().copied().find(|&i| below.is_none_or(|b| i > b))) {
                     Some(i) => {
-                        if let Some((_, kids)) = layers.get_mut(i) {
-                            kids.extend(art);
+                        if let Some(out) = layers.get_mut(i) {
+                            out.add(art, l.flags);
                         }
                         below = Some(i);
                     }
@@ -225,7 +228,9 @@ impl shapes::Builder {
                         }
                         let is = by_name.entry(key).or_default();
                         is.insert(is.partition_point(|&i| i < at), at);
-                        layers.insert(at, (l.name.clone(), art));
+                        let mut out = LayerOut::new(l.name.clone());
+                        out.add(art, l.flags);
+                        layers.insert(at, out);
                         below = Some(at);
                     }
                 }
@@ -237,25 +242,63 @@ impl shapes::Builder {
         }
         if !self.guide_paths.is_empty() {
             let paths = std::mem::take(&mut self.guide_paths);
-            // At the layer limit the guide paths go on the top layer instead of a layer of their own.
+            // At the layer limit the guide paths go on the top shown layer instead of a layer of
+            // their own; when every layer is hidden they go on the top one, with the limit warning.
             let full = layers.len() >= MAX_LAYERS;
-            match layers.last_mut() {
-                Some((_, kids)) if full => kids.extend(paths),
-                _ => layers.push((GUIDES_LAYER.to_string(), paths)),
+            let top = layers.iter().rposition(|l| !l.hidden()).unwrap_or(layers.len().saturating_sub(1));
+            match layers.get_mut(top) {
+                Some(out) if full => {
+                    if out.hidden() {
+                        self.notes.push(Warning::TooDeep);
+                    }
+                    out.kids.extend(paths.into_iter().map(|p| (p, cd::Flags::default())));
+                }
+                _ => {
+                    let mut out = LayerOut::new(GUIDES_LAYER.to_string());
+                    out.kids.extend(paths.into_iter().map(|p| (p, cd::Flags::default())));
+                    layers.push(out);
+                }
+            }
+        }
+        // Hidden guidelines go on a hidden layer of their own on top; past the layer limit they
+        // are left out.
+        if !self.hidden_guides.is_empty() || !self.hidden_paths.is_empty() {
+            if layers.len() >= MAX_LAYERS {
+                self.notes.push(Warning::TooDeep);
+            } else {
+                let mut art = std::mem::take(&mut self.hidden_paths);
+                for g in std::mem::take(&mut self.hidden_guides) {
+                    let kind = NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard };
+                    art.push(Arc::new(Node::new(self.doc.alloc_id(), kind)));
+                }
+                let mut out = LayerOut::new(HIDDEN_GUIDES_LAYER.to_string());
+                out.add(art, cd::Flags { hidden: true, locked: false });
+                layers.push(out);
             }
         }
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
-        doc.layers = layers.into_iter().enumerate().map(|(i, (name, kids))| layer(&mut doc, &name, i, kids)).collect();
+        doc.layers = layers.into_iter().enumerate().map(|(i, out)| out.finish(&mut doc, i)).collect();
         if doc.layers.is_empty() {
-            let l = layer(&mut doc, "Layer 1", 0, Vec::new());
+            let l = layer(&mut doc, "Layer 1", 0, Vec::new(), cd::Flags::default());
             doc.layers.push(l);
         }
-        // Ruler guides go at the top of the top layer, in the order they were read.
+        // Ruler guides go at the top of the top shown layer, in the order they were read. When
+        // every layer is hidden they go on a layer of their own on top; past the layer limit they
+        // go on the hidden top layer, with the limit warning.
         let guides: Vec<Arc<Node>> = std::mem::take(&mut self.guide_list)
             .into_iter()
             .map(|g| Arc::new(Node::new(doc.alloc_id(), NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard })))
             .collect();
-        if let Some(kids) = doc.layers.last_mut().and_then(|l| Arc::make_mut(l).children_mut()) {
+        if !guides.is_empty() && !doc.layers.iter().any(|l| l.visible) && doc.layers.len() < MAX_LAYERS {
+            let i = doc.layers.len();
+            let l = layer(&mut doc, GUIDES_LAYER, i, Vec::new(), cd::Flags::default());
+            doc.layers.push(l);
+        }
+        let top = doc.layers.iter().rposition(|l| l.visible).unwrap_or(doc.layers.len().saturating_sub(1));
+        if !guides.is_empty() && doc.layers.get(top).is_some_and(|l| !l.visible) {
+            self.notes.push(Warning::TooDeep);
+        }
+        if let Some(kids) = doc.layers.get_mut(top).and_then(|l| Arc::make_mut(l).children_mut()) {
             kids.extend(guides);
         }
         self.finish_swatches(&mut doc);
@@ -267,7 +310,7 @@ impl shapes::Builder {
 
     /// The master page's layers: the desktop's objects once, on the first page's space; other
     /// layers' objects on every page, as many copies as [`MAX_MASTER_COPIES`] allows.
-    fn master_layers(&mut self, d: &cd::Drawing, placed: &[Placed], layers: &mut Vec<(String, Vec<Arc<Node>>)>) {
+    fn master_layers(&mut self, d: &cd::Drawing, placed: &[Placed], layers: &mut Vec<LayerOut>) {
         for l in d.master.iter().rev() {
             if layers.len() >= MAX_LAYERS {
                 self.notes.push(Warning::TooDeep);
@@ -285,7 +328,9 @@ impl shapes::Builder {
                 art.extend(self.objects(&l.objects, p.to_doc));
             }
             let name = if l.name.is_empty() { "Master".to_string() } else { l.name.clone() };
-            layers.push((name, art));
+            let mut out = LayerOut::new(name);
+            out.add(art, l.flags);
+            layers.push(out);
         }
     }
 
@@ -293,7 +338,7 @@ impl shapes::Builder {
     /// artboard, others as guide paths.
     fn guides(&mut self, guides: &[cd::Guideline], p: &Placed, artboard: Option<u32>) {
         for g in guides {
-            if self.guide_list.len() + self.guide_paths.len() >= MAX_GUIDES {
+            if self.guide_list.len() + self.guide_paths.len() + self.hidden_guides.len() + self.hidden_paths.len() >= MAX_GUIDES {
                 self.notes.push(Warning::TooDeep);
                 return;
             }
@@ -303,12 +348,13 @@ impl shapes::Builder {
                 self.notes.push(Warning::TooDeep);
                 continue;
             }
+            let list = if g.hidden { &mut self.hidden_guides } else { &mut self.guide_list };
             if turn.abs() < 1e-9 {
-                self.guide_list.push(Guide { artboard, ..Guide::new(false, at.y) });
+                list.push(Guide { artboard, ..Guide::new(false, at.y) });
             } else if (turn - 90.0).abs() < 1e-9 {
-                self.guide_list.push(Guide { artboard, ..Guide::new(true, at.x) });
+                list.push(Guide { artboard, ..Guide::new(true, at.x) });
             } else {
-                self.angled_guide(at, g.angle, p.rect);
+                self.angled_guide(at, g.angle, p.rect, g.hidden);
             }
         }
     }
@@ -322,7 +368,7 @@ fn copy_cost(objects: &[cd::Object]) -> usize {
     while let Some(o) = stack.pop() {
         n = n.saturating_add(1);
         match o {
-            cd::Object::Group(kids) => stack.extend(kids),
+            cd::Object::Group { objects: kids, .. } => stack.extend(kids),
             cd::Object::Shape(s) => n = n.saturating_add(shape_cost(s)),
             cd::Object::Clip { container, objects } => {
                 // A container whose outline is behind its fill is built twice, as that outline
@@ -354,10 +400,52 @@ fn path_cost(s: &cd::Shape) -> usize {
     }
 }
 
-/// A layer of the document named `name` holding `kids` (bottom to top).
-fn layer(doc: &mut Document, name: &str, i: usize, kids: Vec<Arc<Node>>) -> Arc<Node> {
+/// A document layer being made from the drawing's layers of one name: its art bottom to top, each
+/// part with the flags of the layer it came from, and those flags for every layer merged into it.
+struct LayerOut {
+    name: String,
+    kids: Vec<(Arc<Node>, cd::Flags)>,
+    merged: Vec<cd::Flags>,
+}
+
+impl LayerOut {
+    fn new(name: String) -> Self {
+        LayerOut { name, kids: Vec::new(), merged: Vec::new() }
+    }
+
+    /// Whether the layer node will be hidden: every drawing layer merged into it is.
+    fn hidden(&self) -> bool {
+        !self.merged.is_empty() && self.merged.iter().all(|f| f.hidden)
+    }
+
+    /// Adds the art of a drawing layer with flags `flags`.
+    fn add(&mut self, art: Vec<Arc<Node>>, flags: cd::Flags) {
+        self.kids.extend(art.into_iter().map(|n| (n, flags)));
+        self.merged.push(flags);
+    }
+
+    /// The layer node, as the `i`th layer from the bottom. It is hidden or locked when every
+    /// drawing layer merged into it is; otherwise the art of a hidden or locked drawing layer is
+    /// hidden or locked object by object.
+    fn finish(self, doc: &mut Document, i: usize) -> Arc<Node> {
+        let all = |f: fn(&cd::Flags) -> bool| !self.merged.is_empty() && self.merged.iter().all(f);
+        let own = cd::Flags { hidden: all(|f| f.hidden), locked: all(|f| f.locked) };
+        let kids = self
+            .kids
+            .into_iter()
+            .map(|(n, f)| shapes::with_flags(n, cd::Flags { hidden: f.hidden && !own.hidden, locked: f.locked && !own.locked }))
+            .collect();
+        layer(doc, &self.name, i, kids, own)
+    }
+}
+
+/// A layer of the document named `name` holding `kids` (bottom to top), hidden or locked as
+/// `flags` say.
+fn layer(doc: &mut Document, name: &str, i: usize, kids: Vec<Arc<Node>>, flags: cd::Flags) -> Arc<Node> {
     let name = if name.is_empty() { format!("Layer {}", i + 1) } else { name.to_string() };
     let mut n = Node::layer(doc.alloc_id(), &name, LayerColor::Preset((i % 9) as u8));
+    n.visible = !flags.hidden;
+    n.locked = flags.locked;
     if let Some(c) = n.children_mut() {
         *c = kids;
     }

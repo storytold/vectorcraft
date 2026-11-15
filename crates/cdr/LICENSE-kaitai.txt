@@ -5,6 +5,11 @@ specification `coreldraw_cdr.ksy`
 license below. No part of that specification is copied into this crate;
 `PROVENANCE.md` cites it by line.
 
+Some layouts are also taken from the fork of that specification by Zach Wolfe
+(https://github.com/filestar/coreldraw_cdr.ksy, branch new_stuff, commit
+2189b68f07e0cafe9afec3dcf699ebc0342144c7), which is published under the same
+license and copyright notice.
+
 MIT License
 
 Copyright (c) 2020 Kaitai team

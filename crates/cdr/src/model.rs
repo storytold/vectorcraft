@@ -112,18 +112,64 @@ pub struct Outline {
     pub scale_with: bool,
 }
 
+/// Whether a layer, group or shape is hidden or locked.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Flags {
+    pub hidden: bool,
+    pub locked: bool,
+}
+
+/// How a shape's colors combine with the art below it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Blend {
+    #[default]
+    Normal,
+    Multiply,
+    Screen,
+    Overlay,
+    SoftLight,
+    HardLight,
+    ColorDodge,
+    ColorBurn,
+    Darken,
+    Lighten,
+    Difference,
+    Exclusion,
+    Hue,
+    Saturation,
+    Color,
+    Luminosity,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Shape {
     pub geometry: Geometry,
     pub matrix: Matrix,
     pub fill: Option<Color>,
     pub outline: Option<Outline>,
+    /// The fill covers every area its subpaths wind around (nonzero); otherwise subpaths that
+    /// overlap leave holes (even-odd).
+    pub nonzero: bool,
+    /// 1 opaque, 0 clear.
+    pub opacity: f32,
+    pub blend: Blend,
+    pub flags: Flags,
+}
+
+impl Shape {
+    /// An opaque, shown shape filled even-odd.
+    pub fn new(geometry: Geometry, matrix: Matrix, fill: Option<Color>, outline: Option<Outline>) -> Shape {
+        Shape { geometry, matrix, fill, outline, nonzero: false, opacity: 1.0, blend: Blend::Normal, flags: Flags::default() }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Object {
     Shape(Box<Shape>),
-    Group(Vec<Object>),
+    Group {
+        objects: Vec<Object>,
+        flags: Flags,
+    },
     /// A clipping container and the objects it clips: `objects` (front to back) show only
     /// inside the container's shape, with its fill behind them and its outline over them.
     Clip {
@@ -137,6 +183,8 @@ pub enum Object {
 pub struct Guideline {
     pub at: Pt,
     pub angle: f64,
+    /// The guideline, a group around it or its layer is hidden.
+    pub hidden: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,6 +200,7 @@ pub enum LayerKind {
 pub struct Layer {
     pub name: String,
     pub kind: LayerKind,
+    pub flags: Flags,
     /// Front to back, as the file lists them.
     pub objects: Vec<Object>,
     pub guides: Vec<Guideline>,
@@ -180,7 +229,8 @@ pub enum Warning {
     Arrowheads,
     /// Envelopes, which are not applied: the shapes under them keep their outlines.
     Envelopes,
-    /// Lenses and object transparency, which are not applied: the objects show opaque.
+    /// Lenses, and object transparency that isn't read, which are not applied: the objects show
+    /// opaque.
     Lenses,
     /// Content nested deeper, or past the counts, that a read takes.
     TooDeep,

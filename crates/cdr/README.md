@@ -13,6 +13,7 @@ with each object's transform. It does not write `.cdr` files.
 | ZIP packages: `content/riffData.cdr` (versions 14 and 15), `content/root.dat` with the data streams `content/dataFileList.dat` names (16 on) | the RIFF chunk tree; a data stream is inflated only when a chunk the reader reads, or a list it splits, points into it |
 | Pages, the page size in `mcfg` or a page's own size | pages, laid out by the engine as artboards side by side |
 | Layers (drawing, desktop, guides and grid layers), the master page's among them | layers by name and kind |
+| The hidden and locked flags of layers, groups and objects | flags |
 | Guidelines (object type 0x16, and the version 7 `guid` chunk) | guidelines at their point and angle |
 | Groups (`LIST grp `) | groups |
 | Clipping containers and the groups of `LIST clpt` they clip | the container with the objects it clips |
@@ -21,14 +22,21 @@ with each object's transform. It does not write `.cdr` files.
 | Ellipses, arcs and pies | ellipses, and paths for arcs and pies |
 | Polygons and stars (a base side copied for each side) | paths |
 | Uniform fills: CMYK, CMY, RGB, gray, registration, library colors | colors, spot colors with their tints |
-| Outlines: width, caps, joins, dashes, the no-outline and behind-the-fill flags | outlines |
+| The fill's winding flag | the nonzero fill rule, or even-odd |
+| Outlines: width, caps, joins, dashes, the no-outline and behind-the-fill flags, and from version 13 a library color named in their property list | outlines |
+| Uniform transparency (version 13 on) and its merge mode | the shape's opacity and blend mode |
 | Styles (`LIST stlt`, versions 7 to 15) that objects name | the fill and outline of an object that has none of its own |
 
 Text, bitmaps, linked groups (blends, contours, brush strokes), B-spline curves, fountain,
-pattern, texture and PostScript fills, outline arrowheads, lenses and object transparency are not
+pattern, texture and PostScript fills, outline arrowheads, lenses, transparency other than uniform
+transparency of version 13 and later, and merge modes without a VectorCraft blend mode are not
 read; the drawing's
 `warnings` name each kind it held. Drawings of versions after 27 are refused, and so are packages
 that are encrypted, ZIP64 archives or split across files.
+
+VectorCraft reads a uniform transparency's stored value as the transparency in percent (0 opaque,
+100 clear), and a winding flag other than 0 as the nonzero fill rule. These are VectorCraft's own
+readings: no public source states either direction.
 
 ## Versions 1 to 4
 

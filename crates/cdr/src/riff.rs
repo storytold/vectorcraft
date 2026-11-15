@@ -203,9 +203,11 @@ impl<'a> Index<'a> {
     /// The version: the `vrsn` chunk's when it names one from 3 to 27, else the form type's (R1,
     /// R2). A template's form type names no version, so its `vrsn` chunk decides whatever it names
     /// (R28). Letters count differently from the version 24 update on (R1), so when both name a
-    /// version after 27 the `vrsn` chunk's is the one refused.
+    /// version after 27 the `vrsn` chunk's is the one refused. The `cdr8` form type alone makes a
+    /// file the 8.01 variant, whatever its `vrsn` chunk names (R1).
     pub(crate) fn version(&self) -> u16 {
         match self.vrsn.flatten() {
+            _ if self.form_version == 801 => 801,
             Some(v) if (layout::OLDEST_RIFF..=layout::NEWEST).contains(&v) => v,
             Some(v) if self.form_version == 0 => v,
             Some(v) if v > layout::NEWEST && self.form_version > layout::NEWEST => v,
