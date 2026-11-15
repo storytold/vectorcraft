@@ -3281,16 +3281,24 @@ horizontal guide between its top and bottom. Released anywhere else, it makes no
 These families are in the live catalog (`command_list` / `vectorcraft://commands`); the prompt `trace-and-style`
 already walks Image Trace. Short agent entry points:
 
-- Symbols: `symbol.list` (each row includes `registration` 0..8, `exportType`: `movieClip`|`graphic` and `type`:
-  `static`|`dynamic`),
-  `symbol.new {name?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, ids?}`,
-  `symbol.options {name?, newName?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?}` (`nineSlice` bool turns
+- Symbols: `symbol.list` (each row includes `registration` 0..8, `exportType`: `movieClip`|`graphic`, `type`:
+  `static`|`dynamic` and `alignToPixelGrid`),
+  `symbol.new {name?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, alignToPixelGrid?, ids?}`,
+  `symbol.options {name?, newName?, registration?, exportType?, nineSlice?, nineSliceGuides?, type?, alignToPixelGrid?}` (`nineSlice` bool turns
   9-slice guides on or off; `nineSliceGuides` is `[left, top, right, bottom]`, fractions of the symbol size in from
   each edge, each -16..16 with `left + right < 1` and `top + bottom < 1`, a quarter each when none are given; below 0
   or above 1 puts a guide outside the art, and the art then scales by the cells it falls in; rows of `symbol.list` carry `nineSlice`: the guides or `null`; a scaled instance of
   a symbol with guides keeps its corners at their size, and `symbol.breakLink` gives its art as it draws; dragging a
   guide on the canvas in symbol editing mode sends `nineSliceGuides` in one undo step; `type` is
-  Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options dialog),
+  Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options dialog;
+  `alignToPixelGrid` is Symbol Options › Align to Pixel Grid, off by default: when it is on, the horizontal and
+  vertical straight segments of the paths in the symbol's art snap to whole points (half points for an odd centered
+  stroke) as the art is drawn at the symbol's natural size, its stroke weights become whole points, and each instance
+  placed at that size, reflected across one axis or not, moves to whole points and goes back to them after every move;
+  VectorCraft leaves a scaled, rotated (a half turn included) or sheared instance, and an instance in another symbol's
+  art, where it is, snaps the art again after it is edited, and does not count
+  instances in `select.object.notAlignedToPixelGrid`; `alignToPixelGrid` alone with the value the symbol already has
+  adds no undo step),
   `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}` (the art keeps the instance's opacity mask and its bounding box, square after
   `object.resetBoundingBox`; a hidden or locked instance's
   art stays hidden or locked and is not selected), `symbol.replace`,
