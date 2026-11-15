@@ -827,7 +827,9 @@ impl<'a> Walk<'a> {
         let mut paint = first.clip_paint();
         // A stroke at 0% opacity isn't drawn, so the clipping path is drawn in its fill.
         let type_stroke = |s: &Node| matches!(&s.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.has_stroke()));
-        paint.stroke = paint.stroke.filter(|s| top_stroke(s).is_some() || type_stroke(s));
+        // The strokes of a clipping path whose stroke effects were applied are a group of pieces,
+        // which effects around it may have put in groups of their own.
+        paint.stroke = paint.stroke.filter(|s| top_stroke(s).is_some() || type_stroke(s) || strokes_in_pieces(s));
         if paint.stroke.is_none()
             && let Some(fill) = &paint.fill
         {
@@ -852,9 +854,10 @@ impl<'a> Walk<'a> {
             None => {}
         }
         // Drawn whole where its stroke paints: a fill closes its outline, and type's characters
-        // without a stroke are drawn too.
-        if paint.stroke.is_some() {
-            self.node(first, false);
+        // without a stroke are drawn too. Pieces of a clipping path whose fill and stroke effects
+        // were applied are drawn in its stroke pieces alone.
+        if let Some(stroke) = &paint.stroke {
+            self.node(if first.extras().clip_pieces { stroke } else { first }, false);
         }
     }
 
@@ -1144,6 +1147,12 @@ fn top_stroke(n: &Node) -> Option<&StrokeLayer> {
         AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0 && s.opacity > 0.0 => Some(s),
         _ => None,
     })
+}
+
+/// Whether a member of `n`, at any depth of its groups, has a stroke that paints ([`top_stroke`]),
+/// with it and the groups around it shown and not fully transparent.
+fn strokes_in_pieces(n: &Node) -> bool {
+    n.children().is_some_and(|ch| ch.iter().filter(|c| c.visible && c.opacity > 0.0).any(|c| top_stroke(c).is_some() || strokes_in_pieces(c)))
 }
 
 /// The paint of the topmost fill of `n` that paints: visible, with a paint and some opacity.
