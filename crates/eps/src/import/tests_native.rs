@@ -4663,6 +4663,9 @@ fn an_eps_page_of_its_art_stays_its_page_through_the_layers() {
     assert_eq!(boards.len(), 1);
     assert!((boards[0].width() - 4.0).abs() < 1e-6 && (boards[0].height() - 4.0).abs() < 1e-6, "{boards:?}");
     assert!(boards[0].inflate(1e-6, 1e-6).contains_rect(art), "{boards:?} round {art:?}");
+    // Its private data is an EPS's editing copy, whatever the file is named.
+    let named_ai = crate::import::import_ai(&file, true, false, crate::NameEncoding::default()).unwrap();
+    assert_eq!(named_ai.document.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), boards, "{:?}", named_ai.warnings);
 }
 
 #[test]

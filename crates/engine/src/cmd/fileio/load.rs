@@ -393,8 +393,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 return Err(err(format!("can't open `{}`: {}", file_name(name), crate::cmd::place::dcs::LINK_ONLY)));
             }
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
+            // A `.ai` keeps the artboard its header gives; an EPS comes in on its page.
+            let import = if matches!(format.id, "ai" | "ait") { vectorcraft_eps::import_ai } else { vectorcraft_eps::import_names };
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
+                let r = import(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
                     .map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?
