@@ -164,6 +164,7 @@
 	Align to Artboard	Alinhar à Mesa de Trabalho
 	Align to Glyph Bounds	Alinhar aos Limites do Glifo
 	Align to Key Object	Alinhar ao Objeto-Chave
+	Align to Key Anchor	Alinhar ao Ponto de Ancoragem-Chave
 	Align to Page	Alinhar à Página
 	Align to Path	Alinhar ao Caminho
 	Align to Selection	Alinhar à Seleção
@@ -1076,6 +1077,7 @@ antiAlias	Sharp	Nítido
 	Rotate (Classic)…	Girar (Clássico)…
 	Surface	Superfície
 	Wireframe	Aramado
+	Render Settings	Configurações de renderização
 	No Shading	Sem Sombreamento
 	Plastic	Plástico
 	Highlight Intensity	Intensidade do Realce
@@ -1726,6 +1728,7 @@ antiAlias	Sharp	Nítido
 	Merge Layers	Mesclar Camadas
 	Merge Swatches	Mesclar Amostras
 	Merge colors into one row	Mesclar cores em uma linha
+	New Row	Nova linha
 	Mesh Tool	Ferramenta Malha
 	Message:	Mensagem:
 	Metadata:	Metadados:
@@ -2235,6 +2238,8 @@ antiAlias	Sharp	Nítido
 	Proof Setup	Configuração de Prova
 	Properties	Propriedades
 	Proportional Metrics	Métrica Proporcional
+	H or V Style	Estilo Horizontal ou Vertical
+	Roman Italics	Itálico Romano
 	Insert Aki Left	Inserir Aki à Esquerda
 	Insert Aki Right	Inserir Aki à Direita
 	Tsume	Tsume
@@ -2890,6 +2895,7 @@ digits	Malayalam	Malaiala
 	Sixth Space	Espaço de Sexto
 	Size	Tamanho
 	Size Tile to Art	Dimensionar Bloco para a Arte
+	Move Tile with Art	Mover Bloco com a Arte
 	Size/Leading	Tamanho/Entrelinhamento
 	Size:	Tamanho:
 	Size: {size}  Tracking: {tracking}	Tamanho: {size}  Rastreamento: {tracking}
@@ -3500,6 +3506,11 @@ imageTrace	Outline	Contorno
 	NTSC Colors	Cores NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Política RGB:
+	CMYK Policy:	Política CMYK:
+	Preserve Embedded Profiles	Preservar perfis incorporados
+	Convert to Working Space	Converter para espaço de trabalho
+	Preserve Numbers	Preservar números
 	Texture	Textura
 	Craquelure…	Craquelê…
 	Grain…	Granulação…
@@ -3611,6 +3622,7 @@ font-technology	Variable	Variáveis
 	Graphics	Gráficos
 	Highlight Rows	Destacar linhas
 	Highlight Variable	Destacar variável
+	Sort Variables	Ordenar variáveis
 	Palette:	Paleta:
 	Limited	Limitada
 	Full Tone	Tom completo
@@ -4666,6 +4678,7 @@ axis	Both	Ambos
 @msg	automation filesystem access is not granted: write authority is absent: {path}	o acesso da automação ao sistema de arquivos não foi concedido: falta autorização de gravação: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	caminho da automação rejeitado: fora da raiz de leitura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	caminho da automação rejeitado: fora das raízes de leitura {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	um arquivo JavaScript vinculado está fora das raízes de leitura
 @msg	automation path rejected: outside the write root {root}: {path}	caminho da automação rejeitado: fora da raiz de gravação {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	caminho da automação rejeitado: fora das raízes de gravação {roots}: {path}
 @msg	automation path rejected: path is empty	caminho da automação rejeitado: o caminho está vazio
@@ -4799,6 +4812,9 @@ axis	Both	Ambos
 	Softness	Suavidade
 	Ambient Light	Luz ambiente
 	Light behind the object	Luz atrás do objeto
+	Move Light to Back	Mover luz para trás
+	Move Light to Front	Mover luz para a frente
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Arraste uma luz para movê-la. As teclas de seta movem a luz em foco; Shift a move de 15° em 15°.
 	Shadows	Sombras
 	Distance from Object	Distância do objeto
 	Shadow Bounds	Limites da sombra
@@ -4962,6 +4978,40 @@ axis	Both	Ambos
 	Gradient (. or Shift+.)	Gradiente (. ou Shift+.)
 	Graph Data	Dados do Gráfico
 	Graph Type	Tipo de Gráfico
+	Graph Options	Opções do Gráfico
+	Left Axis	Eixo Esquerdo
+	Right Axis	Eixo Direito
+	Category Axis	Eixo de Categorias
+	Separate Scales	Escalas Separadas
+	Add Drop Shadow	Adicionar Sombra Projetada
+	Add Legend Across Top	Adicionar Legenda na Parte Superior
+	First Row in Front	Primeira Linha na Frente
+	First Column in Front	Primeira Coluna na Frente
+	Legend	Legenda
+	Column Width	Largura da Coluna
+	Bar Width	Largura da Barra
+	Cluster Width	Largura do Grupo
+	Mark Data Points	Marcar Pontos de Dados
+	Connect Data Points	Conectar Pontos de Dados
+	Edge-to-Edge Lines	Linhas de Borda a Borda
+	Draw Filled Lines	Desenhar Linhas Preenchidas
+	Tick Values	Valores das Marcas
+	Override Calculated Values	Substituir Valores Calculados
+	Divisions	Divisões
+	Tick Marks	Marcas de Escala
+	Tick Marks per Division	Marcas por Divisão
+	Draw Tick Marks Between Labels	Desenhar Marcas entre Rótulos
+	Add Labels	Adicionar Rótulos
+	Maximum must be more than Minimum.	O máximo deve ser maior que o mínimo.
+	Column Graph	Gráfico de Colunas
+	Stacked Column Graph	Gráfico de Colunas Empilhadas
+	Bar Graph	Gráfico de Barras
+	Stacked Bar Graph	Gráfico de Barras Empilhadas
+	Line Graph	Gráfico de Linhas
+	Area Graph	Gráfico de Áreas
+	Scatter Graph	Gráfico de Dispersão
+	Pie Graph	Gráfico de Pizza
+	Radar Graph	Gráfico de Radar
 	New Design	Novo Design
 	Delete Design	Excluir Design
 	Paste Design	Colar Design
@@ -5235,6 +5285,8 @@ axis	Both	Ambos
 	Summary	Resumo
 	Superscript	Sobrescrito
 	Swap the selected object for the file, keeping its place and transform	Troca o objeto selecionado pelo arquivo, mantendo sua posição e transformação
+	Show Import Options	Mostrar Opções de Importação
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pergunta as opções de importação de cada arquivo PDF, DXF ou de texto antes de colocá-lo; desligado: usa as últimas opções escolhidas
 	Swatch Libraries Menu	Menu de Bibliotecas de Amostras
 	Create New Library…	Criar Nova Biblioteca…
 	Rename Library…	Renomear Biblioteca…
@@ -5260,11 +5312,55 @@ axis	Both	Ambos
 	Composite Fonts	Fontes compostas
 	Export Composite Fonts	Exportar fontes compostas
 	Import Composite Fonts	Importar fontes compostas
+@msg	each font must be {name, parts}	cada fonte deve ser {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	chave desconhecida `{k}`; uma fonte aceita name e parts
+@msg	each font needs a name	cada fonte precisa de um nome
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` não pode nomear uma fonte composta (de 1 a {COMPOSITE_NAME_MAX} caracteres, sem caracteres de controle)
+@msg	`{name}`: parts must be an object	`{name}`: parts deve ser um objeto
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: classe desconhecida `{k}`; as classes são kanji, kana, punctuation, symbols, roman e numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} deve ser um objeto
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: chave desconhecida `{k}` em {_1}
+@msg	`{name}`: give the kanji part	`{name}`: informe a parte kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	um documento contém no máximo {COMPOSITE_FONTS_MAX} fontes compostas
+@msg	two composite fonts are named `{_1}`	duas fontes compostas se chamam `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` é o nome de uma fonte instalada
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, uma fonte composta
+@msg	give fonts: [{name, parts}…]	informe fonts: [{name, parts}…]
+@msg	path is empty	path está vazio
+@msg	fonts must be a list of composite fonts	fonts deve ser uma lista de fontes compostas
+@msg	names must be strings	names deve conter strings
+@msg	no composite font named `{n}`	nenhuma fonte composta chamada `{n}`
+@msg	names must be a list of names	names deve ser uma lista de nomes
+@msg	no composite fonts to export	nenhuma fonte composta para exportar
+@msg	not a composite fonts file: {e}	não é um arquivo de fontes compostas: {e}
+@msg	not a composite fonts file: no compositeFonts list	não é um arquivo de fontes compostas: não há lista compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	o arquivo contém mais de {COMPOSITE_FONTS_MAX} fontes compostas
+@msg	the file is larger than 4 MB	o arquivo tem mais de 4 MB
+@msg	dataBase64 is not base64	dataBase64 não é base64
+@msg	give one of path, data or dataBase64	informe path, data ou dataBase64
+@msg	the file holds no composite fonts	o arquivo não contém fontes compostas
+@msg	the file holds two composite fonts named `{_1}`	o arquivo contém duas fontes compostas chamadas `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` não pode nomear uma fonte composta
+@msg	{k}: give a font	{k}: informe uma fonte
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: informe uma fonte
+@msg	{k}: size must be {_1} to {_2}%	{k}: size deve estar entre {_1} e {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size deve estar entre {_1} e {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline deve estar entre {_1} e {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline deve estar entre {_1} e {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: a escala deve estar entre {_1} e {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: a escala deve estar entre {_1} e {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: só kana, roman e numerals podem ser escalados
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: só kana, roman e numerals podem ser escalados
+@msg	{k}: only kana can be scaled at the center	{k}: só kana pode ser escalado a partir do centro
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: só kana pode ser escalado a partir do centro
+@msg	no composite font	nenhuma fonte composta
 	Delete Font	Excluir fonte
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Números
 	Scale at Center	Dimensionar a partir do centro
+	Delete Set	Excluir conjunto
+	Direct Entry	Entrada direta
 	Up/Down:	Para Cima/Para Baixo:
 	Left/Right:	Esquerda/Direita:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko Para Cima/Para Baixo
@@ -5315,6 +5411,9 @@ axis	Both	Ambos
 	Windows	Windows
 	Working CMYK (don't tag)	CMYK de Trabalho (não marcar)
 	Working RGB (don't tag)	RGB de Trabalho (não marcar)
+	Don't Color Manage This Document	Não gerenciar as cores deste documento
+	Working RGB: {name}	RGB de Trabalho: {name}
+	Working CMYK: {name}	CMYK de Trabalho: {name}
 	Workspace {i}	Espaço de Trabalho {i}
 	Yellow	Amarelo
 	[Normal Character Style]	[Estilo de Caractere Normal]
@@ -5446,6 +5545,7 @@ axis	Both	Ambos
 @msg	every numbered name for {name} is taken in the document's folder	todos os nomes numerados para {name} já existem na pasta do documento
 @msg	No linked files to look for	Nenhum arquivo vinculado para procurar
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	O link está dentro de um símbolo, projeto de gráfico, padrão ou máscara de opacidade e não tem lugar na tela
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	a arte de um projeto de gráfico em uma série do gráfico é desenhada de novo a partir do projeto: edite o projeto para alterá-la
 	De-Interlace	Desentrelaçar
 	Eliminate	Eliminar
 	Create New Fields by	Criar Novos Campos por
@@ -5965,6 +6065,7 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	um efeito 3D no preenchimento ou traçado de um grupo não desenha nada para exportar
 @msg	The 3D object is too complex to export	O objeto 3D é complexo demais para ser exportado
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	o objeto não tem efeito 3D (Extrusão e Bisel, Revolver, Inflar ou Girar)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve ser um objeto que contenha apenas `mode`, com o valor shaded ou wireframe
 @msg	its 3D effect builds no solid	seu efeito 3D não constrói nenhum sólido
 @msg	bevel must be none or one of {_1}	bevel deve ser none ou um de {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} não pode construir sólidos a partir desta arte: suas instâncias de símbolo, mesclagens e grupos de recorte contêm objetos demais
@@ -6416,6 +6517,7 @@ axis	Y Axis	Eixo Y
 @msg	stops must be in order of `offset`	as paradas devem estar em ordem de `offset`
 @msg	the document has no pattern {pattern}	o documento não tem o padrão {pattern}
 @msg	the document has no swatch {n}	o documento não tem a amostra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requer uma parada vinculada a uma amostra de cor spot
 @msg	the output	a saída
 @msg	the path has no anchor points	o caminho não tem pontos de ancoragem
 @msg	too many anchor points (limit {MAX_ANCHORS})	pontos de ancoragem demais (limite {MAX_ANCHORS})
@@ -6602,6 +6704,8 @@ axis	Y Axis	Eixo Y
 	Create New Set	Criar Novo Conjunto
 	Stop Global Edit	Parar Edição Global
 	Global Edit Options	Opções de Edição Global
+	Select Similar Objects	Selecionar Objetos Semelhantes
+	Select Similar Options	Opções de Seleção de Semelhantes
 	Leave Out of Global Edit	Deixar Fora da Edição Global
 	Match	Corresponder
 	On Artboards	Nas Mesas de Trabalho
@@ -6724,6 +6828,13 @@ axis	Y Axis	Eixo Y
 	Graphite Pencil	Lápis de Grafite
 	Wax Crayon	Giz de Cera
 	Charcoal Dust	Pó de Carvão
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuitos tecnológicos
+	Circuit Trace	Trilha de circuito
+	Bus Lines	Linhas de barramento
+	Terminal Nodes	Nós terminais
+
 	Notched Ribbon	Fita Entalhada
 	Double Line	Linha Dupla
 	Wave	Onda
@@ -9321,7 +9432,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	unexpected resources	recursos inesperados
 @msg	unknown CMYK profile `{name}`	perfil CMYK desconhecido `{name}`
 @msg	unknown File Info field `{k}`	campo de Informações do Arquivo desconhecido `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	recurso OpenType desconhecido `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefixe com - para desativar; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt aceitam o número de uma alternativa como `tag=N` com N de 0 a {_1}, como `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	recurso OpenType desconhecido `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefixe com - para desativar; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt aceitam o número de uma alternativa como `tag=N` com N de 0 a {_1}, como `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	recurso OpenType desconhecido `{t}` em featureChanges (as tags que `features` aceita)
 @msg	unknown PDF preset `{name}` (presets: {_1})	predefinição de PDF desconhecida `{name}` (predefinições: {_1})
 @msg	unknown Warp style	estilo de Deformação desconhecido
@@ -9477,7 +9588,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	os arquivos {kind} não têm transparência, e o arquivo teria {what}: achate-a primeiro (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	as imagens {kind} não podem ser abertas (veja document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` não é uma das opções
-@msg	{k} has control characters{_1}	{k} tem caracteres de controle{_1}
+@msg	{k} has control characters	{k} tem caracteres de controle
+@msg	{k} has control characters or line breaks	{k} tem caracteres de controle ou quebras de linha
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} é longo demais (no máximo {MAX_TEXT} caracteres)
 @msg	{k} must be > 0	{k} deve ser > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} deve ser um número (pt) ou um comprimento como "210 mm"

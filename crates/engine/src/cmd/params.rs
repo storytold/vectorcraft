@@ -424,9 +424,9 @@ fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
 /// A value of the type effect `effect` reads for `key`, a parameter its params description names
 /// without a dialog default: the earlier 3D Perspective and light (`perspective`, `lightAzimuth`,
 /// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
-/// and a Gaussian Blur's `linear` is true or false. A Glass or Texturizer `textureImage`, an SVG
-/// filter's `name` and `xml`, a Warp's `version` and the `style` of Crop Marks have checks of their
-/// own; they aren't listed.
+/// and a Gaussian Blur's `linear` is true or false. A Glass, Texturizer or Rough Pastels
+/// `textureImage`, an SVG filter's `name` and `xml`, a Warp's `version` and the `style` of Crop
+/// Marks have checks of their own; they aren't listed.
 pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
     use vectorcraft_render::effects;
     let number = || Some(Value::from(0.0));
@@ -529,7 +529,6 @@ pub const UNCHECKED: &[&str] = &[
     "assets.settings.set",
     "attributes.info",
     "attributes.set",
-    "brush.freehand",
     "css.export",
     "css.generate",
     "css.selection",

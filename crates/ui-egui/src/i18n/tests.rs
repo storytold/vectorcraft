@@ -158,6 +158,25 @@ fn hindi_rows_keep_the_meaning_of_their_english() {
         "पेज थंबनेल RGB पिक्सल का होना चाहिए, हर तरफ़ 1 से 256 (मिला 0 × 4)"
     );
     assert_eq!(message(hi, "invalid angle"), "अमान्य कोण");
+    let limits = message(
+        hi,
+        "the image would be 9000 × 9000 pixels; raster exports are limited to 8192 pixels per side and 64 megapixels: lower the scale or resolution",
+    );
+    assert!(
+        limits.contains("9000 × 9000 पिक्सेल") && limits.contains("8192 पिक्सेल और 64 मेगापिक्सेल") && limits.contains("स्केल या रिज़ॉल्यूशन कम करें"),
+        "{limits}"
+    );
+    assert_eq!(
+        message(hi, "color books in color space HSB aren't supported (only RGB, CMYK and Lab)"),
+        "कलर स्पेस HSB वाली कलर बुक समर्थित नहीं हैं (केवल RGB, CMYK और Lab)"
+    );
+    assert_eq!(message(hi, "`index` must be a whole number"), "`index` पूरी संख्या होनी चाहिए");
+    let knockout = message(
+        hi,
+        "knockout groups with too many overlapping translucent elements are written as PDF knockout groups: \
+         their translucent elements knock out what they cover fully",
+    );
+    assert!(knockout.starts_with("बहुत अधिक ओवरलैप") && knockout.contains("PDF नॉकआउट ग्रुप"), "{knockout}");
     assert_eq!(tr(hi, "Desired"), "वांछित");
     let range = "न्यूनतम, वांछित से अधिक नहीं होना चाहिए और वांछित, अधिकतम से अधिक नहीं होना चाहिए";
     assert_eq!(tr(hi, "Minimum must not exceed Desired, nor Desired Maximum."), format!("{range}।"));
@@ -332,6 +351,28 @@ fn languages_resolve_from_their_tags_and_name_themselves() {
     }
 }
 
+/// Turkish `Draw` labels use the drawing verb of the catalog's other drawing modes, and the
+/// accepted control names in its messages keep the spelling the command reads. The dimension
+/// scale rows keep the `drawing:real` form and say that the ratio labels a page unit.
+#[test]
+fn turkish_draw_labels_use_the_drawing_verb() {
+    let tr_lang = Lang::from_code("tr").expect("tr registered");
+    assert_eq!(tr(tr_lang, "Draw"), "Çiz");
+    assert_eq!(tr(tr_lang, "Draw:"), "Çiz:");
+    assert_eq!(tr(tr_lang, "Draw Behind"), "Arkaya Çiz");
+    let (entries, _) = parse_entries(tr_lang.0.source);
+    let tie: Vec<_> =
+        entries.iter().filter(|(_, _, t)| t.to_lowercase().contains("beraber")).map(|(_, src, t)| format!("{src:?} -> {t:?}")).collect();
+    assert!(tie.is_empty(), "Turkish rows read as a tied game:\n{}", tie.join("\n"));
+    let unknown = message(tr_lang, "unknown control `x`: fillStroke, coloring, drawMode or screenMode");
+    assert!(unknown.contains("fillStroke, coloring, drawMode veya screenMode"), "{unknown}");
+    assert_eq!(
+        tr(tr_lang, "Drawing : real size — 1:10 labels 1 unit on the page as 10."),
+        "Çizim : gerçek boyut — 1:10, sayfadaki 1 birimi 10 olarak etiketler."
+    );
+    assert_eq!(message(tr_lang, "Scale must be drawing:real, for example 1:10"), "Ölçek çizim:gerçek biçiminde olmalıdır, örneğin 1:10");
+}
+
 /// The Catalan catalog registers under `ca`, claims complete menus and messages, and passes
 /// locale resolution, vocabulary and count formatting checks.
 #[test]
@@ -437,7 +478,7 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
         .collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 43, "{names:?}");
+    assert_eq!(names.len(), 46, "{names:?}");
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
@@ -1914,6 +1955,13 @@ fn uk() -> Lang {
     Lang::from_code("uk").expect("uk registered")
 }
 
+/// The Ukrainian Color Library labels use the word for colors (кольорів), not flowers (квітів).
+#[test]
+fn ukrainian_color_library_labels_name_colors() {
+    assert_eq!(uk().catalog().plain("Color Library"), Some("Бібліотека кольорів"));
+    assert_eq!(uk().catalog().plain("Color Library…"), Some("Бібліотека кольорів…"));
+}
+
 /// Every Ukrainian plural has all three forms; exercise different endings through real lookups.
 #[test]
 fn ukrainian_plurals_have_three_forms() {
@@ -2142,6 +2190,123 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
             let english = ["completed", "locked", "hidden", "object", "objects", "unchanged"];
             assert!(shown.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {shown}");
             assert!(counts.iter().all(|n| shown.contains(n)), "{code}: {shown}");
+        }
+    }
+}
+
+/// `file.info`'s refusal of a value with control characters is two whole messages, one for the
+/// fields that take line breaks and one for the fields that don't, and each is translated in every
+/// complete-message language with the field's key kept as written.
+#[test]
+fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
+    use serde_json::json;
+    let literals = message_literals_in(&["engine"]);
+    for key in ["{k} has control characters", "{k} has control characters or line breaks"] {
+        assert!(literals.contains(key), "the message scan doesn't find {key:?}");
+    }
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let refusals = [
+        (json!({"description": "a\u{7}b"}), "description", "has control characters"),
+        (json!({"copyrightNotice": "a\u{7}b"}), "copyrightNotice", "has control characters"),
+        (json!({"title": "a\nb"}), "title", "has control characters or line breaks"),
+        (json!({"author": "a\nb"}), "author", "has control characters or line breaks"),
+        (json!({"authorTitle": "a\rb"}), "authorTitle", "has control characters or line breaks"),
+        (json!({"copyrightUrl": "a\u{7}b"}), "copyrightUrl", "has control characters or line breaks"),
+        (json!({"keywords": ["ok", "a\tb"]}), "keywords", "has control characters or line breaks"),
+    ];
+    for (params, field, rule) in refusals {
+        let error = s.execute("file.info", &params).unwrap_err().to_string();
+        assert_eq!(error, format!("invalid parameters for `file.info`: {field} {rule}"));
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &error);
+            // Whole runs of Latin letters, so that Spanish's "control" is not read as English and
+            // Korean's `description에` still shows the key.
+            let words: Vec<&str> = shown.split(|c: char| !c.is_ascii_alphabetic()).collect();
+            let english = ["has", "characters", "or", "line", "breaks"];
+            assert!(words.iter().all(|w| !english.contains(w)), "{code}: {shown}");
+            assert!(words.contains(&field), "{code}: {shown}");
+        }
+    }
+}
+
+/// Every complete-message catalog has a row for each error that `type.compositeFonts.set`,
+/// `.export` and `.import`, the composite font checks behind them and the Composite Fonts dialog
+/// give, and translates them with the font name, the key and the class key kept, and the reason
+/// after a font's name translated in turn.
+#[test]
+fn composite_font_errors_translate_in_complete_languages() {
+    const SOURCES: &[&str] = &[
+        "each font must be {name, parts}",
+        "unknown key `{k}`; a font takes name and parts",
+        "each font needs a name",
+        "`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)",
+        "`{name}`: parts must be an object",
+        "`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals",
+        "`{name}`: {_1} must be an object",
+        "`{name}`: unknown key `{k}` in {_1}",
+        "`{name}`: give the kanji part",
+        "a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts",
+        "two composite fonts are named `{_1}`",
+        "`{_1}` is the name of an installed font",
+        "`{_1}`: {_2} is set in `{font}`, a composite font",
+        "give fonts: [{name, parts}…]",
+        "path is empty",
+        "fonts must be a list of composite fonts",
+        "names must be strings",
+        "no composite font named `{n}`",
+        "names must be a list of names",
+        "no composite fonts to export",
+        "not a composite fonts file: {e}",
+        "not a composite fonts file: no compositeFonts list",
+        "the file holds more than {COMPOSITE_FONTS_MAX} composite fonts",
+        "the file is larger than 4 MB",
+        "dataBase64 is not base64",
+        "give one of path, data or dataBase64",
+        "the file holds no composite fonts",
+        "the file holds two composite fonts named `{_1}`",
+        "`{_1}` can't name a composite font",
+        "{k}: give a font",
+        "{k}: size must be {_1} to {_2}%",
+        "{k}: baseline must be {_1} to {_2}%",
+        "{k}: scale must be {_1} to {_2}%",
+        "{k}: only kana, roman and numerals can be scaled",
+        "{k}: only kana can be scaled at the center",
+        "`{name}`: {k}: give a font",
+        "`{name}`: {k}: size must be {_1} to {_2}%",
+        "`{name}`: {k}: baseline must be {_1} to {_2}%",
+        "`{name}`: {k}: scale must be {_1} to {_2}%",
+        "`{name}`: {k}: only kana, roman and numerals can be scaled",
+        "`{name}`: {k}: only kana can be scaled at the center",
+        "no composite font",
+    ];
+    // An error, English words its translation replaces, and the text it keeps.
+    let cases: &[(&str, &str, &[&str])] = &[
+        (
+            "`Mincho Mix`: unknown class `kanjj`; the classes are kanji, kana, punctuation, symbols, roman and numerals",
+            "the classes are",
+            &["`Mincho Mix`", "`kanjj`", "kanji", "kana", "punctuation", "symbols", "roman", "numerals"],
+        ),
+        ("`Mincho Mix`: give the kanji part", "give the", &["`Mincho Mix`", "kanji"]),
+        ("`Mincho Mix`: parts must be an object", "must be an object", &["`Mincho Mix`", "parts"]),
+        ("`Mincho Mix`: kana must be an object", "must be an object", &["`Mincho Mix`", "kana"]),
+        ("`Mincho Mix`: unknown key `weight` in roman", "unknown key", &["`Mincho Mix`", "`weight`", "roman"]),
+        ("two composite fonts are named `Mincho Mix`", "are named", &["`Mincho Mix`"]),
+        ("`Mincho Mix`: kana: give a font", "give a font", &["`Mincho Mix`", "kana"]),
+        ("not a composite fonts file: the file is larger than 4 MB", "larger than", &["4"]),
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: Vec<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        let missing: Vec<&&str> = SOURCES.iter().filter(|s| !rows.contains(s)).collect();
+        assert!(missing.is_empty(), "{code} has no row for {missing:?}");
+        for (error, english, kept) in cases {
+            let shown = message(lang, error);
+            assert!(!shown.contains(english), "{code}: {shown}");
+            for k in *kept {
+                assert!(shown.contains(k), "{code}: {k} in {shown}");
+            }
         }
     }
 }
@@ -3139,6 +3304,48 @@ fn selected_path_reason_is_translated() {
     }
 }
 
+/// The refusals of a linked JavaScript file or a library's file outside the read roots, of a file
+/// name that fits more than one linked JavaScript file, and of an appearance edit of the art a
+/// graph design draws in a graph series have translated rows in languages that translate every
+/// message. Each row keeps `{file}` and shows translated both alone and inside the
+/// invalid-parameters error of the command that returns it.
+#[test]
+fn read_root_script_and_graph_design_reasons_are_translated() {
+    use vectorcraft_engine::EngineError;
+    let reasons = [
+        ("document.export", "a linked JavaScript file is outside the read roots"),
+        ("swatch.library.copyToUser", "the library's file is outside the read roots"),
+        ("svgInteractivity.removeFile", "{file} names more than one linked JavaScript file"),
+        ("appearance", "the art of a graph design in a graph series is drawn again from the design: edit the design to change it"),
+    ];
+    let literals = message_literals();
+    for (_, reason) in reasons {
+        assert!(literals.contains(reason), "{reason}");
+    }
+    let mut rows = [0; 4];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        for (i, (cmd, reason)) in reasons.into_iter().enumerate() {
+            let row = entries.iter().find(|(ctx, src, _)| ctx == "@msg" && src == reason).map(|(_, _, tr)| tr.as_str());
+            let Some(row) = row else { continue };
+            rows[i] += 1;
+            assert_ne!(row, reason, "{code}");
+            assert_eq!(row.matches("{file}").count(), reason.matches("{file}").count(), "{code}: {row}");
+            let sample = reason.replace("{file}", "\"a.js\"");
+            let translated = row.replace("{file}", "\"a.js\"");
+            assert_eq!(message(lang, &sample), translated, "{code}");
+            let error = EngineError::BadParams { cmd: cmd.into(), msg: sample.clone() }.to_string();
+            assert_eq!(message(Lang::EN, &error), error);
+            let shown = message(lang, &error);
+            assert!(shown.contains(&translated) && !shown.contains(&sample) && shown.contains(&format!("`{cmd}`")), "{code}: {shown}");
+        }
+    }
+    for ((_, reason), count) in reasons.into_iter().zip(rows) {
+        assert!(count > 0, "no complete-message catalog has a `@msg` row for {reason:?}");
+    }
+}
+
 /// The errors a script's `File` and `Folder` objects, `vc.run` and `$.evalFile` raise are
 /// translated in every language of [`COMPLETE_MESSAGES`], and so is the status bar's line for a run
 /// that ends with one: the script's name, its place, the command ids and what the script itself
@@ -3870,6 +4077,27 @@ fn dataset_import_cell_errors_are_translated() {
     }
 }
 
+/// Russian shows command, script and file messages in Russian: a whole message, a message that
+/// begins with a feature name, messages with a name, a number or a command id filled in, and the
+/// two messages whose catalog rows escape a backslash.
+#[test]
+fn russian_translates_command_script_and_file_messages() {
+    let ru = Lang::from_code("ru").expect("registered");
+    for (english, russian) in [
+        ("CSV is empty", "CSV пуст"),
+        ("Offset Path: the path is too complex to offset", "Смещение контура: контур слишком сложен для смещения"),
+        ("no swatch named `Gold`", "нет образца с именем `Gold`"),
+        ("object 12 is not an Intertwine group", "объект 12 не является группой переплетения"),
+        ("no slice 4 in the image (see slice.list)", "в изображении нет фрагмента 4 (см. slice.list)"),
+        ("give origin: [x, y], or reset: true", "укажите origin: [x, y] или reset: true"),
+        ("`kinsoku` must be \"none\", \"hard\" or \"soft\"", "`kinsoku` должно быть \"none\", \"hard\" или \"soft\""),
+        ("\\ at end of pattern", "\\ в конце шаблона"),
+        ("a \\u escape needs four hexadecimal digits", "после \\u нужны четыре шестнадцатеричные цифры"),
+    ] {
+        assert_eq!(message(ru, english), russian, "{english}");
+    }
+}
+
 /// The errors of the parameter checks that many commands share (a number given as text, a missing
 /// number or index, a fraction for a whole number, `ids` that aren't a list of object ids, an
 /// `ids` entry or an `id` that is negative, an object id that names no object, a date that isn't
@@ -4105,8 +4333,13 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("column must be true or a number from 1", &["column"]),
     ("column: true floats the whole column and takes no onto, above or below", &["column", "onto", "above", "below"]),
     ("control must be fillStroke, coloring, drawMode or screenMode", &["control", "fillStroke", "coloring", "drawMode", "screenMode"]),
+    ("dataBase64 is not base64", &["dataBase64"]),
     ("decimals must be {_1}–{_2} (got {_3})", &["decimals"]),
     ("detect must be true or false", &["detect"]),
+    ("each font must be {name, parts}", &["name", "parts"]),
+    ("fonts must be a list of composite fonts", &["fonts"]),
+    ("give fonts: [{name, parts}…]", &["fonts", "name", "parts"]),
+    ("give one of path, data or dataBase64", &["path", "data", "dataBase64"]),
     ("give origin: [x, y], or reset: true", &["origin", "reset"]),
     ("global must be true or false", &["global"]),
     ("group must be true or false", &["group"]),
@@ -4125,12 +4358,16 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("member is for order front, forward, backward or back", &["member", "order", "front", "forward", "backward", "back"]),
     ("mode is set, add or toggle, not `{other}`", &["mode", "set", "add", "toggle"]),
     ("names is empty", &["names"]),
+    ("names must be a list of names", &["names"]),
+    ("names must be strings", &["names"]),
+    ("not a composite fonts file: no compositeFonts list", &["compositeFonts"]),
     ("on must be true or false", &["on"]),
     ("onto must name a floating panel", &["onto"]),
     ("others must be true or false", &["others"]),
     ("page must be a whole number from 1", &["page"]),
     ("panel is not in a dock group", &["panel"]),
     ("panel must name a registered panel", &["panel"]),
+    ("path is empty", &["path"]),
     ("paths must be strings", &["paths"]),
     ("percent must be above 0 and at most 6400, not {p}", &["percent"]),
     ("plane must be left, right or ground", &["plane", "left", "right", "ground"]),
@@ -4146,6 +4383,7 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("span: \"selection\" places a linear, radial, conic or diamond gradient, not a freeform one", &["span"]),
     ("thickness must be from 0.01 to 5000 pt", &["thickness"]),
     ("title can't be empty", &["title"]),
+    ("unknown key `{k}`; a font takes name and parts", &["name", "parts"]),
     (
         "unknown light setting: use color, intensity, rotation, height, softness or behind",
         &["color", "intensity", "rotation", "height", "softness", "behind"],
@@ -4158,6 +4396,20 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("`strokeMode` applies to strokes (stroke: true)", &["stroke"]),
     ("`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`", &["symbol", "face", "x", "y", "scale", "rotation"]),
     ("`{GRAPHICS}` face must be front or back", &["face", "front", "back"]),
+    ("`{name}`: give the kanji part", &["kanji"]),
+    ("`{name}`: parts must be an object", &["parts"]),
+    (
+        "`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals",
+        &["kanji", "kana", "punctuation", "symbols", "roman", "numerals"],
+    ),
+    ("{k}: baseline must be {_1} to {_2}%", &["baseline"]),
+    ("{k}: only kana can be scaled at the center", &["kana"]),
+    ("{k}: only kana, roman and numerals can be scaled", &["kana", "roman", "numerals"]),
+    ("{k}: size must be {_1} to {_2}%", &["size"]),
+    ("`{name}`: {k}: baseline must be {_1} to {_2}%", &["baseline"]),
+    ("`{name}`: {k}: only kana can be scaled at the center", &["kana"]),
+    ("`{name}`: {k}: only kana, roman and numerals can be scaled", &["kana", "roman", "numerals"]),
+    ("`{name}`: {k}: size must be {_1} to {_2}%", &["size"]),
 ];
 
 /// Every catalog's translation of a [`NAMED_KEYS`] message keeps each name the table lists, as
