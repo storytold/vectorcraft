@@ -160,6 +160,7 @@
 	Align to Artboard	Alinear con la mesa de trabajo
 	Align to Glyph Bounds	Alinear con los límites del glifo
 	Align to Key Object	Alinear con el objeto clave
+	Align to Key Anchor	Alinear con el punto de ancla clave
 	Align to Page	Alinear con la página
 	Align to Path	Alinear con el trazado
 	Align to Selection	Alinear con la selección
@@ -3787,6 +3788,8 @@ digits	Malayalam	Malayálam
 	Kana	Kana
 	Numerals	Números
 	Scale at Center	Escalar desde el centro
+	Delete Set	Eliminar juego
+	Direct Entry	Entrada directa
 	Up/Down:	Arriba/abajo:
 	Left/Right:	Izquierda/derecha:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko arriba/abajo
@@ -5396,6 +5399,11 @@ axis	Both	Ambos
 @msg	Imported library {name}	Biblioteca {name} importada
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Norma RGB:
+	CMYK Policy:	Norma CMYK:
+	Preserve Embedded Profiles	Conservar perfiles incrustados
+	Convert to Working Space	Convertir en espacio de trabajo
+	Preserve Numbers	Conservar números
 	Texture	Textura
 	Craquelure…	Craquelado…
 	Grain…	Granulado…

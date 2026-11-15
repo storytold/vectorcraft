@@ -1538,6 +1538,11 @@
 	NTSC Colors	NTSC-farver
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-politik:
+	CMYK Policy:	CMYK-politik:
+	Preserve Embedded Profiles	Bevar indlejrede profiler
+	Convert to Working Space	Konverter til arbejdsfarverum
+	Preserve Numbers	Bevar tal
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Krakelering…
@@ -2037,6 +2042,7 @@ lighting	Light	Lys
 	Align to Artboard	Juster til tegnebræt
 	Align to Glyph Bounds	Juster til glyfafgrænsning
 	Align to Key Object	Juster til nøgleobjekt
+	Align to Key Anchor	Juster til nøgleankerpunkt
 	Align to Selection	Juster til markering
 	Align To:	Juster til:
 	Cancel Key Object	Annullér nøgleobjekt
@@ -2228,6 +2234,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Tal
 	Scale at Center	Skalér fra midten
+	Delete Set	Slet sæt
+	Direct Entry	Direkte indtastning
 	Up/Down:	Op/ned:
 	Left/Right:	Venstre/højre:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko op/ned

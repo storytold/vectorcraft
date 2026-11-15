@@ -118,6 +118,7 @@
 	Align to Artboard	對齊工作區域
 	Align to Glyph Bounds	對齊字符邊界
 	Align to Key Object	對齊關鍵物件
+	Align to Key Anchor	對齊關鍵錨點
 	Align to Page	對齊頁面
 	Align to Path	對齊路徑
 	Align to Selection	對齊選取範圍
@@ -4908,6 +4909,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Kana	假名
 	Numerals	數字
 	Scale at Center	從中心縮放
+	Delete Set	刪除集
+	Direct Entry	直接輸入
 	Up/Down:	上/下：
 	Left/Right:	左/右：
 	Tate-chu-yoko Up/Down	縱中橫上/下
@@ -5564,6 +5567,11 @@ axis	Both	兩者
 	Interpolation	內插
 	RGB:	RGB：
 	CMYK:	CMYK：
+	RGB Policy:	RGB 原則：
+	CMYK Policy:	CMYK 原則：
+	Preserve Embedded Profiles	保留內嵌描述檔
+	Convert to Working Space	轉換為工作空間
+	Preserve Numbers	保留數值
 	Texture	紋理
 	Craquelure…	龜裂紋…
 	Grain…	顆粒…

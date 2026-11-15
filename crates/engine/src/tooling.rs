@@ -1262,6 +1262,14 @@ impl Session {
     /// is placed under ([`Session::place_queue_roots`]).
     fn note_place_queue_roots(&mut self) {
         self.place_queue_roots = crate::file_access::current();
+        self.place_queue_loads = self.place_queue_loads.wrapping_add(1);
+    }
+
+    /// How many times the place cursor has been loaded (`file.place.queue`, or a `queue` set on
+    /// the Place tool): a frontend that keeps its own state about the loaded cursor compares it to
+    /// tell a newer load.
+    pub fn place_queue_loads(&self) -> u64 {
+        self.place_queue_loads
     }
 
     /// The automation roots the place cursor's files are placed under: those in force when it

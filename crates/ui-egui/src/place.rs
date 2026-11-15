@@ -74,7 +74,19 @@ pub struct PlaceState {
     queue_asks: bool,
     /// The loaded cursor's files by name, with the size a click places them at.
     queue_sizes: Vec<(String, f64, f64)>,
+    /// The engine's count of cursor loads ([`vectorcraft_engine::Session::place_queue_loads`]) when
+    /// `queue_asks` and `queue_sizes` were set: a later load (`tool.setOption`, a script) clears them.
+    queue_load: u64,
+    /// The import options dialog a click of the cursor opened (the token in its params'
+    /// [`ASKED`]), with the automation roots the cursor was loaded in: its OK, pressed outside any
+    /// roots, places the file within them. Cleared when the cursor is loaded again.
+    asked: Option<(u64, std::sync::Arc<vectorcraft_engine::file_access::AutomationRoots>)>,
 }
+
+/// The `file.place` param that ties an import options dialog's OK to the click of the place cursor
+/// that opened it ([`PlaceState::asked`]); hidden from the dialog's fields and removed before the
+/// file is placed.
+const ASKED: &str = "__placeCursorAsk";
 
 /// A place cursor thumbnail: decoded when the cursor is loaded, uploaded when first drawn (and
 /// again in a new graphics context).
@@ -137,6 +149,20 @@ enum Read {
 }
 
 fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
+    // The OK of import options a click of the place cursor asked for places within the roots the
+    // cursor was loaded in. A caller with roots of its own places within those.
+    let Some(token) = p.get(ASKED) else { return place_file_in(app, p, read) };
+    forget_older_queue(app);
+    let Some(roots) = app.place.asked.as_ref().filter(|(t, _)| Some(*t) == token.as_u64()).map(|(_, r)| r.clone()) else {
+        return Err("the place cursor that asked for these import options is no longer loaded".into());
+    };
+    if vectorcraft_engine::file_access::current().is_some() {
+        return place_file_in(app, p, read);
+    }
+    vectorcraft_engine::file_access::confine(Some(&roots), || place_file_in(app, p, read))
+}
+
+fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
     let show = match p.get("showImportOptions") {
         None | Some(Value::Null) => None,
         Some(Value::Bool(b)) => Some(*b),
@@ -187,6 +213,9 @@ fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, 
         && let Some(v) = app.view()
     {
         p["at"] = json!([v.center.x, v.center.y]);
+    }
+    if let Some(o) = p.as_object_mut() {
+        o.remove(ASKED);
     }
     match read {
         Read::ForUser { dropped } if crate::placing::available(app) => {
@@ -425,10 +454,19 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     // Read within the automation roots of whoever loaded the cursor, even on a click of the person
     // at the keyboard: an agent's queue reaches no file it wasn't given.
     let roots = app.session.place_queue_roots();
+    forget_older_queue(app);
     vectorcraft_engine::file_access::confine(roots.as_ref(), || {
         if app.place.queue_asks {
+            let mut p = clicked_at_full_size(app, p);
+            // The import options it may ask for keep the token, and their OK places within the
+            // same roots ([`place_file`]).
+            app.place.asked = roots.clone().map(|r| {
+                static TOKEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+                let token = TOKEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                p[ASKED] = json!(token);
+                (token, r)
+            });
             // Placing shows its own errors in the status bar.
-            let p = clicked_at_full_size(app, p);
             let _ = place_file(app, &p, Read::ForUser { dropped: false });
         } else if crate::placing::available(app) {
             if let Err(e) = crate::placing::start(app, p, false) {
@@ -438,6 +476,16 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
             let _ = engine(app, "file.place", p);
         }
     });
+}
+
+/// The cursor was loaded again since [`show_thumbnails`] (`tool.setOption` with a `queue`, a
+/// script): its files no longer ask for their import options, and their queued sizes are unknown.
+fn forget_older_queue(app: &mut VectorcraftApp) {
+    if app.place.queue_load != app.session.place_queue_loads() {
+        app.place.queue_asks = false;
+        app.place.queue_sizes.clear();
+        app.place.asked = None;
+    }
 }
 
 /// The params of a cursor click (`rect` at the file's queued size) on a PDF or DXF file, whose
@@ -467,7 +515,9 @@ fn clicked_at_full_size(app: &VectorcraftApp, p: &Value) -> Value {
 /// The cursor's thumbnails and its files' sizes from `file.place.queue`'s reply `r` once the cursor
 /// is loaded; `asks`: its files ask for their import options when placed.
 pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value, asks: bool) {
+    app.place.queue_load = app.session.place_queue_loads();
     app.place.queue_asks = asks;
+    app.place.asked = None;
     app.place.queue_sizes = r["files"]
         .as_array()
         .into_iter()
