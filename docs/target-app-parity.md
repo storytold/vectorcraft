@@ -185,7 +185,7 @@ the work list made from it. Deep areas have their own checklists: [UI and intera
 | 2026-10-22 | minor | PDF import: a gap between glyphs of two sizes reads as a space measured against the smaller size (#3623); mixed-size regression. Scores and hours unchanged. |
 | 2026-10-21 | minor | PDF import: letter-spaced type keeps its word spaces and gains none between letters; synthetic Tc and glyph-by-glyph regressions. Scores and hours unchanged. |
 | 2026-10-15 | minor | Image Trace retains nonzero positioned boundaries when a fixed-end returning piece has fewer than two fitted cubics. Source-generated tests check survival, winding, shared-edge reversal and Noise controls; see `image-trace-quality.md`. Scores and hours unchanged. |
-| **Feature breadth** (does each Illustrator menu item, tool, effect and format exist?) | **~88%** | measured in part: menu tree 353 of 375 items wired (94.1%), tools 89 of 92 (97%), vector effects 44 of 50 (88%), Photoshop-style effects 57 of 57 (100%), 3D 4 of 4 (initial: Extrude & Bevel, Revolve, Inflate, Rotate); blended by the area weights below |
+| **Feature breadth** (does each Illustrator menu item, tool, effect and format exist?) | **~88%** | measured in part: menu tree 717 of 719 items wired (99.7%), tools 89 of 92 (97%), vector effects 44 of 50 (88%), Photoshop-style effects 57 of 57 (100%), 3D 4 of 4 (initial: Extrude & Bevel, Revolve, Inflate, Rotate); blended by the area weights below |
 | **Feature depth** (each area scored by behaviour, weighted) | **~75%** | estimated, area table below |
 | **Ready for real work, mainstream illustrator** | **~65%** (60–70%) | estimated, see [Ready for real work](#ready-for-real-work) |
 | **Ready for real work, full Illustrator** (decides the stage) | **~62%** (57–67%) | estimated: additive weighted sum over the dimensions, see [Ready for real work](#ready-for-real-work) |
@@ -210,11 +210,16 @@ tests and the CI gate. See [Calibration](#calibration).
   Adobe install, its `Info.plist` and `.lproj` folders included, and forbids launching or measuring it. So
   nothing here is a menu dump or a side-by-side measurement: the numbers come from our own code against
   Illustrator's public documentation.
-- **From the code (measured, origin/main `01e165af`):**
-  - Menu tree (`crates/ui-egui/src/menus.rs`, laid out in Illustrator's menu order): 348 items bound to
-    commands, 26 stubs (`todo(…)`/`todos(…)`), so 93.0% of menu items do something (348 and 26 after Snap to Glyph shipped in #3124; 348 and 27 after the
-    Revolve merge; 350 and 25, 93.3%, after Graph › Design and Marker; 353 and 22, 94.1%, after Extrude & Bevel, Inflate and Rotate). The menu stubs on `a47d7eec` are Effect › 3D and Materials › Materials,
-    Edit › Spelling › Check Spelling and Help › VectorCraft Help.
+- **From the code (measured, origin/main `01e165af`; the menu tree at `957397e7`):**
+  - Menu tree (`crates/ui-egui/src/menus/tree.rs` and `submenus.rs`, laid out in Illustrator's menu order): walking
+    `menu_tree()` at `957397e7` finds 717 items bound to commands and 2 stubs (`todo(…)`), so 99.7% of menu items do
+    something. The two stubs are Effect › 3D and Materials › Materials and Help › VectorCraft Help; Edit › Spelling ›
+    Check Spelling opens its dialog. The count includes the Effect entries built from the effect catalog. It leaves
+    out 239 entries in the recent-file, recent-font, saved-selection and saved-view slots and in the Open With,
+    Scripts, Plug-ins, Type › Font, Effect › SVG Filters and View › Perspective Grid preset submenus, some of which
+    also hold built-in commands. Earlier counts covered fewer entries: 348 items and 26 stubs (`todo(…)`/`todos(…)`), 93.0%, at `01e165af` and
+    after Snap to Glyph shipped in #3124; 348 and 27 after the Revolve merge; 350 and 25, 93.3%, after Graph › Design
+    and Marker; 353 and 22, 94.1%, after Extrude & Bevel, Inflate and Rotate.
   - Engine commands: ~710 ids registered with `cmd!` across `crates/engine/src/cmd` (plus macro-generated
     families), and 85 UI-only commands (`UI_COMMANDS`).
   - Tools: 91 in `crates/tools/src/catalog.rs`; Touch Type is listed but not implemented, and the Dimension
