@@ -4670,6 +4670,58 @@ fn group_selected_series_go_on_the_chosen_axis() {
     assert!(spec(&s, id).right_series.is_empty());
 }
 
+/// The Graph Type dialog's subject: the selected graph, the series picked in it, and the tick values each value axis
+/// is drawn with while they are calculated, which are the ones the graph's value labels show.
+#[test]
+fn graph_type_subject_gives_the_picked_series_and_the_calculated_tick_values() {
+    let mut s = Session::new();
+    assert!(super::graph_type_subject(&s).is_err(), "no document");
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    assert!(super::graph_type_subject(&s).is_err(), "no graph selected");
+    // Q1 3, 2; Q2 5, 4; Q3 -1, 6.
+    let id = graph(&mut s, "column");
+    let subject = super::graph_type_subject(&s).unwrap();
+    assert_eq!((subject.id, subject.series), (id, vec![]));
+    assert_eq!(subject.calculated, [(-2.0, 6.0, 4); 2]);
+    let shown = |s: &Session| value_labels(s, id).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+    assert_eq!(shown(&s), ["-2", "0", "2", "4", "6"]);
+    // Overriding with them draws the same axis, and the calculated values stay the data's.
+    s.execute("graph.setType", &json!({"axisMin": -2, "axisMax": 6, "ticks": 4})).unwrap();
+    assert_eq!(shown(&s), ["-2", "0", "2", "4", "6"]);
+    s.execute("graph.setType", &json!({"axisMin": 0, "axisMax": 100, "ticks": 0})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated[0], (-2.0, 6.0, 4));
+    // A single bound is calculated with, as the axis is drawn.
+    s.execute("graph.setType", &json!({"axisMin": -10, "axisMax": null})).unwrap();
+    let (lo, hi, _) = super::graph_type_subject(&s).unwrap().calculated[0];
+    let labels = shown(&s);
+    assert!(lo <= -10.0, "{lo}");
+    assert_eq!((labels.first().and_then(|t| t.parse::<f64>().ok()), labels.last().and_then(|t| t.parse::<f64>().ok())), (Some(lo), Some(hi)));
+    s.execute("graph.setType", &json!({"axisMin": null, "axisMax": null})).unwrap();
+    // Stacked columns stack their positive and their negative values: Q2 reaches 9, Q3 from -1 to 6.
+    s.execute("graph.setType", &json!({"type": "stackedColumn"})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated[0], (-2.0, 10.0, 6));
+    assert_eq!(shown(&s), ["-2", "0", "2", "4", "6", "8", "10"]);
+    // A radar graph's axis starts at 0, and a pie graph has none.
+    s.execute("graph.setType", &json!({"type": "radar"})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 6.0, 3); 2]);
+    s.execute("graph.setType", &json!({"type": "pie"})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 1.0, 5); 2]);
+    // Series picked with Group Selection.
+    s.execute("graph.setType", &json!({"type": "column"})).unwrap();
+    let picked = series(s.doc().unwrap().doc.node(id).unwrap(), 1).id;
+    s.execute("select.set", &json!({"ids": [picked.0]})).unwrap();
+    let subject = super::graph_type_subject(&s).unwrap();
+    assert_eq!((subject.id, subject.series), (id, vec![1]));
+    // Separate Scales: the right axis has the tick values of its own series.
+    let mut s = Session::new();
+    let id = two_scale_graph(&mut s);
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 1000.0, 5); 2]);
+    s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+    s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 10.0, 5), (0.0, 1000.0, 5)]);
+    assert_eq!(spec(&s, id).right_series, [1]);
+}
+
 #[test]
 fn bar_graphs_keep_their_value_axis_along_the_bottom() {
     let mut s = Session::new();
