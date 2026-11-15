@@ -5407,9 +5407,9 @@ axis	Both	Les deux
 @msg	a layer of the PSD file is too large to read	un calque du fichier PSD est trop grand pour être lu
 @msg	the PSD file's layers take more memory to read than allowed	les calques du fichier PSD demandent plus de mémoire que permis pour être lus
 @msg	the file is no longer loaded	le fichier n’est plus chargé
-@msg	the layers can't be read ({e}): the file was placed as its merged image	les calques ne peuvent pas être lus ({e}) : le fichier a été importé comme son image fusionnée
-@msg	1 type layer came in as pixels: the text isn't editable	1 calque de texte a été importé en pixels : le texte n’est pas modifiable
-@msg	{n} type layers came in as pixels: the text isn't editable	{n} calques de texte ont été importés en pixels : le texte n’est pas modifiable
+@msg	the layers can't be read ({e}): the file was placed as its merged image	les calques ne peuvent pas être lus ({e}) : le fichier a été importé comme son image fusionnée
+@msg	1 type layer came in as pixels: the text isn't editable	1 calque de texte a été importé en pixels : le texte n’est pas modifiable
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} calques de texte ont été importés en pixels : le texte n’est pas modifiable
 @msg	1 adjustment layer was not applied	1 calque de réglage n’a pas été appliqué
 @msg	{n} adjustment layers were not applied	{n} calques de réglage n’ont pas été appliqués
 @msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 calque de remplissage n’a pas été dessiné (un remplissage de dégradé ou de motif, une couleur illisible ou une forme qui ne stocke aucun pixel)
@@ -5425,13 +5425,13 @@ axis	Both	Les deux
 @msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 calque écrêté sur un calque de remplissage non dessiné a été omis
 @msg	{n} layers clipped to fill layers that weren't drawn were left out	{n} calques écrêtés sur des calques de remplissage non dessinés ont été omis
 @msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	les calques dans des modes de fusion que VectorCraft n’a pas ({modes}) ont été fusionnés avec les calques situés en dessous
-@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 calque dans un mode de fusion que VectorCraft n’a pas a été importé en Normal : la fusion demande plus de mémoire que permis
-@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} calques dans des modes de fusion que VectorCraft n’a pas ont été importés en Normal : la fusion demande plus de mémoire que permis
-@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 calque écrêté sur le calque inférieur a été importé sans écrêtage : la fusion demande plus de mémoire que permis
-@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} calques écrêtés sur le calque inférieur ont été importés sans écrêtage : la fusion demande plus de mémoire que permis
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 calque dans un mode de fusion que VectorCraft n’a pas a été importé en Normal : la fusion demande plus de mémoire que permis
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} calques dans des modes de fusion que VectorCraft n’a pas ont été importés en Normal : la fusion demande plus de mémoire que permis
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	1 calque écrêté sur le calque inférieur a été importé sans écrêtage : la fusion demande plus de mémoire que permis
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	{n} calques écrêtés sur le calque inférieur ont été importés sans écrêtage : la fusion demande plus de mémoire que permis
 @msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers s’applique à un fichier PSD importé avec layers: true
-@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices : un fichier PSD lié est importé comme son image aplatie ; indiquez link: false pour l’incorporer avec ses tranches
-@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers : un fichier PSD lié est importé comme son image aplatie ; omettez link ou indiquez link: false
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices : un fichier PSD lié est importé comme son image aplatie ; indiquez link: false pour l’incorporer avec ses tranches
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers : un fichier PSD lié est importé comme son image aplatie ; omettez link ou indiquez link: false
 @msg	the slices can't be read ({e}) and were left out	les tranches ne peuvent pas être lues ({e}) et ont été omises
 @msg	1 slice lies outside the canvas or has no size and was left out	1 tranche se trouve hors de la zone de travail ou n’a pas de taille et a été omise
 @msg	{n} slices lie outside the canvas or have no size and were left out	{n} tranches se trouvent hors de la zone de travail ou n’ont pas de taille et ont été omises
