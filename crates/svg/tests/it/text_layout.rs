@@ -357,6 +357,19 @@ fn a_chosen_glyph_is_written_as_outlines() {
     assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
 }
 
+/// Type with an Adjust Diacritic Position is written as outlines: a reader's `<text>` would draw
+/// the marks where the font puts them.
+#[test]
+fn moved_diacritics_are_written_as_outlines() {
+    let svg = export(&area_doc(vec![run("re\u{301}sume\u{301}", style(12.0))], 280.0, Justify::Left), &ExportOptions::default());
+    assert!(svg.contains("<text"), "without a moved mark the text stays live: {svg}");
+    for moved in [CharStyle { diacritic_horizontal: 100.0, ..style(12.0) }, CharStyle { diacritic_vertical: -100.0, ..style(12.0) }] {
+        let d = area_doc(vec![run("re\u{301}", style(12.0)), run("sume\u{301}", moved)], 280.0, Justify::Left);
+        let svg = export(&d, &ExportOptions::default());
+        assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
+    }
+}
+
 /// A run whose font size measures the cap height is written at the em size it is drawn at: 14 pt
 /// measuring a 0.7 em cap height is `font-size="20"`, after a 12 pt run measuring the em box,
 /// which takes the `<text>` element's 12.

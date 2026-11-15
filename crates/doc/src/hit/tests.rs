@@ -2140,6 +2140,37 @@ fn a_click_and_a_marquee_walk_repeated_nested_symbol_instances_within_one_limit(
     assert_eq!(with_art_limit(100, || marquee(&d, edge, None, false)).0, [inst], "marquee across the art's edge");
 }
 
+/// The members of an Intertwine group in symbol art count toward the art walk's limit of objects
+/// for a click, as the members of a plain group do. A click on a member's path past the instance's
+/// box is still found within the limit.
+#[test]
+fn a_click_counts_the_members_of_an_intertwine_group_in_symbol_art_toward_one_limit() {
+    set_clip_region(moved_clip_region);
+    // A clip group whose clipping region `test.move` moves to 100..200 × 0..100, past the 0..100
+    // box, over an Intertwine group of 200 squares at 140..160 × 40..60.
+    let mut d = Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let (mut mask, _) = half_clipped(&mut d);
+    mask.appearance.effects.push(test_move());
+    let squares = (0..200)
+        .map(|_| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(140.0, 40.0, 160.0, 60.0)), Appearance::default_art())))
+        .collect();
+    let woven = Arc::new(Node::new(d.alloc_id(), NodeKind::Intertwine { children: squares }));
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), woven]);
+    clip.set_clips(true);
+    group_symbol(&mut d, "Woven", vec![Arc::new(clip)]);
+    let inst = instance_of(&mut d, "Woven");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    let opt = HitOptions { path_only: true, ..HitOptions::default() };
+    let at = |x: f64| hit_test(&d, Point::new(x, 50.0), opt).map(|h| h.leaf);
+    // Inside the squares and away from their paths, every member is tested and none is hit.
+    let (hit, leaves, _) = with_art_limit(100, || at(150.0));
+    assert_eq!(hit, None);
+    assert!(leaves <= 100, "{leaves} leaves tested");
+    assert_eq!(with_art_limit(100, || at(140.0)).0, Some(id), "on the squares' paths");
+}
+
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than
 /// [`crate::MAX_SYMBOL_NODES`] objects of, Direct Selection picks and outlines nothing, as the
 /// canvas draws nothing of it. At the art's natural size the same art is picked.

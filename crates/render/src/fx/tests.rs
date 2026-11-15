@@ -337,6 +337,38 @@ fn a_transform_after_a_drop_shadow_scales_the_shadow_with_the_art() {
     }
 }
 
+/// A Transform effect listed after a Bas Relief turns its light with the art: a group of a black
+/// square centered on a white one, lit from the top and turned 90° counterclockwise about its
+/// center, draws as the group lit from the left.
+#[test]
+fn a_transform_after_bas_relief_turns_its_light_with_the_art() {
+    let relieved = |effects: Vec<(&str, serde_json::Value)>| {
+        let mut d = Document::new(100.0, 100.0);
+        let mut square =
+            |r: Rect, c: Color| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::basic(Paint::solid(c), Paint::None, 0.0)));
+        let members = vec![square(Rect::new(20.0, 20.0, 80.0, 80.0), Color::WHITE), square(Rect::new(40.0, 40.0, 60.0, 60.0), Color::BLACK)];
+        let mut g = Node::group(d.alloc_id(), members);
+        g.appearance.effects = effects.into_iter().map(|(id, p)| Effect { id: id.into(), params: p, visible: true }).collect();
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, g).unwrap();
+        render(&d)
+    };
+    let relief = |light: &str| ("sketch.basRelief", json!({"lightDirection": light}));
+    let turned = relieved(vec![relief("top"), ("distort.transform", json!({"rotate": 90}))]);
+    let left = relieved(vec![relief("left")]);
+    let top = relieved(vec![relief("top")]);
+    // The largest difference of a channel between two images.
+    let diff = |a: &Rendered, b: &Rendered| {
+        (0..100u32)
+            .flat_map(|y| (0..100u32).map(move |x| (x, y)))
+            .map(|(x, y)| a.pixel(x, y).iter().zip(b.pixel(x, y)).map(|(p, q)| p.abs_diff(q)).max().unwrap_or(0))
+            .max()
+            .unwrap_or(0)
+    };
+    assert!(diff(&left, &top) > 50, "the light's direction shows: {}", diff(&left, &top));
+    assert!(diff(&turned, &left) <= 2, "turned top light draws as a left light: {}", diff(&turned, &left));
+}
+
 /// An object's or a group's Transform effect transforms the raster effects of what it holds with
 /// the art: halving a 40 pt square about its center halves the 10 pt offset of its fill's shadow,
 /// and of a group member's own shadow, with Scale Strokes & Effects off or on.

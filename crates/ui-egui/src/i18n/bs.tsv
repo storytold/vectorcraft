@@ -1035,6 +1035,8 @@
 	Step up or down	Korak gore ili dolje
 	Drag values or labels. Double-click a value to type.	Prevucite vrijednosti ili oznake. Dvostruki klik na vrijednost za upis.
 	Drag rings to rotate. Shift snaps to 15°.	Prevucite prstenove za rotaciju. Shift hvata na 15°.
+	Track cube	Kocka za rotaciju
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Prevucite stranu, ivicu ili prsten za rotaciju. Shift rotira oko jedne ose ekrana.
 	Drag the light, or its rings. Shift snaps to 15°.	Prevucite svjetlo ili njegove prstenove. Shift hvata na 15°.
 lighting	Light	Svjetlo
 	Keep visible surfaces only when expanding	Pri proširivanju zadrži samo vidljive površine
@@ -1604,6 +1606,8 @@ lighting	Light	Svjetlo
 	Insert Aki Left	Umetni aki lijevo
 	Insert Aki Right	Umetni aki desno
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Podesi vodoravni položaj dijakritika
+	Adjust Vertical Diacritic Position	Podesi okomiti položaj dijakritika
 	Character Direction	Smjer znakova
 	Digits	Cifre
 	Arabic	Arapski
@@ -2907,6 +2911,7 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Prikaži glatki kotač boja
 	Show segmented color wheel	Prikaži segmentirani kotač boja
 	Show color bars	Prikaži trake boja
+	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
 	Limit to Library:	Ograniči na biblioteku:
@@ -7049,4 +7054,21 @@ shape	Open	Otvoren
 	Nest Shapes…	Slaganje oblika…
 	Nest Shapes	Slaganje oblika
 	Roll	Rolna
+	Packaging Tools	Alati za ambalažu
+	Fold Lines	Linije savijanja
+	Make Cut Line	Napravi liniju rezanja
+	Make Crease Line	Napravi liniju bigovanja
+	Make Partial Cut Line	Napravi liniju djelimičnog rezanja
+	Make Perforation Line	Napravi liniju perforacije
+	Make Fold Line	Napravi liniju savijanja
+	Role Swatches…	Uzorci boja za vrste linija…
+	Role Swatches	Uzorci boja za vrste linija
+	Role	Vrsta linije
+	Cut Line	Linija rezanja
+	Crease Line	Linija bigovanja
+	Partial Cut Line	Linija djelimičnog rezanja
+	Perforation Line	Linija perforacije
+	No objects are selected.	Nijedan objekat nije odabran.
+	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
+	Remove Fold Line Role	Ukloni vrstu linije
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"

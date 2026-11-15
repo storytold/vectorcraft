@@ -1126,6 +1126,10 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         warichu_scale: _,
         warichu_align: _,
         digits,
+        // A mark glyph moves by its own run's values ([`shape_segment`]), so a mark keeps its
+        // letter whatever they are.
+        diacritic_horizontal: _,
+        diacritic_vertical: _,
         font_height_reference,
         no_break,
         language,
@@ -1200,7 +1204,8 @@ pub(crate) fn warichu_alike(a: &CharStyle, b: &CharStyle) -> bool {
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
 /// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
 /// run's, see [`shape_segment`]), the space before a line's first character ([`space_before`]),
-/// Insert Aki ([`aki`]), Tsume ([`tighten`]), the OpenType features and the East Asian glyph form (each run's apply to its own characters, as features
+/// Insert Aki ([`aki`]), Tsume ([`tighten`]), the Adjust Diacritic Positions (each mark glyph takes
+/// its run's), the OpenType features and the East Asian glyph form (each run's apply to its own characters, as features
 /// over a range of the one buffer) and the tracking, as long as the tracking keeps or drops
 /// standard ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
@@ -1259,6 +1264,8 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         warichu_scale: _,
         warichu_align: _,
         digits,
+        diacritic_horizontal: _,
+        diacritic_vertical: _,
         font_height_reference,
         no_break,
         language,
@@ -1537,11 +1544,21 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     if !manual_ends.is_empty() {
         return shape_apart(manual_ends, out);
     }
-    // Harakat styled apart from their letters (paint only): shaped with them, each glyph then
-    // takes its own character's run ([`crate::harakat`]).
+    // Harakat styled apart from their letters (paint only), and harakat and Hebrew points with
+    // diacritic positions of their own: shaped with them, each glyph then takes its own
+    // character's run ([`crate::harakat`]).
     let mark_boundaries: Vec<usize> = boundaries()
-        .filter(|&b| run_at(b - 1).1 != run_at(b).1 && crate::harakat::paint_only_mark_boundary(text, b, run_at(b - 1).1, run_at(b).1))
+        .filter(|&b| {
+            let (before, after) = (run_at(b - 1).1, run_at(b).1);
+            before != after
+                && (crate::harakat::paint_only_mark_boundary(text, b, before, after)
+                    || crate::harakat::diacritic_mark_boundary(text, b, before, after))
+        })
         .collect();
+    // The face's mark classes, read once when any of the segment's runs moves its marks.
+    let moves_marks =
+        runs.get(source_runs.clone()).unwrap_or_default().iter().any(|(_, s)| s.diacritic_horizontal != 0.0 || s.diacritic_vertical != 0.0);
+    let diacritic_classes = if moves_marks { crate::harakat::mark_classes(face) } else { None };
     // Source run starts are sorted. Reuse their classification when checking cluster splits.
     let styled_marks = !mark_boundaries.is_empty();
     let char_level = std::cell::Cell::new(false);
@@ -1842,11 +1859,21 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     for (gi, &(gid, cl, xa, xo, yo)) in raw.iter().enumerate() {
         let cl = cl as usize;
         let (run, gst) = run_at(cl);
-        // A glyph of a harakat styled apart takes its own character's run (paint only).
-        let run = match chars.get(gi).map(|&c| run_at(c as usize)) {
-            Some((own, own_st)) if crate::harakat::paint_only(gst, own_st) => own,
-            _ => run,
+        // A glyph of a harakat styled apart takes its own character's run (paint and diacritic
+        // positions only).
+        let (run, run_st) = match chars.get(gi).map(|&c| run_at(c as usize)) {
+            Some((own, own_st)) if crate::harakat::paint_only(gst, own_st) => (own, own_st),
+            _ => (run, gst),
         };
+        // A mark glyph (GDEF class 3) moves by its run's Adjust Diacritic Positions, thousandths
+        // of the em it is set in: right and up for positive values.
+        let (mut dx, mut dy) = (xo as f64 * k * hs, -(yo as f64) * k * vs);
+        if let Some(classes) = &diacritic_classes
+            && classes.get(skrifa::GlyphId::new(gid)) == 3
+        {
+            dx += run_st.diacritic_horizontal / 1000.0 * size * hs;
+            dy -= run_st.diacritic_vertical / 1000.0 * size * vs;
+        }
         let end = cluster_end(cl);
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
@@ -1901,8 +1928,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             run,
             adv,
             tracking: tracked,
-            dx: xo as f64 * k * hs,
-            dy: -(yo as f64) * k * vs,
+            dx,
+            dy,
             kern_shift,
             aki_shift,
             aki: aki_in_adv,
