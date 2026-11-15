@@ -121,6 +121,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     {
         // Middle-button drag pans the view whatever the tool.
         ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::Pan { start, center: v.center, middle: true }));
+        app.session.tool_press_elsewhere();
         app.session.tool_hover_ended(view);
     } else if let Some(d) = drag {
         // The pointer gone (a pen lifted with its press), the drag ends where it was last seen.
@@ -341,6 +342,9 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
     // view tools are not that tool.
     if !space && matches!(d, Drag::ZoomBox { .. } | Drag::ZoomScrub { .. } | Drag::Pan { .. } | Drag::RotateView { .. }) {
         crate::shortcuts::note_tool_use(app);
+    }
+    if !matches!(d, Drag::Tool) {
+        app.session.tool_press_elsewhere();
     }
     // Panning, zooming or turning the view takes the pointer from the tool's hover.
     if !tool_holds(d) {
