@@ -188,6 +188,8 @@ fn snapped(d: Vec2, unsnapped: Vec2, shift: bool, guides: &[Overlay]) -> bool {
 pub struct DirectSelectionTool {
     group: bool,
     state: State,
+    /// How far the move's last preview carried the anchors or the objects ([`Tool::readout`]).
+    moved: Option<Vec2>,
     /// The spine point last clicked (blend, anchor): its handles show and can be dragged.
     spine: Option<(NodeId, usize)>,
     /// Other points of that spine picked with it (Shift-click adds or takes one away); dragging
@@ -251,6 +253,7 @@ impl DirectSelectionTool {
         Self {
             group,
             state: State::Idle,
+            moved: None,
             spine: None,
             spine_more: vec![],
             mesh: MeshEdit::default(),
@@ -732,6 +735,10 @@ impl Tool for DirectSelectionTool {
     }
     fn busy(&self) -> bool {
         !matches!(self.state, State::Idle) || self.guide.busy()
+    }
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        let moving = matches!(self.state, State::MoveAnchors { began: true, .. } | State::MoveObject { began: true, .. });
+        self.moved.filter(|_| moving).map(crate::Readout::drag)
     }
     fn options(&self) -> Value {
         self.mesh.options()
@@ -1486,6 +1493,7 @@ impl DirectSelectionTool {
             (d, self.guides) = (q - grab, guides);
         }
         self.snapped = snapped(d, unsnapped, ev.mods.shift, &self.guides);
+        self.moved = Some(d);
         out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y})));
         out
     }
@@ -1538,6 +1546,7 @@ impl DirectSelectionTool {
                 (d, self.guides) = (q - held, guides);
             }
             self.snapped = snapped(d, unsnapped, ev.mods.shift, &self.guides);
+            self.moved = Some(d);
             out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y})));
             return out;
         }
@@ -1553,6 +1562,7 @@ impl DirectSelectionTool {
             (d, self.guides) = if ev.mods.shift { snap.snap_along(cx, hold, d, ev.mods.alt) } else { snap.snap(cx, hold, d, ev.mods.alt) };
         }
         self.snapped = snapped(d, unsnapped, ev.mods.shift, &self.guides);
+        self.moved = Some(d);
         out.push(Action::Preview(
             "object.transform".into(),
             json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(d)), "copy": ev.mods.alt}),
