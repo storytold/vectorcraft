@@ -526,7 +526,7 @@ fn preserve_text_writes_point_type_as_a_type_layer_between_pixel_layers() {
     assert!(has(b"/UseFractionalGlyphWidths true"), "Fractional Widths on");
 
     // A reader takes the file, and the merged image is the same render.
-    assert_eq!(::psd::Psd::from_bytes(&file).unwrap().layers().len(), 3);
+    assert_eq!(craft_psd::PsdFile::from_bytes(&file).unwrap().layers().len(), p.records.len());
     let plain = export(&doc, &RasterExportOptions { ppi: 144.0, ..opts(PsdOptions::default()) });
     assert_eq!(merged(&file), merged(&plain));
     assert_eq!(parse(&plain).records.iter().filter(|r| r.type_tool.is_some()).count(), 0, "off: no type layers");
@@ -562,11 +562,20 @@ fn type_a_type_layer_cant_draw_stays_pixels() {
     b.add(tabbed);
     let leading = type_node(&mut b, (40.0, 10.0), "Auto", |t| t.para.justification.auto_leading = 150.0);
     b.add(leading);
-    // Hebrew: right to left from its first strong character, so Auto alignment is right.
-    let hebrew = type_node(&mut b, (70.0, 10.0), "שלום", |_| {});
+    // Hebrew: right to left from its first strong character, so Auto alignment is right. In an
+    // installed font that covers it when there is one; otherwise its font lacks it.
+    let hebrew_face = vectorcraft_text::FontDb::global().face_covering('ש');
+    let hebrew = type_node(&mut b, (70.0, 10.0), "שלום", |t| {
+        if let Some(f) = &hebrew_face {
+            (t.runs[0].style.font_family, t.runs[0].style.font_style) = (f.family.clone(), f.style.clone());
+        }
+    });
     b.add(hebrew);
     let tracked = type_node(&mut b, (10.0, 58.0), "Tracked", |t| t.runs[0].style.tracking = 0.5);
     b.add(tracked);
+    // Drawn partly with a fallback font: the bundled fonts have no 縦.
+    let fallback = type_node(&mut b, (40.0, 58.0), "A縦", |_| {});
+    b.add(fallback);
     let mut doc = b.build();
     let with = |o: PsdOptions| export(&doc, &opts(o));
     assert_eq!(with(PsdOptions { preserve_text: true, ..PsdOptions::default() }), with(PsdOptions::default()), "one pixel layer either way");
@@ -585,7 +594,7 @@ fn type_a_type_layer_cant_draw_stays_pixels() {
 fn vertical_type_and_maximum_editability() {
     let mut b = DocBuilder::new(100.0, 60.0);
     b.rect(Rect::new(0.0, 0.0, 10.0, 10.0), Color::rgb8(255, 0, 0), |_| {});
-    let t = type_node(&mut b, (50.0, 10.0), "縦", |t| t.vertical = true);
+    let t = type_node(&mut b, (50.0, 10.0), "Up", |t| t.vertical = true);
     b.add(t);
     let hidden = type_node(&mut b, (10.0, 50.0), "Hidden", |_| {});
     b.add(Node { visible: false, ..hidden });
@@ -597,7 +606,7 @@ fn vertical_type_and_maximum_editability() {
     let square = doc.layers[0].children().unwrap()[0].display_name();
     assert_eq!(
         rows,
-        [("</Layer group>", false, false), (square.as_str(), false, false), ("縦", true, false), ("Hidden", true, true), ("Layer 1", false, false)],
+        [("</Layer group>", false, false), (square.as_str(), false, false), ("Up", true, false), ("Hidden", true, true), ("Layer 1", false, false)],
         "each object a layer of its own; hidden type is a hidden type layer"
     );
     let t = type_tool(p.records[2].type_tool.as_deref().unwrap());
@@ -618,6 +627,62 @@ fn type_layer_keeps_fractional_widths_off() {
     let Item::Raw(engine) = item(&t.text, "EngineData") else { panic!("EngineData") };
     let needle = b"/UseFractionalGlyphWidths false";
     assert!(engine.windows(needle.len()).any(|w| w == needle), "whole-point advances, as the pixels are drawn");
+}
+
+#[test]
+fn type_layer_keeps_the_anti_aliasing_method() {
+    use vectorcraft_doc::text::TypeAntiAlias;
+    let engine_anti_alias = |doc: &Document, o: &RasterExportOptions| {
+        let file = export(doc, o);
+        let p = parse(&file);
+        let t = type_tool(p.records.iter().find_map(|r| r.type_tool.as_deref()).expect("a type layer"));
+        let Item::Raw(engine) = item(&t.text, "EngineData") else { panic!("EngineData") };
+        let at = engine.windows(11).position(|w| w == b"/AntiAlias ").expect("AntiAlias");
+        let Item::Enum(_, method) = item(&t.text, "AntA") else { panic!("AntA") };
+        (method.clone(), engine[at + 11])
+    };
+    let o = opts(PsdOptions { preserve_text: true, ..PsdOptions::default() });
+    for (aa, key, number) in [
+        (TypeAntiAlias::None, "Anno", b'0'),
+        (TypeAntiAlias::Sharp, "AnSh", b'4'),
+        (TypeAntiAlias::Crisp, "AnCr", b'1'),
+        (TypeAntiAlias::Strong, "AnSt", b'2'),
+    ] {
+        let mut b = DocBuilder::new(100.0, 60.0);
+        let t = type_node(&mut b, (10.0, 30.0), "Edges", |t| t.anti_alias = aa);
+        b.add(t);
+        let doc = b.build();
+        assert_eq!(engine_anti_alias(&doc, &o), (key.to_string(), number), "{aa:?}");
+        let hard = RasterExportOptions { anti_alias: crate::AntiAlias::None, ..o.clone() };
+        assert_eq!(engine_anti_alias(&doc, &hard), ("Anno".to_string(), b'0'), "{aa:?} exported without anti-aliasing");
+    }
+}
+
+#[test]
+fn variation_selectors_and_joiners_need_no_glyph() {
+    let mut b = DocBuilder::new(100.0, 60.0);
+    let t = type_node(&mut b, (10.0, 30.0), "A\u{FE0F}\u{200D}B\u{E0100}", |_| {});
+    b.add(t);
+    let file = export(&b.build(), &opts(PsdOptions { preserve_text: true, ..PsdOptions::default() }));
+    assert_eq!(parse(&file).records.iter().filter(|r| r.type_tool.is_some()).count(), 1);
+}
+
+#[test]
+fn hidden_type_left_out_keeps_its_layer_whole() {
+    let mut b = DocBuilder::new(100.0, 60.0);
+    b.rect(Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb8(255, 0, 0), |_| {});
+    let t = type_node(&mut b, (20.0, 40.0), "Hidden", |_| {});
+    b.add(Node { visible: false, ..t });
+    b.rect(Rect::new(60.0, 10.0, 90.0, 40.0), Color::rgb8(0, 0, 255), |_| {});
+    let doc = b.build();
+    let with = |o: PsdOptions| export(&doc, &opts(o));
+    assert_eq!(with(PsdOptions { preserve_text: true, ..PsdOptions::default() }), with(PsdOptions::default()), "one pixel layer either way");
+    let shown = parse(&with(PsdOptions { preserve_text: true, hidden_layers: true, ..PsdOptions::default() }))
+        .records
+        .iter()
+        .filter(|r| r.type_tool.is_some() && r.hidden)
+        .count();
+    assert_eq!(shown, 1, "with hidden layers: a hidden type layer");
 }
 
 #[test]

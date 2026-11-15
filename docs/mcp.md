@@ -8641,17 +8641,18 @@ drawn. Files are at most 30000 pixels a side.
 
 `preserveText: true` (with layers; refused with `layers: false`) writes horizontal and vertical point type as type
 layers that a reader can edit: each holds the text, its fonts (by PostScript name), sizes, leading, tracking, scaling,
-baseline shift, caps, underline, strikethrough, fill color, Fractional Widths, paragraph alignment and orientation, at
-the export's resolution, and keeps its pixels for readers that show them. The font is the installed version the
-character style names, if any. VectorCraft writes only point type in solid colors with whole-number tracking that
-sets no other character attribute (no stroke, kerning, rotation, OpenType feature, small caps, position or East Asian setting), whose
-paragraphs set nothing but their alignment and line breaking (no indents, spacing, tabs, bullets or numbers, Auto
-Leading, word or letter spacing) and run left to right (set, or from their first strong character), and that has no
-inline graphics, ruby, System Layout, Optical Margin Alignment, effects, appearance of its own or opacity mask as a
-type layer; other type, area type and type on a path stay pixels. Without `maxEditability`, a layer or sublayer that
-holds such type becomes a group of its type layers and one pixel layer for each stretch of art between them, unless
-other art in it blends in a mode other than Normal: then the layer stays one pixel layer. With
-`maxEditability`, every object is a layer as above. The PSD Options dialog has the option as Preserve Text Editability
+baseline shift, caps, underline, strikethrough, fill color, Fractional Widths, paragraph alignment, orientation and
+anti-aliasing method (None with `antiAlias: none`), at the export's resolution, and keeps its pixels for readers that
+show them. The font is the installed version the character style names, if any. VectorCraft writes only point type in
+solid colors with whole-number tracking whose characters are all in their own font (none drawn with a fallback font),
+that sets no other character attribute (no stroke, kerning, rotation, OpenType feature, small caps, position or East
+Asian setting), whose paragraphs set nothing but their alignment and line breaking (no indents, spacing, tabs,
+bullets or numbers, Auto Leading, word or letter spacing) and run left to right (set, or from their first strong
+character), and that has no inline graphics, ruby, System Layout, Optical Margin Alignment, effects, appearance of its
+own or opacity mask as a type layer; other type, area type and type on a path stay pixels. Without `maxEditability`, a
+layer or sublayer that holds such type becomes a group of its type layers and one pixel layer for each stretch of art
+between them, unless other art in it blends in a mode other than Normal: then the layer stays one pixel layer. Hidden
+type counts only with `hiddenLayers`. With `maxEditability`, every object is a layer as above. The PSD Options dialog has the option as Preserve Text Editability
 (<https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/export-file-format-options-in-illustrator.html>).
 
 ```json

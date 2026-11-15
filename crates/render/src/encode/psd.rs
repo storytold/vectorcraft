@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use vectorcraft_color::{BlendMode, cms};
+use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{Document, Knockout, LayerColor, Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
 
@@ -469,13 +470,14 @@ impl Parts<'_> {
             let record = self.draw(n);
             let [top, left, bottom, right] = record.rect.map(f64::from);
             let origin = Point::new(self.region.x0, self.region.y0);
-            let smooth = self.ro.anti_alias != AntiAlias::None;
-            let type_tool = Some(psd_type::type_block(t, origin, self.scale, Rect::new(left, top, right, bottom), smooth));
+            let aa = if self.ro.anti_alias == AntiAlias::None { TypeAntiAlias::None } else { t.anti_alias };
+            let type_tool = Some(psd_type::type_block(t, origin, self.scale, Rect::new(left, top, right, bottom), aa));
             self.records.push(Record { blend: blend_key(n.blend), opacity, hidden, type_tool, ..record });
             return;
         }
         let per_object = self.o.max_editability;
-        if (per_object || self.o.preserve_text && holds_type(n))
+        let hidden_layers = self.o.hidden_layers;
+        if (per_object || self.o.preserve_text && holds_type(n, hidden_layers))
             && splits(n)
             && let Some(children) = n.children()
         {
@@ -488,7 +490,7 @@ impl Parts<'_> {
                 // The art between type layers stays together, one pixel layer per stretch.
                 let mut stretch: Vec<Arc<Node>> = vec![];
                 for c in children {
-                    if psd_type::editable(c).is_some() || holds_type(c) {
+                    if type_layer(c, hidden_layers) {
                         self.add_stretch(n, std::mem::take(&mut stretch));
                         self.add(c);
                     } else {
@@ -589,18 +591,25 @@ fn splits(n: &Node) -> bool {
 /// Does layer `n`, or a sublayer that can be written as a group, hold point type that can be a type
 /// layer? Not when other art in it blends in a mode other than normal (the object, or a fill or
 /// stroke of it, as [`Node::blends_through`] sees it): drawn as a pixel layer of its own, it would no
-/// longer blend with the type or the art below.
-fn holds_type(n: &Node) -> bool {
+/// longer blend with the type or the art below. Hidden type counts only when `hidden` (Include
+/// Hidden Layers) writes it.
+fn holds_type(n: &Node, hidden: bool) -> bool {
     let Some(children) = n.children().filter(|_| splits(n)) else { return false };
     let mut held = false;
     for c in children {
-        if psd_type::editable(c).is_some() || holds_type(c) {
+        if type_layer(c, hidden) {
             held = true;
         } else if Node::children_blend(std::slice::from_ref(c), &mut |c| c.blends_through()) {
             return false;
         }
     }
     held
+}
+
+/// Is child `c` written as a type layer, or as a group holding one ([`holds_type`])? A hidden child
+/// is written only when `hidden`.
+fn type_layer(c: &Node, hidden: bool) -> bool {
+    (c.visible || hidden) && (psd_type::editable(c).is_some() || holds_type(c, hidden))
 }
 
 /// Does anything in `n` carry effects of its own that may paint outside the art's bounds?

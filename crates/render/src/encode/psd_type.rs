@@ -5,14 +5,16 @@
 //! The layer keeps its pixels for readers that show them.
 
 use vectorcraft_color::Paint;
+use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{CharStyle, Justify, Node, NodeKind, ParaStyle, TextKind, TextObject};
 use vectorcraft_geom::{Affine, Point, Rect};
 
 /// Point type that a type layer draws as `n` draws: horizontal or vertical point type with text,
 /// whose characters use only the attributes a type layer carries ([`carried`]) in solid colours
-/// with whole-number tracking, without strokes or inline graphics, whose paragraphs set only an alignment ([`flat`]) and run
-/// left to right, and without System Layout, Optical Margin Alignment, ruby, an appearance of its
-/// own, effects or an opacity mask. Other type stays pixels.
+/// with whole-number tracking, each drawn with its own font (no fallback font), without strokes or
+/// inline graphics, whose paragraphs set only an alignment ([`flat`]) and run left to right, and
+/// without System Layout, Optical Margin Alignment, ruby, an appearance of its own, effects or an
+/// opacity mask. Other type stays pixels.
 pub(super) fn editable(n: &Node) -> Option<&TextObject> {
     let NodeKind::Text(t) = &n.kind else { return None };
     let text = t.plain_text();
@@ -33,8 +35,23 @@ pub(super) fn editable(n: &Node) -> Option<&TextObject> {
             .iter()
             .all(|r| r.inline.is_none() && matches!(r.style.fill, Paint::Solid { .. }) && matches!(r.style.stroke, Paint::None) && carried(&r.style))
         // A type layer's tracking is a whole number of thousandths of an em.
-        && t.runs.iter().all(|r| r.style.tracking.fract() == 0.0);
+        && t.runs.iter().all(|r| r.style.tracking.fract() == 0.0)
+        // The type layer names one font per run: a character its font lacks would be drawn with
+        // another. Breaks, joiners and variation selectors draw no glyph of their own (as the
+        // shaper's `drawn_chars` counts them).
+        && t.runs.iter().all(|r| face(&r.style).is_some_and(|f| r.text.chars().all(|c| !drawn(c) || f.covers(c))));
     plain.then_some(&**t)
+}
+
+/// Does `c` need a glyph of its own: not a control character (tab, line or paragraph break), a
+/// line separator, a joiner or a variation selector?
+fn drawn(c: char) -> bool {
+    !(c.is_control() || matches!(c, '\u{200C}' | '\u{200D}' | '\u{2028}' | '\u{FE00}'..='\u{FE0F}' | '\u{E0100}'..='\u{E01EF}'))
+}
+
+/// The face the text of style `s` is drawn with: its font version when that is installed.
+fn face(s: &CharStyle) -> Option<std::sync::Arc<vectorcraft_text::FontFace>> {
+    vectorcraft_text::FontDb::global().face_version(&s.font_family, &s.font_style, s.font_version.as_deref())
 }
 
 /// Does paragraph `p` set only its alignment, the others being at their defaults (no indents,
@@ -266,7 +283,7 @@ fn descriptor(out: &mut Vec<u8>, class: &str, items: &[(&str, V)]) {
 /// installed), as type layers name fonts; without the face installed, its family and style without
 /// spaces.
 fn postscript(s: &CharStyle) -> String {
-    if let Some(face) = vectorcraft_text::FontDb::global().face_version(&s.font_family, &s.font_style, s.font_version.as_deref()) {
+    if let Some(face) = face(s) {
         return face.postscript_name();
     }
     let squeeze = |s: &str| -> String { s.chars().filter(|c| c.is_ascii_graphic() && !"[](){}<>/%".contains(*c)).collect() };
@@ -317,10 +334,21 @@ fn paragraph_data(j: Justify) -> E {
     E::Dict(vec![("Justification", E::Int(n)), ("AutoLeading", E::Real(1.2)), ("LeadingType", E::Int(0))])
 }
 
-/// The `EngineData` of `t` at `px` pixels per point: the text with a `\r` after each paragraph,
-/// a style run per text run and a paragraph run per paragraph (lengths in UTF-16 units), point
-/// type's shape, and the fonts.
-fn engine_data(t: &TextObject, px: f64, smooth: bool) -> Vec<u8> {
+/// The anti-aliasing method `aa` as the text descriptor's `AntA` value and the `EngineData`
+/// `AntiAlias` number.
+fn anti_alias(aa: TypeAntiAlias) -> (&'static str, i64) {
+    match aa {
+        TypeAntiAlias::None => ("Anno", 0),
+        TypeAntiAlias::Crisp => ("AnCr", 1),
+        TypeAntiAlias::Strong => ("AnSt", 2),
+        TypeAntiAlias::Sharp => ("AnSh", 4),
+    }
+}
+
+/// The `EngineData` of `t` at `px` pixels per point, drawn with anti-aliasing `aa`: the text with a
+/// `\r` after each paragraph, a style run per text run and a paragraph run per paragraph (lengths in
+/// UTF-16 units), point type's shape, and the fonts.
+fn engine_data(t: &TextObject, px: f64, aa: TypeAntiAlias) -> Vec<u8> {
     let text = t.plain_text().replace('\n', "\r");
     let mut fonts: Vec<String> = vec![];
     let (mut styles, mut lengths) = (vec![], vec![]);
@@ -410,7 +438,7 @@ fn engine_data(t: &TextObject, px: f64, smooth: bool) -> Vec<u8> {
                 ("Editor", E::Dict(vec![("Text", E::Str(format!("{text}\r")))])),
                 ("ParagraphRun", E::Dict(vec![("RunArray", E::Array(paras)), ("RunLengthArray", E::Array(para_lengths)), ("IsJoinable", E::Int(1))])),
                 ("StyleRun", E::Dict(vec![("RunArray", E::Array(styles)), ("RunLengthArray", E::Array(lengths)), ("IsJoinable", E::Int(2))])),
-                ("AntiAlias", E::Int(if smooth { 3 } else { 0 })),
+                ("AntiAlias", E::Int(anti_alias(aa).1)),
                 ("UseFractionalGlyphWidths", E::Bool(t.fractional_widths)),
                 (
                     "Rendered",
@@ -431,10 +459,10 @@ fn engine_data(t: &TextObject, px: f64, smooth: bool) -> Vec<u8> {
 }
 
 /// The `TySh` block of point type `t`, drawn into a canvas whose top left is `origin` (document
-/// points) at `px` pixels per point; `ink` is what the layer paints, in canvas pixels. The
-/// transform maps the text's own space, in pixels with its origin at the first baseline's start,
-/// to the canvas.
-pub(super) fn type_block(t: &TextObject, origin: Point, px: f64, ink: Rect, smooth: bool) -> Vec<u8> {
+/// points) at `px` pixels per point with anti-aliasing `aa`; `ink` is what the layer paints, in
+/// canvas pixels. The transform maps the text's own space, in pixels with its origin at the first
+/// baseline's start, to the canvas.
+pub(super) fn type_block(t: &TextObject, origin: Point, px: f64, ink: Rect, aa: TypeAntiAlias) -> Vec<u8> {
     let [a, b, c, d, e, f] = t.xf.as_coeffs();
     let xf = Affine::new([a, b, c, d, (e - origin.x) * px, (f - origin.y) * px]);
     // The ink in text space: the canvas rectangle taken back through the transform.
@@ -473,11 +501,11 @@ pub(super) fn type_block(t: &TextObject, origin: Point, px: f64, ink: Rect, smoo
             ("Txt ", V::Text(t.plain_text().replace('\n', "\r"))),
             ("textGridding", V::Enum("textGridding", "None")),
             ("Ornt", V::Enum("Ornt", orientation)),
-            ("AntA", V::Enum("Annt", if smooth { "AnSm" } else { "Anno" })),
+            ("AntA", V::Enum("Annt", anti_alias(aa).0)),
             ("bounds", rect("bounds")),
             ("boundingBox", rect("boundingBox")),
             ("TextIndex", V::Long(0)),
-            ("EngineData", V::Raw(engine_data(t, px, smooth))),
+            ("EngineData", V::Raw(engine_data(t, px, aa))),
         ],
     );
     // Warp version 1, descriptor version 16: no warp.
