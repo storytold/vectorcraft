@@ -188,6 +188,7 @@
 	Align to Artboard	આર્ટબોર્ડ પર સંરેખિત કરો
 	Align to Glyph Bounds	ગ્લિફ સીમા પર સંરેખિત કરો
 	Align to Key Object	કી ઑબ્જેક્ટ પર સંરેખિત કરો
+	Align to Key Anchor	કી એન્કર બિંદુ પર સંરેખિત કરો
 	Align to Page	પેજ પર સંરેખિત કરો
 	Align to Path	પાથ પર સંરેખિત કરો
 	Align to Pixel Grid	પિક્સેલ ગ્રિડ પર સંરેખિત કરો
@@ -471,6 +472,11 @@
 	CMYK Images	CMYK ઇમેજ
 	CMYK colours print with their own values; off, they go through the colour settings too.	CMYK રંગો પોતાની કિંમતો સાથે છાપે છે; બંધ હોય ત્યારે તે રંગ સેટિંગમાંથી પણ પસાર થાય છે.
 	CMYK:	CMYK:
+	RGB Policy:	RGB નીતિ:
+	CMYK Policy:	CMYK નીતિ:
+	Preserve Embedded Profiles	એમ્બેડ કરેલી પ્રોફાઇલ જાળવો
+	Convert to Working Space	કાર્યકારી સ્પેસમાં રૂપાંતરિત કરો
+	Preserve Numbers	સંખ્યાઓ જાળવો
 	CSS Properties	CSS ગુણધર્મો
 	Calligraphic Brush	કેલિગ્રાફિક બ્રશ
 	Calligraphic Brush Options	કેલિગ્રાફિક બ્રશ વિકલ્પો
@@ -1029,6 +1035,7 @@
 	Document model	દસ્તાવેજ મોડેલ
 	Document open password	દસ્તાવેજ ખોલવાનો પાસવર્ડ
 	Documents you create appear here.	તમે બનાવેલા દસ્તાવેજો અહીં દેખાશે.
+	Don't Color Manage This Document	આ દસ્તાવેજનું રંગ સંચાલન કરશો નહીં
 	Don't Relink	ફરીથી લિંક કરશો નહીં
 	Don't Save	સાચવશો નહીં
 	Don't Show Center	સેન્ટર બતાવશો નહીં
@@ -1234,7 +1241,6 @@
 	Every (minutes)	દર (મિનિટ)
 	Every option is at its default.	દરેક વિકલ્પ ડિફૉલ્ટ પર છે.
 	Every option matches {base}.	દરેક વિકલ્પ {base} સાથે મેળ ખાય છે.
-	Every-line Composer	એવરી-લાઇન કમ્પોઝર
 	Exact dash lengths	ચોક્કસ ડેશ લંબાઈ
 	Exceptions (comma separated)	અપવાદો (અલ્પવિરામથી અલગ)
 	Exclude	બાકાત રાખો
@@ -1509,6 +1515,8 @@
 	Global	ગ્લોબલ
 	Global Brush Dimensions	ગ્લોબલ બ્રશ પરિમાણો
 	Global Edit Options	ગ્લોબલ એડિટ વિકલ્પો
+	Select Similar Objects	સમાન ઑબ્જેક્ટ પસંદ કરો
+	Select Similar Options	સમાન પસંદગીના વિકલ્પો
 	Global Process Color	ગ્લોબલ પ્રોસેસ રંગ
 	Glowing Edges…	ગ્લોઇંગ એજિસ…
 	Glyph Bounds	ગ્લિફ બાઉન્ડ્સ
@@ -1538,6 +1546,40 @@
 	Graph Design	ગ્રાફ ડિઝાઇન
 	Graph Marker	ગ્રાફ માર્કર
 	Graph Type	ગ્રાફ પ્રકાર
+	Graph Options	ગ્રાફ વિકલ્પો
+	Left Axis	ડાબી અક્ષ
+	Right Axis	જમણી અક્ષ
+	Category Axis	શ્રેણી અક્ષ
+	Separate Scales	અલગ સ્કેલ
+	Add Drop Shadow	ડ્રોપ શેડો ઉમેરો
+	Add Legend Across Top	ઉપર લેજન્ડ ઉમેરો
+	First Row in Front	પ્રથમ પંક્તિ આગળ
+	First Column in Front	પ્રથમ કૉલમ આગળ
+	Legend	લેજન્ડ
+	Column Width	કૉલમ પહોળાઈ
+	Bar Width	બાર પહોળાઈ
+	Cluster Width	જૂથ પહોળાઈ
+	Mark Data Points	ડેટા પોઇન્ટ ચિહ્નિત કરો
+	Connect Data Points	ડેટા પોઇન્ટ જોડો
+	Edge-to-Edge Lines	કિનારીથી કિનારી સુધી રેખાઓ
+	Draw Filled Lines	ભરેલી રેખાઓ દોરો
+	Tick Values	ટિક મૂલ્યો
+	Override Calculated Values	ગણતરી કરેલાં મૂલ્યો બદલો
+	Divisions	વિભાગો
+	Tick Marks	ટિક ચિહ્નો
+	Tick Marks per Division	વિભાગ દીઠ ટિક ચિહ્નો
+	Draw Tick Marks Between Labels	લેબલ વચ્ચે ટિક ચિહ્નો દોરો
+	Add Labels	લેબલ ઉમેરો
+	Maximum must be more than Minimum.	મહત્તમ ન્યૂનતમ કરતાં વધુ હોવું જોઈએ.
+	Column Graph	કૉલમ ગ્રાફ
+	Stacked Column Graph	સ્ટેક્ડ કૉલમ ગ્રાફ
+	Bar Graph	બાર ગ્રાફ
+	Stacked Bar Graph	સ્ટેક્ડ બાર ગ્રાફ
+	Line Graph	રેખા ગ્રાફ
+	Area Graph	ક્ષેત્ર ગ્રાફ
+	Scatter Graph	સ્કેટર ગ્રાફ
+	Pie Graph	પાઇ ગ્રાફ
+	Radar Graph	રડાર ગ્રાફ
 	Graphic Pen…	ગ્રાફિક પેન…
 	Graphic Style	ગ્રાફિક સ્ટાઇલ
 	Graphic Style Libraries	ગ્રાફિક સ્ટાઇલ લાઇબ્રેરીઓ
@@ -1642,6 +1684,7 @@
 	Highlight Substituted Glyphs	બદલાયેલા ગ્લિફ હાઇલાઇટ કરો
 	Highlight Tracking	ટ્રેકિંગ હાઇલાઇટ કરો
 	Highlight Variable	વેરિએબલ હાઇલાઇટ કરો
+	Sort Variables	વેરિએબલનો ક્રમ લગાવો
 	Highlight anchors on mouse over	માઉસ ફેરવતાં એન્કર હાઇલાઇટ કરો
 	Highlight:	હાઇલાઇટ:
 	Hindi	હિન્દી
@@ -1864,6 +1907,14 @@
 	Lasso Tool	લાસો ટૂલ
 	Last	છેલ્લું
 	Last Artboard	છેલ્લું આર્ટબોર્ડ
+	Status Bar Show	સ્ટેટસ બારમાં બતાવો
+	Artboard Name	આર્ટબોર્ડનું નામ
+	Current Tool	વર્તમાન ટૂલ
+	Date and Time	તારીખ અને સમય
+	Number of Undos	પૂર્વવત્ કરવાની સંખ્યા
+	Document Color Profile	દસ્તાવેજની રંગ પ્રોફાઇલ
+	Undos	પૂર્વવત્
+	Redos	ફરીથી કરો
 	Last Effect: {name}	છેલ્લી ઇફેક્ટ: {name}
 	Last Effect…	છેલ્લી ઇફેક્ટ…
 	Last Page	છેલ્લું પેજ
@@ -1910,6 +1961,9 @@
 	Light Intensity	લાઇટ તીવ્રતા
 	Light Rough	લાઇટ રફ
 	Light behind the object	ઑબ્જેક્ટની પાછળ લાઇટ
+	Move Light to Back	લાઇટ પાછળ ખસેડો
+	Move Light to Front	લાઇટ આગળ ખસેડો
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	લાઇટ ખસેડવા માટે તેને ખેંચો. ઍરો કી ફોકસ થયેલી લાઇટ ખસેડે છે; Shift સાથે 15° ના પગલાં.
 	Lighten	હળવું કરો
 	Lighting	લાઇટિંગ
 	Lights	લાઇટ્સ
@@ -2102,6 +2156,7 @@
 	Merge Shared Edge	શેર કરેલી કિનાર મર્જ કરો
 	Merge Swatches	સ્વેચ મર્જ કરો
 	Merge colors into one row	રંગોને એક હરોળમાં મર્જ કરો
+	New Row	નવી હરોળ
 	Merge only with selection	માત્ર પસંદગી સાથે મર્જ કરો
 	Merged PRs	મર્જ થયેલા PR
 	Mesh Point Color	મેશ બિંદુનો રંગ
@@ -3257,6 +3312,8 @@
 	Scale Text Attributes	ટેક્સ્ટ ગુણધર્મો સ્કેલ કરો
 	Scale Tool	સ્કેલ ટૂલ
 	Scale at Center	કેન્દ્રથી સ્કેલ કરો
+	Delete Set	સેટ કાઢી નાખો
+	Direct Entry	સીધી એન્ટ્રી
 	Scale in Perspective	પર્સ્પેક્ટિવમાં સ્કેલ કરો
 	Scale to Fit Artboard	આર્ટબોર્ડમાં બંધબેસતું સ્કેલ કરો
 	Scale:	સ્કેલ:
@@ -3533,10 +3590,10 @@
 	Single Quotes:	એકલ અવતરણ ચિહ્નો:
 	Single Right Quotation Mark	જમણું એકલ અવતરણ ચિહ્ન
 	Single Word Justification:	એક શબ્દ જસ્ટિફિકેશન:
-	Single-line Composer	સિંગલ-લાઇન કમ્પોઝર
 	Sixth Space	છઠ્ઠી જગ્યા
 	Size	કદ
 	Size Tile to Art	ટાઇલનું કદ આર્ટ પ્રમાણે કરો
+	Move Tile with Art	ટાઇલને આર્ટ સાથે ખસેડો
 	Size/Leading	કદ/લીડિંગ
 	Size:	કદ:
 	Size: {size}  Tracking: {tracking}	કદ: {size}  ટ્રેકિંગ: {tracking}
@@ -4175,9 +4232,12 @@
 	Width:	પહોળાઈ:
 	Window	વિન્ડો
 	Wireframe	વાયરફ્રેમ
+	Render Settings	રેન્ડર સેટિંગ્સ
 	Word Spacing:	શબ્દ અંતર:
 	Words Longer Than:	આનાથી લાંબા શબ્દો:
 	Working CMYK	કાર્યકારી CMYK
+	Working CMYK: {name}	કાર્યકારી CMYK: {name}
+	Working RGB: {name}	કાર્યકારી RGB: {name}
 	Workspace	વર્કસ્પેસ
 	Wrinkle	કરચલી
 	Wrinkle Tool	કરચલી ટૂલ
@@ -4712,3 +4772,8 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Repeat Objects	પુનરાવર્તિત ઑબ્જેક્ટ્સ
 @msg	`{path}` must be one of {_1}, not {got}	`{path}` એ {_1}માંથી એક હોવું જોઈએ, {got} નહીં
 	Path Length	પાથની લંબાઈ
+	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
+	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"

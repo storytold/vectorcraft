@@ -102,7 +102,7 @@ const RANGES: [(&str, f64, f64, bool); 13] = [
     ("blendSteps", 1.0, 256.0, true),
 ];
 
-const FLAGS: [&str; 4] = ["cap", "bevelInside", "lightBehind", "drawHiddenFaces"];
+const FLAGS: [&str; 5] = ["cap", "bevelInside", "lightBehind", "drawHiddenFaces", "preserveSpotColors"];
 
 /// Check Extrude & Bevel (Classic)'s parameters `p` (its defaults filled in): every key is one of
 /// its parameters, numbers are in range, flags are true or false, and `surface`, `shadingColor` and
@@ -127,7 +127,7 @@ const ROTATE_RANGES: [(&str, f64, f64, bool); 9] = [
 /// Check Rotate (Classic)'s parameters `p` (its defaults filled in) as [`validate`] checks Extrude &
 /// Bevel (Classic)'s, with `surface` No Shading or Diffuse only.
 pub fn validate_rotate(p: &Value) -> Result<(), String> {
-    validate_classic(CLASSIC_ROTATE, p, &ROTATE_RANGES, &["lightBehind"])?;
+    validate_classic(CLASSIC_ROTATE, p, &ROTATE_RANGES, &["lightBehind", "preserveSpotColors"])?;
     if p.get("surface").is_some_and(|v| !v.as_str().is_some_and(|s| ROTATE_SURFACES.contains(&s))) {
         return Err(format!("`surface` must be one of {}", ROTATE_SURFACES.join(", ")));
     }
@@ -192,6 +192,35 @@ fn shaded(c: Color, tone: f64, spec: f64, shade: Option<Color>) -> Color {
     Color::rgb(r, g, b)
 }
 
+/// Whether Preserve Spot Colors applies with parameters `p`: `preserveSpotColors` is on and the
+/// shading color is not Custom, which cannot keep a spot color.
+fn preserves_spot_colors(p: &Value) -> bool {
+    flag(p, "preserveSpotColors", false) && text(p, "shadingColor", "black") != "custom"
+}
+
+/// A face of `paint`, a color linked to a swatch, with Preserve Spot Colors: the swatch at a lower
+/// tint for the highlight `spec`, its link kept so a spot color stays on its own plate, and, where
+/// tone `tone` is below full light and the faces darken (`shade`), black over it at `1 - tone`,
+/// multiplied and overprinting, so it prints on the black plate. `seam` is the width of the seam
+/// stroke each layer draws around the face.
+fn linked_face(paint: &Paint, tone: f64, spec: f64, shade: Option<Color>, seam: f64) -> Vec<AppearanceItem> {
+    let Paint::Solid { color, swatch, tint } = paint else { return vec![] };
+    let keep = (1.0 - spec).clamp(0.0, 1.0) as f32;
+    let fill = Paint::Solid { color: color.tinted(keep), swatch: swatch.clone(), tint: tint * keep };
+    let mut items = vec![AppearanceItem::Fill(FillLayer::new(fill.clone())), AppearanceItem::Stroke(crate::lighting::seam_stroke(fill, seam))];
+    if shade.is_some() && tone < 1.0 {
+        let black = Paint::solid(Color::gray((1.0 - tone).clamp(0.0, 1.0) as f32));
+        let mut layer = FillLayer::new(black.clone());
+        layer.blend = BlendMode::Multiply;
+        layer.overprint = true;
+        let mut edge = crate::lighting::seam_stroke(black, seam);
+        edge.blend = BlendMode::Multiply;
+        edge.overprint = true;
+        items.extend([AppearanceItem::Fill(layer), AppearanceItem::Stroke(edge)]);
+    }
+    items
+}
+
 /// The width of the stroke [`surface`] draws around `face` with parameters `p`: a wire edge on
 /// Wireframe, else the seam between faces.
 pub(crate) fn stroke_width(face: &Facet, p: &Value) -> f64 {
@@ -200,12 +229,14 @@ pub(crate) fn stroke_width(face: &Facet, p: &Value) -> f64 {
 
 /// One solid's faces in paint `paint`, as a group with the paint's opacity and blend mode, one child
 /// for each facet: the edges of the faces on Wireframe, else each face filled in its paint shaded by
-/// its tone and highlight. A gradient with transparent stops is shaded opaque and then masked by
+/// its tone and highlight (with Preserve Spot Colors, a color linked to a swatch as [`linked_face`]
+/// draws it). A gradient with transparent stops is shaded opaque and then masked by
 /// its own transparency, so the shading follows the gradient's coverage.
 pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32, blend: BlendMode, p: &Value) -> Node {
     let shading = classic_shading(p);
     let lights = lights(p);
     let shade = shading_color(p);
+    let preserve = preserves_spot_colors(p);
     let wire = shading.surface == ClassicSurface::Wireframe;
     let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_paint(source) };
     let paint = &paint;
@@ -228,6 +259,10 @@ pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32
                         AppearanceItem::Fill(FillLayer::new(paint.clone())),
                         AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam)),
                     ]
+                }
+                // Preserve Spot Colors: a color linked to a swatch stays a tint of that swatch.
+                Some(_) if preserve && matches!(paint, Paint::Solid { swatch: Some(_), .. }) && !paint.is_registration() => {
+                    linked_face(paint, tone, spec, shade, seam)
                 }
                 Some(c) => {
                     let fill = Paint::solid(shaded(c, tone, spec, shade));

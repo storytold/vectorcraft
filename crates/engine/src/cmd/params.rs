@@ -369,6 +369,12 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     {
         return Err(bad(id, "`origin` must be [x, y] in points"));
     }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(axes) = given.get("axes")
+        && vectorcraft_render::effects::svg_filter::valid_axes(axes).is_none()
+    {
+        return Err(bad(id, "`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0"));
+    }
     // Its name is the filter's id.
     if effect == vectorcraft_render::effects::SVG_FILTER && given.contains_key("name") && !given.contains_key("xml") {
         return Err(bad(id, "an SVG filter is named by its id: give `xml` with `name`"));
@@ -529,7 +535,6 @@ pub const UNCHECKED: &[&str] = &[
     "assets.settings.set",
     "attributes.info",
     "attributes.set",
-    "brush.freehand",
     "css.export",
     "css.generate",
     "css.selection",
