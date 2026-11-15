@@ -1415,6 +1415,8 @@ file-filter	Templates	範本
 	Graph	圖表
 	Graph Data	圖表資料
 	Graph Type	圖表類型
+	Graph Type…	圖表類型…
+	Graph Data…	圖表資料…
 	Graph Options	圖表選項
 	Left Axis	左軸
 	Right Axis	右軸
@@ -2438,6 +2440,8 @@ file-filter	Templates	範本
 @msg	give only one of onto, below and above	onto、below 和 above 只能提供其中一個
 @msg	column must be true or a number from 1	column 必須是 true 或從 1 起算的數字
 @msg	unknown panel `{raw}`	未知的面板 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` 沒有可切換的顯示大小
+@msg	the panels are not shown	面板未顯示
 @msg	panels can't be shown in Presentation Mode	簡報模式下無法顯示面板
 @msg	x and y must both be numbers	x 和 y 都必須是數字
 @msg	Downloaded {what}	已下載 {what}
@@ -5674,6 +5678,7 @@ effect	Soft	柔和
 	Change Panel Layout	變更面板配置
 	Close Panel	關閉面板
 	Collapse Panel Group	摺疊面板群組
+	Cycle Display Sizes	切換顯示大小
 	Move Panel	移動面板
 	Group with	群組至
 	Resize panels	調整面板大小
@@ -5975,6 +5980,7 @@ lighting	Light	光源
 	Export Data Sets…	匯出資料集…
 	Load Variable Library…	載入變數資料庫…
 	Save Variable Library…	儲存變數資料庫…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	「匯入」讀取副檔名為 .csv、.tsv、.txt 或 .xml 的資料來源檔案
 @msg	a variable library holds text variables, and the document has none	變數資料庫包含文字變數，但文件中沒有文字變數
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	無法將變數 `{name}` 儲存到變數資料庫：請重新命名，使其以字母或 `_` 開頭，且不含空格或 `-`、`_`、`.` 以外的符號
 @msg	{k} has control characters	{k} 包含控制字元

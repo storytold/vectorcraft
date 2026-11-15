@@ -48,8 +48,10 @@ pub struct CharStyle {
     /// of the character's ink, inside its own width, that is taken away, 0 to [`MAX_TSUME`]. 50
     /// halves that space and 100 sets the ink edge to edge; the glyph itself is not scaled. A
     /// cluster takes the value of its first character. Tracking, kerning and Insert Aki are added
-    /// after it. Horizontal type only.
+    /// after it. In vertical type an upright character is measured above and below its ink, inside
+    /// its cell down the column.
     /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/format-east-asian-characters-in-vertical-text.html>
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub tsume: f64,
     /// Use glyph shapes for automatic pair spacing; false uses font metrics.

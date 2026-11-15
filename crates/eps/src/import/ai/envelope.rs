@@ -121,11 +121,12 @@ pub(super) fn options(o: &Obj) -> Option<(EnvelopeOptions, f64)> {
 
 /// The margins of `content` when the size the file saves for it (`AIDeformArtWidthKey`,
 /// `AIDeformArtHeightKey`) matches its bounds with its strokes within [`SAVED_SIZE_SLACK`] and lies
-/// nearer them than its geometric bounds. None without that size, or for contents with no width or
-/// no height.
-fn saved_margin(o: &Obj, content: &[Arc<Node>]) -> Option<[f32; 4]> {
+/// nearer them than its geometric bounds. The saved size is in art space, and `scale` takes it to the
+/// contents' space (a Large Canvas copy read at its declared scale). None without that size, or for
+/// contents with no width or no height.
+fn saved_margin(o: &Obj, content: &[Arc<Node>], scale: f64) -> Option<[f32; 4]> {
     let saved = |key: &str| match o.nums(key).as_slice() {
-        [v] if v.is_finite() => Some(*v),
+        [v] if v.is_finite() => Some(*v * scale).filter(|v| v.is_finite()),
         _ => None,
     };
     let (w, h) = (saved("AIDeformArtWidthKey")?, saved("AIDeformArtHeightKey")?);
@@ -508,9 +509,10 @@ fn unwrapped(mut nodes: Vec<Node>) -> Vec<Arc<Node>> {
 }
 
 /// The live envelope of dictionary `o`, the group on `%_` lines before it (`before`) and the art
-/// in its `AIDeformArtKey` block (`inner`); `None` where they don't make one.
-pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<NodeKind> {
-    envelope_as(o, before, inner, false)
+/// in its `AIDeformArtKey` block (`inner`); `None` where they don't make one. `scale` takes sizes in
+/// art space to the space the art was read into ([`saved_margin`]).
+pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>, scale: f64) -> Option<NodeKind> {
+    envelope_as(o, before, inner, false, scale)
 }
 
 /// Is the envelope of dictionary `o` a warp?
@@ -521,12 +523,12 @@ fn is_warp(o: &Obj) -> bool {
 /// [`live`] for a warp, as a mesh envelope on the grid its editing data saves (the mesh that shapes
 /// it), its points and handles as saved: it draws as that grid does, without the warp's style, bend
 /// and distortions. `None` for an envelope that isn't a warp, or whose grid doesn't read.
-fn live_on_saved_grid(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<NodeKind> {
-    envelope_as(o, before, inner, true)
+fn live_on_saved_grid(o: &Obj, before: Option<Node>, inner: Vec<Node>, scale: f64) -> Option<NodeKind> {
+    envelope_as(o, before, inner, true, scale)
 }
 
 /// [`live`], or with `on_grid` [`live_on_saved_grid`].
-fn envelope_as(o: &Obj, before: Option<Node>, inner: Vec<Node>, on_grid: bool) -> Option<NodeKind> {
+fn envelope_as(o: &Obj, before: Option<Node>, inner: Vec<Node>, on_grid: bool, scale: f64) -> Option<NodeKind> {
     let editing = switch(o, "AIDeformEditModeKey")?;
     let (mut options, fidelity) = options(o)?;
     let before = before?;
@@ -546,7 +548,7 @@ fn envelope_as(o: &Obj, before: Option<Node>, inner: Vec<Node>, on_grid: bool) -
         return None;
     }
     if options.distort_appearance {
-        options.bounds_margin = saved_margin(o, &content).unwrap_or_default();
+        options.bounds_margin = saved_margin(o, &content, scale).unwrap_or_default();
     }
     let kind = match (whole(o, "AIDeformStyle")??, on_grid) {
         (1, false) => warp(o)?,
@@ -637,14 +639,15 @@ pub(super) struct WarpedLook {
 
 /// An envelope of type read with its drawn art: its dictionary, the group on `%_` lines before it
 /// and the art in its `AIDeformArtKey` block, as [`live`] takes them (their text slots still
-/// empty), and the id of its drawn art in the document. Type is laid out after the layers are read,
-/// so it waits for that ([`WarpedType::settle_envelopes`]).
+/// empty), the id of its drawn art in the document, and the scale [`live`] takes. Type is laid out
+/// after the layers are read, so it waits for that ([`WarpedType::settle_envelopes`]).
 #[derive(Debug)]
 pub(crate) struct TypedEnvelope {
     pub(super) obj: Obj,
     pub(super) before: Option<Node>,
     pub(super) inner: Vec<Node>,
     pub(super) drawn: NodeId,
+    pub(super) scale: f64,
 }
 
 /// Why an envelope of type kept its drawn art.
@@ -788,7 +791,7 @@ impl WarpedType {
         shown: &BTreeSet<NodeId>,
         waiting: usize,
     ) -> Result<(NodeId, Vec<Node>), TypeKept> {
-        let TypedEnvelope { obj, mut before, mut inner, drawn } = envelope;
+        let TypedEnvelope { obj, mut before, mut inner, drawn, scale } = envelope;
         let art = doc.node(drawn).cloned().ok_or(TypeKept::Read)?;
         // The text slots in the contents, in the order the reader put their hidden copies in.
         let mut slots = vec![];
@@ -813,13 +816,13 @@ impl WarpedType {
         }
         // A warp that VectorCraft's own warp doesn't draw as its drawn art may still draw as the
         // grid the file saves for it: then it opens as a mesh envelope on that grid.
-        let on_grid = if is_warp(&obj) { live_on_saved_grid(&obj, before.clone(), inner.clone()) } else { None };
+        let on_grid = if is_warp(&obj) { live_on_saved_grid(&obj, before.clone(), inner.clone(), scale) } else { None };
         // With Distort Appearance, a file's envelope may map its type from its glyphs grown by half
         // their strokes' weight or from the glyphs alone, and for type the size the file saves for
         // that box is often out of date (not the size of the type there now): each is checked.
         // After all of those, each is checked mapping from what its type paints, where that box is
         // another: it is measured only when such a check comes and one is left.
-        let kinds: Vec<NodeKind> = live(&obj, before, inner).into_iter().chain(on_grid).collect();
+        let kinds: Vec<NodeKind> = live(&obj, before, inner, scale).into_iter().chain(on_grid).collect();
         if kinds.is_empty() {
             return Err(TypeKept::Read);
         }
