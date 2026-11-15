@@ -9,7 +9,7 @@ description = "VectorCraft text: font database, shaping, layout, glyph outlines"
 workspace = true
 
 [dependencies]
-craft-text = { git = "https://github.com/storytold/craft-libs", rev = "935dc0084680a3045b935ba303ab3ea08c38e1e7", default-features = false, features = ["positioned"] }
+craft-text = { git = "https://github.com/storytold/craft-libs", rev = "54485a66ceb7a7b6eaa584deee5bb76a85ea310f", default-features = false, features = ["positioned"] }
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
 kurbo = { workspace = true }

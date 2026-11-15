@@ -1,6 +1,32 @@
 //! Adapters from VectorCraft's shaped glyphs to the shared paragraph composer.
 
-pub(crate) use craft_text::composer::{Breakpoint, Exhausted, Measure, Params, compose, compose_with};
+use crate::justify::Flex;
+use crate::shape::SGlyph;
+pub(crate) use craft_text::composer::{Breakpoint, Exhausted, Measure, Params};
+
+pub(crate) fn compose(
+    g: &[SGlyph],
+    width: &dyn Fn(usize) -> f64,
+    start: &dyn Fn(usize) -> f64,
+    end: &dyn Fn(usize) -> f64,
+    cands: &[Breakpoint],
+    flex: &[Flex],
+    params: &Params,
+) -> Option<Vec<(usize, bool)>> {
+    craft_text::composer::compose(g, width, start, end, cands, flex, params)
+}
+
+pub(crate) fn compose_with<M: Measure>(
+    g: &[SGlyph],
+    measure: &mut M,
+    start: &dyn Fn(usize) -> f64,
+    end: &dyn Fn(usize) -> f64,
+    cands: &[Breakpoint],
+    flex: &[Flex],
+    params: &Params,
+) -> Option<Vec<(usize, bool)>> {
+    craft_text::composer::compose_with(g, measure, start, end, cands, flex, params)
+}
 
 impl craft_text::composer::Glyph for crate::shape::SGlyph {
     fn advance(&self) -> f64 {
