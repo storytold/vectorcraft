@@ -571,6 +571,9 @@ impl Writer<'_> {
         let base = self.char_props(&drawn.first_style(), space);
         let mut props = base.clone();
         let (from, to) = t.kind.path_span().unwrap_or((start, 1.0));
+        // Type on an open path may start before the path: a negative `startOffset`, and a reader
+        // does not draw the characters before the path's start, as the layout does not.
+        let from = t.kind.path_text_start().unwrap_or(from);
         // The anchor sits where the layout aligns the line within its span.
         let at = match t.para_at(0).justify {
             Justify::Center | Justify::JustifyCenter => {

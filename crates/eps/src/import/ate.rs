@@ -2,8 +2,9 @@
 //!
 //! The editing copy of a file keeps the characters of its text objects, with their fonts, sizes,
 //! colours and where they sit, in one text document of its own: between `%AI11_BeginTextDocument`
-//! and `%AI11_EndTextDocument`, ASCII85 of nested dictionaries with numbers for keys. A text object
-//! in a layer is only a stub naming its story in it (`/StoryIndex`).
+//! and `%AI11_EndTextDocument`, ASCII85 of nested dictionaries with numbers for keys (names in files
+//! saved for version 11, and for keys newer than the version a file is saved for: see [`names`]).
+//! A text object in a layer is only a stub naming its story in it (`/StoryIndex`).
 //!
 //! The format isn't documented. Most of what is read here was worked out from the files of the
 //! project's users, used locally and never committed, by comparing it with the type their pages
@@ -31,6 +32,8 @@ use vectorcraft_doc::{
     ParaDirection, ParaStyle, PathAlign, PathEffect, TabAlign, TabStop, TextKind, TextObject, TextRun,
 };
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
+
+mod names;
 
 /// Longest story read (bytes).
 pub(crate) const MAX_STORY: usize = 1 << 20;
@@ -631,7 +634,7 @@ impl Texts {
         if bytes.len() > MAX_BYTES {
             return None;
         }
-        let doc = read(&bytes)?;
+        let doc = names::numbered(read(&bytes)?);
         let fonts = doc
             .get("0")?
             .get("1")?
