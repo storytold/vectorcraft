@@ -1108,7 +1108,7 @@ dependencies = [
 [[package]]
 name = "craft-text"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=48dcbe61b1d4887f7b08f51b76e54cfb00d51c75#48dcbe61b1d4887f7b08f51b76e54cfb00d51c75"
+source = "git+https://github.com/storytold/craft-libs?rev=935dc0084680a3045b935ba303ab3ea08c38e1e7#935dc0084680a3045b935ba303ab3ea08c38e1e7"
 dependencies = [
  "kurbo 0.13.1",
 ]
