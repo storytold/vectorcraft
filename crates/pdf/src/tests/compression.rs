@@ -902,7 +902,9 @@ fn max_diff(a: &[u8], b: &[u8]) -> String {
 /// image that carries an ICC profile is converted from that profile (to sRGB, then to the
 /// destination) rather than from its numbers read as sRGB ones; an untagged image is converted
 /// from sRGB as before. A gray image keeps its profile (gray stays gray), and an RGB profile the
-/// CMS can't read leaves the numbers converted as sRGB ones, with a warning.
+/// CMS can't read leaves the numbers converted as sRGB ones, with a warning. An RGB destination
+/// that is the document's own RGB profile leaves RGB images as they are, so the image keeps its
+/// profile.
 #[test]
 fn convert_to_destination_converts_tagged_images_from_their_profile() {
     use vectorcraft_color::cms::{self, ColorSettings, DISPLAY_P3, GENERIC_CMYK, Intent, WIDE_GAMUT_RGB, icc_bytes};
@@ -955,6 +957,12 @@ fn convert_to_destination_converts_tagged_images_from_their_profile() {
             max_diff(&samples[0], &as_srgb)
         );
     }
+    // A destination that is the document's own RGB profile leaves RGB images as they are: the
+    // image keeps its profile, as untagged images keep their numbers.
+    let own = std::sync::Arc::new(cms::Cms::new(&ColorSettings { intent, rgb: WIDE_GAMUT_RGB.into(), ..ColorSettings::default() }).unwrap());
+    let settings = json!({"compatibility": "1.7", "output": {"conversion": "destination", "destination": WIDE_GAMUT_RGB}});
+    let (spaces, _) = cms::with_active(own, || export_images(&tagged_png, settings));
+    assert!(spaces.len() == 1 && spaces[0].space == "ICCBased" && spaces[0].icc.as_deref() == Some(p3.as_slice()), "own RGB profile: {spaces:?}");
     // A gray image keeps its gray profile in a CMYK destination.
     let gray = gray_profile(&[0x01CD]);
     let settings = json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}});

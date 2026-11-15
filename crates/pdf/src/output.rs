@@ -349,8 +349,9 @@ impl ColorOut {
     /// with ([`crate::images::recode`]): the colour settings' intent, with Convert to Destination
     /// and an sRGB destination, also when the document's RGB space is sRGB, or a destination
     /// colour images' pixels are then converted to ([`Self::pixels`]: CMYK, another RGB space).
-    /// `None` otherwise, Preserve Numbers included: such an image keeps its profile, or its
-    /// numbers are converted as sRGB ones.
+    /// `None` otherwise, Preserve Numbers and an RGB destination that is the document's own RGB
+    /// profile (which leaves RGB colours and RGB images as they are) included: such an image
+    /// keeps its profile, or its numbers are converted as sRGB ones.
     pub(crate) fn image_srgb_intent(&self) -> Option<Intent> {
         let d = self.dest.as_ref().filter(|d| d.destination)?;
         ((d.model == Model::Rgb && d.srgb) || self.pixels().is_some()).then_some(self.intent)
