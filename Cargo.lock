@@ -1008,8 +1008,9 @@ source = "git+https://github.com/storytold/craft-libs?rev=6d620e971e820b517b11a9
 [[package]]
 name = "craft-font-catalog"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=14bccd4e09094820babc434d2681297be8873bd9#14bccd4e09094820babc434d2681297be8873bd9"
+source = "git+https://github.com/storytold/craft-libs?rev=159b942defe3613c91a4beec5fadfcb1593f2600#159b942defe3613c91a4beec5fadfcb1593f2600"
 dependencies = [
+ "harfrust 0.13.3",
  "kurbo 0.13.1",
  "skrifa 0.47.0",
  "thiserror 2.0.21",

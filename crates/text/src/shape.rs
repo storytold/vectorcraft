@@ -8,7 +8,7 @@ use unicode_bidi::Level;
 use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 
-use harfrust::{BufferClusterLevel, Direction, Feature, ShapeOptions, Tag, UnicodeBuffer};
+use harfrust::{Direction, Feature, Tag};
 use kurbo::Shape;
 use skrifa::MetadataProvider;
 use skrifa::charmap::Charmap;
@@ -1515,46 +1515,28 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             let along_features = with_more(&|s| feats.resolve(s));
             // gid, cluster, x and y advance, x and y offset.
             let shape = |feats: &[Feature], direction: Direction| {
-                let mut buf = UnicodeBuffer::new();
-                for (i, c) in text_seg.char_indices() {
-                    let cl = (range.start + i) as u32;
-                    let c = st.digits.map(c);
-                    if upper {
-                        for u in c.to_uppercase() {
-                            buf.add(u, cl);
-                        }
-                    } else {
-                        buf.add(c, cl);
-                    }
-                }
-                buf.set_direction(direction);
-                buf.guess_segment_properties();
-                if char_level.get() {
-                    buf.set_cluster_level(BufferClusterLevel::Characters);
-                }
-                // The characters' language picks the font's forms for it (`locl`: Turkish keeps fi
-                // apart and the dot on its i).
-                if let Some(l) = &language {
-                    buf.set_language(l.clone());
-                }
-                // Harfrust keeps this Unicode context for joining/positional shaping, but does not emit
-                // glyphs for it. This retains context at real style/font segmentation boundaries without
-                // shaping across those boundaries or claiming cross-style ligatures/mark attachment.
-                if let Some(pre) = text.get(context.start..range.start) {
-                    buf.set_pre_context(pre);
-                }
-                if let Some(post) = text.get(range.end..context.end) {
-                    buf.set_post_context(post);
-                }
-                // A buffer whose characters name no script reads as `UNKNOWN`: its plan has none.
-                let script = Some(buf.script()).filter(|s| *s != harfrust::script::UNKNOWN);
-                let plan = face.shape_plan(&shaper, buf.direction(), script, language.as_ref(), feats);
-                let gb = shaper.shape(buf, ShapeOptions::new().features(feats).plan(Some(&plan)));
-                gb.glyph_infos()
-                    .iter()
-                    .zip(gb.glyph_positions())
-                    .map(|(info, pos)| (info.glyph_id, info.cluster, pos.x_advance, pos.y_advance, pos.x_offset, pos.y_offset))
-                    .collect::<Vec<_>>()
+                let input = craft_font_catalog::RunInput {
+                    text: text_seg,
+                    source_start: range.start,
+                    pre_context: text.get(context.start..range.start).unwrap_or_default(),
+                    post_context: text.get(range.end..context.end).unwrap_or_default(),
+                    direction,
+                    language: language.as_ref(),
+                    features: feats,
+                    character_clusters: char_level.get(),
+                    uppercase: upper,
+                };
+                craft_font_catalog::shape_run(
+                    &shaper,
+                    &input,
+                    |c| st.digits.map(c),
+                    |shaper, direction, script, language, features| face.shape_plan(shaper, direction, script, language, features),
+                )
+                // HarfRust clusters are u32; a run beyond that source offset cannot be represented.
+                .unwrap_or_default()
+                .into_iter()
+                .map(|g| (g.glyph_id, g.cluster, g.x_advance, g.y_advance, g.x_offset, g.y_offset))
+                .collect::<Vec<_>>()
             };
             let along = if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight };
             *raw = shape(&along_features, along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
