@@ -6793,6 +6793,7 @@ axis	Y Axis	Y 軸
 @msg	Image Trace failed: {e}	画像トレースに失敗しました: {e}
 @msg	Image Trace finished, but its document was closed	画像トレースは完了しましたが、ドキュメントが閉じられています
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	画像トレースは完了しましたが、その間に画像または設定が変更されました: もう一度トレースしてください
+@msg	Image Trace finished, but its document was reverted: trace it again	画像トレースは完了しましたが、ドキュメントは保存済みの状態に戻されました: もう一度トレースしてください
 @msg	Invalid dimension offset	寸法のオフセットが無効です
 @msg	Invalid point	点が無効です
 @msg	Join: a subpath went missing	連結: サブパスが見つからなくなりました

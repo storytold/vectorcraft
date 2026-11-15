@@ -7688,6 +7688,7 @@ breakText	Glyphs	Glyfy
 @msg	Image Trace failed: {e}	Vektorizace obrazu selhala: {e}
 @msg	Image Trace finished, but its document was closed	Vektorizace obrazu skončila, ale její dokument byl zavřen
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Vektorizace obrazu skončila, ale obraz nebo jeho nastavení se mezitím změnily: vektorizujte ho znovu
+@msg	Image Trace finished, but its document was reverted: trace it again	Vektorizace obrazu skončila, ale její dokument byl vrácen k uložené verzi: vektorizujte ho znovu
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importovat filtr SVG čte soubory SVG, ne SVGZ
 @msg	Invalid dimension offset	Neplatné odsazení kóty
 @msg	Invalid point	Neplatný bod

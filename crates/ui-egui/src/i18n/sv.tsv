@@ -8091,6 +8091,7 @@ digits	Hindi	Hindi
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Bildkalkering misslyckades: internt fel: dess tråd stoppades (rapportera gärna felet)
 @msg	Image Trace finished, but its document was closed	Bildkalkeringen är klar, men dess dokument har stängts
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Bildkalkeringen är klar, men bilden eller dess inställningar ändrades under tiden: vektorisera den igen
+@msg	Image Trace finished, but its document was reverted: trace it again	Bildkalkeringen är klar, men dess dokument har återgått till sparad version: vektorisera den igen
 @msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client eller server
 @msg	index out of range	index utanför intervallet
 @msg	instances must be 1..1000	instances måste vara 1..1000

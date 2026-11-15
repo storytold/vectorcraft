@@ -7177,6 +7177,7 @@ axis	Y Axis	Y ekseni
 @msg	Image Trace failed: {e}	Görüntü İzleme başarısız oldu: {e}
 @msg	Image Trace finished, but its document was closed	Görüntü İzleme tamamlandı, ancak belgesi kapatılmıştı
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Görüntü İzleme tamamlandı, ancak bu sırada görüntü veya ayarları değişti: yeniden izleyin
+@msg	Image Trace finished, but its document was reverted: trace it again	Görüntü İzleme tamamlandı, ancak belgesi geri döndürüldü: yeniden izleyin
 @msg	Invalid dimension offset	Geçersiz boyut ofseti
 @msg	Invalid point	Geçersiz nokta
 @msg	Join: a subpath went missing	Birleştir: bir alt yol kayboldu

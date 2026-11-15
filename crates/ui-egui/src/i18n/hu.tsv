@@ -7558,6 +7558,7 @@ breakText	Glyphs	Glifák
 @msg	Image Trace failed: {e}	A képvektorizálás nem sikerült: {e}
 @msg	Image Trace finished, but its document was closed	A képvektorizálás elkészült, de a dokumentumát bezárták
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	A képvektorizálás elkészült, de a kép vagy a beállításai közben megváltoztak: vektorizáld újra
+@msg	Image Trace finished, but its document was reverted: trace it again	A képvektorizálás elkészült, de a dokumentumát visszaállították a mentett változatra: vektorizáld újra
 @msg	Import SVG Filter reads SVG files, not SVGZ	Az SVG-szűrő importálása SVG-fájlokat olvas, SVGZ-fájlokat nem
 @msg	Invalid dimension offset	Érvénytelen méretvonal-eltolás
 @msg	Invalid point	Érvénytelen pont

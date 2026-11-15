@@ -7283,6 +7283,7 @@ breakText	Glyphs	글리프
 @msg	Image Trace failed: {e}	이미지 추적 실패: {e}
 @msg	Image Trace finished, but its document was closed	이미지 추적이 끝났지만 문서가 닫혔습니다
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	이미지 추적이 끝났지만 그 사이에 이미지나 설정이 바뀌었습니다: 다시 추적하세요
+@msg	Image Trace finished, but its document was reverted: trace it again	이미지 추적이 끝났지만 문서가 되돌려졌습니다: 다시 추적하세요
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG 필터 가져오기는 SVGZ가 아닌 SVG 파일을 읽습니다
 @msg	Invalid dimension offset	잘못된 치수 오프셋
 @msg	Invalid point	잘못된 점
