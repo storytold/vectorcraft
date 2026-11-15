@@ -125,7 +125,8 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, options: bool, 
     }
     if options {
         let full = art_option_widths(ui, false);
-        let compact = ui.available_width() < ART_OPTIONS_WIDTH || !crate::chrome::Fit::new(0.0).room(ui, &full);
+        let spacing = ui.spacing().item_spacing.x;
+        let compact = ui.available_width() < ART_OPTIONS_WIDTH || ui.available_width() < full.iter().map(|w| w + spacing).sum::<f32>();
         // The fields after the boxes need far more room than the spacing after them, so the boxes
         // can end the row.
         if fit.room_at_end(ui, &if compact { art_option_widths(ui, true) } else { full }) {

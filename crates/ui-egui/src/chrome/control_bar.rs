@@ -246,15 +246,22 @@ impl Fit {
     }
 
     /// Whether the row `ui` has room for controls `widths` wide side by side, with the spacing after
-    /// each and the reserve after them, and no control before them in the group was left out.
+    /// each and the reserve after them, and no control before them in the group was left out. A
+    /// control left out is noted with [`left_out`].
     pub(crate) fn room(&mut self, ui: &Ui, widths: &[f32]) -> bool {
-        self.full = self.full || ui.available_width() < row_width(ui, widths) + self.reserve;
-        !self.full
+        self.fits(ui, row_width(ui, widths))
     }
 
     /// [`Fit::room`] for controls that end the row, with no spacing after the last of them.
     pub(crate) fn room_at_end(&mut self, ui: &Ui, widths: &[f32]) -> bool {
-        self.full = self.full || ui.available_width() < row_width(ui, widths) - ui.spacing().item_spacing.x + self.reserve;
+        self.fits(ui, row_width(ui, widths) - ui.spacing().item_spacing.x)
+    }
+
+    fn fits(&mut self, ui: &Ui, width: f32) -> bool {
+        self.full = self.full || ui.available_width() < width + self.reserve;
+        if self.full {
+            left_out(ui);
+        }
         !self.full
     }
 
@@ -350,7 +357,7 @@ fn left_out_key(ui: &Ui) -> egui::Id {
 
 /// Notes that a control of the Control bar's row `ui` was left out in this pass for want of room,
 /// so the controls the bar leaves out first stay out too ([`any_left_out`]).
-pub(crate) fn left_out(ui: &mut Ui) {
+pub(crate) fn left_out(ui: &Ui) {
     let (key, pass) = (left_out_key(ui), ui.ctx().cumulative_pass_nr());
     ui.data_mut(|d| d.insert_temp(key, pass));
 }

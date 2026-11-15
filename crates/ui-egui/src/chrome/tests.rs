@@ -3309,6 +3309,42 @@ fn a_narrow_control_bar_shows_embed_without_edit_original_and_the_artboard_link_
     assert!(link_only, "some width has room for the Transform link but not Rearrange All Artboards");
 }
 
+/// The Control bar's Select Similar Objects button takes only the room every control ahead of it
+/// left, so it never shows while the bar left out one of a selected image's controls for room.
+#[test]
+fn select_similar_stays_out_while_an_image_control_is_left_out() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let dir = vectorcraft_testkit::temp_dir("control-bar-similar-image");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("half.png");
+    std::fs::write(&path, &png).unwrap();
+    app.run("file.place", json!({"path": path, "link": false})).unwrap();
+    // With these groups off, the image's controls come right before the button.
+    for group in ["opacity", "graphicStyle", "alignDistribute", "transform"] {
+        app.run("window.control.options", json!({"group": group, "visible": false})).unwrap();
+    }
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let shows = |nodes: &[egui::accesskit::Node], name: &str| nodes.iter().any(|n| n.label().is_some_and(|l| l == name));
+    let mut seen = false;
+    for w in (150..=1600).step_by(2) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w as f32, 300.0));
+        control_bar_frame_in(&mut app, &ctx, screen, vec![]);
+        let nodes = control_bar_frame_in(&mut app, &ctx, screen, vec![]);
+        if shows(&nodes, "Select Similar Objects") {
+            assert!(shows(&nodes, "Remove Background"), "{w}: shown while Remove Background is left out");
+            seen = true;
+        }
+    }
+    assert!(seen, "a wide bar shows the button after the image's controls");
+}
+
 /// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps
 /// its Anchor Point label.
 #[test]
