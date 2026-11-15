@@ -1188,6 +1188,7 @@ font-technology	Variable	Variables
 	Rotate (Classic)…	Rotar (clásico)…
 	Surface	Superficie
 	Wireframe	Malla
+	Render Settings	Ajustes de renderizado
 	No Shading	Sin sombreado
 	Plastic	Plástico
 	Highlight Intensity	Intensidad del brillo
@@ -1422,6 +1423,40 @@ font-technology	Variable	Variables
 	Graph	Gráfico
 	Graph Data	Datos del gráfico
 	Graph Type	Tipo de gráfico
+	Graph Options	Opciones de gráfico
+	Left Axis	Eje izquierdo
+	Right Axis	Eje derecho
+	Category Axis	Eje de categorías
+	Separate Scales	Escalas separadas
+	Add Drop Shadow	Añadir sombra paralela
+	Add Legend Across Top	Añadir leyenda en la parte superior
+	First Row in Front	Primera fila delante
+	First Column in Front	Primera columna delante
+	Legend	Leyenda
+	Column Width	Anchura de columna
+	Bar Width	Anchura de barra
+	Cluster Width	Anchura de grupo
+	Mark Data Points	Marcar puntos de datos
+	Connect Data Points	Conectar puntos de datos
+	Edge-to-Edge Lines	Líneas de borde a borde
+	Draw Filled Lines	Dibujar líneas rellenas
+	Tick Values	Valores de marcas
+	Override Calculated Values	Sustituir valores calculados
+	Divisions	Divisiones
+	Tick Marks	Marcas de graduación
+	Tick Marks per Division	Marcas por división
+	Draw Tick Marks Between Labels	Dibujar marcas entre etiquetas
+	Add Labels	Añadir etiquetas
+	Maximum must be more than Minimum.	El máximo debe ser mayor que el mínimo.
+	Column Graph	Gráfico de columnas
+	Stacked Column Graph	Gráfico de columnas apiladas
+	Bar Graph	Gráfico de barras
+	Stacked Bar Graph	Gráfico de barras apiladas
+	Line Graph	Gráfico de líneas
+	Area Graph	Gráfico de áreas
+	Scatter Graph	Gráfico de dispersión
+	Pie Graph	Gráfico circular
+	Radar Graph	Gráfico de radar
 	Graph Design	Diseño de gráfico
 	Graph Marker	Marcador de gráfico
 	New Design	Nuevo diseño
@@ -1542,6 +1577,7 @@ font-technology	Variable	Variables
 	Highlight anchors on mouse over	Resaltar anclas al pasar el puntero
 	Highlight Rows	Resaltar filas
 	Highlight Variable	Resaltar variable
+	Sort Variables	Ordenar variables
 	Highlight Substituted Fonts	Resaltar fuentes sustituidas
 	Highlight Substituted Glyphs	Resaltar glifos sustituidos
 	History	Historial
@@ -2019,6 +2055,7 @@ font-technology	Variable	Variables
 	Menu Dialog	Cuadro de diálogo de menú
 	Merge	Combinar
 	Merge colors into one row	Combinar colores en una fila
+	New Row	Nueva fila
 	Merge Graphic Styles	Combinar estilos gráficos
 	Merge Graphic Styles…	Combinar estilos gráficos…
 	Merge Layers	Combinar capas
@@ -3705,6 +3742,48 @@ digits	Malayalam	Malayálam
 	Composite Fonts	Fuentes compuestas
 	Export Composite Fonts	Exportar fuentes compuestas
 	Import Composite Fonts	Importar fuentes compuestas
+@msg	each font must be {name, parts}	cada fuente debe ser {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	clave desconocida `{k}`; una fuente admite name y parts
+@msg	each font needs a name	cada fuente necesita un nombre
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no puede nombrar una fuente compuesta (de 1 a {COMPOSITE_NAME_MAX} caracteres, sin caracteres de control)
+@msg	`{name}`: parts must be an object	`{name}`: parts debe ser un objeto
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: clase desconocida `{k}`; las clases son kanji, kana, punctuation, symbols, roman y numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} debe ser un objeto
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: clave desconocida `{k}` en {_1}
+@msg	`{name}`: give the kanji part	`{name}`: indique la parte kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un documento admite como máximo {COMPOSITE_FONTS_MAX} fuentes compuestas
+@msg	two composite fonts are named `{_1}`	dos fuentes compuestas se llaman `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` es el nombre de una fuente instalada
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, una fuente compuesta
+@msg	give fonts: [{name, parts}…]	indique fonts: [{name, parts}…]
+@msg	path is empty	path está vacío
+@msg	fonts must be a list of composite fonts	fonts debe ser una lista de fuentes compuestas
+@msg	names must be strings	names debe contener cadenas
+@msg	no composite font named `{n}`	no hay ninguna fuente compuesta llamada `{n}`
+@msg	names must be a list of names	names debe ser una lista de nombres
+@msg	no composite fonts to export	no hay fuentes compuestas para exportar
+@msg	not a composite fonts file: {e}	no es un archivo de fuentes compuestas: {e}
+@msg	not a composite fonts file: no compositeFonts list	no es un archivo de fuentes compuestas: no hay lista compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	el archivo contiene más de {COMPOSITE_FONTS_MAX} fuentes compuestas
+@msg	the file is larger than 4 MB	el archivo ocupa más de 4 MB
+@msg	dataBase64 is not base64	dataBase64 no es base64
+@msg	give one of path, data or dataBase64	indique path, data o dataBase64
+@msg	the file holds no composite fonts	el archivo no contiene fuentes compuestas
+@msg	the file holds two composite fonts named `{_1}`	el archivo contiene dos fuentes compuestas llamadas `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` no puede nombrar una fuente compuesta
+@msg	{k}: give a font	{k}: indique una fuente
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: indique una fuente
+@msg	{k}: size must be {_1} to {_2}%	{k}: size debe estar entre {_1} y {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size debe estar entre {_1} y {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline debe estar entre {_1} y {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline debe estar entre {_1} y {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: la escala debe estar entre {_1} y {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: la escala debe estar entre {_1} y {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: solo kana, roman y numerals se pueden escalar
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: solo kana, roman y numerals se pueden escalar
+@msg	{k}: only kana can be scaled at the center	{k}: solo kana se puede escalar desde el centro
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: solo kana se puede escalar desde el centro
+@msg	no composite font	ninguna fuente compuesta
 	Delete Font	Eliminar fuente
 	Kanji	Kanji
 	Kana	Kana
@@ -5971,6 +6050,7 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada que exportar
 @msg	The 3D object is too complex to export	El objeto 3D es demasiado complejo para exportarlo
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	el objeto no tiene ningún efecto 3D (Extrusión y biselado, Revolución, Inflar o Rotar)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` debe ser un objeto que solo contenga `mode`, con el valor shaded o wireframe
 @msg	its 3D effect builds no solid	su efecto 3D no construye ningún sólido
 @msg	bevel must be none or one of {_1}	bevel debe ser none o uno de estos: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no puede construir sólidos a partir de esta ilustración: sus instancias de símbolo, fusiones y grupos de recorte contienen demasiados objetos

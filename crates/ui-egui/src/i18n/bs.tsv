@@ -513,6 +513,7 @@
 	Rotate (Classic)…	Rotiraj (klasično)…
 	Surface	Površina
 	Wireframe	Žičani model
+	Render Settings	Postavke renderovanja
 	No Shading	Bez sjenčenja
 	Plastic	Plastika
 	Highlight Intensity	Intenzitet odsjaja
@@ -2894,6 +2895,7 @@ digits	Malayalam	Malajalam
 	Limit to Library:	Ograniči na biblioteku:
 	Link harmony colors	Poveži boje harmonije
 	Merge colors into one row	Spoji boje u jedan red
+	New Row	Novi red
 	No colors to recolor (preserved colors are left out).	Nema boja za ponovno bojenje (sačuvane boje su izostavljene).
 	Preserve:	Očuvaj:
 	Randomly change color order	Nasumično promijeni redoslijed boja
@@ -3576,6 +3578,40 @@ theme	Appearance	Izgled
 	Create Graph	Kreiraj grafikon
 	Graph Data	Podaci grafikona
 	Graph Type	Vrsta grafikona
+	Graph Options	Opcije grafikona
+	Left Axis	Lijeva osa
+	Right Axis	Desna osa
+	Category Axis	Osa kategorija
+	Separate Scales	Odvojene skale
+	Add Drop Shadow	Dodaj sjenu
+	Add Legend Across Top	Dodaj legendu na vrh
+	First Row in Front	Prvi red naprijed
+	First Column in Front	Prva kolona naprijed
+	Legend	Legenda
+	Column Width	Širina stupca
+	Bar Width	Širina trake
+	Cluster Width	Širina grupe
+	Mark Data Points	Označi tačke podataka
+	Connect Data Points	Poveži tačke podataka
+	Edge-to-Edge Lines	Linije od ivice do ivice
+	Draw Filled Lines	Crtaj ispunjene linije
+	Tick Values	Vrijednosti crtica
+	Override Calculated Values	Zamijeni izračunate vrijednosti
+	Divisions	Podioci
+	Tick Marks	Crtice
+	Tick Marks per Division	Crtica po podioku
+	Draw Tick Marks Between Labels	Crtaj crtice između oznaka
+	Add Labels	Dodaj oznake
+	Maximum must be more than Minimum.	Maksimum mora biti veći od minimuma.
+	Column Graph	Stupčasti grafikon
+	Stacked Column Graph	Naslagani stupčasti grafikon
+	Bar Graph	Trakasti grafikon
+	Stacked Bar Graph	Naslagani trakasti grafikon
+	Line Graph	Linijski grafikon
+	Area Graph	Površinski grafikon
+	Scatter Graph	Raspršeni grafikon
+	Pie Graph	Tortni grafikon
+	Radar Graph	Radarski grafikon
 	Vector Halftone	Vektorski polutonovi
 	spot	spot
 	Text	Tekst
@@ -4182,6 +4218,7 @@ axis	Both	Obje
 	Replace:	Zamijeni:
 	Type on a Path Options	Opcije teksta na putanji
 	Highlight Variable	Istakni varijablu
+	Sort Variables	Sortiraj varijable
 	New Variable	Nova varijabla
 	List Variables	Izlistaj varijable
 	Bind Variable	Veži varijablu

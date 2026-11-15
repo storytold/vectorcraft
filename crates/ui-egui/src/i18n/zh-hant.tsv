@@ -1159,6 +1159,7 @@ font-technology	Variable	可變
 	Rotate (Classic)…	旋轉 (經典)…
 	Surface	表面
 	Wireframe	線框
+	Render Settings	演算設定
 	No Shading	無網底
 	Plastic	塑膠
 	Highlight Intensity	亮部強度
@@ -1405,6 +1406,40 @@ file-filter	Templates	範本
 	Graph	圖表
 	Graph Data	圖表資料
 	Graph Type	圖表類型
+	Graph Options	圖表選項
+	Left Axis	左軸
+	Right Axis	右軸
+	Category Axis	類別軸
+	Separate Scales	分開刻度
+	Add Drop Shadow	加入投影
+	Add Legend Across Top	在頂端加入圖例
+	First Row in Front	第一列在前
+	First Column in Front	第一欄在前
+	Legend	圖例
+	Column Width	直條寬度
+	Bar Width	橫條寬度
+	Cluster Width	群組寬度
+	Mark Data Points	標示資料點
+	Connect Data Points	連接資料點
+	Edge-to-Edge Lines	邊到邊線條
+	Draw Filled Lines	繪製填色線條
+	Tick Values	刻度值
+	Override Calculated Values	覆寫計算值
+	Divisions	刻度數
+	Tick Marks	刻度記號
+	Tick Marks per Division	每個刻度的記號數
+	Draw Tick Marks Between Labels	在標籤之間繪製刻度記號
+	Add Labels	加入標籤
+	Maximum must be more than Minimum.	最大值必須大於最小值。
+	Column Graph	直條圖
+	Stacked Column Graph	堆疊直條圖
+	Bar Graph	橫條圖
+	Stacked Bar Graph	堆疊橫條圖
+	Line Graph	折線圖
+	Area Graph	區域圖
+	Scatter Graph	散佈圖
+	Pie Graph	圓形圖
+	Radar Graph	雷達圖
 	Graph Design	圖表設計
 	Graph Marker	圖表標記
 	New Design	新增設計
@@ -1526,6 +1561,7 @@ file-filter	Templates	範本
 	Highlight anchors on mouse over	滑鼠移過時醒目提示錨點
 	Highlight Rows	反白顯示列
 	Highlight Variable	突出顯示變數
+	Sort Variables	排序變數
 	Highlight Substituted Fonts	醒目提示被取代的字體
 	Highlight Substituted Glyphs	醒目提示被取代的字符
 	History	步驟記錄
@@ -3113,6 +3149,7 @@ file-filter	Templates	範本
 	Menu Dialog	選單對話框
 	Merge	合併
 	Merge colors into one row	將顏色合併為一列
+	New Row	新增列
 	Merge Graphic Styles	合併繪圖樣式
 	Merge Graphic Styles…	合併繪圖樣式…
 	Merge Layers	合併圖層
@@ -4826,6 +4863,48 @@ digits	Malayalam	馬來亞拉姆數字
 	Composite Fonts	複合字體
 	Export Composite Fonts	匯出複合字體
 	Import Composite Fonts	匯入複合字體
+@msg	each font must be {name, parts}	每個字體都必須是 {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	未知的鍵 `{k}`；字體可用的鍵為 name 和 parts
+@msg	each font needs a name	每個字體都需要名稱
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` 不能作為複合字體的名稱（1 到 {COMPOSITE_NAME_MAX} 個字元，不含控制字元）
+@msg	`{name}`: parts must be an object	`{name}`：parts 必須是物件
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`：未知的類別 `{k}`；類別為 kanji、kana、punctuation、symbols、roman 和 numerals
+@msg	`{name}`: {_1} must be an object	`{name}`：{_1} 必須是物件
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`：{_1} 中有未知的鍵 `{k}`
+@msg	`{name}`: give the kanji part	`{name}`：請指定 kanji 部分
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	一份文件最多保存 {COMPOSITE_FONTS_MAX} 個複合字體
+@msg	two composite fonts are named `{_1}`	有兩個複合字體都名為 `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` 是已安裝字體的名稱
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`：{_2} 使用了複合字體 `{font}`
+@msg	give fonts: [{name, parts}…]	請指定 fonts：[{name, parts}…]
+@msg	path is empty	path 為空
+@msg	fonts must be a list of composite fonts	fonts 必須是複合字體清單
+@msg	names must be strings	names 必須是字串
+@msg	no composite font named `{n}`	沒有名為 `{n}` 的複合字體
+@msg	names must be a list of names	names 必須是名稱清單
+@msg	no composite fonts to export	沒有可匯出的複合字體
+@msg	not a composite fonts file: {e}	不是複合字體檔案：{e}
+@msg	not a composite fonts file: no compositeFonts list	不是複合字體檔案：沒有 compositeFonts 清單
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	檔案包含超過 {COMPOSITE_FONTS_MAX} 個複合字體
+@msg	the file is larger than 4 MB	檔案大於 4 MB
+@msg	dataBase64 is not base64	dataBase64 不是 base64
+@msg	give one of path, data or dataBase64	請指定 path、data 或 dataBase64 其中之一
+@msg	the file holds no composite fonts	檔案不含複合字體
+@msg	the file holds two composite fonts named `{_1}`	檔案中有兩個複合字體都名為 `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` 不能作為複合字體的名稱
+@msg	{k}: give a font	{k}：請指定字體
+@msg	`{name}`: {k}: give a font	`{name}`: {k}：請指定字體
+@msg	{k}: size must be {_1} to {_2}%	{k}：size 必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}：size 必須為 {_1}% 到 {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}：baseline 必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}：baseline 必須為 {_1}% 到 {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}：縮放必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}：縮放必須為 {_1}% 到 {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}：只有 kana、roman 和 numerals 可以縮放
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}：只有 kana、roman 和 numerals 可以縮放
+@msg	{k}: only kana can be scaled at the center	{k}：只有 kana 可以從中心縮放
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}：只有 kana 可以從中心縮放
+@msg	no composite font	沒有複合字體
 	Delete Font	刪除字體
 	Kanji	漢字
 	Kana	假名
@@ -5733,6 +5812,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必須是只含 `mode` 的物件，值為 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
 @msg	bevel must be none or one of {_1}	bevel 必須是 none 或 {_1} 其中之一
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}無法從此圖稿產生實體：其符號實例、漸變和剪裁群組包含的物件過多
