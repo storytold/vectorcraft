@@ -716,11 +716,33 @@ fn a_cut_out_edge_in_grayscale_ties_by_its_gray() {
     let t = TRANSPARENT;
     let q = Quantized { labels: vec![0, 2, 1, t, t, t], palette: vec![[50, 50, 50], [150, 150, 150], [90, 90, 90]] };
     let mut gray = q.clone();
-    crate::quantize::settle_cut_edges(&mut gray, &img, true);
+    let marked = crate::quantize::settle_cut_edges(&mut gray, &img, true);
     assert_eq!(gray.palette.get(gray.labels[1] as usize), Some(&[50, 50, 50]));
+    assert_eq!(marked, [false, true, false, false, false, false], "the edge pixel is marked as a blend");
     let mut color = q;
     crate::quantize::settle_cut_edges(&mut color, &img, false);
     assert_eq!(color.palette.get(color.labels[1] as usize), Some(&[150, 150, 150]));
+}
+
+#[test]
+fn a_cut_out_edge_pixel_already_of_the_color_beside_it_is_marked_when_a_blend_of_it() {
+    // A semi-transparent dark red edge pixel between opaque red and blue pixels, already labeled red: it keeps red,
+    // and is marked as a blend for Noise. A purple one labeled red is a blend of neither pixel's color alone and is
+    // not marked.
+    for (edge, blend) in [([128, 0, 0, 192], true), ([128, 0, 128, 192], false)] {
+        let img = Raster::from_fn(3, 2, |x, y| match (x, y) {
+            (0, 0) => [255, 0, 0, 255],
+            (1, 0) => edge,
+            (2, 0) => [0, 0, 255, 255],
+            _ => [0, 0, 0, 0],
+        });
+        let t = TRANSPARENT;
+        let q = Quantized { labels: vec![0, 0, 1, t, t, t], palette: vec![[255, 0, 0], [0, 0, 255]] };
+        let mut settled = q.clone();
+        let marked = crate::quantize::settle_cut_edges(&mut settled, &img, false);
+        assert_eq!(settled, q, "{edge:?}");
+        assert_eq!(marked, [false, blend, false, false, false, false], "{edge:?}");
+    }
 }
 
 #[test]
@@ -761,8 +783,9 @@ fn a_thin_semi_transparent_outline_keeps_its_own_color() {
             let q = quantize(&img, &TraceParams { mode, colors: 3, ..TraceParams::default() });
             assert_ne!(q.labels[9 * 60 + 30], q.labels[30 * 60 + 30], "{mode:?}, alpha {alpha}: the outline has a color of its own");
             let mut settled = q.clone();
-            crate::quantize::settle_cut_edges(&mut settled, &img, mode == Mode::Grayscale);
+            let marked = crate::quantize::settle_cut_edges(&mut settled, &img, mode == Mode::Grayscale);
             assert_eq!(settled, q, "{mode:?}, alpha {alpha}");
+            assert!(!marked.contains(&true), "{mode:?}, alpha {alpha}: the outline is no blend of the square");
         }
     }
 }
@@ -899,10 +922,10 @@ fn presets_have_their_paths_corners_and_noise() {
         ("High Fidelity Photo", 50.0, 50.0, 5),
         ("Low Fidelity Photo", 50.0, 50.0, 10),
         ("3 Colors", 50.0, 50.0, 15),
-        ("6 Colors", 50.0, 50.0, 15),
-        ("16 Colors", 50.0, 50.0, 15),
+        ("6 Colors", 50.0, 50.0, 8),
+        ("16 Colors", 50.0, 50.0, 8),
         ("Shades of Gray", 50.0, 50.0, 15),
-        ("Black and White Logo", 50.0, 75.0, 25),
+        ("Black and White Logo", 50.0, 75.0, 5),
         ("Sketched Art", 50.0, 50.0, 20),
         ("Silhouettes", 50.0, 50.0, 90),
         ("Line Art", 50.0, 75.0, 20),
@@ -1928,7 +1951,9 @@ fn contour_spread(res: &TraceResult) -> (f64, usize) {
 
 #[test]
 fn the_borders_of_a_gradients_bands_follow_its_contours() {
-    let res = trace(&wavy_bands(), &sixteen_colors());
+    // At the Noise this test was written for: at 16 Colors' Noise 8 the 6 levels of noise leave more
+    // small regions along the borders.
+    let res = trace(&wavy_bands(), &TraceParams { noise: 15, ..sixteen_colors() });
     // The square's sides are edges: it keeps its four corners.
     let [l, t, r, b] = WAVY_SQUARE;
     let square = res.paths.iter().find(|p| p.color.iter().all(|&c| c < 40)).expect("the dark square");

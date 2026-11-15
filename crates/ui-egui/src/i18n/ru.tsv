@@ -1442,6 +1442,8 @@ file-filter	Templates	Шаблоны
 	Graph	Диаграмма
 	Graph Data	Данные диаграммы
 	Graph Type	Тип диаграммы
+	Graph Type…	Тип диаграммы…
+	Graph Data…	Данные диаграммы…
 	Graph Options	Параметры диаграммы
 	Left Axis	Левая ось
 	Right Axis	Правая ось
@@ -5172,6 +5174,8 @@ axis	Both	Оба
 @msg	unknown option `{path}.{k}`	неизвестный параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	неизвестная панель `{raw}`
+@msg	`{panel}` has no display sizes to cycle	у панели `{panel}` нет размеров отображения для переключения
+@msg	the panels are not shown	панели не показаны
 @msg	panels can't be shown in Presentation Mode	в режиме презентации панели показать нельзя
 @msg	unknown preference `{key}`	неизвестная настройка `{key}`
 @msg	Preferences imported.	Настройки импортированы.
@@ -5556,6 +5560,7 @@ variable-list-end	{0}, {1}	{0} и {1}
 	Change Panel Layout	Изменить расположение панелей
 	Close Panel	Закрыть панель
 	Collapse Panel Group	Свернуть группу панелей
+	Cycle Display Sizes	Переключить размеры отображения
 	Move Panel	Переместить панель
 	Group with	Сгруппировать с
 	Resize panels	Изменить размер панелей
@@ -5915,6 +5920,7 @@ lighting	Light	Свет
 	Export Data Sets…	Экспортировать наборы данных…
 	Load Variable Library…	Загрузить библиотеку переменных…
 	Save Variable Library…	Сохранить библиотеку переменных…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Импорт» читает файл источника данных с расширением .csv, .tsv, .txt или .xml
 @msg	a variable library holds text variables, and the document has none	библиотека переменных содержит текстовые переменные, а в документе их нет
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	переменную `{name}` нельзя сохранить в библиотеке переменных: переименуйте её так, чтобы имя начиналось с буквы или `_` и не содержало пробелов и символов, кроме `-`, `_` и `.`
 @msg	{k} has control characters	{k} содержит управляющие символы

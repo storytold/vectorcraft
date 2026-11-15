@@ -598,7 +598,7 @@ pub(crate) fn shape_runs(
         // Synthesized Small Caps shape lowercase letters separately (as smaller capitals).
         let small_caps = st.small_caps.is_some() && !st.all_caps;
         // Split into segments by font coverage (and case, for Small Caps).
-        let mut seg = Segment { range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
+        let mut seg = Segment { db, range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
         let mut cache: std::collections::HashMap<&str, Arc<FontFace>> = std::collections::HashMap::new();
         let mut script = Script::Common;
         // A grapheme cluster (a letter and its marks, an emoji sequence) is set in one face.
@@ -1354,6 +1354,7 @@ fn inline_glyph(
 /// alike ([`shapes_alike`]).
 #[derive(Clone)]
 struct Segment<'a> {
+    db: &'a FontDb,
     range: Range<usize>,
     /// All the runs, and the indices of those the piece's shaping span takes in.
     runs: &'a [(Range<usize>, &'a CharStyle)],
@@ -1413,7 +1414,7 @@ fn is_mark(c: char) -> bool {
 /// SS). A cluster that would take in characters of runs with different drawing attributes (a
 /// ligature, a base with its marks) is not formed, except for paint-only harakat differences.
 fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
-    let Segment { range, runs, source_runs, st, face, small, level } = seg;
+    let Segment { db, range, runs, source_runs, st, face, small, level } = seg;
     let (range, small) = (range.clone(), *small);
     // The source runs the segment's bytes lie in (a span can hold many segments).
     let span = runs.get(source_runs.clone()).unwrap_or_default();
@@ -1507,8 +1508,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         }
         ranged
     };
-    // Horizontal type with Tsume on any of the segment's characters.
-    let tsume_here = !feats.vertical && runs.get(source_runs.clone()).unwrap_or_default().iter().any(|(_, s)| s.tsume > 0.0);
+    // Tsume on any of the segment's characters.
+    let tsume_here = runs.get(source_runs.clone()).unwrap_or_default().iter().any(|(_, s)| s.tsume > 0.0);
     // Shape the segment as if all of it were in `st`, with the features `more` on top.
     let shape_in = |st: &CharStyle, more: &[Feature]| {
         // A BCP 47 tag is short ASCII; anything else (a file may hold anything) is shaped without one.
@@ -1888,10 +1889,11 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             hyphen_language: crate::hyphen::Language::from_tag(gst.language.as_deref()),
         });
         // Tsume takes its share of the blank space beside the cluster's ink once the cluster is
-        // complete, in horizontal type.
-        if last_in_cluster && !invisible && !feats.vertical && gst.tsume > 0.0 {
+        // complete, along the line. In vertical type a glyph that stands upright is measured down
+        // the column instead, once its cell is known ([`crate::layout`]).
+        if last_in_cluster && !invisible && gst.tsume > 0.0 {
             let first = out.iter().rposition(|g| g.byte != cl).map_or(0, |i| i + 1);
-            tighten(out.get_mut(first..).unwrap_or_default(), own, gst.tsume);
+            tighten(db, out.get_mut(first..).unwrap_or_default(), own, gst.tsume);
         }
     }
 }
@@ -1902,25 +1904,20 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
 /// and its ink, on each side, comes out of the cluster's advance, and its glyphs are drawn the
 /// left side's share earlier ([`SGlyph::tsume`] and [`SGlyph::tsume_shift`] hold both, for Optical
 /// kerning to measure the pair without them). A cluster without ink, such as a space, or with a
-/// width that is not positive, keeps its place and width.
-fn tighten(glyphs: &mut [SGlyph], own: f64, tsume: f64) {
+/// width that is not positive, keeps its place and width. The ink is what the glyph paints
+/// ([`painted_box`]): its color art or bitmap when it has one, else its outline.
+fn tighten(db: &FontDb, glyphs: &mut [SGlyph], own: f64, tsume: f64) {
     let Some(last) = glyphs.len().checked_sub(1) else { return };
-    let share = if tsume.is_nan() { 0.0 } else { tsume.clamp(0.0, MAX_TSUME) / 100.0 };
     let (mut pen, mut ink): (f64, Option<(f64, f64)>) = (0.0, None);
     for (i, g) in glyphs.iter().enumerate() {
-        if let Some((a, b)) = ink_across(&g.face, g.gid) {
-            let (a, b) = (pen + g.dx + a * g.sx, pen + g.dx + b * g.sx);
+        if let Some(b) = painted_box(db, g) {
+            let (a, b) = (pen + g.dx + b.x0 * g.sx, pen + g.dx + b.x1 * g.sx);
             let (lo, hi) = (a.min(b), a.max(b));
             ink = Some(ink.map_or((lo, hi), |(l, h)| (l.min(lo), h.max(hi))));
         }
         pen += if i == last { own } else { g.adv };
     }
-    let Some((lo, hi)) = ink.filter(|(lo, hi)| lo.is_finite() && hi.is_finite()) else { return };
-    if !(pen.is_finite() && pen > 0.0) {
-        return;
-    }
-    let left = lo.clamp(0.0, pen) * share;
-    let right = (pen - hi).clamp(0.0, pen) * share;
+    let Some((left, right)) = ink.and_then(|ink| tsume_shares(ink, pen, tsume)) else { return };
     for g in glyphs.iter_mut() {
         g.dx -= left;
         g.tsume_shift = left;
@@ -1931,18 +1928,38 @@ fn tighten(glyphs: &mut [SGlyph], own: f64, tsume: f64) {
     }
 }
 
-/// The left and right edges of glyph `gid`'s outline in `face`, in font units; `None` for a glyph
-/// without an outline (a space, or a bitmap or color glyph without one).
-fn ink_across(face: &FontFace, gid: u32) -> Option<(f64, f64)> {
-    let font = face.skrifa()?;
-    let glyph = font.outline_glyphs().get(skrifa::GlyphId::new(gid))?;
-    let mut pen = crate::fontdb::FlipPen(kurbo::BezPath::new());
-    glyph.draw(skrifa::outline::DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen).ok()?;
-    if pen.0.elements().is_empty() {
+/// What Tsume `tsume` (percent) takes off before and after ink running from `lo` to `hi` along a
+/// cell running from 0 to `length`: its share of the blank space on each side, inside the cell.
+/// `None` when the ink or the cell is not finite, or the cell's length is not positive.
+pub(crate) fn tsume_shares((lo, hi): (f64, f64), length: f64, tsume: f64) -> Option<(f64, f64)> {
+    let share = if tsume.is_nan() { 0.0 } else { tsume.clamp(0.0, MAX_TSUME) / 100.0 };
+    if !(lo.is_finite() && hi.is_finite() && length.is_finite() && length > 0.0) {
         return None;
     }
-    let b = pen.0.bounding_box();
-    Some((b.x0, b.x1))
+    Some((lo.clamp(0.0, length) * share, (length - hi).clamp(0.0, length) * share))
+}
+
+/// The box of what glyph `g` paints, in font units (y down, as outlines are), as the layout draws
+/// it: its COLR or SVG art, else its color bitmap, else its outline. `None` for a glyph that paints
+/// nothing: a space, a control or format character, or art, an image or an outline that is empty
+/// or not finite.
+pub(crate) fn painted_box(db: &FontDb, g: &SGlyph) -> Option<kurbo::Rect> {
+    if g.inline.is_some() || g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}' || crate::justify::is_format_control(g.ch) {
+        return None;
+    }
+    let image_box = |image: &crate::GlyphImage| image.xf.transform_rect_bbox(image.rect());
+    let b = match db.glyph_colour(&g.face, g.gid, vectorcraft_doc::color::Color::BLACK, None) {
+        Some(crate::colr::ColourContent::Art(art)) => art.geometric_bounds(),
+        Some(crate::colr::ColourContent::Image(image)) => Some(image_box(&image)),
+        None => match db.glyph_image(&g.face, g.gid) {
+            Some(image) => Some(image_box(&image)),
+            None => {
+                let outline = db.outline(&g.face, g.gid);
+                (!outline.elements().is_empty()).then(|| outline.bounding_box())
+            }
+        },
+    };
+    b.filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()) && (b.width() > 0.0 || b.height() > 0.0))
 }
 
 #[cfg(test)]
