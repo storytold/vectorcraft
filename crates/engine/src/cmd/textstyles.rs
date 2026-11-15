@@ -228,6 +228,7 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("digits", json!(v.digits)),
         ("fontHeightReference", json!(v.font_height_reference)),
         ("language", json!(v.language)),
+        ("glyphForm", json!(v.glyph_form)),
     ] {
         m.insert(k.into(), x);
     }
