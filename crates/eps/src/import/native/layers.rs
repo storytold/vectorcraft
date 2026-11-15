@@ -13,12 +13,16 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// ([`use_symbols`]) and its variable library ([`use_variables`]) when it could be read, and with
 /// its layer tree, empty, below the page's layer when that could be read (#2033). A program in the
 /// legacy format without layers (`illustrator`, see [`program_alone`]) is read with its art on one
-/// layer; when that can't be used, the file is `visible` as it was. `names`: the encoding of names
-/// that aren't UTF-8.
-pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illustrator: bool, names: ai::NameEncoding) -> Imported {
+/// layer; when that can't be used, the file is `visible` as it was. The program of a `.ai`
+/// (`ai_file`) in the legacy format keeps the artboard its header gives ([`Page::Program`]).
+/// `names`: the encoding of names that aren't UTF-8.
+pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illustrator: bool, ai_file: bool, names: ai::NameEncoding) -> Imported {
+    let program_page = if ai_file { Page::Program } else { Page::Art };
     let Some(data) = editing_copy(ps) else {
-        let read =
-            illustrator.then(|| one_layer(ps)).flatten().and_then(|p| build(&p, Some(&visible.document), Page::Art, false, trust, 1.0, names).ok());
+        let read = illustrator
+            .then(|| one_layer(ps))
+            .flatten()
+            .and_then(|p| build(&p, Some(&visible.document), program_page, false, trust, 1.0, names).ok());
         return match read {
             Some((document, warnings)) => with_page_notes(document, warnings, &visible),
             None => visible,
@@ -28,11 +32,17 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
     // can't be used.
     // Private data kept apart from the program: the program's own header gives the author and
     // custom colors the private data's header may lack.
-    let read =
-        |d: &[u8]| if matches!(data, Ok(Cow::Owned(_))) { ai::read_beside(d, true, ps, true, names) } else { ai::read_over_page(d, true, names) };
+    let private = matches!(data, Ok(Cow::Owned(_)));
+    let read = |d: &[u8]| match (private, program_page) {
+        (true, _) => ai::read_beside(d, true, ps, true, names),
+        (false, Page::Program) => ai::read_program(d, true, true, names),
+        (false, _) => ai::read_over_page(d, true, names),
+    };
+    // Private data is an EPS's editing copy, whatever the file is named.
+    let page = if private { Page::Art } else { program_page };
     let (tree, result) = match data.as_deref() {
         Ok(d) => match read(d) {
-            Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
+            Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), page, false, trust, 1.0)),
             Err(why) => (vec![], Err(why)),
         },
         Err(why) => (vec![], Err(why.clone())),
@@ -607,16 +617,23 @@ fn editing_copy(ps: &[u8]) -> Option<Result<Cow<'_, [u8]>, String>> {
 /// but whose program has no layers (Illustrator 3 had none; image editors still export their
 /// paths so, storytold/photocraft#6036) is read with its art on one layer. `None` when the program
 /// has no layers and isn't in the format: other PostScript isn't read as the format's operators.
+/// The program of a `.ai` (`ai_file`) has the artboard its header gives ([`Page::Program`]).
 /// `names`: the encoding of names that aren't UTF-8.
-pub(in super::super) fn program_alone(ps: &[u8], illustrator: bool, names: ai::NameEncoding) -> Option<Result<(Document, Vec<String>), String>> {
+pub(in super::super) fn program_alone(
+    ps: &[u8],
+    illustrator: bool,
+    ai_file: bool,
+    names: ai::NameEncoding,
+) -> Option<Result<(Document, Vec<String>), String>> {
     if ai::has_eps_data(ps) {
         return None;
     }
+    let page = if ai_file { Page::Program } else { Page::Art };
     if has_layers(ps) {
-        return Some(build(ps, None, Page::Art, false, false, 1.0, names));
+        return Some(build(ps, None, page, false, false, 1.0, names));
     }
     let program = illustrator.then(|| one_layer(ps)).flatten()?;
-    Some(build(&program, None, Page::Art, false, false, 1.0, names))
+    Some(build(&program, None, page, false, false, 1.0, names))
 }
 
 /// `ps` with its art (from its `%%EndSetup` to its `%%PageTrailer`, else its `%%Trailer`, else its

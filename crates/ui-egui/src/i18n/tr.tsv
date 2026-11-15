@@ -145,6 +145,7 @@
 	Align to Artboard	Çalışma Yüzeyine Hizala
 	Align to Glyph Bounds	Glif Sınırlarına Hizala
 	Align to Key Object	Anahtar Nesneye Hizala
+	Align to Key Anchor	Anahtar Bağlantı Noktasına Hizala
 	Align to Page	Sayfaya Hizala
 	Align to Path	Yola Hizala
 	Align to Selection	Seçime Hizala
@@ -910,12 +911,12 @@ font-technology	Variable	Değişken
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Resmi buraya sürükleyin veya seçip + işaretine tıklayın. Birkaç nesneden oluşan bir varlık için Alt tuşunu basılı tutun.
 	Drag onto art to apply this appearance	Bu görünümü uygulamak için resmin üzerine sürükleyin
 	Drag the art to move it on the paper	Resmi kağıt üzerinde taşımak için sürükleyin
-	Draw	Beraberlik
+	Draw	Çiz
 	Draw Behind	Arkaya Çiz
 	Draw in Perspective	Perspektifte Çiz
 	Draw Inside	İçini Çiz
 	Draw Normal	Normal Çiz
-	Draw:	Beraberlik:
+	Draw:	Çiz:
 	Drawing Mode	Çizim Modu
 	Drop Shadow	Alt Gölge
 	Drop Shadow…	Alt Gölge…
@@ -1047,7 +1048,10 @@ font-technology	Variable	Değişken
 	Every (minutes)	Her (dakika)
 	Every option is at its default.	Her seçenek varsayılan değerdedir.
 	Every option matches {base}.	Her seçenek {base} ile eşleşir.
-	Every-line Composer	Her Satır Bestecisi
+	Middle Eastern & South Asian Single-line Composer	Tek Satır Oluşturucu (Orta Doğu ve Güney Asya)
+	Middle Eastern & South Asian Every-line Composer	Her Satır Bestecisi (Orta Doğu ve Güney Asya)
+	Standard Single-line Composer	Standart Tek Satır Oluşturucu
+	Standard Every-line Composer	Standart Her Satır Bestecisi
 	Exact dash lengths	Tam çizgi uzunlukları
 	Exceptions (comma separated)	İstisnalar (virgülle ayrılmış)
 	Exclude	Hariç tut
@@ -1156,6 +1160,7 @@ font-technology	Variable	Değişken
 	Rotate (Classic)…	Çevir (Klasik)…
 	Surface	Yüzey
 	Wireframe	Tel Kafes
+	Render Settings	Oluşturma Ayarları
 	No Shading	Gölgeleme Yok
 	Plastic	Plastik
 	Highlight Intensity	Parlama Yoğunluğu
@@ -1352,6 +1357,40 @@ font-technology	Variable	Değişken
 	Graph	Grafik
 	Graph Data	Grafik Verileri
 	Graph Type	Grafik Türü
+	Graph Options	Grafik Seçenekleri
+	Left Axis	Sol Eksen
+	Right Axis	Sağ Eksen
+	Category Axis	Kategori Ekseni
+	Separate Scales	Ayrı Ölçekler
+	Add Drop Shadow	Alt Gölge Ekle
+	Add Legend Across Top	Göstergeyi Üste Ekle
+	First Row in Front	İlk Satır Önde
+	First Column in Front	İlk Sütun Önde
+	Legend	Gösterge
+	Column Width	Sütun Genişliği
+	Bar Width	Çubuk Genişliği
+	Cluster Width	Küme Genişliği
+	Mark Data Points	Veri Noktalarını İşaretle
+	Connect Data Points	Veri Noktalarını Bağla
+	Edge-to-Edge Lines	Kenardan Kenara Çizgiler
+	Draw Filled Lines	Dolgulu Çizgiler Çiz
+	Tick Values	Onay İşareti Değerleri
+	Override Calculated Values	Hesaplanan Değerleri Geçersiz Kıl
+	Divisions	Bölümler
+	Tick Marks	Ölçek İşaretleri
+	Tick Marks per Division	Bölüm Başına Ölçek İşareti
+	Draw Tick Marks Between Labels	Etiketler Arasına Ölçek İşaretleri Çiz
+	Add Labels	Etiket Ekle
+	Maximum must be more than Minimum.	En çok, en azdan büyük olmalıdır.
+	Column Graph	Sütun Grafik
+	Stacked Column Graph	Yığılmış Sütun Grafik
+	Bar Graph	Çubuk Grafik
+	Stacked Bar Graph	Yığılmış Çubuk Grafik
+	Line Graph	Çizgi Grafik
+	Area Graph	Alan Grafik
+	Scatter Graph	Dağılım Grafik
+	Pie Graph	Pasta Grafik
+	Radar Graph	Radar Grafik
 	Graph Design	Grafik Tasarımı
 	Graph Marker	Grafik İşaretleyici
 	New Design	Yeni Tasarım
@@ -1461,6 +1500,7 @@ font-technology	Variable	Değişken
 	Highlight anchors on mouse over	Fareyle üzerine gelindiğinde bağlantı noktalarını vurgulayın
 	Highlight Rows	Satırları Vurgula
 	Highlight Variable	Değişkeni Vurgula
+	Sort Variables	Değişkenleri Sırala
 	Highlight Substituted Fonts	Değiştirilen Yazı Tiplerini Vurgula
 	Highlight Substituted Glyphs	Değiştirilen Glifleri Vurgula
 	History	Geçmiş
@@ -1848,6 +1888,7 @@ font-technology	Variable	Değişken
 	Menu Dialog	Menü İletişim Kutusu
 	Merge	Birleştir
 	Merge colors into one row	Renkleri tek satırda birleştirme
+	New Row	Yeni satır
 	Merge Graphic Styles	Grafik Stillerini Birleştir
 	Merge Graphic Styles…	Grafik Stillerini Birleştir…
 	Merge Layers	Katmanları Birleştir
@@ -3217,7 +3258,6 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Tek Sol Tırnak İşareti
 	Single Quotes:	Tek Alıntılar:
 	Single Right Quotation Mark	Tek Sağ Tırnak İşareti
-	Single-line Composer	Tek Satır Oluşturucu
 	Toggle Line Composer	Satır Oluşturucuyu Değiştir
 	Sixth Space	Altıncı Uzay
 	Size	Boyut
@@ -3402,6 +3442,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Dolgu ve Konturu Değiştir (Shift+X)
 	Swap start and end arrowheads	Başlangıç ve bitiş ok uçlarını değiştirin
 	Swap the selected object for the file, keeping its place and transform	Seçilen nesneyi, yerini koruyarak dosyayla değiştirin ve dönüştürün
+	Show Import Options	İçe Aktarma Seçeneklerini Göster
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Her PDF, DXF veya metin dosyasını yerleştirmeden önce içe aktarma seçeneklerini sor; kapalıyken son seçilen seçenekleri kullan
 	Stylistic Alternates	Stilistik Alternatifler
 	Swash	çalkalama
 	Swatch Conflict	Renk Örneği Çatışması
@@ -3491,11 +3533,55 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Bileşik Fontlar
 	Export Composite Fonts	Bileşik Fontları Dışa Aktar
 	Import Composite Fonts	Bileşik Fontları İçe Aktar
+@msg	each font must be {name, parts}	her font {name, parts} biçiminde olmalı
+@msg	unknown key `{k}`; a font takes name and parts	bilinmeyen anahtar `{k}`; bir font name ve parts alır
+@msg	each font needs a name	her fontun bir adı olmalı
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` bir bileşik fontun adı olamaz (1 ile {COMPOSITE_NAME_MAX} karakter arası, denetim karakteri olmadan)
+@msg	`{name}`: parts must be an object	`{name}`: parts bir nesne olmalı
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: bilinmeyen sınıf `{k}`; sınıflar: kanji, kana, punctuation, symbols, roman ve numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} bir nesne olmalı
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1} içinde bilinmeyen anahtar `{k}`
+@msg	`{name}`: give the kanji part	`{name}`: kanji bölümünü verin
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	bir belge en fazla {COMPOSITE_FONTS_MAX} bileşik font tutar
+@msg	two composite fonts are named `{_1}`	iki bileşik fontun adı `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` yüklü bir fontun adı
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2}, bir bileşik font olan `{font}` ile ayarlı
+@msg	give fonts: [{name, parts}…]	fonts verin: [{name, parts}…]
+@msg	path is empty	path boş
+@msg	fonts must be a list of composite fonts	fonts bir bileşik font listesi olmalı
+@msg	names must be strings	names dizeler olmalı
+@msg	no composite font named `{n}`	`{n}` adlı bileşik font yok
+@msg	names must be a list of names	names bir ad listesi olmalı
+@msg	no composite fonts to export	dışa aktarılacak bileşik font yok
+@msg	not a composite fonts file: {e}	bileşik font dosyası değil: {e}
+@msg	not a composite fonts file: no compositeFonts list	bileşik font dosyası değil: compositeFonts listesi yok
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	dosyada {COMPOSITE_FONTS_MAX} taneden fazla bileşik font var
+@msg	the file is larger than 4 MB	dosya 4 MB'tan büyük
+@msg	dataBase64 is not base64	dataBase64 base64 değil
+@msg	give one of path, data or dataBase64	path, data veya dataBase64 değerlerinden birini verin
+@msg	the file holds no composite fonts	dosyada bileşik font yok
+@msg	the file holds two composite fonts named `{_1}`	dosyada `{_1}` adlı iki bileşik font var
+@msg	`{_1}` can't name a composite font	`{_1}` bir bileşik fontun adı olamaz
+@msg	{k}: give a font	{k}: bir font verin
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: bir font verin
+@msg	{k}: size must be {_1} to {_2}%	{k}: size %{_1} ile %{_2} arasında olmalı
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size %{_1} ile %{_2} arasında olmalı
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline %{_1} ile %{_2} arasında olmalı
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline %{_1} ile %{_2} arasında olmalı
+@msg	{k}: scale must be {_1} to {_2}%	{k}: ölçek %{_1} ile %{_2} arasında olmalı
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: ölçek %{_1} ile %{_2} arasında olmalı
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: yalnızca kana, roman ve numerals ölçeklenebilir
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: yalnızca kana, roman ve numerals ölçeklenebilir
+@msg	{k}: only kana can be scaled at the center	{k}: merkezden yalnızca kana ölçeklenebilir
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: merkezden yalnızca kana ölçeklenebilir
+@msg	no composite font	bileşik font yok
 	Delete Font	Fontu Sil
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Rakamlar
 	Scale at Center	Merkezden Ölçekle
+	Delete Set	Seti Sil
+	Direct Entry	Doğrudan Giriş
 	Up/Down:	Yukarı/Aşağı:
 	Left/Right:	Sol/Sağ:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko Yukarı/Aşağı
@@ -4175,6 +4261,7 @@ axis	Both	Her İkisi
 @msg	`name` must be the name of a script engine	`name` bir betik motorunun adı olmalıdır
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	ana betik motoru her çalıştırmada yenidir ve hiç saklanmaz, bu yüzden bırakılamaz
 @msg	there is no script engine named {name}	{name} adlı bir betik motoru yok
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` yalnızca sorulacak kimsenin olmadığı bir çalıştırma içindir: uygulamada her iletişim kutusunu kişi yanıtlar
 @msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı
 @msg	Copied the link info	Bağlantı bilgisi kopyalandı
@@ -5124,6 +5211,11 @@ axis	Both	Her İkisi
 @msg	Imported library {name}	İçe aktarılan kitaplık {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB İlkesi:
+	CMYK Policy:	CMYK İlkesi:
+	Preserve Embedded Profiles	Gömülü Profilleri Koru
+	Convert to Working Space	Çalışma Alanına Dönüştür
+	Preserve Numbers	Sayıları Koru
 	Texture	Doku
 	Craquelure…	Küçük çatlak…
 	Grain…	Tahıl…
@@ -5356,6 +5448,7 @@ lighting	Light	Işık
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt dışa aktarılacak hiçbir şey çizmez
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Döndür, Şişir veya Döndür)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`, yalnızca değeri shaded veya wireframe olan `mode` içeren bir nesne olmalıdır
 @msg	its 3D effect builds no solid	3 boyutlu efekti hiçbir katı oluşturmuyor
 @msg	bevel must be none or one of {_1}	bevel, none veya {_1} değerlerinden biri olmalıdır
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} bu resimden katı oluşturamaz: sembol örnekleri, karışımları ve kırpma grupları çok fazla nesne içeriyor
@@ -5872,7 +5965,7 @@ theme	Appearance	Görünüm
 	Drawer menu	Çekmece menüsü
 	Toolbar: Show Controls	Araç Çubuğu: Kontrolleri Göster
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control fillStroke, coloring, drawMode veya screenMode olmalıdır
-@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	bilinmeyen kontrol `{name}`: fillStroke, colouring,drawMode veya screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	bilinmeyen kontrol `{name}`: fillStroke, coloring, drawMode veya screenMode
 @msg	give a fraction `t` from 0 to 1	0'dan 1'e kadar bir `t` kesri verin
 @msg	give the path `id`	`id` yolunu ver
 @msg	invalid stroke widths	geçersiz kontur genişlikleri
@@ -5895,7 +5988,7 @@ theme	Appearance	Görünüm
 	Below Object	Nesnenin altında
 	Registration:	Kayıt:
 	Dimension	Boyut
-	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : Gerçek boyut — 1:10 etiketler sayfada 10 adet olarak 1 adettir.
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : gerçek boyut — 1:10, sayfadaki 1 birimi 10 olarak etiketler.
 	Preview (1 inch on the page)	Önizleme (sayfada 1 inç)
 	Set as Default	Varsayılan Olarak Ayarla
 	 out from a highlighted edge to place its dimension  |  	 boyutunu yerleştirmek için vurgulanan kenardan dışarı |  
@@ -5933,7 +6026,7 @@ theme	Appearance	Görünüm
 @msg	Measured segment no longer exists	Ölçülen segment artık mevcut değil
 @msg	Non-finite dimension	Sonlu olmayan boyut
 @msg	Only linear dimensions are horizontal or vertical	Yalnızca doğrusal boyutlar yatay veya dikey olabilir
-@msg	Scale must be drawing:real, for example 1:10	Ölçek çizim olmalıdır:gerçek, örneğin 1:10
+@msg	Scale must be drawing:real, for example 1:10	Ölçek çizim:gerçek biçiminde olmalıdır, örneğin 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Ölçek oranı 1:1000000 ile 1000000:1 arasında olmalıdır
 @msg	Second measured segment no longer exists	Ölçülen ikinci segment artık mevcut değil
 @msg	Unknown dimension mode	Bilinmeyen boyut modu
@@ -6048,6 +6141,14 @@ theme	Appearance	Görünüm
 	JavaScript:	JavaScript:
 	Large Gaps	Büyük Boşluklar
 	Last Artboard	Son Çalışma Yüzeyi
+	Status Bar Show	Durum Çubuğunda Göster
+	Artboard Name	Çalışma Yüzeyi Adı
+	Current Tool	Geçerli Araç
+	Date and Time	Tarih ve Saat
+	Number of Undos	Geri Alma Sayısı
+	Document Color Profile	Belge Renk Profili
+	Undos	Geri Al
+	Redos	Yinele
 	Levels	Düzeyler
 	Library Panel Options	Kütüphane Paneli Seçenekleri
 	Link JavaScript Files…	JavaScript Dosyalarını Bağla…
@@ -6296,6 +6397,8 @@ theme	Appearance	Görünüm
 	Save Variable Library…	Değişken Kitaplığını Kaydet…
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	`{name}` değişkeni değişken kitaplığına kaydedilemiyor: adını bir harf veya `_` ile başlayacak, boşluk ya da `-`, `_` ve `.` dışında simge içermeyecek şekilde değiştirin
+@msg	{k} has control characters	{k} denetim karakterleri içeriyor
+@msg	{k} has control characters or line breaks	{k} denetim karakterleri veya satır sonları içeriyor
 @msg	data set `{name}` holds a control character, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir denetim karakteri içeriyor
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir boşlukla başlıyor veya bitiyor
 	Long	Uzun
@@ -6590,6 +6693,7 @@ axis	Y Axis	Y ekseni
 @msg	stops must be in order of `offset`	duraklar `offset` sırasında olmalıdır
 @msg	the document has no pattern {pattern}	belgede {pattern} deseni yok
 @msg	the document has no swatch {n}	belgede {n} renk örneği yok
+@msg	`plates` requires a stop linked to a spot swatch	`plates`, nokta rengi örneğine bağlı bir degrade durağı gerektirir
 @msg	the output	çıktı
 @msg	the path has no anchor points	yolun bağlantı noktası yok
 @msg	too many anchor points (limit {MAX_ANCHORS})	çok fazla bağlantı noktası (sınır {MAX_ANCHORS})
@@ -6826,6 +6930,7 @@ axis	Y Axis	Y ekseni
 @msg	`name` must be a name that is not empty	`name` boş olmayan bir ad olmalıdır
 @msg	`name` must not be empty	`name` boş olmamalıdır
 @msg	`origin` must be [x, y] in points	`origin` punto cinsinden [x, y] olmalıdır
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` [a, b, c, d] olmalıdır; her biri -1000 ile 1000 arasında, a·d - b·c ise 0'dan en az 0.001 uzakta olmalıdır
 @msg	`picks` must be an array (got {v})	`picks` bir dizi olmalıdır (verilen: {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` 1 ile {MAX_PICKS} arasında seçim içermelidir (verilen: {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` 2 ile 100000 arasında nokta içermelidir
@@ -7194,6 +7299,7 @@ axis	Y Axis	Y ekseni
 @msg	Image Trace failed: {e}	Görüntü İzleme başarısız oldu: {e}
 @msg	Image Trace finished, but its document was closed	Görüntü İzleme tamamlandı, ancak belgesi kapatılmıştı
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Görüntü İzleme tamamlandı, ancak bu sırada görüntü veya ayarları değişti: yeniden izleyin
+@msg	Image Trace finished, but its document was reverted: trace it again	Görüntü İzleme tamamlandı, ancak belgesi geri döndürüldü: yeniden izleyin
 @msg	Invalid dimension offset	Geçersiz boyut ofseti
 @msg	Invalid point	Geçersiz nokta
 @msg	Join: a subpath went missing	Birleştir: bir alt yol kayboldu
@@ -7608,7 +7714,7 @@ axis	Y Axis	Y ekseni
 @msg	column: true floats the whole column and takes no onto, above or below	column: true tüm sütunu yüzdürür ve onto, above veya below almaz
 @msg	command must be a shape.* command	command bir shape.* komutu olmalıdır
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` eksik
-@msg	composer must be "singleLine" or "everyLine"	composer "singleLine" veya "everyLine" olmalıdır
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer "singleLine", "everyLine", "standardSingleLine" veya "standardEveryLine" olmalıdır
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	bileşik şekiller yolları, bileşik yolları, grupları, bileşik şekilleri, metni, karışımları ve zarfları alır
 @msg	compound {_1} must contain exactly one open path to join	bileşik {_1}, birleştirilecek tam olarak bir açık yol içermelidir
 @msg	connect needs a path other than the one extended	connect için uzatılan yoldan başka bir yol gerekir
@@ -8578,6 +8684,8 @@ axis	Y Axis	Y ekseni
 	Create New Set	Yeni Set Oluştur
 	Stop Global Edit	Genel Düzenlemeyi Durdur
 	Global Edit Options	Genel Düzenleme Seçenekleri
+	Select Similar Objects	Benzer Nesneleri Seç
+	Select Similar Options	Benzer Seçimi Seçenekleri
 	Leave Out of Global Edit	Genel Düzenlemenin Dışında Bırak
 	Match	Eşleştir
 	On Artboards	Çalışma Yüzeylerinde
