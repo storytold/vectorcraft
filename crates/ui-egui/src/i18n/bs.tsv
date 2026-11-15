@@ -3451,6 +3451,8 @@ theme	Appearance	Izgled
 	Symbolism Tool	Alat simbolizam
 	Image Trace Presets	Predlošci praćenja slike
 	Live Paint Bucket	Kanta za živo bojenje
+	Fill Area	Popuni područje
+	Fill Area Tool	Alat za popunjavanje područja
 	Live Paint Bucket (Stroke)	Kanta za živo bojenje (potez)
 	Live Paint Info	Informacije o živom bojenju
 	Shape Builder	Graditelj oblika
@@ -4685,6 +4687,7 @@ imageTrace	Outline	Obris
 @msg	Saved {path}	Sačuvano: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Odaberite tekst ili kliknite u tekst alatom za tekst da umetnete glifove
 @msg	Shape Builder: no region under the pointer	Graditelj oblika: nema regije ispod pokazivača
+@msg	Fill Area: no enclosed area under the pointer	Popuni područje: nema zatvorenog područja ispod pokazivača
 @msg	Shape Builder: select paths or compound paths	Graditelj oblika: odaberite putanje ili složene putanje
 @msg	Show All Hidden Attributes: nothing is hidden	Prikaži sve skrivene atribute: ništa nije skriveno
 @msg	Split Into Grid: select paths large enough for the grid	Podijeli u mrežu: odaberite putanje dovoljno velike za mrežu

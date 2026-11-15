@@ -2582,6 +2582,7 @@ axis	Both	Και τα δύο
 @msg	Saved {path}	Αποθηκεύτηκε το {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Επιλέξτε κείμενο ή κάντε κλικ μέσα σε κείμενο με το εργαλείο κειμένου για εισαγωγή γλύφων
 @msg	Shape Builder: no region under the pointer	Δημιουργία σχημάτων: δεν υπάρχει περιοχή κάτω από τον δείκτη
+@msg	Fill Area: no enclosed area under the pointer	Γέμισμα περιοχής: δεν υπάρχει κλειστή περιοχή κάτω από τον δείκτη
 @msg	Shape Builder: select paths or compound paths	Δημιουργία σχημάτων: επιλέξτε διαδρομές ή σύνθετες διαδρομές
 @msg	Show All Hidden Attributes: nothing is hidden	Εμφάνιση όλων των κρυφών χαρακτηριστικών: δεν υπάρχουν κρυφά χαρακτηριστικά
 @msg	Split Into Grid: select paths large enough for the grid	Διαίρεση σε πλέγμα: επιλέξτε αρκετά μεγάλες διαδρομές για το πλέγμα
@@ -2991,6 +2992,8 @@ theme	Appearance	Εμφάνιση
 	List View	Προβολή λίστας
 	List Workspaces	Λίστα χώρων εργασίας
 	Live Paint Bucket	Κουβάς δυναμικής βαφής
+	Fill Area	Γέμισμα περιοχής
+	Fill Area Tool	Εργαλείο γεμίσματος περιοχής
 	Live Paint Bucket (Stroke)	Κουβάς δυναμικής βαφής (περίγραμμα)
 	Live Paint Info	Πληροφορίες δυναμικής βαφής
 	Live Paint Selection Tool	Επιλογή δυναμικής βαφής (Live Paint Selection Tool)

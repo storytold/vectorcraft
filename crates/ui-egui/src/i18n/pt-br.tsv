@@ -1658,6 +1658,8 @@ antiAlias	Sharp	Nítido
 	List Workspaces	Listar Espaços de Trabalho
 	Live Paint	Pintura ao Vivo
 	Live Paint Bucket	Balde de Pintura ao Vivo
+	Fill Area	Preencher área
+	Fill Area Tool	Ferramenta Preencher Área
 	Live Paint Bucket (Stroke)	Balde de Pintura ao Vivo (Traçado)
 	Live Paint Info	Informações da Pintura ao Vivo
 	Live Paint Selection Tool	Ferramenta Seleção de Pintura ao Vivo
@@ -3954,6 +3956,7 @@ axis	Both	Ambos
 @msg	Saved {path}	{path} salvo
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecione texto ou clique em um texto com a ferramenta Texto para inserir glifos
 @msg	Shape Builder: no region under the pointer	Criador de formas: nenhuma região sob o ponteiro
+@msg	Fill Area: no enclosed area under the pointer	Preencher área: nenhuma área fechada sob o ponteiro
 @msg	Shape Builder: select paths or compound paths	Criador de formas: selecione traçados ou traçados compostos
 @msg	Show All Hidden Attributes: nothing is hidden	Mostrar todos os atributos ocultos: nada está oculto
 @msg	Split Into Grid: select paths large enough for the grid	Dividir em grade: selecione traçados grandes o bastante para a grade

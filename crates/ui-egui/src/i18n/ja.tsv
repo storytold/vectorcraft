@@ -2277,6 +2277,8 @@ antiAlias	Sharp	シャープ
 	List View	リスト表示
 	List Workspaces	ワークスペースの一覧
 	Live Paint Bucket	ライブペイントツール
+	Fill Area	領域を塗りつぶし
+	Fill Area Tool	領域塗りつぶしツール
 	Live Paint Bucket (Stroke)	ライブペイントツール (線)
 	Live Paint Info	ライブペイント情報
 	Live Paint Selection Tool	ライブペイント選択ツール
@@ -4533,6 +4535,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Live Paint: select paths or compound paths	ライブペイント: パスまたは複合パスを選択してください
 @msg	Live Paint: these paths are too degenerate to paint	ライブペイント: これらのパスは形状がつぶれすぎていてペイントできません
 @msg	Shape Builder: no region under the pointer	シェイプ形成ツール: ポインターの下に領域がありません
+@msg	Fill Area: no enclosed area under the pointer	領域を塗りつぶし: ポインターの下に閉じた領域がありません
 @msg	Shape Builder: select paths or compound paths	シェイプ形成ツール: パスまたは複合パスを選択してください
 @msg	image data `{_1}` is missing	画像データ `{_1}` が見つかりません
 @msg	no Live Paint edge near that point	その位置の近くにライブペイントのエッジがありません

@@ -1979,6 +1979,8 @@ file-filter	Templates	Vorlagen
 	List Workspaces	Arbeitsbereiche auflisten
 	Live Paint	Interaktiv malen
 	Live Paint Bucket	Interaktiv-malen-Werkzeug
+	Fill Area	Fläche füllen
+	Fill Area Tool	Fläche-füllen-Werkzeug
 	Live Paint Bucket (Stroke)	Interaktiv-malen-Werkzeug (Kontur)
 	Live Paint Info	Informationen zu „Interaktiv malen“
 	Live Paint Selection Tool	Interaktiv-malen-Auswahlwerkzeug
@@ -4490,6 +4492,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Saved {path}	{path} gespeichert
 @msg	Select text or click into text with the Type tool to insert glyphs	Wählen Sie Text aus oder klicken Sie mit dem Text-Werkzeug in einen Text, um Glyphen einzufügen
 @msg	Shape Builder: no region under the pointer	Formerstellung: kein Bereich unter dem Zeiger
+@msg	Fill Area: no enclosed area under the pointer	Fläche füllen: kein geschlossener Bereich unter dem Zeiger
 @msg	Shape Builder: select paths or compound paths	Formerstellung: Wählen Sie Pfade oder zusammengesetzte Pfade aus
 @msg	Show All Hidden Attributes: nothing is hidden	Alle ausgeblendeten Attribute einblenden: Es ist nichts ausgeblendet
 @msg	Split Into Grid: select paths large enough for the grid	In Raster teilen: Wählen Sie Pfade aus, die groß genug für das Raster sind

@@ -3482,6 +3482,8 @@ theme	Appearance	Ulkoasu
 	Symbolism Tool	Symbolityökalu
 	Image Trace Presets	Kuvan jäljityksen esiasetukset
 	Live Paint Bucket	Elävän maalauksen ämpäri
+	Fill Area	Täytä alue
+	Fill Area Tool	Alueen täyttötyökalu
 	Live Paint Bucket (Stroke)	Elävän maalauksen ämpäri (viiva)
 	Live Paint Info	Elävän maalauksen tiedot
 	Shape Builder	Muodonmuodostin
@@ -4812,6 +4814,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Saved {path}	Tallennettiin {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Valitse tekstiä tai napsauta tekstiin tekstityökalulla, niin voit lisätä merkkejä
 @msg	Shape Builder: no region under the pointer	Muodonmuodostin: osoittimen alla ei ole aluetta
+@msg	Fill Area: no enclosed area under the pointer	Täytä alue: osoittimen alla ei ole suljettua aluetta
 @msg	Shape Builder: select paths or compound paths	Muodonmuodostin: valitse polkuja tai yhdistelmäpolkuja
 @msg	Show All Hidden Attributes: nothing is hidden	Näytä kaikki piilotetut attribuutit: mitään ei ole piilotettu
 @msg	Split Into Grid: select paths large enough for the grid	Jaa ruudukoksi: valitse ruudukolle riittävän suuret polut

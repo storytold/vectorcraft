@@ -2728,6 +2728,8 @@ antiAlias	Sharp	शार्प
 	Live curve fitting	लाइव वक्र फिटिंग
 	Live Paint	लाइव पेंट
 	Live Paint Bucket	लाइव पेंट बकेट
+	Fill Area	क्षेत्र भरें
+	Fill Area Tool	क्षेत्र भरें टूल
 	Live Paint Bucket (Stroke)	लाइव पेंट बाल्टी (स्ट्रोक)
 	Live Paint Info	लाइव पेंट जानकारी
 	Live Paint Selection Tool	लाइव पेंट सिलेक्शन टूल
@@ -8089,6 +8091,7 @@ antiAlias	Sharp	शार्प
 @msg	shadings of more than 4096 patches or triangles were left out	4096 से अधिक पैच या त्रिकोणों के छायांकन को छोड़ दिया गया था
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	छायांकन जिसका कार्य अज्ञात प्रकार के होते हैं, उनके मध्य रंग से भरे होते हैं
 @msg	Shape Builder: no region under the pointer	आकृति बिल्डर: सूचक के तहत कोई क्षेत्र नहीं
+@msg	Fill Area: no enclosed area under the pointer	क्षेत्र भरें: सूचक के तहत कोई बंद क्षेत्र नहीं
 @msg	Shape Builder: select paths or compound paths	आकृति बिल्डर: पाथ या मिश्रित पाथ सिलेक्ट करें
 @msg	Shaper needs 1–64 source paths	शेपर के लिए 1–64 स्रोत पाथ चाहिए
 @msg	shortcut for `{k}` must be a string	`{k}` के लिए शॉर्टकट एक स्ट्रिंग होना चाहिए

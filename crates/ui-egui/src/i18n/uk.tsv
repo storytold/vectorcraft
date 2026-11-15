@@ -2006,6 +2006,8 @@ file-filter	Templates	Шаблони
 	List Workspaces	Перелічити робочі середовища
 	Live Paint	Швидка заливка
 	Live Paint Bucket	Швидка заливка (відро)
+	Fill Area	Заливка області
+	Fill Area Tool	Інструмент «Заливка області»
 	Live Paint Bucket (Stroke)	Швидка заливка (обведення)
 	Live Paint Info	Відомості про швидку заливку
 	Live Paint Selection Tool	Інструмент «Виділення швидкої заливки»
@@ -4604,6 +4606,7 @@ axis	Both	Обидві
 @msg	Saved {path}	Збережено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Виділіть текст або клацніть всередині тексту інструментом «Текст», щоб вставити гліфи
 @msg	Shape Builder: no region under the pointer	Створення фігур: під вказівником немає області
+@msg	Fill Area: no enclosed area under the pointer	Заливка області: під вказівником немає замкненої області
 @msg	Shape Builder: select paths or compound paths	Створення фігур: виділіть контури або складені контури
 @msg	Show All Hidden Attributes: nothing is hidden	Показати всі приховані атрибути: нічого не приховано
 @msg	Split Into Grid: select paths large enough for the grid	Поділ на сітку: виділіть контури, досить великі для сітки
