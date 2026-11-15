@@ -180,15 +180,8 @@ fn fill_pathfinder_options(app: &VectorcraftApp, id: &str, fields: &mut Map<Stri
     if !vectorcraft_effects::takes_pathfinder_options(id) {
         return;
     }
-    let options = if fresh {
-        let mut current = app.session.prefs.pathfinder;
-        if !vectorcraft_effects::PATHFINDER_EFFECT_PRECISION.contains(&current.precision) {
-            current.precision = vectorcraft_engine::PathfinderOptions::default().precision;
-        }
-        json!(current)
-    } else {
-        vectorcraft_effects::PathfinderEffectOptions::default().to_params()
-    };
+    let options =
+        if fresh { super::pathfinder_options::options_in_force(app) } else { vectorcraft_effects::PathfinderEffectOptions::default().to_params() };
     for (key, v) in options.as_object().into_iter().flatten() {
         fields.entry(key.clone()).or_insert_with(|| v.clone());
     }

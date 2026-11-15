@@ -3590,7 +3590,9 @@ already walks Image Trace. Short agent entry points:
   keeps the `to` its click sends at insertion (`key` while the selection has a key object or key guide, `artboard` for one selected
   object or with Align to Artboard, else `selection`), so a later Align To choice does not change it, and a step that
   aligns to the key object fails in playback when the selection has no key then. With anchor points selected the click
-  sends no `to`, and neither does the step. These are VectorCraft's own rules. A
+  sends no `to`, and neither does the step. An Effect › Pathfinder item's step holds the Pathfinder Options in force at
+  insertion (`precision`, `removeRedundantPoints` and `removeUnpainted` in its `params`), as its click applies the
+  effect with them, so a later Pathfinder Options change does not change it. These are VectorCraft's own rules. A
   View menu step plays as `ui.action.play` describes. With `set` and `action`, the
   step goes into that action, after step `step`, else after its last step, becomes the panel's selected step, and the
   command returns `{set, action, step}`. Without them it goes into the recording in progress and returns
