@@ -3044,7 +3044,7 @@ fn control_bar_overflow(app: &mut crate::VectorcraftApp, ctx: &egui::Context, sc
     control_bar_frame_in(app, ctx, screen, vec![]);
     let out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
     let nodes: Vec<_> = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
-    let menu_left = nodes.iter().find(|n| n.label().is_some_and(|l| l == "Panel menu")).and_then(|n| n.bounds())?.x0 as f32;
+    let menu_left = nodes.iter().find(|n| n.label().is_some_and(|l| l == tl!("Panel menu"))).and_then(|n| n.bounds())?.x0 as f32;
     // The bar's frame spans the whole bar, the panel menu button included.
     let bar_width = if app.ui.control_bar_floating { screen.width().min(800.0) } else { screen.width() };
     let shapes = out.shapes.iter().filter_map(|cs| {
@@ -3057,8 +3057,12 @@ fn control_bar_overflow(app: &mut crate::VectorcraftApp, ctx: &egui::Context, sc
 }
 
 /// In a narrow window, the Control bar leaves out a control it has no room for, Fill and Stroke,
-/// Opacity and Character included: every control it shows is drawn whole, left of the panel menu button, which
-/// shows in every width, with the bar docked to the top or the bottom or floating.
+/// Opacity and Character included, and the groups other modules draw in it: a shape tool's, the
+/// Dimension, Mirror & Cut, Puppet Warp and Crop Image tools' options, a linked or embedded image's
+/// controls, an Image Trace object's, a warp or mesh envelope's, a symbol instance's and the Artboard
+/// tool's, in English and in German. Every control it shows is drawn whole, left of the panel menu
+/// button, which shows in every width, with the bar docked to the top or the bottom or floating. In a
+/// wide window, each of those groups shows its controls.
 #[test]
 fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     use crate::tests_removeanchors::{control_frame, has};
@@ -3098,8 +3102,113 @@ fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     let bar = control_frame(&mut app, &ctx, vec![]);
     assert!(has(&bar, "Character:"), "the Character group shows in a wide window: {bar:?}");
     check(&mut app, "type selected");
+    let area = app.run("text.create", json!({"x": 20, "y": 150, "text": "Area", "area": {"width": 150, "height": 40}})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [area] })).unwrap();
+    check(&mut app, "area type selected");
     app.run("select.set", json!({ "ids": [] })).unwrap();
     check(&mut app, "nothing selected");
+    // A wide window shows the group's controls named `names`.
+    let wide = |app: &mut crate::VectorcraftApp, case: &str, names: &[&str]| {
+        control_frame(app, &ctx, vec![]);
+        let bar = control_frame(app, &ctx, vec![]);
+        let missing: Vec<_> = names.iter().filter(|n| !has(&bar, n)).collect();
+        assert!(missing.is_empty(), "{case}: {missing:?} missing in a wide window: {bar:?}");
+    };
+    // The tools' options, with a rectangle selected and with nothing selected.
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    for tool in ["rectangle", "ellipse", "polygon", "star", "spiral", "box3d", "dimension", "mirrorCut", "puppetWarp"] {
+        app.select_tool(tool);
+        check(&mut app, tool);
+    }
+    app.select_tool("polygon");
+    wide(&mut app, "Polygon", &["Round", "Random", "Reset"]);
+    app.select_tool("mirrorCut");
+    wide(&mut app, "Mirror & Cut", &["Axis:", "Keep:"]);
+    app.select_tool("puppetWarp");
+    wide(&mut app, "Puppet Warp", &["Expand:", "Show Mesh", "Select All Pins"]);
+    app.select_tool("dimension");
+    wide(&mut app, "Dimension", &["Linear", "Radial", "Tool Options…"]);
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    app.select_tool("spiral");
+    check(&mut app, "spiral, nothing selected");
+    wide(&mut app, "Spiral", &["Segments", "Inner Radius:", "Reset"]);
+    app.select_tool("selection");
+    // An embedded and a linked image, an Image Trace object and Crop Image's options.
+    let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let selected = |app: &crate::VectorcraftApp| app.session.active().unwrap().selection.objects.iter().map(|n| n.0).collect::<Vec<_>>();
+    app.run("file.place", json!({"name": "half.png", "dataBase64": vectorcraft_format::base64_encode(&png), "link": false})).unwrap();
+    check(&mut app, "an embedded image");
+    wide(&mut app, "an embedded image", &["Unembed…", "Image Trace", "Mask", "Crop Image", "Remove Background"]);
+    app.select_tool(vectorcraft_tools::cropimage::ID);
+    check(&mut app, "Crop Image");
+    wide(&mut app, "Crop Image", &["X:", "Y:", "W:"]);
+    app.select_tool("selection");
+    app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
+    let trace = selected(&app);
+    check(&mut app, "an Image Trace object");
+    wide(&mut app, "an Image Trace object", &["Preset:", "View:", "Expand"]);
+    let dir = vectorcraft_testkit::temp_dir("control-bar-narrow-linked");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("half.png");
+    std::fs::write(&path, &png).unwrap();
+    app.run("file.place", json!({"path": path, "link": true})).unwrap();
+    let linked = selected(&app);
+    check(&mut app, "a linked image");
+    wide(&mut app, "a linked image", &["Embed", "Edit Original", "Remove Background"]);
+    // A warp and a mesh envelope, and a symbol instance.
+    let shape = |app: &mut crate::VectorcraftApp, x: f64| {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        app.run("select.set", json!({ "ids": [id] })).unwrap();
+        id
+    };
+    shape(&mut app, 60.0);
+    app.run("object.envelope.makeWithWarp", json!({})).unwrap();
+    check(&mut app, "a warp envelope");
+    wide(&mut app, "a warp envelope", &["Style:", "Horizontal", "Vertical", "Bend:", "V:", "Reset"]);
+    shape(&mut app, 110.0);
+    app.run("object.envelope.makeWithMesh", json!({"rows": 2, "cols": 2})).unwrap();
+    let mesh = selected(&app);
+    check(&mut app, "a mesh envelope");
+    wide(&mut app, "a mesh envelope", &["Rows:", "Columns:", "Reset"]);
+    let art = shape(&mut app, 160.0);
+    let instance = app.run("symbol.new", json!({"name": "Mark", "ids": [art]})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [instance] })).unwrap();
+    check(&mut app, "a symbol instance");
+    wide(&mut app, "a symbol instance", &["Replace:", "Reset"]);
+    // The Artboard tool.
+    app.select_tool("artboard");
+    check(&mut app, "the Artboard tool");
+    wide(&mut app, "the Artboard tool", &["Preset:", "Name:", "Transform"]);
+    // German labels, which are longer.
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    check(&mut app, "the Artboard tool, in German");
+    app.select_tool("selection");
+    app.run("select.set", json!({ "ids": [instance] })).unwrap();
+    check(&mut app, "a symbol instance, in German");
+    shape(&mut app, 210.0);
+    app.run("object.envelope.makeWithWarp", json!({})).unwrap();
+    check(&mut app, "a warp envelope, in German");
+    app.select_tool("puppetWarp");
+    check(&mut app, "Puppet Warp, in German");
+    app.select_tool("dimension");
+    check(&mut app, "Dimension, in German");
+    app.select_tool("selection");
+    for (ids, case) in [(&trace, "an Image Trace object"), (&linked, "a linked image"), (&mesh, "a mesh envelope")] {
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        check(&mut app, &format!("{case}, in German"));
+    }
+    app.run("file.place", json!({"name": "half.png", "dataBase64": vectorcraft_format::base64_encode(&png), "link": false})).unwrap();
+    check(&mut app, "an embedded image, in German");
+    app.select_tool(vectorcraft_tools::cropimage::ID);
+    check(&mut app, "Crop Image, in German");
+    for tool in ["polygon", "spiral", "box3d", "mirrorCut"] {
+        app.select_tool(tool);
+        check(&mut app, &format!("{tool}, in German"));
+    }
+    app.select_tool("selection");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
     assert!(faults.is_empty(), "a control drawn past the bar's room: {faults:#?}");
 }
 
@@ -3156,6 +3265,48 @@ fn a_narrow_control_bar_shows_preferences_without_document_setup() {
     }
     assert!(both, "a wide bar shows Document Setup and Preferences");
     assert!(preferences_only, "some width has room for Preferences but not Document Setup");
+}
+
+/// A narrow Control bar shows a linked image's Embed button without Edit Original, and the Artboard
+/// tool's Transform link after an Artboard tool option it had no room for.
+#[test]
+fn a_narrow_control_bar_shows_embed_without_edit_original_and_the_artboard_link_without_its_options() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let dir = vectorcraft_testkit::temp_dir("control-bar-embed-alone");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("half.png");
+    std::fs::write(&path, &png).unwrap();
+    app.run("file.place", json!({"path": path, "link": true})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let shows = |nodes: &[egui::accesskit::Node], name: &str| nodes.iter().any(|n| n.label().is_some_and(|l| l == name));
+    // Whether some width shows `first` and `second`, and whether some width shows `first` alone.
+    let sweep = |app: &mut crate::VectorcraftApp, first: &str, second: &str| {
+        let (mut both, mut first_only) = (false, false);
+        for w in (150..=1400).step_by(2) {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w as f32, 300.0));
+            control_bar_frame_in(app, &ctx, screen, vec![]);
+            let nodes = control_bar_frame_in(app, &ctx, screen, vec![]);
+            let (a, b) = (shows(&nodes, first), shows(&nodes, second));
+            both |= a && b;
+            first_only |= a && !b;
+        }
+        (both, first_only)
+    };
+    let (both, embed_only) = sweep(&mut app, "Embed", "Edit Original");
+    assert!(both, "a wide bar shows Embed and Edit Original");
+    assert!(embed_only, "some width has room for Embed but not Edit Original");
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    app.select_tool("artboard");
+    let (both, link_only) = sweep(&mut app, "Transform", "Rearrange All Artboards");
+    assert!(both, "a wide bar shows the Artboard tool's Transform link and Rearrange All Artboards");
+    assert!(link_only, "some width has room for the Transform link but not Rearrange All Artboards");
 }
 
 /// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps

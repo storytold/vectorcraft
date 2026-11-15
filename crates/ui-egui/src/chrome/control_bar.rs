@@ -222,6 +222,57 @@ fn row_width(ui: &Ui, widths: &[f32]) -> f32 {
     widths.iter().map(|w| w + ui.spacing().item_spacing.x).sum()
 }
 
+/// The room left in the Control bar's row for a group that another module draws in it (a tool's
+/// options, an image's, an Image Trace object's, an envelope's or symbol instances' controls, or the
+/// Artboard tool's), so that none of its controls runs into the panel menu button. The group asks
+/// [`Fit::room`] before each control, or each label with its field, and draws it only on a yes. Once
+/// one has no room, the rest of the group is left out too, so the group loses controls from its
+/// right end.
+pub(crate) struct Fit {
+    reserve: f32,
+    full: bool,
+}
+
+impl Fit {
+    /// A fit that leaves `reserve` after the group's controls: the Transform link's room
+    /// ([`transform_reserve`]), or none.
+    pub(crate) fn new(reserve: f32) -> Self {
+        Self { reserve, full: false }
+    }
+
+    /// Whether the row `ui` has room for controls `widths` wide side by side, with the spacing after
+    /// each and the reserve after them, and no control before them in the group was left out.
+    pub(crate) fn room(&mut self, ui: &Ui, widths: &[f32]) -> bool {
+        self.full = self.full || ui.available_width() < row_width(ui, widths) + self.reserve;
+        !self.full
+    }
+
+    /// [`Fit::room`] for controls that end the row, with no spacing after the last of them.
+    pub(crate) fn room_at_end(&mut self, ui: &Ui, widths: &[f32]) -> bool {
+        self.full = self.full || ui.available_width() < row_width(ui, widths) - ui.spacing().item_spacing.x + self.reserve;
+        !self.full
+    }
+
+    /// Leaves `reserve` after the group's controls still to come, in place of the reserve before.
+    pub(crate) fn set_reserve(&mut self, reserve: f32) {
+        self.reserve = reserve;
+    }
+
+    /// A separator between two parts of the group ([`group_separator`]), while no control before it
+    /// was left out. It stays only while a control follows it.
+    pub(crate) fn separator(&self, ui: &mut Ui) {
+        if !self.full {
+            group_separator(ui);
+        }
+    }
+}
+
+/// The room the Transform link takes with the separator ahead of it, which the Artboard tool's
+/// controls ahead of the link leave for it.
+pub(crate) fn link_reserve(ui: &Ui) -> f32 {
+    separator_width(ui) + crate::panels::transform::link_width(ui)
+}
+
 /// The size of the Control bar's Fill, Stroke and Graphic Style chips.
 const PAINT_CHIP: f32 = 22.0;
 
@@ -838,22 +889,24 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         if ui.available_width() >= 6.0 {
             ui.add_space(6.0);
         }
+        let reserve = transform_reserve(app, ui, !sel.is_empty());
         // An image or an Image Trace object shows its own controls in place of Fill and Stroke,
-        // and leaves Fill and Stroke out while the Image Options group is off too.
+        // and leaves Fill and Stroke out while the Image Options group is off too. These groups,
+        // the tool options, the envelope's and the symbol instances' each show a control only while
+        // the Transform link's room is left after it.
         let image = if group_on(app, "imageOptions") {
-            crate::place::control_bar_details(app, ui) || crate::panels::image_trace::control_bar(app, ui)
+            crate::place::control_bar_details(app, ui, reserve) || crate::panels::image_trace::control_bar(app, ui, reserve)
         } else {
             crate::place::selected_image_info(app).is_some() || crate::panels::image_trace::selected_trace(app).is_some()
         };
         if group_on(app, "toolOptions") {
-            crate::toolbar::control_bar_options(app, ui);
+            crate::toolbar::control_bar_options(app, ui, reserve);
         }
         if object_options {
-            crate::dialogs::envelope::control_bar(app, ui);
-            crate::panels::symbols::control_bar(app, ui);
+            crate::dialogs::envelope::control_bar(app, ui, reserve);
+            crate::panels::symbols::control_bar(app, ui, reserve);
         }
         let opacity = if has_first { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
-        let reserve = transform_reserve(app, ui, !sel.is_empty());
         if !image && group_on(app, "fillStroke") {
             fill_and_stroke(app, ui, reserve);
         }
@@ -867,8 +920,8 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         }
         // The Transform link opens the whole Transform panel (reference point, rotate,
         // shear, options) in a popover; X/Y/W/H follow inline while the bar has room. The
-        // groups from Fill and Stroke on keep its room, but the controls ahead of them can
-        // still take it.
+        // groups after the object's name keep its room, but the name and the anchor and
+        // isolation buttons ahead of them can still take it.
         if ui.available_width() < crate::panels::transform::link_width(ui) {
             erase_trailing(ui);
             return;
