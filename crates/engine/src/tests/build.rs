@@ -5688,6 +5688,57 @@ fn a_trace_run_applies_only_in_its_own_document() {
     }
 }
 
+/// A trace prepared before File › Revert doesn't apply after it, even when the document keeps its
+/// uid and the restored image, object and settings are the same: both trace commands drop the
+/// trace handed in and trace the restored image again, as one undo step. Reverting another
+/// document, or a revert that fails, leaves the run current, and a trace prepared after the revert
+/// applies as usual.
+#[test]
+fn a_trace_run_prepared_before_a_revert_does_not_apply_after_it() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut direct = session();
+        image_doc(&mut direct);
+        let want = direct.execute(command, &p).unwrap();
+        let mut s = session();
+        let img = image_doc(&mut s);
+        let a = s.active_index().unwrap();
+        let copy = (*s.doc().unwrap().doc).clone();
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        let b = s.add_document(copy.clone(), None);
+        assert!(s.replace_document(b, copy.clone()));
+        assert!(s.set_active(a));
+        assert!(run.current(&s) && !run.reverted(&s), "{command}: another document reverted");
+        assert!(!s.replace_document(s.documents().len(), copy.clone()));
+        assert!(run.current(&s) && !run.reverted(&s), "{command}: a revert that failed");
+        let (uid, reverts) = (s.doc().unwrap().uid, s.doc().unwrap().reverts);
+        assert!(s.replace_document(a, copy));
+        assert_eq!(s.doc().unwrap().uid, uid, "{command}: the tab keeps its uid");
+        assert_eq!(s.doc().unwrap().reverts, reverts + 1, "{command}");
+        assert!(!run.current(&s), "{command}: reverted");
+        assert!(run.reverted(&s), "{command}");
+        traced.hand_in(&mut s);
+        let traces = cmd::TraceRun::traces_on_this_thread();
+        let got = s.execute(run.command(), run.params()).unwrap();
+        assert_eq!(cmd::TraceRun::traces_on_this_thread(), traces + 1, "{command}: traced again");
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        assert_eq!(got, want, "{command}");
+        let g = NodeId(got["id"].as_u64().unwrap());
+        assert_eq!(node(&s, g), node(&direct, g), "{command}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: one undo step");
+        // A trace prepared after the revert is handed in and applied without tracing again.
+        let after = cmd::TraceRun::prepare(&s, command, run.params()).unwrap();
+        let traced = after.run(&|_, _| true).unwrap();
+        assert!(after.current(&s) && !after.reverted(&s), "{command}: prepared after the revert");
+        traced.hand_in(&mut s);
+        let traces = cmd::TraceRun::traces_on_this_thread();
+        s.execute(after.command(), after.params()).unwrap();
+        assert_eq!(cmd::TraceRun::traces_on_this_thread(), traces, "{command}: the trace handed in applied");
+    }
+}
+
 /// A plug-in run that calls Image Trace and then fails leaves a trace handed in for the command in
 /// place, as it leaves the document.
 #[test]

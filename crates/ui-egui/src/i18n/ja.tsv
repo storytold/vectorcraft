@@ -1688,7 +1688,10 @@ antiAlias	Sharp	シャープ
 	Every (minutes)	間隔 (分)
 	Every option is at its default.	すべてのオプションが初期値です。
 	Every option matches {base}.	すべてのオプションが {base} と同じです。
-	Every-line Composer	すべての行を一括処理
+	Middle Eastern & South Asian Single-line Composer	1 行ずつ組む (中東・南アジア)
+	Middle Eastern & South Asian Every-line Composer	すべての行を一括処理 (中東・南アジア)
+	Standard Single-line Composer	1 行ずつ組む (標準)
+	Standard Every-line Composer	すべての行を一括処理 (標準)
 	Exact dash lengths	破線の長さを正確に保つ
 	Exceptions (comma separated)	例外 (カンマ区切り)
 	Exclusion	除外
@@ -1885,6 +1888,14 @@ antiAlias	Sharp	シャープ
 	Previous Artboard	前のアートボード
 	Next Artboard	次のアートボード
 	Last Artboard	最後のアートボード
+	Status Bar Show	ステータスバーの表示
+	Artboard Name	アートボード名
+	Current Tool	現在のツール
+	Date and Time	日付と時刻
+	Number of Undos	取り消し回数
+	Document Color Profile	ドキュメントのカラープロファイル
+	Undos	取り消し
+	Redos	やり直し
 	Gradient Fill: click to apply, drag onto art	グラデーションの塗り: クリックで適用、アートにドラッグ
 	Gradient Mesh	グラデーションメッシュ
 	Gradient Tool	グラデーションツール
@@ -3282,7 +3293,6 @@ mark-style	Japanese	日本式
 	Simulate Colored Paper	色紙をシミュレート
 	Simulate Paper	紙色をシミュレート
 	Single Quotes:	一重引用符:
-	Single-line Composer	1 行ずつ組む
 	Toggle Line Composer	行の組版方式を切り替え
 	Size Tile to Art	タイルをアートワークのサイズに合わせる
 	Move Tile with Art	タイルをアートワークと一緒に移動
@@ -5299,6 +5309,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`name` must be the name of a script engine	`name` はスクリプトエンジンの名前にしてください
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	メインのスクリプトエンジンは実行ごとに新しく作られ、保持されないため、破棄できません
 @msg	there is no script engine named {name}	{name} という名前のスクリプトエンジンはありません
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` は尋ねる相手がいない実行専用です。アプリでは、各ダイアログに本人が回答します
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Copied the link info	リンク情報をコピーしました
@@ -6532,6 +6543,7 @@ axis	Y Axis	Y 軸
 @msg	`name` must be a name that is not empty	`name` には空でない名前を指定してください
 @msg	`name` must not be empty	`name` を空にすることはできません
 @msg	`origin` must be [x, y] in points	`origin` にはポイント単位の [x, y] を指定してください
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` には [a, b, c, d] を指定してください (各値は -1000 から 1000、a·d - b·c は 0 から 0.001 以上離れた値)
 @msg	`picks` must be an array (got {v})	`picks` には配列を指定してください (指定値: {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` には 1～{MAX_PICKS} 個の指定が必要です (指定数: {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` には 2～100000 個の点が必要です
@@ -6900,6 +6912,7 @@ axis	Y Axis	Y 軸
 @msg	Image Trace failed: {e}	画像トレースに失敗しました: {e}
 @msg	Image Trace finished, but its document was closed	画像トレースは完了しましたが、ドキュメントが閉じられています
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	画像トレースは完了しましたが、その間に画像または設定が変更されました: もう一度トレースしてください
+@msg	Image Trace finished, but its document was reverted: trace it again	画像トレースは完了しましたが、ドキュメントは保存済みの状態に戻されました: もう一度トレースしてください
 @msg	Invalid dimension offset	寸法のオフセットが無効です
 @msg	Invalid point	点が無効です
 @msg	Join: a subpath went missing	連結: サブパスが見つからなくなりました
@@ -7314,7 +7327,7 @@ axis	Y Axis	Y 軸
 @msg	column: true floats the whole column and takes no onto, above or below	column: true は列全体をフローティングにするため、onto、above、below は指定できません
 @msg	command must be a shape.* command	command には shape.* コマンドを指定してください
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` がありません
-@msg	composer must be "singleLine" or "everyLine"	composer には "singleLine" または "everyLine" を指定してください
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer は "singleLine"、"everyLine"、"standardSingleLine"、"standardEveryLine" のいずれかにしてください
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	複合シェイプに含められるのは、パス、複合パス、グループ、複合シェイプ、文字、ブレンド、エンベロープです
 @msg	compound {_1} must contain exactly one open path to join	連結するには、複合パス {_1} にオープンパスがちょうど 1 つ含まれている必要があります
 @msg	connect end must be "start" or "end"	connect の end には "start" または "end" を指定してください
