@@ -1052,13 +1052,15 @@ fn put_alternate(
     } else {
         None
     };
-    let clear: Vec<u64> = story.iter().filter(|f| **f != id).map(|f| f.0).collect();
-    let mut edit = json!({"id": id.0, "start": lo, "end": hi, "clear": clear});
+    let clear: Vec<NodeId> = story.iter().copied().filter(|f| *f != id).collect();
+    let mut edit = json!({"id": id.0, "start": lo, "end": hi, "clear": clear.iter().map(|f| f.0).collect::<Vec<_>>()});
     match style {
         Some(style) => edit["runs"] = json!([{"text": c.to_string(), "style": style}]),
         None => edit["insert"] = json!(c.to_string()),
     }
-    if let Err(e) = try_on_a_copy(app, face, c, picked, (id, lo), &edit) {
+    // The character's place in the story: a full frame of threaded text flows it on to the next.
+    let Some(at) = app.session.active().map(|st| story_start(&st.doc, id, &clear) + lo) else { return };
+    if let Err(e) = try_on_a_copy(app, face, c, picked, (id, at), &edit) {
         app.status(e);
         return;
     }
@@ -1066,16 +1068,68 @@ fn put_alternate(
         app.status(e.to_string());
         return;
     }
-    app.session.set_tool_option("select", &json!({"start": lo, "end": lo + c.len_utf8()}));
-    if draw_selected_with(app, face, c, picked) {
-        app.session.set_tool_option("select", &json!({"start": lo + c.len_utf8(), "end": lo + c.len_utf8()}));
+    let n = c.len_utf8();
+    if select_in_story(app, (id, at), c, (0, n)) && draw_selected_with(app, face, c, picked) {
+        // The glyph can change the character's width and flow it on again: find it again.
+        select_in_story(app, (id, at), c, (n, n));
     }
 }
 
+/// The Type tool's selection becomes bytes `start..end` from character `c` at byte `at` of the
+/// story of text `id`, in the frame that holds the character; whether it is there. When that
+/// frame is not the one the Type tool edits, the tool edits it, and it is selected, as a click in
+/// it selects it (`move_editing_selection` in the engine's `panelcmds.rs`).
+fn select_in_story(app: &mut VectorcraftApp, (id, at): (NodeId, usize), c: char, (start, end): (usize, usize)) -> bool {
+    let Some((frame, byte)) = app.session.active().and_then(|st| story_place(&st.doc, id, at, c)) else { return false };
+    if super::character::text_editing(app).is_some_and(|(editing, ..)| editing == frame) {
+        app.session.set_tool_option("select", &json!({"start": byte + start, "end": byte + end}));
+        return true;
+    }
+    app.session.set_tool_option("textSelection", &json!({"editing": frame.0, "anchor": byte + start, "caret": byte + end}));
+    let selected =
+        app.session.active().is_some_and(|st| std::iter::successors(Some(frame), |f| st.doc.parent_of(*f)).any(|f| st.selection.contains(f)));
+    if !selected && let Err(e) = app.session.select(|_, sel| sel.set([frame])) {
+        app.status(e.to_string());
+        return false;
+    }
+    true
+}
+
+/// The bytes of the text of the frames before frame `id` in its story ([`Document::story_of`]),
+/// without the frames of `clear`, whose text an edit removes.
+///
+/// [`Document::story_of`]: vectorcraft_doc::Document::story_of
+fn story_start(doc: &vectorcraft_doc::Document, id: NodeId, clear: &[NodeId]) -> usize {
+    doc.story_of(id)
+        .into_iter()
+        .take_while(|f| *f != id)
+        .filter(|f| !clear.contains(f))
+        .filter_map(|f| match doc.node(f).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some(t.plain_text().len()),
+            _ => None,
+        })
+        .sum()
+}
+
+/// The frame of the story of text `id` that holds the character at byte `at` of the story's text,
+/// and that character's byte in the frame; `None` unless that character is `c`.
+fn story_place(doc: &vectorcraft_doc::Document, id: NodeId, at: usize, c: char) -> Option<(NodeId, usize)> {
+    let mut start = 0;
+    for f in doc.story_of(id) {
+        let Some(NodeKind::Text(t)) = doc.node(f).map(|n| &n.kind) else { continue };
+        let text = t.plain_text();
+        if at < start + text.len() {
+            return text.get(at - start..)?.starts_with(c).then_some((f, at - start));
+        }
+        start += text.len();
+    }
+    None
+}
+
 /// The edits of [`put_alternate`] on a copy of the active document in a session of its own: `edit`
-/// (`text.editRange`) puts `c` in at byte `at` of text `id`, and glyph `picked` of `face` goes on
-/// it. The error of the step that fails; an error too when the character is not where the edit put
-/// it.
+/// (`text.editRange`) puts `c` in at byte `at` of the story of text `id` (in whichever frame the
+/// text flows it to), and glyph `picked` of `face` goes on it. The error of the step that fails; an
+/// error too when the character is not where the edit put it.
 fn try_on_a_copy(
     app: &VectorcraftApp,
     face: &vectorcraft_text::FontFace,
@@ -1089,11 +1143,15 @@ fn try_on_a_copy(
     copy.add_document(vectorcraft_doc::Document::clone(&st.doc), None);
     copy.execute("text.editRange", edit).map_err(|e| e.to_string())?;
     let n = c.len_utf8();
-    let step = match copy.active().and_then(|s| s.doc.node(id)).map(|node| &node.kind) {
-        Some(NodeKind::Text(text)) if text.plain_text().get(at..at + n) == Some(c.encode_utf8(&mut [0; 4])) => style_at(text, at).and_then(|style| {
-            alternate_command(id, (at, at + n), &style.features, style.glyph_alternate.is_some(), pick_for(text, at, face, picked))
-        }),
-        _ => return Err("Select text or click into text with the Type tool to insert glyphs".into()),
+    let doc = copy.active().map(|s| &s.doc);
+    let step = match doc.and_then(|d| story_place(d, id, at, c).and_then(|(f, byte)| Some((f, byte, d.node(f)?)))) {
+        Some((f, byte, node)) => match &node.kind {
+            NodeKind::Text(text) => style_at(text, byte).and_then(|style| {
+                alternate_command(f, (byte, byte + n), &style.features, style.glyph_alternate.is_some(), pick_for(text, byte, face, picked))
+            }),
+            _ => return Err("Select text or click into text with the Type tool to insert glyphs".into()),
+        },
+        None => return Err("Select text or click into text with the Type tool to insert glyphs".into()),
     };
     if let Some((cmd, params)) = step {
         copy.execute(cmd, &params).map_err(|e| e.to_string())?;
@@ -2158,6 +2216,43 @@ mod tests {
         let texts: String = [a, b].iter().map(|id| plain(&app, *id)).collect();
         assert_eq!(texts, "a", "status: {}", app.ui.status);
         assert_eq!(glyph_ids(&app, &json!(a)), [u2]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// A pick at the caret at the end of a full frame of threaded text puts the character in, and
+    /// the text flows it on to the next frame: it is drawn with the glyph there, and the Type tool
+    /// edits that frame with the caret after it.
+    #[test]
+    fn a_pick_at_the_end_of_a_full_frame_follows_the_character_to_the_next_frame() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+        let [_, u2, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        // The first frame is wide enough for "a" and one ideograph only.
+        let area = json!({"x": 10, "y": 10, "text": "a中中中", "size": 12, "area": {"width": 20, "height": 16}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        for id in [a, b] {
+            app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        }
+        let plain = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("text"),
+        };
+        assert_eq!((plain(&app, a), plain(&app, b)), ("a中".to_string(), "中中".to_string()));
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let end = "a中".len();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": end, "caret": end}));
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-subset", 1usize);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        assert_eq!((plain(&app, a), plain(&app, b)), ("a中".to_string(), "a中中".to_string()), "status: {}", app.ui.status);
+        assert_eq!(glyph_ids(&app, &json!(b))[0], u2);
+        assert_eq!(super::super::character::text_editing(&app), Some((NodeId(b), 1, 1)), "the caret is after the character");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
     }
 
