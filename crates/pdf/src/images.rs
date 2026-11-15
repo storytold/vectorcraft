@@ -22,6 +22,9 @@
 //! inverted samples, which the PDF writer's Decode array undoes. A CMYK image whose numbers are
 //! kept carries the CMYK profile it is given ([`cmyk_icc`]), whether it is embedded as it is or
 //! written again; without one it is untagged, a JPEG's own `ICC_PROFILE` segments included.
+//! With Don't Include Profiles set ([`SourceProfiles::Remove`], [`CmykTag::Removed`]), a JPEG
+//! embedded as it is loses its `ICC_PROFILE` segments, its other segments and compressed samples
+//! unchanged.
 
 use std::io::Cursor;
 use std::sync::Arc;
@@ -154,10 +157,10 @@ pub(crate) fn from_decoded(img: DynamicImage, icc: Option<Vec<u8>>, interpolate:
 }
 
 /// Image `bytes` decoded within [`limits`], with the ICC profile it carries ([`source_icc`]) when
-/// `profiles` allows it (not in PDF/X-1a, which allows no ICC-based color spaces), as
-/// [`from_decoded`] writes it. `None` when it can't be decoded.
-pub(crate) fn decoded_image(bytes: &[u8], interpolate: bool, sixteen_bit: bool, profiles: bool) -> Option<Image> {
-    from_decoded(decoded(bytes)?, profiles.then(|| source_icc(bytes)).flatten(), interpolate, sixteen_bit)
+/// `profiles` keeps it ([`SourceProfiles::Keep`]), as [`from_decoded`] writes it. `None` when it
+/// can't be decoded.
+pub(crate) fn decoded_image(bytes: &[u8], interpolate: bool, sixteen_bit: bool, profiles: SourceProfiles) -> Option<Image> {
+    from_decoded(decoded(bytes)?, (profiles == SourceProfiles::Keep).then(|| source_icc(bytes)).flatten(), interpolate, sixteen_bit)
 }
 
 /// Are all of the RGBA pixels `rgba` grey?
@@ -340,6 +343,47 @@ pub(crate) struct ToSrgb<'a> {
     pub grey: bool,
 }
 
+/// What happens to the ICC profile a gray or RGB image carries
+/// ([`crate::output::ColorOut::source_profiles`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SourceProfiles {
+    /// The image keeps a well-formed gray or RGB profile ([`valid_icc`]).
+    Keep,
+    /// The image is untagged; a JPEG embedded as it is keeps its data unchanged (PDF/X-1a).
+    Untag,
+    /// The image is untagged and a JPEG embedded as it is loses its `ICC_PROFILE` segments, its
+    /// other segments and compressed samples unchanged (Don't Include Profiles).
+    Remove,
+}
+
+/// The CMYK profile [`recode_cmyk`] tags a CMYK image that keeps its numbers with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CmykTag<'a> {
+    /// This profile ([`cmyk_icc`]).
+    Profile(&'a [u8]),
+    /// None; a JPEG embedded as it is keeps its data unchanged.
+    Untagged,
+    /// None, and a JPEG embedded as it is loses its `ICC_PROFILE` segments, its other segments
+    /// and compressed samples unchanged (Don't Include Profiles).
+    Removed,
+}
+
+impl<'a> CmykTag<'a> {
+    /// The profile the image is tagged with.
+    fn icc(self) -> Option<&'a [u8]> {
+        match self {
+            Self::Profile(icc) => Some(icc),
+            Self::Untagged | Self::Removed => None,
+        }
+    }
+}
+
+/// JPEG `bytes` as they are embedded: without their `ICC_PROFILE` segments with `remove`
+/// ([`vectorcraft_doc::cmyk::jpeg_without_icc`]). `None` when those can't be taken out.
+pub(crate) fn jpeg_data(bytes: &[u8], remove: bool) -> Option<Vec<u8>> {
+    if remove { vectorcraft_doc::cmyk::jpeg_without_icc(bytes) } else { Some(bytes.to_vec()) }
+}
+
 /// The ICC profile image `bytes` carries ([`source_icc`]), when it is a well-formed profile of
 /// colour space `space` (`GRAY` or `RGB `, [`valid_icc`]): `None` without one, `Some(None)` when
 /// the CMS can't read it.
@@ -484,19 +528,19 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
 /// Encoded image `bytes` placed `size` points wide and high, as the Compression settings `c` ask:
 /// resampled when its resolution is above the threshold, compressed with ZIP or JPEG, its colours
 /// converted by `convert` (colour images). Pixels that keep their colours keep the ICC profile
-/// they carry when `profiles` allows it (not in PDF/X-1a, which allows no ICC-based color spaces);
-/// with `to_srgb`, pixels in a gray or RGB profile other than sRGB are converted from it to sRGB
-/// instead ([`ToSrgb`]), and colour ones then by `convert`, or without it by the conversion
-/// `to_srgb` gives ([`ToSrgb::then`]); grey ones keep their profile unless the destination is
-/// sRGB ([`ToSrgb::grey`]). `interpolate` lets viewers smooth it. An image that can't be decoded
-/// is kept as it is, with a warning when its pixels were to be converted to sRGB.
+/// they carry when `profiles` keeps it ([`SourceProfiles::Keep`]); with `to_srgb`, pixels in a
+/// gray or RGB profile other than sRGB are converted from it to sRGB instead ([`ToSrgb`]), and
+/// colour ones then by `convert`, or without it by the conversion `to_srgb` gives
+/// ([`ToSrgb::then`]); grey ones keep their profile unless the destination is sRGB
+/// ([`ToSrgb::grey`]). `interpolate` lets viewers smooth it. An image that can't be decoded is
+/// kept as it is, with a warning when its pixels were to be converted to sRGB.
 pub(crate) fn recode(
     bytes: &[u8],
     size: (f64, f64),
     c: &CompressionSettings,
     interpolate: bool,
     convert: Option<&Pixels>,
-    profiles: bool,
+    profiles: SourceProfiles,
     to_srgb: Option<ToSrgb>,
 ) -> Recoded {
     let keep = Recoded { image: None, warning: None, note: None };
@@ -568,9 +612,14 @@ pub(crate) fn recode(
                 // Written as it is only when nothing converts it further.
                 let as_is = kept(&rule, dims, size, jpeg) && convert.is_none() && then.is_none();
                 // A JPEG kept as JPEG whose samples the conversion leaves unchanged (an sRGB
-                // profile): its JPEG data, without the profile.
-                if !changed && as_is && jpeg {
-                    let image = Image::from_jpeg_with_icc(bytes.to_vec().into(), None, interpolate).ok();
+                // profile): its JPEG data, without the profile (and, with `Remove`, without its
+                // segments: encoded again when those can't be taken out).
+                if !changed
+                    && as_is
+                    && jpeg
+                    && let Some(data) = jpeg_data(bytes, profiles == SourceProfiles::Remove)
+                {
+                    let image = Image::from_jpeg_with_icc(data.into(), None, interpolate).ok();
                     return Recoded { image, warning: rule.instead, note: None };
                 }
                 // Not resampled and lossless: written at its own depth.
@@ -589,7 +638,8 @@ pub(crate) fn recode(
     // Pixels that keep their colours keep the profile they are in; converted ones are in the
     // destination's.
     let want = if kind == Kind::Color { *b"RGB " } else { *b"GRAY" };
-    let icc = (profiles && convert.is_none() && source.is_none()).then(|| source_icc(bytes)).flatten().filter(|icc| valid_icc(icc, want));
+    let keeps = profiles == SourceProfiles::Keep && convert.is_none() && source.is_none();
+    let icc = keeps.then(|| source_icc(bytes)).flatten().filter(|icc| valid_icc(icc, want));
     let rgb_icc = icc.is_some() && kind == Kind::Color;
     let mut rgba = resample(img, &rule, sized(&rule, dims, size)).into_rgba8();
     if kind == Kind::Mono {
@@ -646,8 +696,8 @@ pub(crate) fn coverage_sized(w: u32, h: u32, cover: Vec<u8>, size: (f64, f64), c
 /// is when its numbers are (`convert` is `None`); otherwise its ink amounts are resampled,
 /// converted by `convert` and compressed again. With `alpha` (one sample a pixel, see
 /// [`mask_alpha`]) the image is lossless and carries it as its soft mask; `None` then when its
-/// inks can't be read. When its numbers are kept, the image is tagged with CMYK profile `icc`
-/// (see [`cmyk_icc`]), and is untagged without one; converted pixels are never tagged with it.
+/// inks can't be read. When its numbers are kept, the image is tagged as `tag` says, and is
+/// untagged without a profile; converted pixels are never tagged with it.
 pub(crate) fn recode_cmyk(
     blob: &ImageBlob,
     size: (f64, f64),
@@ -655,18 +705,21 @@ pub(crate) fn recode_cmyk(
     interpolate: bool,
     convert: Option<&CmykPixels>,
     alpha: Option<Vec<u8>>,
-    icc: Option<&[u8]>,
+    tag: CmykTag<'_>,
 ) -> Recoded {
     let rule = rule(c, Kind::Color);
     let jpeg = jpeg_components(&blob.bytes).is_some();
-    let icc = icc.filter(|_| convert.is_none());
+    let icc = tag.icc().filter(|_| convert.is_none());
     if jpeg && convert.is_none() && alpha.is_none() {
         let dims = ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok().and_then(|r| r.into_dimensions().ok());
-        if let Some((w, h)) = dims.filter(|d| kept(&rule, *d, size, true)) {
-            // The JPEG data as it is, tagged with `icc` rather than with its own segments; one
-            // larger than [`MAX_EMBED_PIXELS`] is not written.
+        // The JPEG data as it is (without its `ICC_PROFILE` segments with `CmykTag::Removed`: its
+        // inks are encoded again when those can't be taken out), tagged with `icc` rather than
+        // with its own segments; one larger than [`MAX_EMBED_PIXELS`] is not written.
+        if let Some((w, h)) = dims.filter(|d| kept(&rule, *d, size, true))
+            && let Some(data) = jpeg_data(&blob.bytes, tag == CmykTag::Removed)
+        {
             let image = (u64::from(w) * u64::from(h) <= MAX_EMBED_PIXELS)
-                .then(|| Image::from_jpeg_with_icc(blob.bytes.as_ref().clone().into(), icc.map(|i| i.to_vec().into()), interpolate).ok())
+                .then(|| Image::from_jpeg_with_icc(data.into(), icc.map(|i| i.to_vec().into()), interpolate).ok())
                 .flatten();
             return Recoded { image, warning: rule.instead, note: None };
         }

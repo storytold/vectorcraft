@@ -3,6 +3,8 @@ use super::{Arc, BlendMode, Color, Exporter, Image, Node, NodeKind, Paint, Rect,
 use krilla::color::device_n::{Colorant, DeviceNSpace, Process};
 use krilla::image::{BitsPerComponent, CustomImage, ImageColorspace};
 
+use crate::images::SourceProfiles;
+
 /// The byte count of a repeated color channel, within [`vectorcraft_doc::MAX_RASTER_ALLOC`].
 fn tinted_color_len(samples: usize, pixels: usize) -> Option<usize> {
     let bytes = samples.checked_mul(pixels)?;
@@ -138,7 +140,7 @@ impl Exporter<'_> {
         }
         let doc = self.doc;
         let out = self.out.clone();
-        let profiles = !out.standard.cmyk_only();
+        let profiles = out.source_profiles();
         let then = out.converts_tagged_pixels().then_some(&*out);
         let grey = out.converts_grey_images();
         let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit, then, grey });
@@ -149,7 +151,7 @@ impl Exporter<'_> {
             }
             let r = if cmyk_image {
                 let icc = out.cmyk_image_icc(blob);
-                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, icc.as_deref())
+                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, out.cmyk_tag(icc.as_deref()))
             } else {
                 crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles, to_srgb)
             };
@@ -199,7 +201,8 @@ impl Exporter<'_> {
         let img = doc.image_blob(im).filter(|b| b.is_cmyk()).and_then(|blob| {
             let alpha = crate::images::mask_alpha(doc.image_blob(mi)?, im.width, im.height, m.clip)?;
             let icc = self.out.cmyk_image_icc(blob);
-            let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha), icc.as_deref());
+            let tag = self.out.cmyk_tag(icc.as_deref());
+            let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha), tag);
             if let (Some(w), Some(_)) = (r.warning, &r.image) {
                 self.warn(w);
             }
@@ -322,13 +325,15 @@ pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
-/// other formats (a TIFF) decoded with their 16-bit samples and, when `profiles` allows it (not in
-/// PDF/X-1a), the ICC profile they carry ([`crate::images::decoded_image`]). Without `profiles`, an
-/// image that carries a gray or RGB profile is written without it, and so is one whose gray or RGB
-/// profile is malformed ([`crate::images::valid_icc`]): a JPEG with its data unchanged, an image of
-/// another format decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG or another image of
-/// 16 bits a sample is written at 8 bits ([`png_8_bit`]).
-pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool, profiles: bool) -> Option<Image> {
+/// other formats (a TIFF) decoded with their 16-bit samples and, when `profiles` keeps it (not in
+/// PDF/X-1a), the ICC profile they carry ([`crate::images::decoded_image`]). When `profiles`
+/// doesn't keep it, an image that carries a gray or RGB profile is written without it, and so is
+/// one whose gray or RGB profile is malformed ([`crate::images::valid_icc`]): a JPEG with its data
+/// unchanged, an image of another format decoded. With [`SourceProfiles::Remove`], an image that
+/// carries any profile is written without it, a JPEG without its `ICC_PROFILE` segments (decoded
+/// when those can't be taken out). Without `sixteen_bit` (a file before PDF 1.5), a PNG or another
+/// image of 16 bits a sample is written at 8 bits ([`png_8_bit`]).
+pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool, profiles: SourceProfiles) -> Option<Image> {
     // The header's size first: the writer's decoders allocate what it declares, and the encoded
     // bytes of an image that is far larger than any the app reads may be a few kilobytes.
     let size = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions();
@@ -336,16 +341,25 @@ pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixtee
         return None;
     }
     let bytes = blob.bytes.as_ref().clone();
-    // The PDF writer keeps a gray or RGB image's ICC profile: without `profiles`, or when the
-    // profile is malformed, such a JPEG is written without its profile, and an image of another
+    // The PDF writer keeps a gray or RGB image's ICC profile: unless `profiles` keeps it, or when
+    // the profile is malformed, such a JPEG is written without its profile, and an image of another
     // format is decoded and written without it. The color space is read from the header's bytes
-    // 16..20 even in a profile cut short, as the PDF writer reads it.
-    let strip = crate::images::source_icc(&bytes).is_some_and(|icc| match icc.get(16..20) {
-        Some(space @ (b"GRAY" | b"RGB ")) => !profiles || <[u8; 4]>::try_from(space).is_ok_and(|s| !crate::images::valid_icc(&icc, s)),
+    // 16..20 even in a profile cut short, as the PDF writer reads it. With `Remove`, a JPEG's
+    // `ICC_PROFILE` segments are taken out also when they don't make up a profile the decoder reads.
+    let remove = profiles == SourceProfiles::Remove;
+    let jpeg = matches!(blob.mime.as_str(), "image/jpeg" | "image/jpg");
+    let unkept = crate::images::source_icc(&bytes).is_some_and(|icc| match icc.get(16..20) {
+        _ if remove => true,
+        Some(space @ (b"GRAY" | b"RGB ")) => {
+            profiles != SourceProfiles::Keep || <[u8; 4]>::try_from(space).is_ok_and(|s| !crate::images::valid_icc(&icc, s))
+        }
         _ => false,
     });
+    let strip = (remove && jpeg) || unkept;
     let direct = match blob.mime.as_str() {
-        "image/jpeg" | "image/jpg" if strip => Image::from_jpeg_with_icc(bytes.clone().into(), None, interpolate).ok(),
+        "image/jpeg" | "image/jpg" if strip => {
+            crate::images::jpeg_data(&bytes, remove).and_then(|data| Image::from_jpeg_with_icc(data.into(), None, interpolate).ok())
+        }
         _ if strip => None,
         "image/png" if !sixteen_bit && png_16_bit(&bytes) => png_8_bit(&bytes).and_then(|png| Image::from_png(png.into(), interpolate).ok()),
         "image/png" => Image::from_png(bytes.clone().into(), interpolate).ok(),
@@ -373,7 +387,7 @@ mod tests {
         let crc =
             !png[12..29].iter().fold(!0u32, |c, b| (0..8).fold(c ^ u32::from(*b), |c, _| if c & 1 == 1 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 }));
         png[29..33].copy_from_slice(&crc.to_be_bytes());
-        assert!(super::embed(&ImageBlob::png(png), false, true, true).is_none());
+        assert!(super::embed(&ImageBlob::png(png), false, true, super::SourceProfiles::Keep).is_none());
     }
 
     #[test]
