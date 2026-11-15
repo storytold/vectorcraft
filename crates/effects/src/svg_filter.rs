@@ -1324,6 +1324,12 @@ fn stretch(a: Affine) -> f64 {
     (0.5 * (sum + (sum * sum - 4.0 * det * det).max(0.0).sqrt())).sqrt()
 }
 
+/// The share of a raster pixel, `space.px` points wide, that a pixel of the Document Raster Effects
+/// resolution is (at most 1).
+fn raster_resolution(space: &PixelSpace) -> f64 {
+    if space.line.is_finite() && space.line > 0.0 && space.px.is_finite() && space.px > 0.0 { (space.px / space.line).min(1.0) } else { 1.0 }
+}
+
 /// How many times the raster's pixels a turned filter's canvas may hold ([`SvgFilterFx::turned_canvas`]).
 const TURNED_ROOM: f64 = 4.0;
 
@@ -1434,7 +1440,7 @@ impl SvgFilterFx {
         if !(space.px.is_finite() && space.px > 0.0) {
             return 1.0;
         }
-        let mut s: f64 = if space.line.is_finite() && space.line > 0.0 { (space.px / space.line).min(1.0) } else { 1.0 };
+        let mut s = raster_resolution(space);
         // A length spans at most length × scale × the axes' stretch / px raster pixels, or a fraction of the box.
         let reach = self.scale * stretch(self.axes);
         for (length, most) in [(self.window, MAX_WINDOW_PX), (self.blur, MAX_BLUR_PX)] {
@@ -1493,14 +1499,16 @@ impl SvgFilterFx {
         }
         // Art that draws no pixels still has a box: the whole raster stands for it.
         let (x0, y0, x1, y1) = drawn_box(data, w, h).unwrap_or((0, 0, w, h));
-        let s = self.resolution(space, (x1 - x0).max(y1 - y0) as f64);
         let user = self.to_doc();
         // Filter user space → the small canvas, and the small canvas → the raster's pixels.
         let (sw, sh, outer, back) = if self.axes == Affine::IDENTITY {
+            let s = self.resolution(space, (x1 - x0).max(y1 - y0) as f64);
             let (sw, sh) = ((w as f64 * s).ceil().max(1.0) as u32, (h as f64 * s).ceil().max(1.0) as u32);
             (sw, sh, Affine::scale(s) * space.to_doc.inverse() * user, Affine::scale(1.0 / s))
         } else {
-            let Some(canvas) = self.turned_canvas(w, h, s, space) else { return };
+            // The canvas measures the costly lengths in its own pixels.
+            let drawn = Rect::new(x0 as f64, y0 as f64, x1 as f64, y1 as f64);
+            let Some(canvas) = self.turned_canvas(w, h, raster_resolution(space), drawn, space) else { return };
             canvas
         };
         // The source as an image, its size, and the map from its pixels to filter user space. The
@@ -1550,15 +1558,19 @@ impl SvgFilterFx {
 
     /// The canvas a filter whose user space is turned, skewed or scaled unevenly runs on, for a
     /// `w` × `h` raster lying in the document as `space` says, at resolution `s`
-    /// ([`Self::resolution`]): its axes are the user space's, so the filter's offsets, blurs and
-    /// other lengths run along them as SVG 1.1 measures them, and it covers what the raster shows.
-    /// Along each of its axes its pixels are about as large as the raster's at `s`, and coarser when it would hold more
-    /// than [`TURNED_ROOM`] times as many pixels as the raster does at `s`. Returns its size, the
-    /// map from user space to it, and the map from it to the raster's pixels; `None` when the
-    /// spaces can't be measured.
-    fn turned_canvas(&self, w: usize, h: usize, s: f64, space: &PixelSpace) -> Option<(u32, u32, Affine, Affine)> {
+    /// ([`raster_resolution`]), whose art draws within `drawn` (raster pixels): its axes are the user
+    /// space's, so the filter's offsets, blurs and other lengths run along them as SVG 1.1 measures
+    /// them, and it covers what the raster shows. Along each of its axes its pixels are about as
+    /// large as the raster's at `s`, and coarser when it would hold more than [`TURNED_ROOM`] times
+    /// as many pixels as the raster does at `s`, and when a morphology radius or kernel unit would
+    /// span more than 32 of its pixels or a blur's standard deviation more than 512 (a length in the
+    /// object's box measured against the art's box on the canvas). Returns its size, the map from
+    /// user space to it, and the map from it to the raster's pixels; `None` when the spaces can't
+    /// be measured.
+    fn turned_canvas(&self, w: usize, h: usize, s: f64, drawn: Rect, space: &PixelSpace) -> Option<(u32, u32, Affine, Affine)> {
         let to_px = space.to_doc.inverse() * self.to_doc();
-        let ub = to_px.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let from_px = to_px.inverse();
+        let ub = from_px.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
         let most = ((w as f64 * s).ceil().max(1.0) * (h as f64 * s).ceil().max(1.0) * TURNED_ROOM).max(1.0);
         // Canvas pixels a unit along each axis of the user space: as many as the raster's at `s`.
         let [a, b, c, d, _, _] = to_px.as_coeffs();
@@ -1567,6 +1579,16 @@ impl SvgFilterFx {
         if pixels > most {
             let k = (most / pixels).sqrt();
             (qx, qy) = (qx * k, qy * k);
+        }
+        // A length along an axis spans length × q canvas pixels, or length × the art's box on the
+        // canvas along that axis: both shrink with q.
+        let art = from_px.transform_rect_bbox(drawn);
+        for (length, cap) in [(self.window, MAX_WINDOW_PX), (self.blur, MAX_BLUR_PX)] {
+            let px = if self.box_units { length * (art.width() * qx).max(art.height() * qy) } else { length * qx.max(qy) };
+            if px > cap {
+                let k = cap / px;
+                (qx, qy) = (qx * k, qy * k);
+            }
         }
         if !(qx.is_finite() && qx > 0.0 && qy.is_finite() && qy > 0.0 && ub.is_finite()) {
             return None;

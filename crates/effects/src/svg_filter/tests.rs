@@ -317,7 +317,8 @@ fn a_turned_region_reaches_along_the_turned_axes() {
 fn a_skewed_filter_runs_within_its_pixel_budget() {
     let (w, h) = (64, 48);
     let f = filter(json!({ "xml": SHIFT_X, "axes": [1.0, 0.0, 999.0, 1.0] }));
-    let (cw, ch, ..) = f.turned_canvas(w, h, 1.0, &space(w, h, 1.0, 1.0)).unwrap();
+    let all = Rect::new(0.0, 0.0, w as f64, h as f64);
+    let (cw, ch, ..) = f.turned_canvas(w, h, 1.0, all, &space(w, h, 1.0, 1.0)).unwrap();
     let (cw, ch) = (f64::from(cw), f64::from(ch));
     assert!(cw * ch <= TURNED_ROOM * (w * h) as f64 + cw + ch + 1.0, "{cw} × {ch}");
     // It still draws.
@@ -325,14 +326,40 @@ fn a_skewed_filter_runs_within_its_pixel_budget() {
     f.apply(&mut data, w, h, &space(w, h, 1.0, 1.0));
     // A plain quarter turn keeps the raster's own pixel size.
     let turned = filter(json!({ "xml": SHIFT_X, "axes": [0.0, 1.0, -1.0, 0.0] }));
-    let (cw, ch, outer, _) = turned.turned_canvas(w, h, 1.0, &space(w, h, 1.0, 1.0)).unwrap();
+    let (cw, ch, outer, _) = turned.turned_canvas(w, h, 1.0, all, &space(w, h, 1.0, 1.0)).unwrap();
     assert_eq!((cw, ch), (48, 64));
     assert!((outer.determinant() - 1.0).abs() < 1e-9);
     // Stretched 100 times across and squeezed 100 times down: each canvas axis keeps the raster's
     // detail along it, not one column of it.
     let stretched = filter(json!({ "xml": SHIFT_X, "axes": [100.0, 0.0, 0.0, 0.01] }));
-    let (cw, ch, ..) = stretched.turned_canvas(100, 100, 1.0, &space(100, 100, 1.0, 1.0)).unwrap();
+    let (cw, ch, ..) = stretched.turned_canvas(100, 100, 1.0, Rect::new(0.0, 0.0, 100.0, 100.0), &space(100, 100, 1.0, 1.0)).unwrap();
     assert_eq!((cw, ch), (100, 100));
+}
+
+/// On a far skewed canvas, a radius or a standard deviation in the object's box spans no more
+/// canvas pixels than the caps allow: it is measured against the art's box on the canvas, which the
+/// skew spreads far wider than the art's box in the raster.
+#[test]
+fn a_skewed_filter_keeps_box_lengths_within_the_caps_on_its_canvas() {
+    let (w, h) = (64, 48);
+    let sp = space(w, h, 1.0, 1.0);
+    let drawn = Rect::new(20.0, 10.0, 40.0, 30.0);
+    for (xml, length, cap) in [
+        ("<filter id=\"m\" primitiveUnits=\"objectBoundingBox\"><feMorphology radius=\"1.5\"/></filter>", 1.5, MAX_WINDOW_PX),
+        ("<filter id=\"b\" primitiveUnits=\"objectBoundingBox\"><feGaussianBlur stdDeviation=\"20\"/></filter>", 20.0, MAX_BLUR_PX),
+    ] {
+        let f = filter(json!({ "xml": xml, "axes": [1.0, 0.0, 999.0, 1.0] }));
+        let (_, _, outer, _) = f.turned_canvas(w, h, 1.0, drawn, &sp).unwrap();
+        // The art's box on the canvas: the drawn pixels taken into user space, then onto the canvas.
+        let art = (outer * f.to_doc().inverse() * sp.to_doc).transform_rect_bbox(drawn);
+        let px = length * art.width().max(art.height());
+        assert!(px <= cap + 1e-6, "{xml}: {px} canvas pixels");
+    }
+    // A user-space radius spans no more than 32 canvas pixels along either axis.
+    let f = filter(json!({ "xml": "<filter id=\"u\"><feMorphology radius=\"100\"/></filter>", "scale": 1000.0, "axes": [1.0, 0.0, 999.0, 1.0] }));
+    let (_, _, outer, _) = f.turned_canvas(w, h, 1.0, drawn, &sp).unwrap();
+    let [qx, _, _, qy, _, _] = outer.as_coeffs();
+    assert!(100.0 * qx.max(qy) <= MAX_WINDOW_PX + 1e-6, "{qx} {qy}");
 }
 
 #[test]

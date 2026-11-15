@@ -5306,7 +5306,8 @@ its y axis `[c, d]`, before `scale`; absent, the document's axes; each number -1
 filter runs on coarser pixels when a morphology radius or kernel unit would span more than 32 of them, or a standard
 deviation more than 512. With `axes`, the filter runs on pixels lined up with its own axes, so offsets, blurs and the
 region run along them, and the result is drawn onto the object's pixels through `axes`; those pixels are about as fine
-along each axis as the object's and coarser when there would be more than 4 times as many. The object's box is then
+along each axis as the object's and coarser when there would be more than 4 times as many, or when a radius, kernel
+unit or standard deviation would span more than 32 or 512 of them. The object's box is then
 its box in that user space: a region measured against it, and a region or primitive lengths in `objectBoundingBox`
 units, are measured against that box. Moving the object moves `origin` and
 leaves `scale` and `axes` as they are. An effect whose XML or `axes` these rules refuse (from a file or a script) is not drawn or exported. The
