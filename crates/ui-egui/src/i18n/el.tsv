@@ -2436,6 +2436,25 @@ axis	Both	Και τα δύο
 @msg	{name}: `answers` has no answer left for this dialog	{name}: το `answers` δεν έχει άλλη απάντηση για αυτό το παράθυρο διαλόγου
 @msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Το `answers` περιέχει {n} απάντηση που δεν χρησιμοποίησε το σενάριο|Το `answers` περιέχει {n} απαντήσεις που δεν χρησιμοποίησε το σενάριο
 @msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	Το {_1} άφησε {n} αντικείμενο κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές|Το {_1} άφησε {n} αντικείμενα κάτω από το πινέλο χωρίς αλλαγή ({_2}): αναδιαμορφώνει μόνο διαδρομές
+liquify-tool	Warp	εργαλείο Παραμόρφωση
+liquify-tool	Twirl	εργαλείο Στροβιλισμός
+liquify-tool	Pucker	εργαλείο Συρρίκνωση
+liquify-tool	Bloat	εργαλείο Διόγκωση
+liquify-tool	Scallop	εργαλείο Κυματιστά άκρα
+liquify-tool	Crystallize	εργαλείο Κρυσταλλοποίηση
+liquify-tool	Wrinkle	εργαλείο Πτυχώσεις
+liquify-kind	graphs	γραφήματα
+liquify-kind	type	κείμενο
+liquify-kind	symbols	σύμβολα
+liquify-kind	images	εικόνες
+liquify-kind	meshes	πλέγματα
+liquify-kind	envelopes	περιβλήματα
+liquify-kind	repeats	επαναλήψεις
+liquify-kind	placed documents	τοποθετημένα έγγραφα
+liquify-kind	blends	αναμείξεις
+liquify-list-two	{0}, {1}	{0} και {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} και {1}
 @msg	vc.document{place} is too large for a script	το vc.document{place} είναι πολύ μεγάλο για σενάριο
 @msg	vc.log: the log of this run is full	vc.log: το αρχείο καταγραφής αυτής της εκτέλεσης είναι γεμάτο
 @msg	this function's script run has ended	η εκτέλεση σεναρίου αυτής της συνάρτησης έχει τελειώσει

@@ -4846,6 +4846,25 @@ theme	Appearance	Giao diện
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` không còn câu trả lời nào cho hộp thoại này
 @msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` có {n} câu trả lời mà tập lệnh không dùng
 @msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} giữ nguyên {n} đối tượng dưới cọ ({_2}): chỉ biến dạng đường dẫn
+liquify-tool	Warp	Biến dạng
+liquify-tool	Twirl	Xoáy
+liquify-tool	Pucker	Nhíu
+liquify-tool	Bloat	Phình
+liquify-tool	Scallop	Vỏ sò
+liquify-tool	Crystallize	Kết tinh
+liquify-tool	Wrinkle	Nhăn
+liquify-kind	graphs	biểu đồ
+liquify-kind	type	chữ
+liquify-kind	symbols	ký hiệu
+liquify-kind	images	hình ảnh
+liquify-kind	meshes	lưới
+liquify-kind	envelopes	bao hình
+liquify-kind	repeats	lặp lại
+liquify-kind	placed documents	tài liệu đã đặt
+liquify-kind	blends	hòa trộn
+liquify-list-two	{0}, {1}	{0} và {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} và {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} quá lớn đối với tập lệnh
 @msg	vc.log: the log of this run is full	vc.log: nhật ký của lần chạy này đã đầy
 @msg	this function's script run has ended	lần chạy tập lệnh của hàm này đã kết thúc

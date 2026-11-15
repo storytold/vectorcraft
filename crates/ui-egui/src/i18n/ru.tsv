@@ -4417,6 +4417,25 @@ axis	Both	Оба
 @msg	{name}: `answers` has no answer left for this dialog	{name}: в `answers` не осталось ответа для этого диалогового окна
 @msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	В `answers` остался {n} ответ, который скрипт не использовал|В `answers` осталось {n} ответа, которые скрипт не использовал|В `answers` осталось {n} ответов, которые скрипт не использовал
 @msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} оставил без изменений {n} объект под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объекта под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объектов под кистью ({_2}): он изменяет только контуры
+liquify-tool	Warp	Инструмент «Деформация»
+liquify-tool	Twirl	Инструмент «Закручивание»
+liquify-tool	Pucker	Инструмент «Сморщивание»
+liquify-tool	Bloat	Инструмент «Раздувание»
+liquify-tool	Scallop	Инструмент «Фестоны»
+liquify-tool	Crystallize	Инструмент «Кристаллизация»
+liquify-tool	Wrinkle	Инструмент «Морщины»
+liquify-kind	graphs	диаграммы
+liquify-kind	type	текст
+liquify-kind	symbols	символы
+liquify-kind	images	изображения
+liquify-kind	meshes	сетки
+liquify-kind	envelopes	оболочки
+liquify-kind	repeats	повторы
+liquify-kind	placed documents	размещённые документы
+liquify-kind	blends	переходы
+liquify-list-two	{0}, {1}	{0} и {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} и {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} слишком велик для скрипта
 @msg	vc.log: the log of this run is full	vc.log: журнал этого запуска заполнен
 @msg	this function's script run has ended	запуск скрипта этой функции завершён
