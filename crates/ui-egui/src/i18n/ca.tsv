@@ -1626,6 +1626,7 @@ antiAlias	Sharp	Nítid
 	Rotate (Classic)…	Gira (clàssic)…
 	Surface	Superfície
 	Wireframe	Filferro
+	Render Settings	Configuració de renderització
 	No Shading	Sense ombra
 	Plastic	Plàstic
 	Highlight Intensity	Intensitat de la brillantor
@@ -6217,6 +6218,7 @@ digits	Malayalam	Malaiàlam
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
 @msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objecte no té cap efecte 3D (Extrudeix i bisella, Revoluciona, Infla o Gira)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` ha de ser un objecte que només contingui `mode`, amb el valor shaded o wireframe
 @msg	its 3D effect builds no solid	el seu efecte 3D no construeix cap sòlid
 @msg	bevel must be none or one of {_1}	bevel ha de ser none o un de {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no pot construir sòlids a partir d’aquesta il·lustració: les seves instàncies de símbol, fusions i grups de retall contenen massa objectes

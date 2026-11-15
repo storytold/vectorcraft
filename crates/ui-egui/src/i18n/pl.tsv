@@ -485,6 +485,7 @@
 	Rotate (Classic)…	Obróć (klasyczny)…
 	Surface	Powierzchnia
 	Wireframe	Szkielet
+	Render Settings	Ustawienia renderowania
 	No Shading	Bez cieniowania
 	Plastic	Plastik
 	Highlight Intensity	Intensywność połysku
@@ -5857,6 +5858,7 @@ mark-style	Japanese	Japońskie
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efekt 3D na wypełnieniu lub obrysie grupy nie rysuje niczego do eksportu
 @msg	The 3D object is too complex to export	Obiekt 3D jest zbyt złożony, aby go wyeksportować
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	obiekt nie ma efektu 3D (Wyciągnięcie i fazowanie, Obrót, Nadmuchanie ani Obróć)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musi być obiektem zawierającym tylko `mode` o wartości shaded lub wireframe
 @msg	its 3D effect builds no solid	jego efekt 3D nie tworzy żadnej bryły
 @msg	bevel must be none or one of {_1}	bevel musi mieć wartość none lub jedną z: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nie może utworzyć brył z tego rysunku: jego wystąpienia symboli, przejścia i grupy przycinające zawierają zbyt wiele obiektów

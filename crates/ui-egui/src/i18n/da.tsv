@@ -291,6 +291,7 @@
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en gruppes udfyldning eller streg tegner intet at eksportere
 @msg	The 3D object is too complex to export	3D-objektet er for komplekst til at blive eksporteret
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` skal være et objekt, der kun indeholder `mode` med værdien shaded eller wireframe
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
 @msg	bevel must be none or one of {_1}	bevel skal være none eller en af {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan ikke danne legemer af denne grafik: dens symbolforekomster, blandinger og beskæringsgrupper indeholder for mange objekter
@@ -1089,6 +1090,7 @@
 	Rotate (Classic)…	Rotér (klassisk)…
 	Surface	Overflade
 	Wireframe	Trådmodel
+	Render Settings	Renderingsindstillinger
 	No Shading	Ingen skyggelægning
 	Plastic	Plastik
 	Highlight Intensity	Højlysintensitet

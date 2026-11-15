@@ -1164,6 +1164,7 @@ font-technology	Variable	Variabel
 	Rotate (Classic)…	Drehen (klassisch)…
 	Surface	Oberfläche
 	Wireframe	Drahtmodell
+	Render Settings	Rendereinstellungen
 	No Shading	Keine Schattierung
 	Plastic	Kunststoff
 	Highlight Intensity	Glanzpunktintensität
@@ -5598,6 +5599,7 @@ lighting	Light	Licht
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
 @msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	das Objekt hat keinen 3D-Effekt (Extrudieren und abgeflachte Kante, Kreiseln, Aufblasen oder Drehen)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` muss ein Objekt sein, das nur `mode` mit dem Wert shaded oder wireframe enthält
 @msg	its 3D effect builds no solid	sein 3D-Effekt erzeugt keinen Körper
 @msg	bevel must be none or one of {_1}	bevel muss none oder einer der folgenden Werte sein: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kann aus diesem Bildmaterial keine Körper erstellen: Seine Symbolinstanzen, Angleichungen und Schnittgruppen enthalten zu viele Objekte

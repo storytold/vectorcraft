@@ -1185,6 +1185,7 @@ font-technology	Variable	Variables
 	Rotate (Classic)…	Rotar (clásico)…
 	Surface	Superficie
 	Wireframe	Malla
+	Render Settings	Ajustes de renderizado
 	No Shading	Sin sombreado
 	Plastic	Plástico
 	Highlight Intensity	Intensidad del brillo
@@ -5969,6 +5970,7 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada que exportar
 @msg	The 3D object is too complex to export	El objeto 3D es demasiado complejo para exportarlo
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	el objeto no tiene ningún efecto 3D (Extrusión y biselado, Revolución, Inflar o Rotar)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` debe ser un objeto que solo contenga `mode`, con el valor shaded o wireframe
 @msg	its 3D effect builds no solid	su efecto 3D no construye ningún sólido
 @msg	bevel must be none or one of {_1}	bevel debe ser none o uno de estos: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no puede construir sólidos a partir de esta ilustración: sus instancias de símbolo, fusiones y grupos de recorte contienen demasiados objetos

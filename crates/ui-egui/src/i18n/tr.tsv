@@ -1156,6 +1156,7 @@ font-technology	Variable	Değişken
 	Rotate (Classic)…	Çevir (Klasik)…
 	Surface	Yüzey
 	Wireframe	Tel Kafes
+	Render Settings	Oluşturma Ayarları
 	No Shading	Gölgeleme Yok
 	Plastic	Plastik
 	Highlight Intensity	Parlama Yoğunluğu
@@ -5354,6 +5355,7 @@ lighting	Light	Işık
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt dışa aktarılacak hiçbir şey çizmez
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Döndür, Şişir veya Döndür)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`, yalnızca değeri shaded veya wireframe olan `mode` içeren bir nesne olmalıdır
 @msg	its 3D effect builds no solid	3 boyutlu efekti hiçbir katı oluşturmuyor
 @msg	bevel must be none or one of {_1}	bevel, none veya {_1} değerlerinden biri olmalıdır
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} bu resimden katı oluşturamaz: sembol örnekleri, karışımları ve kırpma grupları çok fazla nesne içeriyor

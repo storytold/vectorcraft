@@ -1188,6 +1188,7 @@ font-technology	Variable	Варіативні
 	Rotate (Classic)…	Поворот (класичний)…
 	Surface	Поверхня
 	Wireframe	Каркас
+	Render Settings	Параметри рендерингу
 	No Shading	Без затінення
 	Plastic	Пластик
 	Highlight Intensity	Інтенсивність відблиску
@@ -5622,6 +5623,7 @@ lighting	Light	Світло
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-ефект на заливці або обведенні групи не малює нічого для експорту
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	об’єкт не має 3D-ефекту (Видавлювання та фаска, Обертання, Надування або Повернути)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` має бути об’єктом лише з полем `mode` зі значенням shaded або wireframe
 @msg	its 3D effect builds no solid	його 3D-ефект не будує тіла
 @msg	bevel must be none or one of {_1}	bevel має бути none або одним з: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: не вдається побудувати тіла з цієї ілюстрації: її екземпляри символів, переходи та відсічні групи містять забагато об’єктів
