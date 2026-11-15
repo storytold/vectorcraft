@@ -66,7 +66,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Swedish | `sv` | 8,991 rows, 3,106 of them `@msg` and 48 `@msgplural` (counted 2026-11-14): the untranslated report lists 518 missing messages for it, and 12 menu strings, 1 `tl!` literal and 3 undo labels; one/other plurals | full; native review welcome |
 | Bulgarian | `bg` | 5,245 rows, 763 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial | full; AI-drafted, native review pending |
 | Greek | `el` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | full; native review welcome |
-| Georgian | `ka` | 7,512 rows, 1,640 of them `@msg` and 48 `@msgplural` (counted 2026-11-14): menus, panels, dialogs and plurals (one count-neutral form); the untranslated report lists 1,927 missing Georgian messages, and 53 messages that no language has a row for | full |
+| Georgian | `ka` | 9,758 rows, 3,740 of them `@msg` and 49 `@msgplural` (counted 2026-11-15): menus, panels, dialogs and plurals (one count-neutral form); the untranslated report lists 1 missing Georgian message; reviewed by a native speaker | full |
 | Turkish | `tr` | 9,175 rows, 3,446 of them `@msg` and 48 `@msgplural` (counted 2026-11-13); 41 messages, 62 menu strings, 26 `tl!` literals, 13 undo labels and the default swatch names still fall back to English | full |
 | Catalan | `ca` | 5,626 rows, 881 of them `@msg` (counted 2026-10-28): menus, `tl!` literals and messages complete when counted; one/other plurals; every `ca-*` locale resolves here | full; AI-drafted, native review welcome |
 
