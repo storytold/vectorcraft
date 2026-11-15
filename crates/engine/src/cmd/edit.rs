@@ -1536,6 +1536,10 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         for id in &new_ids {
             super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
         }
+        // A pasted graph whose design the document has under the same name draws with the document's.
+        if !imported.kept_designs.is_empty() {
+            super::graph::redraw_with_designs(d, &new_ids, &imported.kept_designs)?;
+        }
         sel.set(new_ids.iter().copied());
         // Copied ruler guides (#3226): on the layer new art goes to, moved as the objects are (a
         // paste of guides alone keeps them where they were, but onto another artboard or every

@@ -144,6 +144,9 @@ pub struct Session {
     pub(crate) pending_paint: Option<Paint>,
     /// User Defined and loaded swatch libraries (Window → Swatch Libraries); not saved.
     pub swatch_libraries: cmd::swatchlib::Libraries,
+    /// The graph designs of the documents loaded as swatch libraries (Window → Swatch Libraries →
+    /// Other Library…), for the Graph Column and Graph Marker dialogs; not saved.
+    pub graph_design_libraries: cmd::swatchlib::DesignLibraries,
     /// The selected freeform gradient point (`paint.freeform.selectPoint`) and whose gradient it
     /// was selected on: read it with [`Session::selected_freeform_point`].
     pub(crate) freeform_point: Option<(usize, cmd::gradient::StopOwner)>,

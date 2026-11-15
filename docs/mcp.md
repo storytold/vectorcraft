@@ -4413,7 +4413,18 @@ document's swatches, as a library to add from. From an `.ase` file it reads RGB,
 spot or process swatches and keeps their color groups. A color book (such as a Pantone book you own) gives its RGB,
 CMYK or Lab colors named with the book's prefix and suffix ("PANTONE 185 C"), as spot colors unless the book marks
 them as process colors; `.acb` files are read, never written. A file in the user library folder, or a file with the
-same extension and bytes as one there, loads as that User Defined library (category `user`).
+same extension and bytes as one there, loads as that User Defined library (category `user`). A file larger than 256 MB
+is refused before it is read. A document's graph designs come with it: the reply's `graphDesigns` counts them, and
+`graph.column`, `graph.marker` and `graph.design` take the library's id as `library` until the app quits (a User
+Defined copy made with `swatch.library.copyToUser` holds the swatches alone, so the designs stay under the loaded id).
+`graph.column {design, library}` and `graph.marker {design, library}` copy a design the document lacks into it, with the
+swatches, patterns, symbols, styles, brushes and images its art uses, in the same undo step as the graph change.
+`graph.design {library, add: name | [names]}` copies designs without applying them and returns `{added, existing}`, and
+`graph.design {library}` lists the library's designs. A design the document already has under the same name stays as it
+is. With no `design`, `graph.column`, `graph.marker` and `graph.design` list the loaded libraries that hold designs as
+`libraries: [{library, name, designs}]`. Copying a graph and pasting it into another document brings the designs its series
+draw with in the same way; a pasted graph is drawn again with the document's design of that name when that design
+would draw it otherwise.
 `swatch.library.copyToUser {library}` copies a loaded library into the user library folder of the desktop
 app (a library file as it is; a document's swatches or a library loaded from `data` or `dataBase64`
 as `.vcswatches`) under a name no file there has, and lists it as User Defined from then on; until the app

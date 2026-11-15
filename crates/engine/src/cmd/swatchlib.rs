@@ -76,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Library…",
             ["Window", "Swatch Libraries"],
             None,
-            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches, .gpl, .ase (swatch exchange) or .acb (color book, read only) library, or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library) → {library: id, name, count}",
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcswatches, .gpl, .ase (swatch exchange) or .acb (color book, read only) library, or the swatches of any document VectorCraft opens (see document.formats), for the library panel (Window → Swatch Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library). A document's graph designs are offered by Object › Graph › Column… and Marker… (graph.column, graph.marker and graph.design take the library's id) until the app quits. A file larger than 256 MB is refused before it is read → {library: id, name, count, graphDesigns: the document's graph designs (0 for a library file)}",
             always,
             load
         ),
@@ -90,6 +90,45 @@ pub fn specs() -> Vec<CommandSpec> {
             copy_to_user
         ),
     ]
+}
+
+/// The graph designs of the documents Other Library… loaded (`swatch.library.load`), which the
+/// Graph Column and Graph Marker dialogs offer besides the document's own; not saved.
+#[derive(Clone, Debug, Default)]
+pub struct DesignLibraries {
+    libs: Vec<DesignLibrary>,
+}
+
+/// A document loaded as a swatch library that holds graph designs ([`DesignLibraries`]).
+#[derive(Clone, Debug)]
+pub struct DesignLibrary {
+    /// The id `swatch.library.load` gave the swatch library. A User Defined copy of it
+    /// (`swatch.library.copyToUser`) holds the swatches alone, so the designs stay under this id.
+    pub id: String,
+    pub name: String,
+    /// The designs and the resources their art uses.
+    pub doc: Arc<vectorcraft_doc::Document>,
+}
+
+impl DesignLibraries {
+    /// The libraries, in the order they were loaded.
+    pub fn iter(&self) -> impl Iterator<Item = &DesignLibrary> {
+        self.libs.iter()
+    }
+
+    /// The library loaded as swatch library `id`.
+    pub fn get(&self, id: &str) -> Option<&DesignLibrary> {
+        self.libs.iter().find(|l| l.id == id)
+    }
+
+    /// Keep `doc`'s graph designs as library `id` named `name`, in place of the ones loaded as `id`
+    /// before; with no designs, `id` no longer has any.
+    fn set(&mut self, id: &str, name: &str, doc: Option<vectorcraft_doc::Document>) {
+        self.libs.retain(|l| l.id != id);
+        if let Some(doc) = doc {
+            self.libs.push(DesignLibrary { id: id.to_string(), name: name.to_string(), doc: Arc::new(doc) });
+        }
+    }
 }
 
 /// The libraries beyond the built-in ones: User Defined (the library files in the user library
@@ -734,8 +773,17 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn load(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.load";
+    // The size is checked before the file is read.
+    let max = super::place::document::MAX_FILE;
+    if let Some(path) = text_param(p, "path", C)?
+        && super::fileio::file_stamp(path).is_some_and(|(len, _)| len > max as u64)
+    {
+        return Err(bad(C, format!("the file is larger than {} MB", max >> 20)));
+    }
+    let mut designs = None;
     let (info, lib) = s.swatch_libraries.load(p, C, |bytes, file| {
-        // A library file, or a document whose swatches become the library.
+        // A library file, or a document whose swatches become the library and whose graph
+        // designs the Graph Column and Graph Marker dialogs offer.
         if palette_io::sniff_bytes(bytes) {
             palette_io::read_bytes(bytes, stem(file)).map_err(|e| bad(C, e))
         } else {
@@ -743,10 +791,13 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
             if loaded.preview_only {
                 return Err(bad(C, "only this Affinity file's embedded preview could be read; use File › Open to see it with its warning"));
             }
+            designs = super::clipboard::resources::graph_design_library(&loaded.doc);
             document_library(&loaded.doc, &[], stem(file).to_string(), C)
         }
     })?;
-    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len()}))
+    let count = designs.as_ref().map_or(0, |d| d.graph_designs.len());
+    s.graph_design_libraries.set(&info.id, &info.name, designs);
+    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len(), "graphDesigns": count}))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {

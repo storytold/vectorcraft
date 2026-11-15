@@ -78,6 +78,7 @@ impl Session {
             recent_colors: vec![],
             pending_paint: None,
             swatch_libraries: Default::default(),
+            graph_design_libraries: Default::default(),
             freeform_point: None,
             style_libraries: Default::default(),
             symbol_libraries: Default::default(),

@@ -1,9 +1,69 @@
 use super::edit::regenerate;
 use super::{Arc, Document, GraphDesign, GraphSpec, Result, Session, Value, bad, json, ok, str_param};
+use crate::cmd::clipboard::resources::import_graph_designs;
+use crate::cmd::swatchlib::{concealed_library_id, shown_library_id};
 
 /// The document's graph design names, in order.
 pub(super) fn design_names(d: &Document) -> Vec<String> {
     d.graph_designs.iter().map(|x| x.name.clone()).collect()
+}
+
+/// The library param `library` names: a document Other Library… loaded (`swatch.library.load`)
+/// that holds graph designs, by its id, the id a reply showed for it, or its name. `None` without
+/// `library`.
+fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Arc<Document>>> {
+    let key = match p.get("library") {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::String(k)) => k.as_str(),
+        Some(_) => {
+            let list = "graph.design";
+            return Err(bad(cmd, format!("`library` is a library id or name (see {list})")));
+        }
+    };
+    let libs = &s.graph_design_libraries;
+    let own = concealed_library_id(s, key);
+    libs.get(key)
+        .or_else(|| own.as_deref().and_then(|id| libs.get(id)))
+        .or_else(|| libs.iter().find(|l| l.name == key))
+        .map(|l| Some(l.doc.clone()))
+        .ok_or_else(|| bad(cmd, format!("no library `{key}`")))
+}
+
+/// The loaded libraries' designs, as lists show them: `[{library, name, designs}]`; `None` when no
+/// loaded library holds graph designs.
+pub(super) fn libraries_json(s: &Session) -> Option<Value> {
+    let libs: Vec<Value> = s
+        .graph_design_libraries
+        .iter()
+        .map(|l| json!({ "library": shown_library_id(s, &l.id), "name": l.name, "designs": design_names(&l.doc) }))
+        .collect();
+    (!libs.is_empty()).then(|| json!(libs))
+}
+
+/// The library design `p`'s `design` names, with the library to bring it in from, when `p` gives a
+/// `library` and the document has no design of that name: the document's own design of a name is
+/// the one a graph draws with.
+pub(super) fn from_library(s: &Session, p: &Value, cmd: &str) -> Result<Option<(Arc<Document>, String)>> {
+    let Some(lib) = library_param(s, p, cmd)? else { return Ok(None) };
+    let Some(Value::String(n)) = p.get("design") else { return Ok(None) };
+    if s.doc()?.doc.graph_designs.iter().any(|x| x.name == *n) {
+        return Ok(None);
+    }
+    if !lib.graph_designs.iter().any(|x| x.name == *n) {
+        return Err(bad(cmd, format!("no design named `{n}`")));
+    }
+    Ok(Some((lib, n.clone())))
+}
+
+/// Add designs `names` of library `lib` to `d` with the resources their art uses, and redraw the
+/// graphs that already name one the document lacked.
+pub(super) fn bring_in(d: &mut Document, lib: &Document, names: &[String]) -> Result<()> {
+    for (name, added) in import_graph_designs(lib, d, names)? {
+        if added {
+            refresh_graphs_using(d, &name)?;
+        }
+    }
+    Ok(())
 }
 
 /// Whether graph `g` draws a series with design `name`, as its marker or its columns.
@@ -20,6 +80,27 @@ fn refresh_graphs_using(d: &mut Document, name: &str) -> Result<()> {
         }
     });
     for id in ids {
+        if let Some(spec) = d.node(id).and_then(|n| n.extras().graph.as_deref().cloned()) {
+            regenerate(d, id, spec)?;
+        }
+    }
+    Ok(())
+}
+
+/// Draw the graphs in the subtrees of `ids` again that draw a series with one of the designs
+/// `names`: pasted graphs, after the paste kept the document's own designs of those names.
+pub(crate) fn redraw_with_designs(d: &mut Document, ids: &[super::NodeId], names: &std::collections::BTreeSet<String>) -> Result<()> {
+    let mut graphs = vec![];
+    for id in ids {
+        if let Some(n) = d.node(*id) {
+            n.walk(&mut |m| {
+                if m.extras().graph.as_deref().is_some_and(|g| names.iter().any(|name| draws_with(g, name))) {
+                    graphs.push(m.id);
+                }
+            });
+        }
+    }
+    for id in graphs {
         if let Some(spec) = d.node(id).and_then(|n| n.extras().graph.as_deref().cloned()) {
             regenerate(d, id, spec)?;
         }
@@ -159,7 +240,29 @@ pub(super) fn design(s: &mut Session, p: &Value) -> Result<Value> {
         })?;
         return ok();
     }
+    // Designs from a document loaded as a library: those the document has under the same name stay
+    // as they are.
+    if let Some(mut wanted) = names_param(p, "add", C)? {
+        let lib = library_param(s, p, C)?.ok_or_else(|| bad(C, "missing `library`"))?;
+        if let Some(n) = wanted.iter().find(|n| !lib.graph_designs.iter().any(|x| x.name == **n)) {
+            return Err(bad(C, format!("no design named `{n}`")));
+        }
+        let mut seen = std::collections::HashSet::new();
+        wanted.retain(|n| seen.insert(n.clone()));
+        let (existing, added): (Vec<String>, Vec<String>) = wanted.into_iter().partition(|n| taken(s, n));
+        if !added.is_empty() {
+            s.edit("New Design", |d, _| bring_in(d, &lib, &added))?;
+        }
+        return Ok(json!({ "added": added, "existing": existing }));
+    }
+    if let Some(lib) = library_param(s, p, C)? {
+        return Ok(json!({ "designs": design_names(&lib) }));
+    }
     // The list, with the designs no graph draws with (Select Unused picks those).
     let d = &s.doc()?.doc;
-    Ok(json!({ "designs": design_names(d), "unused": unused_designs(d) }))
+    let mut out = json!({ "designs": design_names(d), "unused": unused_designs(d) });
+    if let Some(libs) = libraries_json(s) {
+        out["libraries"] = libs;
+    }
+    Ok(out)
 }
