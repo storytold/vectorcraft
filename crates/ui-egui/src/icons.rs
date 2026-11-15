@@ -5,6 +5,34 @@ use std::sync::OnceLock;
 use craft_ui::icons::{SvgIconSet, SvgStyle};
 use egui::{Color32, ImageSource, Rect, Ui, Vec2};
 
+fn quiet_table() -> &'static SvgIconSet {
+    static T: OnceLock<SvgIconSet> = OnceLock::new();
+    T.get_or_init(|| {
+        SvgIconSet::new(
+            crate::icon_data_quiet::ICONS,
+            SvgStyle { current_color: "white", stroke_width: None },
+            "bytes://icon-quiet/",
+            "square-dashed",
+        )
+    })
+}
+
+/// Tool-catalogue icon names whose Quiet icon is a drawing of its own, not the one the name maps
+/// to in the shared set (which reuses it for other tools).
+fn quiet_role(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "tool-perspective-select" => "proposal-perspective-select",
+        "tool-symbol" => "proposal-symbol-style",
+        "tool-graph" => "proposal-graph-radar",
+        "tool-slice" => "proposal-slice-select",
+        "dc-rounded-rect" => "proposal-corner-tool",
+        "dc-anchor" => "proposal-slide-anchor",
+        "dc-join" => "proposal-shared-edge",
+        "box" => "proposal-box3d",
+        _ => return None,
+    })
+}
+
 fn table() -> &'static SvgIconSet {
     static T: OnceLock<SvgIconSet> = OnceLock::new();
     T.get_or_init(|| {
@@ -106,8 +134,24 @@ pub fn tool_icon(name: &str) -> &'static str {
     }
 }
 
-pub fn source(name: &str) -> ImageSource<'static> {
-    table().source(name)
+/// Whether `name` is drawn from the Quiet icon set: Quiet is on and the set has the icon.
+fn in_quiet_set(ctx: &egui::Context, name: &str) -> bool {
+    crate::theme::Tokens::get(ctx).quiet_icons && quiet_table().contains(name)
+}
+
+/// The image for icon `name` under the colour scheme in force in `ctx`: Quiet's own drawing where
+/// it has one, the shared icon elsewhere.
+pub fn source(ctx: &egui::Context, name: &str) -> ImageSource<'static> {
+    if in_quiet_set(ctx, name) { quiet_table().source(name) } else { table().source(name) }
+}
+
+/// [`tool_icon`] under the colour scheme in force in `ctx`: Quiet gives a few tools an icon of
+/// their own where the shared set reuses one for several.
+pub fn tool_icon_for(ctx: &egui::Context, name: &str) -> &'static str {
+    match quiet_role(name) {
+        Some(icon) if crate::theme::Tokens::get(ctx).quiet_icons => icon,
+        _ => tool_icon(name),
+    }
 }
 
 /// Paint icon `name` into `rect` tinted with `tint`. The Selection and Direct Selection arrows are
@@ -115,15 +159,16 @@ pub fn source(name: &str) -> ImageSource<'static> {
 /// Selection arrow look like Direct Selection's): their fill is painted first, then their outline
 /// in `tint`.
 pub fn paint(ui: &Ui, name: &str, rect: Rect, tint: Color32) {
+    // Quiet's own arrows are drawn to stand alone: no fill underneath.
     let fill = match name {
-        "dc-selection" => Some(Color32::BLACK),
-        "dc-direct" => Some(Color32::WHITE),
+        "dc-selection" if !in_quiet_set(ui.ctx(), name) => Some(Color32::BLACK),
+        "dc-direct" if !in_quiet_set(ui.ctx(), name) => Some(Color32::WHITE),
         _ => None,
     };
     if let Some(fill) = fill {
-        egui::Image::new(source("dc-arrow-fill")).tint(fill).fit_to_exact_size(rect.size()).paint_at(ui, rect);
+        egui::Image::new(source(ui.ctx(), "dc-arrow-fill")).tint(fill).fit_to_exact_size(rect.size()).paint_at(ui, rect);
     }
-    egui::Image::new(source(name)).tint(tint).fit_to_exact_size(rect.size()).paint_at(ui, rect);
+    egui::Image::new(source(ui.ctx(), name)).tint(tint).fit_to_exact_size(rect.size()).paint_at(ui, rect);
 }
 
 /// An icon widget of `size` points.
@@ -172,7 +217,7 @@ mod tests {
     fn shared_catalog_preserves_existing_icons() {
         for (name, original) in crate::icon_data::ICONS {
             let expected = String::from_utf8_lossy(original).replace("currentColor", "white").replace("stroke-width=\"2\"", "stroke-width=\"1.6\"");
-            let ImageSource::Bytes { uri, bytes } = source(name) else { panic!("expected SVG bytes") };
+            let ImageSource::Bytes { uri, bytes } = source(&egui::Context::default(), name) else { panic!("expected SVG bytes") };
             assert_eq!(uri.as_ref(), format!("bytes://icon/{name}.svg"));
             assert_eq!(bytes.as_ref(), expected.as_bytes(), "{name}");
             assert!(exists(name));
@@ -231,12 +276,70 @@ mod tests {
 
     #[test]
     fn shared_catalog_preserves_fallback_and_tool_aliases() {
-        let ImageSource::Bytes { uri, bytes } = source("missing-icon") else { panic!("expected SVG bytes") };
-        let ImageSource::Bytes { bytes: fallback, .. } = source("square-dashed") else { panic!("expected SVG bytes") };
+        let ImageSource::Bytes { uri, bytes } = source(&egui::Context::default(), "missing-icon") else { panic!("expected SVG bytes") };
+        let ImageSource::Bytes { bytes: fallback, .. } = source(&egui::Context::default(), "square-dashed") else { panic!("expected SVG bytes") };
         assert_eq!(uri.as_ref(), "bytes://icon/missing-icon.svg");
         assert_eq!(bytes.as_ref(), fallback.as_ref());
         assert!(!exists("missing-icon"));
         assert_eq!(tool_icon("missing-icon"), "square-dashed");
         assert_eq!(tool_icon("tool-selection"), "dc-selection");
+    }
+    /// A context drawing in colour scheme `scheme`.
+    fn ctx_in(scheme: crate::theme::Scheme) -> egui::Context {
+        let ctx = egui::Context::default();
+        crate::theme::apply_with(&ctx, crate::theme::Brightness::MediumDark, crate::theme::Accent::default(), scheme);
+        ctx
+    }
+
+    fn bytes_of(source: ImageSource<'static>) -> (String, Vec<u8>) {
+        let ImageSource::Bytes { uri, bytes } = source else { panic!("expected SVG bytes") };
+        (uri.to_string(), bytes.as_ref().to_vec())
+    }
+
+    /// Modern, Classic and Flat draw the shared icons, byte for byte, as before the Quiet set.
+    #[test]
+    fn the_default_and_other_schemes_draw_the_shared_icons() {
+        use crate::theme::Scheme;
+        for scheme in [Scheme::default(), Scheme::Classic, Scheme::Flat] {
+            let ctx = ctx_in(scheme);
+            for (name, _) in crate::icon_data::ICONS {
+                assert_eq!(bytes_of(source(&ctx, name)), bytes_of(table().source(name)), "{scheme:?} {name}");
+            }
+            for tool in vectorcraft_tools::catalog::all_tools() {
+                assert_eq!(tool_icon_for(&ctx, tool.icon), tool_icon(tool.icon), "{scheme:?} {}", tool.id);
+            }
+        }
+    }
+
+    /// Choosing Quiet switches the icons it has a drawing for, falls back to the shared icon for
+    /// the rest, and gives the tools whose icon the shared set reuses an icon each.
+    #[test]
+    fn quiet_draws_its_own_icons_and_falls_back_to_the_shared_ones() {
+        let (quiet, shared) = (ctx_in(crate::theme::Scheme::Quiet), ctx_in(crate::theme::Scheme::default()));
+        for (name, _) in crate::icon_data_quiet::ICONS {
+            if exists(name) {
+                let (uri, svg) = bytes_of(source(&quiet, name));
+                assert_eq!(uri, format!("bytes://icon-quiet/{name}.svg"));
+                assert_ne!(svg, bytes_of(source(&shared, name)).1, "{name}: Quiet's drawing differs from the shared one");
+            }
+        }
+        let without =
+            crate::icon_data::ICONS.iter().map(|(n, _)| *n).find(|n| !quiet_table().contains(n)).expect("some icon isn't in the Quiet set yet");
+        assert_eq!(bytes_of(source(&quiet, without)), bytes_of(source(&shared, without)), "{without} falls back");
+        assert_ne!(tool_icon_for(&quiet, "tool-graph"), tool_icon_for(&shared, "tool-graph"));
+    }
+
+    /// Every tool in the catalogue has an icon in both sets: the name resolves to a drawing in
+    /// the Quiet set or in the shared one, never the dashed-square fallback.
+    #[test]
+    fn every_tool_resolves_to_an_icon_in_every_scheme() {
+        for scheme in crate::theme::Scheme::ALL {
+            let ctx = ctx_in(scheme);
+            for tool in vectorcraft_tools::catalog::all_tools() {
+                let name = tool_icon_for(&ctx, tool.icon);
+                assert!(exists(name) || in_quiet_set(&ctx, name), "{scheme:?}: {} -> {name}", tool.id);
+                assert!(name != "square-dashed" || tool_icon(tool.icon) == "square-dashed", "{scheme:?}: {} fell back to the dashed square", tool.id);
+            }
+        }
     }
 }

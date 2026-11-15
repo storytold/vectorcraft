@@ -1457,7 +1457,7 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     fn paint_icon(&mut self, painter: &egui::Painter, rect: egui::Rect, id: &String, color: egui::Color32) -> bool {
         let icon = crate::state::rail_panel(id).map(|p| p.2).or_else(|| crate::panels::library_panel::parse(id).map(|_| "library"));
         let Some(icon) = icon else { return false };
-        let image = egui::Image::new(crate::icons::source(icon));
+        let image = egui::Image::new(crate::icons::source(painter.ctx(), icon));
         match image.load_for_size(painter.ctx(), rect.size()) {
             Ok(egui::load::TexturePoll::Ready { texture }) => {
                 let uv = egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0));

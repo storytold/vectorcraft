@@ -187,6 +187,9 @@ pub struct Tokens {
     pub cards: bool,
     /// How panel tabs mark the one in front.
     pub tab_style: TabStyle,
+    /// Draw the interface's icons from the Quiet icon set (`assets/icons-quiet`) where it has the
+    /// icon, the current set elsewhere. Only Quiet sets it.
+    pub quiet_icons: bool,
     /// 1 pt lines between the parts of the docked chrome (app bar, control bar, doc tabs, toolbar,
     /// dock, rail, status and hint bars, and egui's panel separators), where it meets the canvas,
     /// and between panel sections; without, they are separated by tone and space alone
@@ -271,6 +274,7 @@ impl Tokens {
             radius_float: 8,
             cards: true,
             tab_style: TabStyle::Pill,
+            quiet_icons: false,
             chrome_lines: true,
             raised_shadow: Shadow::NONE,
             field_shade: Color32::TRANSPARENT,
@@ -637,6 +641,7 @@ impl Tokens {
         let base = Tokens {
             dark: true,
             cards: false,
+            quiet_icons: true,
             tab_style: TabStyle::Segmented,
             chrome_lines: false,
             raised_shadow: raised(128),

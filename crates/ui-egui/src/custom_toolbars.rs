@@ -1324,7 +1324,7 @@ fn slot_button(ui: &mut egui::Ui, t: &Tokens, p: &Press, slot: &[String], action
         ui.painter().rect_filled(well, CornerRadius::same(6), t.hover);
     }
     let ir = egui::Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
-    icons::paint(ui, icons::tool_icon(shown.icon), ir, if is_active { t.text_strong } else { t.icon });
+    icons::paint(ui, icons::tool_icon_for(ui.ctx(), shown.icon), ir, if is_active { t.text_strong } else { t.icon });
     if tools.len() > 1 {
         let c = rect.center() + vec2(12.5, 10.0);
         ui.painter().add(egui::Shape::convex_polygon(vec![c, c + vec2(-3.5, 0.0), c + vec2(0.0, -3.5)], t.icon, Stroke::NONE));
