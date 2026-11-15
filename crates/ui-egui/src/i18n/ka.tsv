@@ -879,6 +879,7 @@
 	Free Transform	თავისუფალი გარდაქმნა
 	Perspective Distort	პერსპექტიული დეფორმაცია
 	Radial Blur…	რადიალური გაბუნდოვნება…
+	Blur Center	გაბუნდოვნების ცენტრი
 	Smart Blur…	ჭკვიანი გაბუნდოვნება…
 	Sharpen	გამკვეთრება
 	Unsharp Mask…	არამკვეთრი ნიღაბი…
@@ -1456,6 +1457,8 @@ lighting	Light	სინათლე
 	Leading	სტრიქონთა დაშორება
 	No Break	გადატანის გარეშე
 	Proportional Metrics	პროპორციული მეტრიკა
+	H or V Style	ჰორიზონტალური ან ვერტიკალური სტილი
+	Roman Italics	ლათინური კურსივი
 	Insert Aki Left	აკის ჩასმა მარცხნივ
 	Insert Aki Right	აკის ჩასმა მარჯვნივ
 	Tsume	ცუმე
@@ -2438,6 +2441,7 @@ digits	Malayalam	მალაიალამური
 	Transparent Background	გამჭვირვალე ფონი
 	Choose…	არჩევა…
 	Copy Fonts Used in the Document	დოკუმენტში გამოყენებული შრიფტების კოპირება
+	Copy Info	ინფორმაციის კოპირება
 	Copy Links	ბმულების კოპირება
 	Create Report	ანგარიშის შექმნა
 	Fonts whose licence doesn't allow embedding are not copied.	შრიფტები, რომელთა ლიცენზია ჩაშენების უფლებას არ იძლევა, არ კოპირდება.
@@ -5650,6 +5654,7 @@ imageTrace	Outline	კონტური
 @msg	there is no script engine named {name}	სკრიპტის ძრავა სახელით {name} არ არსებობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
+@msg	Copied the link info	კოპირებულია ბმულის ინფორმაცია
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
 	Load EPS into Clipboard	EPS-ის ბუფერში ჩატვირთვა
@@ -5730,6 +5735,7 @@ imageTrace	Outline	კონტური
 @msg	object has no weighted stroke	ობიექტს ცვლადი სისქის კონტური არ აქვს
 @msg	objects can't be nested more than 32 deep	ობიექტების ჩადგმის სიღრმე 32-ს ვერ გადააჭარბებს
 @msg	the SVG's elements are nested more than {0} deep	SVG-ის ელემენტების ჩადგმის სიღრმე {0}-ს აჭარბებს
+@msg	the SVG's style sheets take too long to match	SVG-ის სტილის ფურცლების შედარებას ძალიან დიდი დრო სჭირდება
 @msg	the SVG's styles expand to more than {0} MB	SVG-ის სტილები გაშლისას {0} MB-ს აჭარბებს
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	უცნობი control `{name}`: fillStroke, coloring, drawMode ან screenMode
 @plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	ემთხვევა ნაგულისხმევ მალსახმობებს: {n}|ემთხვევა ნაგულისხმევ მალსახმობებს: {n}

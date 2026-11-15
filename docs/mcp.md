@@ -647,8 +647,8 @@ sampler.
 | `inspect_document` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | Artboards (with `color`, `#rrggbb`, for one with a background color), layer tree (ids, kinds, bounds, paint), selection, history, tool. A type node's `fill`, `stroke` and `strokeWidth` are the paint its characters show (its first run's); fills and strokes of the type object itself come as `objectFill`, `objectStroke` and `objectStrokeWidth`. Paint comes as a label (`"#ff0000"`, `"None"`, `"G1 40% (#ff9999)"` for a swatch at a tint); `paint.proxies` gives it as an object. |
 | `inspect_ui` | `{}` | UI state. Remote mode only. |
 | `select_tool` | `{tool}` | `selection`, `directSelection`, `pen`, `rectangle`, `ellipse`, `polygon`, `star`, `lineSegment`, … |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
-| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`. `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default, and a `backquote` that is not a boolean is an error. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
+| `pointer_gesture` | `{events:[{kind,x,y,mods?,backquote?,pressure?,tiltX?,tiltY?,rotation?,holdMs?}], tool?, mods?, backquote?}` | `kind` is one of `down`, `drag`, `up`, `move`, `doubleclick`, `tripleclick` (`doubleclick` follows the second click's `up`, and `tripleclick` the third's). `backquote` is the held state for each event; the top-level value supplies its default. Events go through the same path as the mouse. Headless, a `move` replies after the tool's highlight under the pointer is ready, including the Shape Builder's and the Live Paint Bucket's regions of a large selection, which the desktop app finds off the UI thread and highlights after the reply. Remote, the events wait until the keys and other input sent before them (`press_key`, `type_text`) have reached the app, so a key pressed between two calls of one drag applies before the release. When that input is dropped because the document, a dialog or the focus changed first, the call fails and its events are not sent. The release of a Shape Builder click or drag over such a selection replies once the merge is applied, headless and in the desktop app, which computes the merge off the UI thread. In the desktop app, a gesture sent before then is made after the merge, and its reply comes once it is made; a command that can edit, select, save or redraw the documents (a preference, the proof and separations views), sent before then, waits for the merge and runs after it. |
 | `draw_path` | `{points \| d, closed?, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `points` is `[[x,y],…]` or `[{x,y,in?,out?,smooth?},…]`. `d` is SVG path data. The options are below. |
 | `draw_shape` | `{shape, …geometry, fill?, stroke?, strokeWidth?, dash?, cap?, join?, opacity?, name?, effects?}` | `rectangle`/`ellipse`: `x,y,width,height` (plus `radius` for corners). `polygon`: `cx,cy,radius,sides`. `star`: `cx,cy,radius1,radius2,points`. Polygons and stars take `rotation` in degrees clockwise (0: a corner or point straight up). `line`: `x1,y1,x2,y2`. |
 | `set_paint` | `{fill?, stroke?, strokeWidth?, ids?}` | Applies to the selection (or `ids`) and becomes the default for new art. Returns `{applied, objects}`: `objects` is the number of objects painted, as the `objects` of the `paint.setFill`, `paint.setStroke` and `stroke.set` replies (the largest of them): a selected group counts the objects inside it. When it is 0, a `note` says that only the paint for new art changed. |
@@ -878,10 +878,14 @@ leaves room for a legend label's stored indents, spacing and leading.
 
 When a graph is drawn again, its plot moves and scales with any move or scale of the graph made since it was last
 drawn. The graph saves the bounds of its art other than type as `placedArt` (and the bounds of all of its art as
-`placed`), and measures the move or scale on those. Changing the size, indents or spacing of the labels, moving a label
-on its own and `type.createOutlines` on labels do not move or scale the plot. A graph opened from a `.ai` file saves
-`placedArt` too. A graph saved without `placedArt`, or with a `placedArt` that has no width or height, is measured on
-`placed`.
+`placed`), and measures the move or scale on those. Changing the size or indents of the labels, moving a label on its
+own, `type.createOutlines` on labels and `object.path.outlineStroke` on the graph's strokes do not move or scale the
+plot. Outlined labels are no longer type: moving one of them on its own, like moving a swatch, an axis or a tick mark on
+its own, can move or scale the plot at the next redraw. When all of a graph's art other than type has been deleted, or
+the art measured has no width or no height, a redraw leaves the plot where it is and does not follow a move or scale of
+the graph. A graph opened from a `.ai` file
+saves `placedArt` too. A graph saved without `placedArt`, or with a `placedArt` that has no width or height, is
+measured on `placed`.
 
 The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, and the paint, stroke, gradient and
 transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
@@ -1106,8 +1110,9 @@ way. `document.exportPdf {useArtboards: false}` writes that one page as well, an
 art's bounds is measured without what the plot leaves out: non-printing layers, objects at 0% opacity, placed images,
 gradient meshes whose every point is at 0% opacity, and paths without effects whose fills and strokes paint nothing.
 An image or a mesh with a Crop Marks effect, or with a Vector Halftone effect that makes dots, is measured.
-Such objects in the art of a symbol that is not dynamic are left out of its instances too, and an instance whose
-symbol holds nothing else is left out.
+Such objects in the art of a symbol are left out of its instances too, and an instance whose symbol holds nothing
+else is left out. In the art of a dynamic symbol, an object that an instance's fill, stroke or opacity makes
+the plot draw is measured.
 A document whose only visible art is left out is refused, and Export As refuses an HP-GL plot of it before the save
 dialog. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
 is in VectorCraft Default), the export comes back with a warning that says so. A `.ai` export with
@@ -1122,8 +1127,9 @@ follows as after Export As: Save PDF without its Artboards section, SVG Options 
 options, EPS Options, DXF Options without Export Selected Art Only, Text Export Options with Selection Only on, or an
 exporter plug-in's parameters. Other formats are written at once. OK writes the selection alone, cropped to it, as
 `document.exportSelection` writes it, with the chosen options. While a dialog is open the call returns `null`, and
-OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). To
-write without a dialog, pass `path` or any option. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
+OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). Any
+option skips the options dialog, but without `path` the save panel still picks the file. To write without a
+dialog, pass `path`. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
@@ -1728,6 +1734,16 @@ one opens as before and draws it as `rgb`:
 ```json
 {"id": "effect.setParams", "params": {"index": 0, "params": {"channel": "alpha"}}}
 → invalid parameters for `effect.setParams`: `channel` must be one of rgb, red, green, blue
+```
+
+Radial Blur's Blur Center, `centerX` and `centerY`, must each be a number from 0 to 1: the share of the object's bounds
+across from its left edge and down from its top edge (0.5 each, the object's center, by default). The effect turns or
+zooms about that point, which moves and scales with the object. `effect.apply` and `effect.setParams` refuse any other
+value themselves in the same way, and a document saved with one draws it at the nearest edge:
+
+```json
+{"id": "effect.setParams", "params": {"index": 0, "params": {"centerX": 1.5}}}
+→ invalid parameters for `effect.setParams`: `centerX` must be a number from 0 to 1
 ```
 
 A number outside the range the effect documents is still stored as given and clamped when the effect draws. A
@@ -3222,6 +3238,13 @@ already walks Image Trace. Short agent entry points:
   unchanged. No undo step is added when the symbols are already in order. The panel menu's Thumbnail View, Small List
   View and Large List View change only how the panel shows the symbols: thumbnails, or rows with a thumbnail and the
   name (smaller rows in Small List View).
+- Panel views: `ui.panelView {panel, view?}` sets the view of the Swatches, Graphic Styles or Symbols panel, as the
+  view items of its panel menu (and the Swatches panel's list and thumbnail buttons) do. `panel` is `swatches`,
+  `graphicStyles` or `symbols`. The Swatches panel takes `smallThumb`, `mediumThumb` (the default), `largeThumb`,
+  `smallList` or `largeList`; the Graphic Styles and Symbols panels take `thumbnail` (the default), `smallList` or
+  `largeList`. Without `view` the command answers the current one. Each panel keeps its own view for the session, and
+  the document does not change. An unknown panel or view is an error, and then nothing changes. It answers
+  `{panel, view}`.
 - The Brushes panel menu's Select All Unused: `brush.unused` (a query) lists the brushes no stroke paints with, in
   library order, and the panel selects them. Strokes in the art (opacity masks included), symbols, graph designs,
   pattern tiles (with the tiles that pattern editing's Cancel puts back) and graphic styles count, and so do the
@@ -3338,32 +3361,48 @@ already walks Image Trace. Short agent entry points:
   `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
   is XML whose `variableSets` element holds `variableSet` elements, each with a `variables` element of `variable`
   elements (`varName`, `trait`) and a `sampleDataSets` element of `sampleDataSet` elements (`dataSetName`). Every
-  data set is deleted, and every variable of the document is deleted with its bindings and values, except a text
-  variable the library also declares: it keeps its bindings, so selecting one of the library's data sets changes the
-  objects bound to it. Then the library's other variables whose `trait` is `textcontent` are defined as text
-  variables, unbound. In each data set, the element named
-  after a text variable gives its value: the text of its `p` elements, one paragraph each. An element without a `p`
-  element gives no value. Variables of other kinds are left out with their values: the reply lists them in `skipped`
-  (`name`, `trait`), and its `warning` names each `trait` with its count. The reply's `deleted` and `deletedDataSets`
+  data set is deleted, and every variable of the document is deleted with its bindings and values, except a variable
+  the library also declares with the same kind: it keeps its bindings, so selecting one of the library's data sets
+  changes the objects bound to it. Then the library's other variables are defined, unbound, with the kind their
+  `trait` gives: `textcontent` is text, `visibility` is visibility, `fileref` (a linked file) is image and
+  `graphdata` is graph. A variable without a `trait`, or with one VectorCraft doesn't know, is defined of unknown
+  kind and takes no values. In each data set, the element named after a variable gives its value:
+  - text: the text of its `p` elements, one paragraph each; an element without a `p` element gives no value;
+  - visibility: `true` or `false`, in any case;
+  - image: a file's absolute path (from `/`, `\\` or a drive's root) or a `file:` URL of one, whose `%XX` escapes
+    are decoded; the file isn't read, so a library can name files that aren't there;
+  - graph: a `data` element. Its optional `propertyRow` holds a corner cell and then the series names, and each `row`
+    of its `values` holds the row's category in a first `value` whose `key` is `name`, then a `value` per series. A
+    value that is empty, marked `type="string"` or not a number is a blank. The data is read as the CSV
+    `graph.setData` takes, at most 256 KiB of it. Graph data with more than 10,000 rows or 256 series, which a
+    graph doesn't hold, is refused, by `variable.saveLibrary` too. `variable.saveLibrary` also refuses graph data
+    with neither rows nor series, which loads back as no value.
+
+  Visibility, image and graph values are read without the white space round them, and an element holding only white
+  space gives no value. The reply's `variables` lists the library's variables, and `deleted` and `deletedDataSets`
   list the variables and data sets the load deleted. While the variables are locked, a library that would delete or
-  define a variable fails with "variables are locked". The reply is `{variables, deleted, deletedDataSets, names,
-  skipped, warning?}`. A library larger than 8 MiB, one whose elements nest more than 256 deep, and one with more
+  define a variable fails with "variables are locked". The reply is `{variables, deleted, deletedDataSets, names}`. A
+  library larger than 8 MiB, one whose elements nest more than 256 deep, and one with more
   than 256 variables or 1,000 data sets are refused. Its document type declaration may hold an external identifier,
   comments, processing instructions and up to 64 entity declarations whose values are plain text (no `<`, `&` or
   `%`). A declaration that holds anything else, and entity references that expand the library past 8 MiB, are
-  refused. So are a variable or data set declared twice and a value for a variable the library doesn't declare.
-  `variable.saveLibrary {path?}` (the panel menu's Save Variable Library…) writes the document's text variables and
-  every data set as a variable library in the layout `variable.loadLibrary` reads: a `variable` element with
-  `varName` and `trait="textcontent"` for each text variable, and a `sampleDataSet` element with `dataSetName` for
-  each data set, holding an element named after each text variable it has a value for, with one `p` element per line
-  of the value. Loading the file gives back the same text variables, data set names and text values. Variables of
-  other kinds are left out with their values: the reply lists them in `skipped` (`name`, `kind`), and its `warning`
-  names each kind with its count. Saving is refused for a document without a text variable, for a text variable whose
-  name isn't an XML name (it starts with a letter or `_` and holds only letters, digits, `-`, `_` and `.`), for a
-  data set whose name or text value holds a control character, for a data set name with white space at either end,
-  for a name longer than 255 characters or used twice, and past `variable.loadLibrary`'s caps (256 variables, 1,000
-  data sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets, skipped, warning?}`;
-  with it, the file is written and the reply is `{path, variables, datasets, skipped, warning?}`.
+  refused. So are a variable or data set declared twice, a value for a variable the library doesn't declare, and a
+  value that doesn't fit its variable's kind.
+  `variable.saveLibrary {path?}` (the panel menu's Save Variable Library…) writes the document's variables and every
+  data set as a variable library in the layout `variable.loadLibrary` reads: a `variable` element with `varName` for
+  each variable, with the `trait` and `category` of its kind (`textcontent` and `&ns_flows;`, `visibility` and
+  `&ns_vars;`, `fileref` and `&ns_vars;`, `graphdata` and `&ns_graphs;`; neither for a variable of unknown kind), and
+  a `sampleDataSet` element with `dataSetName` for each data set, holding an element named after each variable it has
+  a value for. A text value is written with one `p` element per line, a visibility value as `true` or `false`, an
+  image value as its path (a path from the root of a Unix file system as a `file:///` URL), and a graph value as a
+  `data` element, with a blank category marked `type="string"`. Loading the file gives back the same variables with their kinds, data set names and values; graph
+  data comes back in the CSV form Graph Data writes. Saving is refused for a document without a variable, for a
+  variable whose name isn't an XML name (it starts with a letter or `_` and holds only letters, digits, `-`, `_` and
+  `.`; a variable of unknown kind has no values, so its name isn't checked), for a name or value that holds a control
+  character, for a name with white space at either end, for a name longer than 255 characters or used twice, for an
+  image value that isn't a file's absolute path, and past `variable.loadLibrary`'s caps (256 variables, 1,000 data
+  sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets}`; with it, the file is written and the reply
+  is `{path, variables, datasets}`.
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
   action on every file in a folder or every data set (the Actions panel menu's Batch…). Override Save and Override
@@ -3666,8 +3705,20 @@ already walks Image Trace. Short agent entry points:
   `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group?|id?}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
-  color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill of its front-most
-  covering source, including compound paths with shared curved boundaries. Expand keeps those face fills.
+  color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill rows that draw of
+  its front-most covering source that has one, including compound paths with shared curved boundaries, and each edge
+  the stroke rows that draw of its source. A row draws when it is shown and has paint and an opacity above 0; a
+  stroke also needs a weight above 0, and a source whose opacity is 0 has no rows that draw. The rows keep their order
+  and settings (opacity, blending mode, effects, overprint, and a stroke's weight, caps, joins, dashes and alignment),
+  gradients keep their fit on the source, and the face or edge takes the source's opacity and blending mode. Where a
+  path is cut into several edges, each edge runs the way the path does, its dashes go on from where it starts along
+  the path (Align Dashes to Corners is turned off on it), the arrowheads stay only at the path's own ends, and a width
+  profile or brush stays only on an edge that runs the whole path. A gradient applied along a stroke starts again on
+  each cut edge, and an inside or outside stroke is drawn centered on an edge that is an open piece of a closed path.
+  When `livePaint.gapOptions` or `livePaint.merge` cuts an edge into pieces, each piece takes the edge's paint, with
+  its rows fitted to its part of the edge in the same way. A face or edge given no such row has one unpainted row. Rows that do not draw stay with the stored sources, which
+  `livePaint.release` returns unchanged. The source's object effects and the strokes' pen pressure are not carried.
+  Expand keeps those face fills.
   `livePaint.expand` keeps each face and edge that draws, with all its fill and stroke rows: it is shown, its opacity
   is above 0, and a fill or stroke row is shown, has paint and an opacity above 0 (a stroke also a weight above 0),
   whichever row is on top. A painted lower row under an unpainted top row keeps the part; a part whose only painted
@@ -3740,6 +3791,31 @@ already walks Image Trace. Short agent entry points:
   `livePaint.strokeEdge` when an edge is within 4 screen pixels of the pointer and `livePaint.fill` otherwise, and
   Shift-click runs `livePaint.fill`. With both off, a click runs nothing. With `highlight` off, the face or edge under
   the pointer is not outlined.
+  A double-click runs the command a click there runs with `scope: "connected"`, and a triple-click with
+  `scope: "samePaint"`; Alt held runs nothing, and so does Cmd/Ctrl (`mods.cmd`), whose presses go to the selection
+  tool Cmd lends. With Space held (`mods.space`, the view tools), a press, a
+  double-click or a triple-click runs nothing, and a move outlines no face or edge. On a face, `connected` fills the face and every face reached from it
+  across edges that draw no stroke (an edge that is hidden or fully transparent, or whose strokes are each hidden,
+  without paint, 0 pt wide or fully transparent); a stroked edge, a hidden face, a gap
+  that Gap Detection closes and the group's outside stop it. `samePaint` fills every face
+  of the group, joined to it or not, whose fill is the `match` paint. On an edge, `connected` paints the edge and the
+  edges joined to it end to end that draw with the stroke paint `match`, and `samePaint` paints every edge of the
+  group that draws with that stroke paint; the stroke's weight is not compared. An edge draws with the paint of its
+  topmost stroke that is shown, with paint, above 0 pt and not fully transparent, and with none when the edge is fully
+  transparent or has no such stroke. Each click of a double-click or triple-click runs as it
+  arrives and is its own undo step. `match` is the paint the face or edge had before the first of the double-click's
+  two clicks or the triple-click's three that painted it, or before the double-click when the triple-click's double-click
+  reached it, so the clicks before the last do not change what it matches;
+  a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. An edge takes the
+  paint and weight in its topmost stroke that is shown, or in a new stroke above the others when it has none. These rules
+  for what faces and edges join and what paints match are VectorCraft's own. The help page describes the gestures:
+  https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html.
+  `livePaint.fill {scope}` and `livePaint.strokeEdge {scope}` take `scope` as `"one"` (the default), `"connected"` or
+  `"samePaint"`; any other value is an error and changes nothing. `match` is a paint in the model JSON that
+  `document.node {id}` writes for an appearance's paints (`{"type": "none"}` for none), taken only with a scope that compares paints, and
+  defaults to the face's fill or the stroke paint the edge draws with. `livePaint.fill` refuses a `scope` other than `"one"` with
+  `points`. Both replies add `count`, the number of faces or edges the click reaches, including those that already had the
+  paint.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
   keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
   `paint.setStroke` when the Stroke proxy is in front) with the color swatch before or after the active paint in the
@@ -3756,7 +3832,8 @@ already walks Image Trace. Short agent entry points:
   objects; otherwise it returns an error and does not merge the objects.
   A Live Paint command that changes nothing records no undo step, keeps the redo steps, leaves a saved document saved
   and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has the paint,
-  `livePaint.strokeEdge` when the edge already has the paint and the width, `livePaint.gapOptions` (and the Gap Options
+  `livePaint.strokeEdge` when the topmost shown stroke of each edge it reaches already has the paint and the width,
+  `livePaint.gapOptions` (and the Gap Options
   dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
   `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
   colors and the last color as they are. `livePaint.gapOptions` makes a group's faces again, with new ids, only when it adds a path or when Gap Detection is turned on or off or given a new size while it is on.
@@ -5133,8 +5210,12 @@ when its symbol or a symbol nested in its art holds an instance of itself, and w
 nest 32 deep in its art. PDF and EPS export and the SVG of an artboard leave out art outside the page or artboard, and
 Skip Blank Artboards skips an artboard with no art on it. For both, the box of an instance whose art holds brushed
 strokes grows by 16 times the widest stroke (at least 1 pt) of the objects in its art that have a brushed stroke,
-plus 8 pt. The SVG of an artboard also keeps an object whose effects paint onto the artboard, and an object that holds
-an instance when the effects in the symbol's art, or the instance's own, paint onto it.
+plus 8 pt. PDF and EPS export and Skip Blank Artboards grow the box of an object with a visible, painted brushed stroke the
+same way, by its own widest stroke, and the box of an object that holds one by the largest such room among them (of a
+clip group, only its clipping path counts). Print with Ignore Artboards frames the page around the art with the same
+room for brushed objects and for instances whose art holds brushed strokes. The SVG of an artboard also keeps an
+object whose effects paint onto the artboard, and an object that holds an instance when the effects in the symbol's
+art, or the instance's own, paint onto it.
 
 ## Expand
 
@@ -5214,7 +5295,7 @@ The Attributes panel (`window.panel {panel: "attributes"}`, Cmd+F11) reads `attr
 objects differ) and `recentUrls`. `attributes.set {overprintFill?, overprintStroke?, showCenter?, imageMap?, url?,
 note?, ids?}` sets them in one undo step; `path.setFillRule {rule: "nonZero"|"evenOdd"}` sets the fill rule of the
 paths and compound paths, and `path.reverse {reversed?}` makes subpaths run counter-clockwise (true) or clockwise
-(false). When every subpath of a path turns alike, its strokes' width profiles (left and right swapped) and pen
+(false). When every subpath of a path or compound path turns alike, its strokes' width profiles (left and right swapped) and pen
 pressure, tilt, bearing and rotation turn with it, so the strokes draw as before. SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
 
 ```json
@@ -5252,8 +5333,19 @@ it. The native format keeps the events and the files.
 
 ## SVG filters
 
-Effect › SVG Filters lists the document's SVG filters below Apply SVG Filter… and Import SVG Filter…; choosing one
-applies it to the selection. `svgFilter.list {}` returns them as `filters: [{name, xml}]`. Each is one `<filter>`
+Effect › SVG Filters lists the default SVG filters and then the document's other filters below Apply SVG Filter… and
+Import SVG Filter…; choosing one applies it to the selection
+([apply SVG filter effects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/apply-svg-filter-effects.html)).
+The 14 defaults are VectorCraft's own set, written with [SVG 1.1 filter primitives](https://www.w3.org/TR/SVG11/filters.html):
+Soft Blur, Heavy Blur, Soft Shadow, Hard Shadow, Glow, Bevel, Emboss, Thicken, Thin, Rough Edges, Grain, Grayscale,
+Invert and Hue Shift. Every document lists them, and a document holds none of them until one is applied or edited
+there. `svgFilter.apply` with a default's name copies the default into the document in the same undo step (refused
+when the document already holds 64 filters), and `svgFilter.define` with `replace` naming a default adds the edited
+copy under that name (code equal to the default's adds nothing). The document's filter of a default's name is then
+listed in the default's place. `svgFilter.delete` refuses a default the document holds no copy of; deleting the copy
+lists the default again, and applying the default again makes the effects that still name it draw with it.
+`svgFilter.list {}` returns the document's filters as `filters: [{name, xml}]` and the defaults as
+`defaults: [{name, xml, inDocument}]`. Each filter is one `<filter>`
 element whose `id` is its name, with 1 to 64 primitives and at most 64 KB of XML (`feTurbulence` octaves up to 10,
 `feConvolveMatrix` kernels up to 9 cells a side, `feMorphology` radii and `kernelUnitLength` up to 100 and
 `stdDeviation` up to 500 user units, elements nested at most 16 deep). It holds only filter primitives,
@@ -5264,8 +5356,9 @@ a filter after the others, or with `replace` replaces the filter of that name, w
 filter has is refused, and the same filter again records no undo step. `svgFilter.delete {name}` removes one, and `svgFilter.import
 {path?|svg?}` adds the `<filter>` elements of an SVG file (at most 16 MB, not SVGZ, the first 256 filters) or of SVG text, leaving out the names the
 document already has and the filters `svgFilter.define` would refuse (`{added, skipped}`). Each change is one undo
-step. `svgFilter.apply {name, ids?|id?, item?}` applies one as the live effect `svg.filter`, as `effect.apply` does,
-in one undo step. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
+step. `svgFilter.apply {name, ids?|id?, item?, index?}` applies one as the live effect `svg.filter`, as `effect.apply` does,
+in one undo step; with `index` it puts the filter in the place of the applied `svg.filter` effect at that index of
+`item`, as `effect.setParams` does, and an index that is not an applied SVG filter is an error. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
 what every object that uses it draws, in the edit's one undo step, and an application after an edit takes the edited
 filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
 empty) until a filter of that name is defined or imported again. A pasted effect that names one of the document's
@@ -5625,6 +5718,25 @@ used, as a transform's does.
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"scaleH":50,"scaleV":50,"strokes":false}}}
 ```
 
+## Scale and Reflect on a turned bounding box
+
+`object.scale` and `object.reflect` with a named axis act along the selection's bounding box: after a rotation, `sx`
+stretches along the box's own width and `sy` along its height, and `"vertical"` and `"horizontal"` are the box's own
+axes, until Object › Transform › Reset Bounding Box squares the box to the page. Both take `basis?: "box"|"page"`:
+`"box"` is the default, and `"page"` acts along the page's axes. Any other `basis` is an error, and nothing changes.
+`origin` is still a page point, and a numeric `axis` is still a line on the page at that angle. Selections whose
+objects stand at different angles, and anchors selected with Direct Selection, use the page's axes; with `copy` or
+with `objects: false`, the whole objects or their pattern tiles transform, along the box. The journal entry
+records the `basis` used, so a recorded action replays in the same frame; a saved step without `basis` (an action or
+journal entry recorded before it) plays along the page's axes, as it did when it was recorded. `object.transformAgain` repeats the transform's page matrix, also after Reset Bounding Box. The Scale
+and Reflect dialogs, the Transform and Properties panels' flips, the Scale tool and the Reflect tool's default axis
+and Shift steps follow the box the same way; a Reflect axis drawn with the tool is the line drawn on the page.
+
+```json
+{"name":"run_command","arguments":{"command":"object.scale","params":{"sx":200,"sy":100}}}
+{"name":"run_command","arguments":{"command":"object.reflect","params":{"axis":"vertical","basis":"page"}}}
+```
+
 ## Free Distort on a turned bounding box
 
 `object.distort` maps the corners of `from` (TL, TR, BR, BL) onto `corners`, which are page coordinates. With
@@ -5834,7 +5946,8 @@ commands send `to: "key"` while the selection has a key, else `"artboard"` for o
 anchor points, else the Align To choice. The Distribute commands send `to: "key"` while the selection has a key, else
 the Align To choice, and while there is a key object or a key guide they send the panel's Distribute Spacing value as
 `spacing`. Edit › Keyboard Shortcuts lists them under Align, with no default shortcut, and
-`shortcuts.set {id, shortcut}` gives one a shortcut.
+`shortcuts.set {id, shortcut}` gives one a shortcut. The Object › Distribute menu lists the eight Distribute commands,
+and each item runs its command.
 
 With the Artboard tool chosen, the same buttons and UI commands, and the Control bar's Align and Distribute buttons,
 run `artboard.align`, `artboard.distribute` and `artboard.distributeSpacing` on the artboards the tool has selected.
@@ -6205,8 +6318,9 @@ Color on (HDR or Automatic Color Management) and macOS windows are converted by 
 again. In a Wayland session, and where no profile is set or the profile is not an RGB display profile of at most 1 MiB,
 the canvas stays sRGB. The app reads the display again every 10 seconds and when the window moves to another display.
 Exports, `ui.render`, the document, panels and thumbnails are not converted; with Proof Colors on, the proof is drawn
-first and then converted. The art is converted before it is drawn over the converted paper, so the blend of a
-translucent object or an antialiased edge with the paper can differ slightly from a conversion of the blended color.
+first and then converted. Translucent art and the antialiased edges of art over an artboard's paper or the
+transparency grid are blended with it in sRGB, and the blend is converted; over the pasteboard and in Outline the art
+is converted on its own.
 `ui.inspect` returns `displayProfile`: `{enabled, display, source, profile, from, applied, reason,
 osManaged}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
 `pending` or `unsupported`, `applied` says whether the canvas is converted, and `reason` says why not.
@@ -6514,7 +6628,8 @@ report warn about it).
 Commands take and return lengths in points (the distances of `object.path.offsetPath`, `object.path.simplify`,
 `object.path.splitIntoGrid` and `text.setStyle` `size`/`leading` also take a string with a unit, `"5 mm"`). A length
 string takes the same arithmetic as the desktop app's fields, where `%` is a share of the value before it:
-`"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. The units
+`"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. A length string with more than 128 `+ - * /` signs is not read
+as a length. The units
 only change what the UI shows and how it reads typed numbers. Preferences ▸ Units has
 four: General (rulers, positions and sizes, the Info panel, dialog distances, canvas measurement labels), Stroke
 (weights, dashes), Type (font size, leading, baseline shift) and East Asian Type (no field uses it yet). General is the active document's units
@@ -7235,6 +7350,14 @@ is mixed with middle gray by its alpha.
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"distort.glass","params":{"distortion":10,"textureImage":{"path":"/tmp/texture.png"}}}}}
 ```
 
+Texturizer (`texture.texturizer`) and Rough Pastels (`artistic.roughPastels`) take `params.textureImage` the same
+way, as the surface that Scaling, Relief, Light Direction and Invert act on. With `texture: "loaded"` and no stored
+texture they draw Canvas.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"artistic.roughPastels","params":{"relief":12,"textureImage":{"path":"/tmp/texture.png"}}}}}
+```
+
 ## Linked images
 
 A placed image linked to its file (`file.place {path}`, Link on) records the file's absolute path, its size,
@@ -7557,6 +7680,12 @@ bounds; `clip` puts it in a clip group of the old bounds when it is larger). The
 except for a placed document, which opens in a tab. With the preference `editOriginalSystemDefaults` (Preferences ›
 File Handling › Use System Defaults for Edit Original, on by default) off, Edit Original opens a raster image in the app
 that made it, PhotoCraft, where it is installed, and anything else in the system's default app (#5236).
+The UI command `links.copyInfo {ids?}` (the panel menu's Copy Info) copies the file names of images and placed
+documents `ids` to the clipboard, one per line in the order given, and returns `{text, names}`. Without `ids` (or with
+`ids: null`, as for the other `ids` commands) it copies the selected ones, and the rows outside the layer tree picked in
+the panel, in the order `links.list` gives them; the panel menu passes the selected rows in the order the panel shows
+them. An embedded image gives the name its row shows. An id that is not an image or a placed document, a
+malformed `ids`, or nothing to copy is an error, and the clipboard is left as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"links.list","params":{"show":"missing"}}}
@@ -8198,6 +8327,16 @@ flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, R
 (converted with the colour settings' CMYK) and Lab, at 1, 8, 16 and 32 bits per channel, sized by their resolution.
 A document with transparency keeps it. `file.place {path}` links the file like any image (`links.update` reads it
 again when it changes); Multichannel files are refused.
+
+A PSD or PSB file that names a clipping path (the saved path its clipping path resource names, in the
+[published PSD file format specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/)) places, and
+opens as its merged image (`layers: false`, a file with no layers, or a file whose layers can't be read), inside a clip group whose clipping
+path is that path, under the even-odd rule, so the image shows only inside it. The clipping path is an ordinary path
+that can be edited or released. `file.place` answers `image`, the id of the image in the clip group. The
+[import options help page](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
+says that a file imported as one flattened image keeps the document's clipping path when it has one. `links.update`
+and `links.relink` read the file's pixels again and leave the clip group and its clipping path as they are. Files that name no clipping path, or name a path
+they don't have, come in as a plain image.
 
 `document.open` converts a PSD or PSB file's layers to objects. In
 [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html),
@@ -9064,7 +9203,11 @@ menus, and a value typed past 1000 sets 1000; Reset Panel sets both to 0. Charac
 in Advanced Character Formats. With Fractional Widths off or System Layout on, each side is set in whole points, and
 justification keeps that width. Live SVG text places each character the space moves, and type on a path with
 Insert Aki is written as outlines. An SVG saved without Preserve Editing (`preserveEditing`) reopens without the
-Insert Aki values; save it with Preserve Editing to keep them editable.
+Insert Aki values; save it with Preserve Editing to keep them editable. An `.ai` file's text document keeps both
+values, and opening the file reads them back. The stored values are read in thousandths of an em and a negative
+value opens as 0; these are VectorCraft's own rules. When a legacy `.ai` save writes type as text, it writes type with
+Insert Aki without the values and warns that they are left out. With `outlineText: true` it writes the type as outlines,
+which keep the space Insert Aki adds, and does not warn that the values are left out.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"akiRight":500}}}
@@ -9090,6 +9233,27 @@ as outlines.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"tsume":50}}}
+```
+
+## East Asian glyph forms
+
+`text.setFormat` and `text.setRangeStyle {glyphForm}` set the East Asian glyph form the characters are drawn in
+([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)): `"traditional"`,
+`"expert"`, `"jis04"`, `"jis90"`, `"jis78"`, `"jis83"`, `"fullWidth"`, `"halfWidth"`, `"thirdWidth"` or
+`"quarterWidth"`, which draw them with the font's OpenType feature `trad`, `expt`, `jp04`, `jp90`, `jp78`, `jp83`,
+`fwid`, `hwid`, `twid` or `qwid` ([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)),
+or `"default"`, the font's default glyphs. A character holds one form at a time, so setting one replaces another. The
+text keeps its characters, and a character the font has no glyph of that form for keeps its own. Runs that differ only
+in their form are shaped as one piece of text. The form is saved only when it is not `"default"`, character styles
+carry it, PDF draws the glyphs the canvas draws, and live SVG text writes it in `font-feature-settings`. Another value
+is refused with `` `glyphForm` must be one of "traditional", … ``. One undo step, and a `text.setFormat` call that
+gives the form the characters already have records none. With Show East Asian Options on, the Glyphs panel menu lists
+the ten forms and Revert To Default Forms: a form is checked when every selected character has it, choosing it again
+does nothing, and it is disabled when none of the faces that draw the selected text, fallback faces included, has a
+feature for it.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"glyphForm":"jis78"}}}
 ```
 
 ## Composite Fonts
@@ -9435,6 +9599,24 @@ not kerned). Off by default and saved only when on. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
+```
+
+## H or V Style and Roman Italics
+
+With Show East Asian Options on, the OpenType panel menu has H or V Style and Roman Italics
+([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)). They are the character
+feature tags `hkna` and `ital` of `text.setStyle` and `text.setRangeStyle {features, featureChanges}`
+([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)). `hkna` draws kana with the
+forms the font makes for horizontal type, and in vertical type the shaper applies `vkna`, the forms for vertical type,
+in its place. `ital` draws half-width alphanumerics with the font's italic forms. A font without the feature draws the
+characters unchanged. Both are on or off only: `hkna=2` and `ital=0` are refused as unknown features, and `vkna` is
+not a tag of its own. A menu item is checked when every character the panel acts on has it; choosing it turns the
+feature on for all of them, or off when it is checked, each character keeping its other features, in one undo step.
+Reset OpenType Features turns both off. Character styles carry them, and Character Style Options › OpenType Features
+has an on, off or unset switch for each. Live SVG text writes them in `font-feature-settings`.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":6,"featureChanges":["hkna","ital"]}}}
 ```
 
 ## Variable fonts
