@@ -244,18 +244,30 @@ pub(super) fn tab_advance<'t, 'g>(
 ) -> (f64, &'t str) {
     use vectorcraft_doc::TabAlign;
     let rel = x - origin;
-    let seg: Vec<&SGlyph> = rest.into_iter().take_while(|g| g.ch != '\t' && g.ch != '\u{2028}').collect();
-    let width: f64 = seg.iter().map(|g| g.adv).sum();
-    let target = |pos: f64, align: TabAlign, on: char| match align {
-        TabAlign::Left => pos,
-        TabAlign::Right => pos - width,
-        TabAlign::Center => pos - width / 2.0,
-        TabAlign::Decimal => pos - seg.iter().take_while(|g| g.ch != on).map(|g| g.adv).sum::<f64>(),
-    };
-    let explicit = tabs.iter().find_map(|t| {
-        let at = target(t.position, t.align, t.align_on);
-        (at > rel + 1e-6).then_some((at, t.leader.as_str()))
-    });
+    // The text after the tab is read only when a right, center or decimal stop is reached, since
+    // only those align it. A tab to a default or left stop reads none of it.
+    let mut rest = Some(rest);
+    let mut seg: Vec<&SGlyph> = Vec::new();
+    let mut width = 0.0;
+    let mut explicit = None;
+    for t in tabs {
+        if t.align != TabAlign::Left
+            && let Some(r) = rest.take()
+        {
+            seg = r.into_iter().take_while(|g| g.ch != '\t' && g.ch != '\u{2028}').collect();
+            width = seg.iter().map(|g| g.adv).sum();
+        }
+        let at = match t.align {
+            TabAlign::Left => t.position,
+            TabAlign::Right => t.position - width,
+            TabAlign::Center => t.position - width / 2.0,
+            TabAlign::Decimal => t.position - seg.iter().take_while(|g| g.ch != t.align_on).map(|g| g.adv).sum::<f64>(),
+        };
+        if at > rel + 1e-6 {
+            explicit = Some((at, t.leader.as_str()));
+            break;
+        }
+    }
     let (at, leader) = explicit.unwrap_or_else(|| {
         let last = tabs.iter().map(|t| t.position).fold(0.0, f64::max).max(0.0);
         let base = rel.max(last);
@@ -293,7 +305,8 @@ const MAX_DRAWN_CHECKS: usize = 256;
 
 /// Most breaks, or hyphenation points, [`break_line`] measures as drawn one by one when a glyph of
 /// the line has a negative advance: a later break can then be drawn narrower than an earlier one,
-/// and bisecting can miss the latest break that fits.
+/// and bisecting can miss the latest break that fits. It is also the most legal breaks such a line
+/// reads past where it first overflows in the order of its text.
 const MAX_DRAWN_CHECKS_STEPPING_BACK: usize = 1024;
 
 /// Most copies of a leader drawn in one tab: a tiny type size and a far stop must not make
@@ -399,7 +412,11 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
 /// while the least it can be drawn at fits `width`, then ends at the latest legal break where it
 /// fits as drawn (past [`MAX_DRAWN_CHECKS`] breaks back from the latest, or
 /// [`MAX_DRAWN_CHECKS_STEPPING_BACK`] when a glyph of the line has a negative advance, the earlier
-/// ones without a hyphen are bisected); hyphenation points are measured the same way.
+/// ones without a hyphen are bisected); hyphenation points are measured the same way. Once such a
+/// line holds a glyph with a negative advance and has been wider than `width` in the order of its
+/// text, it reads at most [`MAX_DRAWN_CHECKS_STEPPING_BACK`] legal breaks further, and a forced
+/// line break right after the last of them, and ends at the latest of the breaks read that fits as
+/// drawn.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -469,6 +486,11 @@ pub(super) fn break_line(
         }
     };
     let mut last_break: Option<(usize, bool)> = None;
+    // Whether the line, once it holds a tab and is measured as drawn, has been wider in the order of
+    // its text than `width`, and how many legal breaks it has read since then with a glyph stepping
+    // back: past MAX_DRAWN_CHECKS_STEPPING_BACK of them the line stops reading.
+    let mut overflowed = false;
+    let mut breaks_past_overflow = 0usize;
     // A list marker (length 0) is a cluster of its own; the line holds it and at least the first
     // cluster after it.
     let first = i + g.get(i..).unwrap_or_default().iter().take_while(|h| h.len == 0).count();
@@ -519,6 +541,7 @@ pub(super) fn break_line(
         // there are tabs.
         let stops_reached = if back + cluster_back > 0.0 { f64::NEG_INFINITY } else { nth_stop(tabs_read) - x_start };
         let measured = if tabbed && fits.is_some() { (ink + cluster_ink).max(stops_reached) } else { x + cluster_width };
+        overflowed |= tabbed && fits.is_some() && j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS;
         if j > first && !gl.is_space() && measured - end_credit > width + EPS {
             // It ends the line with the spaces after it.
             if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1, kinsoku) {
@@ -546,6 +569,15 @@ pub(super) fn break_line(
                 last_break = Some((cluster_end, hyphenated));
                 if fits.is_some() {
                     breaks.push((cluster_end, hyphenated));
+                }
+                // A line with a glyph stepping back stops reading MAX_DRAWN_CHECKS_STEPPING_BACK
+                // breaks past where it first overflowed in the order of its text, and ends at the
+                // latest break read that fits as drawn: each of those breaks is measured one by one.
+                // A soft hyphen ending the text draws no hyphen there, as at the end of the text below.
+                // A break right before a forced line break reads on to it: the line ends there.
+                breaks_past_overflow += usize::from(overflowed && back > 0.0);
+                if breaks_past_overflow >= MAX_DRAWN_CHECKS_STEPPING_BACK && g.get(cluster_end).is_none_or(|n| n.ch != '\u{2028}') {
+                    return settle(tabbed, checks(back), (cluster_end, hyphenated && cluster_end < g.len()), &breaks);
                 }
             }
         }

@@ -122,6 +122,7 @@ pub(crate) mod shapes;
 pub mod shortcut_import;
 pub(crate) mod simplify_slider;
 pub mod slices;
+pub mod smart_punctuation;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
 pub mod svg_filter;
@@ -430,6 +431,7 @@ registry! {
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
+    SmartPunctuation: [smart_punctuation::KIND] => smart_punctuation::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,

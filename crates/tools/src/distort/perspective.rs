@@ -26,6 +26,7 @@ use crate::bbox::{Handle as BoxHandle, scale_for_drag};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 pub mod define;
+pub mod infer;
 pub mod view;
 pub mod widget;
 pub use define::{GridDefinition, Rgb, Station};
@@ -183,6 +184,11 @@ pub struct PerspectiveGrid {
     /// Horizontal extent of the right plane (points, plane units); None: `extent`, as the left.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extent_right: Option<f64>,
+    /// Automatic Plane Positioning: the point (x, y and z in the grid's frame, points, as
+    /// [`Axis`] names them) the active plane passes through for now, while the other planes hide
+    /// ([`infer`]). View state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inferred: Option<[f64; 3]>,
 }
 
 impl PerspectiveGrid {
@@ -224,11 +230,18 @@ impl PerspectiveGrid {
             snap: true,
             rulers: false,
             extent_right: None,
+            inferred: None,
         }
     }
 
-    /// Where `plane` is along its normal (points; 0: its place in the grid's definition).
+    /// Where `plane` is along its normal (points; 0: its place in the grid's definition): for the
+    /// active plane held by Automatic Plane Positioning, where that holds it.
     pub fn offset(&self, plane: Plane) -> f64 {
+        self.inferred_offset(plane).unwrap_or_else(|| self.placed_offset(plane))
+    }
+
+    /// Where `plane` was moved along its normal, Automatic Plane Positioning aside.
+    pub fn placed_offset(&self, plane: Plane) -> f64 {
         match plane {
             Plane::Left => self.left_offset,
             Plane::Right => self.right_offset,
@@ -325,7 +338,8 @@ impl PerspectiveGrid {
         let mut v = serde_json::to_value(self).map_err(|e| e.to_string())?;
         if let (Some(o), Some(p)) = (v.as_object_mut(), patch.as_object()) {
             for (k, val) in p {
-                if k == "ids" || k == "attached" {
+                // Automatic Plane Positioning's point is `perspective.plane.infer`'s to set.
+                if k == "ids" || k == "attached" || k == "inferred" {
                     continue;
                 }
                 o.insert(k.clone(), val.clone());
@@ -333,6 +347,7 @@ impl PerspectiveGrid {
         }
         let mut g: Self = serde_json::from_value(v).map_err(|e| e.to_string())?;
         g.reconcile(self, patch);
+        g.keep_positioning_valid();
         g.validate()?;
         Ok(g)
     }
@@ -354,7 +369,7 @@ impl PerspectiveGrid {
             self.extent,
             self.height,
         ];
-        if nums.iter().any(|v| !v.is_finite() || v.abs() > 4.0e6) {
+        if nums.iter().chain(self.inferred.iter().flatten()).any(|v| !v.is_finite() || v.abs() > 4.0e6) {
             return Err("grid values must be finite".into());
         }
         if self.distance <= 0.0 || self.cell <= 0.0 || self.extent <= 0.0 || self.height <= 0.0 {
@@ -563,10 +578,31 @@ impl PerspectiveGrid {
         let Some(h) = self.homography(plane) else { return vec![] };
         let d = self.domain(plane);
         let mut out = vec![];
+        let (w, h_len) = (d.width(), d.height());
+        let Some(((su, nu), (sv, nv))) = self.line_steps(plane) else { return out };
+        for i in 0..=nu {
+            let u = i as f64 * su;
+            if let (Some(a), Some(b)) = (h.apply(Point::new(u, 0.0)), h.apply(Point::new(u, h_len))) {
+                out.push((a, b));
+            }
+        }
+        for i in 0..=nv {
+            let v = i as f64 * sv;
+            if let (Some(a), Some(b)) = (h.apply(Point::new(0.0, v)), h.apply(Point::new(w, v))) {
+                out.push((a, b));
+            }
+        }
+        out
+    }
+
+    /// How the gridlines of `plane` are spaced as drawn: (step, the number of the last line) along
+    /// its u and its v axis. `None` for a grid without lines.
+    pub(crate) fn line_steps(&self, plane: Plane) -> Option<((f64, usize), (f64, usize))> {
+        let d = self.domain(plane);
         // A stored grid is not checked: no spacing, or an extent that isn't a number, has no lines.
         let (w, h_len) = (d.width(), d.height());
         if !(self.cell.is_finite() && self.cell > 0.0 && w.is_finite() && h_len.is_finite()) {
-            return out;
+            return None;
         }
         let step = |len: f64| {
             let mut s = self.cell;
@@ -580,19 +616,7 @@ impl PerspectiveGrid {
         // tolerance can inflate the count when the whole domain is far smaller than it, so the
         // bound is capped on its own, before any loop runs.
         let count = |len: f64, s: f64| ((len + 1e-9) / s).floor().clamp(0.0, 120.0) as usize;
-        for i in 0..=count(w, su) {
-            let u = i as f64 * su;
-            if let (Some(a), Some(b)) = (h.apply(Point::new(u, 0.0)), h.apply(Point::new(u, h_len))) {
-                out.push((a, b));
-            }
-        }
-        for i in 0..=count(h_len, sv) {
-            let v = i as f64 * sv;
-            if let (Some(a), Some(b)) = (h.apply(Point::new(0.0, v)), h.apply(Point::new(w, v))) {
-                out.push((a, b));
-            }
-        }
-        out
+        Some(((su, count(w, su)), (sv, count(h_len, sv))))
     }
 
     /// Plane Switching widget geometry in the first artboard's top-left corner (headless): (plane,
@@ -611,10 +635,10 @@ impl PerspectiveGrid {
     }
 
     /// The left, right and horizontal plane widgets: where each sits (on its plane: the middle of a
-    /// wall's ground edge, the middle of the horizontal plane).
+    /// wall's ground edge, the middle of the horizontal plane). A hidden plane has none.
     pub fn plane_widgets(&self) -> Vec<(Plane, Point)> {
         let e = self.extent / 2.0;
-        Plane::ALL
+        self.shown_planes()
             .into_iter()
             .filter_map(|pl| {
                 let q = if pl == Plane::Ground { Point::new(e, e) } else { Point::new(e, 0.0) };
@@ -793,7 +817,7 @@ pub fn grid_overlays_in(doc: &Document, tol: f64, place: Option<widget::WidgetPl
         return vec![];
     }
     let mut out = vec![];
-    for pl in g.planes() {
+    for pl in g.shown_planes() {
         let (line, color) = (g.line_color(pl), g.plane_color(pl));
         for (a, b) in g.lines(pl) {
             out.push(Overlay::GridLine { a, b, color: line });
