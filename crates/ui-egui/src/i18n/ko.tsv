@@ -6189,6 +6189,7 @@ axis	Y Axis	Y축
 @msg	stops must be in order of `offset`	정지점은 `offset` 순서여야 합니다
 @msg	the document has no pattern {pattern}	문서에 패턴 {pattern}이(가) 없습니다
 @msg	the document has no swatch {n}	문서에 견본 {n}이(가) 없습니다
+@msg	`plates` requires a stop linked to a spot swatch	`plates`에는 별색 견본에 연결된 정지점이 필요합니다
 @msg	the output	출력
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})

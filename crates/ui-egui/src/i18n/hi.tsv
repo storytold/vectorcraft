@@ -5763,6 +5763,7 @@ antiAlias	Sharp	शार्प
 @msg	stops must be in order of `offset`	स्टॉप `offset` के क्रम में होने चाहिए
 @msg	the document has no pattern {pattern}	डॉक्यूमेंट में पैटर्न {pattern} नहीं है
 @msg	the document has no swatch {n}	डॉक्यूमेंट में स्वॉच {n} नहीं है
+@msg	`plates` requires a stop linked to a spot swatch	`plates` के लिए स्पॉट रंग स्वॉच से जुड़ा स्टॉप आवश्यक है
 @msg	the output	आउटपुट
 @msg	the path has no anchor points	पाथ में कोई एंकर पॉइंट नहीं है
 @msg	too many anchor points (limit {MAX_ANCHORS})	बहुत अधिक एंकर पॉइंट (सीमा {MAX_ANCHORS})

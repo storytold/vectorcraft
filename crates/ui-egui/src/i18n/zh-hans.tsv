@@ -6441,6 +6441,7 @@ axis	Y Axis	Y 轴
 @msg	stops must be in order of `offset`	色标必须按 `offset` 排序
 @msg	the document has no pattern {pattern}	文档中没有图案 {pattern}
 @msg	the document has no swatch {n}	文档中没有色板 {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` 需要链接到专色色板的渐变色标
 @msg	the output	输出
 @msg	the path has no anchor points	路径没有锚点
 @msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）

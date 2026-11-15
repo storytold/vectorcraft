@@ -6517,6 +6517,7 @@ axis	Y Axis	Eixo Y
 @msg	stops must be in order of `offset`	as paradas devem estar em ordem de `offset`
 @msg	the document has no pattern {pattern}	o documento não tem o padrão {pattern}
 @msg	the document has no swatch {n}	o documento não tem a amostra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requer uma parada vinculada a uma amostra de cor spot
 @msg	the output	a saída
 @msg	the path has no anchor points	o caminho não tem pontos de ancoragem
 @msg	too many anchor points (limit {MAX_ANCHORS})	pontos de ancoragem demais (limite {MAX_ANCHORS})

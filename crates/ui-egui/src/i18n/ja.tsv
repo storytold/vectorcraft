@@ -6294,6 +6294,7 @@ axis	Y Axis	Y 軸
 @msg	stops must be in order of `offset`	分岐点は `offset` の順に並べてください
 @msg	the document has no pattern {pattern}	ドキュメントにパターン {pattern} がありません
 @msg	the document has no swatch {n}	ドキュメントにスウォッチ {n} がありません
+@msg	`plates` requires a stop linked to a spot swatch	`plates` には特色スウォッチにリンクされた分岐点が必要です
 @msg	the output	出力
 @msg	the path has no anchor points	パスにアンカーポイントがありません
 @msg	too many anchor points (limit {MAX_ANCHORS})	アンカーポイントが多すぎます (上限 {MAX_ANCHORS})

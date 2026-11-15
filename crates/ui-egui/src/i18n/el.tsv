@@ -6558,6 +6558,7 @@ axis	Y Axis	Άξονας Y
 @msg	stops must be in order of `offset`	τα σημεία χρώματος πρέπει να είναι ταξινομημένα κατά `offset`
 @msg	the document has no pattern {pattern}	το έγγραφο δεν έχει μοτίβο {pattern}
 @msg	the document has no swatch {n}	το έγγραφο δεν έχει δείγμα χρώματος {n}
+@msg	`plates` requires a stop linked to a spot swatch	το `plates` απαιτεί σημείο χρώματος συνδεδεμένο με δείγμα πλακάτου χρώματος
 @msg	the output	η έξοδος
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})

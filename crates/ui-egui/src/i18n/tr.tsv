@@ -6676,6 +6676,7 @@ axis	Y Axis	Y ekseni
 @msg	stops must be in order of `offset`	duraklar `offset` sırasında olmalıdır
 @msg	the document has no pattern {pattern}	belgede {pattern} deseni yok
 @msg	the document has no swatch {n}	belgede {n} renk örneği yok
+@msg	`plates` requires a stop linked to a spot swatch	`plates`, nokta rengi örneğine bağlı bir degrade durağı gerektirir
 @msg	the output	çıktı
 @msg	the path has no anchor points	yolun bağlantı noktası yok
 @msg	too many anchor points (limit {MAX_ANCHORS})	çok fazla bağlantı noktası (sınır {MAX_ANCHORS})

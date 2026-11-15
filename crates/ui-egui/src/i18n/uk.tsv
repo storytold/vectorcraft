@@ -6208,6 +6208,7 @@ axis	Y Axis	Вісь Y
 @msg	stops must be in order of `offset`	точки переходу мають іти в порядку `offset`
 @msg	the document has no pattern {pattern}	у документі немає візерунка {pattern}
 @msg	the document has no swatch {n}	у документі немає зразка {n}
+@msg	`plates` requires a stop linked to a spot swatch	для `plates` потрібна точка переходу, пов’язана зі зразком плашкового кольору
 @msg	the output	виведення
 @msg	the path has no anchor points	контур не має опорних точок
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
