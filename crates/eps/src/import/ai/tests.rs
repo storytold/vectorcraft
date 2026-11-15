@@ -5175,8 +5175,10 @@ fn an_instance_placed_on_the_canvas_by_an_older_file_stays_live() {
     let ((op, on), (np, nn)) = (both(&older_doc), both(&newer_doc));
     assert!(op.iter().zip(np).all(|(a, b)| (a - b).abs() < 1e-9), "{op:?} {np:?}");
     assert!(on.iter().zip(nn).all(|(a, b)| (a - b).abs() < 1e-9), "{on:?} {nn:?}");
-    // Without a template box the canvas's place isn't known: the instance isn't read.
-    let e = read(stream(&layer(&older("Dot", [1.0, 0.0, 0.0, 1.0, 8111.0, 8192.0]))).as_bytes());
+    // Without a template box the canvas's place isn't known: the instance isn't read, though Dot is
+    // defined and the same instance with a template box is read above.
+    let defs = symbols(&symbol("Dot", &dot(), 5));
+    let e = read(stream(&format!("{defs}{}", layer(&older("Dot", [1.0, 0.0, 0.0, 1.0, 8111.0, 8192.0])))).as_bytes());
     assert!(e.is_err_and(|e| e.contains("symbols")));
 }
 
