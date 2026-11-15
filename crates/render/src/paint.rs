@@ -260,11 +260,11 @@ fn reduction(bytes: &[u8], allowance: u64) -> Option<Reduction> {
     let to = fitted_dims(w, h, allowance)?;
     // A PNG that isn't interlaced or animated (and upright in pre-pixel EXIF) is read a row at a time when the reader's buffers fit the allowance.
     let row_scratch = if format == image::ImageFormat::Png {
-        craft_image_codecs::PngDecodeRows::new_streaming(bytes, &craft_image_codecs::Limits::default())
+        let streamed = craft_image_codecs::PngDecodeRows::new_streaming(bytes, &craft_image_codecs::Limits::default())
             .ok()
             .filter(|dec| dec.streamable())
-            .and_then(|dec| png_row_scratch(&dec.header()))
-            .filter(|&s| s <= allowance)
+            .and_then(|dec| png_row_scratch(&dec.header()));
+        streamed.or_else(|| png_row_scratch_from_header(bytes, w, h, d.total_bytes())).filter(|&s| s <= allowance)
     } else {
         None
     };
@@ -295,6 +295,44 @@ const PNG_WINDOW_AND_STEP: u64 = (32 << 10) + (8 << 10);
 /// stored row and the row given out come on top. `None` when a row given out doesn't fit memory.
 fn png_row_scratch(hdr: &craft_image_codecs::PngHeader) -> Option<u64> {
     let out = u64::from(hdr.width).checked_mul(hdr.layout.channels() as u64)?.checked_mul(hdr.sample.bytes() as u64)?;
+    png_row_scratch_for_row(out)
+}
+
+/// The row decoder rejects a truncated PNG's tiny IDAT before it can report its header. For a
+/// size estimate, the image decoder still gives us the declared output bytes; use those only when
+/// the PNG header says it is a static, non-interlaced image, the format the renderer can stream.
+fn png_row_scratch_from_header(bytes: &[u8], width: u32, height: u32, total_bytes: u64) -> Option<u64> {
+    const SIG: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+    if bytes.get(..8)? != SIG || height == 0 || total_bytes % u64::from(height) != 0 {
+        return None;
+    }
+    let mut at = 8usize;
+    let mut header = false;
+    loop {
+        let len = u32::from_be_bytes(bytes.get(at..at + 4)?.try_into().ok()?) as usize;
+        let kind = bytes.get(at + 4..at + 8)?;
+        let data_at = at.checked_add(8)?;
+        let end = data_at.checked_add(len)?;
+        let data = bytes.get(data_at..end)?;
+        match kind {
+            b"IHDR" if len == 13 && !header => {
+                header = true;
+                if u32::from_be_bytes(data[..4].try_into().ok()?) != width || data[12] != 0 {
+                    return None;
+                }
+            }
+            b"acTL" | b"eXIf" => return None,
+            b"IDAT" if header => {
+                let row = total_bytes / u64::from(height);
+                return row.checked_add(1).and_then(png_row_scratch_for_row);
+            }
+            _ => {}
+        }
+        at = end.checked_add(4)?; // CRC
+    }
+}
+
+fn png_row_scratch_for_row(out: u64) -> Option<u64> {
     // A filter byte and the row's samples.
     let stored = 1u64.checked_add(out)?;
     let kept = (stored * 4).next_multiple_of(64).max(PNG_KEPT_ROWS);
