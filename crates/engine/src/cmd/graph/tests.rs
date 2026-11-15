@@ -635,6 +635,11 @@ fn invert_of_a_group_recolors_its_own_fill_and_leaves_design_art() {
     assert_ne!(own(&s), own_was, "the group's own fill");
     assert_ne!(look(&s, mark), mark_was);
     assert_eq!(look(&s, art), art_was);
+    // The color remembered is the group's own new fill, which the Fill proxy shows.
+    let Some(Paint::Solid { color, .. }) = s.doc().unwrap().doc.node(group).unwrap().proxy_paint_only(false, None).cloned() else {
+        panic!("the group's fill is not a solid color")
+    };
+    assert_eq!((s.last_solid, s.recent_colors.first().copied()), (color, Some(color)));
     let (own_was, mark_was) = (own(&s), look(&s, mark));
     s.execute("paint.invert", &json!({"ids": [group.0], "target": "contents"})).unwrap();
     assert_eq!(own(&s), own_was, "target: contents");
