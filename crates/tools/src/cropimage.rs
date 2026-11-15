@@ -75,7 +75,8 @@ pub fn check_options(values: &serde_json::Map<String, Value>, max: Option<f64>) 
 
 /// The box `r` over an image with bounds `image`, with one Control bar field set: `x` or `y` moves
 /// the box so its `reference` point is there; `width` or `height` resizes it about that point, the
-/// other side following in proportion when `linked`. Sizes below [`MIN`] are raised to it. A
+/// other side following in proportion when `linked`. Sizes below [`MIN`] are raised to it, a
+/// linked size with both sides together so it keeps its proportions. A
 /// linked size is held to the image with both sides scaled together, and a box that fits is slid
 /// back within the image, so its proportions survive being kept within it. `None` for another key
 /// or a value that isn't finite.
@@ -89,20 +90,13 @@ pub fn edited_box(r: Rect, image: Rect, reference: usize, linked: bool, key: &st
     match key {
         "x" => return Some(fit(r + Vec2::new(v - p.x, 0.0))),
         "y" => return Some(fit(r + Vec2::new(0.0, v - p.y))),
-        "width" => {
-            let nw = v.max(MIN);
-            if linked && w > 0.0 {
-                h = (h * nw / w).max(MIN);
-            }
-            w = nw;
+        // Linked, both sides take one scale, raised so neither side falls below MIN.
+        "width" | "height" if linked && w > 0.0 && h > 0.0 => {
+            let k = (v / if key == "width" { w } else { h }).max(MIN / w).max(MIN / h);
+            (w, h) = (w * k, h * k);
         }
-        "height" => {
-            let nh = v.max(MIN);
-            if linked && h > 0.0 {
-                w = (w * nh / h).max(MIN);
-            }
-            h = nh;
-        }
+        "width" => w = v.max(MIN),
+        "height" => h = v.max(MIN),
         _ => return None,
     }
     if linked {
@@ -204,11 +198,12 @@ impl CropImageTool {
     }
 
     /// Crop to the box at the chosen resolution and go back to the Selection tool (only back when
-    /// the box covers the image and the resolution is the image's own).
+    /// the box covers the image and the resolution is the image's own). The box and the resolution
+    /// are forgotten when the tool is left, so a crop that fails keeps them for another try.
     fn apply(&mut self, cx: &ToolContext) -> Vec<Action> {
         let current = self.current(cx);
         let ppi = self.ppi;
-        self.reset();
+        self.drag = None;
         let mut out = vec![];
         if let Some((id, image, r)) = current {
             let im = match cx.doc.node(id).map(|n| &n.kind) {
@@ -456,6 +451,15 @@ mod tests {
         }
     }
 
+    /// Enter, then the switch to the Selection tool that a crop that ran is followed by.
+    fn enter(t: &mut CropImageTool, cx: &ToolContext) -> Vec<Action> {
+        let acts = t.key(cx, ToolKey::Enter, Mods::default());
+        if acts.contains(&Action::SwitchTool("selection".into())) {
+            assert!(t.deactivate(cx).is_empty());
+        }
+        acts
+    }
+
     fn crop_rect(acts: &[Action]) -> Option<Vec<f64>> {
         acts.iter().find_map(|a| match a {
             Action::Exec(c, v) if c == "object.cropImage" => Some(v["rect"].as_array()?.iter().filter_map(Value::as_f64).collect()),
@@ -487,11 +491,11 @@ mod tests {
         assert_eq!(ov.iter().filter(|o| matches!(o, Overlay::Highlight { .. })).count(), 2, "above and right of the box");
         assert_eq!(ov.iter().filter(|o| matches!(o, Overlay::Handle { .. })).count(), 8);
         // Enter crops to it and goes back to the Selection tool.
-        let acts = t.key(&cx, ToolKey::Enter, Mods::default());
+        let acts = enter(&mut t, &cx);
         assert_eq!(crop_rect(&acts), Some(vec![50.0, 70.0, 130.0, 90.0]));
         assert_eq!(acts.last(), Some(&Action::SwitchTool("selection".into())));
         assert!(t.options().get("rect").is_none(), "the next crop starts afresh");
-        assert!(crop_rect(&t.key(&cx, ToolKey::Enter, Mods::default())).is_none(), "the whole image: nothing to cut");
+        assert!(crop_rect(&enter(&mut t, &cx)).is_none(), "the whole image: nothing to cut");
     }
 
     /// In a view turned 90° the handles' cursors turn with the view.
@@ -515,10 +519,10 @@ mod tests {
         let mut t = CropImageTool::default();
         drag(&mut t, &cx, (100.0, 150.0), (110.0, 150.0));
         assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::SwitchTool("selection".into())]);
-        assert_eq!(crop_rect(&t.key(&cx, ToolKey::Enter, Mods::default())), Some(vec![0.0, 100.0, 150.0, 100.0]));
+        assert_eq!(crop_rect(&enter(&mut t, &cx)), Some(vec![0.0, 100.0, 150.0, 100.0]));
         // The Control bar sets the box; it stays within the image.
         t.set_option("rect", &json!([100, 120, 500, 20]));
-        assert_eq!(crop_rect(&t.key(&cx, ToolKey::Enter, Mods::default())), Some(vec![100.0, 120.0, 50.0, 20.0]));
+        assert_eq!(crop_rect(&enter(&mut t, &cx)), Some(vec![100.0, 120.0, 50.0, 20.0]));
         // Nothing selected: no box, and the keys go elsewhere.
         let none = Selection::default();
         let cx = crate::testutil::cx(&d, &none, &p);
@@ -660,19 +664,50 @@ mod tests {
         };
         let mut t = CropImageTool::default();
         t.set_option("ppi", &json!(20));
-        assert_eq!(exec(&t.key(&cx, ToolKey::Enter, Mods::default())), Some(json!({ "rect": [50.0, 60.0, 200.0, 100.0], "ppi": 20.0 })));
+        assert_eq!(exec(&enter(&mut t, &cx)), Some(json!({ "rect": [50.0, 60.0, 200.0, 100.0], "ppi": 20.0 })));
         assert!(t.options().get("ppi").is_none(), "the next crop starts at the image's own");
         t.set_option("ppi", &json!(36));
-        assert_eq!(exec(&t.key(&cx, ToolKey::Enter, Mods::default())), None, "the image's own over the whole image: nothing to do");
+        assert_eq!(exec(&enter(&mut t, &cx)), None, "the image's own over the whole image: nothing to do");
         t.set_option("ppi", &json!(36));
         t.set_option("rect", &json!([60, 70, 100, 50]));
-        assert_eq!(exec(&t.key(&cx, ToolKey::Enter, Mods::default())), Some(json!({ "rect": [60.0, 70.0, 100.0, 50.0] })));
+        assert_eq!(exec(&enter(&mut t, &cx)), Some(json!({ "rect": [60.0, 70.0, 100.0, 50.0] })));
         // A resolution set before this image was selected is held to its limit: 300 → its own 36.
         t.set_option("ppi", &json!(300));
         t.set_option("rect", &json!([60, 70, 100, 50]));
-        assert_eq!(exec(&t.key(&cx, ToolKey::Enter, Mods::default())), Some(json!({ "rect": [60.0, 70.0, 100.0, 50.0] })));
+        assert_eq!(exec(&enter(&mut t, &cx)), Some(json!({ "rect": [60.0, 70.0, 100.0, 50.0] })));
         t.set_option("ppi", &json!(300));
-        assert_eq!(exec(&t.key(&cx, ToolKey::Enter, Mods::default())), None, "held to its own over the whole image: nothing to do");
+        assert_eq!(exec(&enter(&mut t, &cx)), None, "held to its own over the whole image: nothing to do");
+    }
+
+    /// A crop that fails leaves the tool chosen (the switch to the Selection tool is not made), so
+    /// the box and the resolution stay for another try; leaving the tool forgets them.
+    #[test]
+    fn the_box_and_resolution_stay_until_the_tool_is_left() {
+        let (d, s) = doc_with_image((50.0, 60.0));
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = CropImageTool::default();
+        t.set_option("ppi", &json!(20));
+        t.set_option("rect", &json!([60, 70, 100, 50]));
+        let acts = t.key(&cx, ToolKey::Enter, Mods::default());
+        assert_eq!(crop_rect(&acts), Some(vec![60.0, 70.0, 100.0, 50.0]));
+        assert_eq!(t.options()["rect"], json!([60.0, 70.0, 100.0, 50.0]));
+        assert_eq!(t.options()["ppi"], json!(20.0));
+        assert!(t.deactivate(&cx).is_empty());
+        assert!(t.options().get("rect").is_none() && t.options().get("ppi").is_none());
+    }
+
+    /// A linked size raised to the smallest box keeps the box's proportions: both sides grow
+    /// together until the shorter one is a point.
+    #[test]
+    fn a_linked_size_at_the_smallest_keeps_its_proportions() {
+        let big = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+        let wide = Rect::new(10.0, 20.0, 110.0, 70.0);
+        assert_eq!(edited_box(wide, big, 0, true, "width", 1.0), Some(Rect::new(10.0, 20.0, 12.0, 21.0)));
+        assert_eq!(edited_box(wide, big, 0, true, "height", 0.25), Some(Rect::new(10.0, 20.0, 12.0, 21.0)));
+        let tall = Rect::new(10.0, 20.0, 60.0, 120.0);
+        assert_eq!(edited_box(tall, big, 0, true, "height", 1.0), Some(Rect::new(10.0, 20.0, 11.0, 22.0)));
+        assert_eq!(edited_box(tall, big, 0, true, "width", -3.0), Some(Rect::new(10.0, 20.0, 11.0, 22.0)));
     }
 
     #[test]

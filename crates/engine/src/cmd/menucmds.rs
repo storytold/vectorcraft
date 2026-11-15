@@ -1030,23 +1030,29 @@ fn check_crop_size(w: f64, h: f64) -> Result<()> {
 }
 
 /// `img` resampled to `w` × `h` with its colors weighted by their alpha, so the color of a fully
-/// transparent pixel does not show at the edges of what is opaque.
+/// transparent pixel does not show at the edges of what is opaque. The weighted colors are held in
+/// 16 bits a channel until the end, so a nearly transparent pixel keeps its color.
 fn resize_premultiplied(img: &image::RgbaImage, w: u32, h: u32) -> image::RgbaImage {
-    let mut pre = img.clone();
-    for p in pre.pixels_mut() {
-        let a = u32::from(p[3]);
-        for c in &mut p.0[..3] {
-            *c = ((u32::from(*c) * a + 127) / 255) as u8;
+    let mut pre = image::ImageBuffer::<image::Rgba<u16>, Vec<u16>>::new(img.width(), img.height());
+    for (d, s) in pre.pixels_mut().zip(img.pixels()) {
+        let a = u32::from(s[3]);
+        for (dc, sc) in d.0[..3].iter_mut().zip(&s.0[..3]) {
+            // c × 257 × a / 255, rounded: the color scaled to 16 bits and weighted.
+            *dc = ((u32::from(*sc) * 257 * a + 127) / 255) as u16;
         }
+        d.0[3] = (a * 257) as u16;
     }
-    let mut out = image::imageops::resize(&pre, w, h, image::imageops::FilterType::Lanczos3);
-    for p in out.pixels_mut() {
-        let a = u32::from(p[3]);
-        for c in &mut p.0[..3] {
-            *c = (u32::from(*c) * 255 + a / 2).checked_div(a).unwrap_or(0).min(255) as u8;
+    let out = image::imageops::resize(&pre, w, h, image::imageops::FilterType::Lanczos3);
+    let mut res = image::RgbaImage::new(out.width(), out.height());
+    for (d, s) in res.pixels_mut().zip(out.pixels()) {
+        let a = u64::from(s[3]);
+        for (dc, sc) in d.0[..3].iter_mut().zip(&s.0[..3]) {
+            // c × 65535 / a back to 8 bits (÷ 257), rounded: c × 255 / a.
+            *dc = (u64::from(*sc) * 255 + a / 2).checked_div(a).unwrap_or(0).min(255) as u8;
         }
+        d.0[3] = ((a + 128) / 257).min(255) as u8;
     }
-    out
+    res
 }
 
 /// `img` as PNG bytes.
@@ -1141,8 +1147,20 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(e) = bare.extras_if_any() {
         e.color_mask = None;
     }
+    let (dw, dh) = ((r.width() * scale).round().max(1.0), (r.height() * scale).round().max(1.0));
+    let region = Rect::new(r.x0, r.y0, r.x0 + dw / scale, r.y0 + dh / scale);
+    // At a resolution asked for, the drawing is fitted to the box below: the image is stretched
+    // about the box's corner so the box fills the whole pixels drawn, and nothing past it is drawn.
+    if target.is_some()
+        && let NodeKind::Image(bi) = &mut bare.kind
+    {
+        let o = r.origin().to_vec2();
+        bi.xf = Affine::translate(o)
+            * Affine::scale_non_uniform(region.width() / r.width(), region.height() / r.height())
+            * Affine::translate(-o)
+            * bi.xf;
+    }
     let tmp = isolated_doc(&st.doc, vec![bare]);
-    let region = Rect::new(r.x0, r.y0, r.x0 + (r.width() * scale).round().max(1.0) / scale, r.y0 + (r.height() * scale).round().max(1.0) / scale);
     let (png, w, h, warning) =
         render_png(&tmp, region, scale, &RasterExportOptions::default().render_options(RasterFormat::Png), RasterColorModel::Document)?;
     // At a resolution asked for, the drawing is resampled to the box's size at that resolution and

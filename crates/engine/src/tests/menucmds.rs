@@ -1600,7 +1600,10 @@ fn crop_image_resamples_the_cut_to_the_resolution_asked_for() {
     let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
     let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
     let cut = image::imageops::crop_imm(&px, 10, 5, 30, 20).to_image();
-    assert_eq!(out, image::imageops::resize(&cut, 15, 10, image::imageops::FilterType::Lanczos3));
+    // Resampled in 16 bits a channel: within a level of the 8-bit resampling.
+    let want = image::imageops::resize(&cut, 15, 10, image::imageops::FilterType::Lanczos3);
+    assert_eq!(out.dimensions(), want.dimensions());
+    assert!(out.as_raw().iter().zip(want.as_raw()).all(|(a, b)| a.abs_diff(*b) <= 1));
 }
 
 /// Resampling weights colors by their alpha: the color hidden in fully transparent pixels does not
@@ -1624,6 +1627,53 @@ fn crop_image_resampling_keeps_hidden_colors_out_of_the_edges() {
     for p in out.pixels().filter(|p| p[3] > 0) {
         assert!(p[1] >= 250 && p[2] >= 250, "white, not tinted red: {p:?}");
     }
+}
+
+/// Resampling keeps the color of pixels that are nearly transparent: a uniform color at the lowest
+/// alpha comes out as that color, not black.
+#[test]
+fn crop_image_resampling_keeps_the_color_of_nearly_transparent_pixels() {
+    let px = image::RgbaImage::from_pixel(100, 80, image::Rgba([100, 50, 25, 1]));
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "faint.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 18})).unwrap();
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    for p in out.pixels() {
+        let near = |a: u8, b: u8| a.abs_diff(b) <= 1;
+        assert!(p[3] == 1 && near(p[0], 100) && near(p[1], 50) && near(p[2], 25), "{p:?}");
+    }
+}
+
+/// A box between pixels drawn at a resolution asked for holds what is inside the box only, at its
+/// place: the edge of the image's content lands where it was in the box.
+#[test]
+fn crop_image_between_pixels_keeps_the_content_at_its_place() {
+    // White pixels 0 to 49 across, black from 50: at 2 pt a pixel, the edge is at x = 100 pt.
+    let px = image::RgbaImage::from_fn(100, 80, |x, _| if x < 50 { image::Rgba([255, 255, 255, 255]) } else { image::Rgba([0, 0, 0, 255]) });
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "edge.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    // 101 × 31 pt from (21, 11), off the pixel grid, at 35 ppi: 49 × 15 px. The edge is 79 pt into
+    // the 101 pt box, so each row holds 49 × 79 / 101 pixels' worth of white.
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 101, 31], "ppi": 35})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (49, 15), "{r}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    let white: f64 = out.pixels().map(|p| f64::from(p[1]) / 255.0).sum::<f64>() / f64::from(out.height());
+    let want = 49.0 * 79.0 / 101.0;
+    assert!((white - want).abs() < 0.1, "{white} pixels of white a row, want {want}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 101.0) && close(b.height(), 31.0), "{b:?}");
 }
 
 /// A box between pixels is drawn at the resolution asked for, and lands on the box.
