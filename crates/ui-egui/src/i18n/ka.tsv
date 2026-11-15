@@ -5696,6 +5696,7 @@ imageTrace	Outline	კონტური
 @msg	object has no weighted stroke	ობიექტს ცვლადი სისქის კონტური არ აქვს
 @msg	objects can't be nested more than 32 deep	ობიექტების ჩადგმის სიღრმე 32-ს ვერ გადააჭარბებს
 @msg	the SVG's elements are nested more than {0} deep	SVG-ის ელემენტების ჩადგმის სიღრმე {0}-ს აჭარბებს
+@msg	the SVG's style sheets take too long to match	SVG-ის სტილის ფურცლების შედარებას ძალიან დიდი დრო სჭირდება
 @msg	the SVG's styles expand to more than {0} MB	SVG-ის სტილები გაშლისას {0} MB-ს აჭარბებს
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	უცნობი control `{name}`: fillStroke, coloring, drawMode ან screenMode
 @plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	ემთხვევა ნაგულისხმევ მალსახმობებს: {n}|ემთხვევა ნაგულისხმევ მალსახმობებს: {n}

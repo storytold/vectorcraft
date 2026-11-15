@@ -6975,6 +6975,7 @@ imageTrace	Outline	Contour
 @msg	the RTF file is too large to place as type (at most {_1} MB)	het RTF-bestand is te groot om als tekst te plaatsen (maximaal {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	de SVG wordt uitgevouwen tot meer dan {0} geneste SVG-afbeeldingen
 @msg	the SVG expands to more than {0} objects	de SVG wordt uitgevouwen tot meer dan {0} objecten
+@msg	the SVG's style sheets take too long to match	het vergelijken van de stijlbladen van de SVG duurt te lang
 @msg	the SVG's styles expand to more than {0} MB	de stijlen van de SVG worden uitgevouwen tot meer dan {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	het SVG-bestand is groter dan {MAX_IMPORT_BYTES} bytes
 @msg	the SVG has no drawable objects	de SVG heeft geen tekenbare objecten
