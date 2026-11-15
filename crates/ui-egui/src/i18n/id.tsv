@@ -480,6 +480,7 @@
 	Rotate (Classic)…	Putar (klasik)…
 	Surface	Permukaan
 	Wireframe	Kerangka kawat
+	Render Settings	Pengaturan render
 	No Shading	Tanpa pengarsiran
 	Plastic	Plastik
 	Highlight Intensity	Intensitas kilau
@@ -927,6 +928,11 @@
 	NTSC Colors	Warna NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Kebijakan RGB:
+	CMYK Policy:	Kebijakan CMYK:
+	Preserve Embedded Profiles	Pertahankan Profil Tersemat
+	Convert to Working Space	Konversi ke Ruang Kerja
+	Preserve Numbers	Pertahankan Angka
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Craquelure…
@@ -1426,6 +1432,7 @@ lighting	Light	Cahaya
 	Align to Artboard	Ratakan ke artboard
 	Align to Glyph Bounds	Ratakan ke batas glif
 	Align to Key Object	Ratakan ke objek kunci
+	Align to Key Anchor	Ratakan ke titik jangkar kunci
 	Align to Selection	Ratakan ke seleksi
 	Align To:	Ratakan ke:
 	Cancel Key Object	Batalkan objek kunci
@@ -1520,6 +1527,8 @@ lighting	Light	Cahaya
 	Leading	Leading
 	No Break	Tanpa pemenggalan
 	Proportional Metrics	Metrik proporsional
+	H or V Style	Gaya horizontal atau vertikal
+	Roman Italics	Miring Romawi
 	Insert Aki Left	Sisipkan aki kiri
 	Insert Aki Right	Sisipkan aki kanan
 	Tsume	Tsume
@@ -1573,6 +1582,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Angka
 	Scale at Center	Skalakan dari tengah
+	Delete Set	Hapus set
+	Direct Entry	Entri langsung
 	Up/Down:	Atas/bawah:
 	Left/Right:	Kiri/kanan:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko atas/bawah
@@ -1856,7 +1867,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Lining tabular
 	Tabular Oldstyle	Oldstyle tabular
 	Titling Alternates	Alternatif judul
-	Every-line Composer	Komposer tiap baris
+	Middle Eastern & South Asian Single-line Composer	Komposer satu baris (Timur Tengah dan Asia Selatan)
+	Middle Eastern & South Asian Every-line Composer	Komposer tiap baris (Timur Tengah dan Asia Selatan)
+	Standard Single-line Composer	Komposer standar satu baris
+	Standard Every-line Composer	Komposer standar tiap baris
 	First-line Left Indent	Indentasi kiri baris pertama
 	Hyphenation…	Pemenggalan kata…
 	Justification…	Justifikasi…
@@ -1888,7 +1902,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
-	Single-line Composer	Komposer satu baris
 	Toggle Line Composer	Alihkan komposer baris
 	Space After Paragraph	Spasi setelah paragraf
 	Space Before Paragraph	Spasi sebelum paragraf
@@ -1932,6 +1945,7 @@ digits	Malayalam	Malayalam
 	Show Swatch Bounds	Tampilkan batas swatch
 	Show Tile Edge	Tampilkan tepi ubin
 	Size Tile to Art	Sesuaikan ukuran ubin dengan karya seni
+	Move Tile with Art	Pindahkan ubin bersama karya seni
 	Tile Type:	Jenis ubin:
 	Top in Front	Atas di depan
 	V Spacing:	Jarak V:
@@ -1974,6 +1988,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Gunakan kompensasi titik hitam
 	Working CMYK (don't tag)	CMYK kerja (tanpa tag)
 	Working RGB (don't tag)	RGB kerja (tanpa tag)
+	Don't Color Manage This Document	Jangan kelola warna dokumen ini
+	Working RGB: {name}	RGB kerja: {name}
+	Working CMYK: {name}	CMYK kerja: {name}
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Tambahkan ke profil…
 	Align Stroke to Center	Ratakan stroke ke tengah
@@ -2568,6 +2585,8 @@ digits	Malayalam	Malayalam
 	Keep a link to an image file instead of only embedding it	Pertahankan tautan ke file gambar alih-alih hanya menyematkannya
 	Place onto a new locked, dimmed template layer below the current layer	Tempatkan pada lapisan templat baru yang terkunci dan diredupkan di bawah lapisan saat ini
 	Swap the selected object for the file, keeping its place and transform	Tukar objek terpilih dengan file, mempertahankan tempat dan transformasinya
+	Show Import Options	Tampilkan Opsi Impor
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Tanyakan opsi impor setiap file PDF, DXF, atau teks sebelum menempatkannya; nonaktif: gunakan opsi yang terakhir dipilih
 	On: one locked object showing the document, updated when it changes.	Aktif: satu objek terkunci yang menampilkan dokumen, diperbarui saat dokumen berubah.
 	Off: an editable copy of its art, embedded in this document.	Nonaktif: salinan karya seninya yang dapat diedit, tersemat dalam dokumen ini.
 	Images: link to the file instead of only embedding it.	Gambar: tautkan ke file alih-alih hanya menyematkannya.
@@ -2702,6 +2721,7 @@ digits	Malayalam	Malayalam
 	Limit to Library:	Batasi ke pustaka:
 	Link harmony colors	Tautkan warna harmoni
 	Merge colors into one row	Gabungkan warna ke dalam satu baris
+	New Row	Baris baru
 	No colors to recolor (preserved colors are left out).	Tidak ada warna untuk diwarnai ulang (warna yang dipertahankan dikesampingkan).
 	Preserve:	Pertahankan:
 	Randomly change color order	Ubah urutan warna secara acak
@@ -3351,6 +3371,40 @@ theme	Appearance	Tampilan
 	Create Graph	Buat grafik
 	Graph Data	Data grafik
 	Graph Type	Jenis grafik
+	Graph Options	Opsi grafik
+	Left Axis	Sumbu kiri
+	Right Axis	Sumbu kanan
+	Category Axis	Sumbu kategori
+	Separate Scales	Skala terpisah
+	Add Drop Shadow	Tambahkan bayangan jatuh
+	Add Legend Across Top	Tambahkan legenda di atas
+	First Row in Front	Baris pertama di depan
+	First Column in Front	Kolom pertama di depan
+	Legend	Legenda
+	Column Width	Lebar kolom
+	Bar Width	Lebar batang
+	Cluster Width	Lebar kelompok
+	Mark Data Points	Tandai titik data
+	Connect Data Points	Hubungkan titik data
+	Edge-to-Edge Lines	Garis dari tepi ke tepi
+	Draw Filled Lines	Gambar garis terisi
+	Tick Values	Nilai tanda skala
+	Override Calculated Values	Timpa nilai terhitung
+	Divisions	Pembagian
+	Tick Marks	Tanda skala
+	Tick Marks per Division	Tanda skala per pembagian
+	Draw Tick Marks Between Labels	Gambar tanda skala di antara label
+	Add Labels	Tambahkan label
+	Maximum must be more than Minimum.	Maksimum harus lebih besar dari minimum.
+	Column Graph	Grafik kolom
+	Stacked Column Graph	Grafik kolom bertumpuk
+	Bar Graph	Grafik batang
+	Stacked Bar Graph	Grafik batang bertumpuk
+	Line Graph	Grafik garis
+	Area Graph	Grafik area
+	Scatter Graph	Grafik sebar
+	Pie Graph	Grafik pai
+	Radar Graph	Grafik radar
 	Vector Halftone	Halftone vektor
 	spot	spot
 	Text	Teks
@@ -3938,6 +3992,7 @@ axis	Both	Keduanya
 	Replace:	Ganti:
 	Type on a Path Options	Opsi teks pada jalur
 	Highlight Variable	Sorot variabel
+	Sort Variables	Urutkan variabel
 	New Variable	Variabel baru
 	List Variables	Daftar variabel
 	Bind Variable	Ikat variabel
@@ -5442,6 +5497,9 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	Move Light to Back	Pindahkan Cahaya ke Belakang
+	Move Light to Front	Pindahkan Cahaya ke Depan
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Seret cahaya untuk memindahkannya. Tombol panah memindahkan cahaya yang difokuskan; Shift memindahkannya 15°.
 	Shadows	Bayangan
 	Distance from Object	Jarak dari objek
 	Shadow Bounds	Batas bayangan
@@ -5802,6 +5860,14 @@ swatch	Bright Violet	Violet cerah
 	Color wheel	Roda warna
 	First Artboard	Artboard pertama
 	Last Artboard	Artboard terakhir
+	Status Bar Show	Tampilkan di bilah status
+	Artboard Name	Nama artboard
+	Current Tool	Alat saat ini
+	Date and Time	Tanggal dan waktu
+	Number of Undos	Jumlah urungkan
+	Document Color Profile	Profil warna dokumen
+	Undos	Urungkan
+	Redos	Ulangi
 	Next Artboard	Artboard berikutnya
 	Previous Artboard	Artboard sebelumnya
 	Step up or down	Naikkan atau turunkan bertahap
@@ -6157,6 +6223,8 @@ axis	Y Axis	Sumbu Y
 	Create New Set	Buat set baru
 	Stop Global Edit	Hentikan edit global
 	Global Edit Options	Opsi edit global
+	Select Similar Objects	Pilih objek serupa
+	Select Similar Options	Opsi pilih serupa
 	Leave Out of Global Edit	Keluarkan dari edit global
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edit global berfungsi pada jalur, jalur gabungan, instans simbol, dan grupnya
 	Match	Cocokkan
@@ -6268,6 +6336,13 @@ axis	Y Axis	Sumbu Y
 	Graphite Pencil	Pensil grafit
 	Wax Crayon	Krayon lilin
 	Charcoal Dust	Debu arang
+
+# Original procedural circuit brushes.
+	Tech Circuit	Sirkuit teknologi
+	Circuit Trace	Jalur sirkuit
+	Bus Lines	Jalur bus
+	Terminal Nodes	Simpul terminal
+
 	Notched Ribbon	Pita bertakik
 	Double Line	Garis ganda
 	Wave	Gelombang
@@ -6935,3 +7010,4 @@ breakText	Glyphs	Glif
 	Nest Shapes…	Susun Bentuk…
 	Nest Shapes	Susun Bentuk
 	Roll	Gulungan
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

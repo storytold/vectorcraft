@@ -154,6 +154,42 @@ fn files_not_relinked_go_back_to_linked_file_not_found() {
     assert_eq!(d.fields["notes"], json!(["a note"]));
     super::super::cancel(&mut app);
     assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 2);
+    let opened = crate::io::opened_with_notes(1, "a note");
+    assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), vec!["a note".to_string()]))));
+}
+
+/// Relink, and Cancel, in the Find Linked Files dialog that Linked File Not Found's Find in Folder…
+/// opened: the status bar shows the open's notes again and keeps them for its hover. Cancel of the
+/// Links panel's Find in Folder… leaves the message as it is.
+#[test]
+fn the_last_find_in_folder_answer_keeps_the_open_notes() {
+    let root = folder("notes");
+    let mut app = app_for(&root);
+    let bytes = opened_without(&mut app, &root, &["a.png"]);
+    let found = at(&root, "found/a.png");
+    write(&found, &bytes[0]);
+    let missing = rows(app.ui.dialog.as_ref().unwrap(), "missing");
+    let notes = vec!["a note".to_string(), "another note".to_string()];
+    let opened = crate::io::opened_with_notes(2, "a note");
+    let find = |app: &mut VectorcraftApp, back: bool| {
+        let mut d = dialog(app, missing.clone(), vec![], back).unwrap();
+        d.fields.insert("notes".into(), json!(notes));
+        d.fields.insert("picks".into(), json!([found]));
+        app.ui.dialog = Some(d);
+        app.status("Something else");
+    };
+    find(&mut app, false);
+    super::super::cancel(&mut app);
+    assert_eq!(app.ui.status, "Something else");
+    find(&mut app, true);
+    super::super::cancel(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Cancel");
+    find(&mut app, true);
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 0);
+    assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Relink");
 }
 
 /// A file is chosen when the choice is clear: the only same file, else the only file. A row the

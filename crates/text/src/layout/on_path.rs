@@ -380,6 +380,35 @@ pub(crate) fn layout_trying_each_start(db: &crate::fontdb::FontDb, t: &TextObjec
     l
 }
 
+/// For type that starts before its open path `ap` (`lead`), a glyph whose middle is `mid` along the
+/// path and falls before the path's start is not drawn, as SVG 2 lays out text on a path
+/// (https://www.w3.org/TR/SVG2/text.html#TextLayoutPath): glyph `at` keeps its place in the layout
+/// for the caret, with no length at the path's start (moved off the path by `rise`, as Align to Path
+/// moves the glyph), and draws nothing ([`crate::PositionedGlyph::off_path`]). True when it is hidden.
+fn hide_before_open_path(cx: &mut Ctx<'_>, ap: &ArcPath, lead: bool, at: usize, mid: f64, rise: f64) -> bool {
+    if !lead || ap.is_closed() || mid >= 0.0 {
+        return false;
+    }
+    let (p, dir) = ap.at(0.0);
+    let start = p + Vec2::new(-dir.y, dir.x) * rise;
+    if let Some(glyph) = cx.out.glyphs.get_mut(at) {
+        glyph.origin = start;
+        glyph.advance = 0.0;
+        glyph.width = 0.0;
+        glyph.width_start = 0.0;
+        glyph.outline = BezPath::new();
+        glyph.image = None;
+        glyph.colour = None;
+        // A ligature's caret stops stay, at the path's start with the glyph.
+        for c in &mut glyph.carets {
+            c.1 = 0.0;
+        }
+        glyph.off_path = true;
+    }
+    cx.out.inlines.retain(|i| i.glyph != at);
+    true
+}
+
 /// Lay type on a path out along `path` (text space), between its brackets.
 pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &PathData) {
     cx.out.on_path = true;
@@ -393,7 +422,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         let text = cx.text;
         let bidi = para_bidi_with(text.get(pr.clone()).unwrap_or_default(), para.direction, &cx.char_directions(pr));
         rtl.get_or_insert(is_rtl(bidi.as_ref()) && !cx.vertical);
-        let mut glyphs = cx.shape_para(pr.clone(), bidi.as_ref());
+        let mut glyphs = cx.shape_para(pr.clone(), bidi.as_ref(), t.para_at(pi));
         // Bullets and numbers: a list paragraph's text starts after its marker here too, unless
         // the paragraph continues from the frame before in its thread.
         if pi > 0 || !t.first_para_continues {
@@ -453,6 +482,11 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
     }
     let centre = path.bounds().unwrap_or_default().center();
     let (from, to) = t.kind.path_span().unwrap_or((0.0, 1.0));
+    // On an open path the text may start before the path's start: the span runs from there, so
+    // Dynamic Text fills it to the end bracket, and the drawn text runs from the path's start to the
+    // end bracket.
+    let from = t.kind.path_text_start().unwrap_or(from);
+    let lead = t.kind.starts_before_path();
     let s_start = from * ap.len();
     let avail = (to - from) * ap.len();
     let spacing = if t.path_spacing.is_finite() { t.path_spacing } else { 0.0 };
@@ -491,7 +525,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
                 }
             }
         } else {
-            (l.min(s_start), r.min((ap.len() - s_start - avail).max(0.0)))
+            (l.min(s_start.max(0.0)), r.min((ap.len() - s_start - avail).max(0.0)))
         };
         (l, r, hung_r)
     };
@@ -673,10 +707,12 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
                 m.tab = at;
             }
         }
+        let at = cx.out.glyphs.len();
         cx.emit(g, pre, origin, angle, g.adv, 0);
+        let hidden = hide_before_open_path(cx, &ap, lead, at, s + step * 0.5, rise);
         // A glyph of a script whose letters join is bent along a curved path (Rainbow), so its
         // joining strokes meet its neighbours' instead of standing off the curve.
-        if t.path_effect == PathEffect::Rainbow && g.cursive && !cx.vertical && g.inline.is_none() {
+        if !hidden && t.path_effect == PathEffect::Rainbow && g.cursive && !cx.vertical && g.inline.is_none() {
             let bend = GlyphBend { s, step, advance: g.adv, rise };
             if let Some(last) = cx.out.glyphs.last_mut()
                 && last.image.is_none()

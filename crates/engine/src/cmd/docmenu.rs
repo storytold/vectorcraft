@@ -10,6 +10,7 @@ use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, 
 use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
+use super::panelcmds::artboard_at;
 use super::pathops::Beside;
 use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
@@ -201,7 +202,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Guide",
             [],
             None,
-            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default a canvas guide, across the whole canvas), layer?: id (the layer it is on, shown, hidden, locked and deleted with it; default the current layer)} → {index}",
+            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (0-based whole number; an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default, or null, a canvas guide, across the whole canvas), layer?: id (the layer it is on, shown, hidden, locked and deleted with it; default the current layer)} → {index}",
             has_doc,
             guide_add
         ),
@@ -767,15 +768,8 @@ fn clear_guides(s: &mut Session, _: &Value) -> Result<Value> {
 fn guide_add(s: &mut Session, p: &Value) -> Result<Value> {
     let pos = f64_req(p, "pos", "guide.add")?;
     let vertical = switch_or(p, "vertical", false, "guide.add")?;
-    let artboard = match p.get("artboard").filter(|v| !v.is_null()) {
-        Some(v) => {
-            let boards = &s.doc()?.doc.artboards;
-            let ab = v.as_u64().and_then(|i| boards.get(usize::try_from(i).ok()?)).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-            Some(ab.id)
-        }
-        None => None,
-    };
     let st = s.doc()?;
+    let artboard = artboard_at(&st.doc, p, "artboard", "guide.add")?.and_then(|i| st.doc.artboards.get(i)).map(|a| a.id);
     let layer = match id_param(p, "layer") {
         Some(l) if st.doc.node(l).is_some_and(Node::is_layer) => Some(l),
         Some(_) => return Err(bad("guide.add", "layer must name a layer or sublayer")),

@@ -527,10 +527,20 @@ fn blob_brush_sends_keep_selected_and_merge_only_with_selection() {
             "{acts:?}"
         );
     }
-    // The Eraser keeps Size (Fixed by default), Angle and Roundness: a round tip by default.
+    // The Eraser keeps Size, Angle and Roundness, each Fixed by default: a round tip by default.
     assert_eq!(
         GestureTool::new("eraser").options(),
-        json!({"size": 10.0, "sizeMode": "fixed", "sizeVariation": 0.0, "angle": 0.0, "roundness": 100.0})
+        json!({
+            "size": 10.0,
+            "sizeMode": "fixed",
+            "sizeVariation": 0.0,
+            "angle": 0.0,
+            "angleMode": "fixed",
+            "angleVariation": 0.0,
+            "roundness": 100.0,
+            "roundnessMode": "fixed",
+            "roundnessVariation": 0.0
+        })
     );
 }
 
@@ -2450,11 +2460,111 @@ fn the_blob_brush_and_the_eraser_outline_a_long_drag_a_bounded_amount_per_frame(
     }
 }
 
+/// The settled paths of the outline of a long Blob Brush or Eraser drag (each the outline of up
+/// to `BLOCK_PIECES` pieces) come back from one call to the next, at any zoom, as the same shared
+/// paths, which the host draws again without copying or flattening them. A step of the drag
+/// replaces only the paths of the pieces near it.
+#[test]
+fn the_settled_outline_of_a_long_drag_is_the_same_shared_path_each_frame() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let settled = |o: &[Overlay]| -> Vec<std::sync::Arc<BezPath>> {
+        o.iter().filter_map(|o| if let Overlay::SharedPath { path, .. } = o { Some(std::sync::Arc::clone(path)) } else { None }).collect()
+    };
+    let kept = |was: &[std::sync::Arc<BezPath>], now: &[std::sync::Arc<BezPath>]| {
+        now.iter().filter(|n| was.iter().any(|w| std::sync::Arc::ptr_eq(w, n))).count()
+    };
+    for (id, angle, roundness, pressure) in
+        [("blobBrush", 0.0, 100.0, false), ("eraser", -60.0, 30.0, false), ("blobBrush", 0.0, 100.0, true), ("eraser", 45.0, 50.0, true)]
+    {
+        let mut t = GestureTool::new(id);
+        t.set_option("size", &json!(10));
+        t.set_option("angle", &json!(angle));
+        t.set_option("roundness", &json!(roundness));
+        if pressure {
+            t.set_option("sizeMode", &json!("pressure"));
+            t.set_option("sizeVariation", &json!(4));
+        }
+        let n = if pressure { 3000 } else { 6000 };
+        long_area_drag(&mut t, &cx, n, |i| if pressure { 0.3 + 0.6 * ((i % 50) as f32 / 50.0) } else { 1.0 });
+        drain_area(&t, &cx);
+        let first = settled(&t.overlays(&cx));
+        assert!(first.len() > 1, "{id}: {} settled paths", first.len());
+        for zoom in [1.0, 4.0, 1.0] {
+            let again = settled(&t.overlays(&ToolContext { zoom, ..cx }));
+            assert_eq!(again.len(), first.len(), "{id}");
+            assert_eq!(kept(&first, &again), first.len(), "{id}: at zoom {zoom}, every settled path is the one shown before");
+        }
+        // One step more along the drag: with Size set to Pressure each path holds 64 one-segment
+        // pieces, part of one turn of the drag, and the paths far from the step stay the ones shown
+        // before. (Without it a path holds 64 pieces of 32 segments, many turns round the circle.)
+        if !pressure {
+            continue;
+        }
+        let s = n as f64;
+        let r = 150.0 + 100.0 * (s * 0.0071).sin();
+        let (x, y) = (300.0 + r * (s * 0.04).cos(), 300.0 + r * (s * 0.04).sin());
+        t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, x, y) });
+        drain_area(&t, &cx);
+        let after = settled(&t.overlays(&cx));
+        let replaced = after.len() - kept(&first, &after);
+        assert!((1..=8).contains(&replaced), "{id}: {replaced} of {} settled paths replaced", after.len());
+    }
+}
+
+/// The outline a Blob Brush or Eraser drag shows does not change what its release sends: the same
+/// drag sends the same command whether or not its outline was drawn along the way.
+#[test]
+fn drawing_the_outline_of_a_drag_does_not_change_what_its_release_sends() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    for (id, angle, roundness, pressure) in
+        [("blobBrush", 0.0, 100.0, false), ("blobBrush", 30.0, 40.0, true), ("eraser", -60.0, 30.0, false), ("eraser", 45.0, 50.0, true)]
+    {
+        let release = |drawn: bool| {
+            let mut t = GestureTool::new(id);
+            t.set_option("size", &json!(10));
+            t.set_option("angle", &json!(angle));
+            t.set_option("roundness", &json!(roundness));
+            if pressure {
+                t.set_option("sizeMode", &json!("pressure"));
+                t.set_option("sizeVariation", &json!(4));
+            }
+            for i in 0..800 {
+                let s = i as f64;
+                let r = 150.0 + 100.0 * (s * 0.0071).sin();
+                let (x, y) = (300.0 + r * (s * 0.04).cos(), 300.0 + r * (s * 0.04).sin());
+                let kind = if i == 0 { PointerKind::Down } else { PointerKind::Drag };
+                let pressure = if pressure { 0.3 + 0.6 * ((i % 50) as f32 / 50.0) } else { 1.0 };
+                t.pointer(&cx, &PointerEvent { pressure, ..PointerEvent::new(kind, x, y) });
+                if drawn {
+                    t.overlays(&cx);
+                }
+            }
+            if drawn {
+                drain_area(&t, &cx);
+            }
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 300.0))
+        };
+        let (drawn, not_drawn) = (release(true), release(false));
+        assert!(matches!(drawn.first(), Some(Action::Exec(..))), "{id}: {drawn:?}");
+        assert_eq!(drawn, not_drawn, "{id}");
+    }
+}
+
 /// Every flattened point of the paths `o` (the outline shown).
 fn shown_points(o: &[Overlay]) -> Vec<(Point, Point)> {
     let mut lines = vec![];
     for o in o {
-        let Overlay::Path { path, .. } = o else { continue };
+        let path = match o {
+            Overlay::Path { path, .. } => path,
+            Overlay::SharedPath { path, .. } => &**path,
+            _ => continue,
+        };
         let mut pen = Point::ZERO;
         let mut start = Point::ZERO;
         vectorcraft_geom::kurbo::flatten(path.elements().iter().copied(), 0.01, |el| match el {
@@ -2541,7 +2651,11 @@ fn a_long_jump_in_a_blob_brush_drag_is_outlined_a_bounded_amount_at_a_time() {
     let o = t.overlays(&cx);
     let b = o
         .iter()
-        .filter_map(|o| if let Overlay::Path { path, .. } = o { Some(vectorcraft_geom::Shape::bounding_box(path)) } else { None })
+        .filter_map(|o| match o {
+            Overlay::Path { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(path)),
+            Overlay::SharedPath { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(&**path)),
+            _ => None,
+        })
         .reduce(|a, b| a.union(b));
     let Some(b) = b else { panic!("{o:?}") };
     assert!((b.x0 + 0.5).abs() < 0.01 && (b.x1 - 20_000.5).abs() < 0.01, "{b:?}");
@@ -2662,6 +2776,161 @@ fn the_blob_brush_and_the_eraser_show_their_tip_at_the_pointer() {
         hover(&mut t, &cx, Mods::default());
         assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { width, .. } if *width == 3.0)), "{id}");
     }
+}
+
+/// Eraser Tool Options' Angle, Roundness and Size variation menus: the Eraser keeps each mode and
+/// Variation, the release sends them with the pen's readings along the drag, and while it erases
+/// its tip outline at the pointer takes the angle, roundness and size the pen gives there. The Blob
+/// Brush's Size takes Fixed and Pressure only, and it has no Angle or Roundness menus.
+#[test]
+fn the_eraser_tip_follows_its_variation_modes() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    // The bounds of the tip outline, the last two overlays (its halo and its line).
+    let tip = |t: &GestureTool| match &t.overlays(&cx)[..] {
+        [.., Overlay::Path { path: halo, width: 3.0, .. }, Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }] => {
+            assert_eq!(halo, path);
+            vectorcraft_geom::Shape::bounding_box(path)
+        }
+        o => panic!("{o:?}"),
+    };
+    let near = |b: vectorcraft_geom::Rect, want: (f64, f64, f64, f64)| {
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let mut t = GestureTool::new("eraser");
+    assert_eq!(
+        (t.options()["angleMode"].clone(), t.options()["roundnessMode"].clone(), t.options()["sizeMode"].clone()),
+        (json!("fixed"), json!("fixed"), json!("fixed")),
+        "Fixed by default"
+    );
+    for (k, v) in [
+        ("size", json!(20)),
+        ("roundness", json!(25)),
+        ("angleMode", json!("rotation")),
+        ("angleVariation", json!(90)),
+        ("roundnessMode", json!("random")),
+        ("roundnessVariation", json!(10)),
+        ("sizeMode", json!("tilt")),
+        ("sizeVariation", json!(8)),
+    ] {
+        t.set_option(k, &v);
+    }
+    let o = t.options();
+    assert_eq!(
+        [&o["angleMode"], &o["angleVariation"], &o["roundnessMode"], &o["roundnessVariation"], &o["sizeMode"], &o["sizeVariation"]],
+        [&json!("rotation"), &json!(90.0), &json!("random"), &json!(10.0), &json!("tilt"), &json!(8.0)]
+    );
+    // A mode it does not have leaves the mode as it was; a Variation is kept within its range.
+    t.set_option("angleMode", &json!("wheel"));
+    t.set_option("roundnessVariation", &json!(500));
+    assert_eq!((t.options()["angleMode"].clone(), t.options()["roundnessVariation"].clone()), (json!("rotation"), json!(100.0)));
+    t.set_option("roundnessVariation", &json!(10));
+    // Before a press the outline is the set tip: 20 by 5 pt, lying level.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 100.0, 50.0));
+    near(tip(&t), (90.0, 47.5, 110.0, 52.5));
+    // Erasing with the barrel turned half way round and the pen upright, the tip stands upright and
+    // is 28 by 7 pt; Random leaves the roundness as set.
+    let pen = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: Some(180.0) });
+    t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (196.5, 36.0, 203.5, 64.0));
+    let acts = t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(c, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(c, "path.eraseRegion");
+    assert_eq!(
+        [&v["angleMode"], &v["angleVariation"], &v["roundnessMode"], &v["roundnessVariation"], &v["sizeMode"], &v["sizeVariation"]],
+        [&json!("rotation"), &json!(90.0), &json!("random"), &json!(10.0), &json!("tilt"), &json!(8.0)]
+    );
+    assert_eq!(
+        v["points"],
+        json!([[100.0, 50.0, 0.5, 0.0, 0.0, 180.0], [200.0, 50.0, 0.5, 0.0, 0.0, 180.0]]),
+        "the pen's readings go with the points"
+    );
+    // A mouse drag, which reads no tilt or rotation, keeps the set tip.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 50.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 50.0));
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 50.0));
+    // A point without a reading after one with it goes back to the set tip there, as the release
+    // erases it.
+    t.pointer(&cx, &PointerEvent { pen, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    // The Blob Brush's Size is Fixed or Pressure, and its Angle and Roundness have no menus.
+    let mut b = GestureTool::new("blobBrush");
+    b.set_option("sizeMode", &json!("tilt"));
+    b.set_option("angleMode", &json!("rotation"));
+    assert_eq!(b.options()["sizeMode"], json!("fixed"));
+    assert!(b.options().get("angleMode").is_none() && b.options().get("roundnessVariation").is_none());
+    b.set_option("sizeMode", &json!("pressure"));
+    assert_eq!(b.options()["sizeMode"], json!("pressure"));
+}
+
+/// The Eraser's tip outline follows a pen turned in place, which adds no stroke point, and the
+/// release erases with that reading; and its size passes 1296 pt as `path.eraseRegion` sweeps it.
+#[test]
+fn the_eraser_tip_turns_in_place_and_passes_a_nib_size() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let tip = |t: &GestureTool| match &t.overlays(&cx)[..] {
+        [.., Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }] => vectorcraft_geom::Shape::bounding_box(path),
+        o => panic!("{o:?}"),
+    };
+    let near = |b: vectorcraft_geom::Rect, want: (f64, f64, f64, f64)| {
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(20)), ("roundness", json!(25)), ("angleMode", json!("rotation")), ("angleVariation", json!(90))] {
+        t.set_option(k, &v);
+    }
+    let level = Some(PenPose { tilt: None, rotation: Some(0.0) });
+    let turned = Some(PenPose { tilt: None, rotation: Some(180.0) });
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    // The barrel turns half way round with the pointer still: the tip stands upright.
+    t.pointer(&cx, &PointerEvent { pen: turned, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (197.5, 40.0, 202.5, 60.0));
+    let acts = t.pointer(&cx, &PointerEvent { pen: turned, pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["points"], json!([[100.0, 50.0, 0.5, null, null, 0.0], [200.0, 50.0, 0.5, null, null, 180.0]]));
+    // A release at the last point erases with the pose the pen has as it lifts.
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    let acts = t.pointer(&cx, &PointerEvent { pen: turned, pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["points"], json!([[100.0, 50.0, 0.5, null, null, 0.0], [200.0, 50.0, 0.5, null, null, 180.0]]));
+    // A release there that reads no pose keeps the last one.
+    t.pointer(&cx, &PointerEvent { pen: level, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: turned, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    let acts = t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["points"], json!([[100.0, 50.0, 0.5, null, null, 0.0], [200.0, 50.0, 0.5, null, null, 180.0]]));
+    // With Angle on Bearing, a pen that leaned only at the last point and stands up there again
+    // leaves no bearing: the tip lies level, as set.
+    t.set_option("angleMode", &json!("bearing"));
+    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None });
+    let leaning = Some(PenPose { tilt: Some([0.0, 45.0]), rotation: None });
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: leaning, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    assert!(tip(&t).height() > 6.0, "{:?}", tip(&t));
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    // Size 1000 with a Variation of 1000 on Tilt, the pen upright: a tip 2000 pt across.
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(1000)), ("sizeMode", json!("tilt")), ("sizeVariation", json!(1000))] {
+        t.set_option(k, &v);
+    }
+    let upright = Some(PenPose { tilt: Some([0.0, 0.0]), rotation: None });
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: upright, pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (-800.0, -950.0, 1200.0, 1050.0));
 }
 
 #[test]

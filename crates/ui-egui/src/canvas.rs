@@ -60,12 +60,13 @@ use input::handle_input;
 use outline::KEY_OUTLINE;
 #[cfg(test)]
 use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
+pub use overlays::SharedPaths;
 #[cfg(test)]
 use overlays::selected_anchor;
 use overlays::{HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub use panes::Panes;
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
-use raster::{changed_pixels, pixel_region, upload};
+use raster::{changed_pixels, frame_ppp, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned, render_job};
 pub use selection_marks::SelectionMarks;
 #[cfg(test)]
@@ -244,6 +245,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden_chars = std::mem::take(&mut app.canvas.hidden_chars);
     // The selection's kept marks. Likewise, a frame that does not draw them drops them.
     let selection_marks = std::mem::take(&mut app.canvas.selection_marks);
+    // The meshes of the tools' shared paths. Likewise, a frame that does not draw the tools'
+    // overlays drops them.
+    let mut shared_paths = std::mem::take(&mut app.canvas.shared_paths);
     // A release ends the Image Trace panel's eye-button hold, also when the panel is no longer
     // drawn, so a later press elsewhere does not show the source image.
     if app.ui.trace_hold_source.is_some() && !ui.input(|i| i.pointer.any_down()) {
@@ -322,7 +326,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 
     // Artwork raster.
-    let ppp = ui.ctx().pixels_per_point();
+    let device_ppp = ui.ctx().pixels_per_point();
+    let max_side = ui.ctx().input(|i| i.max_texture_side);
+    let ppp = frame_ppp(rect.size(), device_ppp, max_side);
     // Match Renderer::render_as before recording the cache extent or building its view.
     let (w, h) = (
         ((rect.width() * ppp).round().max(1.0) as u32).min(u32::from(u16::MAX)),
@@ -330,7 +336,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     );
     // View › Pixel Preview: the art as it rasterizes, one pixel per point, while a document pixel
     // is bigger than a screen pixel (below that the screen render already shows it).
-    let pixel = (app.ui.view.pixel_preview && xf.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
+    let pixel = (app.ui.view.pixel_preview && xf.zoom * device_ppp as f64 > 1.0).then(|| pixel_region(&xf, max_side)).flatten();
     // File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview: off, images show
     // their pixels as they rasterize, hard-edged.
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
@@ -415,7 +421,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         original_path_overlay(app, &painter, &xf);
 
         let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
-        draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
+        draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
+        app.canvas.shared_paths = shared_paths;
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);
