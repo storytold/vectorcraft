@@ -4,6 +4,8 @@ use egui::{Event, Modifiers, PointerButton, Pos2};
 use vectorcraft_color::Color;
 use vectorcraft_engine::Session;
 
+mod context_menu;
+
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
