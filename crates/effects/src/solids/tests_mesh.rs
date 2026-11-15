@@ -238,7 +238,7 @@ fn meshes_built_apart(fx: &Effect, shapes: &[Profile], total: &mut usize, limit:
         match mesh {
             Ok(mesh) => {
                 let (paint, opacity, _) = paint_of(item, *opacity);
-                keep_mesh(&mut out, total, SolidMesh { mesh, color: mesh_color(&paint, opacity) }, limit)?;
+                keep_mesh(&mut out, total, SolidMesh::plain(mesh, mesh_color(&paint, opacity)), limit)?;
             }
             Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}
             Err(e) => return Err(e),

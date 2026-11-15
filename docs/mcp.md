@@ -8261,13 +8261,24 @@ default), `usdz`, `gltf` or `obj`; the panel shows a Format row for the 3D asset
 `assets.set3DFormat {assets, format}` sets it (an undo step only when the format changes). `assets.list` gives each
 asset's `format3D` (null for a picture asset).
 
-`assets.export3D {assets?, folder?, zip?}` writes each 3D asset (default: all of them) as a mesh file named after it:
+`assets.export3D {assets?, folder?, zip?, textureSize?}` writes each 3D asset (default: all of them) as a mesh file named after it:
 `.usda`, `.usdz`, `.gltf` (glTF 2.0, its buffer embedded) or `.obj` with its `.mtl` (whitespace and `#` in an OBJ's
 name become `_`). Every solid of the object (the
 fill's, each stroke's, a group's members') is its own mesh, with a two-sided material in the color it is painted
 (a gradient's stops averaged, a pattern gray). The mesh holds the solid's faces before they are projected onto the
 page, those turned away from the viewer included, at the object's 3D rotation, y up, about the point the object turns
 about: in points (USD's layer gives `metersPerUnit`), in meters in glTF. Files that would share a name get `-2`, `-3` and so on.
+Graphics mapped onto a plane or onto Extrude & Bevel's front or back cap (`threeD.mapGraphic`) are exported as a PNG
+texture of that face: the face's color with its graphics drawn over it, flat and unlit, on a mesh of the face's own
+triangles with texture coordinates and a material that shows the texture. glTF embeds the PNG as a data URI
+(`TEXCOORD_0`, `baseColorTexture`), USDZ stores it after the layer, USDA reads it through `primvars:st`, a
+`UsdPrimvarReader_float2` and a `UsdUVTexture` connected to the surface's `diffuseColor`, and OBJ gives `vt` coordinates
+and an MTL `map_Kd`; OBJ and USDA write the PNG beside them as `<name>-texture-1.png`, `-texture-2.png` and so on
+(whitespace, `#` and `@` become `_`). Faces with the same color, graphics and bounds share one texture. `textureSize` (128 to
+4096, default 1024, VectorCraft's own values) is the number of pixels along the longer side of each texture; one export
+draws at most 67,108,864 texture pixels in all, and past that it is refused. Graphics on Revolve's side are not
+exported yet. The layouts follow glTF 2.0, UsdPreviewSurface (<https://openusd.org/release/spec_usdpreviewsurface.html>)
+and OBJ/MTL (<https://www.loc.gov/preservation/digital/formats/fdd/fdd000508.shtml>).
 With `zip`, the files go into one ZIP named after the document with `-3D` added (`Untitled-1-3D.zip`), or
 `3D Assets.zip` when the document's title gives no file name.
 An object whose face has a hole that crosses the face's outline or another hole is refused, by `assets.add3D` and
