@@ -2117,6 +2117,35 @@ fn confined_clipboard_svg_refuses_a_linked_image_file_outside_the_read_roots() {
     assert!(svg.contains(&format!("xlink:href=\"{photo}\"")), "{svg}");
 }
 
+/// `clipboard.flavours` and the session's flavors leave out the SVG, and its markup as text, that
+/// `clipboard.exportSvg` withholds from a confined caller; the PNG is still listed. The SVG is listed
+/// while its image's pixels are held, and for a caller with no read roots.
+#[test]
+fn confined_clipboard_flavours_leave_out_a_withheld_svg() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("clip-flavours-away");
+    let home = Folder::new("clip-flavours-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let (text, svg, png) = ("text/plain", "image/svg+xml", "image/png");
+    let listed = |s: &mut Session| confine(roots.as_ref(), || s.execute("clipboard.flavours", &json!({}))).unwrap()["flavours"].clone();
+    assert_eq!(listed(&mut s), json!([text, svg, png]));
+
+    without_pixels(&mut s, a);
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(listed(&mut s), json!([png]));
+    let made = confine(roots.as_ref(), || s.clipboard_flavours());
+    assert!(made.iter().all(|f| f.mime != svg && f.mime != text), "{:?}", made.iter().map(|f| f.mime).collect::<Vec<_>>());
+    assert_eq!(confine(roots.as_ref(), || s.clipboard_flavour_types()), [png]);
+    assert_eq!(s.execute("clipboard.flavours", &json!({})).unwrap()["flavours"], json!([text, svg, png]));
+}
+
 /// A confined caller's SVG with Preserve Editing Capabilities is refused while the stored brush
 /// library holds an entry that does not read as a brush, or is not a list: the native document
 /// carries it as it is, and its links cannot be checked. Without Preserve Editing the SVG is written.
