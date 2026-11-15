@@ -2637,6 +2637,8 @@ mark-style	Japanese	Japanisch
 	Proof Setup	Proof einrichten
 	Properties	Eigenschaften
 	Proportional Metrics	Proportionale Metrik
+	H or V Style	Horizontaler oder vertikaler Stil
+	Roman Italics	Lateinische Kursive
 	Insert Aki Left	Aki links einfügen
 	Insert Aki Right	Aki rechts einfügen
 	Tsume	Tsume
@@ -3387,6 +3389,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Sechstelgeviert-Leerzeichen
 	Size	Größe
 	Size Tile to Art	Kachelgröße an Grafik anpassen
+	Move Tile with Art	Kachel mit Grafik verschieben
 	Size/Leading	Größe/Zeilenabstand
 	Size:	Größe:
 	Ridges per segment:	Zacken pro Segment:
@@ -3963,6 +3966,9 @@ effect	Points	Punkte
 	Working CMYK	CMYK-Arbeitsfarbraum
 	Working CMYK (don't tag)	CMYK-Arbeitsfarbraum (nicht kennzeichnen)
 	Working RGB (don't tag)	RGB-Arbeitsfarbraum (nicht kennzeichnen)
+	Don't Color Manage This Document	Kein Farbmanagement für dieses Dokument
+	Working RGB: {name}	RGB-Arbeitsfarbraum: {name}
+	Working CMYK: {name}	CMYK-Arbeitsfarbraum: {name}
 	Workspace	Arbeitsbereich
 	Workspace {i}	Arbeitsbereich {i}
 	Wrinkle Tool	Zerknittern-Werkzeug
@@ -5681,6 +5687,9 @@ effect	Soft	Weich
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+	Move Light to Back	Licht nach hinten
+	Move Light to Front	Licht nach vorne
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Ziehen Sie ein Licht, um es zu verschieben. Die Pfeiltasten verschieben das fokussierte Licht; mit Umschalt in Schritten von 15°.
 	Shadows	Schatten
 	Distance from Object	Abstand vom Objekt
 	Shadow Bounds	Schattenbegrenzung
@@ -6402,6 +6411,13 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technische Schaltungen
+	Circuit Trace	Leiterbahn
+	Bus Lines	Busleitungen
+	Terminal Nodes	Anschlussknoten
+
 	Notched Ribbon	Gekerbtes Band
 	Double Line	Doppellinie
 	Wave	Welle
@@ -7479,7 +7495,7 @@ breakText	Glyphs	Glyphen
 @msg	toString is not a function	toString ist keine Funktion
 @msg	too many arguments	zu viele Argumente
 @msg	too many quantifiers	zu viele Quantifizierer
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	unbekannte OpenType-Funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; mit vorangestelltem - ausschalten; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom und aalt nehmen die Nummer einer Alternative als `tag=N` mit N von 0 bis {_1}, etwa `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	unbekannte OpenType-Funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; mit vorangestelltem - ausschalten; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom und aalt nehmen die Nummer einer Alternative als `tag=N` mit N von 0 bis {_1}, etwa `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	unbekanntes Dithering `{d}` (diffusion, pattern, noise oder none)
 @msg	unknown panel `{panel}`	unbekanntes Bedienfeld `{panel}`
 @msg	unknown parameter `{key}`	unbekannter Parameter `{key}`

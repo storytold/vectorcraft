@@ -2038,6 +2038,8 @@ lighting	Light	Licht
 	Leading	Regelafstand
 	No Break	Niet afbreken
 	Proportional Metrics	Proportionele metingen
+	H or V Style	Horizontale of verticale stijl
+	Roman Italics	Romeinse cursief
 	Insert Aki Left	Aki links invoegen
 	Insert Aki Right	Aki rechts invoegen
 	Tsume	Tsume
@@ -2450,6 +2452,7 @@ digits	Malayalam	Malayalam
 	Show Swatch Bounds	Staalgrenzen weergeven
 	Show Tile Edge	Tegelrand weergeven
 	Size Tile to Art	Tegel aan artwork aanpassen
+	Move Tile with Art	Tegel met artwork verplaatsen
 	Tile Type:	Tegeltype:
 	Top in Front	Bovenkant voorop
 	V Spacing:	V-spatiëring:
@@ -2492,6 +2495,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Zwartpuntcompensatie gebruiken
 	Working CMYK (don't tag)	Werk-CMYK (niet taggen)
 	Working RGB (don't tag)	Werk-RGB (niet taggen)
+	Don't Color Manage This Document	Geen kleurbeheer voor dit document
+	Working RGB: {name}	Werk-RGB: {name}
+	Working CMYK: {name}	Werk-CMYK: {name}
 	{name} (spot)	{name} (spotkleur)
 	Add to Profiles…	Toevoegen aan profielen…
 	Align Stroke to Center	Lijn in het midden uitlijnen
@@ -7209,7 +7215,7 @@ imageTrace	Outline	Contour
 @msg	unexpected resources	onverwachte resources
 @msg	unknown CMYK profile `{name}`	onbekend CMYK-profiel `{name}`
 @msg	unknown File Info field `{k}`	onbekend veld `{k}` van Bestandsinfo
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	onbekende OpenType-functie `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; zet er - voor om uit te schakelen; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom en aalt accepteren het nummer van een alternatief als `tag=N` met N van 0 tot {_1}, zoals `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	onbekende OpenType-functie `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; zet er - voor om uit te schakelen; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom en aalt accepteren het nummer van een alternatief als `tag=N` met N van 0 tot {_1}, zoals `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	onbekende OpenType-functie `{t}` in featureChanges (de tags die `features` accepteert)
 @msg	unknown PDF preset `{name}` (presets: {_1})	onbekende PDF-voorinstelling `{name}` (voorinstellingen: {_1})
 @msg	unknown Warp style	onbekende warpstijl
@@ -7846,6 +7852,9 @@ mark-style	Japanese	Japans
 	Softness	Zachtheid
 	Ambient Light	Omgevingslicht
 	Light behind the object	Licht achter het object
+	Move Light to Back	Licht naar achteren
+	Move Light to Front	Licht naar voren
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Sleep een licht om het te verplaatsen. De pijltoetsen verplaatsen het licht met de focus; Shift verplaatst het per 15°.
 	Shadows	Schaduwen
 	Distance from Object	Afstand tot object
 	Shadow Bounds	Schaduwgrenzen
@@ -8714,6 +8723,13 @@ axis	Y Axis	Y-as
 	Graphite Pencil	Grafietpotlood
 	Wax Crayon	Waskrijt
 	Charcoal Dust	Houtskoolstof
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technische schakelingen
+	Circuit Trace	Printspoor
+	Bus Lines	Buslijnen
+	Terminal Nodes	Aansluitpunten
+
 	Notched Ribbon	Gekerfd lint
 	Double Line	Dubbele lijn
 	Wave	Golf

@@ -17,6 +17,7 @@ fn marquee_feedback_explains_the_rule_and_stays_on_canvas() {
                 &[Overlay::SelectionMarquee { rect: Rect::new(20.0, y - 60.0, 300.0, y), enclosed, pointer: Point::new(315.0, y) }],
                 &t,
                 overlays::HandleLook::of(&prefs),
+                &mut overlays::SharedPaths::default(),
             );
         }
     };
@@ -59,6 +60,89 @@ fn marquee_feedback_explains_the_rule_and_stays_on_canvas() {
         harness.run_steps(4);
         harness.render().unwrap().save(path).unwrap();
     }
+}
+
+/// A tool's shared path ([`Overlay::SharedPath`], the settled outline of a long Blob Brush or Eraser
+/// drag) is drawn with the mesh kept from the last frame while the path and the view stay the same,
+/// and that mesh is the one the plain path draws. Another path, even one with the same elements, or
+/// a new view builds a new mesh, and a frame keeps only the meshes it draws.
+#[test]
+fn a_shared_tool_path_is_drawn_with_the_mesh_kept_while_it_and_the_view_stay() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply(&ctx, crate::theme::Brightness::MediumDark);
+    let prefs = vectorcraft_engine::Prefs::default();
+    let mut shared = overlays::SharedPaths::default();
+    let frame = |overlays: &[Overlay], zoom: f64, shared: &mut overlays::SharedPaths| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let t = Tokens::get(ui.ctx());
+            let xf = Xf { rect: ui.max_rect(), zoom, center: Point::new(200.0, 150.0), rot: 0.3 };
+            overlays::draw_overlays(ui.painter(), &xf, overlays, &t, overlays::HandleLook::of(&prefs), shared);
+        });
+        out.textures_delta.clear();
+        out.shapes
+    };
+    let meshes = |shapes: &[egui::epaint::ClippedShape]| -> Vec<std::sync::Arc<egui::Mesh>> {
+        shapes.iter().filter_map(|c| if let Shape::Mesh(m) = &c.shape { Some(std::sync::Arc::clone(m)) } else { None }).collect()
+    };
+    let one = |shapes: Vec<egui::epaint::ClippedShape>| {
+        let found = meshes(&shapes);
+        assert_eq!(found.len(), 1, "one mesh");
+        std::sync::Arc::clone(&found[0])
+    };
+    let mut path = BezPath::new();
+    path.move_to((60.0, 80.0));
+    path.curve_to((120.0, 20.0), (220.0, 260.0), (330.0, 120.0));
+    path.close_path();
+    path.move_to((150.0, 150.0));
+    path.line_to((250.0, 160.0));
+    let a = std::sync::Arc::new(path.clone());
+    let b = std::sync::Arc::new(path.clone());
+    let shared_of = |p: &std::sync::Arc<BezPath>| Overlay::SharedPath { path: std::sync::Arc::clone(p), color: [0x80, 0x80, 0x80], width: 1.0 };
+    let first = one(frame(&[shared_of(&a)], 1.0, &mut shared));
+    assert!(!first.vertices.is_empty());
+    let again = one(frame(&[shared_of(&a)], 1.0, &mut shared));
+    assert!(std::sync::Arc::ptr_eq(&first, &again), "the same path at the same view is drawn with the kept mesh");
+    // The plain path draws the same triangles.
+    let plain = frame(&[Overlay::Path { path: path.clone(), color: [0x80, 0x80, 0x80], width: 1.0, dashed: false }], 1.0, &mut shared);
+    assert!(shared.meshes.is_empty(), "a frame that draws no shared path keeps no mesh");
+    let lines: Vec<_> = plain.into_iter().filter(|c| matches!(c.shape, Shape::Path(_))).collect();
+    assert_eq!(lines.len(), 2, "a line for each subpath");
+    let tessellated = ctx.tessellate(lines, ctx.pixels_per_point());
+    let triangles: Vec<_> = tessellated
+        .into_iter()
+        .filter_map(|c| if let egui::epaint::Primitive::Mesh(m) = c.primitive { Some(m) } else { None })
+        .flat_map(|m| m.vertices)
+        .map(|v| (v.pos, v.color))
+        .collect();
+    assert_eq!(triangles, first.vertices.iter().map(|v| (v.pos, v.color)).collect::<Vec<_>>());
+    // A dropped mesh, another allocation of the same path and a new view each build a new mesh.
+    let rebuilt = one(frame(&[shared_of(&a)], 1.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&first, &rebuilt) && *first == *rebuilt);
+    let other = one(frame(&[shared_of(&b)], 1.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&rebuilt, &other) && *rebuilt == *other);
+    let zoomed = one(frame(&[shared_of(&b)], 2.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&other, &zoomed) && *other != *zoomed);
+    // Two paths in one frame: each keeps its own mesh, and only those two are kept.
+    let both = meshes(&frame(&[shared_of(&a), shared_of(&b)], 2.0, &mut shared));
+    let both_again = meshes(&frame(&[shared_of(&a), shared_of(&b)], 2.0, &mut shared));
+    assert_eq!(both.len(), 2);
+    assert!(both.iter().zip(&both_again).all(|(x, y)| std::sync::Arc::ptr_eq(x, y)));
+    assert!(std::sync::Arc::ptr_eq(&both[1], &zoomed), "b at zoom 2 was kept from its frame");
+    assert_eq!(shared.meshes.len(), 2);
+    // A path off the canvas gets no triangles and draws nothing, and the lines of one partly off
+    // it are left out of its mesh.
+    let mut far = path.clone();
+    far.apply_affine(vectorcraft_geom::Affine::translate((5000.0, 5000.0)));
+    let far = std::sync::Arc::new(far);
+    assert!(meshes(&frame(&[shared_of(&far)], 1.0, &mut shared)).is_empty());
+    assert!(shared.meshes.values().all(|m| m.mesh.is_empty()) && shared.meshes.len() == 1);
+    let mut half = path.clone();
+    half.move_to((5000.0, 5000.0));
+    half.line_to((5100.0, 5000.0));
+    let half = one(frame(&[shared_of(&std::sync::Arc::new(half))], 1.0, &mut shared));
+    assert_eq!(*half, *first, "the subpath off the canvas adds no triangles");
 }
 
 #[test]
@@ -1331,6 +1415,64 @@ fn switch_selection_and_drawing_modes_command() {
     }
 }
 
+/// A Switch Selection and Drawing Modes whose tool choice fails returns the error, in both
+/// directions: the tool stays, the drawing tool to return to stays, and no undo step is added.
+#[test]
+fn a_failed_mode_switch_returns_its_error() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 30, "height": 20})).unwrap();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let steps = undo(&app);
+    app.select_tool("rectangle");
+    app.ui.touch_drawing_tool = Some("pen".into());
+    app.fail_next_tool_choice = Some("no switch".into());
+    let r = app.run(crate::touch::TOGGLE_MODE, json!({}));
+    assert!(r.as_ref().is_err_and(|e| e.contains("no switch")), "{r:?}");
+    assert_eq!((app.session.tool_id(), app.ui.touch_drawing_tool.as_deref(), undo(&app)), ("rectangle", Some("pen"), steps), "drawing mode");
+    app.select_tool("selection");
+    app.fail_next_tool_choice = Some("no switch".into());
+    let r = app.run(crate::touch::TOGGLE_MODE, json!({}));
+    assert!(r.as_ref().is_err_and(|e| e.contains("no switch")), "{r:?}");
+    assert_eq!((app.session.tool_id(), app.ui.touch_drawing_tool.as_deref(), undo(&app)), ("selection", Some("pen"), steps), "selection mode");
+    // The next switch works again.
+    assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "pen"}));
+    assert_eq!(undo(&app), steps);
+}
+
+/// The commands that choose a tool (Select Tool, Crop Image, and the Path Precision Tools' Corner
+/// Tool and Shared Edge Merge Tool) return the error when the choice fails, and the tool and the
+/// toolbar group's tool stay as they were.
+#[test]
+fn tool_commands_return_a_failed_choice() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let img = image::RgbaImage::from_pixel(20, 10, image::Rgba([200, 120, 40, 255]));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    app.run("file.place", json!({"name": "texture.png", "dataBase64": data, "link": false, "at": [150, 150]})).unwrap();
+    app.select_tool("selection");
+    let group = vectorcraft_tools::catalog::group_of("ellipse").unwrap();
+    let commands = [
+        ("tool.select", json!({"tool": "ellipse"})),
+        ("ui.cropImage", json!({})),
+        (crate::addons::pathtools::corner::COMMAND, json!({})),
+        (crate::addons::pathtools::shared_edge::COMMAND, json!({})),
+    ];
+    for (command, params) in commands {
+        let slot = app.ui.group_tool[group].clone();
+        app.fail_next_tool_choice = Some("no switch".into());
+        let r = app.run(command, params.clone());
+        assert!(r.as_ref().is_err_and(|e| e.contains("no switch")), "{command}: {r:?}");
+        assert_eq!(app.session.tool_id(), "selection", "{command}");
+        assert_eq!(app.ui.group_tool[group], slot, "{command}");
+        app.run(command, params).unwrap();
+        assert_ne!(app.session.tool_id(), "selection", "{command} works again");
+        app.select_tool("selection");
+    }
+}
+
 /// The Artboard tool's label holds the artboard's name (never translated); the tools' own
 /// labels are interface text.
 #[test]
@@ -2408,6 +2550,45 @@ fn an_edit_renders_only_its_part_of_the_canvas() {
     assert!(canvas(&app, delta).is_some_and(|(pos, _)| pos.is_none()), "a new view renders all of it");
 }
 
+/// A canvas more device pixels across than the largest texture side the display supports renders
+/// its art at fewer pixels a point, within that size, and draws it over the whole canvas. Pixel
+/// Preview's region of document pixels stays within it too.
+#[test]
+fn the_art_renders_within_the_largest_texture_side() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":400,"height":300})).unwrap();
+    app.canvas.worker_started = true; // every frame on this thread, however long it takes
+    let ctx = egui::Context::default();
+    ctx.set_pixels_per_point(2.0);
+    // The first frame sets the pixels a point, the second draws at them.
+    for _ in 0..2 {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            max_texture_side: Some(1024),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+    }
+    let rect = app.canvas_rect.unwrap();
+    assert!(rect.width() * ctx.pixels_per_point() > 1024.0, "the canvas is {rect:?} at {} pixels a point", ctx.pixels_per_point());
+    let size = app.canvas.texture.as_ref().map(|t| t.size()).unwrap();
+    assert_eq!(size[0].max(size[1]), 1024, "the frame is {size:?} pixels");
+    let k = app.canvas.key.clone().unwrap();
+    assert!(
+        (k.w as f32 / k.ppp - rect.width()).abs() < 1.0 && (k.h as f32 / k.ppp - rect.height()).abs() < 1.0,
+        "the frame covers the canvas {rect:?}: {} × {} pixels at {} a point",
+        k.w,
+        k.h,
+        k.ppp
+    );
+
+    let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 500.0)), zoom: 0.5, center: Point::new(0.0, 0.0), rot: 0.0 };
+    let [x0, _, x1, _] = pixel_region(&xf, 4096).expect("a region 2,000 document pixels wide");
+    assert_eq!(x1 - x0, 2000);
+    assert_eq!(pixel_region(&xf, 1024), None, "more than the display's largest texture");
+}
+
 /// A placed document's bitmap made in the background renders the canvas again only where the
 /// objects showing its file are: both copies of the file are in the part rendered again.
 #[test]
@@ -3283,7 +3464,8 @@ fn a_drag_back_to_its_start_renders_again_after_it() {
     assert!(!app.canvas.moved);
 }
 
-/// Cache metadata, worker requests and view transforms use the renderer's bounded raster size.
+/// Cache metadata, worker requests and view transforms use the renderer's bounded raster size,
+/// on a display that reports a larger texture side than that.
 /// Keep the worker controlled so huge virtual viewports never allocate huge test images.
 #[test]
 fn canvas_render_jobs_use_renderer_limited_dimensions() {
@@ -3294,7 +3476,11 @@ fn canvas_render_jobs_use_renderer_limited_dimensions() {
     app.canvas.worker_started = true;
     app.ui.view.rulers = false;
     let frame = |app: &mut VectorcraftApp, size, ppp| {
-        let mut input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(pos2(0.0, 0.0), size)), ..Default::default() };
+        let mut input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(pos2(0.0, 0.0), size)),
+            max_texture_side: Some(1 << 20),
+            ..Default::default()
+        };
         input.viewports.get_mut(&egui::ViewportId::ROOT).unwrap().native_pixels_per_point = Some(ppp);
         let mut output = ctx.run_ui(input, |ui| show(app, ui));
         output.textures_delta.clear();
@@ -4873,6 +5059,67 @@ fn scrolls_and_pans_move_the_view_by_whole_device_pixels() {
         assert!((by.x - want.x).abs() <= 1.0 && (by.y - want.y).abs() <= 1.0, "drag {k}: moved {by:?} device pixels for {want:?}");
     }
     frame(&mut app, vec![primary(p0 + vec2(-5.55, 22.71), false)]);
+}
+
+/// On a canvas whose frame renders at fewer pixels a point than the display's ([`frame_ppp`]),
+/// the wheel and the Hand tool move the view by whole pixels of that frame.
+#[test]
+fn scrolls_and_pans_move_a_lowered_frame_by_whole_pixels() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true; // every frame on this thread
+    let ctx = egui::Context::default();
+    ctx.set_pixels_per_point(2.0);
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 0.016;
+        let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), max_texture_side: Some(1024), events, ..Default::default() };
+        ctx.run_ui(input, |ui| show(app, ui)).textures_delta.clear();
+    };
+    frame(&mut app, vec![]);
+    app.view_mut().unwrap().center = Point::new(200.3, 150.7);
+    frame(&mut app, vec![]);
+    let ppp = app.canvas.key.as_ref().map(|k| k.ppp).unwrap();
+    assert!(ppp < 2.0, "the frame renders at {ppp} pixels a point");
+    // The pan of the canvas's render view, in pixels of its frame.
+    let pan = |app: &VectorcraftApp| {
+        let v = app.view().unwrap();
+        (Affine::scale(v.zoom * f64::from(ppp)) * Affine::translate(-v.center.to_vec2())).translation()
+    };
+    let whole = |by: vectorcraft_geom::Vec2| (by - vectorcraft_geom::Vec2::new(by.x.round(), by.y.round())).hypot() < 1e-6;
+    let wheel = |d: egui::Vec2| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: d,
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let rect = app.canvas_rect.unwrap();
+    frame(&mut app, vec![egui::Event::PointerMoved(rect.center())]);
+    let start = pan(&app);
+    for (k, d) in [vec2(0.37, 11.13), vec2(-12.71, 0.0), vec2(21.9, -3.83)].into_iter().enumerate() {
+        frame(&mut app, vec![wheel(d)]);
+        let by = pan(&app) - start;
+        assert!(whole(by), "scroll {k}: the view moved {by:?} pixels of the frame");
+    }
+    for k in 0..60 {
+        frame(&mut app, vec![]);
+        let by = pan(&app) - start;
+        assert!(whole(by), "frame {k} after the scrolls: the view moved {by:?} pixels of the frame");
+    }
+    assert!((pan(&app) - start).hypot() > 10.0, "the wheel moved the view");
+    app.select_tool("hand");
+    let p0 = rect.center() + vec2(0.3, 0.1);
+    frame(&mut app, vec![egui::Event::PointerMoved(p0)]);
+    let start = pan(&app);
+    frame(&mut app, vec![primary(p0, true)]);
+    for (k, d) in [vec2(13.37, -7.61), vec2(40.19, 3.33)].into_iter().enumerate() {
+        frame(&mut app, vec![egui::Event::PointerMoved(p0 + d)]);
+        let by = pan(&app) - start;
+        assert!(whole(by), "drag {k}: the view moved {by:?} pixels of the frame");
+    }
+    frame(&mut app, vec![primary(p0 + vec2(40.19, 3.33), false)]);
 }
 
 /// The part of a device pixel a scroll leaves is added to the next scroll of the same view, and

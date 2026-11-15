@@ -2713,6 +2713,8 @@ mark-style	Japanese	Giapponese
 	Proof Setup	Impostazione prova
 	Properties	Proprietà
 	Proportional Metrics	Metrica proporzionale
+	H or V Style	Stile orizzontale o verticale
+	Roman Italics	Corsivo romano
 	Insert Aki Left	Inserisci aki a sinistra
 	Insert Aki Right	Inserisci aki a destra
 	Tsume	Tsume
@@ -3463,6 +3465,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Spazio di un sesto
 	Size	Dimensione
 	Size Tile to Art	Adatta tassello alla grafica
+	Move Tile with Art	Sposta tassello con la grafica
 	Size/Leading	Dimensione/interlinea
 	Size:	Dimensione:
 	Ridges per segment:	Creste per segmento:
@@ -4092,6 +4095,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMYK di lavoro
 	Working CMYK (don't tag)	CMYK di lavoro (senza tag)
 	Working RGB (don't tag)	RGB di lavoro (senza tag)
+	Don't Color Manage This Document	Non gestire il colore di questo documento
+	Working RGB: {name}	RGB di lavoro: {name}
+	Working CMYK: {name}	CMYK di lavoro: {name}
 	Workspace	Area di lavoro
 	Workspace {i}	Area di lavoro {i}
 	Wrinkle Tool	Strumento Grinza
@@ -5262,6 +5268,7 @@ axis	Both	Entrambi
 @msg	every numbered name for {name} is taken in the document's folder	tutti i nomi numerati per {name} sono già usati nella cartella del documento
 @msg	No linked files to look for	Nessun file collegato da cercare
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Il collegamento si trova in un simbolo, un design di grafico, un motivo o una maschera di opacità e non ha una posizione nell’area di disegno
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	la grafica di un design di grafico in una serie del grafico viene ridisegnata dal design: modifica il design per cambiarla
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servizi
@@ -5307,6 +5314,7 @@ axis	Both	Entrambi
 @msg	automation filesystem access is not granted: write authority is absent: {path}	l'automazione non ha accesso al file system: manca l'autorizzazione di scrittura: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	percorso di automazione rifiutato: fuori dalla cartella radice di lettura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	percorso di automazione rifiutato: fuori dalle cartelle radice di lettura {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	un file JavaScript collegato è fuori dalle cartelle radice di lettura
 @msg	automation path rejected: outside the write root {root}: {path}	percorso di automazione rifiutato: fuori dalla cartella radice di scrittura {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	percorso di automazione rifiutato: fuori dalle cartelle radice di scrittura {roots}: {path}
 @msg	automation path rejected: path is empty	percorso di automazione rifiutato: il percorso è vuoto
@@ -5716,6 +5724,9 @@ lighting	Light	Luce
 	Softness	Morbidezza
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto
+	Move Light to Back	Sposta luce dietro
+	Move Light to Front	Sposta luce davanti
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Trascina una luce per spostarla. I tasti freccia spostano la luce attiva; Maiusc a passi di 15°.
 	Shadows	Ombre
 	Distance from Object	Distanza dall'oggetto
 	Shadow Bounds	Limiti dell'ombra
@@ -6436,6 +6447,13 @@ axis	Y Axis	Asse Y
 	Graphite Pencil	Matita di grafite
 	Wax Crayon	Pastello a cera
 	Charcoal Dust	Polvere di carboncino
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuiti tecnologici
+	Circuit Trace	Pista del circuito
+	Bus Lines	Linee del bus
+	Terminal Nodes	Nodi terminali
+
 	Notched Ribbon	Nastro dentellato
 	Double Line	Doppia linea
 	Wave	Onda
@@ -7527,7 +7545,7 @@ breakText	Glyphs	Glifi
 @msg	toString is not a function	toString non è una funzione
 @msg	too many arguments	troppi argomenti
 @msg	too many quantifiers	troppi quantificatori
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	funzione OpenType sconosciuta `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; anteponi - per disattivarla; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt accettano il numero di un'alternativa come `tag=N` con N da 0 a {_1}, ad esempio `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	funzione OpenType sconosciuta `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; anteponi - per disattivarla; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt accettano il numero di un'alternativa come `tag=N` con N da 0 a {_1}, ad esempio `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	dithering sconosciuto `{d}` (diffusion, pattern, noise o none)
 @msg	unknown panel `{panel}`	pannello sconosciuto `{panel}`
 @msg	unknown parameter `{key}`	parametro sconosciuto `{key}`

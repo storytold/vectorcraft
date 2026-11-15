@@ -1525,6 +1525,8 @@ lighting	Light	Światło
 	Leading	Interlinia
 	No Break	Bez podziału
 	Proportional Metrics	Metryka proporcjonalna
+	H or V Style	Styl poziomy lub pionowy
+	Roman Italics	Kursywa łacińska
 	Insert Aki Left	Wstaw aki z lewej
 	Insert Aki Right	Wstaw aki z prawej
 	Tsume	Tsume
@@ -2050,6 +2052,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Pokaż granice próbki
 	Show Tile Edge	Pokaż krawędź kafelka
 	Size Tile to Art	Dopasuj kafelek do kompozycji
+	Move Tile with Art	Przesuwaj kafelek z kompozycją
 	Tile Type:	Typ kafelka:
 	Top in Front	Górny na wierzchu
 	V Spacing:	Odstęp pion.:
@@ -2092,6 +2095,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Użyj kompensacji punktu czerni
 	Working CMYK (don't tag)	Roboczy CMYK (bez znacznika)
 	Working RGB (don't tag)	Roboczy RGB (bez znacznika)
+	Don't Color Manage This Document	Nie zarządzaj kolorem tego dokumentu
+	Working RGB: {name}	Roboczy RGB: {name}
+	Working CMYK: {name}	Roboczy CMYK: {name}
 	{name} (spot)	{name} (dodatkowy)
 	Add to Profiles…	Dodaj do profili…
 	Align Stroke to Center	Wyrównaj obrys do środka
@@ -5346,6 +5352,7 @@ imageTrace	Outline	Kontur
 @msg	every numbered name for {name} is taken in the document's folder	wszystkie numerowane nazwy dla {name} są zajęte w folderze dokumentu
 @msg	No linked files to look for	Brak połączonych plików do wyszukania
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Łącze znajduje się w symbolu, wzorze wykresu, wzorku lub masce krycia i nie ma miejsca na obszarze roboczym
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	grafika wzoru wykresu w serii danych wykresu jest rysowana od nowa na podstawie wzoru: aby ją zmienić, edytuj wzór
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` to odwołanie do kroku {r}, które rozwiązują tylko `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musi być tablicą identyfikatorów obiektów, nie {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` musi być tablicą kolorów, nie {v}
@@ -5365,6 +5372,7 @@ imageTrace	Outline	Kontur
 @msg	automation filesystem access is not granted: write authority is absent: {path}	nie przyznano dostępu automatyzacji do systemu plików: brak uprawnień do zapisu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	odrzucono ścieżkę automatyzacji: poza katalogiem głównym odczytu {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	odrzucono ścieżkę automatyzacji: poza katalogami głównymi odczytu {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	połączony plik JavaScript jest poza katalogami głównymi odczytu
 @msg	automation path rejected: outside the write root {root}: {path}	odrzucono ścieżkę automatyzacji: poza katalogiem głównym zapisu {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	odrzucono ścieżkę automatyzacji: poza katalogami głównymi zapisu {roots}: {path}
 @msg	automation path rejected: path is empty	odrzucono ścieżkę automatyzacji: ścieżka jest pusta
@@ -5939,6 +5947,9 @@ mark-style	Japanese	Japońskie
 	Softness	Miękkość
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
+	Move Light to Back	Przenieś światło do tyłu
+	Move Light to Front	Przenieś światło do przodu
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Przeciągnij światło, aby je przesunąć. Klawisze strzałek przesuwają aktywne światło; z Shift o 15°.
 	Shadows	Cienie
 	Distance from Object	Odległość od obiektu
 	Shadow Bounds	Granice cienia
@@ -6665,6 +6676,13 @@ axis	Y Axis	Oś Y
 	Graphite Pencil	Ołówek grafitowy
 	Wax Crayon	Kredka woskowa
 	Charcoal Dust	Pył węglowy
+
+# Original procedural circuit brushes.
+	Tech Circuit	Obwody techniczne
+	Circuit Trace	Ścieżka obwodu
+	Bus Lines	Linie magistrali
+	Terminal Nodes	Węzły końcowe
+
 	Notched Ribbon	Wstęga z nacięciami
 	Double Line	Podwójna linia
 	Wave	Fala
@@ -7768,7 +7786,7 @@ breakText	Glyphs	Glify
 @msg	too many arguments	zbyt wiele argumentów
 @msg	too many quantifiers	zbyt wiele kwantyfikatorów
 @msg	turn on at least one side	włącz co najmniej jedną stronę
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	nieznana funkcja OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefiks - wyłącza funkcję; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom i aalt przyjmują numer wariantu w postaci `tag=N`, gdzie N to liczba od 0 do {_1}, na przykład `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	nieznana funkcja OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefiks - wyłącza funkcję; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom i aalt przyjmują numer wariantu w postaci `tag=N`, gdzie N to liczba od 0 do {_1}, na przykład `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	nieznane rozpraszanie `{d}` (diffusion, pattern, noise lub none)
 @msg	unknown panel `{panel}`	nieznany panel `{panel}`
 @msg	unknown parameter `{key}`	nieznany parametr `{key}`

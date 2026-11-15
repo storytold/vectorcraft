@@ -1029,6 +1029,7 @@
 	Document model	દસ્તાવેજ મોડેલ
 	Document open password	દસ્તાવેજ ખોલવાનો પાસવર્ડ
 	Documents you create appear here.	તમે બનાવેલા દસ્તાવેજો અહીં દેખાશે.
+	Don't Color Manage This Document	આ દસ્તાવેજનું રંગ સંચાલન કરશો નહીં
 	Don't Relink	ફરીથી લિંક કરશો નહીં
 	Don't Save	સાચવશો નહીં
 	Don't Show Center	સેન્ટર બતાવશો નહીં
@@ -1910,6 +1911,9 @@
 	Light Intensity	લાઇટ તીવ્રતા
 	Light Rough	લાઇટ રફ
 	Light behind the object	ઑબ્જેક્ટની પાછળ લાઇટ
+	Move Light to Back	લાઇટ પાછળ ખસેડો
+	Move Light to Front	લાઇટ આગળ ખસેડો
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	લાઇટ ખસેડવા માટે તેને ખેંચો. ઍરો કી ફોકસ થયેલી લાઇટ ખસેડે છે; Shift સાથે 15° ના પગલાં.
 	Lighten	હળવું કરો
 	Lighting	લાઇટિંગ
 	Lights	લાઇટ્સ
@@ -2744,6 +2748,8 @@
 	Proof Setup	પ્રૂફ સેટઅપ
 	Properties	ગુણધર્મો
 	Proportional Metrics	પ્રમાણસર મેટ્રિક્સ
+	H or V Style	આડી અથવા ઊભી શૈલી
+	Roman Italics	રોમન ઇટાલિક
 	Pucker	પકર
 	Pucker & Bloat…	પકર અને બ્લોટ…
 	Pucker Tool	પકર ટૂલ
@@ -3534,6 +3540,7 @@
 	Sixth Space	છઠ્ઠી જગ્યા
 	Size	કદ
 	Size Tile to Art	ટાઇલનું કદ આર્ટ પ્રમાણે કરો
+	Move Tile with Art	ટાઇલને આર્ટ સાથે ખસેડો
 	Size/Leading	કદ/લીડિંગ
 	Size:	કદ:
 	Size: {size}  Tracking: {tracking}	કદ: {size}  ટ્રેકિંગ: {tracking}
@@ -4175,6 +4182,8 @@
 	Word Spacing:	શબ્દ અંતર:
 	Words Longer Than:	આનાથી લાંબા શબ્દો:
 	Working CMYK	કાર્યકારી CMYK
+	Working CMYK: {name}	કાર્યકારી CMYK: {name}
+	Working RGB: {name}	કાર્યકારી RGB: {name}
 	Workspace	વર્કસ્પેસ
 	Wrinkle	કરચલી
 	Wrinkle Tool	કરચલી ટૂલ
@@ -4501,6 +4510,13 @@ antiAlias	Sharp	શાર્પ
 	Graphite Pencil	ગ્રેફાઇટ પેન્સિલ
 	Wax Crayon	વેક્સ ક્રેયોન
 	Charcoal Dust	ચારકોલનો ભૂકો
+
+# Original procedural circuit brushes.
+	Tech Circuit	ટેક સર્કિટ
+	Circuit Trace	સર્કિટ પથ
+	Bus Lines	બસ રેખાઓ
+	Terminal Nodes	ટર્મિનલ નોડ્સ
+
 	Notched Ribbon	ખાંચાવાળી રિબન
 	Double Line	બેવડી રેખા
 	Wave	તરંગ

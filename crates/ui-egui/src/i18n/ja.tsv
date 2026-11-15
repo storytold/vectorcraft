@@ -50,6 +50,8 @@ font-technology	Variable	バリアブル
 	x-Height	x ハイト
 	ICF Box	平均字面
 	Proportional Metrics	プロポーショナルメトリクス
+	H or V Style	横組み・縦組み用かな
+	Roman Italics	欧文イタリック
 	Insert Aki Left	前にアキを挿入
 	Insert Aki Right	後ろにアキを挿入
 	Tsume	文字ツメ
@@ -3279,6 +3281,7 @@ mark-style	Japanese	日本式
 	Single-line Composer	1 行ずつ組む
 	Toggle Line Composer	行の組版方式を切り替え
 	Size Tile to Art	タイルをアートワークのサイズに合わせる
+	Move Tile with Art	タイルをアートワークと一緒に移動
 	Size/Leading	サイズ/行送り
 	Size:	サイズ:
 	Ridges per segment:	セグメントごとの山数:
@@ -4120,6 +4123,9 @@ file-filter	Templates	テンプレート
 	Windows	Windows
 	Working CMYK (don't tag)	作業用 CMYK (タグなし)
 	Working RGB (don't tag)	作業用 RGB (タグなし)
+	Don't Color Manage This Document	このドキュメントにカラーマネジメントを適用しない
+	Working RGB: {name}	作業用 RGB: {name}
+	Working CMYK: {name}	作業用 CMYK: {name}
 	Workspace {i}	ワークスペース {i}
 	Yellow	イエロー
 	[Normal Character Style]	[標準文字スタイル]
@@ -5329,6 +5335,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	No linked files to look for	検索するリンクファイルがありません
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	このリンクはシンボル、グラフデザイン、パターン、または不透明マスクの中にあり、カンバス上に位置がありません
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	グラフの系列にあるグラフデザインのアートはデザインから描き直されます: 変更するにはデザインを編集してください
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
@@ -5348,6 +5355,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	automation filesystem access is not granted: write authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 書き込み権限がありません: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	自動化のパスを拒否しました: 読み込みルート {root} の外です: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	自動化のパスを拒否しました: 読み込みルート {roots} のいずれの中でもありません: {path}
+@msg	a linked JavaScript file is outside the read roots	リンクされた JavaScript ファイルが読み込みルートの外にあります
 @msg	automation path rejected: outside the write root {root}: {path}	自動化のパスを拒否しました: 書き込みルート {root} の外です: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	自動化のパスを拒否しました: 書き込みルート {roots} のいずれの中でもありません: {path}
 @msg	automation path rejected: path is empty	自動化のパスを拒否しました: パスが空です
@@ -5759,6 +5767,9 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+	Move Light to Back	ライトを背面へ
+	Move Light to Front	ライトを前面へ
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	ライトをドラッグして移動します。矢印キーでフォーカスのあるライトを移動し、Shift キーで 15° ずつ移動します。
 	Shadows	シャドウ
 	Distance from Object	オブジェクトからの距離
 	Shadow Bounds	シャドウの範囲
@@ -6734,7 +6745,7 @@ axis	Y Axis	Y 軸
 @msg	toString is not a function	toString は関数ではありません
 @msg	too many arguments	引数が多すぎます
 @msg	too many quantifiers	量指定子が多すぎます
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	`{t}` は不明な OpenType 機能です (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt。オフにするには先頭に - を付けます。swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt には、`salt=2` のように `tag=N` の形式で代替字形の番号を指定できます。N は 0 から {_1} まで)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	`{t}` は不明な OpenType 機能です (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital。オフにするには先頭に - を付けます。swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt には、`salt=2` のように `tag=N` の形式で代替字形の番号を指定できます。N は 0 から {_1} まで)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	`{d}` は不明なディザの指定です (diffusion、pattern、noise、none のいずれか)
 @msg	unknown panel `{panel}`	`{panel}` は不明なパネルです
 @msg	unknown parameter `{key}`	`{key}` は不明なパラメーターです
@@ -8308,6 +8319,13 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	黒鉛鉛筆
 	Wax Crayon	ワックスクレヨン
 	Charcoal Dust	木炭の粉
+
+# Original procedural circuit brushes.
+	Tech Circuit	電子回路
+	Circuit Trace	回路配線
+	Bus Lines	バス配線
+	Terminal Nodes	端子ノード
+
 	Notched Ribbon	ノッチリボン
 	Double Line	二重線
 	Wave	波

@@ -2663,6 +2663,8 @@ font-technology	Variable	Variables
 	Proof Setup	Format d’épreuve
 	Properties	Propriétés
 	Proportional Metrics	Métrique proportionnelle
+	H or V Style	Style horizontal ou vertical
+	Roman Italics	Italique des caractères romains
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
 	Tsume	Tsume
@@ -3410,6 +3412,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Espace d’un sixième
 	Size	Taille
 	Size Tile to Art	Ajuster le carreau à l’illustration
+	Move Tile with Art	Déplacer le carreau avec l’illustration
 	Size/Leading	Taille/interlignage
 	Size:	Taille :
 	Ridges per segment:	Crêtes par segment :
@@ -4036,6 +4039,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMJN de travail
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
 	Working RGB (don't tag)	RVB de travail (sans balise)
+	Don't Color Manage This Document	Ne pas gérer les couleurs de ce document
+	Working RGB: {name}	RVB de travail : {name}
+	Working CMYK: {name}	CMJN de travail : {name}
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
 	Wrinkle Tool	Outil Fronces
@@ -5197,6 +5203,7 @@ axis	Both	Les deux
 @msg	every numbered name for {name} is taken in the document's folder	tous les noms numérotés pour {name} sont déjà pris dans le dossier du document
 @msg	No linked files to look for	Aucun fichier lié à rechercher
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Le lien se trouve dans un symbole, une conception de graphe, un motif ou un masque d’opacité et n’a pas de place sur le canevas
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	l’illustration d’une conception de graphe dans une série de graphe est redessinée à partir de la conception, qu’il faut modifier pour la changer
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services
@@ -5262,6 +5269,7 @@ axis	Both	Les deux
 @msg	automation filesystem access is not granted: write authority is absent: {path}	l’automatisation n’a pas accès au système de fichiers : aucune autorisation d’écriture : {path}
 @msg	automation path rejected: outside the read root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine de lecture {root} : {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines de lecture {roots} : {path}
+@msg	a linked JavaScript file is outside the read roots	un fichier JavaScript lié est hors des dossiers racines de lecture
 @msg	automation path rejected: outside the write root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine d’écriture {root} : {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines d’écriture {roots} : {path}
 @msg	automation path rejected: path is empty	chemin d’automatisation refusé : le chemin est vide
@@ -6095,6 +6103,9 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+	Move Light to Back	Placer la lumière derrière
+	Move Light to Front	Placer la lumière devant
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Faites glisser une lumière pour la déplacer. Les touches fléchées déplacent la lumière active ; Maj par pas de 15°.
 	Shadows	Ombres
 	Distance from Object	Distance de l'objet
 	Shadow Bounds	Limites de l'ombre
@@ -6805,6 +6816,13 @@ axis	Y Axis	Axe Y
 	Graphite Pencil	Crayon graphite
 	Wax Crayon	Craie grasse
 	Charcoal Dust	Poussière de fusain
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuits techniques
+	Circuit Trace	Piste de circuit
+	Bus Lines	Lignes de bus
+	Terminal Nodes	Nœuds terminaux
+
 	Notched Ribbon	Ruban cranté
 	Double Line	Double ligne
 	Wave	Vague
@@ -9117,7 +9135,7 @@ breakText	Glyphs	Glyphes
 @msg	unexpected resources	ressources inattendues
 @msg	unknown CMYK profile `{name}`	profil CMJN inconnu `{name}`
 @msg	unknown File Info field `{k}`	champ Informations sur le fichier inconnu `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	fonctionnalité OpenType inconnue `{t}` dans featureChanges (les balises qu’accepte `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	paramètre prédéfini PDF inconnu `{name}` (paramètres prédéfinis : {_1})
 @msg	unknown Warp style	style de déformation inconnu
