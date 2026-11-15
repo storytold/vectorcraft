@@ -3281,6 +3281,8 @@ digits	Malayalam	Малаялам
 @msg	`{key}` must be an array of these names: {_1}	`{key}` должно быть массивом из этих имён: {_1}
 	Search commands and tools	Поиск команд и инструментов
 	Search commands and tools…	Поиск команд и инструментов…
+	Recent Commands	Недавние команды
+	No recent commands	Нет недавних команд
 	Search Commands…	Поиск команд…
 	Secondary	Вторичный
 	Section Symbol	Символ параграфа

@@ -3249,6 +3249,8 @@ digits	Malayalam	Malayálam
 @msg	`{key}` must be an array of these names: {_1}	`{key}` debe ser una lista de estos nombres: {_1}
 	Search commands and tools	Buscar comandos y herramientas
 	Search commands and tools…	Buscar comandos y herramientas…
+	Recent Commands	Comandos recientes
+	No recent commands	No hay comandos recientes
 	Search Commands…	Buscar comandos…
 	Secondary	Secundario
 	Section Symbol	Símbolo de sección
