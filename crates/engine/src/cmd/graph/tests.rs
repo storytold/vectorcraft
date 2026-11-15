@@ -416,7 +416,184 @@ fn refused_on_design_art(s: &mut Session, cmd: &str, p: serde_json::Value) {
     let steps = s.doc().unwrap().history.undo.len();
     let e = s.execute(cmd, &p).unwrap_err().to_string();
     assert!(e.contains("drawn again from the design"), "{cmd}: {e}");
+    // `appearance.addEffect` is an alias of `effect.apply`, whose errors name `effect.apply`.
+    let named = if cmd == "appearance.addEffect" { "effect.apply" } else { cmd };
+    assert!(e.contains(&format!("`{named}`")), "the error names the command that ran: {e}");
     assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+}
+
+/// The look of object `id`: its appearance, opacity, blend mode, isolation, knockout and overprint.
+fn look(s: &Session, id: NodeId) -> String {
+    format!("{:?}", s.doc().unwrap().doc.node(id).unwrap())
+}
+
+/// An edit of a graph design's art in a series lasts only until the graph is drawn again: the graph draws the art again
+/// from the design.
+#[test]
+fn an_edit_of_a_graph_designs_art_is_lost_when_the_graph_is_drawn_again() {
+    let (mut s, id, _, art, _) = design_art();
+    let path = |s: &Session| {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let mut out = None;
+        series(&n, 0).children().unwrap()[0].walk(&mut |m| {
+            if out.is_none() && matches!(m.kind, NodeKind::Path { .. }) {
+                out = Some(m.clone());
+            }
+        });
+        out.unwrap()
+    };
+    assert_eq!(path(&s).id, art);
+    s.execute("object.setProps", &json!({"id": art.0, "opacity": 50})).unwrap();
+    assert!((path(&s).opacity - 0.5).abs() < 1e-6);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"csv": ",2024,2025\nQ1,3,2\nQ2,5,8\nQ3,-1,6"})).unwrap();
+    assert!((path(&s).opacity - 1.0).abs() < 1e-6);
+}
+
+/// The paint, stroke, gradient and overprint commands leave the art of a graph design in a series as the design draws
+/// it, and edit the other objects they are given.
+#[test]
+fn paint_commands_leave_a_graph_designs_art_out() {
+    let (mut s, _, copy, art, mark) = design_art();
+    let fill = top_row(&s, art, true);
+    let commands = [
+        ("stroke.set", json!({"weight": 5})),
+        ("stroke.weightUp", json!({})),
+        ("stroke.setAdvanced", json!({"arrowScale": [200, 200]})),
+        ("paint.editGradient", json!({"kind": "linear"})),
+        ("paint.setGradientGeom", json!({"start": [0, 0], "end": [50, 50]})),
+        ("object.setOverprint", json!({"fill": true})),
+        ("paint.swap", json!({})),
+        ("paint.default", json!({})),
+        ("paint.invert", json!({"item": fill, "stroke": false})),
+    ];
+    let (copy_was, art_was) = (look(&s, copy), look(&s, art));
+    for (cmd, p) in &commands {
+        for ids in [json!([copy.0]), json!([art.0])] {
+            let steps = s.doc().unwrap().history.undo.len();
+            let mut q = p.clone();
+            q["ids"] = ids;
+            let _ = s.execute(cmd, &q);
+            assert_eq!((look(&s, copy), look(&s, art)), (copy_was.clone(), art_was.clone()), "{cmd}");
+            assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+        }
+        let mark_was = look(&s, mark);
+        let mut q = p.clone();
+        q["ids"] = json!([art.0, mark.0]);
+        s.execute(cmd, &q).unwrap();
+        assert_eq!(look(&s, art), art_was, "{cmd}");
+        assert_ne!(look(&s, mark), mark_was, "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // Selected, without ids.
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 5})).unwrap();
+    assert_eq!(look(&s, art), art_was);
+    // A freeform gradient point is refused on the art alone.
+    refused_on_design_art(&mut s, "paint.freeform.addPoint", json!({"ids": [art.0], "at": [0, 0]}));
+}
+
+/// `attributes.info` reads the overprint of a graph design's art in a series, which the overprint edits leave out.
+#[test]
+fn attributes_info_reads_a_graph_designs_art() {
+    let (mut s, _, _, art, _) = design_art();
+    let info = s.execute("attributes.info", &json!({"ids": [art.0]})).unwrap();
+    assert_eq!(info["ids"], json!([art.0]));
+    assert_eq!(info["overprintFill"], json!(false), "{info}");
+    assert_eq!(info["overprintStroke"], json!(false), "{info}");
+}
+
+/// With only the art of a graph design selected, `stroke.setAdvanced` and the stroke mode of `paint.editGradient` act
+/// as edits of a selection, not of the stroke the next object drawn takes.
+#[test]
+fn stroke_edits_of_selected_design_art_leave_the_new_art_stroke() {
+    let (mut s, _, _, art, _) = design_art();
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    let was = format!("{:?}", s.new_art_stroke());
+    s.execute("stroke.setAdvanced", &json!({"arrowScale": [200, 200], "swapArrows": true})).unwrap();
+    assert_eq!(format!("{:?}", s.new_art_stroke()), was, "stroke.setAdvanced");
+    let mode = s.new_art_stroke().gradient_mode;
+    s.execute("paint.editGradient", &json!({"kind": "linear", "stroke": true, "strokeMode": "along"})).unwrap();
+    assert_eq!(s.new_art_stroke().gradient_mode, mode, "paint.editGradient");
+}
+
+/// `transparency.set` without `item` refuses the art of a graph design in a series, and given it with other objects
+/// sets only theirs.
+#[test]
+fn object_transparency_leaves_a_graph_designs_art_out() {
+    let (mut s, _, copy, art, mark) = design_art();
+    refused_on_design_art(&mut s, "transparency.set", json!({"ids": [art.0], "opacity": 40}));
+    refused_on_design_art(&mut s, "transparency.set", json!({"ids": [copy.0], "isolate": true}));
+    s.execute("transparency.set", &json!({"ids": [art.0, mark.0], "opacity": 40, "blend": "multiply"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!((d.node(art).unwrap().opacity - 1.0).abs() < 1e-6);
+    assert!((d.node(mark).unwrap().opacity - 0.4).abs() < 1e-6);
+}
+
+/// With the art of a graph design selected first, the Appearance panel's active row (a row of that art) stands for no
+/// row of the other objects selected: an effect goes on each of them as a whole.
+#[test]
+fn an_active_row_of_a_graph_designs_art_is_not_applied_to_other_objects() {
+    let (mut s, _, _, art, mark) = design_art();
+    let stroke = top_row(&s, art, false);
+    s.execute("select.set", &json!({"ids": [art.0, mark.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.subjects().first(), Some(&art));
+    s.execute("appearance.setActiveItem", &json!({"index": stroke})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow"})).unwrap();
+    let n = s.doc().unwrap().doc.node(mark).unwrap().clone();
+    assert_eq!(n.appearance.effects.len(), 1);
+    assert!(n.appearance.items.iter().all(|it| it.effects().is_empty()));
+    assert!(s.doc().unwrap().doc.node(art).unwrap().appearance.effects.is_empty());
+}
+
+/// Expand Appearance leaves the art of a graph design in a series as the design draws it.
+#[test]
+fn expand_appearance_leaves_a_graph_designs_art() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].clone();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [r]})).unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("graph.design", &json!({"new": "Shadow"})).unwrap();
+    s.execute("graph.column", &json!({"id": id.0, "seriesIndexes": [0], "design": "Shadow"})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let mut art = vec![];
+    series(&n, 0).children().unwrap()[0].walk(&mut |m| {
+        if !m.appearance.effects.is_empty() {
+            art.push(m.id);
+        }
+    });
+    let art = art[0];
+    let other = s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [other]})).unwrap();
+    let art_was = look(&s, art);
+    // Given alone, by id or selected, it leaves Expand Appearance disabled.
+    for p in [json!({"ids": [art.0]}), json!({})] {
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        assert!(s.execute("effect.expandAppearance", &p).unwrap_err().to_string().contains("not available"));
+        assert_eq!(look(&s, art), art_was);
+    }
+    // Inside a selected graph or series group, the art stays as the design draws it: with nothing else to expand there,
+    // Expand Appearance is disabled, and with a mark's effect, the mark expands alone.
+    let series_group = series(&n, 0).id;
+    for root in [id, series_group] {
+        s.execute("select.set", &json!({"ids": [root.0]})).unwrap();
+        assert!(s.execute("effect.expandAppearance", &json!({})).unwrap_err().to_string().contains("not available"));
+        assert_eq!(look(&s, art), art_was);
+    }
+    let mark = series(&n, 1).children().unwrap()[0].id;
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let expanded = s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(expanded["ids"], json!([mark.0]));
+    assert_eq!(look(&s, art), art_was);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Selected with another object, the art is left as it is and the other object expands.
+    s.execute("select.set", &json!({"ids": [art.0, other]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(look(&s, art), art_was);
+    assert!(s.doc().unwrap().doc.node(NodeId(other)).is_none_or(|m| m.appearance.effects.is_empty()));
 }
 
 /// The commands that give rows, effects or graphic styles refuse the art of a graph design inside a series, given by
@@ -445,6 +622,7 @@ fn appearance_commands_refuse_a_graph_designs_art_in_a_series() {
         refused_on_design_art(&mut s, "effect.remove", json!({"ids": ids, "index": 0}));
         refused_on_design_art(&mut s, "threeD.mapGraphic", json!({"ids": ids, "symbol": "Mark"}));
         refused_on_design_art(&mut s, "graphicStyle.apply", json!({"name": "Blue", "ids": ids}));
+        refused_on_design_art(&mut s, "graphicStyle.breakLink", json!({"ids": ids}));
     }
     for cmd in ["appearance.removeItem", "appearance.duplicateItem"] {
         refused_on_design_art(&mut s, cmd, json!({"ids": [art.0], "index": fill}));
@@ -497,6 +675,451 @@ fn appearance_commands_edit_the_objects_given_with_a_graph_designs_art() {
     s.execute("appearance.addFill", &json!({"ids": [id.0], "target": "contents"})).unwrap();
     assert_eq!((rows(&s, copy), rows(&s, art)), (copy_was, art_was));
     assert_eq!(rows(&s, mark).items.len(), mark_was.items.len() + 1);
+}
+
+/// `design_art()` with the design's art painted with a red and a blue fill and series 1's first mark with a blue fill and
+/// a black stroke, so that row 1 of the art (its blue fill) is row 0 of the mark: the graph, the art and the mark.
+fn aligned_design_art() -> (Session, NodeId, NodeId, NodeId) {
+    let (mut s, id, _, art, mark) = design_art();
+    let (red, blue) = (Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)), Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+    let mark_look = vectorcraft_doc::Appearance::basic(blue, Paint::solid(vectorcraft_color::Color::BLACK), 1.0);
+    let mut art_look = mark_look.clone();
+    art_look.items = vec![art_look.items[0].clone(), art_look.items[0].clone()];
+    *art_look.items[0].paint_mut() = red;
+    s.edit("Looks", |d, _| {
+        d.node_mut(art).unwrap().appearance = vectorcraft_doc::Shared::new(art_look.clone());
+        d.node_mut(mark).unwrap().appearance = vectorcraft_doc::Shared::new(mark_look.clone());
+        Ok(())
+    })
+    .unwrap();
+    (s, id, art, mark)
+}
+
+/// Aligned rows given with the art of a graph design in a series first are rows of that art's stack, which the commands
+/// leave as it is: each other object edits the row equal to the given one, never the row at the same index.
+#[test]
+fn aligned_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objects() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let green = Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+    let (mut s, _, art, mark) = aligned_design_art();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    s.execute("appearance.removeItem", &json!({"ids": [art.0, mark.0], "index": 1, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(rows(&s, mark).items, mark_was.items[1..], "the mark loses its blue fill and keeps its stroke");
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("appearance.setItem", &json!({"ids": [art.0, mark.0], "index": 1, "aligned": true, "color": "#00ff00"})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!((rows(&s, mark).items[0].paint(), &rows(&s, mark).items[1]), (&green, &mark_was.items[1]));
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("appearance.duplicateItem", &json!({"ids": [art.0, mark.0], "index": 1, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    let fills: Vec<bool> = rows(&s, mark).items.iter().map(|it| it.is_fill()).collect();
+    assert_eq!(fills, [true, true, false], "the mark's blue fill is copied, not its stroke");
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("transparency.set", &json!({"ids": [art.0, mark.0], "item": 1, "aligned": true, "opacity": 40})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!((rows(&s, mark).items[0].opacity(), rows(&s, mark).items[1].opacity()), (0.4, 1.0));
+
+    // A row of the art past the end of the mark's stack.
+    let (mut s, _, art, mark) = aligned_design_art();
+    s.edit("Rows", |d, _| {
+        let ap = &mut d.node_mut(art).unwrap().appearance;
+        let red = ap.items[0].clone();
+        ap.items.insert(0, red);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("transparency.set", &json!({"ids": [art.0, mark.0], "item": 2, "aligned": true, "opacity": 40})).unwrap();
+    assert_eq!((rows(&s, mark).items[0].opacity(), rows(&s, mark).items[1].opacity()), (0.4, 1.0));
+
+    // A row of the art (its red fill) that the mark has no equal of: transparency.set is an error, and appearance.setItem
+    // and appearance.removeItem leave the document as it is.
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    let steps = s.doc().unwrap().history.undo.len();
+    let e = s.execute("transparency.set", &json!({"ids": [art.0, mark.0], "item": 0, "aligned": true, "opacity": 40})).unwrap_err();
+    assert!(e.to_string().contains("no appearance item 0"), "{e}");
+    s.execute("appearance.setItem", &json!({"ids": [art.0, mark.0], "index": 0, "aligned": true, "color": "#00ff00"})).unwrap();
+    s.execute("appearance.removeItem", &json!({"ids": [art.0, mark.0], "index": 0, "aligned": true})).unwrap();
+    assert_eq!((rows(&s, art), rows(&s, mark)), (art_was, mark_was));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step is recorded");
+}
+
+/// Aligned effects given with the art of a graph design in a series first go on, and come off, the rows equal to the art's
+/// row in the other objects; an object without an equal row is left as it is.
+#[test]
+fn aligned_effects_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objects() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let effects = |s: &Session, id: NodeId| rows(s, id).items.iter().map(|it| it.effects().len()).collect::<Vec<_>>();
+    let (mut s, id, art, mark) = aligned_design_art();
+    // A second mark of series 1 with a green fill, which no row of the art equals, and the same black stroke.
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let other = series(&n, 1).children().unwrap()[1].id;
+    let mut other_look = rows(&s, mark);
+    *other_look.items[0].paint_mut() = Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+    s.edit("Look", |d, _| {
+        d.node_mut(other).unwrap().appearance = vectorcraft_doc::Shared::new(other_look.clone());
+        Ok(())
+    })
+    .unwrap();
+    let (art_was, other_was) = (rows(&s, art), rows(&s, other));
+    let r = s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [art.0, mark.0, other.0], "item": 1, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(effects(&s, mark), [1, 0], "the shadow goes on the mark's blue fill");
+    assert_eq!(rows(&s, other), other_was, "the other mark has no blue fill");
+    assert_eq!((&r["ids"], &r["item"], &r["index"]), (&json!([mark.0]), &json!(0), &json!(0)), "the reply names the mark's row");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A 3D effect is checked on the rows it goes on only.
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [art.0, mark.0, other.0], "item": 1, "aligned": true})).unwrap();
+    assert_eq!((rows(&s, art), effects(&s, mark), rows(&s, other)), (art_was.clone(), vec![1, 0], other_was.clone()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("appearance.addEffect", &json!({"effect": "stylize.dropShadow", "ids": [art.0, mark.0, other.0], "item": 1, "aligned": true})).unwrap();
+    assert_eq!((rows(&s, art), effects(&s, mark), rows(&s, other)), (art_was, vec![1, 0], other_was));
+
+    // The art's blue fill with the same shadow as the mark's: removing it from the art's row takes it off the mark's.
+    s.edit("Shadow", |d, _| {
+        let row = d.node(mark).unwrap().appearance.items[0].clone();
+        d.node_mut(art).unwrap().appearance.items[1] = row;
+        Ok(())
+    })
+    .unwrap();
+    let art_was = rows(&s, art);
+    // The effect dialog reads the shadow from the art's row and passes the art on first.
+    let (target, fx) = s.appearance_effect_target(&json!({"ids": [art.0, mark.0], "item": 1, "aligned": true})).unwrap();
+    assert_eq!((fx.len(), &target["ids"], &target["item"]), (1, &json!([art.0, mark.0]), &json!(1)));
+    // Edits of the art's row effect change the mark's equal row.
+    s.execute("effect.setParams", &json!({"ids": [art.0, mark.0], "item": 1, "index": 0, "visible": false, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert!(!rows(&s, mark).items[0].effects()[0].visible, "the mark's shadow is hidden");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("effect.duplicate", &json!({"ids": [art.0, mark.0], "item": 1, "index": 0, "aligned": true})).unwrap();
+    assert_eq!((rows(&s, art), effects(&s, mark)), (art_was.clone(), vec![2, 0]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": 1, "index": 0, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(effects(&s, mark), [0, 0]);
+
+    // An object-level effect of the art that the mark does not have: a new object-level effect still goes on the mark.
+    s.edit("Effect", |d, _| {
+        let shadow = d.node(art).unwrap().appearance.items[1].effects()[0].clone();
+        d.node_mut(art).unwrap().appearance.effects.push(shadow);
+        Ok(())
+    })
+    .unwrap();
+    let art_was = rows(&s, art);
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [art.0, mark.0], "item": null, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(rows(&s, mark).effects.len(), 1);
+    // The art's object-level shadow is not the mark's roughen: the effect dialog reads the art's, and removing it leaves
+    // the mark as it is.
+    let (_, fx) = s.appearance_effect_target(&json!({"ids": [art.0, mark.0], "item": null, "aligned": true})).unwrap();
+    assert_eq!(fx.iter().map(|e| e.id.to_string()).collect::<Vec<_>>(), ["stylize.dropShadow"]);
+    let mark_was = rows(&s, mark);
+    assert!(s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "index": 0, "aligned": true})).is_err());
+    assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was));
+    // An object-level effect index past the end of the art's list names no effect of the mark either.
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
+    let mark_was = rows(&s, mark);
+    assert!(s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "index": 1, "aligned": true})).is_err());
+    assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was));
+    // The mark with the art's object-level shadow after its roughen: removing the art's effect 0 takes off the mark's 1.
+    s.edit("Shadow", |d, _| {
+        let shadow = d.node(art).unwrap().appearance.effects[0].clone();
+        d.node_mut(mark).unwrap().appearance.effects[1] = shadow;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "index": 0, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(rows(&s, mark).effects.iter().map(|e| e.id.to_string()).collect::<Vec<_>>(), ["distort.roughen"]);
+}
+
+/// Aligned rows of a graph design's art and of another object whose stack differs are not one place in both stacks, so
+/// they are not reordered, and `to` is refused for their copies; with the same stacks, the copies go to `to`.
+#[test]
+fn aligned_rows_of_a_graph_designs_art_and_a_different_stack_are_not_moved() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let (mut s, _, art, mark) = aligned_design_art();
+    let mark_was = rows(&s, mark);
+    assert!(s.execute("appearance.moveItem", &json!({"ids": [art.0, mark.0], "from": 1, "to": 0, "aligned": true})).is_err());
+    assert_eq!(rows(&s, mark), mark_was);
+    assert!(s.execute("appearance.duplicateItem", &json!({"ids": [art.0, mark.0], "index": 1, "to": 0, "aligned": true})).is_err());
+    assert_eq!(rows(&s, mark), mark_was);
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [mark.0], "item": null})).unwrap();
+    let mark_was = rows(&s, mark);
+    assert!(s.execute("effect.move", &json!({"ids": [art.0, mark.0], "from": 1, "to": 0, "aligned": true})).is_err());
+    assert_eq!(rows(&s, mark), mark_was);
+
+    // The mark with the art's stack.
+    let (mut s, _, art, mark) = aligned_design_art();
+    let art_was = rows(&s, art);
+    s.edit("Look", |d, _| {
+        d.node_mut(mark).unwrap().appearance = vectorcraft_doc::Shared::new(art_was.clone());
+        Ok(())
+    })
+    .unwrap();
+    assert!(s.execute("appearance.duplicateItem", &json!({"ids": [art.0, mark.0], "indices": [1, 9], "to": 0, "aligned": true})).is_err());
+    assert_eq!(rows(&s, mark), art_was, "a row that does not exist is refused");
+    s.execute("appearance.duplicateItem", &json!({"ids": [art.0, mark.0], "index": 1, "to": 0, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    let paints: Vec<_> = rows(&s, mark).items.iter().map(|it| it.paint().clone()).collect();
+    assert_eq!(paints, [art_was.items[1].paint().clone(), art_was.items[0].paint().clone(), art_was.items[1].paint().clone()]);
+}
+
+/// An `item` given with `aligned: true` and the art of a graph design in a series first is a row of the art's stack in the
+/// paint and stroke commands: each other object edits the row equal to it, and a row the art does not have as a fill or
+/// stroke as edited, or that no other object has, is an error that leaves the document and its undo history as they are.
+#[test]
+fn aligned_paint_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objects() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let green = Paint::solid(vectorcraft_color::Color::rgb(0.0, 1.0, 0.0));
+    // The art's row 1 is the blue fill the mark has as row 0, and its row 2 the black stroke the mark has as row 1.
+    let (mut s, _, art, mark) = aligned_design_art();
+    let black = rows(&s, mark).items[1].clone();
+    s.edit("Stroke", |d, _| {
+        d.node_mut(art).unwrap().appearance.items.push(black.clone());
+        Ok(())
+    })
+    .unwrap();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    let fill = |s: &mut Session, cmd: &str, p: serde_json::Value| {
+        s.execute(cmd, &p).unwrap();
+        let now = rows(s, mark);
+        assert_eq!(rows(s, art), art_was, "{cmd}");
+        assert_ne!(now.items[0], mark_was.items[0], "{cmd} edits the mark's blue fill");
+        assert_eq!(now.items[1], mark_was.items[1], "{cmd} leaves the mark's stroke");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(rows(s, mark), mark_was, "{cmd} is one undo step");
+        now
+    };
+    let ids = [art.0, mark.0];
+    let now = fill(&mut s, "paint.setFill", json!({"ids": ids, "item": 1, "aligned": true, "color": "#00ff00"}));
+    assert_eq!(now.items[0].paint(), &green);
+    let now = fill(&mut s, "paint.invert", json!({"ids": ids, "item": 1, "aligned": true}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color(), "the inverted color is the last color, not the art's");
+    let now = fill(&mut s, "paint.lastColor", json!({"ids": ids, "item": 1, "aligned": true, "stroke": false}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color());
+    // Without `aligned`, the art is left out and the item is a row of the mark.
+    let now = fill(&mut s, "paint.invert", json!({"ids": ids, "item": 0}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color(), "the mark's inverted color is the last color, not the art's");
+    s.last_solid = vectorcraft_color::Color::rgb(0.5, 0.5, 0.5);
+    let now = fill(&mut s, "paint.complement", json!({"ids": ids, "item": 0}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color(), "the mark's complement is the last color, not the art's");
+    let now = fill(&mut s, "paint.editGradient", json!({"ids": ids, "item": 1, "aligned": true, "kind": "linear"}));
+    let Paint::Gradient(g) = now.items[0].paint() else { panic!("{:?}", now.items[0].paint()) };
+    assert_eq!(&s.last_gradient, &**g, "the mark's new gradient is the last gradient");
+    let now = fill(&mut s, "paint.lastGradient", json!({"ids": ids, "item": 1, "aligned": true, "stroke": false}));
+    assert!(matches!(now.items[0].paint(), Paint::Gradient(_)));
+
+    let stroke = |s: &mut Session, cmd: &str, p: serde_json::Value| {
+        s.execute(cmd, &p).unwrap();
+        let now = rows(s, mark);
+        assert_eq!(rows(s, art), art_was, "{cmd}");
+        assert_eq!(now.items[0], mark_was.items[0], "{cmd} leaves the mark's fill");
+        assert_ne!(now.items[1], mark_was.items[1], "{cmd} edits the mark's stroke");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(rows(s, mark), mark_was, "{cmd} is one undo step");
+        now
+    };
+    let now = stroke(&mut s, "paint.setStroke", json!({"ids": ids, "item": 2, "aligned": true, "color": "#00ff00"}));
+    assert_eq!(now.items[1].paint(), &green);
+    let now = stroke(&mut s, "stroke.set", json!({"ids": ids, "item": 2, "aligned": true, "weight": 5}));
+    assert_eq!(now.stroke_at(Some(1)).unwrap().width, 5.0);
+    let now = stroke(&mut s, "stroke.setAdvanced", json!({"ids": ids, "item": 2, "aligned": true, "arrowScale": [200, 200]}));
+    assert_eq!(now.stroke_at(Some(1)).unwrap().arrow_scale, (200.0, 200.0));
+    // Without `stroke`, the kind of the art's row is edited.
+    let now = stroke(&mut s, "paint.editGradient", json!({"ids": ids, "item": 2, "aligned": true, "kind": "linear"}));
+    assert!(matches!(now.items[1].paint(), Paint::Gradient(_)));
+    fill(&mut s, "paint.complement", json!({"ids": ids, "item": 1, "aligned": true, "stroke": false}));
+
+    let steps = s.doc().unwrap().history.undo.len();
+    for (cmd, p, said) in [
+        ("stroke.set", json!({"ids": ids, "item": 1, "aligned": true, "weight": 5}), "appearance item 1 is not a stroke"),
+        ("paint.setFill", json!({"ids": ids, "item": 2, "aligned": true, "color": "#00ff00"}), "appearance item 2 is not a fill"),
+        ("paint.setFill", json!({"ids": ids, "item": 0, "aligned": true, "color": "#00ff00"}), "no appearance item 0"),
+        ("paint.setFill", json!({"ids": ids, "item": 9, "aligned": true, "color": "#00ff00"}), "no appearance item 9"),
+        // The art alone: no other object has the row.
+        ("paint.setFill", json!({"ids": [art.0], "item": 9, "aligned": true, "color": "#00ff00"}), "no appearance item 9"),
+        ("paint.setFill", json!({"ids": [art.0], "item": 1, "aligned": true, "color": "#00ff00"}), "no appearance item 1"),
+        ("stroke.set", json!({"ids": [art.0], "item": 1, "aligned": true, "weight": 5}), "appearance item 1 is not a stroke"),
+        ("paint.editGradient", json!({"ids": [art.0], "item": 1, "aligned": true, "kind": "linear"}), "no appearance item 1"),
+        // The weight steps take no row: they step each object's active or top stroke.
+        ("stroke.weightUp", json!({"ids": ids, "item": 2}), "unknown parameter `item`"),
+        ("stroke.weightUp", json!({"ids": ids, "aligned": true}), "unknown parameter `aligned`"),
+        ("stroke.weightDown", json!({"ids": ids, "item": 2}), "unknown parameter `item`"),
+        ("stroke.weightDown", json!({"ids": ids, "aligned": true}), "unknown parameter `aligned`"),
+    ] {
+        let defaults = format!("{:?}", (&s.paint.fill, &s.paint.stroke, &s.last_gradient));
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(said), "{cmd}: {e}");
+        assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was.clone()), "{cmd}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+        assert_eq!(format!("{:?}", (&s.paint.fill, &s.paint.stroke, &s.last_gradient)), defaults, "{cmd}");
+    }
+
+    // An object with no row equal to the art's is left out of what the commands report as edited.
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let rect = *s.doc().unwrap().selection.subjects().first().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [rect.0], "color": "#ff00ff"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff00ff"})).unwrap();
+    let rect_was = rows(&s, rect);
+    let ids = [art.0, mark.0, rect.0];
+    for (cmd, p, key, said) in [
+        ("paint.setFill", json!({"ids": ids, "item": 1, "aligned": true, "color": "#00ff00"}), "objects", json!(1)),
+        ("stroke.set", json!({"ids": ids, "item": 2, "aligned": true, "weight": 5}), "objects", json!(1)),
+        ("paint.editGradient", json!({"ids": ids, "item": 1, "aligned": true, "kind": "linear"}), "ids", json!([mark.0])),
+        ("paint.setGradientGeom", json!({"ids": ids, "item": 1, "aligned": true, "start": [0, 0], "end": [10, 40]}), "ids", json!([mark.0])),
+    ] {
+        if cmd == "paint.setGradientGeom" {
+            s.execute("paint.editGradient", &json!({"ids": [mark.0], "item": 0, "kind": "linear"})).unwrap();
+            let gradient = rows(&s, mark).items[0].clone();
+            s.edit("Gradient", |d, _| {
+                d.node_mut(art).unwrap().appearance.items[1] = gradient.clone();
+                Ok(())
+            })
+            .unwrap();
+        }
+        let r = s.execute(cmd, &p).unwrap();
+        assert_eq!(r[key], said, "{cmd}: {r}");
+        assert_eq!(rows(&s, rect), rect_was, "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+
+    // A gradient spanning the selection spans only the objects that take it: a distant object without an equal row does
+    // not move it.
+    s.execute("shape.rectangle", &json!({"x": 5000, "y": 5000, "width": 10, "height": 10})).unwrap();
+    let far = *s.doc().unwrap().selection.subjects().first().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [far.0], "color": "#ff00ff"})).unwrap();
+    let far_was = rows(&s, far);
+    let gradient = json!({"stops": [{"offset": 0, "color": "#000000"}, {"offset": 1, "color": "#ffffff"}]});
+    let mut placed = Vec::new();
+    for ids in [vec![art.0, mark.0], vec![art.0, mark.0, far.0]] {
+        s.execute("paint.setFill", &json!({"ids": ids, "item": 1, "aligned": true, "gradient": gradient, "span": "selection"})).unwrap();
+        placed.push(rows(&s, mark).items[0].clone());
+        assert_eq!(rows(&s, far), far_was);
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert!(matches!(placed[0].paint(), Paint::Gradient(_)));
+    assert_eq!(placed[1], placed[0]);
+}
+
+/// The gradient and freeform gradient commands read an `item` given with `aligned: true` and the art of a graph design in
+/// a series first as a row of the art's stack, as the paint commands do.
+#[test]
+fn aligned_gradient_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objects() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    for kind in ["linear", "freeform"] {
+        let (mut s, _, art, mark) = aligned_design_art();
+        // The mark's fill and the art's equal row become the same gradient.
+        s.execute("paint.editGradient", &json!({"ids": [mark.0], "item": 0, "kind": kind})).unwrap();
+        let gradient = rows(&s, mark).items[0].clone();
+        // A yellow fill above the mark's gradient is the mark's row 1, as the gradient is the art's row 1.
+        let mut yellow = gradient.clone();
+        *yellow.paint_mut() = Paint::solid(vectorcraft_color::Color::rgb(1.0, 1.0, 0.0));
+        s.edit("Gradient", |d, _| {
+            d.node_mut(art).unwrap().appearance.items[1] = gradient.clone();
+            d.node_mut(mark).unwrap().appearance.items.insert(1, yellow.clone());
+            Ok(())
+        })
+        .unwrap();
+        let ids = [art.0, mark.0];
+        let edits = if kind == "linear" {
+            vec![
+                ("paint.setGradientGeom", json!({"ids": ids, "item": 1, "aligned": true, "start": [0, 0], "end": [10, 40]})),
+                ("paint.editGradient", json!({"ids": ids, "item": 1, "aligned": true, "kind": "radial"})),
+            ]
+        } else {
+            vec![("paint.freeform.addPoint", json!({"ids": ids, "item": 1, "aligned": true, "at": [5, 5]}))]
+        };
+        for (cmd, p) in edits {
+            let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+            s.execute(cmd, &p).unwrap();
+            let now = rows(&s, mark);
+            assert_eq!(rows(&s, art), art_was, "{cmd}");
+            assert_ne!(now.items[0], mark_was.items[0], "{cmd} edits the mark's gradient fill");
+            assert_eq!(now.items[1..], mark_was.items[1..], "{cmd}");
+            s.execute("edit.undo", &json!({})).unwrap();
+            // The edited gradient is the last gradient (paint.setGradientGeom does not set it).
+            if cmd != "paint.setGradientGeom" {
+                let Paint::Gradient(g) = now.items[0].paint() else { panic!("{cmd}") };
+                assert_eq!(&s.last_gradient, &**g, "{cmd}: the mark's edited gradient is the last gradient");
+            }
+        }
+    }
+}
+
+/// The Contents row of a graph design's copy and of a group whose stack differs is not moved with `aligned: true`, as
+/// the rows are not.
+#[test]
+fn aligned_contents_row_of_a_graph_designs_copy_and_a_different_stack_is_not_moved() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let (mut s, _, copy, _, _) = design_art();
+    s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.addFill", &json!({"ids": [g.0]})).unwrap();
+    s.execute("appearance.addFill", &json!({"ids": [g.0]})).unwrap();
+    assert_ne!(rows(&s, copy), rows(&s, g));
+    let (copy_was, g_was) = (rows(&s, copy), rows(&s, g));
+    let steps = s.doc().unwrap().history.undo.len();
+    let e = s.execute("appearance.moveItem", &json!({"ids": [copy.0, g.0], "from": "contents", "to": 1, "aligned": true})).unwrap_err();
+    assert!(e.to_string().contains("appearances differ"), "{e}");
+    assert_eq!((rows(&s, copy), rows(&s, g)), (copy_was, g_was));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// Invert with an `item` remembers the paint of an object it recolored, not that of a graph design's art given first,
+/// which it leaves out.
+#[test]
+fn invert_of_an_item_remembers_the_recolored_paint_not_the_design_arts() {
+    let (mut s, _, art, mark) = aligned_design_art();
+    s.execute("paint.invert", &json!({"ids": [art.0, mark.0], "item": 0, "stroke": false})).unwrap();
+    let Paint::Solid { color, .. } = s.doc().unwrap().doc.node(mark).unwrap().appearance.items[0].paint().clone() else {
+        panic!("the mark's fill stays a solid color");
+    };
+    assert_ne!(color, vectorcraft_color::Color::rgb(0.0, 0.0, 1.0), "the mark's blue fill is inverted");
+    assert_eq!(s.last_solid, color, "the mark's inverted fill is remembered, not the art's red one");
+}
+
+/// With a graph design's art given first and `aligned: true`, `effect.remove` and `effect.duplicate` with `indices` are an
+/// error and change nothing when one of the indices names no effect of the art.
+#[test]
+fn aligned_effect_indices_past_the_end_of_a_graph_designs_art_are_refused() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let (mut s, _, art, mark) = aligned_design_art();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
+    s.edit("Shadow", |d, _| {
+        let shadow = d.node(mark).unwrap().appearance.effects[0].clone();
+        d.node_mut(art).unwrap().appearance.effects.push(shadow);
+        Ok(())
+    })
+    .unwrap();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    let steps = s.doc().unwrap().history.undo.len();
+    for cmd in ["effect.remove", "effect.duplicate"] {
+        let e = s.execute(cmd, &json!({"ids": [art.0, mark.0], "item": null, "indices": [0, 9], "aligned": true})).unwrap_err();
+        assert!(e.to_string().contains("no effects at indices 0, 9"), "{cmd}: {e}");
+        assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was.clone()), "{cmd}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+    }
+    // With index 0 alone, which the art has, the mark's equal effect is removed.
+    s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "indices": [0], "aligned": true})).unwrap();
+    assert!(rows(&s, mark).effects.is_empty());
+}
+
+/// A blur on a series group makes the whole group an image, which draws the design's art with the series' other art:
+/// Expand Appearance does not put the art back beside the image.
+#[test]
+fn expanding_a_blurred_series_group_takes_a_graph_designs_art_into_the_image() {
+    let (mut s, id, copy, _, _) = design_art();
+    let series_group = series(s.doc().unwrap().doc.node(id).unwrap(), 0).id;
+    s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [series_group.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({"ids": [series_group.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(matches!(d.node(series_group).unwrap().kind, NodeKind::Image(_)));
+    assert!(d.node(copy).is_none());
 }
 
 /// The paint commands leave the art of a graph design in a series out, a copy of the design given by id with an item
@@ -4047,6 +4670,58 @@ fn group_selected_series_go_on_the_chosen_axis() {
     assert!(spec(&s, id).right_series.is_empty());
 }
 
+/// The Graph Type dialog's subject: the selected graph, the series picked in it, and the tick values each value axis
+/// is drawn with while they are calculated, which are the ones the graph's value labels show.
+#[test]
+fn graph_type_subject_gives_the_picked_series_and_the_calculated_tick_values() {
+    let mut s = Session::new();
+    assert!(super::graph_type_subject(&s).is_err(), "no document");
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    assert!(super::graph_type_subject(&s).is_err(), "no graph selected");
+    // Q1 3, 2; Q2 5, 4; Q3 -1, 6.
+    let id = graph(&mut s, "column");
+    let subject = super::graph_type_subject(&s).unwrap();
+    assert_eq!((subject.id, subject.series), (id, vec![]));
+    assert_eq!(subject.calculated, [(-2.0, 6.0, 4); 2]);
+    let shown = |s: &Session| value_labels(s, id).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+    assert_eq!(shown(&s), ["-2", "0", "2", "4", "6"]);
+    // Overriding with them draws the same axis, and the calculated values stay the data's.
+    s.execute("graph.setType", &json!({"axisMin": -2, "axisMax": 6, "ticks": 4})).unwrap();
+    assert_eq!(shown(&s), ["-2", "0", "2", "4", "6"]);
+    s.execute("graph.setType", &json!({"axisMin": 0, "axisMax": 100, "ticks": 0})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated[0], (-2.0, 6.0, 4));
+    // A single bound is calculated with, as the axis is drawn.
+    s.execute("graph.setType", &json!({"axisMin": -10, "axisMax": null})).unwrap();
+    let (lo, hi, _) = super::graph_type_subject(&s).unwrap().calculated[0];
+    let labels = shown(&s);
+    assert!(lo <= -10.0, "{lo}");
+    assert_eq!((labels.first().and_then(|t| t.parse::<f64>().ok()), labels.last().and_then(|t| t.parse::<f64>().ok())), (Some(lo), Some(hi)));
+    s.execute("graph.setType", &json!({"axisMin": null, "axisMax": null})).unwrap();
+    // Stacked columns stack their positive and their negative values: Q2 reaches 9, Q3 from -1 to 6.
+    s.execute("graph.setType", &json!({"type": "stackedColumn"})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated[0], (-2.0, 10.0, 6));
+    assert_eq!(shown(&s), ["-2", "0", "2", "4", "6", "8", "10"]);
+    // A radar graph's axis starts at 0, and a pie graph has none.
+    s.execute("graph.setType", &json!({"type": "radar"})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 6.0, 3); 2]);
+    s.execute("graph.setType", &json!({"type": "pie"})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 1.0, 5); 2]);
+    // Series picked with Group Selection.
+    s.execute("graph.setType", &json!({"type": "column"})).unwrap();
+    let picked = series(s.doc().unwrap().doc.node(id).unwrap(), 1).id;
+    s.execute("select.set", &json!({"ids": [picked.0]})).unwrap();
+    let subject = super::graph_type_subject(&s).unwrap();
+    assert_eq!((subject.id, subject.series), (id, vec![1]));
+    // Separate Scales: the right axis has the tick values of its own series.
+    let mut s = Session::new();
+    let id = two_scale_graph(&mut s);
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 1000.0, 5); 2]);
+    s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+    s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 10.0, 5), (0.0, 1000.0, 5)]);
+    assert_eq!(spec(&s, id).right_series, [1]);
+}
+
 #[test]
 fn bar_graphs_keep_their_value_axis_along_the_bottom() {
     let mut s = Session::new();
@@ -7143,6 +7818,43 @@ fn a_centered_label_with_an_empty_middle_line_and_kept_leading_stays_centered() 
 }
 
 #[test]
+fn a_centered_label_with_a_line_break_in_its_text_is_set_as_with_a_bar() {
+    // A quoted CSV cell keeps its line breaks, so they reach the label as well as the `|` it is written with.
+    for (bar, quoted, text) in [("Q|1", "\"Q\n1\"", "Q\n1"), ("Q|||1", "\"Q\n||1\"", "Q\n\n\n1")] {
+        let label_middle = |s: &Session, id: NodeId| {
+            let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+            let label =
+                group(&n, "Axes").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == text)).unwrap();
+            let b = label.geometric_bounds().unwrap();
+            (b.y0 + b.y1) / 2.0
+        };
+        let drawn = |cat: &str, leading: bool| {
+            let mut s = Session::new();
+            s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+            let csv = format!(",2024,2025\n{cat},3,2\nQ2,5,4\nQ3,-1,6");
+            let id = NodeId(
+                s.execute("graph.create", &json!({"type": "bar", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+            if leading {
+                let l = text_id(&s, id, "Axes", text);
+                s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+                s.execute("text.setFormat", &json!({"autoLeading": 400})).unwrap();
+                s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+                s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+            }
+            label_middle(&s, id)
+        };
+        for leading in [false, true] {
+            let (by_bar, by_break) = (drawn(bar, leading), drawn(quoted, leading));
+            assert!((by_bar - by_break).abs() < 0.01, "{text:?} sits where {bar:?} does (kept leading: {leading}): {by_bar} {by_break}");
+        }
+        assert!((drawn(quoted, true) - drawn(quoted, false)).abs() < 0.01, "{text:?} keeps its middle with kept leading");
+    }
+}
+
+#[test]
 fn a_legend_across_top_measures_its_labels_with_system_layout() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
@@ -7335,8 +8047,8 @@ fn graph_commands_refuse_params_of_the_wrong_type() {
 }
 
 /// A `.ai` in PostScript form whose graph's records read whole (version 7 specification, appendix A)
-/// opens as a graph whose data can be edited: Graph Data redraws it on its plot. Saving it as `.ai`
-/// says its data and settings aren't written, in either form.
+/// opens as a graph whose data can be edited: Graph Data redraws it on its plot. Saving it as `.ai`,
+/// in either form, writes its records, and the file opens again with the graph's new data.
 #[test]
 fn a_graph_opened_from_ai_keeps_its_data_for_editing() {
     let graph = "%_Gs\n%_100 200 300 100 Gb\n%_5 0 0 14 0 1 0 0 6 44 Gy\n%_10 2 0 0 90 80 0 Gd\n\
@@ -7393,8 +8105,58 @@ fn a_graph_opened_from_ai_keeps_its_data_for_editing() {
         }
         let r = s.execute("file.saveAs", &p).unwrap();
         let notes = r["warnings"].as_array().cloned().unwrap_or_default();
-        assert!(notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
+        assert!(!notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
+        let mut again = Session::new();
+        again.execute("document.open", &json!({"path": dir.join(name)})).unwrap();
+        let mut graphs = vec![];
+        again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().cloned()));
+        assert_eq!(graphs.len(), 1, "{name}");
+        let g = &graphs[0];
+        assert_eq!(
+            (g.series.as_slice(), g.categories.as_slice(), g.rows.as_slice()),
+            (&after.series[..], &after.categories[..], &after.rows[..]),
+            "{name}"
+        );
+        assert_eq!(g.kind, after.kind, "{name}");
     }
+}
+
+/// A graph the graph tools draw, of each type, saved as `.ai` in either form, opens again as the same
+/// graph exactly when the save gives no warning about graphs; a column graph does.
+#[test]
+fn a_drawn_graph_saved_as_ai_opens_as_a_graph_unless_the_save_warns() {
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-save");
+    let mut live = vec![];
+    for ty in ["column", "stackedColumn", "bar", "stackedBar", "line", "area", "scatter", "pie", "radar"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,1,6";
+        let id = s.execute("graph.create", &json!({"type": ty, "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let written = spec(&s, NodeId(id));
+        for (name, version) in [("v7.ai", Some("7")), ("pdf.ai", None)] {
+            let path = dir.join(format!("{ty}-{name}"));
+            let mut p = json!({"path": path, "format": "ai"});
+            if let Some(v) = version {
+                p["aiVersion"] = json!(v);
+            }
+            let r = s.execute("file.saveAs", &p).unwrap();
+            let notes = r["warnings"].as_array().cloned().unwrap_or_default();
+            let warned = notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art")));
+            let mut again = Session::new();
+            again.execute("document.open", &json!({"path": path})).unwrap();
+            let mut graphs = vec![];
+            again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().cloned()));
+            assert_eq!(graphs.len(), usize::from(!warned), "{ty} {name}: {r}");
+            if let Some(g) = graphs.first() {
+                assert_eq!((g.kind, g.cells()), (written.kind, written.cells()), "{ty} {name}");
+                assert_eq!((g.series.as_slice(), g.categories.as_slice()), (&written.series[..], &written.categories[..]), "{ty} {name}");
+                live.push(format!("{ty} {name}"));
+            }
+        }
+    }
+    assert!(live.contains(&"column v7.ai".to_string()) && live.contains(&"column pdf.ai".to_string()), "{live:?}");
 }
 
 /// A graph opened from a `.ai` keeps the bounds of its art without type, so moving one of its labels on its own

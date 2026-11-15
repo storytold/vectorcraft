@@ -22,7 +22,7 @@ use crate::shape::{
     Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, mark_word_ends, no_line_end, no_line_start, punct, run_face, shape_range, shape_runs,
     soft_line_start, style_metrics,
 };
-use crate::{Composer, FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
+use crate::{FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
 
 mod bidi;
 mod breaking;
@@ -229,11 +229,14 @@ impl Ctx<'_> {
         out
     }
 
-    /// Shape paragraph `r` (its bidi resolution `bidi`).
-    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>) -> Vec<SGlyph> {
+    /// Shape paragraph `r` (its bidi resolution `bidi`, its attributes `para`). A Standard composer
+    /// sets a complex script glyph by glyph ([`OtFeatures::unshaped_complex`]).
+    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>, para: &ParaStyle) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
         let levels = bidi.map_or(&[][..], |b| &b.levels);
-        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &self.opts.features, levels, &mut v);
+        let standard = !self.opts.composer.unwrap_or(para.composer).shapes_complex_scripts();
+        let feats = OtFeatures { unshaped_complex: standard, ..self.opts.features };
+        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &feats, levels, &mut v);
         self.finish_shaping(&mut v, |g| self.style_at(g.byte));
         v
     }
@@ -336,6 +339,8 @@ impl Ctx<'_> {
         tab.kern_shift = 0.0;
         tab.aki_shift = 0.0;
         tab.aki = 0.0;
+        tab.tsume_shift = 0.0;
+        tab.tsume = 0.0;
         tab.tcy = None;
         tab.wari = None;
         tab.vpal = None;
@@ -371,7 +376,8 @@ impl Ctx<'_> {
         // Only the glyph right after an upright glyph can continue its cluster.
         let cluster = self.upright_cluster.take();
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
-        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}';
+        // Joiners and direction marks are format controls: no ink either, whatever glyph the font maps.
+        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}' || crate::justify::is_format_control(g.ch);
         // A colour glyph draws its art (COLR layers, an SVG document) or its image (a bitmap, or
         // COLR paints documents have no form for), not its outline; COLR, then SVG, then bitmaps.
         // Art in the text's colours takes the run's fill (black when it isn't a colour) and
@@ -624,6 +630,7 @@ impl Ctx<'_> {
             width_start,
             warichu: g.wari.map(|w| w.start),
             warichu_line: g.wari.map_or(0.0, |w| w.across),
+            off_path: false,
         });
     }
 
@@ -653,6 +660,8 @@ impl Ctx<'_> {
         k.kern_shift = 0.0;
         k.aki_shift = 0.0;
         k.aki = 0.0;
+        k.tsume_shift = 0.0;
+        k.tsume = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
@@ -713,6 +722,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -779,6 +790,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,

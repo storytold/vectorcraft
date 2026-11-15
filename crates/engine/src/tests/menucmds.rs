@@ -2789,6 +2789,73 @@ fn select_same_fill_keeps_live_paint_faces_to_their_group() {
     }
 }
 
+/// Select Similar Objects (`select.similar`) runs the Select > Same command of the attribute it is
+/// given and keeps that attribute for its next run without one; `all`, the attribute until one is
+/// given, matches the fill and stroke colours, the stroke weight, the opacity and the blending mode
+/// together. An unknown attribute is an error that keeps the selection and the kept attribute.
+#[test]
+fn select_similar_selects_by_the_kept_attribute() {
+    let mut s = session();
+    let [a, b, faded, heavy, multiplied, blue] = [0.0, 20.0, 40.0, 60.0, 80.0, 100.0].map(|x| rect(&mut s, x, 0.0, 10.0, 10.0));
+    for id in [a, b, faded, heavy, multiplied] {
+        fill(&mut s, id, "#ff0000");
+    }
+    fill(&mut s, blue, "#0000ff");
+    s.execute("transparency.set", &json!({"ids": [faded.0], "opacity": 50, "item": null})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [multiplied.0], "blend": "multiply", "item": null})).unwrap();
+    sel(&mut s, &[heavy]);
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let similar = |s: &mut Session, p: Value| {
+        sel(s, &[a]);
+        let r = s.execute("select.similar", &p).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        assert_eq!(r["count"], v.len(), "{p}");
+        (r["by"].as_str().unwrap().to_string(), v)
+    };
+    assert_eq!(s.select_similar, "all");
+    assert_eq!(similar(&mut s, json!({})), ("all".into(), vec![a, b]));
+    assert_eq!(similar(&mut s, json!({"by": "fillColor"})), ("fillColor".into(), vec![a, b, faded, heavy, multiplied]));
+    assert_eq!(similar(&mut s, json!({})), ("fillColor".into(), vec![a, b, faded, heavy, multiplied]));
+    // The journal, and an action recorded around it, keep the attribute used.
+    let last = s.journal.last().unwrap();
+    assert_eq!((last.0.as_str(), &last.1), ("select.similar", &json!({"by": "fillColor"})));
+    assert_eq!(similar(&mut s, json!({"by": "opacity"})), ("opacity".into(), vec![a, b, heavy, multiplied, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "blendingMode"})), ("blendingMode".into(), vec![a, b, faded, heavy, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "strokeWeight"})), ("strokeWeight".into(), vec![a, b, faded, multiplied, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "all"})).1, vec![a, b]);
+    // Select > Reselect repeats `all`, whichever attribute is kept by then.
+    s.select_similar = "fillColor";
+    s.execute("select.reselect", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b]);
+    // Every attribute names a command that runs. A path with no graphic style has none to match,
+    // which is an error that keeps the attribute as it was.
+    for (by, _) in crate::cmd::SIMILAR {
+        sel(&mut s, &[a]);
+        let was = s.select_similar;
+        let r = s.execute("select.similar", &json!({ "by": by }));
+        if by == "graphicStyle" {
+            assert!(r.is_err(), "{r:?}");
+            assert_eq!(s.select_similar, was);
+        } else {
+            r.unwrap_or_else(|e| panic!("{by}: {e:?}"));
+            assert_eq!(s.select_similar, by);
+        }
+    }
+    // An unknown or malformed attribute changes nothing.
+    s.select_similar = "opacity";
+    for bad in [json!("color"), json!(""), json!("FillColor"), json!(3), json!(true), json!(["all"])] {
+        sel(&mut s, &[a]);
+        let r = s.execute("select.similar", &json!({ "by": bad }));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })), "{bad}: {r:?}");
+        assert_eq!((selected(&s), s.select_similar), (vec![a], "opacity"), "{bad}");
+    }
+    // With nothing selected it does not run, and keeps the attribute.
+    sel(&mut s, &[]);
+    assert!(s.execute("select.similar", &json!({"by": "fillColor"})).is_err());
+    assert_eq!(s.select_similar, "opacity");
+}
+
 /// Select by Color needs no object to start from: it matches fills and strokes as
 /// `document.inspect` reports them, `#rrggbb`.
 #[test]
@@ -3230,6 +3297,32 @@ fn select_all_on_artboard_refuses_an_artboard_past_u32() {
     s.execute("select.none", &json!({})).unwrap();
     assert!(s.execute("select.allOnArtboard", &json!({"artboard": 1u64 << 32})).is_err());
     assert!(selected(&s).is_empty());
+}
+
+/// All on Active Artboard refuses an `artboard` that is not a whole number, naming the parameter,
+/// and leaves the selection as it was; a whole number past the last artboard is `no such
+/// artboard`. Left out or null, it takes the first artboard.
+#[test]
+fn select_all_on_artboard_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 2, "artboardLayout": {"layout": "row", "spacing": 0}})).unwrap();
+    let (first, second) = (rect(&mut s, 10.0, 10.0, 20.0, 20.0), rect(&mut s, 110.0, 10.0, 20.0, 20.0));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        s.execute("select.none", &json!({})).unwrap();
+        let err = s.execute("select.allOnArtboard", &json!({"artboard": bad})).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `select.allOnArtboard`: `artboard` must be a whole number", "{bad}");
+        assert!(selected(&s).is_empty(), "{bad}");
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.allOnArtboard", &json!({"artboard": 9})).unwrap_err().to_string(), "no such artboard");
+    assert!(selected(&s).is_empty());
+    for p in [json!({}), json!({"artboard": null}), json!({"artboard": 0})] {
+        s.execute("select.none", &json!({})).unwrap();
+        s.execute("select.allOnArtboard", &p).unwrap();
+        assert_eq!(selected(&s), vec![first], "{p}");
+    }
+    s.execute("select.allOnArtboard", &json!({"artboard": 1})).unwrap();
+    assert_eq!(selected(&s), vec![second]);
 }
 
 #[test]
@@ -4536,6 +4629,27 @@ fn artboard_guides_go_with_their_artboard() {
     // Cut, too.
     s.execute("artboard.cut", &json!({"index": 0})).unwrap();
     assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
+}
+
+/// `guide.add` refuses an `artboard` that is not a whole number, naming the parameter, and adds no
+/// guide; a whole number past the last artboard is `no such artboard`. Null makes a canvas guide,
+/// and a whole number an artboard guide.
+#[test]
+fn guide_add_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 900, "y": 0, "width": 400, "height": 300})).unwrap();
+    let add = |s: &mut Session, artboard: Value| s.execute("guide.add", &json!({"vertical": true, "pos": 10, "artboard": artboard}));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        let err = add(&mut s, bad.clone()).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `guide.add`: `artboard` must be a whole number", "{bad}");
+    }
+    assert_eq!(add(&mut s, json!(9)).unwrap_err().to_string(), "no such artboard");
+    assert!(s.doc().unwrap().doc.ruler_guides().is_empty());
+    add(&mut s, Value::Null).unwrap();
+    add(&mut s, json!(1)).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let boards: Vec<_> = d.ruler_guides().iter().map(|g| g.artboard).collect();
+    assert_eq!(boards, [None, Some(d.artboards[1].id)]);
 }
 
 /// #451: a guide dragged out of a ruler snaps (to the art's corners, side midpoints and anchors,

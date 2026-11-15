@@ -1,8 +1,14 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use egui::Mesh;
+use egui::epaint::{TessellationOptions, Tessellator};
+
 use super::artboards::names_an_artboard;
 use super::input::marquee_through;
 use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors};
 use super::selection_marks::{MarkOptions, SelectionMarks};
-use super::{Color32, CornerRadius, NodeKind, Overlay, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
+use super::{BezPath, Color32, CornerRadius, NodeKind, Overlay, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
 pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };
@@ -79,6 +85,11 @@ impl<'a> HandleLook<'a> {
         }
     }
 }
+
+/// How many points bigger than the other selected anchors the key anchor's square is drawn.
+const KEY_ANCHOR_GROW: f32 = 2.0;
+/// The gap between the key anchor's square and the frame drawn around it.
+const KEY_ANCHOR_GAP: f32 = 2.0;
 
 pub(super) fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
     let r = egui::Rect::from_center_size(c, vec2(size, size));
@@ -182,6 +193,14 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
         }
         marks.paint(st, p, xf, &options, key_outline, if big { &[] } else { &st.selection.objects });
+        // The key anchor (Align to Key Anchor): a filled square bigger than the other anchors, in
+        // a frame as thick as a key object's outline.
+        if let Some(((k, _), q)) = st.selection.key_anchor.zip(st.selection.key_anchor_point(&st.doc)) {
+            let (c, color, size) = (xf.to_screen(q), c32(st.doc.layer_color(k)), anchor(direct) + KEY_ANCHOR_GROW);
+            anchor_square(p, c, color, true, size);
+            let frame = egui::Rect::from_center_size(c, vec2(size + 2.0 * KEY_ANCHOR_GAP, size + 2.0 * KEY_ANCHOR_GAP));
+            p.rect_stroke(frame, 0.0, Stroke::new(KEY_OUTLINE, color), StrokeKind::Outside);
+        }
     }
     // The spine of each selected blend (or of the blend a selected key object belongs to).
     let mut spines = vec![];
@@ -351,7 +370,75 @@ pub(super) fn ime_geometry(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &X
     app.ime_caret_rect = Some((r, r));
 }
 
-pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, look: HandleLook) {
+/// The meshes the tools' shared paths ([`Overlay::SharedPath`]) were drawn with in the last frame
+/// ([`crate::CanvasCache::shared_paths`]). Each is kept with its path, by the path's allocation, and
+/// with the view, clip and stroke it was built for: a path that comes back unchanged at the same view
+/// is drawn with the same mesh, without flattening or tessellating it again. A frame keeps only the
+/// meshes it draws; a frame that draws no overlays drops them all ([`super::show`]).
+#[derive(Default)]
+pub struct SharedPaths {
+    pub(super) meshes: HashMap<usize, SharedMesh>,
+}
+
+pub(super) struct SharedMesh {
+    /// Held so that the allocation, the key of the map, is not reused while the mesh is kept.
+    path: Arc<BezPath>,
+    key: SharedKey,
+    pub(super) mesh: Arc<Mesh>,
+}
+
+/// What a shared path's mesh depends on besides the path.
+#[derive(Clone, Copy, PartialEq)]
+struct SharedKey {
+    /// The view's mapping onto the screen ([`Xf::affine`]).
+    view: [f64; 6],
+    /// The painter's clip: the lines of the path outside it have no triangles in the mesh.
+    clip: egui::Rect,
+    stroke: Stroke,
+    pixels_per_point: f32,
+    tessellation: TessellationOptions,
+}
+
+impl SharedPaths {
+    /// The mesh that draws `path` with `s` at the view `xf` with the painter `p`: the one kept in
+    /// this frame or in `last` (the last frame's) when it was built for the same, else a new one.
+    /// It is kept for the next frame.
+    fn mesh(&mut self, last: &mut HashMap<usize, SharedMesh>, path: &Arc<BezPath>, xf: &Xf, s: Stroke, p: &egui::Painter) -> Arc<Mesh> {
+        let ctx = p.ctx();
+        let key = SharedKey {
+            view: xf.affine().as_coeffs(),
+            clip: p.clip_rect(),
+            stroke: s,
+            pixels_per_point: ctx.pixels_per_point(),
+            tessellation: ctx.tessellation_options(|o| *o),
+        };
+        let at = Arc::as_ptr(path) as usize;
+        let fits = |m: &SharedMesh| m.key == key && Arc::ptr_eq(&m.path, path);
+        if let Some(kept) = self.meshes.get(&at).filter(|m| fits(m)) {
+            return Arc::clone(&kept.mesh);
+        }
+        let kept = match last.remove(&at).filter(|m| fits(m)) {
+            Some(kept) => kept,
+            None => {
+                let font_image_size = ctx.fonts(|f| f.font_image_size());
+                let mut tessellator = Tessellator::new(key.pixels_per_point, key.tessellation, font_image_size, vec![]);
+                tessellator.set_clip_rect(key.clip);
+                let mut mesh = Mesh::default();
+                for line in to_screen_path(path, xf) {
+                    tessellator.tessellate_shape(Shape::line(line, s), &mut mesh);
+                }
+                SharedMesh { path: Arc::clone(path), key, mesh: Arc::new(mesh) }
+            }
+        };
+        let mesh = Arc::clone(&kept.mesh);
+        self.meshes.insert(at, kept);
+        mesh
+    }
+}
+
+pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, look: HandleLook, shared: &mut SharedPaths) {
+    // The meshes kept from the last frame; those this frame does not draw are dropped.
+    let mut last = std::mem::take(&mut shared.meshes);
     for o in overlays {
         match o {
             // Where the tools select: the document rectangle, turned with the view.
@@ -387,6 +474,12 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
                     }
                 } else {
                     stroke_path(p, path, xf, s);
+                }
+            }
+            Overlay::SharedPath { path, color, width } => {
+                let mesh = shared.mesh(&mut last, path, xf, Stroke::new(*width, c32(*color)), p);
+                if !mesh.is_empty() {
+                    p.add(Shape::mesh(mesh));
                 }
             }
             Overlay::Line { a, b, color, dashed } => {

@@ -393,8 +393,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 return Err(err(format!("can't open `{}`: {}", file_name(name), crate::cmd::place::dcs::LINK_ONLY)));
             }
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
+            // A `.ai` keeps the artboard its header gives; an EPS comes in on its page.
+            let import = if matches!(format.id, "ai" | "ait") { vectorcraft_eps::import_ai } else { vectorcraft_eps::import_names };
             restore_or_import(editing, || {
-                let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
+                let r = import(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
                     .map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
                 Ok((r.document, r.warnings))
             })?
@@ -526,17 +528,26 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
         // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
-        "psd" | "psb" if opts.layers => {
-            let cms = vectorcraft_color::cms::active();
-            match super::psdlayers::import(bytes, opts.hidden_layers, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)) {
-                Ok(Some((doc, warnings))) => (doc, warnings, false),
-                Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
-                Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
-            }
-        }
+        "psd" | "psb" if opts.layers => match super::psdlayers::import_active(bytes, opts.hidden_layers) {
+            Ok(Some((doc, warnings))) => (doc, warnings, false),
+            Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
+            Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
+        },
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
+    // A PSD or PSB file's slices become user slices over its canvas (`importSlices`, default on),
+    // whether its layers or its merged image came in.
+    if matches!(format.id, "psd" | "psb")
+        && opts.import_slices
+        && let Some(canvas) = doc.artboards.first().map(|a| a.rect)
+    {
+        let (slices, notes) = super::psd_slices(bytes, canvas);
+        for (rect, options) in slices {
+            crate::cmd::slices::add_slice(&mut doc, rect, options);
+        }
+        warnings.extend(notes);
+    }
     // A PDF, `.ai` or `.ait` read from its pages or its editing copy, not restored from the document
     // it carries, opens with the File Info it gives (a PostScript `.ai` gives none).
     if matches!(format.id, "pdf" | "ai" | "ait")
@@ -658,6 +669,17 @@ pub struct ReadFile {
     path: Option<String>,
     /// What became of its linked files.
     links: Resolved,
+    /// Whether the color management policies changed the document ([`apply_policies`]).
+    policy_changed: bool,
+}
+
+/// Edit › Color Settings: the color management policies keep, take off or convert from the
+/// profiles the document `loaded` holds is tagged with, and their notes go to its warnings →
+/// whether they changed the document.
+fn apply_policies(loaded: &mut Loaded) -> bool {
+    let (notes, changed) = crate::cmd::colormgmt::apply_open_policies(&mut loaded.doc);
+    loaded.warnings.extend(notes);
+    changed
 }
 
 #[cfg(test)]
@@ -678,17 +700,35 @@ impl ReadFile {
 /// ([`super::importer`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let mut loaded = if opts.link_pages {
-        linked_pages(name, bytes, path.as_deref(), &opts)?
+    let (mut loaded, policy_changed) = if opts.link_pages {
+        let mut loaded = linked_pages(name, bytes, path.as_deref(), &opts)?;
+        let changed = apply_policies(&mut loaded);
+        (loaded, changed)
     } else {
         match super::importer::pick(name, bytes, p)? {
-            Some(plugin) => super::importer::load(name, bytes, &plugin, p)?,
-            None => load_with(name, bytes, &opts)?,
+            Some(plugin) => {
+                let mut loaded = super::importer::load(name, bytes, &plugin, p)?;
+                let changed = apply_policies(&mut loaded);
+                (loaded, changed)
+            }
+            None => {
+                // The color mode `p` asks for converts the colors after the policies did, through
+                // the profiles the document keeps.
+                let mut loaded = load_with(name, bytes, &LoadOptions { color_mode: None, ..opts.clone() })?;
+                let changed = apply_policies(&mut loaded);
+                if let Some(mode) = opts.color_mode.filter(|m| *m != loaded.doc.color_mode) {
+                    let doc = &mut loaded.doc;
+                    vectorcraft_color::cms::with_active(super::super::colormgmt::doc_cms(doc), || {
+                        super::super::colormgmt::set_color_mode(doc, mode, true, None, opts.grays);
+                    });
+                }
+                (loaded, changed)
+            }
         }
     };
     let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
-    Ok(ReadFile { loaded, opts, path, links })
+    Ok(ReadFile { loaded, opts, path, links, policy_changed })
 }
 
 /// The PDF `name` (`bytes`, read from `path`) opened with `linkPages`: its pages as placed documents
@@ -703,7 +743,7 @@ fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, opts: &LoadOptions
 /// The second half of [`open_bytes_with`]: open a file [`read_for_open`] read as the new active
 /// document → `document.open`'s result.
 pub fn open_read(s: &mut Session, file: ReadFile) -> Result<Value> {
-    open_loaded(s, file.loaded, file.links, file.path, &file.opts, false)
+    open_loaded(s, file.loaded, file.links, file.path, &file.opts, false, file.policy_changed)
 }
 
 /// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
@@ -715,14 +755,24 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
             "only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first",
         ));
     }
+    let policy_changed = apply_policies(&mut loaded);
     let base = crate::cmd::links::LinkBase::file(path);
     let links = crate::cmd::links::resolve(&mut loaded.doc, base, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
-    open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true)
+    open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true, policy_changed)
 }
 
-/// Make a loaded file the new active document; `links` is what became of its linked files, and
-/// `opts` are the options it was read with.
-fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
+/// Make a loaded file the new active document; `links` is what became of its linked files, `opts`
+/// are the options it was read with, and `policy_changed` says whether the color management
+/// policies changed it (it then opens with unsaved changes).
+fn open_loaded(
+    s: &mut Session,
+    loaded: Loaded,
+    links: Resolved,
+    path: Option<String>,
+    opts: &LoadOptions,
+    as_template: bool,
+    policy_changed: bool,
+) -> Result<Value> {
     let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } =
         loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
@@ -763,6 +813,9 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     let converted = saves_back && converted && s.prefs.append_converted;
     let index = s.add_document(doc, path);
     let st = s.doc_mut()?;
+    if policy_changed {
+        st.mark_unsaved();
+    }
     if let Some(pdf) = native_pdf_compatible {
         st.save_options.insert("pdfCompatible".into(), json!(pdf));
     }
@@ -871,7 +924,9 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// they are, with their ink amounts ([`ImageBlob::cmyk`]), except that ones storing one plane per
 /// ink are written again with their inks together ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]);
 /// CMYK TIFFs with an alpha channel, which the decoder can't read, become RGBA in the active color
-/// settings' CMYK, as do CMYK Photoshop documents, whose merged image is read ([`psdread`]).
+/// settings' CMYK, whichever of their extra channels is the alpha
+/// ([`vectorcraft_doc::cmyk::extra_samples_tiff_rgba`]), as do CMYK Photoshop documents, whose
+/// merged image is read ([`psdread`]).
 /// 1-bit TIFFs compressed with CCITT Group 3, which the decoder can't read either, become RGBA
 /// too ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]).
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read
@@ -1079,14 +1134,30 @@ pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
     let layer = d.layers[0].id;
     let id = d.alloc_id();
     let xf = Affine::scale_non_uniform(sx, sy);
-    let mut n = Node::new(
+    let n = Node::new(
         id,
         NodeKind::Image(Box::new(ImageObject { key: key.clone(), width, height, xf, link: None, placement: Default::default(), pixels: None })),
     );
+    let mut n = file_clipped(&mut d, n, psdread::clipping_path(bytes));
     n.name = Some(name.to_string());
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;
     Ok(d)
+}
+
+/// Image `image` of `d` clipped by `clip`, the clipping path its file names in the image's pixel
+/// space (a PSD or PSB file's, [`psdread::clipping_path`]): a clip group of that path (even-odd,
+/// with no paint) and the image. Without one the image stays as it is.
+pub(crate) fn file_clipped(d: &mut Document, image: Node, clip: Option<vectorcraft_geom::PathData>) -> Node {
+    let (Some(mut path), NodeKind::Image(im)) = (clip, &image.kind) else { return image };
+    path.transform(im.xf);
+    let none = vectorcraft_color::Paint::None;
+    let mut clip = Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance::basic(none.clone(), none, 0.0));
+    if let NodeKind::Path { clipping, rule, .. } = &mut clip.kind {
+        *clipping = true;
+        *rule = vectorcraft_geom::FillRule::EvenOdd;
+    }
+    Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(clip), std::sync::Arc::new(image)], clip: true })
 }
 
 /// Does this import note say that the file has something the document doesn't?
