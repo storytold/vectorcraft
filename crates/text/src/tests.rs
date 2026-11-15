@@ -2832,6 +2832,29 @@ fn kurikaeshi_moji_shori_scans_a_paragraph_once() {
     assert!(l.glyphs.iter().filter(|g| g.byte > 0 && text.get(g.byte..).is_some_and(|s| s.starts_with('々'))).all(|g| g.gid == face.glyph_for('時')));
 }
 
+/// Kurikaeshi Moji Shori: area type in a frame that isn't a rectangle, centered vertically, flows
+/// again until it settles, and keeps one record for each repeat mark it draws as another character.
+#[test]
+fn vertically_centered_repeat_marks_in_a_round_frame_are_recorded_once() {
+    use crate::test_fonts::{REPEAT_MARK_FAMILY, repeat_mark_font};
+    use vectorcraft_doc::VerticalAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(repeat_mark_font().expect("test font"));
+    let st = CharStyle { size: 20.0, font_family: REPEAT_MARK_FAMILY.into(), font_style: "Regular".into(), ..CharStyle::default() };
+    let text = format!("時{}", "\u{2028}々".repeat(5));
+    let frame = kurbo::Ellipse::new((150.0, 150.0), (150.0, 150.0), 0.0).to_path(0.1);
+    let mut t = area(&text, st, Rect::new(0.0, 0.0, 300.0, 300.0), Justify::Left);
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&frame) };
+    t.para.kurikaeshi_moji_shori = true;
+    let top = layout(&db, &t);
+    let marks: Vec<(usize, char)> = text.match_indices('々').map(|(b, _)| (b, '時')).collect();
+    assert_eq!(top.repeat_marks, marks);
+    t.area.vertical_align = VerticalAlign::Center;
+    let lay = layout(&db, &t);
+    assert!(lay.lines[0].baseline > top.lines[0].baseline + 1.0, "the text moves down");
+    assert_eq!(lay.repeat_marks, marks);
+}
+
 /// Bunri-Kinshi: a justified line spreads its room over the gaps between its CJK characters but not
 /// over the gap inside a vertical kana repeat mark, and still fills its width.
 #[test]
