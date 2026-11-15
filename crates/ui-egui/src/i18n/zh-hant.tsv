@@ -4788,6 +4788,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Import Options	顯示讀入選項
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前詢問每個 PDF、DXF 或文字檔案的讀入選項；關閉時使用上次選擇的選項
 	Stylistic Alternates	風格替代字
+	Ligatures	連字
+	Ornaments	裝飾字
+	Figures	數字
 	Swash	花體字
 	Swatch Conflict	色票衝突
 	Swatch Conflicts	色票衝突

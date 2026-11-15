@@ -4667,6 +4667,9 @@ digits	Malayalam	Malaiàlam
 	Show Import Options	Mostra les opcions d’importació
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demana les opcions d’importació de cada fitxer PDF, DXF o de text abans de col·locar-lo; desactivat: s’usen les últimes opcions triades
 	Stylistic Alternates	Alternatives estilístiques
+	Ligatures	Lligadures
+	Ornaments	Ornaments
+	Figures	Xifres
 	Swash	Volada
 	Swatch Conflict	Conflicte de mostres
 	Swatch Conflicts	Conflictes de mostres

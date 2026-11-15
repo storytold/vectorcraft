@@ -3658,6 +3658,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	Afficher les options d’importation
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demander les options d’importation de chaque fichier PDF, DXF ou texte avant de le placer, sinon utiliser les dernières options choisies
 	Stylistic Alternates	Variantes stylistiques
+	Ligatures	Ligatures
+	Ornaments	Ornements
+	Figures	Chiffres
 	Swash	Lettres ornées
 	Swatch Conflict	Conflit de nuances
 	Swatch Conflicts	Conflits de nuances

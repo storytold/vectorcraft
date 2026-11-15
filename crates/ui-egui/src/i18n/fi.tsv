@@ -2070,6 +2070,9 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Valitse teksti, jonka OpenType-ominaisuudet haluat asettaa.
 	Standard Ligatures	Vakioligatuurit
 	Stylistic Alternates	Tyylivaihtoehdot
+	Ligatures	Ligatuurit
+	Ornaments	Ornamentit
+	Figures	Numerot
 	Swash	Koukerot
 	Tabular Lining	Taulukkonumerot
 	Tabular Oldstyle	Vanhanaikaiset taulukkonumerot

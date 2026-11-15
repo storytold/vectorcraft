@@ -3705,6 +3705,9 @@ effect	Points	Точки
 	Show Import Options	Показувати параметри імпорту
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запитувати параметри імпорту кожного файлу PDF, DXF чи текстового файлу перед розміщенням; якщо вимкнено, використовуються останні вибрані параметри
 	Stylistic Alternates	Стилістичні альтернативи
+	Ligatures	Лігатури
+	Ornaments	Орнаменти
+	Figures	Цифри
 	Swash	Розчерк
 	Swatch Conflict	Конфлікт зразків
 	Swatch Conflicts	Конфлікти зразків

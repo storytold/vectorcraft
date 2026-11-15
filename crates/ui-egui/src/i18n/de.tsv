@@ -3636,6 +3636,9 @@ effect	Points	Punkte
 	Show Import Options	Importoptionen anzeigen
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Vor dem Platzieren nach den Importoptionen jeder PDF-, DXF- oder Textdatei fragen; aus: die zuletzt gewählten Optionen verwenden
 	Stylistic Alternates	Stilistische Varianten
+	Ligatures	Ligaturen
+	Ornaments	Ornamente
+	Figures	Ziffern
 	Swash	Schwungschrift
 	Swatch Conflict	Farbfeldkonflikt
 	Swatch Conflicts	Farbfeldkonflikte

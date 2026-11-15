@@ -3525,6 +3525,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Import Options	显示导入选项
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前询问每个 PDF、DXF 或文本文件的导入选项；关闭时使用上次选择的选项
 	Stylistic Alternates	风格替代字
+	Ligatures	连字
+	Ornaments	装饰字
+	Figures	数字
 	Swash	花饰字
 	Swatch Conflict	色板冲突
 	Swatch Conflicts	色板冲突
