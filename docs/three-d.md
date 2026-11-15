@@ -354,7 +354,9 @@ Our reading:
 - Softness is not applied to the shadow, and only the first light casts one.
 - A shadow is cast from at most 327,680 faces, the solids of one object together (our own limit). Past it, a
   command is refused with "The 3D shadow is too complex; turn Shadows off or simplify the art", and a loaded
-  file draws the source path.
+  file draws the source path. A command checks the shadow from the same builds that check the solids, as
+  drawing casts it, so each solid is built once. A stroke whose solid is left out of the art (past its own
+  limits) casts no shadow.
 - Canvas, SVG and PDF exports draw the shadow, the art's bounds take it in, and Expand Appearance keeps it as a
   path below the faces. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow.
 
