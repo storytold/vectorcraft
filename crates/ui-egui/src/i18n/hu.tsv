@@ -1208,6 +1208,8 @@ font-technology	Variable	Változó
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Húzz ide grafikát, színeket és szövegstílusokat, hogy más dokumentumokban is használhasd őket. A könyvtárak ezen a gépen tárolódnak, fiók nem kell hozzájuk.
 	Drag onto art to apply this appearance	Grafikára húzva alkalmazza ezt a megjelenést
 	Drag rings to rotate. Shift snaps to 15°.	Forgatáshoz húzd a gyűrűket. Shift: illesztés 15°-onként.
+	Track cube	Forgatókocka
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Forgatáshoz húzz egy lapot, egy élt vagy a gyűrűt. Shift: forgatás egy képernyőtengely körül.
 	Drag the art to move it on the paper	Húzd a grafikát a papíron való áthelyezéshez
 	Drag the light, or its rings. Shift snaps to 15°.	Húzd a fényt vagy a gyűrűit. Shift: illesztés 15°-onként.
 	Drag to float as a toolbar	Húzd el, hogy önálló eszköztárként lebegjen
@@ -1368,7 +1370,10 @@ font-technology	Variable	Változó
 	Every (minutes)	Gyakoriság (perc)
 	Every option is at its default.	Minden beállítás az alapértéken áll.
 	Every option matches {base}.	Minden beállítás egyezik: {base}.
-	Every-line Composer	Többsoros tördelő
+	Middle Eastern & South Asian Single-line Composer	Egysoros tördelő (Közel-Kelet és Dél-Ázsia)
+	Middle Eastern & South Asian Every-line Composer	Többsoros tördelő (Közel-Kelet és Dél-Ázsia)
+	Standard Single-line Composer	Normál egysoros tördelő
+	Standard Every-line Composer	Normál többsoros tördelő
 	Exact	Pontos
 	Exact dash lengths	Pontos vonalhosszak
 	Exceptions (comma separated)	Kivételek (vesszővel elválasztva)
@@ -4115,7 +4120,6 @@ mark-style	Japanese	Japán
 	Single Left Quotation Mark	Bal oldali szimpla idézőjel
 	Single Quotes:	Szimpla idézőjelek:
 	Single Right Quotation Mark	Jobb oldali szimpla idézőjel
-	Single-line Composer	Egysoros tördelő
 	Toggle Line Composer	Sortördelő váltása
 	Sixth Space	Hatodkvirt-szóköz
 	Size	Méret
@@ -8265,7 +8269,7 @@ breakText	Glyphs	Glifák
 @msg	column: true floats the whole column and takes no onto, above or below	column: true az egész oszlopot lebegővé teszi, és nem adható meg mellette onto, above vagy below
 @msg	command must be a shape.* command	command: shape.* parancs kell
 @msg	commands[{i}]: missing `command`	commands[{i}]: hiányzik: `command`
-@msg	composer must be "singleLine" or "everyLine"	composer: "singleLine" vagy "everyLine" kell
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer értéke "singleLine", "everyLine", "standardSingleLine" vagy "standardEveryLine" lehet
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	összetett alakzatba útvonalak, összetett útvonalak, csoportok, összetett alakzatok, szöveg, összemosások és burkolók kerülhetnek
 @msg	compound {_1} must contain exactly one open path to join	az összetett objektumnak ({_1}) pontosan egy összekapcsolható nyitott útvonalat kell tartalmaznia
 @msg	connect needs a path other than the one extended	connect: a meghosszabbított útvonaltól különböző útvonal kell

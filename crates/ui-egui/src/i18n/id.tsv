@@ -976,6 +976,8 @@
 	Reset all Revolve settings to their defaults.	Atur ulang semua pengaturan Revolusi ke defaultnya.
 	Drag values or labels. Double-click a value to type.	Seret nilai atau label. Klik dua kali pada nilai untuk mengetik.
 	Drag rings to rotate. Shift snaps to 15°.	Seret cincin untuk memutar. Shift mengunci ke kelipatan 15°.
+	Track cube	Kubus putar
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Seret sisi, tepi, atau cincin untuk memutar. Shift memutar pada satu sumbu layar.
 	Drag the light, or its rings. Shift snaps to 15°.	Seret cahaya atau cincinnya. Shift mengunci ke kelipatan 15°.
 lighting	Light	Cahaya
 	Keep visible surfaces only when expanding	Pertahankan hanya permukaan yang terlihat saat memperluas
@@ -1867,7 +1869,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Lining tabular
 	Tabular Oldstyle	Oldstyle tabular
 	Titling Alternates	Alternatif judul
-	Every-line Composer	Komposer tiap baris
+	Middle Eastern & South Asian Single-line Composer	Komposer satu baris (Timur Tengah dan Asia Selatan)
+	Middle Eastern & South Asian Every-line Composer	Komposer tiap baris (Timur Tengah dan Asia Selatan)
+	Standard Single-line Composer	Komposer standar satu baris
+	Standard Every-line Composer	Komposer standar tiap baris
 	First-line Left Indent	Indentasi kiri baris pertama
 	Hyphenation…	Pemenggalan kata…
 	Justification…	Justifikasi…
@@ -1899,7 +1904,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
-	Single-line Composer	Komposer satu baris
 	Toggle Line Composer	Alihkan komposer baris
 	Space After Paragraph	Spasi setelah paragraf
 	Space Before Paragraph	Spasi sebelum paragraf
@@ -7008,3 +7012,4 @@ breakText	Glyphs	Glif
 	Nest Shapes…	Susun Bentuk…
 	Nest Shapes	Susun Bentuk
 	Roll	Gulungan
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

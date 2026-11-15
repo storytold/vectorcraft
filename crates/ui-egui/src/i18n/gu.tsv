@@ -1067,6 +1067,8 @@
 	Drag art or swatches here, or use + to add the selection's colors and text styles.	અહીં આર્ટ અથવા સ્વેચ ખેંચો, અથવા પસંદગીના રંગો અને ટેક્સ્ટ સ્ટાઇલ ઉમેરવા + વાપરો.
 	Drag onto art to apply this appearance	આ દેખાવ લાગુ કરવા આર્ટ પર ખેંચો
 	Drag rings to rotate. Shift snaps to 15°.	ફેરવવા રિંગ્સ ખેંચો. Shift 15° પર સ્નેપ કરે છે.
+	Track cube	ફેરવવાનો ઘન
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	ફેરવવા ફલક, ધાર અથવા રિંગ ખેંચો. Shift સ્ક્રીનની એક અક્ષની આસપાસ ફેરવે છે.
 	Drag the art to move it on the paper	કાગળ પર ખસેડવા આર્ટ ખેંચો
 	Drag the light, or its rings. Shift snaps to 15°.	લાઇટ અથવા તેની રિંગ્સ ખેંચો. Shift 15° પર સ્નેપ કરે છે.
 	Drag to float as a toolbar	ટૂલબાર તરીકે ફ્લોટ કરવા ખેંચો
@@ -1241,7 +1243,6 @@
 	Every (minutes)	દર (મિનિટ)
 	Every option is at its default.	દરેક વિકલ્પ ડિફૉલ્ટ પર છે.
 	Every option matches {base}.	દરેક વિકલ્પ {base} સાથે મેળ ખાય છે.
-	Every-line Composer	એવરી-લાઇન કમ્પોઝર
 	Exact dash lengths	ચોક્કસ ડેશ લંબાઈ
 	Exceptions (comma separated)	અપવાદો (અલ્પવિરામથી અલગ)
 	Exclude	બાકાત રાખો
@@ -3590,7 +3591,6 @@
 	Single Quotes:	એકલ અવતરણ ચિહ્નો:
 	Single Right Quotation Mark	જમણું એકલ અવતરણ ચિહ્ન
 	Single Word Justification:	એક શબ્દ જસ્ટિફિકેશન:
-	Single-line Composer	સિંગલ-લાઇન કમ્પોઝર
 	Sixth Space	છઠ્ઠી જગ્યા
 	Size	કદ
 	Size Tile to Art	ટાઇલનું કદ આર્ટ પ્રમાણે કરો
@@ -4773,3 +4773,8 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Repeat Objects	પુનરાવર્તિત ઑબ્જેક્ટ્સ
 @msg	`{path}` must be one of {_1}, not {got}	`{path}` એ {_1}માંથી એક હોવું જોઈએ, {got} નહીં
 	Path Length	પાથની લંબાઈ
+	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
+	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"

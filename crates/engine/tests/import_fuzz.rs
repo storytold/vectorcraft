@@ -1841,6 +1841,7 @@ proptest! {
     /// Mutated copies of the PSD and PSB samples never crash opening them with their layers, hidden
     /// ones too: the PSD's layer records, channel lengths and data, and the PSB's layer count.
     /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`.)
+    /// Neither does `document.psdInfo`, nor placing them with their layers as objects.
     #[test]
     fn mutated_layered_psds_open_without_panics(which in 6usize..8, cut in 0usize..1_000_000, edits in prop::collection::vec((0usize..1_000_000, any::<u8>()), 0..12)) {
         let (name, mut bytes) = raster_samples().swap_remove(which);
@@ -1855,6 +1856,10 @@ proptest! {
             let mut s = vectorcraft_engine::Session::new();
             let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "hiddenLayers": true});
             let _ = no_panic(s.execute("document.open", &p));
+            let _ = no_panic(s.execute("document.psdInfo", &p));
+            let _ = no_panic(s.execute("file.new", &json!({})));
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "layers": true, "hiddenLayers": true});
+            let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
     }

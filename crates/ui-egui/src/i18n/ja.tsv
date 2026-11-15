@@ -1688,7 +1688,10 @@ antiAlias	Sharp	シャープ
 	Every (minutes)	間隔 (分)
 	Every option is at its default.	すべてのオプションが初期値です。
 	Every option matches {base}.	すべてのオプションが {base} と同じです。
-	Every-line Composer	すべての行を一括処理
+	Middle Eastern & South Asian Single-line Composer	1 行ずつ組む (中東・南アジア)
+	Middle Eastern & South Asian Every-line Composer	すべての行を一括処理 (中東・南アジア)
+	Standard Single-line Composer	1 行ずつ組む (標準)
+	Standard Every-line Composer	すべての行を一括処理 (標準)
 	Exact dash lengths	破線の長さを正確に保つ
 	Exceptions (comma separated)	例外 (カンマ区切り)
 	Exclusion	除外
@@ -3290,7 +3293,6 @@ mark-style	Japanese	日本式
 	Simulate Colored Paper	色紙をシミュレート
 	Simulate Paper	紙色をシミュレート
 	Single Quotes:	一重引用符:
-	Single-line Composer	1 行ずつ組む
 	Toggle Line Composer	行の組版方式を切り替え
 	Size Tile to Art	タイルをアートワークのサイズに合わせる
 	Move Tile with Art	タイルをアートワークと一緒に移動
@@ -5635,6 +5637,8 @@ effect	Vertical	垂直
 	Step up or down	1 段階ずつ増減
 	Drag values or labels. Double-click a value to type.	数値やラベルをドラッグして調整。数値をダブルクリックすると入力できます。
 	Drag rings to rotate. Shift snaps to 15°.	リングをドラッグして回転。Shiftで15°刻みに調整。
+	Track cube	回転キューブ
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	面、辺、またはリングをドラッグして回転。Shiftで画面の1つの軸を中心に回転。
 	Drag the light, or its rings. Shift snaps to 15°.	ライトやリングをドラッグ。Shiftで15°刻みに調整。
 lighting	Light	ライト
 	Keep visible surfaces only when expanding	アピアランス分割時に見える面だけを保持
@@ -7326,7 +7330,7 @@ axis	Y Axis	Y 軸
 @msg	column: true floats the whole column and takes no onto, above or below	column: true は列全体をフローティングにするため、onto、above、below は指定できません
 @msg	command must be a shape.* command	command には shape.* コマンドを指定してください
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` がありません
-@msg	composer must be "singleLine" or "everyLine"	composer には "singleLine" または "everyLine" を指定してください
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer は "singleLine"、"everyLine"、"standardSingleLine"、"standardEveryLine" のいずれかにしてください
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	複合シェイプに含められるのは、パス、複合パス、グループ、複合シェイプ、文字、ブレンド、エンベロープです
 @msg	compound {_1} must contain exactly one open path to join	連結するには、複合パス {_1} にオープンパスがちょうど 1 つ含まれている必要があります
 @msg	connect end must be "start" or "end"	connect の end には "start" または "end" を指定してください
