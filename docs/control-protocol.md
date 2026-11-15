@@ -296,7 +296,7 @@ color's brightness (the base color's when none is selected; the patch's color on
 `added: true` that becomes the selected row; `remove` (the Remove Color tool) removes the color of the marker clicked. The base color can't be removed. A removed color's row is dropped, unless it
 has current colors and art or a group is open: it then keeps them with `to: null`, that art keeps its colors, and the
 group's swatch at that place is removed. A row with no current colors recolors no art; with a group, the new color of
-one with `added: true` is added to the group after the group's other colors, and a row made with New Row adds none.
+one with `added: true` that is not excluded is added to the group after the group's other colors, and a row made with New Row adds none.
 The base color is the row with `base: true`, or the first color the Edit tab shows when no row has it; the harmony rules
 build from it, and selecting another color for the sliders leaves it the base. A right-click on a wheel marker or a
 color bar opens a menu with Set As Base Color (moves `base: true` to that row), Select Shade (a grid of the color's hue

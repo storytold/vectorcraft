@@ -605,7 +605,7 @@ fn apply_params(d: &Dialog) -> Value {
         let took: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).map(|r| &r["to"]).collect();
         let assign = d.fields.get("__assign").and_then(Value::as_array).filter(|_| d.bool("__art"));
         let rest = assign.map_or(&[][..], |a| a.get(took.len()..).unwrap_or_default());
-        let added = rs.iter().filter(|r| no_current(r) && is_added(r)).map(|r| &r["to"]).filter(|c| !c.is_null());
+        let added = rs.iter().filter(|r| no_current(r) && is_added(r) && !excluded(r)).map(|r| &r["to"]).filter(|c| !c.is_null());
         let colors: Vec<&Value> = took.into_iter().chain(rest).chain(added).collect();
         let name = d.str("groupName");
         let rename = (!name.trim().is_empty() && name != g).then_some(name);
@@ -2029,6 +2029,10 @@ mod tests {
         add_color(&mut rs, &Color::rgb(9.0 / 255.0, 9.0 / 255.0, 9.0 / 255.0));
         d.fields.insert("rows".into(), json!(rs));
         assert_eq!(apply_params(&d)["groupColors"], json!(["rgb 1 1 1", null, "rgb 3 3 3", "rgb 9 9 9"]));
+        // An added color whose row is excluded joins no group.
+        rs[3]["exclude"] = json!(true);
+        d.fields.insert("rows".into(), json!(rs));
+        assert_eq!(apply_params(&d)["groupColors"], json!(["rgb 1 1 1", null, "rgb 3 3 3"]));
     }
 
     #[test]
