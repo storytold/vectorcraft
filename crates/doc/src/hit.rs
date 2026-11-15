@@ -1,7 +1,7 @@
 //! Hit testing over the document tree.
 
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
@@ -279,13 +279,16 @@ pub fn selected_hidden_at(doc: &Document, p: Point, opt: HitOptions, selected: &
             return false;
         }
         // How a click reaches it, if one does.
+        let start = opt;
         let Some(opt) = path_options(&nodes, &chain, opt) else { return false };
-        // Hidden by a mask: one of the containers around it clips, and not to `p`.
-        let masked = nodes
-            .iter()
-            .rev()
-            .skip(1)
-            .any(|n| n.clips() && n.children().and_then(|c| c.first()).is_some_and(|clip| clip.id != id && !clip_contains(clip, p)));
+        // Hidden by a mask: one of the containers around it clips, and not to `p`. A container
+        // tests its clipping path in outline from the first layer with Preview off down to it, as
+        // a click going down to it does ([`path_options`]).
+        let below = start.scope.and_then(|s| chain.iter().position(|a| *a == s)).map_or(0, |i| i + 1);
+        let masked = nodes.iter().enumerate().rev().skip(1).any(|(k, n)| {
+            let outline = start.outline || nodes.get(below..=k).is_some_and(|ns| ns.iter().any(|n| previews_off(n)));
+            n.clips() && n.children().and_then(|c| c.first()).is_some_and(|clip| clip.id != id && !clip_contains(clip, p, outline))
+        });
         // A click may reach it there ([`may_hit`]: not a guide while guides are locked or
         // hidden, nor a Shaper group's hidden part), and its own art is what a click would hit
         // in it: a group's hidden, locked or masked contents don't count.
@@ -359,6 +362,7 @@ pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeI
 /// measured by their art ([`Node::geometric_bounds_with`]).
 fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, tops: &mut Vec<NodeId>, seen: &mut HashSet<NodeId>) -> bool {
     let Some(children) = layer.children() else { return true };
+    let opt = if matches!(layer.kind, NodeKind::Layer { preview: false, .. }) { HitOptions { outline: true, ..opt } } else { opt };
     if layer.clips()
         && let Some(clip) = children.first()
     {
@@ -366,11 +370,10 @@ fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
         if clip_outline_hit(layer, clip, p, opt, symbols, true).is_some() && seen.insert(clip.id) {
             tops.push(clip.id);
         }
-        if !clip_contains(clip, p) {
+        if !clip_contains(clip, p, opt.outline) {
             return true;
         }
     }
-    let opt = if matches!(layer.kind, NodeKind::Layer { preview: false, .. }) { HitOptions { outline: true, ..opt } } else { opt };
     for (i, c) in children.iter().enumerate().rev() {
         if !may_hit(layer, i, c, p, opt, symbols, true) || seen.contains(&c.id) {
             continue;
@@ -452,7 +455,7 @@ pub fn locked_objects_at(doc: &Document, p: Point, opt: HitOptions) -> Vec<NodeI
 /// whole, and an unlocked layer, group, blend or envelope in Edit Contents is searched inside.
 fn locked_children(parent: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, out: &mut Vec<NodeId>) {
     let Some(children) = parent.children() else { return };
-    if parent.clips() && !edits_inside(parent, opt.scope) && children.first().is_some_and(|clip| !clip_contains(clip, p)) {
+    if parent.clips() && !edits_inside(parent, opt.scope) && children.first().is_some_and(|clip| !clip_contains(clip, p, opt.outline)) {
         return;
     }
     for i in hit_order(parent, children, p) {
@@ -561,14 +564,170 @@ fn edits_contents(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Envelope { editing: true, .. })
 }
 
-/// Is `p` inside the region `clip` clips to ([`Node::clip_shapes`])? Text counts by its frame:
-/// glyph outlines need the font engine, above this crate.
-fn clip_contains(clip: &Node, p: Point) -> bool {
-    clip_regions(clip).iter().any(|(bp, rule)| fill_contains(bp, *rule, p))
+/// Is `p` inside the region `clip` clips to ([`clip_areas`])? In outline mode ([`HitOptions::outline`])
+/// the canvas draws no effects, so the plain shapes of `clip` ([`clip_regions`]) count.
+fn clip_contains(clip: &Node, p: Point, outline: bool) -> bool {
+    let areas = if outline { clip_regions(clip) } else { clip_areas(clip) };
+    areas.iter().any(|(bp, rule)| fill_contains(bp, *rule, p))
 }
 
-/// The regions `clip` clips to ([`Node::clip_shapes`]), text counted by its frame as in
-/// [`clip_contains`].
+/// The region of a clip group's clipping path as the canvas clips by it, with the live geometry
+/// effects of the clipping path and of what it clips by applied, as one path and fill rule
+/// (`Some(None)` when nothing is left to clip by). `None` when nothing in the clipping path has a
+/// live geometry effect: its plain shapes ([`clip_regions`]) count then. Effects are evaluated
+/// above this crate, so the engine registers one with [`set_clip_region`].
+pub type ClipRegion = fn(&Node) -> Option<Option<(BezPath, FillRule)>>;
+
+static CLIP_REGION: OnceLock<ClipRegion> = OnceLock::new();
+
+/// Register how the region of a clipping path with live effects is found (the first registration
+/// stays).
+pub fn set_clip_region(f: ClipRegion) {
+    // Already set: the same engine, registered by another session.
+    let _ = CLIP_REGION.set(f);
+}
+
+/// Does `clip`, or anything it holds, have a visible effect of its own or on a fill or stroke? Only
+/// then can the registered [`ClipRegion`] find a geometry effect in it.
+fn has_effects(clip: &Node) -> bool {
+    let mut found = false;
+    clip.walk(&mut |n| {
+        let visible = |e: &crate::Effect| e.visible;
+        found |= n.appearance.effects.iter().any(visible) || n.appearance.items.iter().any(|i| i.effects().iter().any(visible));
+    });
+    found
+}
+
+/// A clipping path's region evaluated by [`clip_region`] on this thread: the clipping path and the
+/// [`LiveInputs`] as they were, the region (`None` without geometry effects) and the number of its
+/// path elements.
+struct EvaluatedClip {
+    clip: Node,
+    inputs: u64,
+    region: Option<Rc<Option<(BezPath, FillRule)>>>,
+    size: usize,
+}
+
+/// How many regions [`clip_region`] keeps on each thread: every click and every hover over a clip
+/// group whose clipping path has live effects asks for its region, and clip groups can be nested.
+const CLIPS_KEPT: usize = 16;
+
+thread_local! {
+    /// The regions [`clip_region`] keeps, the latest first.
+    static CLIPS: RefCell<Vec<EvaluatedClip>> = const { RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many regions [`clip_region`] evaluated on this thread.
+    static CLIPS_EVALUATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The region clipping path `clip` clips to with its live geometry effects applied
+/// ([`set_clip_region`]), or `None` when it has none or nothing is registered; its plain shapes
+/// ([`clip_regions`]) are the region then. The region is evaluated again when `clip` or the
+/// [`LiveInputs`] have changed since.
+fn clip_region(clip: &Node) -> Option<Rc<Option<(BezPath, FillRule)>>> {
+    let f = CLIP_REGION.get()?;
+    if !has_effects(clip) {
+        return None;
+    }
+    let inputs = live_inputs();
+    let kept = CLIPS.with_borrow_mut(|kept| {
+        let i = kept.iter().position(|e| e.inputs == inputs && e.clip == *clip)?;
+        let e = kept.remove(i);
+        let region = e.region.clone();
+        kept.insert(0, e);
+        Some(region)
+    });
+    if let Some(region) = kept {
+        return region;
+    }
+    #[cfg(test)]
+    CLIPS_EVALUATED.with(|c| c.set(c.get() + 1));
+    let region = f(clip).map(Rc::new);
+    let elements = region.as_deref().and_then(Option::as_ref).map_or(0, |(bp, _)| bp.elements().len());
+    let size = elements.saturating_add(art_size(std::slice::from_ref(clip)));
+    if size <= LIVE_KEPT_SIZE {
+        let e = EvaluatedClip { clip: clip.clone(), inputs, region: region.clone(), size };
+        CLIPS.with_borrow_mut(|kept| {
+            kept.insert(0, e);
+            kept.truncate(CLIPS_KEPT);
+            let mut total = 0usize;
+            kept.retain(|e| {
+                total = total.saturating_add(e.size);
+                total <= LIVE_KEPT_SIZE
+            });
+        });
+    }
+    region
+}
+
+/// The box of a clipping path's region found by [`reshaped_clip_box`]: the clipping path and the
+/// [`LiveInputs`] as they were, the box and the [`art_size`] of the clipping path.
+struct ClipBox {
+    clip: Node,
+    inputs: u64,
+    rect: Option<Rect>,
+    size: usize,
+}
+
+/// How many boxes [`reshaped_clip_box`] keeps on each thread. Every pointer move measures every clip
+/// group it passes, so the boxes of all of a document's clip groups with live effects are kept, not
+/// only the latest few as with the regions.
+const CLIP_BOXES_KEPT: usize = 4096;
+
+thread_local! {
+    /// The boxes [`reshaped_clip_box`] keeps, by clipping path, and the sum of their sizes.
+    static CLIP_BOXES: RefCell<(HashMap<NodeId, ClipBox>, usize)> = RefCell::new((HashMap::new(), 0));
+}
+
+/// The box of the region `clip` clips to with its live geometry effects applied ([`clip_region`]),
+/// `None` when it has none or no region. The box is kept until `clip` or the [`LiveInputs`] change.
+/// When the boxes kept are full, a new box replaces as many others as it needs room for, so the
+/// pointer moving over more clip groups than fit still finds most of their boxes.
+pub(crate) fn reshaped_clip_box(clip: &Node) -> Option<Rect> {
+    use vectorcraft_geom::kurbo::Shape;
+    CLIP_REGION.get()?;
+    if !has_effects(clip) {
+        return None;
+    }
+    let inputs = live_inputs();
+    let kept = CLIP_BOXES.with_borrow(|(boxes, _)| boxes.get(&clip.id).filter(|b| b.inputs == inputs && b.clip == *clip).map(|b| b.rect));
+    if let Some(rect) = kept {
+        return rect;
+    }
+    let rect = clip_region(clip).and_then(|r| r.as_ref().as_ref().filter(|(bp, _)| !bp.elements().is_empty()).map(|(bp, _)| bp.bounding_box()));
+    let size = art_size(std::slice::from_ref(clip));
+    if size <= LIVE_KEPT_SIZE {
+        CLIP_BOXES.with_borrow_mut(|(boxes, total)| {
+            if let Some(old) = boxes.remove(&clip.id) {
+                *total = total.saturating_sub(old.size);
+            }
+            while boxes.len() >= CLIP_BOXES_KEPT || total.saturating_add(size) > LIVE_KEPT_SIZE {
+                let Some(other) = boxes.keys().next().copied() else { break };
+                if let Some(old) = boxes.remove(&other) {
+                    *total = total.saturating_sub(old.size);
+                }
+            }
+            boxes.insert(clip.id, ClipBox { clip: clip.clone(), inputs, rect, size });
+            *total = total.saturating_add(size);
+        });
+    }
+    rect
+}
+
+/// The regions a click inside a clip group must fall in: those `clip` clips to with its live
+/// effects applied, as the canvas clips ([`clip_region`]), else its plain shapes ([`clip_regions`]).
+fn clip_areas(clip: &Node) -> Vec<(BezPath, FillRule)> {
+    match clip_region(clip) {
+        Some(region) => region.as_ref().iter().cloned().collect(),
+        None => clip_regions(clip),
+    }
+}
+
+/// The regions `clip` clips to by its plain shapes ([`Node::clip_shapes`]), without its live
+/// effects. Text counts by its frame: glyph outlines need the font engine, above this crate.
 pub fn clip_regions(clip: &Node) -> Vec<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)> {
     let frame = |n: &Node| {
         let b = n.geometric_bounds()?;
@@ -698,7 +857,7 @@ fn hit_children(
         // Elsewhere a clip group (or a layer with a clipping mask) only hits inside it, except for
         // the selection tools in isolation mode within it.
         let edited = opt.clip_outlines && editable_only && edits_inside(parent, opt.scope);
-        if !edited && !clip_contains(clip, p) {
+        if !edited && !clip_contains(clip, p, opt.outline) {
             return None;
         }
     }
@@ -960,7 +1119,7 @@ fn hit_any(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option
     match &n.kind {
         // A clip group only hits inside its clipping path.
         NodeKind::Group { children, clip } => {
-            if *clip && children.first().is_some_and(|c| !clip_contains(c, p)) {
+            if *clip && children.first().is_some_and(|c| !clip_contains(c, p, opt.outline)) {
                 return None;
             }
             children.iter().rev().find_map(|c| hit_any(c, p, opt, symbols))
@@ -1048,7 +1207,9 @@ fn moved(n: &Node, xf: vectorcraft_geom::Affine) -> Node {
 /// group's original shapes, which the canvas does not draw, and guide paths with
 /// [`HitOptions::skip_guides`]. Nothing is picked in art that placing through the symbol's 9-slice
 /// guides could make more than [`crate::MAX_SYMBOL_NODES`] objects of, which the canvas does not
-/// draw. `None` when `inst` is not a symbol instance or no editable object of its art is under `p`.
+/// draw. Art in a layer of the symbol whose Preview is off, and the art of an instance below such a
+/// layer, is tested in outline ([`HitOptions::outline`]), as the canvas draws it. `None` when `inst` is not a symbol instance or
+/// no editable object of its art is under `p`.
 pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) -> Option<Vec<u32>> {
     struct Find<'a> {
         art: &'a InstanceArt<'a>,
@@ -1057,35 +1218,34 @@ pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) ->
         symbols: &'a SymbolBoxes<'a>,
     }
     impl Find<'_> {
-        fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>) -> bool {
-            self.art.place(n, whole).is_some_and(|n| hit_any(&n, self.p, self.opt, self.symbols).is_some())
+        fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>, opt: HitOptions) -> bool {
+            self.art.place(n, whole).is_some_and(|n| hit_any(&n, self.p, opt, self.symbols).is_some())
         }
         fn skips_guide(&self, n: &Node) -> bool {
             self.opt.skip_guides && matches!(n.kind, NodeKind::Path { guide: true, .. })
         }
-        fn find(&self, n: &Node, path: &mut Vec<u32>, whole: Option<vectorcraft_geom::Affine>) -> bool {
+        /// `outline`: the view is in Outline, or a layer around `n` has Preview off.
+        fn find(&self, n: &Node, path: &mut Vec<u32>, whole: Option<vectorcraft_geom::Affine>, outline: bool) -> bool {
             if !n.visible || n.locked || n.is_template() || self.skips_guide(n) {
                 return false;
             }
-            let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole) };
+            let outline = outline || previews_off(n);
+            let opt = HitOptions { outline, ..self.opt };
+            let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole, opt) };
             if path.len() >= crate::symbol_overrides::MAX_PATH_DEPTH {
-                return self.hit(n, whole);
+                return self.hit(n, whole, opt);
             }
             let whole = self.art.whole(n, whole);
             if n.clips()
                 && let Some(first) = children.first()
             {
                 let Some(clip) = self.art.place_unclipped(first, whole) else { return false };
-                if self.opt.clip_outlines
-                    && first.visible
-                    && !first.locked
-                    && !self.skips_guide(first)
-                    && clip_outline(&clip, self.p, self.opt).is_some()
+                if self.opt.clip_outlines && first.visible && !first.locked && !self.skips_guide(first) && clip_outline(&clip, self.p, opt).is_some()
                 {
                     path.push(0);
                     return true;
                 }
-                if !clip_contains(&clip, self.p) {
+                if !clip_contains(&clip, self.p, outline) {
                     return false;
                 }
             }
@@ -1096,7 +1256,7 @@ pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) ->
                 }
                 let Ok(i) = u32::try_from(i) else { continue };
                 path.push(i);
-                if self.find(c, path, whole) {
+                if self.find(c, path, whole, outline) {
                     return true;
                 }
                 path.pop();
@@ -1107,7 +1267,17 @@ pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) ->
     let art = InstanceArt::of(doc, inst)?;
     let symbols = doc.symbol_boxes();
     let mut path = vec![];
-    Find { art: &art, p, opt, symbols: &symbols }.find(&art.art, &mut path, None).then_some(path)
+    let outline = opt.outline || below_preview_off(doc, inst, opt.scope);
+    Find { art: &art, p, opt, symbols: &symbols }.find(&art.art, &mut path, None, outline).then_some(path)
+}
+
+/// Is `n` below a layer whose Preview is off, so that the canvas draws it in outline? As for clicks
+/// ([`path_options`]), the Preview of the isolated container `scope` and of the layers around it
+/// does not count.
+fn below_preview_off(doc: &Document, n: &Node, scope: Option<NodeId>) -> bool {
+    let Some(chain) = doc.ancestry(n.id) else { return false };
+    let below = scope.and_then(|s| chain.iter().position(|a| *a == s)).map_or(0, |i| i + 1);
+    chain.iter().skip(below).any(|a| doc.node(*a).is_some_and(previews_off))
 }
 
 /// The outlines of the object at `path` in symbol instance `inst`'s art (see [`symbol_part_at`]),
@@ -1116,11 +1286,23 @@ pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) ->
 /// group per cell) they are cut to the bounds of the group's clip path, which is not outlined. An
 /// object inside a clip group or a clipping layer of the art, other than its clipping path, is cut
 /// to the bounds of that clipping path as well, which contain the region where [`symbol_part_at`]
-/// picks it.
+/// picks it: the bounds of the region its live geometry effects give it ([`clip_region`]) when it
+/// has any.
 /// `None` for art past the 9-slice object limit that [`symbol_part_at`] applies.
 pub fn symbol_part_outline(doc: &Document, inst: &Node, path: &[u32]) -> Option<BezPath> {
+    symbol_part_outline_in_view(doc, inst, path, HitOptions::default())
+}
+
+/// [`symbol_part_outline`] in the view the canvas shows, for the clicks of `opt`: in Outline view
+/// ([`HitOptions::outline`]) and below a layer whose Preview is off, in the art or around the
+/// instance (the isolated container [`HitOptions::scope`] and the layers around it apart), the
+/// outlines are cut to the bounds of the plain clipping paths, without their live effects, as
+/// [`symbol_part_at`] counts them. The outline is empty when the effects of a clipping path around
+/// the object leave no region.
+pub fn symbol_part_outline_in_view(doc: &Document, inst: &Node, path: &[u32], opt: HitOptions) -> Option<BezPath> {
     let art = InstanceArt::of(doc, inst)?;
     let part = crate::symbol_overrides::part(&art.art, path)?;
+    let mut outline = opt.outline || below_preview_off(doc, inst, opt.scope);
     let mut out = BezPath::new();
     let mut limit = None;
     let mut whole = None;
@@ -1128,24 +1310,40 @@ pub fn symbol_part_outline(doc: &Document, inst: &Node, path: &[u32]) -> Option<
     for &i in path {
         let children = n.children()?;
         whole = art.whole(n, whole);
+        outline = outline || previews_off(n);
         if i != 0
             && n.clips()
             && let Some(first) = children.first()
-            && let Some(clip) = art.place_unclipped(first, whole)?.geometric_bounds()
         {
-            match meet(Some(clip), limit) {
-                Some(r) => limit = Some(r),
-                None => return Some(out),
-            }
+            let Some(within) = limit_within(&art.place_unclipped(first, whole)?, limit, outline) else { return Some(out) };
+            limit = within;
         }
         n = children.get(usize::try_from(i).ok()?)?;
     }
-    outline_within(&art.place(part, whole)?, limit, &mut out);
+    outline_within(&art.place(part, whole)?, limit, outline, &mut out);
     Some(out)
 }
 
-/// [`symbol_part_outline`] for placed object `n`, cut to `limit` when there is one.
-fn outline_within(n: &Node, limit: Option<Rect>, out: &mut BezPath) {
+/// `limit` cut to the box that the art clipped by `clip` is drawn in: the bounds of the region the
+/// live geometry effects of `clip` give it ([`clip_region`]), or the bounds of `clip` when it has no
+/// such effects and with `outline`, where the canvas draws no effects. `None` when none of that art
+/// is drawn: the effects leave no region, or the box is outside `limit`.
+fn limit_within(clip: &Node, limit: Option<Rect>, outline: bool) -> Option<Option<Rect>> {
+    use vectorcraft_geom::kurbo::Shape;
+    let region = if outline { None } else { clip_region(clip) };
+    let bounds = match region.as_deref() {
+        Some(Some((bp, _))) if !bp.elements().is_empty() => Some(bp.bounding_box()),
+        Some(_) => return None,
+        None => clip.geometric_bounds(),
+    };
+    match bounds {
+        Some(b) => meet(Some(b), limit).map(Some),
+        None => Some(limit),
+    }
+}
+
+/// [`symbol_part_outline_in_view`] for placed object `n`, cut to `limit` when there is one.
+fn outline_within(n: &Node, limit: Option<Rect>, outline: bool, out: &mut BezPath) {
     use vectorcraft_geom::kurbo::Shape;
     if let Some(pd) = n.path_data() {
         match limit {
@@ -1159,20 +1357,15 @@ fn outline_within(n: &Node, limit: Option<Rect>, out: &mut BezPath) {
         out.extend(b.to_path(0.1));
     }
     let Some(children) = n.children() else { return };
+    let outline = outline || previews_off(n);
     if n.clips()
         && let Some((first, rest)) = children.split_first()
     {
-        let inner = match first.geometric_bounds() {
-            Some(c) => match meet(Some(c), limit) {
-                Some(r) => Some(r),
-                None => return,
-            },
-            None => limit,
-        };
-        rest.iter().for_each(|c| outline_within(c, inner, out));
+        let Some(inner) = limit_within(first, limit, outline) else { return };
+        rest.iter().for_each(|c| outline_within(c, inner, outline, out));
         return;
     }
-    children.iter().for_each(|c| outline_within(c, limit, out));
+    children.iter().for_each(|c| outline_within(c, limit, outline, out));
 }
 
 /// The overlap of `a` and `b` (`a` alone without `b`), `None` when they do not overlap.
@@ -1248,31 +1441,48 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 /// or of the parent of the single object isolated, does not limit the marquee, as it does not limit
 /// the selection tools' clicks.
 pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> Vec<NodeId> {
-    marquee_with(doc, r, scope, leaves, false)
+    marquee_with(doc, r, scope, leaves, false, false)
+}
+
+/// [`marquee`] in the view the canvas shows: with `outline` (Outline view), and below a layer
+/// whose Preview is off, a clipping path counts by its plain shapes, without its live effects, as
+/// the clicks of [`HitOptions::outline`] do.
+pub fn marquee_in_view(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, outline: bool) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, leaves, false, outline)
 }
 
 /// Candidates for whole-object enclosure by a loop bounded by `r`. Eligibility and group
-/// traversal follow [`marquee`]; compounds contribute the complete path they paint.
-pub fn enclosure_candidates(doc: &Document, r: Rect, scope: Option<NodeId>) -> Vec<NodeId> {
-    marquee_with(doc, r, scope, true, true)
+/// traversal follow [`marquee_in_view`]; compounds contribute the complete path they paint.
+pub fn enclosure_candidates(doc: &Document, r: Rect, scope: Option<NodeId>, outline: bool) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, true, true, outline)
 }
 
-fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, whole_compounds: bool) -> Vec<NodeId> {
+/// Is `n` a layer whose Preview is off (its art is drawn and clicked in outline)?
+fn previews_off(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Layer { preview: false, .. })
+}
+
+fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, whole_compounds: bool, outline: bool) -> Vec<NodeId> {
     let mut out = Vec::new();
-    // `tops` pairs each object with the part of `r` in which the marquee can touch it.
-    let tops: Vec<(&std::sync::Arc<Node>, Rect)> = match scope.and_then(|s| doc.node(s)) {
+    // The objects the marquee may touch ([`Top`]).
+    let tops: Vec<Top> = match scope.and_then(|s| doc.node(s)) {
         // Isolated art whose layer, or a group around it, was locked or hidden afterwards: the
         // marquee touches none of it, as clicks don't (#5309).
         Some(s) if !doc.is_editable(s.id) => vec![],
         Some(s) => match s.children() {
-            Some(c) => c.iter().enumerate().filter(|(i, c)| !c.is_ruler_guide() && !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
+            Some(c) => c
+                .iter()
+                .enumerate()
+                .filter(|(i, c)| !c.is_ruler_guide() && !shaper_hides(s, *i, scope))
+                .map(|(_, c)| (c, Some(r), outline, None))
+                .collect(),
             // A single object isolated: only it.
             None => doc
                 .parent_of(s.id)
                 .and_then(|p| doc.node(p))
                 .and_then(|p| p.children())
                 .into_iter()
-                .flat_map(|c| c.iter().filter(|c| c.id == s.id).map(|c| (c, r)))
+                .flat_map(|c| c.iter().filter(|c| c.id == s.id).map(|c| (c, Some(r), outline, None)))
                 .collect(),
         },
         // The objects of the layers, looking through sublayers (hidden, locked and template ones
@@ -1281,42 +1491,88 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             .layers
             .iter()
             .filter(|l| l.visible && !l.locked && !l.is_template() && doc.pattern_edit.as_ref().is_none_or(|e| e.layer == l.id))
-            .flat_map(|l| layer_objects(l, r))
+            .flat_map(|l| layer_objects(l, r, outline))
             .collect(),
     };
     /// The objects of layer `l`, each with the part of `r` that the clipping masks of `l` and of
-    /// the sublayers it is in leave.
-    fn layer_objects(l: &Node, r: Rect) -> Vec<(&std::sync::Arc<Node>, Rect)> {
+    /// the sublayers it is in leave, whether it is in outline, and for the clipping mask of `l`,
+    /// `r` for its edge test. The clipping mask itself counts by its own geometry within its plain
+    /// shapes ([`mask_marquee`]).
+    fn layer_objects(l: &Node, r: Rect, outline: bool) -> Vec<Top<'_>> {
         let mut out = vec![];
-        let Some(r) = marquee_in(l, r) else { return out };
-        for c in l.children().into_iter().flatten() {
+        let outline = outline || previews_off(l);
+        let inner = marquee_in_parent(l, r, outline);
+        for (i, c) in l.children().into_iter().flatten().enumerate() {
             if c.is_layer() {
-                if c.visible && !c.locked && !c.is_template() {
-                    out.extend(layer_objects(c, r));
+                if let Some(inner) = inner
+                    && c.visible
+                    && !c.locked
+                    && !c.is_template()
+                {
+                    out.extend(layer_objects(c, inner, outline));
                 }
             } else if !c.is_ruler_guide() {
-                out.push((c, r));
+                if i == 0 && l.clips() {
+                    out.push((c, mask_marquee(l, r), outline, Some(r)));
+                } else if inner.is_some() {
+                    out.push((c, inner, outline, None));
+                }
             }
         }
         out
     }
+    /// The part of `r` in which the marquee can touch the clipping path of `parent` by its own
+    /// geometry: within the bounds of its plain shapes ([`marquee_in`]), where clicks find its
+    /// outline too ([`clip_outline_hit`]), whatever its live effects do to the region it clips to.
+    fn mask_marquee(parent: &Node, r: Rect) -> Option<Rect> {
+        marquee_in_parent(parent, r, true)
+    }
+    /// Does the marquee `r` touch `clip`, the clipping path of a clip group or of a layer with a
+    /// clipping mask, on the edge of the region its live effects give it ([`clip_region`]), where
+    /// the clip shows? Never in outline, nor without live effects: its own geometry counts then.
+    fn clip_edge_touches(clip: &Node, r: Rect, outline: bool) -> bool {
+        if outline {
+            return false;
+        }
+        clip_region(clip).is_some_and(|region| {
+            region.as_ref().as_ref().is_some_and(|(bp, _)| {
+                // The edge of the region is its outline with each open subpath closed, as `fill_contains` fills it.
+                let mut edge = PathData::from_bezpath(bp);
+                edge.subpaths.iter_mut().for_each(|sp| sp.closed = true);
+                vectorcraft_geom::hit::intersects_rect(&edge, r)
+            })
+        })
+    }
+    /// Is `n` collected whole by [`collect_leaves`], not by its members?
+    fn is_leaf(n: &Node) -> bool {
+        !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Intertwine { .. })
+    }
     /// Does the marquee `r` touch `n`? It skips the children of a Shaper Group that clicks skip
     /// ([`shaper_hides`]). An Intertwine group is touched by its members, and a repeat is touched
     /// by the copies it draws, as clicks hit them. Objects of every other kind except paths,
-    /// compound paths, layers and groups are touched by their box.
-    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool) -> bool {
+    /// compound paths, layers and groups are touched by their box. A clipping path is touched by
+    /// its own geometry ([`mask_marquee`]) and on the edge of its region ([`clip_edge_touches`]).
+    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool) -> bool {
         match &n.kind {
             NodeKind::Path { path, .. } => vectorcraft_geom::hit::intersects_rect(path, r),
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
-                marquee_in(n, r).is_some_and(|r| {
-                    children.iter().enumerate().any(|(i, c)| c.visible && !shaper_hides(n, i, scope) && touches(c, s, r, scope, whole_compounds))
+                let outline = outline || previews_off(n);
+                let inner = marquee_in_parent(n, r, outline);
+                children.iter().enumerate().any(|(i, c)| {
+                    c.visible
+                        && !shaper_hides(n, i, scope)
+                        && if i == 0 && n.clips() {
+                            mask_marquee(n, r).is_some_and(|r| touches(c, s, r, scope, whole_compounds, outline)) || clip_edge_touches(c, r, outline)
+                        } else {
+                            inner.is_some_and(|r| touches(c, s, r, scope, whole_compounds, outline))
+                        }
                 })
             }
             NodeKind::Compound { children, .. } if whole_compounds => {
                 children.iter().filter_map(|c| c.path_data()).any(|path| vectorcraft_geom::hit::intersects_rect(path, r))
             }
-            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds)),
-            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds)),
+            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds, outline)),
+            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds, outline)),
             // A box with no width or no height (an instance of a symbol that draws a straight
             // line) is touched where the marquee crosses it.
             _ => n.geometric_bounds_with(s).is_some_and(|b| {
@@ -1325,18 +1581,30 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             }),
         }
     }
-    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, out: &mut Vec<NodeId>) {
+    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool, out: &mut Vec<NodeId>) {
         match &n.kind {
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
-                let Some(r) = marquee_in(n, r) else { return };
+                let outline = outline || previews_off(n);
+                let inner = marquee_in_parent(n, r, outline);
                 for (i, c) in children.iter().enumerate() {
-                    if c.visible && !c.locked && !shaper_hides(n, i, scope) {
-                        collect_leaves(c, s, r, scope, whole_compounds, out);
+                    if !c.visible || c.locked || shaper_hides(n, i, scope) {
+                        continue;
+                    }
+                    if i == 0 && n.clips() {
+                        let before = out.len();
+                        if let Some(r) = mask_marquee(n, r) {
+                            collect_leaves(c, s, r, scope, whole_compounds, outline, out);
+                        }
+                        if out.len() == before && is_leaf(c) && clip_edge_touches(c, r, outline) {
+                            out.push(c.id);
+                        }
+                    } else if let Some(r) = inner {
+                        collect_leaves(c, s, r, scope, whole_compounds, outline, out);
                     }
                 }
             }
             _ => {
-                if touches(n, s, r, scope, whole_compounds) {
+                if touches(n, s, r, scope, whole_compounds, outline) {
                     out.push(n.id);
                 }
             }
@@ -1344,36 +1612,56 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     }
     let symbols = doc.symbol_boxes();
     let locks = doc.locked_artboards();
-    for (t, r) in tops {
+    for (t, r, outline, edge) in tops {
         if !t.visible || t.locked || locks.holds_id(t.id) {
             continue;
         }
         if leaves {
-            collect_leaves(t, &symbols, r, scope, whole_compounds, &mut out);
-        } else if touches(t, &symbols, r, scope, whole_compounds) {
+            let before = out.len();
+            if let Some(r) = r {
+                collect_leaves(t, &symbols, r, scope, whole_compounds, outline, &mut out);
+            }
+            if edge.is_some_and(|e| out.len() == before && is_leaf(t) && clip_edge_touches(t, e, outline)) {
+                out.push(t.id);
+            }
+        } else if r.is_some_and(|r| touches(t, &symbols, r, scope, whole_compounds, outline))
+            || edge.is_some_and(|e| clip_edge_touches(t, e, outline))
+        {
             out.push(t.id);
         }
     }
     out
 }
 
+/// An object a marquee may touch ([`marquee_with`]): the object, the part of the marquee in which
+/// it can be touched (`None` when nowhere), whether it is in outline, and for the clipping mask of a
+/// layer, the marquee whose edge test it also takes (`clip_edge_touches`).
+type Top<'a> = (&'a std::sync::Arc<Node>, Option<Rect>, bool, Option<Rect>);
+
 /// The part of a marquee `r` in which it can touch the children of `parent`. For a clip group or a
-/// layer with a clipping mask, this is what [`marquee_in_clip`] returns for its clipping path (None
-/// when the marquee misses it); otherwise it is all of `r`.
+/// layer with a clipping mask, this is what [`marquee_in_clip`] returns for the plain shapes of its
+/// clipping path ([`clip_regions`]; None when the marquee misses them); otherwise it is all of `r`.
 pub fn marquee_in(parent: &Node, r: Rect) -> Option<Rect> {
+    marquee_in_parent(parent, r, true)
+}
+
+/// The part of a marquee `r` in which it can touch the children of `parent`, by the region its
+/// clipping path clips to ([`clip_areas`]), or by that path's plain shapes with `outline`
+/// ([`marquee_in_view`]).
+fn marquee_in_parent(parent: &Node, r: Rect, outline: bool) -> Option<Rect> {
     match parent.children().and_then(|c| c.first()) {
-        Some(clip) if parent.clips() => marquee_in_clip(clip, r),
+        Some(clip) if parent.clips() => marquee_in_clip(clip, r, outline),
         _ => Some(r),
     }
 }
 
 /// The part of a marquee `r` in which it can touch the art that `clip` clips (the clipping path of
 /// a clip group or of a layer with a clipping mask): `r` cut to the bounds of the regions `clip`
-/// clips to ([`clip_regions`]), or `None` when `r` meets none of those regions. Within those
-/// bounds, art outside a region that is not a rectangle still counts.
-fn marquee_in_clip(clip: &Node, r: Rect) -> Option<Rect> {
+/// clips to ([`clip_areas`], its plain shapes with `outline`), or `None` when `r` meets none of
+/// those regions. Within those bounds, art outside a region that is not a rectangle still counts.
+fn marquee_in_clip(clip: &Node, r: Rect, outline: bool) -> Option<Rect> {
     use vectorcraft_geom::kurbo::Shape;
-    let regions = clip_regions(clip);
+    let regions = if outline { clip_regions(clip) } else { clip_areas(clip) };
     // The edge of a region is its outline with each open subpath closed, as `fill_contains` fills it.
     let meets = |(bp, rule): &(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)| {
         let mut edge = vectorcraft_geom::PathData::from_bezpath(bp);

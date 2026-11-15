@@ -838,6 +838,7 @@ font-technology	Variable	Változó
 	Copy Artboard	Rajztábla másolása
 	Copy Color Value (Hex)	Színérték másolása (hex)
 	Copy Fonts Used in the Document	A dokumentumban használt betűtípusok másolása
+	Copy Info	Adatok másolása
 	Copy Links	Csatolások másolása
 	Copy only fonts you own or are licensed to install.	Csak olyan betűtípust másolj, amely a tiéd, vagy amelynek telepítésére licenced van.
 	Copy Selected Style	Kijelölt stílus másolása
@@ -1666,6 +1667,7 @@ file-filter	Templates	Sablonok
 	Format	Formátum
 	Format Options	Formátumbeállítások
 	Format Settings	Formátumbeállítások
+	Format Settings…	Formátumbeállítások…
 	Format:	Formátum:
 	Formats:	Formátumok:
 	Fractional Widths	Tört szélességek
@@ -2106,6 +2108,7 @@ file-filter	Templates	Sablonok
 	Import Library	Könyvtár importálása
 	Import Library…	Könyvtár importálása…
 	Import PDF	PDF importálása
+	Import PDF pages as links	PDF-oldalak importálása csatolásként
 	Import PDF Presets	PDF-előbeállítások importálása
 	Import Perspective Grid Presets	Perspektivikus rács előbeállításainak importálása
 	Import Print Presets	Nyomtatási előbeállítások importálása
@@ -3259,6 +3262,7 @@ mark-style	Japanese	Japán
 	Radial	Körkörös
 	Radial Blur	Körkörös elmosás
 	Radial Blur…	Körkörös elmosás…
+	Blur Center	Elmosás középpontja
 	Radial Glows	Körkörös ragyogások
 	Organic Fades	Organikus áttűnések
 	Holographic	Holografikus
@@ -4096,6 +4100,18 @@ mark-style	Japanese	Japán
 	Smart Guides (View → Smart Guides)	Intelligens segédvonalak (Nézet → Intelligens segédvonalak)
 	Smart Guides (⌘U)	Intelligens segédvonalak (⌘U)
 	Smart Punctuation…	Intelligens írásjelek…
+	Smart Punctuation	Intelligens írásjelek
+	ff, fi, ffi Ligatures	ff, fi, ffi ligatúrák
+	ff, fl, ffl Ligatures	ff, fl, ffl ligatúrák
+	Smart Quotes	Intelligens idézőjelek
+	Smart Spaces	Intelligens szóközök
+	En, Em Dashes	Gondolatjelek és nagykötőjelek
+	Ellipses	Három pont
+	Expert Fractions	Szakértői törtek
+	Replace In	Csere helye
+	Selected Text Only	Csak a kijelölt szöveg
+	Entire Document	Teljes dokumentum
+	Report Results	Eredmények jelentése
 	Smooth	Simítás
 	Smooth Color	Sima színátmenet
 	Smooth Tool	Simítás
@@ -4126,6 +4142,7 @@ mark-style	Japanese	Japán
 	Sort by Luminance	Rendezés fénysűrűség szerint
 	Sort by Name	Rendezés név szerint
 	Sort by Popularity	Rendezés gyakoriság szerint
+	Sort by Size	Rendezés méret szerint
 	Sort by Status	Rendezés állapot szerint
 	Source code on GitHub	Forráskód a GitHubon
 	Source Image	Forráskép
@@ -5189,6 +5206,7 @@ imageTrace	Outline	Körvonal
 @msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
+@msg	Copied the link info	Csatolás adatai másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Nem sikerült a rendszer vágólapjára másolni: {e}
@@ -7504,6 +7522,10 @@ breakText	Glyphs	Glifák
 	Grommets	Ringlik
 	Grommet Inset	Ringlik távolsága a széltől
 	Diameter	Átmérő
+	Nest Shapes…	Alakzatok elrendezése…
+	Nest Shapes	Alakzatok elrendezése
+	Roll	Tekercs
+
 # Status and error messages of commands, scripts, file import and export, and plug-ins.
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	a 'caller', a 'callee' és az 'arguments' nem használható szigorú módú függvényeken
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Egy profilon egy Forgatás tengely körül effektus lehet. Inkább a meglévő effektus beállításait szerkeszd.
@@ -8890,6 +8912,8 @@ breakText	Glyphs	Glifák
 @msg	the RTF file is too large to place as type (at most {_1} MB)	az RTF-fájl túl nagy ahhoz, hogy szövegként elhelyezhető legyen (legfeljebb {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	az SVG kibontva több mint {0} beágyazott SVG-képet tartalmaz
 @msg	the SVG expands to more than {0} objects	az SVG kibontva több mint {0} objektumot tartalmaz
+@msg	the SVG's style sheets take too long to match	az SVG stíluslapjainak illesztése túl sokáig tart
+@msg	the SVG's styles expand to more than {0} MB	az SVG stílusai kibontva több mint {0} MB-ot foglalnak
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	az SVG-fájl nagyobb, mint {MAX_IMPORT_BYTES} bájt
 @msg	the SVG has no drawable objects	az SVG-ben nincsenek kirajzolható objektumok
 @msg	the SVGZ file unpacks to more than {_1} MB	az SVGZ-fájl kicsomagolva nagyobb, mint {_1} MB

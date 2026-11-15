@@ -15,6 +15,7 @@
 	Edge Brightness	Kantljusstyrka
 	Smoothness	Mjukhet
 	Radial Blur…	Radiell oskärpa…
+	Blur Center	Oskärpans mittpunkt
 	Smart Blur…	Smart oskärpa…
 	Sharpen	Skärpa
 	Unsharp Mask…	Oskarp mask…
@@ -632,6 +633,7 @@ font-technology	Variable	Variabla
 	Copy All Styles	Kopiera alla stilar
 	Copy Color Value (Hex)	Kopiera färgvärde (hex)
 	Copy Fonts Used in the Document	Kopiera typsnitt som används i dokumentet
+	Copy Info	Kopiera info
 	Copy Links	Kopiera länkar
 	Copy Selected Style	Kopiera markerad stil
 	Copy to User Defined	Kopiera till användardefinierade
@@ -1300,6 +1302,7 @@ font-technology	Variable	Variabla
 	Format	Format
 	Format Options	Formatalternativ
 	Format Settings	Formatinställningar
+	Format Settings…	Formatinställningar…
 	Format:	Format:
 	Formats:	Format:
 	Fractional Widths	Bråkdelsbredder
@@ -1646,6 +1649,7 @@ font-technology	Variable	Variabla
 	Images:	Bilder:
 	Import Keyboard Shortcuts…	Importera kortkommandon…
 	Import PDF	Importera PDF
+	Import PDF pages as links	Importera PDF-sidor som länkar
 	Import PDF Presets	Importera PDF-förinställningar
 	Import Perspective Grid Presets	Importera förinställningar för perspektivrutnät
 	Import Print Presets	Importera utskriftsförinställningar
@@ -3366,6 +3370,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Smarta stödlinjer (Visa → Smarta stödlinjer)
 	Smart Guides (⌘U)	Smarta stödlinjer (⌘U)
 	Smart Punctuation…	Smarta skiljetecken…
+	Smart Punctuation	Smarta skiljetecken
+	ff, fi, ffi Ligatures	Ligaturer ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligaturer ff, fl, ffl
+	Smart Quotes	Smarta citattecken
+	Smart Spaces	Smarta blanksteg
+	En, Em Dashes	Korta och långa tankstreck
+	Ellipses	Ellipser
+	Expert Fractions	Expertbråk
+	Replace In	Ersätt i
+	Selected Text Only	Endast markerad text
+	Entire Document	Hela dokumentet
+	Report Results	Rapportera resultat
 	Smooth	Mjuk
 	Corner	Hörn
 	Relative	Relativ
@@ -3396,6 +3412,7 @@ digits	Malayalam	Malayalam
 	Solid	Enfärgad
 	Sort by Kind	Sortera efter typ
 	Sort by Name	Sortera efter namn
+	Sort by Size	Sortera efter storlek
 	Sort by Status	Sortera efter status
 	Source code on GitHub	Källkod på GitHub
 	Source Sans 3	Source Sans 3
@@ -4287,6 +4304,7 @@ axis	Both	Båda
 @msg	there is no script engine named {name}	det finns ingen skriptmotor med namnet {name}
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
+@msg	Copied the link info	Kopierade länkinfo
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
 @msg	Couldn't open {name}: {e}	Kunde inte öppna {name}: {e}
@@ -8660,6 +8678,8 @@ digits	Hindi	Hindi
 @msg	the subpath has no ends to extend (it is closed or a single point)	delbanan har inga ändar att förlänga (den är stängd eller en enkel punkt)
 @msg	the SVG expands to more than {0} nested SVG images	SVG-filen expanderar till fler än {0} kapslade SVG-bilder
 @msg	the SVG expands to more than {0} objects	SVG-filen expanderar till fler än {0} objekt
+@msg	the SVG's style sheets take too long to match	matchningen av SVG-filens formatmallar tar för lång tid
+@msg	the SVG's styles expand to more than {0} MB	SVG-filens stilar expanderar till mer än {0} MB
 @msg	the SVG has no drawable objects	SVG-filen har inga ritbara objekt
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ-filen packas upp till mer än {_1} MB
 @msg	the symbols are nested too deeply to expand their instances	symbolerna är kapslade för djupt för att deras instanser ska kunna expanderas
@@ -8995,6 +9015,9 @@ digits	Hindi	Hindi
 	Grommets	Öljetter
 	Grommet Inset	Öljetternas avstånd från kanten
 	Diameter	Diameter
+	Nest Shapes…	Packa former…
+	Nest Shapes	Packa former
+	Roll	Rulle
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-effekter kräver ändliga koordinater inom 100 miljoner punkter
