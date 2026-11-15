@@ -118,6 +118,49 @@ fn opaque_pixels_stay_opaque_where_warp_pieces_overlap() {
     }
 }
 
+/// Pieces the file leaves out share no image: with Images set to Link, the warp pieces of a linked
+/// image that are hidden, or sit in hidden clip groups, put no `<image>` naming its file in the
+/// defs unless hidden layers are kept. Visible pieces share one.
+#[test]
+fn hidden_warp_pieces_share_no_image() {
+    let path = "/away/photo.png";
+    let svg = |d: &Document, hidden_layers: bool| {
+        let opts = ExportOptions { images: vectorcraft_svg::ImageMode::Link, hidden_layers, ..ExportOptions::default() };
+        export_full(d, &opts, None).svg
+    };
+    // Every image in `n` linked to `path`.
+    fn link(n: &mut Node, path: &str) {
+        if let NodeKind::Image(im) = &mut n.kind {
+            im.link = Some(vectorcraft_doc::LinkInfo::new(path));
+        }
+        for c in n.children_mut().into_iter().flatten() {
+            link(std::sync::Arc::make_mut(c), path);
+        }
+    }
+    for masked in [false, true] {
+        // Hide every image (`ancestor` false), or every clip group holding one (`ancestor` true).
+        for ancestor in [false, true] {
+            let mut d = warped_pixels(&|p| p, masked, [255, 0, 0, 255], |_| {});
+            let layer = std::sync::Arc::make_mut(&mut d.layers[0]);
+            let g = std::sync::Arc::make_mut(&mut layer.children_mut().unwrap()[0]);
+            link(g, path);
+            let visible = d.clone();
+            assert_eq!(svg(&visible, false).matches(path).count(), 1, "masked {masked}: the pieces share one image");
+            let layer = std::sync::Arc::make_mut(&mut d.layers[0]);
+            let g = std::sync::Arc::make_mut(&mut layer.children_mut().unwrap()[0]);
+            for piece in g.children_mut().unwrap() {
+                let piece = std::sync::Arc::make_mut(piece);
+                match piece.children_mut() {
+                    Some(kids) if !ancestor => std::sync::Arc::make_mut(&mut kids[1]).visible = false,
+                    _ => piece.visible = false,
+                }
+            }
+            assert!(!svg(&d, false).contains(path), "masked {masked}, ancestor {ancestor}: {}", svg(&d, false));
+            assert_eq!(svg(&d, true).matches(path).count(), 1, "masked {masked}, ancestor {ancestor}");
+        }
+    }
+}
+
 /// Pieces of an opaque image are drawn one over another without knockout masks; a colorize paint
 /// draws a gray image's light pixels partly transparent, so its pieces take them.
 #[test]
