@@ -1537,7 +1537,10 @@ antiAlias	Sharp	Nítid
 	Every (minutes)	Cada (minuts)
 	Every option is at its default.	Totes les opcions són al valor predeterminat.
 	Every option matches {base}.	Totes les opcions coincideixen amb {base}.
-	Every-line Composer	Composició línia per línia
+	Middle Eastern & South Asian Single-line Composer	Compositor d’una línia (Orient Pròxim i Àsia Meridional)
+	Middle Eastern & South Asian Every-line Composer	Composició línia per línia (Orient Pròxim i Àsia Meridional)
+	Standard Single-line Composer	Compositor estàndard d’una línia
+	Standard Every-line Composer	Composició estàndard línia per línia
 	Exact	Exacte
 	Exact dash lengths	Longituds de guió exactes
 	Example: {name}	Exemple: {name}
@@ -4403,7 +4406,6 @@ digits	Malayalam	Malaiàlam
 	Single Quotes:	Cometes simples:
 	Single Right Quotation Mark	Cometa simple dreta
 	Single Word Justification:	Justificació d’una sola paraula:
-	Single-line Composer	Compositor d’una línia
 	Sixth Space	Espai de sisena part
 	Size	Mida
 	Size Tile to Art	Ajusta la mida del mosaic a l’art
@@ -7768,3 +7770,4 @@ breakText	Glyphs	Glifs
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a JPEG (com a màxim 65535 píxels per costat): reduïu la resolució
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a Targa (com a màxim 65535 píxels per costat): reduïu la resolució
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} píxels és massa gran per a PSD (com a màxim {MAX_SIDE} píxels per costat): reduïu la resolució
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

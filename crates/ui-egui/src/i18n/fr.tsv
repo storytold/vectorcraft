@@ -1072,7 +1072,10 @@ font-technology	Variable	Variables
 	Every (minutes)	Toutes les (minutes)
 	Every option is at its default.	Toutes les options ont leur valeur par défaut.
 	Every option matches {base}.	Toutes les options correspondent à {base}.
-	Every-line Composer	Compositeur multiligne
+	Middle Eastern & South Asian Single-line Composer	Compositeur ligne par ligne (Moyen-Orient et Asie du Sud)
+	Middle Eastern & South Asian Every-line Composer	Compositeur multiligne (Moyen-Orient et Asie du Sud)
+	Standard Single-line Composer	Compositeur standard ligne par ligne
+	Standard Every-line Composer	Compositeur standard multiligne
 	Exact dash lengths	Longueurs de tirets exactes
 	Exceptions (comma separated)	Exceptions (séparées par des virgules)
 	Exclude	Exclusion
@@ -3453,7 +3456,6 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Guillemet simple ouvrant
 	Single Quotes:	Guillemets simples :
 	Single Right Quotation Mark	Guillemet simple fermant
-	Single-line Composer	Compositeur ligne par ligne
 	Toggle Line Composer	Basculer le compositeur de lignes
 	Sixth Space	Espace d’un sixième
 	Size	Taille
@@ -8254,7 +8256,7 @@ breakText	Glyphs	Glyphes
 @msg	column: true floats the whole column and takes no onto, above or below	column: true rend flottante toute la colonne et n’accepte ni onto, ni above, ni below
 @msg	command must be a shape.* command	command doit être une commande shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}] : `command` manquant
-@msg	composer must be "singleLine" or "everyLine"	composer doit valoir "singleLine" ou "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer doit être "singleLine", "everyLine", "standardSingleLine" ou "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	les formes composées acceptent les tracés, tracés transparents, groupes, formes composées, textes, dégradés de formes et enveloppes
 @msg	compound {_1} must contain exactly one open path to join	le tracé transparent {_1} doit contenir exactement un tracé ouvert à joindre
 @msg	connect end must be "start" or "end"	l’extrémité de connect doit valoir "start" ou "end"
