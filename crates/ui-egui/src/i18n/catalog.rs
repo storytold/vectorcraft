@@ -219,8 +219,13 @@ impl Catalog {
         }
         // Templates that start with text before those that start with a placeholder, so
         // `plug-in manifest: {0}` wins over `{_1} is {_2} bytes (limit {_3})` for a message it
-        // wraps; then most literal text first, so `Couldn't open {name}: {e}` wins over `{path}: {e}`.
-        c.templates.sort_by_key(|t| (matches!(t.pieces.first(), Some(Piece::Hole(_))), std::cmp::Reverse(t.literal)));
+        // wraps; then the longest text before the first placeholder, so `` `answers[{i}]` {e} `` wins
+        // over `` `{key}` must be true or false `` for a message it wraps; then most literal text
+        // first, so `Couldn't open {name}: {e}` wins over `{path}: {e}`.
+        c.templates.sort_by_key(|t| {
+            let lead = if let Some(Piece::Text(text)) = t.pieces.first() { text.len() } else { 0 };
+            (matches!(t.pieces.first(), Some(Piece::Hole(_))), std::cmp::Reverse(lead), std::cmp::Reverse(t.literal))
+        });
         c
     }
 
@@ -255,6 +260,28 @@ impl Catalog {
             return None;
         }
         self.templates.iter().find_map(|t| t.captures(s).map(|caps| (t.forms.as_slice(), caps)))
+    }
+
+    /// [`Catalog::message_forms`] for a part of a message that starts with `[`, which may be a JSON
+    /// array: an exact `@msg` entry, else only a template that starts with a literal `[` and a
+    /// placeholder whose value is an index of ASCII digits, such as ``[{j}] `{_1}`: {why}``. An
+    /// array such as ``["] `x`: b"]`` fits that template's text, but not its index.
+    pub fn indexed_message_forms<'a>(&self, s: &'a str) -> Option<(&[String], Captures<'_, 'a>)> {
+        if let Some(tr) = self.messages.get(s) {
+            return Some((std::slice::from_ref(tr), Vec::new()));
+        }
+        if s.len() > MAX_MESSAGE_LEN {
+            return None;
+        }
+        self.templates.iter().find_map(|t| {
+            let [Piece::Text(open), Piece::Hole(index), ..] = t.pieces.as_slice() else { return None };
+            if open != "[" {
+                return None;
+            }
+            let caps = t.captures(s)?;
+            let digits = caps.iter().any(|(k, v)| k == index && v.bytes().all(|b| b.is_ascii_digit()));
+            digits.then_some((t.forms.as_slice(), caps))
+        })
     }
 
     /// The translation of a status or error message that has an exact `@msg` entry, as written in
