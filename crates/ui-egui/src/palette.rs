@@ -10,7 +10,9 @@ use crate::{VectorcraftApp, menus};
 /// Engine commands the palette leaves out, each with the UI command of the same name that runs it
 /// the way the panels and menus do: (engine id, UI command id). The Layers panel's Delete
 /// Selection asks before deleting a layer that holds art, and the other UI commands open the
-/// command's dialog or file chooser. Scripts and the control channel still run the engine ids.
+/// command's dialog or file chooser (the four Other Library… commands ask for the library file).
+/// Batch… and Flattener Preview open the dialog or panel that runs the engine command. Scripts and
+/// the control channel still run the engine ids.
 const WRAPPED: &[(&str, &str)] = &[
     ("layer.delete", "ui.layerDelete"),
     ("brush.new", "ui.newBrush"),
@@ -18,34 +20,185 @@ const WRAPPED: &[(&str, &str)] = &[
     ("symbol.options", "ui.symbolOptions"),
     ("svgFilter.import", "ui.importSvgFilter"),
     ("text.convertListToText", "type.convertListToText"),
+    ("action.batch", "ui.batchDialog"),
+    ("flattener.preview", "ui.flattenerPreview"),
+    ("swatch.library.load", "window.swatchLibrary.other"),
+    ("graphicStyle.loadLibrary", "window.graphicStyleLibrary.other"),
+    ("symbol.loadLibrary", "window.symbolLibrary.other"),
+    ("brush.loadLibrary", "window.brushLibrary.other"),
 ];
 
-/// Everything the palette searches: (label, command id or `tool:<id>`, shortcut).
-pub fn items() -> Vec<(String, String, String)> {
-    let mut items = vec![];
-    // Aliases kept for older scripts run a command that is listed already, and a wrapped engine
-    // command is listed as its UI command.
+/// The menu path ([`context`]) a result takes when another result has its name: (id, English
+/// path), for commands that no item of the menu bar runs and whose id names no parent command.
+const CONTEXTS: &[(&str, &str)] = &[
+    ("addon.pen.close", "Pen"),
+    ("addon.pen.reshape", "Pen"),
+    ("addon.pen.togglePoint", "Pen"),
+    ("brush.library", "Brushes"),
+    ("brush.unused", "Brushes"),
+    ("charStyle.setAttrs", "Character Styles"),
+    ("file.exportInBackground", "Export"),
+    ("file.openInBackground", "Open"),
+    ("graphicStyle.library", "Graphic Styles"),
+    ("help.links", "Help"),
+    ("imageTrace.hideRuns", "Image Trace"),
+    ("links.reveal", "Links"),
+    ("livePaint.fill", "Live Paint"),
+    ("object.blend.spine.convertAnchor", "Blend"),
+    ("paraStyle.setAttrs", "Paragraph Styles"),
+    ("path.close", "Path"),
+    ("path.convertAnchor", "Path"),
+    ("path.knife", "Path"),
+    ("path.reshapeSegment", "Path"),
+    ("plugin.hideRuns", "Plug-ins"),
+    ("swatch.library.get", "Swatches"),
+    ("symbol.library", "Symbols"),
+    ("symbol.unused", "Symbols"),
+    ("text.editRange", "Text"),
+    ("ui.layersPanelOptions", "Layers"),
+    ("ui.navigatorPanelOptions", "Navigator"),
+];
+
+/// A palette result before its name is made distinct ([`distinct_names`]).
+struct Draft {
+    /// The English menu path, `›`-separated; each segment translates.
+    path: String,
+    /// The English label.
+    label: String,
+    /// Does the label translate? An installed filter plug-in's name does not.
+    translates: bool,
+    id: String,
+    shortcut: String,
+    /// Has [`distinct_names`] given the result its [`context`]?
+    in_context: bool,
+    /// Does the result show its id after its name?
+    keyed: bool,
+}
+
+impl Draft {
+    fn new(path: &str, label: &str, id: String, shortcut: &str) -> Draft {
+        Draft {
+            path: path.to_string(),
+            label: label.to_string(),
+            translates: true,
+            id,
+            shortcut: shortcut.to_string(),
+            in_context: false,
+            keyed: false,
+        }
+    }
+
+    /// The name in `lang`: the path's segments and the label translate on their own, and the id
+    /// follows in parentheses when the result shows it.
+    fn name(&self, lang: crate::i18n::Lang) -> String {
+        let label = if self.translates { crate::i18n::tr(lang, &self.label) } else { self.label.as_str() };
+        let name = if self.path.is_empty() { label.to_string() } else { format!("{} › {label}", shown_label(lang, &self.path)) };
+        if self.keyed { format!("{name} ({})", self.id) } else { name }
+    }
+}
+
+/// The palette's results before their names are made distinct: every listed engine command and
+/// plug-in command, UI command and tool.
+fn drafts() -> Vec<Draft> {
+    let mut out = vec![];
+    // Aliases kept for older scripts run a command that is listed already, a wrapped engine
+    // command is listed as its UI command, and an engine command with a UI command of the same id
+    // (Place…, Print…) is listed once, as the UI command.
     let plugin_commands = vectorcraft_engine::cmd::plugin::command_specs();
-    let listed = |id: &str| !vectorcraft_engine::cmd::is_alias(id) && !WRAPPED.iter().any(|(engine, _)| *engine == id);
-    let labeled = |menu: &[&str], label: &str| {
-        let path = menu.join(" › ");
-        if path.is_empty() { label.to_string() } else { format!("{path} › {label}") }
-    };
+    let ui_ids: std::collections::HashSet<&str> = menus::UI_COMMANDS.iter().map(|c| c.0).collect();
+    let listed = |id: &str| !vectorcraft_engine::cmd::is_alias(id) && !WRAPPED.iter().any(|(engine, _)| *engine == id) && !ui_ids.contains(id);
     for c in vectorcraft_engine::command_specs().iter().filter(|c| listed(c.id)).chain(plugin_commands) {
-        items.push((labeled(c.menu, c.label), c.id.to_string(), menus::shortcut_of(c.id).unwrap_or("").to_string()));
+        out.push(Draft::new(&c.menu.join(" › "), c.label, c.id.to_string(), menus::shortcut_of(c.id).unwrap_or("")));
     }
     // `plugin.dialog` runs nothing without an id: [`build`] lists each filter instead. A script of
     // the Scripts folder runs from File › Scripts, by its path. A UI command that wraps an engine
-    // command takes that command's menu path, so a search for the path still finds it.
+    // command, or has an engine command's id, takes that command's menu path, so a search for the
+    // path still finds it.
     for c in menus::UI_COMMANDS.iter().filter(|c| c.0 != "plugin.dialog" && c.0 != crate::scripts_menu::COMMAND) {
-        let engine = WRAPPED.iter().find(|(_, ui)| *ui == c.0).and_then(|(engine, _)| vectorcraft_engine::find_command(engine));
-        let label = engine.map_or_else(|| c.1.to_string(), |e| labeled(e.menu, c.1));
-        items.push((label, c.0.to_string(), menus::shortcut_of(c.0).unwrap_or("").to_string()));
+        let engine = WRAPPED.iter().find(|(_, ui)| *ui == c.0).map_or(c.0, |(engine, _)| *engine);
+        let engine = vectorcraft_engine::find_command(engine);
+        let path = engine.map(|e| e.menu.join(" › ")).unwrap_or_default();
+        out.push(Draft::new(&path, c.1, c.0.to_string(), menus::shortcut_of(c.0).unwrap_or("")));
     }
     for tool in vectorcraft_tools::catalog::all_tools() {
-        items.push((tool.label.to_string(), format!("tool:{}", tool.id), crate::shortcut_editor::tool_shortcut(tool.id).unwrap_or("").to_string()));
+        out.push(Draft::new("", tool.label, format!("tool:{}", tool.id), crate::shortcut_editor::tool_shortcut(tool.id).unwrap_or("")));
     }
-    items
+    out
+}
+
+/// Everything the palette searches: (label, command id or `tool:<id>`, shortcut). Labels are the
+/// English names before [`build`] makes them distinct.
+pub fn items() -> Vec<(String, String, String)> {
+    drafts().into_iter().map(|d| (d.name(crate::i18n::Lang::EN), d.id, d.shortcut)).collect()
+}
+
+/// The menu path a result shows when its name is another result's: its [`CONTEXTS`] path, Tools
+/// for a tool, the menu path of the item of the menu bar that runs it (the four Other Library…
+/// commands go under Window › Swatch Libraries, Brush Libraries, Graphic Style Libraries and Symbol
+/// Libraries), or the label of the command whose id is its id without the last part (Reset Panel
+/// goes under Character Style Options and Paragraph Style Options).
+fn context(id: &str) -> Option<String> {
+    if let Some((_, path)) = CONTEXTS.iter().find(|(c, _)| *c == id) {
+        return Some(path.to_string());
+    }
+    if id.starts_with("tool:") {
+        return Some("Tools".to_string());
+    }
+    if id.starts_with("plugin:") {
+        return None;
+    }
+    if let Some(path) = crate::shortcut_editor::menu_bar_path(id) {
+        return Some(path.to_string());
+    }
+    let (parent, _) = id.rsplit_once('.')?;
+    let label =
+        vectorcraft_engine::find_command(parent).map(|c| c.label).or_else(|| menus::UI_COMMANDS.iter().find(|c| c.0 == parent).map(|c| c.1))?;
+    Some(label.trim_end_matches('…').to_string())
+}
+
+/// Gives results for different ids different names in each of `langs`. Results that share a name
+/// in one of them take their [`context`], when they have one, as their menu path; results that
+/// still share one show their id after it. An installed plug-in whose name is another
+/// result's name with its id ("Blur (plugin:a)") shows its id too.
+fn distinct_names(drafts: &mut [Draft], langs: &[crate::i18n::Lang]) {
+    // The results whose name, in one of `langs`, a result with another id has.
+    let shared = |drafts: &[Draft]| -> Vec<usize> {
+        let mut out = std::collections::BTreeSet::new();
+        for &lang in langs {
+            let mut by_name: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
+            for (i, d) in drafts.iter().enumerate() {
+                by_name.entry(d.name(lang)).or_default().push(i);
+            }
+            let differ = |list: &Vec<usize>| {
+                let ids: Vec<&str> = list.iter().filter_map(|&i| drafts.get(i)).map(|d| d.id.as_str()).collect();
+                ids.iter().any(|id| Some(id) != ids.first())
+            };
+            out.extend(by_name.into_values().filter(differ).flatten());
+        }
+        out.into_iter().collect()
+    };
+    for i in shared(drafts) {
+        if let Some(d) = drafts.get_mut(i).filter(|d| !d.in_context)
+            && let Some(path) = context(&d.id)
+        {
+            d.path = path;
+            d.in_context = true;
+        }
+    }
+    // A pass gives every result of a shared name its id, so a name is shared again only by a result
+    // whose label ends with another result's id; one pass per result is enough.
+    for _ in 0..drafts.len() {
+        let mut changed = false;
+        for i in shared(drafts) {
+            if let Some(d) = drafts.get_mut(i).filter(|d| !d.keyed) {
+                d.keyed = true;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
 }
 
 /// A palette label in `lang`: each `›`-separated menu segment and the command label translate on
@@ -60,9 +213,9 @@ pub(crate) struct Entry {
     shortcut: String,
     /// The label in the UI language.
     shown: String,
-    /// The English label (what agents document), the shown label and the id (and the id of the
-    /// engine command a UI command wraps), lowercased, one per line: a query word (which has no
-    /// line break) matches within one of them.
+    /// The English label before and after [`distinct_names`] (what agents document), the shown
+    /// label and the id (and the id of the engine command a UI command wraps), lowercased, one per
+    /// line: a query word (which has no line break) matches within one of them.
     haystack: String,
 }
 
@@ -89,31 +242,31 @@ fn entries(ctx: &egui::Context, lang: crate::i18n::Lang) -> Arc<Vec<Entry>> {
 }
 
 /// The palette's entries in `lang`: [`items`], then one per filter plug-in's Object › Plug-ins
-/// item (`plugin:<id>`), whose name is not translated.
+/// item (`plugin:<id>`), whose name is not translated, each with a name no result for another id
+/// shows, in English and in `lang` ([`distinct_names`]). A query still matches the name before
+/// it was made distinct.
 fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
-    let entry = |label: String, shown: String, id: String, shortcut: String| {
-        let mut haystack = format!("{}\n{}\n{}", label.to_lowercase(), shown.to_lowercase(), id.to_lowercase());
-        // A UI command that wraps an engine command is also found by the engine command's id.
-        if let Some((engine, _)) = WRAPPED.iter().find(|(_, ui)| *ui == id) {
-            haystack.push('\n');
-            haystack.push_str(&engine.to_lowercase());
-        }
-        Entry { id, shortcut, shown, haystack }
-    };
-    let mut out: Vec<Entry> = items()
-        .into_iter()
-        .map(|(label, id, shortcut)| {
-            let shown = shown_label(lang, &label);
-            entry(label, shown, id, shortcut)
-        })
-        .collect();
-    out.extend(crate::shortcut_editor::filter_items().iter().map(|f| {
-        let shortcut = crate::shortcut_editor::filter_shortcut(&f.id).unwrap_or("").to_string();
-        let label = format!("{} › {}", f.group, f.label);
-        let shown = format!("{} › {}", shown_label(lang, &f.group), f.label);
-        entry(label, shown, format!("plugin:{}", f.id), shortcut)
+    let mut drafts = drafts();
+    drafts.extend(crate::shortcut_editor::filter_items().iter().map(|f| Draft {
+        translates: false,
+        ..Draft::new(&f.group, &f.label, format!("plugin:{}", f.id), crate::shortcut_editor::filter_shortcut(&f.id).unwrap_or(""))
     }));
-    out
+    let plain: Vec<String> = drafts.iter().map(|d| d.name(crate::i18n::Lang::EN)).collect();
+    distinct_names(&mut drafts, &[crate::i18n::Lang::EN, lang]);
+    drafts
+        .into_iter()
+        .zip(plain)
+        .map(|(d, plain)| {
+            let (label, shown) = (d.name(crate::i18n::Lang::EN), d.name(lang));
+            let mut haystack = [plain, label, shown.clone(), d.id.clone()].map(|s| s.to_lowercase()).join("\n");
+            // A UI command that wraps an engine command is also found by the engine command's id.
+            if let Some((engine, _)) = WRAPPED.iter().find(|(_, ui)| *ui == d.id) {
+                haystack.push('\n');
+                haystack.push_str(&engine.to_lowercase());
+            }
+            Entry { id: d.id, shortcut: d.shortcut, shown, haystack }
+        })
+        .collect()
 }
 
 /// Runs the palette result `id`: selects a tool, or invokes a command with the params its entry
@@ -534,6 +687,133 @@ mod tests {
         assert_eq!(frame(&mut app, vec![]), 0);
     }
 
+    /// Each command, tool and plug-in is one result: Place… and Print…, which are engine commands
+    /// and UI commands of one id, are listed once, under their engine menu path.
+    #[test]
+    fn each_id_is_one_result() {
+        let entries = build(Lang::EN);
+        let mut seen = std::collections::HashSet::new();
+        let twice: Vec<&str> = entries.iter().filter(|e| !seen.insert(e.id.as_str())).map(|e| e.id.as_str()).collect();
+        assert!(twice.is_empty(), "{twice:?}");
+        let shown = |id: &str| entries.iter().find(|e| e.id == id).map(|e| e.shown.as_str());
+        assert_eq!((shown("file.place"), shown("file.print")), (Some("File › Place…"), Some("Print…")));
+    }
+
+    /// No two results for different commands, tools or plug-ins show the same name, in English or
+    /// in any language with a complete menu catalog.
+    #[test]
+    fn different_results_show_different_names() {
+        let langs = std::iter::once(Lang::EN).chain(Lang::all().filter(|l| l.complete_menus()));
+        let mut shared = vec![];
+        for lang in langs {
+            let mut by_name: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
+            for e in build(lang) {
+                let ids = by_name.entry(e.shown).or_default();
+                if !ids.contains(&e.id) {
+                    ids.push(e.id);
+                }
+            }
+            shared.extend(by_name.into_iter().filter(|(_, ids)| ids.len() > 1).map(|(name, ids)| format!("{}: {name}: {ids:?}", lang.code())));
+        }
+        assert!(shared.is_empty(), "{} shared names:\n{}", shared.len(), shared.join("\n"));
+    }
+
+    /// Results that would share a name show the panel, menu or command they belong to, or their id
+    /// when nothing else tells them apart. A query still finds them
+    /// by the plain name, the new path in English or in the UI language, and the id.
+    #[test]
+    fn results_that_share_a_name_show_where_they_belong() {
+        let entries = build(Lang::EN);
+        let shown = |id: &str| entries.iter().find(|e| e.id == id).map(|e| e.shown.clone()).unwrap_or_else(|| panic!("{id} is a result"));
+        for (id, want) in [
+            ("brush.unused", "Brushes › Select All Unused"),
+            ("symbol.unused", "Symbols › Select All Unused"),
+            ("ui.layersPanelOptions", "Layers › Panel Options…"),
+            ("ui.navigatorPanelOptions", "Navigator › Panel Options…"),
+            ("ui.charStyleOptions.resetPanel", "Character Style Options › Reset Panel"),
+            ("ui.paraStyleOptions.resetPanel", "Paragraph Style Options › Reset Panel"),
+            ("window.swatchLibrary.other", "Window › Swatch Libraries › Other Library…"),
+            ("window.brushLibrary.other", "Window › Brush Libraries › Other Library…"),
+            ("tool:knife", "Tools › Knife"),
+            ("path.knife", "Path › Knife"),
+            ("addon.pen.close", "Pen › Close Path"),
+            ("path.close", "Path › Close Path"),
+            ("type.fitHeadline", "Type › Fit Headline (type.fitHeadline)"),
+            ("text.fitHeadline", "Type › Fit Headline (text.fitHeadline)"),
+            ("shape.ellipse", "Ellipse (shape.ellipse)"),
+            ("addon.shapes.ellipse", "Ellipse (addon.shapes.ellipse)"),
+            ("help.links", "Help › Links"),
+            ("perspective.editText", "Object › Perspective › Edit Text"),
+            ("ui.batchDialog", "Batch…"),
+            ("ui.flattenerPreview", "Flattener Preview"),
+        ] {
+            assert_eq!(shown(id), want, "{id}");
+        }
+        assert!(shown("perspective.grid.rulers").contains("Perspective Grid"), "{}", shown("perspective.grid.rulers"));
+        assert_ne!(shown("perspective.grid.rulers"), shown("view.rulers"));
+        assert!(entries.iter().all(|e| e.id != "action.batch" && e.id != "flattener.preview"), "the engine commands are listed as their UI commands");
+        // A name nobody else has stays as it was.
+        assert_eq!(shown("object.group"), "Object › Group");
+        let found = |entries: &[Entry], query: &str| -> Vec<String> {
+            entries.iter().filter(|e| query.split_whitespace().all(|w| e.haystack.contains(&w.to_lowercase()))).map(|e| e.id.clone()).collect()
+        };
+        for query in ["select all unused", "brushes select all unused", "brush.unused"] {
+            assert!(found(&entries, query).contains(&"brush.unused".to_string()), "{query}");
+        }
+        assert!(!found(&entries, "symbols select all unused").contains(&"brush.unused".to_string()));
+        let zh = Lang::from_code("zh-hant").unwrap();
+        let zh_entries = build(zh);
+        let brushes = crate::i18n::tr(zh, "Brushes");
+        let unused = zh_entries.iter().find(|e| e.id == "brush.unused").unwrap();
+        assert_eq!(unused.shown, format!("{brushes} › {}", crate::i18n::tr(zh, "Select All Unused")));
+        assert!(found(&zh_entries, &format!("{brushes} select all unused")).contains(&"brush.unused".to_string()));
+    }
+
+    /// Every menu path a result can take when it shares a name has a row in each catalog with
+    /// complete menus.
+    #[test]
+    fn the_paths_of_results_that_share_a_name_translate() {
+        let mut paths: Vec<String> = CONTEXTS.iter().map(|(_, path)| path.to_string()).collect();
+        paths.push("Tools".into());
+        let mut by_name: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        for d in drafts() {
+            by_name.entry(d.name(Lang::EN)).or_default().push(d.id);
+        }
+        paths.extend(by_name.into_values().filter(|ids| ids.len() > 1).flatten().filter_map(|id| context(&id)));
+        let mut missing = vec![];
+        for lang in Lang::all().filter(|l| l.complete_menus()) {
+            for segment in paths.iter().flat_map(|p| p.split(" › ")) {
+                let row = format!("{}: {segment}", lang.code());
+                if !crate::i18n::has(lang, segment) && !missing.contains(&row) {
+                    missing.push(row);
+                }
+            }
+        }
+        assert!(missing.is_empty(), "{}", missing.join("\n"));
+    }
+
+    /// A pick of each of two results that shared a name runs its own command: Show Rulers under View
+    /// › Rulers toggles the document rulers, and the one under the perspective grid toggles the
+    /// grid's rulers.
+    #[test]
+    fn a_pick_of_a_renamed_result_runs_its_own_command() {
+        let entries = build(Lang::EN);
+        let picks: Vec<(String, String)> =
+            entries.iter().filter(|e| e.haystack.lines().next() == Some("show rulers")).map(|e| (e.id.clone(), e.shown.clone())).collect();
+        assert_eq!(picks.len(), 2, "{picks:?}");
+        assert!(picks.iter().all(|(_, name)| name != "Show Rulers") && picks[0].1 != picks[1].1, "{picks:?}");
+        for (id, name) in &picks {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let label = |app: &VectorcraftApp, id: &str| crate::menus::dynamic_label(app, id, "");
+            let before: Vec<String> = picks.iter().map(|(other, _)| label(&app, other)).collect();
+            run_pick(&mut app, id);
+            for ((other, _), before) in picks.iter().zip(before) {
+                assert_eq!(label(&app, other) != before, other == id, "{name}: {other}");
+            }
+        }
+    }
+
     /// Each filter plug-in has one result, also when two share a name: its menu path translates,
     /// the plug-in's name does not, and a pick runs that filter (a dialog for one with parameters,
     /// nothing with no document open).
@@ -565,6 +845,35 @@ mod tests {
         run_pick(&mut app, &key_two);
         let d = app.ui.dialog.take().expect("the filter's dialog opens");
         assert_eq!((d.kind.as_str(), d.str("__plugin")), ("plugin", two.to_string()));
+        vectorcraft_plugins::registry::remove(one);
+        vectorcraft_plugins::registry::remove(two);
+    }
+
+    /// Two filter plug-ins with one name show their ids after it, the name untranslated, and each
+    /// pick runs its own filter.
+    #[test]
+    fn filter_plugins_with_one_name_show_their_ids() {
+        use vectorcraft_plugins::wat as tpl;
+        let (one, two) = ("test.UI.palette_same-one", "test.UI.palette_same-two");
+        for id in [one, two] {
+            let manifest = format!(r#"{{"id":"{id}","name":"Same Name","version":"1","kind":"filter","params":{{"wiggle":{{"type":"bool"}}}}}}"#);
+            vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        }
+        let zh = Lang::from_code("zh-hant").unwrap();
+        let built = build(zh);
+        let path = format!("{} › {}", crate::i18n::tr(zh, "Object"), crate::i18n::tr(zh, "Plug-ins"));
+        for id in [one, two] {
+            let key = format!("plugin:{id}");
+            let shown: Vec<&str> = built.iter().filter(|e| e.id == key).map(|e| e.shown.as_str()).collect();
+            assert_eq!(shown, [format!("{path} › Same Name… ({key})")], "{id}");
+        }
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        for id in [one, two] {
+            run_pick(&mut app, &format!("plugin:{id}"));
+            let d = app.ui.dialog.take().expect("the filter's dialog opens");
+            assert_eq!(d.str("__plugin"), id.to_string());
+        }
         vectorcraft_plugins::registry::remove(one);
         vectorcraft_plugins::registry::remove(two);
     }

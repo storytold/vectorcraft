@@ -753,7 +753,7 @@ fn menu_bar_paths() -> &'static HashMap<&'static str, Vec<(String, Value)>> {
 /// The menu path of the item of the menu bar that runs command `id` as a key press runs it
 /// ([`a_menu_bar_item_runs`]): the first item that runs it with no params, or else the first item,
 /// whose params all its items give.
-fn menu_bar_path(id: &str) -> Option<&'static str> {
+pub(crate) fn menu_bar_path(id: &str) -> Option<&'static str> {
     let (_, params) = command_doc(id)?;
     let items = menu_bar_paths().get(id).filter(|_| a_menu_bar_item_runs(id, params))?;
     chosen_path(items)
