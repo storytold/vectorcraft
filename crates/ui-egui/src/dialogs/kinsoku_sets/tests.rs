@@ -246,7 +246,8 @@ fn ok_sets_the_document_the_dialog_opened_on() {
 
 /// OK keeps a set the document gained while the dialog was open, after the dialog's sets, and a
 /// set deleted in the dialog stays deleted. A `sets` field that is not a list of sets keeps the
-/// dialog open and leaves the document's sets as they are.
+/// dialog open and leaves the document's sets as they are, also when a frame is drawn before OK,
+/// and New refuses to start from it.
 #[test]
 fn ok_keeps_sets_added_while_open_and_refuses_malformed_sets() {
     let mut app = app();
@@ -264,12 +265,21 @@ fn ok_keeps_sets_added_while_open_and_refuses_malformed_sets() {
     super::super::confirm(&mut app).unwrap();
     let names = |app: &VectorcraftApp| doc_sets(app).iter().map(|k| k.name.clone()).collect::<Vec<_>>();
     assert_eq!(names(&app), ["Later"]);
-    for bad in [Value::Null, json!({}), json!("Later"), json!([1])] {
-        open(&mut app).unwrap();
-        dialog(&mut app).fields.insert("sets".into(), bad.clone());
-        assert!(super::super::confirm(&mut app).is_err(), "{bad}");
-        assert!(app.ui.dialog.is_some(), "{bad}");
-        assert_eq!(names(&app), ["Later"], "{bad}");
+    for bad in [Value::Null, json!({}), json!("Later"), json!([1]), json!([{"name": "Later", "cannotStart": "ー"}, 1])] {
+        for drawn in [false, true] {
+            open(&mut app).unwrap();
+            dialog(&mut app).fields.insert("sets".into(), bad.clone());
+            if drawn {
+                frame(&mut app);
+                assert_eq!(dialog(&mut app).fields.get("sets"), Some(&bad), "a frame keeps {bad} as it is");
+                let mut d = app.ui.dialog.clone().unwrap();
+                assert!(run(&mut app, &mut d, Action::New).is_err(), "{bad}");
+                assert_eq!(d.fields.get("sets"), Some(&bad), "New keeps {bad} as it is");
+            }
+            assert!(super::super::confirm(&mut app).is_err(), "{bad} drawn: {drawn}");
+            assert!(app.ui.dialog.is_some(), "{bad} drawn: {drawn}");
+            assert_eq!(names(&app), ["Later"], "{bad} drawn: {drawn}");
+        }
     }
 }
 

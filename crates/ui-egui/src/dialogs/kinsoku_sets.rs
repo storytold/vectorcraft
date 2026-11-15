@@ -73,6 +73,12 @@ fn sets(d: &Dialog) -> Vec<Map<String, Value>> {
     d.fields.get("sets").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_object().cloned()).collect()).unwrap_or_default()
 }
 
+/// Is the `sets` field a list of sets? One that is not (set with `ui.dialog.set`) is kept as it is:
+/// no frame or button replaces it, and OK sends it to the command, which refuses it.
+fn holds_sets(d: &Dialog) -> bool {
+    d.fields.get("sets").and_then(Value::as_array).is_some_and(|a| a.iter().all(Value::is_object))
+}
+
 fn put_sets(d: &mut Dialog, sets: &[Map<String, Value>]) {
     d.fields.insert("sets".into(), json!(sets));
 }
@@ -242,7 +248,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
         d.fields.insert("shown".into(), Value::Object(set.clone()));
     }
-    put_sets(d, &list);
+    if holds_sets(d) {
+        put_sets(d, &list);
+    }
     if let Some(a) = act
         && let Err(e) = run(app, d, a)
     {
@@ -253,6 +261,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 /// Do what button `act` asks for on the dialog's sets.
 fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action) -> Result<(), String> {
+    if !holds_sets(d) {
+        return Err("the sets must be a list of Kinsoku sets".into());
+    }
     let mut list = sets(d);
     let i = selected(d, list.len());
     match act {
@@ -325,8 +336,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         app.run("document.activate", json!({ "index": index }))?;
     }
     // A `sets` field that is not a list of sets goes to the command as it is, which refuses it.
-    let raw = d.fields.get("sets").cloned().unwrap_or(Value::Null);
-    let sets = if raw.as_array().is_some_and(|a| a.iter().all(Value::is_object)) {
+    let sets = if holds_sets(d) {
         // A set the document gained while the dialog was open (a script, another command) is
         // kept, after the dialog's sets.
         let opened: Vec<&str> =
@@ -336,7 +346,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         }
         json!(list)
     } else {
-        raw
+        d.fields.get("sets").cloned().unwrap_or(Value::Null)
     };
     let r = app.run(COMMAND, json!({ "sets": sets }));
     // A name two sets share, a reserved name or a category too long keeps the dialog open to be
