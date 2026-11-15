@@ -8531,7 +8531,9 @@ breakText	Glyphs	Glifi
 @msg	position must be normal, superscript or subscript	position deve essere normal, superscript o subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position deve essere topLeft, topRight, bottomLeft o bottomRight
 @msg	positions must be between 0 and 100000 pt	le posizioni devono essere comprese tra 0 e 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi non può superare {max} per questa immagine
 @msg	ppi must be a positive number, not {ppi}	ppi deve essere un numero positivo, non {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim mantiene i pixel dell'immagine così come sono: ometti ppi
 @msg	ppi must be between 1 and 2400	ppi deve essere compreso tra 1 e 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` non è transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape deve essere clippingMask|transparency

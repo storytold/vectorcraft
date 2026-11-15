@@ -8899,7 +8899,9 @@ breakText	Glyphs	Glyfy
 @msg	position must be normal, superscript or subscript	position musí být normal, superscript nebo subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position musí být topLeft, topRight, bottomLeft nebo bottomRight
 @msg	positions must be between 0 and 100000 pt	positions musí být mezi 0 a 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi nemůže být pro tento obrázek víc než {max}
 @msg	ppi must be a positive number, not {ppi}	ppi musí být kladné číslo, ne {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim ponechává pixely obrázku beze změny: vynechte ppi
 @msg	ppi must be between 1 and 2400	ppi musí být mezi 1 a 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` není transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape musí být clippingMask|transparency

@@ -8465,7 +8465,9 @@ digits	Hindi	Hindi
 @msg	position must be normal, superscript or subscript	position måste vara normal, superscript eller subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position måste vara topLeft, topRight, bottomLeft eller bottomRight
 @msg	positions must be between 0 and 100000 pt	positionerna måste vara mellan 0 och 100 000 pt
+@msg	ppi can't be more than {max} for this image	ppi kan inte vara mer än {max} för den här bilden
 @msg	ppi must be a positive number, not {ppi}	ppi måste vara ett positivt tal, inte {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim behåller bildens pixlar som de är: utelämna ppi
 @msg	ppi must be between 1 and 2400	ppi måste vara mellan 1 och 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` är inte transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape måste vara clippingMask|transparency

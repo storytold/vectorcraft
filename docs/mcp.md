@@ -1882,6 +1882,21 @@ and `rotate` in `object.transformEach`; `ppi` in `object.rasterize`; `width`, `h
 four numbers, such as a string, with `rect must be [x, y, width, height]`; a null `rect` crops to the artboard, as a
 missing one does.
 
+`object.cropImage {ppi}` sets the cropped image's resolution in pixels per inch: the cut pixels are resampled to it,
+and the image keeps the size of the crop box. A `rect` over the whole image with a new `ppi` only resamples the image.
+An image scaled differently across and down is resampled on both sides, so its pixels come out square at `ppi`.
+The most it takes is the image's own resolution (along the denser side of its pixel grid, however it is turned), or
+300 ppi for a linked image; above that it is refused with `ppi can't be more than {max} for this image`. A value
+outside 1 to 2400 is refused with `ppi must be between 1 and 2400`, and a value that is not a positive number with
+`ppi must be a positive number, not {ppi}`. A null `ppi` keeps the image's own, as a missing one does, and `ppi` with
+`trim` is refused. While the Crop Image tool is chosen, `tool.setOption` sets `ppi` (the resolution Apply sends),
+`reference` (0 to 8, left to right and top to bottom: the point of the box that the Control bar's X and Y name and
+that its W and H resize about; 4, the center, by default) and `linked` (W and H keep the box's proportions; false by
+default). It refuses another value of those three, such as a `ppi` of `"high"`, a `ppi` above what the selected
+image allows or a `reference` of 9, and changes nothing; a null `ppi` goes back to the image's own. `tool.options` reads them back with `rect`.
+Apply holds a `ppi` set before the image was selected to that image's limit. With `linked` on, a new W or H that would
+not fit the image is reduced with the other side in proportion, and the box slides back within the image.
+
 `object.createObjectMosaic` (`columns`, `rows`), `object.transformEach` (`reference`, `seed`) and `artboard.rearrange`
 (`columns`) take whole numbers, written `4` or `4.0`. A fraction or a negative number is refused with
 `` `columns` must be a whole number ``. A string or another value that is not a number is refused with

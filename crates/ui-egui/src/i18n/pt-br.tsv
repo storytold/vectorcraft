@@ -8962,7 +8962,9 @@ swatch	Yellow Green	Verde-amarelado
 @msg	position must be normal, superscript or subscript	position deve ser normal, superscript ou subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position deve ser topLeft, topRight, bottomLeft ou bottomRight
 @msg	positions must be between 0 and 100000 pt	positions deve estar entre 0 e 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi não pode ser maior que {max} para esta imagem
 @msg	ppi must be a positive number, not {ppi}	ppi deve ser um número positivo, não {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim mantém os pixels da imagem como estão: omita ppi
 @msg	ppi must be between 1 and 2400	ppi deve estar entre 1 e 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` não é transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape deve ser clippingMask|transparency

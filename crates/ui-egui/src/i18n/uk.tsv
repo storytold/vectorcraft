@@ -8496,7 +8496,9 @@ breakText	Glyphs	Гліфи
 @msg	position must be normal, superscript or subscript	position має бути normal, superscript або subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position має бути topLeft, topRight, bottomLeft або bottomRight
 @msg	positions must be between 0 and 100000 pt	positions мають бути від 0 до 100000 pt
+@msg	ppi can't be more than {max} for this image	ppi для цього зображення не може перевищувати {max}
 @msg	ppi must be a positive number, not {ppi}	ppi має бути додатним числом, а не {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim залишає пікселі зображення без змін: не вказуйте ppi
 @msg	ppi must be between 1 and 2400	ppi має бути від 1 до 2400
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` не є transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape має бути clippingMask|transparency

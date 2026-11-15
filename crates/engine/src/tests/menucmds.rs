@@ -1588,6 +1588,166 @@ fn crop_image_to_a_rect_between_pixels_keeps_the_rect() {
     assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
 }
 
+/// Crop Image's `ppi` resamples the cut pixels to that resolution; the image keeps the box's size.
+#[test]
+fn crop_image_resamples_the_cut_to_the_resolution_asked_for() {
+    let (mut s, img, px) = busy_image_at_two_points_a_pixel();
+    // The image is 36 ppi (2 pt a pixel); 18 ppi halves the cut's 30 × 20 pixels.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (15, 10), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 20.0) && close(b.y0, 10.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    let cut = image::imageops::crop_imm(&px, 10, 5, 30, 20).to_image();
+    assert_eq!(out, image::imageops::resize(&cut, 15, 10, image::imageops::FilterType::Lanczos3));
+}
+
+/// Resampling weights colors by their alpha: the color hidden in fully transparent pixels does not
+/// tint the partly transparent edge of what is opaque.
+#[test]
+fn crop_image_resampling_keeps_hidden_colors_out_of_the_edges() {
+    // Opaque white on the left half, fully transparent red on the right.
+    let px = image::RgbaImage::from_fn(40, 20, |x, _| if x < 20 { image::Rgba([255, 255, 255, 255]) } else { image::Rgba([255, 0, 0, 0]) });
+    let mut png = Vec::new();
+    px.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "edge.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let img = selected(&s)[0];
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    // 36 ppi to 15 ppi over pixels 5 to 35 across: the edge pixels mix white and clear.
+    s.execute("object.cropImage", &json!({"rect": [10, 0, 60, 40], "ppi": 15})).unwrap();
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    let out = image::load_from_memory(&s.doc().unwrap().doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert!(out.pixels().any(|p| p[3] > 0 && p[3] < 255), "the edge is partly transparent");
+    for p in out.pixels().filter(|p| p[3] > 0) {
+        assert!(p[1] >= 250 && p[2] >= 250, "white, not tinted red: {p:?}");
+    }
+}
+
+/// A box between pixels is drawn at the resolution asked for, and lands on the box.
+#[test]
+fn crop_image_between_pixels_draws_at_the_resolution_asked_for() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 60, 40], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (15, 10), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 60.0) && close(b.height(), 40.0), "{b:?}");
+    // 100 × 30 pt at 20 ppi is 27.8 × 8.3 px: the 28 × 8 px drawn are fitted to the box.
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let r = s.execute("object.cropImage", &json!({"rect": [21, 11, 100, 30], "ppi": 20})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (28, 8), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 21.0) && close(b.y0, 11.0) && close(b.width(), 100.0) && close(b.height(), 30.0), "{b:?}");
+}
+
+/// A box over the whole image with a new resolution resamples it; with the image's own there is
+/// nothing to do.
+#[test]
+fn crop_image_over_the_whole_image_only_resamples_it() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let before = undo_len(&s);
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 160], "ppi": 36}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "nothing to crop"), "{r:?}");
+    assert_eq!(undo_len(&s), before);
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 160], "ppi": 9})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (25, 20), "{r}");
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 0.0) && close(b.y0, 0.0) && close(b.width(), 200.0) && close(b.height(), 160.0), "{b:?}");
+}
+
+/// An image scaled more down than across is resampled on both sides at the resolution of its denser
+/// side, so its pixels come out square.
+#[test]
+fn crop_image_resamples_pixels_that_are_not_square() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    // 2 pt a pixel across (36 ppi) and 1 pt a pixel down (72 ppi), 200 × 80 pt.
+    s.execute("object.scale", &json!({"sx": 100, "sy": 50, "origin": [0, 0]})).unwrap();
+    let r = s.execute("object.cropImage", &json!({"rect": [0, 0, 200, 80], "ppi": 72})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (200, 80), "{r}");
+    let b = bounds(&s, img);
+    assert!(close(b.x0, 0.0) && close(b.y0, 0.0) && close(b.width(), 200.0) && close(b.height(), 80.0), "{b:?}");
+}
+
+/// Crop Image refuses a resolution that isn't a positive number, one above the image's own, and one
+/// with trim; the image stays as it was.
+#[test]
+fn crop_image_refuses_a_resolution_it_cannot_give() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    let before = (undo_len(&s), node(&s, img));
+    let refused = |s: &mut Session, p: Value, want: &str| {
+        let r = s.execute("object.cropImage", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{p}: {r:?}");
+    };
+    for v in [json!(0), json!(-72), json!("high"), json!(true)] {
+        refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": v}), &format!("ppi must be a positive number, not {v}"));
+    }
+    for v in [0.5, 1e-310, 2401.0] {
+        refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": v}), "ppi must be between 1 and 2400");
+    }
+    refused(&mut s, json!({"rect": [20, 10, 60, 40], "ppi": 72}), "ppi can't be more than 36 for this image");
+    refused(&mut s, json!({"trim": true, "ppi": 18}), "trim keeps the image's pixels as they are: leave out ppi");
+    assert_eq!((undo_len(&s), node(&s, img)), before);
+    // A null ppi keeps the image's own, as a missing one does.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": null})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (30, 20), "{r}");
+}
+
+/// A turned image keeps its own resolution as the limit (not the density across its bounding box),
+/// and its drawn cut is resampled to the box's size at the resolution asked for.
+#[test]
+fn crop_image_of_a_turned_image_resamples_its_drawing() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let b = bounds(&s, img);
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 37}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "ppi can't be more than 36 for this image"), "{r:?}");
+    let r = s.execute("object.cropImage", &json!({"rect": [b.x0 + 40.0, b.y0 + 40.0, 72, 36], "ppi": 18})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (18, 9), "{r}");
+    let c = bounds(&s, img);
+    assert!(close(c.x0, b.x0 + 40.0) && close(c.y0, b.y0 + 40.0) && close(c.width(), 72.0) && close(c.height(), 36.0), "{c:?}");
+}
+
+/// A linked image can be cropped to up to 300 ppi, even above its own; the crop embeds it.
+#[test]
+fn crop_image_takes_a_linked_image_up_to_300_ppi() {
+    let (mut s, img, _) = busy_image_at_two_points_a_pixel();
+    s.edit("Link", |d, _| {
+        let NodeKind::Image(im) = &mut d.node_mut(img).unwrap().kind else { panic!("not an image") };
+        im.link = Some(vectorcraft_doc::LinkInfo::new("art.png"));
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 301}));
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "ppi can't be more than 300 for this image"), "{r:?}");
+    // 72 ppi: a pixel a point.
+    let r = s.execute("object.cropImage", &json!({"rect": [20, 10, 60, 40], "ppi": 72})).unwrap();
+    assert_eq!((r["width"].as_u64().unwrap(), r["height"].as_u64().unwrap()), (60, 40), "{r}");
+    let NodeKind::Image(im) = &node(&s, img).kind else { panic!("an image") };
+    assert!(im.link.is_none());
+}
+
+/// `tool.setOption` refuses a Crop Image resolution, reference point or link it can't use, and
+/// changes nothing.
+#[test]
+fn crop_image_tool_options_refuse_values_they_cannot_use() {
+    let (mut s, _, _) = busy_image_at_two_points_a_pixel();
+    s.select_tool("cropImage", ViewInfo::default()).unwrap();
+    s.set_tool_option_cmd(&json!({"values": {"ppi": 18, "reference": 0, "linked": true}})).unwrap();
+    // 72 ppi is above the selected 36 ppi image's own.
+    for (key, value) in
+        [("ppi", json!("high")), ("ppi", json!(-1)), ("ppi", json!(0.5)), ("ppi", json!(72)), ("reference", json!(9)), ("linked", json!(1))]
+    {
+        assert!(s.set_tool_option_cmd(&json!({"key": key, "value": value})).is_err(), "{key}: {value}");
+    }
+    let o = s.tool_options();
+    assert_eq!((o["ppi"].clone(), o["reference"].clone(), o["linked"].clone()), (json!(18.0), json!(0), json!(true)), "{o}");
+    s.set_tool_option_cmd(&json!({"key": "ppi", "value": null})).unwrap();
+    assert!(s.tool_options().get("ppi").is_none());
+}
+
 /// Crop Image refuses a `rect` that is not an array, such as text, and the image stays as it was; a
 /// null `rect` crops to the artboard as a missing one does.
 #[test]
