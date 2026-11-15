@@ -419,8 +419,8 @@ pub(super) fn leader_outline(db: &FontDb, g: &SGlyph, leader: &str, origin: f64,
 /// and a cluster is never split. A soft hyphen just before a forced line break adds no hyphen. A list marker at `i` (glyphs of length 0) counts whole, with the word after it. A word
 /// that ends where a line may end is measured as the line is set: without the spaces at its end,
 /// and with its last glyph as narrow as `line_end` sets it; one that ends at a soft hyphen or past
-/// the measured glyphs is not.
-pub(super) fn word_width<'k>(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: impl Into<KinsokuRules<'k>>) -> f64 {
+/// the measured glyphs is not. With `burasagari`, the word may end after hanging punctuation.
+pub(super) fn word_width<'k>(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: impl Into<KinsokuRules<'k>>, burasagari: Burasagari) -> f64 {
     let kinsoku = kinsoku.into();
     /// Glyphs measured at most: a word wrapped over many lines is measured again from each line's
     /// start, and one this long is broken inside whatever cell it meets.
@@ -454,7 +454,10 @@ pub(super) fn word_width<'k>(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: 
             (trailing, ink) = (0.0, end);
         }
         let cluster_ends = g.get(end).is_none_or(|next| next.byte != gl.byte);
-        if gl.break_after() && cluster_ends && kinsoku_allows(g, end - 1, kinsoku) && !splits_no_break(g, end) {
+        // Hanging punctuation of one glyph may end the line with Burasagari, as in [`break_line`].
+        let alone = cluster_ends && end.checked_sub(2).and_then(|k| g.get(k)).is_none_or(|p| p.byte != gl.byte);
+        let hang_break = burasagari != Burasagari::None && alone && hangs(gl, kinsoku);
+        if (gl.break_after() || hang_break) && cluster_ends && kinsoku_allows(g, end - 1, kinsoku) && !splits_no_break(g, end) {
             return set(w, trailing, ink);
         }
     }

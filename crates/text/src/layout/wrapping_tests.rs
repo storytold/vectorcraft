@@ -300,12 +300,12 @@ fn word_width_measures_across_a_soft_hyphen_inside_a_no_break_run() {
     for g in &mut glyphs {
         g.sx = 0.001;
     }
-    let plain = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    let plain = breaking::word_width(&glyphs, 0, &[], Kinsoku::None, Burasagari::None);
     assert!(plain < 30.0, "without the mark the word ends at the soft hyphen: {plain}");
     for g in &mut glyphs {
         g.no_break = true;
     }
-    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None, Burasagari::None);
     assert!((marked - 30.0).abs() < 1e-9, "the marked run is measured whole: {marked}");
 }
 
@@ -317,7 +317,7 @@ fn word_width_stops_at_a_forced_line_break() {
     for g in &mut glyphs {
         g.no_break = true;
     }
-    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None, Burasagari::None);
     assert!((marked - 10.0).abs() < 1e-9, "the marked run ends at the forced line break: {marked}");
 
     let mut glyphs = synthetic_glyphs(&[(0, 1, 10.0, 'A'), (1, 2, 0.0, '\u{00ad}'), (3, 3, 5.0, '\u{2028}'), (6, 1, 10.0, 'B')]);
@@ -325,12 +325,12 @@ fn word_width_stops_at_a_forced_line_break() {
     for g in &mut glyphs {
         g.sx = 0.001;
     }
-    let plain = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    let plain = breaking::word_width(&glyphs, 0, &[], Kinsoku::None, Burasagari::None);
     assert!((plain - 10.0).abs() < 1e-9, "no hyphen before the forced line break: {plain}");
     for g in &mut glyphs {
         g.no_break = true;
     }
-    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None, Burasagari::None);
     assert!((marked - 10.0).abs() < 1e-9, "the marked run ends at the forced line break: {marked}");
 }
 
@@ -1253,8 +1253,8 @@ fn korean_words_break_at_spaces_unless_line_break_anywhere() {
     let cands = candidates(text, &off, None, Kinsoku::Hard);
     assert_eq!(compose(&off, &|_| 50.0, &|_| 0.0, &|_| 0.0, &cands, &[], &params), Some(vec![(4, false), (7, false)]));
     // The first word is measured whole, as the line loop measures it.
-    assert_eq!(breaking::word_width(&off, 0, &[], Kinsoku::Hard), 30.0);
-    assert_eq!(breaking::word_width(&korean(text, true), 0, &[], Kinsoku::Hard), 10.0);
+    assert_eq!(breaking::word_width(&off, 0, &[], Kinsoku::Hard, Burasagari::None), 30.0);
+    assert_eq!(breaking::word_width(&korean(text, true), 0, &[], Kinsoku::Hard, Burasagari::None), 10.0);
     // A word wider than the line still breaks, at the syllable that overflows.
     assert_eq!(greedy(&korean("가나다라마바", false), 25.0), 2);
     // A soft return still ends the line.
@@ -1360,8 +1360,8 @@ fn bunri_kinshi_keeps_jlreq_pairs_in_both_composers() {
     };
     assert_eq!(greedy(&pairs(text, false), 35.0), 3, "off: the line ends between the dashes");
     assert_eq!(greedy(&pairs(text, true), 35.0), 2, "on: both dashes go to the next line");
-    assert_eq!(breaking::word_width(&pairs("——あ", true), 0, &[], Kinsoku::Hard), 20.0);
-    assert_eq!(breaking::word_width(&pairs("——あ", false), 0, &[], Kinsoku::Hard), 10.0);
+    assert_eq!(breaking::word_width(&pairs("——あ", true), 0, &[], Kinsoku::Hard, Burasagari::None), 20.0);
+    assert_eq!(breaking::word_width(&pairs("——あ", false), 0, &[], Kinsoku::Hard, Burasagari::None), 10.0);
     let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
     let on = pairs("あい——う", true);
     let cands = candidates("あい——う", &on, None, Kinsoku::Hard);
@@ -1532,6 +1532,10 @@ fn a_custom_set_hangs_its_own_hanging_punctuation() {
     };
     assert_eq!(wide(Burasagari::Standard), 4, "! fits and ends the line");
     assert_eq!(wide(Burasagari::None), 3, "without Burasagari ! does not hang, and no line ends after it");
+    // The first word, which places a line in a frame of uneven width, ends after ! as the line may.
+    let word = |b: Burasagari| breaking::word_width(&full_width("AB!CD"), 0, &[], breaking::KinsokuRules::Custom(&bang), b);
+    assert_eq!(word(Burasagari::Standard), 30.0);
+    assert_eq!(word(Burasagari::None), 50.0);
     // A hanging character that starts an inseparable sequence kept with Bunri-Kinshi does not hang
     // the rest of the sequence with it: the sequence goes to the next line.
     let joined = custom_set("", "", "!", &["!あ"]);

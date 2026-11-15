@@ -278,7 +278,7 @@ fn past_end<'r>(p: &Para<'_>, start: &Start<'r>) -> Option<Placed<'r>> {
 /// frame's end ([`past_end`]) when no frame cell has room for it.
 fn place<'r>(p: &Para<'_>, start: &Start<'r>, m: Metrics) -> Result<Option<Placed<'r>>, Exhausted> {
     let (ind_l, ind_r) = line_indents(p.para, start.first, p.mirror);
-    let word = word_width(p.sg, start.pos, p.line_end, KinsokuRules::of(p.para)) - (p.start_credit)(start.pos);
+    let word = word_width(p.sg, start.pos, p.line_end, KinsokuRules::of(p.para), p.para.burasagari) - (p.start_credit)(start.pos);
     let mut pen = start.pen.clone();
     loop {
         match pen.place(m, ind_l, ind_r, word) {

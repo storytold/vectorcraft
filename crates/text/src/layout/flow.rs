@@ -107,7 +107,7 @@ fn compose_para(
         // Only the first line's first word is known here. Later lines are placed as the composed
         // lines need: each fits its width, so its first word does too. It is measured as the line
         // loop measures it, with Mojikumi's narrower start and end.
-        let word = if first { word_width(sg, 0, line_end, kinsoku) - start_credit(0) } else { 0.0 };
+        let word = if first { word_width(sg, 0, line_end, kinsoku, para.burasagari) - start_credit(0) } else { 0.0 };
         let Some((b, x0, x1, _)) = sim.place(m, ind_l, para.right_indent, word) else { break };
         let w = x1 - x0 - ind_l - para.right_indent;
         widths.push(w);
@@ -430,7 +430,7 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
     }
     // The line's first word, as narrow as the line sets it at both ends.
     let kinsoku = KinsokuRules::of(para);
-    let word = word_width(sg, *i, line_end, kinsoku);
+    let word = word_width(sg, *i, line_end, kinsoku, para.burasagari);
     // A composed line in a frame whose lines are not all as wide is placed at its own tallest
     // metrics, as the composer placed it (`shaped::Shaped`): its room is the room across its height.
     let composed_line = composed.as_ref().and_then(|lines| lines.get(*para_line)).is_some_and(|&(end, _)| end > *i);
