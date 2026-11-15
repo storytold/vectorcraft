@@ -286,7 +286,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((doc, keys)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d))) else { return };
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
-    let view: View = pstate(ui.ctx(), VIEW);
+    let view = app.ui.symbols_view;
     let sel = current(app);
     let uid = app.session.active().map(|d| d.uid);
     let marked = marked(ui.ctx(), uid, &names);
@@ -458,10 +458,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.status(e);
     }
     ui.separator();
-    let view: View = pstate(ui.ctx(), VIEW);
+    let view = app.ui.symbols_view;
     for (v, label) in View::ALL {
-        if menu_item(ui, tl!(label), true, view == v) {
-            set_pstate(ui.ctx(), VIEW, v);
+        if menu_item(ui, tl!(label), true, view == v)
+            && let Err(e) = app.run("ui.panelView", json!({ "panel": "symbols", "view": v }))
+        {
+            app.status(e);
         }
     }
     ui.separator();
@@ -475,13 +477,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The panel state key of the symbols Select All Unused picked.
 const MARKED: &str = "sym-unused";
 
-/// The panel state key of the panel's [`View`].
-const VIEW: &str = "sym-view";
-
 /// The panel's views: Thumbnail View (the default) and the Small and Large List Views, whose rows
-/// show each symbol's thumbnail and name.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum View {
+/// show each symbol's thumbnail and name (`ui.panelView {panel: "symbols", view}`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum View {
     #[default]
     Thumbnail,
     SmallList,
@@ -1170,7 +1170,7 @@ mod tests {
         // Large List View: the row named Dot.
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
-        set_pstate(&ctx, VIEW, View::LargeList);
+        app.ui.symbols_view = View::LargeList;
         let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0))), ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
         out.textures_delta.clear();
@@ -1238,7 +1238,6 @@ mod tests {
             assert_eq!((editing(&app), current(&mut app)), (None, Some("Cat".into())), "{view}");
             let ctx2 = egui::Context::default();
             crate::theme::install_fonts(&ctx2);
-            set_pstate(&ctx2, VIEW, pstate::<View>(&ctx, VIEW));
             frame(&ctx2, &mut app, vec![]);
             frame(&ctx2, &mut app, double_click(row));
             assert_eq!(editing(&app).as_deref(), Some("Cat"), "{view}");
@@ -1251,6 +1250,49 @@ mod tests {
         let undo = app.session.active().unwrap().history.undo.len();
         click_menu(&ctx, &mut app, "Sort by Name");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+
+    /// `ui.panelView` sets the Symbols, Graphic Styles and Swatches panels' views as the view items
+    /// of their panel menus do, and answers the current view without `view`. An unknown panel or
+    /// view, or a view of another panel, is an error and changes nothing.
+    #[test]
+    fn panel_view_sets_the_view_of_each_panel() {
+        use super::super::{graphic_styles, swatches};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        for (i, name) in ["ant", "bee"].into_iter().enumerate() {
+            app.run("shape.rectangle", json!({"x": 10.0 + 40.0 * i as f64, "y": 10, "width": 30, "height": 20})).unwrap();
+            app.run("symbol.new", json!({"name": name})).unwrap();
+        }
+        let views = |checked: &str| ["Thumbnail View", "Small List View", "Large List View"].map(|v| (v.to_string(), v == checked)).to_vec();
+        assert_eq!(app.run("ui.panelView", json!({"panel": "symbols"})).unwrap(), json!({"panel": "symbols", "view": "thumbnail"}));
+        assert!(panel_labels(&ctx, &mut app, &["ant", "bee"]).is_empty(), "the thumbnails draw no names");
+        let r = app.run("ui.panelView", json!({"panel": "symbols", "view": "largeList"})).unwrap();
+        assert_eq!(r, json!({"panel": "symbols", "view": "largeList"}));
+        assert_eq!(view_items(&ctx, &mut app), views("Large List View"), "the panel menu checks it");
+        let names: Vec<String> = panel_labels(&ctx, &mut app, &["ant", "bee"]).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(names, ["ant", "bee"], "the list names the symbols");
+        click_menu(&ctx, &mut app, "Small List View");
+        assert_eq!(app.run("ui.panelView", json!({"panel": "symbols"})).unwrap()["view"], "smallList", "the menu item sets it too");
+        for bad in [
+            json!({"panel": "symbols", "view": "mediumThumb"}),
+            json!({"panel": "symbols", "view": 3}),
+            json!({"panel": "brushes", "view": "smallList"}),
+            json!({"view": "largeList"}),
+        ] {
+            assert!(app.run("ui.panelView", bad.clone()).is_err(), "{bad}");
+        }
+        assert_eq!(app.ui.symbols_view, View::SmallList, "unchanged");
+        let r = app.run("ui.panelView", json!({"panel": "graphicStyles", "view": "largeList"})).unwrap();
+        assert_eq!(r, json!({"panel": "graphicStyles", "view": "largeList"}));
+        assert_eq!(app.ui.graphic_styles_view, graphic_styles::View::LargeList);
+        assert_eq!(app.run("ui.panelView", json!({"panel": "swatches"})).unwrap()["view"], "mediumThumb");
+        app.run("ui.panelView", json!({"panel": "swatches", "view": "largeThumb"})).unwrap();
+        assert!(app.run("ui.panelView", json!({"panel": "swatches", "view": "thumbnail"})).is_err());
+        assert_eq!(app.ui.swatches_view, swatches::View::LargeThumb, "unchanged by the error");
+        assert_eq!(app.ui.symbols_view, View::SmallList, "each panel keeps its own view");
     }
 
     /// The panel menu's Edit Symbol edits the selected instance's symbol, and with no instance
@@ -1724,7 +1766,7 @@ mod tests {
         assert!(!symbols(h.state_mut()).contains(&"B".to_string()));
 
         // Also test list view
-        set_pstate(&h.ctx, VIEW, View::SmallList);
+        h.state_mut().ui.symbols_view = View::SmallList;
         h.run_steps(2);
         let node_a = h.get_by_label("A");
         let pos_a = node_a.rect().center();

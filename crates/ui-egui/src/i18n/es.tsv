@@ -18,6 +18,7 @@
 	Edge Brightness	Brillo del borde
 	Smoothness	Suavizado
 	Radial Blur…	Desenfoque radial…
+	Blur Center	Centro del desenfoque
 	Smart Blur…	Desenfoque inteligente…
 	Sharpen	Enfocar
 	Unsharp Mask…	Máscara de enfoque…
@@ -645,6 +646,7 @@ font-technology	Variable	Variables
 	Copy All Styles	Copiar todos los estilos
 	Copy Color Value (Hex)	Copiar valor de color (hex)
 	Copy Fonts Used in the Document	Copiar fuentes usadas en el documento
+	Copy Info	Copiar información
 	Copy Links	Copiar vínculos
 	Copy Selected Style	Copiar estilo seleccionado
 	Copy to User Defined	Copiar en Definido por el usuario
@@ -1689,6 +1691,7 @@ font-technology	Variable	Variables
 	Images:	Imágenes:
 	Import Keyboard Shortcuts…	Importar métodos abreviados de teclado…
 	Import PDF	Importar PDF
+	Import PDF pages as links	Importar páginas PDF como vínculos
 	Import PDF Presets	Importar preajustes de PDF
 	Import Perspective Grid Presets	Importar preajustes de cuadrícula de perspectiva
 	Import Print Presets	Importar preajustes de impresión
@@ -2668,6 +2671,8 @@ font-technology	Variable	Variables
 	Proof Setup	Ajuste de prueba
 	Properties	Propiedades
 	Proportional Metrics	Métrica proporcional
+	H or V Style	Estilo horizontal o vertical
+	Roman Italics	Cursiva romana
 	Insert Aki Left	Insertar aki a la izquierda
 	Insert Aki Right	Insertar aki a la derecha
 	Tsume	Tsume
@@ -3415,6 +3420,7 @@ digits	Malayalam	Malayálam
 	Sixth Space	Sexto de espacio
 	Size	Tamaño
 	Size Tile to Art	Ajustar tamaño del mosaico a la ilustración
+	Move Tile with Art	Mover mosaico con la ilustración
 	Size/Leading	Tamaño/interlineado
 	Size:	Tamaño:
 	Ridges per segment:	Crestas por segmento:
@@ -3445,6 +3451,18 @@ digits	Malayalam	Malayálam
 	Smart Guides (View → Smart Guides)	Guías inteligentes (Ver → Guías inteligentes)
 	Smart Guides (⌘U)	Guías inteligentes (⌘U)
 	Smart Punctuation…	Puntuación inteligente…
+	Smart Punctuation	Puntuación inteligente
+	ff, fi, ffi Ligatures	Ligaduras ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligaduras ff, fl, ffl
+	Smart Quotes	Comillas inteligentes
+	Smart Spaces	Espacios inteligentes
+	En, Em Dashes	Semirrayas y rayas
+	Ellipses	Puntos suspensivos
+	Expert Fractions	Fracciones expertas
+	Replace In	Reemplazar en
+	Selected Text Only	Solo el texto seleccionado
+	Entire Document	Todo el documento
+	Report Results	Informar de los resultados
 	Smooth	Suavizar
 	Corner	Vértice
 	Relative	Relativo
@@ -3475,6 +3493,7 @@ digits	Malayalam	Malayálam
 	Solid	Sólido
 	Sort by Kind	Ordenar por tipo
 	Sort by Name	Ordenar por nombre
+	Sort by Size	Ordenar por tamaño
 	Sort by Status	Ordenar por estado
 	Source code on GitHub	Código fuente en GitHub
 	Source Sans 3	Source Sans 3
@@ -4029,6 +4048,9 @@ digits	Malayalam	Malayálam
 	Working CMYK	CMYK de trabajo
 	Working CMYK (don't tag)	CMYK de trabajo (sin etiquetar)
 	Working RGB (don't tag)	RGB de trabajo (sin etiquetar)
+	Don't Color Manage This Document	No gestionar el color de este documento
+	Working RGB: {name}	RGB de trabajo: {name}
+	Working CMYK: {name}	CMYK de trabajo: {name}
 	Workspace	Espacio de trabajo
 	Workspace {i}	Espacio de trabajo {i}
 	Wrinkle Tool	Herramienta Arrugar
@@ -4378,6 +4400,7 @@ axis	Both	Ambos
 @msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
+@msg	Copied the link info	Se copió la información del vínculo
 @msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado
 @msg	Couldn't copy to the system clipboard: {e}	No se pudo copiar al portapapeles del sistema: {e}
 @msg	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
@@ -4850,6 +4873,8 @@ axis	Both	Ambos
 @msg	result would exceed the canvas (coordinates out of range)	el resultado excedería el lienzo (coordenadas fuera de rango)
 @msg	objects can't be nested more than 32 deep	los objetos no pueden anidarse a más de 32 niveles
 @msg	the SVG's elements are nested more than {0} deep	los elementos del SVG están anidados a más de {0} niveles
+@msg	the SVG's style sheets take too long to match	la comparación de las hojas de estilo del SVG tarda demasiado
+@msg	the SVG's styles expand to more than {0} MB	los estilos del SVG se expanden a más de {0} MB
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale debe ser un número de {_1} a {_2}, no {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale debe ser un número de {_1} a {_2}, no {s}
 @msg	select (or target) objects whose appearance isn't basic	selecciona (o apunta a) objetos cuya apariencia no sea básica
@@ -5192,6 +5217,7 @@ axis	Both	Ambos
 @msg	every numbered name for {name} is taken in the document's folder	todos los nombres numerados para {name} ya existen en la carpeta del documento
 @msg	No linked files to look for	No hay archivos vinculados que buscar
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	El vínculo está dentro de un símbolo, un diseño de gráfico, un motivo o una máscara de opacidad y no tiene lugar en el lienzo
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	la ilustración de un diseño de gráfico en una serie de un gráfico se vuelve a dibujar a partir del diseño: edita el diseño para cambiarla
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios
@@ -5237,6 +5263,7 @@ axis	Both	Ambos
 @msg	automation filesystem access is not granted: write authority is absent: {path}	la automatización no tiene acceso al sistema de archivos: falta el permiso de escritura: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	ruta de automatización rechazada: fuera de la carpeta raíz de lectura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	ruta de automatización rechazada: fuera de las carpetas raíz de lectura {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	un archivo JavaScript vinculado está fuera de las carpetas raíz de lectura
 @msg	automation path rejected: outside the write root {root}: {path}	ruta de automatización rechazada: fuera de la carpeta raíz de escritura {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	ruta de automatización rechazada: fuera de las carpetas raíz de escritura {roots}: {path}
 @msg	automation path rejected: path is empty	ruta de automatización rechazada: la ruta está vacía
@@ -6023,6 +6050,9 @@ mark-style	Japanese	Japonesas
 	Softness	Suavidad
 	Ambient Light	Luz ambiental
 	Light behind the object	Luz detrás del objeto
+	Move Light to Back	Mover luz detrás
+	Move Light to Front	Mover luz delante
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Arrastre una luz para moverla. Las teclas de flecha mueven la luz con el foco; Mayús la mueve de 15° en 15°.
 	Shadows	Sombras
 	Distance from Object	Distancia del objeto
 	Shadow Bounds	Límites de la sombra
@@ -6735,6 +6765,13 @@ axis	Y Axis	Eje Y
 	Graphite Pencil	Lápiz de grafito
 	Wax Crayon	Cera de colores
 	Charcoal Dust	Polvo de carboncillo
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuitos tecnológicos
+	Circuit Trace	Pista de circuito
+	Bus Lines	Líneas de bus
+	Terminal Nodes	Nodos terminales
+
 	Notched Ribbon	Cinta dentada
 	Double Line	Línea doble
 	Wave	Onda

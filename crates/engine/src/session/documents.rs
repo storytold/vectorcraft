@@ -24,6 +24,8 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Clicks inside a clip group fall in the region its clipping path's effects give it.
+        vectorcraft_doc::hit::set_clip_region(vectorcraft_render::effects::reshaped_clip_outline);
         // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them,
         // evaluated again when the fonts, the hyphenation exceptions or the plug-ins change.
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
@@ -329,6 +331,8 @@ impl Session {
         // Ruler guides a reader left in the saved list become nodes on their layers.
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
+        // A plane held by Automatic Plane Positioning when the file was saved is back in its place.
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
@@ -357,6 +361,7 @@ impl Session {
         doc.resolve_inline_art();
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         // In the back, type set in a font named like a composite font is measured again below, in
         // the document's own composite fonts, not in the front document's.
         let back = self.active != Some(index);
