@@ -652,6 +652,18 @@ font-technology	Variable	Вариативные
 	Copy Width Point	Копировать точку ширины
 	Copyright	Copyright
 	Copyright Info URL:	URL информации об авторских правах:
+	Save Metadata Template…	Сохранить шаблон метаданных…
+	Import Options	Параметры импорта
+	Clear existing fields and use the template's	Очистить существующие поля и использовать поля шаблона
+	Keep existing fields, but replace those the template has	Сохранить существующие поля, но заменить те, что есть в шаблоне
+	Keep existing fields, but append those the template has	Сохранить существующие поля, но добавить те, что есть в шаблоне
+@msg	the template name can't be empty	имя шаблона не может быть пустым
+@msg	the template name isn't usable as a file name	имя шаблона нельзя использовать как имя файла
+@msg	no metadata templates folder here	здесь нет папки шаблонов метаданных
+@msg	give `name` or `path`, not both	укажите `name` или `path`, но не оба
+@msg	give one of `path`, `name` and `data`	укажите один из параметров `path`, `name` и `data`
+@msg	mode must be replace, keep or append	режим должен быть replace, keep или append
+@msg	the file is not an XMP metadata template	файл не является шаблоном метаданных XMP
 	Copyright Notice:	Уведомление об авторских правах:
 	Copyright Status:	Статус авторских прав:
 	Copyright Symbol	Символ авторского права

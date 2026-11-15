@@ -2953,6 +2953,18 @@ digits	Malayalam	Malayalam
 	Author Title:	Auteurstitel:
 	Author:	Auteur:
 	Copyright Info URL:	URL voor copyrightinfo:
+	Save Metadata Template…	Metagegevenssjabloon opslaan…
+	Import Options	Importopties
+	Clear existing fields and use the template's	Bestaande velden wissen en die van het sjabloon gebruiken
+	Keep existing fields, but replace those the template has	Bestaande velden behouden, maar die in het sjabloon vervangen
+	Keep existing fields, but append those the template has	Bestaande velden behouden, maar die in het sjabloon toevoegen
+@msg	the template name can't be empty	de sjabloonnaam mag niet leeg zijn
+@msg	the template name isn't usable as a file name	de sjabloonnaam is niet bruikbaar als bestandsnaam
+@msg	no metadata templates folder here	hier is geen map voor metagegevenssjablonen
+@msg	give `name` or `path`, not both	geef `name` of `path` op, niet allebei
+@msg	give one of `path`, `name` and `data`	geef één van `path`, `name` en `data` op
+@msg	mode must be replace, keep or append	de modus moet replace, keep of append zijn
+@msg	the file is not an XMP metadata template	het bestand is geen XMP-metagegevenssjabloon
 	Copyright Notice:	Copyrightvermelding:
 	Copyright Status:	Copyrightstatus:
 	Created:	Aangemaakt:

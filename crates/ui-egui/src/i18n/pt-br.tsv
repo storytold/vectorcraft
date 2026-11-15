@@ -590,6 +590,18 @@ antiAlias	Sharp	Nítido
 	Copy to User Defined	Copiar para Definido pelo Usuário
 	Copyright	Direitos Autorais
 	Copyright Info URL:	URL de Informações de Direitos Autorais:
+	Save Metadata Template…	Salvar Modelo de Metadados…
+	Import Options	Opções de Importação
+	Clear existing fields and use the template's	Limpar os campos existentes e usar os do modelo
+	Keep existing fields, but replace those the template has	Manter os campos existentes, mas substituir os que o modelo tiver
+	Keep existing fields, but append those the template has	Manter os campos existentes, mas acrescentar os que o modelo tiver
+@msg	the template name can't be empty	o nome do modelo não pode ficar vazio
+@msg	the template name isn't usable as a file name	o nome do modelo não pode ser usado como nome de arquivo
+@msg	no metadata templates folder here	não há pasta de modelos de metadados aqui
+@msg	give `name` or `path`, not both	informe `name` ou `path`, não ambos
+@msg	give one of `path`, `name` and `data`	informe um de `path`, `name` e `data`
+@msg	mode must be replace, keep or append	o modo deve ser replace, keep ou append
+@msg	the file is not an XMP metadata template	o arquivo não é um modelo de metadados XMP
 	Copyright Notice:	Aviso de Direitos Autorais:
 	Copyright Status:	Status de Direitos Autorais:
 	Copyright Symbol	Símbolo de Direitos Autorais

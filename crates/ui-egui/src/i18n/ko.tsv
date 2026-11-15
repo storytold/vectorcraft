@@ -1376,6 +1376,18 @@ antiAlias	Sharp	날카롭게
 	Copy Width Point	너비 점 복사
 	Copyright	저작권
 	Copyright Info URL:	저작권 정보 URL:
+	Save Metadata Template…	메타데이터 템플릿 저장…
+	Import Options	가져오기 옵션
+	Clear existing fields and use the template's	기존 필드를 지우고 템플릿의 필드 사용
+	Keep existing fields, but replace those the template has	기존 필드를 유지하되 템플릿에 있는 필드 바꾸기
+	Keep existing fields, but append those the template has	기존 필드를 유지하되 템플릿에 있는 필드 추가
+@msg	the template name can't be empty	템플릿 이름은 비워 둘 수 없습니다
+@msg	the template name isn't usable as a file name	템플릿 이름은 파일 이름으로 사용할 수 없습니다
+@msg	no metadata templates folder here	여기에는 메타데이터 템플릿 폴더가 없습니다
+@msg	give `name` or `path`, not both	`name` 또는 `path` 중 하나만 지정하세요
+@msg	give one of `path`, `name` and `data`	`path`, `name`, `data` 중 하나를 지정하세요
+@msg	mode must be replace, keep or append	모드는 replace, keep 또는 append여야 합니다
+@msg	the file is not an XMP metadata template	파일이 XMP 메타데이터 템플릿이 아닙니다
 	Copyright Notice:	저작권 고지:
 	Copyright Status:	저작권 상태:
 	Corner Point Angle Threshold:	모퉁이 포인트 각도 임계값:

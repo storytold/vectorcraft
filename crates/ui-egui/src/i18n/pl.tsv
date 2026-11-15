@@ -2563,6 +2563,18 @@ digits	Malayalam	Malajalam
 	Author Title:	Stanowisko autora:
 	Author:	Autor:
 	Copyright Info URL:	URL informacji o prawach autorskich:
+	Save Metadata Template…	Zapisz szablon metadanych…
+	Import Options	Opcje importu
+	Clear existing fields and use the template's	Wyczyść istniejące pola i użyj pól z szablonu
+	Keep existing fields, but replace those the template has	Zachowaj istniejące pola, ale zastąp te, które zawiera szablon
+	Keep existing fields, but append those the template has	Zachowaj istniejące pola, ale dołącz te, które zawiera szablon
+@msg	the template name can't be empty	nazwa szablonu nie może być pusta
+@msg	the template name isn't usable as a file name	nazwy szablonu nie można użyć jako nazwy pliku
+@msg	no metadata templates folder here	brak tu folderu szablonów metadanych
+@msg	give `name` or `path`, not both	podaj `name` albo `path`, nie oba
+@msg	give one of `path`, `name` and `data`	podaj jeden z parametrów `path`, `name` i `data`
+@msg	mode must be replace, keep or append	tryb musi mieć wartość replace, keep lub append
+@msg	the file is not an XMP metadata template	plik nie jest szablonem metadanych XMP
 	Copyright Notice:	Informacja o prawach autorskich:
 	Copyright Status:	Status praw autorskich:
 	Created:	Utworzono:

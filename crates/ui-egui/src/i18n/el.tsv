@@ -613,6 +613,18 @@ font-technology	Variable	Μεταβλητές
 	Copy Width Point	Αντιγραφή σημείου πλάτους
 	Copyright	Πνευματικά δικαιώματα
 	Copyright Info URL:	URL πληροφοριών πνευματικών δικαιωμάτων:
+	Save Metadata Template…	Αποθήκευση προτύπου μεταδεδομένων…
+	Import Options	Επιλογές εισαγωγής
+	Clear existing fields and use the template's	Απαλοιφή των υπαρχόντων πεδίων και χρήση εκείνων του προτύπου
+	Keep existing fields, but replace those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά αντικατάσταση όσων έχει το πρότυπο
+	Keep existing fields, but append those the template has	Διατήρηση των υπαρχόντων πεδίων, αλλά προσθήκη όσων έχει το πρότυπο
+@msg	the template name can't be empty	το όνομα του προτύπου δεν μπορεί να είναι κενό
+@msg	the template name isn't usable as a file name	το όνομα του προτύπου δεν μπορεί να χρησιμοποιηθεί ως όνομα αρχείου
+@msg	no metadata templates folder here	δεν υπάρχει φάκελος προτύπων μεταδεδομένων εδώ
+@msg	give `name` or `path`, not both	δώστε `name` ή `path`, όχι και τα δύο
+@msg	give one of `path`, `name` and `data`	δώστε ένα από τα `path`, `name` και `data`
+@msg	mode must be replace, keep or append	η λειτουργία πρέπει να είναι replace, keep ή append
+@msg	the file is not an XMP metadata template	το αρχείο δεν είναι πρότυπο μεταδεδομένων XMP
 	Copyright Notice:	Σημείωση πνευματικών δικαιωμάτων:
 	Copyright Status:	Κατάσταση πνευματικών δικαιωμάτων:
 	Copyright Symbol	Σύμβολο πνευματικών δικαιωμάτων

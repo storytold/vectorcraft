@@ -4444,6 +4444,18 @@ digits	Malayalam	მალაიალამური
 	Author Title:	ავტორის თანამდებობა:
 	Author:	ავტორი:
 	Copyright Info URL:	საავტორო უფლების ინფორმაციის URL:
+	Save Metadata Template…	მეტამონაცემების შაბლონის შენახვა…
+	Import Options	იმპორტის პარამეტრები
+	Clear existing fields and use the template's	არსებული ველების გასუფთავება და შაბლონის ველების გამოყენება
+	Keep existing fields, but replace those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების ჩანაცვლება
+	Keep existing fields, but append those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების დამატება
+@msg	the template name can't be empty	შაბლონის სახელი ცარიელი ვერ იქნება
+@msg	the template name isn't usable as a file name	შაბლონის სახელი ფაილის სახელად ვერ გამოდგება
+@msg	no metadata templates folder here	აქ მეტამონაცემების შაბლონების საქაღალდე არ არის
+@msg	give `name` or `path`, not both	მიუთითეთ `name` ან `path`, არა ორივე
+@msg	give one of `path`, `name` and `data`	მიუთითეთ ერთ-ერთი: `path`, `name` და `data`
+@msg	mode must be replace, keep or append	რეჟიმი უნდა იყოს replace, keep ან append
+@msg	the file is not an XMP metadata template	ფაილი არ არის XMP მეტამონაცემების შაბლონი
 	Copyright Notice:	საავტორო უფლების შენიშვნა:
 	Copyright Status:	საავტორო უფლების სტატუსი:
 	Created:	შექმნილია:

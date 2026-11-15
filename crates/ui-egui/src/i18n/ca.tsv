@@ -947,6 +947,18 @@ antiAlias	Sharp	Nítid
 	Copyright	Copyright
 	Copyright and Contact Info	Informació de copyright i de contacte
 	Copyright Info URL:	URL de la informació de copyright:
+	Save Metadata Template…	Desa la plantilla de metadades…
+	Import Options	Opcions d’importació
+	Clear existing fields and use the template's	Esborra els camps existents i fes servir els de la plantilla
+	Keep existing fields, but replace those the template has	Conserva els camps existents, però substitueix els que tingui la plantilla
+	Keep existing fields, but append those the template has	Conserva els camps existents, però afegeix els que tingui la plantilla
+@msg	the template name can't be empty	el nom de la plantilla no pot estar buit
+@msg	the template name isn't usable as a file name	el nom de la plantilla no es pot fer servir com a nom de fitxer
+@msg	no metadata templates folder here	aquí no hi ha cap carpeta de plantilles de metadades
+@msg	give `name` or `path`, not both	indiqueu `name` o `path`, no tots dos
+@msg	give one of `path`, `name` and `data`	indiqueu un de `path`, `name` i `data`
+@msg	mode must be replace, keep or append	el mode ha de ser replace, keep o append
+@msg	the file is not an XMP metadata template	el fitxer no és una plantilla de metadades XMP
 	Copyright Notice:	Avís de copyright:
 	Copyright Status:	Estat del copyright:
 	Copyright Symbol	Símbol de copyright
