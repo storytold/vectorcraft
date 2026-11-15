@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swap Fill and Stroke",
             [],
             Some("Shift+X"),
-            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight, and on a graph label the swapped paints of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (exceptions: docs/mcp.md)",
+            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight, and on a graph label the swapped paints of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring what the swap changes on its rows for every line of its kind (exceptions: docs/mcp.md)",
             has_doc,
             swap
         ),
@@ -998,11 +998,10 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
             }
             // The swap writes the paint of the topmost fill and stroke, not their opacity.
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (false, false), true, false);
+            // The graph lines among `ids` keep the paint the swap changed for every line of their kind; the opacity and blend
+            // modes the kind keeps stay.
             let labels = super::graph::capture_label_changes(&before, d, &ids, false, None);
-            // The graph keeps the default fill and stroke rows for every line of a kind it reached, also when one already
-            // showed them; the object opacity the kind keeps stays.
-            let lines = super::graph::capture_line_fill_stroke_rows(d, &ids);
-            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels || lines))
+            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
         })?;
     }
     if s.paint.stroke.is_none() && !s.paint.fill.is_none() && s.paint.stroke_width == 0.0 {

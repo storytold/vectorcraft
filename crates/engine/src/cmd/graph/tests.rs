@@ -7564,6 +7564,28 @@ fn recoloring_a_graph_keeps_its_axis_lines_paint() {
     assert!(!label_paint.is_empty() && label_paint.iter().all(|l| *l == ("#ffffff".to_string(), true)), "{label_paint:?}");
 }
 
+/// Swap Fill and Stroke on an axis line keeps the swapped paint for every axis line and leaves the fill opacity the axis
+/// lines keep from another line, though the line swapped still shows 100%.
+#[test]
+fn swapping_an_axis_lines_paint_keeps_the_fill_opacity_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    let (first, second) = (lines[0].id, lines[1].id);
+    s.execute("paint.setFill", &json!({"ids": [first.0], "color": "#00ff00"})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [first.0], "item": top_row(&s, first, true), "opacity": 40})).unwrap();
+    let shown = s.doc().unwrap().doc.node(second).unwrap().appearance.fill().map(|f| f.opacity);
+    assert!(shown.is_none_or(|o| o == 1.0), "the other lines show 100% until the graph is drawn again: {shown:?}");
+    s.execute("paint.swap", &json!({"ids": [second.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    for n in line_nodes(&s, id) {
+        let fill = n.appearance.fill().map(|f| (f.paint.color().map(|c| c.to_hex()), f.opacity));
+        assert!(fill.as_ref().is_some_and(|(c, o)| c.as_deref() == Some("#000000") && (*o - 0.4).abs() < 1e-6), "{fill:?}");
+        assert!(n.appearance.stroke_paint().is_none(), "the swapped line had no fill, so the lines have no stroke");
+    }
+}
+
 /// A stroke given the whole graph, or its Axes group, is kept for its axis lines.
 #[test]
 fn a_stroke_given_the_whole_graph_or_its_axes_group_is_kept_for_its_axis_lines() {
@@ -7885,6 +7907,58 @@ fn an_appended_pick_without_transparency_on_a_label_keeps_the_opacity_its_kind_k
         let (rows, opacity) = rows_of(&looks, q);
         assert!((opacity - 0.4).abs() < 1e-6, "{q}: {opacity}");
         assert!(rows.iter().any(|r| !r.0 && r.1 == "#ff0000"), "{q}: {rows:?}");
+    }
+}
+
+/// An Eyedropper pick with `append` from a source that shows only a fill, on a graph label or axis line, keeps the added
+/// fill for the kind and leaves the stroke the kind keeps from another label or line, though the one picked onto still
+/// shows its old stroke. With the object's transparency, the kind also keeps the picked object opacity.
+#[test]
+fn an_appended_fill_only_pick_on_a_label_or_axis_line_keeps_the_stroke_its_kind_keeps() {
+    for (label, transparency) in [(true, false), (false, false), (true, true), (false, true)] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setFill", &json!({"ids": [rect.0], "color": "#00ff00"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [rect.0], "color": "#ff0000"})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [rect.0], "index": top_row(&s, rect, false), "visible": false})).unwrap();
+        s.execute("transparency.set", &json!({"ids": [rect.0], "opacity": 50})).unwrap();
+        let (first, second) = if label {
+            (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"))
+        } else {
+            let lines = line_nodes(&s, id);
+            (lines[0].id, lines[1].id)
+        };
+        if label {
+            s.execute("appearance.addStroke", &json!({"ids": [first.0]})).unwrap();
+            let at = top_row(&s, first, false);
+            s.execute("appearance.setItem", &json!({"ids": [first.0], "index": at, "color": "#0000ff", "weight": 2})).unwrap();
+        } else {
+            s.execute("paint.setStroke", &json!({"ids": [first.0], "color": "#0000ff"})).unwrap();
+            assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+        }
+        let mut apply = every_row_attribute_without_transparency();
+        apply["appearance"]["transparency"] = json!(transparency);
+        let pick = json!({"source": rect.0, "ids": [second.0], "apply": apply, "append": true});
+        s.execute("appearance.copyFrom", &pick).unwrap();
+        let opacity = if transparency { 0.5 } else { 1.0 };
+        let case = format!("label {label}, transparency {transparency}");
+        if label {
+            let looks = redrawn_label_rows(&mut s, id);
+            for q in ["Q1", "Q2", "Q3"] {
+                let (rows, shown) = rows_of(&looks, q);
+                assert!(rows.iter().any(|r| r.0 && r.1 == "#00ff00"), "{case}, {q}: {rows:?}");
+                assert!(rows.iter().any(|r| !r.0 && r.1 == "#0000ff"), "{case}, {q}: {rows:?}");
+                assert!(!rows.iter().any(|r| r.1 == "#ff0000"), "{case}, {q}: {rows:?}");
+                assert!((shown - opacity).abs() < 1e-6, "{case}, {q}: {shown}");
+            }
+        } else {
+            let looks = redrawn_line_looks(&mut s, id);
+            assert!(looks.iter().all(|l| l.0 == "#0000ff" && (l.2 - opacity).abs() < 1e-6), "{case}: {looks:?}");
+            let fills: Vec<Option<String>> = line_nodes(&s, id).iter().map(|n| n.appearance.fill_paint().color().map(|c| c.to_hex())).collect();
+            assert!(fills.iter().all(|f| f.as_deref() == Some("#00ff00")), "{case}: {fills:?}");
+        }
     }
 }
 

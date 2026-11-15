@@ -1427,17 +1427,10 @@ pub(crate) fn capture_label_object_opacity(doc: &mut Document, ids: &[NodeId]) -
 }
 
 /// Keep the fill and stroke rows of graph labels and graph lines `ids` for every label or line of their kind, as
-/// [`capture_label_rows`] keeps them, for an edit that left their object opacity and blend mode alone: those stay as the
-/// kind keeps them, also when a label or line still shows other ones until the graph is drawn again. Returns whether what
-/// the graph keeps changed.
-pub(crate) fn capture_label_fill_stroke_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
-    store_label_rows(doc, ids, Keep::Rows)
-}
-
-/// [`capture_label_fill_stroke_rows`] for an edit that put a new fill row (`fill`) or stroke row (`stroke`) on top of
-/// graph labels and graph lines `ids`: only those kinds of row are kept for every label or line of their kind, and the
-/// other kind stays as the kind keeps it, also when a label or line still shows another one until the graph is drawn
-/// again. Returns whether what the graph keeps changed.
+/// [`capture_label_rows`] keeps them, for an edit that put a new fill row (`fill`) or stroke row (`stroke`) on top of
+/// them: only those kinds of row are kept, and the other kind and the object opacity and blend mode stay as the kind
+/// keeps them, also when a label or line still shows other ones until the graph is drawn again. Returns whether what the
+/// graph keeps changed.
 pub(crate) fn capture_label_added_rows(doc: &mut Document, ids: &[NodeId], (fill, stroke): (bool, bool)) -> bool {
     store_label_rows(doc, ids, Keep::Added { fill, stroke })
 }
@@ -1457,7 +1450,7 @@ pub(crate) fn label_object_opacity_differs(doc: &Document, ids: &[NodeId]) -> bo
         })
 }
 
-/// [`capture_label_rows`], [`capture_label_object_opacity`] or [`capture_label_fill_stroke_rows`], as `keep` says.
+/// [`capture_label_rows`], [`capture_label_object_opacity`] or [`capture_label_added_rows`], as `keep` says.
 fn store_label_rows(doc: &mut Document, ids: &[NodeId], keep: Keep) -> bool {
     let mut changed = store_line_rows(doc, ids, keep);
     for (graph, role, rows) in label_rows_of(doc, ids) {
