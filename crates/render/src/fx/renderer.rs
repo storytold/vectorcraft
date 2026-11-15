@@ -389,7 +389,7 @@ impl Renderer {
         let bounds = rasterize_bounds(f.symbols, n, &rfx);
         // Under Rasterize the content reaches as far as its fills' and strokes' raster effects paint.
         let reach = bounds.map_or(reach, |b| reach.union(b));
-        let content = Content { node: n, owner: None, cache: Some(0), reach, outline: Some((g, rule)), bounds, kept: None };
+        let content = Content { node: n, owner: None, cache: Some(0), reach, object: reach, outline: Some((g, rule)), bounds, kept: None };
         let mut items = items;
         self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, paints, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
@@ -423,11 +423,12 @@ impl Renderer {
         let outer = self.made_again;
         self.made_again = outer || !kept;
         // With Crop Marks, the object inside the art paints its own raster effects; Vector
-        // Halftone samples them with the object.
+        // Halftone samples them with the object. The copies of a Transform effect that carry the
+        // raster effects listed before it paint those themselves.
         let rfx = if effects::has_crop_marks(a) || effects::addons::halftone::has_halftone(a) {
             vec![]
         } else {
-            effects::raster_effects(&a.appearance.effects)
+            effects::raster_effects(effects::outer_effects(a))
         };
         match cull_bounds(f.symbols, &art) {
             Some(reach) if !f.opts.outline && !rfx.is_empty() => {
@@ -446,7 +447,16 @@ impl Renderer {
                     None => rasterize_bounds(f.symbols, a, &rfx),
                 };
                 let reach = bounds.map_or(reach, |b| reach.union(b));
-                let content = Content { node: a, owner: Some(a), cache, reach, outline: region.as_deref().map(|r| (&r.0, r.1)), bounds, kept: None };
+                let content = Content {
+                    node: a,
+                    owner: Some(a),
+                    cache,
+                    reach,
+                    object: reach,
+                    outline: region.as_deref().map(|r| (&r.0, r.1)),
+                    bounds,
+                    kept: None,
+                };
                 self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.draw_fx_art(c, fr, a, &art));
                 ctx.set_transform(Affine::IDENTITY);
             }
@@ -770,6 +780,7 @@ impl Renderer {
                     owner: content.owner,
                     cache: None,
                     reach: content.reach,
+                    object: content.object,
                     outline: content.outline,
                     bounds: content.bounds,
                     kept: kept.as_ref(),
@@ -782,6 +793,7 @@ impl Renderer {
                     owner: content.owner,
                     cache: content.cache.filter(|_| !over),
                     reach,
+                    object: content.object,
                     outline,
                     bounds: spread,
                     kept: content.kept.filter(|_| split == at),

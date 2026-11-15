@@ -194,6 +194,8 @@
 	Crop Image	Pangkas gambar
 	Image Tools	Alat Gambar
 	Remove Background…	Hapus latar belakang…
+	Draw (Pencil)	Menggambar (pensil)
+	Place Image	Tempatkan gambar
 	Remove Background	Hapus latar belakang
 	Background	Latar belakang
 	Edge Color	Warna tepi
@@ -387,6 +389,18 @@
 	Title Case	Huruf besar di awal kata
 	Sentence case	Huruf besar di awal kalimat
 	Smart Punctuation…	Tanda baca cerdas…
+	Smart Punctuation	Tanda baca cerdas
+	ff, fi, ffi Ligatures	Ligatur ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatur ff, fl, ffl
+	Smart Quotes	Tanda kutip cerdas
+	Smart Spaces	Spasi cerdas
+	En, Em Dashes	Tanda pisah en dan em
+	Ellipses	Elipsis
+	Expert Fractions	Pecahan ahli
+	Replace In	Ganti di
+	Selected Text Only	Hanya teks terpilih
+	Entire Document	Seluruh dokumen
+	Report Results	Laporkan hasil
 	Create Outlines	Buat garis luar
 	Optical Margin Alignment	Perataan margin optik
 	Dynamic Text	Teks dinamis
@@ -899,6 +913,7 @@
 	Free Transform	Transformasi bebas
 	Perspective Distort	Distorsi perspektif
 	Radial Blur…	Kabur radial…
+	Blur Center	Pusat kabur
 	Smart Blur…	Kabur cerdas…
 	Sharpen	Pertajam
 	Unsharp Mask…	Unsharp Mask…
@@ -1505,8 +1520,11 @@ lighting	Light	Cahaya
 	Leading	Leading
 	No Break	Tanpa pemenggalan
 	Proportional Metrics	Metrik proporsional
+	H or V Style	Gaya horizontal atau vertikal
+	Roman Italics	Miring Romawi
 	Insert Aki Left	Sisipkan aki kiri
 	Insert Aki Right	Sisipkan aki kanan
+	Tsume	Tsume
 	Character Direction	Arah karakter
 	Digits	Digit
 	Arabic	Arab
@@ -1633,6 +1651,9 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Font karakter yang dipilih tidak tersedia.
 	No alternates for the selected character.	Tidak ada alternatif untuk karakter yang dipilih.
 	Double-click to replace	Klik ganda untuk mengganti
+	Click to replace	Klik untuk mengganti
+	Show all alternates in the Glyphs panel	Tampilkan semua alternatif di panel Glif
+	Show Character Alternates	Tampilkan alternatif karakter
 	Select one character with the Type tool first.	Pilih satu karakter dengan alat teks terlebih dahulu.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} adalah glif {font}, bukan dari font yang dipakai teks terpilih ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} milik {base} (U+{base_code}) {place}; pilihan Anda adalah {sel} (U+{code}).
@@ -1837,7 +1858,9 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Lining tabular
 	Tabular Oldstyle	Oldstyle tabular
 	Titling Alternates	Alternatif judul
+	Middle Eastern & South Asian Single-line Composer	Komposer satu baris (Timur Tengah dan Asia Selatan)
 	Middle Eastern & South Asian Every-line Composer	Komposer tiap baris (Timur Tengah dan Asia Selatan)
+	Standard Single-line Composer	Komposer standar satu baris
 	Standard Every-line Composer	Komposer standar tiap baris
 	First-line Left Indent	Indentasi kiri baris pertama
 	Hyphenation…	Pemenggalan kata…
@@ -1870,8 +1893,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
-	Middle Eastern & South Asian Single-line Composer	Komposer satu baris (Timur Tengah dan Asia Selatan)
-	Standard Single-line Composer	Komposer standar satu baris
 	Toggle Line Composer	Alihkan komposer baris
 	Space After Paragraph	Spasi setelah paragraf
 	Space Before Paragraph	Spasi sebelum paragraf
@@ -1915,6 +1936,7 @@ digits	Malayalam	Malayalam
 	Show Swatch Bounds	Tampilkan batas swatch
 	Show Tile Edge	Tampilkan tepi ubin
 	Size Tile to Art	Sesuaikan ukuran ubin dengan karya seni
+	Move Tile with Art	Pindahkan ubin bersama karya seni
 	Tile Type:	Jenis ubin:
 	Top in Front	Atas di depan
 	V Spacing:	Jarak V:
@@ -1957,6 +1979,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Gunakan kompensasi titik hitam
 	Working CMYK (don't tag)	CMYK kerja (tanpa tag)
 	Working RGB (don't tag)	RGB kerja (tanpa tag)
+	Don't Color Manage This Document	Jangan kelola warna dokumen ini
+	Working RGB: {name}	RGB kerja: {name}
+	Working CMYK: {name}	CMYK kerja: {name}
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Tambahkan ke profil…
 	Align Stroke to Center	Ratakan stroke ke tengah
@@ -2076,6 +2101,7 @@ digits	Malayalam	Malayalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	entri paths {i} memerlukan path dan ids (id objek yang tidak dimiliki entri lain)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder menerima path: tautan hilang lainnya dicari di folder file tersebut
 	Show Missing	Tampilkan yang hilang
+	Sort by Size	Urutkan berdasarkan ukuran
 	Sort by Status	Urutkan berdasarkan status
 	Clear Overrides	Hapus penimpaan
 	Create New {kind} Style	Buat gaya {kind} baru
@@ -2325,6 +2351,7 @@ digits	Malayalam	Malayalam
 	Export Asset	Ekspor aset
 	Export to:	Ekspor ke:
 	Format Settings	Pengaturan format
+	Format Settings…	Pengaturan format…
 	Formats:	Format:
 	Full Document	Dokumen penuh
 	Include Bleed	Sertakan bleed
@@ -2414,6 +2441,7 @@ digits	Malayalam	Malayalam
 	e.g. 1-3, 5	mis. 1-3, 5
 	First Page	Halaman pertama
 	Import PDF	Impor PDF
+	Import PDF pages as links	Impor halaman PDF sebagai tautan
 	Last Page	Halaman terakhir
 	Next Page	Halaman berikutnya
 	of {count}	dari {count}
@@ -2497,6 +2525,7 @@ digits	Malayalam	Malayalam
 	Transparent Background	Latar belakang transparan
 	Choose…	Pilih…
 	Copy Fonts Used in the Document	Salin font yang digunakan dalam dokumen
+	Copy Info	Salin info
 	Copy Links	Salin tautan
 	Create Report	Buat laporan
 	Fonts whose licence doesn't allow embedding are not copied.	Font yang lisensinya tidak mengizinkan penyematan tidak disalin.
@@ -2547,6 +2576,8 @@ digits	Malayalam	Malayalam
 	Keep a link to an image file instead of only embedding it	Pertahankan tautan ke file gambar alih-alih hanya menyematkannya
 	Place onto a new locked, dimmed template layer below the current layer	Tempatkan pada lapisan templat baru yang terkunci dan diredupkan di bawah lapisan saat ini
 	Swap the selected object for the file, keeping its place and transform	Tukar objek terpilih dengan file, mempertahankan tempat dan transformasinya
+	Show Import Options	Tampilkan Opsi Impor
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Tanyakan opsi impor setiap file PDF, DXF, atau teks sebelum menempatkannya; nonaktif: gunakan opsi yang terakhir dipilih
 	On: one locked object showing the document, updated when it changes.	Aktif: satu objek terkunci yang menampilkan dokumen, diperbarui saat dokumen berubah.
 	Off: an editable copy of its art, embedded in this document.	Nonaktif: salinan karya seninya yang dapat diedit, tersemat dalam dokumen ini.
 	Images: link to the file instead of only embedding it.	Gambar: tautkan ke file alih-alih hanya menyematkannya.
@@ -4279,6 +4310,7 @@ imageTrace	Outline	Kontur
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Skrip ini telah menambahkan sangat banyak objek. Lanjutkan, atau hentikan dan batalkan yang telah dilakukannya?
 @msg	Copied the script report	Berhasil menyalin laporan skrip
+@msg	Copied the link info	Berhasil menyalin info tautan
 @msg	Corners edits the corners of a path	Corners menyunting sudut jalur
 @msg	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
 @msg	Couldn't open {name}: {e}	Tidak dapat membuka {name}: {e}
@@ -5420,6 +5452,9 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	Move Light to Back	Pindahkan Cahaya ke Belakang
+	Move Light to Front	Pindahkan Cahaya ke Depan
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Seret cahaya untuk memindahkannya. Tombol panah memindahkan cahaya yang difokuskan; Shift memindahkannya 15°.
 	Shadows	Bayangan
 	Distance from Object	Jarak dari objek
 	Shadow Bounds	Batas bayangan
@@ -6135,6 +6170,8 @@ axis	Y Axis	Sumbu Y
 	Create New Set	Buat set baru
 	Stop Global Edit	Hentikan edit global
 	Global Edit Options	Opsi edit global
+	Select Similar Objects	Pilih objek serupa
+	Select Similar Options	Opsi pilih serupa
 	Leave Out of Global Edit	Keluarkan dari edit global
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edit global berfungsi pada jalur, jalur gabungan, instans simbol, dan grupnya
 	Match	Cocokkan
@@ -6246,6 +6283,13 @@ axis	Y Axis	Sumbu Y
 	Graphite Pencil	Pensil grafit
 	Wax Crayon	Krayon lilin
 	Charcoal Dust	Debu arang
+
+# Original procedural circuit brushes.
+	Tech Circuit	Sirkuit teknologi
+	Circuit Trace	Jalur sirkuit
+	Bus Lines	Jalur bus
+	Terminal Nodes	Simpul terminal
+
 	Notched Ribbon	Pita bertakik
 	Double Line	Garis ganda
 	Wave	Gelombang
@@ -6874,11 +6918,20 @@ breakText	Glyphs	Glif
 	Open Tutorial Sample	Buka contoh tutorial
 	Finish Tutorial	Selesaikan tutorial
 	Next Tutorial	Tutorial berikutnya
+	Show Learn Tab	Tampilkan tab Belajar
+	Show Skill	Tampilkan keterampilan
+	Back One Level	Kembali satu tingkat
 	Back to Skills	Kembali ke keterampilan
 @msg	tutorial `{id}` has no practice sample	tutorial `{id}` tidak memiliki contoh latihan
 @msg	open the practice sample of `{id}` first (see learn.openSample)	buka contoh latihan `{id}` terlebih dahulu (lihat learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	selesaikan `{id}` terlebih dahulu (lihat learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` adalah tutorial terakhir dalam keterampilannya
+	Reset progress	Atur ulang kemajuan
+	Mark Tutorial Step	Tandai langkah tutorial
+	Reset Learn Progress	Atur ulang kemajuan belajar
+@msg	missing `step` (see learn.show)	`step` tidak ada (lihat learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` harus berupa nomor langkah dari 0 sampai {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` sudah selesai (lihat learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Segarkan efek yang ditunda
@@ -6901,4 +6954,7 @@ breakText	Glyphs	Glif
 	Grommets	Mata ayam
 	Grommet Inset	Jarak mata ayam dari tepi
 	Diameter	Diameter
+	Nest Shapes…	Susun Bentuk…
+	Nest Shapes	Susun Bentuk
+	Roll	Gulungan
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

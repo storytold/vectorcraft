@@ -366,18 +366,17 @@ fn load_variable_library_asks_off_the_ui_thread() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// The Variables panel menu's Save Variable Library… is enabled once the document has a text
-/// variable, and then asks off the UI thread: the library is written
-/// to the path the dialog answers, Load Variable Library reads it back, and the warning about the
-/// visibility variable it left out shows in the status bar.
+/// The Variables panel menu's Save Variable Library… is enabled once the document has a variable,
+/// of any kind, and then asks off the UI thread: the library is written to the path the dialog
+/// answers, and Load Variable Library reads back its visibility and text variables.
 #[test]
 fn save_variable_library_asks_off_the_ui_thread() {
     let (mut app, shown, _) = app();
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-    app.run("variable.define", json!({"name": "Shown", "kind": "visibility"})).unwrap();
-    // Without a text variable the item is disabled and asks for no file.
+    // Without a variable the item is disabled and asks for no file.
     click(&mut app, "Save Variable Library…", crate::panels::variables::menu);
     assert!(shown.requests().is_empty(), "{:?}", shown.requests());
+    app.run("variable.define", json!({"name": "Shown", "kind": "visibility"})).unwrap();
     app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
     app.run("dataset.new", json!({"name": "A", "values": {"Name": "x", "Shown": true}})).unwrap();
     let dir = vectorcraft_testkit::temp_dir("picks-save-variable-library");
@@ -392,10 +391,11 @@ fn save_variable_library_asks_off_the_ui_thread() {
     assert!(!library.exists(), "nothing is written before the dialog answers");
     shown.answer(&[&library.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(app.ui.status, "variables that aren't text were left out: visibility (1)");
     let xml = std::fs::read_to_string(&library).unwrap_or_else(|e| panic!("{e}: {}", app.ui.status));
     let loaded = app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
-    assert_eq!((loaded["variables"].clone(), loaded["names"].clone()), (json!(["Name"]), json!(["A"])));
+    assert_eq!((loaded["variables"].clone(), loaded["names"].clone()), (json!(["Shown", "Name"]), json!(["A"])));
+    let values = &app.session.doc().unwrap().doc.variables.datasets[0].values;
+    assert_eq!(values.get("Shown"), Some(&vectorcraft_doc::DataValue::Visible(true)));
     let _ = std::fs::remove_dir_all(dir);
 }
 

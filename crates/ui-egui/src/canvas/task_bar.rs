@@ -55,6 +55,42 @@ fn selection_tool_with_selection(app: &VectorcraftApp) -> bool {
         && app.session.active().is_some_and(|st| !st.selection.is_empty())
 }
 
+/// Whether the bar shows its blank canvas actions, Draw (Pencil) and Place Image: a selection tool is
+/// in use and the active document has no artwork, only layers and guides.
+fn blank_canvas(app: &VectorcraftApp) -> bool {
+    fn no_art(nodes: &[std::sync::Arc<vectorcraft_doc::Node>]) -> bool {
+        nodes.iter().all(|n| n.is_guide() || (n.is_layer() && n.children().is_none_or(|c| no_art(c))))
+    }
+    matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection")
+        && app.session.active().is_some_and(|st| st.selection.is_empty() && no_art(&st.doc.layers))
+}
+
+/// Where the bar's top edge centers, on screen: under the lowest corner on screen of the selected
+/// artboards or the selection, centered on them (the view may be rotated); on a blank canvas, which
+/// has no selection, [`blank_canvas_anchor`]. None with nothing to sit under.
+fn bar_anchor(app: &mut VectorcraftApp, xf: &Xf, on_artboards: bool, blank: bool) -> Option<Pos2> {
+    if blank {
+        return Some(blank_canvas_anchor(app, xf));
+    }
+    let b = if on_artboards { picked_artboards_bounds(app) } else { app.selection_bounds() }?;
+    let lowest = xf.quad(b).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
+    Some(pos2(xf.to_screen(b.center()).x, lowest))
+}
+
+/// Where the blank canvas bar's top edge centers, on screen: under the bottom of the active artboard
+/// when part of it is in view, else the canvas's center.
+fn blank_canvas_anchor(app: &VectorcraftApp, xf: &Xf) -> Pos2 {
+    let board = app.session.active().and_then(|st| {
+        let last = st.doc.artboards.len().checked_sub(1)?;
+        st.doc.artboards.get(app.view().map_or(0, |v| v.artboard).min(last)).map(|a| a.rect)
+    });
+    let shown = board.map(|b| (b, xf.quad(b))).filter(|(_, q)| egui::Rect::from_points(q).intersects(xf.rect));
+    match shown {
+        Some((b, q)) => pos2(xf.to_screen(b.center()).x, q.iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max)),
+        None => xf.rect.center(),
+    }
+}
+
 /// Whether a Type tool edits type, or has type selected: its bar then shows only the text
 /// formatting controls.
 fn type_tool_on_type(app: &VectorcraftApp) -> bool {
@@ -75,6 +111,8 @@ pub(crate) fn task_bar_shows_type(app: &VectorcraftApp) -> bool {
 /// While a Type tool edits type, or has type selected, the bar shows only those controls and the
 /// Fill. When one row would be wider than the canvas, the font controls take a row of their own,
 /// narrowed to fit it, and the actions wrap onto rows under the handle's ([`bar_layout`]).
+/// On a blank canvas, a document with no artwork and a selection tool in use, it sits under the
+/// active artboard and offers Draw (Pencil) and Place Image.
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
 pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
@@ -83,13 +121,15 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     // Text added with a Type tool shows its formatting controls, as the help page describes
     // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
     let typing = type_tool_on_type(app);
-    if !(on_artboards || typing || selection_tool_with_selection(app)) {
+    // A blank canvas offers Draw (Pencil) and Place Image, as the same help page describes.
+    let blank = !on_artboards && blank_canvas(app);
+    if !(on_artboards || typing || blank || selection_tool_with_selection(app)) {
         return;
     }
     // Selected type has the font controls too, as the help page describes
     // (<https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/font-options-overview.html>).
     let fonts = task_bar_shows_type(app);
-    let Some(b) = (if on_artboards { picked_artboards_bounds(app) } else { app.selection_bounds() }) else { return };
+    let Some(anchor) = bar_anchor(app, xf, on_artboards, blank) else { return };
     let Some(st) = app.session.active() else { return };
     let n = st.selection.len();
     let first = st.selection.objects.first().and_then(|id| st.doc.node(*id));
@@ -137,6 +177,10 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Rearrange All"), "dc-rearrange", TASK_BAR_REARRANGE_ARTBOARDS, none()));
         }
         items.push((tl!("Export"), "share-2", "file.exportForScreens", none()));
+    } else if blank {
+        // Draw (Pencil) switches to the Pencil tool; Place Image picks files for the Place dialog.
+        items.push((tl!("Draw (Pencil)"), "pencil", "tool.select", json!({"tool": "pencil"})));
+        items.push((tl!("Place Image"), "image", "file.place", none()));
     } else if !typing {
         // The selection tools' object actions. A Type tool's bar leaves them out, Create Outlines
         // and the type conversions included.
@@ -163,8 +207,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Remove Anchor Points"), "pen-tool-delete", "path.removeAnchors", none()));
             items.push((tl!("Connect"), "dc-join", "path.join", none()));
             items.push((tl!("Cut Path"), "scissors", "path.cutAtAnchors", none()));
-            items.push((tl!("Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
-            items.push((tl!("Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
+            items.push((tl!("Convert Selected Anchor Points to Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
+            items.push((tl!("Convert Selected Anchor Points to Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
         }
         // As in the reference app, open paths offer Join and Edit Path, compound paths and clipping
         // masks their Release, images selected with vector art Make Clipping Mask, type converts
@@ -213,14 +257,17 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         } else if is_image {
             // Offset Path and Simplify don't apply to an image.
         } else if !anchors && direct {
-            // Corner and Smooth convert every anchor of a path selected whole; Remove and Cut
-            // need anchors picked out, so they wait for them.
+            // The two convert buttons convert every anchor of a path selected whole; Remove and Cut
+            // need anchors picked out, so they wait for them. Simplify and Smooth open their
+            // sliders, as Object › Path › Simplify… and Smooth… do; the page above names Smooth as
+            // adjusting the path's curvature, apart from converting its anchor points.
             if open_path {
                 items.push((tl!("Connect"), "dc-join", "path.join", none()));
             }
-            items.push((tl!("Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
-            items.push((tl!("Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
+            items.push((tl!("Convert Selected Anchor Points to Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
+            items.push((tl!("Convert Selected Anchor Points to Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
             items.push((tl!("Simplify"), "spline", "object.path.simplify", none()));
+            items.push((tl!("Smooth"), "dc-smooth", "object.path.smooth", none()));
         } else if !anchors {
             if open_path {
                 items.push((tl!("Join"), "dc-join", "path.join", none()));
@@ -234,28 +281,21 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let paints = chip_paints(app, ui.ctx());
     let colored = has_colors(&st.doc, &st.selection.objects);
     let doc = st.uid;
-    // Under the selection's lowest corner on screen, centered on the selection (the view may be
-    // rotated).
-    let lowest = xf.quad(b).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
-    let anchor = pos2(xf.to_screen(b.center()).x, lowest);
     let bounds = xf.rect.shrink(8.0);
     // The canvas's width less the frame's margins and stroke.
     let room = bounds.width() - BAR_FRAME;
     // On a canvas too narrow for the type controls at their narrowest, the bar leaves them out.
     let fonts = fonts && room >= crate::panels::character::task_bar_min_room();
     // The selected objects' Fill, Stroke, Recolor Artwork (when they have colours to recolour) and
-    // Lock (a basic shape's properties instead), left out with the Artboard tool. A Type tool's bar
-    // has the Fill alone.
-    let chips: Vec<Chip> = [
-        (!on_artboards, Chip::Fill),
-        (!on_artboards && !typing, Chip::Stroke),
-        (!on_artboards && !typing && colored, Chip::Recolor),
-        (!on_artboards && !typing, Chip::Lock),
-    ]
-    .into_iter()
-    .filter_map(|(shown, chip)| shown.then_some(chip))
-    .collect();
-    let widths: Vec<f32> = items.iter().map(|(label, ..)| action_width(ui, label)).collect();
+    // Lock (a basic shape's properties instead), left out with the Artboard tool and on a blank
+    // canvas, which have no selected objects. A Type tool's bar has the Fill alone.
+    let objects = !on_artboards && !blank;
+    let chips: Vec<Chip> =
+        [(objects, Chip::Fill), (objects && !typing, Chip::Stroke), (objects && !typing && colored, Chip::Recolor), (objects && !typing, Chip::Lock)]
+            .into_iter()
+            .filter_map(|(shown, chip)| shown.then_some(chip))
+            .collect();
+    let widths: Vec<f32> = items.iter().map(|(label, _, cmd, _)| if icon_only(cmd) { BAR_MORE } else { action_width(ui, label) }).collect();
     let font_w = fonts.then(|| {
         let w = crate::panels::character::TASK_BAR_WIDTHS;
         w.iter().sum::<f32>() + BAR_GAP * (w.len() - 1) as f32
@@ -330,7 +370,17 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             }
                         }
                         for ((label, icon, cmd, params), at) in items.iter().zip(&layout.actions) {
-                            if *at == Some(row) && action_button(ui, &t, label, icon) {
+                            if *at != Some(row) {
+                                continue;
+                            }
+                            // The convert buttons show their icon alone, named by their hover text, as
+                            // the Control bar's do.
+                            let clicked = if icon_only(cmd) {
+                                widgets::icon_button(ui, icon, label, false, BAR_MORE).clicked()
+                            } else {
+                                action_button(ui, &t, label, icon)
+                            };
+                            if clicked {
                                 run = Some((*cmd, params.clone()));
                             }
                         }
@@ -422,7 +472,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         Some((TASK_BAR_ARTBOARD_OPTIONS, _)) => crate::menus::invoke(app, "tool.options", json!({"tool": "artboard"})),
         Some((TASK_BAR_DUPLICATE_ARTBOARDS, _)) => crate::panels::artboards::duplicate_picked(app),
         Some((TASK_BAR_REARRANGE_ARTBOARDS, _)) => crate::panels::artboards::open_rearrange(app),
-        // Corner and Smooth convert the direct-selected anchors, as the Control bar's buttons do.
+        // The convert buttons convert the direct-selected anchors, as the Control bar's buttons do.
         Some((TASK_BAR_TO_CORNER, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "corner"})),
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
         Some((c, p)) => crate::menus::invoke(app, c, p),
@@ -627,6 +677,11 @@ fn paint_or_object_chip(
     }
 }
 
+/// Whether the bar's item that runs `cmd` shows its icon alone: the anchor convert buttons.
+fn icon_only(cmd: &str) -> bool {
+    matches!(cmd, TASK_BAR_TO_CORNER | TASK_BAR_TO_SMOOTH)
+}
+
 /// The paints the Fill and Stroke chips show, and whether each is mixed ("?"): the proxies', or
 /// while a Type tool edits type, the edited characters' fill, which a swatch picked then paints.
 pub(crate) fn chip_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (vectorcraft_color::Paint, vectorcraft_color::Paint, bool, bool) {
@@ -677,8 +732,11 @@ const TASK_BAR_DUPLICATE_ARTBOARDS: &str = "taskBar.duplicateArtboards";
 /// The Contextual Task Bar's Rearrange All button with the Artboard tool.
 const TASK_BAR_REARRANGE_ARTBOARDS: &str = "taskBar.rearrangeArtboards";
 
-/// The Contextual Task Bar's Corner button for direct-selected anchors.
+/// The Contextual Task Bar's Convert Selected Anchor Points to Corner button, for direct-selected
+/// anchors or a path selected whole with Direct Selection.
 const TASK_BAR_TO_CORNER: &str = "taskBar.toCorner";
 
-/// The Contextual Task Bar's Smooth button for direct-selected anchors.
+/// The Contextual Task Bar's Convert Selected Anchor Points to Smooth button, for direct-selected
+/// anchors or a path selected whole with Direct Selection. The bar's Smooth button runs
+/// `object.path.smooth` instead.
 const TASK_BAR_TO_SMOOTH: &str = "taskBar.toSmooth";

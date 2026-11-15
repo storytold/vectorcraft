@@ -166,6 +166,8 @@
 	Crop Image	გამოსახულების ჩამოჭრა
 	Image Tools	გამოსახულების ხელსაწყოები
 	Remove Background…	ფონის მოშორება…
+	Draw (Pencil)	ხატვა (ფანქარი)
+	Place Image	გამოსახულების განთავსება
 	Remove Background	ფონის მოშორება
 	Background	ფონი
 	Edge Color	კიდის ფერი
@@ -352,6 +354,18 @@
 	Title Case	სათაურის რეგისტრი
 	Sentence case	წინადადების რეგისტრი
 	Smart Punctuation…	ჭკვიანი პუნქტუაცია…
+	Smart Punctuation	ჭკვიანი პუნქტუაცია
+	ff, fi, ffi Ligatures	ლიგატურები ff, fi, ffi
+	ff, fl, ffl Ligatures	ლიგატურები ff, fl, ffl
+	Smart Quotes	ჭკვიანი ბრჭყალები
+	Smart Spaces	ჭკვიანი ჰარები
+	En, Em Dashes	მოკლე და გრძელი ტირეები
+	Ellipses	მრავალწერტილები
+	Expert Fractions	ექსპერტული წილადები
+	Replace In	ჩანაცვლების არე
+	Selected Text Only	მხოლოდ მონიშნული ტექსტი
+	Entire Document	მთელი დოკუმენტი
+	Report Results	შედეგების ანგარიში
 	Create Outlines	კონტურებად გარდაქმნა
 	Optical Margin Alignment	ოპტიკური არშიის სწორება
 	Dynamic Text	დინამიკური ტექსტი
@@ -865,6 +879,7 @@
 	Free Transform	თავისუფალი გარდაქმნა
 	Perspective Distort	პერსპექტიული დეფორმაცია
 	Radial Blur…	რადიალური გაბუნდოვნება…
+	Blur Center	გაბუნდოვნების ცენტრი
 	Smart Blur…	ჭკვიანი გაბუნდოვნება…
 	Sharpen	გამკვეთრება
 	Unsharp Mask…	არამკვეთრი ნიღაბი…
@@ -1442,8 +1457,11 @@ lighting	Light	სინათლე
 	Leading	სტრიქონთა დაშორება
 	No Break	გადატანის გარეშე
 	Proportional Metrics	პროპორციული მეტრიკა
+	H or V Style	ჰორიზონტალური ან ვერტიკალური სტილი
+	Roman Italics	ლათინური კურსივი
 	Insert Aki Left	აკის ჩასმა მარცხნივ
 	Insert Aki Right	აკის ჩასმა მარჯვნივ
+	Tsume	ცუმე
 	Character Direction	სიმბოლოების მიმართულება
 	Digits	ციფრები
 	Arabic	არაბული
@@ -1571,6 +1589,9 @@ digits	Malayalam	მალაიალამური
 	The selected character's font is not available.	მონიშნული სიმბოლოს შრიფტი მიუწვდომელია.
 	No alternates for the selected character.	მონიშნულ სიმბოლოს ალტერნატივები არ აქვს.
 	Double-click to replace	ორჯერ დაწკაპეთ ჩასანაცვლებლად
+	Click to replace	დაწკაპეთ ჩასანაცვლებლად
+	Show all alternates in the Glyphs panel	ყველა ალტერნატივის ჩვენება გლიფების პანელში
+	Show Character Alternates	სიმბოლოს ალტერნატივების ჩვენება
 	Select one character with the Type tool first.	ჯერ ტექსტის ხელსაწყოთი მონიშნეთ ერთი სიმბოლო.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} არის {font}-ის გლიფი და არა იმ შრიფტისა, რომლითაც მონიშნული ტექსტია დაწყობილი ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} ეკუთვნის სიმბოლოს {base} (U+{base_code}) {place}; თქვენი მონიშნულია {sel} (U+{code}).
@@ -1766,7 +1787,9 @@ digits	Malayalam	მალაიალამური
 	Tabular Lining	ცხრილური ხაზოვანი
 	Tabular Oldstyle	ცხრილური ძველებური
 	Titling Alternates	სათაურის ალტერნატივები
+	Middle Eastern & South Asian Single-line Composer	სტრიქონის მიხედვით აწყობა (შუა აღმოსავლეთი და სამხრეთ აზია)
 	Middle Eastern & South Asian Every-line Composer	აბზაცის მიხედვით აწყობა (შუა აღმოსავლეთი და სამხრეთ აზია)
+	Standard Single-line Composer	სტანდარტული სტრიქონის მიხედვით აწყობა
 	Standard Every-line Composer	სტანდარტული აბზაცის მიხედვით აწყობა
 	First-line Left Indent	პირველი სტრიქონის მარცხენა შეწევა
 	Hyphenation…	სიტყვების გადატანა…
@@ -1799,8 +1822,6 @@ digits	Malayalam	მალაიალამური
 	East Asian Composition Settings	აღმოსავლეთ აზიური აწყობის პარამეტრები
 	Korean Composition Settings	კორეული აწყობის პარამეტრები
 	Select a text object to edit its paragraph attributes.	აბზაცის ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
-	Middle Eastern & South Asian Single-line Composer	სტრიქონის მიხედვით აწყობა (შუა აღმოსავლეთი და სამხრეთ აზია)
-	Standard Single-line Composer	სტანდარტული სტრიქონის მიხედვით აწყობა
 	Toggle Line Composer	აწყობის რეჟიმის გადართვა
 	Space After Paragraph	ინტერვალი აბზაცის შემდეგ
 	Space Before Paragraph	ინტერვალი აბზაცის წინ
@@ -1844,6 +1865,7 @@ digits	Malayalam	მალაიალამური
 	Show Swatch Bounds	ფერის ნიმუშის საზღვრების ჩვენება
 	Show Tile Edge	ფილის კიდის ჩვენება
 	Size Tile to Art	ფილის ზომის ნახატზე მორგება
+	Move Tile with Art	ფილის ნახატთან ერთად გადატანა
 	Tile Type:	ფილის ტიპი:
 	Top in Front	ზედა წინ
 	V Spacing:	ვერტ. დაშორება:
@@ -1886,6 +1908,9 @@ digits	Malayalam	მალაიალამური
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
 	Working RGB (don't tag)	სამუშაო RGB (ტეგის გარეშე)
+	Don't Color Manage This Document	ამ დოკუმენტის ფერების მართვის გარეშე
+	Working RGB: {name}	სამუშაო RGB: {name}
+	Working CMYK: {name}	სამუშაო CMYK: {name}
 	{name} (spot)	{name} (სპოტ)
 	Add to Profiles…	პროფილებში დამატება…
 	Align Stroke to Center	კონტურის ცენტრზე სწორება
@@ -2004,6 +2029,7 @@ digits	Malayalam	მალაიალამური
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-ის ჩანაწერს {i} სჭირდება path და ids (ობიექტის ID-ები, რომლებიც სხვა ჩანაწერს არ აქვს)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder იღებს path-ს: სხვა დაკარგული ბმულები ამ ფაილის საქაღალდეში იძებნება
 	Show Missing	დაკარგულების ჩვენება
+	Sort by Size	ზომის მიხედვით სორტირება
 	Sort by Status	სტატუსის მიხედვით სორტირება
 	Clear Overrides	ცვლილებების გასუფთავება
 	Create New {kind} Style	ახალი სტილის შექმნა ({kind})
@@ -2251,6 +2277,7 @@ digits	Malayalam	მალაიალამური
 	Export Asset	რესურსის ექსპორტირება
 	Export to:	ექსპორტის ადგილი:
 	Format Settings	ფორმატის პარამეტრები
+	Format Settings…	ფორმატის პარამეტრები…
 	Formats:	ფორმატები:
 	Full Document	მთელი დოკუმენტი
 	Include Bleed	ჭრისპირა არის ჩართვა
@@ -2338,6 +2365,7 @@ digits	Malayalam	მალაიალამური
 	e.g. 1-3, 5	მაგ. 1-3, 5
 	First Page	პირველი გვერდი
 	Import PDF	PDF-ის იმპორტი
+	Import PDF pages as links	PDF-ის გვერდების იმპორტი ბმულებად
 	Last Page	ბოლო გვერდი
 	Next Page	შემდეგი გვერდი
 	of {count}	/ {count}
@@ -2419,6 +2447,7 @@ digits	Malayalam	მალაიალამური
 	Transparent Background	გამჭვირვალე ფონი
 	Choose…	არჩევა…
 	Copy Fonts Used in the Document	დოკუმენტში გამოყენებული შრიფტების კოპირება
+	Copy Info	ინფორმაციის კოპირება
 	Copy Links	ბმულების კოპირება
 	Create Report	ანგარიშის შექმნა
 	Fonts whose licence doesn't allow embedding are not copied.	შრიფტები, რომელთა ლიცენზია ჩაშენების უფლებას არ იძლევა, არ კოპირდება.
@@ -2469,6 +2498,8 @@ digits	Malayalam	მალაიალამური
 	Keep a link to an image file instead of only embedding it	გამოსახულების ფაილის ბმულის შენარჩუნება მხოლოდ ჩაშენების ნაცვლად
 	Place onto a new locked, dimmed template layer below the current layer	ახალ ჩაკეტილ, ჩამქრალ შაბლონის შრეზე განთავსება მიმდინარე შრის ქვემოთ
 	Swap the selected object for the file, keeping its place and transform	მონიშნული ობიექტის ფაილით ჩანაცვლება მისი ადგილისა და გარდაქმნის შენარჩუნებით
+	Show Import Options	იმპორტის პარამეტრების ჩვენება
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	განთავსებამდე თითოეული PDF, DXF ან ტექსტური ფაილის იმპორტის პარამეტრების მოთხოვნა; გამორთულისას ბოლოს არჩეული პარამეტრები გამოიყენება
 	On: one locked object showing the document, updated when it changes.	ჩართული: ერთი ჩაკეტილი ობიექტი, რომელიც დოკუმენტს აჩვენებს და მისი ცვლილებისას ახლდება.
 	Off: an editable copy of its art, embedded in this document.	გამორთული: მისი ნახატის რედაქტირებადი ასლი, ჩაშენებული ამ დოკუმენტში.
 	Images: link to the file instead of only embedding it.	გამოსახულებები: ფაილის ბმული მხოლოდ ჩაშენების ნაცვლად.
@@ -4188,6 +4219,7 @@ font-technology	Variable	ცვლადი
 @msg	`select` must be true or false	`select` უნდა იყოს true ან false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` და `maxAnchors` უნდა იყოს მთელი რიცხვები
 @msg	`{key}` must be a number not below 0	`{key}` უნდა იყოს რიცხვი, არანაკლებ 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` უნდა იყოს ოთხი რიცხვი, თითოეული არანაკლებ 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` უნდა იყოს [x, y, width, height]: ოთხი სასრული რიცხვი, სიგანე და სიმაღლე არ უნდა იყოს უარყოფითი
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` მეტია, ვიდრე `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	მიუთითეთ ერთი მაინც: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4423,6 +4455,7 @@ font-technology	Variable	ცვლადი
 @msg	no action set to save	შესანახი მოქმედებების ნაკრები არ არის
 @msg	the action set file can't be read in full	მოქმედებების ნაკრების ფაილის სრულად წაკითხვა შეუძლებელია
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`
 @msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
 @msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: ცნობარი {MAX_BYTES} ბაიტზე დიდი იქნებოდა
@@ -4642,6 +4675,7 @@ font-technology	Variable	ცვლადი
 @msg	tool shortcuts must be a single key (optionally with Shift)	ხელსაწყოს მალსახმობი ერთი კლავიში უნდა იყოს (სურვილისამებრ Shift-ით)
 @msg	truncated	შეკვეცილია
 @msg	unknown command `{0}`	უცნობი ბრძანება `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	„{action}“, ნაბიჯი {step}: უცნობი ბრძანება `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	უცნობი ბრძანება `{0}`; იქნებ `{1}` იგულისხმეთ?
 @msg	unknown effect `{id}`	უცნობი ეფექტი `{id}`
 @msg	unknown format	უცნობი ფორმატი
@@ -4838,6 +4872,9 @@ font-technology	Variable	ცვლადი
 @msg	automation filesystem access is not granted: write authority is absent: {path}	ავტომატიზაციას ფაილურ სისტემაზე წვდომა არ აქვს: ჩაწერის უფლება არ არის: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირების {roots} გარეთაა: {path}
+@msg	a linked JavaScript file is outside the read roots	დაკავშირებული JavaScript ფაილი წაკითხვის ძირების გარეთაა
+@msg	the library's file is outside the read roots	ბიბლიოთეკის ფაილი წაკითხვის ძირების გარეთაა
+@msg	{file} names more than one linked JavaScript file	{file} ერთზე მეტ დაკავშირებულ JavaScript ფაილს შეესაბამება
 @msg	automation path rejected: outside the write root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირების {roots} გარეთაა: {path}
 @msg	automation path rejected: path is empty	ავტომატიზაციის გზა უარყოფილია: გზა ცარიელია
@@ -5199,6 +5236,7 @@ font-technology	Variable	ცვლადი
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	No linked files to look for	მოსაძებნი დაკავშირებული ფაილები არ არის
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	ბმული სიმბოლოში, დიაგრამის დიზაინში, პატერნში ან გაუმჭვირვალობის ნიღაბშია და ტილოზე ადგილი არ აქვს
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	დიაგრამის სერიაში დიაგრამის დიზაინის გრაფიკა დიზაინიდან თავიდან იხატება: მის შესაცვლელად დაარედაქტირეთ დიზაინი
 	Ruler Origin	სახაზავების სათავე
 	Reset Ruler Origin	სახაზავების სათავის ჩამოყრა
 	Artistic	მხატვრული
@@ -5594,6 +5632,7 @@ imageTrace	Outline	კონტური
 @msg	there is no script engine named {name}	სკრიპტის ძრავა სახელით {name} არ არსებობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
+@msg	Copied the link info	კოპირებულია ბმულის ინფორმაცია
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
 	Load EPS into Clipboard	EPS-ის ბუფერში ჩატვირთვა
@@ -5626,6 +5665,9 @@ imageTrace	Outline	კონტური
 	In the File	ფაილში
 	Keys	კლავიშები
 	Light behind the object	სინათლე ობიექტის უკან
+	Move Light to Back	სინათლის უკან გადატანა
+	Move Light to Front	სინათლის წინ გადატანა
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	გადაათრიეთ სინათლე მის გადასაადგილებლად. ისრიანი ღილაკები ფოკუსირებულ სინათლეს ამოძრავებს; Shift-ით 15°-იანი ბიჯით.
 	Shadows	ჩრდილები
 	Distance from Object	მანძილი ობიექტიდან
 	Shadow Bounds	ჩრდილის საზღვრები
@@ -5674,6 +5716,8 @@ imageTrace	Outline	კონტური
 @msg	object has no weighted stroke	ობიექტს ცვლადი სისქის კონტური არ აქვს
 @msg	objects can't be nested more than 32 deep	ობიექტების ჩადგმის სიღრმე 32-ს ვერ გადააჭარბებს
 @msg	the SVG's elements are nested more than {0} deep	SVG-ის ელემენტების ჩადგმის სიღრმე {0}-ს აჭარბებს
+@msg	the SVG's style sheets take too long to match	SVG-ის სტილის ფურცლების შედარებას ძალიან დიდი დრო სჭირდება
+@msg	the SVG's styles expand to more than {0} MB	SVG-ის სტილები გაშლისას {0} MB-ს აჭარბებს
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	უცნობი control `{name}`: fillStroke, coloring, drawMode ან screenMode
 @plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	ემთხვევა ნაგულისხმევ მალსახმობებს: {n}|ემთხვევა ნაგულისხმევ მალსახმობებს: {n}
 @plural	{n} part of the file wasn't read|{n} parts of the file weren't read	ფაილის წაუკითხავი ნაწილები: {n}|ფაილის წაუკითხავი ნაწილები: {n}
@@ -6343,8 +6387,8 @@ axis	Y Axis	Y ღერძი
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ექსპორტის პლაგინი აცხადებს 1-დან {MAX_EXTENSIONS}-მდე `extensions`-ს
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	ჯგუფების გარეთ მაქსიმუმ {MAX_UNGROUPED} პარამეტრია დასაშვები: დანარჩენებს მიეცით `group`
 @msg	can't encode the input	შეყვანის კოდირება ვერ ხერხდება
-@msg	expected {"dataBase64"}	მოსალოდნელი იყო {"dataBase64"}
-@msg	expected {"objects"}	მოსალოდნელი იყო {"objects"}
+@msg	expected {{"dataBase64": "…"}}	მოსალოდნელი იყო {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	მოსალოდნელი იყო {{"objects": [...]}}
 @msg	export `{name}`: {e}	მოდულის ექსპორტი `{name}`: {e}
 @msg	extension {e} is listed twice	გაფართოება {e} ორჯერაა მითითებული
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	გაფართოება {e}: გამოიყენეთ 1-16 პატარა ასო და ციფრი, წერტილის გარეშე
@@ -6408,11 +6452,11 @@ axis	Y Axis	Y ღერძი
 @msg	a painted live effect returns only `objects`	მხატვრული ცოცხალი ეფექტი აბრუნებს მხოლოდ `objects`-ს
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	მხატვრული ცოცხალი ეფექტის ნაწილს აქვს მხოლოდ `path`, `fillRule`, `fills` და `strokes`
 @msg	a read-only object was left out	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი: დააბრუნეთ ის მხოლოდ {"id"}-ის სახით ან ისე, როგორც მიიღეთ
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი: დააბრუნეთ ის მხოლოდ {{"id": …}}-ის სახით ან ისე, როგორც მიიღეთ
 @msg	a string	სტრიქონი
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	კონტურს აქვს მხოლოდ `paint`, `width`, `join`, `cap` და `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	კონტური უნდა იყოს {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ეფექტი უნდა იყოს {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	კონტური უნდა იყოს {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ეფექტი უნდა იყოს {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	შევსების ეფექტი აბრუნებს მხოლოდ `fills`-ს
 @msg	an effect on a stroke returns only `strokes`	კონტურის ეფექტი აბრუნებს მხოლოდ `strokes`-ს
 @msg	an object must be a JSON object	ობიექტი უნდა იყოს JSON ობიექტი
@@ -6613,6 +6657,8 @@ axis	Y Axis	Y ღერძი
 	Create New Set	ახალი ნაკრების შექმნა
 	Stop Global Edit	გლობალური რედაქტირების დასრულება
 	Global Edit Options	გლობალური რედაქტირების პარამეტრები
+	Select Similar Objects	მსგავსი ობიექტების მონიშვნა
+	Select Similar Options	მსგავსის მონიშვნის პარამეტრები
 	Leave Out of Global Edit	გლობალური რედაქტირებიდან გამორიცხვა
 	Match	დამთხვევა
 	On Artboards	სამუშაო დაფებზე
@@ -6621,7 +6667,7 @@ axis	Y Axis	Y ღერძი
 @plural	Result: {n}|Results: {n}	შედეგი: {n}
 @msg	select one object	მონიშნეთ ერთი ობიექტი
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებზე, სიმბოლოს ეგზემპლარებსა და მათ ჯგუფებზე
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (შემობრუნებული ან არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
 @msg	Global Edit is off	გლობალური რედაქტირება გამორთულია
 @msg	only an object of the Global Edit other than the one it started from can be left out	გლობალური რედაქტირებიდან შეიძლება გამოირიცხოს მხოლოდ ობიექტი, რომლითაც ის არ დაწყებულა
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ან დიაპაზონი, მაგალითად 1, 3-5, და არა {v}
@@ -6735,6 +6781,13 @@ axis	Y Axis	Y ღერძი
 	Graphite Pencil	გრაფიტის ფანქარი
 	Wax Crayon	ცვილის ფანქარი
 	Charcoal Dust	ნახშირის მტვერი
+
+# Original procedural circuit brushes.
+	Tech Circuit	ტექნიკური სქემები
+	Circuit Trace	სქემის გამტარი
+	Bus Lines	სალტის ხაზები
+	Terminal Nodes	ტერმინალური კვანძები
+
 	Notched Ribbon	დაკბილული ლენტი
 	Double Line	ორმაგი ხაზი
 	Wave	ტალღა
@@ -7358,7 +7411,7 @@ font-script	Japanese	იაპონური
 	Japanese Envelope #3	იაპონური კონვერტი #3
 	Japanese Envelope #4	იაპონური კონვერტი #4
 @msg	image '{key}' has no pixels and was left out	გამოსახულებას '{key}' პიქსელები არ აქვს და გამოტოვდა
-@msg	not an RTF file: it doesn't start with {\\rtf	RTF ფაილი არ არის: არ იწყება {\\rtf-ით
+@msg	not an RTF file: it doesn't start with {{\\rtf	RTF ფაილი არ არის: არ იწყება {{\\rtf-ით
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	ტექსტის ხელსაწყოები
 	Text Tweaker…	ტექსტის მორგება…
@@ -7577,11 +7630,20 @@ font-script	Japanese	იაპონური
 	Open Tutorial Sample	გაკვეთილის ნიმუშის გახსნა
 	Finish Tutorial	გაკვეთილის დასრულება
 	Next Tutorial	შემდეგი გაკვეთილი
+	Show Learn Tab	სწავლის ჩანართის ჩვენება
+	Show Skill	უნარის ჩვენება
+	Back One Level	ერთი დონით უკან
 	Back to Skills	უნარებზე დაბრუნება
 @msg	tutorial `{id}` has no practice sample	გაკვეთილს `{id}` არ აქვს სავარჯიშო ნიმუში
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ჯერ გახსენით `{id}` გაკვეთილის სავარჯიშო ნიმუში (იხ. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	ჯერ დაასრულეთ `{id}` (იხ. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` თავისი უნარის ბოლო გაკვეთილია
+	Reset progress	პროგრესის ჩამოყრა
+	Mark Tutorial Step	გაკვეთილის ნაბიჯის მონიშვნა
+	Reset Learn Progress	სწავლის პროგრესის ჩამოყრა
+@msg	missing `step` (see learn.show)	აკლია `step` (იხ. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` უნდა იყოს ნაბიჯის ნომერი 0-დან {last}-მდე
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` დასრულებულია (იხ. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	გადადებული ეფექტების განახლება
@@ -7611,4 +7673,7 @@ font-script	Japanese	იაპონური
 	Grommets	ლუვერები
 	Grommet Inset	ლუვერების დაშორება კიდიდან
 	Diameter	დიამეტრი
+	Nest Shapes…	ფორმების განლაგება…
+	Nest Shapes	ფორმების განლაგება
+	Roll	რულონი
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"

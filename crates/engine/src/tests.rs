@@ -128,6 +128,7 @@ mod pdffidelity;
 mod pdfmarks;
 mod pdfpresets;
 mod pdfraster;
+mod persp_infer;
 mod persp_planes;
 pub(super) mod persp_select;
 mod persp_text;
@@ -239,6 +240,25 @@ pub(crate) fn selected_guides(s: &Session) -> Vec<usize> {
 pub(crate) fn key_guide(s: &Session) -> Option<usize> {
     let st = s.doc().unwrap();
     st.selection.key_guide.and_then(|k| crate::cmd::guide_indexes(&st.doc, &[k]).first().copied())
+}
+
+/// Runs the unit test `path` (`tests::newdoc::...`) again in a child process of the test binary
+/// → whether this is that child. For a test that changes process-wide state the tests running
+/// beside it read, such as the active color settings.
+pub(crate) fn in_own_process(path: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
+    if std::env::var_os(CHILD).is_some() {
+        return true;
+    }
+    let output =
+        std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact", path, "--nocapture"]).env(CHILD, "1").output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{path} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
 }
 
 #[test]
@@ -1273,7 +1293,12 @@ fn a_transform_that_moves_nothing_records_no_undo_step() {
     for (id, p) in calls {
         assert_eq!(s.execute(id, &p).unwrap(), json!({"ids": [a.0]}), "{id} {p}");
         assert_eq!(history(&s), before, "{id} {p}");
-        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), p));
+        // The journal adds the frame a scale acted in, so a replay acts in the same one.
+        let mut recorded = p;
+        if id == "object.scale" {
+            recorded["basis"] = json!("box");
+        }
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), recorded));
     }
     assert_eq!(
         s.doc().unwrap().last_transform,

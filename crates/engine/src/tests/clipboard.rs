@@ -468,6 +468,72 @@ fn styles_symbols_and_images_of_the_same_name_are_renamed() {
     assert_eq!(key(&s, img2), src_key);
 }
 
+/// A graph whose series fill, value labels and legend rows paint with global swatch "Brand" and
+/// whose value labels are set in character style "Emphasis" and paragraph style "Body", as a
+/// later redraw would give them to its marks and labels.
+fn styled_graph(s: &mut Session) -> NodeId {
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#ff0000", "global": true})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Emphasis", "attrs": {"size": 24.0}})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {"space_after": 8.0}})).unwrap();
+    let v = s.execute("graph.create", &json!({"type": "column", "x": 200, "y": 200, "width": 60, "height": 40, "csv": ",2024\nQ1,3\nQ2,5"}));
+    let id = id_of(&v.unwrap());
+    let brand = linked(hex("#ff0000"), "Brand", 1.0);
+    let mut extras = doc_mut(s).node_mut(id).unwrap().extras_mut();
+    let g = extras.graph.as_mut().unwrap();
+    g.series_paints = vec![vectorcraft_doc::SeriesPaint { fill: Some(brand.clone()), ..Default::default() }];
+    let l = &mut g.label_styles;
+    l.values = Some(vectorcraft_doc::CharStyle { fill: brand.clone(), style_name: Some("Emphasis".into()), ..Default::default() });
+    l.values_para = Some(vectorcraft_doc::ParaStyle { style_name: Some("Body".into()), ..Default::default() });
+    let rows = vectorcraft_doc::SeriesPaint { stroke: Some(brand), ..Default::default() };
+    l.legend_rows = Some(vectorcraft_doc::graph::LabelRows { paint: rows, ..Default::default() });
+    id
+}
+
+/// The swatch names a graph's stored paints link to, and its value labels' character and
+/// paragraph style names.
+fn graph_links(s: &Session, id: NodeId) -> (Vec<String>, Option<String>, Option<String>) {
+    let n = node(s, id);
+    let swatches = vectorcraft_doc::swatches::graph_paints(&n).filter_map(|p| match p {
+        Paint::Solid { swatch: Some(w), .. } => Some(w.clone()),
+        _ => None,
+    });
+    let l = &n.extras().graph.as_deref().unwrap().label_styles;
+    let values = l.values.as_ref().and_then(|st| st.style_name.clone());
+    (swatches.collect(), values, l.values_para.as_ref().and_then(|pa| pa.style_name.clone()))
+}
+
+/// A pasted graph brings the swatches and text styles its series and labels keep, and follows
+/// them when they come in under new names.
+#[test]
+fn a_pasted_graph_brings_and_follows_its_label_styles_and_paints() {
+    let mut s = session();
+    let g = styled_graph(&mut s);
+    copy(&mut s, &[g]);
+
+    new_doc(&mut s);
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    let d = doc(&s);
+    assert!(d.swatch("Brand").is_some(), "{v}");
+    assert!(d.char_styles.iter().any(|x| x.name == "Emphasis") && d.para_styles.iter().any(|x| x.name == "Body"), "{v}");
+    let brand = vec!["Brand".to_string(); 3];
+    assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand.clone(), Some("Emphasis".into()), Some("Body".into())));
+
+    // Into a document that gives each name something else: they come in renamed.
+    new_doc(&mut s);
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#0000ff", "global": true})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Emphasis", "attrs": {"size": 8.0}})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {"space_after": 2.0}})).unwrap();
+    let v = s.execute("edit.pasteInPlace", &json!({"swatchConflict": "add"})).unwrap();
+    let brand2 = vec!["Brand 2".to_string(); 3];
+    assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand2, Some("Emphasis 2".into()), Some("Body 2".into())), "{v}");
+
+    // Without formatting: the labels' text styles stay behind.
+    new_doc(&mut s);
+    let v = s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap();
+    assert!(doc(&s).char_styles.is_empty() && doc(&s).para_styles.is_empty(), "{v}");
+    assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand, None, None));
+}
+
 #[test]
 fn pasting_again_reuses_what_an_earlier_paste_added() {
     let mut s = session();
@@ -968,14 +1034,39 @@ fn in_place_pastes_put_a_copy_on_each_artboard_named() {
         // `artboard` wins over `artboards`.
         let ids = ids_of(&s.execute(cmd, &json!({"artboard": 2, "artboards": [0, 3]})).unwrap());
         assert_eq!(doc(&s).bounds_of(&ids, false).unwrap().origin(), Point::new(boards[2].x0 + 10.0, boards[2].y0 + 5.0), "{cmd}");
-        // A list that is empty, names an artboard the document lacks or names one twice, or isn't a
-        // list: an error, and nothing pasted.
-        let before = doc(&s).clone();
-        for bad in [json!([]), json!([0, 4]), json!([1, 1]), json!([0, -1]), json!(2), json!("0,1")] {
-            assert!(s.execute(cmd, &json!({"artboards": bad})).is_err(), "{cmd} with artboards {bad}");
+        // A list that is empty, names an artboard the document lacks or names one twice, holds a
+        // value that is not a whole number, or isn't a list, and an `artboard` that is not a whole
+        // number or not an artboard: an error naming the fault, and nothing pasted. Both keys are
+        // checked when both are given.
+        let (before, undo) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+        let (not_list, missing, not_whole) = (
+            "`artboards` must be a list of artboard indices",
+            "`artboards` names an artboard the document does not have",
+            "`artboards` must contain whole numbers",
+        );
+        let cases = [
+            (json!({"artboards": []}), not_list),
+            (json!({"artboards": 2}), not_list),
+            (json!({"artboards": "0,1"}), not_list),
+            (json!({"artboards": [0, 4]}), missing),
+            (json!({"artboards": [1, 1]}), "`artboards` names an artboard twice"),
+            (json!({"artboards": [0, -1]}), not_whole),
+            (json!({"artboards": [0, 1.5]}), not_whole),
+            (json!({"artboards": [4, "1"]}), not_whole),
+            (json!({"artboard": 1, "artboards": [7]}), missing),
+            (json!({"artboard": 1, "artboards": ["1"]}), not_whole),
+            (json!({"artboard": 4}), "`artboard` must be the index of an artboard of the document"),
+            (json!({"artboard": -1}), "`artboard` must be a whole number"),
+            (json!({"artboard": 1.5}), "`artboard` must be a whole number"),
+            (json!({"artboard": "1"}), "`artboard` must be a whole number"),
+            (json!({"artboard": null}), "`artboard` must be a whole number"),
+            (json!({"artboard": "1", "artboards": [9]}), "`artboard` must be a whole number"),
+        ];
+        for (p, want) in cases {
+            let e = s.execute(cmd, &p).unwrap_err().to_string();
+            assert_eq!(e, format!("invalid parameters for `{cmd}`: {want}"), "{cmd} {p}");
         }
-        assert!(s.execute(cmd, &json!({"artboard": 1, "artboards": [7]})).is_err(), "{cmd}: a bad list with `artboard`");
-        assert_eq!(doc(&s), &before, "{cmd}");
+        assert_eq!((doc(&s), s.doc().unwrap().history.undo.len()), (&before, undo), "{cmd}");
     }
 }
 

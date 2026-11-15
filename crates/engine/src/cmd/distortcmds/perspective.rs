@@ -18,7 +18,7 @@ pub(crate) fn store_grid(d: &mut Document, g: &PerspectiveGrid) {
 
 /// Whether `d` holds `g` as [`store_grid`] writes it (with `attached` cleared): then storing `g`
 /// leaves `d` as it is.
-fn grid_kept(d: &Document, g: &PerspectiveGrid) -> bool {
+pub(crate) fn grid_kept(d: &Document, g: &PerspectiveGrid) -> bool {
     let mut g = g.clone();
     g.attached.clear();
     serde_json::to_value(&g).is_ok_and(|v| d.unknown.get(persp::DOC_KEY) == Some(&v))
@@ -70,13 +70,26 @@ pub(super) fn grid_show(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => None,
         Some(_) => Some(switch_or(p, "visible", false, C)?),
     };
-    let g = silent(s, |g| g.visible = want.unwrap_or(!g.visible))?;
+    // A hidden grid holds no plane for Automatic Plane Positioning.
+    let g = silent(s, |g| {
+        g.visible = want.unwrap_or(!g.visible);
+        if !g.visible {
+            g.inferred = None;
+        }
+    })?;
     Ok(json!({ "visible": g.visible }))
 }
 
 pub(super) fn plane_set(s: &mut Session, p: &Value) -> Result<Value> {
     let plane = str_param(p, "plane").and_then(Plane::parse).ok_or_else(|| bad("perspective.plane.set", "plane must be left|right|ground|none"))?;
-    silent(s, |g| g.plane = plane)?;
+    // The new active plane passes through the point Automatic Plane Positioning holds, unless no
+    // plane is active or that would put the plane behind the viewer.
+    silent(s, |g| {
+        g.plane = plane;
+        if g.inferred.is_some() && (plane == Plane::None || g.validate().is_err()) {
+            g.inferred = None;
+        }
+    })?;
     Ok(json!({ "plane": plane.id() }))
 }
 
@@ -91,9 +104,14 @@ fn plane_param(g: &PerspectiveGrid, p: &Value, cmd: &str) -> Result<Plane> {
     Ok(plane)
 }
 
+/// The objects a perspective command acts on: the outermost of `ids` (each once, in the order first
+/// given), else the selection's roots.
 pub(super) fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     match named_ids(p)? {
-        Some(v) => Ok(outermost(&s.doc()?.doc, v)),
+        Some(v) => {
+            let mut seen = std::collections::HashSet::new();
+            Ok(outermost(&s.doc()?.doc, v.into_iter().filter(|id| seen.insert(*id)).collect()))
+        }
         None => selected_roots(s),
     }
 }
@@ -138,6 +156,9 @@ pub(super) fn attach(s: &mut Session, p: &Value) -> Result<Value> {
         store_grid(d, &g);
         Ok(())
     })?;
+    if !ids.is_empty() {
+        crate::cmd::perspgrid::plane_positioning_used(s, plane)?;
+    }
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "plane": plane.id() }))
 }
 
@@ -205,8 +226,13 @@ fn persp_edit(
         return Err(EngineError::Other("select the objects to transform in perspective".into()));
     }
     let mut g = grid_of(&s.doc()?.doc);
+    // An object not in perspective yet attaches to `fallback` where that plane is now.
+    let attaches = {
+        let d = &s.doc()?.doc;
+        fallback.filter(|_| ids.iter().any(|id| g.attachment_of(d, *id).is_none()))
+    };
     let kept = if copy && !stores_attachments(&s.doc()?.doc) { crate::cmd::object::preview_copies(s, ids, false)? } else { None };
-    s.edit(label, |d, sel| {
+    let edited = s.edit(label, |d, sel| {
         g.adopt_stored_attachments(d);
         let targets = match &kept {
             // The document becomes the snapshot with the kept copies, not yet mapped, and the loop
@@ -236,7 +262,11 @@ fn persp_edit(
         }
         store_grid(d, &g);
         Ok((targets, first))
-    })
+    })?;
+    if let Some(plane) = attaches {
+        crate::cmd::perspgrid::plane_positioning_used(s, plane)?;
+    }
+    Ok(edited)
 }
 
 /// Where the first of `ids` is in perspective (its plane and depth) when `ids` is not empty, every one
@@ -430,6 +460,9 @@ pub(super) fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["offset", "by"], C)?;
     let old = grid_of(&s.doc()?.doc);
     let plane = plane_param(&old, p, C)?;
+    // A plane that Automatic Plane Positioning holds moves from where it is held, and the move
+    // places it there for good: the moved grid holds no plane (undoing the move holds it again).
+    let held = old.inferred;
     let from = old.offset(plane);
     let to = match (p.get("offset").and_then(Value::as_f64), p.get("by").and_then(Value::as_f64)) {
         (Some(o), _) => o,
@@ -440,7 +473,7 @@ pub(super) fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
     if !matches!(objects, "none" | "move" | "copy") {
         return Err(bad(C, "objects must be none, move or copy"));
     }
-    let mut g = old.clone();
+    let mut g = PerspectiveGrid { inferred: None, ..old.clone() };
     g.set_offset(plane, to);
     g.validate().map_err(|e| bad(C, e))?;
     let label = match objects {
@@ -458,8 +491,9 @@ pub(super) fn plane_move(s: &mut Session, p: &Value) -> Result<Value> {
             .collect()
     };
     // A plane moved to where it is, with its objects or without them, moves nothing: when the
-    // document holds the grid already, the document and its undo history stay as they are.
-    if to == from && objects != "copy" && grid_kept(&s.doc()?.doc, &g) {
+    // document holds the grid already, the document and its undo history stay as they are (a
+    // plane held where it was placed stays held).
+    if to == from && objects != "copy" && grid_kept(&s.doc()?.doc, &PerspectiveGrid { inferred: held, ..g.clone() }) {
         let ids = if objects == "move" { on_plane(&s.doc()?.doc) } else { vec![] };
         return Ok(json!({ "plane": plane.id(), "offset": to, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
     }
@@ -507,12 +541,19 @@ pub(super) fn plane_match(s: &mut Session, p: &Value) -> Result<Value> {
         named_id(p)?.or_else(|| st.selection.objects.first().copied()).ok_or_else(|| EngineError::Other("select an object in perspective".into()))?;
     let mut g = grid_of(&st.doc);
     let (plane, depth) = g.attachment_of(&st.doc, id).ok_or_else(|| EngineError::Other("the object isn't in perspective".into()))?;
+    // The moved grid holds no plane for Automatic Plane Positioning (undoing the move holds it
+    // again).
+    let held = g.inferred.take();
     g.set_offset(plane, depth);
     g.plane = plane;
     g.validate().map_err(|e| bad("perspective.plane.matchObject", e))?;
     // When the plane is at the object and active already, and the document holds that grid, the
-    // document and its undo history stay as they are.
-    if grid_kept(&st.doc, &g) {
+    // document and its undo history stay as they are; a plane held elsewhere goes back to that
+    // place as view state.
+    if grid_kept(&st.doc, &PerspectiveGrid { inferred: held, ..g.clone() }) {
+        if held.is_some() {
+            silent(s, |g| g.inferred = None)?;
+        }
         return Ok(json!({ "plane": plane.id(), "offset": depth }));
     }
     s.edit("Move Plane to Match Object", |d, _| {
@@ -573,6 +614,7 @@ pub(super) fn persp_draw(s: &mut Session, p: &Value) -> Result<Value> {
         st.history.recost_last(&st.doc);
     }
     res?;
+    crate::cmd::perspgrid::plane_positioning_used(s, plane)?;
     Ok(json!({ "id": id.0, "plane": plane.id() }))
 }
 

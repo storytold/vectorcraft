@@ -26,6 +26,8 @@ pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0
 /// Insert Aki Left and Right presets, in thousandths of an em: none, a quarter, half and a whole
 /// full-width space.
 pub const AKI_PRESETS: [f64; 4] = [0.0, 250.0, 500.0, 1000.0];
+/// Tsume presets, in percent.
+pub const TSUME_PRESETS: [f64; 5] = [0.0, 25.0, 50.0, 75.0, 100.0];
 
 /// The stored character style: the selected range's (or the caret's) while the Type
 /// tool edits text, else the first selected text object's first run (including groups). With it, the paragraph
@@ -106,6 +108,20 @@ pub(crate) fn shared<T: PartialEq>(app: &VectorcraftApp, f: impl Fn(&CharStyle) 
     shared_styles(app, |_, _, style, _| Some(f(style)))
 }
 
+/// The fonts (family and style) of the character styles the panels act on ([`shared`]), each
+/// once, in the order the runs come.
+pub(crate) fn selected_fonts(app: &VectorcraftApp) -> Vec<(String, String)> {
+    let fonts = std::cell::RefCell::new(Vec::<(String, String)>::new());
+    shared_styles(app, |_, _, style, _| {
+        let mut fonts = fonts.borrow_mut();
+        if !fonts.iter().any(|(family, face)| *family == style.font_family && *face == style.font_style) {
+            fonts.push((style.font_family.clone(), style.font_style.clone()));
+        }
+        Some(())
+    });
+    fonts.into_inner()
+}
+
 /// Dimensional controls use document units and tolerate arithmetic roundoff when comparing
 /// compensated runs. Keep raw styles available to font/paragraph controls and style definitions,
 /// even if a collapsed affine prevents editing dimensions.
@@ -141,33 +157,52 @@ fn shared_styles<T: PartialEq>(
     app: &VectorcraftApp,
     f: impl Fn(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool) -> Option<T>,
 ) -> Option<T> {
-    let st = app.session.active()?;
+    let mut acc = Shared::None;
+    each_style(app, |t, para, style, inline| acc.add(f(t, para, style, inline)));
+    acc.value().flatten()
+}
+
+/// Whether `f` holds for any of the character styles [`shared`] reads.
+pub(crate) fn any_style(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> bool) -> bool {
+    let mut any = false;
+    each_style(app, |_, _, style, _| any = any || f(style));
+    any
+}
+
+/// Call `f` with each character style the panels act on, as [`shared_styles`] describes: the
+/// caret's style at a Type tool caret, else each piece of the runs the Type tool's selection
+/// covers, else of every run of every frame of the selected stories.
+fn each_style(app: &VectorcraftApp, mut f: impl FnMut(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool)) {
+    let Some(st) = app.session.active() else {
+        return;
+    };
     let text = |id: NodeId| match st.doc.node(id).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => Some(t),
         _ => None,
     };
-    let mut acc = Shared::None;
     if let Some((id, a, b)) = text_editing(app) {
-        let t = text(id)?;
+        let Some(t) = text(id) else {
+            return;
+        };
         if b <= a {
             let para = t.plain_text().get(..a).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
-            return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
+            f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
+            return;
         }
         match text_story(app) {
             // After Select All in threaded text: all the text of every frame of the story.
             Some(story) => {
                 for t in story.into_iter().filter_map(text) {
-                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
+                    each_paragraph_run(t, None, |para, style, inline| f(t, para, style, inline));
                 }
             }
-            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline))),
+            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| f(t, para, style, inline)),
         }
     } else {
         for t in selected_story_texts(app) {
-            each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
+            each_paragraph_run(t, None, |para, style, inline| f(t, para, style, inline));
         }
     }
-    acc.value().flatten()
 }
 
 /// `f` of the paragraph and style of each piece of `t`'s runs that lies in one paragraph (a
@@ -846,7 +881,7 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 /// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
 /// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
 /// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown), and with Show East
-/// Asian Options on a row with Insert Aki Left and Right. With Show Font
+/// Asian Options on a row with Insert Aki Left and Right and a row with Tsume. With Show Font
 /// Height Options on, a row under Font Size holds the Set Font Height Reference dropdown. The
 /// Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
@@ -941,6 +976,14 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
                     }
                 });
             }
+            ui.end_row();
+            // Tsume: the share of the blank space beside each character's ink taken away.
+            cell(ui, "→A←", tl!("Tsume"), |ui| {
+                if let Some(v) = widgets::spin_plain(ui, "ch-tsume", shared(app, |s| s.tsume), "%", 1, fw, 1.0, 0.0, &TSUME_PRESETS) {
+                    // The field stops at the largest value the command takes.
+                    format(app, json!({ "tsume": v.min(vectorcraft_doc::text::MAX_TSUME) }));
+                }
+            });
             ui.end_row();
         }
     });
@@ -1219,20 +1262,40 @@ fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
 }
 
 /// The Control bar's type controls while type is selected or edited: the Character link (the
-/// Character panel in a popover), the font family and style menus and the Font Size combo.
-pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some((s, _)) = text_style(app) else { return };
-    let link = ui
-        .link(egui::RichText::new(tl!("Character:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline())
-        .on_hover_text(tl!("Character options"));
+/// Character panel in a popover), the font family and style menus and the Font Size combo. They
+/// show whole, with `reserve` left after them, or not at all: it returns false when type is selected
+/// or edited and the row has no room for them.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool {
+    let Some((s, _)) = text_style(app) else { return true };
+    if ui.available_width() < control_bar_width(ui) + reserve {
+        return false;
+    }
+    let link = ui.link(control_bar_link_text(ui)).on_hover_text(tl!("Character options"));
     widgets::popover(&link, link.clicked(), |ui| {
         ui.set_width(260.0);
         show_owned(app, ui, crate::font_menu::WheelOwner::ControlPopover(link.id));
     });
-    font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
-    size_field(app, ui, "cb-font-size", 96.0);
+    let [family, style, size] = CONTROL_BAR_WIDTHS;
+    font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (family, style));
+    size_field(app, ui, "cb-font-size", size);
     ui.add_space(4.0);
     crate::chrome::group_separator(ui);
+    true
+}
+
+/// The Control bar's widths of the font family menu, the font style dropdown and the Font Size combo.
+const CONTROL_BAR_WIDTHS: [f32; 3] = [150.0, 96.0, 96.0];
+
+/// The text of the Control bar's Character link, as [`control_bar`] draws it.
+fn control_bar_link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Character:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The room [`control_bar`]'s link, menus and Font Size combo take in the Control bar's row, with
+/// the spacing after each.
+fn control_bar_width(ui: &Ui) -> f32 {
+    let spacing = ui.spacing().item_spacing.x;
+    widgets::text_width(ui, control_bar_link_text(ui)) + CONTROL_BAR_WIDTHS.iter().sum::<f32>() + 4.0 * spacing
 }
 
 /// The Contextual Task Bar's widths of the font family menu, the font style dropdown and the
@@ -1666,7 +1729,7 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Warichu, Standard Vertical Roman Alignment and
 /// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the default Warichu Settings (2 lines, no
-/// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, the Default character direction,
+/// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, Tsume 0, the Default character direction,
 /// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
 /// already open, the reset is part of that group's step.
@@ -1686,7 +1749,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
             "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right, "akiLeft": d.aki_left, "akiRight": d.aki_right,
-            "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
+            "tsume": d.tsume, "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
             "warichuAlign": d.warichu_align,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
             "digits": d.digits, "fontHeightReference": d.font_height_reference

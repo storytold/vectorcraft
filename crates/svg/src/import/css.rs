@@ -103,6 +103,24 @@ impl Compound {
             && self.attrs.iter().all(|(a, v)| n.attribute(a.as_str()).is_some_and(|x| v.as_deref().is_none_or(|v| x == v)))
             && !self.nots.iter().any(|c| c.matches(n))
     }
+
+    /// The tests [`Compound::matches`] makes of `n` at most, its `:not()`s' included: one for the
+    /// compound, [`scan_tests`] of `n`'s attributes for each attribute it looks up, and for each
+    /// of its classes, [`scan_tests`] of `n`'s class list.
+    fn tests(&self, n: XNode) -> u64 {
+        let lookups = u64::from(self.id.is_some()) + u64::from(!self.classes.is_empty()) + self.attrs.len() as u64;
+        let mut tests = lookups.saturating_mul(scan_tests(n.attributes().len())).saturating_add(1);
+        if !self.classes.is_empty() {
+            let list = scan_tests(n.attribute("class").map_or(0, str::len));
+            tests = tests.saturating_add((self.classes.len() as u64).saturating_mul(list));
+        }
+        self.nots.iter().map(|c| c.tests(n)).fold(tests, u64::saturating_add)
+    }
+}
+
+/// The tests a scan of `len` attributes or bytes counts as: one, and one more for every 16.
+pub(super) fn scan_tests(len: usize) -> u64 {
+    1 + len as u64 / 16
 }
 
 /// A complex selector, rightmost compound first; each compound's flag says whether it must be the
@@ -129,7 +147,7 @@ thread_local! {
 
 /// [`SELECTOR_TESTS`] of this thread.
 #[cfg(test)]
-fn selector_tests() -> u64 {
+pub(super) fn selector_tests() -> u64 {
     SELECTOR_TESTS.get()
 }
 
@@ -260,14 +278,35 @@ impl Selector {
     }
 
     fn matches(&self, n: XNode) -> bool {
+        #[cfg(test)]
+        SELECTOR_TESTS.set(SELECTOR_TESTS.get().saturating_add(1));
+        self.matches_counting(n, &mut 0, None)
+    }
+
+    /// [`Self::matches`], counting the tests of each compound tested against an element in
+    /// `steps` ([`Compound::tests`]), those of its `:not()`s included. Once `steps` passes `most`,
+    /// no compound matches any more.
+    fn matches_within(&self, n: XNode, steps: &mut u64, most: u64) -> bool {
+        self.matches_counting(n, steps, Some(most))
+    }
+
+    /// [`Self::matches_within`] when `most` is given; [`Self::matches`], counting nothing, when not.
+    fn matches_counting(&self, n: XNode, steps: &mut u64, most: Option<u64>) -> bool {
         // The result of matching a selector suffix from a node depends only on the suffix and
         // the node, so memoize it: without this, every descendant step retries every matching
         // ancestor and a selector whose leftmost compound never matches makes the search
         // enumerate ancestor combinations (#1703). A suffix of `parts` is identified by its
         // length, so (suffix length, node id) is a complete key and the visited states are
         // bounded by parts × ancestors.
-        fn go(parts: &[(Compound, bool)], n: XNode, memo: &mut HashMap<(usize, roxmltree::NodeId), bool>) -> bool {
+        type Memo = HashMap<(usize, roxmltree::NodeId), bool>;
+        fn go(parts: &[(Compound, bool)], n: XNode, memo: &mut Memo, steps: &mut u64, most: Option<u64>) -> bool {
             let Some(((c, child), rest)) = parts.split_first() else { return true };
+            if let Some(most) = most {
+                *steps = steps.saturating_add(c.tests(n));
+                if *steps > most {
+                    return false;
+                }
+            }
             if !c.matches(n) {
                 return false;
             }
@@ -279,16 +318,14 @@ impl Selector {
                 return hit;
             }
             let hit = if *child {
-                n.parent_element().is_some_and(|p| go(rest, p, memo))
+                n.parent_element().is_some_and(|p| go(rest, p, memo, steps, most))
             } else {
-                n.ancestors().skip(1).filter(|a| a.is_element()).any(|a| go(rest, a, memo))
+                n.ancestors().skip(1).filter(|a| a.is_element()).any(|a| go(rest, a, memo, steps, most))
             };
             memo.insert(key, hit);
             hit
         }
-        #[cfg(test)]
-        SELECTOR_TESTS.set(SELECTOR_TESTS.get().saturating_add(1));
-        go(&self.parts, n, &mut HashMap::new())
+        go(&self.parts, n, &mut HashMap::new(), steps, most)
     }
 }
 
@@ -495,16 +532,36 @@ impl Styles {
         m
     }
 
+    /// The bytes the declarations of the rules that match `n` take, names and values, each with
+    /// `per_declaration` more: at least what [`Styles::declared`] keeps of them for `n`. Nothing
+    /// is kept. `steps` counts the rules and compounds tested; `None` once it passes `most`.
+    pub(super) fn matched_bytes(&self, n: XNode, per_declaration: u64, steps: &mut u64, most: u64) -> Option<u64> {
+        let mut bytes = 0u64;
+        for r in self.index.candidates(n).into_iter().filter_map(|i| self.rules.get(i)) {
+            *steps = steps.saturating_add(1);
+            if r.selector.matches_within(n, steps, most) {
+                let size = |(k, v, _): &(String, String, bool)| per_declaration.saturating_add((k.len() + v.len()) as u64);
+                bytes = r.decls.iter().map(size).fold(bytes, u64::saturating_add);
+            }
+            if *steps > most {
+                return None;
+            }
+        }
+        Some(bytes)
+    }
+
     /// Are there rules with a `:not()` (which usvg's style sheets drop)?
     pub(super) fn has_not_rules(&self) -> bool {
         self.rules.iter().any(|r| r.selector.has_not())
     }
 
     /// The properties rules with a `:not()` set on `n`, each with its value after the cascade.
+    /// Only the rules [`Index::candidates`] gives for `n` are tested, as in [`Styles::matched_bytes`].
     pub(super) fn set_by_not_rules(&self, n: XNode) -> Vec<(String, String)> {
         let declared = self.declared(n);
         let mut out: Vec<(String, String)> = Vec::new();
-        for r in self.rules.iter().filter(|r| r.selector.has_not() && r.selector.matches(n)) {
+        let rules = self.index.candidates(n).into_iter().filter_map(|i| self.rules.get(i));
+        for r in rules.filter(|r| r.selector.has_not() && r.selector.matches(n)) {
             for (k, ..) in r.decls.iter() {
                 if !out.iter().any(|(o, _)| o == k)
                     && let Some(v) = declared.get(k)
