@@ -133,6 +133,8 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             drag_released(app, ui, &f, d, release_pos(ui, button).unwrap_or(p));
         }
     } else if let Some(p) = hover_tool
+        // A press on an artboard's name starts no drag: the moves while it is held are not hover.
+        && !(pointer.primary_down() && ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id()).is_some()))
         && (pointer.is_moving() || mods_changed || !was_over || tool_switched || (context_changed && app.session.tool_wants_rehover()))
     {
         let ev = PointerEvent {
