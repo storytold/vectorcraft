@@ -252,17 +252,18 @@ speaks English, German, Japanese, Korean, Vietnamese, Traditional and Simplified
 The scores are self-assessed from our code against public documentation;
 [target-app-parity.md](docs/target-app-parity.md#how-this-was-measured-2026-10-10) explains how far to trust them.
 
+The Effect Gallery includes all 57 approximated Photoshop-style raster filters, filter thumbnails and an in-dialog preview.
+
 **What's missing:**
 - reliable exchange of .ai files (layer structure in real files; the editing copy a save writes keeps live effects only on paths, compound paths and groups that qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports (see [docs/file-format-parity.md](docs/file-format-parity.md)), leaves out other objects' effects other than geometry effects, and writes live objects as their art);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
 - 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
-- filter thumbnails and a preview area inside the Effect Gallery (the gallery itself and all 57 Photoshop-style raster filters, approximated, are in);
 - CJK composition for vertical type (vertical type itself has initial support, with a Japanese interface);
 - scripting, and the rest of Variables (image and graph kinds, dataset import);
 - generative AI features.
 
-**Where we're going:** next is the interaction-fidelity pass, `.ai` files from real users and start-up stability,
-alongside the raster-effects package; then type, recent additions and 3D. The ranked list is in
+**Where we're going:** next is the interaction-fidelity pass, `.ai` files from real users and start-up stability;
+then type, recent additions and 3D. The ranked list is in
 [`docs/gaps.md`](docs/gaps.md).
 
 **Workspace:** `crates/{geom, color, doc, pathops, text, effects, three-d, trace, brush, render, svg, pdf, eps, cad, metafile, format, tools, engine, ui-egui, mcp, testkit}`
