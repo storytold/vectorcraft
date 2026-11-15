@@ -320,8 +320,7 @@ fn glass_loads_a_texture_saves_it_and_draws_it() {
     assert_eq!(doc.node(NodeId(g)).unwrap().appearance.effects[0].params, glass_params(&s, g));
     assert_eq!(Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true).pixels, loaded.pixels);
     // The same file by path, through Effect Options, stores the same texture.
-    let dir = std::env::temp_dir().join(format!("vc-glass-texture-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = vectorcraft_testkit::TempDir::new("glass-texture");
     let path = dir.join("rings.png");
     std::fs::write(&path, &png).unwrap();
     let (mut t, h) = striped();
@@ -331,7 +330,7 @@ fn glass_loads_a_texture_saves_it_and_draws_it() {
     assert_eq!(glass_params(&t, h)["textureImage"], json!(stored));
     assert_eq!(glass_params(&t, h)["texture"], json!("loaded"));
     assert_eq!(render(&t).pixels, loaded.pixels);
-    let _ = std::fs::remove_dir_all(&dir);
+    drop(dir);
     // The stored string is taken as it is (as effect.list gives it, and a graphic style copies it).
     t.execute("effect.apply", &json!({"effect": "distort.glass", "ids": [h], "params": {"textureImage": stored, "texture": "frosted"}})).unwrap();
     let second = t.doc().unwrap().doc.node(NodeId(h)).unwrap().appearance.effects[1].params.clone();
@@ -421,15 +420,14 @@ fn rough_pastels_loads_a_texture_saves_it_and_draws_it() {
     assert!(e.to_string().contains("textureImage"), "{e}");
     assert_eq!(glass_params(&s, g), before);
     // The same file by path, through Effect Options, stores the same texture; undo takes it away.
-    let dir = std::env::temp_dir().join(format!("vc-rough-pastels-texture-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = vectorcraft_testkit::TempDir::new("rough-pastels-texture");
     let path = dir.join("rings.png");
     std::fs::write(&path, &png).unwrap();
     let (mut t, h) = striped();
     t.execute("effect.apply", &json!({"effect": "artistic.roughPastels", "ids": [h], "params": {"relief": 20}})).unwrap();
     assert!(glass_params(&t, h).get("textureImage").is_none());
     t.execute("effect.setParams", &json!({"index": 0, "ids": [h], "params": {"textureImage": {"path": path.to_string_lossy()}}})).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
+    drop(dir);
     assert_eq!((&glass_params(&t, h)["textureImage"], &glass_params(&t, h)["texture"]), (&json!(stored), &json!("loaded")));
     assert_eq!(render(&t).pixels, loaded.pixels);
     t.execute("edit.undo", &json!({})).unwrap();
