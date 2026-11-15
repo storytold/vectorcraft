@@ -601,6 +601,18 @@ const FIND_TRIES: usize = 20;
 /// `recolor.reduce` returned them.
 const PRESERVED: &str = "__preserved";
 
+/// A row's current color as `recolor.apply` matches it: an exact color (its key, parsed whatever
+/// its case or spacing), or `Err` with the hex of a "#rrggbb" entry, which matches every color
+/// shown as that hex.
+type FindEntry = Result<ColorKey, String>;
+
+fn find_entry(k: &Value) -> Option<FindEntry> {
+    match k.as_str() {
+        Some(s) => ColorKey::parse(s).map(Ok).or_else(|| color_value(k).map(|c| Err(c.to_hex()))),
+        None => color_value(k).map(|c| Ok(ColorKey::of(&c))),
+    }
+}
+
 /// While Find is on, on the Assign tab with art and rows selected: what the art previews instead of
 /// [`apply_params`], as `command.batch` parameters. A first `recolor.apply` gives each current color
 /// of the rows that aren't selected, and each preserved color, its [`FIND_DIM`] tint, or the nearest lighter one when that is a
@@ -619,22 +631,30 @@ fn find_params(d: &Dialog) -> Option<Value> {
     }
     let keys = |r: &Value| r["from"].as_array().cloned().unwrap_or_default();
     let found: Vec<Value> = sel.iter().flat_map(|&i| keys(&rs[i])).collect();
+    // The selected rows' entries as `recolor.apply` reads them: exact colors and "#rrggbb" ones.
+    let found: Vec<FindEntry> = found.iter().filter_map(find_entry).collect();
+    let found_keys: Vec<ColorKey> = found.iter().filter_map(|e| e.as_ref().ok().copied()).collect();
+    let found_hex_entries: Vec<String> = found.iter().filter_map(|e| e.as_ref().err().cloned()).collect();
+    let found_hex: Vec<String> = found.iter().map(|e| e.as_ref().map_or_else(Clone::clone, |k| k.color().to_hex())).collect();
     // A dimmed color must not be one the second step recolors (by its key, or by its hex as a
     // "#rrggbb" entry matches): the nearest lighter tint that is none of them is taken instead.
-    let found_hex: Vec<String> = found.iter().filter_map(color_value).map(|c| c.to_hex()).collect();
     let dimmed = |c: Color| {
         (0..FIND_TRIES)
             .map(|n| c.tinted(FIND_DIM - n as f32 * 0.01))
-            .find(|t| !found.contains(&key(t)) && !found_hex.contains(&t.to_hex()))
+            .find(|t| !found_keys.contains(&ColorKey::of(t)) && !found_hex.contains(&t.to_hex()))
             .map(|t| key(&t))
     };
     // The current colors of the rows that aren't selected, and the preserved colors.
     let preserved = d.fields.get(PRESERVED).and_then(Value::as_array).cloned().unwrap_or_default();
     let others = rs.iter().enumerate().filter(|(i, _)| !sel.contains(i)).flat_map(|(_, r)| keys(r)).chain(preserved);
     let mut dim = serde_json::Map::new();
-    // A color shown as the same hex as one a selected row lists stays: a "#rrggbb" entry on either
-    // side matches both.
-    let listed = |k: &Value| found.contains(k) || color_value(k).is_some_and(|c| found_hex.contains(&c.to_hex()));
+    // A color a selected row lists stays, and so does one shown as the same hex when either entry is
+    // "#rrggbb" (it matches both). Two keys of the same hex are separate colors.
+    let listed = |k: &Value| match find_entry(k) {
+        Some(Ok(key)) => found_keys.contains(&key) || found_hex_entries.contains(&key.color().to_hex()),
+        Some(Err(hex)) => found_hex.contains(&hex),
+        None => false,
+    };
     for k in others.filter(|k| !listed(k)) {
         if let (Some(to), Some(name)) = (color_value(&k).and_then(dimmed), k.as_str()) {
             dim.insert(name.to_string(), to);
@@ -2133,13 +2153,30 @@ mod tests {
         assert_eq!(second["map"][0], rows()[0], "the selected row recolors as it would");
         assert_eq!((second["map"][1]["exclude"].clone(), second["map"][2]["exclude"].clone()), (json!(true), json!(true)));
         assert!(second.get("group").is_none() && second.get("rename").is_none(), "{second}");
-        // A color that a selected row lists as a hex (or with another key of the same hex) stays.
+        // A color that a selected row lists as a hex stays.
         let mut e = d.clone();
         let mut rs = rows();
         rs[0]["from"] = json!(["#0000ff"]);
         e.fields.insert("rows".into(), json!(rs));
         let map = find_params(&e).unwrap()["commands"][0]["params"]["map"].clone();
         assert!(map.get("rgb 0 0 255").is_none() && map.get("rgb 0 0 128").is_some(), "{map}");
+        // A color a selected row lists by its key keeps only that color: another key of the same hex
+        // dims, and a hex entry of it stays (it would dim the selected color too).
+        let mut e = d.clone();
+        let mut rs = rows();
+        rs[0]["from"] = json!(["rgb 191 191 255"]);
+        rs[1]["from"] = json!(["rgb 191.25 191.25 255", "#bfbfff"]);
+        e.fields.insert("rows".into(), json!(rs));
+        let map = find_params(&e).unwrap()["commands"][0]["params"]["map"].clone();
+        assert!(map.get("rgb 191.25 191.25 255").is_some() && map.get("#bfbfff").is_none(), "{map}");
+        // A key is read whatever its case or spacing, as `recolor.apply` reads it.
+        let mut e = d.clone();
+        let mut rs = rows();
+        rs[0]["from"] = json!(["RGB  191 191 255"]);
+        rs[1]["from"] = json!(["rgb 191 191 255", "rgb 0 0 128"]);
+        e.fields.insert("rows".into(), json!(rs));
+        let map = find_params(&e).unwrap()["commands"][0]["params"]["map"].clone();
+        assert!(map.get("rgb 191 191 255").is_none() && map.get("rgb 0 0 128").is_some(), "{map}");
         // The preserved colors dim too.
         let mut e = d.clone();
         e.fields.insert(PRESERVED.into(), json!(["rgb 0 0 0"]));
