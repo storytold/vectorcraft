@@ -97,11 +97,18 @@ fn xmp_pick() -> FilePick {
     FilePick { filters: vec![FilePick::filter("XMP metadata templates", &[XMP_EXT])], ..Default::default() }
 }
 
+/// Whether the session has a metadata templates folder for Templates Folder to show (the web build
+/// has none).
+fn has_templates_folder(app: &VectorcraftApp) -> bool {
+    app.session.metadata_templates_dir().is_some()
+}
+
 /// The ≡ templates menu at the top right, and the merge choice for a template it picked.
 fn templates_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     let can_save = crate::picks::can(app, &PickRequest::Save(xmp_pick()));
     let can_open = crate::picks::can(app, &PickRequest::Open(xmp_pick()));
+    let has_folder = has_templates_folder(app);
     let mut act = None;
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -150,9 +157,11 @@ fn templates_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                         }
                     });
                 }
-                ui.separator();
-                if widgets::menu_item(ui, tl!("Templates Folder"), true, false) {
-                    act = Some(Act::Folder);
+                if has_folder {
+                    ui.separator();
+                    if widgets::menu_item(ui, tl!("Templates Folder"), true, false) {
+                        act = Some(Act::Folder);
+                    }
                 }
             });
         })
@@ -463,6 +472,15 @@ mod tests {
         let st = app.session.active().unwrap();
         assert_eq!((st.doc.metadata.author.as_str(), st.doc.metadata.rating), ("Ada", 3));
         assert_eq!(st.history.undo.len(), 1);
+    }
+
+    #[test]
+    fn templates_folder_is_offered_only_where_there_is_one() {
+        let dir = vectorcraft_testkit::TempDir::new("ui-file-info-folder");
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        assert!(!super::has_templates_folder(&app), "a session without a folder, as on the web, offers no Templates Folder");
+        app.session.attach_metadata_templates_dir(dir.join("Metadata Templates"));
+        assert!(super::has_templates_folder(&app));
     }
 
     #[test]
