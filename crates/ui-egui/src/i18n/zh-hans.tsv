@@ -591,6 +591,7 @@ antiAlias	Sharp	锐利
 	Copy All Styles	复制所有样式
 	Copy Color Value (Hex)	复制颜色值 (十六进制)
 	Copy Fonts Used in the Document	复制文档中使用的字体
+	Copy Info	复制信息
 	Copy Links	复制链接
 	Copy Selected Style	复制所选样式
 	Copy to User Defined	复制到用户定义
@@ -2566,6 +2567,8 @@ font-script	Japanese	汉字
 	Proof Setup	校样设置
 	Properties	属性
 	Proportional Metrics	比例度量
+	H or V Style	横排或直排样式
+	Roman Italics	西文斜体
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在后方插入空白
 	Tsume	比例间距
@@ -4889,6 +4892,7 @@ imageTrace	Outline	轮廓
 @msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
+@msg	Copied the link info	已复制链接信息
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
 @msg	unknown highlight `{h}`	未知的高亮显示 `{h}`
@@ -5587,6 +5591,7 @@ axis	Both	两者
 
 # Photoshop-style raster effects (Effect menu, their dialogs).
 	Radial Blur…	径向模糊…
+	Blur Center	模糊中心
 	Smart Blur…	智能模糊…
 	Sharpen	锐化
 	Unsharp Mask…	反锐化遮罩…
@@ -7757,7 +7762,7 @@ breakText	Glyphs	字形
 @msg	too many arguments	参数过多
 @msg	too many quantifiers	量词过多
 @msg	turn on at least one side	请至少打开一条边
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 特性 `{t}` (liga、calt、dlig、smcp、frac、onum、tnum、ordn、swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom、aalt；加前缀 - 表示关闭；swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom 和 aalt 可用 `tag=N` 指定替代字形的编号，N 为 0 到 {_1}，例如 `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 特性 `{t}` (liga、calt、dlig、smcp、frac、onum、tnum、ordn、swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom、aalt、hkna、ital；加前缀 - 表示关闭；swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom 和 aalt 可用 `tag=N` 指定替代字形的编号，N 为 0 到 {_1}，例如 `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的参数 `{key}`
@@ -8881,6 +8886,7 @@ breakText	Glyphs	字形
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 文件过大，无法作为文字置入 (最多 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG 展开后的嵌套 SVG 图像超过 {0} 个
 @msg	the SVG expands to more than {0} objects	SVG 展开后的对象超过 {0} 个
+@msg	the SVG's style sheets take too long to match	匹配 SVG 的样式表耗时过长
 @msg	the SVG's styles expand to more than {0} MB	SVG 的样式展开后超过 {0} MB
 @msg	the SVG has no drawable objects	SVG 中没有可绘制的对象
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 文件解压后超过 {_1} MB

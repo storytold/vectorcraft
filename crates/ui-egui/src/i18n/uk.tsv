@@ -17,6 +17,7 @@
 	Smoothness	Згладжування
 
 	Radial Blur…	Радіальне розмиття…
+	Blur Center	Центр розмиття
 	Smart Blur…	Розумне розмиття…
 	Sharpen	Різкість
 	Unsharp Mask…	Нерізка маска…
@@ -540,8 +541,8 @@ font-technology	Variable	Варіативні
 	Color Guide Options	Параметри колірного гіда
 	Color Guide Options…	Параметри колірного гіда…
 	Color images	Кольорові зображення
-	Color Library	Бібліотека квітів
-	Color Library…	Бібліотека квітів…
+	Color Library	Бібліотека кольорів
+	Color Library…	Бібліотека кольорів…
 	Color Management	Керування кольором
 	Color Mixer (Shift-click the chip)	Змішувач кольорів (Shift+клацання на зразку)
 	Color Mode	Колірний режим
@@ -639,6 +640,7 @@ font-technology	Variable	Варіативні
 	Copy All Styles	Копіювати всі стилі
 	Copy Color Value (Hex)	Копіювати значення кольору (hex)
 	Copy Fonts Used in the Document	Копіювати шрифти, використані у документі
+	Copy Info	Копіювати відомості
 	Copy Links	Копіювати зв’язки
 	Copy Selected Style	Копіювати вибраний стиль
 	Copy to User Defined	Копіювати в «Користувацькі»
@@ -2703,6 +2705,8 @@ mark-style	Japanese	Японський
 	Proof Setup	Налаштування кольоропроби
 	Properties	Властивості
 	Proportional Metrics	Пропорційні метрики
+	H or V Style	Горизонтальний або вертикальний стиль
+	Roman Italics	Римський курсив
 	Insert Aki Left	Вставити акі ліворуч
 	Insert Aki Right	Вставити акі праворуч
 	Tsume	Цуме
@@ -4428,6 +4432,7 @@ axis	Both	Обидві
 @msg	there is no script engine named {name}	рушія скриптів з назвою {name} немає
 @msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано
+@msg	Copied the link info	Відомості про зв’язок скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
 @msg	Couldn't open {name}: {e}	Не вдалося відкрити {name}: {e}
@@ -8639,6 +8644,7 @@ breakText	Glyphs	Гліфи
 @msg	the RTF file is too large to place as type (at most {_1} MB)	файл RTF завеликий, щоб помістити його як текст (не більше {_1} МБ)
 @msg	the SVG expands to more than {0} nested SVG images	SVG розгортається у понад {0} вкладених зображень SVG
 @msg	the SVG expands to more than {0} objects	SVG розгортається у понад {0} об’єктів
+@msg	the SVG's style sheets take too long to match	зіставлення таблиць стилів SVG триває надто довго
 @msg	the SVG's styles expand to more than {0} MB	стилі SVG розгортаються у понад {0} МБ
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	файл SVG більший за {MAX_IMPORT_BYTES} байтів
 @msg	the SVG has no drawable objects	SVG не містить об’єктів, які можна намалювати
@@ -8858,7 +8864,7 @@ breakText	Glyphs	Гліфи
 @msg	unexpected resources	неочікувані ресурси
 @msg	unknown CMYK profile `{name}`	невідомий профіль CMYK `{name}`
 @msg	unknown File Info field `{k}`	невідоме поле відомостей про файл `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	невідома функція OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; префікс - вимикає функцію; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom і aalt приймають номер альтернативи у вигляді `tag=N`, де N від 0 до {_1}, наприклад `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	невідома функція OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; префікс - вимикає функцію; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom і aalt приймають номер альтернативи у вигляді `tag=N`, де N від 0 до {_1}, наприклад `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	невідома функція OpenType `{t}` у featureChanges (допустимі теги, які приймає `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	невідомий набір PDF `{name}` (набори: {_1})
 @msg	unknown Warp style	невідомий стиль деформації

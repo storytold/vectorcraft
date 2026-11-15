@@ -41,7 +41,7 @@ pub mod jxlread;
 mod legacy_ai;
 mod load;
 mod mesh3d;
-pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
+pub(crate) use load::{MAX_RASTER_ALLOC, file_clipped, size_note};
 mod heifread;
 mod hpgl;
 mod jp2read;
