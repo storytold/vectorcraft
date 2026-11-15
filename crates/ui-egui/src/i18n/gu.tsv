@@ -1029,6 +1029,7 @@
 	Document model	દસ્તાવેજ મોડેલ
 	Document open password	દસ્તાવેજ ખોલવાનો પાસવર્ડ
 	Documents you create appear here.	તમે બનાવેલા દસ્તાવેજો અહીં દેખાશે.
+	Don't Color Manage This Document	આ દસ્તાવેજનું રંગ સંચાલન કરશો નહીં
 	Don't Relink	ફરીથી લિંક કરશો નહીં
 	Don't Save	સાચવશો નહીં
 	Don't Show Center	સેન્ટર બતાવશો નહીં
@@ -4177,6 +4178,8 @@
 	Word Spacing:	શબ્દ અંતર:
 	Words Longer Than:	આનાથી લાંબા શબ્દો:
 	Working CMYK	કાર્યકારી CMYK
+	Working CMYK: {name}	કાર્યકારી CMYK: {name}
+	Working RGB: {name}	કાર્યકારી RGB: {name}
 	Workspace	વર્કસ્પેસ
 	Wrinkle	કરચલી
 	Wrinkle Tool	કરચલી ટૂલ

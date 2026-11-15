@@ -1043,6 +1043,11 @@ styles and brushes.
 `color.removeProfile`, `view.proofSetup`, `view.proofColors`, `view.overprintPreview`, `view.separationsPreview` and
 `swatch.setSpot` reject a param of the wrong type, such as `"bpc": "no"`, `"on": 1`, `"to": 5` or `"colors": "#fff"`,
 and change nothing. Omitting a param or giving null keeps its default.
+The Separations panel's Assign rows (where Edit › Assign Profile… goes) act on the profile of the document's color
+mode: Don't Color Manage This Document runs `edit.assignProfile` with null for that model (no profile, so the colors
+show through the working space), Working RGB or Working CMYK with the working space's name (that profile stays
+assigned when the working space changes), and Profile with another profile of that kind. A choice the document
+already has runs nothing, and the other model's profile stays as it is.
 
 SVG import keeps what the canvas edits live. `<pattern>` becomes a pattern swatch. A `<symbol>` with `<use>` becomes a
 symbol (named after its `data-name`, else its id) with an instance per `<use>`; a `<use>` that shows it differently
@@ -1633,10 +1638,6 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   target of `view.proofSetup` simulates the working CMYK space in such a document too. `color.convert`'s
   `outOfGamut` and `deltaE`, `color.gamutCheck`, and the out-of-gamut warning of the Color panel and Color Picker
   check against the assigned CMYK profile, else the working CMYK space; the warning updates when either changes.
-  The Separations panel's Assign rows (where Edit › Assign Profile… goes) act on the profile of the document's
-  color mode: Don't Color Manage This Document runs `edit.assignProfile` with null for that model, Working RGB or
-  Working CMYK with the working space's name, and Profile with another profile of that kind. A choice the document
-  already has runs nothing, and the other model's profile stays as it is.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
