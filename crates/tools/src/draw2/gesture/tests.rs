@@ -3080,9 +3080,10 @@ fn the_eraser_drag_area_matches_the_release_when_pressure_or_a_mode_starts_durin
     press(&mut t, leaning, 1.0, PointerKind::Drag, 150.0);
     near(bounds(&t), (40.0, 147.5, 160.0, 152.5));
     // The pen lifts to no pressure: the release reads full pressure at the first three points, the
-    // tip turned 90°, and none at the last, turned -90°. Every step stands upright.
+    // tip turned 90°, and none at the last, turned -90°. The first two steps stand upright, and
+    // the last, halfway between full pressure and none, lies level.
     press(&mut t, leaning, 0.0, PointerKind::Drag, 200.0);
-    near(bounds(&t), (47.5, 140.0, 202.5, 160.0));
+    near(bounds(&t), (47.5, 140.0, 210.0, 160.0));
     press(&mut t, leaning, 0.0, PointerKind::Up, 200.0);
 
     // The same tip with its angle on Pressure by up to 90°, pressed halfway all along, and
@@ -3167,10 +3168,42 @@ fn the_eraser_drag_area_gives_the_first_lean_to_the_points_before_it() {
     same((drag([[0.0, 0.0]; 5], Some([0.0, 45.0])), drag([[0.0, 45.0]; 5], Some([0.0, 45.0]))));
 }
 
+/// Each step of an Eraser drag's outline takes the tip the release erases with halfway along it:
+/// with the angle on Pressure by up to 90°, a step from no pressure (the tip turned -90°) to full
+/// pressure (turned 90°) shows the tip lying level, as the release turns it through level there,
+/// though the tips at its ends are the same upright tip.
+#[test]
+fn the_eraser_drag_area_takes_the_tip_halfway_along_each_step() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(20)), ("roundness", json!(25)), ("angleMode", json!("pressure")), ("angleVariation", json!(90))] {
+        t.set_option(k, &v);
+    }
+    t.pointer(&cx, &PointerEvent { pressure: 0.0, ..PointerEvent::new(PointerKind::Down, 50.0, 150.0) });
+    t.pointer(&cx, &PointerEvent { pressure: 1.0, ..PointerEvent::new(PointerKind::Drag, 150.0, 150.0) });
+    drain_area(&t, &cx);
+    let o = t.overlays(&cx);
+    let b = o
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(path)),
+            Overlay::SharedPath { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(&**path)),
+            _ => None,
+        })
+        .reduce(|a, b| a.union(b))
+        .unwrap_or_else(|| panic!("{o:?}"));
+    // The level tip 20 by 5 pt swept from x 50 to 150.
+    let want = (40.0, 147.5, 160.0, 152.5);
+    assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?}");
+    t.pointer(&cx, &PointerEvent { pressure: 1.0, ..PointerEvent::new(PointerKind::Up, 150.0, 150.0) });
+}
+
 /// The outline of a long Eraser drag whose tip turns and changes shape with the pen is built a
 /// bounded amount per frame, and once finished it shows nothing inside the area: no point of it
-/// lies well inside the area of any step, each step with the tip halfway between those at its
-/// ends.
+/// lies well inside the area of any step, each step with the tip halfway along it.
 #[test]
 fn the_outline_of_a_long_varied_eraser_drag_is_bounded_and_shows_nothing_inside() {
     let (d, _) = doc_with_rect();
@@ -3194,21 +3227,19 @@ fn the_outline_of_a_long_varied_eraser_drag_is_bounded_and_shows_nothing_inside(
     drain_area(&t, &cx);
     let shown = shown_points(&t.overlays(&cx));
     assert!(!shown.is_empty());
-    let tips: Vec<[f64; 3]> = (0..t.points.len()).map(|i| t.tip_of_point(i)).collect();
     let steps: Vec<(Affine, Point, Point, f64)> = (0..t.points.len() - 1)
         .map(|j| {
-            let (a, b) = (tips[j], tips[j + 1]);
-            let turn = (b[0] - a[0]).rem_euclid(180.0);
-            let turn = if turn > 90.0 { turn - 180.0 } else { turn };
-            let angle = a[0] + turn / 2.0;
-            let round = eraser_tip(angle, (a[1] + b[1]) / 2.0).inverse();
-            (round, round * t.points[j], round * t.points[j + 1], (a[2] + b[2]) / 4.0)
+            let [angle, roundness, size] = t.tip_between(j);
+            let round = eraser_tip(angle, roundness).inverse();
+            (round, round * t.points[j], round * t.points[j + 1], size / 2.0)
         })
         .collect();
     for &(q, _) in &shown {
+        // A curve of an outline is checked at the middles of its pieces, so where it crosses the
+        // end of a narrow tip's area, the end of a piece can lie a little way inside it.
         for &(round, a, b, r) in &steps {
             let d = distance_to_line(round * q, (a, b));
-            assert!(d > r * 0.9, "a point of the outline {d} from a step, inside its area of radius {r}, at {q:?}");
+            assert!(d > r * 0.85, "a point of the outline {d} from a step, inside its area of radius {r}, at {q:?}");
         }
     }
 }

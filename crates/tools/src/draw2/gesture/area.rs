@@ -241,9 +241,9 @@ impl AreaPreview {
 
     /// Take the points of the drag `pts` added since the last call and check outlines, within this
     /// call's limits. When the tip varies along the drag, `tip(i)` gives the tip at point `i`, and
-    /// each segment takes the tip halfway between those at its ends. A last point whose tip changed
-    /// since it was taken (a pen turned or tilted in place) gives its segment the new tip.
-    pub(super) fn step(&mut self, pts: &[Point], tip: &dyn Fn(usize) -> Tip) {
+    /// segment `j` takes `middle(j)`, the tip halfway along it. A last point whose tip changed since
+    /// it was taken (a pen turned or tilted in place) gives its segment the new tip.
+    pub(super) fn step(&mut self, pts: &[Point], tip: &dyn Fn(usize) -> Tip, middle: &dyn Fn(usize) -> Tip) {
         self.work = AreaWork::default();
         let mut changed = BTreeSet::new();
         if self.key.varies
@@ -252,7 +252,7 @@ impl AreaPreview {
         {
             let k = self.piece_of(j);
             let old = self.radius[j];
-            self.set_tip(j, tip(j), tip(j + 1));
+            self.set_tip(j, middle(j));
             self.last_tip = Some(tip(j + 1));
             changed.insert(k);
             // The pieces near the old tip or the new one are checked again.
@@ -272,7 +272,7 @@ impl AreaPreview {
             let Some(j) = i.checked_sub(1) else { continue };
             if self.key.varies {
                 self.radius.push(0.0);
-                self.set_tip(j, tip(j), tip(i));
+                self.set_tip(j, middle(j));
             } else {
                 self.radius.push(self.key.size / 2.0);
             }
@@ -290,17 +290,11 @@ impl AreaPreview {
         self.check_some();
     }
 
-    /// Give segment `j` the tip halfway between `from` and `to`, the tips at its ends: its radius,
-    /// and with `shaped` the map to the space where that tip is round. The angles meet the shorter
-    /// way round, a tip turned by 180° being the same tip.
-    fn set_tip(&mut self, j: usize, from: Tip, to: Tip) {
-        let size = (from[2] + to[2]) / 2.0;
+    /// Give segment `j` the tip `[angle, roundness, size]`, the tip halfway along it: its radius,
+    /// and with `shaped` the map to the space where that tip is round.
+    fn set_tip(&mut self, j: usize, [angle, roundness, size]: Tip) {
         self.radius[j] = size.max(MIN_BRUSH_SIZE) / 2.0;
         if self.key.shaped {
-            let turn = (to[0] - from[0]).rem_euclid(180.0);
-            let turn = if turn > 90.0 { turn - 180.0 } else { turn };
-            let angle = from[0] + turn / 2.0;
-            let roundness = (from[1] + to[1]) / 2.0;
             let round = eraser_tip(angle, roundness).inverse();
             match self.to_round.get_mut(j) {
                 Some(m) => *m = round,

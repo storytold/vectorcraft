@@ -1157,19 +1157,41 @@ impl GestureTool {
         self.poses.len() == self.points.len()
     }
 
-    /// The tip at point `i` of the stroke, as `path.eraseRegion` reads the pen there: the pressure
-    /// once the pen has pressed less than fully, the tilt and rotation of the point, and the
-    /// bearing of the last point up to it that the pen leaned 1° or more at, or before the first
-    /// such point the bearing of that first one ([`Self::tip_for`]). What the release does not
-    /// read ([`Self::reads_pressures`], [`Self::reads_poses`]) gives the values themselves.
+    /// The tip at point `i` of the stroke, as `path.eraseRegion` reads the pen there
+    /// ([`Self::controls_of_point`]).
     fn tip_of_point(&self, i: usize) -> [f64; 3] {
+        self.tip_of_controls(self.controls_of_point(i))
+    }
+
+    /// The tip halfway along the step from point `j` to point `j + 1`, as `path.eraseRegion` reads
+    /// the pen there: the pressure and tilt halfway between those at the two points, and the
+    /// bearing and rotation halfway between them the shorter way round. A tip whose angle follows
+    /// the pressure from 0 at one point to 1 at the next lies level there, not turned as at
+    /// either end.
+    fn tip_between(&self, j: usize) -> [f64; 3] {
+        let (a, b) = (self.controls_of_point(j), self.controls_of_point(j + 1));
+        // Bearing and rotation read ½ plus the angle over 360° ([`super::pen_controls`]).
+        let turn = |a: f64, b: f64| {
+            let (a, b) = ((a - 0.5) * 360.0, (b - 0.5) * 360.0);
+            0.5 + vectorcraft_geom::normalize_deg(a + vectorcraft_geom::normalize_deg(b - a) / 2.0) / 360.0
+        };
+        self.tip_of_controls([(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, turn(a[2], b[2]), turn(a[3], b[3])])
+    }
+
+    /// What each of the variation modes Pressure, Tilt, Bearing and Rotation reads at point `i` of
+    /// the stroke, as `path.eraseRegion` reads the pen there ([`super::pen_controls`]): the
+    /// pressure once the pen has pressed less than fully, the tilt and rotation of the point, and
+    /// the bearing of the last point up to it that the pen leaned 1° or more at, or before the
+    /// first such point the bearing of that first one. What the release does not read
+    /// ([`Self::reads_pressures`], [`Self::reads_poses`]) reads ½, the values themselves.
+    fn controls_of_point(&self, i: usize) -> [f64; 4] {
         let pressure = if self.reads_pressures() { self.pressures.get(i).map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
         let (pose, bearing) = if self.reads_poses() {
             (self.poses.get(i).copied().flatten(), self.bearings.get(i).copied().flatten().or(self.first_bearing))
         } else {
             (None, None)
         };
-        self.tip_for(pressure, pose, bearing)
+        super::pen_controls(pressure, pose, bearing)
     }
 
     /// How the tip's angle, roundness and size vary: the Eraser's three modes, the Blob Brush's
@@ -1207,8 +1229,13 @@ impl GestureTool {
     /// to the value plus it ([`super::pen_controls`]); for Random, Fixed and what the pen does not
     /// give, the values themselves.
     fn tip_for(&self, pressure: f64, pose: Option<PenPose>, bearing: Option<f64>) -> [f64; 3] {
+        self.tip_of_controls(super::pen_controls(pressure, pose, bearing))
+    }
+
+    /// The tip's angle, roundness and size where the modes Pressure, Tilt, Bearing and Rotation
+    /// read `controls` (0..1 each, [`super::pen_controls`]).
+    fn tip_of_controls(&self, controls: [f64; 4]) -> [f64; 3] {
         let base = [self.angle, self.roundness, self.size];
-        let controls = super::pen_controls(pressure, pose, bearing);
         let variations = [self.angle_variation, self.roundness_variation, self.size_variation];
         let mut out = base;
         for (i, (v, mode)) in out.iter_mut().zip(self.tip_modes()).enumerate() {
@@ -1740,10 +1767,8 @@ impl Tool for GestureTool {
                 variations: [self.angle_variation, self.roundness_variation, self.size_variation],
             };
             let mut area = self.area.take().filter(|a| a.fits(key, &self.points)).unwrap_or_else(|| AreaPreview::new(key, self.points[0]));
-            area.step(&self.points, &|i| {
-                let [angle, roundness, size] = self.tip_of_point(i);
-                [angle, roundness, if size_varies { size } else { self.size }]
-            });
+            let sized = |[angle, roundness, size]: [f64; 3]| [angle, roundness, if size_varies { size } else { self.size }];
+            area.step(&self.points, &|i| sized(self.tip_of_point(i)), &|j| sized(self.tip_between(j)));
             let paths = area.paths(&self.points);
             o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0 }));
             o.extend(paths.live.into_iter().map(|path| Overlay::Path { path, color, width: 1.0, dashed: false }));
