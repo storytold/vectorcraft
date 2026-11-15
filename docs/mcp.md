@@ -5928,7 +5928,11 @@ are converted to, an RGB image that carries an ICC profile is converted from tha
 and then to the destination, instead of having its numbers read as sRGB (a profile the color engine can't read leaves
 them read as sRGB, with a warning); a gray image keeps its profile, as gray is not converted. An RGB destination other
 than sRGB that is the document's own RGB profile leaves RGB colors and RGB images as they are, so a tagged RGB image keeps its profile
-there.
+there. Any other image whose colors are converted (a CMYK image, or an RGB image going to a CMYK destination or to an
+RGB one other than sRGB) but whose pixels are more than VectorCraft decodes or can't be written that way is left out with
+the warning "an image couldn't be converted to the Output destination and is missing from the picture", rather than
+written in its own colors. One whose pixel data can't be read is left out with the warning "an image couldn't be decoded
+and is missing from the picture", as without a conversion.
 `preserveNumbers` still reads an image's numbers as sRGB. The destination is any profile `edit.colorSettings` lists (default: the document's
 for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
 `edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
