@@ -432,6 +432,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.nextArtboard", "Next Artboard", "", "{} the navigator's Next Artboard button: view.goToArtboard {index: \"next\"} → {index}"),
     ("view.lastArtboard", "Last Artboard", "", "{} the navigator's Last Artboard button: view.goToArtboard {index: \"last\"} → {index}"),
+    (
+        "view.statusBarShow",
+        "Status Bar Show",
+        "",
+        "{show: \"artboardName\" | \"currentTool\" | \"dateTime\" | \"undos\" | \"colorProfile\"} the status bar's Show menu (a click on its info field): the field shows the name of the artboard the navigator shows, the tool in use (the default), the date and time (local on the desktop, UTC on the web), the active document's undo and redo step counts, or the profile its colors use (the one assigned for its color mode, else, or when that one is not available, that mode's working space); kept with the UI state; any other value is an error → show",
+    ),
     ("view.edges", "Hide Edges", "Cmd+H", "{}"),
     ("view.artboards", "Hide Artboards", "Cmd+Shift+H", "{}"),
     (

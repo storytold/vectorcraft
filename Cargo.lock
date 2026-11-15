@@ -6928,6 +6928,7 @@ name = "vectorcraft-ui-egui"
 version = "0.24.1"
 dependencies = [
  "bytemuck",
+ "chrono",
  "craft-keymap",
  "craft-ui",
  "craft-update",

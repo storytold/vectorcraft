@@ -1321,6 +1321,14 @@ font-technology	Variable	Μεταβλητές
 	Previous Artboard	Προηγούμενος πίνακας σχεδίασης
 	Next Artboard	Επόμενος πίνακας σχεδίασης
 	Last Artboard	Τελευταίος πίνακας σχεδίασης
+	Status Bar Show	Εμφάνιση στη γραμμή κατάστασης
+	Artboard Name	Όνομα πίνακα σχεδίασης
+	Current Tool	Τρέχον εργαλείο
+	Date and Time	Ημερομηνία και ώρα
+	Number of Undos	Αριθμός αναιρέσεων
+	Document Color Profile	Χρωματικό προφίλ εγγράφου
+	Undos	Αναιρέσεις
+	Redos	Επαναλήψεις
 	Go To Link	Μετάβαση στη σύνδεση
 	GPL palettes keep solid colours only, as RGB.	Οι παλέτες GPL διατηρούν μόνο συμπαγή χρώματα σε RGB.
 	GPU Performance	Απόδοση GPU

@@ -1883,6 +1883,14 @@ antiAlias	Sharp	シャープ
 	Previous Artboard	前のアートボード
 	Next Artboard	次のアートボード
 	Last Artboard	最後のアートボード
+	Status Bar Show	ステータスバーの表示
+	Artboard Name	アートボード名
+	Current Tool	現在のツール
+	Date and Time	日付と時刻
+	Number of Undos	取り消し回数
+	Document Color Profile	ドキュメントのカラープロファイル
+	Undos	取り消し
+	Redos	やり直し
 	Gradient Fill: click to apply, drag onto art	グラデーションの塗り: クリックで適用、アートにドラッグ
 	Gradient Mesh	グラデーションメッシュ
 	Gradient Tool	グラデーションツール

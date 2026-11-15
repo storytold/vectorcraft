@@ -1391,6 +1391,14 @@ file-filter	Templates	Vorlagen
 	Previous Artboard	Vorherige Zeichenfläche
 	Next Artboard	Nächste Zeichenfläche
 	Last Artboard	Letzte Zeichenfläche
+	Status Bar Show	In Statusleiste anzeigen
+	Artboard Name	Name der Zeichenfläche
+	Current Tool	Aktuelles Werkzeug
+	Date and Time	Datum und Uhrzeit
+	Number of Undos	Anzahl der Rückgängig-Schritte
+	Document Color Profile	Farbprofil des Dokuments
+	Undos	Rückgängig
+	Redos	Wiederholen
 	Go To Link	Gehe zu Verknüpfung
 	GPL palettes keep solid colours only, as RGB.	GPL-Paletten enthalten nur einfarbige Farben, als RGB.
 	GPU Performance	GPU-Leistung

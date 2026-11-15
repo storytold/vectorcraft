@@ -1421,6 +1421,14 @@ file-filter	Templates	Modelli
 	Previous Artboard	Tavola da disegno precedente
 	Next Artboard	Tavola da disegno successiva
 	Last Artboard	Ultima tavola da disegno
+	Status Bar Show	Mostra nella barra di stato
+	Artboard Name	Nome tavola da disegno
+	Current Tool	Strumento attivo
+	Date and Time	Data e ora
+	Number of Undos	Numero di annullamenti
+	Document Color Profile	Profilo colore del documento
+	Undos	Annullamenti
+	Redos	Ripristini
 	Go To Link	Vai al collegamento
 	GPL palettes keep solid colours only, as RGB.	Le palette GPL conservano solo i colori pieni, in RGB.
 	GPU Performance	Prestazioni GPU
