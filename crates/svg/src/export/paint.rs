@@ -841,7 +841,8 @@ fn exact_matrix(a: Affine) -> String {
 }
 
 /// The SVG filter (Effect › SVG Filters) of an object's `effects` that SVG keeps as a `<filter>`:
-/// its last visible effect, in any user space the effect gives it ([`Writer::turned_filter_space`]).
+/// its last visible effect, in any user space the effect gives it ([`Writer::turned_filter_space`])
+/// that SVG import can store again.
 fn live_svg_filter(effects: &[vectorcraft_doc::Effect]) -> Option<vectorcraft_effects::svg_filter::SvgFilterFx> {
     if !vectorcraft_effects::svg_filter::writes_live(effects) {
         return None;
@@ -850,7 +851,9 @@ fn live_svg_filter(effects: &[vectorcraft_doc::Effect]) -> Option<vectorcraft_ef
     // A region measured against the object's box is kept only when the filter runs on the object itself.
     let alone = fx.len() == 1;
     match fx.pop() {
-        Some(vectorcraft_effects::RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(f))) if (alone || !f.measured()) && f.writes_as_svg11() => {
+        Some(vectorcraft_effects::RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(f)))
+            if (alone || !f.measured()) && f.writes_as_svg11() && f.opens_again() =>
+        {
             Some(f)
         }
         _ => None,

@@ -5306,8 +5306,9 @@ its y axis `[c, d]`, before `scale`; absent, the document's axes; each number -1
 filter runs on coarser pixels when a morphology radius or kernel unit would span more than 32 of them, or a standard
 deviation more than 512. With `axes`, the filter runs on pixels lined up with its own axes, so offsets, blurs and the
 region run along them, and the result is drawn onto the object's pixels through `axes`; those pixels are about as fine
-along each axis as the object's and coarser when there would be more than 4 times as many, and a region measured
-against the object's box is measured against its box in that user space. Moving the object moves `origin` and
+along each axis as the object's and coarser when there would be more than 4 times as many. The object's box is then
+its box in that user space: a region measured against it, and a region or primitive lengths in `objectBoundingBox`
+units, are measured against that box. Moving the object moves `origin` and
 leaves `scale` and `axes` as they are. An effect whose XML or `axes` these rules refuse (from a file or a script) is not drawn or exported. The
 filter is drawn and written rebuilt from its filter elements and their filter attributes alone, without comments,
 text, descriptions or other attributes. An image in a filter is drawn only when its bytes are a PNG, JPEG, GIF or WebP
@@ -5315,7 +5316,8 @@ within the pixel limit. A filter region in user space given in percentages is me
 and y from its top-left corner), and one in em or ex or left out takes the default region of that box (10% beyond
 each side); these are VectorCraft's own rules. Scale Strokes & Effects scales
 `scale`. SVG export writes the filter as a `<filter>` element when it is the object's last effect and its only pixel
-effect (with a region measured against the object's box, its only raster effect), with the object in a
+effect (with a region measured against the object's box, its only raster effect) and SVG import can store its user
+space again (`scale` and `axes` together within the import limits below), with the object in a
 group that places the filter's user space and such a region written in user units. When `scale` isn't 1 or the effect
 has `axes`, that group's transform is the filter's user space and the object is written in document coordinates in a
 group inside the filter whose transform is the inverse, so its strokes keep their widths; SVG import reads that back

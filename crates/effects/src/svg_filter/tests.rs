@@ -269,6 +269,38 @@ fn a_turned_region_is_measured_against_the_box_in_its_user_space() {
     assert!(at(&data, w, 12, 12)[3] < 40, "outside the diamond, inside its box on the page: {:?}", at(&data, w, 12, 12));
 }
 
+/// In a turned user space, a region in the object's bounding box (the default `filterUnits`) and a
+/// primitive's lengths in it (`primitiveUnits="objectBoundingBox"`) are measured against the
+/// object's box there: on a diamond turned an eighth of a turn, a flood over 0..100% of the box
+/// covers the diamond alone.
+#[test]
+fn a_turned_filter_measures_box_units_against_the_box_in_its_user_space() {
+    let w = 40;
+    let h = std::f64::consts::FRAC_1_SQRT_2;
+    let region = r##"<filter id="F" x="0" y="0" width="1" height="1"><feFlood flood-color="#ff0000"/></filter>"##;
+    let primitive = r##"<filter id="F" filterUnits="userSpaceOnUse" x="-1000" y="-1000" width="2000" height="2000" primitiveUnits="objectBoundingBox"><feFlood flood-color="#ff0000" x="0" y="0" width="1" height="1"/></filter>"##;
+    for xml in [region, primitive] {
+        let diamond = |x: usize, y: usize| (x as f64 - 19.5).abs() + (y as f64 - 19.5).abs() <= 10.0;
+        let mut data = image(w, w, |x, y| if diamond(x, y) { [0, 0, 255, 255] } else { [0; 4] });
+        filter(json!({ "xml": xml, "axes": [h, h, -h, h] })).apply(&mut data, w, w, &space(w, w, 1.0, 1.0));
+        assert_eq!(at(&data, w, 20, 20), [255, 0, 0, 255], "{xml}: inside the diamond");
+        assert!(at(&data, w, 12, 12)[3] < 40, "{xml}: outside the diamond, inside its box on the page: {:?}", at(&data, w, 12, 12));
+    }
+}
+
+/// SVG import stores a filter's user space again only when `scale` and `axes` together stay within
+/// what it holds: each alone can be valid while their product is not.
+#[test]
+fn a_user_space_opens_again_only_within_what_import_stores() {
+    let opens = |scale: f64, axes: serde_json::Value| filter(json!({ "xml": SHIFT_X, "scale": scale, "axes": axes })).opens_again();
+    assert!(opens(1000.0, json!(null)));
+    assert!(opens(2.0, json!([0.0, 1.0, -1.0, 0.0])));
+    assert!(!opens(1000.0, json!([2.0, 0.0, 0.0, 2.0])), "scale 2000 across");
+    assert!(!opens(0.001, json!([0.5, 0.0, 0.0, 0.5])), "scale 0.0005 across");
+    let space = user_space(Affine::new([0.0, 2.0, -2.0, 0.0, 5.0, 6.0])).unwrap();
+    assert_eq!((space.scale, space.origin, space.axes), (2.0, [5.0, 6.0], Some([0.0, 1.0, -1.0, 0.0])));
+}
+
 /// The region of a turned filter reaches as far as its turned box does.
 #[test]
 fn a_turned_region_reaches_along_the_turned_axes() {
