@@ -145,6 +145,7 @@
 @msg	`name` must be the name of a script engine	`name` moet de naam van een scriptengine zijn
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	de hoofdscriptengine is bij elke uitvoering nieuw en wordt nooit bewaard, dus kan hij niet worden verwijderd
 @msg	there is no script engine named {name}	er is geen scriptengine met de naam {name}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` is alleen voor een uitvoering zonder iemand om te vragen: in de app beantwoordt de persoon elk dialoogvenster
 @msg	Running a script	Er wordt een script uitgevoerd
 @msg	Data Recovery can't keep copies in {path}: {e}	Gegevensherstel kan geen kopieën bewaren in {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kunnen niet worden geladen uit {path}: {e}
@@ -374,6 +375,7 @@
 @msg	stops must be in order of `offset`	kleurstops moeten op volgorde van `offset` staan
 @msg	the document has no pattern {pattern}	het document heeft geen patroon {pattern}
 @msg	the document has no swatch {n}	het document heeft geen staal {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` vereist een verloopstop die aan een steunkleurstaal is gekoppeld
 @msg	the output	de uitvoer
 @msg	the path has no anchor points	het pad heeft geen ankerpunten
 @msg	too many anchor points (limit {MAX_ANCHORS})	te veel ankerpunten (limiet {MAX_ANCHORS})
@@ -1446,6 +1448,11 @@
 	NTSC Colors	NTSC-kleuren
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-beleid:
+	CMYK Policy:	CMYK-beleid:
+	Preserve Embedded Profiles	Ingesloten profielen behouden
+	Convert to Working Space	Omzetten naar werkruimte
+	Preserve Numbers	Waarden behouden
 	CMYK	CMYK
 	Texture	Textuur
 	Craquelure…	Craquelure…
@@ -1945,6 +1952,7 @@ lighting	Light	Licht
 	Align to Artboard	Uitlijnen op tekengebied
 	Align to Glyph Bounds	Uitlijnen op glyphbegrenzing
 	Align to Key Object	Uitlijnen op sleutelobject
+	Align to Key Anchor	Uitlijnen op sleutelankerpunt
 	Align to Selection	Uitlijnen op selectie
 	Align To:	Uitlijnen op:
 	Cancel Key Object	Sleutelobject annuleren
@@ -2136,6 +2144,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Cijfers
 	Scale at Center	Schalen vanuit het midden
+	Delete Set	Set verwijderen
+	Direct Entry	Directe invoer
 	Up/Down:	Omhoog/omlaag:
 	Left/Right:	Links/rechts:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko omhoog/omlaag
@@ -2419,7 +2429,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Tabulaire lining
 	Tabular Oldstyle	Tabulaire oldstyle
 	Titling Alternates	Titelalternatieven
-	Every-line Composer	Compositie per alinea
+	Middle Eastern & South Asian Single-line Composer	Compositie per regel (Midden-Oosten en Zuid-Azië)
+	Middle Eastern & South Asian Every-line Composer	Compositie per alinea (Midden-Oosten en Zuid-Azië)
+	Standard Single-line Composer	Standaardcompositie per regel
+	Standard Every-line Composer	Standaardcompositie per alinea
 	First-line Left Indent	Eerste regel links inspringen
 	Hyphenation…	Afbreken…
 	Justification…	Uitvullen…
@@ -2451,7 +2464,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Instellingen voor Oost-Aziatische zetting
 	Korean Composition Settings	Instellingen voor Koreaanse zetting
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
-	Single-line Composer	Compositie per regel
 	Toggle Line Composer	Compositiemethode wisselen
 	Space After Paragraph	Ruimte na alinea
 	Space Before Paragraph	Ruimte voor alinea
@@ -3271,6 +3283,7 @@ digits	Malayalam	Malayalam
 	Limit to Library:	Beperken tot bibliotheek:
 	Link harmony colors	Harmoniekleuren koppelen
 	Merge colors into one row	Kleuren samenvoegen in één rij
+	New Row	Nieuwe rij
 	No colors to recolor (preserved colors are left out).	Geen kleuren om opnieuw te kleuren (behouden kleuren zijn weggelaten).
 	Preserve:	Behouden:
 	Randomly change color order	Kleurvolgorde willekeurig wijzigen
@@ -3920,6 +3933,40 @@ theme	Appearance	Vormgeving
 	Create Graph	Diagram maken
 	Graph Data	Diagramgegevens
 	Graph Type	Diagramtype
+	Graph Options	Diagramopties
+	Left Axis	Linkeras
+	Right Axis	Rechteras
+	Category Axis	Categorie-as
+	Separate Scales	Aparte schalen
+	Add Drop Shadow	Slagschaduw toevoegen
+	Add Legend Across Top	Legenda bovenaan toevoegen
+	First Row in Front	Eerste rij vooraan
+	First Column in Front	Eerste kolom vooraan
+	Legend	Legenda
+	Column Width	Kolombreedte
+	Bar Width	Staafbreedte
+	Cluster Width	Groepbreedte
+	Mark Data Points	Gegevenspunten markeren
+	Connect Data Points	Gegevenspunten verbinden
+	Edge-to-Edge Lines	Lijnen van rand tot rand
+	Draw Filled Lines	Gevulde lijnen tekenen
+	Tick Values	Maatstreepwaarden
+	Override Calculated Values	Berekende waarden negeren
+	Divisions	Verdelingen
+	Tick Marks	Maatstreepjes
+	Tick Marks per Division	Maatstreepjes per verdeling
+	Draw Tick Marks Between Labels	Maatstreepjes tussen labels tekenen
+	Add Labels	Labels toevoegen
+	Maximum must be more than Minimum.	Het maximum moet groter zijn dan het minimum.
+	Column Graph	Kolomdiagram
+	Stacked Column Graph	Gestapeld kolomdiagram
+	Bar Graph	Staafdiagram
+	Stacked Bar Graph	Gestapeld staafdiagram
+	Line Graph	Lijndiagram
+	Area Graph	Vlakdiagram
+	Scatter Graph	Spreidingsdiagram
+	Pie Graph	Cirkeldiagram
+	Radar Graph	Radardiagram
 	Vector Halftone	Vectorhalftoon
 	spot	spot
 	Text	Tekst
@@ -4507,6 +4554,7 @@ axis	Both	Beide
 	Replace:	Vervangen:
 	Type on a Path Options	Opties voor tekst op pad
 	Highlight Variable	Variabele markeren
+	Sort Variables	Variabelen sorteren
 	New Variable	Nieuwe variabele
 	List Variables	Variabelen weergeven
 	Bind Variable	Variabele binden
@@ -5681,6 +5729,7 @@ imageTrace	Outline	Contour
 @msg	Image Trace failed: {e}	Afbeelding traceren is mislukt: {e}
 @msg	Image Trace finished, but its document was closed	Afbeelding traceren is voltooid, maar het document ervan is gesloten
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Afbeelding traceren is voltooid, maar de afbeelding of de instellingen ervan zijn intussen gewijzigd: traceer de afbeelding opnieuw
+@msg	Image Trace finished, but its document was reverted: trace it again	Afbeelding traceren is voltooid, maar het document ervan is teruggezet: traceer de afbeelding opnieuw
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG-filter importeren leest SVG-bestanden, geen SVGZ
 @msg	Invalid dimension offset	Ongeldige verschuiving van de maatlijn
 @msg	Invalid point	Ongeldig punt
@@ -5855,6 +5904,7 @@ imageTrace	Outline	Contour
 @msg	`names` must be an array of style names	`names` moet een array van stijlnamen zijn
 @msg	`new` is a design name, or true	`new` is de naam van een ontwerp, of true
 @msg	`origin` must be [x, y] in points	`origin` moet [x, y] in punten zijn
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` moet [a, b, c, d] zijn, elk van -1000 tot 1000, met a·d - b·c minstens 0,001 van 0 af
 @msg	`path` must be a folder	`path` moet een map zijn
 @msg	`path` must be a path object	`path` moet een padobject zijn
 @msg	`picks` must be an array (got {v})	`picks` moet een array zijn (kreeg {v})
@@ -6263,7 +6313,7 @@ imageTrace	Outline	Contour
 @msg	column: true floats the whole column and takes no onto, above or below	column: true laat de hele kolom zweven en accepteert geen onto, above of below
 @msg	command must be a shape.* command	command moet een shape.*-opdracht zijn
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` ontbreekt
-@msg	composer must be "singleLine" or "everyLine"	composer moet "singleLine" of "everyLine" zijn
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer moet "singleLine", "everyLine", "standardSingleLine" of "standardEveryLine" zijn
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	samengestelde vormen accepteren paden, samengestelde paden, groepen, samengestelde vormen, tekst, mengsels en omvormingen
 @msg	compound {_1} must contain exactly one open path to join	samengesteld object {_1} moet precies één open pad bevatten om te verbinden
 @msg	connect needs a path other than the one extended	connect heeft een ander pad nodig dan het pad dat wordt verlengd
@@ -8059,6 +8109,8 @@ mark-style	Japanese	Japans
 @msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	‘Importeren’ leest een gegevensbronbestand met de extensie .csv, .tsv, .txt of .xml
 @msg	a variable library holds text variables, and the document has none	een variabelenbibliotheek bevat tekstvariabelen, en het document heeft er geen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabele `{name}` kan niet in een variabelenbibliotheek worden opgeslagen: geef haar een naam die met een letter of `_` begint, zonder spaties of andere symbolen dan `-`, `_` en `.`
+@msg	{k} has control characters	{k} bevat stuurtekens
+@msg	{k} has control characters or line breaks	{k} bevat stuurtekens of regeleinden
 @msg	data set `{name}` holds a control character, which a variable library can't hold	gegevensset `{name}` bevat een stuurteken, dat een variabelenbibliotheek niet kan bevatten
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	gegevensset `{name}` begint of eindigt met witruimte, die een variabelenbibliotheek niet kan bevatten
 	Make Graph Dynamic	Grafiek dynamisch maken
@@ -8258,6 +8310,14 @@ swatch	Bright Violet	Felviolet
 	Color wheel	Kleurenwiel
 	First Artboard	Eerste tekenbord
 	Last Artboard	Laatste tekenbord
+	Status Bar Show	Weergeven in statusbalk
+	Artboard Name	Naam van tekenbord
+	Current Tool	Huidig gereedschap
+	Date and Time	Datum en tijd
+	Number of Undos	Aantal ongedaan gemaakte stappen
+	Document Color Profile	Kleurprofiel van document
+	Undos	Ongedaan maken
+	Redos	Opnieuw uitvoeren
 	Next Artboard	Volgende tekenbord
 	Previous Artboard	Vorige tekenbord
 	Step up or down	Stapsgewijs verhogen of verlagen
