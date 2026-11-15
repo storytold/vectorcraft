@@ -66,7 +66,7 @@ pub const PATHFINDER_EFFECT_PRECISION: std::ops::RangeInclusive<f64> = 0.001..=1
 /// The documentation of [`PATHFINDER_OPTION_KEYS`], as a literal for `concat!`.
 macro_rules! options_doc {
     () => {
-        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing; results are refit to within it and pieces thinner than it are dropped), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, the other operations ignore it)"
+        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing; results are refit to within it and pieces thinner than it are dropped), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, except that Divide keeps every piece when the group or compound shape has a visible fill of its own; the other operations ignore it)"
     };
 }
 
@@ -555,6 +555,10 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         out.extend(source.iter().skip(art).cloned());
         return Some(out);
     }
+    // The group's own fill paints its members' geometry, a compound shape's area included
+    // ([`evaluate_container`]), so with one Remove Unpainted Artwork leaves out no Divide piece.
+    // Outline's pieces are open segments, which still go by their own fill.
+    let own_fill = has_visible_fill(group);
     let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
         // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
         match compound_shape_area(doc, group, hook) {
@@ -644,7 +648,12 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         } else {
             // Divide and Outline Will Remove Unpainted Artwork: the pieces of members with no
             // visible fill go.
-            let unpainted = options.remove_unpainted && matches!(op, PathfinderOp::Divide | PathfinderOp::Outline);
+            let unpainted = options.remove_unpainted
+                && match op {
+                    PathfinderOp::Divide => !own_fill,
+                    PathfinderOp::Outline => true,
+                    _ => false,
+                };
             po::pathfinder_with(op, &shapes, options.precision)
                 .into_iter()
                 .filter(|r| !r.path.is_empty() && !(unpainted && !has_visible_fill(&sources[r.key as usize])))

@@ -4891,8 +4891,9 @@ whatever the options are then.
 
 Each Effect › Pathfinder effect (`pathfinder.add` … `pathfinder.softMix`, not Trap) keeps Pathfinder Options of its own
 in its params: `precision` (a number, 0.001–10 pt), `removeRedundantPoints` and `removeUnpainted` (true or false), which
-mean what they mean for the panel's operations; the other operations ignore `removeUnpainted`. `effect.apply` fills
-the ones `params` leave out from the current Pathfinder Options, and the values join its journal entry. An effect saved
+mean what they mean for the panel's operations; the other operations ignore `removeUnpainted`, and Divide keeps every
+piece when the group or compound shape has a visible fill of its own. `effect.apply` fills the ones `params` leave out
+from the current Pathfinder Options, and the values join its journal entry. An effect saved
 without them evaluates with precision 0.01 and both switches off, as before effects kept them. `effect.setParams
 {index, params: {precision?, removeRedundantPoints?, removeUnpainted?}}` edits them as one undo step; values the
 effect already evaluates with record no undo step and return `{ids: []}`. A precision out of range, or a switch that

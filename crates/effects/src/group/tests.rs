@@ -120,6 +120,50 @@ fn divide_and_outline_draw_nothing_for_unpainted_members() {
     }
 }
 
+/// With Remove Unpainted Artwork, Divide keeps the area of a compound shape whose own appearance
+/// has a visible fill and leaves out the area of one without. Outline's open segments of the area
+/// go either way.
+#[test]
+fn remove_unpainted_keeps_a_filled_compound_shapes_area() {
+    for effect in ["pathfinder.divide", "pathfinder.outline"] {
+        for filled in [true, false] {
+            let mut g = compound_shape(ShapeMode::Add);
+            if !filled {
+                g.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0).into();
+            }
+            g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"removeUnpainted": true}), visible: true });
+            let out = pathfinder_children(None, &g, None).unwrap();
+            let kept = filled && effect == "pathfinder.divide";
+            assert_eq!(!out.is_empty(), kept, "{effect}, filled {filled}: {out:#?}");
+        }
+    }
+}
+
+/// With Remove Unpainted Artwork, Divide keeps the pieces of an unfilled member when its group's
+/// own visible fill paints them and leaves them out when the group has no fill. Outline leaves out
+/// the member's segments either way.
+#[test]
+fn remove_unpainted_keeps_members_a_groups_own_fill_paints() {
+    let unfilled = Arc::new(Node::path(
+        NodeId(2),
+        shapes::rectangle(Rect::new(5.0, 0.0, 15.0, 10.0)),
+        Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0),
+    ));
+    for effect in ["pathfinder.divide", "pathfinder.outline"] {
+        for filled in [true, false] {
+            let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), unfilled.clone()]);
+            if filled {
+                g.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0).into();
+            }
+            g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"removeUnpainted": true}), visible: true });
+            let out = pathfinder_children(None, &g, None).unwrap();
+            assert!(out.iter().any(|n| n.id == NodeId(1)), "{effect}, filled {filled}: {out:#?}");
+            let kept = filled && effect == "pathfinder.divide";
+            assert_eq!(out.iter().any(|n| n.id == NodeId(2)), kept, "{effect}, filled {filled}: {out:#?}");
+        }
+    }
+}
+
 /// Returns an "H" in blue type at 100 pt on a baseline at y = 80, with its stems on either
 /// side of x = 100.
 fn type_h() -> Node {
