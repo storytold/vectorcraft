@@ -523,6 +523,7 @@
 	Rotate (Classic)…	Kierrä (perinteinen)…
 	Surface	Pinta
 	Wireframe	Rautalanka
+	Render Settings	Renderöintiasetukset
 	No Shading	Ei varjostusta
 	Plastic	Muovi
 	Highlight Intensity	Kiillon voimakkuus
@@ -1637,6 +1638,48 @@ digits	Malayalam	Malajalam
 	Composite Fonts	Yhdistelmäfontit
 	Export Composite Fonts	Vie yhdistelmäfontit
 	Import Composite Fonts	Tuo yhdistelmäfontit
+@msg	each font must be {name, parts}	jokaisen fontin on oltava {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	tuntematon avain `{k}`; fontti ottaa name ja parts
+@msg	each font needs a name	jokainen fontti tarvitsee nimen
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ei kelpaa yhdistelmäfontin nimeksi (1–{COMPOSITE_NAME_MAX} merkkiä, ei ohjausmerkkejä)
+@msg	`{name}`: parts must be an object	`{name}`: parts on oltava objekti
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: tuntematon luokka `{k}`; luokat ovat kanji, kana, punctuation, symbols, roman ja numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} on oltava objekti
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: tuntematon avain `{k}` osassa {_1}
+@msg	`{name}`: give the kanji part	`{name}`: anna osa kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	asiakirjassa voi olla enintään {COMPOSITE_FONTS_MAX} yhdistelmäfonttia
+@msg	two composite fonts are named `{_1}`	kahden yhdistelmäfontin nimi on `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` on asennetun fontin nimi
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} käyttää fonttia `{font}`, joka on yhdistelmäfontti
+@msg	give fonts: [{name, parts}…]	anna fonts: [{name, parts}…]
+@msg	path is empty	path on tyhjä
+@msg	fonts must be a list of composite fonts	fonts on oltava luettelo yhdistelmäfonteista
+@msg	names must be strings	names on oltava merkkijonoja
+@msg	no composite font named `{n}`	yhdistelmäfonttia `{n}` ei ole
+@msg	names must be a list of names	names on oltava luettelo nimistä
+@msg	no composite fonts to export	ei vietäviä yhdistelmäfontteja
+@msg	not a composite fonts file: {e}	ei yhdistelmäfonttitiedosto: {e}
+@msg	not a composite fonts file: no compositeFonts list	ei yhdistelmäfonttitiedosto: luettelo compositeFonts puuttuu
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	tiedostossa on yli {COMPOSITE_FONTS_MAX} yhdistelmäfonttia
+@msg	the file is larger than 4 MB	tiedosto on suurempi kuin 4 Mt
+@msg	dataBase64 is not base64	dataBase64 ei ole base64-muotoa
+@msg	give one of path, data or dataBase64	anna path, data tai dataBase64
+@msg	the file holds no composite fonts	tiedostossa ei ole yhdistelmäfontteja
+@msg	the file holds two composite fonts named `{_1}`	tiedostossa on kaksi yhdistelmäfonttia nimeltä `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` ei kelpaa yhdistelmäfontin nimeksi
+@msg	{k}: give a font	{k}: anna fontti
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: anna fontti
+@msg	{k}: size must be {_1} to {_2}%	{k}: size on oltava {_1}–{_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size on oltava {_1}–{_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline on oltava {_1}–{_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline on oltava {_1}–{_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skaalauksen on oltava {_1}–{_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skaalauksen on oltava {_1}–{_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: vain kana, roman ja numerals voidaan skaalata
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: vain kana, roman ja numerals voidaan skaalata
+@msg	{k}: only kana can be scaled at the center	{k}: vain kana voidaan skaalata keskeltä
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: vain kana voidaan skaalata keskeltä
+@msg	no composite font	ei yhdistelmäfonttia
 	Delete Font	Poista fontti
 	Kanji	Kanji
 	Kana	Kana
@@ -2736,6 +2779,8 @@ digits	Malayalam	Malajalam
 	Keep a link to an image file instead of only embedding it	Säilytä linkki kuvatiedostoon sen sijaan, että kuva vain upotetaan
 	Place onto a new locked, dimmed template layer below the current layer	Sijoita uudelle lukitulle, himmennetylle mallitasolle nykyisen tason alapuolelle
 	Swap the selected object for the file, keeping its place and transform	Korvaa valittu objekti tiedostolla säilyttäen sen paikan ja muunnoksen
+	Show Import Options	Näytä tuontiasetukset
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Kysy kunkin PDF-, DXF- tai tekstitiedoston tuontiasetukset ennen sijoittamista; pois: käytä viimeksi valittuja asetuksia
 	On: one locked object showing the document, updated when it changes.	Päällä: yksi lukittu objekti, joka näyttää asiakirjan ja päivittyy sen muuttuessa.
 	Off: an editable copy of its art, embedded in this document.	Pois: muokattava kopio sen kuvituksesta upotettuna tähän asiakirjaan.
 	Images: link to the file instead of only embedding it.	Kuvat: linkitä tiedostoon sen sijaan, että se vain upotetaan.
@@ -5935,6 +5980,7 @@ mark-style	Japanese	Japanilainen
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
 @msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektilla ei ole 3D-tehostetta (Pursota ja viistä, Pyöräytä, Täytä ilmalla tai Kierrä)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` on oltava objekti, jossa on vain `mode` arvolla shaded tai wireframe
 @msg	its 3D effect builds no solid	sen 3D-tehoste ei muodosta kappaletta
 @msg	bevel must be none or one of {_1}	bevel-arvon on oltava none tai jokin seuraavista: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ei voi muodostaa kappaleita tästä kuvituksesta: sen symbolien esiintymät, sulautukset ja leikkausryhmät sisältävät liikaa objekteja
@@ -6758,6 +6804,8 @@ axis	Y Axis	Y-akseli
 	Create New Set	Luo uusi sarja
 	Stop Global Edit	Lopeta yleismuokkaus
 	Global Edit Options	Yleismuokkauksen asetukset
+	Select Similar Objects	Valitse samankaltaiset objektit
+	Select Similar Options	Samankaltaisten valinnan asetukset
 	Leave Out of Global Edit	Jätä pois yleismuokkauksesta
 	Match	Vastaavuus
 	On Artboards	Piirtoalustoilla

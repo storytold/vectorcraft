@@ -399,7 +399,7 @@ fn control_bar_link_text(ui: &Ui) -> egui::RichText {
 /// Character controls: the Paragraph link, which opens the Paragraph panel in a popover under it,
 /// and the Align left, Align center and Align right buttons, `size` points square as the bar's others. `reserve` gives the room the controls
 /// after them keep, asked only when type is selected: short of room, the buttons are left out,
-/// then the link too. Returns whether the link shows.
+/// then the link too, each noted with [`crate::chrome::left_out`]. Returns whether the link shows.
 pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, reserve: impl FnOnce(&Ui) -> f32) -> bool {
     let Some((_, para)) = text_style(app) else { return false };
     let text = control_bar_link_text(ui);
@@ -407,6 +407,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, rese
     let room = ui.available_width() - reserve(ui);
     let link_room = link_width + ui.spacing().item_spacing.x;
     if room < link_room {
+        crate::chrome::left_out(ui);
         return false;
     }
     let link = ui.link(text).on_hover_text(tl!("Paragraph options"));
@@ -419,6 +420,8 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, rese
         ui.spacing_mut().item_spacing.x = CONTROL_BAR_BUTTON_SPACING;
         first_alignment_buttons(app, ui, &para, size, CONTROL_BAR_ALIGNMENTS);
         ui.spacing_mut().item_spacing.x = spacing;
+    } else {
+        crate::chrome::left_out(ui);
     }
     true
 }

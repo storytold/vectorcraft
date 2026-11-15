@@ -272,6 +272,46 @@ fn control_svg_export_refuses_a_linked_javascript_file_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export`, and `file.exportAs` run as a command, write no SVG that would name a linked
+/// image's file outside the read root (Images: Link, Preserve Editing Capabilities), and the error
+/// names no file or folder. Embedded pixels are written; the person at the keyboard exports the
+/// link as stored.
+#[test]
+fn control_svg_export_refuses_a_linked_image_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("svg-image");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let photo = s(base.join("outside/photo.png"));
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    std::fs::write(&photo, png).unwrap();
+    app.run("file.place", json!({"path": photo, "link": true, "at": [50, 25]})).unwrap();
+    let path = s(base.join("out/a.svg"));
+    for (method, params) in [
+        ("app.export", json!({"path": path, "format": "svg", "images": "link", "wait": true})),
+        ("app.export", json!({"path": s(base.join("out/a.svgz")), "images": "link", "wait": true})),
+        ("app.export", json!({"format": "svg", "images": "link"})),
+        ("app.export", json!({"format": "svg", "preserveEditing": true})),
+        ("engine.execute", json!({"command": "file.exportAs", "params": {"path": path, "format": "svg", "images": "link"}})),
+    ] {
+        let r = request(&mut app, &tx, method, params.clone());
+        let e = r["error"].as_str().unwrap_or_default();
+        assert!(e.contains("a linked image file is outside the read roots"), "{method} {params}: {r}");
+        assert!(!e.contains("photo.png") && !e.contains(&s(base.clone())), "{method} {params}: {r}");
+    }
+    assert_eq!(std::fs::read_dir(base.join("out")).unwrap().count(), 0, "nothing written");
+    let r = request(&mut app, &tx, "app.export", json!({"path": path, "format": "svg", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    let svg = std::fs::read_to_string(&path).unwrap();
+    assert!(svg.contains("data:image/png;base64,") && !svg.contains(&photo), "{svg}");
+    // The person at the keyboard isn't confined.
+    app.run("file.exportAs", json!({"path": path, "format": "svg", "images": "link"})).unwrap();
+    let svg = std::fs::read_to_string(&path).unwrap();
+    assert!(svg.contains(&format!("xlink:href=\"{photo}\"")), "{svg}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `app.export` with a path writes the file when given an option only another format reads, and
 /// its warnings name that option, as `document.export`'s do without a path. `file.exportAs` run
 /// as a command does the same; an export that automation did not ask for gets no such note.

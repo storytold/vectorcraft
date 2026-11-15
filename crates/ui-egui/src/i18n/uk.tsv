@@ -1188,6 +1188,7 @@ font-technology	Variable	Варіативні
 	Rotate (Classic)…	Поворот (класичний)…
 	Surface	Поверхня
 	Wireframe	Каркас
+	Render Settings	Параметри рендерингу
 	No Shading	Без затінення
 	Plastic	Пластик
 	Highlight Intensity	Інтенсивність відблиску
@@ -3651,6 +3652,8 @@ effect	Points	Точки
 	Swap Fill and Stroke (Shift+X)	Змінити заливку та обведення (Shift+X)
 	Swap start and end arrowheads	Поміняти початкову та кінцеву стрілки
 	Swap the selected object for the file, keeping its place and transform	Замінити виділений об’єкт файлом, зберігши його положення та перетворення
+	Show Import Options	Показувати параметри імпорту
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запитувати параметри імпорту кожного файлу PDF, DXF чи текстового файлу перед розміщенням; якщо вимкнено, використовуються останні вибрані параметри
 	Stylistic Alternates	Стилістичні альтернативи
 	Swash	Розчерк
 	Swatch Conflict	Конфлікт зразків
@@ -3740,6 +3743,48 @@ effect	Points	Точки
 	Composite Fonts	Складені шрифти
 	Export Composite Fonts	Експорт складених шрифтів
 	Import Composite Fonts	Імпорт складених шрифтів
+@msg	each font must be {name, parts}	кожен шрифт має бути у вигляді {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	невідомий ключ `{k}`; шрифт приймає name і parts
+@msg	each font needs a name	кожен шрифт повинен мати назву
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` не може бути назвою складеного шрифту (від 1 до {COMPOSITE_NAME_MAX} символів, без керівних символів)
+@msg	`{name}`: parts must be an object	`{name}`: parts має бути об’єктом
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: невідомий клас `{k}`; класи: kanji, kana, punctuation, symbols, roman і numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} має бути об’єктом
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: невідомий ключ `{k}` у {_1}
+@msg	`{name}`: give the kanji part	`{name}`: вкажіть частину kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	документ містить щонайбільше {COMPOSITE_FONTS_MAX} складених шрифтів
+@msg	two composite fonts are named `{_1}`	два складені шрифти мають назву `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` є назвою встановленого шрифту
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} використовує `{font}`, а це складений шрифт
+@msg	give fonts: [{name, parts}…]	вкажіть fonts: [{name, parts}…]
+@msg	path is empty	path порожній
+@msg	fonts must be a list of composite fonts	fonts має бути списком складених шрифтів
+@msg	names must be strings	names мають бути рядками
+@msg	no composite font named `{n}`	немає складеного шрифту з назвою `{n}`
+@msg	names must be a list of names	names має бути списком назв
+@msg	no composite fonts to export	немає складених шрифтів для експорту
+@msg	not a composite fonts file: {e}	це не файл складених шрифтів: {e}
+@msg	not a composite fonts file: no compositeFonts list	це не файл складених шрифтів: немає списку compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	у файлі понад {COMPOSITE_FONTS_MAX} складених шрифтів
+@msg	the file is larger than 4 MB	файл більший за 4 МБ
+@msg	dataBase64 is not base64	dataBase64 не у форматі base64
+@msg	give one of path, data or dataBase64	вкажіть path, data або dataBase64
+@msg	the file holds no composite fonts	у файлі немає складених шрифтів
+@msg	the file holds two composite fonts named `{_1}`	у файлі два складені шрифти з назвою `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` не може бути назвою складеного шрифту
+@msg	{k}: give a font	{k}: вкажіть шрифт
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: вкажіть шрифт
+@msg	{k}: size must be {_1} to {_2}%	{k}: size має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size має бути від {_1} до {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline має бути від {_1} до {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: масштаб має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: масштаб має бути від {_1} до {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: масштабувати можна лише kana, roman і numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: масштабувати можна лише kana, roman і numerals
+@msg	{k}: only kana can be scaled at the center	{k}: масштабувати від центру можна лише kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: масштабувати від центру можна лише kana
+@msg	no composite font	немає складеного шрифту
 	Delete Font	Видалити шрифт
 	Kanji	Кандзі
 	Kana	Кана
@@ -5646,6 +5691,7 @@ lighting	Light	Світло
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-ефект на заливці або обведенні групи не малює нічого для експорту
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	об’єкт не має 3D-ефекту (Видавлювання та фаска, Обертання, Надування або Повернути)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` має бути об’єктом лише з полем `mode` зі значенням shaded або wireframe
 @msg	its 3D effect builds no solid	його 3D-ефект не будує тіла
 @msg	bevel must be none or one of {_1}	bevel має бути none або одним з: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: не вдається побудувати тіла з цієї ілюстрації: її екземпляри символів, переходи та відсічні групи містять забагато об’єктів
@@ -6330,6 +6376,8 @@ axis	Y Axis	Вісь Y
 	Create New Set	Створити новий набір
 	Stop Global Edit	Завершити глобальне редагування
 	Global Edit Options	Параметри глобального редагування
+	Select Similar Objects	Виділити схожі об’єкти
+	Select Similar Options	Параметри виділення схожих
 	Leave Out of Global Edit	Виключити з глобального редагування
 	Match	Збіг
 	On Artboards	На монтажних областях

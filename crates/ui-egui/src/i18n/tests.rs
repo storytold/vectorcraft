@@ -332,6 +332,28 @@ fn languages_resolve_from_their_tags_and_name_themselves() {
     }
 }
 
+/// Turkish `Draw` labels use the drawing verb of the catalog's other drawing modes, and the
+/// accepted control names in its messages keep the spelling the command reads. The dimension
+/// scale rows keep the `drawing:real` form and say that the ratio labels a page unit.
+#[test]
+fn turkish_draw_labels_use_the_drawing_verb() {
+    let tr_lang = Lang::from_code("tr").expect("tr registered");
+    assert_eq!(tr(tr_lang, "Draw"), "Çiz");
+    assert_eq!(tr(tr_lang, "Draw:"), "Çiz:");
+    assert_eq!(tr(tr_lang, "Draw Behind"), "Arkaya Çiz");
+    let (entries, _) = parse_entries(tr_lang.0.source);
+    let tie: Vec<_> =
+        entries.iter().filter(|(_, _, t)| t.to_lowercase().contains("beraber")).map(|(_, src, t)| format!("{src:?} -> {t:?}")).collect();
+    assert!(tie.is_empty(), "Turkish rows read as a tied game:\n{}", tie.join("\n"));
+    let unknown = message(tr_lang, "unknown control `x`: fillStroke, coloring, drawMode or screenMode");
+    assert!(unknown.contains("fillStroke, coloring, drawMode veya screenMode"), "{unknown}");
+    assert_eq!(
+        tr(tr_lang, "Drawing : real size — 1:10 labels 1 unit on the page as 10."),
+        "Çizim : gerçek boyut — 1:10, sayfadaki 1 birimi 10 olarak etiketler."
+    );
+    assert_eq!(message(tr_lang, "Scale must be drawing:real, for example 1:10"), "Ölçek çizim:gerçek biçiminde olmalıdır, örneğin 1:10");
+}
+
 /// The Catalan catalog registers under `ca`, claims complete menus and messages, and passes
 /// locale resolution, vocabulary and count formatting checks.
 #[test]
@@ -2213,6 +2235,87 @@ fn script_file_messages_translate_in_every_complete_message_language() {
     }
     let de = Lang::from_code("de").expect("de registered");
     assert_eq!(message(de, "Script file access denied: C:/x/a.txt"), "Dateizugriff des Skripts verweigert: C:/x/a.txt");
+}
+
+/// Every complete-message catalog has a row for each error that `type.compositeFonts.set`,
+/// `.export` and `.import`, the composite font checks behind them and the Composite Fonts dialog
+/// give, and translates them with the font name, the key and the class key kept, and the reason
+/// after a font's name translated in turn.
+#[test]
+fn composite_font_errors_translate_in_complete_languages() {
+    const SOURCES: &[&str] = &[
+        "each font must be {name, parts}",
+        "unknown key `{k}`; a font takes name and parts",
+        "each font needs a name",
+        "`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)",
+        "`{name}`: parts must be an object",
+        "`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals",
+        "`{name}`: {_1} must be an object",
+        "`{name}`: unknown key `{k}` in {_1}",
+        "`{name}`: give the kanji part",
+        "a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts",
+        "two composite fonts are named `{_1}`",
+        "`{_1}` is the name of an installed font",
+        "`{_1}`: {_2} is set in `{font}`, a composite font",
+        "give fonts: [{name, parts}…]",
+        "path is empty",
+        "fonts must be a list of composite fonts",
+        "names must be strings",
+        "no composite font named `{n}`",
+        "names must be a list of names",
+        "no composite fonts to export",
+        "not a composite fonts file: {e}",
+        "not a composite fonts file: no compositeFonts list",
+        "the file holds more than {COMPOSITE_FONTS_MAX} composite fonts",
+        "the file is larger than 4 MB",
+        "dataBase64 is not base64",
+        "give one of path, data or dataBase64",
+        "the file holds no composite fonts",
+        "the file holds two composite fonts named `{_1}`",
+        "`{_1}` can't name a composite font",
+        "{k}: give a font",
+        "{k}: size must be {_1} to {_2}%",
+        "{k}: baseline must be {_1} to {_2}%",
+        "{k}: scale must be {_1} to {_2}%",
+        "{k}: only kana, roman and numerals can be scaled",
+        "{k}: only kana can be scaled at the center",
+        "`{name}`: {k}: give a font",
+        "`{name}`: {k}: size must be {_1} to {_2}%",
+        "`{name}`: {k}: baseline must be {_1} to {_2}%",
+        "`{name}`: {k}: scale must be {_1} to {_2}%",
+        "`{name}`: {k}: only kana, roman and numerals can be scaled",
+        "`{name}`: {k}: only kana can be scaled at the center",
+        "no composite font",
+    ];
+    // An error, English words its translation replaces, and the text it keeps.
+    let cases: &[(&str, &str, &[&str])] = &[
+        (
+            "`Mincho Mix`: unknown class `kanjj`; the classes are kanji, kana, punctuation, symbols, roman and numerals",
+            "the classes are",
+            &["`Mincho Mix`", "`kanjj`", "kanji", "kana", "punctuation", "symbols", "roman", "numerals"],
+        ),
+        ("`Mincho Mix`: give the kanji part", "give the", &["`Mincho Mix`", "kanji"]),
+        ("`Mincho Mix`: parts must be an object", "must be an object", &["`Mincho Mix`", "parts"]),
+        ("`Mincho Mix`: kana must be an object", "must be an object", &["`Mincho Mix`", "kana"]),
+        ("`Mincho Mix`: unknown key `weight` in roman", "unknown key", &["`Mincho Mix`", "`weight`", "roman"]),
+        ("two composite fonts are named `Mincho Mix`", "are named", &["`Mincho Mix`"]),
+        ("`Mincho Mix`: kana: give a font", "give a font", &["`Mincho Mix`", "kana"]),
+        ("not a composite fonts file: the file is larger than 4 MB", "larger than", &["4"]),
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: Vec<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        let missing: Vec<&&str> = SOURCES.iter().filter(|s| !rows.contains(s)).collect();
+        assert!(missing.is_empty(), "{code} has no row for {missing:?}");
+        for (error, english, kept) in cases {
+            let shown = message(lang, error);
+            assert!(!shown.contains(english), "{code}: {shown}");
+            for k in *kept {
+                assert!(shown.contains(k), "{code}: {k} in {shown}");
+            }
+        }
+    }
 }
 
 /// Spanish shows the image encoders', color profiles', swatch exchange files', Revolve's, DXF
@@ -4216,8 +4319,13 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("column must be true or a number from 1", &["column"]),
     ("column: true floats the whole column and takes no onto, above or below", &["column", "onto", "above", "below"]),
     ("control must be fillStroke, coloring, drawMode or screenMode", &["control", "fillStroke", "coloring", "drawMode", "screenMode"]),
+    ("dataBase64 is not base64", &["dataBase64"]),
     ("decimals must be {_1}–{_2} (got {_3})", &["decimals"]),
     ("detect must be true or false", &["detect"]),
+    ("each font must be {name, parts}", &["name", "parts"]),
+    ("fonts must be a list of composite fonts", &["fonts"]),
+    ("give fonts: [{name, parts}…]", &["fonts", "name", "parts"]),
+    ("give one of path, data or dataBase64", &["path", "data", "dataBase64"]),
     ("give origin: [x, y], or reset: true", &["origin", "reset"]),
     ("global must be true or false", &["global"]),
     ("group must be true or false", &["group"]),
@@ -4236,12 +4344,16 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("member is for order front, forward, backward or back", &["member", "order", "front", "forward", "backward", "back"]),
     ("mode is set, add or toggle, not `{other}`", &["mode", "set", "add", "toggle"]),
     ("names is empty", &["names"]),
+    ("names must be a list of names", &["names"]),
+    ("names must be strings", &["names"]),
+    ("not a composite fonts file: no compositeFonts list", &["compositeFonts"]),
     ("on must be true or false", &["on"]),
     ("onto must name a floating panel", &["onto"]),
     ("others must be true or false", &["others"]),
     ("page must be a whole number from 1", &["page"]),
     ("panel is not in a dock group", &["panel"]),
     ("panel must name a registered panel", &["panel"]),
+    ("path is empty", &["path"]),
     ("paths must be strings", &["paths"]),
     ("percent must be above 0 and at most 6400, not {p}", &["percent"]),
     ("plane must be left, right or ground", &["plane", "left", "right", "ground"]),
@@ -4257,6 +4369,7 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("span: \"selection\" places a linear, radial, conic or diamond gradient, not a freeform one", &["span"]),
     ("thickness must be from 0.01 to 5000 pt", &["thickness"]),
     ("title can't be empty", &["title"]),
+    ("unknown key `{k}`; a font takes name and parts", &["name", "parts"]),
     (
         "unknown light setting: use color, intensity, rotation, height, softness or behind",
         &["color", "intensity", "rotation", "height", "softness", "behind"],
@@ -4269,6 +4382,20 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("`strokeMode` applies to strokes (stroke: true)", &["stroke"]),
     ("`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`", &["symbol", "face", "x", "y", "scale", "rotation"]),
     ("`{GRAPHICS}` face must be front or back", &["face", "front", "back"]),
+    ("`{name}`: give the kanji part", &["kanji"]),
+    ("`{name}`: parts must be an object", &["parts"]),
+    (
+        "`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals",
+        &["kanji", "kana", "punctuation", "symbols", "roman", "numerals"],
+    ),
+    ("{k}: baseline must be {_1} to {_2}%", &["baseline"]),
+    ("{k}: only kana can be scaled at the center", &["kana"]),
+    ("{k}: only kana, roman and numerals can be scaled", &["kana", "roman", "numerals"]),
+    ("{k}: size must be {_1} to {_2}%", &["size"]),
+    ("`{name}`: {k}: baseline must be {_1} to {_2}%", &["baseline"]),
+    ("`{name}`: {k}: only kana can be scaled at the center", &["kana"]),
+    ("`{name}`: {k}: only kana, roman and numerals can be scaled", &["kana", "roman", "numerals"]),
+    ("`{name}`: {k}: size must be {_1} to {_2}%", &["size"]),
 ];
 
 /// Every catalog's translation of a [`NAMED_KEYS`] message keeps each name the table lists, as

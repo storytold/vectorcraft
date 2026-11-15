@@ -12,8 +12,8 @@ use crate::DocState;
 use super::super::{Result, Session, bad, check_switches, edit, number_or, switch_or, text_param};
 use super::encode::single_artboard;
 use super::{
-    ARTBOARD_PARAMS, Format, check_linked_scripts, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded,
-    write_or_return,
+    ARTBOARD_PARAMS, Format, check_images_in, check_linked_scripts, default_name, encode_all, encode_with_warnings, merge, with_black_output,
+    writable, write_encoded, write_or_return,
 };
 
 /// The keys the export commands take for every format, beside the path, the format and the
@@ -287,6 +287,8 @@ fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(C
     }
     let st = s.doc()?;
     let doc = export_doc(st, f, p)?;
+    // The objects written (all, or with selectedOnly the selected ones) are checked.
+    check_images_in(cmd, f.id, &doc, crate::cmd::links::LinkBase::of(st), p)?;
     let display_doc_title = super::has_own_title(&doc);
     Ok((super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned), display_doc_title))
 }
@@ -372,6 +374,8 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let expanded = expand_presets(s, C, p)?;
     let p = with_black_output(s, &expanded);
     let (d, bounds) = selection(s, C, f.id == "txt")?;
+    // The selected objects' links are looked for from the document they are in.
+    check_images_in(C, f.id, &d, crate::cmd::links::LinkBase::of(s.doc()?), &without_artboards(&p))?;
     // The encoder's warnings (options accepted but not applied, features approximated or left
     // out), as document.export reports them.
     let (bytes, mut warnings) = encode_with_warnings(&d, f.id, &without_artboards(&p))?;
