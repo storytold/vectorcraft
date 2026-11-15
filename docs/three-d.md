@@ -553,8 +553,10 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   face that darkens gets black over it, multiplied and overprinting, so a spot color stays on its own plate. The
   checkbox is unavailable while Shading Color is Custom
   ([Preserve Spot Color](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260)); how
-  the faces are shaded with it is VectorCraft's own. The track cube, map art, Turntable and 3D export are separate,
-  unbuilt items.
+  the faces are shaded with it is VectorCraft's own. The Black Overprint shading color keeps each face's paint and
+  draws the shading over it as overprinting black, without the highlight. The shading is on the black plate in
+  Separations Preview and PDF output. The track cube, map art, Turntable and 3D export are
+  separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 
