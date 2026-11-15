@@ -928,7 +928,8 @@ them in the Swatches panel does); give colour group names instead to reorder the
 in the app runs `paint.setFill` (or `paint.setStroke`, the active proxy) with `ids: [the object under the pointer]`.
 The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}`, `swatch.unused` (a query: the
 names Select All Unused selects; a spot swatch counts as used while an image placed from a DCS file has a plate of
-its ink), `swatch.merge {names}` (the first is kept), `swatch.ungroup {name}` and
+its ink), `swatch.merge {names}` (the first is kept; gradient stops linked to the others drop their process
+plates), `swatch.ungroup {name}` and
 `swatch.sortByKind`.
 `brush.move {name | names, to?, type?}` reorders brushes among the brushes of their type, as dragging one onto
 another of its type in the Brushes panel does. `to` is an index among the brushes of that type in `brush.list`
