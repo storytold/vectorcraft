@@ -214,6 +214,95 @@ fn user_space_starts_at_the_origin() {
     assert!((filter(json!({ "xml": half, "origin": [-10.0, 0.0] })).outset(b) - 10.0).abs() < 1e-9);
 }
 
+/// The opacity of `data` (`w` wide) after the filter `xml` with `params` runs on a blue square
+/// over 10..20 pt of a 40 pt raster one point a pixel, at each of `points`.
+fn turned_run(xml: &str, params: serde_json::Value, points: &[(usize, usize)]) -> Vec<u8> {
+    let w = 40;
+    let mut data = image(w, w, |x, y| if (10..20).contains(&x) && (10..20).contains(&y) { [0, 0, 255, 255] } else { [0; 4] });
+    let mut p = params;
+    p["xml"] = json!(xml);
+    filter(p).apply(&mut data, w, w, &space(w, w, 1.0, 1.0));
+    points.iter().map(|&(x, y)| at(&data, w, x, y)[3]).collect()
+}
+
+const SHIFT_X: &str = r#"<filter id="Shift" x="-1" y="-1" width="3" height="3"><feOffset dx="4"/></filter>"#;
+
+/// With `axes`, the filter runs in its turned or skewed user space: an offset along its x axis
+/// moves the art along that axis in the document (SVG 1.1 measures a primitive's lengths in the
+/// user space of the element the filter is on).
+#[test]
+fn a_turned_user_space_moves_the_art_along_its_own_axes() {
+    // The square spans 10..20 pt; moved 4 pt along x it covers 14..24 across.
+    let points = [(22, 15), (15, 22), (12, 11)];
+    assert_eq!(turned_run(SHIFT_X, json!({}), &points), [255, 0, 0], "the document's axes: to the right");
+    // Turned a quarter turn: the filter's x axis points down the page.
+    let down = turned_run(SHIFT_X, json!({ "axes": [0.0, 1.0, -1.0, 0.0] }), &points);
+    assert_eq!(down, [0, 255, 0], "moved down, not to the right");
+    // Skewed: one unit along y is one across and one down, so dy 4 moves the art 4 pt each way.
+    let shift_y = r#"<filter id="Shift" x="-1" y="-1" width="3" height="3"><feOffset dy="4"/></filter>"#;
+    let skewed = turned_run(shift_y, json!({ "axes": [1.0, 0.0, 1.0, 1.0] }), &[(22, 22), (11, 22), (11, 11)]);
+    assert!(skewed[0] > 200 && skewed[1] < 60 && skewed[2] < 60, "moved across and down: {skewed:?}");
+}
+
+#[test]
+fn axes_the_effect_cannot_measure_are_not_drawn() {
+    for axes in [json!([0, 0, 0, 0]), json!([1, 2]), json!([1, 0, 0, "1"]), json!([2000, 0, 0, 1]), json!([0.01, 0, 0, 0.01]), json!("turned")] {
+        let e = Effect { id: SVG_FILTER.into(), params: json!({ "xml": SHIFT_X, "axes": axes }), visible: true };
+        assert!(raster_effects(&[e]).is_empty(), "{axes}: drawn without it");
+        assert!(valid_axes(&axes).is_none(), "{axes}");
+    }
+    assert_eq!(valid_axes(&json!([0, 1, -1, 0])), Some(Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0])));
+}
+
+/// A region measured against the object's box is measured against its box in the turned user
+/// space: a diamond turned an eighth of a turn is a square there, and a flood over 0..100% of it
+/// covers the diamond alone.
+#[test]
+fn a_turned_region_is_measured_against_the_box_in_its_user_space() {
+    let w = 40;
+    let diamond = |x: usize, y: usize| (x as f64 - 19.5).abs() + (y as f64 - 19.5).abs() <= 10.0;
+    let mut data = image(w, w, |x, y| if diamond(x, y) { [0, 0, 255, 255] } else { [0; 4] });
+    let flood = r##"<filter id="F" filterUnits="userSpaceOnUse" x="0%" y="0%" width="100%" height="100%"><feFlood flood-color="#ff0000"/></filter>"##;
+    let h = std::f64::consts::FRAC_1_SQRT_2;
+    filter(json!({ "xml": flood, "axes": [h, h, -h, h] })).apply(&mut data, w, w, &space(w, w, 1.0, 1.0));
+    assert_eq!(at(&data, w, 20, 20), [255, 0, 0, 255], "inside the diamond");
+    assert!(at(&data, w, 12, 12)[3] < 40, "outside the diamond, inside its box on the page: {:?}", at(&data, w, 12, 12));
+}
+
+/// The region of a turned filter reaches as far as its turned box does.
+#[test]
+fn a_turned_region_reaches_along_the_turned_axes() {
+    let b = Rect::new(0.0, 0.0, 50.0, 50.0);
+    let user = r#"<filter id="u" filterUnits="userSpaceOnUse" x="-30" y="-5" width="100" height="100"><feOffset/></filter>"#;
+    assert!((filter(json!({ "xml": user })).outset(b) - 45.0).abs() < 1e-9, "45 pt below the box");
+    // A quarter turn: user y runs to the left of the page, so -5..95 of it lies 95 pt left of the box.
+    assert!((filter(json!({ "xml": user, "axes": [0.0, 1.0, -1.0, 0.0] })).outset(b) - 95.0).abs() < 1e-9);
+}
+
+/// A filter skewed as far as `axes` allows runs on a canvas no larger than four times the raster's
+/// pixels, however far the skew spreads the raster's box in its user space.
+#[test]
+fn a_skewed_filter_runs_within_its_pixel_budget() {
+    let (w, h) = (64, 48);
+    let f = filter(json!({ "xml": SHIFT_X, "axes": [1.0, 0.0, 999.0, 1.0] }));
+    let (cw, ch, ..) = f.turned_canvas(w, h, 1.0, &space(w, h, 1.0, 1.0)).unwrap();
+    let (cw, ch) = (f64::from(cw), f64::from(ch));
+    assert!(cw * ch <= TURNED_ROOM * (w * h) as f64 + cw + ch + 1.0, "{cw} × {ch}");
+    // It still draws.
+    let mut data = image(w, h, |x, y| if (20..40).contains(&x) && (10..30).contains(&y) { [0, 0, 255, 255] } else { [0; 4] });
+    f.apply(&mut data, w, h, &space(w, h, 1.0, 1.0));
+    // A plain quarter turn keeps the raster's own pixel size.
+    let turned = filter(json!({ "xml": SHIFT_X, "axes": [0.0, 1.0, -1.0, 0.0] }));
+    let (cw, ch, outer, _) = turned.turned_canvas(w, h, 1.0, &space(w, h, 1.0, 1.0)).unwrap();
+    assert_eq!((cw, ch), (48, 64));
+    assert!((outer.determinant() - 1.0).abs() < 1e-9);
+    // Stretched 100 times across and squeezed 100 times down: each canvas axis keeps the raster's
+    // detail along it, not one column of it.
+    let stretched = filter(json!({ "xml": SHIFT_X, "axes": [100.0, 0.0, 0.0, 0.01] }));
+    let (cw, ch, ..) = stretched.turned_canvas(100, 100, 1.0, &space(100, 100, 1.0, 1.0)).unwrap();
+    assert_eq!((cw, ch), (100, 100));
+}
+
 #[test]
 fn runs_no_finer_than_the_raster_effects_resolution() {
     let w = 16;
@@ -440,7 +529,8 @@ fn a_region_measured_against_the_box_is_written_out() {
     let far = r#"<filter id="r" filterUnits="userSpaceOnUse" x="-50%" y="0" width="200%" height="10"><feOffset/></filter>"#;
     let f = filter(json!({ "xml": far, "origin": [10.0, 0.0] }));
     assert_eq!(
-        f.written_xml(Rect::new(10.0, 0.0, 30.0, 10.0)).as_deref(),
+        // The object over 10..30 pt of the page: 0..20 of the user space that starts at the origin.
+        f.written_xml(Rect::new(0.0, 0.0, 20.0, 10.0)).as_deref(),
         Some(r#"<filter id="r" filterUnits="userSpaceOnUse" x="-10" y="0" width="40" height="10"><feOffset/></filter>"#)
     );
     let plain = filter(json!({ "xml": RED_FLOOD }));

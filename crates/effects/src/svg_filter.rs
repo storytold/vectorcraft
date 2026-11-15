@@ -1,7 +1,8 @@
 //! Effect › SVG Filters (`svg.filter`): an SVG `<filter>` element applied as a live raster effect.
 //! The filter runs on the object's pixels as SVG 1.1 describes it
 //! (<https://www.w3.org/TR/SVG11/filters.html>), drawn by resvg. Its lengths are in points times
-//! the effect's `scale`, its user space starts at the effect's `origin`, its object bounding box is the box of the drawn pixels, and it runs at the
+//! the effect's `scale`, its user space starts at the effect's `origin`, its axes point as the effect's `axes` say (a turned or
+//! skewed user space), its object bounding box is the box of the drawn pixels, and it runs at the
 //! Document Raster Effects resolution when the view shows the object at a finer one.
 
 use std::sync::Arc;
@@ -1224,13 +1225,16 @@ fn region_length(v: Option<&str>, default: f64, user: bool) -> Length {
 }
 
 /// An SVG filter effect: the filter's XML, how many points one of its units is, where its user
-/// space's origin lies in the document, and its region.
+/// space's origin lies in the document, which way its axes point, and its region.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SvgFilterFx {
     /// The filter as it is drawn and written ([`rebuilt`]).
     xml: Arc<str>,
     scale: f64,
     origin: Vec2,
+    /// The directions of the user space's axes in the document, before `scale` ([`axes_param`]):
+    /// the identity unless the user space is turned, skewed or scaled unevenly.
+    axes: Affine,
     /// Its region (filter effects region): x, y, width, height.
     region: [Length; 4],
     /// Is the region in user space with a length measured against the object's box? It is then
@@ -1250,11 +1254,49 @@ fn origin_param(p: &Value) -> Vec2 {
     Vec2::new(at(0), at(1))
 }
 
+/// The largest magnitude of an entry of an SVG filter effect's `axes`.
+pub const MAX_AXIS: f64 = 1000.0;
+
+/// The smallest magnitude of the determinant of an SVG filter effect's `axes`.
+pub const MIN_AXES_DET: f64 = 0.001;
+
+/// The `axes` of an SVG filter effect's parameters `p`: `[a, b, c, d]`, the document directions
+/// of one unit along the filter's x axis (`[a, b]`) and its y axis (`[c, d]`), before `scale`.
+/// The identity when absent; `None` when it isn't four numbers from -[`MAX_AXIS`] to [`MAX_AXIS`]
+/// whose determinant is at least [`MIN_AXES_DET`] across ([`valid_axes`]).
+fn axes_param(p: &Value) -> Option<Affine> {
+    match p.get("axes") {
+        None | Some(Value::Null) => Some(Affine::IDENTITY),
+        Some(v) => valid_axes(v),
+    }
+}
+
+/// `v` as the linear map of an SVG filter effect's `axes` ([`axes_param`]), when it is one.
+pub fn valid_axes(v: &Value) -> Option<Affine> {
+    let n: Vec<f64> = v.as_array()?.iter().map(Value::as_f64).collect::<Option<_>>()?;
+    let [a, b, c, d] = <[f64; 4]>::try_from(n).ok()?;
+    let det = a * d - b * c;
+    ([a, b, c, d].iter().all(|v| v.is_finite() && v.abs() <= MAX_AXIS) && det.abs() >= MIN_AXES_DET).then(|| Affine::new([a, b, c, d, 0.0, 0.0]))
+}
+
+/// The longest a unit vector becomes under the linear part of `a` (its largest singular value).
+fn stretch(a: Affine) -> f64 {
+    let [a, b, c, d, _, _] = a.as_coeffs();
+    let sum = a * a + b * b + c * c + d * d;
+    let det = a * d - b * c;
+    (0.5 * (sum + (sum * sum - 4.0 * det * det).max(0.0).sqrt())).sqrt()
+}
+
+/// How many times the raster's pixels a turned filter's canvas may hold ([`SvgFilterFx::turned_canvas`]).
+const TURNED_ROOM: f64 = 4.0;
+
 impl SvgFilterFx {
-    /// The effect's parameters `p` (defaults merged in): `xml`, the `<filter>` element, `scale`
-    /// and `origin`. `None` when `xml` isn't a filter [`check`] takes, however the effect came to
-    /// hold it (an opened file, a script): the object is then drawn, printed and exported without it.
+    /// The effect's parameters `p` (defaults merged in): `xml`, the `<filter>` element, `scale`,
+    /// `origin` and `axes`. `None` when `xml` isn't a filter [`check`] takes, or `axes` isn't
+    /// valid ([`axes_param`]), however the effect came to hold it (an opened file, a script): the
+    /// object is then drawn, printed and exported without it.
     pub(crate) fn parse(p: &Value) -> Option<Self> {
+        let axes = axes_param(p)?;
         let xml = checked(text(p, "xml", ""))?;
         let (wrapped, _) = wrap(&xml);
         let doc = roxmltree::Document::parse(&wrapped).ok()?;
@@ -1273,7 +1315,17 @@ impl SvgFilterFx {
         let (window, blur) = (largest(&["radius", "kernelUnitLength"]), largest(&["stdDeviation"]));
         let box_units = f.attribute("primitiveUnits").is_some_and(|u| u.trim() == "objectBoundingBox");
         let scale = num(p, "scale", 1.0).clamp(1e-3, 1e3);
-        Some(Self { xml, scale, origin: origin_param(p), region, measured, window, blur, box_units })
+        Some(Self { xml, scale, origin: origin_param(p), axes, region, measured, window, blur, box_units })
+    }
+
+    /// The filter's user space → the document: moved to `origin`, scaled by `scale`, along `axes`.
+    pub fn to_doc(&self) -> Affine {
+        Affine::translate(self.origin) * Affine::scale(self.scale) * self.axes
+    }
+
+    /// The box of `bounds` (document units) in the filter's user space.
+    fn user_box(&self, bounds: Rect) -> Rect {
+        self.to_doc().inverse().transform_rect_bbox(bounds)
     }
 
     /// The filter's region in its user space for an object whose box there is `b`: lengths in user
@@ -1308,11 +1360,11 @@ impl SvgFilterFx {
         with_attributes(xml, &[("x", r.x0), ("y", r.y0), ("width", r.width()), ("height", r.height())])
     }
 
-    /// The filter as SVG output writes it (one unit a point, [`Self::in_points`]) for an object
-    /// whose box in the document is `bounds`: in its SVG 1.1 form ([`svg11`]), `None` when SVG 1.1
-    /// can't hold it ([`Self::writes_as_svg11`]).
-    pub fn written_xml(&self, bounds: Rect) -> Option<String> {
-        let out = self.with_region(&self.svg11_form()?, (bounds - self.origin).scale_from_origin(1.0 / self.scale))?;
+    /// The filter as SVG output writes it, in its user space ([`Self::to_doc`]), for an object
+    /// whose box in that user space is `user_box`: in its SVG 1.1 form ([`svg11`]), `None` when SVG
+    /// 1.1 can't hold it ([`Self::writes_as_svg11`]).
+    pub fn written_xml(&self, user_box: Rect) -> Option<String> {
+        let out = self.with_region(&self.svg11_form()?, user_box)?;
         (written_len(&out) <= MAX_WRITTEN_XML).then_some(out)
     }
 
@@ -1346,9 +1398,10 @@ impl SvgFilterFx {
             return 1.0;
         }
         let mut s: f64 = if space.line.is_finite() && space.line > 0.0 { (space.px / space.line).min(1.0) } else { 1.0 };
-        // A length spans length × scale / px raster pixels, or a fraction of the box.
+        // A length spans at most length × scale × the axes' stretch / px raster pixels, or a fraction of the box.
+        let reach = self.scale * stretch(self.axes);
         for (length, most) in [(self.window, MAX_WINDOW_PX), (self.blur, MAX_BLUR_PX)] {
-            let px = if self.box_units { length * box_px.max(0.0) } else { length * self.scale / space.px };
+            let px = if self.box_units { length * box_px.max(0.0) } else { length * reach / space.px };
             if px * s > most {
                 s = most / px;
             }
@@ -1374,15 +1427,15 @@ impl SvgFilterFx {
         self.measured
     }
 
-    /// Does one unit of the filter's user space measure one point (its `scale` is 1)?
-    pub fn in_points(&self) -> bool {
-        self.scale == 1.0
+    /// Is the filter's user space the document's, only moved: one unit a point, its axes the
+    /// document's (`scale` 1, no `axes`)?
+    pub fn moves_only(&self) -> bool {
+        self.scale == 1.0 && self.axes == Affine::IDENTITY
     }
 
     /// How far beyond `bounds` (document units) the filter can draw: its region's reach past them.
     pub fn outset(&self, bounds: Rect) -> f64 {
-        let b = (bounds - self.origin).scale_from_origin(1.0 / self.scale);
-        let region = self.region_in(b).scale_from_origin(self.scale) + self.origin;
+        let region = self.to_doc().transform_rect_bbox(self.region_in(self.user_box(bounds)));
         let reach = [bounds.x0 - region.x0, bounds.y0 - region.y0, region.x1 - bounds.x1, region.y1 - bounds.y1].into_iter().fold(0.0, f64::max);
         if reach.is_finite() { reach.min(MAX_OUTSET) } else { 0.0 }
     }
@@ -1398,13 +1451,26 @@ impl SvgFilterFx {
         // Art that draws no pixels still has a box: the whole raster stands for it.
         let (x0, y0, x1, y1) = drawn_box(data, w, h).unwrap_or((0, 0, w, h));
         let s = self.resolution(space, (x1 - x0).max(y1 - y0) as f64);
-        let (sw, sh) = ((w as f64 * s).ceil().max(1.0) as u32, (h as f64 * s).ceil().max(1.0) as u32);
+        let user = self.to_doc();
+        // Filter user space → the small canvas, and the small canvas → the raster's pixels.
+        let (sw, sh, outer, back) = if self.axes == Affine::IDENTITY {
+            let (sw, sh) = ((w as f64 * s).ceil().max(1.0) as u32, (h as f64 * s).ceil().max(1.0) as u32);
+            (sw, sh, Affine::scale(s) * space.to_doc.inverse() * user, Affine::scale(1.0 / s))
+        } else {
+            let Some(canvas) = self.turned_canvas(w, h, s, space) else { return };
+            canvas
+        };
         let Some(png) = png_of(data, w, x0, y0, x1, y1).map(Arc::new) else { return };
-        let k = self.scale;
-        // Filter user space → the small canvas, and the image's pixels → filter user space.
-        let outer = Affine::scale(s) * space.to_doc.inverse() * Affine::translate(self.origin) * Affine::scale(k);
-        let place = Affine::scale(1.0 / k) * Affine::translate(-self.origin) * space.to_doc * Affine::translate(Vec2::new(x0 as f64, y0 as f64));
-        let b = place.transform_rect_bbox(Rect::new(0.0, 0.0, (x1 - x0) as f64, (y1 - y0) as f64));
+        // The image's pixels → filter user space.
+        let place = user.inverse() * space.to_doc * Affine::translate(Vec2::new(x0 as f64, y0 as f64));
+        // The object's box in user space: in a turned or skewed one, the box of its pixels turned
+        // into it, not of their box in the raster.
+        let b = if self.axes == Affine::IDENTITY {
+            place.transform_rect_bbox(Rect::new(0.0, 0.0, (x1 - x0) as f64, (y1 - y0) as f64))
+        } else {
+            let Some(b) = turned_box(data, w, user.inverse() * space.to_doc) else { return };
+            b
+        };
         let Some(drawn) = self.drawn_xml(b).and_then(|xml| with_id(&xml, DRAWN_ID)) else { return };
         let svg = format!(
             "<svg xmlns=\"{SVG_NS}\" xmlns:xlink=\"{XLINK_NS}\" width=\"{sw}\" height=\"{sh}\" viewBox=\"0 0 {sw} {sh}\"><defs>{drawn}</defs><g transform=\"{}\"><g filter=\"url(#{DRAWN_ID})\"><image width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" transform=\"{}\" xlink:href=\"data:image/png;base64,{}\"/></g></g></svg>",
@@ -1420,18 +1486,50 @@ impl SvgFilterFx {
         }
         let Some(mut small) = tiny_skia::Pixmap::new(sw, sh) else { return };
         resvg::render(&tree, tiny_skia::Transform::identity(), &mut small.as_mut());
-        let out = if s < 1.0 {
+        let out = if back == Affine::IDENTITY {
+            small
+        } else {
             let Some(mut full) = tiny_skia::Pixmap::new(w as u32, h as u32) else { return };
             let paint = tiny_skia::PixmapPaint { quality: tiny_skia::FilterQuality::Bilinear, ..Default::default() };
-            let up = (1.0 / s) as f32;
-            full.draw_pixmap(0, 0, small.as_ref(), &paint, tiny_skia::Transform::from_scale(up, up), None);
+            let [a, b, c, d, e, f] = back.as_coeffs().map(|v| v as f32);
+            full.draw_pixmap(0, 0, small.as_ref(), &paint, tiny_skia::Transform::from_row(a, b, c, d, e, f), None);
             full
-        } else {
-            small
         };
         if out.data().len() == data.len() {
             data.copy_from_slice(out.data());
         }
+    }
+
+    /// The canvas a filter whose user space is turned, skewed or scaled unevenly runs on, for a
+    /// `w` × `h` raster lying in the document as `space` says, at resolution `s`
+    /// ([`Self::resolution`]): its axes are the user space's, so the filter's offsets, blurs and
+    /// other lengths run along them as SVG 1.1 measures them, and it covers what the raster shows.
+    /// Along each of its axes its pixels are about as large as the raster's at `s`, and coarser when it would hold more
+    /// than [`TURNED_ROOM`] times as many pixels as the raster does at `s`. Returns its size, the
+    /// map from user space to it, and the map from it to the raster's pixels; `None` when the
+    /// spaces can't be measured.
+    fn turned_canvas(&self, w: usize, h: usize, s: f64, space: &PixelSpace) -> Option<(u32, u32, Affine, Affine)> {
+        let to_px = space.to_doc.inverse() * self.to_doc();
+        let ub = to_px.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let most = ((w as f64 * s).ceil().max(1.0) * (h as f64 * s).ceil().max(1.0) * TURNED_ROOM).max(1.0);
+        // Canvas pixels a unit along each axis of the user space: as many as the raster's at `s`.
+        let [a, b, c, d, _, _] = to_px.as_coeffs();
+        let (mut qx, mut qy) = (s * a.hypot(b), s * c.hypot(d));
+        let pixels = ub.width() * qx * ub.height() * qy;
+        if pixels > most {
+            let k = (most / pixels).sqrt();
+            (qx, qy) = (qx * k, qy * k);
+        }
+        if !(qx.is_finite() && qx > 0.0 && qy.is_finite() && qy > 0.0 && ub.is_finite()) {
+            return None;
+        }
+        let (cw, ch) = ((ub.width() * qx).ceil().max(1.0), (ub.height() * qy).ceil().max(1.0));
+        // Rounding up adds at most a row and a column.
+        if cw * ch > most + cw + ch + 1.0 {
+            return None;
+        }
+        let outer = Affine::scale_non_uniform(qx, qy) * Affine::translate(Vec2::new(-ub.x0, -ub.y0));
+        Some((cw as u32, ch as u32, outer, to_px * outer.inverse()))
     }
 }
 
@@ -1448,6 +1546,27 @@ fn drawn_box(data: &[u8], w: usize, h: usize) -> Option<(usize, usize, usize, us
         }
     }
     (x1 > x0 && y1 > y0).then_some((x0, y0, x1, y1))
+}
+
+/// The box, under the map `a` from pixel coordinates, of the pixels of `data` (`w` wide) that aren't
+/// transparent, or of the whole raster when all are. Under a map that keeps lines straight, a row's
+/// farthest corners are those of its first and last such pixel, so each row is measured by those two.
+fn turned_box(data: &[u8], w: usize, a: Affine) -> Option<Rect> {
+    let px = data.as_chunks::<4>().0;
+    let h = px.len().checked_div(w)?;
+    let mut out: Option<Rect> = None;
+    let mut add = |x: usize, y: usize| {
+        let r = a.transform_rect_bbox(Rect::new(x as f64, y as f64, x as f64 + 1.0, y as f64 + 1.0));
+        out = Some(out.map_or(r, |o| o.union(r)));
+    };
+    for y in 0..h {
+        let row = px.get(y * w..(y + 1) * w)?;
+        if let (Some(first), Some(last)) = (row.iter().position(|p| p[3] > 0), row.iter().rposition(|p| p[3] > 0)) {
+            add(first, y);
+            add(last, y);
+        }
+    }
+    out.or_else(|| (w > 0 && h > 0).then(|| a.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64))))
 }
 
 /// The pixels of `data` (premultiplied RGBA8, `w` wide) in columns x0..x1 and rows y0..y1, as a PNG.

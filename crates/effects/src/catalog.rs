@@ -859,7 +859,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
         crate::SVG_FILTER,
         "SVG Filter",
         &["Effect", "SVG Filters"],
-        "{name: string (the filter's id), xml: string (one SVG <filter> element with an id and 1..64 primitives, at most 64 KB), scale: number 0.001..1000 (1; points per unit of the filter's user space), origin: [x, y] pt ([0, 0]; where the filter's user space starts in the document)} runs the SVG filter on the object's pixels, its lengths in points times scale, at the Document Raster Effects resolution or finer; svgFilter.apply applies one of the document's filters (svgFilter.list)",
+        "{name: string (the filter's id), xml: string (one SVG <filter> element with an id and 1..64 primitives, at most 64 KB), scale: number 0.001..1000 (1; points per unit of the filter's user space), origin: [x, y] pt ([0, 0]; where the filter's user space starts in the document), axes?: [a, b, c, d] (absent: the document's axes; the document directions of one unit along the filter's x axis [a, b] and y axis [c, d] before scale, each -1000..1000, with a·d - b·c at least 0.001 from 0; a turned, skewed or unevenly scaled user space, as SVG import gives a filtered element under a rotate, skew or uneven scale; the filter's offsets, blurs and region run along these axes)} runs the SVG filter on the object's pixels, its lengths in points times scale, at the Document Raster Effects resolution or finer; svgFilter.apply applies one of the document's filters (svgFilter.list)",
         json!({"scale": 1.0, "origin": [0.0, 0.0]}),
     ));
     v

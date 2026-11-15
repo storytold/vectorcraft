@@ -113,22 +113,56 @@ fn source_of<'a>(filter: &Filter, sources: &'a HashMap<String, Source>) -> Optio
 /// XML from `sources` ([`sources`]), in user space mapped to the document by `ts`. `None` when one
 /// isn't there, looks different outside the document, or isn't a filter the effect draws
 /// ([`vectorcraft_effects::svg_filter::check`]), or
-/// when `ts` turns or skews the user space or scales it past what the effect measures (0.001 to
-/// 1000 points to a unit). Where `ts` moves the user space is the effect's `origin`.
+/// when `ts` scales the user space past what the effect measures (0.001 to 1000 points to a unit,
+/// as the square root of its area scale) or stretches its axes past what the effect's `axes` hold.
+/// Where `ts` moves the user space is the effect's `origin`; a user space that `ts` turns, skews
+/// or scales unevenly keeps those directions in the effect's `axes`, so the filter runs in the
+/// element's own user space as SVG 1.1 defines it (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>).
 pub(super) fn kept(filters: &[Arc<Filter>], ts: Affine, sources: &HashMap<String, Source>) -> Option<Vec<Effect>> {
-    let [a, b, c, d, e, f] = ts.as_coeffs();
-    if b != 0.0 || c != 0.0 || !(0.001..=1000.0).contains(&a) || (a - d).abs() > 1e-9 * a.abs().max(1.0) || !e.is_finite() || !f.is_finite() {
-        return None;
-    }
+    let space = user_space(ts)?;
     filters
         .iter()
         .map(|filter| {
             // A filter styled by the document is left out rather than drawn differently.
             let source = source_of(filter, sources).filter(|s| !s.styled)?;
-            let params = json!({ "name": source.name()?, "xml": source.xml, "scale": a, "origin": [e, f] });
+            let mut params = json!({ "name": source.name()?, "xml": source.xml, "scale": space.scale, "origin": space.origin });
+            if let Some(axes) = space.axes {
+                params["axes"] = json!(axes);
+            }
             Some(Effect { id: vectorcraft_effects::SVG_FILTER.into(), params, visible: true })
         })
         .collect()
+}
+
+/// A filter's user space as the SVG filter effect stores it ([`user_space`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct UserSpace {
+    scale: f64,
+    origin: [f64; 2],
+    /// `None` when the axes are the document's.
+    axes: Option<[f64; 4]>,
+}
+
+/// `ts`, a user space mapped to the document, as the SVG filter effect's `scale` (the square root
+/// of its area scale), `origin` and, when it turns, skews or scales unevenly, `axes`. `None` when
+/// it can't be stored: not finite, `scale` outside 0.001..1000, or `axes` the effect refuses
+/// ([`vectorcraft_effects::svg_filter::valid_axes`]).
+fn user_space(ts: Affine) -> Option<UserSpace> {
+    let [a, b, c, d, e, f] = ts.as_coeffs();
+    if ![a, b, c, d, e, f].iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let scale = ts.determinant().abs().sqrt();
+    if !(0.001..=1000.0).contains(&scale) {
+        return None;
+    }
+    let even = b == 0.0 && c == 0.0 && a > 0.0 && (a - d).abs() <= 1e-9 * a.max(1.0);
+    if even {
+        return Some(UserSpace { scale: a, origin: [e, f], axes: None });
+    }
+    let axes = [a, b, c, d].map(|v| v / scale);
+    vectorcraft_effects::svg_filter::valid_axes(&json!(axes))?;
+    Some(UserSpace { scale, origin: [e, f], axes: Some(axes) })
 }
 
 /// The object's alpha, blurred (σ), moved and maybe inverted.

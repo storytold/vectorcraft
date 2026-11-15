@@ -473,7 +473,9 @@ fn imaged(n: &Node, which: Which) -> bool {
             let live = filters
                 && pixels == 1
                 && effects::svg_filter::writes_live(&n.appearance.effects)
-                && fx.iter().any(|f| matches!(f, RasterFx::Pixel(effects::PixelFx::Svg(s)) if s.in_points() && (!s.measured() || fx.len() == 1) && s.writes_as_svg11()));
+                && fx
+                    .iter()
+                    .any(|f| matches!(f, RasterFx::Pixel(effects::PixelFx::Svg(s)) if (!s.measured() || fx.len() == 1) && s.writes_as_svg11()));
             (pixels > 0 && !live)
                 || (fx.iter().any(|f| matches!(f, RasterFx::DropShadow { darkness: Some(_), .. })) && (cmyk || !simple_rgb_shadow_source(n, &fx)))
         }
