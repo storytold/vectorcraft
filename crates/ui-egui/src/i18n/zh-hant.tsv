@@ -5953,6 +5953,8 @@ lighting	Light	光源
 	Save Variable Library…	儲存變數資料庫…
 @msg	a variable library holds text variables, and the document has none	變數資料庫包含文字變數，但文件中沒有文字變數
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	無法將變數 `{name}` 儲存到變數資料庫：請重新命名，使其以字母或 `_` 開頭，且不含空格或 `-`、`_`、`.` 以外的符號
+@msg	{k} has control characters	{k} 包含控制字元
+@msg	{k} has control characters or line breaks	{k} 包含控制字元或換行
 @msg	data set `{name}` holds a control character, which a variable library can't hold	資料集 `{name}` 包含變數資料庫無法儲存的控制字元
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	資料集 `{name}` 的開頭或結尾有變數資料庫無法儲存的空白字元
 	Make Graph Dynamic	使圖表動態化
@@ -6248,6 +6250,7 @@ axis	Y Axis	Y 軸
 @msg	stops must be in order of `offset`	色標必須依 `offset` 排序
 @msg	the document has no pattern {pattern}	文件中沒有圖樣 {pattern}
 @msg	the document has no swatch {n}	文件中沒有色票 {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` 需要連結到特別色色票的漸層色標
 @msg	the output	輸出
 @msg	the path has no anchor points	路徑沒有錨點
 @msg	too many anchor points (limit {MAX_ANCHORS})	錨點過多（上限 {MAX_ANCHORS}）
