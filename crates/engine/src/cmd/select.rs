@@ -8,6 +8,7 @@ use vectorcraft_doc::{Document, LockedArtboards, Node, NodeId, NodeKind};
 use vectorcraft_tools::builder::is_live_paint;
 
 use super::object::can_align;
+use super::panelcmds::artboard_at;
 use super::wand::{fill_of, stroke_of};
 use super::{
     CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index, ok, str_param,
@@ -31,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "All on Active Artboard",
             ["Select"],
             Some("Cmd+Alt+A"),
-            "{artboard?: index (0-based; the app passes the active one; default: the first)}",
+            "{artboard?: index (0-based whole number; the app passes the active one; default, or null: the first)}",
             has_doc,
             all_on_artboard
         ),
@@ -360,7 +361,7 @@ fn all(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn all_on_artboard(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let i = p.get("artboard").and_then(Value::as_u64).map_or(0, index);
+    let i = artboard_at(&st.doc, p, "artboard", "select.allOnArtboard")?.unwrap_or(0);
     let r = st.doc.artboards.get(i).map(|a| a.rect).ok_or_else(|| bad("select.allOnArtboard", "no such artboard"))?;
     let symbols = st.doc.symbol_boxes();
     let ids: Vec<NodeId> =
