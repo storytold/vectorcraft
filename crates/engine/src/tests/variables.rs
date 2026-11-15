@@ -2665,6 +2665,11 @@ fn malformed_variable_libraries_are_refused() {
     let long_graph = format!("<Shown><data><values>{}</values></data></Shown>", row.repeat(2_000));
     let cases = [
         ("not well-formed XML", "<variableSets><variableSet>".to_string()),
+        ("not well-formed XML", ok.replace("<p>x</p>", "<p>A&missing;B</p>")),
+        ("not well-formed XML", ok.replace("</variableSets>", "")),
+        ("not well-formed XML", ok.replace("varName=\"Name\"", "varName=\"Name\" varName=\"Other\"")),
+        ("not well-formed XML", ok.replace("<variable ", "<variable xmlns:a=\"urn:test\" xmlns:b=\"urn:test\" a:id=\"1\" b:id=\"2\" ")),
+        ("missing `varName`", ok.replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Name\"")),
         ("no `variableSets` element", "<svg><variables/></svg>".to_string()),
         ("declares no variables", "<variableSets><variableSet><variables/></variableSet></variableSets>".to_string()),
         ("is declared twice", library(&[("Name", "textcontent"), ("Name", "textcontent")], &[])),
@@ -3543,6 +3548,17 @@ fn variable_sort_orders_the_list_by_each_column() {
         assert_eq!(listed_names(&mut s), reversed, "{by}, descending");
         assert_eq!(s.execute("variable.list", &json!({})).unwrap()["sort"], json!({"by": by, "descending": true}));
     }
+}
+
+#[test]
+fn variable_library_attributes_keep_their_namespace() {
+    let mut s = session();
+    let xml = library(&[("Name", "textcontent")], &[("A", &[("Name", &["x"])])])
+        .replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Other\" varName=\"Name\"");
+    let loaded = s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(loaded["variables"], json!(["Name"]));
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "x"}}));
 }
 
 /// The sort is panel state: it is not an undo step and does not count as a change to save, and
