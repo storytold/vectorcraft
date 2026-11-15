@@ -11116,6 +11116,16 @@ picked point's color, and `fillMixed` compares the picked points' colors with ea
 selected objects. The Transparency panel shows the picked points' opacity (blank when it differs), and the Control
 bar shows the first picked point's opacity.
 
+A solid color dragged from the Color or Swatches panel or a Fill proxy and dropped on a selected gradient mesh, while the
+Fill proxy is active, recolors the mesh point under the pointer (within 5 screen pixels), else the four points around the
+patch there, as `object.mesh.setPointColor {id, points, color, keepModel: true}`. With a gradient mesh selected and a
+solid fill color set, a plain Eyedropper click does the same with the fill color: on a point of any selected mesh, or
+inside a patch of the selected mesh the click hits. A gradient, a pattern, a fill of None, a stroke proxy or a mesh that
+is not selected keeps the earlier behavior (the whole object takes the paint, and the Eyedropper copies the appearance),
+and so does an unselected object on top of the mesh at that place.
+See [Edit mesh objects](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=312);
+the 5-pixel reach is VectorCraft's own.
+
 `object.mesh.movePoints {id, points: [index…], dx, dy}` (or `{items: [{id, points}…], dx, dy}` over several meshes)
 moves points by (dx, dy), their handles with them; `object.mesh.setPointColor` takes `points` or `items` the same
 way to colour or fade several points at once. An index out of range, an index that is not a whole number ≥ 0, or a

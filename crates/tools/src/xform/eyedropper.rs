@@ -10,6 +10,10 @@
 //! blend's steps, an envelope's distorted contents). Clicking an image samples its pixels
 //! (averaged over the options' raster sample size; a CMYK image gives its ink amounts).
 //!
+//! With a gradient mesh selected, a click on one of its points gives that point the current solid
+//! fill color, and a click inside one of its patches gives it to the patch's four points
+//! (`object.mesh.setPointColor`).
+//!
 //! The Gradient panel's eyedropper sets the `stop` option (the tool to return to): the next click
 //! samples the colour under the cursor into the selected gradient stop (`paint.sampleColor
 //! {stop}`) and switches back to that tool.
@@ -453,6 +457,21 @@ fn image_color_at(s: &Sampler, n: &Node, p: Point) -> Option<Color> {
     Some(Color::rgb(r, g, b))
 }
 
+/// The selected, editable gradient mesh and its points that an Eyedropper click at `p` recolors
+/// ([`crate::meshedit::color_points`]): the topmost visible object within reach of `p` (locked art
+/// included, clipping applied) must be that mesh, and the points are its point within reach of
+/// `p`, else the four points around its patch under `p`.
+fn selected_mesh_points(cx: &ToolContext, p: Point) -> Option<(NodeId, Vec<usize>)> {
+    let tol = cx.tol(5.0);
+    let opt = sample_options(cx);
+    let leaf = hit_test_visible(cx.doc, p, HitOptions { tol: opt.tol.max(tol), ..opt })?.leaf;
+    if !cx.selection.contains(leaf) || !cx.doc.editable()(leaf) {
+        return None;
+    }
+    let Some(NodeKind::Mesh(m)) = cx.doc.node(leaf).map(|n| &n.kind) else { return None };
+    Some((leaf, crate::meshedit::color_points(m, p, tol)?))
+}
+
 impl Tool for EyedropperTool {
     fn id(&self) -> &'static str {
         "eyedropper"
@@ -471,6 +490,17 @@ impl Tool for EyedropperTool {
             return vec![Action::Dialog("brushKeyColor".into(), json!({ "color": color_json(&c) })), Action::SwitchTool(back)];
         }
         let stop = self.stop.as_ref().zip(cx.gradient_stop);
+        // A plain click on a selected gradient mesh gives the fill color to the point there, else
+        // to the four points of the patch there.
+        if stop.is_none()
+            && !ev.mods.alt
+            && !ev.mods.shift
+            && let Paint::Solid { color, .. } = &cx.paint.fill
+            && let Some((id, points)) = selected_mesh_points(cx, ev.pos)
+        {
+            let params = json!({ "id": id.0, "points": points, "color": color_json(color), "keepModel": true });
+            return vec![Action::Exec("object.mesh.setPointColor".into(), params)];
+        }
         // Reading a source is independent of its editability. Only Alt's reverse operation
         // writes to the clicked object; Shift+Alt appends its appearance to the selection.
         let source = if ev.mods.alt && !ev.mods.shift && stop.is_none() {
@@ -1351,6 +1381,70 @@ mod tests {
         let shift = Mods { shift: true, ..Default::default() };
         let a = EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 125.0, 150.0).with_mods(shift));
         assert_eq!(sampled_hex(&a), "#404040");
+    }
+
+    /// With a gradient mesh selected, a click on one of its points gives that point the fill color,
+    /// and a click inside a patch gives it to the patch's four points. Unselected, a click copies
+    /// the mesh's appearance as before, and Shift still samples.
+    #[test]
+    fn a_click_on_a_selected_mesh_gives_its_point_or_patch_the_fill_color() {
+        use vectorcraft_doc::{Document, GradientMesh};
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mesh = GradientMesh::from_surface(2, 2, &|u, v| Point::new(100.0 + 100.0 * u, 100.0 + 100.0 * v), &|_, _| Color::WHITE);
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Mesh(mesh))).unwrap();
+        let mut p = paint();
+        p.fill = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let red = color_json(&Color::rgb(1.0, 0.0, 0.0));
+        let set = |points: Value| {
+            vec![Action::Exec("object.mesh.setPointColor".into(), json!({"id": id.0, "points": points, "color": red, "keepModel": true}))]
+        };
+        let mut s = Selection::default();
+        let click = |s: &Selection, p: &crate::PaintDefaults, x: f64, y: f64, m: Mods| {
+            EyedropperTool::default().pointer(&cx(&d, s, p), &PointerEvent::new(PointerKind::Down, x, y).with_mods(m))
+        };
+        let plain = Mods::default();
+        let a = click(&s, &p, 125.0, 125.0, plain);
+        assert_eq!(a, vec![Action::Exec("appearance.copyFrom".into(), json!({"source": id.0}))], "an unselected mesh");
+        s.set([id]);
+        assert_eq!(click(&s, &p, 151.0, 149.0, plain), set(json!([4])), "the point near the click");
+        assert_eq!(click(&s, &p, 125.0, 125.0, plain), set(json!([0, 1, 3, 4])), "the patch's four points");
+        assert_eq!(click(&s, &p, 175.0, 175.0, plain), set(json!([4, 5, 7, 8])));
+        let shift = Mods { shift: true, ..Default::default() };
+        assert!(matches!(&click(&s, &p, 125.0, 125.0, shift)[0], Action::Exec(c, _) if c == "paint.sampleColor"));
+        let alt = Mods { alt: true, ..Default::default() };
+        assert!(matches!(&click(&s, &p, 125.0, 125.0, alt)[0], Action::Exec(c, v) if c == "appearance.copyFrom" && v["reverse"] == true));
+        // Off the mesh, or with a fill that is not a solid color, nothing goes to its points.
+        assert!(click(&s, &p, 400.0, 400.0, plain).is_empty());
+        p.fill = Paint::None;
+        assert!(matches!(&click(&s, &p, 125.0, 125.0, plain)[0], Action::Exec(c, _) if c == "appearance.copyFrom"));
+    }
+
+    /// An unselected object on top of a selected mesh's point keeps the click: it copies that
+    /// object's appearance, and the mesh's points keep their colors.
+    #[test]
+    fn a_click_on_an_object_over_a_selected_mesh_copies_that_object() {
+        use vectorcraft_doc::{Document, GradientMesh};
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mesh = GradientMesh::from_surface(2, 2, &|u, v| Point::new(100.0 + 100.0 * u, 100.0 + 100.0 * v), &|_, _| Color::WHITE);
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Mesh(mesh))).unwrap();
+        let top = d.alloc_id();
+        let mut cover = (*filled_rect(vectorcraft_geom::Rect::new(140.0, 140.0, 160.0, 160.0), Paint::solid(Color::BLACK))).clone();
+        cover.id = top;
+        d.insert(Some(l), usize::MAX, cover).unwrap();
+        let mut p = paint();
+        p.fill = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let mut s = Selection::default();
+        s.set([id]);
+        let a = EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+        assert_eq!(a, vec![Action::Exec("appearance.copyFrom".into(), json!({"source": top.0}))]);
+        // Locked, it is still what the click samples.
+        d.node_mut(top).unwrap().locked = true;
+        let a = EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+        assert_eq!(a, vec![Action::Exec("appearance.copyFrom".into(), json!({"source": top.0}))], "a locked object on top");
     }
 
     /// Finding the point in a mesh counts the points it looks at in every patch: a 20 × 20 mesh

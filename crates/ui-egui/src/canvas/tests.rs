@@ -8461,6 +8461,86 @@ fn swatches_and_proxy_paints_dropped_on_art_fill_the_object_hit() {
 }
 
 #[test]
+fn a_color_dropped_on_a_selected_mesh_recolors_the_point_or_patch_under_it() {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{GradientMesh, NodeId, NodeKind};
+    use widgets::PanelDrag;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let id = NodeId(id);
+    app.session.execute("object.mesh.create", &json!({"ids": [id.0], "rows": 2, "columns": 2})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let drop = |app: &mut VectorcraftApp, d: PanelDrag, at: Point| {
+        let at = xf.to_screen(at);
+        egui::DragAndDrop::set_payload(&ctx, d);
+        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+        frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    };
+    let mesh = |app: &VectorcraftApp| -> GradientMesh {
+        match &app.session.active().unwrap().doc.node(id).unwrap().kind {
+            NodeKind::Mesh(m) => m.clone(),
+            _ => panic!("not a gradient mesh"),
+        }
+    };
+    let colors = |app: &VectorcraftApp| mesh(app).points.iter().map(|q| q.color).collect::<Vec<_>>();
+    let undo_len = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = colors(&app);
+    let m = mesh(&app);
+    let (center, patch) = (m.points[4].p, Point::new((m.points[0].p.x + m.points[4].p.x) / 2.0, (m.points[0].p.y + m.points[4].p.y) / 2.0));
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    // On a mesh point: that point alone.
+    drop(&mut app, PanelDrag::paint(Paint::solid(red)), center);
+    let after = colors(&app);
+    assert_eq!(after[4], red);
+    assert_eq!((0..9).filter(|i| after[*i] != before[*i]).count(), 1, "only the point under the pointer");
+    // Inside a patch: its four points.
+    drop(&mut app, PanelDrag::paint(Paint::solid(blue)), patch);
+    let after = colors(&app);
+    assert_eq!([0, 1, 3, 4].map(|i| after[i]), [blue; 4]);
+    assert_eq!([2, 5, 6, 7, 8].map(|i| after[i]), [2, 5, 6, 7, 8].map(|i| before[i]));
+    assert!(app.session.active().unwrap().selection.contains(id), "the selection stays");
+    // The same color again changes nothing and records no undo step.
+    let n = undo_len(&app);
+    drop(&mut app, PanelDrag::paint(Paint::solid(blue)), patch);
+    assert_eq!(undo_len(&app), n);
+    // With Object Selection by Path Only, a drop inside a patch still reaches its points, and a
+    // drop 4 screen pixels outside a corner point still reaches that point.
+    app.session.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
+    let green = Color::rgb(0.0, 1.0, 0.0);
+    let far = Point::new((m.points[4].p.x + m.points[8].p.x) / 2.0, (m.points[4].p.y + m.points[8].p.y) / 2.0);
+    // Art below the patch, with its outline within the selection tolerance, is not taken for it.
+    let h = 1.0 / xf.zoom;
+    let below = app.session.execute("shape.rectangle", &json!({"x": far.x - h, "y": far.y - h, "width": 2.0 * h, "height": 2.0 * h})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    app.session.execute("object.arrange.sendToBack", &json!({"ids": [below]})).unwrap();
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    drop(&mut app, PanelDrag::paint(Paint::solid(green)), far);
+    assert_eq!([4, 5, 7, 8].map(|i| colors(&app)[i]), [green; 4]);
+    assert_ne!(app.session.active().unwrap().doc.node(NodeId(below)).unwrap().appearance.fill_paint(), Paint::solid(green));
+    let off = 4.0 / xf.zoom;
+    drop(&mut app, PanelDrag::paint(Paint::solid(red)), Point::new(m.points[0].p.x - off, m.points[0].p.y));
+    assert_eq!(colors(&app)[0], red, "the corner point within reach");
+    assert_eq!(colors(&app)[1], blue);
+    // An unselected object on top of the mesh takes the drop itself.
+    app.session.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": false})).unwrap();
+    let c = m.points[4].p;
+    let cover = app.session.execute("shape.rectangle", &json!({"x": c.x - 10.0, "y": c.y - 10.0, "width": 20, "height": 20})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let before = colors(&app);
+    drop(&mut app, PanelDrag::paint(Paint::solid(green)), c);
+    assert_eq!(colors(&app), before, "the mesh under it keeps its colors");
+    assert_eq!(app.session.active().unwrap().doc.node(NodeId(cover)).unwrap().appearance.fill_paint(), Paint::solid(green));
+}
+
+#[test]
 fn dropping_the_appearance_thumbnail_on_art_copies_the_appearance() {
     use vectorcraft_doc::NodeId;
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

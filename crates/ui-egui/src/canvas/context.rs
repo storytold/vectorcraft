@@ -50,7 +50,9 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
 
 /// A panel drag ([`widgets::PanelDrag`]) dropped on art acts on the object under the pointer,
 /// selected or not: a paint (swatches, a Fill/Stroke proxy, the Gradient panel's thumbnail) goes
-/// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it), the
+/// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it; a
+/// solid fill color on a selected gradient mesh recolors the mesh point under the pointer, else the
+/// four points of the patch there, with `object.mesh.setPointColor`), the
 /// Appearance panel's thumbnail gives the object (the topmost one hit) the appearance it carries
 /// (`appearance.copyFrom`), a graphic style is applied to it (`graphicStyle.apply`; with Alt, on
 /// top of its appearance), and a brush is applied to it (`brush.apply`, `brush.addFromLibrary`
@@ -85,6 +87,21 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
     if let widgets::PanelDrag::LibrarySymbol { library, name } = &*d {
         let at = xf.to_doc(pos);
         if let Err(e) = app.run("symbol.addFromLibrary", json!({"library": library, "name": name, "place": true, "x": at.x, "y": at.y})) {
+            app.status(e);
+        }
+        return;
+    }
+    // A solid fill color on a selected gradient mesh: the point under the pointer, else the four
+    // points around the patch there, take it. The selected meshes are looked at directly, so
+    // Object Selection by Path Only and the selection tolerance do not stop it.
+    if let widgets::PanelDrag::Paint { params, paint, .. } = &*d
+        && !params.is_null()
+        && let Some(color) = paint.color()
+        && crate::panels::proxy_cmd(app, false) == "paint.setFill"
+        && let Some((id, points)) = selected_mesh_drop(app, xf.to_doc(pos), xf.zoom)
+    {
+        let params = json!({"id": id.0, "points": points, "color": crate::panels::color_json(&color), "keepModel": true});
+        if let Err(e) = app.run("object.mesh.setPointColor", params) {
             app.status(e);
         }
         return;
@@ -147,4 +164,22 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
     if let Err(e) = app.run(cmd, params) {
         app.status(e);
     }
+}
+
+/// The selected, editable gradient mesh and its points that a solid color dropped at document
+/// point `p` at `zoom` recolors: the topmost object within 5 screen pixels of `p` must be that mesh
+/// (fills count even with Object Selection by Path Only, and clipping applies), and the points are
+/// its point within 5 screen pixels, else the four points around its patch under `p`.
+fn selected_mesh_drop(app: &VectorcraftApp, p: vectorcraft_geom::Point, zoom: f64) -> Option<(vectorcraft_doc::NodeId, Vec<usize>)> {
+    let tol = 5.0 / zoom.max(1e-9);
+    let leaf = hit_with(app, p, zoom, |doc, p, opt| {
+        vectorcraft_doc::hit::hit_test(doc, p, vectorcraft_doc::hit::HitOptions { path_only: false, tol: opt.tol.max(tol), ..opt })
+    })?
+    .leaf;
+    let st = app.session.active()?;
+    if !st.selection.contains(leaf) || !st.doc.editable()(leaf) {
+        return None;
+    }
+    let Some(vectorcraft_doc::NodeKind::Mesh(m)) = st.doc.node(leaf).map(|n| &n.kind) else { return None };
+    Some((leaf, vectorcraft_tools::meshedit::color_points(m, p, tol)?))
 }
