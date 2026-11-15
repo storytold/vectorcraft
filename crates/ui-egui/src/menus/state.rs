@@ -63,6 +63,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
         "window.control" => app.ui.control_bar,
         "window.helpBar" => app.ui.help_bar,
+        "view.statusBarShow" => p.get("show").and_then(Value::as_str) == Some(app.ui.status_bar_show.param()),
         "window.control.dock" => p.get("edge").and_then(Value::as_str) == Some(crate::chrome::control_bar_placement(&app.ui)),
         "window.control.options" => p
             .get("group")

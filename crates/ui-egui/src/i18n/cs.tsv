@@ -526,6 +526,7 @@
 	Rotate (Classic)…	Otočit (klasické)…
 	Surface	Povrch
 	Wireframe	Drátový model
+	Render Settings	Nastavení vykreslování
 	No Shading	Bez stínování
 	Plastic	Plast
 	Highlight Intensity	Intenzita odlesku
@@ -1004,6 +1005,11 @@
 	NTSC Colors	Barvy NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Zásada RGB:
+	CMYK Policy:	Zásada CMYK:
+	Preserve Embedded Profiles	Zachovat vložené profily
+	Convert to Working Space	Převést do pracovního prostoru
+	Preserve Numbers	Zachovat čísla
 	CMYK	CMYK
 	Texture	Textura
 	Craquelure…	Krakelování…
@@ -1103,6 +1109,14 @@ lighting	Light	Světlo
 	Previous Artboard	Předchozí pracovní plocha
 	Next Artboard	Další pracovní plocha
 	Last Artboard	Poslední pracovní plocha
+	Status Bar Show	Zobrazit ve stavovém řádku
+	Artboard Name	Název pracovní plochy
+	Current Tool	Aktuální nástroj
+	Date and Time	Datum a čas
+	Number of Undos	Počet kroků zpět
+	Document Color Profile	Barevný profil dokumentu
+	Undos	Zpět
+	Redos	Znovu
 	Graphic Style Options…	Možnosti grafického stylu…
 	Symbol Options	Možnosti symbolu
 	Symbol Options…	Možnosti symbolu…
@@ -1519,6 +1533,7 @@ lighting	Light	Světlo
 	Align to Artboard	Zarovnat k pracovní ploše
 	Align to Glyph Bounds	Zarovnat k hranicím glyfů
 	Align to Key Object	Zarovnat ke klíčovému objektu
+	Align to Key Anchor	Zarovnat ke klíčovému kotevnímu bodu
 	Align to Selection	Zarovnat k výběru
 	Align To:	Zarovnat k:
 	Cancel Key Object	Zrušit klíčový objekt
@@ -1664,11 +1679,55 @@ digits	Malayalam	Malajálamské
 	Composite Fonts	Složená písma
 	Export Composite Fonts	Exportovat složená písma
 	Import Composite Fonts	Importovat složená písma
+@msg	each font must be {name, parts}	každé písmo musí být {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	neznámý klíč `{k}`; písmo přijímá name a parts
+@msg	each font needs a name	každé písmo potřebuje název
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nemůže být názvem složeného písma (1 až {COMPOSITE_NAME_MAX} znaků, bez řídicích znaků)
+@msg	`{name}`: parts must be an object	`{name}`: parts musí být objekt
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: neznámá třída `{k}`; třídy jsou kanji, kana, punctuation, symbols, roman a numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} musí být objekt
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: neznámý klíč `{k}` v {_1}
+@msg	`{name}`: give the kanji part	`{name}`: zadejte část kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	dokument obsahuje nejvýše {COMPOSITE_FONTS_MAX} složených písem
+@msg	two composite fonts are named `{_1}`	dvě složená písma se jmenují `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` je název nainstalovaného písma
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} používá `{font}`, což je složené písmo
+@msg	give fonts: [{name, parts}…]	zadejte fonts: [{name, parts}…]
+@msg	path is empty	path je prázdné
+@msg	fonts must be a list of composite fonts	fonts musí být seznam složených písem
+@msg	names must be strings	names musí být řetězce
+@msg	no composite font named `{n}`	žádné složené písmo s názvem `{n}`
+@msg	names must be a list of names	names musí být seznam názvů
+@msg	no composite fonts to export	žádná složená písma k exportu
+@msg	not a composite fonts file: {e}	nejde o soubor složených písem: {e}
+@msg	not a composite fonts file: no compositeFonts list	nejde o soubor složených písem: chybí seznam compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	soubor obsahuje více než {COMPOSITE_FONTS_MAX} složených písem
+@msg	the file is larger than 4 MB	soubor je větší než 4 MB
+@msg	dataBase64 is not base64	dataBase64 není base64
+@msg	give one of path, data or dataBase64	zadejte path, data nebo dataBase64
+@msg	the file holds no composite fonts	soubor neobsahuje žádná složená písma
+@msg	the file holds two composite fonts named `{_1}`	soubor obsahuje dvě složená písma s názvem `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` nemůže být názvem složeného písma
+@msg	{k}: give a font	{k}: zadejte písmo
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: zadejte písmo
+@msg	{k}: size must be {_1} to {_2}%	{k}: size musí být {_1} až {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size musí být {_1} až {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline musí být {_1} až {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline musí být {_1} až {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: měřítko musí být {_1} až {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: měřítko musí být {_1} až {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: měnit měřítko lze jen u kana, roman a numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: měnit měřítko lze jen u kana, roman a numerals
+@msg	{k}: only kana can be scaled at the center	{k}: měřítko od středu lze měnit jen u kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: měřítko od středu lze měnit jen u kana
+@msg	no composite font	žádné složené písmo
 	Delete Font	Odstranit písmo
 	Kanji	Kandži
 	Kana	Kana
 	Numerals	Číslice
 	Scale at Center	Měřítko od středu
+	Delete Set	Odstranit sadu
+	Direct Entry	Přímé zadání
 	Up/Down:	Nahoru/dolů:
 	Left/Right:	Vlevo/vpravo:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko nahoru/dolů
@@ -2050,7 +2109,8 @@ digits	Malayalam	Malajálamské
 	Tabular Lining	Tabulkové verzálkové
 	Tabular Oldstyle	Tabulkové minuskové
 	Titling Alternates	Titulkové alternativy
-	Every-line Composer	Sazba všech řádků
+	Middle Eastern & South Asian Every-line Composer	Sazba všech řádků (Blízký východ a Jižní Asie)
+	Standard Every-line Composer	Standardní sazba všech řádků
 	First-line Left Indent	Odsazení prvního řádku zleva
 	Hyphenation…	Dělení slov…
 	Words Longer Than:	Slova delší než:
@@ -2090,7 +2150,8 @@ digits	Malayalam	Malajálamské
 	East Asian Composition Settings	Nastavení východoasijské sazby
 	Korean Composition Settings	Nastavení korejské sazby
 	Select a text object to edit its paragraph attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho odstavce.
-	Single-line Composer	Sazba jednoho řádku
+	Middle Eastern & South Asian Single-line Composer	Sazba jednoho řádku (Blízký východ a Jižní Asie)
+	Standard Single-line Composer	Standardní sazba jednoho řádku
 	Toggle Line Composer	Přepnout sazbu řádků
 	Space After Paragraph	Mezera za odstavcem
 	Space Before Paragraph	Mezera před odstavcem
@@ -2928,6 +2989,7 @@ digits	Malayalam	Malajálamské
 	Limit to Library:	Omezit na knihovnu:
 	Link harmony colors	Propojit barvy harmonie
 	Merge colors into one row	Sloučit barvy do jednoho řádku
+	New Row	Nový řádek
 	No colors to recolor (preserved colors are left out).	Žádné barvy k přebarvení (zachované barvy jsou vynechány).
 	Preserve:	Zachovat:
 	Randomly change color order	Náhodně změnit pořadí barev
@@ -3634,6 +3696,40 @@ theme	Appearance	Motiv
 	Create Graph	Vytvořit graf
 	Graph Data	Data grafu
 	Graph Type	Typ grafu
+	Graph Options	Možnosti grafu
+	Left Axis	Levá osa
+	Right Axis	Pravá osa
+	Category Axis	Osa kategorií
+	Separate Scales	Samostatná měřítka
+	Add Drop Shadow	Přidat vržený stín
+	Add Legend Across Top	Přidat legendu nahoru
+	First Row in Front	První řádek vpředu
+	First Column in Front	První sloupec vpředu
+	Legend	Legenda
+	Column Width	Šířka sloupce
+	Bar Width	Šířka pruhu
+	Cluster Width	Šířka skupiny
+	Mark Data Points	Označit datové body
+	Connect Data Points	Spojit datové body
+	Edge-to-Edge Lines	Čáry od okraje k okraji
+	Draw Filled Lines	Kreslit vyplněné čáry
+	Tick Values	Hodnoty značek
+	Override Calculated Values	Přepsat vypočítané hodnoty
+	Divisions	Dílky
+	Tick Marks	Značky
+	Tick Marks per Division	Značek na dílek
+	Draw Tick Marks Between Labels	Kreslit značky mezi popisky
+	Add Labels	Přidat popisky
+	Maximum must be more than Minimum.	Maximum musí být větší než minimum.
+	Column Graph	Sloupcový graf
+	Stacked Column Graph	Skládaný sloupcový graf
+	Bar Graph	Pruhový graf
+	Stacked Bar Graph	Skládaný pruhový graf
+	Line Graph	Spojnicový graf
+	Area Graph	Plošný graf
+	Scatter Graph	Bodový graf
+	Pie Graph	Výsečový graf
+	Radar Graph	Paprskový graf
 	Vector Halftone	Vektorový polotón
 	spot	přímá
 	Text	Text
@@ -4242,6 +4338,7 @@ axis	Both	Obě
 	Replace:	Nahradit:
 	Type on a Path Options	Možnosti textu na cestě
 	Highlight Variable	Zvýraznit proměnnou
+	Sort Variables	Seřadit proměnné
 	New Variable	Nová proměnná
 	List Variables	Vypsat proměnné
 	Bind Variable	Svázat proměnnou
@@ -4717,6 +4814,7 @@ imageTrace	Outline	Obrys
 @msg	`name` must be the name of a script engine	`name` musí být název skriptovacího jádra
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hlavní skriptovací jádro je pro každý běh nové a nikdy se neuchovává, proto je nelze zahodit
 @msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` je jen pro běh, kde se nemá koho zeptat: v aplikaci odpovídá na každý dialog uživatel
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
 @msg	Copied the link info	Informace o propojení zkopírovány
@@ -6032,6 +6130,7 @@ mark-style	Japanese	Japonské
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
 @msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objekt nemá žádný 3D efekt (Vysunutí a zkosení, Rotační těleso, Nafouknutí ani Otočit)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musí být objekt obsahující pouze `mode` s hodnotou shaded nebo wireframe
 @msg	its 3D effect builds no solid	jeho 3D efekt nevytváří žádné těleso
 @msg	bevel must be none or one of {_1}	bevel musí být none nebo jedno z {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nemůže z této kresby vytvořit tělesa: její instance symbolů, prolnutí a ořezové skupiny obsahují příliš mnoho objektů
@@ -6195,6 +6294,8 @@ mark-style	Japanese	Japonské
 	Save Variable Library…	Uložit knihovnu proměnných…
 @msg	a variable library holds text variables, and the document has none	knihovna proměnných obsahuje textové proměnné a dokument žádné nemá
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	proměnnou `{name}` nelze uložit do knihovny proměnných: přejmenujte ji tak, aby začínala písmenem nebo `_` a neobsahovala mezery ani jiné symboly než `-`, `_` a `.`
+@msg	{k} has control characters	{k} obsahuje řídicí znaky
+@msg	{k} has control characters or line breaks	{k} obsahuje řídicí znaky nebo zalomení řádků
 @msg	data set `{name}` holds a control character, which a variable library can't hold	sada dat `{name}` obsahuje řídicí znak, který knihovna proměnných nemůže obsahovat
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	sada dat `{name}` začíná nebo končí prázdným znakem, který knihovna proměnných nemůže obsahovat
 	Make Graph Dynamic	Nastavit graf jako dynamický
@@ -6520,6 +6621,7 @@ axis	Y Axis	osa Y
 @msg	stops must be in order of `offset`	zarážky musí být seřazeny podle `offset`
 @msg	the document has no pattern {pattern}	dokument nemá vzorek {pattern}
 @msg	the document has no swatch {n}	dokument nemá vzorek barvy {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` vyžaduje zarážku propojenou se vzorkem přímé barvy
 @msg	the output	výstup
 @msg	the path has no anchor points	cesta nemá žádné kotevní body
 @msg	too many anchor points (limit {MAX_ANCHORS})	příliš mnoho kotevních bodů (limit {MAX_ANCHORS})
@@ -7719,6 +7821,7 @@ breakText	Glyphs	Glyfy
 @msg	Image Trace failed: {e}	Vektorizace obrazu selhala: {e}
 @msg	Image Trace finished, but its document was closed	Vektorizace obrazu skončila, ale její dokument byl zavřen
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Vektorizace obrazu skončila, ale obraz nebo jeho nastavení se mezitím změnily: vektorizujte ho znovu
+@msg	Image Trace finished, but its document was reverted: trace it again	Vektorizace obrazu skončila, ale její dokument byl vrácen k uložené verzi: vektorizujte ho znovu
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importovat filtr SVG čte soubory SVG, ne SVGZ
 @msg	Invalid dimension offset	Neplatné odsazení kóty
 @msg	Invalid point	Neplatný bod
@@ -7892,6 +7995,7 @@ breakText	Glyphs	Glyfy
 @msg	`names` must be an array of style names	`names` musí být pole názvů stylů
 @msg	`new` is a design name, or true	`new` je název návrhu, nebo true
 @msg	`origin` must be [x, y] in points	`origin` musí být [x, y] v bodech
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` musí být [a, b, c, d], každé od -1000 do 1000, a a·d - b·c se musí od 0 lišit alespoň o 0.001
 @msg	`path` must be a folder	`path` musí být složka
 @msg	`path` must be a path object	`path` musí být objekt cesty
 @msg	`picks` must be an array (got {v})	`picks` musí být pole (zadáno {v})
@@ -8297,7 +8401,7 @@ breakText	Glyphs	Glyfy
 @msg	column: true floats the whole column and takes no onto, above or below	column: true uvolní celý sloupec jako plovoucí a nepřijímá onto, above ani below
 @msg	command must be a shape.* command	command musí být příkaz shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: chybí `command`
-@msg	composer must be "singleLine" or "everyLine"	composer musí být "singleLine" nebo "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer musí být "singleLine", "everyLine", "standardSingleLine" nebo "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	složené tvary přijímají cesty, složené cesty, skupiny, složené tvary, text, prolnutí a obálky
 @msg	compound {_1} must contain exactly one open path to join	složený objekt {_1} musí ke spojení obsahovat právě jednu otevřenou cestu
 @msg	connect needs a path other than the one extended	connect vyžaduje jinou cestu než tu prodlužovanou
