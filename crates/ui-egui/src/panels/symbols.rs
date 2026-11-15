@@ -287,7 +287,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     {
         app.status(e);
     }
-    if ui.available_width() >= 4.0 {
+    if ui.available_width() >= reserve + 4.0 {
         ui.add_space(4.0);
     }
 }
@@ -1788,5 +1788,30 @@ mod tests {
         assert!(h.query_by_label("   Place Symbol Instance").is_some());
         h.get_by_label("   Select All Instances").click();
         h.run_steps(2);
+    }
+
+    /// The Control bar's symbol instance controls leave the room `reserve` asks for after them, the
+    /// gap after the controls included, when the row has no room for any of them.
+    #[test]
+    fn control_bar_symbol_controls_leave_the_reserve_when_none_fits() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let art = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        let instance = app.run("symbol.new", json!({"name": "Mark", "ids": [art]})).unwrap()["id"].clone();
+        app.run("select.set", json!({ "ids": [instance] })).unwrap();
+        let ctx = egui::Context::default();
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 100.0))), ..Default::default() };
+        let mut room = None;
+        let mut out = ctx.run_ui(raw, |ui| {
+            ui.horizontal(|ui| {
+                // Two points more than the reserve: too little for Edit Symbol or Replace.
+                let reserve = ui.available_width() - 2.0;
+                control_bar(&mut app, ui, reserve);
+                room = Some((ui.available_width(), reserve));
+            });
+        });
+        out.textures_delta.clear();
+        let (left, reserve) = room.expect("the row was drawn");
+        assert!(left >= reserve, "{left} pt left after the symbol controls, {reserve} pt reserved");
     }
 }

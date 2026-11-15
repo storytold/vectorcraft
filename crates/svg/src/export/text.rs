@@ -86,11 +86,15 @@ impl Writer<'_> {
         // type with warichu, whose stacked lines a reader's <text> can't place either. So are
         // small capitals, superscript and subscript and tab leaders, which SVG text doesn't draw (#3869),
         // and a glyph chosen for a character, which a reader's <text> draws with the default glyph. So
-        // is type in one of the document's composite fonts, which a reader can't find by its name.
+        // is type in one of the document's composite fonts, which a reader can't find by its name,
+        // and type with an Adjust Diacritic Position, whose marks a reader's <text> draws where the
+        // font puts them.
         let unwritable = t.runs.iter().any(|r| {
             r.style.small_caps.is_some()
                 || r.style.position != vectorcraft_doc::CharPosition::Normal
                 || r.style.glyph_alternate.is_some()
+                || r.style.diacritic_horizontal != 0.0
+                || r.style.diacritic_vertical != 0.0
                 || vectorcraft_doc::CompositeFont::named(&doc.composite_fonts, &r.style.font_family).is_some()
         }) || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
         let outlined = self.opts.outline_text
