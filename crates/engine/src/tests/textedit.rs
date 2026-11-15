@@ -724,6 +724,44 @@ fn touch_type_moves_one_character_and_leaves_the_others_where_they_are() {
     assert!(s.execute("text.touchType", &json!({"id": id.0, "start": (1u64 << 32) + 1, "dy": 1})).is_err(), "no character there");
 }
 
+/// Touch Type does not change a character of type on an open path that is not drawn because it
+/// falls before the path's start; a drawn character of the same type still changes.
+#[test]
+fn touch_type_refuses_a_character_before_an_open_paths_start() {
+    let mut s = session();
+    let pid = s.execute("path.create", &json!({"d": "M100 300 L500 300"})).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "Hidden", "size": 12, "at": [100, 300]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("type.pathOptions", &json!({"start": -0.02})).unwrap();
+    let steps = undo_labels(&s).len();
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dy": 2})).is_err(), "the H is not drawn");
+    assert_eq!(undo_labels(&s).len(), steps);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 5, "dy": 2})).unwrap();
+    // An All Caps ß is two glyphs: with the first before the path's start and the second drawn, it
+    // still changes.
+    let pid = s.execute("path.create", &json!({"d": "M100 400 L500 400"})).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "ße", "size": 40, "at": [100, 400]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "allCaps": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let adv = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &obj(&s, id)).glyphs[0].advance;
+    s.execute("type.pathOptions", &json!({"start": -1.2 * adv / 400.0})).unwrap();
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &obj(&s, id));
+    assert!(lay.glyphs[0].byte == 0 && lay.glyphs[1].byte == 0 && lay.glyphs[0].off_path && !lay.glyphs[1].off_path);
+    let drawn = |s: &Session| {
+        let t = obj(s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        let g = lay.glyphs.iter().rfind(|g| g.byte == 0 && !g.off_path).unwrap();
+        t.xf * (g.xf * Point::ZERO)
+    };
+    let before = drawn(&s);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dy": 2})).unwrap();
+    // The drawn glyph rises 2 points.
+    let after = drawn(&s);
+    assert!((after.x - before.x).abs() < 1e-6 && (after.y - (before.y - 2.0)).abs() < 1e-6, "{before:?} -> {after:?}");
+}
+
 /// Touch Type on the first character of a list item moves that character and leaves the bullet
 /// where it is. The bullet stands for no character, so the first character still moves only up
 /// and down.

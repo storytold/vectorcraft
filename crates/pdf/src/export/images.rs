@@ -141,6 +141,7 @@ impl Exporter<'_> {
         let doc = self.doc;
         let out = self.out.clone();
         let profiles = !out.standard.cmyk_only();
+        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit });
         let mut unconverted = false;
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
@@ -151,18 +152,20 @@ impl Exporter<'_> {
                 let icc = out.cmyk_image_icc(blob);
                 crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, icc.as_deref())
             } else {
-                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles)
+                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles, to_srgb)
             };
-            if let Some(w) = r.warning {
-                self.warn(w);
-            }
             if r.unconverted {
                 // The source image would be written in its own colors: it is left out, with a
                 // warning that names the conversion when it could have been written.
                 unconverted = embed(blob, interpolate, self.sixteen_bit, profiles).is_some();
                 return None;
             }
-            r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles))
+            let img = r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles));
+            // An image left out gets the warning below instead.
+            for w in [r.warning, r.note].into_iter().flatten().filter(|_| img.is_some()) {
+                self.warn(w);
+            }
+            img
         });
         if unconverted {
             self.warn(UNCONVERTED);
