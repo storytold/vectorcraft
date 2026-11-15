@@ -421,6 +421,18 @@
 	Title Case	Svaka Riječ Velikim Slovom
 	Sentence case	Veliko početno slovo rečenice
 	Smart Punctuation…	Pametna interpunkcija…
+	Smart Punctuation	Pametna interpunkcija
+	ff, fi, ffi Ligatures	Ligature ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligature ff, fl, ffl
+	Smart Quotes	Pametni navodnici
+	Smart Spaces	Pametni razmaci
+	En, Em Dashes	Srednje i duge crtice
+	Ellipses	Tri tačke
+	Expert Fractions	Stručni razlomci
+	Replace In	Zamijeni u
+	Selected Text Only	Samo odabrani tekst
+	Entire Document	Cijeli dokument
+	Report Results	Izvještaj o rezultatima
 	Create Outlines	Kreiraj obrise
 	Optical Margin Alignment	Optičko poravnanje margina
 	Dynamic Text	Dinamički tekst
@@ -959,6 +971,7 @@
 	Free Transform	Slobodna transformacija
 	Perspective Distort	Izobličenje perspektive
 	Radial Blur…	Radijalno zamućenje…
+	Blur Center	Središte zamućenja
 	Smart Blur…	Pametno zamućenje…
 	Sharpen	Izoštri
 	Unsharp Mask…	Maska izoštravanja…
@@ -2249,6 +2262,7 @@ digits	Malayalam	Malajalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	unos {i} u paths treba path i ids (ID-ove objekata koje nema nijedan drugi unos)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder uzima path: u folderu te datoteke traže se ostale nedostajuće veze
 	Show Missing	Prikaži nedostajuće
+	Sort by Size	Sortiraj po veličini
 	Sort by Status	Sortiraj po statusu
 	Clear Overrides	Očisti zamjene
 	Create New {kind} Style	Kreiraj novi {kind} stil
@@ -2602,6 +2616,7 @@ digits	Malayalam	Malajalam
 	e.g. 1-3, 5	npr. 1-3, 5
 	First Page	Prva stranica
 	Import PDF	Uvezi PDF
+	Import PDF pages as links	Uvezi stranice PDF-a kao veze
 	Last Page	Posljednja stranica
 	Next Page	Sljedeća stranica
 	of {count}	od {count}
@@ -2685,6 +2700,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Prozirna pozadina
 	Choose…	Odaberi…
 	Copy Fonts Used in the Document	Kopiraj fontove korištene u dokumentu
+	Copy Info	Kopiraj informacije
 	Copy Links	Kopiraj veze
 	Create Report	Kreiraj izvještaj
 	Fonts whose licence doesn't allow embedding are not copied.	Fontovi čija licenca ne dozvoljava ugrađivanje ne kopiraju se.
@@ -4532,6 +4548,7 @@ imageTrace	Outline	Obris
 	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Ova skripta je dodala veoma mnogo objekata. Nastaviti, ili je zaustaviti i poništiti ono što je uradila?
 @msg	Copied the script report	Izvještaj skripte kopiran
+@msg	Copied the link info	Informacije o vezi kopirane
 @msg	Corners edits the corners of a path	Uglovi uređuje uglove putanje
 @msg	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}

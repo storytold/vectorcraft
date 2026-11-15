@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Links",
             [],
             None,
-            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded); default: stacking order; top first, dcsTransparency?: false (Show DCS Transparency Interactions: mark the images placed from DCS files that are transparent, themselves or a group or layer holding them, or that overlap a visible object with its own transparency; it looks at every object, so it takes longer)} every image object and placed document the document stores, as the Links panel lists them: those in the layers, then those in opacity-mask art and in the art of symbols, graph designs, patterns and stored brushes (one row per stored object, never one per symbol instance, pattern tile or brushed stroke) → {links: [{id, name, linked, status: ok|modified|missing|embedded, format (DCS for an image placed from a DCS file), pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), note?: said of an image past the decode allowance (shown at reduced size, or too large to draw), document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels), dcsTransparency?: true (with dcsTransparency), owner?: {kind: layers|symbol|graphDesign|pattern|brush, name? (of the symbol, graph design, pattern or brush), index? (a brush's place in the Brushes panel, from 0), tile?: side|outerCorner|innerCorner|start|end (a pattern brush's tile), maskOf?: id (in the opacity-mask art of that object)} (an object outside the layer tree)}], missing, modified, embedded}; under automation read roots, path and found are left out when the file they name is outside the roots",
+            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded)|size (the linked file's size in bytes as Link Info shows it, smallest first; rows without one, embedded images and missing files whose size is not kept, last; equal sizes by name); default: stacking order; top first, dcsTransparency?: false (Show DCS Transparency Interactions: mark the images placed from DCS files that are transparent, themselves or a group or layer holding them, or that overlap a visible object with its own transparency; it looks at every object, so it takes longer)} every image object and placed document the document stores, as the Links panel lists them: those in the layers, then those in opacity-mask art and in the art of symbols, graph designs, patterns and stored brushes (one row per stored object, never one per symbol instance, pattern tile or brushed stroke) → {links: [{id, name, linked, status: ok|modified|missing|embedded, format (DCS for an image placed from a DCS file), pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), note?: said of an image past the decode allowance (shown at reduced size, or too large to draw), document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels), dcsTransparency?: true (with dcsTransparency), owner?: {kind: layers|symbol|graphDesign|pattern|brush, name? (of the symbol, graph design, pattern or brush), index? (a brush's place in the Brushes panel, from 0), tile?: side|outerCorner|innerCorner|start|end (a pattern brush's tile), maskOf?: id (in the opacity-mask art of that object)} (an object outside the layer tree)}], missing, modified, embedded}; under automation read roots, path and found are left out when the file they name is outside the roots",
             has_doc,
             list
         ),
@@ -2211,6 +2211,16 @@ fn document_row(p: &PlacedDocument) -> Value {
     json!({ "format": pdf.map_or("VectorCraft", |f| f.label), "document": true, "pageWidth": p.width, "pageHeight": p.height })
 }
 
+/// The size in bytes of the file that link `l` (of `st`) names, as Link Info shows it: the file's
+/// size now, else the size the document keeps of it when the caller may see its path.
+fn link_file_size(st: &crate::DocState, l: &LinkInfo) -> Option<u64> {
+    let doc_path = LinkBase::of(st).doc;
+    let kept = l.size.filter(|_| path_shown(&l.path, doc_path));
+    let roots = crate::file_access::current().or_else(|| st.opened_by.clone());
+    let now = crate::file_access::confine(roots.as_ref(), || fileio::document_path(&l.path, doc_path).ok().as_deref().and_then(file_stamp));
+    now.map(|s| s.0).or(kept)
+}
+
 /// Sort rank of a `links.list` status: missing, modified, ok, embedded.
 fn status_rank(status: &str) -> usize {
     ["missing", "modified", "ok", "embedded"].iter().position(|s| *s == status).unwrap_or(4)
@@ -2277,8 +2287,14 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
     if !matches!(show, "all" | "missing" | "modified" | "embedded") {
         return Err(bad(C, format!("show `{show}`: all, missing, modified or embedded")));
     }
+    let sort = str_param(p, "sort");
+    if let Some(x) = sort.filter(|x| !matches!(*x, "name" | "kind" | "status" | "size")) {
+        return Err(bad(C, format!("sort `{x}`: name, kind, status or size")));
+    }
     let interactions = if switch_or(p, "dcsTransparency", false, C)? { dcs_transparency(&st.doc) } else { BTreeSet::new() };
     let statuses = statuses(st);
+    // The file size of each listed row's link, read only to sort by size.
+    let mut sizes: BTreeMap<u64, u64> = BTreeMap::new();
     // The layer tree's objects, top first as the Layers panel lists them, then the others in the
     // order they are stored (opacity-mask art, symbols, graph designs, patterns, the art of the
     // stored brushes), each once.
@@ -2326,6 +2342,11 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let doc_path = LinkBase::of(st).doc;
         if let Some(l) = link {
+            if sort == Some("size")
+                && let Some(size) = link_file_size(st, l)
+            {
+                sizes.insert(n.id.0, size);
+            }
             note_path(&mut row, "path", &l.path, doc_path);
             if let Some(page) = l.page {
                 row["page"] = json!(page);
@@ -2346,12 +2367,17 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
         rows.push(row);
     }
     let text = |r: &Value, k: &str| r[k].as_str().unwrap_or_default().to_lowercase();
-    match str_param(p, "sort") {
-        None => {}
+    match sort {
         Some("name") => rows.sort_by_cached_key(|r| text(r, "name")),
         Some("kind") => rows.sort_by_cached_key(|r| (text(r, "format"), text(r, "name"))),
         Some("status") => rows.sort_by_cached_key(|r| (status_rank(r["status"].as_str().unwrap_or_default()), text(r, "name"))),
-        Some(x) => return Err(bad(C, format!("sort `{x}`: name, kind or status"))),
+        // Smallest file first; rows without a file size (embedded images, a missing file whose
+        // size the document does not keep) come last; equal sizes by name.
+        Some("size") => rows.sort_by_cached_key(|r| {
+            let size = r["id"].as_u64().and_then(|id| sizes.get(&id).copied());
+            (size.is_none(), size.unwrap_or(0), text(r, "name"))
+        }),
+        _ => {}
     }
     let count = |k: &str| counts.get(k).copied().unwrap_or(0);
     Ok(json!({ "links": rows, "missing": count("missing"), "modified": count("modified"), "embedded": count("embedded") }))
