@@ -6529,6 +6529,7 @@ axis	Y Axis	Y-akseli
 @msg	stops must be in order of `offset`	väripisteiden on oltava `offset`-järjestyksessä
 @msg	the document has no pattern {pattern}	asiakirjassa ei ole kuviota {pattern}
 @msg	the document has no swatch {n}	asiakirjassa ei ole värimallia {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` vaatii väripisteen, joka on linkitetty spottivärin värimalliin
 @msg	the output	tuloste
 @msg	the path has no anchor points	polulla ei ole ankkuripisteitä
 @msg	too many anchor points (limit {MAX_ANCHORS})	liian monta ankkuripistettä (raja {MAX_ANCHORS})

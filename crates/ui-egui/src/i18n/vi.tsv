@@ -6106,6 +6106,7 @@ axis	Y Axis	Trục Y
 @msg	stops must be in order of `offset`	các điểm dừng phải theo thứ tự của `offset`
 @msg	the document has no pattern {pattern}	tài liệu không có họa tiết {pattern}
 @msg	the document has no swatch {n}	tài liệu không có mẫu màu {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` cần một điểm dừng chuyển sắc liên kết với mẫu màu đặc biệt
 @msg	the output	đầu ra
 @msg	the path has no anchor points	đường dẫn không có điểm neo
 @msg	too many anchor points (limit {MAX_ANCHORS})	quá nhiều điểm neo (giới hạn {MAX_ANCHORS})

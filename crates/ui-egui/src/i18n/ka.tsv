@@ -6450,6 +6450,7 @@ axis	Y Axis	Y ღერძი
 @msg	stops must be in order of `offset`	გადასვლის წერტილები `offset`-ის მიხედვით უნდა იყოს დალაგებული
 @msg	the document has no pattern {pattern}	დოკუმენტს არ აქვს პატერნი {pattern}
 @msg	the document has no swatch {n}	დოკუმენტს არ აქვს ფერის ნიმუში {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` მოითხოვს გადასვლის წერტილს, რომელიც სპოტ-ფერის ნიმუშთანაა დაკავშირებული
 @msg	the output	გამოტანა
 @msg	the path has no anchor points	ტრაექტორიას საყრდენი წერტილები არ აქვს
 @msg	too many anchor points (limit {MAX_ANCHORS})	ძალიან ბევრი საყრდენი წერტილი (ლიმიტი {MAX_ANCHORS})

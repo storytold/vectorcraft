@@ -6144,6 +6144,7 @@ axis	Y Axis	Y 軸
 @msg	stops must be in order of `offset`	色標必須依 `offset` 排序
 @msg	the document has no pattern {pattern}	文件中沒有圖樣 {pattern}
 @msg	the document has no swatch {n}	文件中沒有色票 {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` 需要連結到特別色色票的漸層色標
 @msg	the output	輸出
 @msg	the path has no anchor points	路徑沒有錨點
 @msg	too many anchor points (limit {MAX_ANCHORS})	錨點過多（上限 {MAX_ANCHORS}）

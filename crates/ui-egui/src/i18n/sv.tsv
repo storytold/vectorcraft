@@ -6483,6 +6483,7 @@ axis	Y Axis	Y-axel
 @msg	stops must be in order of `offset`	stoppen måste vara ordnade efter `offset`
 @msg	the document has no pattern {pattern}	dokumentet har inget mönster {pattern}
 @msg	the document has no swatch {n}	dokumentet har ingen färgruta {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` kräver ett gradientstopp som är länkat till en dekorfärgruta
 @msg	the output	utdata
 @msg	the path has no anchor points	banan har inga ankarpunkter
 @msg	too many anchor points (limit {MAX_ANCHORS})	för många ankarpunkter (gräns {MAX_ANCHORS})

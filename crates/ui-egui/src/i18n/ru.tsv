@@ -6110,6 +6110,7 @@ axis	Y Axis	Ось Y
 @msg	stops must be in order of `offset`	точки перехода должны идти в порядке `offset`
 @msg	the document has no pattern {pattern}	в документе нет узора {pattern}
 @msg	the document has no swatch {n}	в документе нет образца {n}
+@msg	`plates` requires a stop linked to a spot swatch	для `plates` нужна точка перехода, связанная с образцом плашечного цвета
 @msg	the output	вывод
 @msg	the path has no anchor points	у контура нет опорных точек
 @msg	too many anchor points (limit {MAX_ANCHORS})	слишком много опорных точек (предел {MAX_ANCHORS})

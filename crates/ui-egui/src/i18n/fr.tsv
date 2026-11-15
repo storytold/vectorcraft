@@ -6493,6 +6493,7 @@ axis	Y Axis	Axe Y
 @msg	stops must be in order of `offset`	les étapes doivent être classées par `offset`
 @msg	the document has no pattern {pattern}	le document n’a pas de motif {pattern}
 @msg	the document has no swatch {n}	le document n’a pas de nuance {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` exige une étape liée à une nuance de ton direct
 @msg	the output	la sortie
 @msg	the path has no anchor points	le tracé n’a aucun point d’ancrage
 @msg	too many anchor points (limit {MAX_ANCHORS})	trop de points d’ancrage (limite {MAX_ANCHORS})
