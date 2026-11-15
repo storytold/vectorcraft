@@ -3832,8 +3832,9 @@ already walks Image Trace. Short agent entry points:
   An Abutting trace with Fills (not Flat Logo) also holds a clip group named `Seam Fills` under its paths. For each
   color it holds one stroke along the edges where a filled path of that color meets a filled path drawn after it, in
   that color (a gradient path's stroke takes its gradient), with butt caps and round joins. The stroke is 1.5 image
-  pixels wide, VectorCraft's own width, at the image's larger scale when the image is stretched more one way. The group
-  clips the strokes to the image's box. Where a shared edge ends at, or runs within 0.75 image pixels of, a transparent
+  pixels wide, VectorCraft's own width. On an image stretched more one way than another, the group holds each stroke's
+  outline in image pixels as a filled path instead; the outline covers 0.75 image pixels on each side of its edge. The
+  group clips the strokes to the image's box. Where a shared edge ends at, or runs within 0.75 image pixels of, a transparent
   area or a color left out, its stroke can reach up to 0.75 image pixels into that area. Paths that became live shapes
   (`shapes`) take no part. The traced paths and their shared edges are the same with or without the group. A trace
   whose paths have more than about half of the trace's anchor limit (8,000,000, 2,000,000 on the web) has no seam

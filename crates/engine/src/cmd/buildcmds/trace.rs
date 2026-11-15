@@ -26,17 +26,26 @@ fn is_trace_group(n: &Node) -> bool {
 const SEAM_FILLS_NAME: &str = "Seam Fills";
 
 /// Whether `n` can be a trace's seam fills group: a clip group named as one, or a clip group whose
-/// members after the clipping path are stroked paths without fills, so that it is still found
-/// after it is renamed or its strokes are edited. (Auto Grouping groups are not clip groups.)
+/// members after the clipping path are all stroked paths without fills, or all filled paths
+/// without strokes (the strokes' outlines, on a stretched image), so that it is still found after
+/// it is renamed or its strokes are edited. (Auto Grouping groups are not clip groups.) Traces made
+/// before the seam fills were clipped hold a group without a clip: one named as seam fills, or one
+/// of stroked paths without fills. (Auto Grouping groups hold filled paths.)
 fn is_seam_fills(n: &Node) -> bool {
-    let stroke_only = |m: &Arc<Node>| {
-        matches!(m.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
-            && m.appearance.fill_paint() == Paint::None
-            && m.appearance.stroke_paint() != Paint::None
-    };
-    let NodeKind::Group { clip: true, children } = &n.kind else { return false };
-    n.name.as_deref() == Some(SEAM_FILLS_NAME)
-        || children.split_first().is_some_and(|(_, members)| !members.is_empty() && members.iter().all(stroke_only))
+    let path = |m: &Arc<Node>| matches!(m.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+    let stroke_only = |m: &Arc<Node>| path(m) && m.appearance.fill_paint() == Paint::None && m.appearance.stroke_paint() != Paint::None;
+    let fill_only = |m: &Arc<Node>| path(m) && m.appearance.fill_paint() != Paint::None && m.appearance.stroke_paint() == Paint::None;
+    let named = n.name.as_deref() == Some(SEAM_FILLS_NAME);
+    match &n.kind {
+        NodeKind::Group { clip: true, children } => {
+            named
+                || children
+                    .split_first()
+                    .is_some_and(|(_, members)| !members.is_empty() && (members.iter().all(stroke_only) || members.iter().all(fill_only)))
+        }
+        NodeKind::Group { clip: false, children } => named || (!children.is_empty() && children.iter().all(stroke_only)),
+        _ => false,
+    }
 }
 
 const LIVE_PATHFINDER_BY_COLOR: &str = "byColor can't regroup a trace with a live Pathfinder effect: expand without byColor";
@@ -668,19 +677,75 @@ fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, steps: &(dyn Fn(u64
         return Err(EngineError::Cancelled);
     }
     let size = (raster.width, raster.height);
-    let seams = seams_within(&res, params, size, MAX_TRACE_ANCHORS);
+    let outlined = seam_unit(raster_xf(&inputs.image, size)).is_none();
+    let seams = seams_within(&res, params, size, MAX_TRACE_ANCHORS, outlined);
     Ok(Traced { inputs: inputs.clone(), raster: size, res, seams })
 }
 
+/// Pixel space of a `size` raster decoded from `img` → the image object's pixel space → document.
+fn raster_xf(img: &ImageObject, size: (u32, u32)) -> vectorcraft_geom::Affine {
+    let sx = img.width.max(1) as f64 / size.0.max(1) as f64;
+    let sy = img.height.max(1) as f64 / size.1.max(1) as f64;
+    img.xf * vectorcraft_geom::Affine::scale_non_uniform(sx, sy)
+}
+
+/// Document units per raster pixel for the seam fills' strokes when `xf` scales every direction
+/// alike, so that a stroke 1.5 pixels wide covers 0.75 pixels on each side of its edge at any
+/// angle; `None` when `xf` stretches one direction more than another (or is degenerate), where a
+/// stroke of any one width would cover more pixels across some edges than across others.
+fn seam_unit(xf: vectorcraft_geom::Affine) -> Option<f64> {
+    let [a, b, c, d, _, _] = xf.as_coeffs();
+    let (t, det) = (a * a + b * b + c * c + d * d, a * d - b * c);
+    let root = (t * t - 4.0 * det * det).max(0.0).sqrt();
+    let (most, least) = (((t + root) / 2.0).sqrt(), ((t - root).max(0.0) / 2.0).sqrt());
+    (most.is_finite() && most > 0.0 && most - least <= 1e-9 * most).then_some(most)
+}
+
 /// The seam fills of `res`, traced with `params` from a `size` raster ([`tr::seam_fills`]), while
-/// the paths, the seam fills' strokes and their clip together stay within `max` anchors: the
-/// strokes have at most as many anchors as the paths and the clip has four, so a trace whose paths
-/// have more than half of `max` less two gets none.
-fn seams_within(res: &tr::TraceResult, params: &tr::TraceParams, size: (u32, u32), max: usize) -> Option<tr::SeamFills> {
+/// the paths, the seam fills and their clip together stay within `max` anchors. With `outlined`,
+/// each stroke is replaced by a filled path, its outline in raster pixels ([`outlined_seam`]),
+/// for an image stretched more one way than another ([`seam_unit`]). The strokes have at most as
+/// many anchors as the paths and the clip has four, so a trace whose paths have more than half of
+/// `max` less two gets none. Outlines, which have more anchors, are counted as each is made, and
+/// none is made when [`SEAM_OUTLINE_ANCHORS`] times the strokes' anchors would not fit, or once
+/// those made so far no longer fit.
+fn seams_within(res: &tr::TraceResult, params: &tr::TraceParams, size: (u32, u32), max: usize, outlined: bool) -> Option<tr::SeamFills> {
     if res.anchor_count().saturating_mul(2).saturating_add(4) > max {
         return None;
     }
-    tr::seam_fills(&res.paths, params, size)
+    let mut seams = tr::seam_fills(&res.paths, params, size)?;
+    if outlined {
+        let strokes = seams.strokes.iter().map(|tp| tp.path.anchor_count()).sum::<usize>();
+        let estimate = strokes.saturating_mul(SEAM_OUTLINE_ANCHORS).saturating_add(seams.clip.anchor_count());
+        if res.anchor_count().saturating_add(estimate) > max {
+            return None;
+        }
+        let mut total = res.anchor_count().saturating_add(seams.clip.anchor_count());
+        for tp in &mut seams.strokes {
+            outlined_seam(tp);
+            total = total.saturating_add(tp.path.anchor_count());
+            if total > max {
+                return None;
+            }
+        }
+        seams.strokes.retain(|tp| !tp.path.is_empty());
+        if seams.strokes.is_empty() {
+            return None;
+        }
+    }
+    Some(seams)
+}
+
+/// About how many anchors a seam stroke's outline ([`outlined_seam`]) has for each anchor of the
+/// stroke: both sides of each segment and a round join at each anchor. Curves can take more.
+const SEAM_OUTLINE_ANCHORS: usize = 6;
+
+/// Replace a seam stroke `tp` by the area it covers, as a filled path in the same raster pixels:
+/// butt caps and round joins, as the strokes have.
+fn outlined_seam(tp: &mut tr::TracedPath) {
+    if let Some(width) = tp.stroke.take() {
+        tp.path = vectorcraft_pathops::outline_stroke(&tp.path, width, vectorcraft_pathops::Cap::Butt, vectorcraft_pathops::Join::Round, 4.0);
+    }
 }
 
 /// An Image Trace made away from its command, off the UI thread (#3098). [`TraceRun::prepare`]
@@ -767,19 +832,12 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
     let TraceInputs { target, image: img, .. } = inputs;
     let mut warnings = keep_warnings(&trace, &res);
     warnings.extend(trace_warnings((img.width, img.height), raster, res.worked_at));
-    // Pixel space of the decoded raster → the image object's pixel space → document.
-    let sx = img.width.max(1) as f64 / raster.0.max(1) as f64;
-    let sy = img.height.max(1) as f64 / raster.1.max(1) as f64;
-    let xf = img.xf * vectorcraft_geom::Affine::scale_non_uniform(sx, sy);
+    let xf = raster_xf(&img, raster);
     // Document units per raster pixel (stroke widths).
     let unit = xf.determinant().abs().sqrt();
-    // Seam fills: document units per raster pixel along the direction the image is stretched most,
-    // so that a stroke covers its pixels across an edge at any angle.
-    let seam_unit = {
-        let [a, b, c, d, _, _] = xf.as_coeffs();
-        let (t, det) = (a * a + b * b + c * c + d * d, a * d - b * c);
-        ((t + (t * t - 4.0 * det * det).max(0.0).sqrt()) / 2.0).sqrt()
-    };
+    // Seam fills: strokes when the image is scaled alike in every direction; on an image stretched
+    // more one way, the trace outlined them in raster pixels ([`seams_within`]).
+    let seam_unit = seam_unit(xf);
     let (npaths, anchors, colors) = (res.paths.len(), res.anchor_count(), res.palette.len());
     let label = if expand { "Image Trace (Make and Expand)" } else { "Image Trace" };
     // A library color fills with the swatch's displayed color (its model kept), unlinked.
@@ -812,22 +870,37 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
             tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf))
         };
         // Abutting: the seam fills, in a clip group of their own under every path, clipped to the
-        // image's box.
+        // image's box: strokes, or on an image stretched more one way, their outlines filled.
         let strokes: Vec<Arc<Node>> = seam_fills
             .iter()
             .flat_map(|f| &f.strokes)
             .filter_map(|tp| {
-                let width = tp.stroke?;
-                let mut n = shape_node(d, tp.path.transformed(xf), None);
-                n.appearance = Appearance {
-                    items: vec![AppearanceItem::Stroke(StrokeLayer {
-                        cap: LineCap::Butt,
-                        join: LineJoin::Round,
-                        ..StrokeLayer::new(paint_of(tp), width * seam_unit)
-                    })],
-                    ..Default::default()
+                let outline = match (tp.stroke, seam_unit) {
+                    (Some(width), Some(u)) => {
+                        let mut n = shape_node(d, tp.path.transformed(xf), None);
+                        n.appearance = Appearance {
+                            items: vec![AppearanceItem::Stroke(StrokeLayer {
+                                cap: LineCap::Butt,
+                                join: LineJoin::Round,
+                                ..StrokeLayer::new(paint_of(tp), width * u)
+                            })],
+                            ..Default::default()
+                        }
+                        .into();
+                        return Some(Arc::new(n));
+                    }
+                    (Some(_), None) => {
+                        let mut outlined = tp.clone();
+                        outlined_seam(&mut outlined);
+                        outlined.path
+                    }
+                    (None, _) => tp.path.clone(),
+                };
+                if outline.is_empty() {
+                    return None;
                 }
-                .into();
+                let mut n = shape_node(d, outline.transformed(xf), None);
+                n.appearance = fill_only(paint_of(tp)).into();
                 Some(Arc::new(n))
             })
             .collect();
@@ -1187,7 +1260,7 @@ mod color_group_tests {
 
 #[cfg(test)]
 mod trace_limit_tests {
-    use super::{MAX_TRACE_ANCHORS, keep_warnings, seams_within, trace_warnings};
+    use super::{MAX_TRACE_ANCHORS, SEAM_OUTLINE_ANCHORS, keep_warnings, seams_within, trace_warnings};
     use vectorcraft_trace as tr;
 
     #[test]
@@ -1205,9 +1278,43 @@ mod trace_limit_tests {
         let anchors = res.anchor_count();
         assert!(anchors + all.as_ref().map_or(0, tr::SeamFills::anchor_count) <= 2 * anchors + 4);
         // Twice the paths' anchors and the clip's four leave room for any seam fills.
-        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + 4), all);
+        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + 4, false), all);
         // One anchor short of that: none.
-        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + 3), None);
+        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + 3, false), None);
+        // Outlined, the seam fills are filled paths, within SEAM_OUTLINE_ANCHORS of the strokes'
+        // anchors each.
+        let strokes = |f: &tr::SeamFills| f.strokes.iter().map(|tp| tp.path.anchor_count()).sum::<usize>();
+        let outlined = seams_within(&res, &params, (24, 16), MAX_TRACE_ANCHORS, true).unwrap();
+        assert!(outlined.strokes.iter().all(|tp| tp.stroke.is_none() && !tp.path.is_empty()), "{outlined:?}");
+        let n = strokes(all.as_ref().unwrap());
+        assert!(strokes(&outlined) <= SEAM_OUTLINE_ANCHORS * n, "{} outline anchors, {n} stroke anchors", strokes(&outlined));
+        // A staircase edge: the outline's round joins give it more anchors than the paths have. The
+        // outlines are made only when SEAM_OUTLINE_ANCHORS times the strokes' anchors fit.
+        let img = tr::Raster::from_fn(32, 32, |x, y| if x < y / 4 * 4 + 4 { [200, 40, 50, 255] } else { [30, 90, 200, 255] });
+        let params = tr::TraceParams { corners: 100.0, ..params };
+        let res = tr::trace(&img, &params);
+        let anchors = res.anchor_count();
+        let all = tr::seam_fills(&res.paths, &params, (32, 32)).unwrap();
+        let n = strokes(&all);
+        let outlined = seams_within(&res, &params, (32, 32), MAX_TRACE_ANCHORS, true).unwrap();
+        assert!(strokes(&outlined) > anchors, "{} outline anchors, {anchors} in the paths", strokes(&outlined));
+        assert!(strokes(&outlined) <= SEAM_OUTLINE_ANCHORS * n, "{} outline anchors, {n} stroke anchors", strokes(&outlined));
+        let fits = anchors + SEAM_OUTLINE_ANCHORS * n + 4;
+        assert!(fits > 2 * anchors + 4, "{fits}, {anchors} in the paths");
+        assert_eq!(seams_within(&res, &params, (32, 32), fits, true), Some(outlined));
+        assert_eq!(seams_within(&res, &params, (32, 32), fits - 1, true), None);
+        assert_eq!(seams_within(&res, &params, (32, 32), fits - 1, false), Some(all));
+    }
+
+    #[test]
+    fn seams_are_strokes_only_where_the_image_is_scaled_alike_every_way() {
+        use vectorcraft_geom::Affine;
+        assert_eq!(super::seam_unit(Affine::scale(2.0)), Some(2.0));
+        let turned = super::seam_unit(Affine::rotate(0.7) * Affine::scale(3.0)).unwrap();
+        assert!((turned - 3.0).abs() < 1e-9, "{turned}");
+        assert_eq!(super::seam_unit(Affine::scale_non_uniform(20.0, 1.0)), None);
+        assert_eq!(super::seam_unit(Affine::scale_non_uniform(1.0, 0.0)), None);
+        assert_eq!(super::seam_unit(Affine::scale(0.0)), None);
     }
 
     #[test]

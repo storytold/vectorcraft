@@ -654,16 +654,16 @@ impl Renderer {
             let opts = RenderOptions { outline: true, ..f.opts.clone() };
             let frame = Frame { opts: &opts, ..*f };
             // An Abutting trace's seam fills hold no traced outline: a clip group named "Seam Fills"
-            // of stroked paths without fills.
+            // of paths that are each stroked without a fill or (on a stretched image, the strokes'
+            // outlines) filled without a stroke.
             let seam_fills = |c: &Arc<Node>| {
-                let stroke_only = |m: &Arc<Node>| {
+                let one_paint = |m: &Arc<Node>| {
                     matches!(m.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
-                        && m.appearance.fill_paint().is_none()
-                        && !m.appearance.stroke_paint().is_none()
+                        && m.appearance.fill_paint().is_none() != m.appearance.stroke_paint().is_none()
                 };
                 c.name.as_deref() == Some("Seam Fills")
                     && matches!(&c.kind, NodeKind::Group { clip: true, children }
-                    if children.split_first().is_some_and(|(_, members)| !members.is_empty() && members.iter().all(stroke_only)))
+                    if children.split_first().is_some_and(|(_, members)| !members.is_empty() && members.iter().all(one_paint)))
             };
             for c in shapes.iter().filter(|c| !seam_fills(c)) {
                 self.draw_outline_member(ctx, &frame, c);
