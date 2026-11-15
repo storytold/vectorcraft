@@ -591,6 +591,7 @@ antiAlias	Sharp	锐利
 	Copy All Styles	复制所有样式
 	Copy Color Value (Hex)	复制颜色值 (十六进制)
 	Copy Fonts Used in the Document	复制文档中使用的字体
+	Copy Info	复制信息
 	Copy Links	复制链接
 	Copy Selected Style	复制所选样式
 	Copy to User Defined	复制到用户定义
@@ -1124,6 +1125,7 @@ antiAlias	Sharp	锐利
 	Rotate (Classic)…	旋转 (经典)…
 	Surface	表面
 	Wireframe	线框
+	Render Settings	渲染设置
 	No Shading	无底纹
 	Plastic	塑料
 	Highlight Intensity	高光强度
@@ -1643,6 +1645,7 @@ file-filter	Templates	模板
 	Images:	图像：
 	Import Keyboard Shortcuts…	导入键盘快捷键…
 	Import PDF	导入 PDF
+	Import PDF pages as links	将 PDF 页面导入为链接
 	Import PDF Presets	导入 PDF 预设
 	Import Perspective Grid Presets	导入透视网格预设
 	Import Print Presets	导入打印预设
@@ -2565,6 +2568,8 @@ font-script	Japanese	汉字
 	Proof Setup	校样设置
 	Properties	属性
 	Proportional Metrics	比例度量
+	H or V Style	横排或直排样式
+	Roman Italics	西文斜体
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在后方插入空白
 	Tsume	比例间距
@@ -3276,6 +3281,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Sixth Space	六分之一空格
 	Size	大小
 	Size Tile to Art	使拼贴适合图稿
+	Move Tile with Art	拼贴随图稿移动
 	Size/Leading	字号/行距
 	Size:	尺寸：
 	Ridges per segment:	每段起伏数：
@@ -3306,6 +3312,18 @@ digits	Malayalam	马拉雅拉姆数字
 	Smart Guides (View → Smart Guides)	智能参考线 (视图 → 智能参考线)
 	Smart Guides (⌘U)	智能参考线 (⌘U)
 	Smart Punctuation…	智能标点…
+	Smart Punctuation	智能标点
+	ff, fi, ffi Ligatures	ff、fi、ffi 连字
+	ff, fl, ffl Ligatures	ff、fl、ffl 连字
+	Smart Quotes	智能引号
+	Smart Spaces	智能空格
+	En, Em Dashes	短破折号和长破折号
+	Ellipses	删节号
+	Expert Fractions	专家分数字
+	Replace In	替换范围
+	Selected Text Only	仅所选文本
+	Entire Document	整个文档
+	Report Results	报告结果
 	Smooth	平滑
 	Corner	尖角
 	Relative	相对
@@ -3336,6 +3354,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Solid	实心
 	Sort by Kind	按类型排序
 	Sort by Name	按名称排序
+	Sort by Size	依大小排序
 	Sort by Status	依状态排序
 	Source code on GitHub	GitHub 源代码
 	Source Sans 3	Source Sans 3
@@ -3454,6 +3473,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Swap Fill and Stroke (Shift+X)	切换填色和描边 (Shift+X)
 	Swap start and end arrowheads	对调起点与终点箭头
 	Swap the selected object for the file, keeping its place and transform	以文件替换选择的对象，并保留其位置与变形
+	Show Import Options	显示导入选项
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前询问每个 PDF、DXF 或文本文件的导入选项；关闭时使用上次选择的选项
 	Stylistic Alternates	风格替代字
 	Swash	花饰字
 	Swatch Conflict	色板冲突
@@ -3543,6 +3564,48 @@ digits	Malayalam	马拉雅拉姆数字
 	Composite Fonts	复合字体
 	Export Composite Fonts	导出复合字体
 	Import Composite Fonts	导入复合字体
+@msg	each font must be {name, parts}	每个字体都必须是 {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	未知键 `{k}`；字体可用的键为 name 和 parts
+@msg	each font needs a name	每个字体都需要名称
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` 不能用作复合字体的名称（1 到 {COMPOSITE_NAME_MAX} 个字符，不含控制字符）
+@msg	`{name}`: parts must be an object	`{name}`：parts 必须是对象
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`：未知类别 `{k}`；类别为 kanji、kana、punctuation、symbols、roman 和 numerals
+@msg	`{name}`: {_1} must be an object	`{name}`：{_1} 必须是对象
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`：{_1} 中有未知键 `{k}`
+@msg	`{name}`: give the kanji part	`{name}`：请指定 kanji 部分
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	一个文档最多保存 {COMPOSITE_FONTS_MAX} 个复合字体
+@msg	two composite fonts are named `{_1}`	有两个复合字体都名为 `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` 是已安装字体的名称
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`：{_2} 使用了复合字体 `{font}`
+@msg	give fonts: [{name, parts}…]	请指定 fonts：[{name, parts}…]
+@msg	path is empty	path 为空
+@msg	fonts must be a list of composite fonts	fonts 必须是复合字体列表
+@msg	names must be strings	names 必须是字符串
+@msg	no composite font named `{n}`	没有名为 `{n}` 的复合字体
+@msg	names must be a list of names	names 必须是名称列表
+@msg	no composite fonts to export	没有可导出的复合字体
+@msg	not a composite fonts file: {e}	不是复合字体文件：{e}
+@msg	not a composite fonts file: no compositeFonts list	不是复合字体文件：没有 compositeFonts 列表
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	文件包含超过 {COMPOSITE_FONTS_MAX} 个复合字体
+@msg	the file is larger than 4 MB	文件大于 4 MB
+@msg	dataBase64 is not base64	dataBase64 不是 base64
+@msg	give one of path, data or dataBase64	请指定 path、data 或 dataBase64 之一
+@msg	the file holds no composite fonts	文件不含复合字体
+@msg	the file holds two composite fonts named `{_1}`	文件中有两个复合字体都名为 `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` 不能用作复合字体的名称
+@msg	{k}: give a font	{k}：请指定字体
+@msg	`{name}`: {k}: give a font	`{name}`: {k}：请指定字体
+@msg	{k}: size must be {_1} to {_2}%	{k}：size 必须为 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}：size 必须为 {_1}% 到 {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}：baseline 必须为 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}：baseline 必须为 {_1}% 到 {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}：缩放必须为 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}：缩放必须为 {_1}% 到 {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}：只有 kana、roman 和 numerals 可以缩放
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}：只有 kana、roman 和 numerals 可以缩放
+@msg	{k}: only kana can be scaled at the center	{k}：只有 kana 可以从中心缩放
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}：只有 kana 可以从中心缩放
+@msg	no composite font	没有复合字体
 	Delete Font	删除字体
 	Kanji	汉字
 	Kana	假名
@@ -3909,6 +3972,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Working CMYK	工作 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加标签)
 	Working RGB (don't tag)	工作 RGB (不加标签)
+	Don't Color Manage This Document	不对此文档进行色彩管理
+	Working RGB: {name}	工作 RGB：{name}
+	Working CMYK: {name}	工作 CMYK：{name}
 	Workspace	工作区
 	Workspace {i}	工作区 {i}
 	Wrinkle Tool	褶皱工具
@@ -4875,6 +4941,7 @@ imageTrace	Outline	轮廓
 @msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
+@msg	Copied the link info	已复制链接信息
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
 @msg	unknown highlight `{h}`	未知的高亮显示 `{h}`
@@ -4988,6 +5055,7 @@ imageTrace	Outline	轮廓
 @msg	every numbered name for {name} is taken in the document's folder	文档所在文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	No linked files to look for	没有要查找的链接文件
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	该链接位于符号、图表设计、图案或不透明度蒙版中，在画布上没有位置
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	图表系列中图表设计的图稿会根据设计重新绘制：要更改它，请编辑设计
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必须是由颜色组成的数组，而不是 {v}
@@ -5007,6 +5075,7 @@ imageTrace	Outline	轮廓
 @msg	automation filesystem access is not granted: write authority is absent: {path}	未授予自动化文件系统访问权限：缺少写入权限：{path}
 @msg	automation path rejected: outside the read root {root}: {path}	已拒绝自动化路径：位于读取根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	已拒绝自动化路径：位于所有读取根目录 {roots} 之外：{path}
+@msg	a linked JavaScript file is outside the read roots	链接的 JavaScript 文件位于所有读取根目录之外
 @msg	automation path rejected: outside the write root {root}: {path}	已拒绝自动化路径：位于写入根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒绝自动化路径：位于所有写入根目录 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒绝自动化路径：路径为空
@@ -5561,6 +5630,7 @@ axis	Both	两者
 
 # Photoshop-style raster effects (Effect menu, their dialogs).
 	Radial Blur…	径向模糊…
+	Blur Center	模糊中心
 	Smart Blur…	智能模糊…
 	Sharpen	锐化
 	Unsharp Mask…	反锐化遮罩…
@@ -5869,6 +5939,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
 @msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必须是只含 `mode` 的对象，值为 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
 @msg	bevel must be none or one of {_1}	bevel 必须是 none 或 {_1} 之一
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}无法从此图稿生成实体：其符号实例、混合和剪切组包含的对象过多
@@ -5951,6 +6022,9 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+	Move Light to Back	将光源移到后方
+	Move Light to Front	将光源移到前方
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	拖动光源可移动它。方向键移动具有焦点的光源；按住 Shift 以 15° 为步长。
 	Shadows	阴影
 	Distance from Object	与对象的距离
 	Shadow Bounds	阴影边界
@@ -6511,6 +6585,8 @@ axis	Y Axis	Y 轴
 	Create New Set	创建新组
 	Stop Global Edit	停止全局编辑
 	Global Edit Options	全局编辑选项
+	Select Similar Objects	选择相似对象
+	Select Similar Options	选择相似对象选项
 	Leave Out of Global Edit	从全局编辑中排除
 	Match	匹配
 	On Artboards	在画板上
@@ -6633,6 +6709,13 @@ axis	Y Axis	Y 轴
 	Graphite Pencil	石墨铅笔
 	Wax Crayon	蜡笔
 	Charcoal Dust	炭粉
+
+# Original procedural circuit brushes.
+	Tech Circuit	电子电路
+	Circuit Trace	电路走线
+	Bus Lines	总线
+	Terminal Nodes	端子节点
+
 	Notched Ribbon	凹口丝带
 	Double Line	双线
 	Wave	波浪
@@ -7733,7 +7816,7 @@ breakText	Glyphs	字形
 @msg	too many arguments	参数过多
 @msg	too many quantifiers	量词过多
 @msg	turn on at least one side	请至少打开一条边
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 特性 `{t}` (liga、calt、dlig、smcp、frac、onum、tnum、ordn、swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom、aalt；加前缀 - 表示关闭；swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom 和 aalt 可用 `tag=N` 指定替代字形的编号，N 为 0 到 {_1}，例如 `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 特性 `{t}` (liga、calt、dlig、smcp、frac、onum、tnum、ordn、swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom、aalt、hkna、ital；加前缀 - 表示关闭；swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom 和 aalt 可用 `tag=N` 指定替代字形的编号，N 为 0 到 {_1}，例如 `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的参数 `{key}`
@@ -8857,6 +8940,8 @@ breakText	Glyphs	字形
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 文件过大，无法作为文字置入 (最多 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG 展开后的嵌套 SVG 图像超过 {0} 个
 @msg	the SVG expands to more than {0} objects	SVG 展开后的对象超过 {0} 个
+@msg	the SVG's style sheets take too long to match	匹配 SVG 的样式表耗时过长
+@msg	the SVG's styles expand to more than {0} MB	SVG 的样式展开后超过 {0} MB
 @msg	the SVG has no drawable objects	SVG 中没有可绘制的对象
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 文件解压后超过 {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文档的属性页超过 {MAX_PAGES} 页，过多而无法置入

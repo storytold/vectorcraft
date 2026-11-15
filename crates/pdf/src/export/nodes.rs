@@ -14,6 +14,11 @@ struct Measured {
     members: Vec<Measured>,
 }
 
+/// Box `b` grown by `reach`, the room brush art can paint past it; `b` itself when `reach` is 0.
+fn brushed(b: Option<Rect>, reach: f64) -> Option<Rect> {
+    if reach > 0.0 { b.map(|b| b.inflate(reach, reach)) } else { b }
+}
+
 #[cfg(test)]
 std::thread_local! {
     /// The objects this thread has measured for the walk and for the links (tests).
@@ -312,15 +317,17 @@ impl Exporter<'_> {
         krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
     }
 
-    /// The box of `n`, and of the members of a plain group or layer.
+    /// The box of `n`, and of the members of a plain group or layer. A box grows by the room brush
+    /// art can paint past the brushed strokes of `n` and of the objects in it
+    /// ([`vectorcraft_brush::reach_within`]), as the renderer culls it.
     fn measure(&self, n: &Node) -> Measured {
         if !matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
             #[cfg(test)]
             MEASURES.with(|m| m.set(m.get() + 1));
-            return Measured { bounds: n.visual_bounds_with(&self.symbols), members: vec![] };
+            return Measured { bounds: brushed(n.visual_bounds_with(&self.symbols), vectorcraft_brush::reach_within(n)), members: vec![] };
         }
         let members: Vec<_> = n.editing_children().iter().map(|c| self.measure(c)).collect();
-        Measured { bounds: n.visual_of_members(members.iter().map(|m| m.bounds)), members }
+        Measured { bounds: brushed(n.visual_of_members(members.iter().map(|m| m.bounds)), vectorcraft_brush::reach(n)), members }
     }
 
     pub(super) fn node(&mut self, s: &mut Surface, n: &Node, page: Rect, force: bool) {
