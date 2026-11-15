@@ -986,6 +986,11 @@
 	NTSC Colors	NTSC boje
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB pravilo:
+	CMYK Policy:	CMYK pravilo:
+	Preserve Embedded Profiles	Zadrži ugrađene profile
+	Convert to Working Space	Pretvori u radni prostor
+	Preserve Numbers	Zadrži brojeve
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Krakelura…
@@ -1080,6 +1085,14 @@ lighting	Light	Svjetlo
 	Previous Artboard	Prethodna radna ploča
 	Next Artboard	Sljedeća radna ploča
 	Last Artboard	Posljednja radna ploča
+	Status Bar Show	Prikaz u traci stanja
+	Artboard Name	Naziv radne ploče
+	Current Tool	Trenutni alat
+	Date and Time	Datum i vrijeme
+	Number of Undos	Broj poništavanja
+	Document Color Profile	Profil boja dokumenta
+	Undos	Poništavanja
+	Redos	Ponavljanja
 	Graphic Style Options…	Opcije grafičkog stila…
 	Symbol Options	Opcije simbola
 	Symbol Options…	Opcije simbola…
@@ -1492,6 +1505,7 @@ lighting	Light	Svjetlo
 	Align to Artboard	Poravnaj s radnom pločom
 	Align to Glyph Bounds	Poravnaj s granicama glifa
 	Align to Key Object	Poravnaj s ključnim objektom
+	Align to Key Anchor	Poravnaj s ključnom sidrenom tačkom
 	Align to Selection	Poravnaj prema odabiru
 	Align To:	Poravnaj s:
 	Cancel Key Object	Otkaži ključni objekat
@@ -1641,6 +1655,8 @@ digits	Malayalam	Malajalam
 	Kana	Kana
 	Numerals	Brojevi
 	Scale at Center	Skaliraj od centra
+	Delete Set	Izbriši skup
+	Direct Entry	Direktan unos
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko gore/dolje
@@ -2020,7 +2036,10 @@ digits	Malayalam	Malajalam
 	Tabular Lining	Tabelarne brojke
 	Tabular Oldstyle	Tabelarne stare brojke
 	Titling Alternates	Alternative za naslove
-	Every-line Composer	Slagač svih redova
+	Middle Eastern & South Asian Single-line Composer	Slagač jednog reda (Bliski istok i Južna Azija)
+	Middle Eastern & South Asian Every-line Composer	Slagač svih redova (Bliski istok i Južna Azija)
+	Standard Single-line Composer	Standardni slagač jednog reda
+	Standard Every-line Composer	Standardni slagač svih redova
 	First-line Left Indent	Lijeva uvlaka prvog reda
 	Hyphenation…	Rastavljanje riječi…
 	Words Longer Than:	Riječi duže od:
@@ -2060,7 +2079,6 @@ digits	Malayalam	Malajalam
 	East Asian Composition Settings	Postavke istočnoazijske kompozicije
 	Korean Composition Settings	Postavke korejske kompozicije
 	Select a text object to edit its paragraph attributes.	Odaberite tekstualni objekat da uredite njegove atribute pasusa.
-	Single-line Composer	Slagač jednog reda
 	Toggle Line Composer	Uključi/isključi Line Composer
 	Space After Paragraph	Razmak nakon pasusa
 	Space Before Paragraph	Razmak prije pasusa
@@ -7030,3 +7048,4 @@ shape	Open	Otvoren
 	Nest Shapes…	Slaganje oblika…
 	Nest Shapes	Slaganje oblika
 	Roll	Rolna
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"

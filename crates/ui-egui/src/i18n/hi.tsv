@@ -283,6 +283,7 @@
 	Align to Corners and Ends	कोनों और सिरों पर संरेखित करें
 	Align to Glyph Bounds	ग्लिफ़ की सीमाओं पर संरेखित करें
 	Align to Key Object	मुख्य ऑब्जेक्ट पर संरेखित करें
+	Align to Key Anchor	मुख्य एंकर पॉइंट पर संरेखित करें
 	Align to Page	पेज पर संरेखित करें
 	Align to Path	पाथ पर संरेखित करें
 	Align to Selection	सिलेक्शन पर संरेखित करें
@@ -891,6 +892,11 @@ antiAlias	Sharp	शार्प
 	CMYK Images	CMYK इमेज
 	CMYK profile in effect	इफ़ेक्ट में CMYK प्रोफ़ाइल
 	CMYK:	CMYK:
+	RGB Policy:	RGB नीति:
+	CMYK Policy:	CMYK नीति:
+	Preserve Embedded Profiles	एम्बेड की गई प्रोफ़ाइल बनाए रखें
+	Convert to Working Space	वर्किंग स्पेस में बदलें
+	Preserve Numbers	संख्याएँ बनाए रखें
 	Coarse Dots	मोटे बिंदु
 	Coincidence:	संयोग:
 	Collapse Panel Group	पैनल समूह संक्षिप्त करें
@@ -1712,7 +1718,8 @@ antiAlias	Sharp	शार्प
 	Every (minutes)	हर (मिनट)
 	Every option is at its default.	प्रत्येक ऑप्शन इसके डिफ़ॉल्ट रूप से होता है।
 	Every option matches {base}.	प्रत्येक ऑप्शन {base} से मेल खाता है।
-	Every-line Composer	हर लाइन संगीतकार
+	Middle Eastern & South Asian Every-line Composer	हर लाइन संगीतकार (मध्य पूर्व और दक्षिण एशिया)
+	Standard Every-line Composer	मानक हर लाइन संगीतकार
 	Exact	सटीक
 	Exact dash lengths	सटीक डैश लंबाई
 	Example: {name}	उदाहरण: {name}
@@ -2564,6 +2571,14 @@ antiAlias	Sharp	शार्प
 	Lasso Tool	लैस्सो टूल
 	Last	अंतिम
 	Last Artboard	अंतिम आर्टबोर्ड
+	Status Bar Show	स्टेटस बार में दिखाएँ
+	Artboard Name	आर्टबोर्ड का नाम
+	Current Tool	मौजूदा टूल
+	Date and Time	तारीख और समय
+	Number of Undos	पूर्ववत करने की संख्या
+	Document Color Profile	दस्तावेज़ की रंग प्रोफ़ाइल
+	Undos	पूर्ववत
+	Redos	फिर से करें
 	Last commit	अंतिम कमिट
 	Last Effect: {}	अंतिम इफ़ेक्ट: {}
 	Last Effect: {name}	अंतिम इफ़ेक्ट: {name}
@@ -4734,7 +4749,8 @@ antiAlias	Sharp	शार्प
 	Single Quotes:	एकल उद्धरण:
 	Single Right Quotation Mark	सिंगल राइट कोटेशन मार्क
 	Single Word Justification:	एकल शब्द जस्टिफ़िकेशन:
-	Single-line Composer	एकल लाइन संगीतकार
+	Middle Eastern & South Asian Single-line Composer	एकल लाइन संगीतकार (मध्य पूर्व और दक्षिण एशिया)
+	Standard Single-line Composer	मानक एकल लाइन संगीतकार
 	Sixth Space	छठे हिस्से जितना स्पेस
 	Size	आकार
 	Size Tile to Art	आकार टाइल कला के लिए
@@ -5157,6 +5173,8 @@ antiAlias	Sharp	शार्प
 	Kana	काना
 	Numerals	अंक
 	Scale at Center	केंद्र से आकार बदलें
+	Delete Set	सेट हटाएँ
+	Direct Entry	सीधी प्रविष्टि
 	Technical Drawing	तकनीकी ड्राइंग
 	Telugu	तेलुगु
 	Temperature	तापमान
@@ -5703,6 +5721,7 @@ antiAlias	Sharp	शार्प
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	स्वीकृति आवश्यक: यह {0} माँगता है, जिसे उपयोगकर्ता इसे अलग से स्थापित करते समय देता है
 @msg	`angle` must be a number	`angle` एक संख्या होना चाहिए
 @msg	`aspect` must be from 0.01 to 100	`aspect` 0.01 से 100 तक होना चाहिए
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` [a, b, c, d] होना चाहिए, हर मान -1000 से 1000 तक, और a·d - b·c का 0 से अंतर कम से कम 0.001 होना चाहिए
 @msg	`cap` must be "butt", "round" or "square"	`cap` "butt", "round" या "square" होना चाहिए
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` "nonzero" या "evenodd" होना चाहिए
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` अधिकतम {MAX_HELP_URL} बाइट का https:// पता होना चाहिए
@@ -5755,6 +5774,7 @@ antiAlias	Sharp	शार्प
 @msg	stops must be in order of `offset`	स्टॉप `offset` के क्रम में होने चाहिए
 @msg	the document has no pattern {pattern}	डॉक्यूमेंट में पैटर्न {pattern} नहीं है
 @msg	the document has no swatch {n}	डॉक्यूमेंट में स्वॉच {n} नहीं है
+@msg	`plates` requires a stop linked to a spot swatch	`plates` के लिए स्पॉट रंग स्वॉच से जुड़ा स्टॉप आवश्यक है
 @msg	the output	आउटपुट
 @msg	the path has no anchor points	पाथ में कोई एंकर पॉइंट नहीं है
 @msg	too many anchor points (limit {MAX_ANCHORS})	बहुत अधिक एंकर पॉइंट (सीमा {MAX_ANCHORS})
@@ -5930,7 +5950,8 @@ antiAlias	Sharp	शार्प
 @msg	{id} is not a slice	{id} एक स्लाइस नहीं है
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} एक अन्य ऐप खोलता है: केवल कीबोर्ड पर व्यक्ति इसे चला सकता है
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` ऑप्शन में से एक नहीं है
-@msg	{k} has control characters{_1}	{k} में नियंत्रण वर्ण हैं{_1}
+@msg	{k} has control characters	{k} में नियंत्रण वर्ण हैं
+@msg	{k} has control characters or line breaks	{k} में नियंत्रण वर्ण या लाइन ब्रेक हैं
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} बहुत लंबा है (अधिकांश {MAX_TEXT} वर्णों पर)
 @msg	{k} must be {{size?, position?}}	{k} को {{size?, position?}} होना चाहिए
 @msg	{k} must be > 0	{k} होना चाहिए > 0
@@ -6693,7 +6714,7 @@ antiAlias	Sharp	शार्प
 @msg	command `{id}` is not available right now	आदेश `{id}` अभी उपलब्ध नहीं है
 @msg	command must be a shape.* command	command कोई shape.* कमांड होना चाहिए
 @msg	commands[{i}]: missing `command`	आदेश [{i}]: लापता `command`
-@msg	composer must be "singleLine" or "everyLine"	composer "singleLine" या "everyLine" होना चाहिए
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer "singleLine", "everyLine", "standardSingleLine" या "standardEveryLine" होना चाहिए
 @msg	compound {_1} must contain exactly one open path to join	जोड़ने के लिए कंपाउंड {_1} में ठीक एक खुला पाथ होना चाहिए
 @msg	compound paths can only contain paths	यौगिक पाथ में केवल पाथ हो सकते हैं
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	कंपाउंड शेप पाथ, कंपाउंड पाथ, समूह, कंपाउंड शेप, टाइप, ब्लेंड और एन्वेलप लेते हैं
@@ -6811,6 +6832,18 @@ antiAlias	Sharp	शार्प
 @msg	`name` must be the name of a script engine	`name` किसी स्क्रिप्ट इंजन का नाम होना चाहिए
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	मुख्य स्क्रिप्ट इंजन हर रन के लिए नया होता है और कभी रखा नहीं जाता, इसलिए इसे हटाया नहीं जा सकता
 @msg	there is no script engine named {name}	{name} नाम का कोई स्क्रिप्ट इंजन नहीं है
+@msg	`answers` must be a list of answers	`answers` उत्तरों की सूची होनी चाहिए
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` में {MAX_ANSWERS} से अधिक उत्तर हैं
+@msg	`answers` is larger than 1 MiB	`answers` 1 MiB से बड़ा है
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	must be an object with `kind` and `value`	`kind` और `value` वाला ऑब्जेक्ट होना चाहिए
+@msg	must have exactly `kind` and `value`	इसमें ठीक-ठीक `kind` और `value` होने चाहिए
+@msg	is an alert's answer, whose `value` must be "ok"	यह alert का उत्तर है, इसलिए इसका `value` "ok" होना चाहिए
+@msg	is a confirm's answer, whose `value` must be true or false	यह confirm का उत्तर है, इसलिए इसका `value` true या false होना चाहिए
+@msg	is longer than 16 KiB	16 KiB से लंबा है
+@msg	is a prompt's answer, whose `value` must be a string or null	यह prompt का उत्तर है, इसलिए इसका `value` स्ट्रिंग या null होना चाहिए
+@msg	must have `kind` alert, confirm or prompt	`kind` alert, confirm या prompt होना चाहिए
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` केवल ऐसे रन के लिए है जिसमें पूछने के लिए कोई नहीं है: ऐप में, व्यक्ति हर डायलॉग का उत्तर देता है
 @msg	Running a script	स्क्रिप्ट चल रही है
 @msg	Copied the script report	Copied स्क्रिप्ट रिपोर्ट
 @msg	Copied the link info	लिंक जानकारी कॉपी की गई
@@ -7106,6 +7139,7 @@ antiAlias	Sharp	शार्प
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	इमेज ट्रेस विफल: आंतरिक त्रुटि: इसके धागे को बंद कर दिया (कृपया इस बग की रिपोर्ट करें)
 @msg	Image Trace finished, but its document was closed	इमेज ट्रेस समाप्त हो गया, लेकिन इसका डॉक्यूमेंट बंद हो गया।
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	इमेज ट्रेस समाप्त हो गया, लेकिन इस बीच इमेज या इसकी सेटिंग्स बदल गई: इसे फिर से ट्रेस करें
+@msg	Image Trace finished, but its document was reverted: trace it again	इमेज ट्रेस समाप्त हो गया, लेकिन इसके डॉक्यूमेंट को मूल स्थिति में लाया गया: इसे फिर से ट्रेस करें
 @msg	Image Trace: the traced image is missing	इमेज ट्रेस: ज्ञात इमेज गायब है
 @msg	image would be too large; lower the resolution	इमेज बहुत बड़ी होगी; रिज़ॉल्यूशन कम करें
 @msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client या server

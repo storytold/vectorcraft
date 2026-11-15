@@ -242,6 +242,7 @@
 	Align to Artboard	Alinea al tauler
 	Align to Glyph Bounds	Alinea als límits del glif
 	Align to Key Object	Alinea a l’objecte clau
+	Align to Key Anchor	Alinea al punt d’ancoratge clau
 	Align to Page	Alinea a la pàgina
 	Align to Path	Alinea al traçat
 	Align to Selection	Alinea a la selecció
@@ -764,6 +765,11 @@ antiAlias	Sharp	Nítid
 	CMYK Equivalents	Equivalents CMYK
 	CMYK profile in effect	Perfil CMYK en vigor
 	CMYK:	CMYK:
+	RGB Policy:	Política RGB:
+	CMYK Policy:	Política CMYK:
+	Preserve Embedded Profiles	Conserva els perfils incrustats
+	Convert to Working Space	Converteix a l'espai de treball
+	Preserve Numbers	Conserva els números
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
 	Collapse Panels to Icons	Replega els panells a icones
@@ -1531,7 +1537,10 @@ antiAlias	Sharp	Nítid
 	Every (minutes)	Cada (minuts)
 	Every option is at its default.	Totes les opcions són al valor predeterminat.
 	Every option matches {base}.	Totes les opcions coincideixen amb {base}.
-	Every-line Composer	Composició línia per línia
+	Middle Eastern & South Asian Single-line Composer	Compositor d’una línia (Orient Pròxim i Àsia Meridional)
+	Middle Eastern & South Asian Every-line Composer	Composició línia per línia (Orient Pròxim i Àsia Meridional)
+	Standard Single-line Composer	Compositor estàndard d’una línia
+	Standard Every-line Composer	Composició estàndard línia per línia
 	Exact	Exacte
 	Exact dash lengths	Longituds de guió exactes
 	Example: {name}	Exemple: {name}
@@ -2319,6 +2328,14 @@ digits	Malayalam	Malaiàlam
 	Enclosing Lasso	Llaç envoltant
 	Last	Últim
 	Last Artboard	Últim tauler
+	Status Bar Show	Mostra a la barra d'estat
+	Artboard Name	Nom del tauler
+	Current Tool	Eina actual
+	Date and Time	Data i hora
+	Number of Undos	Nombre de desfets
+	Document Color Profile	Perfil de color del document
+	Undos	Desfets
+	Redos	Refets
 	Last commit	Últim commit
 	Last Effect: {name}	Últim efecte: {name}
 	Last Effect: {}	Últim efecte: {}
@@ -2477,6 +2494,8 @@ digits	Malayalam	Malaiàlam
 	Save Variable Library…	Desa la biblioteca de variables…
 @msg	a variable library holds text variables, and the document has none	una biblioteca de variables conté variables de text, i el document no en té cap
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no es pot desar en una biblioteca de variables: canvieu-li el nom perquè comenci amb una lletra o `_`, sense espais ni símbols que no siguin `-`, `_` i `.`
+@msg	{k} has control characters	{k} conté caràcters de control
+@msg	{k} has control characters or line breaks	{k} conté caràcters de control o salts de línia
 @msg	data set `{name}` holds a control character, which a variable library can't hold	el conjunt de dades `{name}` conté un caràcter de control, que una biblioteca de variables no pot contenir
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	el conjunt de dades `{name}` comença o acaba amb un espai en blanc, que una biblioteca de variables no pot contenir
 	Loaded Texture	Textura carregada
@@ -4387,7 +4406,6 @@ digits	Malayalam	Malaiàlam
 	Single Quotes:	Cometes simples:
 	Single Right Quotation Mark	Cometa simple dreta
 	Single Word Justification:	Justificació d’una sola paraula:
-	Single-line Composer	Compositor d’una línia
 	Sixth Space	Espai de sisena part
 	Size	Mida
 	Size Tile to Art	Ajusta la mida del mosaic a l’art
@@ -4772,6 +4790,8 @@ digits	Malayalam	Malaiàlam
 	Kana	Kana
 	Numerals	Xifres
 	Scale at Center	Escala des del centre
+	Delete Set	Suprimeix el joc
+	Direct Entry	Entrada directa
 	Up/Down:	Amunt/avall:
 	Left/Right:	Esquerra/dreta:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko amunt/avall
@@ -5699,6 +5719,17 @@ digits	Malayalam	Malaiàlam
 @msg	`name` must be the name of a script engine	`name` ha de ser el nom d'un motor d'scripts
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor d'scripts principal és nou a cada execució i no es conserva mai, per tant no es pot descartar
 @msg	there is no script engine named {name}	no hi ha cap motor d'scripts anomenat {name}
+@msg	`answers` must be a list of answers	`answers` ha de ser una llista de respostes
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` té més de {MAX_ANSWERS} respostes
+@msg	`answers` is larger than 1 MiB	`answers` ocupa més d'1 MiB
+@msg	must be an object with `kind` and `value`	ha de ser un objecte amb `kind` i `value`
+@msg	must have exactly `kind` and `value`	ha de tenir exactament `kind` i `value`
+@msg	is an alert's answer, whose `value` must be "ok"	és la resposta d'un alert, i el seu `value` ha de ser "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	és la resposta d'un confirm, i el seu `value` ha de ser true o false
+@msg	is longer than 16 KiB	ocupa més de 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	és la resposta d'un prompt, i el seu `value` ha de ser una cadena o null
+@msg	must have `kind` alert, confirm or prompt	ha de tenir `kind` alert, confirm o prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` només és per a una execució sense ningú a qui preguntar: a l'aplicació, la persona respon cada quadre de diàleg
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Copied the link info	S’ha copiat la informació de l’enllaç
@@ -6660,6 +6691,7 @@ digits	Malayalam	Malaiàlam
 @msg	{what} points outside memory	{what} apunta fora de la memòria
 @msg	`angle` must be a number	`angle` ha de ser un nombre
 @msg	`aspect` must be from 0.01 to 100	`aspect` ha d’estar entre 0.01 i 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` ha de ser [a, b, c, d], cadascun entre -1000 i 1000, amb a·d - b·c com a mínim a 0.001 de 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` ha de ser "butt", "round" o "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` ha de ser "nonzero" o "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` ha de ser una adreça https:// de {MAX_HELP_URL} bytes com a màxim
@@ -6712,6 +6744,7 @@ digits	Malayalam	Malaiàlam
 @msg	stops must be in order of `offset`	les parades han d’estar en ordre d’`offset`
 @msg	the document has no pattern {pattern}	el document no té el motiu {pattern}
 @msg	the document has no swatch {n}	el document no té la mostra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requereix una parada vinculada a una mostra de color directe
 @msg	the output	la sortida
 @msg	the path has no anchor points	el traçat no té punts d’ancoratge
 @msg	too many anchor points (limit {MAX_ANCHORS})	massa punts d’ancoratge (límit {MAX_ANCHORS})
@@ -7737,3 +7770,4 @@ breakText	Glyphs	Glifs
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a JPEG (com a màxim 65535 píxels per costat): reduïu la resolució
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a Targa (com a màxim 65535 píxels per costat): reduïu la resolució
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} píxels és massa gran per a PSD (com a màxim {MAX_SIDE} píxels per costat): reduïu la resolució
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
