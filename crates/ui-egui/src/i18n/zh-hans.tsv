@@ -591,6 +591,7 @@ antiAlias	Sharp	锐利
 	Copy All Styles	复制所有样式
 	Copy Color Value (Hex)	复制颜色值 (十六进制)
 	Copy Fonts Used in the Document	复制文档中使用的字体
+	Copy Info	复制信息
 	Copy Links	复制链接
 	Copy Selected Style	复制所选样式
 	Copy to User Defined	复制到用户定义
@@ -2566,6 +2567,8 @@ font-script	Japanese	汉字
 	Proof Setup	校样设置
 	Properties	属性
 	Proportional Metrics	比例度量
+	H or V Style	横排或直排样式
+	Roman Italics	西文斜体
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在后方插入空白
 	Tsume	比例间距
@@ -4889,6 +4892,7 @@ imageTrace	Outline	轮廓
 @msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
+@msg	Copied the link info	已复制链接信息
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
 @msg	unknown highlight `{h}`	未知的高亮显示 `{h}`
@@ -7746,7 +7750,7 @@ breakText	Glyphs	字形
 @msg	too many arguments	参数过多
 @msg	too many quantifiers	量词过多
 @msg	turn on at least one side	请至少打开一条边
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 特性 `{t}` (liga、calt、dlig、smcp、frac、onum、tnum、ordn、swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom、aalt；加前缀 - 表示关闭；swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom 和 aalt 可用 `tag=N` 指定替代字形的编号，N 为 0 到 {_1}，例如 `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 特性 `{t}` (liga、calt、dlig、smcp、frac、onum、tnum、ordn、swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom、aalt、hkna、ital；加前缀 - 表示关闭；swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom 和 aalt 可用 `tag=N` 指定替代字形的编号，N 为 0 到 {_1}，例如 `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的参数 `{key}`

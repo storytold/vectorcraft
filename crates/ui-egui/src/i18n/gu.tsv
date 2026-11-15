@@ -743,6 +743,7 @@
 	Copy Artboard	આર્ટબોર્ડ નકલ કરો
 	Copy Color Value (Hex)	રંગ મૂલ્યની નકલ કરો (Hex)
 	Copy Guide	ગાઇડ નકલ કરો
+	Copy Info	માહિતી નકલ કરો
 	Copy Report	રિપોર્ટ નકલ કરો
 	Copy Script Console	સ્ક્રિપ્ટ કન્સોલ નકલ કરો
 	Copy Selected	પસંદ કરેલું નકલ કરો
@@ -2743,6 +2744,8 @@
 	Proof Setup	પ્રૂફ સેટઅપ
 	Properties	ગુણધર્મો
 	Proportional Metrics	પ્રમાણસર મેટ્રિક્સ
+	H or V Style	આડી અથવા ઊભી શૈલી
+	Roman Italics	રોમન ઇટાલિક
 	Pucker	પકર
 	Pucker & Bloat…	પકર અને બ્લોટ…
 	Pucker Tool	પકર ટૂલ
