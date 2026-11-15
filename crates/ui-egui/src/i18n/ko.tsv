@@ -5582,6 +5582,8 @@ effect	Vertical	세로
 	Step up or down	한 단계 올리기 또는 내리기
 	Drag values or labels. Double-click a value to type.	값이나 레이블을 드래그하세요. 값을 더블클릭하면 입력할 수 있습니다.
 	Drag rings to rotate. Shift snaps to 15°.	링을 드래그해 회전하세요. Shift를 누르면 15°씩 스냅됩니다.
+	Track cube	회전 큐브
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	면, 모서리 또는 링을 드래그해 회전하세요. Shift를 누르면 화면의 한 축을 중심으로 회전합니다.
 	Drag the light, or its rings. Shift snaps to 15°.	조명이나 링을 드래그하세요. Shift를 누르면 15°씩 스냅됩니다.
 lighting	Light	광원
 	Keep visible surfaces only when expanding	확장 시 보이는 표면만 유지
