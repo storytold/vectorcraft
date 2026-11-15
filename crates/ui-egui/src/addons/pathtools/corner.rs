@@ -19,7 +19,7 @@ const FIELD_W: f32 = 96.0;
 
 /// Object › Plug-ins › Path Precision Tools › Corner Tool.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    app.select_tool(ID);
+    app.try_select_tool(ID)?;
     crate::panel_docking::reveal_panel(app, super::ID)
 }
 

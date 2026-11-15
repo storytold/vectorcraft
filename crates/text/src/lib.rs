@@ -188,6 +188,12 @@ pub struct PositionedGlyph {
     /// line's baseline before Character Alignment moves the glyph (y down). It names the block
     /// line whatever the alignment of each character on it. 0 for any other glyph.
     pub warichu_line: f64,
+    /// Type on an open path that starts before the path: the glyph's middle falls before the
+    /// path's start, so it draws nothing (its `outline` is empty and it has no image or color
+    /// art), hit testing and Touch Type skip it while a glyph is drawn, and exports leave it out.
+    /// It stays in the layout for the caret, at the path's start with no advance or width, and its
+    /// ligature carets stand there too.
+    pub off_path: bool,
 }
 
 /// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
@@ -600,11 +606,15 @@ pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
                 .map(|(_, d)| (p - (g.origin + along * if g.rtl { g.advance - d } else { d })).hypot2())
                 .fold(mid, f64::min)
         };
-        let best = layout.glyphs.iter().enumerate().min_by(|(_, a), (_, b)| near(a).total_cmp(&near(b)));
+        // Glyphs before the start of an open path draw nothing: a click goes to a drawn one when
+        // there is one.
+        let drawn = layout.glyphs.iter().any(|g| !g.off_path);
+        let best = layout.glyphs.iter().enumerate().filter(|(_, g)| !(drawn && g.off_path)).min_by(|(_, a), (_, b)| near(a).total_cmp(&near(b)));
         let Some((i, g)) = best else { return layout.lines.first().map_or(0, |l| l.start) };
         // `first` and `last` are the first and last glyphs of the cluster. A click before the middle of
-        // the cluster, measured along the first glyph's direction, goes to the cluster's start.
-        let same = |o: &&PositionedGlyph| o.byte == g.byte && o.len == g.len;
+        // the cluster, measured along the first glyph's direction, goes to the cluster's start. A
+        // cluster's glyphs before an open path's start are left out when one of its glyphs is drawn.
+        let same = |o: &&PositionedGlyph| o.byte == g.byte && o.len == g.len && !(drawn && o.off_path);
         let first = layout.glyphs[..=i].iter().rev().take_while(same).last().unwrap_or(g);
         let last = layout.glyphs[i..].iter().take_while(same).last().unwrap_or(g);
         let along = dir(first.angle);
