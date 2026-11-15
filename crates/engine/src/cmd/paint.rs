@@ -1149,9 +1149,24 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
                 return Ok(json!({ "changed": 0 }));
             }
             let art = super::appearance::design_art_in(d, &roots).into_iter().collect();
+            // The fill or stroke the proxy shows of each group among the roots, before the edit.
+            let own = |d: &Document, id: NodeId| {
+                d.node(id)
+                    .filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
+                    .and_then(|n| n.proxy_paint_only(stroke, None))
+                    .cloned()
+            };
+            let own_before: Vec<Option<Paint>> = roots.iter().map(|id| own(d, *id)).collect();
             let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": roots.iter().map(|i| i.0).collect::<Vec<_>>()});
             let r = super::colorcmds::recolor_except(s, &q, cmd, label, f, art)?;
-            let shown_at = super::appearance::drop_design_art(&s.doc()?.doc, leaf_targets(s, &ids)?).first().map(|id| (*id, None));
+            let d = &s.doc()?.doc;
+            let leaves = super::appearance::drop_design_art(d, leaf_targets(s, &ids)?);
+            // With only design art inside, which keeps its paint, the first group whose own fill or stroke changed shows it.
+            let shown_at = leaves
+                .first()
+                .copied()
+                .or_else(|| roots.iter().zip(&own_before).find(|(id, was)| was.is_some() && own(d, **id) != **was).map(|(id, _)| *id))
+                .map(|id| (id, None));
             (r, shown_at)
         }
     };

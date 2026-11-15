@@ -642,6 +642,58 @@ fn invert_of_a_group_recolors_its_own_fill_and_leaves_design_art() {
     assert_eq!(look(&s, art), art_was);
 }
 
+/// Invert and Complement given a series group that holds only a graph design's art recolor the group's own fill and
+/// remember that color, as the last color and the newest recent color. With several such groups the color remembered
+/// is that of the first group whose fill changed.
+#[test]
+fn recoloring_a_group_of_design_art_alone_remembers_its_own_fill() {
+    // A fill of its own for `group`, painted `hex` (the color of a rectangle painted with it).
+    let paint_own = |s: &mut Session, group: NodeId, hex: &str| {
+        s.execute("appearance.addFill", &json!({"ids": [group.0]})).unwrap();
+        let t = NodeId(s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 5, "height": 5})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setFill", &json!({"ids": [t.0], "color": hex})).unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let paint = d.node(t).unwrap().proxy_paint_only(false, None).unwrap().clone();
+        d.node_mut(group).unwrap().appearance.fill_at_mut(None).unwrap().paint = paint;
+    };
+    // Series 0's group with its own fill painted `hex`.
+    let painted_series = |hex: &str| {
+        let (mut s, graph, _, art, _) = design_art();
+        let group = series(s.doc().unwrap().doc.node(graph).unwrap(), 0).id;
+        paint_own(&mut s, group, hex);
+        (s, group, art)
+    };
+    for cmd in ["paint.invert", "paint.complement"] {
+        let (mut s, group, art) = painted_series("#ff0000");
+        let fill = |s: &Session| s.doc().unwrap().doc.node(group).unwrap().proxy_paint_only(false, None).unwrap().clone();
+        let (art_was, fill_was) = (look(&s, art), fill(&s));
+        s.execute(cmd, &json!({"ids": [group.0]})).unwrap();
+        assert_eq!(look(&s, art), art_was, "{cmd}");
+        assert_ne!(fill(&s), fill_was, "{cmd}: the group's fill is recolored");
+        let Paint::Solid { color, .. } = fill(&s) else { panic!("{cmd}: the group's fill is not a solid color") };
+        assert_eq!((s.last_solid, s.recent_colors.first().copied()), (color, Some(color)), "{cmd}");
+    }
+    // A gray fill is its own complement: nothing changes, and the remembered colors stay as they were.
+    let (mut s, group, _) = painted_series("#808080");
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let remembered = |s: &Session| format!("{:?}", (s.last_solid, &s.recent_colors));
+    let was = remembered(&s);
+    assert_eq!(s.execute("paint.complement", &json!({"ids": [group.0]})).unwrap()["changed"], json!(0));
+    assert_eq!(remembered(&s), was);
+    // Both series groups hold only the design's art: a gray one first and a red one, given together.
+    let (mut s, graph, _, _, _) = design_art();
+    s.execute("graph.column", &json!({"id": graph.0, "seriesIndexes": [1], "design": "Square"})).unwrap();
+    let groups = [0, 1].map(|i| series(s.doc().unwrap().doc.node(graph).unwrap(), i).id);
+    paint_own(&mut s, groups[0], "#808080");
+    paint_own(&mut s, groups[1], "#ff0000");
+    s.execute("paint.complement", &json!({"ids": [groups[0].0, groups[1].0]})).unwrap();
+    let Some(Paint::Solid { color, .. }) = s.doc().unwrap().doc.node(groups[1]).unwrap().proxy_paint_only(false, None).cloned() else {
+        panic!("the red group's fill is not a solid color")
+    };
+    assert_eq!((s.last_solid, s.recent_colors.first().copied()), (color, Some(color)));
+}
+
 /// `transparency.set` without `item` refuses the art of a graph design in a series, and given it with other objects
 /// sets only theirs.
 #[test]
