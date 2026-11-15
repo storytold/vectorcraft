@@ -193,6 +193,35 @@ fn a_knockout_group_without_blending_inside_is_isolated_only_when_it_isolates() 
     }
 }
 
+/// An overprinting element of a knockout group that does not isolate is drawn in a `/K` group
+/// without `/I true`, so it overprints the art below the group, and its graphics state still
+/// overprints (`/OP`, `/op`, `/OPM 1`). An isolated group keeps `/I true`.
+#[test]
+fn an_overprinting_element_of_a_knockout_group_that_does_not_isolate_overprints_the_art_below() {
+    for isolate in [false, true] {
+        let mut d = knockout_squares(3, false, isolate);
+        let g = d.layers[0].children().unwrap()[1].id;
+        let squares: Vec<_> = d.node(g).unwrap().children().unwrap().iter().map(|s| s.id).collect();
+        for s in &squares {
+            d.node_mut(*s).unwrap().opacity = 1.0;
+        }
+        d.node_mut(squares[2]).unwrap().appearance.fill_mut().unwrap().overprint = true;
+        let t = text(&d);
+        assert_eq!(t.matches("/Ktrue").count(), 1, "isolate {isolate}");
+        assert_eq!(t.matches("/Itrue").count(), usize::from(isolate), "isolate {isolate}");
+        assert!(t.contains("/OPtrue/optrue/OPM1"), "isolate {isolate}");
+        let back = import(&export(&d, &PdfOptions::default()).unwrap()).unwrap_or_else(|e| panic!("isolate {isolate}: {e}"));
+        let mut overprints = vec![];
+        back.walk(|n| {
+            if let Some(f) = n.appearance.fill() {
+                overprints.push(f.overprint);
+            }
+        });
+        assert_eq!(overprints, [false, false, false, true], "isolate {isolate}");
+        assert_eq!(knockout_groups(&back), [3], "isolate {isolate}");
+    }
+}
+
 /// The knockout group of an isolated group is isolated too (`/I true` beside `/K true`), and the
 /// group reads back as isolated and knocking out. (Each translucent element is a group of its own.)
 #[test]
