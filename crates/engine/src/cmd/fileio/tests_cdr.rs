@@ -571,6 +571,26 @@ fn transparency_winding_and_flags_open_on_the_art() {
     assert!(n.locked && n.visible);
 }
 
+/// A drawing whose open left things out is not written over unasked: the file stays as it was
+/// until the write says `acknowledgeLoss`.
+#[test]
+fn a_drawing_the_open_left_things_out_of_is_not_written_over_unasked() {
+    let d = std::env::temp_dir().join(format!("vc-cdr-lossy-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let src = d.join("drawing.cdr");
+    let original = synth::sample_file(1300, true);
+    std::fs::write(&src, &original).unwrap();
+    let mut s = Session::new();
+    let opened = s.execute("document.open", &json!({ "path": src.to_string_lossy() })).unwrap();
+    assert!(opened["warnings"].to_string().contains("text, bitmaps"), "{opened}");
+    let e = s.execute("document.export", &json!({ "path": src.to_string_lossy(), "format": "svg" })).unwrap_err().to_string();
+    assert!(e.contains("acknowledgeLoss"), "{e}");
+    assert_eq!(std::fs::read(&src).unwrap(), original);
+    s.execute("document.export", &json!({ "path": src.to_string_lossy(), "format": "svg", "acknowledgeLoss": true })).unwrap();
+    assert_ne!(std::fs::read(&src).unwrap(), original);
+    std::fs::remove_dir_all(d).ok();
+}
+
 #[test]
 fn other_versions_and_damaged_drawings_say_why() {
     let mut s = Session::new();

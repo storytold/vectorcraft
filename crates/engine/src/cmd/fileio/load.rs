@@ -734,11 +734,13 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } =
         loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
-    // fallbacks must ask before overwriting the richer source they could not fully read.
+    // fallbacks must ask before overwriting the richer source they could not fully read. Every
+    // warning of a `.cdr` drawing names content the import left out or changed.
     let losses: Vec<String> = warnings
         .iter()
         .filter(|w| {
             is_loss(w)
+                || matches!(format.id, "cdr" | "cdt")
                 || (format.id == "eps"
                     && (matches!(w.as_str(), EDITING_DAMAGED | EDITING_STALE)
                         || w.starts_with("this file's PostScript couldn't be read")

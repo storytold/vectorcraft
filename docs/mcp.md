@@ -8310,7 +8310,8 @@ reader doesn't read yet, fountain, pattern, texture and PostScript fills, and ou
 lenses, other transparency and merge modes without a VectorCraft blend mode are not applied. The `warnings` of
 `document.open` name each of these kinds the drawing had, and say when damaged parts or parts past the import limits
 were left out. Drawings of versions after 27 are refused with a message, and so are packages that are
-encrypted, ZIP64 archives or split across files. VectorCraft doesn't write `.cdr` files.
+encrypted, ZIP64 archives or split across files. VectorCraft doesn't write `.cdr` files. After a drawing opens with
+warnings, an export or Save As to its own path needs `acknowledgeLoss: true`.
 
 Public specifications cover only parts of versions 1 to 4, so for the rest the importer reads the layouts found in public sample files. A
 drawing of version 1 or 2 opens as one page with one layer: its rectangles, whole ellipses and curves with their
