@@ -975,6 +975,7 @@
 	Change Panel Layout	Zmień układ paneli
 	Close Panel	Zamknij panel
 	Collapse Panel Group	Zwiń grupę paneli
+	Cycle Display Sizes	Przełącz rozmiary wyświetlania
 	Move Panel	Przesuń panel
 	Group with	Grupuj z
 	Resize panels	Zmień rozmiar paneli
@@ -5260,6 +5261,8 @@ imageTrace	Outline	Kontur
 @msg	unknown option `{path}.{k}`	nieznana opcja `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
 @msg	unknown panel `{raw}`	nieznany panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` nie ma rozmiarów wyświetlania do przełączania
+@msg	the panels are not shown	panele nie są wyświetlane
 @msg	panels can't be shown in Presentation Mode	w trybie prezentacji nie można wyświetlić paneli
 @msg	unknown preference `{key}`	nieznana preferencja `{key}`
 @msg	Preferences imported.	Zaimportowano preferencje.

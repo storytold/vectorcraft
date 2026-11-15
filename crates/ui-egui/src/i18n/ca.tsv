@@ -772,6 +772,7 @@ antiAlias	Sharp	Nítid
 	Preserve Numbers	Conserva els números
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
+	Cycle Display Sizes	Alterna les mides de visualització
 	Collapse Panels to Icons	Replega els panells a icones
 	Collapse to Icons	Replega a icones
 	Collate	Intercala
@@ -6542,6 +6543,8 @@ digits	Malayalam	Malaiàlam
 @msg	unknown option `{path}.{k}`	opció desconeguda `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressions desconegudes `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panell desconegut `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` no té mides de visualització per alternar
+@msg	the panels are not shown	els panells no es mostren
 @msg	panels can't be shown in Presentation Mode	els panells no es poden mostrar en el mode de presentació
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paràmetre desconegut `{key}`; volies dir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	paràmetre desconegut `{key}`; l’ordre no admet cap paràmetre

@@ -4876,6 +4876,8 @@ axis	Both	Her İkisi
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (preserve, simulate veya discard)
 @msg	unknown panel `{raw}`	bilinmeyen panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` panelinde geçiş yapılacak görüntü boyutu yok
+@msg	the panels are not shown	paneller gösterilmiyor
 @msg	panels can't be shown in Presentation Mode	Sunum Modunda paneller gösterilemez
 @msg	unknown preference `{key}`	bilinmeyen tercih `{key}`
 @msg	Preferences imported.	Tercihler içe aktarıldı.
@@ -6487,6 +6489,7 @@ theme	Appearance	Görünüm
 @msg	a new document refuses this file because of these variables: {names}	yeni bir belge bu değişkenler nedeniyle bu dosyayı reddeder: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` için `{header}` başlığı `{other}` değişkeni olarak okunur: birini yeniden adlandırın
 	Collapse Panel Group	Panel Grubunu Daralt
+	Cycle Display Sizes	Görüntü Boyutları Arasında Geçiş Yap
 @msg	panel is not in a dock group	panel bir yuva grubunda değil
 @msg	only a dock group above or below others collapses, not one beside another	yalnızca diğerlerinin üstünde veya altındaki bir yuva grubu daraltılabilir, yanındaki değil
 @msg	icon must be true or false	icon true veya false olmalı

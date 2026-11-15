@@ -3374,6 +3374,14 @@ already walks Image Trace. Short agent entry points:
   `largeList`. Without `view` the command answers the current one. Each panel keeps its own view for the session, and
   the document does not change. An unknown panel or view is an error, and then nothing changes. It answers
   `{panel, view}`.
+- Panel display sizes: `window.panel.cycleOptions {panel}` shows the panel at its next display size, as the double
+  triangle at the right end of its tab strip does, docked or floating. The sizes are the states its panel menu's Show
+  Options and Hide Options items set, largest first, and the smallest is followed by the largest. Align, Attributes,
+  Character, Color, Flattener Preview, Gradient, Info, Paragraph, Stroke and Transform have two sizes (options shown,
+  options hidden). Transparency has three: thumbnails and options, thumbnails alone, and neither. A panel whose
+  states match none of its sizes goes to its largest. An unknown panel or a panel without display sizes is an error,
+  and then nothing changes. It answers `{panel, size, sizes}`, where `size` 0 is the largest. The order of the sizes
+  and the panels that have them are VectorCraft's own.
 - The Brushes panel menu's Select All Unused: `brush.unused` (a query) lists the brushes no stroke paints with, in
   library order, and the panel selects them. Strokes in the art (opacity masks included), symbols, graph designs,
   pattern tiles (with the tiles that pattern editing's Cancel puts back) and graphic styles count, and so do the

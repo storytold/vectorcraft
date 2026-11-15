@@ -651,6 +651,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{panel, collapsed?: bool} minimize the group holding a panel to its tabs (in a floating window, the window to its title bar), or restore it, as a double-click on a tab or the drag bar does; the same as window.panel.minimize {panel, minimized}. Without `collapsed` it toggles. Returns {panel, collapsed, layout}",
     ),
     (
+        "window.panel.cycleOptions",
+        "Cycle Display Sizes",
+        "",
+        "{panel} show a panel at its next display size, as the double triangle at the right end of its tab strip does: the sizes are the states of its panel menu's Show/Hide Options (Transparency: options and thumbnails, thumbnails alone, neither), largest first, and the smallest goes back to the largest; Align, Attributes, Character, Color, Flattener Preview, Gradient, Info, Paragraph, Stroke, Transform and Transparency have them. An unknown panel or one without display sizes is an error and changes nothing. Returns {panel, size: 0 for the largest, sizes: how many it has}",
+    ),
+    (
         "window.panel.float",
         "Float Panel",
         "",

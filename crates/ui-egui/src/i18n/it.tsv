@@ -5171,6 +5171,8 @@ axis	Both	Entrambi
 @msg	unknown option `{path}.{k}`	opzione sconosciuta `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	valore di sovrastampa sconosciuto `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	pannello sconosciuto `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` non ha dimensioni di visualizzazione da scorrere
+@msg	the panels are not shown	i pannelli non sono visualizzati
 @msg	panels can't be shown in Presentation Mode	i pannelli non possono essere mostrati in modalità presentazione
 @msg	unknown preference `{key}`	preferenza sconosciuta `{key}`
 @msg	Preferences imported.	Preferenze importate.
@@ -5548,6 +5550,7 @@ effect	Regular	Normale
 	Change Panel Layout	Modifica disposizione dei pannelli
 	Close Panel	Chiudi pannello
 	Collapse Panel Group	Comprimi gruppo di pannelli
+	Cycle Display Sizes	Scorri le dimensioni di visualizzazione
 	Move Panel	Sposta pannello
 	Group with	Raggruppa con
 	Resize panels	Ridimensiona pannelli
