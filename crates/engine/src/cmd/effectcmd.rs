@@ -1032,18 +1032,18 @@ fn expand_pieces(
 /// `m`, the art a 3D effect expanded into, with each object in it that has effects of its own (a
 /// shadow blurred by the light's Softness) expanded as Expand Appearance expands it on its own:
 /// a blurred shadow becomes an image. Groups in `m` without effects that hold such an object are
-/// looked into; the rest are left as they are.
-fn expand_raster_pieces(d: &mut Document, mut m: Node, brushes: &[vectorcraft_brush::Brush]) -> Node {
+/// looked into; the rest are left as they are. The objects `skip` lists are not expanded.
+fn expand_raster_pieces(d: &mut Document, mut m: Node, brushes: &[vectorcraft_brush::Brush], skip: &[NodeId]) -> Node {
     for c in m.children_mut().into_iter().flatten() {
         if !c.appearance.effects.is_empty() {
-            if let Some(e) = expanded_node(d, (**c).clone(), brushes, &mut vec![]) {
+            if let Some(e) = expanded_node(d, (**c).clone(), brushes, skip, &mut vec![]) {
                 *c = Arc::new(e);
             }
         } else if c.children().is_some() {
             let mut holds = false;
             c.walk(&mut |n| holds |= !n.appearance.effects.is_empty());
             if holds {
-                *c = Arc::new(expand_raster_pieces(d, (**c).clone(), brushes));
+                *c = Arc::new(expand_raster_pieces(d, (**c).clone(), brushes, skip));
             }
         }
     }
@@ -1254,7 +1254,7 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
             };
             // A 3D effect's shadow blurred by the light's Softness keeps its blur in the art: it
             // expands in turn, to an image.
-            let m = if effects::has_solid(&v) || effects::has_revolve(&v) { m.map(|m| expand_raster_pieces(d, m, brushes)) } else { m };
+            let m = if effects::has_solid(&v) || effects::has_revolve(&v) { m.map(|m| expand_raster_pieces(d, m, brushes, skip)) } else { m };
             match image {
                 Some((image, _)) => {
                     let mut m = m.unwrap_or(v);
