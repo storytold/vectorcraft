@@ -219,9 +219,10 @@ fn rotate_reflect_and_scale_carry_unplaced_gradients() {
     s.execute("object.rotate", &json!({"angle": 90})).unwrap();
     let g = fill_geom(&s, id);
     assert!((g.end.x - g.start.x).abs() < 1e-9 && (g.length() - 100.0).abs() < 1e-9, "vertical after a 90° turn: {g:?}");
-    s.execute("object.reflect", &json!({"axis": "horizontal"})).unwrap();
+    s.execute("object.reflect", &json!({"axis": "horizontal", "basis": "page"})).unwrap();
     let r = fill_geom(&s, id);
-    // The vertical vector is centred on the object, so the reflection swaps its ends.
+    // The vertical vector is centred on the object, so the reflection across the page's
+    // horizontal axis swaps its ends.
     assert!(r.start.distance(g.end) < 1e-9 && r.end.distance(g.start) < 1e-9, "{g:?} → {r:?}");
 
     // A circle's radial gradient becomes an ellipse under a non-uniform scale.
