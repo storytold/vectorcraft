@@ -832,13 +832,15 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         return None;
     }
     let mut m = n.clone();
-    // Its ruler guides take no part: they go back above the evaluated art at the end.
-    let mut guides = m.children_mut().map(|ch| ch.split_off(Node::guide_run_start(ch))).unwrap_or_default();
-    // So do its other guides and those in its sublayers and groups, which would otherwise go with
-    // the art the effects replace or copy: they stay on `n`, hidden and locked as their containers
-    // were.
+    // Its ruler guides take no part: they go back above the evaluated art at the end. With effects
+    // that replace or copy the art, so do its guides among the art and those in its sublayers and
+    // groups, which would otherwise go with that art: they stay on `n`, in order, hidden and
+    // locked as their containers were.
+    let mut guides = vec![];
     if pathfinder || !fx.is_empty() {
         take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
+    } else if let Some(ch) = m.children_mut() {
+        guides = ch.split_off(Node::guide_run_start(ch));
     }
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);

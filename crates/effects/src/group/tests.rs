@@ -1998,6 +1998,35 @@ fn a_ruler_guide_in_a_group_survives_its_containers_effects() {
     }
 }
 
+/// The ruler guides of a layer or group with a Pathfinder effect or Transform copies, one among
+/// its art and one after it, go after the evaluated art in the order they were in.
+#[test]
+fn a_containers_ruler_guides_keep_their_order_through_its_effects() {
+    use vectorcraft_doc::LayerColor;
+    let guide = |id| Arc::new(Node::new(NodeId(id), NodeKind::RulerGuide { vertical: false, pos: 3.0, artboard: None }));
+    for (effect, params) in [("pathfinder.add", serde_json::json!({})), ("distort.transform", serde_json::json!({"moveH": 30, "copies": 2}))] {
+        let members = || vec![sq(1, 0.0, Color::BLACK), guide(20), sq(2, 5.0, Color::BLACK), guide(21)];
+        let fx = Effect { id: effect.into(), params: params.clone(), visible: true };
+        let mut l = Node::layer(NodeId(10), "Layer 1", LayerColor::Preset(0));
+        if let Some(ch) = l.children_mut() {
+            *ch = members();
+        }
+        l.appearance.effects.push(fx.clone());
+        let mut g = Node::group(NodeId(11), members());
+        g.appearance.effects.push(fx);
+        for (what, n) in [("layer", l), ("group", g)] {
+            let art = evaluate_container(None, &n).unwrap();
+            let mut all = vec![];
+            ruler_guides_in(&art, &mut all);
+            let ids = all.iter().map(|(id, ..)| *id).collect::<Vec<_>>();
+            assert_eq!(ids, [NodeId(20), NodeId(21)], "{effect} on a {what}: the guides, in order");
+            let ch = art.children().unwrap();
+            let tail = ch[ch.len() - 2..].iter().map(|c| c.id).collect::<Vec<_>>();
+            assert_eq!(tail, [NodeId(20), NodeId(21)], "{effect} on a {what}: last, in order");
+        }
+    }
+}
+
 /// A group's own Fill + Offset Path below its contents follows the outline of a clip group among
 /// its members, its clipping path, not the clipped art it hides outside that path (#7289).
 #[test]
