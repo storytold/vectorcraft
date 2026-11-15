@@ -488,9 +488,23 @@ pub fn full_width_font() -> Option<Vec<u8>> {
 pub const REPEAT_MARK_FAMILY: &str = "Repeattest Sans";
 
 /// The Japanese characters [`repeat_mark_font`] maps, each to the glyph of the Latin capital beside
-/// it: an ideograph, the repeat marks, and kana with and without their voicing marks.
-pub const REPEAT_MARK_CHARS: [(char, char); 11] =
-    [('時', 'A'), ('々', 'B'), ('す', 'C'), ('ず', 'D'), ('ゝ', 'E'), ('ゞ', 'F'), ('サ', 'G'), ('ザ', 'H'), ('ヽ', 'I'), ('ヾ', 'J'), ('あ', 'K')];
+/// it: an ideograph, the repeat marks, kana with and without their voicing marks, and the combining
+/// voicing mark (U+3099), so that a repeat mark followed by it is shaped in this font and not in a
+/// fallback font that also has both characters (craft-fonts' Japanese faces).
+pub const REPEAT_MARK_CHARS: [(char, char); 12] = [
+    ('時', 'A'),
+    ('々', 'B'),
+    ('す', 'C'),
+    ('ず', 'D'),
+    ('ゝ', 'E'),
+    ('ゞ', 'F'),
+    ('サ', 'G'),
+    ('ザ', 'H'),
+    ('ヽ', 'I'),
+    ('ヾ', 'J'),
+    ('あ', 'K'),
+    ('\u{3099}', 'L'),
+];
 
 /// A test-only cmap over bundled Source Sans 3: each of [`REPEAT_MARK_CHARS`] uses the glyph of its
 /// Latin capital, so the glyph drawn for a repeat mark tells which character was drawn; the space
