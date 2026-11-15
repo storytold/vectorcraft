@@ -585,6 +585,38 @@ fn a_kept_cmyk_jpeg_declaring_too_many_pixels_is_left_out() {
     }
 }
 
+/// A CMYK JPEG whose inks can't be read (it declares more pixels than CMYK images are decoded
+/// with, though fewer than the writer embeds) is written with its own numbers only when they are
+/// kept: when the Output settings convert its colors it is left out with a warning, in every
+/// standard.
+#[test]
+fn a_cmyk_jpeg_whose_inks_cant_be_read_is_left_out_when_its_colors_are_converted() {
+    let mut jpg = cmyk_jpeg(&flat([0, 102, 255, 0], 4), 2, 2);
+    // Height and width of the SOF0 segment (after its marker, length and precision): 8200 × 8200.
+    let sof = jpg.windows(2).position(|w| w == [0xFF, 0xC0]).unwrap();
+    jpg[sof + 5..sof + 9].copy_from_slice(&[0x20, 0x08, 0x20, 0x08]);
+    let blob = ImageBlob::new("image/jpeg", jpg);
+    assert!(blob.is_cmyk() && blob.cmyk().is_none());
+    let d = image_doc(blob, 2, 2);
+    let out = export_with_report(&d, &opts(json!({}))).unwrap();
+    let kept = written(&out.bytes);
+    assert!(kept.len() == 1 && kept[0].space == "DeviceCMYK", "kept as it is: {kept:?}");
+    let unconverted = "an image couldn't be converted to the Output destination and is missing from the picture";
+    for s in [
+        json!({"output": {"conversion": "destination", "destination": DEVICE_CMYK}}),
+        json!({"output": {"conversion": "destination", "destination": SRGB}}),
+        json!({"standard": "pdfX1a", "output": {"conversion": "destination", "destination": DEVICE_CMYK}}),
+        json!({"standard": "pdfX4", "output": {"conversion": "destination", "destination": DEVICE_CMYK}}),
+        json!({"standard": "pdfA2b", "output": {"conversion": "destination", "destination": DEVICE_CMYK}}),
+    ] {
+        let out = export_with_report(&d, &opts(s.clone())).unwrap_or_else(|e| panic!("{s}: {e}"));
+        assert!(written(&out.bytes).is_empty(), "{s}");
+        assert!(out.warnings.iter().any(|w| w == unconverted), "{s}: {:?}", out.warnings);
+        let other = out.warnings.iter().any(|w| w.contains("couldn't be decoded") || w.contains("written as it is"));
+        assert!(!other, "{s}: {:?}", out.warnings);
+    }
+}
+
 /// The profile each transparency group of written PDF `bytes` blends in: its ICC-based space's
 /// profile, or `None` for DeviceCMYK.
 fn group_profiles(bytes: &[u8]) -> Vec<Option<Vec<u8>>> {

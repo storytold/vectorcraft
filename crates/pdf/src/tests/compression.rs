@@ -270,6 +270,36 @@ fn images_declaring_more_than_the_allowance_are_not_decoded() {
     assert!(r.image.is_none(), "kept as it is");
 }
 
+/// When the Output settings convert colors, a color image that can't be decoded can't be kept as
+/// it is: it is unconverted, and so is one whose header can't be read. A grey one, whose pixels
+/// aren't converted, and any image without a conversion are kept as they are.
+#[test]
+fn a_color_image_that_cant_be_decoded_for_a_conversion_is_unconverted() {
+    let d = doc(encoded(colour(), ImageFormat::Png), "image/png");
+    let settings: PdfSettings =
+        serde_json::from_value(json!({"output": {"conversion": "destination", "destination": vectorcraft_color::cms::GENERIC_CMYK}})).unwrap();
+    let out = crate::output::ColorOut::new(&d, &settings).unwrap();
+    assert!(out.pixels().is_some());
+    let c: CompressionSettings = serde_json::from_value(json!({})).unwrap();
+    let cut = |img: DynamicImage| {
+        let mut png = encoded(img, ImageFormat::Png);
+        png.truncate(png.len() / 2);
+        png
+    };
+    let cases = [
+        ("RGB", cut(colour()), true),
+        ("unreadable", vec![1, 2, 3], true),
+        ("grey", cut(colour().grayscale()), false),
+        ("grey declaring more than the allowance", declared_png(60_000, 60_000), false),
+    ];
+    for (what, bytes, unconverted) in cases {
+        let r = crate::images::recode(&bytes, (72.0, 72.0), &c, false, out.pixels(), true);
+        assert!(r.image.is_none(), "{what}");
+        assert_eq!(r.unconverted, unconverted, "{what}");
+        assert!(!crate::images::recode(&bytes, (72.0, 72.0), &c, false, None, true).unconverted, "{what}, no conversion");
+    }
+}
+
 /// A version 2.1 display ICC profile for colour space `space` (`RGB ` or `GRAY`), `len` bytes in
 /// all, with an empty tag table, every byte after the tag count different from its neighbors.
 fn icc_profile(space: &[u8; 4], len: usize) -> Vec<u8> {

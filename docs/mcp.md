@@ -5650,7 +5650,9 @@ the colour bars are process, spot and black-tint patches. Layers whose Print opt
 The Output and Advanced sections convert colours and write real text. `output: {conversion, destination}` converts
 every colour into the destination profile's model (`destination`; CMYK of another profile too) or only the colours of
 the other model (`preserveNumbers`: colours already in it keep their numbers); grey stays grey, images are converted
-too and printer's marks are not. The destination is any profile `edit.colorSettings` lists (default: the document's
+too and printer's marks are not. An image whose colors are to be converted but whose pixels can't be decoded or
+written that way is left out with the warning "an image couldn't be converted to the Output destination and is
+missing from the picture", rather than written in its own colors. The destination is any profile `edit.colorSettings` lists (default: the document's
 for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
 `edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
 the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve (PDF/A, PDF/X-3 and PDF/X-4 files are
