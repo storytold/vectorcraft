@@ -502,8 +502,10 @@ fn select_group(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> 
     d.fields.insert(GROUP_LOADED.into(), json!(name));
     d.fields.insert("groupName".into(), json!(name));
     d.fields.insert("__newGroup".into(), json!(false));
-    // The group's colors take the place of colors picked with the Color Theme Picker.
+    // The group's colors take the place of colors picked with the Color Theme Picker, and the same
+    // picks made again apply to its rows.
     d.fields.insert(THEME_PICKS.into(), json!([]));
+    d.fields.remove(THEME_DONE);
     d.fields.remove(SAVED_ROWS);
     d.fields.remove(SAVED_COLORS);
     if art {
@@ -572,7 +574,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
                 .find(|(n, _)| group.as_deref() == Some(n.as_str()))
                 .map(|g| g.1.iter().map(key).collect())
                 .unwrap_or_default();
-            let row_of = |k: &Value| rs.iter().find(|r| r["from"].as_array().is_some_and(|f| f.contains(k)));
+            let row_of = |k: &Value| row_listing(&rs, k);
             if d.bool("__art") && own.iter().any(|k| row_of(k).is_some()) {
                 colors = own
                     .iter()
@@ -628,7 +630,7 @@ fn reread_rows(app: &mut VectorcraftApp, d: &mut Dialog, old: &[Value], before: 
     for r in &mut rs {
         let Some(first) = r["from"].as_array().and_then(|f| f.first()).cloned() else { continue };
         let from_save = r["from"].as_array().is_some_and(|f| f.iter().any(|c| given.contains(c)));
-        match old.iter().find(|o| o["from"].as_array().is_some_and(|f| f.contains(&first))).filter(|_| !from_save) {
+        match row_listing(old, &first).filter(|_| !from_save) {
             Some(o) => {
                 r["to"] = o["to"].clone();
                 r["exclude"] = json!(excluded(o));
@@ -1026,6 +1028,23 @@ fn find_entry(k: &Value) -> Option<FindEntry> {
         Some(s) => ColorKey::parse(s).map(Ok).or_else(|| color_value(k).map(|c| Err(c.to_hex()))),
         None => color_value(k).map(|c| Ok(ColorKey::of(&c))),
     }
+}
+
+/// The first of `rows` that lists the color entry `k`, as `recolor.apply` reads entries: rows that
+/// list it as an exact color (by key, whatever its case or spacing) come before rows whose
+/// "#rrggbb" entry matches it by its hex.
+fn row_listing<'a>(rows: &'a [Value], k: &Value) -> Option<&'a Value> {
+    let want = find_entry(k)?;
+    let hex = |e: &FindEntry| e.as_ref().map_or_else(Clone::clone, |k| k.color().to_hex());
+    let lists = |r: &Value, by_hex: bool| {
+        r["from"].as_array().is_some_and(|f| {
+            f.iter().filter_map(find_entry).any(|e| match (&e, &want) {
+                (Ok(a), Ok(b)) => !by_hex && a == b,
+                _ => by_hex && hex(&e) == hex(&want),
+            })
+        })
+    };
+    rows.iter().find(|r| lists(r, false)).or_else(|| rows.iter().find(|r| lists(r, true)))
 }
 
 /// While Find is on, on the Assign tab with art and rows selected: what the art previews instead of
@@ -2173,6 +2192,19 @@ mod tests {
     }
 
     /// Randomize after a seed past `u64::MAX` keeps the largest seed.
+    /// A row that lists a color exactly comes before an earlier row whose "#rrggbb" entry matches
+    /// it, as `recolor.apply` reads them; a hex entry matches a key of the same hex.
+    #[test]
+    fn a_row_listing_a_color_exactly_comes_before_a_hex_match() {
+        let rs =
+            [json!({"from": ["#0000ff"], "to": "rgb 0 255 0"}), json!({"from": ["RGB  0 0 255"], "to": "rgb 255 0 0"}), json!({"from": ["#ff0000"]})];
+        assert_eq!(row_listing(&rs, &json!("rgb 0 0 255")), Some(&rs[1]));
+        assert_eq!(row_listing(&rs, &json!("rgb 255 0 0")), Some(&rs[2]));
+        assert_eq!(row_listing(&rs, &json!("#ff0000")), Some(&rs[2]));
+        assert_eq!(row_listing(&rs, &json!("rgb 0 255 0")), None);
+        assert_eq!(row_listing(&rs, &json!("cmyk 0 0 0 0")), None);
+    }
+
     #[test]
     fn next_seed_holds_at_the_largest() {
         assert_eq!(next_seed(&Dialog::new("recolor", json!({}))), 1);
@@ -2946,6 +2978,32 @@ mod tests {
         assert_eq!(group_hex(&app, "A"), Some(vec!["#ff0000".into(), "#00ff00".into()]), "other groups are left as they are");
     }
 
+    /// Without art: after a group is picked in the list, the same Color Theme Picker picks that gave
+    /// the group before it its colors give the new group's rows the palette of the art picked too.
+    #[test]
+    fn theme_picks_apply_again_after_another_group_is_picked() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        square(&mut app, 100.0, "#00ff00");
+        app.run("select.set", json!({"ids": []})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "A", "colors": ["#ff0000", "#0000ff"], "keepModel": true})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "B", "colors": ["#0000ff", "#ffff00", "#ffffff"], "keepModel": true})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "A"})).unwrap();
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let picks = json!([{"at": [107, 17]}]);
+        app.ui.dialog.as_mut().unwrap().fields.insert(THEME_PICKS.into(), picks.clone());
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert_eq!(new_colors(&app), [json!("rgb 0 255 0"), json!("rgb 0 255 0")]);
+        set(&mut app, "group", json!("B")).unwrap();
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert_eq!(new_colors(&app), [json!("rgb 0 0 255"), json!("rgb 255 255 0"), json!("rgb 255 255 255")]);
+        app.ui.dialog.as_mut().unwrap().fields.insert(THEME_PICKS.into(), picks);
+        frame(&mut app, &ctx, 0.3, vec![], 0);
+        assert_eq!(new_colors(&app), [json!("rgb 0 255 0"), json!("rgb 0 255 0"), json!("rgb 0 255 0")], "the picks apply to B's rows");
+    }
+
     /// Save Changes on a group with a swatch that is not a color is refused, renamed or not, and
     /// leaves the group as it is: the rows hold only its colors.
     #[test]
@@ -3140,6 +3198,47 @@ mod tests {
         let want: Vec<String> = order.iter().map(|h| if h == "#0000ff" { "#008000".into() } else { h.clone() }).collect();
         assert_eq!(group_hex(&app, "Linked"), Some(want), "the swatches keep their order and the red one its color");
         assert_eq!(fill_hex(&app, red), "#ff0000", "art linked to a swatch no row lists is left as it is");
+    }
+
+    /// Save Changes where the rows list their current colors as "#rrggbb": a row matches the swatch
+    /// of the same color, so the swatches keep their order and the one a row lists takes its new
+    /// color; read again afterwards, a row whose old entry was a hex keeps its new color.
+    #[test]
+    fn saving_a_group_matches_rows_that_list_hex_colors() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        let red = square(&mut app, 10.0, "#ff0000");
+        let blue = square(&mut app, 40.0, "#0000ff");
+        let yellow = square(&mut app, 70.0, "#ffff00");
+        app.run("select.set", json!({"ids": [red, blue, yellow]})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Linked", "fromArtwork": true, "toGlobal": true})).unwrap();
+        let order = group_hex(&app, "Linked").unwrap();
+        let orange = square(&mut app, 100.0, "#ff8000");
+        app.run("select.set", json!({"ids": [blue, yellow, orange]})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "Linked"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("method".into(), json!(Method::Exact.id()));
+        crate::theme::install_fonts(&ctx);
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        for r in &mut rs {
+            let hex: Vec<String> = from_colors(r).iter().map(|c| c.to_hex()).collect();
+            r["to"] = match hex.first().map(String::as_str) {
+                Some("#0000ff") => json!("rgb 0 128 0"),
+                Some("#ff8000") => json!("rgb 128 0 128"),
+                _ => r["from"][0].clone(),
+            };
+            r["from"] = json!(hex);
+        }
+        d.fields.insert("rows".into(), Value::Array(rs));
+        act(&mut app, &ctx, 0.1, "save").unwrap();
+        let want: Vec<String> = order.iter().map(|h| if h == "#0000ff" { "#008000".into() } else { h.clone() }).collect();
+        assert_eq!(group_hex(&app, "Linked"), Some(want), "the blue swatch takes the green, the red one keeps its color");
+        assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#ff0000".into(), "#008000".into()));
+        let rs = super::rows(app.ui.dialog.as_ref().unwrap());
+        let o = rs.iter().find(|r| from_colors(r).iter().any(|c| c.to_hex() == "#ff8000")).unwrap();
+        assert!(!excluded(o) && o["to"] == json!("rgb 128 0 128"), "the orange row keeps its new color: {o}");
     }
 
     /// Save Changes with art in the group's colors that is not linked to its swatches: the art is
