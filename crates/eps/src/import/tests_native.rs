@@ -3169,6 +3169,29 @@ fn text_document(stories: &[Story<'_>]) -> String {
     )
 }
 
+/// [`text_document`] with its keys written by name, as files saved for version 11 write them: a
+/// typed node's kind under `/StreamTag`, the strikes' kinds by their long names.
+fn named_text_document(stories: &[Story<'_>]) -> String {
+    let story = |(text, align, anchor, _t, start): &Story<'_>| {
+        let n = text.chars().count();
+        format!(
+            "<< /Model << /Text ({text}) /ParagraphRun << /RunArray [ << /RunData << /ParagraphSheet << /Name () /Features << /Justification {align} >> /Parent 0 >> >> /Length {n} >> ] >> \
+             /StyleRun << /RunArray [ << /RunData << /StyleSheet << /Name () /Parent 0 /Features << /Font 0 /FontSize 14.0 /FillColor << /StreamTag /CAITextPaint /Color << /Type 2 /Values [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /Length {n} >> ] >> >> \
+             /View << /Frames [ << /Resource 0 >> ] /Strikes [ << /StreamTag /PathSelectGroupCharacter /Children [ << /StreamTag /FrameStrike /Transform << /Origin [ {} {} ] >> \
+             /Children [ << /StreamTag /RowColStrike /Children [ << /StreamTag /RowColStrike /Children [ << /StreamTag /LineStrike /Children [ \
+             << /StreamTag /Segment /Transform << /Origin [ {start} 0.0 ] >> /Mapping << /CharacterCount {n} >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>",
+            anchor.0, anchor.1
+        )
+    };
+    let frame = |(_, _, _, t, _): &Story<'_>| format!("<< /Resource << /Point [ 0 0 ] /Data << /FrameMatrix [ 1 0 0 1 {} {} ] >> >> >>", t.0, t.1);
+    format!(
+        "/DocumentResources << /FontSet << /Resources [ << /Resource << /StreamTag /CoolTypeFont /Identifier << /Name (Helvetica) >> >> >> ] >> \
+         /TextFrameSet << /Resources [ {} ] >> >>\n/DocumentObjects << /TextObjects [ {} ] /OriginalNormalStyleFeatures << /FontSize 12.0 >> >>\n",
+        stories.iter().map(frame).collect::<Vec<_>>().join(" "),
+        stories.iter().map(story).collect::<Vec<_>>().join(" ")
+    )
+}
+
 /// The editing copy of a 100 × 100 file with `layers` and the text `document`; its template box is
 /// centred at (50, 50).
 fn native_with_text(layers: &str, document: &str) -> String {
@@ -3319,6 +3342,8 @@ fn type_from_the_text_document_takes_the_version_its_font_record_keeps() {
     // A record whose name differs from the copies' in punctuation alone still picks its version.
     assert_eq!(version("/0 (Vertest-Ink-Regular) /5 (1.1)"), "1.1");
     assert_eq!(version("/0 (Vertest-Ink-Regular)"), "1.0");
+    // Files saved for versions older than the key write it by name among the numbered ones.
+    assert_eq!(version("/0 (VertestInk-Regular) /VersionString (1.1)"), "1.1");
 }
 
 /// A story with no runs, and a run or paragraph that names no style, is set in `[Normal Character
@@ -3726,6 +3751,81 @@ fn shown_type_keeps_the_pages_and_type_off_the_page_comes_from_the_text_document
     assert!(all.contains(&"Hi there".to_string()) && all.contains(&"Away".to_string()), "{all:?}");
     assert_eq!(texts.len(), 2, "the page's type is in the layer as it is, not in a group");
     assert!(!r.warnings.iter().any(|w| w.contains("order the page paints")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_text_document_with_named_keys_gives_type_off_the_page_too() {
+    // Files saved for version 11 write the text document's keys by name. Story 1 is off the page:
+    // only the text document has it, and story 0 stays in its own text object.
+    let stories = [("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Away\r", 0, (8300.0, 8180.0), (0.0, 0.0), 0.0)];
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &named_text_document(&stories));
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let texts = text_of(&r.document.layers[0]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi there", "Away"], "{:?}", r.warnings);
+    let x = |t: &vectorcraft_doc::TextObject| t.xf.as_coeffs()[4];
+    assert!((x(texts[0]) - 58.5).abs() < 1e-6 && (x(texts[1]) - 158.5).abs() < 1e-6, "{:?} {:?}", texts[0].xf, texts[1].xf);
+}
+
+#[test]
+fn a_text_document_with_named_keys_reads_as_the_same_one_with_numbers() {
+    // Type on a hidden layer comes only from the text document: its styles, paints, frames and
+    // layout read the same whichever way its keys are written.
+    let stories = [("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Mid\r", 2, (8191.5, 8191.5), (0.0, 0.0), -10.0)];
+    let spare = |doc: &str| {
+        let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &(text_object(0) + &text_object(1)))), doc);
+        let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+        let texts: Vec<vectorcraft_doc::TextObject> = text_of(&r.document.layers[1]).into_iter().cloned().collect();
+        (texts, r.warnings)
+    };
+    let (numbered, _) = spare(&text_document(&stories));
+    let (named, warnings) = spare(&named_text_document(&stories));
+    assert_eq!(numbered.len(), 2);
+    assert_eq!(named, numbered, "{warnings:?}");
+    assert_eq!(named[1].para.justify, vectorcraft_doc::Justify::Center);
+    let magenta = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 1.0, 0.0, 0.0));
+    assert_eq!(named[0].runs[0].style.fill, magenta);
+}
+
+#[test]
+fn a_text_document_with_named_keys_takes_a_runs_style_by_its_number() {
+    // Files saved for version 11 name a run's paragraph and character styles by their numbers in the
+    // document's style sets, and give point type a curve of four equal points. Styles 1 center the
+    // paragraph and paint the type magenta; paragraph style 2 sets its direction right to left.
+    let magenta = "<< /StreamTag /CAITextPaint /Color << /Type 2 /Values [ 1.0 0.0 1.0 0.0 0.0 ] >> >>";
+    let story = |text: &str, para: u8, chars: u8, x: f64| {
+        let n = text.chars().count();
+        format!(
+            "<< /Model << /Text ({text}) /ParagraphRun << /RunArray [ << /RunData << /ParagraphSheet {para} >> /Length {n} >> ] >> \
+             /StyleRun << /RunArray [ << /RunData << /StyleSheet {chars} >> /Length {n} >> ] >> >> \
+             /View << /Frames [ << /Resource 0 >> ] /Strikes [ << /StreamTag /PathSelectGroupCharacter /Children [ << /StreamTag /FrameStrike \
+             /Transform << /Origin [ {x} 8180.0 ] >> /Children [ << /StreamTag /RowColStrike /Children [ << /StreamTag /RowColStrike /Children [ \
+             << /StreamTag /LineStrike /Children [ << /StreamTag /Segment /Transform << /Origin [ 0.0 0.0 ] >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>"
+        )
+    };
+    let doc = format!(
+        "/DocumentResources << /FontSet << /Resources [ << /Resource << /StreamTag /CoolTypeFont /Identifier << /Name (Helvetica) >> >> >> ] >> \
+         /StyleSheetSet << /Resources [ << /Resource << /Name (Normal) /Features << /Font 0 /FontSize 14.0 >> >> >> \
+         << /Resource << /Name (Magenta) /Parent 0 /Features << /FillColor {magenta} >> >> >> ] >> \
+         /ParagraphSheetSet << /Resources [ << /Resource << /Name (Normal) /Features << /Justification 0 >> >> >> \
+         << /Resource << /Name (Centered) /Parent 0 /Features << /Justification 2 >> >> >> \
+         << /Resource << /Name (Leftward) /Parent 0 /Features << /ParagraphDirection 1 >> >> >> ] >> \
+         /TextFrameSet << /Resources [ << /Resource << /Bezier << /Points [ 8191.5 8191.5 8191.5 8191.5 8191.5 8191.5 8191.5 8191.5 ] >> \
+         /Data << /Type 0 /FrameMatrix [ 1 0 0 1 0 0 ] >> >> >> ] >> >>\n\
+         /DocumentObjects << /TextObjects [ {} {} ] /OriginalNormalStyleFeatures << /FontSize 12.0 >> >>\n",
+        story("Mid\r", 1, 1, 8200.0),
+        story("Back\r", 2, 0, 8300.0)
+    );
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &(text_object(0) + &text_object(1)))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Mid", "Back"], "{:?}", r.warnings);
+    assert_eq!(texts[0].para.justify, vectorcraft_doc::Justify::Center);
+    let magenta = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 1.0, 0.0, 0.0));
+    assert_eq!(texts[0].runs[0].style.fill, magenta);
+    assert_eq!(texts[1].para.direction, Some(vectorcraft_doc::ParaDirection::RightToLeft));
+    assert_eq!(texts[1].para.justify, vectorcraft_doc::Justify::Right);
+    assert_ne!(texts[1].runs[0].style.fill, magenta);
 }
 
 #[test]

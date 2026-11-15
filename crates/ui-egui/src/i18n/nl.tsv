@@ -2452,6 +2452,7 @@ digits	Malayalam	Malayalam
 	Show Swatch Bounds	Staalgrenzen weergeven
 	Show Tile Edge	Tegelrand weergeven
 	Size Tile to Art	Tegel aan artwork aanpassen
+	Move Tile with Art	Tegel met artwork verplaatsen
 	Tile Type:	Tegeltype:
 	Top in Front	Bovenkant voorop
 	V Spacing:	V-spatiëring:
@@ -2494,6 +2495,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Zwartpuntcompensatie gebruiken
 	Working CMYK (don't tag)	Werk-CMYK (niet taggen)
 	Working RGB (don't tag)	Werk-RGB (niet taggen)
+	Don't Color Manage This Document	Geen kleurbeheer voor dit document
+	Working RGB: {name}	Werk-RGB: {name}
+	Working CMYK: {name}	Werk-CMYK: {name}
 	{name} (spot)	{name} (spotkleur)
 	Add to Profiles…	Toevoegen aan profielen…
 	Align Stroke to Center	Lijn in het midden uitlijnen
@@ -7847,6 +7851,9 @@ mark-style	Japanese	Japans
 	Softness	Zachtheid
 	Ambient Light	Omgevingslicht
 	Light behind the object	Licht achter het object
+	Move Light to Back	Licht naar achteren
+	Move Light to Front	Licht naar voren
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Sleep een licht om het te verplaatsen. De pijltoetsen verplaatsen het licht met de focus; Shift verplaatst het per 15°.
 	Shadows	Schaduwen
 	Distance from Object	Afstand tot object
 	Shadow Bounds	Schaduwgrenzen
