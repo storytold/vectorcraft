@@ -871,9 +871,15 @@ impl<'a> Reader<'a> {
     // ---- the document ----------------------------------------------------------------------
 
     /// The artboard of a file without artboards or crop marks: its size around the template
-    /// box's centre (half a point off the grid).
+    /// box's center (half a point off the grid). The program of a `.ai` of versions 3 and 4
+    /// ([`Reader::legacy_ai`], no `%AI5_FileFormat`), which don't record the artboard's size, has
+    /// VectorCraft's own default there, a US Letter artboard (612 × 792 pt); an EPS, or a newer
+    /// file without `%AI5_ArtSize`, has none (its page is its bounding box).
     fn sized_board(&self) -> Option<Rect> {
-        let ((w, h), (cx, cy)) = (self.art_size?, self.template_center?);
+        let (cx, cy) = self.template_center?;
+        let [_, _, letter_w, letter_h] = crate::import::LETTER;
+        let letter = self.legacy_ai && !self.file_format;
+        let (w, h) = self.art_size.or(letter.then_some((letter_w, letter_h)))?;
         // Rounded out, but not off a whole point the decimals in the file only just miss.
         let near = |v: f64| (v - v.round()).abs() < 1e-6;
         let (left, top) = (cx - w / 2.0, cy + h / 2.0);

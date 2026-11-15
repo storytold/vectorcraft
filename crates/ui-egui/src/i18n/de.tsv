@@ -1164,6 +1164,7 @@ font-technology	Variable	Variabel
 	Rotate (Classic)…	Drehen (klassisch)…
 	Surface	Oberfläche
 	Wireframe	Drahtmodell
+	Render Settings	Rendereinstellungen
 	No Shading	Keine Schattierung
 	Plastic	Kunststoff
 	Highlight Intensity	Glanzpunktintensität
@@ -3391,6 +3392,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Sechstelgeviert-Leerzeichen
 	Size	Größe
 	Size Tile to Art	Kachelgröße an Grafik anpassen
+	Move Tile with Art	Kachel mit Grafik verschieben
 	Size/Leading	Größe/Zeilenabstand
 	Size:	Größe:
 	Ridges per segment:	Zacken pro Segment:
@@ -3584,6 +3586,8 @@ effect	Points	Punkte
 	Swap Fill and Stroke (Shift+X)	Fläche und Kontur vertauschen (Shift+X)
 	Swap start and end arrowheads	Pfeilspitzen an Anfang und Ende vertauschen
 	Swap the selected object for the file, keeping its place and transform	Das ausgewählte Objekt durch die Datei ersetzen; Position und Transformation bleiben erhalten
+	Show Import Options	Importoptionen anzeigen
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Vor dem Platzieren nach den Importoptionen jeder PDF-, DXF- oder Textdatei fragen; aus: die zuletzt gewählten Optionen verwenden
 	Stylistic Alternates	Stilistische Varianten
 	Swash	Schwungschrift
 	Swatch Conflict	Farbfeldkonflikt
@@ -3654,6 +3658,48 @@ effect	Points	Punkte
 	Composite Fonts	Zusammengesetzte Schriften
 	Export Composite Fonts	Zusammengesetzte Schriften exportieren
 	Import Composite Fonts	Zusammengesetzte Schriften importieren
+@msg	each font must be {name, parts}	jede Schrift muss {name, parts} sein
+@msg	unknown key `{k}`; a font takes name and parts	unbekannter Schlüssel `{k}`; eine Schrift nimmt name und parts
+@msg	each font needs a name	jede Schrift braucht einen Namen
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kann keine zusammengesetzte Schrift benennen (1 bis {COMPOSITE_NAME_MAX} Zeichen, keine Steuerzeichen)
+@msg	`{name}`: parts must be an object	`{name}`: parts muss ein Objekt sein
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: unbekannte Klasse `{k}`; die Klassen sind kanji, kana, punctuation, symbols, roman und numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} muss ein Objekt sein
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: unbekannter Schlüssel `{k}` in {_1}
+@msg	`{name}`: give the kanji part	`{name}`: geben Sie den Teil kanji an
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ein Dokument enthält höchstens {COMPOSITE_FONTS_MAX} zusammengesetzte Schriften
+@msg	two composite fonts are named `{_1}`	zwei zusammengesetzte Schriften heißen `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` ist der Name einer installierten Schrift
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} ist in `{font}` gesetzt, einer zusammengesetzten Schrift
+@msg	give fonts: [{name, parts}…]	geben Sie fonts an: [{name, parts}…]
+@msg	path is empty	path ist leer
+@msg	fonts must be a list of composite fonts	fonts muss eine Liste zusammengesetzter Schriften sein
+@msg	names must be strings	names müssen Zeichenketten sein
+@msg	no composite font named `{n}`	keine zusammengesetzte Schrift namens `{n}`
+@msg	names must be a list of names	names muss eine Liste von Namen sein
+@msg	no composite fonts to export	keine zusammengesetzten Schriften zum Exportieren
+@msg	not a composite fonts file: {e}	keine Datei mit zusammengesetzten Schriften: {e}
+@msg	not a composite fonts file: no compositeFonts list	keine Datei mit zusammengesetzten Schriften: keine Liste compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	die Datei enthält mehr als {COMPOSITE_FONTS_MAX} zusammengesetzte Schriften
+@msg	the file is larger than 4 MB	die Datei ist größer als 4 MB
+@msg	dataBase64 is not base64	dataBase64 ist kein Base64
+@msg	give one of path, data or dataBase64	geben Sie path, data oder dataBase64 an
+@msg	the file holds no composite fonts	die Datei enthält keine zusammengesetzten Schriften
+@msg	the file holds two composite fonts named `{_1}`	die Datei enthält zwei zusammengesetzte Schriften namens `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` kann keine zusammengesetzte Schrift benennen
+@msg	{k}: give a font	{k}: geben Sie eine Schrift an
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: geben Sie eine Schrift an
+@msg	{k}: size must be {_1} to {_2}%	{k}: size muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size muss {_1} bis {_2} % sein
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline muss {_1} bis {_2} % sein
+@msg	{k}: scale must be {_1} to {_2}%	{k}: die Skalierung muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: die Skalierung muss {_1} bis {_2} % sein
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: nur kana, roman und numerals lassen sich skalieren
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: nur kana, roman und numerals lassen sich skalieren
+@msg	{k}: only kana can be scaled at the center	{k}: nur kana lässt sich am Mittelpunkt skalieren
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: nur kana lässt sich am Mittelpunkt skalieren
+@msg	no composite font	keine zusammengesetzte Schrift
 	Delete Font	Schrift löschen
 	Kanji	Kanji
 	Kana	Kana
@@ -3967,6 +4013,9 @@ effect	Points	Punkte
 	Working CMYK	CMYK-Arbeitsfarbraum
 	Working CMYK (don't tag)	CMYK-Arbeitsfarbraum (nicht kennzeichnen)
 	Working RGB (don't tag)	RGB-Arbeitsfarbraum (nicht kennzeichnen)
+	Don't Color Manage This Document	Kein Farbmanagement für dieses Dokument
+	Working RGB: {name}	RGB-Arbeitsfarbraum: {name}
+	Working CMYK: {name}	CMYK-Arbeitsfarbraum: {name}
 	Workspace	Arbeitsbereich
 	Workspace {i}	Arbeitsbereich {i}
 	Wrinkle Tool	Zerknittern-Werkzeug
@@ -5594,6 +5643,7 @@ lighting	Light	Licht
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
 @msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	das Objekt hat keinen 3D-Effekt (Extrudieren und abgeflachte Kante, Kreiseln, Aufblasen oder Drehen)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` muss ein Objekt sein, das nur `mode` mit dem Wert shaded oder wireframe enthält
 @msg	its 3D effect builds no solid	sein 3D-Effekt erzeugt keinen Körper
 @msg	bevel must be none or one of {_1}	bevel muss none oder einer der folgenden Werte sein: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kann aus diesem Bildmaterial keine Körper erstellen: Seine Symbolinstanzen, Angleichungen und Schnittgruppen enthalten zu viele Objekte
@@ -5684,6 +5734,9 @@ effect	Soft	Weich
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+	Move Light to Back	Licht nach hinten
+	Move Light to Front	Licht nach vorne
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Ziehen Sie ein Licht, um es zu verschieben. Die Pfeiltasten verschieben das fokussierte Licht; mit Umschalt in Schritten von 15°.
 	Shadows	Schatten
 	Distance from Object	Abstand vom Objekt
 	Shadow Bounds	Schattenbegrenzung
@@ -6283,6 +6336,8 @@ axis	Y Axis	Y-Achse
 	Create New Set	Neuen Satz erstellen
 	Stop Global Edit	Globale Bearbeitung beenden
 	Global Edit Options	Optionen für globale Bearbeitung
+	Select Similar Objects	Ähnliche Objekte auswählen
+	Select Similar Options	Optionen für ähnliche Objekte
 	Leave Out of Global Edit	Von globaler Bearbeitung ausschließen
 	Match	Übereinstimmung
 	On Artboards	Auf Zeichenflächen
@@ -8989,6 +9044,7 @@ breakText	Glyphs	Glyphen
 @msg	a line can't run from a point to itself	eine Linie kann nicht von einem Punkt zu sich selbst verlaufen
 @msg	a line needs at least two points	eine Linie braucht mindestens zwei Punkte
 @msg	a linked JavaScript file is outside the read roots	eine verknüpfte JavaScript-Datei liegt außerhalb der Lesestammordner
+@msg	a linked image file is outside the read roots	eine verknüpfte Bilddatei liegt außerhalb der Lesestammordner
 @msg	a number cannot be read	eine Zahl kann nicht gelesen werden
 @msg	a swatch exchange block is too long	ein Block der Farbfeld-Austauschdatei ist zu lang
 @msg	a swatch exchange name is too long	ein Name in der Farbfeld-Austauschdatei ist zu lang

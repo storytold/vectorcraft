@@ -523,6 +523,7 @@
 	Rotate (Classic)…	Kierrä (perinteinen)…
 	Surface	Pinta
 	Wireframe	Rautalanka
+	Render Settings	Renderöintiasetukset
 	No Shading	Ei varjostusta
 	Plastic	Muovi
 	Highlight Intensity	Kiillon voimakkuus
@@ -1639,6 +1640,48 @@ digits	Malayalam	Malajalam
 	Composite Fonts	Yhdistelmäfontit
 	Export Composite Fonts	Vie yhdistelmäfontit
 	Import Composite Fonts	Tuo yhdistelmäfontit
+@msg	each font must be {name, parts}	jokaisen fontin on oltava {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	tuntematon avain `{k}`; fontti ottaa name ja parts
+@msg	each font needs a name	jokainen fontti tarvitsee nimen
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ei kelpaa yhdistelmäfontin nimeksi (1–{COMPOSITE_NAME_MAX} merkkiä, ei ohjausmerkkejä)
+@msg	`{name}`: parts must be an object	`{name}`: parts on oltava objekti
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: tuntematon luokka `{k}`; luokat ovat kanji, kana, punctuation, symbols, roman ja numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} on oltava objekti
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: tuntematon avain `{k}` osassa {_1}
+@msg	`{name}`: give the kanji part	`{name}`: anna osa kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	asiakirjassa voi olla enintään {COMPOSITE_FONTS_MAX} yhdistelmäfonttia
+@msg	two composite fonts are named `{_1}`	kahden yhdistelmäfontin nimi on `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` on asennetun fontin nimi
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} käyttää fonttia `{font}`, joka on yhdistelmäfontti
+@msg	give fonts: [{name, parts}…]	anna fonts: [{name, parts}…]
+@msg	path is empty	path on tyhjä
+@msg	fonts must be a list of composite fonts	fonts on oltava luettelo yhdistelmäfonteista
+@msg	names must be strings	names on oltava merkkijonoja
+@msg	no composite font named `{n}`	yhdistelmäfonttia `{n}` ei ole
+@msg	names must be a list of names	names on oltava luettelo nimistä
+@msg	no composite fonts to export	ei vietäviä yhdistelmäfontteja
+@msg	not a composite fonts file: {e}	ei yhdistelmäfonttitiedosto: {e}
+@msg	not a composite fonts file: no compositeFonts list	ei yhdistelmäfonttitiedosto: luettelo compositeFonts puuttuu
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	tiedostossa on yli {COMPOSITE_FONTS_MAX} yhdistelmäfonttia
+@msg	the file is larger than 4 MB	tiedosto on suurempi kuin 4 Mt
+@msg	dataBase64 is not base64	dataBase64 ei ole base64-muotoa
+@msg	give one of path, data or dataBase64	anna path, data tai dataBase64
+@msg	the file holds no composite fonts	tiedostossa ei ole yhdistelmäfontteja
+@msg	the file holds two composite fonts named `{_1}`	tiedostossa on kaksi yhdistelmäfonttia nimeltä `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` ei kelpaa yhdistelmäfontin nimeksi
+@msg	{k}: give a font	{k}: anna fontti
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: anna fontti
+@msg	{k}: size must be {_1} to {_2}%	{k}: size on oltava {_1}–{_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size on oltava {_1}–{_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline on oltava {_1}–{_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline on oltava {_1}–{_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skaalauksen on oltava {_1}–{_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skaalauksen on oltava {_1}–{_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: vain kana, roman ja numerals voidaan skaalata
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: vain kana, roman ja numerals voidaan skaalata
+@msg	{k}: only kana can be scaled at the center	{k}: vain kana voidaan skaalata keskeltä
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: vain kana voidaan skaalata keskeltä
+@msg	no composite font	ei yhdistelmäfonttia
 	Delete Font	Poista fontti
 	Kanji	Kanji
 	Kana	Kana
@@ -2097,6 +2140,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Näytä värimallin rajat
 	Show Tile Edge	Näytä ruudun reuna
 	Size Tile to Art	Sovita ruudun koko kuvitukseen
+	Move Tile with Art	Siirrä ruutua kuvituksen mukana
 	Tile Type:	Ruudun tyyppi:
 	Top in Front	Ylin edessä
 	V Spacing:	Pystyväli:
@@ -2139,6 +2183,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Käytä mustan pisteen kompensointia
 	Working CMYK (don't tag)	Työ-CMYK (ei tunnistetta)
 	Working RGB (don't tag)	Työ-RGB (ei tunnistetta)
+	Don't Color Manage This Document	Älä hallitse tämän asiakirjan värejä
+	Working RGB: {name}	Työ-RGB: {name}
+	Working CMYK: {name}	Työ-CMYK: {name}
 	{name} (spot)	{name} (spottiväri)
 	Add to Profiles…	Lisää profiileihin…
 	Align Stroke to Center	Tasaa viiva keskelle
@@ -2734,6 +2781,8 @@ digits	Malayalam	Malajalam
 	Keep a link to an image file instead of only embedding it	Säilytä linkki kuvatiedostoon sen sijaan, että kuva vain upotetaan
 	Place onto a new locked, dimmed template layer below the current layer	Sijoita uudelle lukitulle, himmennetylle mallitasolle nykyisen tason alapuolelle
 	Swap the selected object for the file, keeping its place and transform	Korvaa valittu objekti tiedostolla säilyttäen sen paikan ja muunnoksen
+	Show Import Options	Näytä tuontiasetukset
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Kysy kunkin PDF-, DXF- tai tekstitiedoston tuontiasetukset ennen sijoittamista; pois: käytä viimeksi valittuja asetuksia
 	On: one locked object showing the document, updated when it changes.	Päällä: yksi lukittu objekti, joka näyttää asiakirjan ja päivittyy sen muuttuessa.
 	Off: an editable copy of its art, embedded in this document.	Pois: muokattava kopio sen kuvituksesta upotettuna tähän asiakirjaan.
 	Images: link to the file instead of only embedding it.	Kuvat: linkitä tiedostoon sen sijaan, että se vain upotetaan.
@@ -5423,6 +5472,7 @@ imageTrace	Outline	Ääriviiva
 @msg	every numbered name for {name} is taken in the document's folder	kaikki kohteen {name} numeroidut nimet ovat jo käytössä asiakirjan kansiossa
 @msg	No linked files to look for	Ei etsittäviä linkitettyjä tiedostoja
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Linkki on symbolin, kaaviomallin, kuvion tai peittävyysmaskin sisällä, eikä sillä ole paikkaa piirtoalueella
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	kaavion sarjassa olevan kaaviomallin piirros piirretään uudelleen mallista: muokkaa mallia muuttaaksesi sitä
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` on vaiheviittaus {r}, jonka vain `run` ja `command_batch` ratkaisevat
 @msg	`ids` must be an array of object ids, not {v}	`ids` on oltava objektitunnusten taulukko, ei {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` on oltava värien taulukko, ei {v}
@@ -5442,6 +5492,9 @@ imageTrace	Outline	Ääriviiva
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automaation tiedostojärjestelmäkäyttöä ei ole myönnetty: kirjoitusoikeus puuttuu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automaation polku hylättiin: lukujuuren {root} ulkopuolella: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	automaation polku hylättiin: lukujuurten {roots} ulkopuolella: {path}
+@msg	a linked JavaScript file is outside the read roots	linkitetty JavaScript-tiedosto on lukujuurten ulkopuolella
+@msg	the library's file is outside the read roots	kirjaston tiedosto on lukujuurten ulkopuolella
+@msg	{file} names more than one linked JavaScript file	{file} vastaa useampaa kuin yhtä linkitettyä JavaScript-tiedostoa
 @msg	automation path rejected: outside the write root {root}: {path}	automaation polku hylättiin: kirjoitusjuuren {root} ulkopuolella: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	automaation polku hylättiin: kirjoitusjuurten {roots} ulkopuolella: {path}
 @msg	automation path rejected: path is empty	automaation polku hylättiin: polku on tyhjä
@@ -5903,6 +5956,7 @@ mark-style	Japanese	Japanilainen
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
 @msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektilla ei ole 3D-tehostetta (Pursota ja viistä, Pyöräytä, Täytä ilmalla tai Kierrä)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` on oltava objekti, jossa on vain `mode` arvolla shaded tai wireframe
 @msg	its 3D effect builds no solid	sen 3D-tehoste ei muodosta kappaletta
 @msg	bevel must be none or one of {_1}	bevel-arvon on oltava none tai jokin seuraavista: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ei voi muodostaa kappaleita tästä kuvituksesta: sen symbolien esiintymät, sulautukset ja leikkausryhmät sisältävät liikaa objekteja
@@ -5983,6 +6037,9 @@ mark-style	Japanese	Japanilainen
 	Softness	Pehmeys
 	Ambient Light	Ympäristövalo
 	Light behind the object	Valo objektin takana
+	Move Light to Back	Siirrä valo taakse
+	Move Light to Front	Siirrä valo eteen
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Siirrä valoa vetämällä. Nuolinäppäimet siirtävät kohdistettua valoa; Vaihto siirtää 15° kerrallaan.
 	Shadows	Varjot
 	Distance from Object	Etäisyys objektista
 	Shadow Bounds	Varjon rajat
@@ -6723,6 +6780,8 @@ axis	Y Axis	Y-akseli
 	Create New Set	Luo uusi sarja
 	Stop Global Edit	Lopeta yleismuokkaus
 	Global Edit Options	Yleismuokkauksen asetukset
+	Select Similar Objects	Valitse samankaltaiset objektit
+	Select Similar Options	Samankaltaisten valinnan asetukset
 	Leave Out of Global Edit	Jätä pois yleismuokkauksesta
 	Match	Vastaavuus
 	On Artboards	Piirtoalustoilla
