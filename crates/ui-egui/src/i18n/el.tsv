@@ -5783,6 +5783,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	 to set spacing and orientation	 για ορισμό απόστασης και προσανατολισμού
 	:	:
 	Light behind the object	Φως πίσω από το αντικείμενο
+	Move Light to Back	Μετακίνηση φωτός πίσω
+	Move Light to Front	Μετακίνηση φωτός μπροστά
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Σύρετε ένα φως για να το μετακινήσετε. Τα πλήκτρα βέλους μετακινούν το εστιασμένο φως· με Shift ανά 15°.
 	Shadows	Σκιές
 	Distance from Object	Απόσταση από το αντικείμενο
 	Shadow Bounds	Όρια σκιάς

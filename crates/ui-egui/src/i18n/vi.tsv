@@ -5706,6 +5706,9 @@ theme	Appearance	Giao diện
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
+	Move Light to Back	Đưa ánh sáng ra sau
+	Move Light to Front	Đưa ánh sáng ra trước
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Kéo một nguồn sáng để di chuyển nó. Phím mũi tên di chuyển nguồn sáng đang có tiêu điểm; Shift di chuyển theo bước 15°.
 	Shadows	Bóng đổ
 	Distance from Object	Khoảng cách từ đối tượng
 	Shadow Bounds	Giới hạn bóng

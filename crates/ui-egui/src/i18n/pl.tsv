@@ -5944,6 +5944,9 @@ mark-style	Japanese	Japońskie
 	Softness	Miękkość
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
+	Move Light to Back	Przenieś światło do tyłu
+	Move Light to Front	Przenieś światło do przodu
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Przeciągnij światło, aby je przesunąć. Klawisze strzałek przesuwają aktywne światło; z Shift o 15°.
 	Shadows	Cienie
 	Distance from Object	Odległość od obiektu
 	Shadow Bounds	Granice cienia

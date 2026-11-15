@@ -5985,6 +5985,9 @@ mark-style	Japanese	Japanilainen
 	Softness	Pehmeys
 	Ambient Light	Ympäristövalo
 	Light behind the object	Valo objektin takana
+	Move Light to Back	Siirrä valo taakse
+	Move Light to Front	Siirrä valo eteen
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Siirrä valoa vetämällä. Nuolinäppäimet siirtävät kohdistettua valoa; Vaihto siirtää 15° kerrallaan.
 	Shadows	Varjot
 	Distance from Object	Etäisyys objektista
 	Shadow Bounds	Varjon rajat

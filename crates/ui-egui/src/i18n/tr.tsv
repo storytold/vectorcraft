@@ -5881,6 +5881,9 @@ theme	Appearance	Görünüm
 	Softness	Yumuşaklık
 	Ambient Light	Ortam Işığı
 	Light behind the object	Nesnenin arkasındaki ışık
+	Move Light to Back	Işığı Arkaya Taşı
+	Move Light to Front	Işığı Öne Taşı
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Işığı taşımak için sürükleyin. Ok tuşları odaktaki ışığı taşır; Shift ile 15° adımlarla.
 	Shadows	Gölgeler
 	Distance from Object	Nesneden uzaklık
 	Shadow Bounds	Gölge sınırları

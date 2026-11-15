@@ -5721,6 +5721,9 @@ lighting	Light	Luce
 	Softness	Morbidezza
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto
+	Move Light to Back	Sposta luce dietro
+	Move Light to Front	Sposta luce davanti
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Trascina una luce per spostarla. I tasti freccia spostano la luce attiva; Maiusc a passi di 15°.
 	Shadows	Ombre
 	Distance from Object	Distanza dall'oggetto
 	Shadow Bounds	Limiti dell'ombra

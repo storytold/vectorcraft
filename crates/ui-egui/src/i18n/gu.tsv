@@ -1911,6 +1911,9 @@
 	Light Intensity	લાઇટ તીવ્રતા
 	Light Rough	લાઇટ રફ
 	Light behind the object	ઑબ્જેક્ટની પાછળ લાઇટ
+	Move Light to Back	લાઇટ પાછળ ખસેડો
+	Move Light to Front	લાઇટ આગળ ખસેડો
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	લાઇટ ખસેડવા માટે તેને ખેંચો. ઍરો કી ફોકસ થયેલી લાઇટ ખસેડે છે; Shift સાથે 15° ના પગલાં.
 	Lighten	હળવું કરો
 	Lighting	લાઇટિંગ
 	Lights	લાઇટ્સ

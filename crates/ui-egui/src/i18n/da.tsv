@@ -6058,6 +6058,9 @@ mark-style	Japanese	Japansk
 	Softness	Blødhed
 	Ambient Light	Omgivelseslys
 	Light behind the object	Lys bag objektet
+	Move Light to Back	Flyt lys bagud
+	Move Light to Front	Flyt lys frem
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Træk et lys for at flytte det. Piletasterne flytter lyset med fokus; Skift flytter det 15° ad gangen.
 	Shadows	Skygger
 	Distance from Object	Afstand fra objektet
 	Shadow Bounds	Skyggegrænser

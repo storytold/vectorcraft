@@ -4802,6 +4802,9 @@ axis	Both	Ambos
 	Softness	Suavidade
 	Ambient Light	Luz ambiente
 	Light behind the object	Luz atrás do objeto
+	Move Light to Back	Mover luz para trás
+	Move Light to Front	Mover luz para a frente
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Arraste uma luz para movê-la. As teclas de seta movem a luz em foco; Shift a move de 15° em 15°.
 	Shadows	Sombras
 	Distance from Object	Distância do objeto
 	Shadow Bounds	Limites da sombra

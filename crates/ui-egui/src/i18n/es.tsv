@@ -6048,6 +6048,9 @@ mark-style	Japanese	Japonesas
 	Softness	Suavidad
 	Ambient Light	Luz ambiental
 	Light behind the object	Luz detrás del objeto
+	Move Light to Back	Mover luz detrás
+	Move Light to Front	Mover luz delante
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Arrastre una luz para moverla. Las teclas de flecha mueven la luz con el foco; Mayús la mueve de 15° en 15°.
 	Shadows	Sombras
 	Distance from Object	Distancia del objeto
 	Shadow Bounds	Límites de la sombra

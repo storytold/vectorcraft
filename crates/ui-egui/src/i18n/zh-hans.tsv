@@ -5974,6 +5974,9 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+	Move Light to Back	将光源移到后方
+	Move Light to Front	将光源移到前方
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	拖动光源可移动它。方向键移动具有焦点的光源；按住 Shift 以 15° 为步长。
 	Shadows	阴影
 	Distance from Object	与对象的距离
 	Shadow Bounds	阴影边界
