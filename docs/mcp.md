@@ -836,25 +836,6 @@ inside a series group other than a path directly in it, a legend swatch's includ
 reached through `target: "contents"`. These commands leave that art out, edit the other objects they are given, and
 are an error when all their objects are design art: the `appearance.*` commands listed above, `effect.apply`,
 `appearance.addEffect` and the other `effect.*` commands that edit, move or remove an effect,
-`effect.expandAppearance` (which also leaves the art inside a selected graph or series group as it was, unless an
-effect of that group turns the whole group into other art, and is disabled when only design art is selected or
-given), `threeD.mapGraphic`,
-`graphicStyle.apply`, `graphicStyle.addFromLibrary` with `apply`, `graphicStyle.breakLink`, `transparency.set`, the
-`paint.freeform.*` commands that edit points and lines, and `appearance.copyFrom` as the target.
-`appearance.transfer` with design art as its `target`, or as its `source` without `copy`, is an error.
-`paint.setFill`, `paint.setStroke`, `paint.swap`, `paint.default`, `paint.invert` and `paint.complement` with an
-`item`, `stroke.set`, `stroke.weightUp`, `stroke.weightDown`, `stroke.setAdvanced`, `paint.editGradient`,
-`paint.setGradientGeom` and `object.setOverprint` leave the art out without an error. When the first selected object is design art, the commands
-do not use the Appearance panel's active row. When the first object given is design art, rows and effects given with
-`aligned: true` are rows of its stack in `appearance.setItem`, `appearance.removeItem`, `appearance.duplicateItem`,
-`transparency.set` with an `item`, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit,
-move or remove an effect: each other object edits the row or effect equal to it, and an object without one is left as
-it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they do
-for a row no object has, and the other commands are an error. `appearance.moveItem`, `effect.move` and
-`appearance.duplicateItem` with `to` are an error when the art's stack differs from the other objects', and
-`appearance.duplicateItem` with `to` is also an error when two or more other objects are given, as it is without the
-art. To change the art, edit the design with `graph.design`.
-
 `effect.expandAppearance` (which also leaves the art inside a selected graph or series group as it was, except that
 an effect of that group which reshapes or replaces the whole group bakes into that art too, and is disabled when only
 design art is selected or given), `threeD.mapGraphic`,
@@ -866,7 +847,15 @@ design art is selected or given), `threeD.mapGraphic`,
 `paint.setGradientGeom` and `object.setOverprint` leave the art out without an error. When all their objects are design art,
 `paint.editGradient`, `paint.swap`, `paint.default`, `paint.invert`, `paint.complement` and `stroke.set` also leave
 the paint and stroke weight for new art and the remembered colors as they are. When the first selected object is design art, the commands
-do not use the Appearance panel's active row. To change the art, edit the design with `graph.design`.
+do not use the Appearance panel's active row. When the first object given is design art, rows and effects given with
+`aligned: true` are rows of its stack in `appearance.setItem`, `appearance.removeItem`, `appearance.duplicateItem`,
+`transparency.set` with an `item`, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit,
+move or remove an effect: each other object edits the row or effect equal to it, and an object without one is left as
+it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they do
+for a row no object has, and the other commands are an error. `appearance.moveItem`, `effect.move` and
+`appearance.duplicateItem` with `to` are an error when the art's stack differs from the other objects', and
+`appearance.duplicateItem` with `to` is also an error when two or more other objects are given, as it is without the
+art. To change the art, edit the design with `graph.design`.
 
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
