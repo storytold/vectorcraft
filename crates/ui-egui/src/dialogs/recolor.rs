@@ -412,13 +412,13 @@ fn group_colors<'a>(app: &VectorcraftApp, d: &Dialog, rs: impl Iterator<Item = &
 }
 
 /// The New Color Group menu's request: save the new colors of the rows that aren't excluded (Save
-/// All Colors, in row order; a row without one gives its first current color) or of the Prominent Colors bar (Save Prominent Colors, in its order)
+/// All Colors, in row order; a row whose new color was removed gives none) or of the Prominent Colors bar (Save Prominent Colors, in its order)
 /// as a new color group, a step of its own (`swatch.newGroup`).
 fn save_group(app: &mut VectorcraftApp, d: &mut Dialog, which: &str) {
     let rs = rows(d);
     let order: Vec<usize> = match which {
         "prominent" => prominent_parts(d, &rs).into_iter().map(|p| p.0).collect(),
-        _ => (0..rs.len()).filter(|&i| !excluded(&rs[i])).collect(),
+        _ => (0..rs.len()).filter(|&i| !excluded(&rs[i]) && to_color(&rs[i]).is_some()).collect(),
     };
     let colors = group_colors(app, d, order.iter().filter_map(|&i| rs.get(i)));
     if colors.is_empty() {
@@ -823,7 +823,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     sync_theme(app, &mut d);
     sync_weights(app, &mut d);
     if d.bool("__newGroup") {
-        let colors = group_colors(app, &d, rows(&d).iter().filter(|r| !excluded(r)));
+        let colors = group_colors(app, &d, rows(&d).iter().filter(|r| !excluded(r) && to_color(r).is_some()));
         return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}));
     }
     let r = form::commit_preview(app, CMD, apply_params(&d))?;
@@ -1756,7 +1756,7 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
             let button = widgets::icon_button(ui, "dc-folder", tl!("New Color Group"), false, 24.0);
             let prominent = d.bool("__art") && !prominent_parts(d, rows).is_empty();
             let saved = egui::Popup::menu(&button).show(|ui| {
-                if widgets::menu_item_name(ui, tl!("Save All Colors"), rows.iter().any(|r| !excluded(r)), false) {
+                if widgets::menu_item_name(ui, tl!("Save All Colors"), rows.iter().any(|r| !excluded(r) && to_color(r).is_some()), false) {
                     return Some("all");
                 }
                 widgets::menu_item_name(ui, tl!("Save Prominent Colors"), prominent, false).then_some("prominent")
@@ -2765,6 +2765,34 @@ mod tests {
         }
         assert_eq!(groups(&app), n + 2);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2, "a step for each group");
+    }
+
+    /// A color removed on the Edit tab leaves its row with no new color, and neither Save All
+    /// Colors nor OK on colors opened alone puts the row's current color in the new color group.
+    #[test]
+    fn a_removed_color_joins_no_saved_color_group() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        prominent_setup(&mut app, &ctx);
+        let last = |app: &VectorcraftApp| -> Vec<String> {
+            let doc = &app.session.doc().unwrap().doc;
+            doc.swatch_groups.last().unwrap().swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect()
+        };
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("rows".into(), json!([{"from": [BLUE], "to": null}, {"from": [RED, PURPLE], "to": "rgb 0 255 0"}]));
+        d.fields.insert(SAVE_GROUP.into(), json!("all"));
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        frame(&mut app, &ctx, 0.11, vec![], 0);
+        assert_eq!(last(&app), ["#00ff00"], "Save All Colors");
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("ui.recolorDialog", json!({"colors": ["#ff0000", "#0000ff"]})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("rows".into(), json!([{"from": ["rgb 255 0 0"], "to": "rgb 255 0 0"}, {"from": ["rgb 0 0 255"], "to": null}]));
+        let d = d.clone();
+        confirm(&mut app, &d).unwrap();
+        assert_eq!(last(&app), ["#ff0000"], "OK on colors opened alone");
     }
 
     /// One frame with `modifiers` held.
