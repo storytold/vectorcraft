@@ -11,6 +11,12 @@
 //! A raster image, linked or a data URL, whose orientation (EXIF, or a TIFF's Orientation tag)
 //! turns or flips its pixels is turned before usvg gets it, so it is sized, fitted and stored as
 //! it is shown.
+//!
+//! usvg decodes a data URL each time it converts the element holding it, a `<use>` copy
+//! included, before the resolver sees it. So before usvg reads an SVG (the imported one, and
+//! each SVG image), each `<image>` and `<feImage>` href that is a data URL is changed to a key,
+//! and the resolver decodes the URL once, the first time a key comes, within what the data URLs
+//! may decode to together ([`MAX_DATA_URL_BYTES`]); every later use of it gets the same image.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -33,6 +39,13 @@ pub const MAX_NESTED_SVG_READS: usize = 1024;
 
 /// Most bytes of nested SVG image text an imported SVG may read, decoded or not, all reads together.
 pub const MAX_NESTED_SVG_TEXT: u64 = 512 << 20;
+
+/// Most bytes the image data URLs an imported SVG shows may decode to, those in its SVG images
+/// included, all together; each URL is decoded once, however often it is shown.
+pub const MAX_DATA_URL_BYTES: u64 = 512 << 20;
+
+/// What a data URL's key starts with, the URL's number following it.
+const DATA_URL_KEY: &str = "vectorcraft-data-url-";
 
 /// The files an SVG's images link to.
 #[derive(Default)]
@@ -74,12 +87,46 @@ pub(in crate::import) struct Files {
     /// The CMYK TIFF stored in place of a turned CMYK image, by the address of the PNG usvg got
     /// (kept here too, so the address stays its own).
     cmyk: Mutex<HashMap<usize, (Bytes, Bytes)>>,
+    /// The data URLs changed to keys before usvg read them.
+    data: Mutex<DataUrls>,
+    /// The bytes the image data URLs decoded to so far, whether or not they are images.
+    data_bytes: AtomicU64,
+    /// Images were left out for their data URLs decoding past [`MAX_DATA_URL_BYTES`].
+    too_much_data: AtomicBool,
     /// What usvg makes of the SVG and of the SVG images read so far, all together ([`budget`]):
     /// elements, bytes of copied style values and selector tests.
     spent: Mutex<budget::Cost>,
     /// Why an SVG image refused the whole SVG: what usvg would make of it is past [`budget`]'s
     /// limits. The first one.
     refused: Mutex<Option<SvgError>>,
+}
+
+/// The hrefs changed to keys, by number: an href's key is [`DATA_URL_KEY`] and its number.
+#[derive(Default)]
+struct DataUrls {
+    /// The number of each href.
+    numbers: HashMap<Arc<str>, usize>,
+    /// Each href: a data URL, then what it decoded to, or a link.
+    urls: Vec<DataUrl>,
+    /// Each href as it was written, for the filters kept as written ([`Files::data_href`]).
+    hrefs: Vec<Arc<str>>,
+}
+
+enum DataUrl {
+    Encoded(Arc<str>),
+    Decoded(Decoded),
+    /// A link that starts as a key does, looked up as it is.
+    Link(Arc<str>),
+}
+
+/// What a data URL decoded to, as usvg gets it.
+#[derive(Clone)]
+enum Decoded {
+    Raster(RasterKind, Bytes),
+    /// SVG text (unpacked when it was SVGZ), read where it is shown ([`Files::svg`]).
+    Svg(Arc<str>),
+    /// Not an image VectorCraft reads, or left out.
+    Nothing,
 }
 
 /// Encoded image bytes, shared.
@@ -254,7 +301,7 @@ fn key(bytes: &Arc<Vec<u8>>) -> usize {
 impl Files {
     /// Read the files the `<image>` elements of `xml` (the text `svg`) link to. Placeholders
     /// stretch to the image's box (`preserveAspectRatio="none"`), which the file fills once
-    /// relinked.
+    /// relinked. The data URLs of its images are changed to keys ([`Files::take_data_urls`]).
     pub(in crate::import) fn read(svg: &str, xml: &roxmltree::Document, opts: &ImportOptions, edits: &mut Edits, warnings: &mut Vec<String>) -> Self {
         let mut files = Files::default();
         let mut reading = Reading {
@@ -269,7 +316,39 @@ impl Files {
             measured: budget::Cost::default(),
         };
         files.sources = files.links_of(svg, xml, opts.folder, None, edits, &mut reading);
+        files.take_data_urls(xml, edits);
         files
+    }
+
+    /// Change each href of the `<image>` and `<feImage>` elements of `xml` that usvg would decode
+    /// as a data URL to that URL's key, numbering the URLs not seen before: usvg gives a key to
+    /// the resolver as it is ([`Files::data_url`]). An href that starts as a key does, a link,
+    /// gets a key too, which the resolver reads as that link.
+    fn take_data_urls(&self, xml: &roxmltree::Document, edits: &mut Edits) {
+        let Ok(mut data) = self.data.lock() else { return };
+        let hrefs = xml
+            .descendants()
+            .filter(|n| n.is_element() && matches!(n.tag_name().name(), "image" | "feImage"))
+            .flat_map(|n| n.attributes())
+            .filter(|a| a.name() == "href" && matches!(a.namespace(), None | Some("http://www.w3.org/1999/xlink")));
+        for a in hrefs {
+            let url = data_url::DataUrl::process(a.value()).is_ok();
+            if !url && !a.value().starts_with(DATA_URL_KEY) {
+                continue;
+            }
+            let n = match data.numbers.get(a.value()) {
+                Some(n) => *n,
+                None => {
+                    let href: Arc<str> = Arc::from(a.value());
+                    let n = data.urls.len();
+                    data.numbers.insert(href.clone(), n);
+                    data.hrefs.push(href.clone());
+                    data.urls.push(if url { DataUrl::Encoded(href) } else { DataUrl::Link(href) });
+                    n
+                }
+            };
+            edits.set_value(a, &format!("{DATA_URL_KEY}{n}"));
+        }
     }
 
     /// What usvg gets for each href the `<image>` elements of `xml` (the text `svg`) link to,
@@ -507,6 +586,9 @@ impl Files {
                 MAX_NESTED_SVG_TEXT >> 20
             ));
         }
+        if self.too_much_data.load(Ordering::Relaxed) {
+            notes.push(format!("images were left out: together their data URLs decode to more than {} MB", MAX_DATA_URL_BYTES >> 20));
+        }
         notes
     }
 
@@ -537,47 +619,145 @@ impl Files {
         }
     }
 
-    /// usvg's image resolver, for an SVG whose elements nest `height` deep: data URLs as usvg
-    /// reads them, other hrefs only from the files read. SVG images are read here
-    /// ([`Files::svg_data`], [`Files::svg`]), never by usvg's own resolver, which caps neither how
-    /// deep they nest nor what they unpack to.
+    /// usvg's image resolver, for an SVG whose elements nest `height` deep: data URLs by their
+    /// keys ([`Files::data_url`]), and those usvg decoded itself as it reads them, within
+    /// [`MAX_DATA_URL_BYTES`]; other hrefs only from the files read. SVG images are read here
+    /// ([`Files::svg`]), never by usvg's own resolver, which caps neither how deep they nest nor
+    /// what they unpack to.
     pub(in crate::import) fn resolver(&self, height: usize) -> ImageHrefResolver<'_> {
         self.depth.store(height, Ordering::Relaxed);
         ImageHrefResolver {
-            // By type as usvg reads them, and TIFF; one without a type (`text/plain`) by its
-            // bytes: one of those rasters, else SVG. A raster as [`shown`] gives it.
             resolve_data: Box::new(move |mime, bytes, opts| {
-                use image::ImageFormat as F;
-                let format = match mime {
-                    "image/jpg" | "image/jpeg" => F::Jpeg,
-                    "image/png" => F::Png,
-                    "image/gif" => F::Gif,
-                    "image/webp" => F::WebP,
-                    "image/tiff" => F::Tiff,
-                    "image/svg+xml" => return self.svg_data(&bytes, opts),
-                    "text/plain" => match image::guess_format(&bytes).ok().filter(|f| raster(*f).is_some() || *f == F::Tiff) {
-                        Some(format) => format,
-                        None => return self.svg_data(&bytes, opts),
-                    },
-                    _ => return None,
-                };
-                let (kind, bytes) = self.keep(shown(bytes, format)?);
-                Some(kind(bytes))
+                let spent = self.data_bytes.load(Ordering::Relaxed).saturating_add(bytes.len() as u64);
+                if spent > MAX_DATA_URL_BYTES {
+                    return leave_out(&self.too_much_data, true);
+                }
+                self.data_bytes.store(spent, Ordering::Relaxed);
+                self.show(self.decoded(mime, bytes), opts)
             }),
-            resolve_string: Box::new(move |h, opts| match self.find(h)? {
-                Source::Raster(kind, bytes) => Some(kind(bytes)),
-                Source::Svg(file) => self.svg(&file.text.clone(), Some(file), opts),
+            resolve_string: Box::new(move |h, opts| {
+                let link = match self.data_number(h).map(|n| self.data_url(n, opts)) {
+                    Some(Ok(image)) => return image,
+                    Some(Err(link)) => link,
+                    None => Arc::from(h),
+                };
+                match self.find(&link)? {
+                    Source::Raster(kind, bytes) => Some(kind(bytes)),
+                    Source::Svg(file) => self.svg(&file.text.clone(), Some(file), opts),
+                }
             }),
         }
     }
 
-    /// The SVG image of data `bytes` (SVG or SVGZ), as [`Files::svg`] reads it. Unpacked here,
-    /// within what the SVGZ images have left, so usvg unpacks nothing itself; past it, `None`,
-    /// noted.
-    fn svg_data(&self, bytes: &[u8], opts: &usvg::Options) -> Option<ImageKind> {
+    /// The number of the href whose key is `h`.
+    fn data_number(&self, h: &str) -> Option<usize> {
+        let n: usize = h.strip_prefix(DATA_URL_KEY)?.parse().ok()?;
+        let known = n < self.data.lock().ok()?.urls.len();
+        (known && h.len() == DATA_URL_KEY.len() + n.to_string().len()).then_some(n)
+    }
+
+    /// The href whose key is `h`, as it was written: a filter kept as an effect holds its
+    /// `<feImage>` hrefs as written, not their keys ([`super::fx::sources`]).
+    pub(in crate::import) fn data_href(&self, h: &str) -> Option<Arc<str>> {
+        let n = self.data_number(h)?;
+        self.data.lock().ok()?.hrefs.get(n).cloned()
+    }
+
+    /// The image of data URL `n`: decoded the first time ([`Files::decode`]), then kept; the link
+    /// when href `n` is one.
+    fn data_url(&self, n: usize, opts: &usvg::Options) -> Result<Option<ImageKind>, Arc<str>> {
+        // The lock is let go before the image is shown: an SVG image takes it again.
+        let state = match self.data.lock().ok().as_deref().and_then(|d| d.urls.get(n)) {
+            Some(DataUrl::Decoded(decoded)) => Ok(decoded.clone()),
+            Some(DataUrl::Encoded(url)) => Err(url.clone()),
+            Some(DataUrl::Link(link)) => return Err(link.clone()),
+            None => return Ok(None),
+        };
+        let url = match state {
+            Ok(decoded) => return Ok(self.show(decoded, opts)),
+            Err(url) => url,
+        };
+        let decoded = self.decode(&url);
+        if let Ok(mut data) = self.data.lock()
+            && let Some(slot) = data.urls.get_mut(n)
+        {
+            *slot = DataUrl::Decoded(decoded.clone());
+        }
+        Ok(self.show(decoded, opts))
+    }
+
+    /// What data URL `url` decodes to, as usvg decodes it, in what is left of
+    /// [`MAX_DATA_URL_BYTES`]: decoding stops where it would go past, the image left out, noted.
+    fn decode(&self, url: &str) -> Decoded {
+        let Ok(parsed) = data_url::DataUrl::process(url) else { return Decoded::Nothing };
+        let spent = self.data_bytes.load(Ordering::Relaxed);
+        let room = MAX_DATA_URL_BYTES.saturating_sub(spent);
+        let mut body = Vec::new();
+        let decoded = parsed.decode(|bytes| {
+            if (body.len() as u64).saturating_add(bytes.len() as u64) > room {
+                return Err(());
+            }
+            body.extend_from_slice(bytes);
+            Ok(())
+        });
+        self.data_bytes.store(spent.saturating_add(body.len() as u64), Ordering::Relaxed);
+        match decoded {
+            Ok(_) => {}
+            Err(data_url::forgiving_base64::DecodeError::WriteError(())) => {
+                self.too_much_data.store(true, Ordering::Relaxed);
+                return Decoded::Nothing;
+            }
+            Err(_) => return Decoded::Nothing,
+        }
+        let mime = format!("{}/{}", parsed.mime_type().type_, parsed.mime_type().subtype);
+        self.decoded(&mime, Arc::new(body))
+    }
+
+    /// What usvg gets for data `bytes` of type `mime`: by type as usvg reads them, and TIFF; one
+    /// without a type (`text/plain`) by its bytes: one of those rasters, else SVG. A raster as
+    /// [`shown`] gives it; SVG or SVGZ as [`Files::svg_text`] gives it.
+    fn decoded(&self, mime: &str, bytes: Bytes) -> Decoded {
+        use image::ImageFormat as F;
+        let format = match mime {
+            "image/jpg" | "image/jpeg" => F::Jpeg,
+            "image/png" => F::Png,
+            "image/gif" => F::Gif,
+            "image/webp" => F::WebP,
+            "image/tiff" => F::Tiff,
+            "image/svg+xml" => return self.svg_text(&bytes),
+            "text/plain" => match image::guess_format(&bytes).ok().filter(|f| raster(*f).is_some() || *f == F::Tiff) {
+                Some(format) => format,
+                None => return self.svg_text(&bytes),
+            },
+            _ => return Decoded::Nothing,
+        };
+        match shown(bytes, format) {
+            Some(shown) => {
+                let (kind, bytes) = self.keep(shown);
+                Decoded::Raster(kind, bytes)
+            }
+            None => Decoded::Nothing,
+        }
+    }
+
+    /// The text of SVG image data `bytes` (SVG or SVGZ). Unpacked here, within what the SVGZ
+    /// images have left, so usvg unpacks nothing itself; past it, nothing, noted.
+    fn svg_text(&self, bytes: &[u8]) -> Decoded {
         match crate::text_within(bytes, &self.unpacked) {
-            Ok(text) => self.svg(&text, None, opts),
-            Err(e) => leave_out(&self.too_big, matches!(e, SvgError::TooBig(_))),
+            Ok(text) => Decoded::Svg(Arc::from(text.as_ref())),
+            Err(e) => {
+                leave_out(&self.too_big, matches!(e, SvgError::TooBig(_)));
+                Decoded::Nothing
+            }
+        }
+    }
+
+    /// The image usvg gets for `decoded`: an SVG image read here, where it is shown.
+    fn show(&self, decoded: Decoded, opts: &usvg::Options) -> Option<ImageKind> {
+        match decoded {
+            Decoded::Raster(kind, bytes) => Some(kind(bytes)),
+            Decoded::Svg(text) => self.svg(&text, None, opts),
+            Decoded::Nothing => None,
         }
     }
 
@@ -641,6 +821,9 @@ impl Files {
         // usvg's parser would overflow on it, as on the SVG holding it (`import`).
         super::convolve_matrices_ok(&xml).ok()?;
         self.set_spent(spent.add(cost));
+        let mut edits = Edits::default();
+        self.take_data_urls(&xml, &mut edits);
+        let keyed = edits.apply(text);
         self.depth.store(used + height, Ordering::Relaxed);
         let within = self.within.lock().ok().map(|mut w| w.push(file)).is_some();
         // usvg's `Tree::from_data_nested`, except that hrefs to files go to the resolver.
@@ -659,7 +842,7 @@ impl Files {
             },
             ..usvg::Options::default()
         };
-        let tree = usvg::Tree::from_str(text, &nested);
+        let tree = usvg::Tree::from_str(&keyed, &nested);
         if within && let Ok(mut w) = self.within.lock() {
             w.pop();
         }
@@ -1094,6 +1277,178 @@ mod tests {
         let Some(Source::Svg(a)) = files.sources.get("./a.svg") else { panic!("a.svg is shown") };
         assert!(a.sources.is_empty(), "{:?}", a.sources.keys());
         assert_eq!(files.left_out().len(), 2, "{:?}", files.left_out());
+    }
+
+    /// A base64 data URL of `bytes` of type `mime`.
+    fn data(mime: &str, bytes: &[u8]) -> String {
+        format!("data:{mime};base64,{}", crate::base64_encode(bytes))
+    }
+
+    /// A PNG of `w` × 1.
+    fn png_of(w: u32) -> Vec<u8> {
+        let mut out = vec![];
+        image::RgbaImage::new(w, 1).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+        out
+    }
+
+    /// SVG text of 2 × 2 holding `body`.
+    fn doc(body: &str) -> String {
+        format!(r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="2" height="2">{body}</svg>"#)
+    }
+
+    /// `svg` read as the import reads it, its data URLs changed to keys first, `spent` bytes of
+    /// [`MAX_DATA_URL_BYTES`] already decoded: the files, and the PNG bytes of the images usvg
+    /// made, filters' included, in order.
+    fn read_keyed(svg: &str, spent: u64) -> (Files, Vec<Arc<Vec<u8>>>) {
+        let xml = super::super::parse(svg).unwrap();
+        let mut edits = Edits::default();
+        let files = Files::read(svg, &xml, &ImportOptions::default(), &mut edits, &mut vec![]);
+        files.data_bytes.store(spent, Ordering::Relaxed);
+        let text = edits.apply(svg).into_owned();
+        let tree = {
+            let height = depth::height(&xml, MAX_ELEMENT_DEPTH).unwrap();
+            let opts = usvg::Options { image_href_resolver: files.resolver(height), ..usvg::Options::default() };
+            usvg::Tree::from_str(&text, &opts).unwrap()
+        };
+        // Filters' images and SVG images' trees are subroots.
+        fn pngs(g: &usvg::Group, out: &mut Vec<Arc<Vec<u8>>>) {
+            for n in g.children() {
+                match n {
+                    usvg::Node::Group(g) => pngs(g, out),
+                    usvg::Node::Image(im) => {
+                        if let ImageKind::PNG(b) = im.kind() {
+                            out.push(b.clone());
+                        }
+                    }
+                    _ => {}
+                }
+                n.subroots(|g| pngs(g, out));
+            }
+        }
+        let mut out = vec![];
+        pngs(tree.root(), &mut out);
+        (files, out)
+    }
+
+    /// A data URL shown by many `<use>` elements is decoded once, and every use gets the same
+    /// image, where usvg decoded it again for each.
+    #[test]
+    fn a_data_url_is_decoded_once_however_often_it_is_used() {
+        let png = png();
+        let uses = r##"<use href="#p"/>"##.repeat(64);
+        let svg = doc(&format!(r#"<defs><image id="p" href="{}" width="1" height="1"/></defs>{uses}"#, data("image/png", &png)));
+        let (files, shown) = read_keyed(&svg, 0);
+        assert_eq!(shown.len(), 64);
+        assert!(shown.iter().all(|b| Arc::ptr_eq(b, &shown[0]) && **b == png));
+        assert_eq!(files.data_bytes.load(Ordering::Relaxed), png.len() as u64);
+        assert!(files.left_out().is_empty(), "{:?}", files.left_out());
+    }
+
+    /// The data URLs inside an SVG image get keys too: each is decoded once, together with the
+    /// SVG image's own URL.
+    #[test]
+    fn data_urls_in_svg_images_are_decoded_once() {
+        let png = png();
+        let uses = r##"<use href="#p"/>"##.repeat(16);
+        let inner = doc(&format!(r#"<defs><image id="p" href="{}" width="1" height="1"/></defs>{uses}"#, data("image/png", &png)));
+        let svg = doc(&format!(r#"<image href="{}" width="2" height="2"/>"#, data("image/svg+xml", inner.as_bytes())));
+        let (files, shown) = read_keyed(&svg, 0);
+        assert_eq!(shown.len(), 16);
+        assert_eq!(files.data_bytes.load(Ordering::Relaxed), (inner.len() + png.len()) as u64);
+    }
+
+    /// An `<feImage>`'s data URL gets a key too.
+    #[test]
+    fn fe_image_data_urls_are_decoded_once() {
+        let png = png();
+        let rects: String = (1..=8).map(|i| format!(r#"<rect width="{i}" height="1" filter="url(#f)"/>"#)).collect();
+        let svg = doc(&format!(r#"<filter id="f"><feImage href="{}"/></filter>{rects}"#, data("image/png", &png)));
+        let (files, shown) = read_keyed(&svg, 0);
+        assert_eq!(shown.len(), 8);
+        assert_eq!(files.data_bytes.load(Ordering::Relaxed), png.len() as u64);
+    }
+
+    /// Both hrefs get keys, and usvg still takes the plain `href` over `xlink:href`, in either
+    /// order: only its URL is decoded.
+    #[test]
+    fn the_plain_href_still_wins_over_xlink_href() {
+        let (one, two) = (png_of(1), png_of(2));
+        let (one_url, two_url) = (data("image/png", &one), data("image/png", &two));
+        for image in [
+            format!(r#"<image href="{one_url}" xlink:href="{two_url}" width="1" height="1"/>"#),
+            format!(r#"<image xlink:href="{two_url}" href="{one_url}" width="1" height="1"/>"#),
+        ] {
+            let (files, shown) = read_keyed(&doc(&image), 0);
+            assert_eq!(shown.len(), 1);
+            assert_eq!(*shown[0], one);
+            assert_eq!(files.data_bytes.load(Ordering::Relaxed), one.len() as u64);
+        }
+    }
+
+    /// An image whose data URL is written in an entity, and so in every element the entity
+    /// makes, gets a key too.
+    #[test]
+    fn data_urls_written_in_entities_are_decoded_once() {
+        let png = png();
+        let uses = r##"<use href="#p"/>"##.repeat(16);
+        let svg = format!(
+            r#"<!DOCTYPE svg [<!ENTITY img "<image id='p' href='{}' width='1' height='1'/>">]>{}"#,
+            data("image/png", &png),
+            doc(&format!("<defs>&img;</defs>{uses}"))
+        );
+        let (files, shown) = read_keyed(&svg, 0);
+        assert_eq!(shown.len(), 16);
+        assert_eq!(files.data_bytes.load(Ordering::Relaxed), png.len() as u64);
+    }
+
+    /// The data URLs decode to at most [`MAX_DATA_URL_BYTES`] together: a URL that fits what is
+    /// left is decoded, and decoding stops where a URL would go past it, that image left out and
+    /// noted.
+    #[test]
+    fn data_urls_past_the_limit_are_left_out() {
+        let (small, big) = (png(), png_of(64));
+        assert!(small.len() < big.len());
+        let svg = doc(&format!(
+            r#"<image href="{}" width="1" height="1"/><image href="{}" width="1" height="1"/>"#,
+            data("image/png", &small),
+            data("image/png", &big)
+        ));
+        let spent = MAX_DATA_URL_BYTES - (small.len() + big.len()) as u64 + 1;
+        let (files, shown) = read_keyed(&svg, spent);
+        assert_eq!(shown.len(), 1);
+        assert_eq!(*shown[0], small);
+        assert!(files.data_bytes.load(Ordering::Relaxed) <= MAX_DATA_URL_BYTES);
+        assert_eq!(files.left_out(), [format!("images were left out: together their data URLs decode to more than {} MB", MAX_DATA_URL_BYTES >> 20)]);
+        // A data URL usvg decodes itself counts too.
+        let files = Files::default();
+        files.data_bytes.store(MAX_DATA_URL_BYTES, Ordering::Relaxed);
+        let resolver = files.resolver(1);
+        assert!((resolver.resolve_data)("image/png", Arc::new(small.clone()), &usvg::Options::default()).is_none());
+        drop(resolver);
+        assert_eq!(files.left_out().len(), 1);
+    }
+
+    /// A link that looks like a key, spelled plainly or with character references, in the
+    /// imported SVG or in an SVG image, stays that link: it never shows a data URL's image.
+    #[test]
+    fn links_that_look_like_keys_stay_links() {
+        let png = png();
+        let url = data("image/png", &png);
+        let inner = doc(&format!(r#"<image href="{DATA_URL_KEY}0" width="1" height="1"/>"#));
+        let svg = doc(&format!(
+            r#"<image href="{url}" width="1" height="1"/><image href="{DATA_URL_KEY}0" width="1" height="1"/><image href="&#118;{}0" width="1" height="1"/><image href="{}" width="2" height="2"/>"#,
+            &DATA_URL_KEY[1..],
+            data("image/svg+xml", inner.as_bytes())
+        ));
+        let (files, shown) = read_keyed(&svg, 0);
+        // The data URL's image, then the placeholder of the missing file, twice; the SVG image's
+        // link names no file there, so it shows nothing.
+        assert_eq!(shown.len(), 3);
+        assert_eq!(*shown[0], png);
+        assert!(shown[1..].iter().all(|b| **b != png && files.links.get(&key(b)).is_some_and(|l| l.missing)));
+        assert_eq!(files.data_number(&format!("{DATA_URL_KEY}00")), None);
+        assert_eq!(files.data_number(&format!("{DATA_URL_KEY}+0")), None);
+        assert_eq!(files.data_number(&format!("{DATA_URL_KEY}9")), None);
     }
 
     /// The nested SVG images read, decoded or not, take at most [`MAX_NESTED_SVG_TEXT`] bytes of

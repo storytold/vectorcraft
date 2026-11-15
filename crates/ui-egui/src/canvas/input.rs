@@ -5,8 +5,8 @@ use super::drag::{
     tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
-    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, rotate_about, scroll_view, touch_gestures, trackpad_turn,
-    wheel, whole_pixels, zoom_about,
+    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, pan_ppp, rotate_about, scroll_view, touch_gestures,
+    trackpad_turn, wheel, whole_pixels, zoom_about,
 };
 use super::{Color32, Drag, Mods, Point, PointerEvent, PointerKind, Pos2, Shape, Stroke, Ui, VectorcraftApp, View, Xf, json};
 
@@ -367,7 +367,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
     let ui_zoom = app.canvas_ui_zoom;
     match d {
         Drag::Pan { start, center, .. } => {
-            let ppp = ui.ctx().pixels_per_point();
+            let ppp = pan_ppp(app, ui);
             if let Some(vm) = app.view_mut() {
                 vm.center = center;
                 pan_pixels(vm, (ppp, ui_zoom), whole_pixels(p - start, ppp));

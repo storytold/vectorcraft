@@ -1560,6 +1560,22 @@ fn type_on_a_path_alignment_and_end_bracket_are_warned_as_left_out() {
     assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.7, end: Some(0.5) }));
     // An open path's end bracket before its start bracket.
     assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.5, end: Some(0.3) }));
+    // Type that starts before its open path: the text path holds a start on the path only.
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: -0.25, end: None }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.0, end: None }));
+    // It is written starting at the path's start: the same text object as a start of 0.
+    let written = |start: f64| {
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Along", style(12.0, Paint::solid(Color::BLACK)));
+        t.kind = TextKind::OnPath { path: along(false), start, end: None };
+        t.xf = Affine::IDENTITY;
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        write(&doc).bytes
+    };
+    assert_eq!(written(-0.25), written(0.0));
+    assert_ne!(written(0.25), written(0.0));
     let two = |first_closed: bool| {
         let mut path = along(first_closed);
         let pts = [(150.0, 100.0).into(), (250.0, 100.0).into()];
