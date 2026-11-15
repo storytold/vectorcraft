@@ -3808,6 +3808,7 @@ mark-style	Japanese	Kiểu Nhật
 	Sixth Space	Dấu cách 1/6
 	Size	Kích thước
 	Size Tile to Art	Kích thước ô theo đối tượng
+	Move Tile with Art	Di chuyển ô cùng đối tượng
 	Size/Leading	Cỡ chữ/Giãn dòng
 	Size:	Kích thước:
 	Size: {size}  Tracking: {tracking}	Kích thước: {size}  Giãn chữ: {tracking}

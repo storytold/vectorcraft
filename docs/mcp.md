@@ -4773,6 +4773,14 @@ and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` st
 `object.pattern.edit` edits the pattern that fills or strokes a selected object, and `pattern.options` changes the
 pattern being edited; each returns an error when there is no such pattern. `pattern.delete` requires `name`.
 
+With `pattern.options {moveTileWithArt: true}` (Move Tile with Art), a move of all of the tile art in pattern editing
+mode moves the tile by the same offset: `object.move`, `object.nudge`, `object.transform` with a translation, and drags
+with the Selection tool. A move of only some of the art, a move of direct-selected anchors, a copy, a rotation and a
+scale leave the tile where it is. The option is off for a new pattern and works the same with `sizeTileToArt` on. These
+details are VectorCraft's own rules; the help page says only that the option moves the tile along with the art
+(<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/edit-patterns.html>).
+`pattern.list` reports it as `moveTileWithArt`. A `pattern.options` call that changes nothing records no undo step.
+
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"patternTileEdgeColor","value":"#ff4f4f"}}}
