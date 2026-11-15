@@ -5457,6 +5457,8 @@ effect	Soft	Mjuk
 	Step up or down	Ett steg upp eller ned
 	Drag values or labels. Double-click a value to type.	Dra i värden eller etiketter. Dubbelklicka på ett värde för att skriva.
 	Drag rings to rotate. Shift snaps to 15°.	Dra i ringarna för att rotera. Shift fäster i steg om 15°.
+	Track cube	Rotationskub
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Dra i en sida, en kant eller ringen för att rotera. Shift roterar runt en skärmaxel.
 	Drag the light, or its rings. Shift snaps to 15°.	Dra i ljuset eller dess ringar. Shift fäster i steg om 15°.
 	Keep visible surfaces only when expanding	Behåll endast synliga ytor vid expandering
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Trimma dold geometri vid Expandera utseende. Live-förhandsgranskningen behåller hela ytan. Transparenta färger och ytor som överskrider synlighetsgränserna behåller alla sidoytor.

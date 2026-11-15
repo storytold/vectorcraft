@@ -5690,6 +5690,8 @@ effect	Soft	柔和
 	Step up or down	逐級增減
 	Drag values or labels. Double-click a value to type.	拖曳數值或標籤。按兩下數值即可輸入。
 	Drag rings to rotate. Shift snaps to 15°.	拖曳圓環旋轉。按住 Shift 以 15° 為間距調整。
+	Track cube	旋轉立方體
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	拖曳面、邊或圓環進行旋轉。按住 Shift 繞一個螢幕軸旋轉。
 	Drag the light, or its rings. Shift snaps to 15°.	拖曳光源或圓環。按住 Shift 以 15° 為間距調整。
 lighting	Light	光源
 	Keep visible surfaces only when expanding	展開時僅保留可見表面

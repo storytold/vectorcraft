@@ -5637,6 +5637,8 @@ effect	Vertical	垂直
 	Step up or down	1 段階ずつ増減
 	Drag values or labels. Double-click a value to type.	数値やラベルをドラッグして調整。数値をダブルクリックすると入力できます。
 	Drag rings to rotate. Shift snaps to 15°.	リングをドラッグして回転。Shiftで15°刻みに調整。
+	Track cube	回転キューブ
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	面、辺、またはリングをドラッグして回転。Shiftで画面の1つの軸を中心に回転。
 	Drag the light, or its rings. Shift snaps to 15°.	ライトやリングをドラッグ。Shiftで15°刻みに調整。
 lighting	Light	ライト
 	Keep visible surfaces only when expanding	アピアランス分割時に見える面だけを保持

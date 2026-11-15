@@ -5547,6 +5547,8 @@ effect	Soft	Doux
 	Step up or down	Augmenter ou diminuer d’un cran
 	Drag values or labels. Double-click a value to type.	Faites glisser les valeurs ou les libellés. Double-cliquez sur une valeur pour la saisir.
 	Drag rings to rotate. Shift snaps to 15°.	Faites glisser les anneaux pour tourner. Maj contraint par pas de 15°.
+	Track cube	Cube de rotation
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Faites glisser une face, une arête ou l'anneau pour tourner. Maj fait tourner autour d'un axe de l'écran.
 	Drag the light, or its rings. Shift snaps to 15°.	Faites glisser la lumière ou ses anneaux. Maj contraint par pas de 15°.
 	Keep visible surfaces only when expanding	Conserver uniquement les surfaces visibles lors de la décomposition
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Découpe la géométrie masquée lors de la décomposition de l’aspect. L’aperçu conserve toute la surface. Les peintures transparentes et les surfaces dépassant les limites de visibilité conservent toutes les faces.

@@ -1082,7 +1082,8 @@ fn geometry_builds(check: impl FnOnce() -> Result<(), String>) -> (usize, Result
 
 /// The check builds each solid the effect draws once, about the bounds it draws it about: one for
 /// a fill and one for each stroke, on an object, on a group's members and on an appearance item,
-/// with the shadow on or off.
+/// with the shadow on or off. With the shadow on, the shadow is cast from the faces those builds
+/// kept, so no solid is built again for it.
 #[test]
 fn the_check_builds_each_drawn_solid_once() {
     for id in [EXTRUDE, CLASSIC_EXTRUDE, INFLATE] {
@@ -1098,6 +1099,11 @@ fn the_check_builds_each_drawn_solid_once() {
         assert_eq!(geometry_builds(|| validate_three_d_at(&n, id, &json!({}), (Some(0), 0))), (1, Ok(())), "{id}: on the fill");
         let shadow = json!({"shadow": true});
         assert_eq!(geometry_builds(|| validate_solid(&n, id, &shadow)), (2, Ok(())), "{id}: with the shadow on");
+        let mut other = square_node();
+        other.id = NodeId(2);
+        let g = Node::group(NodeId(9999), vec![Arc::new(square_node()), Arc::new(other)]);
+        assert_eq!(geometry_builds(|| validate_solid(&g, id, &shadow)), (4, Ok(())), "{id}: a group with the shadow on");
+        assert_eq!(geometry_builds(|| validate_three_d_at(&n, id, &shadow, (Some(0), 0))), (1, Ok(())), "{id}: the fill with the shadow on");
     }
 }
 

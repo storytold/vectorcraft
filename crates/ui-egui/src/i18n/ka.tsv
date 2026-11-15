@@ -3028,6 +3028,8 @@
 	Reset all Revolve settings to their defaults.	ბრუნვის ყველა პარამეტრის ნაგულისხმევზე დაბრუნება.
 	Drag values or labels. Double-click a value to type.	გადაათრიეთ მნიშვნელობები ან წარწერები. მნიშვნელობის ასაკრეფად ორჯერ დაწკაპეთ.
 	Drag rings to rotate. Shift snaps to 15°.	შესაბრუნებლად გადაათრიეთ რგოლები. Shift მიაბამს 15°-ის ჯერად კუთხეებზე.
+	Track cube	შემობრუნების კუბი
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	შესაბრუნებლად გადაათრიეთ წახნაგი, წიბო ან რგოლი. Shift აბრუნებს ეკრანის ერთი ღერძის გარშემო.
 	Drag the light, or its rings. Shift snaps to 15°.	გადაათრიეთ სინათლე ან მისი რგოლები. Shift მიაბამს 15°-ის ჯერად კუთხეებზე.
 lighting	Light	სინათლე
 	Keep visible surfaces only when expanding	გაშლისას მხოლოდ ხილული ზედაპირების შენარჩუნება

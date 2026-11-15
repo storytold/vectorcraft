@@ -977,6 +977,8 @@
 	Reset all Revolve settings to their defaults.	Atur ulang semua pengaturan Revolusi ke defaultnya.
 	Drag values or labels. Double-click a value to type.	Seret nilai atau label. Klik dua kali pada nilai untuk mengetik.
 	Drag rings to rotate. Shift snaps to 15°.	Seret cincin untuk memutar. Shift mengunci ke kelipatan 15°.
+	Track cube	Kubus putar
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Seret sisi, tepi, atau cincin untuk memutar. Shift memutar pada satu sumbu layar.
 	Drag the light, or its rings. Shift snaps to 15°.	Seret cahaya atau cincinnya. Shift mengunci ke kelipatan 15°.
 lighting	Light	Cahaya
 	Keep visible surfaces only when expanding	Pertahankan hanya permukaan yang terlihat saat memperluas

@@ -3565,6 +3565,8 @@ imageTrace	Outline	Contorno
 	Step up or down	Aumentar ou diminuir um passo
 	Drag values or labels. Double-click a value to type.	Arraste os valores ou rótulos. Clique duas vezes em um valor para digitá-lo.
 	Drag rings to rotate. Shift snaps to 15°.	Arraste os anéis para girar. Shift ajusta em incrementos de 15°.
+	Track cube	Cubo de rotação
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Arraste uma face, uma aresta ou o anel para girar. Shift gira em torno de um eixo da tela.
 	Drag the light, or its rings. Shift snaps to 15°.	Arraste a luz ou seus anéis. Shift ajusta em incrementos de 15°.
 lighting	Light	Luz
 	Keep visible surfaces only when expanding	Manter apenas as superfícies visíveis ao expandir
