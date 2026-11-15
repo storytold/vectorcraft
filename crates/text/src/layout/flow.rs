@@ -1301,14 +1301,30 @@ fn emit_line_glyph(
 /// a line, when `g` is a repeat mark, and the character it shows: the character [`repeated_char`]
 /// gives for the character `base` finds before the mark, shaped in the mark's style with the type's
 /// features (so vertical type gets the font's vertical forms), from the same face, with the mark's
-/// advance and place, so the line breaks stay as they are. None when `g` is no repeat mark, belongs
-/// to a tate-chu-yoko or warichu block, `base` gives None, nothing before it fits, or the face draws
-/// the character with no glyph or with more than one. `base` runs only for a repeat mark.
-pub(super) fn repeat_mark_glyph(cx: &Ctx<'_>, g: &SGlyph, base: impl FnOnce() -> Option<Option<char>>) -> Option<(SGlyph, char)> {
+/// advance and place, so the line breaks stay as they are. ゝ or ヽ followed by a combining voicing
+/// mark (U+3099) in one glyph counts as ゞ or ヾ. None when `g` is no repeat mark, belongs to a
+/// tate-chu-yoko or warichu block, holds other characters with the mark, shares its cluster with the
+/// glyph after it (`next`), `base` gives None, nothing before it fits, or the face draws the
+/// character with no glyph or with more than one. `base` runs only for a repeat mark.
+pub(super) fn repeat_mark_glyph(
+    cx: &Ctx<'_>,
+    g: &SGlyph,
+    next: Option<&SGlyph>,
+    base: impl FnOnce() -> Option<Option<char>>,
+) -> Option<(SGlyph, char)> {
     if g.tcy.is_some() || g.wari.is_some() || g.inline.is_some() || !matches!(g.ch, '々' | 'ゝ' | 'ゞ' | 'ヽ' | 'ヾ') {
         return None;
     }
-    let c = repeated_char(base()?, "", g.ch)?;
+    if next.is_some_and(|n| n.byte == g.byte) {
+        return None;
+    }
+    let mark = match cx.text.get(g.byte..g.byte + g.len)? {
+        "ゝ\u{3099}" => 'ゞ',
+        "ヽ\u{3099}" => 'ヾ',
+        cluster if cluster.len() == g.ch.len_utf8() => g.ch,
+        _ => return None,
+    };
+    let c = repeated_char(base()?, "", mark)?;
     let mut buf = [0; 4];
     let s: &str = c.encode_utf8(&mut buf);
     let mut shaped = Vec::with_capacity(1);
@@ -1328,7 +1344,7 @@ fn line_start_repeat(cx: &mut Ctx<'_>, paragraph: &ParagraphData<'_, '_>, first:
     }
     let g = paragraph.sg.get(first)?;
     let text = cx.text;
-    let (glyph, c) = repeat_mark_glyph(cx, g, || paragraph.repeat_base_before(text, g.byte))?;
+    let (glyph, c) = repeat_mark_glyph(cx, g, paragraph.sg.get(first + 1), || paragraph.repeat_base_before(text, g.byte))?;
     cx.out.repeat_marks.push((g.byte, c));
     Some(glyph)
 }

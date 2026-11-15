@@ -418,8 +418,9 @@ fn line_start_repeat(cx: &Ctx<'_>, t: &TextObject, pr: &Range<usize>, glyphs: &m
     if !t.first_para_continues || !t.para_at(0).kurikaeshi_moji_shori {
         return None;
     }
-    let g = glyphs.iter_mut().find(|g| g.len > 0 && g.byte == pr.start)?;
-    let (glyph, c) = repeat_mark_glyph(cx, g, || Some(t.first_para_lead))?;
+    let at = glyphs.iter().position(|g| g.len > 0 && g.byte == pr.start)?;
+    let (glyph, c) = repeat_mark_glyph(cx, glyphs.get(at)?, glyphs.get(at + 1), || Some(t.first_para_lead))?;
+    let g = glyphs.get_mut(at)?;
     *g = glyph;
     Some((g.byte, c))
 }

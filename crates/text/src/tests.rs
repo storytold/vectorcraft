@@ -2828,6 +2828,29 @@ fn kurikaeshi_moji_shori_draws_the_repeated_character_at_a_line_start() {
     assert_eq!(gid_of(&layout(&db, &t), 0), glyph('々'), "type on a path in a frame that does not continue");
 }
 
+/// Kurikaeshi Moji Shori: ゝ or ヽ typed with a combining voicing mark (U+3099) after it, which the
+/// font draws as one glyph, is drawn as the voiced character at a line start, as ゞ and ヾ are.
+#[test]
+fn kurikaeshi_moji_shori_draws_a_decomposed_voiced_mark_voiced() {
+    use crate::test_fonts::{REPEAT_MARK_FAMILY, repeat_mark_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(repeat_mark_font().expect("test font"));
+    let st = CharStyle { size: 20.0, font_family: REPEAT_MARK_FAMILY.into(), font_style: "Regular".into(), ..CharStyle::default() };
+    let face = db.style_face(&st).expect("face");
+    let glyph = |c: char| Some(face.glyph_for(c));
+    let gid_of = |l: &TextLayout, b: usize| l.glyphs.iter().find(|g| g.byte == b).map(|g| g.gid);
+    for (text, mark, want) in [("す\u{2028}ゝ\u{3099}", 'ゞ', 'ず'), ("サ\u{2028}ヽ\u{3099}", 'ヾ', 'ザ')] {
+        let at = text.find(['ゝ', 'ヽ']).expect("mark");
+        let mut t = TextObject::point(Point::ZERO, text, st.clone());
+        let off = layout(&db, &t);
+        assert_eq!(gid_of(&off, at), glyph(mark), "{text:?}: off, the font draws the voiced mark");
+        t.para.kurikaeshi_moji_shori = true;
+        let on = layout(&db, &t);
+        assert_eq!(gid_of(&on, at), glyph(want), "{text:?}");
+        assert_eq!(on.repeat_marks, [(at, want)], "{text:?}");
+    }
+}
+
 /// Kurikaeshi Moji Shori: a paragraph with a repeat mark at the start of each of many lines is laid
 /// out in one scan of its text, not one scan of everything before each line.
 #[test]

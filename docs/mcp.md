@@ -9463,7 +9463,8 @@ VectorCraft's set of marks and its rules: 々 repeats a Han ideograph, ゝ and �
 repeated character is the last one before the mark in the paragraph that is not a repeat mark, a soft return or a
 combining voicing mark (U+3099, U+309A), looking back into the frames before when threaded type continues a paragraph
 from one frame into the next; ゝ and ヽ draw it without its voicing marks, and ゞ and ヾ draw its voiced form, or the
-plain kana when it has none. A mark is drawn as it is when nothing before it in the paragraph fits, when the font has no glyph for the character, at the start of a
+plain kana when it has none; ゝ or ヽ followed by a combining voicing mark (U+3099) counts as ゞ or ヾ when the font draws the
+pair as one glyph, and is drawn as it is when the font draws two. A mark is drawn as it is when nothing before it in the paragraph fits, when the font has no glyph for the character, at the start of a
 paragraph, and inside tate-chu-yoko or warichu. Off by default. It is saved with the paragraph
 (`kurikaeshi_moji_shori` in `para`) only when on, paragraph styles carry it (`kurikaeshi_moji_shori` in a paragraph
 style's attributes), and Reset Panel turns it off. A value that is not true, false or null is refused, `null` leaves the
