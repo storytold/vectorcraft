@@ -24,13 +24,13 @@ pub use control_bar::{
 };
 #[cfg(test)]
 use control_bar::{CONTROL_BAR_FLOAT_AT, ISOLATION_BUTTON};
-pub(crate) use control_bar::{group_separator, left_out};
+pub(crate) use control_bar::{Fit, group_separator, left_out, link_reserve};
 #[cfg(test)]
 use hints::hint_segments;
 pub use hints::{hint_bar, hint_strings};
-pub use status_bar::status_bar;
+pub use status_bar::{StatusBarShow, deserialize_status_bar_show, set_status_bar_show, status_bar};
 #[cfg(test)]
-use status_bar::{StatusReadoutWidths, status_readouts};
+use status_bar::{StatusReadoutWidths, color_profile_name, date_time_label, status_readouts};
 #[cfg(test)]
 use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_drop, tab_groups, tab_title};
 pub use tabs::{doc_tabs, isolation_bar, step_document};

@@ -928,6 +928,11 @@
 	NTSC Colors	Warna NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Kebijakan RGB:
+	CMYK Policy:	Kebijakan CMYK:
+	Preserve Embedded Profiles	Pertahankan Profil Tersemat
+	Convert to Working Space	Konversi ke Ruang Kerja
+	Preserve Numbers	Pertahankan Angka
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Craquelure…
@@ -1427,6 +1432,7 @@ lighting	Light	Cahaya
 	Align to Artboard	Ratakan ke artboard
 	Align to Glyph Bounds	Ratakan ke batas glif
 	Align to Key Object	Ratakan ke objek kunci
+	Align to Key Anchor	Ratakan ke titik jangkar kunci
 	Align to Selection	Ratakan ke seleksi
 	Align To:	Ratakan ke:
 	Cancel Key Object	Batalkan objek kunci
@@ -1576,6 +1582,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Angka
 	Scale at Center	Skalakan dari tengah
+	Delete Set	Hapus set
+	Direct Entry	Entri langsung
 	Up/Down:	Atas/bawah:
 	Left/Right:	Kiri/kanan:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko atas/bawah
@@ -1859,7 +1867,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Lining tabular
 	Tabular Oldstyle	Oldstyle tabular
 	Titling Alternates	Alternatif judul
-	Every-line Composer	Komposer tiap baris
+	Middle Eastern & South Asian Single-line Composer	Komposer satu baris (Timur Tengah dan Asia Selatan)
+	Middle Eastern & South Asian Every-line Composer	Komposer tiap baris (Timur Tengah dan Asia Selatan)
+	Standard Single-line Composer	Komposer standar satu baris
+	Standard Every-line Composer	Komposer standar tiap baris
 	First-line Left Indent	Indentasi kiri baris pertama
 	Hyphenation…	Pemenggalan kata…
 	Justification…	Justifikasi…
@@ -1891,7 +1902,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
-	Single-line Composer	Komposer satu baris
 	Toggle Line Composer	Alihkan komposer baris
 	Space After Paragraph	Spasi setelah paragraf
 	Space Before Paragraph	Spasi sebelum paragraf
@@ -2711,6 +2721,7 @@ digits	Malayalam	Malayalam
 	Limit to Library:	Batasi ke pustaka:
 	Link harmony colors	Tautkan warna harmoni
 	Merge colors into one row	Gabungkan warna ke dalam satu baris
+	New Row	Baris baru
 	No colors to recolor (preserved colors are left out).	Tidak ada warna untuk diwarnai ulang (warna yang dipertahankan dikesampingkan).
 	Preserve:	Pertahankan:
 	Randomly change color order	Ubah urutan warna secara acak
@@ -3360,6 +3371,40 @@ theme	Appearance	Tampilan
 	Create Graph	Buat grafik
 	Graph Data	Data grafik
 	Graph Type	Jenis grafik
+	Graph Options	Opsi grafik
+	Left Axis	Sumbu kiri
+	Right Axis	Sumbu kanan
+	Category Axis	Sumbu kategori
+	Separate Scales	Skala terpisah
+	Add Drop Shadow	Tambahkan bayangan jatuh
+	Add Legend Across Top	Tambahkan legenda di atas
+	First Row in Front	Baris pertama di depan
+	First Column in Front	Kolom pertama di depan
+	Legend	Legenda
+	Column Width	Lebar kolom
+	Bar Width	Lebar batang
+	Cluster Width	Lebar kelompok
+	Mark Data Points	Tandai titik data
+	Connect Data Points	Hubungkan titik data
+	Edge-to-Edge Lines	Garis dari tepi ke tepi
+	Draw Filled Lines	Gambar garis terisi
+	Tick Values	Nilai tanda skala
+	Override Calculated Values	Timpa nilai terhitung
+	Divisions	Pembagian
+	Tick Marks	Tanda skala
+	Tick Marks per Division	Tanda skala per pembagian
+	Draw Tick Marks Between Labels	Gambar tanda skala di antara label
+	Add Labels	Tambahkan label
+	Maximum must be more than Minimum.	Maksimum harus lebih besar dari minimum.
+	Column Graph	Grafik kolom
+	Stacked Column Graph	Grafik kolom bertumpuk
+	Bar Graph	Grafik batang
+	Stacked Bar Graph	Grafik batang bertumpuk
+	Line Graph	Grafik garis
+	Area Graph	Grafik area
+	Scatter Graph	Grafik sebar
+	Pie Graph	Grafik pai
+	Radar Graph	Grafik radar
 	Vector Halftone	Halftone vektor
 	spot	spot
 	Text	Teks
@@ -3947,6 +3992,7 @@ axis	Both	Keduanya
 	Replace:	Ganti:
 	Type on a Path Options	Opsi teks pada jalur
 	Highlight Variable	Sorot variabel
+	Sort Variables	Urutkan variabel
 	New Variable	Variabel baru
 	List Variables	Daftar variabel
 	Bind Variable	Ikat variabel
@@ -5814,6 +5860,14 @@ swatch	Bright Violet	Violet cerah
 	Color wheel	Roda warna
 	First Artboard	Artboard pertama
 	Last Artboard	Artboard terakhir
+	Status Bar Show	Tampilkan di bilah status
+	Artboard Name	Nama artboard
+	Current Tool	Alat saat ini
+	Date and Time	Tanggal dan waktu
+	Number of Undos	Jumlah urungkan
+	Document Color Profile	Profil warna dokumen
+	Undos	Urungkan
+	Redos	Ulangi
 	Next Artboard	Artboard berikutnya
 	Previous Artboard	Artboard sebelumnya
 	Step up or down	Naikkan atau turunkan bertahap
@@ -6956,3 +7010,4 @@ breakText	Glyphs	Glif
 	Nest Shapes…	Susun Bentuk…
 	Nest Shapes	Susun Bentuk
 	Roll	Gulungan
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

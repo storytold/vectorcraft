@@ -40,7 +40,7 @@ fn close(a: f64, b: f64) -> bool {
 fn segment_angles(p: &PathData) -> Vec<f64> {
     p.subpaths
         .iter()
-        .flat_map(|sp| sp.anchors.windows(2).map(|w| w[1].p - w[0].p))
+        .flat_map(|sp| sp.anchors.iter().zip(sp.anchors.iter().skip(1)).map(|(a, b)| b.p - a.p))
         .filter(|v| v.hypot() > 1e-9)
         .map(|v| (-v.y).atan2(v.x).to_degrees().rem_euclid(90.0))
         .collect()

@@ -286,7 +286,7 @@ fn legacy_spiral_decay_preferences_report_the_ratio_drawn_after_reopening() {
         assert_eq!(d.selection.objects.len(), 1);
         let id = d.selection.objects[0];
         let path = d.doc.node(id).unwrap().path_data().unwrap().clone();
-        let anchors = &path.subpaths[0].anchors;
+        let anchors = &path.subpaths[0].anchors.to_vec();
         assert_eq!(anchors.len(), 5);
         assert!(!path.is_closed());
         let center = Point::new(200.0, 200.0);

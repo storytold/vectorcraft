@@ -117,13 +117,71 @@ fn a_hidden_shadow_follows_the_transform_it_loses() {
     assert!(close(drawn_shadow(&[shown]), (20.0, 20.0, 8.0)));
 }
 
-/// Rasterize keeps its room around the art: its image keeps its own pixel grid.
+/// Rasterize keeps its room around the art: its image keeps its own pixel grid, and the Transform
+/// effect moves the image instead ([`crate::rasterize_stage`]).
 #[test]
 fn rasterize_before_a_transform_keeps_its_options() {
     let rasterize = fx(crate::RASTERIZE, json!({"addAround": 6}));
     let effects = [rasterize.clone(), transform(json!({"scaleH": 200, "scaleV": 200}))];
     assert_eq!(crate::raster::followed(&effects)[0], rasterize);
     assert_eq!(crate::raster::without_geometry(&effects), vec![rasterize]);
+    assert_eq!(crate::rasterize_stage(&effects), Some(vec![1]));
+}
+
+/// The Transform effects after the last Rasterize effect move its image when, from the first of
+/// them on, every visible effect is a Transform effect that moves the art once. Hidden ones, and
+/// ones with Transform Objects off, leave the image where it is.
+#[test]
+fn rasterize_following_ignores_hidden_and_objects_off() {
+    let rasterize = || fx(crate::RASTERIZE, json!({}));
+    let scale = || transform(json!({"scaleH": 200, "scaleV": 200}));
+    let mut hidden = scale();
+    hidden.visible = false;
+    let off = transform(json!({"scaleH": 200, "objects": false}));
+    let roughen = fx("distort.roughen", json!({}));
+    let shadow = shadow(5.0, 5.0, 2.0);
+    let cases: Vec<(Vec<Effect>, Option<Vec<usize>>)> = vec![
+        (vec![rasterize(), hidden.clone()], None),
+        (vec![rasterize(), off.clone()], None),
+        (vec![rasterize(), hidden, off, scale()], Some(vec![3])),
+        (vec![rasterize(), transform(json!({"moveH": 10})), scale()], Some(vec![1, 2])),
+        // Effects before the first Transform effect go into the image; anything after it holds
+        // the image back.
+        (vec![rasterize(), roughen.clone(), shadow.clone(), scale()], Some(vec![3])),
+        (vec![rasterize(), scale(), roughen], None),
+        (vec![rasterize(), scale(), shadow], None),
+        (vec![rasterize(), transform(json!({"scaleH": 200, "copies": 2}))], None),
+        (vec![rasterize(), transform(json!({"scaleH": 200, "random": true}))], None),
+        // The Transform effect before the Rasterize effect moves the art.
+        (vec![scale(), rasterize()], None),
+        (vec![scale(), rasterize(), rasterize(), scale()], Some(vec![3])),
+    ];
+    for (effects, want) in cases {
+        let ids: Vec<&str> = effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(crate::rasterize_stage(&effects), want, "{ids:?}");
+    }
+    // What the image is made from hides those Transform effects; the rest stay as they are.
+    let effects = [rasterize(), scale()];
+    let staged = crate::staged_effects(&effects, &[1]);
+    assert_eq!((staged[0].visible, staged[1].visible), (true, false));
+}
+
+/// The map that moves the image is each Transform effect's map about its reference point on the
+/// bounds of the geometry it takes, in order.
+#[test]
+fn the_image_moves_by_each_transform_about_the_art_it_takes() {
+    let staged = shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0));
+    let effects = [fx(crate::RASTERIZE, json!({})), transform(json!({"scaleH": 200, "scaleV": 200})), transform(json!({"moveH": 5}))];
+    let map = crate::stage_map(&effects, &[1, 2], &staged).unwrap();
+    // Twice the size about the center (20, 20), then 5 pt to the right.
+    let want = Affine::translate((5.0, 0.0)) * Affine::translate((20.0, 20.0)) * Affine::scale(2.0) * Affine::translate((-20.0, -20.0));
+    assert!(map.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9), "{map:?}");
+    // The second Transform effect turns about the center of what the first one made.
+    let effects = [fx(crate::RASTERIZE, json!({})), transform(json!({"moveH": 100})), transform(json!({"rotate": 90}))];
+    let map = crate::stage_map(&effects, &[1, 2], &staged).unwrap();
+    let c = map * Point::new(20.0, 20.0);
+    assert!((c.x - 120.0).abs() < 1e-9 && (c.y - 20.0).abs() < 1e-9, "{c:?}");
+    assert_eq!(crate::stage_map(&effects, &[1, 2], &PathData::default()), None);
 }
 
 /// An SVG filter keeps its options: it paints in its own user space.
