@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type on a Path Options…",
             ["Type", "Type on a Path"],
             None,
-            "{ids?|id?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); alignToPath runs each character's em box top (ascender), font bounding box bottom (descender), half the height of its H's top above the baseline (center) or baseline along the path, by the character's own font, size and vertical scale (vertical type: half an em either way, or none for center); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
+            "{ids?|id?, start?: -1000000..1 (below 0 only on an open path), end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path); on an open path a start below 0 starts the text that far before the path's start, and the characters whose middle falls before it are not drawn (on a closed path it is the path's start), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); alignToPath runs each character's em box top (ascender), font bounding box bottom (descender), half the height of its H's top above the baseline (center) or baseline along the path, by the character's own font, size and vertical scale (vertical type: half an em either way, or none for center); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
             has_selection,
             path_options
         ),
@@ -1018,7 +1018,18 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
             Some(v) => v.as_f64().filter(|x| x.is_finite()).map(|x| Some(x.clamp(0.0, 1.0))).ok_or_else(|| bad(C, format!("`{k}` is a number 0..1"))),
         }
     };
-    let start = fraction("start")?;
+    // On an open path the text may start before the path's start (below 0, see
+    // `TextKind::path_text_start`); on a closed path a start below 0 is the path's start.
+    let start = match p.get("start") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(
+            v.as_f64()
+                .filter(|x| x.is_finite())
+                .map(|x| x.clamp(-vectorcraft_doc::PATH_LEAD_MAX, 1.0))
+                .ok_or_else(|| bad(C, "`start` is a number up to 1 (below 0: before an open path's start)"))?,
+        ),
+    };
+    let start_on = |path: &vectorcraft_geom::PathData, v: f64| if path.is_closed() { v.max(0.0) } else { v };
     // `end: null` puts the end bracket back at the end of the path.
     let end = p.get("end").map(|_| fraction("end")).transpose()?;
     let flip = switch_or(p, "flip", false, C)?;
@@ -1037,8 +1048,8 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     // Without a flip, when every object already has every value given, the document and its undo
     // history stay as they are.
     let has_values = |t: &TextObject| match &t.kind {
-        TextKind::OnPath { start: st, end: en, .. } => {
-            start.is_none_or(|v| v == *st)
+        TextKind::OnPath { path, start: st, end: en } => {
+            start.is_none_or(|v| start_on(path, v) == *st)
                 && end.is_none_or(|v| v == *en)
                 && effect.is_none_or(|e| t.path_effect == e)
                 && align.is_none_or(|a| t.path_align == a)
@@ -1053,9 +1064,9 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Type on a Path Options", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            let TextKind::OnPath { start: st, end: en, .. } = &mut t.kind else { continue };
+            let TextKind::OnPath { path, start: st, end: en } = &mut t.kind else { continue };
             if let Some(v) = start {
-                *st = v;
+                *st = start_on(path, v);
             }
             if let Some(v) = end {
                 *en = v;
