@@ -467,6 +467,10 @@ pub struct Symbols {
     /// The global and spot colors the symbols' art is linked to, as swatches, as [`read`] adds
     /// them to a document read from the layers.
     pub swatches: Vec<Swatch>,
+    /// The data's declared large canvas scale (1 when it declares none), not applied to the art.
+    pub canvas_scale: f64,
+    /// [`Structure::symbols_own_size`].
+    pub own_size: bool,
 }
 
 /// The symbols of the editing data `data`, for a file whose layers aren't read (a symbol library
@@ -529,7 +533,7 @@ pub fn symbols(data: &[u8], names: &mut obj::Names) -> Option<Symbols> {
         .chain(art_names(symbols.iter().map(|(s, _)| &*s.art)))
         .collect();
     names.absorb_among(std::mem::take(&mut r.names), &used);
-    Some(Symbols { symbols, images, swatches })
+    Some(Symbols { symbols, images, swatches, canvas_scale: r.canvas_scale, own_size: r.symbols_own_size })
 }
 
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
@@ -867,9 +871,15 @@ impl<'a> Reader<'a> {
     // ---- the document ----------------------------------------------------------------------
 
     /// The artboard of a file without artboards or crop marks: its size around the template
-    /// box's centre (half a point off the grid).
+    /// box's center (half a point off the grid). The program of a `.ai` of versions 3 and 4
+    /// ([`Reader::legacy_ai`], no `%AI5_FileFormat`), which don't record the artboard's size, has
+    /// VectorCraft's own default there, a US Letter artboard (612 × 792 pt); an EPS, or a newer
+    /// file without `%AI5_ArtSize`, has none (its page is its bounding box).
     fn sized_board(&self) -> Option<Rect> {
-        let ((w, h), (cx, cy)) = (self.art_size?, self.template_center?);
+        let (cx, cy) = self.template_center?;
+        let [_, _, letter_w, letter_h] = crate::import::LETTER;
+        let letter = self.legacy_ai && !self.file_format;
+        let (w, h) = self.art_size.or(letter.then_some((letter_w, letter_h)))?;
         // Rounded out, but not off a whole point the decimals in the file only just miss.
         let near = |v: f64| (v - v.round()).abs() < 1e-6;
         let (left, top) = (cx - w / 2.0, cy + h / 2.0);
@@ -1147,7 +1157,7 @@ impl<'a> Reader<'a> {
                 continue;
             }
             let Some(st) = self.styles.get(&name) else { continue };
-            let Some(mut appearance) = appearance_from_art_style(st) else { continue };
+            let Some(mut appearance) = appearance_from_art_style(st, &self.gradients) else { continue };
             // A Large Canvas copy's styles are at its art's scale ([`Self::ensure_space`]).
             if let Some(s) = self.large_canvas.filter(|s| *s != 1.0) {
                 appearance.scale_strokes(s);
@@ -1194,6 +1204,11 @@ impl<'a> Reader<'a> {
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
         super::on_path::apply(&mut self.doc, &self.on_path);
         let mut doc = std::mem::replace(&mut self.doc, Document::new(1.0, 1.0));
+        // A Large Canvas copy's symbols are at its art's scale too ([`Self::ensure_space`]), except
+        // in data VectorCraft wrote.
+        if let Some(s) = self.large_canvas.filter(|s| *s != 1.0 && !self.symbols_own_size) {
+            crate::import::scale_symbols(&mut doc, s);
+        }
         // The active artboard, when it is not the first (the default).
         let active = self.active_board.filter(|i| *i > 0 && *i < self.artboards.len());
         let boards: Vec<AiArtboard> = if self.artboards.is_empty() {
@@ -1374,6 +1389,7 @@ impl<'a> Reader<'a> {
             styles_read,
             text_patterns,
             canvas_scale: self.canvas_scale,
+            symbols_own_size: self.symbols_own_size,
             xml_ids: self.xml_ids,
             bindings,
             bindings_skipped,

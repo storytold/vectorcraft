@@ -217,6 +217,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),
     p!("highlightAlternateGlyphs", "Type", "Options", "Highlight Alternate Glyphs", bool),
+    p!("showCharacterAlternates", "Type", "Options", "Show Character Alternates", bool),
     p!("highlightSubstitutedFonts", "Type", "Options", "Highlight Substituted Fonts", bool),
     p!("placeholderText", "Type", "Options", "Fill New Type Objects With Placeholder Text", bool),
     p!("typedLists", "Type", "Options", "Start Lists From Typed Markers", bool),

@@ -44,8 +44,11 @@ font-technology	Variable	가변
 	x-Height	x 높이
 	ICF Box	ICF 박스
 	Proportional Metrics	비례 메트릭
+	H or V Style	가로 또는 세로 스타일
+	Roman Italics	로마자 이탤릭
 	Insert Aki Left	앞 아키 삽입
 	Insert Aki Right	뒤 아키 삽입
+	Tsume	츠메
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
@@ -455,6 +458,18 @@ digits	Malayalam	말라얄람어
 	Title Case	제목 대소문자
 	Sentence case	문장 대소문자
 	Smart Punctuation…	스마트 문장 부호…
+	Smart Punctuation	스마트 문장 부호
+	ff, fi, ffi Ligatures	ff, fi, ffi 합자
+	ff, fl, ffl Ligatures	ff, fl, ffl 합자
+	Smart Quotes	스마트 따옴표
+	Smart Spaces	스마트 공백
+	En, Em Dashes	엔 대시 및 엠 대시
+	Ellipses	줄임표
+	Expert Fractions	전문가 분수
+	Replace In	바꿀 범위
+	Selected Text Only	선택한 텍스트만
+	Entire Document	전체 문서
+	Report Results	결과 보고
 	Create Outlines	윤곽선 만들기
 	Optical Margin Alignment	시각적 여백 정렬
 	Dynamic Text	동적 텍스트
@@ -548,6 +563,7 @@ digits	Malayalam	말라얄람어
 	Rotate (Classic)…	회전(클래식)…
 	Surface	표면
 	Wireframe	와이어프레임
+	Render Settings	렌더링 설정
 	No Shading	셰이딩 없음
 	Plastic	플라스틱
 	Highlight Intensity	하이라이트 강도
@@ -1546,6 +1562,9 @@ antiAlias	Sharp	날카롭게
 	The selected character's font is not available.	선택한 문자의 글꼴을 사용할 수 없습니다.
 	No alternates for the selected character.	선택한 문자의 대체 글리프가 없습니다.
 	Double-click to replace	더블클릭하여 바꾸기
+	Click to replace	클릭하여 바꾸기
+	Show all alternates in the Glyphs panel	글리프 패널에서 모든 대체 글리프 표시
+	Show Character Alternates	문자의 대체 글리프 표시
 	Select one character with the Type tool first.	먼저 문자 도구로 문자 하나를 선택하세요.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph}은(는) {font}의 글리프이며, 선택한 텍스트의 글꼴({text_font})의 것이 아닙니다.
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph}은(는) {base}(U+{base_code})의 {place} 글리프입니다. 선택한 문자는 {sel}(U+{code})입니다.
@@ -1823,6 +1842,7 @@ antiAlias	Sharp	날카롭게
 	Format	형식
 	Format Options	형식 옵션
 	Format Settings	형식 설정
+	Format Settings…	형식 설정…
 	Format:	형식:
 	Formats:	형식:
 	Fractions	분수
@@ -1913,6 +1933,7 @@ antiAlias	Sharp	날카롭게
 	Highlight Alternate Glyphs	대체 글리프 강조 표시
 	Highlight Rows	행 강조 표시
 	Highlight Variable	가변 요소 강조 표시
+	Sort Variables	가변 요소 정렬
 	Highlight Substituted Fonts	대체된 글꼴 강조 표시
 	Highlight Substituted Glyphs	대체된 글리프 강조 표시
 	Highlight anchors on mouse over	마우스를 올리면 앵커 강조 표시
@@ -2060,6 +2081,7 @@ antiAlias	Sharp	날카롭게
 	Images:	이미지:
 	Import Keyboard Shortcuts…	단축키 가져오기…
 	Import PDF	PDF 가져오기
+	Import PDF pages as links	PDF 페이지를 링크로 가져오기
 	Import PDF Presets	PDF 프리셋 가져오기
 	Import Perspective Grid Presets	원근 격자 프리셋 가져오기
 	Import Print Presets	인쇄 프리셋 가져오기
@@ -2291,6 +2313,7 @@ antiAlias	Sharp	날카롭게
 	Merge Selected	선택 항목 병합
 	Merge Swatches	견본 병합
 	Merge colors into one row	색상을 한 행으로 병합
+	New Row	새 행
 	Mesh Tool	메시 도구
 	Message:	메시지:
 	Metadata:	메타데이터:
@@ -3250,6 +3273,7 @@ mark-style	Japanese	일본식
 	Single-line Composer	한 줄 조판
 	Toggle Line Composer	줄 조판 방식 전환
 	Size Tile to Art	타일을 아트웍 크기에 맞춤
+	Move Tile with Art	아트웍과 함께 타일 이동
 	Size/Leading	크기/행간
 	Size:	크기:
 	Ridges per segment:	세그먼트당 융기 수:
@@ -3745,6 +3769,7 @@ gradient-kind	Radial	방사형
 	Convert To Outlines	윤곽선으로 변환
 	Copy All Objects	모든 개체 복사
 	Copy Fonts Used in the Document	문서에 사용된 글꼴 복사
+	Copy Info	정보 복사
 	Copy Links	링크 복사
 	Couldn't copy to the system clipboard: {e}	시스템 클립보드로 복사할 수 없습니다: {e}
 	Couldn't paste from the clipboard: {e}	클립보드에서 붙여넣을 수 없습니다: {e}
@@ -3823,6 +3848,40 @@ file-filter	Templates	템플릿
 	Gradient (. or Shift+.)	그레이디언트 (. 또는 Shift+.)
 	Graph Data	그래프 데이터
 	Graph Type	그래프 유형
+	Graph Options	그래프 옵션
+	Left Axis	왼쪽 축
+	Right Axis	오른쪽 축
+	Category Axis	범주 축
+	Separate Scales	별도 눈금
+	Add Drop Shadow	드롭 섀도 추가
+	Add Legend Across Top	위쪽에 범례 추가
+	First Row in Front	첫 행을 앞에
+	First Column in Front	첫 열을 앞에
+	Legend	범례
+	Column Width	세로 막대 폭
+	Bar Width	가로 막대 폭
+	Cluster Width	묶음 폭
+	Mark Data Points	데이터 요소 표시
+	Connect Data Points	데이터 요소 연결
+	Edge-to-Edge Lines	가장자리 간 선
+	Draw Filled Lines	채워진 선 그리기
+	Tick Values	눈금 값
+	Override Calculated Values	계산된 값 재정의
+	Divisions	구간
+	Tick Marks	눈금 표시
+	Tick Marks per Division	구간당 눈금 표시
+	Draw Tick Marks Between Labels	레이블 사이에 눈금 표시 그리기
+	Add Labels	레이블 추가
+	Maximum must be more than Minimum.	최대값은 최소값보다 커야 합니다.
+	Column Graph	세로 막대 그래프
+	Stacked Column Graph	누적 세로 막대 그래프
+	Bar Graph	가로 막대 그래프
+	Stacked Bar Graph	누적 가로 막대 그래프
+	Line Graph	선 그래프
+	Area Graph	영역 그래프
+	Scatter Graph	분산형 그래프
+	Pie Graph	원형 그래프
+	Radar Graph	방사형 그래프
 	Graph Design	그래프 디자인
 	Graph Marker	그래프 마커
 	New Design	새 디자인
@@ -4010,6 +4069,7 @@ file-filter	Templates	템플릿
 	Small Thumbnails	작은 축소판
 	Smooth Color	부드러운 색상
 	Social Square Post 1080×1080	소셜 정사각형 게시물 1080×1080
+	Sort by Size	크기순 정렬
 	Sort by Status	상태순 정렬
 	Specified Distance	지정 거리
 	Specified Steps	지정 단계
@@ -4023,6 +4083,8 @@ file-filter	Templates	템플릿
 	Superscript	위 첨자
 	Swap Fill and Stroke (Shift+X)	칠과 선 바꾸기 (Shift+X)
 	Swap the selected object for the file, keeping its place and transform	선택한 개체를 파일로 바꾸되 위치와 변형은 유지합니다
+	Show Import Options	가져오기 옵션 표시
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	배치하기 전에 각 PDF, DXF 또는 텍스트 파일의 가져오기 옵션을 묻습니다. 끄면 마지막으로 선택한 옵션을 사용합니다
 	Swatch Libraries Menu	견본 라이브러리 메뉴
 	System Layout	시스템 레이아웃
 	Tabular Lining	고정폭 라이닝
@@ -4040,6 +4102,48 @@ file-filter	Templates	템플릿
 	Composite Fonts	합성 글꼴
 	Export Composite Fonts	합성 글꼴 내보내기
 	Import Composite Fonts	합성 글꼴 가져오기
+@msg	each font must be {name, parts}	각 글꼴은 {name, parts} 형식이어야 합니다
+@msg	unknown key `{k}`; a font takes name and parts	알 수 없는 키 `{k}`: 글꼴에는 name과 parts만 쓸 수 있습니다
+@msg	each font needs a name	각 글꼴에는 이름이 필요합니다
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}`은(는) 합성 글꼴 이름으로 쓸 수 없습니다(1~{COMPOSITE_NAME_MAX}자, 제어 문자 없음)
+@msg	`{name}`: parts must be an object	`{name}`: parts는 객체여야 합니다
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: 알 수 없는 클래스 `{k}`: 클래스는 kanji, kana, punctuation, symbols, roman, numerals입니다
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1}은(는) 객체여야 합니다
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1}에 알 수 없는 키 `{k}`이(가) 있습니다
+@msg	`{name}`: give the kanji part	`{name}`: kanji 부분을 지정하세요
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	문서에는 합성 글꼴을 최대 {COMPOSITE_FONTS_MAX}개까지 둘 수 있습니다
+@msg	two composite fonts are named `{_1}`	이름이 `{_1}`인 합성 글꼴이 두 개 있습니다
+@msg	`{_1}` is the name of an installed font	`{_1}`은(는) 설치된 글꼴의 이름입니다
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2}이(가) 합성 글꼴인 `{font}`(으)로 설정되어 있습니다
+@msg	give fonts: [{name, parts}…]	fonts를 지정하세요: [{name, parts}…]
+@msg	path is empty	path가 비어 있습니다
+@msg	fonts must be a list of composite fonts	fonts는 합성 글꼴 목록이어야 합니다
+@msg	names must be strings	names는 문자열이어야 합니다
+@msg	no composite font named `{n}`	이름이 `{n}`인 합성 글꼴이 없습니다
+@msg	names must be a list of names	names는 이름 목록이어야 합니다
+@msg	no composite fonts to export	내보낼 합성 글꼴이 없습니다
+@msg	not a composite fonts file: {e}	합성 글꼴 파일이 아닙니다: {e}
+@msg	not a composite fonts file: no compositeFonts list	합성 글꼴 파일이 아닙니다: compositeFonts 목록이 없습니다
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	파일에 합성 글꼴이 {COMPOSITE_FONTS_MAX}개보다 많습니다
+@msg	the file is larger than 4 MB	파일이 4MB보다 큽니다
+@msg	dataBase64 is not base64	dataBase64가 base64가 아닙니다
+@msg	give one of path, data or dataBase64	path, data, dataBase64 중 하나를 지정하세요
+@msg	the file holds no composite fonts	파일에 합성 글꼴이 없습니다
+@msg	the file holds two composite fonts named `{_1}`	파일에 이름이 `{_1}`인 합성 글꼴이 두 개 있습니다
+@msg	`{_1}` can't name a composite font	`{_1}`은(는) 합성 글꼴 이름으로 쓸 수 없습니다
+@msg	{k}: give a font	{k}: 글꼴을 지정하세요
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: 글꼴을 지정하세요
+@msg	{k}: size must be {_1} to {_2}%	{k}: size는 {_1}~{_2}%여야 합니다
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size는 {_1}~{_2}%여야 합니다
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline은 {_1}~{_2}%여야 합니다
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline은 {_1}~{_2}%여야 합니다
+@msg	{k}: scale must be {_1} to {_2}%	{k}: 비율은 {_1}~{_2}%여야 합니다
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: 비율은 {_1}~{_2}%여야 합니다
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: 비율을 바꿀 수 있는 것은 kana, roman, numerals뿐입니다
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: 비율을 바꿀 수 있는 것은 kana, roman, numerals뿐입니다
+@msg	{k}: only kana can be scaled at the center	{k}: 가운데를 기준으로 비율을 바꿀 수 있는 것은 kana뿐입니다
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: 가운데를 기준으로 비율을 바꿀 수 있는 것은 kana뿐입니다
+@msg	no composite font	합성 글꼴이 없습니다
 	Delete Font	글꼴 삭제
 	Kanji	한자
 	Kana	가나
@@ -4088,6 +4192,9 @@ file-filter	Templates	템플릿
 	Windows	Windows
 	Working CMYK (don't tag)	작업용 CMYK (태그 안 함)
 	Working RGB (don't tag)	작업용 RGB (태그 안 함)
+	Don't Color Manage This Document	이 문서에 색상 관리 안 함
+	Working RGB: {name}	작업용 RGB: {name}
+	Working CMYK: {name}	작업용 CMYK: {name}
 	Workspace {i}	작업 영역 {i}
 	Yellow	노랑
 	[Normal Character Style]	[기본 문자 스타일]
@@ -4226,6 +4333,7 @@ theme	Appearance	외관
 	Free Transform	자유 변형
 	Perspective Distort	원근 왜곡
 	Radial Blur…	방사형 흐림…
+	Blur Center	흐림 중심
 	Smart Blur…	스마트 흐림…
 	Sharpen	선명하게
 	Unsharp Mask…	언샤프 마스크…
@@ -4641,6 +4749,7 @@ theme	Appearance	외관
 @msg	objects can't be nested more than 32 deep	개체는 32단계보다 깊게 중첩할 수 없습니다
 @msg	the SVG's elements are nested more than {0} deep	SVG 요소가 {0}단계보다 깊게 중첩되어 있습니다
 @msg	unknown command `{0}`	알 수 없는 명령 `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	“{action}”의 단계 {step}에서 알 수 없는 명령 `{command}`을(를) 실행합니다
 @msg	unknown command `{0}`; did you mean `{1}`?	알 수 없는 명령 `{0}`: `{1}`을(를) 의미하셨습니까?
 @msg	`{what}` closes nothing	`{what}`이(가) 닫는 항목이 없습니다
 @msg	`{what}` closes something it didn't open	`{what}`이(가) 열지 않은 항목을 닫습니다
@@ -4990,6 +5099,7 @@ theme	Appearance	외관
 @msg	no action set to save	저장할 액션 세트가 없습니다
 @msg	the action set file can't be read in full	액션 세트 파일을 전부 읽을 수 없습니다
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}”을(를) 불러왔습니다. 단계 {n}개를 제외했습니다
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}”을(를) 불러왔습니다. 알 수 없는 명령이 있는 단계 {n}개를 그대로 두었습니다. 첫 번째: “{action}”, 단계 {step}, `{command}`
 @msg	not an action set file	액션 세트 파일이 아닙니다
 @msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: 참조가 {MAX_BYTES}바이트보다 커집니다
@@ -5115,6 +5225,7 @@ theme	Appearance	외관
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
+@msg	Copied the link info	링크 정보를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
 @msg	unknown highlight `{h}`	알 수 없는 강조 `{h}`
@@ -5231,6 +5342,7 @@ theme	Appearance	외관
 @msg	every numbered name for {name} is taken in the document's folder	문서 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	링크가 심볼, 그래프 디자인, 패턴 또는 불투명 마스크 안에 있어 캔버스에 위치가 없습니다
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	그래프 계열에 있는 그래프 디자인의 아트는 디자인에서 다시 그려집니다: 변경하려면 디자인을 편집하세요
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
 @msg	`colors` must be an array of colors, not {v}	`colors`는 {v}이(가) 아니라 색상 배열이어야 합니다
@@ -5250,6 +5362,7 @@ theme	Appearance	외관
 @msg	automation filesystem access is not granted: write authority is absent: {path}	자동화 파일 시스템 접근이 허용되지 않았습니다: 쓰기 권한이 없습니다: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	자동화 경로가 거부되었습니다: 읽기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	자동화 경로가 거부되었습니다: 읽기 루트 {roots} 밖입니다: {path}
+@msg	a linked JavaScript file is outside the read roots	연결된 JavaScript 파일이 읽기 루트 밖에 있습니다
 @msg	automation path rejected: outside the write root {root}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {roots} 밖입니다: {path}
 @msg	automation path rejected: path is empty	자동화 경로가 거부되었습니다: 경로가 비어 있습니다
@@ -5569,6 +5682,7 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`는 값이 shaded 또는 wireframe인 `mode`만 있는 객체여야 합니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
 @msg	bevel must be none or one of {_1}	bevel은 none 또는 {_1} 중 하나여야 합니다
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}은(는) 이 아트로 입체를 만들 수 없습니다. 심볼 인스턴스, 블렌드, 클리핑 그룹에 개체가 너무 많습니다
@@ -5652,6 +5766,9 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	Move Light to Back	조명을 뒤로 이동
+	Move Light to Front	조명을 앞으로 이동
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	조명을 드래그하여 이동합니다. 화살표 키로 포커스된 조명을 이동하고, Shift 키를 누르면 15°씩 이동합니다.
 	Shadows	그림자
 	Distance from Object	개체로부터의 거리
 	Shadow Bounds	그림자 범위
@@ -5980,8 +6097,8 @@ axis	Y Axis	Y축
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	내보내기 플러그인은 `extensions`를 1~{MAX_EXTENSIONS}개 선언합니다
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	그룹 밖의 매개변수는 최대 {MAX_UNGROUPED}개입니다. 나머지에는 `group`을 지정하세요
 @msg	can't encode the input	입력을 인코딩할 수 없습니다
-@msg	expected {"dataBase64"}	{"dataBase64"} 형식이어야 합니다
-@msg	expected {"objects"}	{"objects"} 형식이어야 합니다
+@msg	expected {{"dataBase64": "…"}}	{{"dataBase64": "…"}} 형식이어야 합니다
+@msg	expected {{"objects": [...]}}	{{"objects": [...]}} 형식이어야 합니다
 @msg	export `{name}`: {e}	모듈 내보내기 `{name}`: {e}
 @msg	extension {e} is listed twice	확장자 {e}이(가) 두 번 나열되었습니다
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	확장자 {e}: 점 없이 소문자와 숫자 1-16자를 사용하세요
@@ -6045,11 +6162,11 @@ axis	Y Axis	Y축
 @msg	a painted live effect returns only `objects`	페인트형 라이브 효과는 `objects`만 반환합니다
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`만 있습니다
 @msg	a read-only object was left out	읽기 전용 개체가 빠졌습니다
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	읽기 전용 개체가 빠졌습니다: {"id"}만 있는 형태나 받은 그대로 반환하십시오
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	읽기 전용 개체가 빠졌습니다: {{"id": …}}만 있는 형태나 받은 그대로 반환하십시오
 @msg	a string	문자열
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`만 있습니다
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	선은 {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} 형태여야 합니다
-@msg	an effect must be {"id", "params"?, "visible"?}	효과는 {"id", "params"?, "visible"?} 형태여야 합니다
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	선은 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 형태여야 합니다
+@msg	an effect must be {{"id", "params"?, "visible"?}}	효과는 {{"id", "params"?, "visible"?}} 형태여야 합니다
 @msg	an effect on a fill returns only `fills`	칠에 적용된 효과는 `fills`만 반환합니다
 @msg	an effect on a stroke returns only `strokes`	선에 적용된 효과는 `strokes`만 반환합니다
 @msg	an object must be a JSON object	개체는 JSON 개체여야 합니다
@@ -6250,6 +6367,8 @@ axis	Y Axis	Y축
 	Create New Set	새 세트 만들기
 	Stop Global Edit	전체 편집 중지
 	Global Edit Options	전체 편집 옵션
+	Select Similar Objects	유사한 개체 선택
+	Select Similar Options	유사 개체 선택 옵션
 	Leave Out of Global Edit	전체 편집에서 제외
 	Match	일치
 	On Artboards	아트보드에서
@@ -6258,7 +6377,7 @@ axis	Y Axis	Y축
 @plural	Result: {n}|Results: {n}	결과: {n}
 @msg	select one object	개체 하나를 선택하십시오
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	전체 편집은 패스, 컴파운드 패스, 심볼 인스턴스 및 이들의 그룹에서 작동합니다
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(회전하거나 반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오
 @msg	Global Edit is off	전체 편집이 꺼져 있습니다
 @msg	only an object of the Global Edit other than the one it started from can be left out	전체 편집을 시작한 개체가 아닌 전체 편집의 개체만 제외할 수 있습니다
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
@@ -6372,6 +6491,13 @@ axis	Y Axis	Y축
 	Graphite Pencil	흑연 연필
 	Wax Crayon	왁스 크레용
 	Charcoal Dust	목탄 가루
+
+# Original procedural circuit brushes.
+	Tech Circuit	전자 회로
+	Circuit Trace	회로 배선
+	Bus Lines	버스 배선
+	Terminal Nodes	단자 노드
+
 	Notched Ribbon	노치 리본
 	Double Line	이중선
 	Wave	물결
@@ -7055,11 +7181,20 @@ breakText	Glyphs	글리프
 	Open Tutorial Sample	튜토리얼 샘플 열기
 	Finish Tutorial	튜토리얼 완료
 	Next Tutorial	다음 튜토리얼
+	Show Learn Tab	학습 탭 표시
+	Show Skill	기술 표시
+	Back One Level	한 단계 뒤로
 	Back to Skills	기술로 돌아가기
 @msg	tutorial `{id}` has no practice sample	튜토리얼 `{id}`에 연습용 샘플이 없습니다
 @msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)
 @msg	finish `{id}` first (see learn.finish)	먼저 `{id}`을(를) 완료하세요(learn.finish 참조)
 @msg	`{id}` is the last tutorial in its skill	`{id}`은(는) 해당 기술의 마지막 튜토리얼입니다
+	Reset progress	진행률 재설정
+	Mark Tutorial Step	튜토리얼 단계 표시
+	Reset Learn Progress	학습 진행률 재설정
+@msg	missing `step` (see learn.show)	`step`이 없습니다(learn.show 참조)
+@msg	`step` must be a step number from 0 to {last}	`step`은 0에서 {last} 사이의 단계 번호여야 합니다
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}`은(는) 완료되었습니다(learn.resetProgress 참조)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	보류된 효과 새로 고침
@@ -7089,6 +7224,128 @@ breakText	Glyphs	글리프
 	Grommets	아일렛
 	Grommet Inset	가장자리에서 아일렛까지 거리
 	Diameter	지름
+	Nest Shapes…	도형 네스팅…
+	Nest Shapes	도형 네스팅
+	Roll	롤
+
+# Messages of the 3D effects, image export, color profiles, swatch exchange files, color books, DXF import,
+# path operations, libraries, scripts and zip files.
+@msg	3D effects require finite coordinates within 100 million points	3D 효과에는 1억 포인트 이내의 유한한 좌표가 필요합니다
+@msg	3D effects require one to ten lights	3D 효과에는 광원이 1개에서 10개까지 필요합니다
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP 비트 심도 {_1}: 픽셀당 1, 4, 8, 16, 24 또는 32비트여야 합니다
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP 인코딩 실패: {width} × {height}픽셀이 형식이나 픽셀 버퍼에 맞지 않습니다
+@msg	GIF encoding failed: the palette image is malformed	GIF 인코딩 실패: 팔레트 이미지의 형식이 잘못되었습니다
+@msg	GIF encoding failed: {e}	GIF 인코딩 실패: {e}
+@msg	JPEG colour profile: {e}	JPEG 색상 프로파일: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	JPEG encoding failed: {e}	JPEG 인코딩 실패: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	PNG encoding failed: the palette image is malformed	PNG 인코딩 실패: 팔레트 이미지의 형식이 잘못되었습니다
+@msg	PNG encoding failed: {e}	PNG 인코딩 실패: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG 인코딩 실패: {width} × {height}픽셀은 올바른 이미지 크기가 아닙니다
+@msg	PSD colour profile: {e}	PSD 색상 프로파일: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	Revolve profile contains invalid coordinates	회전체 프로파일에 잘못된 좌표가 있습니다
+@msg	Revolve profile is too complex	회전체 프로파일이 너무 복잡합니다
+@msg	Revolve projection is not finite	회전체 투영이 유한하지 않습니다
+@msg	Revolve requires finite profile coordinates within 100 million points	회전체에는 1억 포인트 이내의 유한한 프로파일 좌표가 필요합니다
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	회전체 표면이 너무 복잡합니다. 세그먼트를 줄이거나 프로파일을 단순화하십시오
+@msg	Revolve surface is too complex; simplify the profile	회전체 표면이 너무 복잡합니다. 프로파일을 단순화하십시오
+@msg	Revolve visibility cannot split the projected boundary	회전체 가시성 계산에서 투영된 경계를 분할할 수 없습니다
+@msg	Revolve visibility creates too many fragments	회전체 가시성 계산에서 조각이 너무 많이 생깁니다
+@msg	Revolve visibility creates too many vector anchors	회전체 가시성 계산에서 벡터 고정점이 너무 많이 생깁니다
+@msg	Revolve visibility exceeds its geometry work limit	회전체 가시성 계산이 기하 연산 한도를 넘습니다
+@msg	Revolve visibility exceeds its spatial index limit	회전체 가시성 계산이 공간 인덱스 한도를 넘습니다
+@msg	Revolve visibility has too many boundary crossings	회전체 가시성 계산에 경계 교차가 너무 많습니다
+@msg	Revolve visibility has too many input anchors	회전체 가시성 계산의 입력 고정점이 너무 많습니다
+@msg	Revolve visibility requires convex cap sectors	회전체 가시성 계산에는 볼록한 캡 부채꼴이 필요합니다
+@msg	Revolve visibility requires finite projected faces	회전체 가시성 계산에는 유한한 투영 면이 필요합니다
+@msg	SVG options: {e}	SVG 옵션: {e}
+@msg	Save for Web settings: {e}	웹용 저장 설정: {e}
+@msg	TIFF colour profile: {e}	TIFF 색상 프로파일: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	TIFF encoding failed: {e}	TIFF 인코딩 실패: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa 비트 심도 {_1}: 픽셀당 16, 24 또는 32비트여야 합니다
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa 인코딩 실패: 픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	The 3D projection is not finite	3D 투영이 유한하지 않습니다
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D 그림자가 너무 복잡합니다. 그림자를 끄거나 아트를 단순화하십시오
+@msg	The shape contains invalid coordinates	모양에 잘못된 좌표가 있습니다
+@msg	Too many Revolve faces for visibility evaluation	회전체의 면이 너무 많아 가시성을 계산할 수 없습니다
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft는 견본 교환 파일에서 색상과 그룹을 최대 {ASE_MAX_ENTRIES}개까지 읽는데, 이 라이브러리에는 {entries}개가 있습니다
+@msg	WebP encoding failed: {e}	WebP 인코딩 실패: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`index` must be a whole number	`index`은(는) 정수여야 합니다
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view`는 smallThumb, mediumThumb, largeThumb, smallList 또는 largeList여야 합니다
+@msg	a line can't run from a point to itself	선은 한 점에서 같은 점으로 이어질 수 없습니다
+@msg	a line needs at least two points	선에는 점이 두 개 이상 필요합니다
+@msg	a number cannot be read	숫자를 읽을 수 없습니다
+@msg	a swatch exchange block is too long	견본 교환 블록이 너무 깁니다
+@msg	a swatch exchange name is too long	견본 교환 이름이 너무 깁니다
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	{sw} × {sh} 이미지를 {width} × {height}픽셀로 크기 조정할 수 없습니다
+@msg	a {width} × {height} image is too large	{width} × {height} 이미지가 너무 큽니다
+@msg	a {width} × {height} image: {e}	{width} × {height} 이미지: {e}
+@msg	an image could not be written: {e}	이미지를 기록할 수 없습니다: {e}
+@msg	an image that couldn't be read was left out	읽을 수 없는 이미지를 제외했습니다
+@msg	can't open “{name}”: {e}	“{name}”을(를) 열 수 없습니다: {e}
+@msg	cannot align zip entries to {align} bytes	zip 항목을 {align}바이트 단위로 정렬할 수 없습니다
+@msg	cannot open the automation {kind} root `{_1}`: {e}	자동화 {kind} 루트 `{_1}`을(를) 열 수 없습니다: {e}
+@msg	cannot read profile: {0}	프로파일을 읽을 수 없습니다: {0}
+@msg	color book version {version} isn't supported (only 1)	색상 견본집 버전 {version}은(는) 지원되지 않습니다(1만 지원)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	색상 공간이 {other}인 색상 견본집은 지원되지 않습니다(RGB, CMYK, Lab만 지원)
+@msg	file name too long to zip: {_1}	파일 이름이 너무 길어 zip에 넣을 수 없습니다: {_1}
+@msg	file name too long to zip: {name}	파일 이름이 너무 길어 zip에 넣을 수 없습니다: {name}
+@msg	freeform line {i}: {e}	자유형 선 {i}: {e}
+@msg	freeform point {i}: {e}	자유형 점 {i}: {e}
+@msg	give `{key}` or `{other}`, not both	`{key}`와 `{other}` 중 하나만 지정하세요
+@msg	grayscale profiles can't be working spaces yet	그레이스케일 프로파일은 아직 작업 공간으로 사용할 수 없습니다
+@msg	input contains NaN or infinite coordinates	입력에 NaN 또는 무한대 좌표가 있습니다
+@msg	input path could not be closed	입력 패스를 닫을 수 없습니다
+@msg	invalid ICC profile: {0}	잘못된 ICC 프로파일: {0}
+@msg	invalid scale {scale}	잘못된 비율 {scale}
+@msg	its localized names take more than {_1} KB	지역화된 이름이 {_1} KB를 넘습니다
+@msg	its objects are nested too deep ({e})	개체가 너무 깊이 중첩되어 있습니다({e})
+@msg	its tag table lists the `{_1}` tag more than once	태그 표에 `{_1}` 태그가 두 번 이상 나열되어 있습니다
+@msg	not a graphic style library: {e}	그래픽 스타일 라이브러리가 아닙니다: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	견본 라이브러리가 아닙니다(.vcswatches 또는 .gpl)
+@msg	not a swatch library (format `{_1}`)	견본 라이브러리가 아닙니다(형식 `{_1}`)
+@msg	not a swatch library: {e}	견본 라이브러리가 아닙니다: {e}
+@msg	not an action set file ({e})	액션 세트 파일이 아닙니다({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	프로파일의 색상 공간 {other}은(는) RGB, CMYK 또는 Gray가 아닙니다
+@msg	regular expression too large	정규식이 너무 큽니다
+@msg	script file is not UTF-8 text: {value}	스크립트 파일이 UTF-8 텍스트가 아닙니다: {value}
+@msg	stop {i}: {e}	정지점 {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	견본 교환 버전 {major}.{minor}은(는) 지원되지 않습니다(1.x만 지원)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	색상 견본집의 색상이 {ASE_MAX_ENTRIES}개를 넘습니다
+@msg	the color book is cut short	색상 견본집이 중간에 잘려 있습니다
+@msg	the color book's names take more than {_1} MB	색상 견본집의 이름이 {_1} MB를 넘습니다
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	이미지가 {w} × {h}픽셀이 됩니다. 래스터 내보내기는 한 변에 {MAX_RASTER_SIDE}픽셀, {_1}메가픽셀로 제한됩니다. 비율이나 해상도를 낮추세요
+@msg	the optimised image can't be read back: {e}	최적화된 이미지를 다시 읽을 수 없습니다: {e}
+@msg	the pixel buffer doesn't match the image size	픽셀 버퍼가 이미지 크기와 맞지 않습니다
+@msg	the preview: {e}	미리 보기: {e}
+@msg	the request may not read the New Document profiles folder	이 요청은 새 문서 프로파일 폴더를 읽을 수 없습니다
+@msg	the shapes are too degenerate to combine	모양이 너무 퇴화되어 결합할 수 없습니다
+@msg	the shapes cross themselves and each other too often to combine	모양이 자기 자신 및 서로와 너무 자주 교차하여 결합할 수 없습니다
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	견본 교환 파일의 색상과 그룹이 {ASE_MAX_ENTRIES}개를 넘습니다
+@msg	the swatch exchange file is cut short	견본 교환 파일이 중간에 잘려 있습니다
+@msg	the {_1} plate can't be read: {e}	{_1} 분판을 읽을 수 없습니다: {e}
+@msg	this binary DXF file is damaged or cut short	이 바이너리 DXF 파일이 손상되었거나 중간에 잘려 있습니다
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	DWG 도면은 읽을 수 없습니다. CAD 앱에서 DXF로 저장한 후 여세요
+@msg	too many classes	문자 클래스가 너무 많습니다
+@msg	too many groups	그룹이 너무 많습니다
+@msg	too many layers for PSD (at most 32767)	PSD에 비해 레이어가 너무 많습니다(최대 32767개)
+@msg	too many swatch exchange blocks	견본 교환 블록이 너무 많습니다
+@msg	unknown colour profile: {0}	알 수 없는 색상 프로파일: {0}
+@msg	{_1} clashes with a built-in profile name	{_1}이(가) 기본 제공 프로파일 이름과 겹칩니다
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2}픽셀은 GIF에 비해 너무 큽니다(한 변 최대 65535픽셀). 해상도를 낮추세요
+@msg	{_1}: no usable transform to/from sRGB	{_1}: sRGB와 주고받을 수 있는 변환이 없습니다
+@msg	{name} is not a CMYK profile	{name}은(는) CMYK 프로파일이 아닙니다
+@msg	{name} is not an RGB profile	{name}은(는) RGB 프로파일이 아닙니다
+@msg	{path}: could not be read	{path}: 읽을 수 없습니다
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height}픽셀은 JPEG에 비해 너무 큽니다(한 변 최대 65535픽셀). 해상도를 낮추세요
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height}픽셀은 Targa에 비해 너무 큽니다(한 변 최대 65535픽셀). 해상도를 낮추세요
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h}픽셀은 PSD에 비해 너무 큽니다(한 변 최대 {MAX_SIDE}픽셀). 해상도를 낮추세요
+
 # Status and error messages of commands, scripts, file import and export, and plug-ins.
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	엄격 모드 함수에서는 'caller', 'callee', 'arguments'를 사용할 수 없습니다
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	프로파일 하나에는 회전체 효과를 하나만 쓸 수 있습니다. 기존 효과의 옵션을 편집하세요.
@@ -8477,6 +8734,8 @@ breakText	Glyphs	글리프
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 파일이 너무 커서 문자로 가져올 수 없습니다(최대 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG를 확장하면 중첩된 SVG 이미지가 {0}개보다 많아집니다
 @msg	the SVG expands to more than {0} objects	SVG를 확장하면 개체가 {0}개보다 많아집니다
+@msg	the SVG's style sheets take too long to match	SVG의 스타일 시트를 대조하는 데 시간이 너무 오래 걸립니다
+@msg	the SVG's styles expand to more than {0} MB	SVG의 스타일을 확장하면 {0}MB를 넘습니다
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	SVG 파일이 {MAX_IMPORT_BYTES}바이트보다 큽니다
 @msg	the SVG has no drawable objects	SVG에 그릴 수 있는 개체가 없습니다
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 파일의 압축을 풀면 {_1} MB를 넘습니다
@@ -8704,7 +8963,7 @@ breakText	Glyphs	글리프
 @msg	unexpected resources	예상하지 못한 리소스
 @msg	unknown CMYK profile `{name}`	알 수 없는 CMYK 프로파일 `{name}`
 @msg	unknown File Info field `{k}`	알 수 없는 파일 정보 필드 `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	알 수 없는 OpenType 기능 `{t}`(liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt. 끄려면 앞에 -를 붙이세요. swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt는 대체 글리프 번호를 `tag=N` 형식으로 받으며 N은 0에서 {_1} 사이입니다. 예: `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	알 수 없는 OpenType 기능 `{t}`(liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital. 끄려면 앞에 -를 붙이세요. swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt는 대체 글리프 번호를 `tag=N` 형식으로 받으며 N은 0에서 {_1} 사이입니다. 예: `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	featureChanges의 알 수 없는 OpenType 기능 `{t}`(`features`가 받는 태그를 사용하세요)
 @msg	unknown PDF preset `{name}` (presets: {_1})	알 수 없는 PDF 프리셋 `{name}`(프리셋: {_1})
 @msg	unknown Warp style	알 수 없는 왜곡 스타일

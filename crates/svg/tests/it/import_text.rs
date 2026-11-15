@@ -5,7 +5,7 @@ use vectorcraft_color::{GradientKind, Paint};
 use vectorcraft_doc::{CharStyle, Document, Justify, Node, NodeKind, TextKind, TextObject};
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_svg::{import, import_with_report};
-use vectorcraft_text::{FontDb, layout};
+use vectorcraft_text::{FontDb, layout, spacing_scale};
 
 fn svg(body: &str) -> String {
     format!(r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="400" height="300">{body}</svg>"#)
@@ -300,6 +300,164 @@ fn text_path_becomes_type_on_a_path() {
 }
 
 #[test]
+fn text_path_start_offset_is_scaled_by_the_path_length() {
+    // A path 400 long whose pathLength is 100: a startOffset of 50 lies 200 along it. A
+    // percentage stays a share of the computed length. Huge values of both still give their
+    // ratio. With a pathLength of 0, an offset of 0 stays at the start and any other offset lies
+    // past the end, as does an offset too large to scale on a short path.
+    let d = open(
+        r##"<path id="p" d="M0 100 H400" pathLength="100" fill="none" stroke="black"/>
+        <path id="z" d="M0 200 H400" pathLength="0" fill="none" stroke="black"/>
+        <path id="h" d="M0 300 H400" pathLength="1e308" fill="none" stroke="black"/>
+        <path id="s" d="M0 400 H0.1" pathLength="1e-10" fill="none" stroke="black"/>
+        <text font-size="10"><textPath href="#p" startOffset="50">Half</textPath></text>
+        <text font-size="10"><textPath href="#p" startOffset="25%">Quarter</textPath></text>
+        <text font-size="10"><textPath href="#h" startOffset="5e307">Huge</textPath></text>
+        <text font-size="10"><textPath href="#z" startOffset="0">Zero</textPath></text>
+        <text font-size="10"><textPath href="#z" startOffset="50">Fifty</textPath></text>
+        <text font-size="10"><textPath href="#s" startOffset="1e308">Past</textPath></text>"##,
+    );
+    let t = texts(&d);
+    assert_eq!(t.len(), 6);
+    let start_of = |t: &TextObject| match t.kind {
+        TextKind::OnPath { start, .. } => start,
+        _ => panic!("{:?}", t.kind),
+    };
+    assert!(close(start_of(t[0]), 0.5, 1e-9), "{}", start_of(t[0]));
+    assert!(close(start_of(t[1]), 0.25, 1e-9), "{}", start_of(t[1]));
+    assert!(close(start_of(t[2]), 0.5, 1e-9), "{}", start_of(t[2]));
+    assert_eq!(start_of(t[3]), 0.0);
+    assert_eq!(start_of(t[4]), 1.0);
+    assert_eq!(start_of(t[5]), 1.0);
+}
+
+#[test]
+fn text_on_a_closed_path_wraps_past_the_path_start() {
+    // A closed path 400 long: text anchored before its start, or offset past its end, wraps
+    // around the path instead of stopping at its start or end.
+    let d = open(
+        r##"<path id="p" d="M50 50 H150 V150 H50 Z" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#p">Wave</textPath></text>
+        <text font-size="20"><textPath href="#p" startOffset="440">Wave</textPath></text>
+        <text font-size="20" direction="rtl"><textPath href="#p">Wave</textPath></text>
+        <text font-size="20" text-anchor="middle"><textPath href="#p">Wave</textPath></text>
+        <text font-size="20"><textPath href="#p" startOffset="-40">Wave</textPath></text>
+        <text font-size="20"><textPath href="#p" startOffset="-10%">Wave</textPath></text>
+        <path id="q" d="M50 50 H150 V150 H50 Z M200 50 H300 V150 H200 Z" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#q">Wave</textPath></text>
+        <path id="o" d="M50 50 H150 V150 H50" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#o">Wave</textPath></text>
+        <text font-size="20"><textPath href="#o" startOffset="440">Wave</textPath></text>"##,
+    );
+    let t = texts(&d);
+    assert_eq!(t.len(), 9);
+    let start_of = |t: &TextObject| match t.kind {
+        TextKind::OnPath { start, .. } => start,
+        _ => panic!("{:?}", t.kind),
+    };
+    let width: f64 = layout(FontDb::global(), t[0]).glyphs.iter().map(|g| g.advance).sum();
+    assert!(width > 0.0);
+    // Ending at the path's start: the text starts its width before the end of the loop.
+    assert!(close(start_of(t[0]), 1.0 - width / 400.0, 1e-6), "{} {width}", start_of(t[0]));
+    assert!(close(start_of(t[1]), 0.1, 1e-9), "{}", start_of(t[1]));
+    // Right-to-left text starts at its edge toward the path's end, here the path's start.
+    assert!(close(start_of(t[2]), 1.0 - width / 400.0, 1e-6), "{} {width}", start_of(t[2]));
+    // Centered on the path's start: half the text before it, half after.
+    assert!(close(start_of(t[3]), 1.0 - width / 800.0, 1e-6), "{} {width}", start_of(t[3]));
+    // A negative startOffset, in user units or as a percentage, counts back from the path's end.
+    assert!(close(start_of(t[4]), 0.9, 1e-9), "{}", start_of(t[4]));
+    assert!(close(start_of(t[5]), 0.9, 1e-9), "{}", start_of(t[5]));
+    // A path of two closed subpaths does not wrap: the text starts at the path's start. An open
+    // path does not wrap either: text anchored before its start starts there
+    // (`text_on_an_open_path_starts_before_the_path`), and text offset past its end starts at
+    // its end.
+    assert_eq!(start_of(t[6]), 0.0);
+    assert!(close(start_of(t[7]), -width / 300.0, 1e-6), "{} {width}", start_of(t[7]));
+    assert_eq!(start_of(t[8]), 1.0);
+
+    // Laid out, the end-anchored text draws every glyph up the left side and ends at the start
+    // point; the centered text crosses the start point from the left side onto the top.
+    let lay = layout(FontDb::global(), t[0]);
+    assert!(!lay.overflow);
+    assert_eq!(lay.glyphs.len(), 4);
+    for g in &lay.glyphs {
+        let o = t[0].xf * g.origin;
+        assert!(close(o.x, 50.0, 0.05) && o.y > 50.0 && o.y < 150.0, "{o:?}");
+    }
+    let last = lay.glyphs.last().map(|g| t[0].xf * (g.origin + baseline_dir(g.angle) * g.advance));
+    assert!(last.is_some_and(|p| close(p.x, 50.0, 0.05) && close(p.y, 50.0, 0.05)), "{last:?}");
+    let lay = layout(FontDb::global(), t[3]);
+    assert!(!lay.overflow);
+    assert_eq!(lay.glyphs.len(), 4);
+    let first = t[3].xf * lay.glyphs[0].origin;
+    assert!(close(first.x, 50.0, 0.05) && first.y > 50.0, "{first:?}");
+    let last = t[3].xf * lay.glyphs[3].origin;
+    assert!(close(last.y, 50.0, 0.05) && last.x > 50.0, "{last:?}");
+
+    // Text longer than the loop draws its first characters, whatever its anchor.
+    let d = open(
+        r##"<path id="s" d="M0 0 H20 V20 H0 Z" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#s">Wave Wave Wave</textPath></text>"##,
+    );
+    let t = only_text(&d);
+    let lay = layout(FontDb::global(), t);
+    assert!(lay.overflow);
+    assert!(!lay.glyphs.is_empty() && lay.glyphs.len() < 14, "{}", lay.glyphs.len());
+    assert!(lay.glyphs.iter().enumerate().all(|(i, g)| g.byte == i), "{:?}", lay.glyphs.iter().map(|g| g.byte).collect::<Vec<_>>());
+}
+
+#[test]
+fn text_on_an_open_path_starts_before_the_path() {
+    // An open path 300 long. Text anchored, or offset, before its start starts that far before it,
+    // and only the characters whose middle is on the path are drawn; the text keeps every character.
+    let d = open(
+        r##"<path id="o" d="M50 50 H150 V150 H50" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#o">Wave</textPath></text>
+        <text font-size="20" text-anchor="middle"><textPath href="#o">Wave</textPath></text>
+        <text font-size="20"><textPath href="#o" startOffset="-20%">Wave</textPath></text>
+        <text font-size="20"><textPath href="#o">Wave</textPath></text>"##,
+    );
+    let t = texts(&d);
+    assert_eq!(t.len(), 4);
+    let start_of = |t: &TextObject| match t.kind {
+        TextKind::OnPath { start, .. } => start,
+        _ => panic!("{:?}", t.kind),
+    };
+    let whole = layout(FontDb::global(), t[3]);
+    let width: f64 = whole.glyphs.iter().map(|g| g.advance).sum();
+    assert!(width > 0.0 && width < 60.0, "{width}");
+    assert!(close(start_of(t[0]), -width / 300.0, 1e-6), "{} {width}", start_of(t[0]));
+    assert!(close(start_of(t[1]), -width / 600.0, 1e-6), "{} {width}", start_of(t[1]));
+    assert!(close(start_of(t[2]), -0.2, 1e-9), "{}", start_of(t[2]));
+    let drawn = |t: &TextObject| {
+        let lay = layout(FontDb::global(), t);
+        assert!(!lay.overflow && lay.glyphs.len() == 4, "{} {}", lay.overflow, lay.glyphs.len());
+        assert_eq!(t.plain_text(), "Wave");
+        lay.glyphs.iter().map(|g| !g.outline.elements().is_empty()).collect::<Vec<_>>()
+    };
+    // Ending at the path's start: nothing is drawn.
+    assert_eq!(drawn(t[0]), [false; 4]);
+    // Centered on the path's start: the characters whose middle is past the start are drawn, the
+    // last ones of the text.
+    // (A hidden glyph has no advance: the advances are the ones the text takes on the path.)
+    let middle = drawn(t[1]);
+    let mut x = -width / 2.0;
+    for (g, shown) in whole.glyphs.iter().zip(&middle) {
+        assert_eq!(*shown, x + g.advance / 2.0 >= 0.0, "{x} {middle:?}");
+        x += g.advance;
+    }
+    assert!(middle.iter().any(|d| *d) && !middle[0] && middle[3], "{middle:?}");
+    // 60 before the start, more than the text's width: nothing is drawn.
+    assert_eq!(drawn(t[2]), [false; 4]);
+    assert_eq!(drawn(t[3]), [true; 4]);
+}
+
+/// The unit vector along a glyph's baseline.
+fn baseline_dir(angle: f64) -> vectorcraft_geom::Vec2 {
+    vectorcraft_geom::Vec2::new(angle.cos(), angle.sin())
+}
+
+#[test]
 fn per_character_positions_rotation_and_shifts() {
     let d = open(r#"<text x="10 30 60" y="50" rotate="15 -30" dy="0 -4" font-size="12">abcd</text>"#);
     let t = only_text(&d);
@@ -391,6 +549,9 @@ fn rtl_point_text_start_and_end_use_directional_edges() {
         (r#"<text x="200" y="60" direction="rtl" font-size="20"><tspan direction="ltr">Wave</tspan></text>"#, 0.0),
         (r#"<text x="200" y="60" text-anchor="start" font-size="20">Wave</text>"#, 0.0),
         (r#"<text x="200" y="60" direction="ltr" text-anchor="end" font-size="20">Wave</text>"#, 1.0),
+        // CSS keywords are case-insensitive.
+        (r#"<text x="200" y="60" direction="RTL" font-size="20">Wave</text>"#, 1.0),
+        (r#"<text x="200" y="60" style="direction: Rtl" text-anchor="end" font-size="20">Wave</text>"#, 0.0),
         // With `unicode-bidi: plaintext`, the direction of the chunk's first strong character.
         (r#"<text x="200" y="60" unicode-bidi="plaintext" font-size="20">&#x5D0;&#x5D1;&#x5D2;</text>"#, 1.0),
         (r#"<text x="200" y="60" unicode-bidi="plaintext" text-anchor="end" font-size="20">12 &#x5D0;&#x5D1;</text>"#, 0.0),
@@ -494,6 +655,8 @@ fn a_tspan_bidi_embedding_becomes_its_character_direction() {
         ("ltr", "rtl", "normal", None, false),
         ("rtl", "ltr", "normal", None, false),
         ("ltr", "rtl", "EMBED", Some(Rtl), false),
+        ("ltr", "RTL", "embed", Some(Rtl), false),
+        ("RTL", "ltr", "embed", Some(Ltr), false),
         ("ltr", "rtl", "sideways", None, false),
     ] {
         let (t, w) = read(&format!(
@@ -503,7 +666,7 @@ fn a_tspan_bidi_embedding_becomes_its_character_direction() {
         assert_eq!(t.plain_text(), "ab 1 2 cd", "{case}: the characters stay in logical order");
         assert_eq!(char_direction_of(&t, "1 2"), want, "{case}: {:?}", t.runs);
         assert_eq!(char_direction_of(&t, "ab"), None, "{case}");
-        assert_eq!(t.para_at(0).direction == Some(Rtl), outer == "rtl", "{case}: the paragraph keeps the text's direction");
+        assert_eq!(t.para_at(0).direction == Some(Rtl), outer.eq_ignore_ascii_case("rtl"), "{case}: the paragraph keeps the text's direction");
         assert_eq!(w.iter().any(|w| w.contains("bidi-override") && w.contains("not supported")), warns, "{case}: {w:?}");
         if !warns {
             assert!(w.is_empty(), "{case}: {w:?}");
@@ -587,6 +750,12 @@ fn unicode_bidi_values_the_text_model_cannot_hold_are_reported() {
         (r#"<tspan display="none">&#x5D0;&#x5D1;</tspan>ab"#.to_string(), "ab", Ltr),
         (format!("<tspan>{far}</tspan>"), "\u{5D0}", Rtl),
         (format!("<tspan>\n</tspan>12 <tspan>{far}</tspan>"), "\u{5D0}", Rtl),
+        // An isolate that opens in one text node and closes in a later one is skipped whole.
+        ("&#x2067;ab<tspan>&#x2069;&#x5D0;</tspan>".to_string(), "\u{5D0}", Rtl),
+        ("&#x2067;ab<tspan>cd</tspan>&#x2069;&#x5D0;".to_string(), "\u{5D0}", Rtl),
+        // An isolate that opens in a nested `plaintext` element and closes after it hides the rest of that element.
+        (r#"<tspan unicode-bidi="plaintext">&#x2067;ab</tspan>&#x2069;&#x5D0;"#.to_string(), "\u{5D0}", Rtl),
+        (r#"<tspan unicode-bidi="plaintext">&#x2067;ab</tspan>&#x2069;&#x5D0;"#.to_string(), "ab", Ltr),
     ] {
         let (d, _) =
             import_with_report(&svg(&format!(r#"<text y="40">x <tspan direction="ltr" unicode-bidi="plaintext">{body}</tspan></text>"#))).unwrap();
@@ -717,6 +886,114 @@ fn absolutely_placed_rtl_chunks_of_several_characters_anchor_by_their_visual_edg
         let first = lay.glyphs.iter().filter(|g| g.rtl).min_by_key(|g| g.byte).map(|g| (t.xf * g.origin).x);
         assert!(first.is_some_and(|x| x > left + 1.0), "{body}: the first character starts at {first:?}, the chunk at {left}");
     }
+}
+
+/// Document-space left and right edges of the natural advance of the characters in `bytes` (the
+/// manual kerning that places the next chunk left out: it is at a glyph's right when the glyph runs
+/// left to right and at its left when it runs right to left).
+fn chunk_edges(t: &TextObject, bytes: std::ops::Range<usize>) -> (f64, f64) {
+    let lay = layout(FontDb::global(), t);
+    let mut starts = vec![];
+    let mut at = 0;
+    for r in &t.runs {
+        starts.push((at, &r.style));
+        at += r.text.len();
+    }
+    let style = |byte: usize| starts.iter().rev().find(|(s, _)| *s <= byte).map(|(_, st)| *st).unwrap();
+    let (mut left, mut right) = (f64::INFINITY, f64::NEG_INFINITY);
+    for g in lay.glyphs.iter().filter(|g| bytes.contains(&g.byte)) {
+        let st = style(g.byte);
+        let kern = st.kerning.unwrap_or(0.0) / 1000.0 * st.size * spacing_scale(st, false);
+        let x = (t.xf * g.origin).x;
+        let (l, r) = if g.rtl { (x + kern, x + g.advance) } else { (x, x + g.advance - kern) };
+        (left, right) = (left.min(l), right.max(r));
+    }
+    assert!(left.is_finite(), "no glyph in {bytes:?}");
+    (left, right)
+}
+
+/// SVG 1.1 §10.4 and SVG 2 §11.10.1.1 (https://www.w3.org/TR/SVG2/text.html#TextAnchoringProperties):
+/// every absolutely placed character starts a chunk anchored on its own x, also in right-to-left
+/// text whose characters run right to left, on any line.
+#[test]
+fn absolutely_placed_right_to_left_characters_sit_on_their_own_x() {
+    // (markup, share of each chunk's advance left of its x, each chunk's bytes and x)
+    let two_lines = |anchor: &str| {
+        format!(
+            r#"<text direction="rtl" text-anchor="{anchor}" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100 160" y="80 80">אב</tspan></text>"#
+        )
+    };
+    type Chunks = Vec<(std::ops::Range<usize>, f64)>;
+    let cases: Vec<(String, f64, Chunks)> = vec![
+        (two_lines("start"), 1.0, vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)]),
+        (two_lines("middle"), 0.5, vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)]),
+        (two_lines("end"), 0.0, vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)]),
+        (r#"<text x="100 160" y="80" direction="rtl" font-size="20">אב</text>"#.into(), 1.0, vec![(0..2, 100.0), (2..4, 160.0)]),
+        (r#"<text x="100 160" y="80" direction="rtl" text-anchor="end" font-size="20">אב</text>"#.into(), 0.0, vec![(0..2, 100.0), (2..4, 160.0)]),
+        // Three lines, the characters of the last out of order and overlapping.
+        (
+            r#"<text direction="rtl" font-size="20"><tspan x="300" y="40">אב</tspan><tspan x="60 120" y="80">גד</tspan><tspan x="200 90 205" y="120">הוז</tspan></text>"#.into(),
+            1.0,
+            vec![(0..4, 300.0), (5..7, 60.0), (7..9, 120.0), (10..12, 200.0), (12..14, 90.0), (14..16, 205.0)],
+        ),
+        // Left-to-right characters among right-to-left ones on the same line.
+        (r#"<text x="100 160 220" y="80" direction="rtl" font-size="20">אbc</text>"#.into(), 1.0, vec![(0..2, 100.0), (2..3, 160.0), (3..4, 220.0)]),
+        // Chunks of several characters.
+        (
+            r#"<text direction="rtl" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100" y="80">אב</tspan><tspan x="250">גד</tspan></text>"#.into(),
+            1.0,
+            vec![(0..2, 20.0), (3..7, 100.0), (7..11, 250.0)],
+        ),
+        (
+            r#"<text direction="rtl" text-anchor="middle" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100" y="80">אב</tspan><tspan x="250">גד</tspan></text>"#.into(),
+            0.5,
+            vec![(0..2, 20.0), (3..7, 100.0), (7..11, 250.0)],
+        ),
+        // A placed character after a letter with a combining mark.
+        (
+            r#"<text direction="rtl" font-size="20"><tspan x="100" y="80">&#x5D0;&#x5B8;</tspan><tspan x="160">&#x5D1;</tspan></text>"#.into(),
+            1.0,
+            vec![(4..6, 160.0)],
+        ),
+        (r#"<text font-size="20"><tspan x="100" y="80">e&#x301;</tspan><tspan x="160">b</tspan></text>"#.into(), 0.0, vec![(3..4, 160.0)]),
+        // Characters stretched by `lengthAdjust`, whose kerning is drawn at their scale.
+        (
+            r#"<text direction="rtl" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100 160" y="80 80" textLength="12" lengthAdjust="spacingAndGlyphs">אב</tspan></text>"#.into(),
+            1.0,
+            vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)],
+        ),
+        // Left to right, the right-to-left characters still each start at their own x.
+        (
+            r#"<text direction="ltr" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100 160" y="80 80">אב</tspan></text>"#.into(),
+            0.0,
+            vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)],
+        ),
+        (
+            r#"<text font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100 160" y="80 80">cd</tspan></text>"#.into(),
+            0.0,
+            vec![(0..2, 20.0), (3..4, 100.0), (4..5, 160.0)],
+        ),
+    ];
+    let unplaced = |w: &[String]| w.iter().any(|w| w.contains("absolutely placed"));
+    for (body, share, chunks) in cases {
+        let (d, w) = import_with_report(&svg(&body)).unwrap();
+        assert!(!unplaced(&w), "{body}: {w:?}");
+        let t = only_text(&d);
+        if body.contains("lengthAdjust") {
+            assert!(t.runs.iter().any(|r| r.style.h_scale < 99.0), "{body}: {:?}", t.runs);
+        }
+        for (bytes, x) in chunks {
+            let (left, right) = chunk_edges(t, bytes.clone());
+            let want = x - share * (right - left);
+            assert!(close(left, want, 0.05), "{body}: the chunk {bytes:?} spans {left}..{right}, so it does not start at {want}");
+        }
+    }
+    // A left-to-right character between right-to-left ones is drawn right next to the one after
+    // it, with no kerning between them: that one keeps its place in the line, and a warning says so.
+    let (d, w) = import_with_report(&svg(r#"<text x="100 160 220" y="80" direction="rtl" font-size="20">אbג</text>"#)).unwrap();
+    assert!(unplaced(&w), "{w:?}");
+    let (left, right) = chunk_edges(only_text(&d), 2..3);
+    assert!(close(right, 160.0, 0.05), "b spans {left}..{right}");
 }
 
 #[test]

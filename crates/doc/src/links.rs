@@ -229,7 +229,8 @@ fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
 
 /// Decoded image `img` shrunk to fit [`PROXY_SIZE`] as a PNG.
 fn proxy_of(img: &image::DynamicImage) -> Option<Vec<u8>> {
-    let small = img.thumbnail(PROXY_SIZE, PROXY_SIZE);
+    let (w, h) = crate::resample::fit_size(img.width(), img.height(), PROXY_SIZE, PROXY_SIZE);
+    let small = crate::resample::averaged(img, w, h);
     let mut png = Vec::new();
     small.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
     Some(png)
@@ -248,14 +249,15 @@ fn walk_all<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 
 impl Document {
     /// Visit every image object: in the layers, then in symbol definitions and pattern swatches,
-    /// opacity-mask art included.
+    /// then in [`Document::mounted_art`], opacity-mask art included.
     pub fn visit_images<'a>(&'a self, mut f: impl FnMut(&'a Node, &'a ImageObject)) {
         let roots = self
             .layers
             .iter()
             .chain(self.symbols.iter().map(|s| &s.art))
             .chain(self.graph_designs.iter().map(|g| &g.art))
-            .chain(self.patterns.iter().flat_map(|p| &p.art));
+            .chain(self.patterns.iter().flat_map(|p| &p.art))
+            .chain(self.mounted_art.iter().map(|(n, _)| n));
         for root in roots {
             walk_all(root, &mut |n| {
                 if let NodeKind::Image(im) = &n.kind {
@@ -384,7 +386,8 @@ impl Align {
 
 impl Document {
     /// Rewrite linked file locations in both raster images and placed VectorCraft documents,
-    /// including those inside symbols, patterns and opacity masks. Used to make packages portable.
+    /// including those inside symbols, patterns, opacity masks and [`Document::mounted_art`]. Used to
+    /// make packages portable.
     pub fn update_links(&mut self, mut f: impl FnMut(&mut LinkInfo)) {
         fn walk(n: &mut Arc<Node>, f: &mut dyn FnMut(&mut LinkInfo)) {
             let n = Arc::make_mut(n);
@@ -409,7 +412,8 @@ impl Document {
             .iter_mut()
             .chain(self.symbols.iter_mut().map(|s| &mut s.art))
             .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
-            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n));
         for root in roots {
             walk(root, &mut f);
         }
@@ -471,7 +475,8 @@ impl Document {
             .iter_mut()
             .chain(self.symbols.iter_mut().map(|s| &mut s.art))
             .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
-            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n));
         for root in roots {
             update(root, &pick, &mut f);
         }
@@ -727,5 +732,20 @@ mod tests {
         image(&mut d, "b", None);
         image(&mut d, "c", None);
         assert_eq!(d.linked_only_images().into_iter().collect::<Vec<_>>(), ["a"]);
+    }
+
+    /// The preview of an image with clear pixels keeps the color of its opaque ones: the clear
+    /// black beside them does not darken them, whichever way the preview is made.
+    #[test]
+    fn a_preview_keeps_the_color_beside_clear_pixels() {
+        let mut full = vec![];
+        image::RgbaImage::from_fn(1024, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+            .write_to(&mut Cursor::new(&mut full), image::ImageFormat::Png)
+            .unwrap();
+        for blob in [ImageBlob::png(full.clone()).with_proxy(), ImageBlob::png(full.clone()).checked_with_proxy(true).unwrap()] {
+            let p = image::load_from_memory(blob.proxy.as_ref().unwrap()).unwrap().into_rgba8();
+            assert_eq!(p.dimensions(), (PROXY_SIZE, 1));
+            assert!(p.pixels().all(|q| q.0 == [200, 30, 30, 128]), "{:?}", p.get_pixel(0, 0));
+        }
     }
 }

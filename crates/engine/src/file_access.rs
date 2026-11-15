@@ -222,11 +222,11 @@ pub fn written_elsewhere(path: &str) -> bool {
     !cfg!(windows) && foreign && current().is_some()
 }
 
-/// Does a command param named `key` hold a file or folder path: `path`, `paths`, `file`, `files`,
-/// `folder`, or a name ending in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
-/// `destinationFolder`)?
+/// Does a command param named `key` hold a file or folder path in a command that gives it no other
+/// meaning ([`crate::cmd::key_location`]: `path`, `file`, `diffPath`, `destinationFolder` and the
+/// like)? [`crate::cmd::ParamsPlace`] tells what it holds in a given command.
 pub fn is_path_key(key: &str) -> bool {
-    matches!(key, "path" | "paths" | "file" | "files" | "folder") || ["Path", "Paths", "File", "Files", "Folder"].iter().any(|end| key.ends_with(end))
+    crate::cmd::key_location(key).is_some()
 }
 
 /// May `path` be written here? Always, without roots in force.
@@ -397,6 +397,12 @@ impl ScriptScope {
     /// The scope of a script run from a file in folder `dir`: that folder.
     pub(crate) fn of_folder(dir: &Path) -> Self {
         Self { roots: std::fs::canonicalize(dir).ok().into_iter().collect() }
+    }
+
+    /// The scope of a script run from a file in the folder whose real path, with its links already
+    /// followed, is `real`: that folder, which is not looked up again.
+    pub(crate) fn of_real_folder(real: PathBuf) -> Self {
+        Self { roots: vec![real] }
     }
 
     /// Is `path` refused by its name alone: a `..` component, a NUL, a Windows device name or

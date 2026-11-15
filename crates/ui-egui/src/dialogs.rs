@@ -56,6 +56,7 @@ pub mod freehand;
 mod gradient_stop;
 pub mod graph_data;
 pub mod graph_design;
+pub mod graph_type;
 pub mod graphic_style_options;
 pub mod halftone;
 pub mod hyphenation;
@@ -105,6 +106,7 @@ pub mod relink;
 pub mod rename_artboards;
 pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
+pub(crate) mod revolve_lights;
 pub mod safe_mode;
 pub mod saturate;
 pub mod save_brush_library;
@@ -122,6 +124,7 @@ pub(crate) mod shapes;
 pub mod shortcut_import;
 pub(crate) mod simplify_slider;
 pub mod slices;
+pub mod smart_punctuation;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
 pub mod svg_filter;
@@ -153,13 +156,14 @@ pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES, shown_choices};
-pub use export_as::open as open_export_as;
+pub use export_as::{export_selection, open as open_export_as};
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
-    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
-    import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
-    saved_options as screen_saved_options, saved_rows as screen_saved_rows,
+    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, artboard_name_editing as export_artboard_name_editing,
+    export_preset as screen_export_preset, formats as screen_formats, import_presets as screen_import_presets,
+    open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
+    saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
 pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
@@ -339,6 +343,7 @@ registry! {
     GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
     GraphColumn: [graph_design::COLUMN] => graph_design::COLUMN_SPEC,
     GraphMarker: [graph_design::MARKER] => graph_design::MARKER_SPEC,
+    GraphType: [graph_type::KIND] => graph_type::SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
@@ -430,6 +435,7 @@ registry! {
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
+    SmartPunctuation: [smart_punctuation::KIND] => smart_punctuation::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
     Envelope: [envelope::WARP, envelope::MESH, envelope::OPTIONS] => envelope::SPEC,
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
@@ -514,6 +520,8 @@ fn hidden_controls(d: &Dialog) -> &'static [&'static str] {
         Some(DialogKind::FileInfo) => &["__keyword"],
         // The preset name being typed.
         Some(DialogKind::FlattenTransparency) => &["__presetName"],
+        // The page shown.
+        Some(DialogKind::GraphType) => &[graph_type::PAGE],
         // The Resolution menu's Other.
         Some(DialogKind::RasterOptions | DialogKind::RasterFormatOptions | DialogKind::PsdOptions) => &["__otherPpi"],
         // The category shown, the search text and the three settings kept outside the preferences.
@@ -946,6 +954,8 @@ mod tests;
 mod tests_accessibility;
 #[cfg(test)]
 mod tests_export;
+#[cfg(test)]
+mod tests_export_selection;
 #[cfg(test)]
 mod tests_import_pdf;
 #[cfg(test)]

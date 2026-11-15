@@ -9,8 +9,8 @@
 //! before an image variable); import replaces the datasets, names the rows Data Set 1, 2…,
 //! also reads tab-separated files, and reads header cells that define new variables (`#` for
 //! visibility, `@` for image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
-//! text variables and data sets of a variable library, the XML file of the reference app's Save
-//! Variable Library, and `variable.saveLibrary` writes the text variables and data sets as one.
+//! variables and data sets of a variable library, the XML file of the reference app's Save
+//! Variable Library, and `variable.saveLibrary` writes the variables and data sets as one.
 //! Agents reach every command through `run_command`, like all engine commands.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -26,6 +26,7 @@ use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids
 mod csv;
 mod library;
 
+pub use csv::utf16_order_without_mark;
 use csv::{MAX_GRAPH_CSV, dataset_export, dataset_import};
 pub(crate) use library::{give_svg_library, svg_library};
 use library::{load_library, save_library};
@@ -329,18 +330,19 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn list(s: &mut Session, _p: &Value) -> Result<Value> {
+    let xml_id = s.prefs.identify_objects_by == "xmlId";
     let st = s.doc()?;
-    let variables: Vec<Value> = st
-        .doc
-        .variables
-        .variables
-        .iter()
+    let vars = &st.doc.variables.variables;
+    let variables: Vec<Value> = variable_order(st, xml_id)
+        .into_iter()
+        .filter_map(|i| vars.get(i))
         .map(|v| {
             let bindings = st.doc.variables.objects_of(&v.name).len();
             json!({"name": v.name, "kind": v.kind.label(), "bindings": bindings})
         })
         .collect();
-    Ok(json!({"variables": variables, "locked": st.doc.variables.locked}))
+    let sort = json!({"by": st.variables_sort.by.id(), "descending": st.variables_sort.descending});
+    Ok(json!({"variables": variables, "locked": st.doc.variables.locked, "sort": sort}))
 }
 
 /// Lock Variables: without `locked` it toggles. Setting the state the document already has
@@ -414,6 +416,120 @@ fn highlight(s: &mut Session, p: &Value) -> Result<Value> {
     st.variables_highlight = name.clone();
     st.revision += 1;
     Ok(json!({"variable": name}))
+}
+
+/// The column the Variables panel sorts its list by (`variable.sort`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VariableSortKey {
+    /// The order the variables were defined in.
+    #[default]
+    Defined,
+    /// The Variables column: the variable's name.
+    Name,
+    /// The Objects column: the name of the object the variable is bound to.
+    Object,
+    /// The type column: text, image, graph, visibility, then variables of unknown kind.
+    Type,
+}
+
+impl VariableSortKey {
+    /// The values `variable.sort` takes for `by`, in the order of [`Self::id`].
+    const IDS: [&'static str; 4] = ["name", "object", "type", "none"];
+
+    /// The value `variable.sort` takes for `by` and `variable.list` reports.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Object => "object",
+            Self::Type => "type",
+            Self::Defined => "none",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        match s {
+            "name" => Some(Self::Name),
+            "object" => Some(Self::Object),
+            "type" => Some(Self::Type),
+            "none" => Some(Self::Defined),
+            _ => None,
+        }
+    }
+}
+
+/// How the Variables panel orders its list: a column, and whether the order is reversed. Panel
+/// state, not saved and not an undo step.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VariableSort {
+    pub by: VariableSortKey,
+    pub descending: bool,
+}
+
+/// The place of a variable's kind in the order the type column sorts by.
+fn kind_rank(kind: VariableKind) -> u8 {
+    match kind {
+        VariableKind::Text => 0,
+        VariableKind::Image => 1,
+        VariableKind::Graph => 2,
+        VariableKind::Visibility => 3,
+        VariableKind::Unknown => 4,
+    }
+}
+
+/// The Variables panel's rows in its sort order, as indices into the document's variables.
+/// Names compare without regard to case. Sorted by object, a variable bound to nothing comes
+/// first and one bound to several objects comes after those bound to one; `xml_id` names objects
+/// by their XML ids, as the panel does with Identify Objects By set to XML ID. Ties go by name.
+pub fn variable_order(st: &crate::DocState, xml_id: bool) -> Vec<usize> {
+    let vars = &st.doc.variables.variables;
+    let sort = st.variables_sort;
+    let mut order: Vec<usize> = (0..vars.len()).collect();
+    if sort.by != VariableSortKey::Defined {
+        order.sort_by_cached_key(|&i| {
+            let v = &vars[i];
+            let (rank, label) = match sort.by {
+                VariableSortKey::Object => match st.doc.variables.objects_of(&v.name).as_slice() {
+                    [] => (0, String::new()),
+                    [one] => (1, st.doc.node(*one).map(|n| n.identify_label(xml_id)).unwrap_or_default()),
+                    _ => (2, String::new()),
+                },
+                VariableSortKey::Type => (kind_rank(v.kind), String::new()),
+                VariableSortKey::Name | VariableSortKey::Defined => (0, String::new()),
+            };
+            (rank, label.to_lowercase(), label, v.name.to_lowercase(), v.name.clone())
+        });
+    }
+    if sort.descending {
+        order.reverse();
+    }
+    order
+}
+
+/// Sort the Variables panel's list. Panel state, like `variable.highlight`: not saved and not an
+/// undo step. Setting the order the panel already has changes nothing.
+fn sort(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "variable.sort";
+    let key = "by";
+    let by = match p.get(key) {
+        None => return Err(bad(C, format!("missing `{key}`"))),
+        Some(v) => v
+            .as_str()
+            .and_then(VariableSortKey::parse)
+            .ok_or_else(|| bad(C, format!("`{key}` must be one of {}", VariableSortKey::IDS.join(", "))))?,
+    };
+    // A `descending` that is given must be true or false: null is refused, not read as omitted.
+    let key = "descending";
+    let descending = match p.get(key) {
+        None => false,
+        Some(v) => v.as_bool().ok_or_else(|| bad(C, format!("`{key}` must be true or false")))?,
+    };
+    let sort = VariableSort { by, descending };
+    let st = s.doc_mut()?;
+    if st.variables_sort != sort {
+        st.variables_sort = sort;
+        st.revision += 1;
+    }
+    Ok(json!({"by": by.id(), "descending": descending}))
 }
 
 fn dataset_new(s: &mut Session, p: &Value) -> Result<Value> {
@@ -725,7 +841,15 @@ pub fn specs() -> Vec<CommandSpec> {
             variables_unlocked,
             rename
         ),
-        cmd!(query "variable.list", "List Variables", [], None, "{} → variables with kinds and binding counts, and whether they are locked → {variables, locked}", has_doc, list),
+        cmd!(
+            query "variable.list",
+            "List Variables",
+            [],
+            None,
+            "{} → variables with kinds and binding counts in the Variables panel's order, whether they are locked, and the panel's sort (as variable.sort sets it) → {variables, locked, sort: {by, descending}}",
+            has_doc,
+            list
+        ),
         cmd!(
             "variable.makeTextDynamic",
             "Make Text Dynamic",
@@ -797,6 +921,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{variable?} highlight one Variables panel row (a click); what the panel's Delete, Options… and Select Bound Object act on. An empty or missing `variable` clears it. Not an undo step → {variable}",
             has_doc,
             highlight
+        ),
+        cmd!(
+            "variable.sort",
+            "Sort Variables",
+            [],
+            None,
+            "{by: name|object|type|none, descending?: bool} sort the Variables panel's list (a click on a column header) by variable name, by the name of the bound object, or by type (text, image, graph, visibility, then unknown); `none` is the order the variables were defined in, and `descending` reverses the order. Names compare without regard to case; by object, unbound variables come first and variables bound to several objects last, and ties go by name. Panel state: not saved and not an undo step; variable.list reports it → {by, descending}",
+            has_doc,
+            sort
         ),
         cmd!("dataset.new", "New Data Set…", ["Window", "Variables"], None, "{name, values?: {variable: value}} add a dataset", has_doc, dataset_new),
         cmd!(
@@ -885,7 +1018,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Variable Library…",
             ["Window", "Variables"],
             None,
-            "{path? | xml? | dataBase64?} replace the document's variables and data sets with a variable library's (XML: `variableSets` › `variableSet` › `variables` of `variable` elements with `varName` and `trait`, and `sampleDataSets` of `sampleDataSet` elements with `dataSetName`) in one undo step (none when the document already holds what the library gives). Every data set is deleted, and every variable of the document is deleted with its bindings and values except a text variable the library also declares, which keeps its bindings; then the library's other variables whose `trait` is `textcontent` are defined as text variables, unbound, and each data set takes a value for a variable from the `p` elements of the element named after it, one paragraph each. Variables of other kinds are left out and named in `skipped` and `warning`. Refused while the variables are locked when it would delete or define a variable → {variables, deleted, deletedDataSets, names, skipped, warning?}",
+            "{path? | xml? | dataBase64?} replace the document's variables and data sets with a variable library's (XML: `variableSets` › `variableSet` › `variables` of `variable` elements with `varName` and `trait`, and `sampleDataSets` of `sampleDataSet` elements with `dataSetName`) in one undo step (none when the document already holds what the library gives). Every data set is deleted, and every variable of the document is deleted with its bindings and values except a variable the library also declares with the same kind, which keeps its bindings; then the library's other variables are defined, unbound, with the kind of their `trait`: `textcontent` text, `visibility` visibility, `fileref` image, `graphdata` graph, and any other or none unknown (no values). Each data set takes a variable's value from the element named after it: a text value from its `p` elements, one paragraph each; a visibility value from `true` or `false`; an image value from a file's absolute path or a `file:` URL (the file isn't read); a graph value from a `data` element (`propertyRow` series names, `values` › `row` with a first `value` key=\"name\" category), read as the CSV graph.setData takes. A value that doesn't fit its kind is refused. Refused while the variables are locked when it would delete or define a variable → {variables, deleted, deletedDataSets, names}",
             has_doc,
             load_library
         ),
@@ -894,7 +1027,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Variable Library…",
             ["Window", "Variables"],
             None,
-            "{path?} write the document's text variables and every data set as a variable library, the XML that variable.loadLibrary reads: a `variable` element with `varName` and `trait=\"textcontent\"` per text variable, and a `sampleDataSet` element with `dataSetName` per data set, holding an element named after each text variable it has a value for, with one `p` element per line of the value. Variables of other kinds are left out with their values and named in `skipped` and `warning`. Refused without a text variable, for a text variable whose name isn't an XML name (letters, digits, `-`, `_` and `.`, starting with a letter or `_`), for a data set name or value that holds a control character, for a data set name with white space at either end, for a name longer than 255 characters or used twice, and past variable.loadLibrary's caps (256 variables, 1,000 data sets, 8 MiB). Without path → {xml, variables, datasets, skipped, warning?}; with it → {path, variables, datasets, skipped, warning?}",
+            "{path?} write the document's variables and every data set as a variable library, the XML that variable.loadLibrary reads: a `variable` element with `varName` per variable, with the `trait` of its kind (`textcontent`, `visibility`, `fileref` for image, `graphdata` for graph; none for an unknown kind), and a `sampleDataSet` element with `dataSetName` per data set, holding an element named after each variable it has a value for: one `p` element per line of a text value, `true` or `false`, an image's path (a `file:///` URL for a path from a Unix root), or graph data as a `data` element. Refused without a variable, for a variable whose name isn't an XML name (letters, digits, `-`, `_` and `.`, starting with a letter or `_`; not asked of an unknown kind), for a name or value that holds a control character, for a name with white space at either end, for a name longer than 255 characters or used twice, for an image value that isn't a file's absolute path, and past variable.loadLibrary's caps (256 variables, 1,000 data sets, 8 MiB). Without path → {xml, variables, datasets}; with it → {path, variables, datasets}",
             has_doc,
             save_library
         ),

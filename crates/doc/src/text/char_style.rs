@@ -47,6 +47,14 @@ pub struct CharStyle {
     /// Insert Aki Right: space added after the character in reading order, as [`Self::aki_left`].
     #[serde(default, rename = "akiRight", skip_serializing_if = "crate::skip::is_default")]
     pub aki_right: f64,
+    /// Tsume (Character panel, East Asian options): the percentage of the blank space on each side
+    /// of the character's ink, inside its own width, that is taken away, 0 to [`MAX_TSUME`]. 50
+    /// halves that space and 100 sets the ink edge to edge; the glyph itself is not scaled. A
+    /// cluster takes the value of its first character. Tracking, kerning and Insert Aki are added
+    /// after it. Horizontal type only.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub tsume: f64,
     /// Use glyph shapes for automatic pair spacing; false uses font metrics.
     #[serde(default, rename = "opticalKerning", skip_serializing_if = "crate::skip::is_default")]
     pub optical_kerning: bool,
@@ -200,6 +208,108 @@ pub struct CharStyle {
     /// default glyph otherwise. Saved only when set.
     #[serde(default, rename = "glyphAlternate", skip_serializing_if = "Option::is_none")]
     pub glyph_alternate: Option<GlyphChoice>,
+    /// The East Asian glyph form these characters are drawn in (Glyphs panel menu, with Show East
+    /// Asian Options): one OpenType feature of the font, such as JIS 78 forms (`jp78`), or the
+    /// font's default glyphs. The text keeps its characters. Saved only when set.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "glyphForm", skip_serializing_if = "crate::skip::is_default")]
+    pub glyph_form: GlyphForm,
+}
+
+/// The East Asian glyph form characters are drawn in ([`CharStyle::glyph_form`]): the font's
+/// default glyphs, or the glyphs one OpenType feature substitutes. One form at a time.
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist>
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GlyphForm {
+    /// The font's default glyphs.
+    #[default]
+    Default,
+    /// Traditional forms (`trad`).
+    Traditional,
+    /// Expert forms (`expt`).
+    Expert,
+    /// JIS 2004 forms (`jp04`).
+    Jis04,
+    /// JIS 90 forms (`jp90`).
+    Jis90,
+    /// JIS 78 forms (`jp78`).
+    Jis78,
+    /// JIS 83 forms (`jp83`).
+    Jis83,
+    /// Monospaced full-width forms (`fwid`).
+    FullWidth,
+    /// Monospaced half-width forms (`hwid`).
+    HalfWidth,
+    /// Monospaced third-width forms (`twid`).
+    ThirdWidth,
+    /// Monospaced quarter-width forms (`qwid`).
+    QuarterWidth,
+}
+
+impl GlyphForm {
+    /// Every form, in menu order, the default last.
+    pub const ALL: [GlyphForm; 11] = [
+        GlyphForm::Traditional,
+        GlyphForm::Expert,
+        GlyphForm::Jis04,
+        GlyphForm::Jis90,
+        GlyphForm::Jis78,
+        GlyphForm::Jis83,
+        GlyphForm::FullWidth,
+        GlyphForm::HalfWidth,
+        GlyphForm::ThirdWidth,
+        GlyphForm::QuarterWidth,
+        GlyphForm::Default,
+    ];
+
+    /// The name files and commands give this form (as it is saved).
+    pub fn id(self) -> &'static str {
+        match self {
+            GlyphForm::Default => "default",
+            GlyphForm::Traditional => "traditional",
+            GlyphForm::Expert => "expert",
+            GlyphForm::Jis04 => "jis04",
+            GlyphForm::Jis90 => "jis90",
+            GlyphForm::Jis78 => "jis78",
+            GlyphForm::Jis83 => "jis83",
+            GlyphForm::FullWidth => "fullWidth",
+            GlyphForm::HalfWidth => "halfWidth",
+            GlyphForm::ThirdWidth => "thirdWidth",
+            GlyphForm::QuarterWidth => "quarterWidth",
+        }
+    }
+
+    /// The form [`GlyphForm::id`] names; `None` for any other name.
+    pub fn from_id(id: &str) -> Option<GlyphForm> {
+        GlyphForm::ALL.into_iter().find(|f| f.id() == id)
+    }
+
+    /// The OpenType feature that draws this form; `None` for the default glyphs.
+    pub fn feature(self) -> Option<&'static [u8; 4]> {
+        Some(match self {
+            GlyphForm::Default => return None,
+            GlyphForm::Traditional => b"trad",
+            GlyphForm::Expert => b"expt",
+            GlyphForm::Jis04 => b"jp04",
+            GlyphForm::Jis90 => b"jp90",
+            GlyphForm::Jis78 => b"jp78",
+            GlyphForm::Jis83 => b"jp83",
+            GlyphForm::FullWidth => b"fwid",
+            GlyphForm::HalfWidth => b"hwid",
+            GlyphForm::ThirdWidth => b"twid",
+            GlyphForm::QuarterWidth => b"qwid",
+        })
+    }
+
+    /// Is this one of the monospaced width forms (`fwid`, `hwid`, `twid`, `qwid`)? A font may
+    /// draw them with other glyphs (`GSUB`) or with other widths for the same glyphs (`GPOS`), and
+    /// they set the characters on a fixed width, so Proportional Metrics (`palt`) is not applied
+    /// with them.
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid>
+    pub fn is_width(self) -> bool {
+        matches!(self, GlyphForm::FullWidth | GlyphForm::HalfWidth | GlyphForm::ThirdWidth | GlyphForm::QuarterWidth)
+    }
 }
 
 /// A glyph chosen for one character ([`CharStyle::glyph_alternate`]): the glyph id and the face it
@@ -443,6 +553,9 @@ fn hundred() -> f64 {
 /// The largest Insert Aki Left or Right ([`CharStyle::aki_left`]), in 1/1000 em: one em.
 pub const MAX_AKI: f64 = 1000.0;
 
+/// The largest Tsume ([`CharStyle::tsume`]), in percent: all the blank space beside the ink.
+pub const MAX_TSUME: f64 = 100.0;
+
 /// The number of lines a warichu block may be stacked on ([`CharStyle::warichu_lines`]).
 pub const WARICHU_LINES: std::ops::RangeInclusive<u8> = 1..=6;
 
@@ -538,6 +651,7 @@ impl Default for CharStyle {
             kerning_before: 0.0,
             aki_left: 0.0,
             aki_right: 0.0,
+            tsume: 0.0,
             optical_kerning: false,
             baseline_shift: 0.0,
             h_scale: 100.0,
@@ -578,6 +692,7 @@ impl Default for CharStyle {
             no_break: false,
             language: None,
             glyph_alternate: None,
+            glyph_form: GlyphForm::Default,
         }
     }
 }
@@ -592,7 +707,8 @@ impl CharStyle {
     /// becomes the nearer end. A leading of 0, which legacy `.ai` import stores, stays, and a
     /// baseline shift that is not a number becomes 0. The Tate-chu-yoko Up/Down and Left/Right
     /// offsets are kept as the baseline shift is. Insert Aki Left and Right are kept from 0 to
-    /// [`MAX_AKI`], and one that is not a number becomes 0. The Warichu Settings Lines and Scale
+    /// [`MAX_AKI`], and one that is not a number becomes 0; Tsume is kept from 0 to [`MAX_TSUME`] the
+    /// same way. The Warichu Settings Lines and Scale
     /// are kept to [`WARICHU_LINES`] and [`WARICHU_SCALE`]; a gap or scale that is not a number becomes its default. The gap is kept to 0 to
     /// [`crate::MAX_COORD`], as the baseline shift is, since a scaled type object holds it in its
     /// own units.
@@ -610,6 +726,7 @@ impl CharStyle {
         let aki = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) };
         self.aki_left = aki(self.aki_left);
         self.aki_right = aki(self.aki_right);
+        self.tsume = if self.tsume.is_nan() { 0.0 } else { self.tsume.clamp(0.0, MAX_TSUME) };
         self.warichu_lines = self.warichu_lines.clamp(*WARICHU_LINES.start(), *WARICHU_LINES.end());
         self.warichu_gap = if self.warichu_gap.is_nan() { default.warichu_gap } else { self.warichu_gap.clamp(0.0, crate::MAX_COORD) };
         self.warichu_scale =
@@ -680,6 +797,15 @@ impl CharStyle {
     pub fn keep_scripts_in_range(&mut self) {
         self.position = self.position.in_range();
         self.small_caps = self.small_caps.map(small_caps_in_range);
+    }
+    /// Sets the East Asian glyph form ([`CharStyle::glyph_form`]). A form other than the default
+    /// also takes away the character's glyph choice ([`CharStyle::glyph_alternate`]), which would
+    /// otherwise keep drawing its own glyph; the default form keeps it.
+    pub fn set_glyph_form(&mut self, form: GlyphForm) {
+        self.glyph_form = form;
+        if form != GlyphForm::Default {
+            self.glyph_alternate = None;
+        }
     }
 }
 
