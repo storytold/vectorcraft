@@ -23,12 +23,22 @@ pub fn open(app: &mut VectorcraftApp, set: usize, action: usize) -> Result<Value
     if a.steps.iter().enumerate().all(|(i, _)| a.excluded_steps.contains(&i)) {
         return Err("the action has no included steps".into());
     }
-    if crate::panels::actions::has_stop(&a.included_commands()) {
-        return Err("Batch cannot play an action with a stop".into());
-    }
+    refuse_steps(&a.included_commands())?;
     let name = a.name.clone();
     app.ui.dialog = Some(Dialog::new(KIND, initial_fields(set, action, &name)));
     Ok(Value::Null)
+}
+
+/// Err when the included steps `commands` hold a step that Batch does not play: a stop, or a View
+/// menu step, which acts on a document window ([`crate::panels::actions::is_ui_step`]).
+fn refuse_steps(commands: &[Value]) -> Result<(), String> {
+    if crate::panels::actions::has_stop(commands) {
+        return Err("Batch cannot play an action with a stop".into());
+    }
+    if commands.iter().any(crate::panels::actions::is_ui_step) {
+        return Err("Batch cannot play an action with a View menu step".into());
+    }
+    Ok(())
 }
 
 fn initial_fields(set: usize, action: usize, name: &str) -> Value {
@@ -119,9 +129,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if commands.is_empty() {
         return Err("the action has no included steps".into());
     }
-    if crate::panels::actions::has_stop(&commands) {
-        return Err("Batch cannot play an action with a stop".into());
-    }
+    refuse_steps(&commands)?;
     let source = d.str("source");
     if source == "folder" && d.str("folder").trim().is_empty() {
         return Err("choose a source folder".into());

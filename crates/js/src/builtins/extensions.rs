@@ -388,18 +388,33 @@ fn last_error(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<V
 }
 
 fn line(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    let line = interp.script_frames().last().map_or(0, |(code, pc, _)| code.line_column(pc.saturating_sub(1)).0);
+    let line = interp.script_frames().last().map_or(0, |(code, pc, _)| place(interp.locator.as_ref(), code, pc).1);
     Ok(Value::Number(f64::from(line)))
+}
+
+/// Where the instruction before `pc` in `code` came from: the file the realm's locator names
+/// (`None` without one) and the line there, or the line in the compiled source without a locator.
+fn place(locator: Option<&crate::realm::SourceLocator>, code: &Code, pc: usize) -> (Option<String>, u32) {
+    let line = code.line_column(pc.saturating_sub(1)).0;
+    match locator {
+        Some(locate) => {
+            let (file, line) = locate(code.source.tag, line);
+            (Some(file), line)
+        }
+        None => (None, line),
+    }
 }
 
 /// The most frames `$.stack` lists, and the most characters of a function's name it shows.
 const STACK_FRAMES: usize = 64;
 const STACK_NAME_UNITS: usize = 64;
 
-/// The script's frames, outermost first, one a line: the function's name and the line it is at.
+/// The script's frames, outermost first, one a line: the function's name and the line it is at,
+/// as `name:line`, or as `name@file:line` with the file the realm's locator names.
 fn stack(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let frames: Vec<(Rc<Code>, usize, bool)> = interp.script_frames().map(|(c, pc, f)| (c.clone(), pc, f)).collect();
     let skip = frames.len().saturating_sub(STACK_FRAMES);
+    let locator = interp.locator.clone();
     let mut text = String::new();
     if skip > 0 {
         text.push_str("…\n");
@@ -407,8 +422,10 @@ fn stack(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value>
     for (code, pc, function) in frames.iter().skip(skip) {
         interp.use_fuel()?;
         let name = if *function { function_name(code) } else { "[global]".to_string() };
-        let line = code.line_column(pc.saturating_sub(1)).0;
-        text.push_str(&format!("{name}:{line}\n"));
+        match place(locator.as_ref(), code, *pc) {
+            (Some(file), line) => text.push_str(&format!("{name}@{file}:{line}\n")),
+            (None, line) => text.push_str(&format!("{name}:{line}\n")),
+        }
     }
     let mut out = Builder::new();
     out.push_str(interp, &text)?;

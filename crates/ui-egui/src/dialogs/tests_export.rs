@@ -205,7 +205,8 @@ fn svg_continues_in_svg_options() {
 
 /// Without Use Artboards, a PDF continues in Save PDF too, without its artboard choice, and the
 /// file is one page of the art's bounds. Its options apply: a drawing 10 m long is written at
-/// full size in points with "Write pages longer than 200 in at full size in points".
+/// full size in points with "Write pages longer than 200 in at full size in points" (on by
+/// default), and with a `UserUnit` without it.
 #[test]
 fn pdf_art_continues_in_the_save_pdf_dialog() {
     let (mut app, written) = app(2);
@@ -223,11 +224,20 @@ fn pdf_art_continues_in_the_save_pdf_dialog() {
     app.run("shape.rectangle", json!({"x": 0, "y": 100, "width": 28_346.46, "height": 50})).unwrap();
     app.run("file.exportAs", json!({"format": "pdf"})).unwrap();
     confirm(&mut app).unwrap();
-    set(&mut app, "longPagesInPoints", json!(true));
     frame(&mut app);
     confirm(&mut app).unwrap();
     let bytes = written.borrow()[1].1.clone();
     assert!(!String::from_utf8_lossy(&bytes).contains("/UserUnit"));
+    let width = vectorcraft_pdf::import(&bytes).unwrap().artboards[0].rect.width();
+    assert!((28_346.0..28_350.0).contains(&width), "{width}");
+
+    app.run("file.exportAs", json!({"format": "pdf"})).unwrap();
+    confirm(&mut app).unwrap();
+    set(&mut app, "longPagesInPoints", json!(false));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let bytes = written.borrow()[2].1.clone();
+    assert!(String::from_utf8_lossy(&bytes).contains("/UserUnit"));
     let width = vectorcraft_pdf::import(&bytes).unwrap().artboards[0].rect.width();
     assert!((28_346.0..28_350.0).contains(&width), "{width}");
 }
@@ -292,6 +302,23 @@ fn nothing_to_export_keeps_export_as_open_before_the_save_dialog() {
     confirm(&mut app).unwrap();
     assert_eq!(kind(&app), Some("pngOptions"));
     assert!(written.borrow().is_empty());
+}
+
+/// Art that a plot leaves out (here at 0% opacity) is nothing to export as HP-GL of the art's
+/// bounds, before the save dialog; other formats still export it.
+#[test]
+fn art_a_plot_leaves_out_keeps_hpgl_export_as_open_before_the_save_dialog() {
+    let (mut app, _) = app(1);
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| panic!("no save dialog without art the plot draws")));
+    app.run("select.all", json!({})).unwrap();
+    app.run("transparency.set", json!({"opacity": 0})).unwrap();
+    app.run("file.exportAs", json!({"format": "hpgl"})).unwrap();
+    assert!(confirm(&mut app).unwrap_err().contains("no visible art"));
+    assert_eq!(kind(&app), Some("exportAs"));
+    app.services.pick_save = Some(Box::new(|p: &crate::FilePick| Some(format!("/out/{}", p.name))));
+    set(&mut app, "format", json!("png"));
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("pngOptions"));
 }
 
 #[test]

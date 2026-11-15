@@ -17,7 +17,7 @@ use vectorcraft_doc::{Guide, NodeId};
 use vectorcraft_geom::{Point, Rect};
 
 use crate::guides::{PointSnap, Targets};
-use crate::{Action, Cursor, Overlay, PointerEvent, PointerKind, ToolContext};
+use crate::{Action, Cursor, Overlay, PixelOp, PointerEvent, PointerKind, ToolContext};
 
 /// The ruler guide under `p`, by its index in `guide.list`: the nearest within the selection
 /// tolerance (the newest of equals).
@@ -123,7 +123,7 @@ struct GuideSnap {
 impl GuideSnap {
     fn new(cx: &ToolContext) -> Self {
         let targets = || Targets::collect(cx.doc, &[], None);
-        let targets = if cx.snap_to_pixel || cx.snap_to_grid {
+        let targets = if cx.snaps_to_pixel(PixelOp::Moving) || cx.snap_to_grid {
             None
         } else if cx.smart_guides {
             Some((targets().styled(cx), cx.snapping_tolerance))
@@ -136,7 +136,8 @@ impl GuideSnap {
     }
 
     /// Where a guide dragged to `v` (the x of a vertical one, the y of a horizontal one) goes:
-    /// with Shift on the nearest ruler tick, else on whole pixels, the grid or a target.
+    /// with Shift on the nearest ruler tick, else on whole pixels (Snap to Pixel's While Moving
+    /// option), the grid or a target.
     fn snap(&mut self, cx: &ToolContext, vertical: bool, v: f64, shift: bool) -> f64 {
         self.snapped.clear();
         if shift {
@@ -144,7 +145,7 @@ impl GuideSnap {
             let origin = if vertical { origin.x } else { origin.y };
             return origin + cx.unit.snap_to_ruler_tick(v - origin, cx.zoom);
         }
-        if cx.snap_to_pixel {
+        if cx.snaps_to_pixel(PixelOp::Moving) {
             return v.round();
         }
         if cx.snap_to_grid {

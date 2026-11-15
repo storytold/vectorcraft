@@ -11,7 +11,7 @@ use super::clipboard::SwatchChoices;
 use super::{
     CommandSpec, Result, Session, always, bad, can_clear_history, can_redo, can_undo, check_numbers, checked_ids_param, clock_date, cmd, date_param,
     f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, index, number_or,
-    object_param, ok, point_param, str_param, switch_or,
+    object_param, ok, point_param, str_param, switch_or, u64_req,
 };
 use crate::{Clipboard, EngineError, SourceLayer, inspect};
 
@@ -249,7 +249,10 @@ fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).map(index).ok_or_else(|| bad("document.activate", "missing index"))?;
+    let i = match p.get("index") {
+        None | Some(Value::Null) => return Err(bad("document.activate", "missing index")),
+        Some(v) => v.as_u64().map(index).ok_or_else(|| bad("document.activate", "`index` must be a whole number"))?,
+    };
     if s.set_active(i) { ok() } else { Err(bad("document.activate", "no such document")) }
 }
 
@@ -262,7 +265,10 @@ fn doc_move(s: &mut Session, p: &Value) -> Result<Value> {
     if from >= n {
         return Err(bad("document.move", "no such document"));
     }
-    let to = p.get("to").and_then(Value::as_u64).map(index).ok_or_else(|| bad("document.move", "missing `to`: a non-negative integer"))?;
+    let to = match p.get("to") {
+        None | Some(Value::Null) => return Err(bad("document.move", "missing `to`: a non-negative integer")),
+        Some(v) => v.as_u64().map(index).ok_or_else(|| bad("document.move", "`to` must be a whole number"))?,
+    };
     let to = to.min(n.saturating_sub(1));
     if !s.move_document(from, to) {
         return Err(bad("document.move", "no such document"));
@@ -562,12 +568,11 @@ fn switch_units(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "units": next.label() }))
 }
 
-/// The `artboard` param of the ruler origin commands: an artboard index, 0 when not given.
+/// The `artboard` param of the ruler origin commands: an artboard index, 0 when left out or null. A
+/// value that is not a whole number is "`artboard` must be a whole number"; one past the artboards
+/// is "index out of range".
 fn artboard_param(s: &Session, p: &Value, c: &str) -> Result<usize> {
-    let index = match p.get("artboard") {
-        None => 0,
-        Some(v) => v.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or_else(|| bad(c, "index out of range"))?,
-    };
+    let index = super::index_opt(p, "artboard", c)?.unwrap_or(0);
     if index >= s.doc()?.doc.artboards.len() {
         return Err(bad(c, "index out of range"));
     }
@@ -577,14 +582,15 @@ fn artboard_param(s: &Session, p: &Value, c: &str) -> Result<usize> {
 fn ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     // A document without artboards measures from its global zero point.
-    let index = if d.artboards.is_empty() && p.get("artboard").is_none() { 0 } else { artboard_param(s, p, "document.rulerOrigin")? };
+    let index =
+        if d.artboards.is_empty() && p.get("artboard").is_none_or(Value::is_null) { 0 } else { artboard_param(s, p, "document.rulerOrigin")? };
     Ok(json!(s.doc()?.doc.ruler_origin_for(index)))
 }
 
 fn set_ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.setRulerOrigin";
     let origin = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
-    let index = if s.doc()?.doc.rulers == RulerMode::Global && p.get("artboard").is_none() { 0 } else { artboard_param(s, p, C)? };
+    let index = if s.doc()?.doc.rulers == RulerMode::Global && p.get("artboard").is_none_or(Value::is_null) { 0 } else { artboard_param(s, p, C)? };
     change_ruler_origin(s, index, Some(origin), "Ruler Origin")
 }
 
@@ -678,12 +684,22 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
 /// under an interaction that would then preview on, or cancel to, the document from before (#1719).
 /// A typing session also ends in the Type tool, whose caret and marked text (IME) must follow the
 /// document. A preview that Real-time Drawing off left unapplied is applied first, as the tool's own
-/// commit applies it; when it fails, the interaction is canceled.
+/// commit applies it; when it fails, the interaction is canceled. The applied preview's warning
+/// goes to the running command's result or the tool's status messages, as the tool's own commit
+/// reports it ([`Session::note_settled_warning`]).
 pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
     let typing = typing_in_progress(s);
     match s.unapplied_interaction_preview().filter(|_| !s.previewing) {
-        Some((cmd, p)) if s.preview(&cmd, &p).is_err() => s.cancel_interaction()?,
-        _ => s.commit_interaction()?,
+        Some((cmd, p)) => match s.preview(&cmd, &p) {
+            Ok(v) => {
+                if let Some(w) = v.get("warning").and_then(Value::as_str) {
+                    s.note_settled_warning(w);
+                }
+                s.commit_interaction()?
+            }
+            Err(_) => s.cancel_interaction()?,
+        },
+        None => s.commit_interaction()?,
     }
     if typing {
         s.set_tool_option("endTyping", &Value::Bool(true));
@@ -792,11 +808,11 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let created = date_param(p, "created", C)?;
     let st = s.doc()?;
     // The row as the panel lists it now: keeping an edit in progress below changes the rows.
-    let chosen = match p.get("index") {
-        None | Some(Value::Null) => None,
-        Some(v) => {
-            let state = v.as_u64().and_then(|row| st.history.state(&st.doc, index(row)));
-            Some(state.ok_or_else(|| bad(C, format!("no history state {v}")))?.clone())
+    let chosen = match super::index_opt(p, "index", C)? {
+        None => None,
+        Some(row) => {
+            let v = &p["index"];
+            Some(st.history.state(&st.doc, row).ok_or_else(|| bad(C, format!("no history state {v}")))?.clone())
         }
     };
     settle_interaction(s)?;
@@ -1086,7 +1102,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                     subpaths.extend(super::path::without_segments(sp, &cuts));
                 } else {
                     // Picked anchors leave the path with their connections, as Clear removes them.
-                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flatten().filter_map(|&(s, a)| (s == si).then_some(a)).collect();
+                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flat_map(|refs| super::path::subpath_refs(refs, si)).collect();
                     subpaths.extend(super::path::without_anchors(sp, &gone));
                 }
             }
@@ -1180,8 +1196,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
 /// Document ids scope node ids: two tabs may contain objects with the same node id.
 fn drop_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "edit.dropSelection";
-    let key = "sourceDocument";
-    let uid = p[key].as_u64().ok_or_else(|| bad(CMD, format!("missing integer `{key}`")))?;
+    let uid = u64_req(p, "sourceDocument", CMD)?;
     let point = |key: &str| finite_numbers::<2>(&p[key]).ok_or_else(|| bad(CMD, format!("{key} must be [x, y] with finite coordinates")));
     let grab = point("grab")?;
     let at = point("at")?;
@@ -1261,23 +1276,28 @@ pub(crate) fn place_clip(s: &mut Session, clip: &Clipboard, center: vectorcraft_
 /// The artboards Paste in Place, in Front or in Back puts a copy on, in artboard order: `artboard`
 /// (the active one, #693), else `artboards`, else, while the Artboard tool is chosen with several
 /// artboards selected, those (noted in the journal as `artboards`, so a replay pastes on the same
-/// ones); `None` when none is named. A named index that is not an artboard of the document, a
-/// repeated one or an empty list is an error.
+/// ones); `None` when none is named. A named value that is not a whole number (null included), a
+/// named index that is not an artboard of the document, a repeated one or an empty list is an
+/// error; every value is checked for its form before any is checked against the artboards.
 fn paste_targets(s: &mut Session, p: &Value, cmd: &str) -> Result<Option<Vec<usize>>> {
     let n = s.doc()?.doc.artboards.len();
-    let one = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < n);
-    let single = match p.get("artboard") {
-        Some(v) => Some(one(v).ok_or_else(|| bad(cmd, "`artboard` must be the index of an artboard of the document"))?),
-        None => None,
-    };
-    let listed = match p.get("artboards") {
+    let single = p.get("artboard").map(|v| v.as_u64().map(index).ok_or_else(|| bad(cmd, "`artboard` must be a whole number"))).transpose()?;
+    let entries = match p.get("artboards") {
         Some(v) => {
             let list = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(cmd, "`artboards` must be a list of artboard indices"))?;
-            let mut all = list
-                .iter()
-                .map(one)
-                .collect::<Option<Vec<usize>>>()
-                .ok_or_else(|| bad(cmd, "`artboards` names an artboard the document does not have"))?;
+            let all = list.iter().map(|i| i.as_u64().map(index)).collect::<Option<Vec<usize>>>();
+            Some(all.ok_or_else(|| bad(cmd, "`artboards` must contain whole numbers"))?)
+        }
+        None => None,
+    };
+    if single.is_some_and(|i| i >= n) {
+        return Err(bad(cmd, "`artboard` must be the index of an artboard of the document"));
+    }
+    let listed = match entries {
+        Some(mut all) => {
+            if all.iter().any(|i| *i >= n) {
+                return Err(bad(cmd, "`artboards` names an artboard the document does not have"));
+            }
             all.sort_unstable();
             if all.windows(2).any(|w| w[0] == w[1]) {
                 return Err(bad(cmd, "`artboards` names an artboard twice"));

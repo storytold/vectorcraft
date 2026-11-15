@@ -789,3 +789,29 @@ fn units_and_ruler_guides_survive_save_and_reopen() {
     }
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// A ruler guide hidden or locked on its own (the Layers panel's eye and lock on its row,
+/// `layer.setProps` on its node) stays so through Save, Close and Open, and the other guide stays
+/// visible and unlocked.
+#[test]
+fn a_guide_hidden_or_locked_on_its_own_survives_save_and_reopen() {
+    let d = dir("guide-flags");
+    for ext in ["vectorcraft", "pdf", "ai", "eps"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        for pos in [10, 20, 30] {
+            s.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+        }
+        rect(&mut s);
+        let ids: Vec<u64> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.id.unwrap().0).collect();
+        s.execute("layer.setProps", &json!({"ids": [ids[1]], "visible": false})).unwrap();
+        s.execute("layer.setProps", &json!({"ids": [ids[2]], "locked": true})).unwrap();
+        let p = path(&d, &format!("a.{ext}"));
+        s.execute("document.save", &json!({"path": p})).unwrap();
+        s.execute("file.close", &json!({})).unwrap();
+        s.execute("document.open", &json!({"path": p})).unwrap();
+        let flags: Vec<_> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.pos, g.hidden, g.locked)).collect();
+        assert_eq!(flags, [(10.0, false, false), (20.0, true, false), (30.0, false, true)], "{ext}");
+    }
+    let _ = std::fs::remove_dir_all(d);
+}

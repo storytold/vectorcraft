@@ -1,7 +1,7 @@
 //! The shipped code that records a plug-in grant: only the engine's install approval and its load
-//! of the plug-in folder's grants file make a `GrantToken` and call `registry::grant`. A new call
-//! site fails this test until it is added to the list. It checks the source, not what native code
-//! can do at run time.
+//! of the plug-in folder's grants file make a `GrantToken` and call `registry::grant` or
+//! `registry::install_checked`. A new call site fails this test until it is added to the list. It
+//! checks the source, not what native code can do at run time.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::collections::BTreeMap;
@@ -11,9 +11,12 @@ use std::path::{Path, PathBuf};
 const EXPECTED: &[(&str, &str, usize)] = &[
     ("GrantToken::after_engine_approval", "crates/engine/src/cmd/plugin.rs", 1),
     ("GrantToken::from_engine_grants_file", "crates/engine/src/store.rs", 2),
-    ("registry::grant", "crates/engine/src/cmd/plugin.rs", 1),
     ("registry::grant", "crates/engine/src/store.rs", 2),
+    ("registry::install_checked", "crates/engine/src/cmd/plugin.rs", 1),
 ];
+
+/// The names the audit counts.
+const NAMES: [&str; 4] = ["GrantToken::after_engine_approval", "GrantToken::from_engine_grants_file", "registry::grant", "registry::install_checked"];
 
 /// Every `.rs` file under `dir`, without test files and folders.
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -61,7 +64,7 @@ fn grant_token_call_sites_are_limited() {
         let text = std::fs::read_to_string(file).unwrap();
         let rel = file.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/");
         for line in shipped(&text) {
-            for name in ["GrantToken::after_engine_approval", "GrantToken::from_engine_grants_file", "registry::grant"] {
+            for name in NAMES {
                 let n = count(line, name);
                 if n > 0 {
                     *found.entry((name, rel.clone())).or_default() += n;

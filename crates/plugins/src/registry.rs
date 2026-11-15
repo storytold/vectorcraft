@@ -82,6 +82,57 @@ pub fn install(mut plugin: Plugin) -> Result<Arc<Plugin>> {
     Ok(p)
 }
 
+/// What [`install_checked`] does to the grant recorded for the plug-in's id.
+pub enum GrantUpdate {
+    /// Records this grant, replacing an earlier one for the id ([`grant`]).
+    Record(GrantToken),
+    /// Forgets the grant for the id ([`revoke`]).
+    Revoke,
+}
+
+/// Installs `plugin` and updates the grant for its id as one step. While it holds the plug-ins and
+/// then the grants, `check` is given the plug-in installed under the id and the grant recorded for
+/// it. When `check` returns an error, nothing changes and that error is returned. A plug-in that
+/// lists permissions the grant `update` records doesn't give this very module is refused the same
+/// way, with [`Error::NeedsApproval`] passed through `refused`. Otherwise `attach` runs, the grant
+/// is updated and the plug-in is installed, replacing one with the same id. `check` and `attach`
+/// must not call the other functions of this module, which wait for the locks held here.
+pub fn install_checked<E>(
+    mut plugin: Plugin,
+    update: GrantUpdate,
+    check: impl FnOnce(Option<&Plugin>, Option<&Grant>) -> std::result::Result<(), E>,
+    attach: impl FnOnce(),
+    refused: impl FnOnce(Error) -> E,
+) -> std::result::Result<Arc<Plugin>, E> {
+    // The same order as `install`, which reads the grants while it holds the plug-ins.
+    let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
+    let mut grants = GRANTS.write().unwrap_or_else(|e| e.into_inner());
+    let id = plugin.id().to_string();
+    check(plugins.get(&id).map(|p| &**p), grants.get(&id))?;
+    let m = plugin.manifest();
+    let granted = match &update {
+        GrantUpdate::Record(token) => Some(token.grant()),
+        GrantUpdate::Revoke => None,
+    };
+    if m.asks_permissions() && !granted.is_some_and(|g| g.covers(&m.id, plugin.hash(), &m.permissions())) {
+        return Err(refused(Error::NeedsApproval(crate::permissions::names(&m.permissions()).join(", "))));
+    }
+    attach();
+    match update {
+        GrantUpdate::Record(token) => {
+            let g = token.grant().clone();
+            grants.insert(g.id.clone(), g);
+        }
+        GrantUpdate::Revoke => {
+            grants.remove(&id);
+        }
+    }
+    plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
+    let p = Arc::new(plugin);
+    plugins.insert(id, p.clone());
+    Ok(p)
+}
+
 /// Loads `bytes` with the default limits and installs the plug-in ([`install`]: one that lists
 /// permissions installs only when they were granted to this very module).
 pub fn install_bytes(bytes: &[u8]) -> Result<Arc<Plugin>> {
@@ -344,5 +395,62 @@ mod tests {
             assert!(install_bytes(&module(id, listed, 7)).is_ok(), "{listed:?}");
             assert!(granted(id).is_none() && remove(id), "{listed:?}");
         }
+    }
+
+    /// `install_checked` gives `check` the plug-in and grant held for the id. When `check` refuses,
+    /// or the grant it would record doesn't approve the module, the plug-in, the grant and the
+    /// revision stay as they were and `attach` doesn't run; otherwise it records the grant (or
+    /// forgets it) and installs the module.
+    #[test]
+    fn install_checked_changes_nothing_when_refused() {
+        use crate::permissions::Permission::DocRead;
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let id = "test.registry.checked";
+        let old = module(id, Some(r#"["doc.read"]"#), 8);
+        let new = module(id, Some(r#"["doc.read"]"#), 9);
+        grant(GrantToken::after_engine_approval(grant_for(id, &old, vec![DocRead])));
+        install_bytes(&old).unwrap();
+        let load = |bytes: &[u8]| Plugin::load(bytes, Limits::default()).unwrap();
+        let record = |bytes: &[u8]| GrantUpdate::Record(GrantToken::after_engine_approval(grant_for(id, bytes, vec![DocRead])));
+        let unchanged = |why: &str| {
+            assert_eq!(get(id).map(|p| p.hash().to_string()), Some(crate::permissions::sha256_hex(&old)), "{why}");
+            assert_eq!(granted(id), Some(grant_for(id, &old, vec![DocRead])), "{why}");
+        };
+        let attached = std::cell::Cell::new(false);
+        let before = revision();
+
+        let seen = std::cell::RefCell::new(None);
+        let e = install_checked(
+            load(&new),
+            record(&new),
+            |p, g| {
+                *seen.borrow_mut() = Some((p.map(|p| p.hash().to_string()), g.cloned()));
+                Err("refused")
+            },
+            || attached.set(true),
+            |_| "not approved",
+        )
+        .unwrap_err();
+        assert_eq!(e, "refused");
+        assert_eq!(seen.take(), Some((Some(crate::permissions::sha256_hex(&old)), Some(grant_for(id, &old, vec![DocRead])))));
+        unchanged("check refused");
+
+        let same = std::convert::identity::<Error>;
+        let e = install_checked(load(&new), record(&old), |_, _| Ok(()), || attached.set(true), same).unwrap_err();
+        assert_eq!(e, Error::NeedsApproval("doc.read".into()));
+        unchanged("a grant for other bytes");
+        let e = install_checked(load(&new), GrantUpdate::Revoke, |_, _| Ok(()), || attached.set(true), same).unwrap_err();
+        assert_eq!(e, Error::NeedsApproval("doc.read".into()));
+        unchanged("no grant");
+        assert!(!attached.get() && revision() == before, "nothing ran or moved");
+
+        let p = install_checked(load(&new), record(&new), |_, _| Ok(()), || attached.set(true), same).unwrap();
+        assert!(attached.get() && revision() > before);
+        assert_eq!(get(id).map(|p| p.hash().to_string()), Some(p.hash().to_string()));
+        assert_eq!(granted(id), Some(grant_for(id, &new, vec![DocRead])));
+        let plain = module(id, Some("[]"), 10);
+        install_checked(load(&plain), GrantUpdate::Revoke, |_, _| Ok(()), || {}, same).unwrap();
+        assert!(granted(id).is_none(), "a module without permissions forgets the grant");
+        assert!(remove(id));
     }
 }

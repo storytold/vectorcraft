@@ -164,6 +164,94 @@ fn reverse_path_direction_on_and_off_set_the_winding() {
 }
 
 #[test]
+fn reverse_path_direction_turns_the_width_profile_and_pen_records_with_the_path() {
+    use vectorcraft_doc::{AngleProfile, PressureProfile, WidthProfile};
+    let mut s = session();
+    let open =
+        NodeId(run(&mut s, "path.create", json!({"anchors": [{"x": 0, "y": 50}, {"x": 40, "y": 50}, {"x": 100, "y": 50}]}))["id"].as_u64().unwrap());
+    let closed = rect(&mut s, 10.0);
+    let profile = WidthProfile { points: vec![(0.0, 0.2, 0.6), (0.3, 1.0, 0.4), (1.0, 0.5, 0.9)] };
+    let pressure = PressureProfile { points: vec![(0.0, 0.1), (0.25, 0.9), (1.0, 0.4)] };
+    let bearing = AngleProfile { points: vec![(0.0, 10.0), (0.6, 80.0), (1.0, 170.0)] };
+    s.edit("set", |d, _| {
+        for id in [open, closed] {
+            let st = d.node_mut(id).unwrap().appearance.stroke_mut().unwrap();
+            st.profile = Some(profile.clone());
+            st.pressure = Some(pressure.clone());
+            st.tilt = Some(pressure.clone());
+            st.bearing = Some(bearing.clone());
+            st.rotation = Some(bearing.clone());
+        }
+        Ok(())
+    })
+    .unwrap();
+    // (anchor point, its fraction of the path's length) for each anchor.
+    let along = |s: &Session, id: NodeId| {
+        let sp = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
+        let pos = sp.anchor_arc_positions();
+        let total = *pos.last().unwrap();
+        sp.anchors.iter().zip(pos).map(|(a, at)| (a.p, at / total)).collect::<Vec<_>>()
+    };
+    let before = [along(&s, open), along(&s, closed)];
+    run(&mut s, "select.set", json!({"ids": [open.0, closed.0]}));
+    assert_eq!(run(&mut s, "path.reverse", json!({}))["changed"], 2);
+    for ((id, before), closed) in [open, closed].into_iter().zip(before).zip([false, true]) {
+        let after = along(&s, id);
+        let st = s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().clone();
+        // Each anchor keeps the widths it had (its sides swapped, as the path runs the other way)
+        // and what the pen recorded there. (A closed path's start is where its profile steps.) A
+        // closed path now starts part way along a span of the width profile, which is resampled
+        // there, so its smooth curve moves a little.
+        let near = if closed { 0.02 } else { 1e-6 };
+        for (p, t) in before.iter().filter(|(_, t)| !closed || *t > 0.0) {
+            let u = after.iter().find(|(q, _)| q.distance(*p) < 1e-9).unwrap().1;
+            let (l, r) = profile.at(*t);
+            let (l2, r2) = st.profile.as_ref().unwrap().at(u);
+            assert!((l - r2).abs() < near && (r - l2).abs() < near, "{id:?} at {p:?}: {:?} then {:?}", (l, r), (l2, r2));
+            for got in [&st.pressure, &st.tilt] {
+                assert!((pressure.at(*t) - got.as_ref().unwrap().at(u)).abs() < 1e-6, "{id:?} pressure at {p:?}");
+            }
+            for got in [&st.bearing, &st.rotation] {
+                assert!((bearing.at(*t) - got.as_ref().unwrap().at(u)).abs() < 1e-6, "{id:?} bearing at {p:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn reverse_path_direction_turns_a_compound_paths_own_width_profile_and_pen_records() {
+    use vectorcraft_doc::{AngleProfile, PressureProfile, WidthProfile};
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0), rect(&mut s, 50.0));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "object.compoundPath.make", json!({}));
+    let compound = s.doc().unwrap().selection.objects[0];
+    // A lone rectangle of the same shape, whose strokes Reverse Path Direction already turns.
+    let lone = rect(&mut s, 0.0);
+    let profile = WidthProfile { points: vec![(0.0, 0.2, 0.6), (0.3, 1.0, 0.4), (1.0, 0.5, 0.9)] };
+    let pressure = PressureProfile { points: vec![(0.0, 0.1), (0.25, 0.9), (1.0, 0.4)] };
+    let bearing = AngleProfile { points: vec![(0.0, 10.0), (0.6, 80.0), (1.0, 170.0)] };
+    s.edit("set", |d, _| {
+        for id in [compound, lone] {
+            let st = d.node_mut(id).unwrap().appearance.stroke_mut().unwrap();
+            st.profile = Some(profile.clone());
+            st.pressure = Some(pressure.clone());
+            st.bearing = Some(bearing.clone());
+        }
+        Ok(())
+    })
+    .unwrap();
+    run(&mut s, "select.set", json!({"ids": [compound.0, lone.0]}));
+    assert_eq!(run(&mut s, "path.reverse", json!({}))["changed"], 3);
+    let stroke = |id: NodeId| s.doc().unwrap().doc.node(id).unwrap().appearance.stroke().unwrap().clone();
+    let (got, want) = (stroke(compound), stroke(lone));
+    assert_ne!(want.profile.as_ref(), Some(&profile), "the lone rectangle's profile turned");
+    assert_eq!(got.profile, want.profile, "both members turned alike, so the compound path's profile turns as the rectangle's does");
+    assert_eq!(got.pressure, want.pressure);
+    assert_eq!(got.bearing, want.bearing);
+}
+
+#[test]
 fn attributes_survive_a_native_round_trip() {
     let mut s = session();
     let a = rect(&mut s, 10.0);

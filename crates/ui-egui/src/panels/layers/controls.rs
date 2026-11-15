@@ -63,7 +63,8 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
     {
         actions.push(("appearance.clear".into(), json!({"ids": [id.0]})));
     } else if trash.clicked() {
-        if view.rows.is_empty() && app.session.active().is_some_and(|d| !d.selection.is_empty()) {
+        // With no row highlighted, the selected art and ruler guides go.
+        if view.rows.is_empty() && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides()) {
             actions.push(("edit.clear".into(), json!({})));
         } else {
             actions.push(("ui.layerDelete".into(), json!({})));
@@ -82,15 +83,22 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
         }
     }
     // Rows dropped on the trash are deleted, on New Layer duplicated, as in Illustrator. Both are
-    // outlined while rows (or, on the trash, a target circle) hang over them.
+    // outlined while rows (or, on the trash, a target circle) hang over them. Guide rows dropped on
+    // the trash delete their guides (`guide.remove`); New Layer does not take them.
     for (button, cmd) in [(&trash, "ui.layerDelete"), (&new_layer, "layer.duplicate")] {
-        if let Some(d) = button.dnd_release_payload::<LayersDrag>()
-            && let LayersDrag::Rows(ids) = &*d
-        {
-            actions.push((cmd.into(), json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})));
+        let deletes = cmd == "ui.layerDelete";
+        if let Some(d) = button.dnd_release_payload::<LayersDrag>() {
+            match &*d {
+                LayersDrag::Rows(ids) => actions.push((cmd.into(), json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))),
+                LayersDrag::Guides(guides) if deletes => actions.push(("guide.remove".into(), json!({"indexes": guides}))),
+                _ => {}
+            }
         }
-        let over = button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| matches!(*d, LayersDrag::Rows(_)))
-            || (cmd == "ui.layerDelete" && button.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(_))));
+        let over = button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| match *d {
+            LayersDrag::Rows(_) => true,
+            LayersDrag::Guides(_) => deletes,
+            LayersDrag::Art => false,
+        }) || (deletes && button.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(_))));
         if over {
             widgets::drop_target_outline(&child, button.rect);
         }

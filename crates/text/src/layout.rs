@@ -22,7 +22,7 @@ use crate::shape::{
     Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, mark_word_ends, no_line_end, no_line_start, punct, run_face, shape_range, shape_runs,
     soft_line_start, style_metrics,
 };
-use crate::{Composer, FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
+use crate::{FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
 
 mod bidi;
 mod breaking;
@@ -31,20 +31,22 @@ mod flow;
 mod on_path;
 mod region;
 mod ruby;
+mod shaped;
 mod vertical;
+mod warichu;
 
-pub(crate) use bidi::{is_rtl, para_bidi};
+pub(crate) use bidi::{is_rtl, para_bidi, starts_bidi};
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};
 pub use driver::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 #[cfg(test)]
 pub(crate) use driver::{fit_passes, layout_faces_per_call};
+#[cfg(test)]
+pub(crate) use on_path::{layout_trying_each_start, path_arrangements};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
 
-#[cfg(test)]
-pub(crate) use driver::envelope_ink_inputs;
-pub use driver::{envelope_ink, register_envelope_ink};
+pub use driver::{envelope_ink, layout_inputs, register_envelope_ink};
 
 const EPS: f64 = 1e-6;
 
@@ -227,11 +229,14 @@ impl Ctx<'_> {
         out
     }
 
-    /// Shape paragraph `r` (its bidi resolution `bidi`).
-    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>) -> Vec<SGlyph> {
+    /// Shape paragraph `r` (its bidi resolution `bidi`, its attributes `para`). A Standard composer
+    /// sets a complex script glyph by glyph ([`OtFeatures::unshaped_complex`]).
+    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>, para: &ParaStyle) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
         let levels = bidi.map_or(&[][..], |b| &b.levels);
-        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &self.opts.features, levels, &mut v);
+        let standard = !self.opts.composer.unwrap_or(para.composer).shapes_complex_scripts();
+        let feats = OtFeatures { unshaped_complex: standard, ..self.opts.features };
+        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &feats, levels, &mut v);
         self.finish_shaping(&mut v, |g| self.style_at(g.byte));
         v
     }
@@ -243,7 +248,9 @@ impl Ctx<'_> {
         if self.vertical {
             tate_chu_yoko(v, self.system_layout || !self.fractional_widths, |g| {
                 let st = style(g);
-                TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right }
+                // Type on a path sets warichu characters as they are, its digits included.
+                let warichu = st.warichu && !self.on_path;
+                TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right, warichu }
             });
             // An upright glyph advances down the column by its vertical advance (the font's vertical
             // metrics; without them at least one em, as CJK fonts' is), centred across it: a narrow
@@ -265,6 +272,12 @@ impl Ctx<'_> {
                     g.proportional = a.proportional;
                 }
             }
+        }
+        // Warichu: each stretch of marked characters stacked as one block inside its line, after
+        // tate-chu-yoko and the upright cells have set the glyphs' lengths along it. Type on a path
+        // sets them as they are.
+        if !self.on_path {
+            warichu::warichu(v, (self.vertical, self.system_layout || !self.fractional_widths), |g| warichu::WariStyle::of(style(g)));
         }
         // System Layout or Fractional Widths off: whole-point advances, after tate-chu-yoko and the
         // upright cell have set the widths the line breaker will use. A zero advance stays zero.
@@ -290,7 +303,13 @@ impl Ctx<'_> {
     /// paragraph's embedding level.
     fn prepend_marker(&self, pr: &Range<usize>, para: &ParaStyle, text: Option<&str>, rtl: bool, sg: &mut Vec<SGlyph>) -> usize {
         let Some(text) = text.filter(|_| para.list.is_some() && !pr.is_empty()) else { return 0 };
-        let st = vectorcraft_doc::text::ParaList::marker_style(self.style_at(pr.start));
+        let first = self.style_at(pr.start);
+        let mut st = vectorcraft_doc::text::ParaList::marker_style(first);
+        // A paragraph that starts with warichu: the marker takes the size of the line, not the
+        // block's ([`warichu::warichu_sizes`] set the first character smaller).
+        if warichu::stacked(first, self.vertical) && !self.on_path {
+            st.size = warichu::WariStyle::of(first).parent_size();
+        }
         let run = self.runs.partition_point(|(r, _)| r.end <= pr.start);
         if !self.runs.get(run).is_some_and(|(r, _)| r.start <= pr.start && pr.start < r.end) {
             return 0;
@@ -320,13 +339,16 @@ impl Ctx<'_> {
         tab.kern_shift = 0.0;
         tab.aki_shift = 0.0;
         tab.aki = 0.0;
+        tab.tsume_shift = 0.0;
+        tab.tsume = 0.0;
         tab.tcy = None;
+        tab.wari = None;
         tab.vpal = None;
         let left = para.laid_out_left_indent();
         let pen = left + para.first_line_indent + marker.iter().map(|g| g.adv).sum::<f64>();
         let to_indent = left - pen;
         let stop_before_indent = para.tabs.iter().any(|t| t.position > pen + EPS && t.position < left - EPS);
-        tab.adv = if to_indent > EPS && !stop_before_indent { to_indent } else { tab_advance(&para.tabs, 0.0, pen, sg).0 };
+        tab.adv = if to_indent > EPS && !stop_before_indent { to_indent } else { tab_advance(&para.tabs, 0.0, pen, sg.iter()).0 };
         if para.list.is_some_and(|l| l.align == ListAlign::Right) {
             marker.insert(0, tab);
         } else {
@@ -354,7 +376,8 @@ impl Ctx<'_> {
         // Only the glyph right after an upright glyph can continue its cluster.
         let cluster = self.upright_cluster.take();
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
-        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}';
+        // Joiners and direction marks are format controls: no ink either, whatever glyph the font maps.
+        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}' || crate::justify::is_format_control(g.ch);
         // A colour glyph draws its art (COLR layers, an SVG document) or its image (a bitmap, or
         // COLR paints documents have no form for), not its outline; COLR, then SVG, then bitmaps.
         // Art in the text's colours takes the run's fill (black when it isn't a colour) and
@@ -605,6 +628,9 @@ impl Ctx<'_> {
             },
             width,
             width_start,
+            warichu: g.wari.map(|w| w.start),
+            warichu_line: g.wari.map_or(0.0, |w| w.across),
+            off_path: false,
         });
     }
 
@@ -634,11 +660,14 @@ impl Ctx<'_> {
         k.kern_shift = 0.0;
         k.aki_shift = 0.0;
         k.aki = 0.0;
+        k.tsume_shift = 0.0;
+        k.tsume = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
         k.inline = None;
         k.tcy = None;
+        k.wari = None;
         // Base letter's run: `g` may be a mark (last in the shaping cluster) with mark paint.
         if let Some(run) = self.run_index_at(g.byte) {
             k.run = run;
@@ -693,6 +722,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -704,6 +735,7 @@ mod emit_kashida_mark_last {
             xh: 20.0,
             ch: 'ب',
             tcy: None,
+            wari: None,
             inline: None,
             word_end: false,
             keeps_word: false,
@@ -758,6 +790,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -769,6 +803,7 @@ mod emit_kashida_mark_last {
             xh: 20.0,
             ch: '\u{064E}',
             tcy: None,
+            wari: None,
             inline: None,
             word_end: false,
             keeps_word: false,

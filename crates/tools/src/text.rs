@@ -134,7 +134,7 @@ fn text_hash(s: &str) -> u64 {
     h.finish()
 }
 
-/// The edited text's layout, keyed by the font database's generation and the text.
+/// The edited text's layout, keyed by [`vectorcraft_text::layout_inputs`] and the text.
 type CachedLayout = ((u64, TextObject), Arc<TextLayout>);
 
 /// Process-global Type-tool edit-session counter: the IME target's replacement epoch.
@@ -281,9 +281,9 @@ impl TypeTool {
     }
 
     /// Layout of `t`, cached by content (overlays run every frame) and by the fonts available (the
-    /// web build adds fonts after startup).
+    /// web build adds fonts after startup) and the hyphenation exceptions.
     fn layout(&self, t: &TextObject) -> Arc<TextLayout> {
-        let fonts = FontDb::global().generation();
+        let fonts = vectorcraft_text::layout_inputs();
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(((g, k), l)) = c.as_ref()
             && *g == fonts

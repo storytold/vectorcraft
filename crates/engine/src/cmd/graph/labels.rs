@@ -73,6 +73,44 @@ pub(super) fn label_anti_alias(styles: &vectorcraft_doc::LabelStyles, role: Role
     kept.unwrap_or_default()
 }
 
+/// The object rows labels of `role` keep, if any.
+fn kept_rows(styles: &vectorcraft_doc::LabelStyles, role: Role) -> Option<&vectorcraft_doc::LabelRows> {
+    match role {
+        Role::Value => styles.values_rows.as_ref(),
+        Role::Category => styles.categories_rows.as_ref(),
+        Role::Legend => styles.legend_rows.as_ref(),
+    }
+}
+
+/// Give label `n` the object rows `kept` keeps: a fill row and a stroke row for the kept paints, in their kept order and
+/// place relative to the characters, and the object opacity and blend mode. An opacity read from a file is held to 0..1
+/// and a weight to 0..1000 pt; one that is not a number is left out (a stroke then takes 1 pt).
+fn apply_label_rows(n: &mut Node, kept: &vectorcraft_doc::LabelRows) {
+    use vectorcraft_doc::{AppearanceItem, FillLayer, StrokeLayer};
+    let rows = &kept.paint;
+    let unit = |o: Option<f32>| o.filter(|o| o.is_finite()).map(|o| o.clamp(0.0, 1.0));
+    let fill = rows.fill.as_ref().map(|paint| {
+        let mut f = FillLayer::new(paint.clone());
+        f.opacity = unit(rows.fill_opacity).unwrap_or(1.0);
+        f.blend = rows.fill_blend.unwrap_or_default();
+        AppearanceItem::Fill(f)
+    });
+    let stroke = rows.stroke.as_ref().map(|paint| {
+        let width = rows.stroke_width.filter(|w| w.is_finite()).map_or(1.0, |w| w.clamp(0.0, 1000.0));
+        let mut st = StrokeLayer::new(paint.clone(), width);
+        st.opacity = unit(rows.stroke_opacity).unwrap_or(1.0);
+        st.blend = rows.stroke_blend.unwrap_or_default();
+        AppearanceItem::Stroke(st)
+    });
+    let items: Vec<AppearanceItem> = if kept.stroke_under { [stroke, fill] } else { [fill, stroke] }.into_iter().flatten().collect();
+    let mut ap = Appearance::clone(&n.appearance);
+    ap.items = items;
+    ap.set_contents_at(usize::from(kept.below.unwrap_or(0)));
+    n.appearance = ap.into();
+    n.opacity = unit(rows.opacity).unwrap_or(1.0);
+    n.blend = rows.blend.unwrap_or_default();
+}
+
 /// How big labels of `role` are set: a kept style's size, else 9 pt. The labels' spacing follows it.
 pub(super) fn label_size(styles: &vectorcraft_doc::LabelStyles, role: Role) -> f64 {
     label_style(styles, role).size
@@ -90,7 +128,15 @@ impl Gen<'_> {
     }
     pub(super) fn text(&mut self, role: Role, at: Point, s: &str, justify: Justify) -> Arc<Node> {
         let t = self.text_object(role, at, s, justify);
-        Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
+        self.label_node(role, t)
+    }
+    /// Label text `t` of `role` as a node, with the object rows its kind keeps.
+    fn label_node(&mut self, role: Role, t: TextObject) -> Arc<Node> {
+        let mut n = Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t)));
+        if let Some(rows) = kept_rows(self.styles, role) {
+            apply_label_rows(&mut n, rows);
+        }
+        Arc::new(n)
     }
     /// Label `s` of `role` set at `at` and laid out, not yet in the document.
     fn text_object(&self, role: Role, at: Point, s: &str, justify: Justify) -> TextObject {
@@ -103,25 +149,27 @@ impl Gen<'_> {
         refresh_bounds(&mut t);
         t
     }
-    /// A category or series label: a `|` in it starts a new line (Add graph labels). `middle`: the lines are centred
-    /// on `at` (labels beside an axis or in a wedge) instead of running down from it.
+    /// A category or series label: a `|` in it starts a new line (Add graph labels), as does a line break a quoted CSV
+    /// cell keeps. `middle`: the lines are centred on `at` (labels beside an axis or in a wedge) instead of running down
+    /// from it.
     pub(super) fn label(&mut self, role: Role, at: Point, s: &str, justify: Justify, middle: bool) -> Arc<Node> {
-        let lines = s.split('|').count();
+        let text = s.replace('|', "\n");
+        let lines = text.split('\n').count();
         // Default leading puts the first and last baselines this far above and below `at`.
         let half = (lines - 1) as f64 * label_size(self.styles, role) * 1.2 / 2.0;
         let start = if middle { Point::new(at.x, at.y - half) } else { at };
-        let mut t = self.text_object(role, start, &s.replace('|', "\n"), justify);
+        let mut t = self.text_object(role, start, &text, justify);
         // Kept leading or paragraph spacing moves the lines: put the middle of the first and last baselines on `at`. An
         // empty line has no baseline: an empty first or last line leaves the label where the default leading puts it.
         if middle && kept_para(self.styles, role).is_some() {
             let ys: Vec<f64> = t.baselines().map(|(a, _)| a.y).collect();
-            let ends_set = s.split('|').next().is_some_and(|l| !l.is_empty()) && s.split('|').next_back().is_some_and(|l| !l.is_empty());
-            let set = s.split('|').filter(|l| !l.is_empty()).count();
+            let ends_set = text.split('\n').next().is_some_and(|l| !l.is_empty()) && text.split('\n').next_back().is_some_and(|l| !l.is_empty());
+            let set = text.split('\n').filter(|l| !l.is_empty()).count();
             if let (Some(first), Some(last), true) = (ys.first(), ys.last(), ends_set && ys.len() == set) {
                 t.xf = Affine::translate((0.0, half - (first + last) / 2.0)) * t.xf;
             }
         }
-        Arc::new(Node::new(self.d.alloc_id(), NodeKind::Text(Box::new(t))))
+        self.label_node(role, t)
     }
     pub(super) fn group(&mut self, name: &str, children: Vec<Arc<Node>>) -> Arc<Node> {
         let mut g = Node::group(self.d.alloc_id(), children);

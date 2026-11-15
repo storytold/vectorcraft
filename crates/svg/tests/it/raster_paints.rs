@@ -214,6 +214,39 @@ fn perceptual_gradients_are_images_and_classic_ones_stay_vector() {
     assert!(!svg.contains("<image ") && svg.matches("<linearGradient").count() == 2, "{svg}");
 }
 
+/// SVG gradients mix linearly: a fill and a stroke mixed around the hue wheel are written as
+/// images of the gradient, as the canvas mixes them. Red to blue passes through green one way
+/// around the wheel and through magenta the other way.
+#[test]
+fn hue_wheel_gradients_are_images_of_the_turn_around_the_wheel() {
+    use vectorcraft_color::GradientMethod;
+    let shape = shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 140.0));
+    for (method, middle) in [(GradientMethod::HueCounterclockwise, [0, 255, 0]), (GradientMethod::HueClockwise, [255, 0, 255])] {
+        let stops = vec![
+            vectorcraft_color::GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)),
+            vectorcraft_color::GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ];
+        let mut g = Gradient::new(GradientKind::Linear, stops);
+        g.method = method;
+        let p = Paint::Gradient(Box::new(GradientPaint::new(g)));
+        let mut d = doc_with(Node::path(NodeId(0), shape.clone(), Appearance::basic(p.clone(), p, 4.0)));
+        d.raster_effects_ppi = 144.0;
+        let o = export_full(&d, &ExportOptions::default(), None);
+        let svg = &o.svg;
+        assert_eq!(svg.matches("<image ").count(), 2, "{method:?}: the fill and the stroke: {svg}");
+        assert!(!svg.contains("<linearGradient"), "{method:?}: {svg}");
+        assert!(o.warnings.iter().any(|w| w.contains("drawn as pixels are written as images")), "{method:?}: {:?}", o.warnings);
+        let png = png_of(svg);
+        assert_eq!(png.dimensions(), (320, 240));
+        let [r, gr, b, a] = png.get_pixel(160, 120).0.map(i32::from);
+        assert_eq!(a, 255);
+        let off = [r, gr, b].iter().zip(middle).map(|(x, y)| (x - y).abs()).max().unwrap_or(0);
+        assert!(off <= 4, "{method:?}: the middle is {:?}, not {middle:?}", [r, gr, b]);
+        let back = import(svg).unwrap();
+        assert_similar(&render_artboard(&d), &render_artboard(&back), 12.0, 0.01);
+    }
+}
+
 /// A dithered Perceptual gradient: its fill is an image of the perceptual mix with dither's noise
 /// (within a colour level or so of the mix, and not the undithered pixels), its stroke an image of
 /// the perceptual mix without noise (dither applies to fills only).

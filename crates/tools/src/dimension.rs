@@ -240,16 +240,24 @@ fn points_source(cx: &ToolContext, (a, ra): (Point, &Option<PointRef>), (b, rb):
 impl DimensionTool {
     /// Where a Linear pick at `p` lands: on the nearest anchor of any path, within reach (kept as
     /// a link to its path); else where Smart Guides put it (another object's anchor or centre, in
-    /// line with one, or for the second point on a construction guide through the first), its
-    /// guides showing; else on the closest point of the line under the pointer; else `p` itself.
+    /// line with one, or for the second point square to a segment or grazing a curve from the
+    /// first with Snap to Perpendicular or Snap to Tangent on, or on a construction guide through
+    /// a first point picked on an anchor), its guides showing; else on the closest point of the
+    /// line under the pointer; else `p` itself. A first point not on an anchor has no
+    /// construction guides through it.
+    /// A point the guides leave where the pointer is (right on a guide line) stays there, and with
+    /// Snap to Pixel or Snap to Grid on a point stays where they place it.
     fn snap_linear(&mut self, cx: &ToolContext, p: Point) -> (Point, Option<PointRef>) {
-        let leave = self.points.last().map(|(first, _)| crate::guides::Leave::segment(cx, *first, false));
+        let leave = self.points.last().map(|(first, anchor)| match anchor {
+            Some(_) => crate::guides::Leave::segment(cx, *first, false),
+            None => crate::guides::Leave::contact(*first),
+        });
         let guided = self.snap.hover(cx, p, &[], leave.as_ref());
         if let Some((point, reference)) = anchor_under(cx, p) {
             self.snap.clear();
             return (point, Some(reference));
         }
-        if guided.distance(p) > 1e-9 {
+        if guided.distance(p) > 1e-9 || !self.snap.guides().is_empty() || cx.snap_to_pixel || cx.snap_to_grid {
             return (guided, None);
         }
         // Not on an anchor or a guide: snap to the closest point of the line (#2432).
@@ -342,8 +350,17 @@ impl DimensionTool {
                 _ => Orientation::Aligned,
             };
         }
-        d.place(p);
+        // A dimension dragged out from art starts with placeholder points. Read the art's points
+        // before placing the dimension at the pointer. Clear the offset first: an out-of-range
+        // offset from the last pointer position fails the read.
+        if !matches!(d.mode, DimensionMode::Radius | DimensionMode::Diameter) {
+            d.offset = 0.0;
+        }
         if d.resolve(cx.doc).is_err() {
+            return vec![];
+        }
+        d.place(p);
+        if d.validate().is_err() {
             return vec![];
         }
         let mut actions = vec![];
@@ -673,6 +690,53 @@ mod tests {
         assert!(matches!(placed.last(), Some(Action::Commit)), "{placed:?}");
     }
 
+    /// A pointer position too far away to place the dimension shows no preview, and the preview
+    /// comes back where the pointer returns.
+    #[test]
+    fn placement_recovers_after_a_position_out_of_range() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        for (x, y) in [(400.0, 400.0), (450.0, 400.0)] {
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y));
+        }
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 420.0, 3.0e6)).is_empty());
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Move, 420.0, 450.0));
+        let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+        assert_eq!(params["offset"], json!(50.0));
+    }
+
+    /// Dragging out from a segment previews the dimension at the pointer from the first drag on.
+    #[test]
+    fn the_first_preview_of_a_segment_drag_is_at_the_pointer() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 100.0));
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 150.0, 60.0));
+        let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+        assert_eq!(params["offset"], json!(-40.0), "40 pt above the top edge");
+    }
+
+    /// Dragging out from a corner previews the angle at the pointer's distance from the corner
+    /// from the first drag on.
+    #[test]
+    fn the_first_preview_of_a_corner_drag_is_at_the_pointer() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        t.set_option("mode", &json!("angular"));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 140.0));
+        let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+        assert_eq!(params["vertex"], json!([100.0, 100.0]));
+        assert_eq!(params["offset"], json!(50.0), "50 pt from the corner");
+    }
+
     /// A Linear press on an anchor picks that anchor even when the pointer moves a few pixels
     /// before the release: it does not drag out the dimension of a segment that ends there. Both
     /// picks keep their links to the path, so the dimension measures between the two anchors.
@@ -842,6 +906,136 @@ mod tests {
                 assert_eq!(at(a, b, p), Aligned, "{a:?} to {b:?}, pointer at {p:?}");
             }
         }
+    }
+
+    /// A point that Smart Guides leave where the pointer already is (the pointer right in line
+    /// with a target) stays on the guide the overlays show. It does not move to the nearest point
+    /// of a segment within the pick's reach. Off the guides, a point near a segment still lands
+    /// on it, also straight below the first point: the second point has no construction guide
+    /// through a first point that is not on an anchor.
+    #[test]
+    fn a_point_on_a_guide_stays_on_the_guide() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let click = |t: &mut DimensionTool, x: f64, y: f64| {
+            t.pointer(&c, &PointerEvent::new(PointerKind::Move, x, y));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y));
+        };
+        let mut t = DimensionTool::default();
+        // In line with the rectangle's center, 6 units right of its right edge.
+        assert_eq!(t.snap_linear(&c, Point::new(206.0, 150.0)), (Point::new(206.0, 150.0), None));
+        assert!(!t.snap.guides().is_empty());
+        // Off the guides, beside the edge: the closest point of the edge.
+        let (on_edge, reference) = t.snap_linear(&c, Point::new(206.0, 170.5));
+        assert!(on_edge.distance(Point::new(200.0, 170.5)) < 1e-4 && reference.is_none(), "{on_edge:?}");
+        // The first point, above the rectangle, then straight down past the right edge: no
+        // vertical guide through the first point holds the second, so beside the edge it lands
+        // on the edge, and in line with the center it stays in line.
+        click(&mut t, 206.0, 50.0);
+        assert_eq!(t.points, vec![(Point::new(206.0, 50.0), None)]);
+        for y in [170.5, 190.0] {
+            let (q, reference) = t.snap_linear(&c, Point::new(206.0, y));
+            assert!(q.distance(Point::new(200.0, y)) < 1e-4 && reference.is_none(), "beside the edge at y = {y}: {q:?}");
+        }
+        assert_eq!(t.snap_linear(&c, Point::new(207.0, 300.0)), (Point::new(207.0, 300.0), None), "away from the art");
+        assert!(t.snap.guides().is_empty());
+        assert_eq!(t.snap_linear(&c, Point::new(206.0, 150.0)), (Point::new(206.0, 150.0), None));
+        assert!(!t.snap.guides().is_empty());
+        click(&mut t, 206.0, 150.0);
+        let dim = t.pending.as_ref().expect("both points were picked");
+        assert_eq!((dim.a, dim.b), (Point::new(206.0, 50.0), Point::new(206.0, 150.0)));
+        // The second point, off the edge, is held against the rectangle's anchors.
+        let Some(DimensionSource::Points { free_b: Some(free), .. }) = &dim.source else { panic!("{:?}", dim.source) };
+        assert!(matches!(free, FreePoint::Anchors { .. }), "{free:?}");
+        // A pointer already on a gridline crossing or on a whole pixel stays there too, and one
+        // off the grid lands on the grid, not on the edge.
+        let grid = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+        let step = grid.grid_step();
+        let on_grid = Point::new((200.0 / step).ceil() * step, (170.0 / step).round() * step);
+        assert!(on_grid.x > 200.0 + 1e-6 && on_grid.x - 200.0 < 8.0, "{on_grid:?} is off the edge, within the pick's reach");
+        assert_eq!(DimensionTool::default().snap_linear(&grid, on_grid), (on_grid, None));
+        let off_grid = on_grid + Vec2::new(-step * 0.3, 0.2);
+        assert_eq!(DimensionTool::default().snap_linear(&grid, off_grid), (on_grid, None));
+        let pixel = ToolContext { snap_to_pixel: true, ..cx(&d, &s, &p) };
+        assert_eq!(DimensionTool::default().snap_linear(&pixel, Point::new(206.0, 170.0)), (Point::new(206.0, 170.0), None));
+    }
+
+    /// After a first point that is not on an anchor, the second point still lands where the line
+    /// from the first point meets a slanted segment square or grazes a curve, with the
+    /// "perpendicular" or "tangent" label, at places no construction guide through the first
+    /// point reaches. With Snap to Perpendicular and Snap to Tangent off it stays at the pointer.
+    #[test]
+    fn the_second_point_lands_square_to_a_segment_or_grazing_a_curve() {
+        use vectorcraft_doc::Appearance;
+        use vectorcraft_geom::{Rect, shapes};
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let (line, circle) = (d.alloc_id(), d.alloc_id());
+        let slanted = shapes::line(Point::new(300.0, 100.0), Point::new(400.0, 150.0));
+        d.insert(Some(l), 0, Node::path(line, slanted, Appearance::default_art())).unwrap();
+        let round = shapes::ellipse(Rect::new(420.0, 370.0, 480.0, 430.0));
+        d.insert(Some(l), 0, Node::path(circle, round, Appearance::default_art())).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let first = Point::new(300.0, 250.0);
+        let picked = |c: &ToolContext| {
+            let mut t = DimensionTool::default();
+            for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+                t.pointer(c, &PointerEvent::new(kind, first.x, first.y));
+            }
+            assert_eq!(t.points, vec![(first, None)]);
+            t
+        };
+        let labeled = |t: &DimensionTool, label: &str| t.snap.guides().iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == label));
+        // The foot of the perpendicular from (300, 250) to the line is (360, 130), along no
+        // construction guide angle from the first point.
+        let mut t = picked(&c);
+        let (q, reference) = t.snap_linear(&c, Point::new(361.0, 132.0));
+        assert!(q.distance(Point::new(360.0, 130.0)) < 1e-4 && reference.is_none(), "{q:?}");
+        assert!(labeled(&t, "perpendicular"), "{:?}", t.snap.guides());
+        // Where a line from the first point grazes the circle about (450, 400), radius 30.
+        let (center, radius) = (Point::new(450.0, 400.0), 30.0);
+        let away = first - center;
+        let angle = away.y.atan2(away.x) + (radius / away.hypot()).acos();
+        let touch = center + Vec2::new(angle.cos(), angle.sin()) * radius;
+        let (q, _) = t.snap_linear(&c, touch + Vec2::new(0.5, 0.5));
+        assert!((q.distance(center) - radius).abs() < 0.05, "{q:?} is on the circle");
+        assert!(((q - first).normalize().dot((q - center).normalize())).abs() < 0.01, "{q:?} grazes the circle");
+        assert!(labeled(&t, "tangent"), "{:?}", t.snap.guides());
+        // With both options off, the pointer near the foot lands on the closest point of the line
+        // instead.
+        let off = ToolContext { snap_perpendicular: false, snap_tangent: false, ..cx(&d, &s, &p) };
+        let mut t = picked(&off);
+        let (q, _) = t.snap_linear(&off, Point::new(361.0, 132.0));
+        assert!(q.distance(Point::new(360.0, 130.0)) > 0.5 && !labeled(&t, "perpendicular"), "{q:?}");
+    }
+
+    /// After a first point picked on an anchor, the second point still lands on the construction
+    /// guides through it.
+    #[test]
+    fn the_second_point_after_an_anchor_lands_on_construction_guides() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+            t.pointer(&c, &PointerEvent::new(kind, 200.0, 200.0));
+        }
+        assert_eq!(t.points, vec![(Point::new(200.0, 200.0), Some(PointRef { node: id, subpath: 0, anchor: 2 }))]);
+        // 1.5 units right and below the 45° guide up and to the right of the anchor.
+        let (q, reference) = t.snap_linear(&c, Point::new(331.0, 72.0));
+        assert!(q.distance(Point::new(329.5, 70.5)) < 1e-4 && reference.is_none(), "{q:?}");
+        assert!(!t.snap.guides().is_empty());
+        // The same offset from a first point off the anchors stays at the pointer.
+        let mut t = DimensionTool::default();
+        for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+            t.pointer(&c, &PointerEvent::new(kind, 240.0, 240.0));
+        }
+        assert_eq!(t.points, vec![(Point::new(240.0, 240.0), None)]);
+        assert_eq!(t.snap_linear(&c, Point::new(371.0, 112.0)), (Point::new(371.0, 112.0), None));
+        assert!(t.snap.guides().is_empty());
     }
 
     #[test]

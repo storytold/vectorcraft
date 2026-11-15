@@ -117,14 +117,15 @@ pub(super) struct TileEvents {
 }
 
 /// Clicks, double-clicks, tooltips and drag and drop of the tile or row `resp` of entry `e`
-/// (`items`: the panel's rows, `sel`: its selection, `list`: rows stack downwards). A drag from it
-/// starts a [`PanelDrag`] carrying the rows it moves; see [`tile_drop`] for drags held over it.
+/// (`items`: the panel's rows, `sel`: its selection, `list`: rows stack downwards). A primary-button
+/// drag from it starts a [`PanelDrag`] carrying the rows it moves; see [`tile_drop`] for drags held
+/// over it.
 pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String], list: bool, ev: &mut TileEvents) {
     let name = e.name();
     if matches!(e, Entry::Swatch { .. } | Entry::Folder(_)) && resp.double_clicked() {
         ev.edit = Some(e.clone());
     }
-    if resp.drag_started() {
+    if resp.drag_started_by(egui::PointerButton::Primary) {
         let with_sel = sel.iter().any(|s| s == name);
         let names = items
             .iter()

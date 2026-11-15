@@ -303,11 +303,11 @@ impl Importer {
             (None, id) => format!("'{id}'"),
         };
         let mask = g.mask().and_then(|m| self.opacity_mask(m, ts, &label));
-        // Blurs, shadows and glows become live effects (see [`fx`]); other filters become Effect ›
-        // SVG Filters effects that keep their XML.
+        // Blurs, shadows and glows become live effects (see [`fx`]); other filters, and blurs that
+        // differ by direction in the document, become Effect › SVG Filters effects that keep their XML.
         let effects = match g.filters() {
             [] => vec![],
-            filters => fx::effects(filters, ts, &self.blends).or_else(|| fx::kept(filters, ts, &self.filter_sources)).unwrap_or_else(|| {
+            filters => fx::imported(filters, ts, &self.blends, &self.filter_sources).map(|(fx, _)| fx).unwrap_or_else(|| {
                 // usvg wraps a filtered element in a group of its own: name the element then.
                 let on = match g.children() {
                     [usvg::Node::Group(_)] | [] => label.clone(),
@@ -383,7 +383,7 @@ impl Importer {
     /// (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>) cuts a filter's result at
     /// its region. A filter that didn't import (drawn without it) clips nothing.
     fn filter_regions(&mut self, g: &usvg::Group, ts: Affine, mut n: Node) -> Option<Node> {
-        if g.filters().is_empty() || fx::effects(g.filters(), ts, &self.blends).is_none() {
+        if g.filters().is_empty() || !fx::imported(g.filters(), ts, &self.blends, &self.filter_sources).is_some_and(|(_, live)| live) {
             return Some(n);
         }
         for f in g.filters() {
@@ -771,6 +771,12 @@ impl Importer {
             .ok()
             .and_then(|r| r.into_dimensions().ok())
             .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
+        // A turned CMYK image is stored as the CMYK TIFF of its inks, the size of the PNG usvg got.
+        let cmyk = self.files.stored(i.kind());
+        let (bytes, mime) = match &cmyk {
+            Some(tiff) => (tiff, "image/tiff"),
+            None => (bytes, mime),
+        };
         // A linked file keeps a preview; a placeholder is all a missing one has (its preview).
         let linked = self.files.linked(i.kind());
         let missing = linked.is_some_and(|l| l.missing);

@@ -1,7 +1,7 @@
 //! The Free Transform widget (#598): while the Free Transform tool is active, a small floating box
 //! at the canvas's top left with Constrain (as holding Shift: proportional scaling, moves and
-//! rotations by 45°) over the tool's three modes, Free Transform, Perspective Distort and Free
-//! Distort. It sets the tool's options through `tool.setOption` (`constrain`, `mode`), as agents
+//! rotations by 45°, and Free Distort corners kept on their diagonal) over the tool's three modes,
+//! Free Transform, Perspective Distort and Free Distort. It sets the tool's options through `tool.setOption` (`constrain`, `mode`), as agents
 //! do; the modifier keys keep working while dragging.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
@@ -61,8 +61,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &Ui, canvas: Rect) {
             .shadow(egui::epaint::Shadow { offset: [0, 2], blur: 8, spread: 0, color: Color32::from_black_alpha(60) })
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
-                // Constrain shapes only what the Free Transform mode does.
-                if button(ui, Glyph::Icon("link"), tl!("Constrain"), constrain, mode == "free") {
+                // Constrain shapes what the Free Transform and Free Distort modes do.
+                if button(ui, Glyph::Icon("link"), tl!("Constrain"), constrain, mode != "perspective") {
                     set = Some(("constrain", json!(!constrain)));
                 }
                 let (line, _) = ui.allocate_exact_size(vec2(BUTTON, 3.0), Sense::hover());
@@ -148,7 +148,8 @@ mod tests {
     }
 
     /// The widget shows with the Free Transform tool only; its buttons set the mode and Constrain
-    /// (inert in the distort modes); a corner dragged in Free Distort moves that corner alone.
+    /// (inert in Perspective Distort); a corner dragged in Free Distort moves that corner alone, and
+    /// with Constrain on it keeps to the diagonal through the opposite corner.
     #[test]
     fn the_widget_sets_the_mode_and_a_corner_drag_then_distorts() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -175,26 +176,50 @@ mod tests {
         assert_eq!(options(&app), ("free".into(), true), "Constrain on");
         click(&mut app, &ctx, at(3));
         assert_eq!(options(&app), ("distort".into(), true));
-        click(&mut app, &ctx, at(0));
-        assert_eq!(options(&app), ("distort".into(), true), "Constrain is inert in Free Distort");
         click(&mut app, &ctx, at(2));
         assert_eq!(options(&app).0, "perspective");
+        click(&mut app, &ctx, at(0));
+        assert_eq!(options(&app), ("perspective".into(), true), "Constrain is inert in Perspective Distort");
         click(&mut app, &ctx, at(3));
-        // Free Distort: the top-left corner dragged alone.
+        // Free Distort with Constrain on: the top-left corner dragged by (-20, -10) keeps to the
+        // diagonal (-100, -60), so it moves by 2,600 / 13,600 of it, about (-19.1, -11.5).
         let xf = Xf::new(canvas, app.view().unwrap());
-        let (from, to) = (xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(80.0, 90.0)));
         let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
-        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) / 2.0)]);
-        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
-        frame(&mut app, &ctx, vec![button(to, false)]);
-        frame(&mut app, &ctx, vec![]);
-        let st = app.session.active().unwrap();
-        let node = st.doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
-        let pts: Vec<Point> = node.path_data().unwrap().anchors().map(|(.., a)| a.p).collect();
-        let near = |q: Point| pts.iter().any(|p| p.distance(q) < 0.5);
+        let drag = |app: &mut VectorcraftApp, from: Point, to: Point| {
+            let (from, to) = (xf.to_screen(from), xf.to_screen(to));
+            frame(app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+            frame(app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) / 2.0)]);
+            frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
+            frame(app, &ctx, vec![button(to, false)]);
+            frame(app, &ctx, vec![]);
+        };
+        let corners = |app: &VectorcraftApp| -> Vec<Point> {
+            let st = app.session.active().unwrap();
+            let node = st.doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap();
+            node.path_data().unwrap().anchors().map(|(.., a)| a.p).collect()
+        };
+        let has = |pts: &[Point], q: Point| pts.iter().any(|p| p.distance(q) < 0.5);
+        drag(&mut app, Point::new(100.0, 100.0), Point::new(80.0, 90.0));
+        let k = (20.0 * 100.0 + 10.0 * 60.0) / (100.0f64 * 100.0 + 60.0 * 60.0);
+        let pts = corners(&app);
         assert!(
-            near(Point::new(80.0, 90.0)) && near(Point::new(200.0, 100.0)) && near(Point::new(200.0, 160.0)) && near(Point::new(100.0, 160.0)),
+            has(&pts, Point::new(100.0 - 100.0 * k, 100.0 - 60.0 * k))
+                && has(&pts, Point::new(200.0, 100.0))
+                && has(&pts, Point::new(200.0, 160.0))
+                && has(&pts, Point::new(100.0, 160.0)),
+            "{pts:?}"
+        );
+        app.run("edit.undo", json!({})).unwrap();
+        // Constrain off in Free Distort: the corner moves with the pointer.
+        click(&mut app, &ctx, at(0));
+        assert_eq!(options(&app), ("distort".into(), false), "Constrain works in Free Distort");
+        drag(&mut app, Point::new(100.0, 100.0), Point::new(80.0, 90.0));
+        let pts = corners(&app);
+        assert!(
+            has(&pts, Point::new(80.0, 90.0))
+                && has(&pts, Point::new(200.0, 100.0))
+                && has(&pts, Point::new(200.0, 160.0))
+                && has(&pts, Point::new(100.0, 160.0)),
             "{pts:?}"
         );
         assert_eq!(app.session.tool_id(), TOOL);

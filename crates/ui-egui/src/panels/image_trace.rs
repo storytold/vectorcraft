@@ -349,19 +349,25 @@ pub(crate) fn preset_dropdown(app: &mut VectorcraftApp, ui: &mut Ui, traced_with
 }
 
 /// The Control bar for one selected Image Trace object: its preset, view, the Image Trace panel
-/// and Expand. Whether it is one.
-pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
+/// and Expand. Whether it is one. Each label with its menu, and each button, shows only while the row
+/// has room for it and `reserve` after it, and the controls after one left out are left out too.
+pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool {
     let Some((preset, view)) = selected_trace(app) else { return false };
-    widgets::dim_label(ui, tl!("Preset:"));
-    preset_dropdown(app, ui, &preset, 150.0);
-    view_row(app, ui, view, 190.0);
-    if widgets::icon_button(ui, "image", tl!("Image Trace"), false, 24.0).clicked() {
+    let mut fit = crate::chrome::Fit::new(reserve);
+    if fit.room(ui, &[widgets::dim_label_width(ui, tl!("Preset:")), 150.0]) {
+        widgets::dim_label(ui, tl!("Preset:"));
+        preset_dropdown(app, ui, &preset, 150.0);
+    }
+    if fit.room(ui, &[widgets::dim_label_width(ui, tl!("View:")), 190.0]) {
+        view_row(app, ui, view, 190.0);
+    }
+    if fit.room(ui, &[24.0]) && widgets::icon_button(ui, "image", tl!("Image Trace"), false, 24.0).clicked() {
         open_settings(app);
     }
-    if widgets::flat_button(ui, tl!("Expand"), 64.0).clicked() {
+    if fit.room(ui, &[widgets::flat_button_fit_width(ui, tl!("Expand"), 64.0)]) && widgets::flat_button_fit(ui, tl!("Expand"), 64.0).clicked() {
         app.run("imageTrace.expand", json!({})).ok();
     }
-    ui.separator();
+    fit.separator(ui);
     true
 }
 

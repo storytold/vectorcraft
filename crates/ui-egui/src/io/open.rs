@@ -52,10 +52,12 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
         let load = if swatches { crate::panels::swatches::load_library } else { crate::panels::graphic_styles::load_library };
         return load(app, p).map(|_| Value::Null);
     }
-    // A PDF with several pages or a password asks first (the Import PDF dialog), and so does a
-    // DXF drawing (DXF Import Options).
+    // A PDF with several pages or a password asks first (the Import PDF dialog), and so do a DXF
+    // drawing (DXF Import Options) and a PSD file with several layers or with slices (PSD Import
+    // Options), unless `p` says how its layers come in.
     if crate::dialogs::import_pdf::offer(app, name, bytes, path.clone(), None)
         || crate::dialogs::dxf_import::offer(app, name, bytes, path.clone(), None)
+        || (p.get("layers").is_none() && crate::dialogs::psd_import::offer(app, name, bytes, path.clone(), None))
     {
         return Ok(Value::Null);
     }
@@ -140,19 +142,29 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
 /// what didn't come in as it was, and missing links are asked about. The status bar names the
 /// first of the notes that say reading the file left something out (the ones that make Save ask
 /// before writing over it), else the first note, and keeps the notes in that order for its hover.
+/// A line about the document's linked files comes before the notes ([`show_opened`]).
 pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
     let notes = open_notes(app, r);
-    if let Some(first) = notes.first() {
-        let status = opened_with_notes(notes.len(), first);
-        show_with_notes(app, status, notes);
-    }
-    crate::dialogs::missing_links::after_open(app, r);
+    crate::dialogs::missing_links::after_open(app, r, notes);
+}
+
+/// Show what an open says in the status bar: `notice`, a line about the document's linked files,
+/// then the open's `notes` ([`opened_with_notes`]), kept for the message's hover. Without either
+/// the status bar keeps its message.
+pub(crate) fn show_opened(app: &mut VectorcraftApp, notice: Option<String>, notes: Vec<String>) {
+    let status = match (notice, notes.first()) {
+        (Some(notice), Some(first)) => opened_after_notice(&notice, notes.len(), first),
+        (None, Some(first)) => opened_with_notes(notes.len(), first),
+        (Some(notice), None) => notice,
+        (None, None) => return,
+    };
+    show_with_notes(app, status, notes);
 }
 
 /// The notes of the open `r`, those of what reading the file left out (its document's
 /// `import_losses`) first, each group in the order the import gave them.
-fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
+pub(crate) fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
     let notes = notes_of(r);
     let index = r["index"].as_u64().and_then(|i| usize::try_from(i).ok());
     let losses = index.and_then(|i| app.session.documents().get(i)).map(|st| st.import_losses.as_slice()).unwrap_or_default();
@@ -164,6 +176,16 @@ fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
 /// The status bar's line for a document opened with `n` notes, the first of them `first`.
 pub(crate) fn opened_with_notes(n: usize, first: &str) -> String {
     crate::i18n::msg_n(n as u64, "Opened with {n} note: {first}", "Opened with {n} notes: {first}", &[("first", first)])
+}
+
+/// [`opened_with_notes`] after `notice`, a line about the document's linked files.
+pub(crate) fn opened_after_notice(notice: &str, n: usize, first: &str) -> String {
+    crate::i18n::msg_n(
+        n as u64,
+        "{notice}. Opened with {n} note: {first}",
+        "{notice}. Opened with {n} notes: {first}",
+        &[("notice", notice), ("first", first)],
+    )
 }
 
 /// A path from the open dialog, or "cancelled".
@@ -532,9 +554,11 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
     check_import_size(path, false)?;
     let mut bytes = read(app, path)?;
     if background && opens_as(path).is_none() {
-        // A PDF with several pages or a password, or a DXF drawing, asks first, as at once.
+        // A PDF with several pages or a password, a DXF drawing, or a PSD file with several layers
+        // or with slices asks first, as at once.
         if crate::dialogs::import_pdf::offer(app, path, &bytes, Some(path.to_string()), None)
             || crate::dialogs::dxf_import::offer(app, path, &bytes, Some(path.to_string()), None)
+            || (p.get("layers").is_none() && crate::dialogs::psd_import::offer(app, path, &bytes, Some(path.to_string()), None))
         {
             note_recent(app, path);
             return Ok(Value::Null);
@@ -564,8 +588,7 @@ pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Resu
     };
     let bytes = read(app, &path)?;
     let r = fileio::open_template(&mut app.session, &path, &bytes, Some(&path)).map_err(|e| e.to_string())?;
-    app.sync_views();
-    crate::dialogs::missing_links::after_open(app, &r);
+    opened(app, &r);
     Ok(r)
 }
 

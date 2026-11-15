@@ -10,13 +10,15 @@
 //!   Linux arboard reads no other formats). On Wayland, arboard's data-control
 //!   backend reads the compositor's clipboard (X11 through XWayland only sees what X11 apps
 //!   copied), falling back to X11 where the compositor lacks the protocol, and where there is no
-//!   X11 either (a Flatpak on GNOME) to the compositor's core protocol on the window's connection,
-//!   text only. A clipboard that can't be opened is tried again after a wait that grows to a
-//!   minute, not each time Paste asks. On Linux and the BSDs a read waits 2 s at most for the app
+//!   X11 either (a Flatpak on GNOME) to the compositor's core protocol on the window's connection:
+//!   Copy offers SVG (`image/svg+xml`), PNG (`image/png`) and text together, and Paste reads copied
+//!   files (`text/uri-list`), SVG, text and PNG. A clipboard that can't be opened is tried again
+//!   after a wait that grows to a minute, not each time Paste asks. On Linux and the BSDs a read waits 2 s at most for the app
 //!   that copied to send its data (a bitmap 10 s), and until that app answers, later reads fail at
 //!   once; a paste then waits for that read's answer off the UI thread.
 //! - Everywhere: files copied in a file manager paste as the first one that is art (SVG, PDF, EPS,
-//!   a metafile or a bitmap), before the clipboard's other formats (the files' paths as text).
+//!   a metafile or a bitmap), before the clipboard's other formats (the files' paths as text). A
+//!   file of more than 64 MiB is skipped before it is read.
 
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
@@ -24,8 +26,8 @@ use std::path::PathBuf;
 use vectorcraft_engine::cmd::clipboard::{BITMAP, EPS, FILE_HEAD, Flavour, PDF, PNG, SVG, TEXT, file_flavour};
 use vectorcraft_ui_egui::{ClipboardRead, SystemClipboard};
 
-/// This platform's system clipboard. On Linux, `window`'s Wayland connection carries text where
-/// arboard can't open (GNOME has no data-control protocol, a Flatpak there no X11).
+/// This platform's system clipboard. On Linux, `window`'s Wayland connection carries text, SVG and
+/// PNG where arboard can't open (GNOME has no data-control protocol, a Flatpak there no X11).
 pub fn system_clipboard(window: Option<std::sync::Arc<winit::window::Window>>) -> Box<dyn SystemClipboard> {
     #[cfg(windows)]
     let cb = {
@@ -143,9 +145,18 @@ fn dib_image(dib: &[u8]) -> Option<image::RgbaImage> {
     Some(img)
 }
 
+/// The most bytes a paste takes from another app (untrusted data), VectorCraft's own limit: a copied
+/// file of more is skipped, and on Wayland a read of more fails.
+const MAX_BYTES: usize = 64 << 20;
+
 /// The first of `paths` (files copied in a file manager) that pastes as one of `mimes`, read
-/// whole. Only its first bytes are read to tell, so other files cost little.
+/// whole, at most [`MAX_BYTES`]. Only its first bytes are read to tell, so other files cost little.
 fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
+    copied_file_within(paths, mimes, MAX_BYTES)
+}
+
+/// [`copied_file`] with a file of more than `limit` bytes skipped.
+fn copied_file_within(paths: Vec<PathBuf>, mimes: &[&'static str], limit: usize) -> Option<Flavour> {
     paths.into_iter().find_map(|path| {
         // text/uri-list lines end in CRLF (RFC 2483), but arboard splits them on LF only.
         let path = match path.to_str() {
@@ -163,12 +174,106 @@ fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
         if !std::fs::metadata(&path).ok()?.is_file() {
             return None;
         }
+        let mut file = std::fs::File::open(&path).ok()?;
+        // The file opened may not be the one looked at: its size is checked before any read.
+        let meta = file.metadata().ok()?;
+        if !meta.is_file() || meta.len() > limit as u64 {
+            return None;
+        }
         let mut head = Vec::with_capacity(FILE_HEAD);
-        std::fs::File::open(&path).ok()?.take(FILE_HEAD as u64).read_to_end(&mut head).ok()?;
+        (&mut file).take(FILE_HEAD as u64).read_to_end(&mut head).ok()?;
         let mime = file_flavour(&path.to_string_lossy(), &head, mimes)?;
-        let data = std::fs::read(&path).ok()?;
+        let data = read_rest(file, head, limit)?;
         (!data.is_empty()).then_some(Flavour { mime, data })
     })
+}
+
+/// `data` (the first bytes read of `file`) followed by the rest of `file`, or `None` when they come
+/// to more than `limit` bytes, as when the file grew after its size was checked. At most one byte
+/// past `limit` is read.
+fn read_rest(file: impl Read, mut data: Vec<u8>, limit: usize) -> Option<Vec<u8>> {
+    let more = (limit + 1).saturating_sub(data.len());
+    file.take(more as u64).read_to_end(&mut data).ok()?;
+    (data.len() <= limit).then_some(data)
+}
+
+/// The most URIs a copied file list may hold, VectorCraft's own limit: a longer list (untrusted
+/// data) names no files.
+const MAX_URIS: usize = 1024;
+
+/// The local files a `text/uri-list` names, in order ([`file_uri_path`]). Each line holds one URI
+/// and a line that starts with `#` is a comment (RFC 2483, section 5); lines end in CRLF or LF.
+/// Lines that are not UTF-8 and URIs that don't name a local file are skipped. A list of more than
+/// [`MAX_URIS`] URIs names none.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn uri_list_paths(list: &[u8]) -> Vec<PathBuf> {
+    let uris: Vec<&[u8]> = list
+        .split(|&b| b == b'\n')
+        .map(|line| line.strip_suffix(b"\r").unwrap_or(line))
+        .filter(|line| !line.is_empty() && !line.starts_with(b"#"))
+        .take(MAX_URIS + 1)
+        .collect();
+    if uris.len() > MAX_URIS {
+        return vec![];
+    }
+    uris.into_iter().filter_map(|uri| file_uri_path(std::str::from_utf8(uri).ok()?)).collect()
+}
+
+/// The local files GNOME Files' `x-special/gnome-copied-files` names: a first line of `copy` or
+/// `cut`, then one URI a line, read as [`uri_list_paths`] reads them. A paste places the files'
+/// art either way and leaves the files where they are. No files when the first line is neither.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn gnome_copied_paths(list: &[u8]) -> Vec<PathBuf> {
+    let (action, uris) = match list.iter().position(|&b| b == b'\n') {
+        Some(end) => (list.get(..end).unwrap_or_default(), list.get(end + 1..).unwrap_or_default()),
+        None => (list, &[][..]),
+    };
+    match action.strip_suffix(b"\r").unwrap_or(action) {
+        b"copy" | b"cut" => uri_list_paths(uris),
+        _ => vec![],
+    }
+}
+
+/// The absolute path a `file:` URI names on this machine: `file:/path`, `file:///path` or
+/// `file://localhost/path` (RFC 8089, section 2; scheme and host in any letter case), its percent
+/// escapes decoded once (RFC 3986, section 2.1) and a fragment (`#…`) left out. None for another
+/// scheme, another host, a relative path, a query (`?…`), a bad escape, an escaped NUL or a path
+/// that is not UTF-8 once decoded.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn file_uri_path(uri: &str) -> Option<PathBuf> {
+    let uri = uri.trim_matches(|c: char| c.is_ascii_whitespace());
+    let uri = uri.split_once('#').map_or(uri, |(before, _)| before);
+    if uri.contains('?') {
+        return None;
+    }
+    let scheme = uri.get(..5).filter(|s| s.eq_ignore_ascii_case("file:"))?;
+    let rest = uri.get(scheme.len()..)?;
+    let path = match rest.strip_prefix("//") {
+        Some(authority_and_path) => {
+            let slash = authority_and_path.find('/')?;
+            let host = authority_and_path.get(..slash)?;
+            if !host.is_empty() && !host.eq_ignore_ascii_case("localhost") {
+                return None;
+            }
+            authority_and_path.get(slash..)?
+        }
+        None => rest.starts_with('/').then_some(rest)?,
+    };
+    let mut bytes = Vec::with_capacity(path.len());
+    let mut it = path.bytes();
+    while let Some(b) = it.next() {
+        if b == b'%' {
+            let hex = |d: Option<u8>| char::from(d?).to_digit(16);
+            let (hi, lo) = (hex(it.next())?, hex(it.next())?);
+            bytes.push(u8::try_from(hi * 16 + lo).ok()?);
+        } else {
+            bytes.push(b);
+        }
+    }
+    if bytes.contains(&0) {
+        return None;
+    }
+    String::from_utf8(bytes).ok().map(PathBuf::from)
 }
 
 #[cfg(windows)]
@@ -629,6 +734,10 @@ mod portable {
     enum Ours {
         Text(String),
         Image(usize, usize),
+        /// A Copy through the Wayland core protocol, whose data source tells whether the
+        /// clipboard still holds it.
+        #[cfg(target_os = "linux")]
+        Source,
     }
 
     /// A read of arboard's clipboard.
@@ -858,18 +967,14 @@ mod portable {
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
     impl Late {
         /// What a paste of one of `mimes` takes once the answer comes ([`Unanswered::paste`]). The
-        /// core protocol's text is waited for as long, until [`IMAGE_WAIT`] after its read was
-        /// sent, then read again, and pasted unless it is empty, what `ours` put on the clipboard,
-        /// or doesn't come.
+        /// core protocol's answer is waited for as long, until [`IMAGE_WAIT`] after its read was
+        /// sent; then the clipboard is read again and pasted as at once, unless it holds the Copy
+        /// made here ([`super::wayland::Unanswered::paste`]).
         fn paste(self, ours: Option<&Ours>, mimes: &[&'static str]) -> Option<Flavour> {
             match self {
                 Self::Arboard(unanswered) => unanswered.paste(ours, mimes),
                 #[cfg(target_os = "linux")]
-                Self::Wayland(unanswered) => {
-                    let text = unanswered.text(IMAGE_WAIT).ok().filter(|t| !t.is_empty())?;
-                    let held = matches!(ours, Some(Ours::Text(t)) if *t == text);
-                    (!held).then(|| Flavour { mime: TEXT, data: text.into_bytes() })
-                }
+                Self::Wayland(unanswered) => unanswered.paste(mimes, IMAGE_WAIT),
             }
         }
     }
@@ -962,14 +1067,15 @@ mod portable {
     /// An open clipboard connection.
     enum Backend {
         Arboard(Arboard),
-        /// The compositor's core data-device protocol on the window's connection (text only).
+        /// The compositor's core data-device protocol on the window's connection.
         #[cfg(target_os = "linux")]
-        Wayland(super::wayland::TextClipboard),
+        Wayland(super::wayland::DataClipboard),
     }
 
-    /// What a write of a picture says where the clipboard carries text only.
+    /// What a bitmap read or write says on the core protocol, which carries pictures as PNG data
+    /// only ([`Clipboard::write`], [`Clipboard::read_now_or_later`]).
     #[cfg(target_os = "linux")]
-    const TEXT_ONLY: &str = "this clipboard carries text only";
+    const PNG_ONLY: &str = "this clipboard carries pictures as PNG data";
 
     impl Backend {
         /// arboard (Wayland data-control, else X11), else the core protocol on `window`'s
@@ -979,7 +1085,10 @@ mod portable {
                 || Arboard::open().map(Self::Arboard),
                 || {
                     #[cfg(target_os = "linux")]
-                    return window.and_then(|w| super::wayland::TextClipboard::new(w.clone())).map(Self::Wayland).ok_or("not a Wayland window");
+                    return window
+                        .and_then(|w| super::wayland::DataClipboard::new(w.clone()))
+                        .map(Self::Wayland)
+                        .ok_or("not a Wayland window with a seat and a data-device manager");
                     #[cfg(not(target_os = "linux"))]
                     {
                         let _ = window;
@@ -993,7 +1102,7 @@ mod portable {
             match self {
                 Self::Arboard(_) => "arboard",
                 #[cfg(target_os = "linux")]
-                Self::Wayland(_) => "the Wayland core protocol (text only)",
+                Self::Wayland(_) => "the Wayland core protocol",
             }
         }
 
@@ -1001,7 +1110,7 @@ mod portable {
             match self {
                 Self::Arboard(cb) => cb.read(Request::Text).text(),
                 #[cfg(target_os = "linux")]
-                Self::Wayland(cb) => cb.get_text(),
+                Self::Wayland(cb) => cb.text(),
             }
         }
 
@@ -1009,10 +1118,17 @@ mod portable {
             match self {
                 Self::Arboard(cb) => cb.cb.set_text(text).map_err(|e| e.to_string()),
                 #[cfg(target_os = "linux")]
-                Self::Wayland(cb) => {
-                    cb.set_text(text);
-                    Ok(())
-                }
+                Self::Wayland(cb) => cb.copy(&[Flavour { mime: TEXT, data: text.as_bytes().to_vec() }]),
+            }
+        }
+
+        /// Whether the clipboard holds the core protocol's last Copy made here (never for arboard,
+        /// whose writes are checked by what they wrote).
+        #[cfg(target_os = "linux")]
+        fn holds_source(&mut self) -> bool {
+            match self {
+                Self::Arboard(_) => false,
+                Self::Wayland(cb) => cb.holds_ours(),
             }
         }
 
@@ -1025,7 +1141,7 @@ mod portable {
                 #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")))]
                 Self::Arboard(cb) => cb.read(Request::Image).image(),
                 #[cfg(target_os = "linux")]
-                Self::Wayland(_) => Err(TEXT_ONLY.into()),
+                Self::Wayland(_) => Err(PNG_ONLY.into()),
             }
         }
 
@@ -1041,7 +1157,7 @@ mod portable {
                     Ok(Box::new(move || Ok(image)))
                 }
                 #[cfg(target_os = "linux")]
-                Self::Wayland(_) => Err(TEXT_ONLY.into()),
+                Self::Wayland(_) => Err(PNG_ONLY.into()),
             }
         }
 
@@ -1049,7 +1165,7 @@ mod portable {
             match self {
                 Self::Arboard(cb) => cb.cb.set_image(img).map_err(|e| e.to_string()),
                 #[cfg(target_os = "linux")]
-                Self::Wayland(_) => Err(TEXT_ONLY.into()),
+                Self::Wayland(_) => Err(PNG_ONLY.into()),
             }
         }
 
@@ -1057,15 +1173,12 @@ mod portable {
             match self {
                 Self::Arboard(cb) => cb.cb.clear().map_err(|e| e.to_string()),
                 #[cfg(target_os = "linux")]
-                Self::Wayland(cb) => {
-                    cb.set_text("");
-                    Ok(())
-                }
+                Self::Wayland(cb) => cb.copy(&[]),
             }
         }
 
         /// The read that got no answer in its wait, when a paste of one of `mimes` can take its
-        /// answer ([`Arboard::unanswered`], [`TextReads::unanswered`](super::wayland::TextReads::unanswered)).
+        /// answer ([`Arboard::unanswered`], [`Reads::unanswered`](super::wayland::Reads::unanswered)).
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
         fn unanswered(&mut self, mimes: &[&'static str]) -> Option<Late> {
             match self {
@@ -1085,7 +1198,9 @@ mod portable {
             }
         }
 
-        /// Files copied in a file manager (none where the backend can't read a file list).
+        /// Files copied in a file manager, read through arboard. The Wayland core protocol reads
+        /// its file list with the rest of a paste
+        /// ([`DataClipboard::read`](super::wayland::DataClipboard::read)).
         fn file_list(&mut self) -> Vec<PathBuf> {
             match self {
                 Self::Arboard(cb) => cb.read(Request::Files).files(),
@@ -1223,9 +1338,16 @@ mod portable {
             Some(ClipboardRead::Later(Box::new(move || unanswered.paste(ours.as_ref(), &mimes))))
         }
 
-        /// Text and copied files are read here, and work that reads arboard's image comes back.
+        /// Text and copied files are read here, and work that reads arboard's image comes back. On
+        /// the Wayland core protocol the copied files, else the first of `mimes` the clipboard
+        /// offers, is read: text here, file lists, SVG and PNG by the work that comes back, which
+        /// waits [`IMAGE_WAIT`] at most.
         fn read_now_or_later(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
             let cb = self.cb(Asker::User).ok()?;
+            #[cfg(target_os = "linux")]
+            if let Backend::Wayland(cb) = cb {
+                return cb.read(mimes, IMAGE_WAIT);
+            }
             if let Some(f) = copied_file(cb.file_list(), mimes) {
                 return Some(ClipboardRead::Now(f));
             }
@@ -1247,13 +1369,23 @@ mod portable {
     }
 
     impl SystemClipboard for Clipboard {
+        /// arboard takes the text, else the PNG as a bitmap; the Wayland core protocol offers the
+        /// SVG, PNG and text together ([`DataClipboard::copy`](super::wayland::DataClipboard::copy)).
         fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
+            let cb = self.cb(Asker::User)?;
+            #[cfg(target_os = "linux")]
+            if let Backend::Wayland(wl) = cb {
+                wl.copy(flavours)?;
+                // What a read got late was on the clipboard before this write.
+                wl.forget_unanswered();
+                self.ours = wl.holds_ours().then_some(Ours::Source);
+                return Ok(());
+            }
             let text = text_of(flavours);
             let image = match &text {
                 Some(_) => None,
                 None => flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)),
             };
-            let cb = self.cb(Asker::User)?;
             let ours = match (text, image) {
                 (Some(t), _) => {
                     cb.set_text(t.as_str())?;
@@ -1281,6 +1413,8 @@ mod portable {
             match &self.ours {
                 Some(Ours::Text(t)) => cb.get_text().is_ok_and(|now| now == *t),
                 Some(Ours::Image(w, h)) => cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h)),
+                #[cfg(target_os = "linux")]
+                Some(Ours::Source) => cb.holds_source(),
                 None => false,
             }
         }
@@ -1307,15 +1441,21 @@ mod portable {
             read
         }
 
-        /// Text, and on macOS vector art or a bitmap (by the pasteboard's types). Linux has no
-        /// cheap way to ask for a bitmap (reading one costs as much as pasting it): the paste keys
-        /// take it, the menu item waits for text.
+        /// Text, on macOS vector art or a bitmap (by the pasteboard's types), and on the Wayland
+        /// core protocol copied files, SVG, text or PNG (by the types offered, nothing read).
+        /// arboard has no cheap way to ask for a bitmap (reading one costs as much as pasting it):
+        /// the paste keys take it, the menu item waits for text.
         fn has(&mut self, mimes: &[&'static str]) -> bool {
             #[cfg(target_os = "macos")]
             if super::mac::has(mimes) {
                 return true;
             }
-            mimes.contains(&TEXT) && self.cb(Asker::Probe).is_ok_and(|cb| cb.get_text().is_ok_and(|t| !t.is_empty()))
+            let Ok(cb) = self.cb(Asker::Probe) else { return false };
+            #[cfg(target_os = "linux")]
+            if let Backend::Wayland(wl) = cb {
+                return wl.has(mimes);
+            }
+            mimes.contains(&TEXT) && cb.get_text().is_ok_and(|t| !t.is_empty())
         }
     }
 
@@ -1506,6 +1646,16 @@ mod portable {
 
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
         #[test]
+        fn quitting_waits_for_the_paste_checks_handle_as_long_as_its_reads_last() {
+            // The Paste check's handle is one of these: when the app quits, its unanswered X11 read
+            // ends `X11_READ_LIMIT` after it was sent, and an idle worker stops within `LOAD_WAIT`.
+            // Quitting waits for that handle until both are over.
+            assert!(vectorcraft_ui_egui::CLIPBOARD_PROBE_STOP_WAIT >= finish(false) + super::super::loads::LOAD_WAIT);
+            assert!(vectorcraft_ui_egui::CLIPBOARD_PROBE_STOP_WAIT >= finish(true) + super::super::loads::LOAD_WAIT);
+        }
+
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+        #[test]
         fn a_bitmap_paste_waits_for_the_owner_off_the_ui_thread() {
             let (release, gate) = std::sync::mpsc::channel::<()>();
             // The app that copied sends its bitmap only when released.
@@ -1646,45 +1796,58 @@ mod portable {
         #[cfg(target_os = "linux")]
         #[test]
         fn a_paste_after_an_unanswered_core_protocol_text_read_waits_for_its_answer() {
-            use super::super::wayland::TextReads;
+            use std::sync::{Arc, Mutex};
+
+            use super::super::wayland::{Reads, Seen};
             use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
 
-            /// Core protocol text reads whose owner answers with `text` only once the sender
+            /// Core protocol reads of a clipboard offering `types`, whose owner answers each read
+            /// of a text type with `text` and of `image/png` with `png`, only once the sender
             /// returned is used or dropped.
-            fn slow_text(text: &'static str) -> (TextReads, std::sync::mpsc::Sender<()>) {
+            fn slow_owner(types: &[&str], text: &'static str, png: &'static [u8]) -> (Reads, Arc<Mutex<Seen>>, std::sync::mpsc::Sender<()>) {
                 let (release, gate) = std::sync::mpsc::channel::<()>();
-                let loads = Loads::spawn("test", Duration::ZERO, move |()| {
+                let loads = Loads::spawn("test", Duration::ZERO, move |wire: String| {
                     let _ = gate.recv();
-                    Ok(text.to_string())
+                    Ok(if wire == PNG { png.to_vec() } else { text.as_bytes().to_vec() })
                 })
                 .unwrap();
-                (TextReads::new(loads), release)
+                let seen = Arc::new(Mutex::new(Seen::offering(types)));
+                (Reads::new(loads, seen.clone()), seen, release)
             }
-            // Text was copied here; the clipboard's owner answers the check with `text` late.
-            let paste_after_check = |text: &'static str| {
-                let (mut reads, release) = slow_text(text);
+            // The clipboard's owner answers the check with `text` late; `copied_here` when the
+            // clipboard holds the Copy made here meanwhile.
+            let paste_after_check = |text: &'static str, copied_here: bool| {
+                let (mut reads, seen, release) = slow_owner(&["text/plain;charset=utf-8", PNG], text, b"\x89PNG");
                 // The check whether the clipboard still holds what was copied here gets no answer
                 // in its wait (2 s on the UI thread, none here).
-                assert!(reads.get(Duration::ZERO).is_err());
+                assert!(reads.text(Duration::ZERO).is_err());
                 // The paste's own read fails at once while the owner hasn't answered.
-                assert!(reads.get(Duration::from_secs(600)).is_err());
+                assert!(reads.text(Duration::from_secs(600)).is_err());
                 // A paste of a bitmap alone can't take text: the read stays kept.
                 assert!(reads.unanswered(&[BITMAP]).is_none());
                 let late = Late::Wayland(reads.unanswered(&PASTE_ORDER).expect("the check's read is kept for the paste"));
-                let ours = Ours::Text("copied here".into());
-                let paste = std::thread::spawn(move || late.paste(Some(&ours), &PASTE_ORDER));
+                if copied_here {
+                    let mut seen = seen.lock().unwrap();
+                    seen.copy(vec!["text/plain;charset=utf-8", PNG]);
+                    seen.selection(vec!["text/plain;charset=utf-8".into(), PNG.into()]);
+                }
+                let paste = std::thread::spawn(move || late.paste(None, &PASTE_ORDER));
                 drop(release);
                 paste.join().ok().flatten()
             };
-            let pasted = paste_after_check("copied elsewhere").expect("the other app's text is pasted");
+            let pasted = paste_after_check("copied elsewhere", false).expect("the other app's text is pasted");
             assert_eq!((pasted.mime, pasted.data), (TEXT, b"copied elsewhere".to_vec()));
-            // The text copied here, or nothing: the paste takes the internal clipboard.
-            assert!(paste_after_check("copied here").is_none());
-            assert!(paste_after_check("").is_none());
+            // Text that only names a picture goes with it: the picture is pasted, as at once.
+            let pasted = paste_after_check("https://example.com/art.png", false).expect("the picture is pasted");
+            assert_eq!((pasted.mime, pasted.data), (PNG, b"\x89PNG".to_vec()));
+            // The Copy made here, by its data source: the paste takes the internal clipboard.
+            assert!(paste_after_check("copied elsewhere", true).is_none());
+            // Empty text is not pasted: the picture beside it is.
+            assert_eq!(paste_after_check("", false).map(|f| f.mime), Some(PNG));
 
             // An answer that came before the paste may be old: it is dropped, not pasted.
-            let (mut reads, release) = slow_text("old");
-            assert!(reads.get(Duration::ZERO).is_err());
+            let (mut reads, _, release) = slow_owner(&["text/plain"], "old", b"");
+            assert!(reads.text(Duration::ZERO).is_err());
             drop(release);
             while reads.waiting() {
                 std::thread::yield_now();
@@ -1695,14 +1858,14 @@ mod portable {
             // again and takes the new owner's text.
             let (release, gate) = std::sync::mpsc::channel::<()>();
             let mut texts_read = 0;
-            let loads = Loads::spawn("test", Duration::ZERO, move |()| {
+            let loads = Loads::spawn("test", Duration::ZERO, move |_: String| {
                 let _ = gate.recv();
                 texts_read += 1;
-                Ok(if texts_read == 1 { "old owner" } else { "new owner" }.to_string())
+                Ok(if texts_read == 1 { "old owner" } else { "new owner" }.as_bytes().to_vec())
             })
             .unwrap();
-            let mut reads = TextReads::new(loads);
-            assert!(reads.get(Duration::ZERO).is_err());
+            let mut reads = Reads::new(loads, Arc::new(Mutex::new(Seen::offering(&["UTF8_STRING"]))));
+            assert!(reads.text(Duration::ZERO).is_err());
             let late = Late::Wayland(reads.unanswered(&[TEXT]).expect("the read is kept for the paste"));
             let paste = std::thread::spawn(move || late.paste(None, &[TEXT]));
             drop(release);
@@ -1727,86 +1890,468 @@ mod portable {
 /// The compositor's clipboard through the core data-device protocol (`wl_data_device`), on the
 /// window's own Wayland connection: what Copy and Paste use where the compositor lacks the
 /// data-control protocol arboard needs (GNOME) and there is no X11 to fall back on (the Flatpak on
-/// a Wayland session). Text only (smithay-clipboard), and only while the window has focus, as the
-/// protocol has it. A read waits [`LOAD_WAIT`] at most: smithay-clipboard waits for the owner's
-/// data with no limit, so reads run on a worker of their own. A read that gets no answer in that
-/// time is kept for a paste to wait for off the UI thread, as arboard's are.
+/// a Wayland session). A Copy offers its SVG as `image/svg+xml`, its PNG as `image/png` and its
+/// text under each of [`TEXT_TYPES`]; Paste reads the files a file manager copied
+/// ([`FILE_LISTS`]), then the clipboard's SVG, text and PNG, and the paste check looks at the types
+/// offered without reading any data. The protocol gives the clipboard to the window with the
+/// keyboard focus only. A worker thread handles the protocol's events and starts a thread for each
+/// paste of a Copy's data by another app ([`MAX_SENDS`] at once). Reads run on another worker and
+/// take [`MAX_BYTES`] at most; text waits [`LOAD_WAIT`] at most, file lists, SVG and PNG as long as
+/// a paste's bitmap from arboard. A read that gets no answer in its wait is kept for
+/// a paste to wait for off the UI thread, as arboard's are. A read or send whose pipe moves no data
+/// for [`IDLE_WAIT`] fails and closes the pipe, which frees its worker or thread.
 #[cfg(target_os = "linux")]
 mod wayland {
-    use std::sync::{Arc, mpsc};
+    use std::io::{ErrorKind, Read, Write};
+    use std::os::fd::{AsFd, BorrowedFd};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
     use std::time::{Duration, Instant};
 
-    use super::TEXT;
+    use rustix::event::{PollFd, PollFlags, Timespec};
+    use vectorcraft_engine::cmd::clipboard::names_a_picture;
+    use vectorcraft_ui_egui::ClipboardRead;
+    use wayland_client::backend::ObjectData;
+    use wayland_client::globals::{GlobalListContents, registry_queue_init};
+    use wayland_client::protocol::wl_callback::{self, WlCallback};
+    use wayland_client::protocol::wl_data_device::{self, WlDataDevice};
+    use wayland_client::protocol::wl_data_device_manager::{self, WlDataDeviceManager};
+    use wayland_client::protocol::wl_data_offer::{self, WlDataOffer};
+    use wayland_client::protocol::wl_data_source::{self, WlDataSource};
+    use wayland_client::protocol::wl_keyboard::{self, WlKeyboard};
+    use wayland_client::protocol::wl_pointer::{self, WlPointer};
+    use wayland_client::protocol::wl_registry::{self, WlRegistry};
+    use wayland_client::protocol::wl_seat::{self, WlSeat};
+    use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, WEnum};
+
     use super::loads::{Asker, GONE, LOAD_WAIT, Loads, wait_for_answer};
+    use super::{BITMAP, Flavour, MAX_BYTES, PNG, PathBuf, SVG, TEXT, copied_file, gnome_copied_paths, uri_list_paths};
 
-    /// What a text read gives.
-    type Text = Result<String, String>;
+    /// The types text is offered under and read from, best first: `text/plain;charset=utf-8` (GTK
+    /// and Qt apps), `UTF8_STRING` (X11 apps through XWayland) and `text/plain`.
+    const TEXT_TYPES: [&str; 3] = ["text/plain;charset=utf-8", "UTF8_STRING", "text/plain"];
+    /// What reads the files a file list names.
+    type PathsOf = fn(&[u8]) -> Vec<PathBuf>;
+    /// The types files copied in a file manager are offered under, each with what reads its files,
+    /// best first: `text/uri-list` (RFC 2483), and GNOME Files' own list, read only when the first
+    /// names no file.
+    const FILE_LISTS: [(&str, PathsOf); 2] = [("text/uri-list", uri_list_paths), ("x-special/gnome-copied-files", gnome_copied_paths)];
+    /// The most pastes of a Copy's data that are sent at once; a paste beyond them gets nothing.
+    const MAX_SENDS: usize = 8;
+    /// The most types of an offer that are kept (untrusted data).
+    const MAX_TYPES: usize = 256;
+    /// How long a read or send waits for the other app to move a byte through the pipe before it
+    /// fails, VectorCraft's own limit; the wait starts again after each byte moved.
+    const IDLE_WAIT: Duration = LOAD_WAIT;
+    /// The most bytes a read takes from the pipe at a time.
+    const CHUNK: usize = 64 << 10;
 
-    pub struct TextClipboard {
-        /// Writes: a store only hands the text to smithay-clipboard's thread.
-        cb: smithay_clipboard::Clipboard,
-        /// Reads, on a worker with a second clipboard on the same connection.
-        reads: TextReads,
-        /// Held as long as the clipboards: their connection is the window's.
-        _window: Arc<winit::window::Window>,
+    /// What a read gives: the bytes, or why there are none.
+    type Got = Result<Vec<u8>, String>;
+
+    fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+        m.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Text reads on a worker, and the last one that got no answer in its wait.
-    pub(super) struct TextReads {
-        loads: Loads<(), Text>,
-        /// The last read that got no answer in its wait, until a paste takes it or the next read
-        /// is sent.
+    /// The types a Copy of `flavours` offers, each with its data: SVG as `image/svg+xml`, PNG as
+    /// `image/png` and text under each of [`TEXT_TYPES`]. Flavours with no data and other flavours
+    /// (PDF) are not offered.
+    fn copy_types(flavours: &[Flavour]) -> Vec<(&'static str, Arc<[u8]>)> {
+        let mut out: Vec<(&'static str, Arc<[u8]>)> = vec![];
+        for f in flavours.iter().filter(|f| !f.data.is_empty()) {
+            let types: &[&'static str] = match f.mime {
+                SVG => &[SVG],
+                PNG => &[PNG],
+                TEXT => &TEXT_TYPES,
+                _ => &[],
+            };
+            let data: Arc<[u8]> = f.data.as_slice().into();
+            for &t in types {
+                if !out.iter().any(|(o, _)| *o == t) {
+                    out.push((t, data.clone()));
+                }
+            }
+        }
+        out
+    }
+
+    /// The type among `offered` that a read of `mime` asks for, in any letter case: SVG as
+    /// `image/svg+xml`, text as the first of [`TEXT_TYPES`] offered, a bitmap as `image/png`.
+    fn wire_type<'a>(mime: &str, offered: &'a [String]) -> Option<&'a str> {
+        let wanted: &[&str] = match mime {
+            SVG => &[SVG],
+            TEXT => &TEXT_TYPES,
+            BITMAP | PNG => &[PNG],
+            _ => &[],
+        };
+        wanted.iter().find_map(|w| offered.iter().find(|o| o.eq_ignore_ascii_case(w))).map(String::as_str)
+    }
+
+    /// The flavour a read of `mime` makes of `data`: SVG as it is, a bitmap as PNG, text with its
+    /// line ends as `\n`. None when `data` is empty.
+    fn flavour(mime: &'static str, data: Vec<u8>) -> Option<Flavour> {
+        if data.is_empty() {
+            return None;
+        }
+        Some(match mime {
+            TEXT => Flavour { mime: TEXT, data: String::from_utf8_lossy(&data).replace("\r\n", "\n").replace('\r', "\n").into_bytes() },
+            BITMAP | PNG => Flavour { mime: PNG, data },
+            _ => Flavour { mime, data },
+        })
+    }
+
+    /// What a paste of one of `mimes` takes from a clipboard offering `offered`, `read` reading the
+    /// offer's type for each one tried: the first of `mimes` offered with data, except that text
+    /// that is blank or only names a picture gives way to the PNG when `mimes` has a bitmap
+    /// (`adopt_system_clipboard_or_defer` in `vectorcraft-ui-egui`).
+    fn pick(offered: &[String], mimes: &[&'static str], mut read: impl FnMut(&str) -> Option<Vec<u8>>) -> Option<Flavour> {
+        let mut take = |mime: &'static str| flavour(mime, read(wire_type(mime, offered)?)?);
+        let first = mimes.iter().find_map(|&m| take(m))?;
+        if first.mime == TEXT && mimes.contains(&BITMAP) {
+            let text = String::from_utf8_lossy(&first.data);
+            if text.trim().is_empty() || names_a_picture(&text) {
+                return take(BITMAP).or(Some(first));
+            }
+        }
+        Some(first)
+    }
+
+    /// Whether a paste of one of `mimes` can take a copied file: one of them is not text.
+    fn takes_files(mimes: &[&'static str]) -> bool {
+        mimes.iter().any(|&m| m != TEXT)
+    }
+
+    /// The first type among `offered` that lists copied files ([`FILE_LISTS`]), in any letter case.
+    fn file_list_type(offered: &[String]) -> Option<&str> {
+        FILE_LISTS.iter().find_map(|(list, _)| offered.iter().find(|o| o.eq_ignore_ascii_case(list))).map(String::as_str)
+    }
+
+    /// The first file a file manager copied that pastes as one of `mimes` ([`copied_file`]), from
+    /// the first of [`FILE_LISTS`] among `offered` that names a file, `read` reading each list.
+    fn copied(offered: &[String], mimes: &[&'static str], mut read: impl FnMut(&str) -> Option<Vec<u8>>) -> Option<Flavour> {
+        if !takes_files(mimes) {
+            return None;
+        }
+        let paths = FILE_LISTS.iter().find_map(|(list, paths_of)| {
+            let wire = offered.iter().find(|o| o.eq_ignore_ascii_case(list))?;
+            Some(paths_of(&read(wire)?)).filter(|paths| !paths.is_empty())
+        })?;
+        copied_file(paths, mimes)
+    }
+
+    /// What a paste of one of `mimes` takes: the first copied file that is art ([`copied`]), else
+    /// what [`pick`] takes.
+    fn pick_pasted(offered: &[String], mimes: &[&'static str], mut read: impl FnMut(&str) -> Option<Vec<u8>>) -> Option<Flavour> {
+        copied(offered, mimes, &mut read).or_else(|| pick(offered, mimes, read))
+    }
+
+    /// The time `idle` from now; None when that is past the clock's range (no limit).
+    fn idle_until(idle: Duration) -> Option<Instant> {
+        Instant::now().checked_add(idle)
+    }
+
+    /// Makes `fd` nonblocking, its other flags kept.
+    fn nonblocking(fd: BorrowedFd<'_>) -> std::io::Result<()> {
+        let flags = rustix::fs::fcntl_getfl(fd)?;
+        rustix::fs::fcntl_setfl(fd, flags | rustix::fs::OFlags::NONBLOCK)?;
+        Ok(())
+    }
+
+    /// Waits until `fd` is ready for `events`, closed or failed (true), or `until` passes (false);
+    /// None waits without a limit. A wait a signal cuts short goes on until `until`.
+    fn ready(fd: BorrowedFd<'_>, events: PollFlags, until: Option<Instant>) -> std::io::Result<bool> {
+        loop {
+            let left = until.map(|t| t.saturating_duration_since(Instant::now()));
+            let timeout = left.and_then(|d| Timespec::try_from(d).ok());
+            let mut fds = [PollFd::new(&fd, events)];
+            match rustix::event::poll(&mut fds, timeout.as_ref()) {
+                Ok(n) => return Ok(n > 0),
+                Err(rustix::io::Errno::INTR) => {}
+                Err(e) => return Err(e.into()),
+            }
+        }
+    }
+
+    /// `from` read to its end, `cap` bytes at most: more is an error, as is a failed read and a
+    /// pipe that is left open with no byte coming for `idle`. A read that fails gives none of the
+    /// bytes it took, and closes `from`.
+    fn read_capped(mut from: impl Read + AsFd, cap: usize, idle: Duration) -> Got {
+        let failed = |e: std::io::Error| format!("couldn't read the clipboard's data: {e}");
+        nonblocking(from.as_fd()).map_err(failed)?;
+        let (mut data, mut chunk) = (vec![], vec![0u8; CHUNK]);
+        let mut until = idle_until(idle);
+        loop {
+            match from.read(&mut chunk) {
+                Ok(0) => return Ok(data),
+                Ok(n) => {
+                    let got = chunk.get(..n).ok_or_else(|| failed(ErrorKind::InvalidData.into()))?;
+                    if data.len() + got.len() > cap {
+                        return Err(format!("the clipboard's data is larger than {} MiB", cap >> 20));
+                    }
+                    data.extend_from_slice(got);
+                    until = idle_until(idle);
+                }
+                Err(e) if e.kind() == ErrorKind::Interrupted => {}
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    if !ready(from.as_fd(), PollFlags::IN, until).map_err(failed)? {
+                        return Err("the app that copied stopped sending the clipboard's data".to_string());
+                    }
+                }
+                Err(e) => return Err(failed(e)),
+            }
+        }
+    }
+
+    /// `data` written to `to`: an error when the app that pastes closes its end (the process
+    /// ignores `SIGPIPE`) or takes no byte for `idle`.
+    fn send(mut to: impl Write + AsFd, data: &[u8], idle: Duration) -> std::io::Result<()> {
+        nonblocking(to.as_fd())?;
+        let (mut sent, mut until) = (0, idle_until(idle));
+        while let Some(rest) = data.get(sent..).filter(|rest| !rest.is_empty()) {
+            match to.write(rest) {
+                Ok(0) => return Err(ErrorKind::WriteZero.into()),
+                Ok(n) => {
+                    sent += n;
+                    until = idle_until(idle);
+                }
+                Err(e) if e.kind() == ErrorKind::Interrupted => {}
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                    if !ready(to.as_fd(), PollFlags::OUT, until)? {
+                        return Err(ErrorKind::TimedOut.into());
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+
+    /// The threads that send a Copy's data to the apps that paste it, counted.
+    #[derive(Clone)]
+    struct Sends {
+        running: Arc<AtomicUsize>,
+        /// How long a send waits for the app that pastes to take a byte.
+        idle: Duration,
+    }
+
+    impl Default for Sends {
+        fn default() -> Self {
+            Self { running: Arc::default(), idle: IDLE_WAIT }
+        }
+    }
+
+    impl Sends {
+        /// `data` written to `to` on a thread of its own ([`send`]), which then closes `to`; an app
+        /// that closes its end early or takes no byte for the send's idle wait ends the write.
+        /// While [`MAX_SENDS`] are being written `to` is closed at once with nothing written → false.
+        fn start(&self, to: impl Write + AsFd + Send + 'static, data: Arc<[u8]>) -> bool {
+            if self.running.fetch_add(1, Ordering::SeqCst) >= MAX_SENDS {
+                self.running.fetch_sub(1, Ordering::SeqCst);
+                return false;
+            }
+            let (count, idle) = (self.running.clone(), self.idle);
+            let work = move || {
+                let _ = send(to, &data, idle);
+                count.fetch_sub(1, Ordering::SeqCst);
+            };
+            if std::thread::Builder::new().name("wayland-clipboard-send".into()).spawn(work).is_err() {
+                self.running.fetch_sub(1, Ordering::SeqCst);
+                return false;
+            }
+            true
+        }
+
+        /// How many are being written.
+        #[cfg(test)]
+        fn running(&self) -> usize {
+            self.running.load(Ordering::SeqCst)
+        }
+    }
+
+    /// What the protocol worker has seen of the clipboard.
+    #[derive(Default)]
+    pub(super) struct Seen {
+        /// The types of the clipboard's offer, none when it is empty.
+        offered: Vec<String>,
+        /// The types of this connection's last Copy, until its data source is canceled.
+        copied: Option<Vec<&'static str>>,
+        /// Whether the clipboard holds that Copy.
+        ours: bool,
+    }
+
+    impl Seen {
+        /// A clipboard offering `types`, copied elsewhere.
+        #[cfg(test)]
+        pub(super) fn offering(types: &[&str]) -> Self {
+            Self { offered: types.iter().map(|t| t.to_string()).collect(), ..Self::default() }
+        }
+
+        /// A Copy of `types` (none: the clipboard emptied) was given the clipboard.
+        pub(super) fn copy(&mut self, types: Vec<&'static str>) {
+            self.ours = !types.is_empty();
+            self.copied = Some(types).filter(|t| !t.is_empty());
+        }
+
+        /// The clipboard's offer has `offered` now. It holds the last Copy while that Copy's data
+        /// source is not canceled and the offer has the Copy's types, no more and no fewer, as the
+        /// compositor offers a source's types. An offer made before the Copy and handled after it
+        /// makes the Copy not ours until the Copy's own offer comes.
+        pub(super) fn selection(&mut self, offered: Vec<String>) {
+            self.ours = self.copied.as_ref().is_some_and(|c| c.len() == offered.len() && c.iter().all(|t| offered.iter().any(|o| o == t)));
+            self.offered = offered;
+        }
+
+        /// The last Copy's data source was canceled: another app holds the clipboard.
+        pub(super) fn cancelled(&mut self) {
+            self.copied = None;
+            self.ours = false;
+        }
+    }
+
+    /// Reads of the clipboard's offer on a worker, and the last one that got no answer in its wait.
+    pub(super) struct Reads {
+        /// Each request is the offer's type to read.
+        loads: Loads<String, Got>,
+        seen: Arc<Mutex<Seen>>,
+        /// The last text read that got no answer in its wait, until a paste takes it or the next
+        /// read is sent.
         unanswered: Option<Unanswered>,
     }
 
     /// A text read that got no answer in its wait.
     pub(super) struct Unanswered {
-        answer: mpsc::Receiver<Text>,
+        answer: mpsc::Receiver<Got>,
         sent: Instant,
-        /// The worker, for the read made again once the answer comes.
-        reads: Asker<(), Text>,
+        /// The worker, for the reads made once the answer comes.
+        reads: Asker<String, Got>,
+        seen: Arc<Mutex<Seen>>,
     }
 
     impl Unanswered {
-        /// The text, read again once this read's answer comes, waiting for that answer until
-        /// `limit` after the read was sent, and for the new one as long, [`LOAD_WAIT`] at least.
-        /// The late answer may come from an app that lost the clipboard while it was awaited.
-        pub(super) fn text(self, limit: Duration) -> Text {
+        /// What a paste of one of `mimes` takes once this read's answer comes, waiting for it until
+        /// `limit` after the read was sent: the clipboard read again as [`pick_pasted`] reads it,
+        /// each read waiting as long, [`LOAD_WAIT`] at least, since the app that answers late may
+        /// have lost the clipboard meanwhile. None when the answer doesn't come or the clipboard holds this
+        /// connection's Copy.
+        pub(super) fn paste(self, mimes: &[&'static str], limit: Duration) -> Option<Flavour> {
             let left = |now: Instant| (self.sent + limit).saturating_duration_since(now);
-            let _late = wait_for_answer(&self.answer, left(Instant::now()))?;
-            wait_for_answer(&self.reads.ask(())?, LOAD_WAIT.max(left(Instant::now())))?
+            let _late = wait_for_answer(&self.answer, left(Instant::now())).ok()?;
+            let offered = {
+                let seen = lock(&self.seen);
+                if seen.ours {
+                    return None;
+                }
+                seen.offered.clone()
+            };
+            pick_pasted(&offered, mimes, |wire| {
+                wait_for_answer(&self.reads.ask(wire.to_string()).ok()?, LOAD_WAIT.max(left(Instant::now()))).ok()?.ok()
+            })
         }
     }
 
-    impl TextReads {
-        pub(super) fn new(loads: Loads<(), Text>) -> Self {
-            Self { loads, unanswered: None }
+    impl Reads {
+        pub(super) fn new(loads: Loads<String, Got>, seen: Arc<Mutex<Seen>>) -> Self {
+            Self { loads, seen, unanswered: None }
         }
 
-        /// The text, waiting `wait` at most. A read that gets no answer in that time is kept
-        /// ([`Self::unanswered`]) for a paste to wait for off the UI thread; a read sent means the
-        /// one kept has been answered, and its answer is dropped.
-        pub(super) fn get(&mut self, wait: Duration) -> Text {
+        /// The offer's type for `mime`, when it has one.
+        fn wire(&self, mime: &str) -> Option<String> {
+            wire_type(mime, &lock(&self.seen).offered).map(str::to_string)
+        }
+
+        /// The text, waiting `wait` at most; empty when the clipboard has none. A read that gets no
+        /// answer in that time is kept ([`Self::unanswered`]) for a paste to wait for off the UI
+        /// thread; a read sent means the one kept has been answered, and its answer is dropped.
+        pub(super) fn text(&mut self, wait: Duration) -> Result<String, String> {
+            let Some(wire) = self.wire(TEXT) else { return Ok(String::new()) };
             let sent = Instant::now();
-            let answer = self.loads.ask(())?;
+            let answer = self.loads.ask(wire)?;
             self.unanswered = None;
             match wait_for_answer(&answer, wait) {
-                Ok(text) => text,
+                Ok(got) => Ok(flavour(TEXT, got?).map(|f| String::from_utf8_lossy(&f.data).into_owned()).unwrap_or_default()),
                 Err(why) => {
                     if why != GONE {
-                        self.unanswered = Some(Unanswered { answer, sent, reads: self.loads.asker() });
+                        self.unanswered = Some(Unanswered { answer, sent, reads: self.loads.asker(), seen: self.seen.clone() });
                     }
                     Err(why)
                 }
             }
         }
 
-        /// The read that got no answer in its wait, while its answer has still not come and a
+        /// What a paste of one of `mimes` reads: the files a file manager copied, else the first of
+        /// `mimes` the clipboard offers. A file list is asked for here and read, with the files,
+        /// by the work that comes back, which pastes the first file that is art ([`copied`]) and
+        /// else reads `mimes` as [`pick`] does. Text is read here, [`LOAD_WAIT`] at most, and
+        /// pasted unless it is empty; SVG and PNG are asked for here and waited for, `wait` at most,
+        /// by the work that comes back. When that read fails or is empty, the work reads the rest
+        /// of `mimes` as [`pick`] does. Each read the work makes after the first waits until `wait`
+        /// after the first was sent, [`LOAD_WAIT`] at least.
+        pub(super) fn read(&mut self, mimes: &[&'static str], wait: Duration) -> Option<ClipboardRead> {
+            if takes_files(mimes) {
+                let offered = lock(&self.seen).offered.clone();
+                if let Some(list) = file_list_type(&offered).map(str::to_string) {
+                    let sent = Instant::now();
+                    let answer = self.loads.ask(list.clone()).ok()?;
+                    self.unanswered = None;
+                    let (reads, mimes) = (self.loads.asker(), mimes.to_vec());
+                    return Some(ClipboardRead::Later(Box::new(move || {
+                        let left = || LOAD_WAIT.max((sent + wait).saturating_duration_since(Instant::now()));
+                        // The list asked for here is read from its answer, every other type anew.
+                        let mut first = Some((list, answer));
+                        pick_pasted(&offered, &mimes, |wire| {
+                            let answer = match first.take_if(|(list, _)| list.as_str() == wire) {
+                                Some((_, answer)) => answer,
+                                None => reads.ask(wire.to_string()).ok()?,
+                            };
+                            wait_for_answer(&answer, left()).ok()?.ok()
+                        })
+                    })));
+                }
+            }
+            mimes.iter().enumerate().find_map(|(i, &mime)| {
+                let wire = self.wire(mime)?;
+                if mime == TEXT {
+                    let text = self.text(LOAD_WAIT).ok().filter(|t| !t.is_empty())?;
+                    return Some(ClipboardRead::Now(Flavour { mime: TEXT, data: text.into_bytes() }));
+                }
+                let sent = Instant::now();
+                let answer = self.loads.ask(wire).ok()?;
+                self.unanswered = None;
+                let (reads, seen, rest) = (self.loads.asker(), self.seen.clone(), mimes.get(i + 1..).unwrap_or_default().to_vec());
+                Some(ClipboardRead::Later(Box::new(move || {
+                    if let Some(f) = wait_for_answer(&answer, wait).ok().and_then(Result::ok).and_then(|data| flavour(mime, data)) {
+                        return Some(f);
+                    }
+                    let offered = lock(&seen).offered.clone();
+                    let left = || LOAD_WAIT.max((sent + wait).saturating_duration_since(Instant::now()));
+                    pick(&offered, &rest, |wire| wait_for_answer(&reads.ask(wire.to_string()).ok()?, left()).ok()?.ok())
+                })))
+            })
+        }
+
+        /// Whether the clipboard offers one of `mimes`, or files a file manager copied when a paste
+        /// of `mimes` can take a file; nothing is read.
+        pub(super) fn has(&self, mimes: &[&'static str]) -> bool {
+            let seen = lock(&self.seen);
+            (takes_files(mimes) && file_list_type(&seen.offered).is_some()) || mimes.iter().any(|m| wire_type(m, &seen.offered).is_some())
+        }
+
+        /// Whether the clipboard holds this connection's last Copy.
+        pub(super) fn holds_ours(&self) -> bool {
+            lock(&self.seen).ours
+        }
+
+        /// The text read that got no answer in its wait, while its answer has still not come and a
         /// paste of one of `mimes` can take text. Once it has come the answer may be old, and it is
         /// dropped: a new read is made.
         pub(super) fn unanswered(&mut self, mimes: &[&'static str]) -> Option<Unanswered> {
             let unanswered = self.unanswered.take_if(|_| mimes.contains(&TEXT))?;
             self.loads.waiting().then_some(unanswered)
+        }
+
+        /// Drops the read that got no answer in its wait: a paste no longer takes its answer.
+        pub(super) fn forget_unanswered(&mut self) {
+            self.unanswered = None;
         }
 
         /// Whether a read sent is still unanswered.
@@ -1816,55 +2361,725 @@ mod wayland {
         }
     }
 
-    /// The read worker's clipboard and the window whose connection it uses, dropped in that order.
-    struct Loader {
-        cb: smithay_clipboard::Clipboard,
+    /// The protocol objects of a [`DataClipboard`], kept up to date by its worker.
+    #[derive(Default)]
+    struct Objects {
+        device: Option<WlDataDevice>,
+        keyboard: Option<WlKeyboard>,
+        pointer: Option<WlPointer>,
+        /// The serial of the last key press, click or keyboard focus, which a Copy takes the
+        /// clipboard with.
+        serial: Option<u32>,
+        /// The clipboard's offer.
+        selection: Option<WlDataOffer>,
+        /// The offer of a drag over the window.
+        drag: Option<WlDataOffer>,
+        /// The last Copy's data source.
+        source: Option<WlDataSource>,
+    }
+
+    /// An offer's types, as its events give them.
+    #[derive(Default)]
+    struct OfferData(Mutex<Vec<String>>);
+
+    /// A Copy's types with their data.
+    struct SourceData(Vec<(&'static str, Arc<[u8]>)>);
+
+    /// What the protocol worker's event handlers change.
+    struct State {
+        objects: Arc<Mutex<Objects>>,
+        seen: Arc<Mutex<Seen>>,
+        sends: Sends,
+    }
+
+    impl State {
+        /// Lets go of every object, once the clipboard is dropped.
+        fn close(&mut self, seat: &WlSeat) {
+            let mut o = lock(&self.objects);
+            for offer in [o.selection.take(), o.drag.take()].into_iter().flatten() {
+                offer.destroy();
+            }
+            if let Some(source) = o.source.take() {
+                source.destroy();
+            }
+            if let Some(device) = o.device.take().filter(|d| d.version() >= 2) {
+                device.release();
+            }
+            if let Some(keyboard) = o.keyboard.take().filter(|k| k.version() >= 3) {
+                keyboard.release();
+            }
+            if let Some(pointer) = o.pointer.take().filter(|p| p.version() >= 3) {
+                pointer.release();
+            }
+            if seat.version() >= 5 {
+                seat.release();
+            }
+        }
+    }
+
+    impl Dispatch<WlRegistry, GlobalListContents> for State {
+        fn event(_: &mut Self, _: &WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+    }
+
+    impl Dispatch<WlCallback, ()> for State {
+        fn event(_: &mut Self, _: &WlCallback, _: wl_callback::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
+    }
+
+    impl Dispatch<WlDataDeviceManager, ()> for State {
+        fn event(_: &mut Self, _: &WlDataDeviceManager, _: wl_data_device_manager::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
+    }
+
+    impl Dispatch<WlSeat, ()> for State {
+        fn event(state: &mut Self, seat: &WlSeat, event: wl_seat::Event, _: &(), _: &Connection, qh: &QueueHandle<Self>) {
+            let wl_seat::Event::Capabilities { capabilities: WEnum::Value(caps) } = event else { return };
+            let mut o = lock(&state.objects);
+            if !caps.contains(wl_seat::Capability::Keyboard) {
+                if let Some(keyboard) = o.keyboard.take().filter(|k| k.version() >= 3) {
+                    keyboard.release();
+                }
+            } else if o.keyboard.is_none() {
+                o.keyboard = Some(seat.get_keyboard(qh, ()));
+            }
+            if !caps.contains(wl_seat::Capability::Pointer) {
+                if let Some(pointer) = o.pointer.take().filter(|p| p.version() >= 3) {
+                    pointer.release();
+                }
+            } else if o.pointer.is_none() {
+                o.pointer = Some(seat.get_pointer(qh, ()));
+            }
+        }
+    }
+
+    /// The serial a Copy takes the clipboard with after the keyboard event `event`, `serial` before
+    /// it: a key or the keyboard focus coming in sets it, the focus leaving clears it, and other
+    /// events leave it. A modifier change's serial is not an input event's, and the release of Ctrl
+    /// after Ctrl+C comes before the Copy's data is ready.
+    fn keyboard_serial(event: &wl_keyboard::Event, serial: Option<u32>) -> Option<u32> {
+        match event {
+            wl_keyboard::Event::Enter { serial, .. } | wl_keyboard::Event::Key { serial, .. } => Some(*serial),
+            wl_keyboard::Event::Leave { .. } => None,
+            _ => serial,
+        }
+    }
+
+    impl Dispatch<WlKeyboard, ()> for State {
+        fn event(state: &mut Self, _: &WlKeyboard, event: wl_keyboard::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+            let mut o = lock(&state.objects);
+            o.serial = keyboard_serial(&event, o.serial);
+        }
+    }
+
+    impl Dispatch<WlPointer, ()> for State {
+        fn event(state: &mut Self, _: &WlPointer, event: wl_pointer::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+            if let wl_pointer::Event::Button { serial, .. } = event {
+                lock(&state.objects).serial = Some(serial);
+            }
+        }
+    }
+
+    impl Dispatch<WlDataDevice, ()> for State {
+        fn event(state: &mut Self, _: &WlDataDevice, event: wl_data_device::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+            let mut o = lock(&state.objects);
+            match event {
+                wl_data_device::Event::Selection { id } => {
+                    let mut offered = id.as_ref().and_then(|offer| offer.data::<OfferData>()).map(|d| lock(&d.0).clone()).unwrap_or_default();
+                    offered.dedup();
+                    if let Some(old) = std::mem::replace(&mut o.selection, id) {
+                        old.destroy();
+                    }
+                    lock(&state.seen).selection(offered);
+                }
+                wl_data_device::Event::Enter { id, .. } => {
+                    if let Some(old) = std::mem::replace(&mut o.drag, id) {
+                        old.destroy();
+                    }
+                }
+                wl_data_device::Event::Leave | wl_data_device::Event::Drop => {
+                    if let Some(old) = o.drag.take() {
+                        old.destroy();
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        /// The one event of a data device that makes an object is `data_offer`.
+        fn event_created_child(_: u16, qh: &QueueHandle<Self>) -> Arc<dyn ObjectData> {
+            qh.make_data::<WlDataOffer, _>(OfferData::default())
+        }
+    }
+
+    impl Dispatch<WlDataOffer, OfferData> for State {
+        fn event(_: &mut Self, _: &WlDataOffer, event: wl_data_offer::Event, data: &OfferData, _: &Connection, _: &QueueHandle<Self>) {
+            if let wl_data_offer::Event::Offer { mime_type } = event {
+                let mut types = lock(&data.0);
+                if types.len() < MAX_TYPES {
+                    types.push(mime_type);
+                }
+            }
+        }
+    }
+
+    impl Dispatch<WlDataSource, SourceData> for State {
+        fn event(state: &mut Self, source: &WlDataSource, event: wl_data_source::Event, data: &SourceData, _: &Connection, _: &QueueHandle<Self>) {
+            match event {
+                // A type the Copy doesn't offer gets nothing: dropping `fd` closes it.
+                wl_data_source::Event::Send { mime_type, fd } => {
+                    if let Some((_, bytes)) = data.0.iter().find(|(t, _)| t.eq_ignore_ascii_case(&mime_type)) {
+                        state.sends.start(std::fs::File::from(fd), bytes.clone());
+                    }
+                }
+                wl_data_source::Event::Cancelled => {
+                    source.destroy();
+                    let mut o = lock(&state.objects);
+                    if o.source.as_ref() == Some(source) {
+                        o.source = None;
+                        lock(&state.seen).cancelled();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Reads the clipboard's offer for the read worker.
+    struct Receiver {
+        conn: Connection,
+        objects: Arc<Mutex<Objects>>,
+        /// Held as long as the connection, which is the window's.
         _window: Arc<winit::window::Window>,
     }
 
-    impl Loader {
-        fn load(&self) -> Result<String, String> {
-            self.cb.load().map_err(|e| e.to_string())
+    impl Receiver {
+        /// The clipboard's data of type `wire`, read until the app that copied closes the pipe,
+        /// [`MAX_BYTES`] at most; an error when that app sends no byte for [`IDLE_WAIT`].
+        fn receive(&self, wire: String) -> Got {
+            let offer = lock(&self.objects).selection.clone().ok_or("the clipboard is empty")?;
+            let (from, to) = std::io::pipe().map_err(|e| format!("couldn't open a pipe for the clipboard's data: {e}"))?;
+            offer.receive(wire, to.as_fd());
+            // The request carries a copy of the write end: once it is sent, the app that copied
+            // holds the only one, and the read ends when that app closes it.
+            drop(to);
+            self.conn.flush().map_err(|e| format!("couldn't reach the compositor: {e}"))?;
+            read_capped(from, MAX_BYTES, IDLE_WAIT)
         }
     }
 
-    impl TextClipboard {
-        /// None when `window` isn't a Wayland window or the read worker can't start.
-        #[allow(unsafe_code)]
+    pub struct DataClipboard {
+        reads: Reads,
+        objects: Arc<Mutex<Objects>>,
+        manager: WlDataDeviceManager,
+        conn: Connection,
+        qh: QueueHandle<State>,
+        /// Tells the protocol worker to stop.
+        stop: Arc<AtomicBool>,
+        /// Held as long as the connection, which is the window's.
+        _window: Arc<winit::window::Window>,
+    }
+
+    impl DataClipboard {
+        /// None when `window` isn't a Wayland window, the compositor has no data-device manager or
+        /// seat, or a worker can't start.
         pub fn new(window: Arc<winit::window::Window>) -> Option<Self> {
-            use winit::raw_window_handle::{HasDisplayHandle as _, RawDisplayHandle};
-            let RawDisplayHandle::Wayland(d) = window.display_handle().ok()?.as_raw() else { return None };
-            let display = d.display.as_ptr();
-            // SAFETY: the display is winit's open `wl_display`, which outlives `window`; each
-            // clipboard is held beside a clone of `window` and dropped before it. smithay-clipboard
-            // makes its own event queue on the display and doesn't close it.
-            let (cb, reader) = unsafe { (smithay_clipboard::Clipboard::new(display), smithay_clipboard::Clipboard::new(display)) };
-            let loader = Loader { cb: reader, _window: window.clone() };
-            // `loader.load()`, not `loader.cb.load()`: a closure moves only the fields it names,
-            // and the worker must hold the window as long as its clipboard.
+            let conn = connection(&window)?;
+            let (globals, mut queue) = registry_queue_init::<State>(&conn).ok()?;
+            let qh = queue.handle();
+            let manager: WlDataDeviceManager = globals.bind(&qh, 1..=3, ()).ok()?;
+            let seat: WlSeat = globals.bind(&qh, 1..=5, ()).ok()?;
+            let (objects, seen) = (Arc::<Mutex<Objects>>::default(), Arc::<Mutex<Seen>>::default());
+            lock(&objects).device = Some(manager.get_data_device(&seat, &qh, ()));
+            let mut state = State { objects: objects.clone(), seen: seen.clone(), sends: Sends::default() };
+            // The seat's keyboard and pointer, and the clipboard's offer when the window has focus.
+            queue.roundtrip(&mut state).ok()?;
+            let receiver = Receiver { conn: conn.clone(), objects: objects.clone(), _window: window.clone() };
             // Dropping doesn't wait for an unanswered read: only arboard's X11 handles hand what the
             // app copied on when the last one goes.
-            let loads = Loads::spawn("wayland-clipboard-read", Duration::ZERO, move |()| loader.load())?;
-            Some(Self { cb, reads: TextReads::new(loads), _window: window })
+            let loads = Loads::spawn("wayland-clipboard-read", Duration::ZERO, move |wire| receiver.receive(wire))?;
+            let stop = Arc::new(AtomicBool::new(false));
+            let (stopped, held) = (stop.clone(), window.clone());
+            let work = move || {
+                while !stopped.load(Ordering::SeqCst) && queue.blocking_dispatch(&mut state).is_ok() {}
+                state.close(&seat);
+                let _ = queue.flush();
+                drop(held);
+            };
+            std::thread::Builder::new().name("wayland-clipboard".into()).spawn(work).ok()?;
+            Some(Self { reads: Reads::new(loads, seen), objects, manager, conn, qh, stop, _window: window })
         }
 
-        pub fn get_text(&mut self) -> Result<String, String> {
-            self.reads.get(LOAD_WAIT)
+        /// Gives the clipboard to a Copy of `flavours` ([`copy_types`]); none empties it. Err when
+        /// the seat has no data device or the window has had no input to take the clipboard with.
+        pub fn copy(&mut self, flavours: &[Flavour]) -> Result<(), String> {
+            let offered = copy_types(flavours);
+            let mut o = lock(&self.objects);
+            let device = o.device.clone().ok_or("the seat has no clipboard")?;
+            let serial = o.serial.ok_or("the window has had no key press or click to copy with")?;
+            let types: Vec<&'static str> = offered.iter().map(|(t, _)| *t).collect();
+            let source = (!offered.is_empty()).then(|| {
+                let source = self.manager.create_data_source(&self.qh, SourceData(offered));
+                for t in &types {
+                    source.offer(t.to_string());
+                }
+                source
+            });
+            device.set_selection(source.as_ref(), serial);
+            if let Some(old) = std::mem::replace(&mut o.source, source) {
+                old.destroy();
+            }
+            lock(&self.reads.seen).copy(types);
+            drop(o);
+            self.conn.flush().map_err(|e| format!("couldn't reach the compositor: {e}"))
         }
 
-        pub fn set_text(&self, text: &str) {
-            self.cb.store(text);
+        pub fn text(&mut self) -> Result<String, String> {
+            self.reads.text(LOAD_WAIT)
+        }
+
+        /// What a paste of one of `mimes` reads ([`Reads::read`]), SVG and PNG waited for `wait` at
+        /// most.
+        pub fn read(&mut self, mimes: &[&'static str], wait: Duration) -> Option<ClipboardRead> {
+            self.reads.read(mimes, wait)
+        }
+
+        pub fn has(&self, mimes: &[&'static str]) -> bool {
+            self.reads.has(mimes)
+        }
+
+        pub fn holds_ours(&self) -> bool {
+            self.reads.holds_ours()
         }
 
         /// The read that got no answer in its wait, when a paste of one of `mimes` can take its
-        /// answer ([`TextReads::unanswered`]).
+        /// answer ([`Reads::unanswered`]).
         pub(super) fn unanswered(&mut self, mimes: &[&'static str]) -> Option<Unanswered> {
             self.reads.unanswered(mimes)
         }
 
         /// Drops the read that got no answer in its wait: a paste no longer takes its answer.
         pub fn forget_unanswered(&mut self) {
-            self.reads.unanswered = None;
+            self.reads.forget_unanswered();
+        }
+    }
+
+    impl Drop for DataClipboard {
+        /// Stops the protocol worker, which a sync request's answer wakes.
+        fn drop(&mut self) {
+            self.stop.store(true, Ordering::SeqCst);
+            let _ = self.conn.display().sync(&self.qh, ());
+            let _ = self.conn.flush();
+        }
+    }
+
+    /// A connection on `window`'s Wayland display.
+    #[allow(unsafe_code)]
+    fn connection(window: &winit::window::Window) -> Option<Connection> {
+        use wayland_backend::sys::client::Backend;
+        use winit::raw_window_handle::{HasDisplayHandle as _, RawDisplayHandle};
+        let RawDisplayHandle::Wayland(d) = window.display_handle().ok()?.as_raw() else { return None };
+        // SAFETY: the display is winit's open `wl_display`, which outlives `window`; every user of
+        // the connection holds a clone of `window`. A backend made from a foreign display does not
+        // close it when dropped.
+        let backend = unsafe { Backend::from_foreign_display(d.display.as_ptr().cast()) };
+        Some(Connection::from_backend(backend))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn flavour_of(mime: &'static str, data: &[u8]) -> Flavour {
+            Flavour { mime, data: data.to_vec() }
+        }
+
+        fn offered(types: &[&str]) -> Vec<String> {
+            types.iter().map(|t| t.to_string()).collect()
+        }
+
+        #[test]
+        fn a_copy_offers_its_svg_png_and_text_each_with_its_own_data() {
+            let flavours = [flavour_of(TEXT, b"<svg/>"), flavour_of(SVG, b"<svg/>"), flavour_of(super::super::PDF, b"%PDF"), flavour_of(PNG, b"png")];
+            let types: Vec<(&str, Vec<u8>)> = copy_types(&flavours).into_iter().map(|(t, d)| (t, d.to_vec())).collect();
+            assert_eq!(
+                types,
+                [
+                    ("text/plain;charset=utf-8", b"<svg/>".to_vec()),
+                    ("UTF8_STRING", b"<svg/>".to_vec()),
+                    ("text/plain", b"<svg/>".to_vec()),
+                    (SVG, b"<svg/>".to_vec()),
+                    (PNG, b"png".to_vec()),
+                ]
+            );
+            // With Include SVG Code off the engine makes no SVG flavour, and none is offered; a
+            // flavour with no data is not offered either.
+            let types: Vec<&str> = copy_types(&[flavour_of(PNG, b"png"), flavour_of(TEXT, b"")]).into_iter().map(|(t, _)| t).collect();
+            assert_eq!(types, [PNG]);
+            assert!(copy_types(&[]).is_empty());
+        }
+
+        #[test]
+        fn a_read_asks_for_the_offers_own_type() {
+            let all = offered(&["text/plain", "TEXT", "UTF8_STRING", "Image/PNG", "image/svg+xml", "application/pdf"]);
+            assert_eq!(wire_type(TEXT, &all), Some("UTF8_STRING"));
+            assert_eq!(wire_type(TEXT, &offered(&["text/plain", "text/plain;charset=UTF-8"])), Some("text/plain;charset=UTF-8"));
+            assert_eq!(wire_type(BITMAP, &all), Some("Image/PNG"));
+            assert_eq!(wire_type(SVG, &all), Some("image/svg+xml"));
+            // PDF, EPS and metafiles are not read here, nor types no reader knows.
+            assert_eq!(wire_type(super::super::PDF, &all), None);
+            assert_eq!(wire_type(TEXT, &offered(&["text/html", "image/jpeg"])), None);
+            assert_eq!(wire_type(SVG, &[]), None);
+        }
+
+        /// What a paste of `mimes` takes from a clipboard holding `data` by type, and the types read.
+        fn pasted(data: &[(&str, &[u8])], mimes: &[&'static str]) -> (Option<Flavour>, Vec<String>) {
+            let types: Vec<String> = data.iter().map(|(t, _)| t.to_string()).collect();
+            let mut read = vec![];
+            let f = pick(&types, mimes, |wire| {
+                read.push(wire.to_string());
+                data.iter().find(|(t, _)| *t == wire).map(|(_, d)| d.to_vec())
+            });
+            (f, read)
+        }
+
+        #[test]
+        fn a_paste_takes_svg_then_text_then_png() {
+            use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
+            let svg: (&str, &[u8]) = (SVG, b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+            let text: (&str, &[u8]) = ("text/plain;charset=utf-8", b"a\r\nb");
+            let png: (&str, &[u8]) = (PNG, b"\x89PNG");
+            let (f, read) = pasted(&[text, png, svg], &PASTE_ORDER);
+            assert_eq!(f.map(|f| (f.mime, f.data)), Some((SVG, svg.1.to_vec())));
+            assert_eq!(read, [SVG]);
+            // Text before a bitmap, its line ends made `\n`.
+            let (f, _) = pasted(&[png, text], &PASTE_ORDER);
+            assert_eq!(f.map(|f| (f.mime, f.data)), Some((TEXT, b"a\nb".to_vec())));
+            // An offer of a PNG or SVG alone pastes it.
+            assert_eq!(pasted(&[png], &PASTE_ORDER).0.map(|f| (f.mime, f.data)), Some((PNG, png.1.to_vec())));
+            assert_eq!(pasted(&[svg], &PASTE_ORDER).0.map(|f| f.mime), Some(SVG));
+            // Blank text, or text that only names a picture, gives way to the picture.
+            for beside in [&b" \n"[..], b"https://example.com/art.png", b"<img src=\"art.png\">"] {
+                let (f, read) = pasted(&[("UTF8_STRING", beside), png], &PASTE_ORDER);
+                assert_eq!(f.map(|f| f.mime), Some(PNG));
+                assert_eq!(read, ["UTF8_STRING", PNG]);
+            }
+            // With no picture, or a paste of text alone, the text is what there is.
+            assert_eq!(pasted(&[("text/plain", &b"https://example.com/art.png"[..])], &PASTE_ORDER).0.map(|f| f.mime), Some(TEXT));
+            assert_eq!(pasted(&[("text/plain", &b" "[..]), png], &[TEXT]).0.map(|f| f.mime), Some(TEXT));
+            // An empty clipboard, a type no reader knows, data that doesn't come or is empty.
+            assert_eq!(pasted(&[], &PASTE_ORDER).0, None);
+            assert_eq!(pasted(&[("application/x-other", &b"x"[..])], &PASTE_ORDER).0, None);
+            assert_eq!(pasted(&[(PNG, &b""[..])], &PASTE_ORDER).0, None);
+            let types = offered(&[PNG]);
+            assert_eq!(pick(&types, &PASTE_ORDER, |_| None), None);
+        }
+
+        #[test]
+        fn the_clipboard_holds_a_copy_until_another_app_takes_it() {
+            let mut seen = Seen::default();
+            let types = vec!["text/plain;charset=utf-8", SVG, PNG];
+            seen.copy(types.clone());
+            assert!(seen.ours, "a Copy holds the clipboard before its offer comes");
+            // An offer made before the Copy and handled after it.
+            seen.selection(offered(&[PNG]));
+            assert!(!seen.ours);
+            // The Copy's own offer, its types in another order.
+            seen.selection(offered(&[PNG, SVG, "text/plain;charset=utf-8"]));
+            assert!(seen.ours);
+            // Another app's copy: an offer with other types, then the source canceled.
+            seen.selection(offered(&[PNG, SVG, "text/plain;charset=utf-8", "text/html"]));
+            assert!(!seen.ours);
+            seen.selection(offered(&[PNG, SVG, "text/plain;charset=utf-8"]));
+            seen.cancelled();
+            assert!(!seen.ours, "a canceled source no longer holds the clipboard");
+            // Another app's offer with the same types after that is not ours.
+            seen.selection(offered(&[PNG, SVG, "text/plain;charset=utf-8"]));
+            assert!(!seen.ours);
+            // An empty Copy empties the clipboard.
+            seen.copy(vec![]);
+            assert!(!seen.ours);
+            seen.selection(vec![]);
+            assert!(!seen.ours && seen.offered.is_empty());
+        }
+
+        #[test]
+        fn a_copy_takes_the_clipboard_with_a_key_press_not_a_modifier_change() {
+            let key = |serial| wl_keyboard::Event::Key { serial, time: 0, key: 46, state: WEnum::Value(wl_keyboard::KeyState::Pressed) };
+            let modifiers = |serial| wl_keyboard::Event::Modifiers { serial, mods_depressed: 0, mods_latched: 0, mods_locked: 0, group: 0 };
+            // Ctrl+C, then Ctrl released before the Copy's data is ready.
+            let serial = keyboard_serial(&key(7), None);
+            assert_eq!(keyboard_serial(&modifiers(8), serial), Some(7));
+            assert_eq!(keyboard_serial(&wl_keyboard::Event::RepeatInfo { rate: 25, delay: 600 }, Some(7)), Some(7));
+            assert_eq!(keyboard_serial(&modifiers(9), None), None);
+        }
+
+        /// A wait no test reaches: the other end of each pipe below either moves data or closes.
+        const LONG: Duration = Duration::from_secs(600);
+
+        /// A pipe holding `data`, its write end closed when `close`.
+        fn pipe_with(data: &[u8], close: bool) -> (std::io::PipeReader, Option<std::io::PipeWriter>) {
+            let (from, mut to) = std::io::pipe().unwrap();
+            to.write_all(data).unwrap();
+            (from, (!close).then_some(to))
+        }
+
+        #[test]
+        fn a_read_stops_at_its_limit() {
+            assert_eq!(MAX_BYTES, 64 * 1024 * 1024);
+            assert_eq!(IDLE_WAIT, LOAD_WAIT);
+            assert_eq!(read_capped(pipe_with(b"12345678", true).0, 8, Duration::ZERO), Ok(b"12345678".to_vec()));
+            assert_eq!(read_capped(pipe_with(b"", true).0, 8, Duration::ZERO), Ok(vec![]));
+            assert_eq!(read_capped(pipe_with(&[0u8; 9], true).0, 8, Duration::ZERO), Err("the clipboard's data is larger than 0 MiB".to_string()));
+            // More than a pipe holds, from an app that is still sending.
+            let (from, to) = std::io::pipe().unwrap();
+            assert!(Sends::default().start(to, vec![0u8; (2 << 20) + 1].into()));
+            assert_eq!(read_capped(from, 2 << 20, LONG), Err("the clipboard's data is larger than 2 MiB".to_string()));
+            // A pipe that can't be read: the write end.
+            let (_, to) = std::io::pipe().unwrap();
+            let unreadable = std::fs::File::from(std::os::fd::OwnedFd::from(to));
+            assert!(read_capped(unreadable, 8, LONG).is_err_and(|e| e.starts_with("couldn't read the clipboard's data")));
+        }
+
+        #[test]
+        fn a_read_from_an_app_that_stops_sending_fails_and_closes_the_pipe() {
+            let stopped = Err("the app that copied stopped sending the clipboard's data".to_string());
+            // Some bytes and then nothing, the pipe left open: none of them are pasted.
+            let (from, to) = pipe_with(b"part", false);
+            assert_eq!(read_capped(from, MAX_BYTES, Duration::ZERO), stopped);
+            // The read end is closed, so that app's next write fails.
+            let mut to = to.unwrap();
+            assert_eq!(to.write(b"x").map_err(|e| e.kind()), Err(ErrorKind::BrokenPipe));
+            // Nothing at all, and data that fills the limit exactly with more never coming.
+            let (from, _held) = pipe_with(b"", false);
+            assert_eq!(read_capped(from, MAX_BYTES, Duration::ZERO), stopped);
+            let (from, _held) = pipe_with(b"12345678", false);
+            assert_eq!(read_capped(from, 8, Duration::ZERO), stopped);
+            // The next read gets its data.
+            assert_eq!(read_capped(pipe_with(b"words", true).0, MAX_BYTES, Duration::ZERO), Ok(b"words".to_vec()));
+        }
+
+        #[test]
+        fn a_send_to_an_app_that_stops_reading_fails_and_frees_its_thread() {
+            let data: Arc<[u8]> = vec![3u8; 300_000].into();
+            // More than a pipe holds, to an app that never reads.
+            let (_held, to) = std::io::pipe().unwrap();
+            assert_eq!(send(to, &data, Duration::ZERO).map_err(|e| e.kind()), Err(ErrorKind::TimedOut));
+            // An app that closes its end before reading.
+            let (from, to) = std::io::pipe().unwrap();
+            drop(from);
+            assert_eq!(send(to, &data, LONG).map_err(|e| e.kind()), Err(ErrorKind::BrokenPipe));
+            // A send thread to an app that does not read until the send gives up, its end still open.
+            let sends = Sends { idle: Duration::ZERO, ..Sends::default() };
+            let (from, to) = std::io::pipe().unwrap();
+            assert!(sends.start(to, data.clone()));
+            while sends.running() > 0 {
+                std::thread::yield_now();
+            }
+            // What the pipe held when the send gave up, then the end of the data: the send closed it.
+            let got = read_capped(from, MAX_BYTES, Duration::ZERO).map(|d| d.len());
+            assert!(got.as_ref().is_ok_and(|&n| n > 0 && n < data.len()), "{got:?}");
+            // The thread is free for the next paste.
+            let (from, to) = std::io::pipe().unwrap();
+            assert!(sends.start(to, b"words"[..].into()));
+            assert_eq!(read_capped(from, MAX_BYTES, LONG), Ok(b"words".to_vec()));
+        }
+
+        #[test]
+        fn a_copys_data_is_sent_through_the_pipe_and_closed() {
+            let sends = Sends::default();
+            assert_eq!(sends.idle, IDLE_WAIT);
+            let (from, to) = std::io::pipe().unwrap();
+            let data: Arc<[u8]> = vec![7u8; 300_000].into();
+            assert!(sends.start(to, data.clone()));
+            // More than a pipe holds: the write ends once all of it is read, then the pipe closes.
+            assert_eq!(read_capped(from, MAX_BYTES, LONG).as_deref(), Ok(&data[..]));
+            // An app that closes its end before reading ends the send.
+            let (from, to) = std::io::pipe().unwrap();
+            drop(from);
+            assert!(sends.start(to, data.clone()));
+            while sends.running() > 0 {
+                std::thread::yield_now();
+            }
+        }
+
+        #[test]
+        fn pastes_that_read_nothing_hold_a_few_sends_at_most() {
+            let sends = Sends { idle: LONG, ..Sends::default() };
+            let data: Arc<[u8]> = vec![1u8; 300_000].into();
+            // Apps that ask for the data and never read it, within the sends' idle wait.
+            let stalled: Vec<_> = (0..MAX_SENDS)
+                .map(|_| {
+                    let (from, to) = std::io::pipe().unwrap();
+                    assert!(sends.start(to, data.clone()));
+                    from
+                })
+                .collect();
+            // The next paste gets its pipe closed at once, with nothing written.
+            let (from, to) = std::io::pipe().unwrap();
+            assert!(!sends.start(to, data.clone()));
+            assert_eq!(read_capped(from, MAX_BYTES, Duration::ZERO), Ok(vec![]));
+            // Once those apps close their pipes, the sends end and others are sent again.
+            drop(stalled);
+            while sends.running() > 0 {
+                std::thread::yield_now();
+            }
+            let (from, to) = std::io::pipe().unwrap();
+            assert!(sends.start(to, data.clone()));
+            assert_eq!(read_capped(from, MAX_BYTES, LONG).map(|d| d.len()), Ok(data.len()));
+        }
+
+        /// What a clipboard holds, by type.
+        type Held = &'static [(&'static str, &'static [u8])];
+        const PNG_ONLY: Held = &[(PNG, b"\x89PNG")];
+        const SVG_ONLY: Held = &[(SVG, b"<svg/>")];
+        const TEXT_ONLY: Held = &[("text/plain;charset=utf-8", b"words")];
+        const EMPTY_TEXT: Held = &[("text/plain", b"")];
+        const NOTHING: Held = &[];
+        const UNKNOWN: Held = &[("application/x-other", b"x")];
+
+        /// Reads of a clipboard holding `data`, answered at once.
+        fn reads_of(data: Held) -> Reads {
+            let loads = Loads::spawn("test", Duration::ZERO, move |wire: String| {
+                data.iter().find(|(t, _)| *t == wire).map(|(_, d)| d.to_vec()).ok_or_else(|| "not offered".to_string())
+            })
+            .unwrap();
+            let types: Vec<&str> = data.iter().map(|(t, _)| *t).collect();
+            Reads::new(loads, Arc::new(Mutex::new(Seen::offering(&types))))
+        }
+
+        #[test]
+        fn a_picture_or_svg_alone_can_be_pasted_and_is() {
+            use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
+            let wait = Duration::from_secs(600);
+            for (data, mime) in [(PNG_ONLY, PNG), (SVG_ONLY, SVG)] {
+                let mut reads = reads_of(data);
+                // The paste check enables Paste from the types alone.
+                assert!(reads.has(&PASTE_ORDER));
+                let Some(ClipboardRead::Later(work)) = reads.read(&PASTE_ORDER, wait) else { panic!("{mime} is read off the UI thread") };
+                assert_eq!(work().map(|f| (f.mime, f.data)), Some((mime, data[0].1.to_vec())));
+            }
+            let mut reads = reads_of(TEXT_ONLY);
+            assert!(reads.has(&[TEXT]) && !reads.has(&[BITMAP, SVG]));
+            let Some(ClipboardRead::Now(f)) = reads.read(&PASTE_ORDER, wait) else { panic!("text is read at once") };
+            assert_eq!((f.mime, f.data), (TEXT, b"words".to_vec()));
+            // An empty clipboard, or one with no type a paste reads, enables nothing and pastes nothing.
+            for data in [NOTHING, UNKNOWN] {
+                let mut reads = reads_of(data);
+                assert!(!reads.has(&PASTE_ORDER));
+                assert!(reads.read(&PASTE_ORDER, wait).is_none());
+                assert_eq!(reads.text(wait), Ok(String::new()));
+            }
+            // Empty text is not pasted.
+            assert!(reads_of(EMPTY_TEXT).read(&[TEXT], wait).is_none());
+        }
+
+        #[test]
+        fn an_svg_that_sends_nothing_gives_way_to_the_text_or_png_beside_it() {
+            use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
+            const EMPTY_SVG_TEXT: Held = &[(SVG, b""), ("text/plain", b"words"), (PNG, b"\x89PNG")];
+            const EMPTY_SVG_PNG: Held = &[(SVG, b""), (PNG, b"\x89PNG")];
+            const EMPTY_SVG_URL: Held = &[(SVG, b""), ("text/plain", b"https://example.com/art.png"), (PNG, b"\x89PNG")];
+            let wait = Duration::from_secs(600);
+            const EMPTY_PNG: Held = &[(PNG, b"")];
+            for (data, mime, bytes) in
+                [(EMPTY_SVG_TEXT, TEXT, &b"words"[..]), (EMPTY_SVG_PNG, PNG, &b"\x89PNG"[..]), (EMPTY_SVG_URL, PNG, &b"\x89PNG"[..])]
+            {
+                // Held while the work runs, as the clipboard is.
+                let mut reads = reads_of(data);
+                let Some(ClipboardRead::Later(work)) = reads.read(&PASTE_ORDER, wait) else { panic!("the SVG is asked for") };
+                assert_eq!(work().map(|f| (f.mime, f.data)), Some((mime, bytes.to_vec())));
+            }
+            // A failed PNG read, last of all, pastes nothing.
+            let mut reads = reads_of(EMPTY_PNG);
+            let Some(ClipboardRead::Later(work)) = reads.read(&PASTE_ORDER, wait) else { panic!("the PNG is asked for") };
+            assert!(work().is_none());
+        }
+
+        #[test]
+        fn a_read_that_fails_pastes_nothing() {
+            let loads = Loads::spawn("test", Duration::ZERO, |_: String| Err::<Vec<u8>, _>("the clipboard's data is larger than 64 MiB".to_string()))
+                .unwrap();
+            let mut reads = Reads::new(loads, Arc::new(Mutex::new(Seen::offering(&[PNG, "text/plain"]))));
+            assert_eq!(reads.text(Duration::from_secs(600)), Err("the clipboard's data is larger than 64 MiB".to_string()));
+            let Some(ClipboardRead::Later(work)) = reads.read(&[BITMAP], Duration::from_secs(600)) else { panic!("the PNG is asked for") };
+            assert!(work().is_none());
+        }
+
+        /// Reads of a clipboard holding `data` by type, answered at once.
+        fn reads_holding(data: Vec<(String, Vec<u8>)>) -> Reads {
+            let types: Vec<String> = data.iter().map(|(t, _)| t.clone()).collect();
+            let loads = Loads::spawn("test", Duration::ZERO, move |wire: String| {
+                data.iter().find(|(t, _)| *t == wire).map(|(_, d)| d.clone()).ok_or_else(|| "not offered".to_string())
+            })
+            .unwrap();
+            let types: Vec<&str> = types.iter().map(String::as_str).collect();
+            Reads::new(loads, Arc::new(Mutex::new(Seen::offering(&types))))
+        }
+
+        /// The `file:` URI of `path`, its spaces escaped.
+        fn file_uri(path: &std::path::Path) -> String {
+            format!("file://{}", path.display().to_string().replace(' ', "%20"))
+        }
+
+        /// What a paste of `mimes` takes from `reads`.
+        fn paste(reads: &mut Reads, mimes: &[&'static str]) -> Option<(&'static str, Vec<u8>)> {
+            match reads.read(mimes, Duration::from_secs(600))? {
+                ClipboardRead::Now(f) => Some((f.mime, f.data)),
+                ClipboardRead::Later(work) => work().map(|f| (f.mime, f.data)),
+            }
+        }
+
+        #[test]
+        fn files_copied_in_a_file_manager_paste_as_their_art() {
+            use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
+            let d = tempfile::Builder::new().prefix("vectorcraft-wayland-files-").tempdir().unwrap();
+            let (notes, red) = (d.path().join("notes.txt"), d.path().join("red image.png"));
+            let mut png = vec![];
+            image::RgbaImage::new(2, 2).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+            std::fs::write(&notes, "not art").unwrap();
+            std::fs::write(&red, &png).unwrap();
+            let list = |paths: &[&std::path::Path]| paths.iter().map(|p| file_uri(p) + "\r\n").collect::<String>().into_bytes();
+            let held = |types: &[(&str, Vec<u8>)]| reads_holding(types.iter().map(|(t, d)| (t.to_string(), d.clone())).collect());
+            let text = ("text/plain;charset=utf-8", b"the files' paths".to_vec());
+            // A file list alone enables Paste and pastes the first file that is art.
+            let mut reads = held(&[("text/uri-list", list(&[&notes, &red]))]);
+            assert!(reads.has(&PASTE_ORDER) && reads.has(&[BITMAP]));
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((PNG, png.clone())));
+            // A paste of text alone takes no file.
+            assert!(!reads.has(&[TEXT]));
+            assert_eq!(paste(&mut reads, &[TEXT]), None);
+            // The files come before the other types offered, as on the other platforms; the type in
+            // any letter case.
+            let mut reads = held(&[(SVG, b"<svg/>".to_vec()), text.clone(), ("Text/URI-List", list(&[&red]))]);
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((PNG, png.clone())));
+            assert_eq!(paste(&mut reads, &[TEXT]), Some((TEXT, text.1.clone())));
+            // With no file that is art, the paste takes the other types.
+            let mut reads = held(&[("text/uri-list", list(&[&notes, &d.path().join("gone.png")])), text.clone()]);
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((TEXT, text.1.clone())));
+            let mut reads = held(&[("text/uri-list", b"https://example.com/art.png\r\n".to_vec())]);
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), None);
+            // GNOME Files' own list, alone or when the URI list names no local file.
+            let gnome = [b"copy\n".to_vec(), file_uri(&red).into_bytes()].concat();
+            let mut reads = held(&[("x-special/gnome-copied-files", gnome.clone())]);
+            assert!(reads.has(&PASTE_ORDER));
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((PNG, png.clone())));
+            let mut reads = held(&[("text/uri-list", b"file://server/art.png\r\n".to_vec()), ("x-special/gnome-copied-files", gnome)]);
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), Some((PNG, png.clone())));
+            // KDE's cut marker is not a file list.
+            let mut reads = held(&[("application/x-kde-cutselection", b"1".to_vec())]);
+            assert!(!reads.has(&PASTE_ORDER));
+            assert_eq!(paste(&mut reads, &PASTE_ORDER), None);
+        }
+
+        #[test]
+        fn a_file_list_that_cant_be_read_gives_way_to_the_other_types() {
+            use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
+            let offered = offered(&["text/uri-list", "text/plain"]);
+            let mut asked = vec![];
+            let f = pick_pasted(&offered, &PASTE_ORDER, |wire| {
+                asked.push(wire.to_string());
+                (wire == "text/plain").then(|| b"words".to_vec())
+            });
+            assert_eq!(f.map(|f| (f.mime, f.data)), Some((TEXT, b"words".to_vec())));
+            assert_eq!(asked, ["text/uri-list", "text/plain"]);
         }
     }
 }
@@ -1981,6 +3196,115 @@ mod tests {
         std::fs::write(&red, png(2, 2)).unwrap();
         let with_cr = PathBuf::from(format!("{}\r", red.display()));
         assert_eq!(copied_file(vec![with_cr], &PASTE_ORDER).map(|f| f.mime), Some(PNG));
+    }
+
+    /// A copied file of more than 64 MiB is skipped before it is read, and the next one pastes.
+    #[test]
+    fn an_oversized_copied_file_is_skipped_before_it_is_read() {
+        let d = dir("oversized");
+        let (big, small) = (d.path().join("big.png"), d.path().join("small.png"));
+        std::fs::write(&big, png(2, 2)).unwrap();
+        // Sparse where the file system allows: no 64 MiB is written.
+        std::fs::OpenOptions::new().write(true).open(&big).unwrap().set_len(MAX_BYTES as u64 + 1).unwrap();
+        std::fs::write(&small, png(3, 2)).unwrap();
+        assert!(copied_file(vec![big.clone()], &PASTE_ORDER).is_none());
+        let f = copied_file(vec![big, small], &PASTE_ORDER).unwrap();
+        assert_eq!((f.mime, f.data), (PNG, png(3, 2)));
+    }
+
+    /// A copied file of exactly the limit pastes; one byte more and it is skipped.
+    #[test]
+    fn a_copied_file_pastes_up_to_the_limit() {
+        let d = dir("limit");
+        let art = d.path().join("art.svg");
+        let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"/>";
+        std::fs::write(&art, svg).unwrap();
+        let read = |limit| copied_file_within(vec![art.clone()], &PASTE_ORDER, limit).map(|f| f.data);
+        assert_eq!(read(svg.len()), Some(svg.as_bytes().to_vec()));
+        assert_eq!(read(svg.len() - 1), None);
+    }
+
+    /// A file that grows past the limit after its size was checked is read to one byte past the
+    /// limit and refused.
+    #[test]
+    fn the_rest_of_a_file_is_read_to_the_limit_at_most() {
+        let read = |len: usize, head: usize| {
+            let bytes = vec![7u8; len];
+            let mut file = Cursor::new(bytes);
+            let mut first = vec![0; head];
+            file.read_exact(&mut first).unwrap();
+            (read_rest(&mut file, first, 16).map(|d| d.len()), file.position())
+        };
+        assert_eq!(read(16, 4), (Some(16), 16));
+        assert_eq!(read(0, 0), (Some(0), 0));
+        assert_eq!(read(17, 4), (None, 17));
+        assert_eq!(read(1000, 4), (None, 17));
+        // First bytes already past the limit: nothing more is read.
+        assert_eq!(read(1000, 20), (None, 20));
+    }
+
+    fn uri_paths(list: &[u8]) -> Vec<String> {
+        uri_list_paths(list).into_iter().map(|p| p.to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn a_uri_list_names_the_local_files_of_its_lines() {
+        // CRLF or LF, comment lines and blank lines.
+        assert_eq!(uri_paths(b"# copied\r\nfile:///home/a/one.svg\r\n\r\nfile:///home/a/two.png\n"), ["/home/a/one.svg", "/home/a/two.png"]);
+        assert_eq!(uri_paths(b"file:///a.svg"), ["/a.svg"]);
+        // Percent escapes are decoded once; `+` and an escaped `#` are part of the name.
+        assert_eq!(uri_paths(b"file:///home/a/red%20image.png"), ["/home/a/red image.png"]);
+        assert_eq!(uri_paths(b"file:///home/a/caf%C3%A9.svg\nfile:///home/a/caf\xC3\xA9.svg"), ["/home/a/café.svg", "/home/a/café.svg"]);
+        assert_eq!(uri_paths(b"file:///a/%231+2.svg"), ["/a/#1+2.svg"]);
+        assert_eq!(uri_paths(b"file:///a/100%2525.svg"), ["/a/100%25.svg"]);
+        // No host, `localhost` in any case, and the short form name this machine; a fragment is
+        // left out.
+        assert_eq!(
+            uri_paths(b"file://localhost/a.svg\nFILE://LocalHost/b.svg\nfile:/c.svg\nfile:///d.svg#page=2"),
+            ["/a.svg", "/b.svg", "/c.svg", "/d.svg"]
+        );
+        // Other hosts and schemes, relative paths, queries, bad escapes, an escaped NUL, a name
+        // that is not UTF-8 once decoded and a line that is not UTF-8 name no file.
+        for uri in [
+            &b"file://server/a.svg"[..],
+            b"https://example.com/a.svg",
+            b"file:a.svg",
+            b"file://",
+            b"file://localhost",
+            b"file:///a.svg?x=1",
+            b"file:///a%2",
+            b"file:///a%zz.svg",
+            b"file:///a%00b.svg",
+            b"file:///a%FF.svg",
+            b"file:///a\xFF.svg",
+            b"/home/a/one.svg",
+            b"#file:///a.svg",
+        ] {
+            assert!(uri_list_paths(uri).is_empty(), "{}", String::from_utf8_lossy(uri));
+        }
+        // The files beside a URI that names none are kept.
+        assert_eq!(uri_paths(b"https://example.com/a.svg\r\nfile:///b.svg\r\n"), ["/b.svg"]);
+        assert!(uri_list_paths(b"").is_empty());
+    }
+
+    #[test]
+    fn a_uri_list_longer_than_the_limit_names_no_file() {
+        assert_eq!(MAX_URIS, 1024);
+        let list = |n: usize| (0..n).map(|i| format!("# file {i}\r\nfile:///f{i}.svg\r\n")).collect::<String>();
+        // Comment lines don't count.
+        assert_eq!(uri_list_paths(list(MAX_URIS).as_bytes()).len(), MAX_URIS);
+        assert!(uri_list_paths(list(MAX_URIS + 1).as_bytes()).is_empty());
+    }
+
+    #[test]
+    fn gnome_files_list_names_its_files_after_copy_or_cut() {
+        let paths = |list: &[u8]| gnome_copied_paths(list).into_iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        assert_eq!(paths(b"copy\nfile:///a.svg\nfile:///b%20c.png"), ["/a.svg", "/b c.png"]);
+        assert_eq!(paths(b"cut\r\nfile:///a.svg\r\n"), ["/a.svg"]);
+        // Another first line, none, or no files.
+        for list in [&b"move\nfile:///a.svg"[..], b"file:///a.svg\nfile:///b.svg", b"copy", b"", b"Copy\nfile:///a.svg"] {
+            assert!(gnome_copied_paths(list).is_empty(), "{}", String::from_utf8_lossy(list));
+        }
     }
 
     /// A DIB of `w`×`h` pixels (top row first when `h` is negative): a `header`-byte header (40,

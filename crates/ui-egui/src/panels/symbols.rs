@@ -154,6 +154,69 @@ fn has_instances_selected(app: &VectorcraftApp) -> bool {
     instance_selected(app, |_| true)
 }
 
+/// Collect the IDs of selected instances of symbol `name` (including inside groups).
+fn selected_symbol_instances(app: &VectorcraftApp, name: &str) -> Vec<u64> {
+    let mut ids = vec![];
+    if let Some(st) = app.session.active() {
+        for id in &st.selection.objects {
+            if let Some(n) = st.doc.node(*id) {
+                n.walk(&mut |c| {
+                    if matches!(&c.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == name) {
+                        ids.push(c.id.0);
+                    }
+                });
+            }
+        }
+    }
+    ids
+}
+
+/// A symbol item's context menu.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str) {
+    let center = app
+        .view()
+        .map(|v| v.center)
+        .or_else(|| app.session.active().and_then(|st| st.doc.artboards.first().map(|a| a.rect.center())))
+        .unwrap_or(vectorcraft_geom::Point::ZERO);
+
+    if menu_item(ui, tl!("Place Symbol Instance"), true, false) {
+        if let Err(e) = app.run("symbol.place", json!({ "name": name, "x": center.x, "y": center.y })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    if menu_item(ui, tl!("Edit Symbol"), true, false) {
+        if let Err(e) = app.run("symbol.edit", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    if menu_item(ui, tl!("Duplicate Symbol"), true, false) {
+        if let Err(e) = app.run("symbol.duplicate", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    if menu_item(ui, tl!("Delete Symbol"), true, false) {
+        delete(app, &[], Some(name), false);
+        ui.close();
+    }
+    let break_ids = selected_symbol_instances(app, name);
+    let break_enabled = !break_ids.is_empty();
+    if menu_item(ui, tl!("Break Link to Symbol"), break_enabled, false) {
+        if let Err(e) = app.run("symbol.breakLink", json!({ "ids": break_ids })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    if menu_item(ui, tl!("Select All Instances"), true, false) {
+        if let Err(e) = app.run("symbol.selectInstances", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+}
+
 /// Does the selection hold a symbol instance with appearance changes of its own (a dynamic
 /// symbol's), which Reset drops?
 pub(crate) fn changed_instances_selected(app: &VectorcraftApp) -> bool {
@@ -188,42 +251,52 @@ fn selected_instance_symbols(app: &VectorcraftApp) -> Option<Vec<String>> {
 /// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/edit-symbols.html>),
 /// and the Reset button, which gives them their symbol's scale, rotation and shear again
 /// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/transform-symbols.html>).
-pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// Edit Symbol, Replace with its menu and Reset each show only while the row has room for them and
+/// `reserve` after them, and the controls after one left out are left out too.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     let Some(symbols) = selected_instance_symbols(app) else { return };
     let Some(st) = app.session.active() else { return };
     let names: Vec<String> = st.doc.symbols.iter().map(|s| s.name.clone()).collect();
     let shared = symbols.first().filter(|first| symbols.iter().all(|s| s == *first)).cloned().unwrap_or_default();
+    let mut fit = crate::chrome::Fit::new(reserve);
     // Edit Symbol: the instances' symbol in symbol editing mode, when they share one.
     if !shared.is_empty()
+        && fit.room(ui, &[24.0])
         && widgets::icon_button(ui, "dc-place-symbol", tl!("Edit Symbol"), false, 24.0).clicked()
         && let Err(e) = app.run("symbol.edit", json!({}))
     {
         app.status(e);
     }
-    ui.label(egui::RichText::new(tl!("Replace:")).size(12.0).color(Tokens::get(ui.ctx()).text));
-    let options: Vec<&str> = names.iter().map(String::as_str).collect();
-    if let Some(name) = widgets::dropdown_names(ui, "cb-symbol-replace", &shared, &options, 140.0).and_then(|i| names.get(i))
-        && *name != shared
-        && let Err(e) = app.run("symbol.replace", json!({ "name": name }))
-    {
-        app.status(e);
+    let replace = egui::RichText::new(tl!("Replace:")).size(12.0).color(Tokens::get(ui.ctx()).text);
+    if fit.room(ui, &[widgets::text_width(ui, replace.clone()), 140.0]) {
+        ui.label(replace);
+        let options: Vec<&str> = names.iter().map(String::as_str).collect();
+        if let Some(name) = widgets::dropdown_names(ui, "cb-symbol-replace", &shared, &options, 140.0).and_then(|i| names.get(i))
+            && *name != shared
+            && let Err(e) = app.run("symbol.replace", json!({ "name": name }))
+        {
+            app.status(e);
+        }
     }
     // Reset: Reset Transformation, enabled while an instance's scale, rotation or shear differs
     // from its symbol's.
     let reset = transformed_instances_selected(app);
-    if ui.add_enabled_ui(reset, |ui| widgets::flat_button_fit(ui, tl!("Reset"), 48.0).on_hover_text(tl!("Reset Transformation"))).inner.clicked()
+    if fit.room(ui, &[widgets::flat_button_fit_width(ui, tl!("Reset"), 48.0)])
+        && ui.add_enabled_ui(reset, |ui| widgets::flat_button_fit(ui, tl!("Reset"), 48.0).on_hover_text(tl!("Reset Transformation"))).inner.clicked()
         && let Err(e) = app.run("symbol.instance.resetTransform", json!({}))
     {
         app.status(e);
     }
-    ui.add_space(4.0);
+    if ui.available_width() >= reserve + 4.0 {
+        ui.add_space(4.0);
+    }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((doc, keys)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d))) else { return };
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
-    let view: View = pstate(ui.ctx(), VIEW);
+    let view = app.ui.symbols_view;
     let sel = current(app);
     let uid = app.session.active().map(|d| d.uid);
     let marked = marked(ui.ctx(), uid, &names);
@@ -249,11 +322,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 chip(ui, &doc, &keys, egui::Rect::from_center_size(r.left_center() + vec2(3.0 + side / 2.0, 0.0), vec2(side, side)), n);
                 ui.painter().text(r.left_center() + vec2(side + 10.0, 0.0), egui::Align2::LEFT_CENTER, n, egui::FontId::proportional(text), t.text);
+                let resp = resp.on_hover_text(n);
                 if resp.double_clicked() {
                     clicked = Some((n.clone(), true));
                 } else if resp.clicked() {
                     clicked = Some((n.clone(), false));
                 }
+                if resp.secondary_clicked() && (sel.as_deref() != Some(n) || !marked.is_empty()) {
+                    set_pstate(ui.ctx(), MARKED, (uid, Vec::<String>::new()));
+                    if let Err(e) = app.run("symbol.setCurrent", json!({ "name": n })) {
+                        app.status(e);
+                    }
+                }
+                resp.context_menu(|ui| item_context_menu(app, ui, n));
             }
         } else {
             ui.horizontal_wrapped(|ui| {
@@ -274,6 +355,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     } else if resp.clicked() {
                         clicked = Some((n.clone(), false));
                     }
+                    if resp.secondary_clicked() && (sel.as_deref() != Some(n) || !marked.is_empty()) {
+                        set_pstate(ui.ctx(), MARKED, (uid, Vec::<String>::new()));
+                        if let Err(e) = app.run("symbol.setCurrent", json!({ "name": n })) {
+                            app.status(e);
+                        }
+                    }
+                    resp.context_menu(|ui| item_context_menu(app, ui, n));
                 }
             });
         }
@@ -380,10 +468,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.status(e);
     }
     ui.separator();
-    let view: View = pstate(ui.ctx(), VIEW);
+    let view = app.ui.symbols_view;
     for (v, label) in View::ALL {
-        if menu_item(ui, tl!(label), true, view == v) {
-            set_pstate(ui.ctx(), VIEW, v);
+        if menu_item(ui, tl!(label), true, view == v)
+            && let Err(e) = app.run("ui.panelView", json!({ "panel": "symbols", "view": v }))
+        {
+            app.status(e);
         }
     }
     ui.separator();
@@ -397,13 +487,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The panel state key of the symbols Select All Unused picked.
 const MARKED: &str = "sym-unused";
 
-/// The panel state key of the panel's [`View`].
-const VIEW: &str = "sym-view";
-
 /// The panel's views: Thumbnail View (the default) and the Small and Large List Views, whose rows
-/// show each symbol's thumbnail and name.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum View {
+/// show each symbol's thumbnail and name (`ui.panelView {panel: "symbols", view}`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum View {
     #[default]
     Thumbnail,
     SmallList,
@@ -496,7 +584,7 @@ impl LibraryKind for SymbolLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.symbol_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, LibSymbol>> {
+    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
         let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
         lib.iter().filter(|s| found(s.name())).map(|s| Row { name: s.name(), item: Some(s) }).collect()
     }
@@ -1092,7 +1180,7 @@ mod tests {
         // Large List View: the row named Dot.
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
-        set_pstate(&ctx, VIEW, View::LargeList);
+        app.ui.symbols_view = View::LargeList;
         let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0))), ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
         out.textures_delta.clear();
@@ -1160,7 +1248,6 @@ mod tests {
             assert_eq!((editing(&app), current(&mut app)), (None, Some("Cat".into())), "{view}");
             let ctx2 = egui::Context::default();
             crate::theme::install_fonts(&ctx2);
-            set_pstate(&ctx2, VIEW, pstate::<View>(&ctx, VIEW));
             frame(&ctx2, &mut app, vec![]);
             frame(&ctx2, &mut app, double_click(row));
             assert_eq!(editing(&app).as_deref(), Some("Cat"), "{view}");
@@ -1173,6 +1260,49 @@ mod tests {
         let undo = app.session.active().unwrap().history.undo.len();
         click_menu(&ctx, &mut app, "Sort by Name");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+
+    /// `ui.panelView` sets the Symbols, Graphic Styles and Swatches panels' views as the view items
+    /// of their panel menus do, and answers the current view without `view`. An unknown panel or
+    /// view, or a view of another panel, is an error and changes nothing.
+    #[test]
+    fn panel_view_sets_the_view_of_each_panel() {
+        use super::super::{graphic_styles, swatches};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        for (i, name) in ["ant", "bee"].into_iter().enumerate() {
+            app.run("shape.rectangle", json!({"x": 10.0 + 40.0 * i as f64, "y": 10, "width": 30, "height": 20})).unwrap();
+            app.run("symbol.new", json!({"name": name})).unwrap();
+        }
+        let views = |checked: &str| ["Thumbnail View", "Small List View", "Large List View"].map(|v| (v.to_string(), v == checked)).to_vec();
+        assert_eq!(app.run("ui.panelView", json!({"panel": "symbols"})).unwrap(), json!({"panel": "symbols", "view": "thumbnail"}));
+        assert!(panel_labels(&ctx, &mut app, &["ant", "bee"]).is_empty(), "the thumbnails draw no names");
+        let r = app.run("ui.panelView", json!({"panel": "symbols", "view": "largeList"})).unwrap();
+        assert_eq!(r, json!({"panel": "symbols", "view": "largeList"}));
+        assert_eq!(view_items(&ctx, &mut app), views("Large List View"), "the panel menu checks it");
+        let names: Vec<String> = panel_labels(&ctx, &mut app, &["ant", "bee"]).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(names, ["ant", "bee"], "the list names the symbols");
+        click_menu(&ctx, &mut app, "Small List View");
+        assert_eq!(app.run("ui.panelView", json!({"panel": "symbols"})).unwrap()["view"], "smallList", "the menu item sets it too");
+        for bad in [
+            json!({"panel": "symbols", "view": "mediumThumb"}),
+            json!({"panel": "symbols", "view": 3}),
+            json!({"panel": "brushes", "view": "smallList"}),
+            json!({"view": "largeList"}),
+        ] {
+            assert!(app.run("ui.panelView", bad.clone()).is_err(), "{bad}");
+        }
+        assert_eq!(app.ui.symbols_view, View::SmallList, "unchanged");
+        let r = app.run("ui.panelView", json!({"panel": "graphicStyles", "view": "largeList"})).unwrap();
+        assert_eq!(r, json!({"panel": "graphicStyles", "view": "largeList"}));
+        assert_eq!(app.ui.graphic_styles_view, graphic_styles::View::LargeList);
+        assert_eq!(app.run("ui.panelView", json!({"panel": "swatches"})).unwrap()["view"], "mediumThumb");
+        app.run("ui.panelView", json!({"panel": "swatches", "view": "largeThumb"})).unwrap();
+        assert!(app.run("ui.panelView", json!({"panel": "swatches", "view": "thumbnail"})).is_err());
+        assert_eq!(app.ui.swatches_view, swatches::View::LargeThumb, "unchanged by the error");
+        assert_eq!(app.ui.symbols_view, View::SmallList, "each panel keeps its own view");
     }
 
     /// The panel menu's Edit Symbol edits the selected instance's symbol, and with no instance
@@ -1205,7 +1335,7 @@ mod tests {
         let bar = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
             let mut out = ctx.run_ui(raw, |ui| {
-                ui.horizontal(|ui| control_bar(app, ui));
+                ui.horizontal(|ui| control_bar(app, ui, 0.0));
             });
             out.textures_delta.clear();
             out
@@ -1385,7 +1515,7 @@ mod tests {
         fn bar(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::Shape> {
             let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
             let mut out = ctx.run_ui(raw, |ui| {
-                ui.horizontal(|ui| control_bar(app, ui));
+                ui.horizontal(|ui| control_bar(app, ui, 0.0));
             });
             out.textures_delta.clear();
             out.shapes.into_iter().map(|c| c.shape).collect()
@@ -1481,7 +1611,7 @@ mod tests {
         let bar = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
             let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
             let mut out = ctx.run_ui(raw, |ui| {
-                ui.horizontal(|ui| control_bar(app, ui));
+                ui.horizontal(|ui| control_bar(app, ui, 0.0));
             });
             out.textures_delta.clear();
             out
@@ -1497,5 +1627,191 @@ mod tests {
         let at = clickable(&out).into_iter().find(|(l, _)| l == "Reset").expect("a Reset button").1;
         bar(&mut app, vec![egui::Event::PointerMoved(at), button(at, true), button(at, false)]);
         assert!(close(xf(&app), master), "the Control bar's Reset resets the instance: {:?} vs {master:?}", xf(&app));
+    }
+
+    /// Right-clicking a symbol in the Symbols panel selects it (if not already selected),
+    /// displays the context menu, and clicking an item dispatches the corresponding command.
+    #[test]
+    fn right_click_context_menu_in_symbols_panel_runs_actions() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+
+        let has_instance = |doc: &Document, name: &str| {
+            let mut found = false;
+            for l in &doc.layers {
+                l.walk(&mut |c| found |= matches!(&c.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == name));
+            }
+            found
+        };
+
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        // Create two symbols "A" and "B" (clearing the instances symbol.new leaves)
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let id_a = app.run("symbol.new", json!({"name": "A"})).unwrap()["id"].as_u64().unwrap();
+        app.run("edit.clear", json!({"ids": [id_a]})).unwrap();
+        app.run("shape.rectangle", json!({"x": 50, "y": 10, "width": 30, "height": 20})).unwrap();
+        let id_b = app.run("symbol.new", json!({"name": "B"})).unwrap()["id"].as_u64().unwrap();
+        app.run("edit.clear", json!({"ids": [id_b]})).unwrap();
+
+        // Currently "B" is the current symbol
+        assert_eq!(current(&mut app), Some("B".to_string()));
+
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        // In thumbnail view, get symbol A
+        let node_a = h.get_by_label("A");
+        let pos_a = node_a.rect().center();
+
+        // Right-click symbol A
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        // Right-clicking unselected "A" selected it
+        assert_eq!(current(h.state_mut()), Some("A".to_string()));
+
+        // Context menu items are displayed
+        let place = h.get_by_label("   Place Symbol Instance");
+        let _ = h.get_by_label("   Edit Symbol");
+        let _ = h.get_by_label("   Duplicate Symbol");
+        let _ = h.get_by_label("   Delete Symbol");
+        let break_link = h.get_by_label("   Break Link to Symbol");
+        let _ = h.get_by_label("   Select All Instances");
+
+        // Break Link to Symbol is disabled because no instances of A are selected
+        assert!(break_link.accesskit_node().is_disabled());
+
+        // 1. Click "Place Symbol Instance"
+        place.click();
+        h.run_steps(2);
+
+        // An instance of A is placed on the canvas and selected
+        let doc = &h.state().session.active().unwrap().doc;
+        assert!(has_instance(doc, "A"));
+
+        // 2. Right-click symbol A again now that its instance is selected
+        // Place an instance of B as well and select both to verify Break Link is scoped to A
+        let inst_b = h.state_mut().run("symbol.place", json!({ "name": "B" })).unwrap()["id"].as_u64().unwrap();
+        let inst_a = h.state().session.active().unwrap().doc.layers[0].children().unwrap()[0].id.0;
+        h.state_mut().run("select.set", json!({ "ids": [inst_a, inst_b] })).unwrap();
+        h.run_steps(2);
+
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        // Now "Break Link to Symbol" is enabled
+        let break_link = h.get_by_label("   Break Link to Symbol");
+        assert!(!break_link.accesskit_node().is_disabled());
+        break_link.click();
+        h.run_steps(2);
+
+        // Link broken for A (no longer a SymbolInstance of A), while B remains an instance
+        let doc = &h.state().session.active().unwrap().doc;
+        assert!(!has_instance(doc, "A"));
+        assert!(has_instance(doc, "B"));
+
+        // 3. Right-click A and click "Duplicate Symbol"
+        let before_syms = symbols(h.state_mut());
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        h.get_by_label("   Duplicate Symbol").click();
+        h.run_steps(2);
+
+        let after_syms = symbols(h.state_mut());
+        assert_eq!(after_syms.len(), before_syms.len() + 1);
+        assert!(before_syms.iter().all(|s| after_syms.contains(s)));
+        assert!(after_syms.contains(&"A copy".to_string()));
+
+        // 4. Right-click B and click "Edit Symbol"
+        let node_b = h.get_by_label("B");
+        let pos_b = node_b.rect().center();
+        h.event(egui::Event::PointerMoved(pos_b));
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        assert_eq!(current(h.state_mut()), Some("B".to_string()));
+        h.get_by_label("   Edit Symbol").click();
+        h.run_steps(2);
+        assert!(h.state().session.active().unwrap().doc.symbol_edit.is_some());
+
+        // Exit symbol editing mode
+        h.state_mut().run("symbol.exitEditing", json!({})).unwrap();
+        h.run_steps(2);
+
+        // 5. Right-click B and click "Delete Symbol"
+        h.event(egui::Event::PointerMoved(pos_b));
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        h.get_by_label("   Delete Symbol").click();
+        h.run_steps(2);
+
+        // Dialog opened; cancelling preserves B
+        assert!(h.state().ui.dialog.is_some());
+        h.state_mut().ui.dialog = None;
+        assert!(symbols(h.state_mut()).contains(&"B".to_string()));
+
+        // Right-click B again and confirm deletion
+        h.event(egui::Event::PointerMoved(pos_b));
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+        h.get_by_label("   Delete Symbol").click();
+        h.run_steps(2);
+        crate::dialogs::confirm(h.state_mut()).unwrap();
+        assert!(!symbols(h.state_mut()).contains(&"B".to_string()));
+
+        // Also test list view
+        h.state_mut().ui.symbols_view = View::SmallList;
+        h.run_steps(2);
+        let node_a = h.get_by_label("A");
+        let pos_a = node_a.rect().center();
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        assert!(h.query_by_label("   Place Symbol Instance").is_some());
+        h.get_by_label("   Select All Instances").click();
+        h.run_steps(2);
+    }
+
+    /// The Control bar's symbol instance controls leave the room `reserve` asks for after them, the
+    /// gap after the controls included, when the row has no room for any of them.
+    #[test]
+    fn control_bar_symbol_controls_leave_the_reserve_when_none_fits() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let art = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        let instance = app.run("symbol.new", json!({"name": "Mark", "ids": [art]})).unwrap()["id"].clone();
+        app.run("select.set", json!({ "ids": [instance] })).unwrap();
+        let ctx = egui::Context::default();
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 100.0))), ..Default::default() };
+        let mut room = None;
+        let mut out = ctx.run_ui(raw, |ui| {
+            ui.horizontal(|ui| {
+                // Two points more than the reserve: too little for Edit Symbol or Replace.
+                let reserve = ui.available_width() - 2.0;
+                control_bar(&mut app, ui, reserve);
+                room = Some((ui.available_width(), reserve));
+            });
+        });
+        out.textures_delta.clear();
+        let (left, reserve) = room.expect("the row was drawn");
+        assert!(left >= reserve, "{left} pt left after the symbol controls, {reserve} pt reserved");
     }
 }

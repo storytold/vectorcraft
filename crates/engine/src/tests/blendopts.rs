@@ -542,6 +542,47 @@ fn dragging_a_blend_widget_is_one_undo_step_and_a_click_or_escape_none() {
     assert_eq!(spec(&s, g).1.color_shift, 0.0);
 }
 
+/// A blend made without a spine has the Appearance widget alone: a drag of it with the Selection
+/// tool or the Blend tool changes the color shift in one undo step, and there is no Easing widget
+/// to drag.
+#[test]
+fn dragging_the_appearance_widget_of_a_blend_without_a_spine_is_one_undo_step() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 40.0), rect(&mut s, 200.0, 0.0, 40.0));
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.blend.make", &json!({"steps": 3, "createSpine": "never", "orientation": "path"})).unwrap());
+    assert!(spec(&s, g).1.no_spine);
+    let v = ViewInfo::default();
+    let depth = |s: &Session| s.doc().unwrap().history.undo.len();
+    let ptr = |s: &mut Session, kind: PointerKind, x: f64, y: f64| {
+        s.pointer(&PointerEvent::new(kind, x, y), ViewInfo::default()).unwrap();
+    };
+    for (n, tool) in [(1.0, "selection"), (2.0, "blend")] {
+        s.select_tool(tool, v).unwrap();
+        sel(&mut s, &[g]);
+        let d0 = depth(&s);
+        // The Appearance widget sits 16 px above the halfway point (120, 20) of the line between
+        // the key centers.
+        ptr(&mut s, PointerKind::Down, 120.0, 4.0);
+        ptr(&mut s, PointerKind::Drag, 135.0, 4.0);
+        ptr(&mut s, PointerKind::Up, 135.0, 4.0);
+        let sp = spec(&s, g).1;
+        assert_eq!((sp.color_shift, sp.ease.ramp, depth(&s)), (15.0 * n, 0.0, d0 + 1), "{tool}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![g], "{tool}: the blend stays selected");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, g).1.color_shift, 15.0, "each drag is its own undo step");
+    // 16 px below there is no widget: a drag there leaves the easing and the color shift alone.
+    s.select_tool("selection", v).unwrap();
+    sel(&mut s, &[g]);
+    let before = spec(&s, g).1;
+    ptr(&mut s, PointerKind::Down, 120.0, 36.0);
+    ptr(&mut s, PointerKind::Drag, 150.0, 36.0);
+    ptr(&mut s, PointerKind::Up, 150.0, 36.0);
+    let after = spec(&s, g).1;
+    assert_eq!((after.ease, after.color_shift), (before.ease, before.color_shift), "no Easing widget");
+}
+
 #[test]
 fn native_blend_easing_values_clamp_and_non_finite_become_default() {
     for (bad, ramp, shift) in [

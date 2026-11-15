@@ -13,6 +13,7 @@
 	Edge Brightness	Яркост на ръба
 	Smoothness	Гладкост
 	Radial Blur…	Лъчезарно размазване…
+	Blur Center	Център на размазването
 	Smart Blur…	Интелигентно размазване…
 	Sharpen	Изостряне
 	Unsharp Mask…	Контурна маска…
@@ -145,6 +146,7 @@
 	Align to Artboard	Подравняване спрямо работната област
 	Align to Glyph Bounds	Подравняване спрямо границите на глифа
 	Align to Key Object	Подравняване спрямо ключов обект
+	Align to Key Anchor	Подравняване спрямо ключова опорна точка
 	Align to Page	Подравняване спрямо страницата
 	Align to Path	Подравняване спрямо пътя
 	Align to Selection	Подравняване спрямо селекцията
@@ -614,6 +616,8 @@ font-technology	Variable	Променливи
 	Convert to Artboards	Конвертиране в работни области
 	Convert to CMYK	Конвертиране в CMYK
 	Convert to Grayscale	Конвертиране в ска̀ла на сивото
+	Convert to Indexed Color	Конвертиране в индексирани цветове
+	Convert to Indexed Color…	Конвертиране в индексирани цветове…
 	Convert To Outlines	Конвертиране в контури
 	Convert To Point Type	Конвертиране в точков текст
 	Convert to RGB	Конвертиране в RGB
@@ -628,6 +632,7 @@ font-technology	Variable	Променливи
 	Copy All Styles	Копиране на всички стилове
 	Copy Color Value (Hex)	Копиране на цветова стойност (Hex)
 	Copy Fonts Used in the Document	Копиране на шрифтовете, използвани в документа
+	Copy Info	Копиране на информация
 	Copy Links	Копиране на връзките
 	Copy Selected Style	Копиране на избрания стил
 	Copy to User Defined	Копиране в потребителски
@@ -689,6 +694,8 @@ font-technology	Variable	Променливи
 	Crop Image	Изрязване на изображение
 	Image Tools	Инструменти за изображения
 	Remove Background…	Премахване на фона…
+	Draw (Pencil)	Рисуване (Молив)
+	Place Image	Вмъкване на изображение
 	Remove Background	Премахване на фона
 	Background	Фон
 	Edge Color	Цвят на ръба
@@ -885,6 +892,9 @@ font-technology	Variable	Променливи
 	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
 	No alternates for the selected character.	Няма алтернативи за избрания знак.
 	Double-click to replace	Двойно щракване за замяна
+	Click to replace	Щракване за замяна
+	Show all alternates in the Glyphs panel	Показване на всички алтернативи в панела „Глифи“
+	Show Character Alternates	Показване на алтернативите на знака
 	Select one character with the Type tool first.	Първо изберете един знак с инструмента „Текст“.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} е глиф на {font}, а не на шрифта, с който е зададен избраният текст ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} принадлежи на {base} (U+{base_code}) {place}; избраният от вас знак е {sel} (U+{code}).
@@ -1044,7 +1054,10 @@ font-technology	Variable	Променливи
 	Every (minutes)	На всеки (минути)
 	Every option is at its default.	Всички опции са в състояние по подразбиране.
 	Every option matches {base}.	Всички опции съответстват на {base}.
-	Every-line Composer	Композитор за всеки ред
+	Middle Eastern & South Asian Single-line Composer	Ред по ред композитор (Близък изток и Южна Азия)
+	Middle Eastern & South Asian Every-line Composer	Композитор за всеки ред (Близък изток и Южна Азия)
+	Standard Single-line Composer	Стандартен ред по ред композитор
+	Standard Every-line Composer	Стандартен композитор за всеки ред
 	Exact dash lengths	Точни дължини на тиретата
 	Exceptions (comma separated)	Изключения (разделени със запетаи)
 	Exclude	Изключване
@@ -1142,6 +1155,7 @@ font-technology	Variable	Променливи
 	Rotate (Classic)…	Ротация (класическа)…
 	Surface	Повърхност
 	Wireframe	Телена рамка
+	Render Settings	Настройки за рендериране
 	No Shading	Без засенчване
 	Plastic	Пластмаса
 	Highlight Intensity	Интензивност на отблясъка
@@ -1280,6 +1294,7 @@ font-technology	Variable	Променливи
 	Format	Формат
 	Format Options	Опции за формат
 	Format Settings	Настройки на формата
+	Format Settings…	Настройки на формата…
 	Format:	Формат:
 	Formats:	Формати:
 	Fractional Widths	Дробни ширини
@@ -1336,6 +1351,14 @@ font-technology	Variable	Променливи
 	Previous Artboard	Предишна работна област
 	Next Artboard	Следваща работна област
 	Last Artboard	Последна работна област
+	Status Bar Show	Показване в лентата на състоянието
+	Artboard Name	Име на работната област
+	Current Tool	Текущ инструмент
+	Date and Time	Дата и час
+	Number of Undos	Брой отмени
+	Document Color Profile	Цветови профил на документа
+	Undos	Отмени
+	Redos	Повторения
 	Go To Link	Към връзката
 	GPL palettes keep solid colours only, as RGB.	Палитрите GPL запазват само плътни цветове като RGB.
 	GPU Performance	Производителност на графичния процесор
@@ -1355,6 +1378,40 @@ font-technology	Variable	Променливи
 	Graph	Диаграма
 	Graph Data	Данни за диаграма
 	Graph Type	Тип диаграма
+	Graph Options	Опции на диаграмата
+	Left Axis	Лява ос
+	Right Axis	Дясна ос
+	Category Axis	Ос на категориите
+	Separate Scales	Отделни скали
+	Add Drop Shadow	Добавяне на падаща сянка
+	Add Legend Across Top	Добавяне на легенда отгоре
+	First Row in Front	Първият ред отпред
+	First Column in Front	Първата колона отпред
+	Legend	Легенда
+	Column Width	Ширина на колоната
+	Bar Width	Ширина на стълба
+	Cluster Width	Ширина на групата
+	Mark Data Points	Маркиране на точките от данни
+	Connect Data Points	Свързване на точките от данни
+	Edge-to-Edge Lines	Линии от край до край
+	Draw Filled Lines	Чертане на запълнени линии
+	Tick Values	Стойности на отметките
+	Override Calculated Values	Замяна на изчислените стойности
+	Divisions	Деления
+	Tick Marks	Отметки
+	Tick Marks per Division	Отметки на деление
+	Draw Tick Marks Between Labels	Чертане на отметки между етикетите
+	Add Labels	Добавяне на етикети
+	Maximum must be more than Minimum.	Максимумът трябва да е по-голям от минимума.
+	Column Graph	Колонна диаграма
+	Stacked Column Graph	Колонна диаграма с натрупване
+	Bar Graph	Стълбчеста диаграма
+	Stacked Bar Graph	Стълбчеста диаграма с натрупване
+	Line Graph	Линейна диаграма
+	Area Graph	Площна диаграма
+	Scatter Graph	Диаграма на разсейване
+	Pie Graph	Кръгова диаграма
+	Radar Graph	Радарна диаграма
 	Graph Design	Дизайн на диаграма
 	Graph Marker	Маркер на диаграма
 	New Design	Нов дизайн
@@ -1436,6 +1493,7 @@ font-technology	Variable	Променливи
 	Show smooth color wheel	Показване на плавно цветово колело
 	Show segmented color wheel	Показване на сегментирано цветово колело
 	Show color bars	Показване на цветни ленти
+	Find the selected colors in the artwork	Намиране на избраните цветове в илюстрацията
 	Harmony Sets	Набори от хармонии
 	Height	Височина
 	Height:	Височина:
@@ -1474,6 +1532,7 @@ font-technology	Variable	Променливи
 	Highlight anchors on mouse over	Маркиране на опорните точки при задържане на мишката
 	Highlight Rows	Маркиране на редовете
 	Highlight Variable	Маркиране на променливи
+	Sort Variables	Сортиране на променливите
 	Highlight Substituted Fonts	Маркиране на заменени шрифтове
 	Highlight Substituted Glyphs	Маркиране на заменени глифи
 	History	История
@@ -1537,6 +1596,8 @@ font-technology	Variable	Променливи
 	Objects on Path Tool	Инструмент „Обекти по пътя“
 	Attach Objects on Path	Прикрепяне на обекти към пътя
 	Expand Objects on Path	Разширяване на обекти по пътя
+	Detach	Откачване
+	Detach Object from Path	Откачване на обект от пътя
 	Release Live Paint	Освобождаване на динамично оцветяване
 	Release Repeat	Освобождаване на повторение
 	Release Slice	Освобождаване на отрязък
@@ -1624,6 +1685,7 @@ font-technology	Variable	Променливи
 	Images:	Изображения:
 	Import Keyboard Shortcuts…	Импортиране на клавишни комбинации…
 	Import PDF	Импортиране на PDF
+	Import PDF pages as links	Импортиране на страниците на PDF като връзки
 	Import PDF Presets	Импортиране на PDF предварителни настройки
 	Import Perspective Grid Presets	Импортиране на предварителни настройки за перспективна мрежа
 	Import Print Presets	Импортиране на предварителни настройки за печат
@@ -1933,6 +1995,7 @@ font-technology	Variable	Променливи
 	Menu Dialog	Диалогов прозорец на менюто
 	Merge	Сливане
 	Merge colors into one row	Сливане на цветовете в един ред
+	New Row	Нов ред
 	Merge Graphic Styles	Сливане на графични стилове
 	Merge Graphic Styles…	Сливане на графични стилове…
 	Merge Layers	Сливане на слоеве
@@ -2116,6 +2179,29 @@ font-technology	Variable	Променливи
 	Bristle Brush	Четка с косъм
 	Pattern Brush	Четка с мостра
 	missing from the Brushes panel	липсва в панела „Четки“
+	built in	вграден
+	embedding not allowed	вграждането не е разрешено
+	embedding for editing	вграждане за редактиране
+	embedding for preview and print	вграждане за преглед и печат
+	embedding allowed	вграждането е разрешено
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	заместен: показан с {family} {style} ({detail})
+	missing: shown in {family} {style}	липсва: показан с {family} {style}
+	missing	липсва
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Линеен градиент
+	Radial gradient	Радиален градиент
+	Conic gradient	Конусен градиент
+	Diamond gradient	Ромбовиден градиент
+	Freeform gradient	Градиент със свободна форма
+@plural	{n} instance|{n} instances	{n} екземпляр|{n} екземпляра
+@plural	{n} row|{n} rows	{n} ред|{n} реда
+@plural	{n} column|{n} columns	{n} колона|{n} колони
 	Select art to make a scatter, art or pattern brush.	Изберете графика, за да създадете разпръсната четка, артистична четка или четка с мостра.
 	Brush Art	Графика на четка
 	New Calligraphic Brush	Нова калиграфска четка
@@ -2557,8 +2643,13 @@ font-technology	Variable	Променливи
 	Proof Setup	Настройка на пробен печат
 	Properties	Свойства
 	Proportional Metrics	Пропорционални метрики
+	H or V Style	Хоризонтален или вертикален стил
+	Roman Italics	Римски курсив
 	Insert Aki Left	Вмъкване на аки отляво
 	Insert Aki Right	Вмъкване на аки отдясно
+	Tsume	Цуме
+	Adjust Horizontal Diacritic Position	Коригиране на хоризонталната позиция на диакритиците
+	Adjust Vertical Diacritic Position	Коригиране на вертикалната позиция на диакритиците
 	Character Direction	Посока на знаците
 	Digits	Цифри
 	Arabic	Арабски
@@ -2621,6 +2712,11 @@ digits	Malayalam	Малаялам
 	Rating:	Оценка:
 	Real World:	Реален свят:
 	Real-time Drawing and Editing	Чертане и редактиране в реално време
+	Use Monitor Profile for Canvas	Използване на профила на монитора за платното
+	The canvas is drawn in sRGB.	Платното се изобразява в sRGB.
+	Canvas display profile:	Профил на дисплея за платното:
+	The system matches the window to the display's colors.	Системата съгласува цветовете на прозореца с дисплея.
+	No usable display profile was found: the canvas is drawn in sRGB.	Не е намерен използваем профил на дисплея: платното се изобразява в sRGB.
 	Rearrange All Artboards	Пренареждане на всички работни области
 	Rearrange	Пренареждане
 	Select All Artboards	Избиране на всички работни области
@@ -2833,6 +2929,9 @@ digits	Malayalam	Малаялам
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
 	Color Theme Picker	Избор на цветова тема
 	Click or drag across the art to pick its colors; Shift adds more	Щракнете или плъзнете през илюстрацията, за да вземете цветовете ѝ; Shift добавя още
+	Prominent Colors	Преобладаващи цветове
+	Save All Colors	Запази всички цветове
+	Save Prominent Colors	Запази преобладаващите цветове
 	Reset to Default	Връщане към стандартните
 	Reset to White, Black	Нулиране към бяло, черно
 	Reset with Mesh	Нулиране с мрежа
@@ -3275,11 +3374,11 @@ digits	Malayalam	Малаялам
 	Single Left Quotation Mark	Лява единична кавичка
 	Single Quotes:	Единични кавички:
 	Single Right Quotation Mark	Дясна единична кавичка
-	Single-line Composer	Ред по ред композитор
 	Toggle Line Composer	Превключване на композитора на редове
 	Sixth Space	Шесто разстояние
 	Size	Размер
 	Size Tile to Art	Оразмеряване на плочката според обектите
+	Move Tile with Art	Преместване на плочката заедно с обектите
 	Size/Leading	Размер/междуредие
 	Size:	Размер:
 	Ridges per segment:	Изпъкналости на сегмент:
@@ -3310,6 +3409,18 @@ digits	Malayalam	Малаялам
 	Smart Guides (View → Smart Guides)	Интелигентни водачи (Изглед → Интелигентни водачи)
 	Smart Guides (⌘U)	Интелигентни водачи (⌘U)
 	Smart Punctuation…	Интелигентна пунктуация…
+	Smart Punctuation	Интелигентна пунктуация
+	ff, fi, ffi Ligatures	Лигатури ff, fi, ffi
+	ff, fl, ffl Ligatures	Лигатури ff, fl, ffl
+	Smart Quotes	Интелигентни кавички
+	Smart Spaces	Интелигентни интервали
+	En, Em Dashes	Средни и дълги тирета
+	Ellipses	Многоточия
+	Expert Fractions	Експертни дроби
+	Replace In	Замяна в
+	Selected Text Only	Само избрания текст
+	Entire Document	Целия документ
+	Report Results	Отчет за резултатите
 	Smooth	Гладък
 	Corner	Ъгъл
 	Relative	Относителен
@@ -3340,6 +3451,7 @@ digits	Malayalam	Малаялам
 	Solid	Плътен
 	Sort by Kind	Сортиране по вид
 	Sort by Name	Сортиране по име
+	Sort by Size	Сортиране по размер
 	Sort by Status	Сортиране по състояние
 	Source code on GitHub	Изходен код в GitHub
 	Source Sans 3	Source Sans 3
@@ -3369,6 +3481,20 @@ digits	Malayalam	Малаялам
 	Spot Color Objects	Обекти със спот цветове
 	Pattern Objects	Обекти с мостри
 	Gradient Objects	Обекти с градиенти
+	Font Details	Подробности за шрифтовете
+	Linked Images	Свързани изображения
+	Embedded Images	Вградени изображения
+	Compound Paths	Съставни пътища
+	Text Objects	Текстови обекти
+	Placed Documents	Поставени документи
+	Symbol Instances	Екземпляри на символи
+	Gradient Meshes	Мрежи с градиент
+	Blends	Преливания
+	Envelopes	Пликове
+	Intertwine Groups	Групи с преплитане
+	Opacity Masks	Маски за непрозрачност
+	Objects with Effects	Обекти с ефекти
+	Path Length	Дължина на пътя
 	Spot Colors	Спот цветове
 	Spot Colors…	Спот цветове…
 	Spread:	Разпространение:
@@ -3445,6 +3571,8 @@ digits	Malayalam	Малаялам
 	Swap Fill and Stroke (Shift+X)	Размяна на запълването и щриха (Shift+X)
 	Swap start and end arrowheads	Размяна на началната и крайната стрелка
 	Swap the selected object for the file, keeping its place and transform	Замяна на избрания обект с файла, като се запазват мястото и трансформациите му
+	Show Import Options	Показване на опциите за импортиране
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Питане за опциите за импортиране на всеки PDF, DXF или текстов файл преди поставянето му; изключено: използват се последно избраните опции
 	Stylistic Alternates	Стилистични алтернативи
 	Set {n}	Набор {n}
 	Swash	Декоративен елемент
@@ -3491,6 +3619,8 @@ digits	Malayalam	Малаялам
 	Rename Library Group	Преименуване на библиотечна група
 	Delete Library Group	Изтриване на библиотечна група
 	Move Library Item to Group	Преместване на библиотечен елемент в група
+	Rename Library Item	Преименуване на елемент от библиотека
+	Add to Character Styles	Добавяне към стилове на знаци
 	Library	Библиотека
 	Rename Library	Преименуване на библиотека
 	Show Library	Показване на библиотека
@@ -3524,6 +3654,11 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Тате-чу-йоко
 	Tate-chu-yoko Settings…	Настройки на Тате-чу-йоко…
 	Tate-chu-yoko Settings	Настройки на Тате-чу-йоко
+	Warichu	Варичу
+	Warichu Settings…	Настройки на Варичу…
+	Warichu Settings	Настройки на Варичу
+	Lines:	Редове:
+	Line Gap:	Разстояние между редовете:
 	Composite Fonts…	Съставни шрифтове…
 	Composite Fonts	Съставни шрифтове
 	Export Composite Fonts	Експортиране на съставни шрифтове
@@ -3533,6 +3668,8 @@ digits	Malayalam	Малаялам
 	Kana	Кана
 	Numerals	Цифри
 	Scale at Center	Мащабиране от центъра
+	Delete Set	Изтриване на набор
+	Direct Entry	Директно въвеждане
 	Up/Down:	Нагоре/надолу:
 	Left/Right:	Наляво/надясно:
 	Tate-chu-yoko Up/Down	Тате-чу-йоко нагоре/надолу
@@ -3874,6 +4011,9 @@ digits	Malayalam	Малаялам
 	Working CMYK	Работен CMYK
 	Working CMYK (don't tag)	Работен CMYK (без етикет)
 	Working RGB (don't tag)	Работен RGB (без етикет)
+	Don't Color Manage This Document	Без управление на цветовете за този документ
+	Working RGB: {name}	Работен RGB: {name}
+	Working CMYK: {name}	Работен CMYK: {name}
 	Workspace	Работно пространство
 	Workspace {i}	Работно пространство {i}
 	Wrinkle Tool	Инструмент „Набръчкване“
@@ -4052,6 +4192,10 @@ axis	Both	И двете
 	Dock Panel	Закотвен панел
 	Dock to Top	Закотвяне горе
 	Dock to Bottom	Закотвяне долу
+	Dock to Left	Закотвяне вляво
+	Dock to Right	Закотвяне вдясно
+	Dock Toolbar	Закотвяне на лентата с инструменти
+	Float Toolbar	Плаваща лента с инструменти
 	Control Bar Options	Опции на контролната лента
 	Tool Options	Опции за инструмент
 	Object Options	Опции за обект
@@ -4064,6 +4208,7 @@ axis	Both	И двете
 	Drag to the window's left or right edge to dock	Плъзнете до левия или десния ръб на прозореца за закотвяне
 	Float Tool Group	Плаваща група инструменти
 @msg	no library `{id}`	няма библиотека `{id}`
+@msg	the library has another item of that kind named `{name}`	библиотеката вече има друг елемент от този вид с име `{name}`
 @msg	select some type first	първо изберете текст
 @msg	kerning must be a number, "auto", or "optical"	kerning трябва да е число, „auto“ или „optical“
 @msg	{_1} has no {_2} style	{_1} няма стил {_2}
@@ -4099,13 +4244,21 @@ axis	Both	И двете
 	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Този скрипт добави изключително много обекти. Да продължи ли, или да се спре и да се отменят промените му?
 @msg	Copied the script report	Копиран е отчетът за скрипта
+@msg	Copied the link info	Информацията за връзката е копирана
 @msg	Corners edits the corners of a path	Ъглите редактират ъглите на пътя
 @msg	Couldn't copy to the system clipboard: {e}	Неуспешно копиране в системния клипборд: {e}
 @msg	Couldn't open {name}: {e}	Неуспешно отваряне на {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Неуспешно поставяне на {name}: документът, върху който беше пуснат, е затворен
 @msg	Couldn't place {name}: the document it was placed in was closed	Неуспешно поставяне на {name}: документът, в който се поставяше, е затворен
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Неуспешно поставяне на {name}: документът, върху който беше пуснат, е върнат към запазеното
+@msg	Couldn't place {name}: the document it was placed in was reverted	Неуспешно поставяне на {name}: документът, в който се поставяше, е върнат към запазеното
+@msg	Couldn't paste: the document it was pasted in was reverted	Неуспешно поставяне: документът, в който се поставяше, е върнат към запазеното
 @msg	Couldn't read {name}: {e}	Неуспешно четене на {name}: {e}
 @msg	Couldn't save recovery data: {e}	Неуспешно запазване на данните за възстановяване: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване на {title}: {e}. Копията се записват в {folder}, папката за възстановяване по подразбиране; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване на {title}: {e}. Копията се записват в {folder}, папката, зададена в Предпочитания; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване: {e}. Копията се записват в {folder}, папката за възстановяване по подразбиране; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване: {e}. Копията се записват в {folder}, папката, зададена в Предпочитания; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
 @msg	Create Outlines: select text objects	Създаване на контури: изберете текстови обекти
 @msg	Create from Guides: the document has no artboard	Създаване от водачи: документът няма работна област
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Създаване от водачи: водачите правят повече от {MAX_PIECES} парчета
@@ -4490,6 +4643,7 @@ axis	Both	И двете
 @msg	paths contain invalid coordinates	пътищата съдържат невалидни координати
 @msg	paths: give at least one file	пътища: посочете поне един файл
 @msg	replace: the object to replace was changed or deleted	замяна: обектът за замяна е променен или изтрит
+@msg	the document it was prepared for is no longer active	документът, за който е подготвено, вече не е активен
 @msg	pattern missing	липсва мостра
 @msg	patterns nested too deeply are filled with mid-grey	мострите, вложени прекалено дълбоко, се запълват със средно сиво
 @msg	percent must be above 0 and at most 6400, not {p}	percent трябва да е над 0 и най-много 6400, а не {p}
@@ -4633,11 +4787,11 @@ axis	Both	И двете
 @msg	unknown effect `{id}`	непознат ефект `{id}`
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})
-@msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (точки, линии)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, ромбовиден, свободна форма)
+@msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	непознат акцент `{h}`
 @msg	unknown option `{path}.{k}`	непозната опция `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	непознат панел `{raw}`
 @msg	unknown preference `{key}`	непозната настройка `{key}`
 @msg	Preferences imported.	Настройките са импортирани.
@@ -4655,7 +4809,7 @@ axis	Both	И двете
 @msg	`{key}` must be an object	`{key}` трябва да бъде обект
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` се изпълнява самостоятелно, а не като стъпка от пакет
 @msg	unknown preset (one of {_1})	непозната предварителна настройка (една от {_1})
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (висока, средна, ниска или запазена: вижте flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (high, medium, low или запазена: вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	непозната предварителна настройка `{name}` (вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	непозната предварителна настройка `{name}` (вижте webExport.presets.list)
 @msg	unknown side `{other}` (left|right|top|bottom)	непозната страна `{other}` (left|right|top|bottom)
@@ -4714,6 +4868,7 @@ axis	Both	И двете
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Изхвърлен е {n} възстановен документ|Изхвърлени са {n} възстановени документа
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Възстановен е {n} документ: запазете го, за да го съхраните|Възстановени са {n} документа: запазете ги, за да ги съхраните
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Отворено с {n} бележка: {first}|Отворено с {n} бележки: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Отворено с {n} бележка: {first}|{notice}. Отворено с {n} бележки: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} е запазен с {n} бележка: {first}|{path} е запазен с {n} бележки: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вградено е {n} изображение; {missing} липсват: първо ги свържете наново|Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
 @msgplural	Embedded {n} image|Embedded {n} images	Вградено е {n} изображение|Вградени са {n} изображения
@@ -4791,6 +4946,8 @@ axis	Both	И двете
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вградено изображение от {_1} × {_2} пиксела беше намалено до {_3} × {_4} пиксела, за да се запазят слоевете
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	linked type areas past VectorCraft's limits were left out	свързаните текстови области извън ограниченията на VectorCraft бяха пропуснати
+@msg	the Line Breaking setting of legacy type was left out	настройката за прекъсване на редовете на текста в стария формат беше пропусната
+@msg	the Japanese layout rules of legacy type were left out	японските правила за оформление на текста в стария формат бяха пропуснати
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, който сменя посоката на писане в рамките на текстов обект, се отваря в посоката на първия си знак
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, използван като маска в свързани области, обтичащ текст или съставен път, не изрязва
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	свързаните картини без предварителен преглед във файла показват заместител, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
@@ -4909,6 +5066,11 @@ axis	Both	И двете
 @msg	Imported library {name}	Импортирана библиотека {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Правило за RGB:
+	CMYK Policy:	Правило за CMYK:
+	Preserve Embedded Profiles	Запазване на вградените профили
+	Convert to Working Space	Преобразуване в работното пространство
+	Preserve Numbers	Запазване на числата
 	Texture	Текстура
 	Craquelure…	Кракелюр…
 	Grain…	Зърнистост…
@@ -4955,6 +5117,7 @@ effect	Soft	Меко
 	VectorCraft Title Bar on Every Desktop	Заглавна лента на VectorCraft на всеки работен плот
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Докато е зададена, променливата на средата VECTORCRAFT_TITLEBAR избира заглавната лента.
 	System Title Bar takes precedence over this option while it is on.	Докато е включена, „Заглавна лента на системата“ има предимство пред тази опция.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Докато „Заглавна лента на VectorCraft на всеки работен плот“ е изключена, този работен плот изчертава заглавната лента на прозореца независимо дали тази опция е включена.
 	Value Axis	Ос на стойностите
 	On Left Side	От лявата страна
 	On Right Side	От дясната страна
@@ -5031,6 +5194,8 @@ effect	Soft	Меко
 	Step up or down	Стъпка нагоре или надолу
 	Drag values or labels. Double-click a value to type.	Плъзнете стойности или етикети. Кликнете двукратно върху стойност за въвеждане.
 	Drag rings to rotate. Shift snaps to 15°.	Плъзнете пръстените за завъртане. Shift прилепва към 15°.
+	Track cube	Куб за завъртане
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Плъзнете стена, ръб или пръстена за завъртане. Shift завърта около една ос на екрана.
 	Drag the light, or its rings. Shift snaps to 15°.	Плъзнете светлината или нейните пръстени. Shift прилепва към 15°.
 	Keep visible surfaces only when expanding	Запазване само на видимите повърхности при разширяване
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Изрязване на закритата геометрия при разширяване на оформлението. Живият преглед запазва цялата повърхност. Прозрачните бои и повърхности, надвишаващи границите на видимост, запазват всички лица.
@@ -5379,6 +5544,8 @@ lighting	Light	Светлина
 	Pen	Перо
 	Pentagram	Петограм
 	Perceptual	Перцептивен
+	Hue Clockwise	Оттенък по часовниковата стрелка
+	Hue Counterclockwise	Оттенък обратно на часовниковата стрелка
 	Phone 360×800	Телефон 360×800
 	Phone 375×667	Телефон 375×667
 	Phone 375×812	Телефон 375×812
@@ -5610,6 +5777,9 @@ theme	Appearance	Външен вид
 	Softness	Мекота
 	Ambient Light	Околна светлина
 	Light behind the object	Светлина зад обекта
+	Move Light to Back	Премести светлината отзад
+	Move Light to Front	Премести светлината отпред
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Плъзнете светлина, за да я преместите. Клавишите със стрелки местят фокусираната светлина; Shift я мести с 15°.
 	Shadows	Сенки
 	Distance from Object	Разстояние от обекта
 	Shadow Bounds	Граници на сянката
@@ -5815,6 +5985,7 @@ theme	Appearance	Външен вид
 @msg	no such color	няма такъв цвят
 @msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
 @msg	more than one action is named “{_1}”	повече от едно действие се казва „{_1}“
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	действието „{_1}“ задава предпочитанието за папка {_2}; изтрийте тази стъпка, за да запазите набора
 @msg	no symbol named `{n}`	няма символ с име `{n}`
 	Smudge Stick…	Размазваща пръчка…
 	Smudge Stick	Размазваща пръчка
@@ -5948,7 +6119,7 @@ axis	Y Axis	Y ос
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` се прилага към градиентни запълки (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` се прилага към градиентни запълки (paint.setFill)
 @msg	`dither` must be true or false	`dither` трябва да бъде true или false
-@msg	`method` must be classic or perceptual	`method` трябва да е classic или perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` трябва да е classic, perceptual, hue-clockwise или hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Да се инсталира ли „{name}“, който иска голям изчислителен бюджет?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Всяко изпълнение може да продължи до {minutes} минути и да свърши {times} пъти повече работа, отколкото е позволено на другите приставки. То се изпълнява във фонов режим и можете да го откажете.
@@ -5982,6 +6153,8 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Playback Options…	Опции за възпроизвеждане…
+	Button Mode	Режим с бутони
+	No actions.	Няма действия.
 	Insert Stop…	Вмъкване на спиране…
 	Insert Stop	Вмъкване на спиране
 	Record Stop	Записване на спиране
@@ -5989,12 +6162,14 @@ axis	Y Axis	Y ос
 	Continue	Продължаване
 	Continue Action	Продължаване на действието
 	Delete Action Step	Изтриване на стъпка от действието
+	Move Action Step	Преместване на стъпка от действието
 	Press Play Current Selection in the Actions panel to go on.	За да продължите, натиснете „Изпълнение на текущия избор“ в панела „Действия“.
 	Stop: {message}	Спиране: {message}
 @msg	no action is waiting at a stop	няма действие, което чака при спиране
 @msg	message must be text	message трябва да бъде текст
 @msg	allowContinue must be true or false	allowContinue трябва да бъде true или false
 @msg	Batch cannot play an action with a stop	Пакет не може да изпълни действие със спиране
+@msg	Batch cannot play an action with a View menu step	Пакет не може да изпълни действие със стъпка от менюто Изглед
 	Insert Menu Item…	Вмъкване на елемент от меню…
 	Insert Menu Item	Вмъкване на елемент от меню
 	Insert Select Path	Вмъкване на избор на път
@@ -6037,6 +6212,8 @@ axis	Y Axis	Y ос
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране
+	Select Similar Objects	Избор на подобни обекти
+	Select Similar Options	Опции за избор на подобни
 	Leave Out of Global Edit	Изключване от глобалното редактиране
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобалното редактиране работи с пътища, съставни пътища, екземпляри на символи и групи от тях
 	Match	Съвпадение
@@ -6148,6 +6325,29 @@ axis	Y Axis	Y ос
 	Graphite Pencil	Графитен молив
 	Wax Crayon	Восъчен пастел
 	Charcoal Dust	Въглен прах
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технологични схеми
+	Circuit Trace	Проводяща писта
+	Bus Lines	Шинни линии
+	Terminal Nodes	Крайни възли
+
+	Notched Ribbon	Назъбена лента
+	Double Line	Двойна линия
+	Wave	Вълна
+	Teardrop	Сълза
+	Striped Ribbon	Раирана лента
+	Fine Nib	Тънък писец
+	Broad Nib	Широк писец
+	Chisel	Длето
+	Round Pen	Кръгло перо
+	Pressure Pen	Перо с натиск
+	Beads	Мъниста
+	Dash Dot	Тире-точка
+	Scallops	Фестони
+	Stars	Звезди
+	Triangles	Триъгълници
+	Sparkles	Искри
 	Save Brush Library…	Запази библиотека с четки…
 @msg	no empty artboards to delete	няма празни работни области за изтриване
 	Scale Presets	Пресети за мащаб
@@ -6159,6 +6359,13 @@ axis	Y Axis	Y ос
 	Area Text	Текст в зона
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Измерване на текста по границите на глифа
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Опции за прилепване към пиксел
+	Pixel Snapping Options…	Опции за прилепване към пиксел…
+	Snap to Pixel While Drawing	Прилепване към пиксел при рисуване
+	Snap to Pixel While Moving	Прилепване към пиксел при преместване
+	Snap to Pixel While Scaling	Прилепване към пиксел при мащабиране
+	These options take effect when View › Snap to Pixel is on.	Тези опции действат, когато Изглед › Прилепване към пиксел е включено.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показване на опциите за прилепване към глиф
 	Hide Snap to Glyph Options	Скриване на опциите за прилепване към глиф
@@ -6244,6 +6451,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Инспектор на опорни точки
 	Add Points at Crossings	Добавяне на точки в пресичанията
 	Split at Crossings	Разделяне в пресичанията
+	Trim at Crossings Tool	Инструмент „Подрязване в пресичанията“
+	Trim at Crossings	Подрязване в пресичанията
 	Extend Path	Удължаване на път
 	Measure & Inspect	Измерване и проверка
 	Set Anchor	Задаване на опорна точка
@@ -6744,6 +6953,28 @@ breakText	Glyphs	Глифи
 	Show where this tool is	Показване къде е този инструмент
 @msg	missing `tutorial` (see learn.list)	липсва `tutorial` (вижте learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	непознат урок `{id}` (вижте learn.list)
+	View more	Вижте повече
+	Finish tutorial	Завършване на урока
+	Next Up	Следващ
+	You finished the last tutorial in this skill.	Завършихте последния урок в това умение.
+	Back to skills	Обратно към уменията
+	Open Tutorial Sample	Отваряне на примерния файл на урока
+	Finish Tutorial	Завършване на урок
+	Next Tutorial	Следващ урок
+	Show Learn Tab	Показване на раздел в Обучение
+	Show Skill	Показване на умение
+	Back One Level	Едно ниво назад
+	Back to Skills	Обратно към уменията
+@msg	tutorial `{id}` has no practice sample	урокът `{id}` няма примерен файл за упражнение
+@msg	open the practice sample of `{id}` first (see learn.openSample)	първо отворете примерния файл за упражнение на `{id}` (вижте learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	първо завършете `{id}` (вижте learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` е последният урок в своето умение
+	Reset progress	Нулиране на напредъка
+	Mark Tutorial Step	Отбелязване на стъпка от урока
+	Reset Learn Progress	Нулиране на напредъка в обучението
+@msg	missing `step` (see learn.show)	липсва `step` (вижте learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` трябва да е номер на стъпка от 0 до {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` е завършен (вижте learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновяване на отложените ефекти
@@ -6760,3 +6991,30 @@ breakText	Glyphs	Глифи
 	Box	Рамка
 	Swatch	Образец
 	Direction	Посока
+	Banner Hems and Grommets…	Подгъви и капси за банер…
+	Banner Hems and Grommets	Подгъви и капси за банер
+	Hem	Подгъв
+	Grommets	Капси
+	Grommet Inset	Отстъп на капсите от ръба
+	Diameter	Диаметър
+	Nest Shapes…	Подреждане на форми…
+	Nest Shapes	Подреждане на форми
+	Roll	Ролка
+	Packaging Tools	Инструменти за опаковки
+	Fold Lines	Линии на сгъване
+	Make Cut Line	Направи линия за рязане
+	Make Crease Line	Направи линия за биговане
+	Make Partial Cut Line	Направи линия за частично рязане
+	Make Perforation Line	Направи линия за перфорация
+	Make Fold Line	Направи линия на сгъване
+	Role Swatches…	Образци за видовете линии…
+	Role Swatches	Образци за видовете линии
+	Role	Вид линия
+	Cut Line	Линия за рязане
+	Crease Line	Линия за биговане
+	Partial Cut Line	Линия за частично рязане
+	Perforation Line	Линия за перфорация
+	No objects are selected.	Няма избрани обекти.
+	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
+	Remove Fold Line Role	Премахни вида на линията
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

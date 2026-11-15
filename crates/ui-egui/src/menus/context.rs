@@ -73,6 +73,10 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         if !st.selection.anchors.is_empty() {
             v.extend([c("Remove Anchor Points", "path.removeAnchors"), c("Cut Path at Selected Anchor Points", "path.cutAtAnchors")]);
         }
+        // Object › Path › Smooth…, which opens the Smooth slider (`invoke`). `prune` leaves it out
+        // unless object.path.smooth can run: the selection holds a path, in a group or a compound
+        // path too.
+        v.push(c("Smooth…", "object.path.smooth"));
         if several {
             v.push(c("Make Clipping Mask", "object.clippingMask.make"));
         }
@@ -268,7 +272,7 @@ fn prune(app: &VectorcraftApp, items: Vec<Item>) -> Vec<Item> {
 /// The canvas context menu's popup; the item clicked goes in `clicked`, for [`invoke`].
 pub fn context_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
-        ui.set_min_width(200.0);
+        widgets::menu_min_width(ui, 200.0);
         // Its toggles already say what they do (Show Rulers, Hide Guides): no check-mark gutter,
         // except in a submenu of toggles alone (Spelling › Auto Spell Check).
         render_items(app, ui, &context_items(app), false, clicked);
@@ -285,7 +289,7 @@ pub fn ruler_unit_items() -> Vec<Item> {
 /// `clicked`, for [`invoke`].
 pub fn ruler_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
-        ui.set_min_width(160.0);
+        widgets::menu_min_width(ui, 160.0);
         render_items(app, ui, &ruler_unit_items(), true, clicked);
     });
 }

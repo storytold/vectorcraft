@@ -1,8 +1,9 @@
 //! The window's own title bar on Windows and Linux, where the window has no OS decorations
 //! ([`VectorcraftApp::custom_titlebar`]): empty space in the app bar drags the window and a
-//! double-click there maximizes it, caption buttons at the far right minimize, maximize/restore and
-//! close, and thin invisible zones along the window's edges resize it. On macOS the app bar sits
-//! under the system's transparent title bar and only its [`drag_area`] is used.
+//! double-click there maximizes it, caption buttons at the ends that [`CaptionLayout`] names (all three
+//! at the far right by default) minimize, maximize/restore and close, and thin invisible zones along
+//! the window's edges resize it. On macOS the app bar sits under the system's transparent title bar
+//! and only its [`drag_area`] is used.
 
 use egui::{CursorIcon, Id, LayerId, Order, PointerButton, Rect, ResizeDirection, Sense, Stroke, Ui, ViewportCommand, pos2, vec2};
 use serde_json::json;
@@ -18,15 +19,43 @@ pub const WIDTH: f32 = 3.0 * BUTTON_WIDTH;
 const EDGE: f32 = 5.0;
 const CORNER: f32 = 12.0;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum Caption {
+/// A caption button.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Caption {
     Minimize,
     Maximize,
     Close,
 }
 
-/// Left to right.
+/// The default order, left to right.
 const CAPTIONS: [Caption; 3] = [Caption::Minimize, Caption::Maximize, Caption::Close];
+
+/// Which caption buttons the app bar draws at its left end and at its right end, each list left to
+/// right. The desktop app sets it from the desktop's window-button layout on Linux and the BSDs
+/// ([`VectorcraftApp::caption_layout`]). The default has Minimize, Maximize and Close at the right.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct CaptionLayout {
+    pub left: Vec<Caption>,
+    pub right: Vec<Caption>,
+}
+
+impl Default for CaptionLayout {
+    fn default() -> Self {
+        Self { left: Vec::new(), right: CAPTIONS.to_vec() }
+    }
+}
+
+impl CaptionLayout {
+    /// The width the buttons at the left end take.
+    pub fn left_width(&self) -> f32 {
+        self.left.len() as f32 * BUTTON_WIDTH
+    }
+
+    /// The width the buttons at the right end take.
+    pub fn right_width(&self) -> f32 {
+        self.right.len() as f32 * BUTTON_WIDTH
+    }
+}
 
 /// Caption button ids (stable, so tests and agents can find them).
 fn caption_id(c: Caption) -> Id {
@@ -70,15 +99,21 @@ fn handed_to_os(ctx: &egui::Context) {
     ctx.input_mut(|i| i.pointer = Default::default());
 }
 
-/// Minimize, Maximize/Restore and Close at the right end of `bar` (the app bar's outer rect), full
-/// bar height down to its bottom border, flush with the window's edge so a maximized window's
-/// corner hits Close. Close runs `app.quit`, which asks about unsaved documents first.
+/// The buttons of [`VectorcraftApp::caption_layout`] at the left and right ends of `bar` (the app
+/// bar's outer rect), full bar height down to its bottom border, flush with the window's edges so a
+/// maximized window's corner hits the outermost button. Close runs `app.quit`, which asks about
+/// unsaved documents first.
 pub fn caption_buttons(app: &mut VectorcraftApp, ui: &mut Ui, bar: Rect) {
     let t = Tokens::get(ui.ctx());
     let max = maximized(ui.ctx());
     let mut clicked = None;
-    for (i, c) in CAPTIONS.into_iter().enumerate() {
-        let r = Rect::from_min_size(pos2(bar.right() - WIDTH + i as f32 * BUTTON_WIDTH, bar.top()), vec2(BUTTON_WIDTH, bar.height() - 1.0));
+    let layout = &app.caption_layout;
+    let left = layout.left.iter().enumerate().map(|(i, c)| (*c, bar.left() + i as f32 * BUTTON_WIDTH));
+    let right_start = bar.right() - layout.right_width();
+    let right = layout.right.iter().enumerate().map(|(i, c)| (*c, right_start + i as f32 * BUTTON_WIDTH));
+    let placed: Vec<(Caption, f32)> = left.chain(right).collect();
+    for (c, x) in placed {
+        let r = Rect::from_min_size(pos2(x, bar.top()), vec2(BUTTON_WIDTH, bar.height() - 1.0));
         let resp = ui.interact(r, caption_id(c), Sense::click());
         let close = c == Caption::Close;
         let fill = match (resp.is_pointer_button_down_on(), resp.hovered()) {
@@ -293,6 +328,43 @@ mod tests {
             assert_eq!(has("Discord"), width > 1000.0, "{width}: {texts:?}");
             // Search is an icon only (as in PhotoCraft): its label lives in the tooltip.
             assert!(!has("Search commands and tools"), "{width}: {texts:?}");
+        }
+    }
+
+    /// The caption layout decides which buttons the bar draws and at which end, each end in its
+    /// listed order: Close alone at the right, all three at the left with Close outermost, and a
+    /// split. The bar's other controls stay between the two groups, and Close works at either end.
+    #[test]
+    fn caption_buttons_follow_the_caption_layout() {
+        use Caption::*;
+        let width = 1100.0;
+        for (left, right) in [(vec![], vec![Close]), (vec![Close, Minimize, Maximize], vec![]), (vec![Close], vec![Minimize, Maximize])] {
+            let label = format!("{left:?} : {right:?}");
+            let mut w = Win::new(width);
+            w.app.caption_layout = CaptionLayout { left: left.clone(), right: right.clone() };
+            w.frame(vec![]);
+            w.frame(vec![]);
+            for (i, c) in left.iter().enumerate() {
+                let r = w.caption(*c);
+                assert_eq!((r.left(), r.top(), r.width()), (i as f32 * BUTTON_WIDTH, 0.0, BUTTON_WIDTH), "{c:?} in {label}");
+            }
+            for (i, c) in right.iter().enumerate() {
+                let r = w.caption(*c);
+                let right_edge = width - (right.len() - 1 - i) as f32 * BUTTON_WIDTH;
+                assert_eq!((r.right(), r.top(), r.width()), (right_edge, 0.0, BUTTON_WIDTH), "{c:?} in {label}");
+            }
+            for c in CAPTIONS.into_iter().filter(|c| !left.contains(c) && !right.contains(c)) {
+                assert_eq!(w.caption(c), Rect::NOTHING, "{c:?} is not drawn in {label}");
+            }
+            let (start, end) = (left.len() as f32 * BUTTON_WIDTH, width - right.len() as f32 * BUTTON_WIDTH);
+            let widgets = w.bar_widgets();
+            assert!(widgets.len() >= 11, "home, eight menus, workspace switcher, search in {label}: {widgets:?}");
+            for r in &widgets {
+                assert!(r.left() >= start + 8.0 && r.right() <= end - 8.0, "{r:?} runs into the caption buttons in {label}");
+            }
+            let close = w.caption(Close).center();
+            w.click(close);
+            assert_eq!(w.app.ui.status, "quit", "Close in {label}");
         }
     }
 
