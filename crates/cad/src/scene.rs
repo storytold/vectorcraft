@@ -1405,7 +1405,15 @@ impl<'a> Scene<'a> {
         use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image as CodecImage, SampleType};
         let blob = self.doc.image_blob(im).filter(|b| !b.bytes.is_empty()).ok_or_else(|| "an image has no pixels and was left out".to_string())?;
         // The pixels it converts to (RGBA, 4 bytes each) are read from its header before decoding.
-        let (w, h) = craft_image_codecs::probe_size(&blob.bytes).map_err(|_| UNDECODED.to_string())?;
+        let (w, h) = match craft_image_codecs::detect(&blob.bytes) {
+            Some(Format::Png | Format::Jpeg | Format::Bmp | Format::Tiff) => {
+                // The generic probe does not cover these stored raster dimensions.
+                let limits = craft_image_codecs::Limits { max_width: u32::MAX, max_height: u32::MAX, max_pixels: u64::MAX, ..Default::default() };
+                craft_image_codecs::probe_stored_size(&blob.bytes, &limits)
+            }
+            _ => craft_image_codecs::probe_size(&blob.bytes),
+        }
+        .map_err(|_| UNDECODED.to_string())?;
         if u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS {
             return Err("an image is too large for DXF and was left out".to_string());
         }
