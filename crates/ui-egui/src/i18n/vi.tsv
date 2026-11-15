@@ -739,6 +739,7 @@ font-technology	Variable	Biến thiên
 	Copy Color Value (Hex)	Sao chép giá trị màu (Hex)
 	Copy Fonts Used in the Document	Sao chép phông đã dùng trong tài liệu
 	Copy into the document's folder	Sao chép vào thư mục tài liệu
+	Copy Info	Sao chép thông tin
 	Copy Links	Sao chép liên kết
 	Copy only fonts you own or are licensed to install.	Chỉ sao chép phông chữ bạn sở hữu hoặc có giấy phép cài đặt.
 	Copy Selected Style	Sao chép kiểu đã chọn
@@ -1959,6 +1960,7 @@ digits	Hindi	Hindi
 	Import Library	Nhập thư viện
 	Import Library…	Nhập thư viện…
 	Import PDF	Nhập PDF
+	Import PDF pages as links	Nhập các trang PDF dưới dạng liên kết
 	Import PDF Presets	Nhập thiết lập sẵn PDF
 	Import Perspective Grid Presets	Nhập thiết lập sẵn lưới phối cảnh
 	Import Print Presets	Nhập thiết lập sẵn in
@@ -3015,6 +3017,8 @@ mark-style	Japanese	Kiểu Nhật
 	Proof Setup	Thiết lập thử nghiệm
 	Properties	Thuộc tính
 	Proportional Metrics	Số liệu theo tỷ lệ
+	H or V Style	Kiểu ngang hoặc dọc
+	Roman Italics	Nghiêng Roman
 	Insert Aki Left	Chèn aki bên trái
 	Insert Aki Right	Chèn aki bên phải
 	Tsume	Tsume
@@ -3046,6 +3050,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial	Hướng tâm
 	Radial Blur	Mờ hướng tâm
 	Radial Blur…	Mờ hướng tâm…
+	Blur Center	Tâm làm mờ
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
 	Organic Fades	Mờ dần tự nhiên
@@ -3839,6 +3844,18 @@ mark-style	Japanese	Kiểu Nhật
 	Smart Guides (View → Smart Guides)	Đường căn thông minh (Hiển thị → Đường căn thông minh)
 	Smart Guides (⌘U)	Đường căn thông minh (⌘U)
 	Smart Punctuation…	Dấu câu thông minh…
+	Smart Punctuation	Dấu câu thông minh
+	ff, fi, ffi Ligatures	Chữ ghép ff, fi, ffi
+	ff, fl, ffl Ligatures	Chữ ghép ff, fl, ffl
+	Smart Quotes	Dấu ngoặc kép thông minh
+	Smart Spaces	Khoảng trắng thông minh
+	En, Em Dashes	Gạch ngang ngắn và dài
+	Ellipses	Dấu chấm lửng
+	Expert Fractions	Phân số chuyên dụng
+	Replace In	Thay thế trong
+	Selected Text Only	Chỉ văn bản đã chọn
+	Entire Document	Toàn bộ tài liệu
+	Report Results	Báo cáo kết quả
 	Smooth	Mượt
 	Smooth Color	Màu mượt
 	Smooth Tool	Công cụ Làm mượt
@@ -3861,6 +3878,7 @@ mark-style	Japanese	Kiểu Nhật
 	Sort	Sắp xếp
 	Sort by Kind	Sắp xếp theo loại
 	Sort by Name	Sắp xếp theo tên
+	Sort by Size	Sắp xếp theo kích thước
 	Sort by Status	Sắp xếp theo trạng thái
 	Source code on GitHub	Mã nguồn trên GitHub
 	Source Image	Ảnh nguồn
@@ -4844,6 +4862,7 @@ theme	Appearance	Giao diện
 @msg	there is no script engine named {name}	không có bộ máy tập lệnh nào tên {name}
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
+@msg	Copied the link info	Đã sao chép thông tin liên kết
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
 @msg	could not decode image: {0}	không thể giải mã ảnh: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Không thể sao chép vào khay nhớ tạm hệ thống: {e}
@@ -5261,6 +5280,8 @@ theme	Appearance	Giao diện
 @msg	result would exceed the canvas (coordinates out of range)	kết quả sẽ vượt quá vùng vẽ (tọa độ ngoài phạm vi)
 @msg	objects can't be nested more than 32 deep	không thể lồng các đối tượng sâu quá 32 cấp
 @msg	the SVG's elements are nested more than {0} deep	các phần tử SVG lồng nhau sâu quá {0} cấp
+@msg	the SVG's style sheets take too long to match	việc so khớp các biểu định kiểu của SVG mất quá nhiều thời gian
+@msg	the SVG's styles expand to more than {0} MB	các kiểu của SVG khi mở rộng chiếm hơn {0} MB
 @msg	Save for Web: the image is empty	Lưu cho Web: ảnh trống
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Lưu ghi {_1}, không phải {_2}: dùng document.export cho các định dạng khác
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Lưu ghi {_1}, không phải {_2}: dùng file.saveAsTemplate để ghi định dạng này
