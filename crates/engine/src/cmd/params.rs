@@ -512,7 +512,6 @@ pub const UNCHECKED: &[&str] = &[
     "assets.settings.set",
     "attributes.info",
     "attributes.set",
-    "brush.freehand",
     "css.export",
     "css.generate",
     "css.selection",
