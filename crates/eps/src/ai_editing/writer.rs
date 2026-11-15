@@ -307,6 +307,13 @@ pub(super) struct Writer<'a> {
     shown: Vec<vectorcraft_geom::BezPath>,
     /// The copy of an image that the last [`Self::image`] wrote as a window, when it did.
     windowed: Option<images::Windowed>,
+    /// Writing a graph's art with its records ([`Self::graph_records`]): a graph inside it is written
+    /// as its art.
+    in_graph: bool,
+    /// The `Go` line the next object, a graph's series group, is followed by.
+    series_tag: Option<String>,
+    /// Where the `Go` lines of the graph being written start in [`Self::body`].
+    graph_tags: Vec<usize>,
 }
 
 impl<'a> Writer<'a> {
@@ -382,6 +389,9 @@ impl<'a> Writer<'a> {
             whole_images: HashMap::new(),
             shown: vec![],
             windowed: None,
+            in_graph: false,
+            series_tag: None,
+            graph_tags: vec![],
         }
     }
 
@@ -662,6 +672,7 @@ impl<'a> Writer<'a> {
 
     /// One object: its state before it, its transparency, and its name and opacity mask after it.
     fn node(&mut self, n: &Node) {
+        let tag = self.series_tag.take();
         if let NodeKind::Layer { .. } = n.kind {
             return self.write_layer(n, &[]);
         }
@@ -672,7 +683,8 @@ impl<'a> Writer<'a> {
         if self.in_symbol {
             self.wrote_fixed |= symbols::redrawn(n);
         }
-        if n.extras().graph.is_some() && !self.in_look {
+        let graph = if n.extras().graph.is_some() && !self.in_look { self.graph_records(n) } else { None };
+        if n.extras().graph.is_some() && !self.in_look && graph.is_none() {
             self.warn(GRAPHS);
         }
         // On the layers or in an opacity mask's art (a symbol's and a pattern tile's included),
@@ -699,14 +711,18 @@ impl<'a> Writer<'a> {
         let start = self.body.len();
         // An image's copy written as the part that its opacity mask, among other regions, shows.
         let mut mask_window = None;
+        let charged = self.charges();
         match &n.kind {
             NodeKind::Layer { .. } => {}
             NodeKind::Group { children, clip: true } => self.clip_group(children, xy),
             NodeKind::Group { children, clip: false } => {
                 if self.open_group("u") {
+                    self.in_graph |= graph.is_some();
                     for c in children {
+                        self.series_tag = graph.as_ref().and_then(|g| g.tags.get(&c.id).cloned());
                         self.node(c);
                     }
+                    self.in_graph &= graph.is_none();
                     self.end_group("U", xy);
                 }
             }
@@ -809,6 +825,11 @@ impl<'a> Writer<'a> {
             // A group's dictionary goes between its end and its state block.
             let block = (self.block_end == self.body.len() && self.block_start >= start).then(|| self.body.split_off(self.block_start));
             self.block_end = usize::MAX;
+            // A graph's series group is tagged right after its end, before its dictionary.
+            if let Some(t) = tag {
+                self.graph_tags.push(self.body.len());
+                self.line(&t);
+            }
             let mask_written = self.dictionary(n);
             if let Some(b) = block {
                 self.body.push_str(&b);
@@ -822,6 +843,41 @@ impl<'a> Writer<'a> {
         if deform {
             self.line(&envelopes::plugin_line());
         }
+        if let Some(g) = graph {
+            self.graph_end(g, start, charged);
+        }
+    }
+
+    /// The records of graph `n` ([`crate::ai_graph::records`]) when it is written as a graph: on the
+    /// layers, outside art cut to a clipping object, symbols' art, live objects' art and another
+    /// graph, and without an art style anywhere in it. `None` when it is written as its art.
+    fn graph_records(&self, n: &Node) -> Option<crate::ai_graph::Records> {
+        fn has_style(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+            styled.contains_key(&n.id) || n.children().is_some_and(|c| c.iter().any(|c| has_style(c, styled)))
+        }
+        let placed = self.hidden == 0 && self.nest == 0 && self.drawn == 0 && self.clip.is_none() && !self.in_symbol && !self.in_graph;
+        if !placed || has_style(n, &self.styled) {
+            return None;
+        }
+        crate::ai_graph::records(n, self.to_art)
+    }
+
+    /// The graph whose art was written from `start` on, charged from `charged`, ends: its records go
+    /// before the art and `%_GS` after it, or, when art in it was left out ([`Self::take_objects`]),
+    /// its `Go` lines are taken out and it stays its art, with a warning.
+    fn graph_end(&mut self, records: crate::ai_graph::Records, start: usize, charged: Charges) {
+        let tags = std::mem::take(&mut self.graph_tags);
+        if self.body.len() > start && !self.left_out_since(charged) {
+            self.body.insert_str(start, &records.head);
+            self.line(crate::ai_graph::END);
+            return;
+        }
+        for at in tags.into_iter().rev() {
+            if let Some(len) = self.body.get(at..).and_then(|rest| rest.find('\n')) {
+                self.body.replace_range(at..=at + len, "");
+            }
+        }
+        self.warn(GRAPHS);
     }
 
     /// Live object `n`, of transparency `xy`, as a group of its art, with `warning` when it is given.
