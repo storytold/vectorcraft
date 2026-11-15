@@ -295,7 +295,8 @@ impl OtFeatures {
         let own = self.with_tags(listed.iter().map(String::as_str));
         let s = &own;
         let mut v = Vec::with_capacity(8);
-        if st.kerning.is_some() {
+        // A monospaced width form turns the font's pair kerning off as well.
+        if st.kerning.is_some() || st.glyph_form.is_width() {
             v.push(f(b"kern", false));
         }
         let liga = s.ligatures && (!ligatures_suppressed_by(st.tracking) || explicit_ligatures(listed));
@@ -342,15 +343,20 @@ impl OtFeatures {
             // Kerning for the glyphs `palt` makes proportional (OpenType `apkn`), with automatic
             // kerning only.
             v.push(f(b"apkn", st.kerning.is_none()));
+        } else if st.glyph_form.is_width() {
+            // Listed as off, not left out: in runs shaped together with proportional text, a
+            // feature left out is set back to the shaper's default, which for `apkn` is on.
+            v.push(f(b"apkn", false));
         }
         v
     }
 
     /// Does text in style `st` take proportional widths (`palt`)? Proportional Metrics in
-    /// horizontal type; vertical type takes proportional heights instead
+    /// horizontal type, except with a monospaced width form ([`vectorcraft_doc::GlyphForm::is_width`]),
+    /// which sets the characters on a fixed width; vertical type takes proportional heights instead
     /// ([`Self::proportional_vertical`]).
     pub(crate) fn proportional(&self, st: &CharStyle) -> bool {
-        st.proportional_metrics && !self.vertical
+        st.proportional_metrics && !self.vertical && !st.glyph_form.is_width()
     }
 
     /// Does text in style `st` take proportional heights (`vpal`)? Proportional Metrics in
@@ -629,5 +635,45 @@ mod tests {
         assert_eq!((serbian.len(), russian.len()), (5, 5));
         assert!(serbian.iter().zip(&russian).all(|(s, r)| s != r), "every letter in its Serbian form");
         assert_eq!(outlines("sr-Latn"), serbian);
+    }
+
+    /// A monospaced width form (`fwid`, `hwid`, `twid`, `qwid`) and Proportional Metrics' `palt`
+    /// are mutually exclusive: with a width form `palt` is left out and the font's pair kerning
+    /// (`kern`, and `apkn` for `palt`'s glyphs) is turned off, with automatic or manual kerning,
+    /// and with the other forms they stay.
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid>
+    #[test]
+    fn width_forms_turn_off_proportional_metrics() {
+        use vectorcraft_doc::GlyphForm;
+        let tags = |form, kerning, value| {
+            let st = CharStyle { proportional_metrics: true, glyph_form: form, kerning, ..CharStyle::default() };
+            OtFeatures::default().resolve(&st).iter().filter(|f| f.value == value).map(|f| f.tag.to_string()).collect::<Vec<_>>()
+        };
+        for form in [GlyphForm::Default, GlyphForm::Traditional, GlyphForm::Jis78] {
+            assert!(tags(form, None, 1).contains(&"palt".to_string()), "{form:?}: {:?}", tags(form, None, 1));
+            assert!(!tags(form, None, 0).contains(&"kern".to_string()), "{form:?}: {:?}", tags(form, None, 0));
+        }
+        for form in [GlyphForm::FullWidth, GlyphForm::HalfWidth, GlyphForm::ThirdWidth, GlyphForm::QuarterWidth] {
+            for kerning in [None, Some(0.0)] {
+                let on = tags(form, kerning, 1);
+                assert!(!on.contains(&"palt".to_string()) && !on.contains(&"apkn".to_string()), "{form:?}: {on:?}");
+                assert!(on.iter().any(|t| t.as_bytes() == form.feature().unwrap()), "{form:?}: {on:?}");
+                // Listed as off, so that runs shaped together with proportional text keep them off.
+                let off = tags(form, kerning, 0);
+                assert!(off.contains(&"kern".to_string()) && off.contains(&"apkn".to_string()), "{form:?} {kerning:?}: {off:?}");
+            }
+        }
+    }
+
+    /// A face's `GPOS` features are found apart from its `GSUB` ones: Source Sans 3 kerns with
+    /// `GPOS` and makes ligatures with `GSUB`.
+    #[test]
+    fn positioning_and_substitution_features_are_found_in_their_own_tables() {
+        let face = FontDb::global().face("Source Sans 3", "Regular").unwrap();
+        assert!(face.has_positioning_feature(*b"kern"));
+        assert!(!face.has_substitution_feature(*b"kern"));
+        assert!(face.has_substitution_feature(*b"liga"));
+        assert!(!face.has_positioning_feature(*b"liga"));
+        assert!(!face.has_positioning_feature(*b"fwid"));
     }
 }
