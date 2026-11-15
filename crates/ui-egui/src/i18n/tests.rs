@@ -158,6 +158,25 @@ fn hindi_rows_keep_the_meaning_of_their_english() {
         "पेज थंबनेल RGB पिक्सल का होना चाहिए, हर तरफ़ 1 से 256 (मिला 0 × 4)"
     );
     assert_eq!(message(hi, "invalid angle"), "अमान्य कोण");
+    let limits = message(
+        hi,
+        "the image would be 9000 × 9000 pixels; raster exports are limited to 8192 pixels per side and 64 megapixels: lower the scale or resolution",
+    );
+    assert!(
+        limits.contains("9000 × 9000 पिक्सेल") && limits.contains("8192 पिक्सेल और 64 मेगापिक्सेल") && limits.contains("स्केल या रिज़ॉल्यूशन कम करें"),
+        "{limits}"
+    );
+    assert_eq!(
+        message(hi, "color books in color space HSB aren't supported (only RGB, CMYK and Lab)"),
+        "कलर स्पेस HSB वाली कलर बुक समर्थित नहीं हैं (केवल RGB, CMYK और Lab)"
+    );
+    assert_eq!(message(hi, "`index` must be a whole number"), "`index` पूरी संख्या होनी चाहिए");
+    let knockout = message(
+        hi,
+        "knockout groups with too many overlapping translucent elements are written as PDF knockout groups: \
+         their translucent elements knock out what they cover fully",
+    );
+    assert!(knockout.starts_with("बहुत अधिक ओवरलैप") && knockout.contains("PDF नॉकआउट ग्रुप"), "{knockout}");
     assert_eq!(tr(hi, "Desired"), "वांछित");
     let range = "न्यूनतम, वांछित से अधिक नहीं होना चाहिए और वांछित, अधिकतम से अधिक नहीं होना चाहिए";
     assert_eq!(tr(hi, "Minimum must not exceed Desired, nor Desired Maximum."), format!("{range}।"));
@@ -2237,6 +2256,42 @@ fn script_file_messages_translate_in_every_complete_message_language() {
     assert_eq!(message(de, "Script file access denied: C:/x/a.txt"), "Dateizugriff des Skripts verweigert: C:/x/a.txt");
 }
 
+/// `file.info`'s refusal of a value with control characters is two whole messages, one for the
+/// fields that take line breaks and one for the fields that don't, and each is translated in every
+/// complete-message language with the field's key kept as written.
+#[test]
+fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
+    use serde_json::json;
+    let literals = message_literals_in(&["engine"]);
+    for key in ["{k} has control characters", "{k} has control characters or line breaks"] {
+        assert!(literals.contains(key), "the message scan doesn't find {key:?}");
+    }
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let refusals = [
+        (json!({"description": "a\u{7}b"}), "description", "has control characters"),
+        (json!({"copyrightNotice": "a\u{7}b"}), "copyrightNotice", "has control characters"),
+        (json!({"title": "a\nb"}), "title", "has control characters or line breaks"),
+        (json!({"author": "a\nb"}), "author", "has control characters or line breaks"),
+        (json!({"authorTitle": "a\rb"}), "authorTitle", "has control characters or line breaks"),
+        (json!({"copyrightUrl": "a\u{7}b"}), "copyrightUrl", "has control characters or line breaks"),
+        (json!({"keywords": ["ok", "a\tb"]}), "keywords", "has control characters or line breaks"),
+    ];
+    for (params, field, rule) in refusals {
+        let error = s.execute("file.info", &params).unwrap_err().to_string();
+        assert_eq!(error, format!("invalid parameters for `file.info`: {field} {rule}"));
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &error);
+            // Whole runs of Latin letters, so that Spanish's "control" is not read as English and
+            // Korean's `description에` still shows the key.
+            let words: Vec<&str> = shown.split(|c: char| !c.is_ascii_alphabetic()).collect();
+            let english = ["has", "characters", "or", "line", "breaks"];
+            assert!(words.iter().all(|w| !english.contains(w)), "{code}: {shown}");
+            assert!(words.contains(&field), "{code}: {shown}");
+        }
+    }
+}
+
 /// Every complete-message catalog has a row for each error that `type.compositeFonts.set`,
 /// `.export` and `.import`, the composite font checks behind them and the Composite Fonts dialog
 /// give, and translates them with the font name, the key and the class key kept, and the reason
@@ -2386,6 +2441,26 @@ fn a_repeated_placeholder_matches_the_same_text() {
     assert_eq!(form, "thrown {file} {line} {e}");
     assert_eq!(caps.last(), Some(&("e", "Error: confirm: the next answer is for prompt, not confirm")));
     assert!(c.message("alert: the next answer is for prompt, not confirm").is_none());
+}
+
+/// Of two templates that start with text, the one with the longer text before its first
+/// placeholder matches first, so a row that wraps a message takes it before a row with more text
+/// in all whose placeholder would take part of it; a quoted name may still hold a backtick.
+#[test]
+fn the_longer_leading_text_matches_first() {
+    let c = Catalog::parse(concat!(
+        "@msg\t`{key}` must be true or false\tkey {key}\n",
+        "@msg\t`answers[{i}]` {e}\tanswer {i} {e}\n",
+        "@msg\tno brush named `{name}`\tbrush {name}\n",
+    ));
+    let (form, caps) = c.message("`select` must be true or false").expect("matches");
+    assert_eq!((form, caps), ("key {key}", vec![("key", "select")]));
+    let (form, caps) = c.message("`answers[3]` is a confirm's answer, whose `value` must be true or false").expect("matches");
+    assert_eq!((form, caps), ("answer {i} {e}", vec![("i", "3"), ("e", "is a confirm's answer, whose `value` must be true or false")]));
+    let (form, caps) = c.message("`a`b` must be true or false").expect("matches");
+    assert_eq!((form, caps), ("key {key}", vec![("key", "a`b")]));
+    let (form, caps) = c.message("no brush named `a`b`").expect("matches");
+    assert_eq!((form, caps), ("brush {name}", vec![("name", "a`b")]));
 }
 
 /// A template that starts with text matches a message it wraps before a template that starts
@@ -3200,6 +3275,72 @@ fn f(text: &str, n: usize) -> Result<u32, String> {
     assert!(message_literals_in(&["effects"]).contains("the SVG filter isn't valid XML: {e}"));
 }
 
+/// The scan reads the message a `.map_err` closure gives with `return`, also from inside an `if`
+/// branch or a `let` statement but not from a closure inside it, the last expression after a block
+/// statement with no `;`, and the values a `let` statement gives a local that the closure returns,
+/// and not those of a local the closure only passes elsewhere or writes into a format string, by
+/// name or as a `format!` argument.
+#[test]
+fn message_scan_reads_returns_and_tails_and_skips_locals() {
+    let code = r#"
+fn f(text: &str) -> Result<u32, String> {
+    let a = read(text).map_err(|_| {
+        return "the file cannot be read".to_string();
+    })?;
+    let b = read(text).map_err(|e| {
+        if e.is_io() {
+            return format!("the disk failed: {e}");
+        }
+        e.to_string()
+    })?;
+    let c = read(text).map_err(|e| {
+        if e.is_io() { cleanup(); }
+        format!("the file is cut short: {e}")
+    })?;
+    let d = read(text).map_err(|e| {
+        if e.is_io() { cleanup(); }
+        let level = if e.is_io() { "warning" } else { "error" };
+        log_failure(level, &e);
+        format!("the file is not a library: {e}")
+    })?;
+    let g = read(text).map_err(|e| {
+        let kind = match e.kind() {
+            Kind::Gone => return GONE.into(),
+            _ => { "some other kind" }
+        };
+        format!("the {kind} file is wrong")
+    })?;
+    let h = read(text).map_err(|e| {
+        let name = e.name().unwrap_or_else(|| return "unnamed source");
+        let note = e.note().map(move |n| { return "noted source" });
+        format!("the source {name} is gone")
+    })?;
+    let k = read(text).map_err(|e| {
+        let why = if e.is_deep() { format!("its objects are nested too deep ({e})") } else { e.to_string() };
+        FormatError::NotVectorcraft(why)
+    })?;
+    let m = read(text).map_err(|e| {
+        let level = if e.is_io() { "warning" } else { "error" };
+        format!("the file failed with a {}", level)
+    })?;
+    Ok(a)
+}
+"#;
+    let consts = [("GONE", "the file is gone")].map(|(k, v)| (k.to_string(), vec![v.to_string()])).into();
+    let want = [
+        "the file cannot be read",
+        "the disk failed: {e}",
+        "the file is cut short: {e}",
+        "the file is not a library: {e}",
+        "the file is gone",
+        "the {kind} file is wrong",
+        "the source {name} is gone",
+        "its objects are nested too deep ({e})",
+        "the file failed with a {_1}",
+    ];
+    assert_eq!(source_messages(code, &[], &consts), want);
+}
+
 /// The scan reads the messages of an error handler that a `.map_err(name)` names: a closure bound
 /// to that name, up to its `;`, and a function of that name, each of its statements.
 #[test]
@@ -3734,6 +3875,96 @@ fn dataset_import_repeated_column_error_is_translated() {
     }
 }
 
+/// The scan reads the refusals `script.run`'s `param(msg)` gives, and not the arguments of a type's
+/// own function of that name.
+#[test]
+fn message_scan_reads_script_run_param_refusals() {
+    let code = r#"
+fn f(p: &Value) -> Result<()> {
+    let grays = Grays::param(C, p)?;
+    let pick = Pick::param(p, C)?;
+    let _ = cmd::bad(C, "the name is too long");
+    Err(param("`path` is empty"))
+}
+"#;
+    let engine: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "engine").map(|&(_, call, before)| (call, before)).collect();
+    let consts = [("C".to_string(), vec!["view.proofSetup".to_string()])].into();
+    assert_eq!(source_messages(code, &engine, &consts), ["the name is too long", "`path` is empty"]);
+}
+
+/// `script.run`'s refusals of `answers`, the list's own, an answer's at its index and the refusal
+/// of `answers` in the app, are translated in every language that translates every message, with
+/// the index, the counts and the code names kept. The command's error stays in English.
+#[test]
+fn script_answers_errors_are_translated() {
+    use serde_json::{Value, json};
+    use vectorcraft_engine::{EngineError, Session};
+    let reasons = [
+        "must be an object with `kind` and `value`",
+        "must have exactly `kind` and `value`",
+        "is an alert's answer, whose `value` must be \"ok\"",
+        "is a confirm's answer, whose `value` must be true or false",
+        "is longer than 16 KiB",
+        "is a prompt's answer, whose `value` must be a string or null",
+        "must have `kind` alert, confirm or prompt",
+    ];
+    let in_app = "`answers` is only for a run with nobody to ask: in the app, the person answers each dialog";
+    let lists = ["`answers` must be a list of answers", "`answers` has more than {MAX_ANSWERS} answers", "`answers` is larger than 1 MiB"];
+    let scanned = message_literals();
+    for template in reasons.into_iter().chain(lists).chain(["`answers[{i}]` {e}", in_app]) {
+        assert!(scanned.contains(template), "{template}");
+    }
+    let ok = json!({"kind": "alert", "value": "ok"});
+    let wrong = [
+        json!(1),
+        json!({"kind": "alert"}),
+        json!({"kind": "alert", "value": "yes"}),
+        json!({"kind": "confirm", "value": "yes"}),
+        json!({"kind": "prompt", "value": "x".repeat(16 * 1024 + 1)}),
+        json!({"kind": "prompt", "value": 1}),
+        json!({"kind": "beep", "value": 1}),
+    ];
+    let run = |s: &mut Session, answers: Value| s.execute("script.run", &json!({"source": "1", "answers": answers})).unwrap_err();
+    let mut s = Session::new();
+    // Each error, with the English message the command gives and the reason an answer's holds.
+    let mut errors = vec![];
+    for (reason, answer) in reasons.into_iter().zip(wrong) {
+        for at in [3, 9_999] {
+            let mut list = vec![ok.clone(); at];
+            list.push(answer.clone());
+            errors.push((run(&mut s, json!(list)), format!("`answers[{at}]` {reason}"), Some(reason)));
+        }
+    }
+    errors.push((run(&mut s, json!("ok")), lists[0].to_string(), None));
+    errors.push((run(&mut s, json!(vec![ok.clone(); 10_001])), "`answers` has more than 10000 answers".to_string(), None));
+    let long = json!({"kind": "prompt", "value": "x".repeat(16 * 1024)});
+    errors.push((run(&mut s, json!(vec![long; 70])), lists[2].to_string(), None));
+    s.script_frames = true;
+    errors.push((run(&mut s, json!([ok])), in_app.to_string(), None));
+    for (e, want, reason) in &errors {
+        assert!(matches!(e, EngineError::BadParams { cmd, msg } if cmd == "script.run" && msg == want), "{e}");
+        let line = e.to_string();
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            let shown = message(lang, &line);
+            let inner = message(lang, want);
+            assert_ne!(inner, *want, "{code}");
+            assert!(shown.contains(&inner) && !shown.contains("invalid parameters"), "{code}: {shown}");
+            if let Some(reason) = reason {
+                let translated = message(lang, reason);
+                assert_ne!(translated, *reason, "{code}");
+                assert!(inner.contains(&translated), "{code}: {inner}");
+            }
+            let numbers: Vec<&str> = want.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).collect();
+            let names = ["`answers", "`kind`", "`value`", "true", "false", "null"];
+            assert!(numbers.iter().chain(&names).all(|n| !want.contains(n) || shown.contains(n)), "{code}: {shown}");
+            if want.ends_with("alert, confirm or prompt") {
+                assert!(["alert", "confirm", "prompt"].iter().all(|k| shown.contains(k)), "{code}: {shown}");
+            }
+        }
+    }
+}
+
 /// The errors of a command's parameter schema are translated in every language that translates
 /// every message, with the parameter's path and the refused value kept.
 #[test]
@@ -3920,13 +4151,50 @@ fn bracketed_message_parts_translate_only_as_exact_messages() {
         let point = message(lang, "[x, y] (two numbers)");
         assert_ne!(point, "[x, y] (two numbers)", "{code}");
         assert!(point.contains("[x, y]"), "{code}: {point}");
-        for got in ["[1]", "[1, 2, 3]", r#"{"objects": [1]}"#, r#"[{"a": 1}, "b: c", …"#] {
+        // ``["] `x`: b"]`` fits the text of the effect refusal ``[{j}] `{_1}`: {why}`` but not its index.
+        for got in ["[1]", "[1, 2, 3]", r#"{"objects": [1]}"#, r#"[{"a": 1}, "b: c", …"#, r#"["] `x`: b"]"#] {
             let shown = message(lang, &format!("`center` must be [x, y] (two numbers), not {got}"));
             assert!(shown.contains(&point) && shown.contains(got), "{code}: {shown}");
             let shown = message(lang, &format!("`p` must be an object, not {got}"));
             assert!(shown.contains(got) && !shown.contains("an object"), "{code}: {shown}");
         }
     }
+}
+
+/// An effect refusal inside another message (`plug-in output: …`, and an importer's `can't open …`)
+/// is translated through its template with its reason, keeping the index and the effect id.
+#[test]
+fn nested_effect_refusals_translate_with_their_reason() {
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let refusal = "[0] `fx`: nothing selected";
+        let output = format!("plug-in output: objects[0].effects: {refusal}");
+        for shown in [message(lang, refusal), message(lang, &output), message(lang, &format!("can't open `a.svg`: {output}"))] {
+            assert!(!shown.contains("nothing selected") && shown.contains("[0] `fx`"), "{code}: {shown}");
+        }
+    }
+    let de = de();
+    let refusal = "[0] `fx`: `radius` must be a number";
+    assert_eq!(message(de, refusal), "[0] `fx`: `radius` muss eine Zahl sein");
+    let output = format!("plug-in output: objects[0].effects: {refusal}");
+    assert_eq!(message(de, &output), "Plug-in-Ausgabe: objects[0].effects: [0] `fx`: `radius` muss eine Zahl sein");
+    assert_eq!(
+        message(de, &format!("can't open `a.svg`: {output}")),
+        "`a.svg` kann nicht geöffnet werden: Plug-in-Ausgabe: objects[0].effects: [0] `fx`: `radius` muss eine Zahl sein"
+    );
+    assert_eq!(
+        message(de, "plug-in output: objects[12].effects: [3] `fx`: no row for this reason"),
+        "Plug-in-Ausgabe: objects[12].effects: [3] `fx`: no row for this reason"
+    );
+    let selected = "[1] `fx`: nothing selected";
+    assert_eq!(
+        message(de, &format!("plug-in output: objects[0].effects: {selected}")),
+        "Plug-in-Ausgabe: objects[0].effects: [1] `fx`: nichts ausgewählt"
+    );
+    // Past the depth limit the refusal stays as it is.
+    let deep = format!("plug-in output: plug-in output: plug-in output: plug-in output: objects[0].effects: {selected}");
+    let shown = message(de, &deep);
+    assert!(shown.ends_with(selected), "{shown}");
 }
 
 /// The warning for a PDF/X file that leaves out the document's bleed is translated in every catalog,
@@ -4081,6 +4349,27 @@ fn dataset_import_cell_errors_are_translated() {
             let shown = message(lang, e);
             assert!(!shown.contains(want) && shown.contains('2') && shown.contains('`'), "{code}: {shown}");
         }
+    }
+}
+
+/// Russian shows command, script and file messages in Russian: a whole message, a message that
+/// begins with a feature name, messages with a name, a number or a command id filled in, and the
+/// two messages whose catalog rows escape a backslash.
+#[test]
+fn russian_translates_command_script_and_file_messages() {
+    let ru = Lang::from_code("ru").expect("registered");
+    for (english, russian) in [
+        ("CSV is empty", "CSV пуст"),
+        ("Offset Path: the path is too complex to offset", "Смещение контура: контур слишком сложен для смещения"),
+        ("no swatch named `Gold`", "нет образца с именем `Gold`"),
+        ("object 12 is not an Intertwine group", "объект 12 не является группой переплетения"),
+        ("no slice 4 in the image (see slice.list)", "в изображении нет фрагмента 4 (см. slice.list)"),
+        ("give origin: [x, y], or reset: true", "укажите origin: [x, y] или reset: true"),
+        ("`kinsoku` must be \"none\", \"hard\" or \"soft\"", "`kinsoku` должно быть \"none\", \"hard\" или \"soft\""),
+        ("\\ at end of pattern", "\\ в конце шаблона"),
+        ("a \\u escape needs four hexadecimal digits", "после \\u нужны четыре шестнадцатеричные цифры"),
+    ] {
+        assert_eq!(message(ru, english), russian, "{english}");
     }
 }
 
@@ -4579,14 +4868,15 @@ const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Oth
 /// message: the engine's `bad(cmd, msg)` (`EngineError::BadParams`), `err(msg)` (`cmd/fileio`)
 /// and `error(msg)` (`cmd/dimension.rs`), the script host's `fail(msg)` (`script/files.rs`,
 /// `script/dollar.rs`) and `value(msg)`, which gives the messages the script `File` object's own
-/// code throws (`script/files.rs`), and `.over(limit)` for a limit a run passes (`script/mod.rs`),
-/// the PDF writer's `bad(why)` (`forms.rs`) and `failed(why)` (`encrypt.rs`, `linearize.rs`), the
+/// code throws (`script/files.rs`), `.over(limit)` for a limit a run passes (`script/mod.rs`) and
+/// `param(msg)` for `script.run`'s parameters (`cmd/scripts.rs`), the PDF writer's `bad(why)` (`forms.rs`) and `failed(why)` (`encrypt.rs`, `linearize.rs`), the
 /// plug-in host's `bad(what)` (a parameter's spec and dialog keys), `wrong(what)` (a parameter's
 /// value), `out_err(at, msg)` (plug-in output), `in_range(x, lo, hi, at, what)` and
 /// `unit(x, at, what)` (a painted effect's numbers) and `.read_packed(packed, what, max)` (the block
 /// a plug-in returned), and the script interpreter's methods that throw an error at a script:
 /// `.type_error(msg)`, `.throw(kind, msg)` and the XPath evaluator's `.error(msg)`. A helper that
-/// starts with `.` is a method of any receiver.
+/// starts with `.` is a method of any receiver; any other is a function, not a type's own function
+/// of the same name (`Grays::param(C, p)`).
 const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("engine", "bad(", 1),
     ("engine", "err(", 0),
@@ -4594,6 +4884,7 @@ const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("engine", "fail(", 0),
     ("engine", "value(", 0),
     ("engine", ".over(", 0),
+    ("engine", "param(", 0),
     ("pdf", "bad(", 0),
     ("pdf", "failed(", 0),
     ("plugins", "bad(", 0),
@@ -4776,6 +5067,10 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
             .filter(|&(at, _)| call.starts_with('.') || !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
+            .filter(|&(at, _)| {
+                let owner = code[..at].strip_suffix("::").map(|p| p.rsplit(|c: char| !c.is_alphanumeric() && c != '_').next().unwrap_or(""));
+                !owner.is_some_and(|o| o.starts_with(|c: char| c.is_ascii_uppercase()))
+            })
             // `format!(` given as a helper, and an `error(` helper that is an `#[error(…)]` attribute, take a format string.
             .filter_map(move |(at, _)| {
                 skip_args(&code[at + call.len()..], before).map(|rest| (rest, call == "format!(" || code[..at].ends_with("#[")))
@@ -4889,27 +5184,72 @@ fn statement(code: &str) -> &str {
 
 /// Where each value a closure can return starts, `body` being the text after its parameters: the
 /// body itself, each block or `if`/`else` branch in it (`{ ACB_CUT_SHORT.into() }`, not the
-/// `{` of a `json!({…})` value), each `match` arm (`=>`) and each statement after a `;` (the
-/// last expression of a block or a function body), up to the bracket that closes the call the
-/// closure is given to or the function.
+/// `{` of a `json!({…})` value), each `match` arm (`=>`), each statement after a `;` or after a
+/// block statement's `}` (the last expression of a block or a function body) and the value of
+/// each `return`, up to the bracket that closes the call the closure is given to or the function.
+/// The blocks, arms and statements inside a `let` statement give a local its value, so they count
+/// only when the local's name is used, outside a string literal and a `format!`, in a value the closure returns
+/// (`let why = if … { format!("…") } else { … }; Error(why)`), and not when the local only goes
+/// elsewhere (`let level = if … { "warning" } else { "error" }; log(level);`). A `return` counts
+/// wherever it is, except inside a closure the body holds (`unwrap_or_else(|| return …)`).
 fn closure_returns(body: &str) -> Vec<&str> {
-    let mut out = vec![body];
-    let (mut depth, mut chars) = (0usize, body.char_indices());
+    let ident = |c: char| c.is_alphanumeric() || c == '_';
+    // The name a `let` statement starting at `at` binds (empty for a pattern), if it is one.
+    let let_at = |at: usize| {
+        let rest = body[at..].trim_start().strip_prefix("let").filter(|r| r.starts_with(char::is_whitespace))?.trim_start();
+        let rest = rest.strip_prefix("mut ").map_or(rest, str::trim_start);
+        Some(&rest[..rest.find(|c: char| !ident(c)).unwrap_or(rest.len())])
+    };
+    // Each place a value starts, with the `let` whose local it gives a value to, if any, and
+    // whether a `return` gives it.
+    let mut found: Vec<(&str, Option<&str>, bool)> = vec![(body, None, false)];
+    // For each open bracket, the `quiet` and `in_let` of the text around it: `quiet` names the
+    // `let` that a value inside the bracket belongs to, `in_let` the `let` the statement is.
+    let mut outer = vec![];
+    let (mut quiet, mut in_let, mut chars) = (None, let_at(0), body.char_indices());
+    // Where the innermost closure in the body that a `return` would leave ends.
+    let mut inner_closure_end = 0;
     while let Some((at, c)) = chars.next() {
         match c {
-            '(' | '[' => depth += 1,
-            '{' => {
-                depth += 1;
-                if !body[..at].trim_end().ends_with('(') {
-                    out.push(&body[at + 1..]);
+            '|' if at >= inner_closure_end => {
+                let before = body[..at].trim_end();
+                let after_operator = before.ends_with(['(', ',', '=']) && !["==", "!=", "<=", ">="].iter().any(|op| before.ends_with(op));
+                let opens = after_operator || (before.ends_with("move") && !before[..before.len() - 4].ends_with(ident));
+                let params_end = if body[at + 1..].starts_with('|') { Some(at + 1) } else { body[at + 1..].find('|').map(|end| at + 1 + end) };
+                if let Some(params_end) = params_end.filter(|_| opens) {
+                    inner_closure_end = params_end + 1 + statement(&body[params_end + 1..]).len();
                 }
             }
-            ')' | ']' | '}' => match depth.checked_sub(1) {
-                Some(d) => depth = d,
-                None => break,
-            },
-            ';' => out.push(&body[at + 1..]),
-            '=' if body[at + 1..].starts_with('>') => out.push(&body[at + 2..]),
+            '(' | '[' | '{' => {
+                outer.push((quiet, in_let));
+                if c == '{' && !body[..at].trim_end().ends_with('(') {
+                    found.push((&body[at + 1..], quiet.or(in_let), false));
+                }
+                quiet = quiet.or(in_let);
+                in_let = if c == '{' { let_at(at + 1) } else { None };
+            }
+            ')' | ']' | '}' => {
+                let Some(around) = outer.pop() else { break };
+                (quiet, in_let) = around;
+                if c == '}' {
+                    found.push((&body[at + 1..], quiet.or(in_let), false));
+                    if in_let.is_none() {
+                        in_let = let_at(at + 1);
+                    }
+                }
+            }
+            ';' => {
+                found.push((&body[at + 1..], quiet, false));
+                in_let = let_at(at + 1);
+            }
+            '=' if body[at + 1..].starts_with('>') => found.push((&body[at + 2..], quiet.or(in_let), false)),
+            'r' if at >= inner_closure_end
+                && body[at..].starts_with("return")
+                && !body[..at].ends_with(ident)
+                && !body[at + "return".len()..].starts_with(ident) =>
+            {
+                found.push((&body[at + "return".len()..], None, true));
+            }
             '"' => loop {
                 match chars.next() {
                     Some((_, '\\')) => {
@@ -4920,6 +5260,69 @@ fn closure_returns(body: &str) -> Vec<&str> {
                 }
             },
             _ => {}
+        }
+    }
+    // The values the closure returns: each `return`, and each expression that ends its block
+    // rather than a `;` (a block's start, which spans the whole block, aside).
+    let returned: Vec<String> = found
+        .iter()
+        .filter(|&&(start, held, by_return)| {
+            let tail = !start.trim_start().starts_with('{') && !start[statement(start).len()..].starts_with(';');
+            held.is_none() && (by_return || tail)
+        })
+        .map(|(start, ..)| without_format_args(&without_strings(statement(start))))
+        .collect();
+    let used = |name: &str| !name.is_empty() && returned.iter().any(|value| holds_ascii_word(value, name));
+    found.into_iter().filter(|&(_, held, _)| held.is_none_or(used)).map(|(start, ..)| start).collect()
+}
+
+/// `code`, its string literals already emptied, with the arguments of each `format!(…)` removed:
+/// a value written into a format string is part of a message, not one of its own.
+fn without_format_args(code: &str) -> String {
+    let (mut out, mut rest) = (String::new(), code);
+    while let Some(at) = rest.find("format!(") {
+        out.push_str(&rest[..at + "format!(".len()]);
+        rest = &rest[at + "format!(".len()..];
+        let mut depth = 0usize;
+        let end = rest.char_indices().find_map(|(i, c)| match c {
+            '(' | '[' | '{' => {
+                depth += 1;
+                None
+            }
+            ')' | ']' | '}' => match depth.checked_sub(1) {
+                Some(d) => {
+                    depth = d;
+                    None
+                }
+                None => Some(i),
+            },
+            _ => None,
+        });
+        rest = &rest[end.unwrap_or(rest.len())..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `code` with the text of its string literals removed, the quotes kept.
+fn without_strings(code: &str) -> String {
+    let (mut out, mut chars) = (String::new(), code.chars());
+    while let Some(c) = chars.next() {
+        out.push(c);
+        if c == '"' {
+            loop {
+                match chars.next() {
+                    Some('\\') => {
+                        chars.next();
+                    }
+                    Some('"') => {
+                        out.push('"');
+                        break;
+                    }
+                    Some(_) => {}
+                    None => break,
+                }
+            }
         }
     }
     out

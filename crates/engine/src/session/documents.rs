@@ -114,6 +114,7 @@ impl Session {
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
+            place_queue_loads: 0,
             image_hand_off: None,
             trace_hand_off: None,
             place_cursor_requests: false,

@@ -133,9 +133,7 @@ pub(crate) fn graph_dialog(app: &mut VectorcraftApp, id: &str) -> Result<Value, 
     if id == "graph.setData" {
         return crate::dialogs::graph_data::open(app);
     }
-    let v = app.session.execute(id, &json!({})).map_err(|e| e.to_string())?;
-    let (label, fields) = ("Graph Type", v);
-    app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields})).map(|_| json!({ "dialog": "command" }))
+    crate::dialogs::graph_type::open(app)
 }
 
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
