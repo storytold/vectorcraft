@@ -7011,8 +7011,12 @@ A saved or Recent preset whose size (up to 3,999,856 pt), `artboards` (1 to
 1,000), spacing (0 to 100,000 pt) or bleed (0 to 72 pt a side) lies outside those ranges is read with the nearer end of
 each range, and a size of 0 or less is read as 1 pt.
 The desktop app's `file.newDialog` (Cmd/Ctrl+N) opens the New Document dialog on the first Recent entry, or on the
-Print category's Letter while Recent is empty. `file.newWithoutDialog` (Cmd/Ctrl+Alt+N) runs `file.new` with those
-settings and the next untitled name, without opening the dialog, and returns what `file.new` returns.
+Print category's Letter while Recent is empty. The dialog opens in Preferences › Units › General (`unitsGeneral`),
+also when the Recent entry was made in other units. An entry made in pixels, and an entry that is a saved preset in
+the units it was saved in, keep their units. Clicking another Recent or Saved card brings back the units that card was
+made in. Units chosen in the dialog's Units menu, or set with `ui.dialog.set` (the `units` field), stay when another
+tab or preset is chosen. These are VectorCraft's own rules. `file.newWithoutDialog` (Cmd/Ctrl+Alt+N) runs `file.new`
+with those settings and the next untitled name, without opening the dialog, and returns what `file.new` returns.
 `window.nextDocument` (Cmd/Ctrl+F6) and `window.previousDocument` (Cmd/Ctrl+Shift+F6) make the next and the previous
 open document in tab order the current one, as a click on its tab does, and return `{index}`. After the last document
 comes the first, and before the first document comes the last. From the Home screen they go to the first and the last
