@@ -5047,6 +5047,8 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
 @msg	unknown panel `{raw}`	unbekanntes Bedienfeld `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` hat keine Anzeigegrößen zum Durchlaufen
+@msg	the panels are not shown	die Bedienfelder werden nicht angezeigt
 @msg	panels can't be shown in Presentation Mode	im Präsentationsmodus können keine Bedienfelder angezeigt werden
 @msg	unknown preference `{key}`	unbekannte Voreinstellung `{key}`
 @msg	Preferences imported.	Voreinstellungen importiert.
@@ -5506,6 +5508,7 @@ theme	Appearance	Erscheinungsbild
 	Change Panel Layout	Bedienfeldanordnung ändern
 	Close Panel	Bedienfeld schließen
 	Collapse Panel Group	Bedienfeldgruppe minimieren
+	Cycle Display Sizes	Anzeigegrößen durchlaufen
 	Move Panel	Bedienfeld verschieben
 	Group with	Gruppieren mit
 	Resize panel window	Bedienfeldfenster skalieren

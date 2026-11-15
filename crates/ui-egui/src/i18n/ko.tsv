@@ -5040,6 +5040,8 @@ theme	Appearance	외관
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
 @msg	column must be true or a number from 1	column은 true이거나 1 이상의 숫자여야 합니다
 @msg	unknown panel `{raw}`	알 수 없는 패널 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}`에는 전환할 표시 크기가 없습니다
+@msg	the panels are not shown	패널이 표시되지 않습니다
 @msg	panels can't be shown in Presentation Mode	프레젠테이션 모드에서는 패널을 표시할 수 없습니다
 @msg	x and y must both be numbers	x와 y는 모두 숫자여야 합니다
 @msg	Downloaded {what}	{what}을(를) 다운로드했습니다
@@ -5521,6 +5523,7 @@ effect	Vertical	세로
 	Change Panel Layout	패널 레이아웃 변경
 	Close Panel	패널 닫기
 	Collapse Panel Group	패널 그룹 접기
+	Cycle Display Sizes	표시 크기 전환
 	Move Panel	패널 이동
 	Group with	함께 그룹화
 	Resize panels	패널 크기 조절

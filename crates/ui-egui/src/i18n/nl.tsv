@@ -1477,6 +1477,7 @@
 	Change Panel Layout	Paneelindeling wijzigen
 	Close Panel	Paneel sluiten
 	Collapse Panel Group	Paneelgroep samenvouwen
+	Cycle Display Sizes	Weergavegrootten doorlopen
 	Move Panel	Paneel verplaatsen
 	Group with	Groeperen met
 	Resize panels	Panelen van formaat wijzigen
@@ -5452,6 +5453,8 @@ imageTrace	Outline	Contour
 @msg	unknown option `{path}.{k}`	onbekende optie `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (preserve, simulate of discard)
 @msg	unknown panel `{raw}`	onbekend paneel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` heeft geen weergavegrootten om te doorlopen
+@msg	the panels are not shown	de panelen worden niet getoond
 @msg	unknown preference `{key}`	onbekende voorkeur `{key}`
 @msg	Preferences imported.	Voorkeuren geïmporteerd.
 @msg	not a preferences file: {e}	geen voorkeurenbestand: {e}

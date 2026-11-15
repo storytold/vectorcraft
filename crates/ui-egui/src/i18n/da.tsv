@@ -1581,6 +1581,7 @@
 	Change Panel Layout	Skift panelets layout
 	Close Panel	Luk panel
 	Collapse Panel Group	Skjul panelgruppe
+	Cycle Display Sizes	Skift mellem visningsstørrelser
 	Move Panel	Flyt panel
 	Group with	Gruppér med
 	Resize panels	Tilpas størrelse på paneler
@@ -5556,6 +5557,8 @@ imageTrace	Outline	Kontur
 @msg	unknown option `{path}.{k}`	ukendt indstilling `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	ukendt panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` har ingen visningsstørrelser at skifte mellem
+@msg	the panels are not shown	panelerne vises ikke
 @msg	unknown preference `{key}`	ukendt præference `{key}`
 @msg	Preferences imported.	Præferencerne er importeret.
 @msg	not a preferences file: {e}	ikke en præferencefil: {e}

@@ -1035,6 +1035,7 @@
 	Change Panel Layout	Změnit rozložení panelů
 	Close Panel	Zavřít panel
 	Collapse Panel Group	Sbalit skupinu panelů
+	Cycle Display Sizes	Přepínat velikosti zobrazení
 	Move Panel	Přesunout panel
 	Group with	Seskupit s
 	Resize panels	Změnit velikost panelů
@@ -5441,6 +5442,8 @@ imageTrace	Outline	Obrys
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
 @msg	unknown panel `{raw}`	neznámý panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` nemá velikosti zobrazení k přepínání
+@msg	the panels are not shown	panely nejsou zobrazeny
 @msg	panels can't be shown in Presentation Mode	v režimu prezentace nelze panely zobrazit
 @msg	unknown preference `{key}`	neznámá předvolba `{key}`
 @msg	Preferences imported.	Předvolby byly importovány.

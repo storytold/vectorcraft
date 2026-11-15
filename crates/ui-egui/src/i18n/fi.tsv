@@ -1018,6 +1018,7 @@
 	Change Panel Layout	Muuta paneelien asettelua
 	Close Panel	Sulje paneeli
 	Collapse Panel Group	Kutista paneeliryhmä
+	Cycle Display Sizes	Vaihda näyttökokoa
 	Move Panel	Siirrä paneelia
 	Group with	Ryhmitä kohteen kanssa
 	Resize panels	Muuta paneelien kokoa
@@ -5352,6 +5353,8 @@ imageTrace	Outline	Ääriviiva
 @msg	unknown option `{path}.{k}`	tuntematon asetus `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	tuntematon päällepainatusten käsittely `{o}` (preserve, simulate tai discard)
 @msg	unknown panel `{raw}`	tuntematon paneeli `{raw}`
+@msg	`{panel}` has no display sizes to cycle	paneelissa `{panel}` ei ole vaihdettavia näyttökokoja
+@msg	the panels are not shown	paneelit eivät ole näkyvissä
 @msg	panels can't be shown in Presentation Mode	paneeleja ei voi näyttää esitystilassa
 @msg	unknown preference `{key}`	tuntematon asetus `{key}`
 @msg	Preferences imported.	Asetukset tuotiin.

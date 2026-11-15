@@ -5137,6 +5137,8 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panel desconocido `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` no tiene tamaños de visualización que alternar
+@msg	the panels are not shown	los paneles no se muestran
 @msg	panels can't be shown in Presentation Mode	los paneles no se pueden mostrar en el modo de presentación
 @msg	unknown preference `{key}`	preferencia desconocida `{key}`
 @msg	Preferences imported.	Preferencias importadas.
@@ -5512,6 +5514,7 @@ axis	Both	Ambos
 	Change Panel Layout	Cambiar distribución de paneles
 	Close Panel	Cerrar panel
 	Collapse Panel Group	Contraer grupo de paneles
+	Cycle Display Sizes	Alternar tamaños de visualización
 	Move Panel	Mover panel
 	Group with	Agrupar con
 	Resize panels	Cambiar tamaño de los paneles

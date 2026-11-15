@@ -5114,6 +5114,8 @@ axis	Both	Les deux
 @msg	unknown option `{path}.{k}`	option inconnue `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	surimpressions inconnues `{o}` (preserve, simulate ou discard)
 @msg	unknown panel `{raw}`	panneau inconnu `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` n’a pas de tailles d’affichage à parcourir
+@msg	the panels are not shown	les panneaux ne sont pas affichés
 @msg	panels can't be shown in Presentation Mode	les panneaux ne peuvent pas être affichés en mode Présentation
 @msg	unknown preference `{key}`	préférence inconnue `{key}`
 @msg	Preferences imported.	Préférences importées.
@@ -5508,6 +5510,7 @@ effect	Soft	Doux
 	Change Panel Layout	Modifier la disposition des panneaux
 	Close Panel	Fermer le panneau
 	Collapse Panel Group	Réduire le groupe de panneaux
+	Cycle Display Sizes	Parcourir les tailles d’affichage
 	Move Panel	Déplacer le panneau
 	Group with	Regrouper avec
 	Resize panels	Redimensionner les panneaux

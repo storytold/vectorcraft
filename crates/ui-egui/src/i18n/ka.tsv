@@ -3008,6 +3008,7 @@
 	Change Panel Layout	პანელების განლაგების შეცვლა
 	Close Panel	პანელის დახურვა
 	Collapse Panel Group	პანელების ჯგუფის აკეცვა
+	Cycle Display Sizes	ჩვენების ზომების გადართვა
 	Move Panel	პანელის გადაადგილება
 	Group with	ერთად დაჯგუფება
 	Resize panels	პანელების ზომის შეცვლა
@@ -6865,6 +6866,8 @@ font-technology	Variable	ცვლადი
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
 @msg	unknown panel `{raw}`	უცნობი პანელი `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` პანელს არ აქვს გადასართავი ჩვენების ზომები
+@msg	the panels are not shown	პანელები არ ჩანს
 @msg	panels can't be shown in Presentation Mode	პრეზენტაციის რეჟიმში პანელების ჩვენება შეუძლებელია
 @msg	unknown preference `{key}`	უცნობი პარამეტრი `{key}`
 @msg	Preferences imported.	პარამეტრები იმპორტირებულია.

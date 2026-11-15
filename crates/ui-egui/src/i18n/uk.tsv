@@ -5160,6 +5160,8 @@ axis	Both	Обидві
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
 @msg	unknown panel `{raw}`	невідома панель `{raw}`
+@msg	`{panel}` has no display sizes to cycle	панель `{panel}` не має розмірів відображення для перемикання
+@msg	the panels are not shown	панелі не показано
 @msg	panels can't be shown in Presentation Mode	у режимі презентації панелі показати не можна
 @msg	unknown preference `{key}`	невідоме налаштування `{key}`
 @msg	Preferences imported.	Налаштування імпортовано.
@@ -5535,6 +5537,7 @@ axis	Both	Обидві
 	Change Panel Layout	Змінити розташування панелей
 	Close Panel	Закрити панель
 	Collapse Panel Group	Згорнути групу панелей
+	Cycle Display Sizes	Перемкнути розміри відображення
 	Move Panel	Перемістити панель
 	Group with	Згрупувати з
 	Resize panels	Змінити розмір панелей

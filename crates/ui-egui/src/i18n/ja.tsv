@@ -5113,6 +5113,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
 @msg	column must be true or a number from 1	column には true または 1 以上の数値を指定してください
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
+@msg	`{panel}` has no display sizes to cycle	`{panel}` には切り替える表示サイズがありません
+@msg	the panels are not shown	パネルが表示されていません
 @msg	panels can't be shown in Presentation Mode	プレゼンテーションモードではパネルを表示できません
 @msg	x and y must both be numbers	x と y はどちらも数値で指定してください
 @msg	Downloaded {what}	{what} をダウンロードしました
@@ -5596,6 +5598,7 @@ effect	Vertical	垂直
 	Change Panel Layout	パネルの配置を変更
 	Close Panel	パネルを閉じる
 	Collapse Panel Group	パネルグループを折りたたむ
+	Cycle Display Sizes	表示サイズを切り替え
 	Move Panel	パネルを移動
 	Group with	グループ化先
 	Resize panels	パネルのサイズを変更

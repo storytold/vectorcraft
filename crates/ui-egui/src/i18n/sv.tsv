@@ -5029,6 +5029,8 @@ axis	Both	Båda
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	okänd panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` har inga visningsstorlekar att växla mellan
+@msg	the panels are not shown	panelerna visas inte
 @msg	panels can't be shown in Presentation Mode	paneler kan inte visas i presentationsläge
 @msg	unknown preference `{key}`	okänd inställning `{key}`
 @msg	Preferences imported.	Inställningarna har importerats.
@@ -5420,6 +5422,7 @@ effect	Soft	Mjuk
 	Change Panel Layout	Ändra panellayout
 	Close Panel	Stäng panel
 	Collapse Panel Group	Komprimera panelgrupp
+	Cycle Display Sizes	Växla visningsstorlekar
 	Move Panel	Flytta panel
 	Group with	Gruppera med
 	Resize panels	Ändra storlek på paneler

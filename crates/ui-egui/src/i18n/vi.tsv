@@ -598,6 +598,7 @@ font-technology	Variable	Biến thiên
 	Close Library	Đóng thư viện
 	Close Panel	Đóng bảng
 	Collapse Panel Group	Thu gọn nhóm bảng
+	Cycle Display Sizes	Chuyển kích thước hiển thị
 	Close Path	Đóng đường dẫn
 	Close paths when ends are within:	Đóng đường dẫn khi hai đầu cách nhau trong:
 	Clumped	Dạng cụm
@@ -5698,6 +5699,8 @@ theme	Appearance	Giao diện
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)
 @msg	unknown panel `{raw}`	bảng không xác định `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` không có kích thước hiển thị để chuyển
+@msg	the panels are not shown	các bảng không được hiển thị
 @msg	panels can't be shown in Presentation Mode	không thể hiển thị bảng trong chế độ trình bày
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tham số không xác định `{key}`; ý bạn là `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tham số không xác định `{key}`; lệnh này không nhận tham số

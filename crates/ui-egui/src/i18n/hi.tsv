@@ -900,6 +900,7 @@ antiAlias	Sharp	शार्प
 	Coarse Dots	मोटे बिंदु
 	Coincidence:	संयोग:
 	Collapse Panel Group	पैनल समूह संक्षिप्त करें
+	Cycle Display Sizes	प्रदर्शन आकार बदलें
 	Collapse Panels to Icons	सिकोड़ें करने के लिए पैनल
 	Collapse to Icons	प्रतीक के लिए पतन
 	Collate	कोलेट
@@ -8628,6 +8629,8 @@ antiAlias	Sharp	शार्प
 @msg	unknown overprints `{v}` (preserve, simulate or discard)	अज्ञात ओवरप्रिंट `{v}` (preserve, simulate या discard)
 @msg	unknown panel	अज्ञात पैनल
 @msg	unknown panel `{raw}`	अज्ञात पैनल `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` के पास बदलने के लिए कोई प्रदर्शन आकार नहीं है
+@msg	the panels are not shown	पैनल नहीं दिखाए गए हैं
 @msg	panels can't be shown in Presentation Mode	प्रस्तुति मोड में पैनल्स नहीं दिखाए जा सकते
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
