@@ -259,6 +259,27 @@ fn an_unknown_method_is_refused() {
     assert_eq!(center(&s, a), Point::new(200.0, 150.0));
 }
 
+/// `tool.setOption` refuses a Symbolism Tools Options value of the wrong kind or name, and the
+/// tool's options stay as they were.
+#[test]
+fn tool_set_option_refuses_bad_symbolism_options() {
+    let mut s = session();
+    let before = s.tool_options_of("symbolSizer");
+    for (key, bad, want) in [
+        ("method", json!("smooth"), "`method` must be userDefined, average or random, not \"smooth\""),
+        ("sprayStain", json!("random"), "`sprayStain` must be average or userDefined, not \"random\""),
+        ("usePressure", json!("yes"), "`usePressure` must be true or false"),
+        ("diameter", json!("big"), "`diameter` must be a number"),
+        ("style", json!(3), "`style` must be a name or null"),
+    ] {
+        let r = s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "values": {key: bad}}));
+        assert_eq!(r, Err(want.to_string()), "{key}");
+        assert_eq!(s.tool_options_of("symbolSizer"), before, "{key}");
+    }
+    let r = s.set_tool_option_cmd(&json!({"tool": "symbolSizer", "values": {"method": "random", "sprayStain": "userDefined"}})).unwrap();
+    assert_eq!((r["method"].as_str(), r["sprayStain"].as_str()), (Some("random"), Some("userDefined")));
+}
+
 /// With `usePressure` each point's pen pressure is the intensity there; without it the pressure is
 /// not used. A pressure that isn't a number is an error.
 #[test]

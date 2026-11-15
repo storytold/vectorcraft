@@ -3306,7 +3306,10 @@ already walks Image Trace. Short agent entry points:
   `points` as `[x, y, pressure]` (each point's pen pressure, 0..1, is the intensity there), and for `size`
   `proportional` (true) and `affectsDensity` (false). With `tool: style`, a `style` name the document has no graphic style
   for counts as none (the document's first style after the default one). The Symbol Styler sends the style last
-  clicked into the Graphic Styles panel's selection. `symbol.spray` takes `attributes`
+  clicked into the Graphic Styles panel's selection. `tool.setOption` on a symbolism tool refuses a `method` or
+  Symbol Sprayer option that is not one of its names, a non-number `diameter`, `intensity` or `density`, a
+  non-boolean switch, and a `symbol` or `style` that is neither a name nor null, and sets none of the values.
+  `symbol.spray` takes `attributes`
   `{scrunch?, size?, spin?, screen?, stain?, style?}`, each `average` or `userDefined`, with `color`, `keepModel` and
   `style` for the User Defined stain and style. `symbol.setDensity {from, to, ids?|id?}` gives the selected symbol
   sets a new Symbol Set Density. VectorCraft's own rules:

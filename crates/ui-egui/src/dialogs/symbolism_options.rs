@@ -125,6 +125,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         NUMBERS.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.f64(k, 0.0)))).collect();
     values.extend(SWITCHES.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.bool(k)))));
     values.extend(SPRAY.iter().chain(&["method"]).filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.str(k)))));
+    // A value `tool.setOption` refuses changes no density either.
+    vectorcraft_tools::symbolism::check_options(&d.str("tool"), &values)?;
     let (from, to) = (d.f64(DENSITY_WAS, 0.0).clamp(1.0, 10.0), d.f64("density", 0.0).clamp(1.0, 10.0));
     let sets = selected_sets(app);
     if d.fields.contains_key(DENSITY_WAS) && from != to && !sets.is_empty() {
@@ -281,6 +283,14 @@ mod tests {
         app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
         super::super::confirm(&mut app).unwrap();
         assert_eq!((width(&app), undo(&app)), (was, steps));
+        // An option that `tool.setOption` refuses changes neither the density nor the set.
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
+        fields.insert("density".into(), json!(9));
+        fields.insert("method".into(), json!("smooth"));
+        assert!(super::super::confirm(&mut app).is_err());
+        assert_eq!((width(&app), undo(&app)), (was, steps));
+        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(5.0));
         // A higher density packs the set closer, as one undo step.
         app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
         app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(9));

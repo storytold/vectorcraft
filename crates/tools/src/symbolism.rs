@@ -86,6 +86,37 @@ fn one_of(v: &Value, allowed: &[&'static str]) -> Option<&'static str> {
     allowed.iter().copied().find(|a| *a == s)
 }
 
+/// Check the Symbolism Tools Options `values` that `tool.setOption` sets on symbolism tool `tool`:
+/// a value of the wrong kind, or a `method` or Symbol Sprayer option that is not one of its names,
+/// is an error (stored preferences are not checked: an unknown value there keeps the default).
+/// Other tools' options pass.
+pub fn check_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+    if !crate::settings::SYMBOLISM.contains(&tool) {
+        return Ok(());
+    }
+    let names = |allowed: &[&str]| match allowed {
+        [a, b] => format!("{a} or {b}"),
+        [rest @ .., last] => format!("{} or {last}", rest.join(", ")),
+        [] => String::new(),
+    };
+    for (key, v) in values {
+        let error = match key.as_str() {
+            "diameter" | "intensity" | "density" => (!v.as_f64().is_some_and(f64::is_finite)).then(|| format!("`{key}` must be a number")),
+            "usePressure" | "showBrush" | "proportional" | "affectsDensity" => (!v.is_boolean()).then(|| format!("`{key}` must be true or false")),
+            "symbol" | "style" => (!(v.is_string() || v.is_null())).then(|| format!("`{key}` must be a name or null")),
+            "method" => one_of(v, &METHODS).is_none().then(|| format!("`method` must be {}, not {v}", names(&METHODS))),
+            _ if SPRAY_ATTRIBUTES.iter().any(|(k, _)| k == key) => {
+                one_of(v, &SPRAY_MODES).is_none().then(|| format!("`{key}` must be {}, not {v}", names(&SPRAY_MODES)))
+            }
+            _ => None,
+        };
+        if let Some(e) = error {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
 impl SymbolismTool {
     pub fn new(id: &str) -> Self {
         let id: &'static str = match id {
