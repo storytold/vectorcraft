@@ -376,7 +376,7 @@ fn a_16_bit_png_is_written_at_8_bits_before_pdf_1_5() {
     let deep = image::ImageBuffer::from_fn(8, 8, |x, y| image::Rgb([x as u16 * 8000, y as u16 * 8000, 40000]));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (image::DynamicImage::ImageRgb16(deep)).into();
+        let __dyn: image::DynamicImage = image::DynamicImage::ImageRgb16(deep);
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

@@ -523,7 +523,7 @@ fn noise(w: u32, h: u32, format: craft_image_codecs::Format) -> Vec<u8> {
     });
     let mut out = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -1260,7 +1260,7 @@ fn the_place_queue_draws_a_thumbnail_without_decoding_the_image_again() {
     let img = image::RgbImage::from_fn(320, 160, |x, y| image::Rgb([(x % 251) as u8, 23, (y % 241) as u8]));
     let mut bytes = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

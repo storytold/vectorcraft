@@ -486,7 +486,7 @@ fn clip_group_app() -> (VectorcraftApp, serde_json::Value, serde_json::Value, se
     let img = image::RgbaImage::from_pixel(320, 40, image::Rgba([200, 120, 40, 255]));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -594,7 +594,7 @@ fn a_group_of_clipped_images_shows_its_masks_and_their_bounds() {
     let img = image::RgbaImage::from_pixel(160, 160, image::Rgba([40, 120, 200, 255]));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -3254,7 +3254,7 @@ fn undecodable_images_are_marked_and_reported_once() {
         let img = image::RgbaImage::from_fn(w, 41, |x, y| image::Rgba([(x * 37 + y * 101) as u8, (x * y) as u8, (x ^ y) as u8, 255]));
         let mut png = vec![];
         {
-            let __dyn: image::DynamicImage = (img).into();
+            let __dyn: image::DynamicImage = img.into();
             let (__w, __h) = (__dyn.width(), __dyn.height());
             let (__layout, __sample, __raw) = match __dyn {
                 image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -10975,7 +10975,7 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
     let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -11051,7 +11051,7 @@ fn the_task_bar_removes_a_selected_images_background() {
         image::RgbaImage::from_fn(20, 20, |x, y| image::Rgba(if (6..14).contains(&x) && (6..14).contains(&y) { [200, 0, 0, 255] } else { [255; 4] }));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

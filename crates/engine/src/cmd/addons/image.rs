@@ -13,10 +13,9 @@ mod tests;
 pub(crate) use mask::refresh as refresh_color_masks;
 
 use std::collections::{HashMap, HashSet};
-use std::io::Cursor;
 use std::sync::{Arc, Weak};
 
-use image::{DynamicImage, ImageBuffer, LumaA, Rgba};
+use image::{ImageBuffer, Rgba};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
 use vectorcraft_doc::{ImageBlob, ImageObject, NodeId, NodeKind};
@@ -472,8 +471,8 @@ fn decode(blob: &ImageBlob, kept: Option<&mut DecodedImages>, cmd: &str) -> Resu
     let px = Arc::new(if deep {
         let rgba16 = match (img.layout(), img.to_u16_samples()) {
             (craft_image_codecs::ChannelLayout::Rgba, Some(v)) => v,
-            (craft_image_codecs::ChannelLayout::Rgb, Some(v)) => v.chunks_exact(3).flat_map(|c| [c[0], c[1], c[2], u16::MAX]).collect(),
-            (craft_image_codecs::ChannelLayout::GrayA, Some(v)) => v.chunks_exact(2).flat_map(|c| [c[0], c[0], c[0], c[1]]).collect(),
+            (craft_image_codecs::ChannelLayout::Rgb, Some(v)) => v.as_chunks::<3>().0.iter().flat_map(|c| [c[0], c[1], c[2], u16::MAX]).collect(),
+            (craft_image_codecs::ChannelLayout::GrayA, Some(v)) => v.as_chunks::<2>().0.iter().flat_map(|c| [c[0], c[0], c[0], c[1]]).collect(),
             (craft_image_codecs::ChannelLayout::Gray, Some(v)) => v.into_iter().flat_map(|g| [g, g, g, u16::MAX]).collect(),
             _ => img.to_rgba8().into_iter().map(|b| u16::from(b) * 257).collect(),
         };

@@ -4,7 +4,6 @@
 //! gradient's spread; CSS writes repeating gradients.
 
 use craft_svg::tree::draw::resvg;
-use craft_svg::tree::usvg;
 use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientSpread, GradientStop, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeKind};
 use vectorcraft_geom::{Point, Rect, Vec2, shapes};

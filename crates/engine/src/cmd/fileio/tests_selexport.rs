@@ -121,7 +121,7 @@ fn export_selection_of_a_clipped_object_keeps_its_clip() {
     let reopened = canvas(&t, board);
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (reopened).into();
+        let __dyn: image::DynamicImage = reopened.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

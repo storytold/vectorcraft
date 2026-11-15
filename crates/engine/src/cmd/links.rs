@@ -2597,7 +2597,7 @@ fn convert_image(bytes: &[u8], ext: &str) -> std::result::Result<Vec<u8>, String
     };
     let img = craft_image_codecs::decode(bytes).map_err(|e| e.to_string())?;
     let raw = if format == craft_image_codecs::Format::Jpeg {
-        let rgb: Vec<u8> = img.to_rgba8().chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+        let rgb: Vec<u8> = img.to_rgba8().as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
         craft_image_codecs::Image::from_raw(
             img.width(),
             img.height(),

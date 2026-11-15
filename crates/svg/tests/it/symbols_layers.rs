@@ -5,7 +5,6 @@
 //! editing data notices edits made elsewhere.
 
 use craft_svg::tree::draw::resvg;
-use craft_svg::tree::usvg;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};

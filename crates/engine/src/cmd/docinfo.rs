@@ -1501,7 +1501,7 @@ mod tests {
         s.execute("swatch.new", &json!({"name": "Ink", "color": {"model": "cmyk", "c": 0, "m": 1, "y": 1, "k": 0}, "spot": true})).unwrap();
         let mut bytes = Vec::new();
         {
-            let __dyn: image::DynamicImage = (image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap())).into();
+            let __dyn: image::DynamicImage = image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
             let (__w, __h) = (__dyn.width(), __dyn.height());
             let (__layout, __sample, __raw) = match __dyn {
                 image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -1690,7 +1690,7 @@ mod tests {
         // A grayscale image colorized with the spot color.
         let mut bytes = Vec::new();
         {
-            let __dyn: image::DynamicImage = (image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap())).into();
+            let __dyn: image::DynamicImage = image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
             let (__w, __h) = (__dyn.width(), __dyn.height());
             let (__layout, __sample, __raw) = match __dyn {
                 image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

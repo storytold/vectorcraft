@@ -3,7 +3,6 @@
 //! the backdrop rectangle and inverting filter that draw the options in SVG).
 
 use craft_svg::tree::draw::resvg;
-use craft_svg::tree::usvg;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, OpacityMask};
 use vectorcraft_geom::{Rect, shapes};

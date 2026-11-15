@@ -2,7 +2,6 @@
 //! reference formulas when resvg draws the file, and masks take luminance the canvas's way.
 
 use craft_svg::tree::draw::resvg;
-use craft_svg::tree::usvg;
 use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_color::blend::blend_rgb;
 use vectorcraft_color::{BlendMode, Color, Paint};

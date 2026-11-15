@@ -38,7 +38,7 @@ fn traced_app_with_ink(ink: u8) -> VectorcraftApp {
     let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [ink, ink, ink, 255] } else { [255, 255, 255, 255] }));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -123,7 +123,7 @@ fn a_large_image_traces_and_the_status_bar_says_it_is_slower() {
     let img = image::RgbaImage::from_fn(1601, 12, |x, _| image::Rgba(if x < 800 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -171,7 +171,7 @@ fn a_large_image_traced_as_a_flat_logo_shows_the_size_it_was_traced_at() {
     let img = image::RgbaImage::from_fn(1602, 1602, |x, _| image::Rgba(if x < 800 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -463,7 +463,7 @@ fn settings_that_wait_are_kept_when_a_plain_image_is_traced_in_between() {
     let img = image::RgbaImage::from_fn(20, 20, |_, y| image::Rgba(if y < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -907,7 +907,7 @@ fn a_color_group_the_active_document_lacks_is_all() {
     let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

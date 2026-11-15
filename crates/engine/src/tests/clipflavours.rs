@@ -247,7 +247,7 @@ fn a_pasted_bitmap_is_drawn_without_decoding_it_again() {
     let img = image::RgbImage::from_fn(300, 200, |x, y| image::Rgb([(x % 253) as u8, (y % 233) as u8, 17]));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

@@ -72,7 +72,8 @@ pub(crate) fn carry(from: &Node, mut to: Node) -> Node {
 pub(crate) fn see_through_images(doc: &Document) -> BTreeSet<String> {
     let see_through = |b: &ImageBlob| {
         b.mime != "image/jpeg"
-            && craft_image_codecs::decode(&b.bytes).is_ok_and(|i| i.layout().has_alpha() && i.to_rgba8().chunks_exact(4).any(|p| p[3] < 255))
+            && craft_image_codecs::decode(&b.bytes)
+                .is_ok_and(|i| i.layout().has_alpha() && i.to_rgba8().as_chunks::<4>().0.iter().any(|p| p[3] < 255))
     };
     doc.images.iter().filter(|(_, b)| see_through(b)).map(|(k, _)| k.clone()).collect()
 }

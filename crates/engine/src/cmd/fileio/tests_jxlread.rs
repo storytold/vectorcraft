@@ -18,10 +18,20 @@ enum BitDepth {
 fn jxl(w: usize, h: usize, layout: Layout, depth: BitDepth, samples: &[u8]) -> Vec<u8> {
     let opts = EncodeOptions { lossless: true, ..EncodeOptions::default() };
     match depth {
-        BitDepth::Eight => craft_jxl::encode(ImageRef { width: w as u32, height: h as u32, layout, samples: Samples::U8(samples) }, opts).unwrap(),
+        BitDepth::Eight => craft_jxl::encode(
+            &ImageRef { width: w as u32, height: h as u32, layout, samples: Samples::U8(samples) },
+            opts,
+            &craft_jxl::Metadata::default(),
+        )
+        .unwrap(),
         BitDepth::Sixteen => {
-            let u16s: Vec<u16> = samples.chunks_exact(2).map(|c| u16::from_ne_bytes([c[0], c[1]])).collect();
-            craft_jxl::encode(ImageRef { width: w as u32, height: h as u32, layout, samples: Samples::U16(&u16s) }, opts).unwrap()
+            let u16s: Vec<u16> = samples.as_chunks::<2>().0.iter().map(|c| u16::from_ne_bytes([c[0], c[1]])).collect();
+            craft_jxl::encode(
+                &ImageRef { width: w as u32, height: h as u32, layout, samples: Samples::U16(&u16s) },
+                opts,
+                &craft_jxl::Metadata::default(),
+            )
+            .unwrap()
         }
     }
 }

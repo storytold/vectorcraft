@@ -288,7 +288,7 @@ fn rings_png() -> Vec<u8> {
     });
     let mut png = Vec::new();
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

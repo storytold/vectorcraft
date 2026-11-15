@@ -3,7 +3,6 @@
 //! hidden objects, and reflected or repeated gradients.
 
 use craft_svg::tree::draw::resvg;
-use craft_svg::tree::usvg;
 use std::path::{Path, PathBuf};
 
 use vectorcraft_doc::{Document, ImageObject, LinkInfo, Node, NodeKind};

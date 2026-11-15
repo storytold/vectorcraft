@@ -20,7 +20,6 @@
 //! nothing VectorCraft reads are skipped; a picture cut short keeps what came before.
 
 use std::collections::HashMap;
-use std::io::Cursor;
 
 use vectorcraft_geom::{Affine, BezPath, FillRule, Point, Rect, Shape, Vec2, shapes};
 

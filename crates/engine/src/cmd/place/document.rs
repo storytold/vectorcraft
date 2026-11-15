@@ -377,8 +377,7 @@ fn preview(doc: &Document, art: &Node, frame: Rect) -> Option<Vec<u8>> {
             rgb.into_raw(),
         )
         .ok()?;
-        let mut opts = craft_image_codecs::EncodeOptions::default();
-        opts.jpeg_quality = 80;
+        let opts = craft_image_codecs::EncodeOptions { jpeg_quality: 80, ..Default::default() };
         craft_image_codecs::encode(&raw, craft_image_codecs::Format::Jpeg, &opts).ok()
     } else {
         let raw = craft_image_codecs::Image::from_raw(

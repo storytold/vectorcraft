@@ -157,11 +157,11 @@ fn dct(raw: &[u8]) -> Res<(Vec<u8>, usize, u8)> {
         let gray = if img.sample_type() == craft_image_codecs::SampleType::U8 {
             img.into_data()
         } else {
-            img.to_rgba8().chunks_exact(4).map(|p| p[0]).collect()
+            img.to_rgba8().as_chunks::<4>().0.iter().map(|p| p[0]).collect()
         };
         return Ok((gray, end, 1));
     }
-    let rgb: Vec<u8> = img.to_rgba8().chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+    let rgb: Vec<u8> = img.to_rgba8().as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
     Ok((rgb, end, 3))
 }
 

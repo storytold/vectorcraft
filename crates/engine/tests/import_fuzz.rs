@@ -38,7 +38,7 @@ fn affinity_preview_sample() -> Vec<u8> {
     let im = image::RgbaImage::from_pixel(2, 1, image::Rgba([220, 40, 60, 255]));
     let mut png = Vec::new();
     {
-        let __dyn: image::DynamicImage = (im).into();
+        let __dyn: image::DynamicImage = im.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -1800,7 +1800,7 @@ fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
     ] {
         let mut b = vec![];
         {
-            let __dyn: image::DynamicImage = (img).into();
+            let __dyn: image::DynamicImage = img.clone().into();
             let (__w, __h) = (__dyn.width(), __dyn.height());
             let (__layout, __sample, __raw) = match __dyn {
                 image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -1864,9 +1864,22 @@ fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
     use craft_jxl::{EncodeOptions, ImageRef, Layout, Samples};
     let opts = EncodeOptions { lossless: true, ..EncodeOptions::default() };
     let rgba: Vec<u8> = (0..60).map(|i| (i * 17) as u8).collect();
-    out.push(("a.jxl", craft_jxl::encode(ImageRef { width: 5, height: 3, layout: Layout::Rgba, samples: Samples::U8(&rgba) }, opts).unwrap()));
+    out.push((
+        "a.jxl",
+        craft_jxl::encode(
+            &ImageRef { width: 5, height: 3, layout: Layout::Rgba, samples: Samples::U8(&rgba) },
+            opts,
+            &craft_jxl::Metadata::default(),
+        )
+        .unwrap(),
+    ));
     let gray_u16: Vec<u16> = (0..15).map(|i| u16::from_ne_bytes([(i * 2 * 41) as u8, ((i * 2 + 1) * 41) as u8])).collect();
-    let gray = craft_jxl::encode(ImageRef { width: 5, height: 3, layout: Layout::Gray, samples: Samples::U16(&gray_u16) }, opts).unwrap();
+    let gray = craft_jxl::encode(
+        &ImageRef { width: 5, height: 3, layout: Layout::Gray, samples: Samples::U16(&gray_u16) },
+        opts,
+        &craft_jxl::Metadata::default(),
+    )
+    .unwrap();
     let mut boxed = vec![0, 0, 0, 0x0c, b'J', b'X', b'L', b' ', 0x0d, 0x0a, 0x87, 0x0a];
     boxed.extend(20u32.to_be_bytes());
     boxed.extend(b"ftypjxl \0\0\0\0jxl ");

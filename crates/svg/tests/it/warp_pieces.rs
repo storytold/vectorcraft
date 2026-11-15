@@ -2,7 +2,6 @@
 //! transparent image keeps its own alpha where they do, and the pieces share one copy of the image.
 
 use craft_svg::tree::draw::resvg;
-use craft_svg::tree::usvg;
 use vectorcraft_doc::live::mesh_warp_image;
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Affine, Point};

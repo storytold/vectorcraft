@@ -6,7 +6,6 @@
 //! the `viewBox`, so it comes out too large and out of place (#1561). Before usvg runs, the
 //! percentages of the shapes' geometry are rewritten in the `viewBox`'s units.
 
-use craft_svg::tree::usvg;
 use std::ops::Range;
 use std::str::FromStr;
 

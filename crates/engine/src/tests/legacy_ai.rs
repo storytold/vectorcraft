@@ -437,7 +437,7 @@ fn disk(size: u32, r: f64) -> Vec<u8> {
     });
     let mut out = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -866,7 +866,7 @@ fn checker(a: [u8; 4], b: [u8; 4]) -> Vec<u8> {
     let img = image::RgbaImage::from_fn(32, 32, |x, y| image::Rgba(if (x < 16) == (y < 16) { a } else { b }));
     let mut out = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -928,7 +928,7 @@ fn colorized_pattern_over_blue() -> Session {
     let tile = image::GrayImage::from_fn(32, 32, |x, y| image::Luma([if (x < 16) == (y < 16) { 0 } else { 255 }]));
     let mut bytes = vec![];
     {
-        let __dyn: image::DynamicImage = (tile).into();
+        let __dyn: image::DynamicImage = tile.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

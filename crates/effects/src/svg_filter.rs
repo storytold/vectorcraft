@@ -1651,7 +1651,6 @@ fn on_canvas(data: &[u8], w: usize, h: usize, cw: u32, ch: u32, to_canvas: Affin
 
 /// The pixels of `data` (premultiplied RGBA8, `w` wide) in columns x0..x1 and rows y0..y1, as a PNG.
 fn png_of(data: &[u8], w: usize, x0: usize, y0: usize, x1: usize, y1: usize) -> Option<Vec<u8>> {
-    use image::ImageEncoder;
     let px = data.as_chunks::<4>().0;
     let mut straight = Vec::with_capacity((x1 - x0) * (y1 - y0) * 4);
     for y in y0..y1 {
@@ -1669,8 +1668,7 @@ fn png_of(data: &[u8], w: usize, x0: usize, y0: usize, x1: usize, y1: usize) -> 
         straight,
     )
     .ok()?;
-    let mut opts = craft_image_codecs::EncodeOptions::default();
-    opts.png_compression = craft_image_codecs::PngCompression::Fast;
+    let opts = craft_image_codecs::EncodeOptions { png_compression: craft_image_codecs::PngCompression::Fast, ..Default::default() };
     craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &opts).ok()
 }
 

@@ -307,7 +307,7 @@ fn image_doc(effects: Vec<Effect>) -> Document {
     let img = image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -821,7 +821,7 @@ fn an_images_outline_object_stroke_follows_new_pixels_under_the_same_key() {
     });
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (disc).into();
+        let __dyn: image::DynamicImage = disc.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

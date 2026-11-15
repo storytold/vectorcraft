@@ -112,7 +112,7 @@ fn image(s: &mut Session, key: &str, blob: vectorcraft_doc::ImageBlob, x: f64) -
 fn png(img: image::DynamicImage) -> vectorcraft_doc::ImageBlob {
     let mut bytes = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img;
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

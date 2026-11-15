@@ -7,7 +7,6 @@
 //! skipped. Precedence: `!important`, then the `style` attribute, then specificity, then source
 //! order; a presentation attribute applies only when no rule sets the property.
 
-use craft_svg::tree::usvg;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;

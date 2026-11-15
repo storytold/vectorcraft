@@ -174,7 +174,7 @@ mod tests {
         assert!(png_16_bit(&png));
         let out = png_8_bit(&png).unwrap();
         assert!(!png_16_bit(&out));
-        let decoded = craft_image_codecs::decode_as_with(Format::Png, &out, &craft_image_codecs::Limits::default()).unwrap();
+        let decoded = craft_image_codecs::decode_as_with(Format::Png, &out, &craft_image_codecs::DecodeOptions::default()).unwrap();
         assert_eq!(decoded.icc, Some(icc));
         assert_eq!(decoded.layout(), ChannelLayout::Gray);
         assert_eq!(decoded.sample_type(), SampleType::U8);

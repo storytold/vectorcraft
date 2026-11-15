@@ -1109,7 +1109,7 @@ fn a_placed_image_is_drawn_without_decoding_it_on_the_ui_thread() {
     let noise = image::RgbImage::from_fn(2000, 2000, |x, y| image::Rgb([(x % 251) as u8, (y % 241) as u8, ((x + y) % 239) as u8]));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (noise).into();
+        let __dyn: image::DynamicImage = noise.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -1174,7 +1174,7 @@ fn a_file_that_cant_be_read_off_the_ui_thread_reports_as_at_once() {
     });
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (noise).into();
+        let __dyn: image::DynamicImage = noise.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

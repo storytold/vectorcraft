@@ -212,7 +212,7 @@ fn placed_images_are_separated_not_blackened() {
     let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255]));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -290,7 +290,7 @@ fn rich_black_shows_black_ink_alone_as_rgb_black() {
     let img = image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 0, 0, 255]));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

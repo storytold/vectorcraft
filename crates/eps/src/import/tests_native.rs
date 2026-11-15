@@ -621,7 +621,7 @@ fn top_level_placed_file_replacement_keeps_page_image_data() {
     let pixels = image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 255, 255, 255]));
     let mut png = Vec::new();
     {
-        let __dyn: image::DynamicImage = (pixels).into();
+        let __dyn: image::DynamicImage = pixels.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

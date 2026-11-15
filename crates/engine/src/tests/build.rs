@@ -4985,7 +4985,7 @@ fn live_paint_bucket_alt_image_samples_fill_and_clears_stroke() {
     let img = image::RgbaImage::from_raw(1, 1, vec![0, 255, 0, 255]).unwrap();
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

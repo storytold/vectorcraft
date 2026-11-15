@@ -5,7 +5,6 @@
 //! filled outlines where the look needs them.
 
 use std::collections::HashMap;
-use std::io::Cursor;
 
 use kurbo::PathEl;
 use vectorcraft_color::Paint;
@@ -1422,7 +1421,7 @@ impl<'a> Scene<'a> {
             RasterFormat::Jpeg => {
                 // No alpha in JPEG: transparent pixels over white.
                 let mut rgb = Vec::with_capacity(rgba.len() / 4 * 3);
-                for p in rgba.chunks_exact_mut(4) {
+                for p in rgba.as_chunks_mut::<4>().0 {
                     let a = u32::from(p[3]);
                     for c in &p[..3] {
                         rgb.push(((u32::from(*c) * a + 255 * (255 - a)) / 255) as u8);

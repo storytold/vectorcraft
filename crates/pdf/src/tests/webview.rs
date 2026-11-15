@@ -3,9 +3,9 @@
 //! linearisation checker does), also when encrypted; with both off the export is unchanged.
 
 use std::collections::{HashMap, HashSet};
-use std::io::{Cursor, Read};
+use std::io::Read;
 
-use image::{DynamicImage, ImageFormat};
+use image::DynamicImage;
 use serde_json::json;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Artboard, Document, ImageBlob, ImageObject, Node, NodeKind};
@@ -36,8 +36,7 @@ fn doc(n: usize, image: bool, on_first: bool) -> Document {
     }
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage =
-            (DynamicImage::from(image::RgbImage::from_fn(8, 8, |x, y| image::Rgb([(x * 30) as u8, (y * 30) as u8, 90])))).into();
+        let __dyn: image::DynamicImage = DynamicImage::from(image::RgbImage::from_fn(8, 8, |x, y| image::Rgb([(x * 30) as u8, (y * 30) as u8, 90])));
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

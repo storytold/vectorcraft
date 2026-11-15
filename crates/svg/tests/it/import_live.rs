@@ -3,7 +3,6 @@
 //! export → import keeps them.
 
 use craft_svg::tree::draw::resvg;
-use craft_svg::tree::usvg;
 use std::sync::Arc;
 
 use serde_json::json;

@@ -559,7 +559,7 @@ fn the_eyedropper_takes_an_image_pixel_into_the_working_rgb_space() {
     let img = image::RgbaImage::from_raw(1, 1, vec![83, 170, 223, 255]).unwrap();
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

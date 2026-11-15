@@ -52,7 +52,7 @@ pub fn decode(bytes: &[u8], max_alloc: u64) -> Result<(image::RgbaImage, Option<
     let gray = channels < 3;
     let has_alpha = decoded.layout.has_alpha();
     let mut out = image::RgbaImage::new(w, h);
-    for (dst, src) in out.chunks_exact_mut(4).zip(decoded.pixels.chunks_exact(channels)) {
+    for (dst, src) in out.as_chunks_mut::<4>().0.iter_mut().zip(decoded.pixels.chunks_exact(channels)) {
         let a = if has_alpha { src[channels - 1].clamp(0.0, 1.0) } else { 1.0 };
         let unpremul = |v: f32| if decoded.pixels_premultiplied && a > 0.0 { v / a } else { v };
         let rgb = if gray {

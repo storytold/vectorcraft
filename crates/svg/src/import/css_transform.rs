@@ -8,7 +8,6 @@
 //! functions SVG lacks (`translateX`, `scaleY`, `skew`…) spelled with SVG's. A value that can't be
 //! (percentages, `em`, 3D functions) is left as it is.
 
-use craft_svg::tree::usvg;
 use std::f64::consts::PI;
 use std::ops::Range;
 

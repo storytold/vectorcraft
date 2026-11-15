@@ -1,7 +1,6 @@
 //! Colorized gray and bilevel image export, checked as pixels as well as markup.
 
 use craft_svg::tree::draw::resvg;
-use craft_svg::tree::usvg;
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, LinkInfo, Node, NodeKind};
 use vectorcraft_geom::Affine;

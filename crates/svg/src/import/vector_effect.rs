@@ -4,7 +4,6 @@
 //! document-space stroke of the screen width is exact; type and the art usvg drops ids from
 //! (patterns, markers, `<use>` copies) can't always keep it, and a warning says so.
 
-use craft_svg::tree::usvg;
 use std::collections::HashSet;
 
 use craft_svg::tree::usvg::roxmltree;

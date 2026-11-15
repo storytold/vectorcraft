@@ -19,7 +19,7 @@ fn png(w: u32, h: u32, seed: u8) -> Vec<u8> {
     });
     let mut out = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -2571,7 +2571,7 @@ fn a_reduced_image_on_the_ink_planes_shows_its_average() {
     let lines = image::RgbaImage::from_fn(64, 64, |x, _| image::Rgba(if x % 2 == 0 { [0, 0, 0, 255] } else { [255; 4] }));
     let mut bytes = vec![];
     {
-        let __dyn: image::DynamicImage = (lines).into();
+        let __dyn: image::DynamicImage = lines.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -2629,7 +2629,7 @@ fn varied_png(w: u32, h: u32, seed: u8) -> Vec<u8> {
     let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 5 + y) as u8, (x / 3 + y * 7) as u8, (x ^ y) as u8 ^ seed, 255]));
     let mut out = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

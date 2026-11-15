@@ -425,7 +425,7 @@ fn a_built_in_file_past_the_input_limit_still_opens() {
         };
         let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
         craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
-            .map(|__b| png.extend_from_slice(&__b))
+            .map(|__b| png.get_mut().extend_from_slice(&__b))
     }
     .unwrap();
     std::fs::write(&path, png.get_ref()).unwrap();

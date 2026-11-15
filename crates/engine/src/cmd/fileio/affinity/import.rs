@@ -1,4 +1,4 @@
-use super::{Builder, Cursor, Document, Result, err, raster_doc};
+use super::{Builder, Document, Result, err, raster_doc};
 
 /// What an Affinity file opened as.
 pub(in super::super) struct Imported {
@@ -34,7 +34,7 @@ fn preview(name: &str, bytes: &[u8], native: &vectorcraft_affinity::Error) -> Re
     opts.limits.max_width = 4096;
     opts.limits.max_height = 4096;
     opts.limits.max_alloc = 128 << 20;
-    let _pixels = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Png, &p.png, &opts).map_err(err)?;
+    let _pixels = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Png, p.png, &opts).map_err(err)?;
     let d = raster_doc(name, p.png)?;
     Ok((
         d,

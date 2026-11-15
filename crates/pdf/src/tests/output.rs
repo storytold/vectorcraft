@@ -1,7 +1,6 @@
 //! Save PDF › Output: colours converted to the destination (or their numbers preserved), ICC
 //! profiles tagging them, images converted too, and the output intent and Trapped entries.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
 use craft_pdf::syntax::Pdf;

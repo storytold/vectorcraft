@@ -1,6 +1,5 @@
 //! CSS classes on imported elements come back on export, beside the generated `cls-N` classes.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-use craft_svg::tree::usvg;
 use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_svg::{ExportOptions, Profile, Styling, export, import};
 

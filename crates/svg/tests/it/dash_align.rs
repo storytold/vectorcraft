@@ -2,7 +2,6 @@
 //! exact dashes stay a `stroke-dasharray`. Checked by rendering the exported SVG with resvg.
 
 use craft_svg::tree::draw::resvg;
-use craft_svg::tree::usvg;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, Node, StrokeLayer};
 use vectorcraft_geom::{Rect, shapes};

@@ -2,7 +2,6 @@
 //! live objects and single fills and strokes are written with images of their shadows, glows and
 //! blurs (no "left out" warning), and the PDF reads back looking like the canvas.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -39,7 +38,7 @@ fn png(w: u32, h: u32) -> Vec<u8> {
     let img = image::RgbaImage::from_fn(w, h, |x, _| image::Rgba([(x * 255 / w) as u8, 60, 160, 255]));
     let mut out = Vec::new();
     {
-        let __dyn: image::DynamicImage = (image::DynamicImage::from(img)).into();
+        let __dyn: image::DynamicImage = image::DynamicImage::from(img);
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

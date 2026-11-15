@@ -6,7 +6,6 @@
 //! lies one pixel per point at 100 %, centered on the object's center and repeated in both
 //! directions.
 
-use std::io::Cursor;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -107,7 +106,7 @@ impl LoadedTexture {
             return None;
         }
         let mut opts = craft_image_codecs::DecodeOptions::default();
-        opts.limits.max_alloc = vectorcraft_doc::MAX_RASTER_ALLOC as u64;
+        opts.limits.max_alloc = vectorcraft_doc::MAX_RASTER_ALLOC;
         let img = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Png, png, &opts).ok()?;
         let (width, height) = img.dimensions();
         if width == 0 || height == 0 {

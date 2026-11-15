@@ -1,4 +1,3 @@
-use std::io::Cursor;
 use std::sync::Arc;
 
 use image::{DynamicImage, ImageBuffer, Luma, LumaA, Rgb};
@@ -22,7 +21,7 @@ fn settings(background: Background) -> Settings {
 fn png(img: DynamicImage) -> Vec<u8> {
     let mut out = Vec::new();
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img;
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -219,7 +218,7 @@ fn reused_pixels_keep_their_depth_gray_and_profile() {
     let raw: Vec<u8> = gray16.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect();
     let mut cimg =
         craft_image_codecs::Image::from_raw(8, 8, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U16, raw).unwrap();
-    cimg.meta.icc = Some(icc.clone());
+    cimg.icc = Some(icc.clone());
     let bytes = craft_image_codecs::encode(&cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let decodes = || super::DECODES.with(std::cell::Cell::get);
     let (mut s, id) = open(&bytes);
@@ -235,7 +234,7 @@ fn reused_pixels_keep_their_depth_gray_and_profile() {
     assert_eq!((out.get_pixel(0, 0).0, out.get_pixel(3, 3).0), ([61_000, 0], [7_000, 65_535]));
     let result = bytes_of(&s, id);
     let decoded = craft_image_codecs::decode_as(craft_image_codecs::Format::Png, result.as_slice()).unwrap();
-    assert_eq!(decoded.meta.icc, Some(icc));
+    assert_eq!(decoded.icc, Some(icc));
 }
 
 /// Once the background is cleared, most edge pixels are clear and a second run clears nothing: the
@@ -445,12 +444,12 @@ fn the_color_profile_is_kept() {
         f.into_raw(),
     )
     .unwrap();
-    cimg.meta.icc = Some(icc.clone());
+    cimg.icc = Some(icc.clone());
     let bytes = craft_image_codecs::encode(&cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let blob = ImageBlob::png(bytes);
     let out = super::clear(&blob, &settings(Background::Edges), None, super::C).unwrap().unwrap();
     let decoded = craft_image_codecs::decode_as(craft_image_codecs::Format::Png, out.blob.bytes.as_slice()).unwrap();
-    assert_eq!(decoded.meta.icc, Some(icc));
+    assert_eq!(decoded.icc, Some(icc));
 }
 
 /// The resolution the file declares stays with the pixels, so a later Replace or relink sizes the

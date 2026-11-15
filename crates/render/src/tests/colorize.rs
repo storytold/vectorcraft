@@ -29,7 +29,7 @@ fn gray_png() -> Vec<u8> {
     let img = image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap();
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -116,7 +116,7 @@ fn shrunk_copies_are_kept_per_color() {
     let black = image::GrayImage::from_raw(64, 64, vec![0; 64 * 64]).unwrap();
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (black).into();
+        let __dyn: image::DynamicImage = black.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -171,7 +171,7 @@ fn kept_images_only_draw_the_colorized_pixels() {
     let black = image::GrayImage::from_raw(48, 48, vec![0; 48 * 48]).unwrap();
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (black).into();
+        let __dyn: image::DynamicImage = black.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -238,7 +238,7 @@ fn colorize_dims_with_the_grays() {
     let gray = image::GrayImage::from_raw(2, 1, vec![128, 255]).unwrap();
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (gray).into();
+        let __dyn: image::DynamicImage = gray.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -483,7 +483,7 @@ fn rgb_png(width: u32, height: u32, pixels: &[[u8; 3]]) -> Vec<u8> {
     let img = image::RgbImage::from_raw(width, height, pixels.concat()).unwrap();
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (img).into();
+        let __dyn: image::DynamicImage = img.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

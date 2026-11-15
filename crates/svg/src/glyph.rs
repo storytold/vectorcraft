@@ -2,7 +2,6 @@
 //! it, made as the importer makes art of any SVG file. The text crate asks for it through the
 //! reader the app registers ([`vectorcraft_text::set_svg_glyph_reader`]).
 
-use craft_svg::tree::usvg;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;

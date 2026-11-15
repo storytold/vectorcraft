@@ -20,7 +20,7 @@ fn doc(mode: ColorMode, colorize: Option<Paint>) -> Document {
     let gray = image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap();
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (gray).into();
+        let __dyn: image::DynamicImage = gray.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -145,7 +145,7 @@ fn colorized_images_are_downsampled() {
     let gray = image::GrayImage::from_fn(600, 600, |x, y| image::Luma([((x + y) % 200) as u8]));
     let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = (gray).into();
+        let __dyn: image::DynamicImage = gray.into();
         let (__w, __h) = (__dyn.width(), __dyn.height());
         let (__layout, __sample, __raw) = match __dyn {
             image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -210,7 +210,7 @@ fn a_colorized_warped_image_is_written_once_for_all_its_pieces() {
         let gray = image::GrayImage::from_fn(600, 600, |x, y| image::Luma([((x + y) % 200) as u8]));
         let mut png = vec![];
         {
-            let __dyn: image::DynamicImage = (gray).into();
+            let __dyn: image::DynamicImage = gray.into();
             let (__w, __h) = (__dyn.width(), __dyn.height());
             let (__layout, __sample, __raw) = match __dyn {
                 image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),

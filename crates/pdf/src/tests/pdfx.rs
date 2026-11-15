@@ -114,7 +114,7 @@ fn pdfx_1a_files_have_no_rgb() {
         let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([10, 200, 30, 255]));
         let mut out = std::io::Cursor::new(vec![]);
         {
-            let __dyn: image::DynamicImage = (img).into();
+            let __dyn: image::DynamicImage = img.into();
             let (__w, __h) = (__dyn.width(), __dyn.height());
             let (__layout, __sample, __raw) = match __dyn {
                 image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
@@ -145,7 +145,7 @@ fn pdfx_1a_files_have_no_rgb() {
             };
             let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
             craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
-                .map(|__b| out.extend_from_slice(&__b))
+                .map(|__b| out.get_mut().extend_from_slice(&__b))
         }
         .unwrap();
         out.into_inner()
