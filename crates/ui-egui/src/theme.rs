@@ -1368,4 +1368,37 @@ mod tests {
         assert_eq!(Scheme::default(), Scheme::Modern);
         assert_eq!(Scheme::parse(&vectorcraft_engine::Prefs::default().ui_color_scheme), Some(Scheme::default()));
     }
+
+    /// An untouched install draws the Modern look it always has: cards, outlined chrome, the old
+    /// corner radius and no line under the dock tabs, at every brightness.
+    #[test]
+    fn the_default_look_has_no_quiet_lines_or_corners() {
+        for b in Brightness::ALL {
+            let ctx = egui::Context::default();
+            apply(&ctx, b);
+            let (t, modern) = (Tokens::get(&ctx), Tokens::for_brightness(b));
+            assert_eq!(t.accent, modern.accent, "{b:?}");
+            assert_eq!(t.radius, modern.radius, "{b:?}");
+            assert_eq!((t.cards, t.chrome_lines), (modern.cards, modern.chrome_lines), "{b:?}");
+            assert!(t.column_separator.is_none(), "{b:?}: no inset column lines");
+            assert_eq!(t.tab_rule(), Stroke::NONE, "{b:?}: no line under the dock tabs");
+        }
+    }
+
+    /// Choosing Quiet in Preferences (`uiColorScheme` = "quiet") is what applies it.
+    #[test]
+    fn choosing_quiet_in_the_preferences_applies_it() {
+        let mut prefs = vectorcraft_engine::Prefs::default();
+        prefs.ui_color_scheme = "quiet".into();
+        let scheme = Scheme::parse(&prefs.ui_color_scheme).unwrap_or_default();
+        assert_eq!(scheme, Scheme::Quiet);
+        for b in Brightness::ALL {
+            let ctx = egui::Context::default();
+            apply_with(&ctx, b, Accent::default(), scheme);
+            let t = Tokens::get(&ctx);
+            assert!(t.column_separator.is_some(), "{b:?}: Quiet's inset column lines");
+            assert_ne!(t.tab_rule(), Stroke::NONE, "{b:?}: Quiet's line under the dock tabs");
+            assert_eq!(t.radius, Tokens::quiet(b).radius, "{b:?}");
+        }
+    }
 }

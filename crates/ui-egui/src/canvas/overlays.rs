@@ -86,6 +86,11 @@ impl<'a> HandleLook<'a> {
     }
 }
 
+/// How many points bigger than the other selected anchors the key anchor's square is drawn.
+const KEY_ANCHOR_GROW: f32 = 2.0;
+/// The gap between the key anchor's square and the frame drawn around it.
+const KEY_ANCHOR_GAP: f32 = 2.0;
+
 pub(super) fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
     let r = egui::Rect::from_center_size(c, vec2(size, size));
     if filled {
@@ -188,6 +193,14 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
         }
         marks.paint(st, p, xf, &options, key_outline, if big { &[] } else { &st.selection.objects });
+        // The key anchor (Align to Key Anchor): a filled square bigger than the other anchors, in
+        // a frame as thick as a key object's outline.
+        if let Some(((k, _), q)) = st.selection.key_anchor.zip(st.selection.key_anchor_point(&st.doc)) {
+            let (c, color, size) = (xf.to_screen(q), c32(st.doc.layer_color(k)), anchor(direct) + KEY_ANCHOR_GROW);
+            anchor_square(p, c, color, true, size);
+            let frame = egui::Rect::from_center_size(c, vec2(size + 2.0 * KEY_ANCHOR_GAP, size + 2.0 * KEY_ANCHOR_GAP));
+            p.rect_stroke(frame, 0.0, Stroke::new(KEY_OUTLINE, color), StrokeKind::Outside);
+        }
     }
     // The spine of each selected blend (or of the blend a selected key object belongs to).
     let mut spines = vec![];

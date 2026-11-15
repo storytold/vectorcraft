@@ -242,6 +242,7 @@
 	Align to Artboard	Alinea al tauler
 	Align to Glyph Bounds	Alinea als límits del glif
 	Align to Key Object	Alinea a l’objecte clau
+	Align to Key Anchor	Alinea al punt d’ancoratge clau
 	Align to Page	Alinea a la pàgina
 	Align to Path	Alinea al traçat
 	Align to Selection	Alinea a la selecció
@@ -764,6 +765,11 @@ antiAlias	Sharp	Nítid
 	CMYK Equivalents	Equivalents CMYK
 	CMYK profile in effect	Perfil CMYK en vigor
 	CMYK:	CMYK:
+	RGB Policy:	Política RGB:
+	CMYK Policy:	Política CMYK:
+	Preserve Embedded Profiles	Conserva els perfils incrustats
+	Convert to Working Space	Converteix a l'espai de treball
+	Preserve Numbers	Conserva els números
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
 	Collapse Panels to Icons	Replega els panells a icones
@@ -1626,6 +1632,7 @@ antiAlias	Sharp	Nítid
 	Rotate (Classic)…	Gira (clàssic)…
 	Surface	Superfície
 	Wireframe	Filferro
+	Render Settings	Configuració de renderització
 	No Shading	Sense ombra
 	Plastic	Plàstic
 	Highlight Intensity	Intensitat de la brillantor
@@ -1898,6 +1905,40 @@ digits	Malayalam	Malaiàlam
 	Graph Design	Disseny del gràfic
 	Graph Marker	Marcador del gràfic
 	Graph Type	Tipus de gràfic
+	Graph Options	Opcions del gràfic
+	Left Axis	Eix esquerre
+	Right Axis	Eix dret
+	Category Axis	Eix de categories
+	Separate Scales	Escales separades
+	Add Drop Shadow	Afegeix una ombra paral·lela
+	Add Legend Across Top	Afegeix la llegenda a la part superior
+	First Row in Front	Primera fila al davant
+	First Column in Front	Primera columna al davant
+	Legend	Llegenda
+	Column Width	Amplada de columna
+	Bar Width	Amplada de barra
+	Cluster Width	Amplada del grup
+	Mark Data Points	Marca els punts de dades
+	Connect Data Points	Connecta els punts de dades
+	Edge-to-Edge Lines	Línies de vora a vora
+	Draw Filled Lines	Dibuixa línies emplenades
+	Tick Values	Valors de les marques
+	Override Calculated Values	Substitueix els valors calculats
+	Divisions	Divisions
+	Tick Marks	Marques de graduació
+	Tick Marks per Division	Marques per divisió
+	Draw Tick Marks Between Labels	Dibuixa les marques entre les etiquetes
+	Add Labels	Afegeix etiquetes
+	Maximum must be more than Minimum.	El màxim ha de ser més gran que el mínim.
+	Column Graph	Gràfic de columnes
+	Stacked Column Graph	Gràfic de columnes apilades
+	Bar Graph	Gràfic de barres
+	Stacked Bar Graph	Gràfic de barres apilades
+	Line Graph	Gràfic de línies
+	Area Graph	Gràfic d’àrea
+	Scatter Graph	Gràfic de dispersió
+	Pie Graph	Gràfic de sectors
+	Radar Graph	Gràfic de radar
 	Graphic	Gràfic
 	Graphic Pen	Ploma gràfica
 	Graphic Pen…	Ploma gràfica…
@@ -2039,6 +2080,7 @@ digits	Malayalam	Malaiàlam
 	Highlight Substituted Fonts	Ressalta els tipus de lletra substituïts
 	Highlight Substituted Glyphs	Ressalta els glifs substituïts
 	Highlight Variable	Ressalta la variable
+	Sort Variables	Ordena les variables
 	Highlight:	Ressalta:
 	Hindi	Hindi
 	History	Historial
@@ -2560,6 +2602,7 @@ digits	Malayalam	Malaiàlam
 	Menu Dialog	Diàleg de menú
 	Merge	Fusiona
 	Merge colors into one row	Fusiona els colors en una fila
+	New Row	Fila nova
 	Merge Graphic Styles	Fusiona els estils gràfics
 	Merge Graphic Styles…	Fusiona els estils gràfics…
 	Merge Layers	Fusiona les capes
@@ -4688,11 +4731,55 @@ digits	Malayalam	Malaiàlam
 	Composite Fonts	Tipus de lletra compostos
 	Export Composite Fonts	Exporta tipus de lletra compostos
 	Import Composite Fonts	Importa tipus de lletra compostos
+@msg	each font must be {name, parts}	cada tipus de lletra ha de ser {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	clau desconeguda `{k}`; un tipus de lletra admet name i parts
+@msg	each font needs a name	cada tipus de lletra necessita un nom
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no pot anomenar un tipus de lletra compost (d’1 a {COMPOSITE_NAME_MAX} caràcters, sense caràcters de control)
+@msg	`{name}`: parts must be an object	`{name}`: parts ha de ser un objecte
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: classe desconeguda `{k}`; les classes són kanji, kana, punctuation, symbols, roman i numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} ha de ser un objecte
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: clau desconeguda `{k}` a {_1}
+@msg	`{name}`: give the kanji part	`{name}`: indiqueu la part kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un document conté com a màxim {COMPOSITE_FONTS_MAX} tipus de lletra compostos
+@msg	two composite fonts are named `{_1}`	dos tipus de lletra compostos es diuen `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` és el nom d’un tipus de lletra instal·lat
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, un tipus de lletra compost
+@msg	give fonts: [{name, parts}…]	indiqueu fonts: [{name, parts}…]
+@msg	path is empty	path és buit
+@msg	fonts must be a list of composite fonts	fonts ha de ser una llista de tipus de lletra compostos
+@msg	names must be strings	names ha de contenir cadenes
+@msg	no composite font named `{n}`	cap tipus de lletra compost anomenat `{n}`
+@msg	names must be a list of names	names ha de ser una llista de noms
+@msg	no composite fonts to export	cap tipus de lletra compost per exportar
+@msg	not a composite fonts file: {e}	no és un fitxer de tipus de lletra compostos: {e}
+@msg	not a composite fonts file: no compositeFonts list	no és un fitxer de tipus de lletra compostos: no hi ha cap llista compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	el fitxer conté més de {COMPOSITE_FONTS_MAX} tipus de lletra compostos
+@msg	the file is larger than 4 MB	el fitxer ocupa més de 4 MB
+@msg	dataBase64 is not base64	dataBase64 no és base64
+@msg	give one of path, data or dataBase64	indiqueu path, data o dataBase64
+@msg	the file holds no composite fonts	el fitxer no conté cap tipus de lletra compost
+@msg	the file holds two composite fonts named `{_1}`	el fitxer conté dos tipus de lletra compostos anomenats `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` no pot anomenar un tipus de lletra compost
+@msg	{k}: give a font	{k}: indiqueu un tipus de lletra
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: indiqueu un tipus de lletra
+@msg	{k}: size must be {_1} to {_2}%	{k}: size ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size ha d’estar entre {_1} i {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline ha d’estar entre {_1} i {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: l’escala ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: l’escala ha d’estar entre {_1} i {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: només kana, roman i numerals es poden escalar
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: només kana, roman i numerals es poden escalar
+@msg	{k}: only kana can be scaled at the center	{k}: només kana es pot escalar des del centre
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: només kana es pot escalar des del centre
+@msg	no composite font	cap tipus de lletra compost
 	Delete Font	Suprimeix el tipus de lletra
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Xifres
 	Scale at Center	Escala des del centre
+	Delete Set	Suprimeix el joc
+	Direct Entry	Entrada directa
 	Up/Down:	Amunt/avall:
 	Left/Right:	Esquerra/dreta:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko amunt/avall
@@ -6217,6 +6304,7 @@ digits	Malayalam	Malaiàlam
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
 @msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objecte no té cap efecte 3D (Extrudeix i bisella, Revoluciona, Infla o Gira)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` ha de ser un objecte que només contingui `mode`, amb el valor shaded o wireframe
 @msg	its 3D effect builds no solid	el seu efecte 3D no construeix cap sòlid
 @msg	bevel must be none or one of {_1}	bevel ha de ser none o un de {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no pot construir sòlids a partir d’aquesta il·lustració: les seves instàncies de símbol, fusions i grups de retall contenen massa objectes
