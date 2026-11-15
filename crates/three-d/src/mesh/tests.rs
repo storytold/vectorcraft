@@ -174,6 +174,36 @@ fn a_bridge_through_another_corner_touches_it() {
 }
 
 #[test]
+fn flat_triangles_keep_corners_that_lie_along_an_edge() {
+    // A square with a hole, its edges carrying corners midway, as a cell shares with its finer
+    // neighbors: every corner is a corner of some triangle, and the triangles cover the face.
+    let p = |x: f64, y: f64| Point::new(x, y);
+    let outline = vec![p(5.0, 0.0), p(10.0, 0.0), p(10.0, 5.0), p(10.0, 10.0), p(5.0, 10.0), p(0.0, 10.0), p(0.0, 5.0), p(0.0, 0.0)];
+    let hole = vec![p(1.0, 4.0), p(1.0, 6.0), p(2.0, 6.0), p(2.0, 4.0)];
+    let mut work = 0;
+    let triangles = flat_triangles(&[outline.clone(), hole], &mut work, usize::MAX).unwrap();
+    let area = |t: &[Point; 3]| ((t[1].x - t[0].x) * (t[2].y - t[0].y) - (t[1].y - t[0].y) * (t[2].x - t[0].x)) / 2.0;
+    assert!(triangles.iter().all(|t| area(t) > 0.0));
+    assert!((triangles.iter().map(area).sum::<f64>() - 98.0).abs() < 1e-9);
+    for q in &outline {
+        assert!(triangles.iter().any(|t| t.contains(q)), "{q:?} is no triangle's corner");
+    }
+    assert!(work > 0);
+}
+
+#[test]
+fn flat_triangles_stop_at_their_budget() {
+    let p = |x: f64, y: f64| Point::new(x, y);
+    let outline = vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)];
+    let hole = vec![p(1.0, 4.0), p(1.0, 6.0), p(2.0, 6.0), p(2.0, 4.0)];
+    let mut all = 0;
+    assert!(flat_triangles(&[outline.clone(), hole.clone()], &mut all, usize::MAX).is_some());
+    let mut work = 0;
+    assert!(flat_triangles(&[outline, hole], &mut work, all - 1).is_none());
+    assert!(work >= all, "{work} of {all}");
+}
+
+#[test]
 fn a_beveled_extrusion_stays_closed() {
     let mut b = BezPath::new();
     square(&mut b, 0.0, 0.0, 100.0, false);

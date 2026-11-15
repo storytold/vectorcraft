@@ -196,6 +196,28 @@ thread_local! {
     pub(crate) static INFLATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// The grid work of the last solid this thread inflated in full, for the tests.
     pub(super) static GRID_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The work of cutting cells with holes for graphics in the last solid this thread inflated
+    /// in full, for the tests.
+    pub(super) static FLAT_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The work the next solids of this thread may take cutting cells with holes for graphics,
+    /// for the tests.
+    pub(super) static FLAT_BUDGET: std::cell::Cell<usize> = const { std::cell::Cell::new(MAX_FLAT_WORK) };
+}
+
+/// Most work one inflated surface may take cutting the cells graphics are mapped onto that
+/// [`cell_triangles`] can't take (a hole inside the cell, or a ring of more corners), all its
+/// cells together ([`crate::mesh::flat_triangles`]).
+pub(super) const MAX_FLAT_WORK: usize = 1 << 26;
+
+/// Most corners the pieces of one such cell may have.
+pub(super) const MAX_FLAT_CORNERS: usize = 4096;
+
+/// The work cutting cells with holes for graphics may take.
+fn flat_budget() -> usize {
+    #[cfg(test)]
+    return FLAT_BUDGET.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    MAX_FLAT_WORK
 }
 
 /// Marks the facet the builder `b` added after it held `before` facets, if it added one, as a piece
@@ -278,6 +300,8 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
     // builds the topology of every outline ring near its cell, so a self-crossing outline cost its
     // crossings again in every cell it spans. Past it, cells take their clipped pieces.
     let material_left = std::cell::Cell::new(MAX_MATERIAL_SEGMENTS);
+    // The work of cutting cells with holes for graphics, all the cells together ([`MAX_FLAT_WORK`]).
+    let mut flat_work = 0usize;
     // Every ring's bounds, and the crossings of the last few rows the cells' centres lie on (a
     // row of cells has at most seven, at its three levels).
     let ring_bounds: Vec<Option<Rect>> =
@@ -432,9 +456,25 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                     // the front or back: each triangle then carries where its corners lie in the
                     // art's plane.
                     let smoothed = height > 0.0 && smooth;
-                    if (smoothed || o.map_surface)
-                        && let Some(triangles) = cell_triangles(&pieces)
-                    {
+                    let triangles = match (smoothed || o.map_surface).then(|| cell_triangles(&pieces)) {
+                        // A cell graphics are mapped onto that the quick cut can't take (a hole
+                        // inside it, or a ring of more corners) is cut with its holes, against one
+                        // budget for the whole surface. Drawn whole instead, its piece would show
+                        // no graphics.
+                        Some(None) if o.map_surface => {
+                            if pieces.iter().map(Vec::len).fold(0usize, usize::saturating_add) > MAX_FLAT_CORNERS {
+                                return Err(TOO_COMPLEX_SURFACE.into());
+                            }
+                            let budget = flat_budget();
+                            let holed = crate::mesh::flat_triangles(&pieces, &mut flat_work, budget);
+                            if flat_work > budget {
+                                return Err(TOO_COMPLEX_SURFACE.into());
+                            }
+                            Some(holed.ok_or_else(|| TOO_COMPLEX_SURFACE.to_string())?)
+                        }
+                        quick => quick.flatten(),
+                    };
+                    if let Some(triangles) = triangles {
                         let order = if flat { Order::Last } else { Order::Depth };
                         for points in triangles {
                             let front = points.map(|q| camera.place(q, half + lift(q)));
@@ -550,6 +590,8 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
     }
     #[cfg(test)]
     GRID_WORK.with(|w| w.set(edges.work()));
+    #[cfg(test)]
+    FLAT_WORK.with(|w| w.set(flat_work));
     if edges.spent() {
         return Err(TOO_COMPLEX_SURFACE.into());
     }

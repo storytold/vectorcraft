@@ -464,6 +464,81 @@ fn inflate_marks_where_each_piece_lies_in_the_art_for_graphics() {
     assert!(on(Inflate::default(), behind).iter().all(|f| f.membrane != Some(PlanarFace::Back)));
 }
 
+/// A square 0.3 pt across with its corner at the lattice point `(qx, qy)` of the grid of a
+/// 100 pt shape, offset 0.1 pt: it lies inside one quarter cell of that grid.
+fn speck(qx: f64, qy: f64) -> BezPath {
+    let unit = 100.0 / 48.0 / 4.0;
+    square(qx * unit + 0.1, qy * unit + 0.1, 0.3)
+}
+
+/// The area of the pieces marked for graphics on `face`.
+fn mapped_area(f: &[Facet], face: PlanarFace) -> f64 {
+    f.iter().filter(|f| f.membrane == Some(face)).map(|f| signed_area(&f.contours[0]).abs()).sum()
+}
+
+/// A hole inside one cell of the surface's grid leaves that cell's piece with a hole in it:
+/// graphics still map onto the rest of the cell, front and back, and the hole stays open.
+#[test]
+fn inflate_maps_graphics_around_a_hole_inside_one_cell() {
+    let mut b = square(0.0, 0.0, 100.0);
+    b.extend(speck(96.0, 96.0));
+    let (p, r) = shape(&b);
+    let o = Inflate { map_surface: true, both_sides: true, ..Inflate::default() };
+    let f = inflate(&p, FillRule::EvenOdd, r, o, front()).unwrap();
+    let mapped = mapped_area(&f, PlanarFace::Front);
+    assert!(close(mapped, 100.0 * 100.0 - 0.3 * 0.3, 1e-3), "{mapped}");
+    let f = inflate(&p, FillRule::EvenOdd, r, o, View { rotation_y: 180.0, ..front() }).unwrap();
+    let mapped = mapped_area(&f, PlanarFace::Back);
+    assert!(close(mapped, 100.0 * 100.0 - 0.3 * 0.3, 1e-3), "{mapped}");
+}
+
+/// The cells graphics are mapped onto that need their holes cut out share one budget for the
+/// whole surface: past it the surface is refused, however little each cell takes.
+#[test]
+fn inflate_cuts_holed_cells_for_graphics_within_one_budget() {
+    let mut b = square(0.0, 0.0, 100.0);
+    for i in 0..8 {
+        for j in 0..8 {
+            b.extend(speck(20.0 + 20.0 * i as f64, 20.0 + 20.0 * j as f64));
+        }
+    }
+    let (p, r) = shape(&b);
+    let o = Inflate { map_surface: true, ..Inflate::default() };
+    let f = inflate(&p, FillRule::EvenOdd, r, o, front()).unwrap();
+    assert!(close(mapped_area(&f, PlanarFace::Front), 100.0 * 100.0 - 64.0 * 0.3 * 0.3, 1e-3));
+    let all = FLAT_WORK.with(std::cell::Cell::get);
+    assert!(all > 0);
+    // Half the work all 64 cells took is far more than any one of them takes.
+    FLAT_BUDGET.with(|w| w.set(all / 2));
+    let half = inflate(&p, FillRule::EvenOdd, r, o, front());
+    FLAT_BUDGET.with(|w| w.set(MAX_FLAT_WORK));
+    assert_eq!(half.err().as_deref(), Some(TOO_COMPLEX_SOLID));
+    // The art draws without graphics as before.
+    assert!(inflate(&p, FillRule::EvenOdd, r, Inflate::default(), front()).is_ok());
+}
+
+/// A cell graphics are mapped onto whose pieces have more corners than one cut may take refuses
+/// the surface rather than drawing that cell without its graphics.
+#[test]
+fn inflate_refuses_graphics_on_a_cell_with_too_many_corners() {
+    let mut b = square(0.0, 0.0, 100.0);
+    let unit = 100.0 / 48.0 / 4.0;
+    let c = Point::new(96.5 * unit, 96.5 * unit);
+    let n = MAX_FLAT_CORNERS + 10;
+    let mut ring = BezPath::new();
+    for k in 0..n {
+        let a = -std::f64::consts::TAU * k as f64 / n as f64;
+        let q = (c.x + 0.2 * a.cos(), c.y + 0.2 * a.sin());
+        if k == 0 { ring.move_to(q) } else { ring.line_to(q) }
+    }
+    ring.close_path();
+    b.extend(ring);
+    let (p, r) = shape(&b);
+    let mapped = inflate(&p, FillRule::EvenOdd, r, Inflate { map_surface: true, ..Inflate::default() }, front());
+    assert_eq!(mapped.err().as_deref(), Some(TOO_COMPLEX_SOLID));
+    assert!(inflate(&p, FillRule::EvenOdd, r, Inflate::default(), front()).is_ok());
+}
+
 #[test]
 fn malformed_and_degenerate_input_is_bounded() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
