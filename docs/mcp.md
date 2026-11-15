@@ -10885,7 +10885,7 @@ changes the flare's length and direction as one undo step, and Esc cancels the d
 is no longer edited as a flare (error `select a flare`), and a locked or hidden flare is not edited either. Object › Expand turns
 a flare into a plain group of its parts. The document saves a flare's settings. Sources:
 [Draw and edit flares](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/draw-shapes/draw-and-edit-flares.html),
-[the CS3 help, page 67](https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=67).
+[Edit a flare](https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=67).
 
 ```json
 {"name":"run_command","arguments":{"command":"shape.editFlare","params":{"diameter":100,"rings":6}}}
