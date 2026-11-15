@@ -2528,6 +2528,7 @@ antiAlias	Sharp	शार्प
 	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	ग्राफ़िक्स, रंग और टेक्स्ट स्टाइल्स यहाँ रखें ताकि किसी भी डॉक्यूमेंट में उपयोग कर सकें। लाइब्रेरीज़ इसी कंप्यूटर पर रहती हैं — अकाउंट की ज़रूरत नहीं है।
 	Keep Handles	हैंडल रखें
 	Keep Original	मूल रखें
+	Keep Originals	मूल रखें
 	Keep Plain Text	प्लेन टेक्स्ट रखें
 	Keep selected	सिलेक्ट करें
 	Keep Shared Points Together	साझा पॉइंट्स एक साथ रखें
@@ -4818,6 +4819,8 @@ antiAlias	Sharp	शार्प
 	Smooth	स्मूथ
 	Smooth Anchors	चिकना एंकर
 	Smooth Anchors…	चिकना एंकर…
+	Smooth Bridge	स्मूद ब्रिज
+	Smooth Bridge…	स्मूद ब्रिज…
 	Smooth Color	चिकना रंग
 	Smooth Tool	चिकना टूल
 	Smooth…	चिकना करें…
@@ -7755,6 +7758,7 @@ antiAlias	Sharp	शार्प
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ऑफसेट पाथ: ऑफ़सेट सिलेक्टेड पाथ की कुछ भी नहीं छोड़ता है (आकार की तुलना में एक निर्धारित बड़ा)
 @msg	Offset Path: the path is too complex to offset	ऑफसेट पाथ: पाथ ऑफसेट करने के लिए बहुत जटिल है
 @msg	on must be true or false	on को true या false होना चाहिए
+@msg	one circle is inside the other	एक वृत्त दूसरे के अंदर है
 @msg	only a dock group above or below others collapses, not one beside another	केवल दूसरों के ऊपर या नीचे एक डॉक समूह गिर जाता है, एक दूसरे के बगल में नहीं
 @msg	only an exporter or an importer declares `extensions`	केवल एक्सपोर्टर या इंपोर्टर `extensions` घोषित करता है
 @msg	only an object of the Global Edit other than the one it started from can be left out	केवल ग्लोबल एडिट का एक ऑब्जेक्ट, इसके अलावा इसे शुरू किया जा सकता है, छोड़ दिया जा सकता है
@@ -8063,6 +8067,7 @@ antiAlias	Sharp	शार्प
 @msg	select the objects to attach to the path	ऑब्जेक्ट्स का सिलेक्ट करने के लिए संलग्न करने के लिए पाथ
 @msg	select the objects to bind	ऑब्जेक्ट्स को बांधने के लिए चुनें
 @msg	select the objects to transform in perspective	ऑब्जेक्ट्स को पर्सपेक्टिव में बदलने के लिए चुनें
+@msg	select two circles to bridge	जोड़ने के लिए दो वृत्त चुनें
 @msg	select two open path ends, or two open paths, to average and join	औसत निकालकर जोड़ने के लिए दो खुले पाथ एंड पॉइंट्स या दो खुले पाथ सिलेक्ट करें
 @msg	select two or more graphic styles to merge	दो या अधिक ग्राफिक स्टाइल्स का सिलेक्ट करने के लिए विलय
 @msg	select two or more objects to distribute	वितरित करने के लिए दो या दो से अधिक ऑब्जेक्ट चुनें
@@ -8228,6 +8233,8 @@ antiAlias	Sharp	शार्प
 @msg	the background worker stopped	पृष्ठभूमि कार्यकर्ता बंद कर दिया
 @msg	the blend has no spine	मिश्रण में कोई रीढ़ नहीं है
 @msg	the character's size can't be measured	कैरेक्टर का आकार मापा नहीं जा सकता है
+@msg	the circles are too far apart for this radius	इस त्रिज्या के लिए वृत्त एक-दूसरे से बहुत दूर हैं
+@msg	the circles are too far apart for this radius: raise the radius	इस त्रिज्या के लिए वृत्त एक-दूसरे से बहुत दूर हैं: त्रिज्या बढ़ाएँ
 @msg	the CMYK image couldn't be written	CMYK इमेज को नहीं लिखा जा सकता
 @msg	the Color Picker is not open	रंग पिकर खुला नहीं है
 @msg	the compound shape is too complex to expand	मिश्रित आकार का विस्तार करने के लिए बहुत जटिल है

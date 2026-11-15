@@ -7362,6 +7362,14 @@ breakText	Glyphs	Glyfy
 	Remove Gaps	Odstranit mezery
 @msg	that makes too many pieces (at most 100000): make the dashes longer	tím vznikne příliš mnoho dílů (nejvýše 100000): prodlužte čárky
 @msg	select paths, or segments, to divide	vyberte cesty nebo segmenty k rozdělení
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Hladký most…
+	Smooth Bridge	Hladký most
+	Keep Originals	Zachovat originály
+@msg	select two circles to bridge	vyberte dva kruhy k propojení
+@msg	one circle is inside the other	jeden kruh je uvnitř druhého
+@msg	the circles are too far apart for this radius: raise the radius	kruhy jsou pro tento poloměr příliš daleko od sebe: zvětšete poloměr
+@msg	the circles are too far apart for this radius	kruhy jsou pro tento poloměr příliš daleko od sebe
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozložit čárky na cesty
 @msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení

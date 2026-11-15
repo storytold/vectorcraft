@@ -6741,6 +6741,14 @@ breakText	Glyphs	Glif
 	Remove Gaps	Hapus celah
 @msg	that makes too many pieces (at most 100000): make the dashes longer	itu menghasilkan terlalu banyak potongan (paling banyak 100000): perpanjang garisnya
 @msg	select paths, or segments, to divide	pilih jalur atau segmen yang akan dibagi
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Jembatan Halus…
+	Smooth Bridge	Jembatan Halus
+	Keep Originals	Pertahankan Asli
+@msg	select two circles to bridge	pilih dua lingkaran untuk dijembatani
+@msg	one circle is inside the other	satu lingkaran berada di dalam lingkaran lainnya
+@msg	the circles are too far apart for this radius: raise the radius	lingkaran terlalu berjauhan untuk radius ini: perbesar radius
+@msg	the circles are too far apart for this radius	lingkaran terlalu berjauhan untuk radius ini
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas

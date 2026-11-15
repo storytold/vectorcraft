@@ -6726,6 +6726,14 @@ breakText	Glyphs	Глифи
 	Remove Gaps	Премахване на разстоянията
 @msg	that makes too many pieces (at most 100000): make the dashes longer	така се получават твърде много части (най-много 100000): удължете тиретата
 @msg	select paths, or segments, to divide	изберете пътища или сегменти за разделяне
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Плавен мост…
+	Smooth Bridge	Плавен мост
+	Keep Originals	Запазване на оригиналите
+@msg	select two circles to bridge	изберете два кръга за свързване
+@msg	one circle is inside the other	единият кръг е вътре в другия
+@msg	the circles are too far apart for this radius: raise the radius	кръговете са твърде далеч един от друг за този радиус: увеличете радиуса
+@msg	the circles are too far apart for this radius	кръговете са твърде далеч един от друг за този радиус
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разширяване на тиретата в пътища
 @msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване

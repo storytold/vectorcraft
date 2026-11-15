@@ -6778,6 +6778,14 @@ shape	Open	Otvoren
 	Remove Gaps	Ukloni razmake
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje previše dijelova (najviše 100000): produžite crtice
 @msg	select paths, or segments, to divide	odaberite putanje ili segmente za dijeljenje
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Glatki most…
+	Smooth Bridge	Glatki most
+	Keep Originals	Zadrži originale
+@msg	select two circles to bridge	odaberite dva kruga za premošćavanje
+@msg	one circle is inside the other	jedan krug je unutar drugog
+@msg	the circles are too far apart for this radius: raise the radius	krugovi su predaleko jedan od drugog za ovaj radijus: povećajte radijus
+@msg	the circles are too far apart for this radius	krugovi su predaleko jedan od drugog za ovaj radijus
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Proširi crtice u putanje
 @msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje

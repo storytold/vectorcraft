@@ -41,6 +41,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.image.removeBackground",
     "addon.image.removeColorMask",
     "addon.pathtools.addPoints",
+    "addon.pathtools.bridge",
     "addon.pathtools.close",
     "addon.pathtools.corner",
     "addon.pathtools.cornerRemove",

@@ -987,6 +987,9 @@ fn structured_junk() {
         ("addon.pathtools.expandDashes", json!({})),
         ("addon.pathtools.expandDashes", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
         ("addon.pathtools.expandDashes", json!({"ids": "x", "junk": f64::MAX})),
+        ("addon.pathtools.bridge", json!({"radius": 1e-308, "keepOriginals": "x"})),
+        ("addon.pathtools.bridge", json!({"radius": 1000, "keepOriginals": true, "ids": [0, 1, 2, 3, u64::MAX]})),
+        ("addon.pathtools.bridge", json!({"radius": f64::MAX, "ids": [1, 1], "junk": [0]})),
         // Refused before anything is written: no format of that name, a time that is no time.
         ("addon.document.saveTimestampedCopy", json!({"format": "png", "folder": 7})),
         ("addon.document.saveTimestampedCopy", json!({"format": "svg", "time": [1e308], "folder": null})),

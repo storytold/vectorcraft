@@ -7358,6 +7358,14 @@ breakText	Glyphs	Glifs
 	Remove Gaps	Elimina les separacions
 @msg	that makes too many pieces (at most 100000): make the dashes longer	això fa massa trossos (com a màxim 100000): allargueu els guions
 @msg	select paths, or segments, to divide	seleccioneu camins o segments per dividir
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Pont suau…
+	Smooth Bridge	Pont suau
+	Keep Originals	Conserva els originals
+@msg	select two circles to bridge	seleccioneu dos cercles per unir-los
+@msg	one circle is inside the other	un cercle és dins de l’altre
+@msg	the circles are too far apart for this radius: raise the radius	els cercles estan massa separats per a aquest radi: augmenteu el radi
+@msg	the circles are too far apart for this radius	els cercles estan massa separats per a aquest radi
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandeix els guions en camins
 @msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir

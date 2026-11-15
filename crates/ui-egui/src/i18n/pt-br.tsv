@@ -7393,6 +7393,14 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Remover distâncias
 @msg	that makes too many pieces (at most 100000): make the dashes longer	isso gera peças demais (no máximo 100000): aumente os traços
 @msg	select paths, or segments, to divide	selecione demarcadores ou segmentos para dividir
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Ponte suave…
+	Smooth Bridge	Ponte suave
+	Keep Originals	Manter originais
+@msg	select two circles to bridge	selecione dois círculos para unir
+@msg	one circle is inside the other	um círculo está dentro do outro
+@msg	the circles are too far apart for this radius: raise the radius	os círculos estão muito afastados para este raio: aumente o raio
+@msg	the circles are too far apart for this radius	os círculos estão muito afastados para este raio
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir traços em demarcadores
 @msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir

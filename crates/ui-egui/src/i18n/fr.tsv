@@ -7357,6 +7357,14 @@ breakText	Glyphs	Glyphes
 	Remove Gaps	Supprimer les écarts
 @msg	that makes too many pieces (at most 100000): make the dashes longer	cela donne trop de morceaux (100000 au plus) : allongez les tirets
 @msg	select paths, or segments, to divide	sélectionnez des tracés ou des segments à diviser
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Pont lissé…
+	Smooth Bridge	Pont lissé
+	Keep Originals	Conserver les originaux
+@msg	select two circles to bridge	sélectionnez deux cercles à relier
+@msg	one circle is inside the other	un cercle est à l’intérieur de l’autre
+@msg	the circles are too far apart for this radius: raise the radius	les cercles sont trop éloignés pour ce rayon : augmentez le rayon
+@msg	the circles are too far apart for this radius	les cercles sont trop éloignés pour ce rayon
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Décomposer les tirets en tracés
 @msg	select paths with dashed strokes to expand	sélectionnez des tracés à contour pointillé à décomposer

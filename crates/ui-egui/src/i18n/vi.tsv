@@ -6988,6 +6988,14 @@ breakText	Glyphs	Glyph
 	Remove Gaps	Gỡ các khoảng hở
 @msg	that makes too many pieces (at most 100000): make the dashes longer	như vậy tạo ra quá nhiều mảnh (tối đa 100000): hãy kéo dài nét
 @msg	select paths, or segments, to divide	chọn các đường dẫn hoặc đoạn để chia
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Cầu nối mượt…
+	Smooth Bridge	Cầu nối mượt
+	Keep Originals	Giữ bản gốc
+@msg	select two circles to bridge	chọn hai hình tròn để nối
+@msg	one circle is inside the other	một hình tròn nằm bên trong hình tròn kia
+@msg	the circles are too far apart for this radius: raise the radius	các hình tròn cách nhau quá xa so với bán kính này: hãy tăng bán kính
+@msg	the circles are too far apart for this radius	các hình tròn cách nhau quá xa so với bán kính này
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Mở rộng nét đứt thành đường dẫn
 @msg	select paths with dashed strokes to expand	chọn các đường dẫn có nét đứt để mở rộng

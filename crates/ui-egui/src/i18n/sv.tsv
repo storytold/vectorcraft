@@ -7378,6 +7378,14 @@ breakText	Glyphs	Glyfer
 	Remove Gaps	Ta bort mellanrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det blir för många delar (högst 100000): gör strecken längre
 @msg	select paths, or segments, to divide	markera banor eller segment att dela upp
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Mjuk brygga…
+	Smooth Bridge	Mjuk brygga
+	Keep Originals	Behåll original
+@msg	select two circles to bridge	markera två cirklar att förbinda
+@msg	one circle is inside the other	den ena cirkeln ligger inuti den andra
+@msg	the circles are too far apart for this radius: raise the radius	cirklarna ligger för långt ifrån varandra för den här radien: öka radien
+@msg	the circles are too far apart for this radius	cirklarna ligger för långt ifrån varandra för den här radien
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandera streck till banor
 @msg	select paths with dashed strokes to expand	markera banor med streckad kontur att expandera

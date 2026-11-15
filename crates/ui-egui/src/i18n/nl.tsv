@@ -9236,6 +9236,14 @@ breakText	Glyphs	Glyphs
 	Remove Gaps	Tussenruimten verwijderen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	dat geeft te veel stukken (hoogstens 100000): maak de streepjes langer
 @msg	select paths, or segments, to divide	selecteer paden of segmenten om te verdelen
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Vloeiende brug…
+	Smooth Bridge	Vloeiende brug
+	Keep Originals	Originelen behouden
+@msg	select two circles to bridge	selecteer twee cirkels om te verbinden
+@msg	one circle is inside the other	de ene cirkel ligt binnen de andere
+@msg	the circles are too far apart for this radius: raise the radius	de cirkels liggen te ver uit elkaar voor deze straal: vergroot de straal
+@msg	the circles are too far apart for this radius	de cirkels liggen te ver uit elkaar voor deze straal
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Streepjes uitbreiden tot paden
 @msg	select paths with dashed strokes to expand	selecteer paden met een streepjeslijn om uit te breiden

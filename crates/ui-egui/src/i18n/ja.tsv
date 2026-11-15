@@ -8866,6 +8866,14 @@ breakText	Glyphs	字形
 	Remove Gaps	間隔を削除
 @msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
 @msg	select paths, or segments, to divide	分割するパスまたはセグメントを選択してください
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	スムーズブリッジ…
+	Smooth Bridge	スムーズブリッジ
+	Keep Originals	オリジナルを保持
+@msg	select two circles to bridge	ブリッジでつなぐ円を 2 つ選択してください
+@msg	one circle is inside the other	一方の円がもう一方の円の内側にあります
+@msg	the circles are too far apart for this radius: raise the radius	この半径では円が離れすぎています：半径を大きくしてください
+@msg	the circles are too far apart for this radius	この半径では円が離れすぎています
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	破線をパスに拡張
 @msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください

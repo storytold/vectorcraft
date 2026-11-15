@@ -7347,6 +7347,14 @@ breakText	Glyphs	Glifák
 	Remove Gaps	Hézagok eltávolítása
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ez túl sok darabot adna (legfeljebb 100000): hosszabbítsa meg a szaggatásokat
 @msg	select paths, or segments, to divide	jelöljön ki felosztandó útvonalakat vagy szakaszokat
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Sima híd…
+	Smooth Bridge	Sima híd
+	Keep Originals	Eredetik megtartása
+@msg	select two circles to bridge	jelöljön ki két kört az összekötéshez
+@msg	one circle is inside the other	az egyik kör a másikon belül van
+@msg	the circles are too far apart for this radius: raise the radius	a körök túl messze vannak egymástól ehhez a sugárhoz: növelje a sugarat
+@msg	the circles are too far apart for this radius	a körök túl messze vannak egymástól ehhez a sugárhoz
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz

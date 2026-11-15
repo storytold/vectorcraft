@@ -6953,6 +6953,14 @@ breakText	Glyphs	글리프
 	Remove Gaps	간격 제거
 @msg	that makes too many pieces (at most 100000): make the dashes longer	조각이 너무 많아집니다(최대 100000개). 대시를 더 길게 하십시오
 @msg	select paths, or segments, to divide	나눌 패스나 세그먼트를 선택하십시오
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	부드러운 브리지…
+	Smooth Bridge	부드러운 브리지
+	Keep Originals	원본 유지
+@msg	select two circles to bridge	연결할 원 두 개를 선택하십시오
+@msg	one circle is inside the other	한 원이 다른 원 안에 있습니다
+@msg	the circles are too far apart for this radius: raise the radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다. 반경을 늘리십시오
+@msg	the circles are too far apart for this radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오

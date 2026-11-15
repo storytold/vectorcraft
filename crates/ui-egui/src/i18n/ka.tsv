@@ -9478,6 +9478,14 @@ breakText	Glyphs	გლიფები
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
 @msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი ტრაექტორიები ან სეგმენტები
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	გლუვი ხიდი…
+	Smooth Bridge	გლუვი ხიდი
+	Keep Originals	ორიგინალების შენარჩუნება
+@msg	select two circles to bridge	აირჩიეთ ორი წრე დასაკავშირებლად
+@msg	one circle is inside the other	ერთი წრე მეორის შიგნითაა
+@msg	the circles are too far apart for this radius: raise the radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ რადიუსი
+@msg	the circles are too far apart for this radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები

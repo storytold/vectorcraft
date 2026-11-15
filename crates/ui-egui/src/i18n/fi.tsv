@@ -7407,6 +7407,14 @@ breakText	Glyphs	Merkit
 	Remove Gaps	Poista välit
 @msg	that makes too many pieces (at most 100000): make the dashes longer	siitä tulee liian monta osaa (enintään 100000): pidennä viivoja
 @msg	select paths, or segments, to divide	valitse jaettavat polut tai segmentit
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Pehmeä silta…
+	Smooth Bridge	Pehmeä silta
+	Keep Originals	Säilytä alkuperäiset
+@msg	select two circles to bridge	valitse kaksi yhdistettävää ympyrää
+@msg	one circle is inside the other	toinen ympyrä on toisen sisällä
+@msg	the circles are too far apart for this radius: raise the radius	ympyrät ovat liian kaukana toisistaan tälle säteelle: suurenna sädettä
+@msg	the circles are too far apart for this radius	ympyrät ovat liian kaukana toisistaan tälle säteelle
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Laajenna viivat poluiksi
 @msg	select paths with dashed strokes to expand	valitse laajennettavat polut, joissa on katkoviiva

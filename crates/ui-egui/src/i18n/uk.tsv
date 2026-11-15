@@ -6971,6 +6971,14 @@ breakText	Glyphs	Гліфи
 	Remove Gaps	Прибрати проміжки
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так вийде забагато частин (не більше 100000): подовжте штрихи
 @msg	select paths, or segments, to divide	виділіть контури або сегменти для розділення
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Плавний міст…
+	Smooth Bridge	Плавний міст
+	Keep Originals	Зберегти оригінали
+@msg	select two circles to bridge	виділіть два кола для з’єднання
+@msg	one circle is inside the other	одне коло всередині іншого
+@msg	the circles are too far apart for this radius: raise the radius	кола надто далеко одне від одного для цього радіуса: збільште радіус
+@msg	the circles are too far apart for this radius	кола надто далеко одне від одного для цього радіуса
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Розібрати штрихи на контури
 @msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору

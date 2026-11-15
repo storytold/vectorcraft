@@ -7331,6 +7331,14 @@ breakText	Glyphs	Γλύφοι
 	Remove Gaps	Αφαίρεση κενών
 @msg	that makes too many pieces (at most 100000): make the dashes longer	αυτό δίνει πάρα πολλά κομμάτια (το πολύ 100000): κάντε τις παύλες μεγαλύτερες
 @msg	select paths, or segments, to divide	επιλέξτε διαδρομές ή τμήματα για διαίρεση
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Ομαλή γέφυρα…
+	Smooth Bridge	Ομαλή γέφυρα
+	Keep Originals	Διατήρηση πρωτοτύπων
+@msg	select two circles to bridge	επιλέξτε δύο κύκλους για γεφύρωση
+@msg	one circle is inside the other	ο ένας κύκλος βρίσκεται μέσα στον άλλο
+@msg	the circles are too far apart for this radius: raise the radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα: αυξήστε την ακτίνα
+@msg	the circles are too far apart for this radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Επέκταση παυλών σε διαδρομές
 @msg	select paths with dashed strokes to expand	επιλέξτε διαδρομές με διακεκομμένο περίγραμμα για επέκταση

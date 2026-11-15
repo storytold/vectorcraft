@@ -7012,6 +7012,14 @@ breakText	Glyphs	字符
 	Remove Gaps	移除間隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	這會產生過多片段（最多 100000 個）：請加長短破折號
 @msg	select paths, or segments, to divide	請選取要分割的路徑或線段
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	平滑橋接…
+	Smooth Bridge	平滑橋接
+	Keep Originals	保留原始物件
+@msg	select two circles to bridge	請選取兩個要橋接的圓形
+@msg	one circle is inside the other	一個圓形位於另一個圓形內
+@msg	the circles are too far apart for this radius: raise the radius	就此半徑而言，兩個圓形相距太遠：請增加半徑
+@msg	the circles are too far apart for this radius	就此半徑而言，兩個圓形相距太遠
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
