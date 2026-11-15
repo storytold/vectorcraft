@@ -17,6 +17,8 @@ vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 kurbo = { workspace = true }
 image = { workspace = true }
+# Image headers (PNG and JPEG sizes, `pixels::header_size`).
+craft-image-codecs = { workspace = true }
 tiff = { workspace = true }
 # 1-bit TIFFs compressed with CCITT Group 3 (Compression 2 and 3).
 hayro-ccitt = { workspace = true }

@@ -633,11 +633,7 @@ fn raster_image_sized(data: Arc<Vec<u8>>) -> Option<(usvg::ImageKind, u64)> {
             }
             (u32::from_be_bytes(data[16..20].try_into().ok()?), u32::from_be_bytes(data[20..24].try_into().ok()?))
         }
-        craft_image_codecs::Format::Jpeg => {
-            let mut opts = craft_image_codecs::DecodeOptions::default();
-            opts.limits.max_pixels = MAX_IMAGE_PIXELS;
-            craft_image_codecs::decode_as_with(craft_image_codecs::Format::Jpeg, &data, &opts).ok()?.dimensions()
-        }
+        craft_image_codecs::Format::Jpeg => craft_image_codecs::jpeg_info(&data).map(|j| (j.width, j.height))?,
         craft_image_codecs::Format::Gif | craft_image_codecs::Format::WebP => craft_image_codecs::probe_size(&data).ok()?,
         _ => return None,
     };

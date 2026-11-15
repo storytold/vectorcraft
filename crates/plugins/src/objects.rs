@@ -459,7 +459,7 @@ fn color_mode(b: &ImageBlob) -> &'static str {
     if b.gray_source().is_some() {
         return "gray";
     }
-    let readable = craft_image_codecs::probe_size(&b.bytes).is_ok() || b.header_size().is_some();
+    let readable = vectorcraft_doc::header_size(&b.bytes).is_some() || b.header_size().is_some();
     if readable { "rgb" } else { "unknown" }
 }
 
@@ -480,7 +480,7 @@ fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize, charged: &mut usize) -
         return None;
     }
     let cmyk = b.is_cmyk();
-    let size = if cmyk { b.header_size()? } else { craft_image_codecs::probe_size(&b.bytes).ok().or_else(|| b.header_size())? };
+    let size = if cmyk { b.header_size()? } else { vectorcraft_doc::header_size(&b.bytes).or_else(|| b.header_size())? };
     if size != (w, h) {
         return None;
     }

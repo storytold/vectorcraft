@@ -177,12 +177,8 @@ pub struct LegacyAiOutput {
 pub fn writes_image_mask(doc: &Document, n: &Node) -> bool {
     let NodeKind::Image(im) = &n.kind else { return false };
     // The size from the file's header, before any pixels are decoded.
-    let fits = |bytes: &[u8]| {
-        craft_image_codecs::probe_size(bytes)
-            .ok()
-            .or_else(|| craft_image_codecs::decode(bytes).ok().map(|i| i.dimensions()))
-            .is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS)
-    };
+    let fits =
+        |bytes: &[u8]| vectorcraft_doc::header_size(bytes).is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS);
     matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
         && !n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
         && doc

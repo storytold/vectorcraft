@@ -767,10 +767,7 @@ impl Importer {
             usvg::ImageKind::SVG(tree) => return self.svg_image(tree, acc),
         };
         let size = i.size();
-        let (pw, ph) = craft_image_codecs::probe_size(bytes)
-            .ok()
-            .or_else(|| craft_image_codecs::decode(bytes).ok().map(|i| i.dimensions()))
-            .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
+        let (pw, ph) = vectorcraft_doc::header_size(bytes).unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
         // A turned CMYK image is stored as the CMYK TIFF of its inks, the size of the PNG usvg got.
         let cmyk = self.files.stored(i.kind());
         let (bytes, mime) = match &cmyk {
