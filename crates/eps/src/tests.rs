@@ -1663,6 +1663,60 @@ fn an_image_rejected_by_the_page_limit_keeps_no_unused_code() {
     }
 }
 
+/// An image turned away at the page limit is encoded once, not again at each later placement
+/// that doesn't fit either.
+#[test]
+fn an_image_rejected_by_the_page_limit_is_encoded_once() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let d = image_doc_with(|d| {
+                let mut nodes = vec![red_rect(d)];
+                nodes.extend((0..50).map(|k| pic_node(d, pic, f64::from(k), 20.0, 4.0)));
+                nodes
+            });
+            let o = EpsOptions { level, ..opts(&d) };
+            let rect = crate::scene::Scene::new(&image_doc_with(|d| vec![red_rect(d)]), &o).run();
+            let (page, encodes) = crate::scene::Scene::new(&d, &o).with_max_body(rect.body.len() + 64).run_counting_encodes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!(encodes, 1, "{case}");
+            assert_eq!((&page.setup, &page.body), (&rect.setup, &rect.body), "{case}");
+        }
+    }
+}
+
+/// An image turned away at the page limit inside art that is then taken back is encoded again
+/// once the page has room for it, and written where it is drawn.
+#[test]
+fn an_image_rejected_in_art_taken_back_is_encoded_again_when_it_fits() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let build = |stroked: bool, after: bool| {
+                image_doc_with(|d| {
+                    let fill = pic_pattern(d, pic);
+                    let mut nodes = vec![many_sided(d, &[fill], stroked)];
+                    if after {
+                        nodes.push(pic_node(d, pic, 20.0, 20.0, 4.0));
+                    }
+                    nodes
+                })
+            };
+            let o = EpsOptions { level, ..opts(&build(false, false)) };
+            let solid = image_doc_with(|d| vec![many_sided(d, &[Paint::solid(Color::rgb(1.0, 0.0, 0.0))], false)]);
+            // The shape's outline fits under this limit, and its first tile of the image doesn't.
+            let limit = crate::scene::Scene::new(&solid, &o).run().body.len() + 64;
+            let (page, encodes) = crate::scene::Scene::new(&build(false, false), &o).with_max_body(limit).run_counting_encodes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!((encodes, page.body.matches("} exec\n").count()), (1, 0), "{case}: {}", page.body);
+            let (page, encodes) = crate::scene::Scene::new(&build(true, true), &o).with_max_body(limit).run_counting_encodes();
+            assert_eq!(encodes, 2, "{case}");
+            let alone = crate::scene::Scene::new(&image_doc_with(|d| vec![pic_node(d, pic, 20.0, 20.0, 4.0)]), &o).run();
+            assert_eq!((&page.setup, &page.body), (&alone.setup, &alone.body), "{case}");
+        }
+    }
+}
+
 #[test]
 fn run_length_and_ascii85_round_trip() {
     let cycle: Vec<u8> = (0..=255u8).cycle().take(1000).collect();

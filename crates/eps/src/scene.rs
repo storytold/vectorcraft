@@ -266,6 +266,14 @@ pub(crate) struct Scene<'a> {
     images: HashMap<String, Option<usize>>,
     /// The source key and solid paint together identify a colorized encoding.
     colorized_images: HashMap<(String, String), Option<usize>>,
+    /// Image keys whose encoding didn't fit under the page limit → how much its first placement
+    /// adds to the body. The image is encoded again only once the page has room for that.
+    too_large_images: HashMap<String, usize>,
+    /// The same for colorized encodings, by `colorized_images`' keys.
+    too_large_colorized: HashMap<(String, String), usize>,
+    /// How many times an image or a colorized image was encoded.
+    #[cfg(test)]
+    encodes: usize,
     /// Freeform gradients' images by [`ImageCode::content_key`] → their indices in `codes`: a field
     /// encoded the same as one already kept draws from it.
     fields: HashMap<u64, Vec<usize>>,
@@ -297,6 +305,10 @@ impl<'a> Scene<'a> {
             brushes: None,
             images: HashMap::new(),
             colorized_images: HashMap::new(),
+            too_large_images: HashMap::new(),
+            too_large_colorized: HashMap::new(),
+            #[cfg(test)]
+            encodes: 0,
             fields: HashMap::new(),
             codes: vec![],
             placements: vec![],
@@ -324,6 +336,17 @@ impl<'a> Scene<'a> {
         let uses = self.codes.iter().map(|c| c.uses).collect();
         let cached = self.images.values().chain(self.colorized_images.values()).flatten().chain(self.fields.values().flatten()).copied().collect();
         (self.page(), uses, cached)
+    }
+
+    /// [`Self::run`], with how many times the scene encoded an image or a colorized image.
+    #[cfg(test)]
+    pub fn run_counting_encodes(mut self) -> (Page, usize) {
+        let doc = self.doc;
+        for l in &doc.layers {
+            self.node(l, false);
+        }
+        let encodes = self.encodes;
+        (self.page(), encodes)
     }
 
     pub fn run(mut self) -> Page {
@@ -1479,9 +1502,24 @@ impl<'a> Scene<'a> {
         let encoded = match self.images.get(key) {
             Some(e) => *e,
             None => {
+                // An image turned away at the page limit is encoded again only once it fits.
+                if let Some(&len) = self.too_large_images.get(key) {
+                    if self.size().saturating_add(len).saturating_add(64) > self.max_body {
+                        self.warn(TOO_LARGE);
+                        return;
+                    }
+                    self.too_large_images.remove(key);
+                }
+                #[cfg(test)]
+                {
+                    self.encodes += 1;
+                }
                 let code = self.decode_image(blob).and_then(|img| self.encode_image(img.as_raw(), img.width(), img.height()));
                 // An image that can't be placed isn't kept.
-                if code.as_ref().is_some_and(|c| self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body) {
+                if let Some(c) = &code
+                    && self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body
+                {
+                    self.too_large_images.insert(key.to_string(), c.inline_len);
                     self.warn(TOO_LARGE);
                     return;
                 }
@@ -1517,9 +1555,24 @@ impl<'a> Scene<'a> {
         let encoded = match self.colorized_images.get(&cache) {
             Some(e) => *e,
             None => {
+                // An image turned away at the page limit is encoded again only once it fits.
+                if let Some(&len) = self.too_large_colorized.get(&cache) {
+                    if self.size().saturating_add(len).saturating_add(64) > self.max_body {
+                        self.warn(TOO_LARGE);
+                        return;
+                    }
+                    self.too_large_colorized.remove(&cache);
+                }
+                #[cfg(test)]
+                {
+                    self.encodes += 1;
+                }
                 let code = self.encode_colorized(blob, paint);
                 // An image that can't be placed isn't kept.
-                if code.as_ref().is_some_and(|c| self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body) {
+                if let Some(c) = &code
+                    && self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body
+                {
+                    self.too_large_colorized.insert(cache, c.inline_len);
                     self.warn(TOO_LARGE);
                     return;
                 }
