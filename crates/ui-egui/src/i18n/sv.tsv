@@ -8999,9 +8999,6 @@ digits	Hindi	Hindi
 @msg	`alignOn` must be a string	`alignOn` måste vara en sträng
 @msg	`align` must be a string	`align` måste vara en sträng
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` för den här dialogrutan av typen {kind} måste vara något av: {_1}
-@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har fler än {MAX_ANSWERS} svar
-@msg	`answers` is larger than 1 MiB	`answers` är större än 1 MiB
-@msg	`answers` must be a list of answers	`answers` måste vara en lista med svar
 @msg	`artboard` must be the index of an artboard of the document	`artboard` måste vara indexet för en rityta i dokumentet
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` måste vara [x, y]
 @msg	`artboards` names an artboard the document does not have	`artboards` anger en rityta som dokumentet inte har
@@ -9180,10 +9177,6 @@ digits	Hindi	Hindi
 @msg	invalid regular expression flag '{_1}'	ogiltig flagga '{_1}' för reguljärt uttryck
 @msg	invalid regular expression: {m}	ogiltigt reguljärt uttryck: {m}
 @msg	invalid time value	ogiltigt tidsvärde
-@msg	is a confirm's answer, whose `value` must be true or false	är svaret på en confirm, vars `value` måste vara true eller false
-@msg	is a prompt's answer, whose `value` must be a string or null	är svaret på en prompt, vars `value` måste vara en sträng eller null
-@msg	is an alert's answer, whose `value` must be "ok"	är svaret på en alert, vars `value` måste vara "ok"
-@msg	is longer than 16 KiB	är längre än 16 KiB
 @msg	it draws its image through a clipping path	den ritar sin bild genom en urklippsbana
 @msg	it draws no image	den ritar ingen bild
 @msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	den är större än {MAX_DICTIONARY_FILE_BYTES} byte
@@ -9201,9 +9194,6 @@ digits	Hindi	Hindi
 @msg	localize: the first argument must be a localization object or a string	localize: det första argumentet måste vara ett lokaliseringsobjekt eller en sträng
 @msg	missing `picks`	`picks` saknas
 @msg	missing `word`	`word` saknas
-@msg	must be an object with `kind` and `value`	måste vara ett objekt med `kind` och `value`
-@msg	must have `kind` alert, confirm or prompt	måste ha `kind` alert, confirm eller prompt
-@msg	must have exactly `kind` and `value`	måste ha exakt `kind` och `value`
 @msg	needs a closing quote after the name	kräver ett avslutande citattecken efter namnet
 @msg	needs a name	kräver ett namn
 @msg	needs a name of at most 64 bytes	kräver ett namn på högst 64 byte
