@@ -43,7 +43,7 @@ pub struct OtFeatures {
     pub swash: bool,
     /// The features of [`EXTRA_FEATURES`] turned on, one bit each (off by default): stylistic
     /// sets, alternates, titling, proportional and lining figures, superscript, subscript,
-    /// numerators and denominators, `aalt`.
+    /// numerators and denominators, `aalt`, H or V Style (`hkna`) and Roman Italics (`ital`).
     pub extra: u32,
     /// The value of each feature of [`EXTRA_FEATURES`] that is on, as a tag `salt=2` gives it: for
     /// a feature with alternates, which of them the font draws (the HarfBuzz feature value, 1 for
@@ -64,12 +64,19 @@ pub const MAX_STYLE_FEATURES: usize = 256;
 /// Features beyond the named fields, off unless asked for, each bit `i` of [`OtFeatures::extra`]:
 /// stylistic sets `ss01`–`ss20`, stylistic alternates `salt`, titling `titl`, proportional `pnum`
 /// and lining `lnum` figures, superscript `sups`, subscript `subs`, numerators `numr`,
-/// denominators `dnom` and access all alternates `aalt`.
+/// denominators `dnom`, access all alternates `aalt`, and the OpenType panel menu's H or V Style
+/// `hkna` (shaped as `vkna` in vertical type) and Roman Italics `ital`.
 /// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_ae#tag-aalt>
-pub const EXTRA_FEATURES: [&str; 29] = [
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-hkna>
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-ital>
+pub const EXTRA_FEATURES: [&str; 31] = [
     "ss01", "ss02", "ss03", "ss04", "ss05", "ss06", "ss07", "ss08", "ss09", "ss10", "ss11", "ss12", "ss13", "ss14", "ss15", "ss16", "ss17", "ss18",
-    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs", "numr", "dnom", "aalt",
+    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs", "numr", "dnom", "aalt", "hkna", "ital",
 ];
+
+/// The features of [`EXTRA_FEATURES`] that are only on or off: they substitute one form for each
+/// glyph, so they take no alternate's number (`hkna=2` is refused).
+const SWITCH_FEATURES: [&str; 2] = ["hkna", "ital"];
 
 impl Default for OtFeatures {
     fn default() -> Self {
@@ -107,10 +114,11 @@ struct ParsedTag<'a> {
     value: u16,
 }
 
-/// Can feature `name` take a value (`salt=2`)? The features of [`EXTRA_FEATURES`] and `swsh` can:
-/// each substitutes glyphs, and the value says which alternate.
+/// Can feature `name` take a value (`salt=2`)? The features of [`EXTRA_FEATURES`] but
+/// [`SWITCH_FEATURES`], and `swsh`, can: each substitutes glyphs, and the value says which
+/// alternate.
 fn takes_value(name: &str) -> bool {
-    name == "swsh" || EXTRA_FEATURES.contains(&name)
+    name == "swsh" || (EXTRA_FEATURES.contains(&name) && !SWITCH_FEATURES.contains(&name))
 }
 
 /// Read a feature tag: `tag`, `+tag`, `-tag` or, for a feature that takes a value, `tag=N` (`N`
@@ -316,8 +324,13 @@ impl OtFeatures {
         }
         for (i, tag) in EXTRA_FEATURES.iter().enumerate() {
             if let (true, Ok(t)) = (s.extra & (1 << i) != 0, <[u8; 4]>::try_from(tag.as_bytes())) {
+                // H or V Style: the kana forms made for the writing direction, `vkna` in vertical type.
+                let t = if self.vertical && &t == b"hkna" { *b"vkna" } else { t };
                 v.push(f(&t, u32::from(s.extra_values.get(i).copied().unwrap_or(0).max(1))));
             }
+        }
+        if let Some(tag) = st.glyph_form.feature() {
+            v.push(f(tag, true));
         }
         if self.vertical {
             // Not `vrt2`: its glyphs are already turned on their side, and the layout turns Latin
@@ -428,6 +441,31 @@ mod tests {
             let st = CharStyle { features: vec![tag.into()], ..CharStyle::default() };
             let on: Vec<String> = OtFeatures::default().resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect();
             assert_eq!(on, [tag], "{tag}");
+        }
+    }
+
+    /// H or V Style (`hkna`) and Roman Italics (`ital`) are known, round-trip through the stored
+    /// tags and reach the shaper: `hkna` as itself in horizontal type and as `vkna` in vertical
+    /// type, `ital` in both. Neither takes an alternate's number.
+    #[test]
+    fn kana_style_and_roman_italics_are_kept_and_shaped() {
+        for t in ["hkna", "-hkna", "+ital", "ital"] {
+            assert!(OtFeatures::known_tag(t), "{t}");
+        }
+        for t in ["hkna=2", "ital=0", "vkna"] {
+            assert!(!OtFeatures::known_tag(t), "{t}");
+        }
+        assert_eq!(OtFeatures::from_tags(["ital", "hkna", "smcp"]).to_tags(), ["smcp", "hkna", "ital"]);
+        assert_eq!(OtFeatures::from_tags(["hkna", "ital", "-hkna"]).to_tags(), ["ital"]);
+        let st = CharStyle { features: vec!["hkna".into(), "ital".into()], ..CharStyle::default() };
+        let on = |vertical: bool| -> Vec<String> {
+            OtFeatures { vertical, ..OtFeatures::default() }.resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect()
+        };
+        assert_eq!(on(false), ["hkna", "ital"]);
+        assert_eq!(on(true), ["vkna", "ital", "vert"]);
+        let plain = |vertical: bool| OtFeatures { vertical, ..OtFeatures::default() }.resolve(&CharStyle::default());
+        for vertical in [false, true] {
+            assert!(!plain(vertical).iter().any(|f| [b"hkna", b"vkna", b"ital"].iter().any(|t| f.tag == Tag::new(t))), "off by default");
         }
     }
 
