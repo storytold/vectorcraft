@@ -957,9 +957,9 @@ fn is_container(n: &Node) -> bool {
 
 /// The raster effects of `n` (its own, its fills' and strokes') as an embedded image rendered at
 /// the document's raster effects resolution or a Rasterize effect's finer one, with whether they
-/// all paint below it (shadows and outer glows: the image then holds just them). A group's or
-/// layer's image leaves out its members' raster effects, which are expanded with them. `None`
-/// when it has none.
+/// all paint below it (shadows and outer glows: the image then holds just them, and paints with
+/// their blend mode when they all use one). A group's or layer's image leaves out its members'
+/// raster effects, which are expanded with them. `None` when it has none.
 /// `Err` when that image would take `budget` past its limits: the object then stays as it is.
 fn raster_image(d: &mut Document, n: &Node, budget: &mut RasterBudget) -> std::result::Result<Option<(Node, bool)>, OverBudget> {
     let fx = rasterfx::raster_fx(n);
@@ -968,11 +968,20 @@ fn raster_image(d: &mut Document, n: &Node, budget: &mut RasterBudget) -> std::r
     }
     let below = fx.iter().all(effects::RasterFx::is_below);
     let pixels = budget.take(rasterfx::raster_pixels(d, n, below, true))?;
-    let image = rasterfx::raster_image(d, n, below, true);
+    let mut image = rasterfx::raster_image(d, n, below, true);
     if image.is_none() {
         // No image was made: it takes nothing from the budget.
         budget.images += 1;
         budget.pixels += pixels;
+    }
+    // Rendered alone, over nothing, the shadows and glows can't blend with the art below the
+    // object, so the image does, as the canvas draws them.
+    let mut modes = fx.iter().filter_map(effects::RasterFx::mode);
+    if below
+        && let (Some(mode), Some(image)) = (modes.next(), image.as_mut())
+        && modes.all(|m| m == mode)
+    {
+        image.blend = mode;
     }
     Ok(image.map(|image| (image, below)))
 }

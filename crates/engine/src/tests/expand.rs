@@ -612,6 +612,68 @@ fn a_nested_instance_fill_blur_becomes_an_image_when_the_outer_art_expands() {
     assert!(differing(&before, &after, 24) < 400, "expanding changed {} pixels", differing(&before, &after, 24));
 }
 
+/// A blue rectangle from x 140 to 200, drawn first, so a shadow right of the square falls on it.
+fn blue_backdrop(s: &mut Session) {
+    run(s, "shape.rectangle", json!({"x": 140, "y": 0, "width": 60, "height": 200}));
+    run(s, "paint.setFill", json!({"color": "#0000ff"}));
+}
+
+/// A red Drop Shadow 20 pt to the right on row `row` of instance `id`, with no blur, painting with `mode`.
+fn red_shadow_row(s: &mut Session, id: NodeId, row: usize, mode: &str) {
+    let params = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": mode, "color": "#ff0000"});
+    run(s, "effect.apply", json!({"ids": [id.0], "item": row, "effect": "stylize.dropShadow", "params": params}));
+}
+
+/// The blend modes of the images in `n`, in the order the walk visits them.
+fn image_modes(n: &Node) -> Vec<BlendMode> {
+    let mut modes = vec![];
+    n.walk(&mut |part| {
+        if matches!(part.kind, NodeKind::Image(_)) {
+            modes.push(part.blend);
+        }
+    });
+    modes
+}
+
+/// A Multiply shadow on the nested instance's fill: its image multiplies with the blue art below
+/// as the shadow did, rather than painting red over it.
+#[test]
+fn a_nested_instance_multiply_shadow_image_keeps_its_mode() {
+    let mut s = session();
+    blue_backdrop(&mut s);
+    let (id, row) = nested_with_row(&mut s, |s, id, row| red_shadow_row(s, id, row, "multiply"));
+    offset_row(&mut s, id, row, 10.0);
+    let before = render(&s);
+    assert!(dark(before.pixel(170, 100)), "red multiplied with blue is dark: {:?}", before.pixel(170, 100));
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    assert_eq!(instances_and_images(&n).0, 0, "the outer and inner instances become art");
+    assert_eq!(image_modes(&n), [BlendMode::Multiply]);
+    no_effects_left(&n);
+    let after = render(&s);
+    assert!(dark(after.pixel(170, 100)), "the image multiplies with the blue art: {:?}", after.pixel(170, 100));
+    assert!(differing(&before, &after, 24) < 400, "expanding changed {} pixels", differing(&before, &after, 24));
+}
+
+/// A Multiply shadow on an instance's own fill: the image under its art paints with Multiply.
+#[test]
+fn an_instance_multiply_shadow_image_keeps_its_mode() {
+    let mut s = session();
+    blue_backdrop(&mut s);
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    red_shadow_row(&mut s, id, row, "multiply");
+    let before = render(&s);
+    assert!(dark(before.pixel(160, 100)), "red multiplied with blue is dark: {:?}", before.pixel(160, 100));
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    assert_eq!(image_modes(&n), [BlendMode::Multiply]);
+    let after = render(&s);
+    assert!(dark(after.pixel(160, 100)), "the image multiplies with the blue art: {:?}", after.pixel(160, 100));
+    assert!(differing(&before, &after, 24) < 400, "expanding changed {} pixels", differing(&before, &after, 24));
+}
+
 /// A shadow on a hidden fill of the nested instance draws nothing, and expanding makes no image of it.
 #[test]
 fn a_hidden_nested_instance_fill_shadow_makes_no_image() {
