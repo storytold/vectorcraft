@@ -341,6 +341,8 @@ fn source_profile(bytes: &[u8], space: [u8; 4]) -> Option<Option<IccProfile>> {
 const UNCONVERTED: &str = "an image's ICC profile couldn't be read: the image keeps it and is not converted to sRGB";
 const CONVERTED_AS_SRGB: &str = "an image's ICC profile couldn't be read: its colors are converted to the destination as sRGB";
 
+const UNDECODED: &str = "an image couldn't be decoded and is not converted to sRGB";
+
 /// `img` converted from ICC profile `p` to sRGB with `intent`: at 16 bits a sample when it has
 /// more than 8, else at 8, with its alpha; and whether any sample changed. A grey image stays grey, each level as the sRGB grey it converts to. `None` when the
 /// pixels can't be converted.
@@ -476,7 +478,7 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
 /// with `to_srgb`, pixels in a gray or RGB profile other than sRGB are converted from it to sRGB
 /// instead ([`ToSrgb`]), and colour ones then by `convert`; grey ones that `convert` leaves as
 /// they are keep their profile. `interpolate` lets viewers smooth it. An image that can't be
-/// decoded is kept as it is.
+/// decoded is kept as it is, with a warning when its pixels were to be converted to sRGB.
 pub(crate) fn recode(
     bytes: &[u8],
     size: (f64, f64),
@@ -490,10 +492,6 @@ pub(crate) fn recode(
     let Ok(reader) = ImageReader::new(Cursor::new(bytes)).with_guessed_format() else { return keep };
     let jpeg = reader.format() == Some(ImageFormat::Jpeg);
     let Ok(mut decoder) = reader.into_decoder() else { return keep };
-    // What the header declares is decoded within the image allowance, not whatever it asks for.
-    if decoder.set_limits(limits()).is_err() {
-        return keep;
-    }
     let dims = decoder.dimensions();
     use ExtendedColorType as T;
     let grey = matches!(decoder.original_color_type(), T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16);
@@ -511,6 +509,13 @@ pub(crate) fn recode(
         Some((None, _)) => return Recoded { image: None, warning: Some(UNCONVERTED), note: None },
         None => None,
     };
+    // Pixels that can't be decoded are kept as they are, with a warning when they were to be
+    // converted.
+    let keep = if source.is_some() { Recoded { image: None, warning: Some(UNDECODED), note: None } } else { keep };
+    // What the header declares is decoded within the image allowance, not whatever it asks for.
+    if decoder.set_limits(limits()).is_err() {
+        return keep;
+    }
     let (mut kind, pixels) = if grey {
         // Only the pixels tell monochrome images from greyscale ones: decoded unless both keep it.
         let (g, m) = (rule(c, Kind::Gray), rule(c, Kind::Mono));
