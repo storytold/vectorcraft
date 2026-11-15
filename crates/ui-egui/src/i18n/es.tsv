@@ -1077,7 +1077,10 @@ font-technology	Variable	Variables
 	Every (minutes)	Cada (minutos)
 	Every option is at its default.	Todas las opciones tienen su valor predeterminado.
 	Every option matches {base}.	Todas las opciones coinciden con {base}.
-	Every-line Composer	Composición de todas las líneas
+	Middle Eastern & South Asian Single-line Composer	Composición de una línea (Oriente Medio y Sur de Asia)
+	Middle Eastern & South Asian Every-line Composer	Composición de todas las líneas (Oriente Medio y Sur de Asia)
+	Standard Single-line Composer	Composición estándar de una línea
+	Standard Every-line Composer	Composición estándar de todas las líneas
 	Exact dash lengths	Longitudes exactas de guion
 	Exceptions (comma separated)	Excepciones (separadas por comas)
 	Exclude	Excluir
@@ -1402,6 +1405,14 @@ font-technology	Variable	Variables
 	Previous Artboard	Mesa de trabajo anterior
 	Next Artboard	Mesa de trabajo siguiente
 	Last Artboard	Última mesa de trabajo
+	Status Bar Show	Mostrar en la barra de estado
+	Artboard Name	Nombre de la mesa de trabajo
+	Current Tool	Herramienta actual
+	Date and Time	Fecha y hora
+	Number of Undos	Número de deshacer
+	Document Color Profile	Perfil de color del documento
+	Undos	Deshacer
+	Redos	Rehacer
 	Go To Link	Ir al vínculo
 	GPL palettes keep solid colours only, as RGB.	Las paletas GPL solo conservan colores sólidos, en RGB.
 	GPU Performance	Rendimiento de GPU
@@ -3453,7 +3464,6 @@ digits	Malayalam	Malayálam
 	Single Left Quotation Mark	Comilla simple de apertura
 	Single Quotes:	Comillas simples:
 	Single Right Quotation Mark	Comilla simple de cierre
-	Single-line Composer	Composición de una línea
 	Toggle Line Composer	Alternar composición de líneas
 	Sixth Space	Sexto de espacio
 	Size	Tamaño
@@ -4482,6 +4492,17 @@ axis	Both	Ambos
 @msg	`name` must be the name of a script engine	`name` debe ser el nombre de un motor de scripts
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor de scripts principal es nuevo en cada ejecución y nunca se conserva, por lo que no se puede descartar
 @msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
+@msg	`answers` must be a list of answers	`answers` debe ser una lista de respuestas
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tiene más de {MAX_ANSWERS} respuestas
+@msg	`answers` is larger than 1 MiB	`answers` ocupa más de 1 MiB
+@msg	must be an object with `kind` and `value`	debe ser un objeto con `kind` y `value`
+@msg	must have exactly `kind` and `value`	debe tener exactamente `kind` y `value`
+@msg	is an alert's answer, whose `value` must be "ok"	es la respuesta de un alert, cuyo `value` debe ser "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	es la respuesta de un confirm, cuyo `value` debe ser true o false
+@msg	is longer than 16 KiB	ocupa más de 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	es la respuesta de un prompt, cuyo `value` debe ser una cadena o null
+@msg	must have `kind` alert, confirm or prompt	debe tener `kind` alert, confirm o prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` solo es para una ejecución sin nadie a quien preguntar: en la aplicación, la persona responde cada cuadro de diálogo
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
 @msg	Copied the link info	Se copió la información del vínculo
@@ -6222,6 +6243,8 @@ mark-style	Japanese	Japonesas
 	Save Variable Library…	Guardar biblioteca de variables…
 @msg	a variable library holds text variables, and the document has none	una biblioteca de variables contiene variables de texto y el documento no tiene ninguna
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no se puede guardar en una biblioteca de variables: cámbiele el nombre para que empiece por una letra o `_`, sin espacios ni símbolos distintos de `-`, `_` y `.`
+@msg	{k} has control characters	{k} contiene caracteres de control
+@msg	{k} has control characters or line breaks	{k} contiene caracteres de control o saltos de línea
 @msg	data set `{name}` holds a control character, which a variable library can't hold	el conjunto de datos `{name}` contiene un carácter de control, que una biblioteca de variables no puede contener
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	el conjunto de datos `{name}` empieza o termina con espacio en blanco, que una biblioteca de variables no puede contener
 	Make Graph Dynamic	Hacer gráfico dinámico
@@ -6495,6 +6518,7 @@ axis	Y Axis	Eje Y
 @msg	{what} points outside memory	{what} apunta fuera de la memoria
 @msg	`angle` must be a number	`angle` debe ser un número
 @msg	`aspect` must be from 0.01 to 100	`aspect` debe estar entre 0.01 y 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` debe ser [a, b, c, d], cada uno entre -1000 y 1000, con a·d - b·c a al menos 0.001 de 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` debe ser "butt", "round" o "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` debe ser "nonzero" o "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` debe ser una dirección https:// de {MAX_HELP_URL} bytes como máximo
@@ -6547,6 +6571,7 @@ axis	Y Axis	Eje Y
 @msg	stops must be in order of `offset`	las paradas deben estar en orden de `offset`
 @msg	the document has no pattern {pattern}	el documento no tiene el motivo {pattern}
 @msg	the document has no swatch {n}	el documento no tiene la muestra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requiere una parada vinculada a una muestra de tinta plana
 @msg	the output	la salida
 @msg	the path has no anchor points	el trazado no tiene puntos de ancla
 @msg	too many anchor points (limit {MAX_ANCHORS})	demasiados puntos de ancla (límite {MAX_ANCHORS})
@@ -7706,3 +7731,4 @@ breakText	Glyphs	Glifos
 	Nest Shapes…	Anidar formas…
 	Nest Shapes	Anidar formas
 	Roll	Rollo
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

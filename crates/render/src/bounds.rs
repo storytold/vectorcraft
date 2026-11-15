@@ -58,6 +58,15 @@ pub fn drawn_bounds(doc: &Document, n: &Node) -> Option<Rect> {
     fx::painted_reach(&doc.symbol_boxes(), n)
 }
 
+/// For a path or compound path whose own Rasterize effect is followed by Transform effects that
+/// move the art once ([`crate::effects::rasterize_stage`]): `n` with those Transform effects
+/// hidden, which the image is made of, and the map they move the image by. The canvas draws the
+/// image on its own pixel grid and moves it, and the room around the art, with the map. `None`
+/// for other objects.
+pub fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, vectorcraft_geom::Affine)> {
+    fx::rasterize_stage(doc, n)
+}
+
 /// The outline, with `n`'s geometry effects applied, that the canvas clips `n`'s Rasterize with
 /// Create Clipping Mask to. Object › Rasterize's clipping mask follows it.
 pub fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRule)> {

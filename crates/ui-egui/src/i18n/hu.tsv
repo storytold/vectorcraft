@@ -1368,7 +1368,10 @@ font-technology	Variable	Változó
 	Every (minutes)	Gyakoriság (perc)
 	Every option is at its default.	Minden beállítás az alapértéken áll.
 	Every option matches {base}.	Minden beállítás egyezik: {base}.
-	Every-line Composer	Többsoros tördelő
+	Middle Eastern & South Asian Single-line Composer	Egysoros tördelő (Közel-Kelet és Dél-Ázsia)
+	Middle Eastern & South Asian Every-line Composer	Többsoros tördelő (Közel-Kelet és Dél-Ázsia)
+	Standard Single-line Composer	Normál egysoros tördelő
+	Standard Every-line Composer	Normál többsoros tördelő
 	Exact	Pontos
 	Exact dash lengths	Pontos vonalhosszak
 	Exceptions (comma separated)	Kivételek (vesszővel elválasztva)
@@ -1744,6 +1747,14 @@ file-filter	Templates	Sablonok
 	Previous Artboard	Előző rajztábla
 	Next Artboard	Következő rajztábla
 	Last Artboard	Utolsó rajztábla
+	Status Bar Show	Megjelenítés az állapotsorban
+	Artboard Name	Rajztábla neve
+	Current Tool	Aktuális eszköz
+	Date and Time	Dátum és idő
+	Number of Undos	Visszavonások száma
+	Document Color Profile	Dokumentum színprofilja
+	Undos	Visszavonások
+	Redos	Újra
 	Go to Conflict	Ugrás az ütközésre
 	Go To Link	Ugrás a csatoláshoz
 	Good	Jó
@@ -4107,7 +4118,6 @@ mark-style	Japanese	Japán
 	Single Left Quotation Mark	Bal oldali szimpla idézőjel
 	Single Quotes:	Szimpla idézőjelek:
 	Single Right Quotation Mark	Jobb oldali szimpla idézőjel
-	Single-line Composer	Egysoros tördelő
 	Toggle Line Composer	Sortördelő váltása
 	Sixth Space	Hatodkvirt-szóköz
 	Size	Méret
@@ -5300,6 +5310,8 @@ imageTrace	Outline	Körvonal
 @msg	`name` must be the name of a script engine	a `name` értékének egy parancsfájlmotor nevének kell lennie
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	a fő parancsfájlmotor minden futáshoz új, és sosem marad meg, ezért nem dobható el
 @msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	az `answers` csak olyan futtatáshoz való, ahol nincs kit megkérdezni: az alkalmazásban minden párbeszédpanelre a felhasználó válaszol
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Copied the link info	Csatolás adatai másolva
@@ -6260,6 +6272,8 @@ imageTrace	Outline	Körvonal
 	Save Variable Library…	Változókönyvtár mentése…
 @msg	a variable library holds text variables, and the document has none	a változókönyvtár szöveges változókat tartalmaz, a dokumentumban pedig nincs ilyen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a(z) `{name}` változó nem menthető változókönyvtárba: nevezze át úgy, hogy betűvel vagy `_` jellel kezdődjön, szóközök és a `-`, `_` és `.` jeltől eltérő szimbólumok nélkül
+@msg	{k} has control characters	{k} vezérlőkaraktereket tartalmaz
+@msg	{k} has control characters or line breaks	{k} vezérlőkaraktereket vagy sortöréseket tartalmaz
 @msg	data set `{name}` holds a control character, which a variable library can't hold	a(z) `{name}` adatkészlet vezérlőkaraktert tartalmaz, amelyet a változókönyvtár nem tartalmazhat
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	a(z) `{name}` adatkészlet szóközzel kezdődik vagy végződik, amelyet a változókönyvtár nem tartalmazhat
 	Make Graph Dynamic	Diagram dinamikussá tétele
@@ -6585,6 +6599,7 @@ axis	Y Axis	Y tengely
 @msg	stops must be in order of `offset`	a színátmenet-pontok `offset` szerint rendezve legyenek
 @msg	the document has no pattern {pattern}	a dokumentumban nincs {pattern} mintázat
 @msg	the document has no swatch {n}	a dokumentumban nincs {n} színminta
+@msg	`plates` requires a stop linked to a spot swatch	a `plates` direktszín-színmintához kapcsolt színátmenet-pontot igényel
 @msg	the output	a kimenet
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})
@@ -7671,6 +7686,7 @@ breakText	Glyphs	Glifák
 @msg	Image Trace failed: {e}	A képvektorizálás nem sikerült: {e}
 @msg	Image Trace finished, but its document was closed	A képvektorizálás elkészült, de a dokumentumát bezárták
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	A képvektorizálás elkészült, de a kép vagy a beállításai közben megváltoztak: vektorizáld újra
+@msg	Image Trace finished, but its document was reverted: trace it again	A képvektorizálás elkészült, de a dokumentumát visszaállították a mentett változatra: vektorizáld újra
 @msg	Import SVG Filter reads SVG files, not SVGZ	Az SVG-szűrő importálása SVG-fájlokat olvas, SVGZ-fájlokat nem
 @msg	Invalid dimension offset	Érvénytelen méretvonal-eltolás
 @msg	Invalid point	Érvénytelen pont
@@ -7844,6 +7860,7 @@ breakText	Glyphs	Glifák
 @msg	`names` must be an array of style names	`names`: stílusnevek tömbje kell
 @msg	`new` is a design name, or true	`new`: diagramminta neve vagy true
 @msg	`origin` must be [x, y] in points	`origin`: [x, y] kell pontban megadva
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes`: [a, b, c, d] kell, mindegyik -1000 és 1000 között, és a·d - b·c legalább 0.001-gyel térjen el 0-tól
 @msg	`path` must be a folder	`path`: mappa kell
 @msg	`path` must be a path object	`path`: útvonalobjektum kell
 @msg	`picks` must be an array (got {v})	`picks`: tömb kell (kapott érték: {v})
@@ -8249,7 +8266,7 @@ breakText	Glyphs	Glifák
 @msg	column: true floats the whole column and takes no onto, above or below	column: true az egész oszlopot lebegővé teszi, és nem adható meg mellette onto, above vagy below
 @msg	command must be a shape.* command	command: shape.* parancs kell
 @msg	commands[{i}]: missing `command`	commands[{i}]: hiányzik: `command`
-@msg	composer must be "singleLine" or "everyLine"	composer: "singleLine" vagy "everyLine" kell
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer értéke "singleLine", "everyLine", "standardSingleLine" vagy "standardEveryLine" lehet
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	összetett alakzatba útvonalak, összetett útvonalak, csoportok, összetett alakzatok, szöveg, összemosások és burkolók kerülhetnek
 @msg	compound {_1} must contain exactly one open path to join	az összetett objektumnak ({_1}) pontosan egy összekapcsolható nyitott útvonalat kell tartalmaznia
 @msg	connect needs a path other than the one extended	connect: a meghosszabbított útvonaltól különböző útvonal kell

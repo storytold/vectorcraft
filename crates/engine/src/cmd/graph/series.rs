@@ -1,8 +1,13 @@
 use vectorcraft_color::BlendMode;
+use vectorcraft_geom::Shape;
 
 use super::axis::radar_axis;
-use super::labels::{Role, filled_lines_on, label_para, label_style};
-use super::{Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Rect, Result, Session, Value, bad};
+use super::generate::is_dark;
+use super::labels::{Role, filled_lines_on, label_para, label_size, label_style};
+use super::{
+    Affine, Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Rect, Result, Session, Value, bad,
+    refresh_bounds,
+};
 
 // ---------- generation ----------
 
@@ -639,32 +644,457 @@ fn graph_labels(doc: &Document) -> HashMap<NodeId, (NodeId, Role)> {
     let mut out = HashMap::new();
     doc.walk(|n| {
         let Some(g) = n.extras().graph.as_deref() else { return };
-        for c in n.children().into_iter().flatten() {
-            match (&c.kind, c.name.as_deref(), c.extras().series_index) {
-                (NodeKind::Text(_), _, _) if g.kind == GraphKind::Pie => {
-                    out.insert(c.id, (n.id, Role::Category));
-                }
-                (NodeKind::Group { .. }, Some("Legend"), None) => {
-                    for t in c.children().into_iter().flatten().filter(|t| matches!(t.kind, NodeKind::Text(_))) {
-                        out.insert(t.id, (n.id, Role::Legend));
-                    }
-                }
-                (NodeKind::Group { .. }, Some("Axes"), None) => {
-                    let texts: Vec<NodeId> =
-                        c.children().into_iter().flatten().filter(|t| matches!(t.kind, NodeKind::Text(_))).map(|t| t.id).collect();
-                    let cats = match g.kind {
-                        GraphKind::Scatter => 0,
-                        GraphKind::Radar => texts.len(),
-                        _ => g.categories.iter().take(g.rows.len().max(1)).filter(|c| !c.is_empty()).count().min(texts.len()),
-                    };
-                    for (i, t) in texts.iter().enumerate() {
-                        out.insert(*t, (n.id, if i + cats >= texts.len() { Role::Category } else { Role::Value }));
-                    }
-                }
-                _ => {}
-            }
+        for (id, role) in own_labels(n, g) {
+            out.insert(id, (n.id, role));
         }
     });
+    out
+}
+
+/// The generated labels of graph `n` (with spec `g`) and what each shows, as [`graph_labels`] finds them.
+fn own_labels(n: &Node, g: &GraphSpec) -> Vec<(NodeId, Role)> {
+    let mut out = vec![];
+    for c in n.children().into_iter().flatten() {
+        match (&c.kind, c.name.as_deref(), c.extras().series_index) {
+            (NodeKind::Text(_), _, _) if g.kind == GraphKind::Pie => {
+                out.push((c.id, Role::Category));
+            }
+            (NodeKind::Group { .. }, Some("Legend"), None) => {
+                for t in c.children().into_iter().flatten().filter(|t| matches!(t.kind, NodeKind::Text(_))) {
+                    out.push((t.id, Role::Legend));
+                }
+            }
+            (NodeKind::Group { .. }, Some("Axes"), None) => {
+                let texts: Vec<NodeId> = c.children().into_iter().flatten().filter(|t| matches!(t.kind, NodeKind::Text(_))).map(|t| t.id).collect();
+                let cats = match g.kind {
+                    GraphKind::Scatter => 0,
+                    GraphKind::Radar => texts.len(),
+                    _ => g.categories.iter().take(g.rows.len().max(1)).filter(|c| !c.is_empty()).count().min(texts.len()),
+                };
+                for (i, t) in texts.iter().enumerate() {
+                    out.push((*t, if i + cats >= texts.len() { Role::Category } else { Role::Value }));
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Set the labels of graph node `n` (a copy outside any document) in a new graph's label formats: the character and
+/// paragraph formats the graph keeps for them are dropped, with the mark that its legend labels' fill is their own, and
+/// each label takes its kind's default character style, unscaled (keeping its rotation), and default paragraph
+/// attributes, keeping its alignment and where it starts. A pie's legend label on a dark wedge is white, as a redraw
+/// sets it. Every other object in the graph goes to `other`. The rest of the graph's art, and what its labels say, stay
+/// as they are.
+pub(crate) fn plain_labels(n: &mut Node, other: &dyn Fn(&mut Node)) {
+    fn plain(l: &mut vectorcraft_doc::LabelStyles) {
+        (l.values, l.categories, l.legend) = (None, None, None);
+        (l.values_para, l.categories_para, l.legend_para) = (None, None, None);
+        l.legend_fill_set = false;
+    }
+    // Which legend labels a redraw sets on a dark wedge, read while the labels are as the graph drew them.
+    let on_dark = match n.extras().graph.as_deref() {
+        Some(g) if g.kind == GraphKind::Pie && g.legend && g.pie_legend_in_wedges => {
+            let mut redraw = g.clone();
+            plain(&mut redraw.label_styles);
+            redrawn_on_dark(n, &redraw).unwrap_or_else(|| legend_on_dark(n, g))
+        }
+        _ => HashMap::new(),
+    };
+    let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) else { return };
+    plain(&mut g.label_styles);
+    let Some(g) = n.extras().graph.as_deref() else { return };
+    let roles: HashMap<NodeId, Role> = own_labels(n, g).into_iter().collect();
+    struct Plain<'a> {
+        roles: HashMap<NodeId, Role>,
+        other: &'a dyn Fn(&mut Node),
+    }
+    fn visit(c: &mut Node, p: &Plain) {
+        let role = p.roles.get(&c.id).copied();
+        if let (Some(role), NodeKind::Text(t)) = (role, &mut c.kind) {
+            let plain = vectorcraft_doc::LabelStyles::default();
+            let justify = t.para_at(0).justify;
+            let text = t.plain_text();
+            t.runs = vec![vectorcraft_doc::TextRun { text, style: label_style(&plain, role), inline: None }];
+            let mut para = label_para(&plain, role);
+            para.justify = justify;
+            t.set_all_paras(para);
+            // The label loses its scale and keeps its rotation (and a reflection), so it stays turned with the
+            // rest of a rotated graph's art.
+            let [a, b, c, d, _, _] = t.xf.as_coeffs();
+            let flip = if a * d - b * c < 0.0 { Affine::scale_non_uniform(1.0, -1.0) } else { Affine::IDENTITY };
+            t.xf = Affine::translate(t.xf.translation()) * Affine::rotate(b.atan2(a)) * flip;
+            refresh_bounds(t);
+            return;
+        }
+        // The Axes and Legend groups, and any other group of the graph's own, are looked through.
+        if role.is_none() && matches!(c.kind, NodeKind::Group { .. }) && c.extras().graph.is_none() {
+            for k in c.children_mut().into_iter().flatten() {
+                visit(Arc::make_mut(k), p);
+            }
+            return;
+        }
+        (p.other)(c);
+    }
+    let p = Plain { roles, other };
+    for c in n.children_mut().into_iter().flatten() {
+        visit(Arc::make_mut(c), &p);
+    }
+    set_legend_fills(n, &on_dark);
+}
+
+/// Give each legend label of graph `n` in `on_dark` white characters (`true`) or black ones.
+fn set_legend_fills(n: &mut Node, on_dark: &HashMap<NodeId, bool>) {
+    if on_dark.is_empty() {
+        return;
+    }
+    // The legend labels are in the graph's Legend group.
+    for c in n.children_mut().into_iter().flatten() {
+        if !c.children().into_iter().flatten().any(|t| on_dark.contains_key(&t.id)) {
+            continue;
+        }
+        for t in Arc::make_mut(c).children_mut().into_iter().flatten() {
+            let Some(dark) = on_dark.get(&t.id) else { continue };
+            let fill = Paint::solid(if *dark { Color::WHITE } else { Color::BLACK });
+            if matches!(&t.kind, NodeKind::Text(text) if text.runs.iter().all(|r| r.style.fill == fill)) {
+                continue;
+            }
+            if let NodeKind::Text(text) = &mut Arc::make_mut(t).kind {
+                text.runs.iter_mut().for_each(|r| r.style.fill = fill.clone());
+            }
+        }
+    }
+}
+
+/// The legend labels of graph `n`: the type in its Legend group, as [`own_labels`] finds them.
+fn legend_labels(n: &Node) -> Vec<&Node> {
+    legend_in(n.children().map_or(&[], |c| c.as_slice()))
+}
+
+/// The type in the Legend group among a graph's `children`.
+fn legend_in(children: &[Arc<Node>]) -> Vec<&Node> {
+    children
+        .iter()
+        .filter(|c| matches!(c.kind, NodeKind::Group { .. }) && c.name.as_deref() == Some("Legend") && c.extras().series_index.is_none())
+        .flat_map(|c| c.children().into_iter().flatten())
+        .map(|t| t.as_ref())
+        .filter(|t| matches!(t.kind, NodeKind::Text(_)))
+        .collect()
+}
+
+/// A pie wedge: its series, its outline and whether the fill it shows is dark.
+struct Wedge {
+    series: u32,
+    bounds: vectorcraft_geom::Rect,
+    path: vectorcraft_geom::BezPath,
+    dark: bool,
+}
+
+/// The wedges of pie `n` (the paths of its series groups), in paint order.
+fn pie_wedges(n: &Node) -> Vec<Wedge> {
+    wedges_in(n.children().map_or(&[], |c| c.as_slice()))
+}
+
+/// The wedges among a pie's `children`, as [`pie_wedges`] finds them.
+fn wedges_in(children: &[Arc<Node>]) -> Vec<Wedge> {
+    let mut wedges = vec![];
+    for c in children {
+        let Some(series) = c.extras().series_index else { continue };
+        c.walk(&mut |m| {
+            if let NodeKind::Path { path, .. } = &m.kind {
+                let path = path.to_bezpath();
+                wedges.push(Wedge { series, bounds: path.bounding_box(), path, dark: is_dark(&shown_paint(m, true).0) });
+            }
+        });
+    }
+    wedges
+}
+
+/// The text of the label of each series of graph `g` in its wedges, with the series that show it (several when series
+/// share a name).
+fn series_by_label(g: &GraphSpec) -> HashMap<String, Vec<u32>> {
+    let mut names: HashMap<String, Vec<u32>> = HashMap::new();
+    for (s, name) in g.series.iter().enumerate() {
+        if let Ok(s) = u32::try_from(s) {
+            names.entry(name.replace('|', "\n")).or_default().push(s);
+        }
+    }
+    names
+}
+
+/// The legend labels of pie `n`, each with whether a redraw from spec `g` sets it on a dark wedge, by the fill each wedge
+/// of `n` shows now. The pie is drawn again apart from any document, which places each label in its wedge as `g` sets
+/// it and tells each label's series. Each redrawn wedge takes the fill of the wedge of `n` of its series with the same
+/// bounds, and each legend label of `n` is the nearest redrawn one with the same text, places measured in the bounds of
+/// all the wedges. `None` when a wedge or a label has no counterpart of its own, or a wedge out of its place in paint
+/// order has several (art or labels added, removed, edited or restyled since the pie was drawn).
+fn redrawn_on_dark(n: &Node, g: &GraphSpec) -> Option<HashMap<NodeId, bool>> {
+    use vectorcraft_geom::kurbo::ParamCurveNearest;
+    // Each series name that shows a label is drawn with a mark and its index after it, which moves no line, so each
+    // redrawn label tells its series.
+    const MARK: char = '\u{1f}';
+    let mut marked = g.clone();
+    for (s, name) in marked.series.iter_mut().enumerate() {
+        if !super::labels::blank_label(name) {
+            name.push(MARK);
+            name.push_str(&s.to_string());
+        }
+    }
+    let legend = legend_labels(n);
+    let mut scratch = Document::new(1.0, 1.0);
+    let art = super::generate::generate(&mut scratch, &marked);
+    let redrawn = legend_in(&art);
+    let now = pie_wedges(n);
+    let mut wedges = wedges_in(&art);
+    if redrawn.len() != legend.len() || wedges.len() != now.len() {
+        return None;
+    }
+    // Places are measured in the bounds of all the wedges, since the pie may have been moved or resized since it was drawn.
+    let frame = |ws: &[Wedge]| ws.iter().map(|w| w.bounds).reduce(|a, b| a.union(b));
+    let (Some(was), Some(is)) = (frame(&wedges), frame(&now)) else { return None };
+    let at = |f: vectorcraft_geom::Rect, p: vectorcraft_geom::Point| ((p.x - f.x0) / f.width().max(1e-9), (p.y - f.y0) / f.height().max(1e-9));
+    let corners = |f: vectorcraft_geom::Rect, w: &Wedge| {
+        let (a, b) = (at(f, vectorcraft_geom::Point::new(w.bounds.x0, w.bounds.y0)), at(f, vectorcraft_geom::Point::new(w.bounds.x1, w.bounds.y1)));
+        [a.0, a.1, b.0, b.1]
+    };
+    // A wedge and a redrawn one are the same wedge when they show the same series with the same bounds. Wedges are
+    // compared this many times in all, labels included; past it, nothing is matched.
+    let mut budget: usize = 1 << 20;
+    let mut copied_wedges: HashMap<u32, Vec<(usize, [f64; 4])>> = HashMap::new();
+    for (k, w) in now.iter().enumerate() {
+        copied_wedges.entry(w.series).or_default().push((k, corners(is, w)));
+    }
+    // The wedge in the same place in paint order when its bounds are the same, else the one of the series whose bounds
+    // are nearest, when they are the same to within 0.001 of the whole; each copied wedge is matched once.
+    let off = |c: &[f64; 4], d: &[f64; 4]| c.iter().zip(d).map(|(p, q)| (p - q).abs()).fold(0.0, f64::max);
+    let mut used = vec![false; now.len()];
+    let mut fills = Vec::with_capacity(wedges.len());
+    for (i, r) in wedges.iter().enumerate() {
+        let c = corners(was, r);
+        let k = match now.get(i) {
+            Some(w) if w.series == r.series && off(&c, &corners(is, w)) <= 1e-7 => i,
+            _ => {
+                let group = copied_wedges.get(&r.series)?;
+                if budget < group.len() {
+                    return None;
+                }
+                budget -= group.len();
+                let (k, d) = group.iter().map(|(k, d)| (*k, off(&c, d))).min_by(|a, b| a.1.total_cmp(&b.1))?;
+                if d > 1e-3 {
+                    return None;
+                }
+                k
+            }
+        };
+        if std::mem::replace(used.get_mut(k)?, true) {
+            return None;
+        }
+        fills.push(now.get(k)?.dark);
+    }
+    for (r, dark) in wedges.iter_mut().zip(fills) {
+        r.dark = dark;
+    }
+    // Each label's words and origin, in the frame of its pie's wedges.
+    let place = |labels: &[&Node], f| {
+        labels
+            .iter()
+            .map(|t| match &t.kind {
+                NodeKind::Text(text) => Some((text.plain_text(), at(f, text.xf * vectorcraft_geom::Point::ORIGIN))),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()
+    };
+    let (Some(copied), Some(mut drawn)) = (place(&legend, is), place(&redrawn, was)) else { return None };
+    // The series of each redrawn label, and its words without the mark.
+    let mut series = Vec::with_capacity(drawn.len());
+    for (words, _) in &mut drawn {
+        let (said, s) = words.rsplit_once(MARK)?;
+        let s: usize = s.parse().ok()?;
+        let name = g.series.get(s)?;
+        if *said != name.replace('|', "\n") {
+            return None;
+        }
+        series.push((s, name.as_str()));
+        words.truncate(said.len());
+    }
+    // Each label is the nearest redrawn label that says the same, and no two labels are the same redrawn one.
+    let mut same: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (j, (words, _)) in drawn.iter().enumerate() {
+        same.entry(words.as_str()).or_default().push(j);
+    }
+    let mut taken = vec![false; drawn.len()];
+    let mut matched = Vec::with_capacity(copied.len());
+    for (words, p) in &copied {
+        let group = same.get(words.as_str())?;
+        if budget < group.len() {
+            return None;
+        }
+        budget -= group.len();
+        let away = |j: &usize| drawn.get(*j).map_or(f64::INFINITY, |(_, q)| (p.0 - q.0).powi(2) + (p.1 - q.1).powi(2));
+        let j = *group.iter().min_by(|a, b| away(a).total_cmp(&away(b)))?;
+        if std::mem::replace(taken.get_mut(j)?, true) {
+            return None;
+        }
+        matched.push(j);
+    }
+    let mut by_series: HashMap<u32, Vec<&Wedge>> = HashMap::new();
+    for w in &wedges {
+        by_series.entry(w.series).or_default().push(w);
+    }
+    // A redraw puts the middle of a label's lines (its series name split at `|` and line breaks, at the default leading)
+    // 0.35 of the label size below a point inside its wedge, at the label's origin across. The label is on the nearest
+    // wedge of its series to that point, the one holding it. When the wedges of the series are all dark or all light, the
+    // place does not matter.
+    let uniform: HashMap<u32, Option<bool>> =
+        by_series.iter().map(|(s, ws)| (*s, ws.first().map(|w| w.dark).filter(|d| ws.iter().all(|w| w.dark == *d)))).collect();
+    let ls = label_size(&g.label_styles, Role::Legend);
+    let mut out = HashMap::new();
+    for (t, j) in legend.iter().zip(matched) {
+        let (Some(r), Some((s, name))) = (redrawn.get(j), series.get(j).copied()) else { return None };
+        let s = u32::try_from(s).ok()?;
+        if let Some(Some(dark)) = uniform.get(&s) {
+            out.insert(t.id, *dark);
+            continue;
+        }
+        let NodeKind::Text(text) = &r.kind else { return None };
+        let middle = name.split(['|', '\n']).count().saturating_sub(1) as f64 * ls * 1.2 / 2.0;
+        let point = text.xf * vectorcraft_geom::Point::new(0.0, middle - ls * 0.35);
+        let named = by_series.get(&s)?;
+        if budget < named.len() {
+            return None;
+        }
+        budget -= named.len();
+        // The nearest wedge, measured exactly only while its bounds are nearer than the nearest one found so far.
+        let to_box = |b: vectorcraft_geom::Rect| {
+            let (dx, dy) = ((b.x0 - point.x).max(point.x - b.x1).max(0.0), (b.y0 - point.y).max(point.y - b.y1).max(0.0));
+            dx * dx + dy * dy
+        };
+        let away = |w: &Wedge| {
+            if w.path.contains(point) { 0.0 } else { w.path.segments().map(|seg| seg.nearest(point, 1e-3).distance_sq).fold(f64::INFINITY, f64::min) }
+        };
+        let mut by_box: Vec<(f64, &Wedge)> = named.iter().map(|w| (to_box(w.bounds), *w)).collect();
+        by_box.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut best: Option<(f64, bool)> = None;
+        for (near, w) in by_box {
+            if best.is_some_and(|b| near >= b.0) {
+                break;
+            }
+            let d = away(w);
+            if best.is_none_or(|b| d < b.0) {
+                best = Some((d, w.dark));
+            }
+        }
+        out.insert(t.id, best?.1);
+    }
+    Some(out)
+}
+
+/// The legend labels of graph `n` (a pie with Legends in Wedges, its labels where it drew them), each with whether a
+/// redraw sets it on a dark wedge, by the fill each wedge shows now. A label is placed by the point a redraw centers it
+/// on, which lies inside its wedge: the wedge holding it of the series the label names (the nearest one when none holds
+/// it), or of any series when the label names none. When the wedges of the series a label names are all dark or all
+/// light, the label's place does not matter.
+fn legend_on_dark(n: &Node, g: &GraphSpec) -> HashMap<NodeId, bool> {
+    wedge_contrast(&legend_labels(n), &pie_wedges(n), g)
+}
+
+/// The point a redraw centers legend label `text` of series `name` on, in a pie of spec `g` whose legend labels are
+/// `ls` points: 0.35 of the label size above where a redraw (`label` in `labels.rs`) puts the middle of the label's
+/// lines, at the label's origin across. The lines are those of the series name, split at `|` and line breaks, at the
+/// default leading; with kept paragraph attributes, a redraw puts the middle of the first and last baselines there
+/// instead, when each of those lines that holds characters has one baseline and the first and last hold characters.
+fn label_anchor(text: &vectorcraft_doc::TextObject, name: &str, g: &GraphSpec, ls: f64) -> vectorcraft_geom::Point {
+    let lines: Vec<&str> = name.split(['|', '\n']).collect();
+    let ys: Vec<f64> = text.baselines().map(|(a, _)| a.y).collect();
+    let set = lines.iter().filter(|l| !l.is_empty()).count();
+    let ends_set = lines.first().is_some_and(|l| !l.is_empty()) && lines.last().is_some_and(|l| !l.is_empty());
+    let middle = match (ys.first(), ys.last()) {
+        (Some(first), Some(last)) if g.label_styles.legend_para.is_some() && ends_set && ys.len() == set => (first + last) / 2.0,
+        _ => lines.len().saturating_sub(1) as f64 * ls * 1.2 / 2.0,
+    };
+    text.xf * vectorcraft_geom::Point::new(0.0, middle - ls * 0.35)
+}
+
+/// [`legend_on_dark`] for legend labels `legend` of a pie of spec `g` with wedges `wedges`.
+fn wedge_contrast(legend: &[&Node], wedges: &[Wedge], g: &GraphSpec) -> HashMap<NodeId, bool> {
+    use vectorcraft_geom::kurbo::ParamCurveNearest;
+    let mut out = HashMap::new();
+    if legend.is_empty() {
+        return out;
+    }
+    let mut by_series: HashMap<u32, Vec<&Wedge>> = HashMap::new();
+    for w in wedges {
+        by_series.entry(w.series).or_default().push(w);
+    }
+    // For each label text, the wedges of the series that show it, and how many of them are dark.
+    let named_wedges: HashMap<String, (Vec<&Wedge>, usize)> = series_by_label(g)
+        .into_iter()
+        .map(|(name, series)| {
+            let named: Vec<&Wedge> = series.iter().filter_map(|s| by_series.get(s)).flatten().copied().collect();
+            let darks = named.iter().filter(|w| w.dark).count();
+            (name, (named, darks))
+        })
+        .collect();
+    let none = (vec![], 0);
+    // For each label text, the first series name that shows it (names that differ only in `|` against a line break of
+    // their own show the same text, and nothing in the label tells them apart).
+    let mut series_names: HashMap<String, &str> = HashMap::new();
+    for name in &g.series {
+        series_names.entry(name.replace('|', "\n")).or_insert(name.as_str());
+    }
+    let ls = label_size(&g.label_styles, Role::Legend);
+    // The search for the nearest wedge looks at this many wedges in all; past it, a label takes the contrast most of the
+    // wedges of its series show.
+    let mut budget: usize = 1 << 20;
+    for t in legend {
+        let NodeKind::Text(text) = &t.kind else { continue };
+        let id = t.id;
+        let words = text.plain_text();
+        let (named, darks) = named_wedges.get(&words).unwrap_or(&none);
+        let darks = *darks;
+        if (darks == 0 || darks == named.len())
+            && let Some(w) = named.first()
+        {
+            out.insert(id, w.dark);
+            continue;
+        }
+        let name = series_names.get(&words).map_or_else(|| words.replace('\n', "|"), |s| (*s).to_owned());
+        let at = label_anchor(text, &name, g, ls);
+        if named.is_empty() {
+            let cost = wedges.len();
+            let dark = budget >= cost && wedges.iter().any(|w| w.dark && w.bounds.contains(at) && w.path.contains(at));
+            budget = budget.saturating_sub(cost);
+            out.insert(id, dark);
+            continue;
+        }
+        if budget < named.len() {
+            out.insert(id, darks * 2 > named.len());
+            continue;
+        }
+        budget -= named.len();
+        // The nearest wedge, measured exactly only while its bounds are nearer than the nearest one found so far.
+        let to_box = |r: vectorcraft_geom::Rect| {
+            let (dx, dy) = ((r.x0 - at.x).max(at.x - r.x1).max(0.0), (r.y0 - at.y).max(at.y - r.y1).max(0.0));
+            dx * dx + dy * dy
+        };
+        let away = |w: &Wedge| {
+            if w.path.contains(at) { 0.0 } else { w.path.segments().map(|s| s.nearest(at, 1e-3).distance_sq).fold(f64::INFINITY, f64::min) }
+        };
+        let mut by_box: Vec<(f64, &Wedge)> = named.iter().map(|w| (to_box(w.bounds), *w)).collect();
+        by_box.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut best = (f64::INFINITY, darks * 2 > named.len());
+        for (near, w) in by_box {
+            if near >= best.0 {
+                break;
+            }
+            let d = away(w);
+            if d < best.0 {
+                best = (d, w.dark);
+            }
+        }
+        out.insert(id, best.1);
+    }
     out
 }
 

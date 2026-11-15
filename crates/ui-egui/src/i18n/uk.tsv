@@ -1080,7 +1080,8 @@ font-technology	Variable	Варіативні
 	Every (minutes)	Кожен (хвилин)
 	Every option is at its default.	Усі параметри мають значення за промовчанням.
 	Every option matches {base}.	Усі параметри збігаються з {base}.
-	Every-line Composer	Компонувальник всіх рядків
+	Middle Eastern & South Asian Every-line Composer	Компонувальник всіх рядків (Близький Схід і Південна Азія)
+	Standard Every-line Composer	Стандартний компонувальник всіх рядків
 	Exact dash lengths	Точна довжина штрихів
 	Exceptions (comma separated)	Винятки (через кому)
 	Exclude	Виключити
@@ -1417,6 +1418,14 @@ file-filter	Templates	Шаблони
 	Previous Artboard	Попередня монтажна область
 	Next Artboard	Наступна монтажна область
 	Last Artboard	Остання монтажна область
+	Status Bar Show	Показ у рядку стану
+	Artboard Name	Назва монтажної області
+	Current Tool	Поточний інструмент
+	Date and Time	Дата й час
+	Number of Undos	Кількість скасувань
+	Document Color Profile	Колірний профіль документа
+	Undos	Скасування
+	Redos	Повтори
 	Go To Link	Перейти за посиланням
 	GPL palettes keep solid colours only, as RGB.	Палітри GPL зберігають лише суцільні кольори RGB.
 	GPU Performance	Продуктивність GPU
@@ -3490,7 +3499,8 @@ digits	Malayalam	Малаялам
 	Single Left Quotation Mark	Одинарна лапка, що відкриває
 	Single Quotes:	Одинарні лапки:
 	Single Right Quotation Mark	Одинарна лапка, що закриває
-	Single-line Composer	Однорядковий компонувальник
+	Middle Eastern & South Asian Single-line Composer	Однорядковий компонувальник (Близький Схід і Південна Азія)
+	Standard Single-line Composer	Стандартний однорядковий компонувальник
 	Toggle Line Composer	Переключити компонувальник рядків
 	Sixth Space	Шоста шпація
 	Size	Розмір
@@ -5877,6 +5887,8 @@ lighting	Light	Світло
 	Save Variable Library…	Зберегти бібліотеку змінних…
 @msg	a variable library holds text variables, and the document has none	бібліотека змінних містить текстові змінні, а в документі їх немає
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	змінну `{name}` не можна зберегти в бібліотеці змінних: перейменуйте її так, щоб ім’я починалося з літери або `_` і не містило пробілів і символів, крім `-`, `_` і `.`
+@msg	{k} has control characters	{k} містить керівні символи
+@msg	{k} has control characters or line breaks	{k} містить керівні символи або розриви рядків
 @msg	data set `{name}` holds a control character, which a variable library can't hold	набір даних `{name}` містить керівний символ, який бібліотека змінних не може містити
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	набір даних `{name}` починається або закінчується пробілом, який бібліотека змінних не може містити
 	Make Graph Dynamic	Зробити діаграму динамічною
@@ -6208,6 +6220,7 @@ axis	Y Axis	Вісь Y
 @msg	stops must be in order of `offset`	точки переходу мають іти в порядку `offset`
 @msg	the document has no pattern {pattern}	у документі немає візерунка {pattern}
 @msg	the document has no swatch {n}	у документі немає зразка {n}
+@msg	`plates` requires a stop linked to a spot swatch	для `plates` потрібна точка переходу, пов’язана зі зразком плашкового кольору
 @msg	the output	виведення
 @msg	the path has no anchor points	контур не має опорних точок
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
@@ -7407,6 +7420,7 @@ breakText	Glyphs	Гліфи
 @msg	Image Trace failed: {e}	Трасування зображення не вдалося: {e}
 @msg	Image Trace finished, but its document was closed	Трасування зображення завершено, але його документ закрито
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Трасування зображення завершено, але зображення або його параметри тим часом змінилися: виконайте трасування ще раз
+@msg	Image Trace finished, but its document was reverted: trace it again	Трасування зображення завершено, але його документ було повернуто до збереженої версії: виконайте трасування ще раз
 @msg	Import SVG Filter reads SVG files, not SVGZ	Імпорт фільтра SVG читає файли SVG, а не SVGZ
 @msg	Invalid dimension offset	Неприпустиме зміщення розміру
 @msg	Invalid point	Неприпустима точка
@@ -7453,6 +7467,7 @@ breakText	Glyphs	Гліфи
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` для цього діалогового вікна ({kind}) має бути одним з: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` містить понад {MAX_ANSWERS} відповідей
 @msg	`answers` is larger than 1 MiB	`answers` більший за 1 МіБ
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` призначений лише для запуску, у якому немає кого запитати: у застосунку людина сама відповідає на кожне діалогове вікно
 @msg	`answers` must be a list of answers	`answers` має бути списком відповідей
 @msg	`artboard` must be the index of an artboard of the document	`artboard` має бути індексом монтажної області документа
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` має бути [x, y]
@@ -7578,6 +7593,7 @@ breakText	Glyphs	Гліфи
 @msg	`names` must be an array of style names	`names` має бути масивом імен стилів
 @msg	`new` is a design name, or true	`new` — це назва дизайну або true
 @msg	`origin` must be [x, y] in points	`origin` має бути [x, y] у пунктах
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` має бути [a, b, c, d], кожне від -1000 до 1000, а a·d - b·c має відрізнятися від 0 щонайменше на 0.001
 @msg	`path` must be a folder	`path` має бути папкою
 @msg	`path` must be a path object	`path` має бути об’єктом-контуром
 @msg	`picks` must be an array (got {v})	`picks` має бути масивом (отримано {v})
@@ -7977,7 +7993,7 @@ breakText	Glyphs	Гліфи
 @msg	column: true floats the whole column and takes no onto, above or below	column: true робить плаваючим увесь стовпець і не приймає onto, above або below
 @msg	command must be a shape.* command	command має бути командою shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: відсутній `command`
-@msg	composer must be "singleLine" or "everyLine"	composer має бути "singleLine" або "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer має бути "singleLine", "everyLine", "standardSingleLine" або "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	складені фігури приймають контури, складені контури, групи, складені фігури, текст, переходи й оболонки
 @msg	compound {_1} must contain exactly one open path to join	складений об’єкт {_1} має містити рівно один відкритий контур для з’єднання
 @msg	connect needs a path other than the one extended	для connect потрібен контур, відмінний від того, що продовжується
@@ -9116,7 +9132,6 @@ breakText	Glyphs	Гліфи
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	файли {kind} не мають прозорості, а файл містив би таке: {what}; спочатку зведіть прозорість (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	зображення {kind} не можна відкрити (див. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` не є одним із варіантів
-@msg	{k} has control characters{_1}	{k} містить керівні символи{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} задовгий (не більше {MAX_TEXT} символів)
 @msg	{k} must be > 0	{k} має бути > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} має бути числом (pt) або довжиною на зразок "210 mm"
