@@ -3771,6 +3771,12 @@ digits	Malayalam	Malaiàlam
 	Responsive	Adaptatiu
 	Restore	Restaura
 	Restore every preference to its default (applied on OK)	Restaura cada preferència al seu valor predeterminat (s’aplica en prémer D’acord)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	La unitat dels documents nous de mides predefinides, excepte les mides en píxels, i dels fitxers oberts que no registren cap unitat; si la trieu aquí i feu clic a D’acord, també passa a ser la unitat del document actiu.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Els gruixos de traç, els guions i els espais es mostren en aquesta unitat, i els nombres que s’hi escriuen es llegeixen en aquesta unitat.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Les mides del text, l’interlineat i el desplaçament de la línia de base es mostren en aquesta unitat, i els nombres que s’hi escriuen es llegeixen en aquesta unitat.
+	The unit for East Asian type measurements, which no field uses yet.	La unitat per a les mesures del text d’Àsia oriental, que encara no fa servir cap camp.
+	When on, a number typed without a unit into a field in picas is read in points.	Quan està activat, un nombre escrit sense unitat en un camp en piques es llegeix en punts.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Amb ID XML, els noms dels objectes es mostren com a ID XML a Capes, Variables i Opcions de la capa.
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
 	Restore Recovered Documents	Restaura els documents recuperats

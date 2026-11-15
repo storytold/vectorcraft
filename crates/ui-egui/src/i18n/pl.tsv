@@ -4309,6 +4309,12 @@ font-technology	Variable	Zmienne
 	Preferences	Preferencje
 	Previous	Wstecz
 	Restore every preference to its default (applied on OK)	Przywróć domyślne wartości wszystkich preferencji (zastosowane po OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jednostka nowych dokumentów o wbudowanych rozmiarach, z wyjątkiem rozmiarów w pikselach, oraz otwartych plików bez zapisanej jednostki; wybranie jej tutaj i kliknięcie OK ustawia ją też w aktywnym dokumencie.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Grubości obrysu, kreski i odstępy są wyświetlane w tej jednostce, a liczby wpisane dla nich są w niej odczytywane.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Rozmiary tekstu, interlinia i przesunięcie linii bazowej są wyświetlane w tej jednostce, a liczby wpisane dla nich są w niej odczytywane.
+	The unit for East Asian type measurements, which no field uses yet.	Jednostka miar tekstu wschodnioazjatyckiego, której żadne pole jeszcze nie używa.
+	When on, a number typed without a unit into a field in picas is read in points.	Gdy opcja jest włączona, liczba wpisana bez jednostki w polu w pica jest odczytywana w punktach.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Przy ID XML nazwy obiektów są wyświetlane jako ID XML w Warstwach, Zmiennych i Opcjach warstwy.
 	Reset all preferences to their defaults?	Przywrócić domyślne wartości wszystkich preferencji?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Wartości domyślne zostaną zastosowane po kliknięciu OK w Preferencjach. Anuluj w tym oknie zachowuje bieżące preferencje.
 	Smaller ↔ Larger	Mniejszy ↔ większy

@@ -4688,6 +4688,12 @@ font-technology	Variable	Variabel
 	Preferences	Voorkeuren
 	Previous	Vorige
 	Restore every preference to its default (applied on OK)	Elke voorkeur terugzetten naar de standaard (toegepast bij OK)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	De eenheid voor nieuwe documenten in de ingebouwde formaten, behalve formaten in pixels, en voor geopende bestanden die geen eenheid vastleggen; kiest u die hier en klikt u op OK, dan krijgt ook het actieve document deze eenheid.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Contourdiktes, streepjes en tussenruimtes worden in deze eenheid getoond, en getallen die ervoor worden getypt, worden erin gelezen.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Tekstgroottes, regelafstand en basislijnverschuiving worden in deze eenheid getoond, en getallen die ervoor worden getypt, worden erin gelezen.
+	The unit for East Asian type measurements, which no field uses yet.	De eenheid voor maten van Oost-Aziatische tekst, die nog geen enkel veld gebruikt.
+	When on, a number typed without a unit into a field in picas is read in points.	Wanneer dit aan staat, wordt een getal dat zonder eenheid in een veld in pica's wordt getypt, in punten gelezen.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Met XML-id worden objectnamen als XML-id's getoond in Lagen, Variabelen en Laagopties.
 	Reset all preferences to their defaults?	Alle voorkeuren terugzetten naar de standaardwaarden?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	De standaardwaarden worden toegepast wanneer u in Voorkeuren op OK klikt. Annuleren daar behoudt uw huidige voorkeuren.
 	Smaller ↔ Larger	Kleiner ↔ Groter

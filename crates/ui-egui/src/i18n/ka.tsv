@@ -6071,6 +6071,12 @@ font-technology	Variable	ცვლადი
 	Preferences	პარამეტრები
 	Previous	წინა
 	Restore every preference to its default (applied on OK)	ყველა პარამეტრის ნაგულისხმევ მნიშვნელობაზე დაბრუნება (გამოიყენება OK-ზე დაჭერისას)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ახალი დოკუმენტების ერთეული ჩაშენებული ზომებით, პიქსელური ზომების გარდა, და გახსნილი ფაილებისა, რომლებიც ერთეულს არ ინახავს; თუ აქ აირჩევთ და OK-ს დააწკაპუნებთ, ის აქტიური დოკუმენტის ერთეულიც გახდება.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	კონტურის სისქე, ტირეები და შუალედები ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	ტექსტის ზომა, სტრიქონთა დაშორება და საბაზისო ხაზის წანაცვლება ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
+	The unit for East Asian type measurements, which no field uses yet.	აღმოსავლეთაზიური ტექსტის ზომების ერთეული, რომელსაც ჯერჯერობით არცერთი ველი არ იყენებს.
+	When on, a number typed without a unit into a field in picas is read in points.	ჩართვისას პიკებში მოცემულ ველში ერთეულის გარეშე აკრეფილი რიცხვი პუნქტებში იკითხება.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID-ის არჩევისას ობიექტების სახელები შრეებში, ცვლადებსა და შრის პარამეტრებში XML ID-ად ჩანს.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი

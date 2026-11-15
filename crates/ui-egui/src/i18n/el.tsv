@@ -3744,6 +3744,12 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reshape Type Area	Αναδιαμόρφωση περιοχής κειμένου
 	Responsive	Αποκρινόμενο
 	Restore every preference to its default (applied on OK)	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους (εφαρμογή με το Εντάξει)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Η μονάδα για τα νέα έγγραφα από ενσωματωμένα μεγέθη, εκτός από μεγέθη σε εικονοστοιχεία, και για τα ανοιγμένα αρχεία χωρίς καταγεγραμμένη μονάδα· αν την επιλέξετε εδώ και πατήσετε Εντάξει, γίνεται και μονάδα του ενεργού εγγράφου.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Τα πάχη περιγράμματος, οι παύλες και τα διάκενα εμφανίζονται σε αυτή τη μονάδα και οι αριθμοί που πληκτρολογούνται γι’ αυτά διαβάζονται σε αυτή.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Τα μεγέθη κειμένου, το διάστιχο και η μετατόπιση γραμμής βάσης εμφανίζονται σε αυτή τη μονάδα και οι αριθμοί που πληκτρολογούνται γι’ αυτά διαβάζονται σε αυτή.
+	The unit for East Asian type measurements, which no field uses yet.	Η μονάδα για τις μετρήσεις κειμένου Ανατολικής Ασίας, την οποία δεν χρησιμοποιεί ακόμη κανένα πεδίο.
+	When on, a number typed without a unit into a field in picas is read in points.	Όταν είναι ενεργό, ένας αριθμός που πληκτρολογείται χωρίς μονάδα σε πεδίο σε πίκες διαβάζεται σε σημεία.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Με το Αναγνωριστικό XML, τα ονόματα αντικειμένων εμφανίζονται ως αναγνωριστικά XML στα Επίπεδα, στις Μεταβλητές και στις Επιλογές επιπέδου.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Οι προεπιλογές εφαρμόζονται όταν κάνετε κλικ στο Εντάξει στις Προτιμήσεις. Το Ακύρωση εκεί διατηρεί τις τρέχουσες προτιμήσεις σας.
 	Restore Recovered Documents	Επαναφορά ανακτημένων εγγράφων
