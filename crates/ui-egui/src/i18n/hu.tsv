@@ -6260,6 +6260,8 @@ imageTrace	Outline	Körvonal
 	Save Variable Library…	Változókönyvtár mentése…
 @msg	a variable library holds text variables, and the document has none	a változókönyvtár szöveges változókat tartalmaz, a dokumentumban pedig nincs ilyen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a(z) `{name}` változó nem menthető változókönyvtárba: nevezze át úgy, hogy betűvel vagy `_` jellel kezdődjön, szóközök és a `-`, `_` és `.` jeltől eltérő szimbólumok nélkül
+@msg	{k} has control characters	{k} vezérlőkaraktereket tartalmaz
+@msg	{k} has control characters or line breaks	{k} vezérlőkaraktereket vagy sortöréseket tartalmaz
 @msg	data set `{name}` holds a control character, which a variable library can't hold	a(z) `{name}` adatkészlet vezérlőkaraktert tartalmaz, amelyet a változókönyvtár nem tartalmazhat
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	a(z) `{name}` adatkészlet szóközzel kezdődik vagy végződik, amelyet a változókönyvtár nem tartalmazhat
 	Make Graph Dynamic	Diagram dinamikussá tétele
@@ -6585,6 +6587,7 @@ axis	Y Axis	Y tengely
 @msg	stops must be in order of `offset`	a színátmenet-pontok `offset` szerint rendezve legyenek
 @msg	the document has no pattern {pattern}	a dokumentumban nincs {pattern} mintázat
 @msg	the document has no swatch {n}	a dokumentumban nincs {n} színminta
+@msg	`plates` requires a stop linked to a spot swatch	a `plates` direktszín-színmintához kapcsolt színátmenet-pontot igényel
 @msg	the output	a kimenet
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})

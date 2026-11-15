@@ -1532,6 +1532,47 @@ fn images_sharing_an_entry_are_written_once() {
     assert_eq!(store.images_written().len(), 1, "restored into this session's area once");
 }
 
+/// A linked image shown only in a stored brush's art is kept as its preview, as a save writes it;
+/// an image key that a brush's art embeds keeps its full bytes though the layers show it linked.
+#[test]
+fn recovery_brush_links_keep_proxy_and_embedded_full_bytes() {
+    let (full, proxy) = (vec![1u8; 40], vec![2u8; 10]);
+    for brush_linked in [true, false] {
+        let store = Arc::new(MemoryStore::default());
+        let mut s = session_in(&store);
+        {
+            let d = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+            let blob =
+                vectorcraft_doc::ImageBlob { proxy: Some(Arc::new(proxy.clone())), ..vectorcraft_doc::ImageBlob::new("image/jpeg", full.clone()) };
+            d.images.insert("k".into(), blob);
+            let image = |link: Option<vectorcraft_doc::LinkInfo>| {
+                let im = vectorcraft_doc::ImageObject {
+                    key: "k".into(),
+                    width: 4,
+                    height: 4,
+                    xf: vectorcraft_geom::Affine::IDENTITY,
+                    link,
+                    placement: Default::default(),
+                    pixels: None,
+                };
+                vectorcraft_doc::Node::new(NodeId(0), vectorcraft_doc::NodeKind::Image(Box::new(im)))
+            };
+            let link = Some(vectorcraft_doc::LinkInfo::new("/work/k.jpg"));
+            if !brush_linked {
+                let (mut n, layer) = (image(link.clone()), d.layers[0].id);
+                n.id = d.alloc_id();
+                d.insert(Some(layer), 0, n).unwrap();
+            }
+            let art = image(if brush_linked { link } else { None });
+            let scatter = vectorcraft_brush::Scatter { art, ..Default::default() };
+            vectorcraft_brush::store(d, &[vectorcraft_brush::Brush { name: "Dots".into(), kind: vectorcraft_brush::BrushKind::Scatter(scatter) }]);
+        }
+        let r = s.execute("file.recovery.save", &json!({})).unwrap();
+        let want = if brush_linked { proxy.len() } else { full.len() };
+        assert_eq!(r["saved"][0]["imageBytes"], want, "linked in the brush: {brush_linked}: {r}");
+    }
+}
+
 #[test]
 fn copies_from_before_images_were_kept_apart_still_restore() {
     let store = Arc::new(MemoryStore::default());

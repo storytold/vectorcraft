@@ -1545,6 +1545,7 @@ fn shape_commands_refuse_a_number_or_boolean_given_as_text() {
         ("shape.flare", json!({"cx": 100, "cy": 100, "x2": "300", "y2": 300}), "x2"),
         ("shape.flare", with(&flare, "direction", json!("45")), "direction"),
         ("shape.flare", with(&flare, "seed", json!("7")), "seed"),
+        ("shape.flare", with(&flare, "ringSeed", json!("7")), "ringSeed"),
         ("shape.spiral", with(&spiral, "decay", json!("80")), "decay"),
         ("shape.spiral", with(&spiral, "segments", json!("10")), "segments"),
     ]
@@ -3267,6 +3268,70 @@ fn flare_rotation_turns_only_the_rays() {
             assert!(p.distance(*q) < 1e-6, "{name:?}: {p:?} is not {q:?}");
         }
     }
+}
+
+/// `shape.flare`'s `ringSeed` places the rings along the path anew and keeps their count and
+/// sizes and the other parts; the same `ringSeed` draws the same flare, neighboring ones differ,
+/// and a seed that is not a whole number of at least 0 (for `ringSeed`, below 2^53) is refused.
+#[test]
+fn flare_ring_seed_moves_only_the_rings() {
+    let mut s = session();
+    let parts = |s: &mut Session, ring_seed: Option<u64>| {
+        let mut p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 6, "x2": 400, "y2": 300, "seed": 3});
+        if let Some(r) = ring_seed {
+            p["ringSeed"] = json!(r);
+        }
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().map(|c| (c.name.clone(), c.geometric_bounds().unwrap())).collect::<Vec<_>>()
+    };
+    let plain = parts(&mut s, None);
+    let placed = parts(&mut s, Some(11));
+    assert_eq!(placed, parts(&mut s, Some(11)));
+    assert_eq!(plain.len(), placed.len());
+    let mut moved = 0;
+    for ((name, a), (_, b)) in plain.iter().zip(&placed) {
+        if name.as_deref() == Some("Ring") {
+            assert!((a.width() - b.width()).abs() < 1e-9, "a ring keeps its size");
+            moved += usize::from(a.center().distance(b.center()) > 1e-6);
+        } else {
+            assert_eq!(a, b, "{name:?}");
+        }
+    }
+    assert_eq!(moved, 6, "every ring moves");
+    assert_ne!(parts(&mut s, Some(0)), parts(&mut s, Some(1)), "neighboring seeds place the rings differently");
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in [json!(-1), json!(2.5), json!(true), json!(1u64 << 53)] {
+        assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "ringSeed": bad})).is_err(), "{bad}");
+    }
+    for bad in [json!(-1), json!(2.5), json!(true)] {
+        assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "seed": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+/// Through the session, Ctrl/Cmd in the Flare tool's center drag keeps the center's size while the
+/// drag sizes the halo, and the flare drawn keeps both.
+#[test]
+fn flare_tool_ctrl_keeps_the_center_while_the_drag_sizes_the_halo() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let cmd = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    s.select_tool("flare", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 240.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 500.0, 400.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 500.0, 400.0), v).unwrap();
+    let st = s.doc().unwrap();
+    let g = st.doc.node(st.selection.objects[0]).unwrap();
+    let NodeKind::Group { children, .. } = &g.kind else { panic!("flare is a group") };
+    let width = |name: &str| children.iter().find(|c| c.name.as_deref() == Some(name)).unwrap().geometric_bounds().unwrap().width();
+    // The center as the key found it (80); the halo as a 160-point center with 20 % growth would
+    // have it: 80 × 1.2 × 1.6 = 153.6 radius.
+    assert!((width("Center") - 80.0).abs() < 0.5, "{}", width("Center"));
+    assert!((width("Halo") - 2.0 * 153.6).abs() < 0.5, "{}", width("Halo"));
 }
 
 #[test]
