@@ -7396,6 +7396,22 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Remover distâncias
 @msg	that makes too many pieces (at most 100000): make the dashes longer	isso gera peças demais (no máximo 100000): aumente os traços
 @msg	select paths, or segments, to divide	selecione demarcadores ou segmentos para dividir
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangentes comuns…
+	Common Tangents	Tangentes comuns
+	Tangents	Tangentes
+	Centerline	Linha central
+	External	Externas
+	Internal	Internas
+@msg	select two closed paths	selecione dois demarcadores fechados
+@msg	a selected path is open	um demarcador selecionado está aberto
+@msg	a selected path is not convex	um demarcador selecionado não é convexo
+@msg	a selected path has no area	um demarcador selecionado não tem área
+@msg	a selected path has more than 10000 segments	um demarcador selecionado tem mais de 10000 segmentos
+@msg	the two paths have the same outline	os dois demarcadores têm o mesmo contorno
+@msg	One path lies inside the other, so they have no common tangents	Um demarcador está dentro do outro, então eles não têm tangentes comuns
+@msg	The paths overlap, so they have no internal tangents	Os demarcadores se sobrepõem, então eles não têm tangentes internas
+@msg	One path lies inside the other, so they have no internal tangents	Um demarcador está dentro do outro, então eles não têm tangentes internas
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir traços em demarcadores
 @msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir

@@ -7360,6 +7360,22 @@ breakText	Glyphs	Glyphes
 	Remove Gaps	Supprimer les écarts
 @msg	that makes too many pieces (at most 100000): make the dashes longer	cela donne trop de morceaux (100000 au plus) : allongez les tirets
 @msg	select paths, or segments, to divide	sélectionnez des tracés ou des segments à diviser
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangentes communes…
+	Common Tangents	Tangentes communes
+	Tangents	Tangentes
+	Centerline	Ligne médiane
+	External	Externes
+	Internal	Internes
+@msg	select two closed paths	sélectionnez deux tracés fermés
+@msg	a selected path is open	un tracé sélectionné est ouvert
+@msg	a selected path is not convex	un tracé sélectionné n’est pas convexe
+@msg	a selected path has no area	un tracé sélectionné n’a pas de surface
+@msg	a selected path has more than 10000 segments	un tracé sélectionné a plus de 10000 segments
+@msg	the two paths have the same outline	les deux tracés ont le même contour
+@msg	One path lies inside the other, so they have no common tangents	Un tracé se trouve à l’intérieur de l’autre : ils n’ont donc aucune tangente commune
+@msg	The paths overlap, so they have no internal tangents	Les tracés se chevauchent : ils n’ont donc aucune tangente interne
+@msg	One path lies inside the other, so they have no internal tangents	Un tracé se trouve à l’intérieur de l’autre : ils n’ont donc aucune tangente interne
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Décomposer les tirets en tracés
 @msg	select paths with dashed strokes to expand	sélectionnez des tracés à contour pointillé à décomposer

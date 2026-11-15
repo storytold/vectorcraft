@@ -7361,6 +7361,22 @@ breakText	Glyphs	Glifs
 	Remove Gaps	Elimina les separacions
 @msg	that makes too many pieces (at most 100000): make the dashes longer	això fa massa trossos (com a màxim 100000): allargueu els guions
 @msg	select paths, or segments, to divide	seleccioneu camins o segments per dividir
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Tangents comunes…
+	Common Tangents	Tangents comunes
+	Tangents	Tangents
+	Centerline	Línia central
+	External	Externes
+	Internal	Internes
+@msg	select two closed paths	seleccioneu dos camins tancats
+@msg	a selected path is open	un camí seleccionat és obert
+@msg	a selected path is not convex	un camí seleccionat no és convex
+@msg	a selected path has no area	un camí seleccionat no té àrea
+@msg	a selected path has more than 10000 segments	un camí seleccionat té més de 10000 segments
+@msg	the two paths have the same outline	els dos camins tenen el mateix contorn
+@msg	One path lies inside the other, so they have no common tangents	Un camí és dins de l’altre, per tant no tenen tangents comunes
+@msg	The paths overlap, so they have no internal tangents	Els camins se superposen, per tant no tenen tangents internes
+@msg	One path lies inside the other, so they have no internal tangents	Un camí és dins de l’altre, per tant no tenen tangents internes
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandeix els guions en camins
 @msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir

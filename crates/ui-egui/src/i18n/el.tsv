@@ -7334,6 +7334,22 @@ breakText	Glyphs	Γλύφοι
 	Remove Gaps	Αφαίρεση κενών
 @msg	that makes too many pieces (at most 100000): make the dashes longer	αυτό δίνει πάρα πολλά κομμάτια (το πολύ 100000): κάντε τις παύλες μεγαλύτερες
 @msg	select paths, or segments, to divide	επιλέξτε διαδρομές ή τμήματα για διαίρεση
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Κοινές εφαπτόμενες…
+	Common Tangents	Κοινές εφαπτόμενες
+	Tangents	Εφαπτόμενες
+	Centerline	Κεντρική γραμμή
+	External	Εξωτερικές
+	Internal	Εσωτερικές
+@msg	select two closed paths	επιλέξτε δύο κλειστές διαδρομές
+@msg	a selected path is open	μια επιλεγμένη διαδρομή είναι ανοιχτή
+@msg	a selected path is not convex	μια επιλεγμένη διαδρομή δεν είναι κυρτή
+@msg	a selected path has no area	μια επιλεγμένη διαδρομή δεν έχει εμβαδόν
+@msg	a selected path has more than 10000 segments	μια επιλεγμένη διαδρομή έχει περισσότερα από 10000 τμήματα
+@msg	the two paths have the same outline	οι δύο διαδρομές έχουν το ίδιο περίγραμμα
+@msg	One path lies inside the other, so they have no common tangents	Η μία διαδρομή βρίσκεται μέσα στην άλλη, επομένως δεν έχουν κοινές εφαπτόμενες
+@msg	The paths overlap, so they have no internal tangents	Οι διαδρομές επικαλύπτονται, επομένως δεν έχουν εσωτερικές εφαπτόμενες
+@msg	One path lies inside the other, so they have no internal tangents	Η μία διαδρομή βρίσκεται μέσα στην άλλη, επομένως δεν έχουν εσωτερικές εφαπτόμενες
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Επέκταση παυλών σε διαδρομές
 @msg	select paths with dashed strokes to expand	επιλέξτε διαδρομές με διακεκομμένο περίγραμμα για επέκταση

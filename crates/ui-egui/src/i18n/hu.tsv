@@ -7350,6 +7350,22 @@ breakText	Glyphs	Glifák
 	Remove Gaps	Hézagok eltávolítása
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ez túl sok darabot adna (legfeljebb 100000): hosszabbítsa meg a szaggatásokat
 @msg	select paths, or segments, to divide	jelöljön ki felosztandó útvonalakat vagy szakaszokat
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Közös érintők…
+	Common Tangents	Közös érintők
+	Tangents	Érintők
+	Centerline	Középvonal
+	External	Külső
+	Internal	Belső
+@msg	select two closed paths	jelöljön ki két zárt útvonalat
+@msg	a selected path is open	egy kijelölt útvonal nyitott
+@msg	a selected path is not convex	egy kijelölt útvonal nem konvex
+@msg	a selected path has no area	egy kijelölt útvonalnak nincs területe
+@msg	a selected path has more than 10000 segments	egy kijelölt útvonalnak több mint 10000 szakasza van
+@msg	the two paths have the same outline	a két útvonal körvonala azonos
+@msg	One path lies inside the other, so they have no common tangents	Az egyik útvonal a másikon belül van, így nincsenek közös érintőik
+@msg	The paths overlap, so they have no internal tangents	Az útvonalak átfedik egymást, így nincsenek belső érintőik
+@msg	One path lies inside the other, so they have no internal tangents	Az egyik útvonal a másikon belül van, így nincsenek belső érintőik
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz

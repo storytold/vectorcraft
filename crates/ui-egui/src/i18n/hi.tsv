@@ -8040,6 +8040,22 @@ antiAlias	Sharp	शार्प
 @msg	select paths to join	जोड़ने के लिए पाथ सिलेक्ट करें
 @msg	select paths with dashed strokes to expand	विस्तृत करने के लिए डैश स्ट्रोक के साथ पाथ सिलेक्ट करें
 @msg	select paths, or segments, to divide	विभाजित करने के लिए पाथ, या खंड चुनें
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	उभयनिष्ठ स्पर्शरेखाएँ…
+	Common Tangents	उभयनिष्ठ स्पर्शरेखाएँ
+	Tangents	स्पर्शरेखाएँ
+	Centerline	केंद्र रेखा
+	External	बाहरी
+	Internal	आंतरिक
+@msg	select two closed paths	दो बंद पाथ चुनें
+@msg	a selected path is open	चुना गया एक पाथ खुला है
+@msg	a selected path is not convex	चुना गया एक पाथ उत्तल नहीं है
+@msg	a selected path has no area	चुने गए एक पाथ का कोई क्षेत्रफल नहीं है
+@msg	a selected path has more than 10000 segments	चुने गए एक पाथ में 10000 से अधिक खंड हैं
+@msg	the two paths have the same outline	दोनों पाथ की रूपरेखा एक जैसी है
+@msg	One path lies inside the other, so they have no common tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई उभयनिष्ठ स्पर्शरेखा नहीं है
+@msg	The paths overlap, so they have no internal tangents	पाथ एक-दूसरे पर चढ़े हुए हैं, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
+@msg	One path lies inside the other, so they have no internal tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
 @msg	Select point type	पॉइंट टाइप सिलेक्ट करें
 @msg	select rows or objects to collect	इकट्ठा करने के लिए पंक्तियों या ऑब्जेक्ट्स सिलेक्ट करें

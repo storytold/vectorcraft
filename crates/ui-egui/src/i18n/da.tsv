@@ -7414,6 +7414,22 @@ breakText	Glyphs	Glyffer
 	Remove Gaps	Fjern mellemrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det giver for mange stykker (højst 100000): gør stregerne længere
 @msg	select paths, or segments, to divide	vælg stier eller segmenter, der skal opdeles
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Fælles tangenter…
+	Common Tangents	Fælles tangenter
+	Tangents	Tangenter
+	Centerline	Midterlinje
+	External	Ydre
+	Internal	Indre
+@msg	select two closed paths	vælg to lukkede stier
+@msg	a selected path is open	en valgt sti er åben
+@msg	a selected path is not convex	en valgt sti er ikke konveks
+@msg	a selected path has no area	en valgt sti har intet areal
+@msg	a selected path has more than 10000 segments	en valgt sti har mere end 10000 segmenter
+@msg	the two paths have the same outline	de to stier har samme omrids
+@msg	One path lies inside the other, so they have no common tangents	Den ene sti ligger inden i den anden, så de har ingen fælles tangenter
+@msg	The paths overlap, so they have no internal tangents	Stierne overlapper, så de har ingen indre tangenter
+@msg	One path lies inside the other, so they have no internal tangents	Den ene sti ligger inden i den anden, så de har ingen indre tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Udvid streger til stier
 @msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides
