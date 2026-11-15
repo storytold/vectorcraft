@@ -22,6 +22,22 @@ fn is_trace_group(n: &Node) -> bool {
         && n.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
 }
 
+/// The name of the group that holds an Abutting trace's seam fills (see [`tr::TraceResult::seams`]).
+const SEAM_FILLS_NAME: &str = "Seam Fills";
+
+/// Whether `n` can be a trace's seam fills group: a group named as one, or a group of stroked paths
+/// without fills, so that it is still found after it is renamed or its strokes are edited. (Auto
+/// Grouping groups hold filled paths.)
+fn is_seam_fills(n: &Node) -> bool {
+    let stroke_only = |m: &Arc<Node>| {
+        matches!(m.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+            && m.appearance.fill_paint() == Paint::None
+            && m.appearance.stroke_paint() != Paint::None
+    };
+    matches!(n.kind, NodeKind::Group { clip: false, .. })
+        && (n.name.as_deref() == Some(SEAM_FILLS_NAME) || n.children().is_some_and(|c| !c.is_empty() && c.iter().all(stroke_only)))
+}
+
 const LIVE_PATHFINDER_BY_COLOR: &str = "byColor can't regroup a trace with a live Pathfinder effect: expand without byColor";
 
 /// The `view` param ([`TraceView`] id), if given.
@@ -393,11 +409,15 @@ fn by_color_param(cmd: &str, p: &Value) -> Result<bool> {
 /// (by the boxes of everything they paint, effects included, within one point); otherwise it
 /// starts another group of that paint, which keeps the stacking order of those items. Items
 /// farther apart can still share antialiased pixels at small view or raster-export scales, so
-/// their edge pixels may change. A group among `items` (Auto Grouping) is refused.
+/// their edge pixels may change. The seam fills' group, when it is the lowest item, stays as it is,
+/// under every other group. Any other group among `items` (Auto Grouping) is refused.
 fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Vec<Arc<Node>>> {
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Bound::{Excluded, Unbounded};
     use vectorcraft_color::tint_percent;
+    // The seam fills come first, under every path: kept there, they move under nothing.
+    let mut items = items;
+    let seams: Vec<Arc<Node>> = if items.first().is_some_and(|n| is_seam_fills(n)) { items.drain(..1).collect() } else { vec![] };
     // Grouped by the paint: unlinked (its #rrggbb), linked (the swatch and its exact tint), a
     // gradient, or another paint (its label). The name is apart from it: a swatch may be named as
     // a color's `#rrggbb` or as "Gradients".
@@ -517,14 +537,15 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
             }
         }
     }
-    Ok(groups
+    let groups: Vec<Arc<Node>> = groups
         .into_iter()
         .map(|run| {
             let mut g = Node::group(d.alloc_id(), run.members);
             g.name = Some(run.name);
             Arc::new(g)
         })
-        .collect())
+        .collect();
+    Ok(seams.into_iter().chain(groups).collect())
 }
 
 /// What a trace depends on: the document it is made in, the object traced (an image, or an Image
@@ -608,11 +629,13 @@ fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
     Ok(Prepared { inputs, trace: params, view, params_json, preset_label, library })
 }
 
-/// What a trace made of an image: the size in pixels it was decoded at, and the paths.
+/// What a trace made of an image: the size in pixels it was decoded at, the paths, and their seam
+/// fills ([`seams_within`]).
 pub struct Traced {
     inputs: TraceInputs,
     raster: (u32, u32),
     res: tr::TraceResult,
+    seams: Vec<tr::TracedPath>,
 }
 
 impl Traced {
@@ -636,7 +659,18 @@ fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, steps: &(dyn Fn(u64
         tr::TraceError::Cancelled => EngineError::Cancelled,
         e => EngineError::Other(e.to_string()),
     })?;
-    Ok(Traced { inputs: inputs.clone(), raster: (raster.width, raster.height), res })
+    let seams = seams_within(&res, params, MAX_TRACE_ANCHORS);
+    Ok(Traced { inputs: inputs.clone(), raster: (raster.width, raster.height), res, seams })
+}
+
+/// The seam fills of `res`, traced with `params` ([`tr::seam_fills`]), while the paths and the seam
+/// fills together stay within `max` anchors: the seam fills have at most as many anchors as the
+/// paths, so a trace whose paths have more than half of `max` gets none.
+fn seams_within(res: &tr::TraceResult, params: &tr::TraceParams, max: usize) -> Vec<tr::TracedPath> {
+    if res.anchor_count() > max / 2 {
+        return vec![];
+    }
+    tr::seam_fills(&res.paths, params)
 }
 
 /// An Image Trace made away from its command, off the UI thread (#3098). [`TraceRun::prepare`]
@@ -716,7 +750,7 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
         s.note_journal("savedPreset", recorded);
     }
     // A trace handed in for these very inputs ([`TraceRun`]), else one made now.
-    let Traced { raster, res, .. } = match s.trace_hand_off.take() {
+    let Traced { raster, res, seams: seam_fills, .. } = match s.trace_hand_off.take() {
         Some(traced) if traced.inputs == inputs => traced,
         _ => trace_now(&inputs, &trace, &|_, _| true)?,
     };
@@ -729,6 +763,13 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
     let xf = img.xf * vectorcraft_geom::Affine::scale_non_uniform(sx, sy);
     // Document units per raster pixel (stroke widths).
     let unit = xf.determinant().abs().sqrt();
+    // Seam fills: document units per raster pixel along the direction the image is stretched most,
+    // so that a stroke covers its pixels across an edge at any angle.
+    let seam_unit = {
+        let [a, b, c, d, _, _] = xf.as_coeffs();
+        let (t, det) = (a * a + b * b + c * c + d * d, a * d - b * c);
+        ((t + (t * t - 4.0 * det * det).max(0.0).sqrt()) / 2.0).sqrt()
+    };
     let (npaths, anchors, colors) = (res.paths.len(), res.anchor_count(), res.palette.len());
     let label = if expand { "Image Trace (Make and Expand)" } else { "Image Trace" };
     // A library color fills with the swatch's displayed color (its model kept), unlinked.
@@ -754,8 +795,38 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
             hidden.visible = false;
             children.push(Arc::new(hidden));
         }
+        let paint_of = |tp: &tr::TracedPath| {
+            let solid =
+                by_color.get(&tp.color).map_or_else(|| Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])), |paint| (*paint).clone());
+            // Gradients: a path the tracer found to be a linear gradient is filled with it.
+            tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf))
+        };
+        // Abutting: the seam fills, in a group of their own under every path.
+        let seams: Vec<Arc<Node>> = seam_fills
+            .iter()
+            .filter_map(|tp| {
+                let width = tp.stroke?;
+                let mut n = shape_node(d, tp.path.transformed(xf), None);
+                n.appearance = Appearance {
+                    items: vec![AppearanceItem::Stroke(StrokeLayer {
+                        cap: LineCap::Butt,
+                        join: LineJoin::Round,
+                        ..StrokeLayer::new(paint_of(tp), width * seam_unit)
+                    })],
+                    ..Default::default()
+                }
+                .into();
+                Some(Arc::new(n))
+            })
+            .collect();
+        if !seams.is_empty() {
+            let mut g = Node::group(d.alloc_id(), seams);
+            g.name = Some(SEAM_FILLS_NAME.into());
+            children.push(Arc::new(g));
+        }
         let mut traced = Vec::with_capacity(res.paths.len());
         for tp in res.paths {
+            let paint = paint_of(&tp);
             let path = tp.path.transformed(xf);
             let mut n = shape_node(d, path, None);
             // Shapes: a path the tracer found to be a shape is that live shape.
@@ -764,10 +835,6 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
                 *path = shape.to_path();
                 *live = Some(Box::new(shape));
             }
-            let solid =
-                by_color.get(&tp.color).map_or_else(|| Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])), |paint| (*paint).clone());
-            // Gradients: a path the tracer found to be a linear gradient is filled with it.
-            let paint = tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf));
             n.appearance = match tp.stroke {
                 // Traced lines: round corners, and ends round or square as the tracer found them.
                 Some(width) => Appearance {
@@ -1103,8 +1170,27 @@ mod color_group_tests {
 
 #[cfg(test)]
 mod trace_limit_tests {
-    use super::{MAX_TRACE_ANCHORS, keep_warnings, trace_warnings};
+    use super::{MAX_TRACE_ANCHORS, keep_warnings, seams_within, trace_warnings};
     use vectorcraft_trace as tr;
+
+    #[test]
+    fn seam_fills_count_against_the_anchor_limit() {
+        // Two colors side by side, the edge between them anti-aliased: one seam fill along it.
+        let img = tr::Raster::from_fn(24, 16, |x, _| {
+            let share = (10.4 - f64::from(x)).clamp(0.0, 1.0);
+            let mix = |a: f64, b: f64| (a * share + b * (1.0 - share)).round() as u8;
+            [mix(200.0, 30.0), mix(40.0, 90.0), mix(50.0, 200.0), 255]
+        });
+        let params = tr::TraceParams { mode: tr::Mode::Color, colors: 2, method: tr::Method::Abutting, ..tr::TraceParams::default() };
+        let res = tr::trace(&img, &params);
+        let all = tr::seam_fills(&res.paths, &params);
+        assert!(!all.is_empty(), "{res:?}");
+        let anchors = res.anchor_count();
+        // Twice the paths' anchors leaves room for any seam fills.
+        assert_eq!(seams_within(&res, &params, 2 * anchors), all);
+        // One anchor short of that: none.
+        assert_eq!(seams_within(&res, &params, 2 * anchors - 1), []);
+    }
 
     #[test]
     fn keep_warnings_name_matched_colors_that_produce_no_paths() {

@@ -109,6 +109,7 @@
 	Align to Artboard	对齐画板
 	Align to Glyph Bounds	对齐到字形边界
 	Align to Key Object	对齐关键对象
+	Align to Key Anchor	对齐关键锚点
 	Align to Page	对齐页面
 	Align to Path	对齐路径
 	Align to Selection	对齐选区
@@ -3646,6 +3647,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Kana	假名
 	Numerals	数字
 	Scale at Center	从中心缩放
+	Delete Set	删除集
+	Direct Entry	直接输入
 	Up/Down:	上/下：
 	Left/Right:	左/右：
 	Tate-chu-yoko Up/Down	纵中横上/下
@@ -5332,6 +5335,11 @@ imageTrace	Outline	轮廓
 	None (Color Preview)	无 (颜色预览)
 	Preserve	保留
 	CMYK:	CMYK：
+	RGB Policy:	RGB 策略：
+	CMYK Policy:	CMYK 策略：
+	Preserve Embedded Profiles	保留嵌入的配置文件
+	Convert to Working Space	转换为工作空间
+	Preserve Numbers	保留数值
 	Art & Illustration	艺术和插画
 	Branding	品牌
 	Film & Video	影片和视频

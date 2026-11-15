@@ -1067,6 +1067,7 @@ digits	Malayalam	말라얄람어
 	Align to Artboard	아트보드에 정렬
 	Align to Glyph Bounds	글리프 경계에 정렬
 	Align to Key Object	키 개체에 정렬
+	Align to Key Anchor	키 앵커 포인트에 정렬
 	Align to Page	페이지에 정렬
 	Align to Path	패스에 정렬
 	Align to Selection	선택 영역에 정렬
@@ -4149,6 +4150,8 @@ file-filter	Templates	템플릿
 	Kana	가나
 	Numerals	숫자
 	Scale at Center	중심에서 크기 조정
+	Delete Set	집합 삭제
+	Direct Entry	직접 입력
 	Up/Down:	위/아래:
 	Left/Right:	왼쪽/오른쪽:
 	Tate-chu-yoko Up/Down	다테추요코 위/아래
@@ -5414,6 +5417,11 @@ theme	Appearance	외관
 @msg	Imported library {name}	라이브러리 {name}을(를) 가져왔습니다
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB 정책:
+	CMYK Policy:	CMYK 정책:
+	Preserve Embedded Profiles	포함된 프로필 유지
+	Convert to Working Space	작업 공간으로 변환
+	Preserve Numbers	숫자 유지
 	Texture	텍스처
 	Craquelure…	크랙…
 	Grain…	그레인…

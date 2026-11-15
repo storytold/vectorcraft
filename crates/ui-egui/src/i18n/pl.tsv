@@ -946,6 +946,11 @@
 	NTSC Colors	Kolory NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Zasada RGB:
+	CMYK Policy:	Zasada CMYK:
+	Preserve Embedded Profiles	Zachowaj osadzone profile
+	Convert to Working Space	Konwertuj do przestrzeni roboczej
+	Preserve Numbers	Zachowaj wartości liczbowe
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Spękania…
@@ -1433,6 +1438,7 @@ lighting	Light	Światło
 	Align to Artboard	Wyrównaj do obszaru kompozycji
 	Align to Glyph Bounds	Wyrównaj do granic glifów
 	Align to Key Object	Wyrównaj do obiektu kluczowego
+	Align to Key Anchor	Wyrównaj do kluczowego punktu kontrolnego
 	Align to Selection	Wyrównaj do zaznaczenia
 	Align To:	Wyrównaj do:
 	Cancel Key Object	Anuluj obiekt kluczowy
@@ -1624,6 +1630,8 @@ digits	Malayalam	Malajalam
 	Kana	Kana
 	Numerals	Cyfry
 	Scale at Center	Skaluj od środka
+	Delete Set	Usuń zestaw
+	Direct Entry	Wprowadzanie bezpośrednie
 	Up/Down:	W górę/w dół:
 	Left/Right:	W lewo/w prawo:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko w górę/w dół

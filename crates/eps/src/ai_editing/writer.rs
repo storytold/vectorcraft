@@ -28,7 +28,7 @@ mod variables;
 pub(super) use brushes::BRUSHES;
 #[cfg(test)]
 pub(super) use envelopes::ENVELOPES;
-pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_objects};
+pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_definitions, styled_objects};
 #[cfg(test)]
 pub(super) use styles::{PANEL_EMPTY, PANEL_STYLES, STYLE_LINKS, WARPED_IMAGES, same_appearance};
 
@@ -133,6 +133,10 @@ struct Charges {
     kept_objects: usize,
     kept_symbol_nodes: u64,
     left_out: usize,
+    /// The objects written with the graphic style they are linked to, and those of them in the
+    /// definitions written.
+    links: usize,
+    kept_links: usize,
 }
 
 pub(super) struct Writer<'a> {
@@ -171,6 +175,8 @@ pub(super) struct Writer<'a> {
     definition_objects: usize,
     /// The objects of symbol art in those definitions ([`Self::symbol_nodes`]).
     definition_symbol_nodes: u64,
+    /// The objects in those definitions written with the graphic style they are linked to.
+    definition_links: usize,
     /// The most objects written ([`Self::take_objects`]): the most the reader reads,
     /// [`crate::import::MAX_EDITING_OBJECTS`].
     pub(super) max_objects: usize,
@@ -268,6 +274,12 @@ pub(super) struct Writer<'a> {
     /// The objects that may be written with an art style, as they were before baking, by id
     /// ([`styles::styled_objects`]).
     pub(super) styled: HashMap<NodeId, Arc<Node>>,
+    /// The objects of the opacity masks' art in each symbol's art and each pattern's tile art that
+    /// may be written with an art style, by the symbol's or pattern's name
+    /// ([`styles::styled_definitions`]). [`Self::define_symbol`] and [`Self::define_pattern`] write
+    /// a definition's art with its own as [`Self::styled`].
+    pub(super) symbol_styled: HashMap<String, styles::StyledMap>,
+    pub(super) pattern_styled: HashMap<String, styles::StyledMap>,
     /// The art styles written ([`styles`]).
     styles: styles::Styles,
     /// An object's drawn look is being written: no object in it is written with a style, and its
@@ -365,6 +377,8 @@ impl<'a> Writer<'a> {
             symbol_scales: HashMap::new(),
             root_entries: None,
             styled: HashMap::new(),
+            symbol_styled: HashMap::new(),
+            pattern_styled: HashMap::new(),
             styles: styles::Styles::default(),
             in_look: false,
             drawn: 0,
@@ -376,6 +390,7 @@ impl<'a> Writer<'a> {
             objects: 0,
             left_out: 0,
             definition_objects: 0,
+            definition_links: 0,
             definition_symbol_nodes: 0,
             max_objects: crate::import::MAX_EDITING_OBJECTS,
             last_samples: None,
@@ -434,6 +449,8 @@ impl<'a> Writer<'a> {
             kept_objects: self.definition_objects,
             kept_symbol_nodes: self.definition_symbol_nodes,
             left_out: self.left_out,
+            links: self.styles.links_written,
+            kept_links: self.definition_links,
         }
     }
 
@@ -447,15 +464,18 @@ impl<'a> Writer<'a> {
     fn keep_since(&mut self, c: Charges) {
         self.definition_objects = c.kept_objects + (self.objects - c.objects);
         self.definition_symbol_nodes = c.kept_symbol_nodes + (self.symbol_nodes - c.symbol_nodes);
+        self.definition_links = c.kept_links + (self.styles.links_written - c.links);
     }
 
-    /// Art written since `c` as `lines` is not used: the objects and symbol art charged since are
-    /// given back, except those of the definitions written since, and the images `lines` marks
+    /// Art written since `c` as `lines` is not used: the objects and symbol art charged since, and
+    /// the objects counted as written with their graphic style, are given back, except those of the
+    /// definitions written since, and the images `lines` marks
     /// are emptied (the others keep their indices). An image whose whole copy is among them is no
     /// longer written whole ([`Self::whole_images`]).
     fn give_back(&mut self, c: Charges, lines: &str) {
         self.objects = c.objects + (self.definition_objects - c.kept_objects);
         self.symbol_nodes = c.symbol_nodes + (self.definition_symbol_nodes - c.kept_symbol_nodes);
+        self.styles.links_written = c.links + (self.definition_links - c.kept_links);
         let mut emptied = HashSet::new();
         for index in lines.split(PAYLOAD).skip(1).step_by(2) {
             if let Some((i, p)) = index.parse::<usize>().ok().and_then(|i| Some((i, self.payloads.get_mut(i)?))) {
@@ -675,12 +695,11 @@ impl<'a> Writer<'a> {
         if n.extras().graph.is_some() && !self.in_look && graph.is_none() {
             self.warn(GRAPHS);
         }
-        // On the layers or in an opacity mask's art, outside art cut to a clipping object: with its
-        // art style, when it has one.
+        // On the layers or in an opacity mask's art (a symbol's and a pattern tile's included),
+        // outside art cut to a clipping object: with its art style, when it has one.
         if !self.in_look
-            && ((self.hidden == 0 && self.nest == 0) || self.mask_level == Some((self.hidden, self.nest)))
+            && ((self.hidden == 0 && self.nest == 0 && !self.in_symbol) || self.mask_level == Some((self.hidden, self.nest)))
             && self.clip.is_none()
-            && !self.in_symbol
             && let Some(orig) = self.styled.get(&n.id).cloned()
             && self.check_left(&orig)
             && let Some(name) = self.object_style(n, &orig)

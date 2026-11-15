@@ -1446,6 +1446,11 @@
 	NTSC Colors	NTSC-kleuren
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-beleid:
+	CMYK Policy:	CMYK-beleid:
+	Preserve Embedded Profiles	Ingesloten profielen behouden
+	Convert to Working Space	Omzetten naar werkruimte
+	Preserve Numbers	Waarden behouden
 	CMYK	CMYK
 	Texture	Textuur
 	Craquelure…	Craquelure…
@@ -1945,6 +1950,7 @@ lighting	Light	Licht
 	Align to Artboard	Uitlijnen op tekengebied
 	Align to Glyph Bounds	Uitlijnen op glyphbegrenzing
 	Align to Key Object	Uitlijnen op sleutelobject
+	Align to Key Anchor	Uitlijnen op sleutelankerpunt
 	Align to Selection	Uitlijnen op selectie
 	Align To:	Uitlijnen op:
 	Cancel Key Object	Sleutelobject annuleren
@@ -2136,6 +2142,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Cijfers
 	Scale at Center	Schalen vanuit het midden
+	Delete Set	Set verwijderen
+	Direct Entry	Directe invoer
 	Up/Down:	Omhoog/omlaag:
 	Left/Right:	Links/rechts:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko omhoog/omlaag

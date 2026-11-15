@@ -5341,8 +5341,9 @@ fn add_image(s: &mut Session, r: &vectorcraft_trace::Raster, xf: Affine) -> Node
     .unwrap()
 }
 
+/// The traced paths of an Image Trace object: its children but the image and the seam fills.
 fn traced_paths(n: &Node) -> Vec<Arc<Node>> {
-    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).cloned().collect()
+    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_)) && c.name.as_deref() != Some("Seam Fills")).cloned().collect()
 }
 
 #[test]
@@ -5961,6 +5962,73 @@ fn image_trace_release_and_expand() {
     assert!(s.execute("imageTrace.release", &json!({})).is_err());
 }
 
+/// Abutting with Fills: the strokes along the edges the paths share sit in a "Seam Fills" group
+/// under the paths, in the lower path's color, and stay under them through Expand by color.
+#[test]
+fn image_trace_abutting_seam_fills_sit_under_the_paths() {
+    // Red beside blue, the edge between them anti-aliased.
+    let art = vectorcraft_trace::Raster::from_fn(40, 20, |x, _| {
+        let share = (16.4 - f64::from(x)).clamp(0.0, 1.0);
+        let mix = |a: f64, b: f64| (a * share + b * (1.0 - share)).round() as u8;
+        [mix(200.0, 30.0), mix(40.0, 90.0), mix(50.0, 200.0), 255]
+    });
+    let seams = |n: &Node| n.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Seam Fills")).cloned();
+    let made = |method: &str, cmd: &str, by_color: bool| {
+        let mut s = session();
+        let img = add_image(&mut s, &art, Affine::scale(2.0));
+        let params = json!({"mode": "color", "palette": "limited", "colors": 2, "method": method});
+        let mut p = json!({ "params": params });
+        if by_color {
+            p["byColor"] = json!(true);
+        }
+        let r = s.execute(cmd, &p).unwrap();
+        (s, img, r)
+    };
+    let (mut s, _, r) = made("abutting", "imageTrace.make", false);
+    assert_eq!(r["paths"], 2, "{r}");
+    let g = NodeId(r["id"].as_u64().unwrap());
+    let n = node(&s, g);
+    let kids = n.children().unwrap();
+    assert_eq!(kids.len(), 4, "the image, the seam fills and two paths");
+    assert!(matches!(kids[0].kind, NodeKind::Image(_)));
+    let group = seams(&n).unwrap();
+    assert!(Arc::ptr_eq(&group, &kids[1]), "the seam fills come under the paths");
+    let strokes = group.children().unwrap();
+    assert_eq!(strokes.len(), 1);
+    assert_eq!(strokes[0].appearance.fill_paint(), Paint::None);
+    let AppearanceItem::Stroke(layer) = &strokes[0].appearance.items[0] else { panic!("{:?}", strokes[0].appearance) };
+    assert_eq!((layer.cap, layer.join, layer.width), (LineCap::Butt, LineJoin::Round, 3.0), "1.5 image pixels, the image scaled 2×");
+    assert_eq!(layer.paint, kids[2].appearance.fill_paint(), "the lower path's color");
+    // The stroke runs along the edge, from the image's top to its bottom.
+    let bb = outline(&strokes[0]).0.bounds().unwrap();
+    assert!((bb.center().x - 32.8).abs() < 1.0 && bb.y0.abs() < 1e-9 && (bb.y1 - 40.0).abs() < 1e-9, "{bb:?}");
+    // Expand by color keeps the seam fills under the color groups, renamed too; Release gives the
+    // image back.
+    s.execute("layer.setProps", &json!({"id": group.id.0, "name": "Edges"})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+    let n = node(&s, g);
+    let names: Vec<_> = n.children().unwrap().iter().map(|c| c.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names.len(), 3, "{names:?}");
+    assert_eq!(names[0], "Edges", "{names:?}");
+    assert_eq!(n.children().unwrap()[0].id, group.id);
+    let (mut s, img, _) = made("abutting", "imageTrace.make", false);
+    assert_eq!(ids(&s.execute("imageTrace.release", &json!({})).unwrap()), vec![img]);
+    // Make and Expand by color too.
+    let (s, _, r) = made("abutting", "imageTrace.makeAndExpand", true);
+    let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert_eq!(n.children().unwrap()[0].name.as_deref(), Some("Seam Fills"));
+    // Overlapping paths are stacked: no seam fills.
+    let (s, _, r) = made("overlapping", "imageTrace.make", false);
+    assert!(seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).is_none());
+    // An image stretched 3× across and squeezed to half height: 1.5 pixels at the larger scale.
+    let mut s = session();
+    add_image(&mut s, &art, Affine::scale_non_uniform(3.0, 0.5));
+    let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
+    let group = seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).unwrap();
+    let AppearanceItem::Stroke(layer) = &group.children().unwrap()[0].appearance.items[0] else { panic!("{group:?}") };
+    assert!((layer.width - 4.5).abs() < 1e-9, "{}", layer.width);
+}
+
 /// Expand by color: each color's paths in a group of their own, named by the color, the groups
 /// stacked by the lowest path in each and the art drawn as before; Release to Layers then gives a
 /// sublayer for each color.
@@ -5995,7 +6063,11 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         };
         let (flat, fg) = expand(false);
         let (mut s, g) = expand(true);
-        let paths = node(&flat, fg).children().unwrap().clone();
+        let kids = node(&flat, fg).children().unwrap().clone();
+        // Abutting: the seam fills' group comes first, under every path, with byColor too.
+        let seams = usize::from(method == "abutting");
+        assert!(kids.iter().take(seams).all(|c| c.name.as_deref() == Some("Seam Fills")), "{method}");
+        let paths = kids[seams..].to_vec();
         // Without byColor (the default) the paths sit in the trace's group, with no group of their own.
         assert!(paths.iter().all(|p| !matches!(p.kind, NodeKind::Group { .. })), "{method}");
         let (default, dg) = {
@@ -6004,7 +6076,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
             let r = s.execute("imageTrace.makeAndExpand", &json!({"params": params})).unwrap();
             (s, NodeId(r["id"].as_u64().unwrap()))
         };
-        assert!(*node(&default, dg).children().unwrap() == paths, "{method}: byColor is false when not given");
+        assert!(*node(&default, dg).children().unwrap() == kids, "{method}: byColor is false when not given");
         // The colors in the order they first come in, bottom to top.
         let mut order: Vec<String> = vec![];
         for p in &paths {
@@ -6019,10 +6091,11 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         // Overlapping fills the ring whole and draws the field inside it above the ring: that path starts a second
         // group of the field's color, above the black one.
         let want: Vec<String> = if method == "overlapping" { order.iter().chain(order.first()).cloned().collect() } else { order.clone() };
-        assert_eq!(names(&n), want, "{method}");
+        assert_eq!(names(&n)[seams..], want, "{method}");
+        assert!(n.children().unwrap().iter().take(seams).all(|c| *c == kids[0]), "{method}: the seam fills stay as they are");
         // Each group holds its color's paths, and in turn they are the paths of the trace without
         // byColor, in their order.
-        let groups = n.children().unwrap();
+        let groups = &n.children().unwrap()[seams..];
         for c in groups {
             assert!(matches!(c.kind, NodeKind::Group { .. }), "{method}");
             assert!(c.children().unwrap().iter().all(|m| Some(hex(m)) == c.name), "{method}: {:?}", c.name);
@@ -6033,8 +6106,8 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         // Release to Layers: a sublayer for each color, in the same order.
         let r = s.execute("layer.releaseToLayers", &json!({"id": g.0})).unwrap();
         let subs = ids(&r);
-        assert_eq!(subs.len(), want.len(), "{method}");
-        for (sub, name) in subs.iter().zip(&want) {
+        assert_eq!(subs.len(), seams + want.len(), "{method}");
+        for (sub, name) in subs[seams..].iter().zip(&want) {
             let l = node(&s, *sub);
             assert!(matches!(l.kind, NodeKind::Layer { .. }), "{method}");
             assert_eq!(names(&l), std::slice::from_ref(name), "{method}");
@@ -6051,7 +6124,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
     let mut got = names(&node(&s, g));
     got.sort();
-    assert_eq!(got, ["#000000", "#c82832", "#f0f0dc"]);
+    assert_eq!(got, ["#000000", "#c82832", "#f0f0dc", "Seam Fills"]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
 
@@ -6086,7 +6159,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     });
     add_image(&mut s, &stripes, Affine::IDENTITY);
     let g = NodeId(s.execute("imageTrace.make", &json!({"params": grouped})).unwrap()["id"].as_u64().unwrap());
-    assert!(node(&s, g).children().unwrap().iter().all(|c| !matches!(c.kind, NodeKind::Group { .. })));
+    assert!(traced_paths(&node(&s, g)).iter().all(|c| !matches!(c.kind, NodeKind::Group { .. })));
     let e = s.execute("imageTrace.expand", &json!({"byColor": true})).unwrap_err().to_string();
     assert!(e.contains("Auto Grouping"), "{e}");
     assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
@@ -6103,8 +6176,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     add_image(&mut s, &r, Affine::IDENTITY);
     let limited = json!({"mode": "color", "palette": "limited", "colors": 3});
     let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
-    let paths: Vec<(u64, String)> =
-        node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).map(|c| (c.id.0, hex(c))).collect();
+    let paths: Vec<(u64, String)> = traced_paths(&node(&s, g)).iter().map(|c| (c.id.0, hex(c))).collect();
     let mut colors: Vec<&str> = paths.iter().map(|(_, h)| h.as_str()).collect();
     colors.sort();
     colors.dedup();
@@ -6116,14 +6188,14 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
     let mut got = names(&node(&s, g));
     got.sort();
-    assert_eq!(got, ["#28a03c", "Ink", "Sky 50%"]);
+    assert_eq!(got, ["#28a03c", "Ink", "Seam Fills", "Sky 50%"]);
     // A swatch named as another color's #rrggbb still gets a group of its own.
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("swatch.edit", &json!({"name": "Ink", "newName": "#28a03c"})).unwrap();
     s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
     let mut got = names(&node(&s, g));
     got.sort();
-    assert_eq!(got, ["#28a03c", "#28a03c", "Sky 50%"]);
+    assert_eq!(got, ["#28a03c", "#28a03c", "Seam Fills", "Sky 50%"]);
 
     // Gradient fills share one group, and a stroked line goes by its stroke.
     let ramp = vectorcraft_trace::Raster::from_fn(100, 60, |x, _| {
@@ -6192,7 +6264,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         add_image(&mut s, &stripes, Affine::IDENTITY);
         let limited = json!({"mode": "color", "palette": "limited", "colors": 3, "method": "abutting"});
         let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
-        let paths: Vec<Arc<Node>> = node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).cloned().collect();
+        let paths = traced_paths(&node(&s, g));
         assert_eq!(paths.len(), 3);
         let (first, middle, last) = (&paths[0], &paths[1], &paths[2]);
         s.execute("paint.setFill", &json!({"ids": [last.id.0], "color": hex(first)})).unwrap();
@@ -6220,7 +6292,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     for how in ["move", "transform", "shadow", "beside"] {
         let (flat, _) = edited(false, how);
         let (s, g) = edited(true, how);
-        assert_eq!(names(&node(&s, g)).len(), 3, "{how}");
+        assert_eq!(names(&node(&s, g)).len(), 4, "{how}: the seam fills and three colors");
         assert!(shot(&s) == shot(&flat), "{how}: the edited art changed");
     }
 
@@ -6230,14 +6302,14 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     add_image(&mut s, &stripes, Affine::IDENTITY);
     let limited = json!({"mode": "color", "palette": "limited", "colors": 3});
     let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
-    let paths: Vec<u64> = node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).map(|c| c.id.0).collect();
+    let paths: Vec<u64> = traced_paths(&node(&s, g)).iter().map(|c| c.id.0).collect();
     assert_eq!(paths.len(), 3);
     s.execute("paint.setFill", &json!({"ids": [paths[0]], "swatch": "Sky", "tint": 50.1})).unwrap();
     s.execute("paint.setFill", &json!({"ids": [paths[1], paths[2]], "swatch": "Sky", "tint": 50.4})).unwrap();
     s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
     let groups = node(&s, g).children().unwrap().clone();
-    assert_eq!(names(&node(&s, g)), ["Sky 50%", "Sky 50%"]);
-    assert_eq!(groups.iter().map(|c| c.children().unwrap().len()).collect::<Vec<_>>(), [1, 2]);
+    assert_eq!(names(&node(&s, g)), ["Seam Fills", "Sky 50%", "Sky 50%"]);
+    assert_eq!(groups.iter().skip(1).map(|c| c.children().unwrap().len()).collect::<Vec<_>>(), [1, 2]);
 }
 
 #[test]
@@ -6289,7 +6361,7 @@ fn image_trace_make_and_expand_and_color_presets() {
     assert_eq!(res["paths"], 4);
     let g = node(&s, NodeId(res["id"].as_u64().unwrap()));
     assert!(g.name.is_none());
-    assert_eq!(g.children().unwrap().len(), 4);
+    assert_eq!(traced_paths(&g).len(), 4);
     assert!(s.execute("imageTrace.make", &json!({"preset": "No Such Preset"})).is_err());
     assert!(s.execute("imageTrace.make", &json!({"params": {"mode": "rainbow"}})).is_err());
 }

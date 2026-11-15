@@ -242,6 +242,7 @@
 	Align to Artboard	Alinea al tauler
 	Align to Glyph Bounds	Alinea als límits del glif
 	Align to Key Object	Alinea a l’objecte clau
+	Align to Key Anchor	Alinea al punt d’ancoratge clau
 	Align to Page	Alinea a la pàgina
 	Align to Path	Alinea al traçat
 	Align to Selection	Alinea a la selecció
@@ -764,6 +765,11 @@ antiAlias	Sharp	Nítid
 	CMYK Equivalents	Equivalents CMYK
 	CMYK profile in effect	Perfil CMYK en vigor
 	CMYK:	CMYK:
+	RGB Policy:	Política RGB:
+	CMYK Policy:	Política CMYK:
+	Preserve Embedded Profiles	Conserva els perfils incrustats
+	Convert to Working Space	Converteix a l'espai de treball
+	Preserve Numbers	Conserva els números
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
 	Collapse Panels to Icons	Replega els panells a icones
@@ -4772,6 +4778,8 @@ digits	Malayalam	Malaiàlam
 	Kana	Kana
 	Numerals	Xifres
 	Scale at Center	Escala des del centre
+	Delete Set	Suprimeix el joc
+	Direct Entry	Entrada directa
 	Up/Down:	Amunt/avall:
 	Left/Right:	Esquerra/dreta:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko amunt/avall

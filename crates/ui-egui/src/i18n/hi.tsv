@@ -283,6 +283,7 @@
 	Align to Corners and Ends	कोनों और सिरों पर संरेखित करें
 	Align to Glyph Bounds	ग्लिफ़ की सीमाओं पर संरेखित करें
 	Align to Key Object	मुख्य ऑब्जेक्ट पर संरेखित करें
+	Align to Key Anchor	मुख्य एंकर पॉइंट पर संरेखित करें
 	Align to Page	पेज पर संरेखित करें
 	Align to Path	पाथ पर संरेखित करें
 	Align to Selection	सिलेक्शन पर संरेखित करें
@@ -891,6 +892,11 @@ antiAlias	Sharp	शार्प
 	CMYK Images	CMYK इमेज
 	CMYK profile in effect	इफ़ेक्ट में CMYK प्रोफ़ाइल
 	CMYK:	CMYK:
+	RGB Policy:	RGB नीति:
+	CMYK Policy:	CMYK नीति:
+	Preserve Embedded Profiles	एम्बेड की गई प्रोफ़ाइल बनाए रखें
+	Convert to Working Space	वर्किंग स्पेस में बदलें
+	Preserve Numbers	संख्याएँ बनाए रखें
 	Coarse Dots	मोटे बिंदु
 	Coincidence:	संयोग:
 	Collapse Panel Group	पैनल समूह संक्षिप्त करें
@@ -5157,6 +5163,8 @@ antiAlias	Sharp	शार्प
 	Kana	काना
 	Numerals	अंक
 	Scale at Center	केंद्र से आकार बदलें
+	Delete Set	सेट हटाएँ
+	Direct Entry	सीधी प्रविष्टि
 	Technical Drawing	तकनीकी ड्राइंग
 	Telugu	तेलुगु
 	Temperature	तापमान
