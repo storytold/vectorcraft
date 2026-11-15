@@ -19,13 +19,12 @@ vello_cpu = { workspace = true }
 # Filter types (Gaussian blur, drop shadow) are not re-exported by vello_cpu 0.2.
 vello_common = { version = "0.2", default-features = false }
 image = { workspace = true }
+craft-image-codecs = { workspace = true }
 flate2 = { workspace = true }
 jpeg-encoder = { workspace = true }
 gif = { workspace = true }
 # TIFF LZW compression (MIT OR Apache-2.0; already used by the image crate's TIFF reader).
 weezl = "0.2"
-# PNG rows read one at a time (MIT OR Apache-2.0; already used by the image crate's PNG reader).
-png = "0.18"
 log = { workspace = true }
 # Combining marks inside a lam-alef cluster (MIT OR Apache-2.0; already used by vectorcraft-text).
 unicode-general-category = "1"
@@ -47,8 +46,7 @@ vectorcraft-plugins = { workspace = true }
 wat = { workspace = true }
 # Decoders the export tests read their files back with.
 image = { workspace = true, features = ["tga"] }
-tiff = "0.11"
-# Reads the PSD exports back (MIT OR Apache-2.0).
-psd = "0.3"
+craft-tiff = { workspace = true }
+craft-psd = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }

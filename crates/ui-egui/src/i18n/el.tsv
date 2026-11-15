@@ -1353,6 +1353,8 @@ font-technology	Variable	Μεταβλητές
 	Graph	Γράφημα
 	Graph Data	Δεδομένα γραφήματος
 	Graph Type	Τύπος γραφήματος
+	Graph Type…	Τύπος γραφήματος…
+	Graph Data…	Δεδομένα γραφήματος…
 	Graph Options	Επιλογές γραφήματος
 	Left Axis	Αριστερός άξονας
 	Right Axis	Δεξιός άξονας
@@ -1468,6 +1470,7 @@ font-technology	Variable	Μεταβλητές
 	Show smooth color wheel	Εμφάνιση ομαλού χρωματικού τροχού
 	Show segmented color wheel	Εμφάνιση τμηματοποιημένου χρωματικού τροχού
 	Show color bars	Εμφάνιση χρωματικών ράβδων
+	Find the selected colors in the artwork	Εύρεση των επιλεγμένων χρωμάτων στο σχέδιο
 	Harmony Sets	Σύνολα χρωματικής αρμονίας
 	Height	Ύψος
 	Height:	Ύψος:
@@ -2726,6 +2729,7 @@ effect	Soft	Απαλό
 	Change Panel Layout	Αλλαγή διάταξης πάνελ
 	Close Panel	Κλείσιμο πάνελ
 	Collapse Panel Group	Σύμπτυξη ομάδας πάνελ
+	Cycle Display Sizes	Εναλλαγή μεγεθών εμφάνισης
 	Move Panel	Μετακίνηση πάνελ
 	Group with	Ομαδοποίηση με
 	Resize panels	Αλλαγή μεγέθους πάνελ
@@ -3500,6 +3504,8 @@ theme	Appearance	Εμφάνιση
 	Insert Aki Left	Εισαγωγή aki αριστερά
 	Insert Aki Right	Εισαγωγή aki δεξιά
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Προσαρμογή οριζόντιας θέσης διακριτικών
+	Adjust Vertical Diacritic Position	Προσαρμογή κατακόρυφης θέσης διακριτικών
 	Arabic	Αραβικά
 	Hindi	Χίντι
 	Farsi	Περσικά
@@ -5084,6 +5090,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown option `{path}.{k}`	άγνωστη επιλογή `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	άγνωστη επιλογή υπερεκτύπωσης `{o}` (preserve, simulate ή discard)
 @msg	unknown panel `{raw}`	άγνωστος πίνακας `{raw}`
+@msg	`{panel}` has no display sizes to cycle	ο πίνακας `{panel}` δεν έχει μεγέθη εμφάνισης για εναλλαγή
+@msg	the panels are not shown	οι πίνακες δεν εμφανίζονται
 @msg	panels can't be shown in Presentation Mode	τα πλαίσια δεν μπορούν να εμφανιστούν στη λειτουργία παρουσίασης
 @msg	unknown preference `{key}`	άγνωστη προτίμηση `{key}`
 @msg	Preferences imported.	Οι προτιμήσεις εισήχθησαν.
@@ -5434,6 +5442,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Step up or down	Ένα βήμα πάνω ή κάτω
 	Drag values or labels. Double-click a value to type.	Σύρετε τιμές ή ετικέτες. Κάντε διπλό κλικ σε μια τιμή για πληκτρολόγηση.
 	Drag rings to rotate. Shift snaps to 15°.	Σύρετε τους δακτυλίους για περιστροφή. Με Shift γίνεται προσκόλληση ανά 15°.
+	Track cube	Κύβος περιστροφής
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Σύρετε μια έδρα, μια ακμή ή τον δακτύλιο για περιστροφή. Με Shift η περιστροφή γίνεται γύρω από έναν άξονα της οθόνης.
 	Drag the light, or its rings. Shift snaps to 15°.	Σύρετε την πηγή φωτός ή τους δακτυλίους της. Με Shift γίνεται προσκόλληση ανά 15°.
 	Keep visible surfaces only when expanding	Διατήρηση μόνο ορατών επιφανειών κατά την ανάπτυξη
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Αποκοπή καλυμμένης γεωμετρίας κατά την Ανάπτυξη εμφάνισης. Η ζωντανή προεπισκόπηση διατηρεί ολόκληρη την επιφάνεια. Διαφανή γεμίσματα και επιφάνειες που υπερβαίνουν τα όρια ορατότητας διατηρούν όλες τις έδρες.
@@ -6156,6 +6166,7 @@ effect	Points	Σημεία
 	Export Data Sets…	Εξαγωγή συνόλων δεδομένων…
 	Load Variable Library…	Φόρτωση βιβλιοθήκης μεταβλητών…
 	Save Variable Library…	Αποθήκευση βιβλιοθήκης μεταβλητών…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	Η «Εισαγωγή» διαβάζει αρχείο προέλευσης δεδομένων με κατάληξη .csv, .tsv, .txt ή .xml
 @msg	a variable library holds text variables, and the document has none	μια βιβλιοθήκη μεταβλητών περιέχει μεταβλητές κειμένου και το έγγραφο δεν έχει καμία
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	η μεταβλητή `{name}` δεν μπορεί να αποθηκευτεί σε βιβλιοθήκη μεταβλητών: μετονομάστε την ώστε να ξεκινά με γράμμα ή `_`, χωρίς κενά ή σύμβολα εκτός από `-`, `_` και `.`
 @msg	{k} has control characters	{k} περιέχει χαρακτήρες ελέγχου
@@ -7533,6 +7544,19 @@ breakText	Glyphs	Γλύφοι
 	Not Aligned to Pixel Grid	Μη στοιχισμένα στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
 @msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`
+@msg	side is left or right, not `{v}`	το side είναι left ή right, όχι `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	το order είναι ακέραιος αριθμός από 0 έως {others}, όχι `{v}`
+@msg	toolbar (a toolbar's name) must be a string	το toolbar (το όνομα μιας γραμμής εργαλείων) πρέπει να είναι συμβολοσειρά
+@msg	no toolbar named `{name}`	δεν υπάρχει γραμμή εργαλείων με όνομα `{name}`
+@msg	toolbar name can't be empty	το όνομα της γραμμής εργαλείων δεν μπορεί να είναι κενό
+@msg	a toolbar name has at most {MAX_NAME} characters	ένα όνομα γραμμής εργαλείων έχει το πολύ {MAX_NAME} χαρακτήρες
+@msg	there is already a toolbar named `{name}`	υπάρχει ήδη γραμμή εργαλείων με όνομα `{name}`
+@msg	there is already a toolbar named `{to}`	υπάρχει ήδη γραμμή εργαλείων με όνομα `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	ένας χώρος εργασίας κρατά το πολύ {MAX} γραμμές εργαλείων
+@msg	name (a toolbar's name) must be a string	το name (το όνομα μιας γραμμής εργαλείων) πρέπει να είναι συμβολοσειρά
+@msg	name (a toolbar's name) is required	απαιτείται το name (το όνομα μιας γραμμής εργαλείων)
+@msg	to (the new name) is required	απαιτείται το to (το νέο όνομα)
+@msg	name must be a toolbar's name	το name πρέπει να είναι όνομα γραμμής εργαλείων
 	Ignore All	Παράβλεψη όλων
 	Add to Dictionary	Προσθήκη στο λεξικό
 	No Suggestions	Καμία πρόταση
@@ -7746,4 +7770,21 @@ breakText	Glyphs	Γλύφοι
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για JPEG (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για Targa (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	τα {w} × {h} εικονοστοιχεία είναι υπερβολικό μέγεθος για PSD (το πολύ {MAX_SIDE} εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+	Packaging Tools	Εργαλεία συσκευασίας
+	Fold Lines	Γραμμές δίπλωσης
+	Make Cut Line	Δημιουργία γραμμής κοπής
+	Make Crease Line	Δημιουργία γραμμής πτύχωσης
+	Make Partial Cut Line	Δημιουργία γραμμής μερικής κοπής
+	Make Perforation Line	Δημιουργία γραμμής διάτρησης
+	Make Fold Line	Δημιουργία γραμμής δίπλωσης
+	Role Swatches…	Δείγματα χρωμάτων τύπων γραμμής…
+	Role Swatches	Δείγματα χρωμάτων τύπων γραμμής
+	Role	Τύπος γραμμής
+	Cut Line	Γραμμή κοπής
+	Crease Line	Γραμμή πτύχωσης
+	Partial Cut Line	Γραμμή μερικής κοπής
+	Perforation Line	Γραμμή διάτρησης
+	No objects are selected.	Δεν έχουν επιλεγεί αντικείμενα.
+	Open a document to mark its fold lines.	Ανοίξτε ένα έγγραφο για να σημειώσετε τις γραμμές δίπλωσής του.
+	Remove Fold Line Role	Αφαίρεση τύπου γραμμής
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"

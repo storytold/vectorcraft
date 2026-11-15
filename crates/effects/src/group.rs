@@ -853,7 +853,11 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     if !fx.is_empty() {
         m = crate::reshape::outlined_members(doc, &m);
-        members_as_drawn(doc, &mut m);
+        {
+            // The members' raster effects then follow the group's own Transform effects as well.
+            let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
+            members_as_drawn(doc, &mut m);
+        }
         let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
         // The group's own fills and strokes paint the members as a whole: their gradients follow
         // the effects as the members' do.

@@ -1357,6 +1357,8 @@ font-technology	Variable	Değişken
 	Graph	Grafik
 	Graph Data	Grafik Verileri
 	Graph Type	Grafik Türü
+	Graph Type…	Grafik Türü…
+	Graph Data…	Grafik Verileri…
 	Graph Options	Grafik Seçenekleri
 	Left Axis	Sol Eksen
 	Right Axis	Sağ Eksen
@@ -1461,6 +1463,7 @@ font-technology	Variable	Değişken
 	Show smooth color wheel	Kesintisiz renk tekerleğini göster
 	Show segmented color wheel	Bölümlü renk tekerleğini göster
 	Show color bars	Renk çubuklarını göster
+	Find the selected colors in the artwork	Seçili renkleri resimde bul
 	Harmony Sets	Armoni Setleri
 	Height	Yükseklik
 	Height:	Yükseklik:
@@ -2501,6 +2504,8 @@ shape	Open	Açık
 	Insert Aki Left	Sola Aki Ekle
 	Insert Aki Right	Sağa Aki Ekle
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Yatay Aksan İşareti Konumunu Ayarla
+	Adjust Vertical Diacritic Position	Dikey Aksan İşareti Konumunu Ayarla
 	Digits	Rakamlar
 	Arabic	Arapça
 	Hindi	Hintçe
@@ -4878,6 +4883,8 @@ axis	Both	Her İkisi
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (preserve, simulate veya discard)
 @msg	unknown panel `{raw}`	bilinmeyen panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` panelinde geçiş yapılacak görüntü boyutu yok
+@msg	the panels are not shown	paneller gösterilmiyor
 @msg	panels can't be shown in Presentation Mode	Sunum Modunda paneller gösterilemez
 @msg	unknown preference `{key}`	bilinmeyen tercih `{key}`
 @msg	Preferences imported.	Tercihler içe aktarıldı.
@@ -5330,6 +5337,8 @@ effect	Soft	Yumuşak
 	Reset all Revolve settings to their defaults.	Tüm Revolve ayarlarını varsayılan değerlerine sıfırlayın.
 	Drag values or labels. Double-click a value to type.	Değerleri veya etiketleri sürükleyin. Yazmak için bir değeri çift tıklayın.
 	Drag rings to rotate. Shift snaps to 15°.	Döndürmek için halkaları sürükleyin. Kaydırma 15°'ye sabitlenir.
+	Track cube	Döndürme küpü
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Döndürmek için bir yüzü, kenarı veya halkayı sürükleyin. Shift tek bir ekran ekseni etrafında döndürür.
 	Drag the light, or its rings. Shift snaps to 15°.	Işığı veya halkalarını sürükleyin. Kaydırma 15°'ye sabitlenir.
 	Keep visible surfaces only when expanding	Görünür yüzeyleri yalnızca genişletirken koruyun
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Görünümü Genişlet'te kapsanan geometriyi kırpın. Canlı önizleme tüm yüzeyi korur. Şeffaf boyalar ve görünürlük sınırlarını aşan yüzeyler tüm yüzleri korur.
@@ -6393,6 +6402,7 @@ theme	Appearance	Görünüm
 	Kashidas	Keşide
 	Load Variable Library…	Değişken Kitaplığı Yükle…
 	Save Variable Library…	Değişken Kitaplığını Kaydet…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"İthalat" uzantısı .csv, .tsv, .txt veya .xml olan bir veri kaynağı dosyasını okur
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	`{name}` değişkeni değişken kitaplığına kaydedilemiyor: adını bir harf veya `_` ile başlayacak, boşluk ya da `-`, `_` ve `.` dışında simge içermeyecek şekilde değiştirin
 @msg	{k} has control characters	{k} denetim karakterleri içeriyor
@@ -6489,6 +6499,7 @@ theme	Appearance	Görünüm
 @msg	a new document refuses this file because of these variables: {names}	yeni bir belge bu değişkenler nedeniyle bu dosyayı reddeder: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` için `{header}` başlığı `{other}` değişkeni olarak okunur: birini yeniden adlandırın
 	Collapse Panel Group	Panel Grubunu Daralt
+	Cycle Display Sizes	Görüntü Boyutları Arasında Geçiş Yap
 @msg	panel is not in a dock group	panel bir yuva grubunda değil
 @msg	only a dock group above or below others collapses, not one beside another	yalnızca diğerlerinin üstünde veya altındaki bir yuva grubu daraltılabilir, yanındaki değil
 @msg	icon must be true or false	icon true veya false olmalı
@@ -9547,3 +9558,20 @@ breakText	Glyphs	Glifler
 	Nest Shapes…	Şekilleri yerleştir…
 	Nest Shapes	Şekilleri yerleştir
 	Roll	Rulo
+	Packaging Tools	Ambalaj Araçları
+	Fold Lines	Katlama Çizgileri
+	Make Cut Line	Kesim Çizgisi Yap
+	Make Crease Line	Pilyaj Çizgisi Yap
+	Make Partial Cut Line	Yarım Kesim Çizgisi Yap
+	Make Perforation Line	Perforaj Çizgisi Yap
+	Make Fold Line	Katlama Çizgisi Yap
+	Role Swatches…	Çizgi Türü Renk Örnekleri…
+	Role Swatches	Çizgi Türü Renk Örnekleri
+	Role	Çizgi türü
+	Cut Line	Kesim çizgisi
+	Crease Line	Pilyaj çizgisi
+	Partial Cut Line	Yarım kesim çizgisi
+	Perforation Line	Perforaj çizgisi
+	No objects are selected.	Hiçbir nesne seçili değil.
+	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
+	Remove Fold Line Role	Çizgi Türünü Kaldır
