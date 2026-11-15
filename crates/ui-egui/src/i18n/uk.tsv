@@ -1080,7 +1080,8 @@ font-technology	Variable	Варіативні
 	Every (minutes)	Кожен (хвилин)
 	Every option is at its default.	Усі параметри мають значення за промовчанням.
 	Every option matches {base}.	Усі параметри збігаються з {base}.
-	Every-line Composer	Компонувальник всіх рядків
+	Middle Eastern & South Asian Every-line Composer	Компонувальник всіх рядків (Близький Схід і Південна Азія)
+	Standard Every-line Composer	Стандартний компонувальник всіх рядків
 	Exact dash lengths	Точна довжина штрихів
 	Exceptions (comma separated)	Винятки (через кому)
 	Exclude	Виключити
@@ -1417,6 +1418,14 @@ file-filter	Templates	Шаблони
 	Previous Artboard	Попередня монтажна область
 	Next Artboard	Наступна монтажна область
 	Last Artboard	Остання монтажна область
+	Status Bar Show	Показ у рядку стану
+	Artboard Name	Назва монтажної області
+	Current Tool	Поточний інструмент
+	Date and Time	Дата й час
+	Number of Undos	Кількість скасувань
+	Document Color Profile	Колірний профіль документа
+	Undos	Скасування
+	Redos	Повтори
 	Go To Link	Перейти за посиланням
 	GPL palettes keep solid colours only, as RGB.	Палітри GPL зберігають лише суцільні кольори RGB.
 	GPU Performance	Продуктивність GPU
@@ -3490,7 +3499,8 @@ digits	Malayalam	Малаялам
 	Single Left Quotation Mark	Одинарна лапка, що відкриває
 	Single Quotes:	Одинарні лапки:
 	Single Right Quotation Mark	Одинарна лапка, що закриває
-	Single-line Composer	Однорядковий компонувальник
+	Middle Eastern & South Asian Single-line Composer	Однорядковий компонувальник (Близький Схід і Південна Азія)
+	Standard Single-line Composer	Стандартний однорядковий компонувальник
 	Toggle Line Composer	Переключити компонувальник рядків
 	Sixth Space	Шоста шпація
 	Size	Розмір
@@ -7983,7 +7993,7 @@ breakText	Glyphs	Гліфи
 @msg	column: true floats the whole column and takes no onto, above or below	column: true робить плаваючим увесь стовпець і не приймає onto, above або below
 @msg	command must be a shape.* command	command має бути командою shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: відсутній `command`
-@msg	composer must be "singleLine" or "everyLine"	composer має бути "singleLine" або "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer має бути "singleLine", "everyLine", "standardSingleLine" або "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	складені фігури приймають контури, складені контури, групи, складені фігури, текст, переходи й оболонки
 @msg	compound {_1} must contain exactly one open path to join	складений об’єкт {_1} має містити рівно один відкритий контур для з’єднання
 @msg	connect needs a path other than the one extended	для connect потрібен контур, відмінний від того, що продовжується
