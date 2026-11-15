@@ -8229,7 +8229,12 @@ breakText	Glyphs	字形
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel 必须是 {own} (文档的模式)、grayscale 或 bitmap
 @msg	colour groups can't go into colour groups	颜色组不能放入颜色组
 @msg	colour, mode and spot apply to solid-colour swatches only	colour、mode 和 spot 只适用于纯色色板
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	第 {column} 列：`{cell}` 是图表数据文件的 `%` 列，不会读取
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	第 {line} 行，第 {column} 列：`{var}` 的图表数据文件 `{path}` 是相对路径：请提供 `base` 或绝对路径
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	第 {line} 行，第 {column} 列：无法读取 `{var}` 的图表数据文件：{e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	第 {line} 行，第 {column} 列：`{var}` 的图表数据文件 `{path}` 超过 {MAX_GRAPH_DATA_FILE} 字节
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	第 {line} 行，第 {column} 列：`{var}` 的图表数据文件 `{path}` 得到的图表值超过 {MAX_GRAPH_CSV} 字节
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	第 {line} 行，第 {column} 列：图表数据文件总计超过 {MAX_GRAPH_FILES_TOTAL} 字节
+@msg	`base` is empty	`base` 为空
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	第 {column} 列：`{cell}` 指定了 `{name}`，而它是 {_1} 变量
 @msg	column {column}: `{cell}` names no variable	第 {column} 列：`{cell}` 没有对应的变量
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	第 {column} 列：变量名称超过 {MAX_NAME} 个字符

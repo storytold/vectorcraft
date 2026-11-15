@@ -8335,7 +8335,12 @@ swatch	Yellow Green	Verde-amarelado
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel deve ser {own} (o modo do documento), grayscale ou bitmap
 @msg	colour groups can't go into colour groups	grupos de cores não podem ficar dentro de grupos de cores
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode e spot se aplicam somente a amostras de cor sólida
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	coluna {column}: `{cell}` é uma coluna `%` de arquivos de dados de gráfico, que não são lidos
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	linha {line}, coluna {column}: o arquivo de dados de gráfico `{path}` de `{var}` é um caminho relativo: informe `base` ou um caminho absoluto
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	linha {line}, coluna {column}: não é possível ler o arquivo de dados de gráfico de `{var}`: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	linha {line}, coluna {column}: o arquivo de dados de gráfico `{path}` de `{var}` tem mais de {MAX_GRAPH_DATA_FILE} bytes
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	linha {line}, coluna {column}: o arquivo de dados de gráfico `{path}` de `{var}` gera um valor de gráfico com mais de {MAX_GRAPH_CSV} bytes
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	linha {line}, coluna {column}: os arquivos de dados de gráfico têm mais de {MAX_GRAPH_FILES_TOTAL} bytes no total
+@msg	`base` is empty	`base` está vazio
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	coluna {column}: `{cell}` indica `{name}`, que é uma variável de {_1}
 @msg	column {column}: `{cell}` names no variable	coluna {column}: `{cell}` não indica nenhuma variável
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	coluna {column}: o nome da variável tem mais de {MAX_NAME} caracteres

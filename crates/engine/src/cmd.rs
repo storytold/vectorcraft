@@ -896,6 +896,10 @@ pub use brushsym::reset_transformation_changes;
 /// Data window reads files by it too).
 pub use variablecmds::utf16_order_without_mark;
 
+/// How the Graph Data window's Import Data and Import Data Sets' `%` columns read a graph data
+/// file: its size limit, its text, its cells and the data `graph.setData` takes from them.
+pub use graph::{MAX_GRAPH_DATA_FILE, graph_cell_text, graph_data_from_grid, graph_data_text, graph_grid_from_text};
+
 /// Command ids kept only so older scripts keep working: `(alias, the command it duplicates)`.
 /// They run as before but the command palette leaves them out (it lists the command once).
 pub const ALIASES: &[(&str, &str)] = &[("object.convertDocumentColorMode", "file.documentColorMode")];

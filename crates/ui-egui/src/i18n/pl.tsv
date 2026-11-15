@@ -8243,7 +8243,12 @@ breakText	Glyphs	Glify
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel musi mieć wartość {own} (tryb dokumentu), grayscale lub bitmap
 @msg	colour groups can't go into colour groups	grup kolorów nie można umieszczać w grupach kolorów
 @msg	colour, mode and spot apply to solid-colour swatches only	color, mode i spot dotyczą tylko próbek kolorów jednolitych
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	kolumna {column}: `{cell}` to kolumna `%` plików danych wykresu, które nie są odczytywane
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	wiersz {line}, kolumna {column}: plik danych wykresu `{path}` dla `{var}` ma ścieżkę względną: podaj `base` albo ścieżkę bezwzględną
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	wiersz {line}, kolumna {column}: nie można odczytać pliku danych wykresu dla `{var}`: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	wiersz {line}, kolumna {column}: plik danych wykresu `{path}` dla `{var}` jest większy niż {MAX_GRAPH_DATA_FILE} bajtów
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	wiersz {line}, kolumna {column}: plik danych wykresu `{path}` dla `{var}` daje wartość wykresu dłuższą niż {MAX_GRAPH_CSV} bajtów
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	wiersz {line}, kolumna {column}: pliki danych wykresu zawierają łącznie ponad {MAX_GRAPH_FILES_TOTAL} bajtów
+@msg	`base` is empty	`base` jest puste
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	kolumna {column}: `{cell}` wskazuje `{name}`, czyli zmienną typu {_1}
 @msg	column {column}: `{cell}` names no variable	kolumna {column}: `{cell}` nie wskazuje żadnej zmiennej
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	kolumna {column}: nazwa zmiennej ma więcej niż {MAX_NAME} znaków

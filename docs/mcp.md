@@ -3329,7 +3329,7 @@ already walks Image Trace. Short agent entry points:
 - Data sets: `dataset.list`, `dataset.new {name, values?}`, `dataset.set {name, newName?, values?}` (`newName` also
   renames the row, in the same undo step; Edit Data Set's Name field sends it), `dataset.rename`,
   `dataset.delete`, `dataset.capture`, `dataset.update`, `dataset.select {name}`, `dataset.next` /
-  `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv}` /
+  `dataset.prev` (each `dataset.select` / next / prev is one undo step over every bound object), `dataset.import {path|data|dataBase64|csv, base?}` /
   `dataset.export {path?}` (CSV: one column per variable, and no column of data set names). `dataset.import` also
   reads tab-separated files. Every header cell is a variable, whatever its case (`name` and `Name` included). The
   first row holds the field names, as the
@@ -3337,16 +3337,29 @@ already walks Image Trace. Short agent entry points:
   describes. The rows replace every data set of the document and are named `Data Set 1`, `Data Set 2` and so on, in file order;
   the document's variables and their bindings stay, and the reply's `deletedDataSets` lists the data sets that were replaced. An import error
   about a row's values gives the file line the row starts on. A header cell that names no variable defines one, unbound, in the same undo step as the
-  rows. `#Shown` defines a visibility variable `Shown`, `@Photo` defines an image variable `Photo`, and a cell without
-  a prefix defines a text variable. `dataset.export` writes a visibility variable's header as `#Shown` and an image
-  variable's as `@Photo`, and a text or graph variable's as its name alone. Its reply's `warning` names the variables
-  whose header or values make an import into a document without them refuse the file (a `%` header, a `#` header
-  whose values aren't true or false). Otherwise it names the variables that such an import does not read back with
-  their kind: text variables whose names start with `#` or `@`, and graph variables. Export is refused, naming both variables, when a variable's header is
-  another variable's name (a visibility variable `Show` next to a text variable `#Show`). A prefixed cell whose name
-  is already a variable of the prefix's kind names it;
-  one whose name is a variable of another kind fails the import. A `%` cell that isn't a variable's exact name (graph
-  data files) is refused, and so are two cells that name one variable (`City` twice, or `Shown` and `#Shown`). The
+  rows. `#Shown` defines a visibility variable `Shown`, `@Photo` defines an image variable `Photo`, `%Sales` defines a
+  graph variable `Sales`, and a cell without a prefix defines a text variable. The cells of a `%` column are paths of
+  graph data files, as the set-up page's example shows. Each file is read as the Graph Data window's Import Data reads
+  one ([add graph data](https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/visualize-data/add-graph-data.html)):
+  at most 1 MB; tab-separated when any line holds a tab, else comma-separated; the first row holds the series labels
+  and the first column the category labels; UTF-16 by the rule below, else UTF-8. The data becomes the data set's
+  graph value, which `dataset.select` applies as `graph.setData` applies it, so the graph gets the data that Import
+  Data and Apply give it. A relative path is taken from `dataset.import`'s `base` folder, else from the folder of the
+  CSV file at `path`; with neither (`csv`, `data` or `dataBase64` and no `base`), it fails the import. This is
+  VectorCraft's own rule. A file that is missing, can't be read or is larger than 1 MB, a file that gives a graph value
+  longer than 256 KB, and `%` columns whose files and graph values hold more than 256 MB in all fail the import with
+  the line and the column, and the document is left as it was. Each file is read once per import, however many cells
+  name it, and counts once toward the 256 MB; each cell's graph value counts every time. `dataset.export` writes a
+  visibility variable's header as `#Shown` and an image variable's as `@Photo`, and a text or graph variable's as its
+  name alone. Its reply's `warning` names the variables whose header or values make an import into a document without
+  them refuse the file (a `%` header over values, which such an import reads as file paths, and a `#` header whose
+  values aren't true or false). Otherwise it names the variables that such an import does not read back with their
+  kind: variables whose names start with `#`, `@` or `%` and aren't of that prefix's kind, and graph variables. Export
+  is refused, naming both variables, when a variable's header is another variable's name (a visibility variable
+  `Show` next to a text variable `#Show`). A prefixed cell whose name is already a variable of the prefix's kind names
+  it; one whose name is a variable of another kind fails the import, and so do two cells that name one variable
+  (`City` twice, or `Shown` and `#Shown`). A cell that is a variable's exact name, prefix included, names that
+  variable, so the cells under a graph variable named `%Sales` are read as graph data in CSV form. The
   reply's `defined` lists the variables the import defined. While the variables are
   locked, an import whose header would define a variable fails with "variables are locked".
   A `dataset.import` file that isn't UTF-8 is read as Windows-1252, unless it starts with the UTF-8 byte-order mark.

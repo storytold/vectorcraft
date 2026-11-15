@@ -8141,7 +8141,12 @@ breakText	Glyphs	Glifák
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel: {own} (a dokumentum módja), grayscale vagy bitmap kell
 @msg	colour groups can't go into colour groups	színcsoport nem kerülhet színcsoportba
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode és spot: csak egyszínű színmintákra vonatkozik
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	{column}. oszlop: `{cell}` a diagramadat-fájlok `%` oszlopa, ezek beolvasása nem történik meg
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	{line}. sor, {column}. oszlop: a(z) `{var}` `{path}` diagramadat-fájlja relatív elérési út: adja meg a `base` értéket vagy egy abszolút elérési utat
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	{line}. sor, {column}. oszlop: a(z) `{var}` diagramadat-fájlja nem olvasható: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	{line}. sor, {column}. oszlop: a(z) `{var}` `{path}` diagramadat-fájlja nagyobb {MAX_GRAPH_DATA_FILE} bájtnál
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	{line}. sor, {column}. oszlop: a(z) `{var}` `{path}` diagramadat-fájlja {MAX_GRAPH_CSV} bájtnál hosszabb diagramértéket ad
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	{line}. sor, {column}. oszlop: a diagramadat-fájlok összesen több mint {MAX_GRAPH_FILES_TOTAL} bájtot tartalmaznak
+@msg	`base` is empty	a `base` üres
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	{column}. oszlop: `{cell}` ezt nevezi meg: `{name}`, amely {_1} típusú változó
 @msg	column {column}: `{cell}` names no variable	{column}. oszlop: `{cell}` nem nevez meg változót
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	{column}. oszlop: a változó neve hosszabb {MAX_NAME} karakternél
