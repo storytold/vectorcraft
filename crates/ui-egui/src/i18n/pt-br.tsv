@@ -1343,6 +1343,7 @@ antiAlias	Sharp	Nítido
 	Show smooth color wheel	Mostrar roda de cores contínua
 	Show segmented color wheel	Mostrar roda de cores segmentada
 	Show color bars	Mostrar barras de cores
+	Find the selected colors in the artwork	Localizar as cores selecionadas na arte
 	Harmony Sets	Conjuntos de Harmonia
 	Height	Altura
 	Height:	Altura:
@@ -2261,6 +2262,8 @@ antiAlias	Sharp	Nítido
 	Insert Aki Left	Inserir Aki à Esquerda
 	Insert Aki Right	Inserir Aki à Direita
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajustar Posição Horizontal dos Diacríticos
+	Adjust Vertical Diacritic Position	Ajustar Posição Vertical dos Diacríticos
 	Character Direction	Direção de Caracteres
 	Digits	Dígitos
 	Arabic	Arábicos
@@ -9673,3 +9676,20 @@ swatch	Yellow Green	Verde-amarelado
 	Nest Shapes…	Aninhar formas…
 	Nest Shapes	Aninhar formas
 	Roll	Rolo
+	Packaging Tools	Ferramentas de Embalagem
+	Fold Lines	Linhas de Dobra
+	Make Cut Line	Transformar em Linha de Corte
+	Make Crease Line	Transformar em Linha de Vinco
+	Make Partial Cut Line	Transformar em Linha de Meio-Corte
+	Make Perforation Line	Transformar em Linha de Perfuração
+	Make Fold Line	Transformar em Linha de Dobra
+	Role Swatches…	Amostras dos Tipos de Linha…
+	Role Swatches	Amostras dos Tipos de Linha
+	Role	Tipo de Linha
+	Cut Line	Linha de Corte
+	Crease Line	Linha de Vinco
+	Partial Cut Line	Linha de Meio-Corte
+	Perforation Line	Linha de Perfuração
+	No objects are selected.	Nenhum objeto selecionado.
+	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
+	Remove Fold Line Role	Remover Tipo de Linha
