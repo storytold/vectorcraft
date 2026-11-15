@@ -1826,6 +1826,7 @@ antiAlias	Sharp	シャープ
 	Fit in Window	ウィンドウに合わせる
 	Fit on Screen	画面にフィット
 	Flare	フレア
+	Edit Flare	フレアを編集
 	Flare Tool	フレアツール
 	Flat Image	統合イメージ
 	Flatness:	フラットネス:
@@ -4602,6 +4603,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no previous transform	前回の変形がありません
 @msg	nothing to align	整列するものがありません
 @msg	select a clip group	クリップグループを選択してください
+@msg	select a flare	フレアを選択してください
 @msg	select two or more objects to distribute	分布させるオブジェクトを 2 つ以上選択してください
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis には "vertical"、"horizontal"、度単位の角度のいずれかを指定してください (`{v}` は指定できません)
 @msg	give horizontal or vertical	horizontal または vertical を指定してください

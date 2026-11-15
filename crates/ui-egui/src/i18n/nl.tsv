@@ -4340,6 +4340,7 @@ theme	Appearance	Vormgeving
 	Set Tab Stops	Tabstops instellen
 	Tab Stops	Tabstops
 	Flare	Flare
+	Edit Flare	Flare bewerken
 	Rays	Stralen
 	Rectangle	Rechthoek
 	Paintbrush	Penseel
@@ -5232,6 +5233,7 @@ imageTrace	Outline	Contour
 @msg	select a Live Paint group	selecteer een Live Paint-groep
 @msg	select a blend	selecteer een vermenging
 @msg	select a clip group	selecteer een knipgroep
+@msg	select a flare	selecteer een flare
 @msg	select a gradient mesh	selecteer een verloopnet
 @msg	select a linked image: an embedded one has no file	selecteer een gekoppelde afbeelding: een ingesloten afbeelding heeft geen bestand
 @msg	select a repeat	selecteer een herhaling

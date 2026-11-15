@@ -1286,6 +1286,7 @@ font-technology	Variable	Вариативные
 	Fit to Selected Art	Вписать в выделенный рисунок
 	Flag…	Флаг…
 	Flare	Блик
+	Edit Flare	Редактировать блик
 	Flare Tool	Инструмент «Блик»
 	Flare Tool Options	Параметры инструмента «Блик»
 	Halo	Ореол
@@ -4915,6 +4916,7 @@ axis	Both	Оба
 @msg	select a blend	выделите переход
 @msg	select a blend or give `id`	выделите переход или укажите `id`
 @msg	select a clip group	выделите группу обрезки
+@msg	select a flare	выделите блик
 @msg	select a gradient mesh	выделите градиентную сетку
 @msg	select a linked image: an embedded one has no file	выделите связанное изображение: у внедрённого нет файла
 @msg	select a repeat	выделите повтор

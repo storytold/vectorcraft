@@ -1738,6 +1738,7 @@ digits	Malayalam	Malaiàlam
 	Fixed	Fix
 	Flag…	Marca…
 	Flare	Resplendor
+	Edit Flare	Edita el resplendor
 	Flare Tool	Eina de resplendor
 	Flare Tool Options	Opcions de l’eina de resplendor
 	Flat Angle	Angle pla
@@ -6106,6 +6107,7 @@ digits	Malayalam	Malaiàlam
 @msg	select a blend	selecciona una fusió
 @msg	select a blend or give `id`	selecciona una fusió o dona `id`
 @msg	select a clip group	selecciona un grup de retall
+@msg	select a flare	selecciona un resplendor
 @msg	select a gradient mesh	selecciona una malla de degradat
 @msg	select a linked image: an embedded one has no file	selecciona una imatge enllaçada: una d’incrustada no té fitxer
 @msg	select a Live Paint group	selecciona un grup de pintura interactiva

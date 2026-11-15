@@ -1247,6 +1247,7 @@ font-technology	Variable	Variabla
 	Fit to Selected Art	Anpassa till markerad grafik
 	Flag…	Flagga…
 	Flare	Ljusreflex
+	Edit Flare	Redigera ljusreflex
 	Flare Tool	Ljusreflexverktyg
 	Flare Tool Options	Alternativ för ljusreflexverktyget
 	Halo	Halo
@@ -4776,6 +4777,7 @@ axis	Both	Båda
 @msg	select a blend	markera en blandning
 @msg	select a blend or give `id`	markera en blandning eller ange dess `id`
 @msg	select a clip group	markera en urklippsgrupp
+@msg	select a flare	markera en ljusreflex
 @msg	select a gradient mesh	markera ett gradientnät
 @msg	select a linked image: an embedded one has no file	markera en länkad bild: en inbäddad bild har ingen fil
 @msg	select a repeat	markera en upprepning

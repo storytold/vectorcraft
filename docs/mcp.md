@@ -10478,6 +10478,24 @@ A canvas-click dialog also has `preview` (initially on): tentative settings draw
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"flare","values":{"rays":24,"ringsOn":false}}}}
 ```
 
+A flare keeps the settings it was drawn with, and a move, scale, rotation, reflection or shear of it updates them.
+With one or more flares selected, double-clicking the Flare tool opens Flare Tool Options filled from the first
+selected flare, with `flares` listing the selected ones. OK runs `shape.editFlare` with the settings changed in the
+dialog and leaves the tool's own options as they were. `shape.editFlare {ids?, cx?, cy?, x2?, y2?, diameter?, ...}`
+draws each flare again in its place from its settings, changing only the ones given (the center, the end point,
+the path length and the direction where the flare is drawn now, the other settings as in `shape.flare`), as one undo step, and adds no step when nothing
+changes. With a flare selected, the Flare tool draws its center and end point as handles joined by a dashed line;
+dragging the center moves it while the end point stays, and dragging the end point moves the end point; either drag
+changes the flare's length and direction as one undo step, and Esc cancels the drag. A flare whose parts were edited
+is no longer edited as a flare (error `select a flare`), and a locked or hidden flare is not edited either. Object › Expand turns
+a flare into a plain group of its parts. The document saves a flare's settings. Sources:
+[Draw and edit flares](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/draw-shapes/draw-and-edit-flares.html),
+[the CS3 help, page 67](https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=67).
+
+```json
+{"name":"run_command","arguments":{"command":"shape.editFlare","params":{"diameter":100,"rings":6}}}
+```
+
 The Shape Builder tool's options are its Shape Builder Tool Options (dialog `shapeBuilderOptions`):
 `openFilledAsClosed` (on: a filled open path bounds a region as if an invisible edge closed it; a path counts as
 filled when any of its fill rows is shown, painted and above 0% opacity, whichever row is on top; off: it cuts regions

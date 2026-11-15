@@ -4105,6 +4105,7 @@ theme	Appearance	Motiv
 	Set Tab Stops	Nastavit zarážky tabulátoru
 	Tab Stops	Zarážky tabulátoru
 	Flare	Odlesk
+	Edit Flare	Upravit odlesk
 	Rays	Paprsky
 	Rectangle	Obdélník
 	Paintbrush	Štětec
@@ -5185,6 +5186,7 @@ imageTrace	Outline	Obrys
 @msg	select a blend	vyberte prolnutí
 @msg	select a blend or give `id`	vyberte prolnutí, nebo zadejte `id`
 @msg	select a clip group	vyberte ořezovou skupinu
+@msg	select a flare	vyberte odlesk
 @msg	select a gradient mesh	vyberte přechodovou síť
 @msg	select a linked image: an embedded one has no file	vyberte propojený obrázek: vložený nemá soubor
 @msg	select a repeat	vyberte opakování

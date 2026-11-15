@@ -3268,6 +3268,128 @@ fn flare_rotation_turns_only_the_rays() {
     }
 }
 
+/// A flare keeps its settings: `shape.editFlare` draws it again with the settings changed, in its
+/// place and transformed as it has been since, as one undo step (none when nothing changes). A
+/// flare with a changed part, a locked one and an expanded one are not edited.
+#[test]
+fn edit_flare_draws_a_transformed_flare_again_in_its_place_in_one_undo_step() {
+    let mut s = session();
+    let p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 4, "x2": 400, "y2": 200, "seed": 3});
+    let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+    // Reflected twice, sheared and back, turned a quarter and moved: it stays a flare.
+    for (c, p) in [
+        ("object.reflect", json!({"axis": "vertical"})),
+        ("object.reflect", json!({"axis": "horizontal"})),
+        ("object.shear", json!({"angle": 30})),
+        ("object.shear", json!({"angle": -30})),
+        ("object.rotate", json!({"angle": 90})),
+        ("object.move", json!({"dx": 50, "dy": 10})),
+    ] {
+        s.execute(c, &p).unwrap();
+    }
+    let spec = |s: &Session| flare_settings(&s.doc().unwrap().doc, id).expect("still a flare");
+    let part = |s: &Session, name: &str| {
+        let g = s.doc().unwrap().doc.node(id).unwrap();
+        g.children().unwrap().iter().filter(|c| c.name.as_deref() == Some(name)).map(|c| c.geometric_bounds().unwrap()).collect::<Vec<_>>()
+    };
+    let (c, e) = (spec(&s).center().unwrap(), spec(&s).end().unwrap());
+    // The quarter turn made the rings run vertically, 200 points from the center.
+    assert!((c.distance(e) - 200.0).abs() < 1e-6 && (c.x - e.x).abs() < 1e-6, "{c:?} {e:?}");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("shape.editFlare", &json!({"diameter": 100, "rings": 6, "rays": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    let centre = part(&s, "Center")[0];
+    assert!(centre.center().distance(c) < 1e-6 && (centre.width() - 100.0).abs() < 1e-6, "{centre:?}");
+    assert_eq!((part(&s, "Ring").len(), part(&s, "Rays").len()), (6, 0));
+    assert!(spec(&s).end().unwrap().distance(e) < 1e-6, "the end point stays");
+    // Each ring lies on the line from the center to the end point.
+    assert!(part(&s, "Ring").iter().all(|r| (r.center().x - c.x).abs() < 1e-6), "{:?}", part(&s, "Ring"));
+    // The center handle, where it is drawn now: the end point stays where it is.
+    s.execute("shape.editFlare", &json!({"ids": [id.0], "cx": c.x + 20.0, "cy": c.y})).unwrap();
+    assert!(spec(&s).center().unwrap().distance(Point::new(c.x + 20.0, c.y)) < 1e-6);
+    assert!(spec(&s).end().unwrap().distance(e) < 1e-6);
+    assert!(part(&s, "Center")[0].center().distance(Point::new(c.x + 20.0, c.y)) < 1e-6);
+    // The end handle, then the path length and direction.
+    s.execute("shape.editFlare", &json!({"x2": c.x + 20.0, "y2": c.y + 80.0})).unwrap();
+    assert!(spec(&s).end().unwrap().distance(Point::new(c.x + 20.0, c.y + 80.0)) < 1e-6);
+    // The path length and direction are where the flare is drawn now, though it was turned.
+    s.execute("shape.editFlare", &json!({"direction": 0, "pathLength": 50})).unwrap();
+    assert!(spec(&s).end().unwrap().distance(Point::new(c.x + 70.0, c.y)) < 1e-6, "{:?}", spec(&s).end());
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Nothing changes: no undo step.
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("shape.editFlare", &json!({"diameter": 100})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // Bad values are refused.
+    for bad in [json!({"rings": 2.5}), json!({"diameter": "big"}), json!({"cx": 10}), json!({"diameter": 1e20})] {
+        assert!(s.execute("shape.editFlare", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(spec(&s).end().unwrap().distance(e) < 1e-6, "undo puts the end point back");
+    // A changed part: no longer a flare.
+    s.edit("Opacity", |d, _| {
+        let ring = d.node(id).unwrap().children().unwrap().iter().find(|c| c.name.as_deref() == Some("Center")).unwrap().id;
+        d.node_mut(ring).unwrap().opacity = 0.25;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(s.execute("shape.editFlare", &json!({"rings": 3})).unwrap_err().to_string(), "select a flare");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A locked flare.
+    s.execute("object.lock", &json!({})).unwrap();
+    assert!(s.execute("shape.editFlare", &json!({"ids": [id.0], "rings": 3})).is_err());
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    // Object › Expand: a plain group that is no longer a flare.
+    s.execute("object.expand", &json!({"object": true, "fill": false, "stroke": false})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().extras().flare.is_none());
+    assert!(s.execute("shape.editFlare", &json!({"rings": 3})).is_err());
+}
+
+/// `shape.flare` reads whole-number counts written as floats, and refuses fractions.
+#[test]
+fn flare_counts_are_whole_numbers() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 4.0, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    let g = s.doc().unwrap().doc.node(id).unwrap();
+    let rays = g.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Rays")).unwrap();
+    assert_eq!(rays.path_data().unwrap().subpaths.len(), 4);
+    assert!(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 2.5})).is_err());
+}
+
+/// A flare drawn again keeps its parts' pixel-aligned property, whatever the document's Align New
+/// Objects to Pixel Grid is now, and a pixel-aligned flare that was moved is still a flare.
+#[test]
+fn edit_flare_keeps_its_parts_pixel_alignment() {
+    let mut s = session();
+    let aligned = |s: &Session, id: NodeId| -> Vec<bool> {
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().map(|c| c.extras().pixel_aligned).collect()
+    };
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    let on = NodeId(s.execute("shape.flare", &json!({"cx": 100.3, "cy": 200.6, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.move", &json!({"dx": 10.25, "dy": 3.5})).unwrap();
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": false})).unwrap();
+    let part = |s: &Session, id: NodeId, name: &str| -> NodeId {
+        s.doc().unwrap().doc.node(id).unwrap().children().unwrap().iter().find(|c| c.name.as_deref() == Some(name)).unwrap().id
+    };
+    let centre = part(&s, on, "Center");
+    s.execute("shape.editFlare", &json!({"rings": 4})).unwrap();
+    assert!(aligned(&s, on).len() > 4 && aligned(&s, on).iter().all(|a| *a));
+    // Each part drawn again keeps its id and its own property: without the rays, the center does
+    // not take theirs.
+    assert_eq!(part(&s, on, "Center"), centre);
+    s.execute("object.setPixelAligned", &json!({"ids": [centre.0], "on": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [on.0]})).unwrap();
+    s.execute("shape.editFlare", &json!({"rays": 0})).unwrap();
+    let node = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().extras().pixel_aligned;
+    assert!(!node(&s, centre) && node(&s, part(&s, on, "Halo")));
+    let off = NodeId(s.execute("shape.flare", &json!({"cx": 300.3, "cy": 200.6, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    s.execute("document.setup", &json!({"alignNewObjectsToPixelGrid": true})).unwrap();
+    s.execute("shape.editFlare", &json!({"rings": 4})).unwrap();
+    assert!(aligned(&s, off).iter().all(|a| !*a));
+}
+
 #[test]
 fn reshape_moves_the_grabbed_point_and_its_neighbourhood() {
     let mut s = session();

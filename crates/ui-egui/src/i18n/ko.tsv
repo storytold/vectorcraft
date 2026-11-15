@@ -1816,6 +1816,7 @@ antiAlias	Sharp	날카롭게
 	Fit in Window	창에 맞추기
 	Fit on Screen	화면에 맞추기
 	Flare	플레어
+	Edit Flare	플레어 편집
 	Flare Tool	플레어 도구
 	Flat Image	단일 이미지
 	Flatness:	평탄도:
@@ -4529,6 +4530,7 @@ theme	Appearance	외관
 @msg	no previous transform	이전 변형이 없습니다
 @msg	nothing to align	정렬할 항목이 없습니다
 @msg	select a clip group	클립 그룹을 선택하세요
+@msg	select a flare	플레어를 선택하세요
 @msg	select two or more objects to distribute	분포할 개체를 두 개 이상 선택하세요
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis는 "vertical", "horizontal" 또는 도 단위 각도여야 합니다: `{v}`
 @msg	give horizontal or vertical	horizontal 또는 vertical을 지정하세요

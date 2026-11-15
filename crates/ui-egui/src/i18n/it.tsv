@@ -1297,6 +1297,7 @@ font-technology	Variable	Variabili
 	Fit to Selected Art	Adatta alla grafica selezionata
 	Flag…	Bandiera…
 	Flare	Riflesso
+	Edit Flare	Modifica riflesso
 	Flare Tool	Strumento Riflesso
 	Flare Tool Options	Opzioni strumento Riflesso
 	Halo	Alone
@@ -4928,6 +4929,7 @@ axis	Both	Entrambi
 @msg	select a blend	seleziona una fusione
 @msg	select a blend or give `id`	seleziona una fusione o specifica il suo `id`
 @msg	select a clip group	seleziona un gruppo di ritaglio
+@msg	select a flare	seleziona un riflesso
 @msg	select a gradient mesh	seleziona una trama sfumatura
 @msg	select a linked image: an embedded one has no file	seleziona un'immagine collegata: un'immagine incorporata non ha un file
 @msg	select a repeat	seleziona una ripetizione

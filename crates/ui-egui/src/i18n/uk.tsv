@@ -1291,6 +1291,7 @@ font-technology	Variable	Варіативні
 	Fit to Selected Art	Вписати у виділений малюнок
 	Flag…	Прапор…
 	Flare	Відблиск
+	Edit Flare	Редагувати відблиск
 	Flare Tool	Інструмент «Відблиск»
 	Flare Tool Options	Параметри інструменту «Відблиск»
 	Halo	Ореол
@@ -4912,6 +4913,7 @@ axis	Both	Обидві
 @msg	select a blend	виділіть перехід
 @msg	select a blend or give `id`	виділіть перехід або вкажіть `id`
 @msg	select a clip group	виділіть відсічну групу
+@msg	select a flare	виділіть відблиск
 @msg	select a gradient mesh	виділіть градієнтну сітку
 @msg	select a linked image: an embedded one has no file	виділіть пов’язане зображення: у вбудованого немає файлу
 @msg	select a repeat	виділіть повтор

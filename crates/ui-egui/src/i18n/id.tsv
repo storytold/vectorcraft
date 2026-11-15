@@ -3822,6 +3822,7 @@ theme	Appearance	Tampilan
 	Set Tab Stops	Atur hentian tab
 	Tab Stops	Hentian tab
 	Flare	Flare
+	Edit Flare	Edit flare
 	Rays	Sinar
 	Rectangle	Persegi panjang
 	Paintbrush	Kuas lukis
@@ -4713,6 +4714,7 @@ imageTrace	Outline	Kontur
 @msg	select a Live Paint group	pilih grup Live Paint
 @msg	select a blend	pilih blend
 @msg	select a clip group	pilih grup klip
+@msg	select a flare	pilih flare
 @msg	select a gradient mesh	pilih mesh gradien
 @msg	select a linked image: an embedded one has no file	pilih gambar tertaut: gambar yang tersemat tidak memiliki berkas
 @msg	select a repeat	pilih pengulangan

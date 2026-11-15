@@ -1267,6 +1267,7 @@ font-technology	Variable	Variabel
 	Fit to Selected Art	An ausgewählte Grafik anpassen
 	Flag…	Flagge…
 	Flare	Blendenfleck
+	Edit Flare	Blendenfleck bearbeiten
 	Flare Tool	Blendenfleck-Werkzeug
 	Flare Tool Options	Optionen für das Blendenfleck-Werkzeug
 	Halo	Lichtkranz
@@ -4800,6 +4801,7 @@ theme	Appearance	Erscheinungsbild
 @msg	select a blend	wählen Sie eine Angleichung aus
 @msg	select a blend or give `id`	wählen Sie eine Angleichung aus oder geben Sie `id` an
 @msg	select a clip group	wählen Sie eine Schnittgruppe aus
+@msg	select a flare	wählen Sie einen Blendenfleck aus
 @msg	select a gradient mesh	wählen Sie ein Verlaufsgitter aus
 @msg	select a linked image: an embedded one has no file	wählen Sie ein verknüpftes Bild aus: Ein eingebettetes hat keine Datei
 @msg	select a repeat	wählen Sie eine Wiederholung aus

@@ -1939,6 +1939,7 @@ antiAlias	Sharp	शार्प
 	Fixed	निश्चित
 	Flag…	झंडा…
 	Flare	फ्लेयर
+	Edit Flare	फ्लेयर संपादित करें
 	Flare Tool	फ्लेयर टूल
 	Flare Tool Options	फ़्लेयर टूल ऑप्शन्स
 	Flat Angle	फ्लैट कोण
@@ -7831,6 +7832,7 @@ antiAlias	Sharp	शार्प
 @msg	select a blend or give `id`	एक मिश्रण सिलेक्ट करें या `id` देना
 @msg	select a blend to set easing or color shift	Easing या रंग शिफ्ट सेट करने के लिए एक मिश्रण सिलेक्ट करें
 @msg	select a clip group	एक क्लिप समूह चुनें
+@msg	select a flare	एक फ्लेयर चुनें
 @msg	select a compound shape	एक मिश्रित आकार चुनें
 @msg	Select a dimension first	पहले आयाम सिलेक्ट करें
 @msg	select a gradient mesh	एक ग्रेडिएंट जाल सिलेक्ट करें

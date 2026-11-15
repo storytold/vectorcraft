@@ -1168,6 +1168,7 @@ antiAlias	Sharp	Nítido
 	Fit to Selected Art	Ajustar à Arte Selecionada
 	Flag…	Bandeira…
 	Flare	Brilho de Lente
+	Edit Flare	Editar Brilho de Lente
 	Flare Tool	Ferramenta Brilho de Lente
 	Flat Image	Imagem Plana
 	Flatness:	Achatamento:
@@ -4325,6 +4326,7 @@ axis	Both	Ambos
 @msg	select a blend	selecione uma mesclagem
 @msg	select a blend or give `id`	selecione uma mesclagem ou informe seu `id`
 @msg	select a clip group	selecione um grupo de recorte
+@msg	select a flare	selecione um brilho de lente
 @msg	select a gradient mesh	selecione uma malha de gradiente
 @msg	select a linked image: an embedded one has no file	selecione uma imagem vinculada: uma incorporada não tem arquivo
 @msg	select a repeat	selecione uma repetição

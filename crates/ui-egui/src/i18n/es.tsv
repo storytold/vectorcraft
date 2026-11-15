@@ -1288,6 +1288,7 @@ font-technology	Variable	Variables
 	Fit to Selected Art	Encajar en la ilustración seleccionada
 	Flag…	Bandera…
 	Flare	Destello
+	Edit Flare	Editar destello
 	Flare Tool	Herramienta Destello
 	Flare Tool Options	Opciones de la herramienta Destello
 	Halo	Halo
@@ -4878,6 +4879,7 @@ axis	Both	Ambos
 @msg	select a blend	selecciona una fusión
 @msg	select a blend or give `id`	selecciona una fusión o indica su `id`
 @msg	select a clip group	selecciona un grupo de recorte
+@msg	select a flare	selecciona un destello
 @msg	select a gradient mesh	selecciona una malla de degradado
 @msg	select a linked image: an embedded one has no file	selecciona una imagen vinculada: una incrustada no tiene archivo
 @msg	select a repeat	selecciona una repetición

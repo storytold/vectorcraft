@@ -1241,6 +1241,7 @@ font-technology	Variable	Değişken
 	Fit to Selected Art	Seçilen Sanata Sığdır
 	Flag…	Bayrak…
 	Flare	parlama
+	Edit Flare	Parlamayı Düzenle
 	Flare Tool	Mercek Parlaması Aracı
 	Flare Tool Options	Genişletme Aracı Seçenekleri
 	Halo	Hale
@@ -4647,6 +4648,7 @@ axis	Both	Her İkisi
 @msg	select a Live Paint group	bir Canlı Boyama grubu seçin
 @msg	select a blend	bir karışım seç
 @msg	select a clip group	bir klip grubu seçin
+@msg	select a flare	bir parlama seçin
 @msg	select a gradient mesh	bir degrade ağı seçin
 @msg	select a linked image: an embedded one has no file	bağlantılı bir görsel seçin: gömülü görselin dosyası yok
 @msg	select a repeat	bir tekrar seç

@@ -460,7 +460,8 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         // The Line Segment, Arc and grid tools: their Tool Options, the options of their next
         // drag and click.
         _ if crate::dialogs::shapes::OPTION_TOOLS.contains(&tool) => crate::dialogs::shapes::open_options(app, tool),
-        // The Flare tool: its options, which draw the next flare (OK draws none).
+        // The Flare tool: its options, which draw the next flare (OK draws none); with flares
+        // selected, the first one's settings, and OK draws the selected flares again.
         "flare" => Ok(crate::dialogs::flare_options::open(app, None)),
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),

@@ -3964,6 +3964,7 @@ theme	Appearance	Wygląd
 	Set Tab Stops	Ustaw tabulatory
 	Tab Stops	Tabulatory
 	Flare	Rozbłysk
+	Edit Flare	Edytuj rozbłysk
 	Rays	Promienie
 	Rectangle	Prostokąt
 	Paintbrush	Pędzel
@@ -5011,6 +5012,7 @@ imageTrace	Outline	Kontur
 @msg	select a blend	zaznacz przejście
 @msg	select a blend or give `id`	zaznacz przejście lub podaj `id`
 @msg	select a clip group	zaznacz grupę przycinającą
+@msg	select a flare	zaznacz rozbłysk
 @msg	select a gradient mesh	zaznacz siatkę gradientową
 @msg	select a linked image: an embedded one has no file	zaznacz obraz połączony: osadzony nie ma pliku
 @msg	select a repeat	zaznacz powtórzenie

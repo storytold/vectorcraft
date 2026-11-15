@@ -1228,6 +1228,7 @@ antiAlias	Sharp	锐利
 	Fit to Selected Art	适合所选图稿
 	Flag…	旗形…
 	Flare	光晕
+	Edit Flare	编辑光晕
 	Flare Tool	光晕工具
 	Flare Tool Options	光晕工具选项
 	Halo	光晕
@@ -4301,6 +4302,7 @@ imageTrace	Outline	轮廓
 @msg	no previous transform	没有上一次变换
 @msg	nothing to align	没有可对齐的内容
 @msg	select a clip group	请选择一个剪切组
+@msg	select a flare	请选择一个光晕
 @msg	select two or more objects to distribute	请选择两个或更多要分布的对象
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis 必须是 "vertical"、"horizontal" 或以度为单位的角度，而不是 `{v}`
 @msg	give horizontal or vertical	请给出 horizontal 或 vertical

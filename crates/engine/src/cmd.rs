@@ -32,6 +32,7 @@ pub mod expand;
 pub(crate) mod fileinfo;
 pub mod fileio;
 pub mod findfiles;
+pub mod flare;
 pub mod flatten;
 pub mod fontfiles;
 mod fonts;

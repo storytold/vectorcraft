@@ -1212,6 +1212,7 @@ font-technology	Variable	Μεταβλητές
 	Fit to Selected Art	Προσαρμογή στο επιλεγμένο γραφικό
 	Flag…	Σημαία…
 	Flare	Λάμψη
+	Edit Flare	Επεξεργασία λάμψης
 	Flare Tool	Λάμψη (Flare Tool)
 	Flare Tool Options	Επιλογές εργαλείου λάμψης
 	Halo	Άλως
@@ -4834,6 +4835,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	select a blend	επιλέξτε ανάμειξη
 @msg	select a blend or give `id`	επιλέξτε ανάμειξη ή δώστε το `id`
 @msg	select a clip group	επιλέξτε ομάδα αποκοπής
+@msg	select a flare	επιλέξτε λάμψη
 @msg	select a gradient mesh	επιλέξτε πλέγμα ντεγκραντέ
 @msg	select a linked image: an embedded one has no file	επιλέξτε συνδεδεμένη εικόνα: η ενσωματωμένη δεν έχει αρχείο
 @msg	select a repeat	επιλέξτε επανάληψη

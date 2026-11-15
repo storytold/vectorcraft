@@ -1234,6 +1234,7 @@ font-technology	Variable	Променливи
 	Fit to Selected Art	Побиране спрямо избраната графика
 	Flag…	Знаме…
 	Flare	Взрив
+	Edit Flare	Редактиране на взрива
 	Flare Tool	Инструмент „Взрив“
 	Flare Tool Options	Опции на инструмента „Взрив“
 	Halo	Ореол
@@ -4615,6 +4616,7 @@ axis	Both	И двете
 @msg	select a blend	изберете преход (blend)
 @msg	select a blend or give `id`	изберете преливане или задайте неговия `id`
 @msg	select a clip group	изберете група за изрязване
+@msg	select a flare	изберете взрив
 @msg	select a gradient mesh	изберете мрежа на градиент (gradient mesh)
 @msg	select a linked image: an embedded one has no file	изберете свързано изображение: вграденото няма файл
 @msg	select a repeat	изберете повторение (repeat)

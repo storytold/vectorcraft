@@ -4049,6 +4049,7 @@ theme	Appearance	Izgled
 	Set Tab Stops	Postavi tabulatore
 	Tab Stops	Tabulatori
 	Flare	Odsjaj
+	Edit Flare	Uredi odsjaj
 	Rays	Zrake
 	Rectangle	Pravougaonik
 	Paintbrush	Kist
@@ -5011,6 +5012,7 @@ imageTrace	Outline	Obris
 @msg	select a blend	odaberite stapanje
 @msg	select a blend or give `id`	odaberite stapanje ili navedite `id`
 @msg	select a clip group	odaberite grupu isijecanja
+@msg	select a flare	odaberite odsjaj
 @msg	select a gradient mesh	odaberite gradijentnu mrežu
 @msg	select a linked image: an embedded one has no file	odaberite povezanu sliku: ugrađena nema datoteku
 @msg	select a repeat	odaberite ponavljanje

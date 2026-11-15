@@ -4431,6 +4431,7 @@ theme	Appearance	Udseende
 	Set Tab Stops	Angiv tabulatorstop
 	Tab Stops	Tabulatorstop
 	Flare	Flare
+	Edit Flare	Redigér flare
 	Rays	Stråler
 	Rectangle	Rektangel
 	Paintbrush	Malerpensel
@@ -5323,6 +5324,7 @@ imageTrace	Outline	Kontur
 @msg	select a Live Paint group	markér en Live Paint-gruppe
 @msg	select a blend	markér en blanding
 @msg	select a clip group	markér en klipgruppe
+@msg	select a flare	markér en flare
 @msg	select a gradient mesh	markér et gradientnet
 @msg	select a linked image: an embedded one has no file	markér et linket billede: et indlejret har ingen fil
 @msg	select a repeat	markér en gentagelse

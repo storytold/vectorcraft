@@ -16,6 +16,7 @@ pub mod compound_shape;
 pub mod corners;
 pub mod depth;
 pub mod dimension;
+pub mod flare;
 pub mod graph;
 mod halftone_radii;
 pub mod hit;

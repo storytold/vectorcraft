@@ -1282,6 +1282,7 @@ font-technology	Variable	Variables
 	Fit to Selected Art	Ajuster à l’illustration sélectionnée
 	Flag…	Drapeau…
 	Flare	Halo
+	Edit Flare	Modifier le halo
 	Flare Tool	Outil Halo
 	Flare Tool Options	Options de l’outil Halo
 	Halo	Halo
@@ -4865,6 +4866,7 @@ axis	Both	Les deux
 @msg	select a blend	sélectionnez un dégradé de formes
 @msg	select a blend or give `id`	sélectionnez un dégradé de formes ou indiquez son `id`
 @msg	select a clip group	sélectionnez un groupe d’écrêtage
+@msg	select a flare	sélectionnez un halo
 @msg	select a gradient mesh	sélectionnez un filet de dégradé
 @msg	select a linked image: an embedded one has no file	sélectionnez une image liée : une image incorporée n’a pas de fichier
 @msg	select a repeat	sélectionnez une répétition

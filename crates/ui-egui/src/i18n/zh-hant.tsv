@@ -1262,6 +1262,7 @@ font-technology	Variable	可變
 	Fit to Selected Art	符合選取的圖稿
 	Flag…	旗形…
 	Flare	光暈
+	Edit Flare	編輯光暈
 	Flare Tool	光暈工具
 	Flare Tool Options	光暈工具選項
 	Halo	光暈
@@ -1997,6 +1998,7 @@ file-filter	Templates	範本
 @msg	no previous transform	沒有上一次的變形
 @msg	nothing to align	沒有可對齊的內容
 @msg	select a clip group	請選取剪裁群組
+@msg	select a flare	請選取光暈
 @msg	select two or more objects to distribute	請選取兩個以上要均分的物件
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis 必須是 "vertical"、"horizontal" 或以度為單位的角度，而非 `{v}`
 @msg	give horizontal or vertical	請提供 horizontal 或 vertical

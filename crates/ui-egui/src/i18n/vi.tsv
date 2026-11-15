@@ -1513,6 +1513,7 @@ digits	Malayalam	Malayalam
 	Fixed	Cố định
 	Flag…	Lá cờ…
 	Flare	Hào quang
+	Edit Flare	Chỉnh sửa hào quang
 	Flare Tool	Công cụ Hào quang
 	Flare Tool Options	Tùy chọn Công cụ Hào quang
 	Flat Angle	Góc phẳng
@@ -5302,6 +5303,7 @@ theme	Appearance	Giao diện
 @msg	select a blend	hãy chọn một đối tượng hòa trộn
 @msg	select a blend or give `id`	hãy chọn một đối tượng hòa trộn hoặc cung cấp `id`
 @msg	select a clip group	hãy chọn nhóm cắt
+@msg	select a flare	hãy chọn một hào quang
 @msg	select a gradient mesh	hãy chọn lưới chuyển sắc
 @msg	select a linked image: an embedded one has no file	hãy chọn ảnh liên kết: ảnh nhúng không có tệp
 @msg	select a Live Paint group	hãy chọn nhóm tô trực tiếp
