@@ -422,6 +422,15 @@ pub(crate) fn design_reference(s: &Session, p: &Value, cmd: &str) -> Result<Opti
     Ok(ids.first().copied().filter(|id| super::graph::is_design_art(d, *id)))
 }
 
+/// The [`design_reference`] of an edit aimed at `item`: none for the Appearance panel's active row, which is a row of the
+/// first selected object's stack.
+pub(crate) fn reference_of(s: &Session, p: &Value, item: ItemTarget, cmd: &str) -> Result<Option<NodeId>> {
+    if matches!(item, ItemTarget::Item { explicit: false, .. }) {
+        return Ok(None);
+    }
+    design_reference(s, p, cmd)
+}
+
 /// `ids` after `of` (see [`design_reference`]), when there is one.
 pub(crate) fn with_reference(of: Option<NodeId>, ids: &[NodeId]) -> Vec<NodeId> {
     of.into_iter().chain(ids.iter().copied()).collect()
@@ -437,7 +446,7 @@ pub(crate) fn rows_per_target(d: &Document, of: Option<NodeId>, ids: &[NodeId], 
 }
 
 /// Whether the `target` param asks for the contents of groups and layers (see the module docs).
-fn targets_contents(p: &Value) -> Result<bool> {
+pub(crate) fn targets_contents(p: &Value) -> Result<bool> {
     match p.get("target") {
         None | Some(Value::Null) => Ok(false),
         Some(v) => match v.as_str() {
@@ -497,6 +506,20 @@ pub(crate) fn without_design_art(d: &Document, ids: Vec<NodeId>, cmd: &str) -> R
 pub(crate) fn drop_design_art(d: &Document, mut ids: Vec<NodeId>) -> Vec<NodeId> {
     ids.retain(|id| !super::graph::is_design_art(d, *id));
     ids
+}
+
+/// [`drop_design_art`] for an edit of the `item` rows of `ids` (`fill`: fill rows): an explicit `item` that a design's
+/// art has no row of that kind for is still an error of `cmd`, as on any other object.
+pub(crate) fn drop_design_art_rows(s: &Session, ids: Vec<NodeId>, item: ItemTarget, fill: bool, cmd: &str) -> Result<Vec<NodeId>> {
+    let d = &s.doc()?.doc;
+    for (id, it) in ids.iter().zip(item.per_target(s, &ids)) {
+        if let (Some(it), Some(n)) = (it, d.node(*id))
+            && super::graph::is_design_art(d, *id)
+        {
+            it.resolve(&n.appearance, fill, cmd)?;
+        }
+    }
+    Ok(drop_design_art(d, ids))
 }
 
 /// The outermost art of graph designs drawn in graph series inside `roots`: the objects directly in a series group that
@@ -610,16 +633,23 @@ fn require_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
 /// ([`capture_series_changes`], [`super::graph::capture_label_changes`]). Nothing targeted is not
 /// an edit, and when `f` leaves every target as it was, the document and its undo history stay as
 /// they are.
+///
+/// With `of` (see [`reference_of`]), an explicit aligned `item` is a row of the stack of `of`, which
+/// is not among `ids`: it must be there and of the edited kind, each target edits the row equal to
+/// it, a target without one is left as it is, and no target with one is an error. Returns the
+/// targets `f` was aimed at, in the order of `ids`.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn edit_items(
     s: &mut Session,
     ids: &[NodeId],
     item: ItemTarget,
+    of: Option<NodeId>,
     cmd: &str,
     label: &str,
     fill: bool,
     f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
-) -> Result<()> {
-    edit_items_then(s, ids, item, cmd, label, fill, f, |before, d, edited| {
+) -> Result<Vec<NodeId>> {
+    edit_items_then(s, ids, item, of, cmd, label, fill, f, |before, d, edited| {
         let series = capture_series_changes(before, d, edited);
         // The rows `f` edited are kept by `edit_items_then`.
         let labels = super::graph::capture_label_changes(before, d, edited, false);
@@ -636,17 +666,29 @@ pub(crate) fn edit_items_then(
     s: &mut Session,
     ids: &[NodeId],
     item: ItemTarget,
+    of: Option<NodeId>,
     cmd: &str,
     label: &str,
     fill: bool,
     mut f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
     mut after: impl FnMut(&vectorcraft_doc::Document, &mut vectorcraft_doc::Document, &[NodeId]) -> Result<bool>,
-) -> Result<()> {
-    if ids.is_empty() {
-        return Ok(());
-    }
+) -> Result<Vec<NodeId>> {
+    let art = of.and_then(|of| s.doc().ok()?.doc.node(of).map(|n| n.appearance.clone()));
+    let per = match (item, art) {
+        // Checked even when the art is the only object given, which leaves `ids` empty.
+        (ItemTarget::Item { index, explicit: true, aligned: true }, Some(art)) => {
+            item.resolve(&art, fill, cmd)?;
+            let per = item.per_target_of(s, of, ids);
+            if per.iter().all(Option::is_none) {
+                return Err(bad(cmd, format!("no appearance item {index}")));
+            }
+            per
+        }
+        _ if ids.is_empty() => return Ok(Vec::new()),
+        _ => item.per_target(s, ids),
+    };
+    let aimed: Vec<NodeId> = ids.iter().zip(&per).filter(|(_, item)| item.is_some()).map(|(id, _)| *id).collect();
     let before = s.doc()?.doc.clone();
-    let per = item.per_target(s, ids);
     super::overprint::edit_counted(s, label, |d| {
         let mut edited = Vec::new();
         // The objects whose rows `f` edited: on type, no row means its characters.
@@ -665,7 +707,13 @@ pub(crate) fn edit_items_then(
         let labels = super::graph::capture_label_rows(d, &rows);
         Ok(count_changed(d, &before, &edited) + usize::from(more || labels))
     })?;
-    Ok(())
+    Ok(aimed)
+}
+
+/// The first of `ids` that [`edit_items`] aimed at `item` with `of` changes, and the item it changes there. Read it
+/// before the edit: once edited, a row that was equal to a row of the art of `of` no longer is.
+pub(crate) fn first_edited(s: &Session, item: ItemTarget, of: Option<NodeId>, ids: &[NodeId]) -> Option<(NodeId, ItemTarget)> {
+    ids.iter().zip(item.per_target_of(s, of, ids)).find_map(|(id, it)| Some((*id, it?)))
 }
 
 /// How many of `ids` differ in `d` from `before`.
@@ -674,8 +722,8 @@ pub(crate) fn count_changed(d: &vectorcraft_doc::Document, before: &vectorcraft_
 }
 
 /// Whether an edit aimed at `item` changes a stroke: the `stroke` param, else the kind of the
-/// targeted item (on the object whose row it is, see [`ItemTarget::anchor`]), else `default`. A `stroke` other than true, false or
-/// null is an error of command `cmd`.
+/// targeted item (on the object whose row it is, see [`ItemTarget::anchor`] and [`reference_of`]), else `default`. A `stroke` other than
+/// true, false or null is an error of command `cmd`.
 pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bool, cmd: &str) -> Result<bool> {
     check_switches(p, &["stroke"], cmd)?;
     if let Some(b) = p.get("stroke").and_then(Value::as_bool) {
@@ -683,8 +731,17 @@ pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bo
     }
     let ItemTarget::Item { index, .. } = item else { return Ok(default) };
     let d = &s.doc()?.doc;
-    let ids = drop_design_art(d, appearance_targets(s, p)?);
-    Ok(ids.get(item.anchor(s, &ids)).and_then(|id| d.node(*id)?.appearance.items.get(index)).map_or(default, |it| !it.is_fill()))
+    let holder = match reference_of(s, p, item, cmd)? {
+        Some(of) => Some(of),
+        None => {
+            let all = appearance_targets(s, p)?;
+            // The art of a graph design is left out, unless it is all there is: the item is then a row of that art.
+            let kept = drop_design_art(d, all.clone());
+            let ids = if kept.is_empty() { all } else { kept };
+            ids.get(item.anchor(s, &ids)).copied()
+        }
+    };
+    Ok(holder.and_then(|id| d.node(id)?.appearance.items.get(index)).map_or(default, |it| !it.is_fill()))
 }
 
 /// The whole number of 0 or more that `key` holds, read with [`u64_req`] and [`index`].

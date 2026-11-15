@@ -1298,7 +1298,139 @@ pub(crate) fn path_shown(path: &str, doc_path: Option<&str>) -> bool {
 /// alone in a reply to the caller asking now? Only a path [`path_shown`] does not allow; a URL is
 /// always shown as it is.
 pub(crate) fn script_hidden(f: &str, doc_path: Option<&str>) -> bool {
-    !path_shown(f, doc_path) && !matches!(fileio::document_path(f, doc_path), Err(craft_docpath::Refused::Url))
+    file_hidden(f, doc_path)
+}
+
+/// Is the file `path` (a link of the document saved at `doc_path`) one the caller asking now may
+/// not be shown? Only a path [`path_shown`] does not allow; a URL is not a file and is shown as it is.
+pub(crate) fn file_hidden(path: &str, doc_path: Option<&str>) -> bool {
+    !path_shown(path, doc_path) && !matches!(fileio::document_path(path, doc_path), Err(craft_docpath::Refused::Url))
+}
+
+/// Does an SVG of `d` (a document whose links are looked for from `base`) written for the caller
+/// asking now name the file of a linked image that [`file_hidden`] keeps from it? An `<image>`
+/// names its image's file with SVG Options › Images set to Link (`link`), and with Embed when the
+/// document holds no pixels for the image. An image with a solid colorize paint whose pixels are
+/// gray or missing names none: the SVG writes gray pixels colorized and leaves out an image
+/// without pixels. The images of the art the SVG writes (opacity masks included) and of the
+/// symbols, patterns and brushes that art uses, as Copy follows them, are checked: the SVG writes
+/// no other resource. A placed document's images are those of the art the SVG draws for it. Hidden
+/// layers and objects are written only with SVG Options › hidden layers kept (`hidden`), in the
+/// layers and in the symbols, patterns and graph designs alike, and template layers never. SVG Tiny
+/// 1.2 (`tiny`) writes no opacity masks ([`svg_written`]). Always `false` without read roots in
+/// force.
+pub(crate) fn svg_names_hidden_image(d: &Document, base: LinkBase, link: bool, hidden: bool, tiny: bool) -> bool {
+    if crate::file_access::current().is_none() {
+        return false;
+    }
+    if !d.has_placed() && !names_hidden_image(d, base, link) {
+        return false;
+    }
+    // The writer draws placed documents' art with the pixels their files hold.
+    let placed = d.with_placed_art();
+    let d = &*placed;
+    let art = d.layers.iter().filter_map(|l| svg_written(d, l, hidden, tiny)).collect();
+    let mut out = super::clipboard::Clipboard::gather(d, art).to_document();
+    let written = |n: &std::sync::Arc<Node>| {
+        let empty = || Node::new(n.id, NodeKind::Group { children: vec![], clip: false });
+        std::sync::Arc::new(svg_written(d, n, hidden, tiny).unwrap_or_else(empty))
+    };
+    for s in &mut out.symbols {
+        s.art = written(&s.art);
+    }
+    for g in &mut out.graph_designs {
+        g.art = written(&g.art);
+    }
+    for p in &mut out.patterns {
+        p.art = p.art.iter().filter_map(|n| svg_written(d, n, hidden, tiny)).map(std::sync::Arc::new).collect();
+    }
+    names_hidden_image(&out, base, link)
+}
+
+/// `n` (an object of `d`) as the SVG writer writes it, or `None` when it writes none of it: a
+/// hidden layer or object is left out unless `hidden`, a template layer's art always, a disabled
+/// opacity mask's art, and with SVG Tiny 1.2 (`tiny`) every opacity mask's art. A placed document
+/// is the art the writer draws for it. Only layers and groups lose members; other objects keep
+/// theirs as they are.
+fn svg_written(d: &Document, n: &Node, hidden: bool, tiny: bool) -> Option<Node> {
+    if !(n.visible || hidden) {
+        return None;
+    }
+    if matches!(n.kind, NodeKind::PlacedDocument(_)) {
+        return svg_written(d, &vectorcraft_render::effects::expand_live_deep(Some(d), n), hidden, tiny);
+    }
+    let mut n = n.clone();
+    let mask = n.extras().mask.as_deref().filter(|m| !m.disabled && !tiny).and_then(|m| {
+        let art = svg_written(d, &m.art, hidden, tiny)?;
+        Some(Box::new(vectorcraft_doc::OpacityMask { art: std::sync::Arc::new(art), ..m.clone() }))
+    });
+    if n.extras().mask.is_some() {
+        n.extras_mut().mask = mask;
+    }
+    match &mut n.kind {
+        NodeKind::Layer { template: true, children, .. } => children.clear(),
+        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
+            *children = children.iter().filter_map(|c| svg_written(d, c, hidden, tiny)).map(std::sync::Arc::new).collect();
+        }
+        _ => {}
+    }
+    Some(n)
+}
+
+/// [`svg_names_hidden_image`] for every image of `d`: in the layers, symbols, graph designs,
+/// patterns, opacity masks and the art of the stored brushes, used or not.
+fn names_hidden_image(d: &Document, base: LinkBase, link: bool) -> bool {
+    let d = with_brush_art(d);
+    let mut hidden = false;
+    d.visit_images(|n, im| {
+        if hidden {
+            return;
+        }
+        let shown = d.shown_image(n, im);
+        let Some(l) = &shown.link else { return };
+        let blob = d.image_blob(&shown).filter(|b| !b.bytes.is_empty());
+        // The SVG writes an image with a solid colorize paint as colorized pixels when they are
+        // gray, and leaves it out when the document holds none of them.
+        if matches!(n.extras().colorize.as_deref(), Some(vectorcraft_color::Paint::Solid { .. })) && blob.is_none_or(|b| b.gray_source().is_some()) {
+            return;
+        }
+        let named = link || blob.is_none();
+        hidden = named && file_hidden(&l.path, base.doc);
+    });
+    hidden
+}
+
+/// Does the native document an SVG of `d` (a document whose links are looked for from `base`)
+/// carries with Preserve Editing Capabilities name a file that the caller asking now may not be
+/// shown: the file of a linked image or placed document ([`file_hidden`]), the relative path kept
+/// of one, which is followed from the file the document was read from and from the document's own
+/// folder, or a data set's image? Links in the layers, symbols, graph designs, patterns, the pattern
+/// being edited as it was before, opacity masks and the art of the stored brushes are all checked,
+/// as [`with_hidden_paths_named`] checks them. A stored brush library that is not a list, or holds
+/// an entry that does not read as a brush, counts as naming one: the native document carries it as
+/// it is, and its links cannot be checked. Always `false` without read roots in force.
+pub(crate) fn names_hidden_file(d: &Document, base: LinkBase) -> bool {
+    if crate::file_access::current().is_none() {
+        return false;
+    }
+    let unread = |list: &Vec<Value>| list.iter().any(|raw| vectorcraft_brush::Brush::from_json(raw.clone()).is_err());
+    if d.unknown.get(vectorcraft_brush::DOC_KEY).is_some_and(|v| v.as_array().is_none_or(unread)) {
+        return true;
+    }
+    let relative_hidden = |r: &str| [base.relative, base.doc].into_iter().any(|from| !path_shown(r, from));
+    let hidden = |l: &LinkInfo| file_hidden(&l.path, base.doc) || l.relative.as_deref().is_some_and(relative_hidden);
+    let image_hidden = |v: &DataValue| matches!(v, DataValue::Image(path) if file_hidden(path, base.doc));
+    if d.variables.datasets.iter().any(|set| set.values.values().any(image_hidden)) {
+        return true;
+    }
+    let mut d = with_brush_art(d);
+    if let Some(original) = d.pattern_edit.as_ref().and_then(|e| e.original.clone()) {
+        d.to_mut().patterns.push(original);
+    }
+    let mut found = false;
+    d.visit_images(|_, im| found |= im.link.as_ref().is_some_and(hidden));
+    d.visit_placed(|_, p| found |= hidden(&p.link));
+    found
 }
 
 /// The linked JavaScript file `f` of the open document `st` as a reply to the caller asking now

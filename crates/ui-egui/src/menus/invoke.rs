@@ -133,9 +133,7 @@ pub(crate) fn graph_dialog(app: &mut VectorcraftApp, id: &str) -> Result<Value, 
     if id == "graph.setData" {
         return crate::dialogs::graph_data::open(app);
     }
-    let v = app.session.execute(id, &json!({})).map_err(|e| e.to_string())?;
-    let (label, fields) = ("Graph Type", v);
-    app.run("ui.paramDialog", json!({"command": id, "label": label, "params": fields})).map(|_| json!({ "dialog": "command" }))
+    crate::dialogs::graph_type::open(app)
 }
 
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
@@ -296,6 +294,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
     if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Check Spelling…: dialog to walk through unknown words.
+    if id == crate::dialogs::check_spelling::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::check_spelling::open(app) {
             app.status(e);
         }
         return true;
