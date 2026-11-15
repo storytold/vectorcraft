@@ -790,6 +790,41 @@ fn colorized_images_keep_their_color() {
     assert_eq!(out.warnings, [IMAGE_ALPHA]);
 }
 
+/// The pieces of a colorized warped image work out the image's coverage once, and an image with
+/// other data works out its own: a black and white image's pieces are written as image masks
+/// in its color, and a gray image's pieces with its color in their pixels.
+#[test]
+fn the_pieces_of_a_colorized_warped_image_work_out_its_coverage_once() {
+    // GUARDS: each piece of a colorized warped image decoded the image again for its coverage.
+    let mut doc = Document::new(400.0, 200.0);
+    doc.layers.clear();
+    let layer = doc.add_layer(Some("Art"));
+    let paint = Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0));
+    let checks: Vec<u8> = (0..16 * 16).map(|i| if (i % 16 + i / 16) % 2 == 0 { 0 } else { 255 }).collect();
+    let ramp: Vec<u8> = (0..16 * 16).map(|i| (i % 16 * 16) as u8).collect();
+    for (gray, x) in [(checks, 10.0), (ramp, 210.0)] {
+        let photo = colorized_image(&mut doc, (16, 16), gray, &paint, (x, 10.0));
+        let NodeKind::Image(im) = &photo.kind else { panic!("{:?}", photo.kind) };
+        let bend = move |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 8.0 * ((p.x - x) / 160.0 * std::f64::consts::PI).sin());
+        let warped = vectorcraft_doc::live::mesh_warp_image(&photo, im, &bend, 4, false, false);
+        doc.insert(Some(layer), usize::MAX, warped).unwrap();
+    }
+    super::writer::COVERAGE_RUNS.with(|n| n.set(0));
+    let out = write(&doc);
+    assert_eq!(super::writer::COVERAGE_RUNS.with(std::cell::Cell::get), 2, "once for each image");
+    let text = String::from_utf8(out.bytes).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 64, "32 pieces of each image");
+    let xi = |piece: &Vec<&str>| piece.iter().find(|l| l.ends_with(" XI")).map(|l| l.to_string()).unwrap_or_default();
+    assert!(images[..32].iter().all(|p| xi(p).ends_with(" 1 1 0 0 0 1 XI")), "{:?}", images[..32].iter().map(xi).collect::<Vec<_>>());
+    assert!(images[32..].iter().all(|p| xi(p).ends_with(" 8 3 0 0 0 0 XI")), "{:?}", images[32..].iter().map(xi).collect::<Vec<_>>());
+    // The first piece holds the whole image: each row of 16 pixels in two bytes, its black pixels 0 bits.
+    assert!(xi(&images[0]).ends_with(" ] 0 0 16 16 16 16 1 1 0 0 0 1 XI"), "{}", xi(&images[0]));
+    let data: Vec<&str> = images[0].iter().filter_map(|l| l.strip_prefix('%')).filter(|l| l.bytes().all(|b| b.is_ascii_hexdigit())).collect();
+    assert_eq!(data.concat(), "5555AAAA".repeat(8));
+    assert_eq!(out.warnings, [IMAGE_ALPHA]);
+}
+
 /// An image mask is only for a colorized image the writer draws as the document does: not one
 /// with an opacity mask turned on, and not one with more pixels than the writer writes.
 #[test]
