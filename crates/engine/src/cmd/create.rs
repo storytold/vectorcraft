@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Flare",
             [],
             None,
-            "{ids?|id?: flares (default: the selected flares), cx?, cy? (the center, where it is drawn now), x2?, y2? (the rings' end point, where it is drawn now; else pathLength at direction from the center, both where it is drawn now, when either is given; else where it was), diameter?, opacity?, brightness?, growth?, fuzziness?, rays?, longest?, rayFuzziness?, rotation?, pathLength?, rings?, largest?, direction? (as shape.flare: what is left out stays as it was)} draws each flare again in its place, moved, scaled, rotated, reflected or sheared as it has been since it was drawn, as one undo step (none when nothing changes); a flare whose parts were edited, or that is locked or hidden, is not one → {ids}",
+            "{ids?|id?: flares (default: the selected flares), cx?, cy? (the center, where it is drawn now), x2?, y2? (the rings' end point, where it is drawn now; else pathLength at direction from the center, both where it is drawn now, when either is given; else where it was), diameter?, opacity?, brightness?, growth?, fuzziness?, rays?, longest?, rayFuzziness?, rotation? (deg, turns the rays clockwise), pathLength?, rings?, largest?, direction? (as shape.flare: what is left out stays as it was)} draws each flare again in its place, moved, scaled, rotated, reflected or sheared as it has been since it was drawn, as one undo step (none when nothing changes); a flare whose parts were edited, or that is locked or hidden, is not one → {ids}",
             has_doc,
             super::flare::edit_flare
         ),
