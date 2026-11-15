@@ -3858,6 +3858,40 @@ file-filter	Templates	テンプレート
 	Gradient (. or Shift+.)	グラデーション (. または Shift+.)
 	Graph Data	グラフデータ
 	Graph Type	グラフの種類
+	Graph Options	グラフオプション
+	Left Axis	左軸
+	Right Axis	右軸
+	Category Axis	項目軸
+	Separate Scales	目盛りを別にする
+	Add Drop Shadow	ドロップシャドウを追加
+	Add Legend Across Top	凡例を上に表示
+	First Row in Front	最初の行を前面に
+	First Column in Front	最初の列を前面に
+	Legend	凡例
+	Column Width	棒の幅
+	Bar Width	横棒の幅
+	Cluster Width	グループの幅
+	Mark Data Points	データポイントにマーカーを表示
+	Connect Data Points	データポイントを線でつなぐ
+	Edge-to-Edge Lines	端から端までの線
+	Draw Filled Lines	線を塗りつぶして描く
+	Tick Values	目盛りの値
+	Override Calculated Values	計算値を上書き
+	Divisions	分割数
+	Tick Marks	目盛り
+	Tick Marks per Division	分割ごとの目盛り
+	Draw Tick Marks Between Labels	ラベルの間に目盛りを描く
+	Add Labels	ラベルを追加
+	Maximum must be more than Minimum.	最大値は最小値より大きくしてください。
+	Column Graph	棒グラフ
+	Stacked Column Graph	積み上げ棒グラフ
+	Bar Graph	横向き棒グラフ
+	Stacked Bar Graph	横向き積み上げ棒グラフ
+	Line Graph	折れ線グラフ
+	Area Graph	面グラフ
+	Scatter Graph	散布図
+	Pie Graph	円グラフ
+	Radar Graph	レーダーチャート
 	Graph Design	グラフのデザイン
 	Graph Marker	グラフのマーカー
 	New Design	新規デザイン

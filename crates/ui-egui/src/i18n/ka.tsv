@@ -3248,6 +3248,40 @@ theme	Appearance	იერსახე
 	Create Graph	გრაფიკის შექმნა
 	Graph Data	გრაფიკის მონაცემები
 	Graph Type	გრაფიკის ტიპი
+	Graph Options	გრაფიკის პარამეტრები
+	Left Axis	მარცხენა ღერძი
+	Right Axis	მარჯვენა ღერძი
+	Category Axis	კატეგორიების ღერძი
+	Separate Scales	ცალკე სკალები
+	Add Drop Shadow	ჩრდილის დამატება
+	Add Legend Across Top	ლეგენდის დამატება ზემოთ
+	First Row in Front	პირველი მწკრივი წინ
+	First Column in Front	პირველი სვეტი წინ
+	Legend	ლეგენდა
+	Column Width	სვეტის სიგანე
+	Bar Width	ზოლის სიგანე
+	Cluster Width	ჯგუფის სიგანე
+	Mark Data Points	მონაცემთა წერტილების მონიშვნა
+	Connect Data Points	მონაცემთა წერტილების შეერთება
+	Edge-to-Edge Lines	ხაზები კიდიდან კიდემდე
+	Draw Filled Lines	შევსებული ხაზების დახატვა
+	Tick Values	დანაყოფების მნიშვნელობები
+	Override Calculated Values	გამოთვლილი მნიშვნელობების შეცვლა
+	Divisions	დანაყოფები
+	Tick Marks	დანაყოფის ნიშნები
+	Tick Marks per Division	ნიშნები თითო დანაყოფზე
+	Draw Tick Marks Between Labels	ნიშნების დახატვა წარწერებს შორის
+	Add Labels	წარწერების დამატება
+	Maximum must be more than Minimum.	მაქსიმუმი მინიმუმზე მეტი უნდა იყოს.
+	Column Graph	სვეტოვანი გრაფიკი
+	Stacked Column Graph	დაწყობილი სვეტოვანი გრაფიკი
+	Bar Graph	ზოლოვანი გრაფიკი
+	Stacked Bar Graph	დაწყობილი ზოლოვანი გრაფიკი
+	Line Graph	ხაზოვანი გრაფიკი
+	Area Graph	არეების გრაფიკი
+	Scatter Graph	გაფანტული გრაფიკი
+	Pie Graph	წრიული გრაფიკი
+	Radar Graph	რადარული გრაფიკი
 	Vector Halftone	ვექტორული ნახევარტონი
 	spot	სპოტ
 	Text	ტექსტი

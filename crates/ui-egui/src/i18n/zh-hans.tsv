@@ -1370,6 +1370,40 @@ file-filter	Templates	模板
 	Graph	图表
 	Graph Data	图表数据
 	Graph Type	图表类型
+	Graph Options	图表选项
+	Left Axis	左轴
+	Right Axis	右轴
+	Category Axis	类别轴
+	Separate Scales	分开刻度
+	Add Drop Shadow	添加投影
+	Add Legend Across Top	在顶部添加图例
+	First Row in Front	第一行在前
+	First Column in Front	第一列在前
+	Legend	图例
+	Column Width	列宽
+	Bar Width	条形宽度
+	Cluster Width	簇宽度
+	Mark Data Points	标记数据点
+	Connect Data Points	连接数据点
+	Edge-to-Edge Lines	边到边线条
+	Draw Filled Lines	绘制填充线
+	Tick Values	刻度值
+	Override Calculated Values	覆盖计算值
+	Divisions	刻度数
+	Tick Marks	刻度线
+	Tick Marks per Division	每个刻度的刻度线数
+	Draw Tick Marks Between Labels	在标签之间绘制刻度线
+	Add Labels	添加标签
+	Maximum must be more than Minimum.	最大值必须大于最小值。
+	Column Graph	柱形图
+	Stacked Column Graph	堆积柱形图
+	Bar Graph	条形图
+	Stacked Bar Graph	堆积条形图
+	Line Graph	折线图
+	Area Graph	面积图
+	Scatter Graph	散点图
+	Pie Graph	饼图
+	Radar Graph	雷达图
 	Graph Design	图表设计
 	Graph Marker	图表标记
 	New Design	新建设计

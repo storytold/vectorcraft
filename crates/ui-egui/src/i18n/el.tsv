@@ -1341,6 +1341,40 @@ font-technology	Variable	Μεταβλητές
 	Graph	Γράφημα
 	Graph Data	Δεδομένα γραφήματος
 	Graph Type	Τύπος γραφήματος
+	Graph Options	Επιλογές γραφήματος
+	Left Axis	Αριστερός άξονας
+	Right Axis	Δεξιός άξονας
+	Category Axis	Άξονας κατηγοριών
+	Separate Scales	Ξεχωριστές κλίμακες
+	Add Drop Shadow	Προσθήκη εξωτερικής σκιάς
+	Add Legend Across Top	Προσθήκη υπομνήματος στο επάνω μέρος
+	First Row in Front	Πρώτη γραμμή μπροστά
+	First Column in Front	Πρώτη στήλη μπροστά
+	Legend	Υπόμνημα
+	Column Width	Πλάτος στήλης
+	Bar Width	Πλάτος ράβδου
+	Cluster Width	Πλάτος ομάδας
+	Mark Data Points	Σήμανση σημείων δεδομένων
+	Connect Data Points	Σύνδεση σημείων δεδομένων
+	Edge-to-Edge Lines	Γραμμές από άκρη σε άκρη
+	Draw Filled Lines	Σχεδίαση γεμισμένων γραμμών
+	Tick Values	Τιμές υποδιαιρέσεων
+	Override Calculated Values	Αντικατάσταση υπολογισμένων τιμών
+	Divisions	Διαιρέσεις
+	Tick Marks	Σημάδια υποδιαίρεσης
+	Tick Marks per Division	Σημάδια ανά διαίρεση
+	Draw Tick Marks Between Labels	Σχεδίαση σημαδιών ανάμεσα στις ετικέτες
+	Add Labels	Προσθήκη ετικετών
+	Maximum must be more than Minimum.	Το μέγιστο πρέπει να είναι μεγαλύτερο από το ελάχιστο.
+	Column Graph	Γράφημα στηλών
+	Stacked Column Graph	Γράφημα στοιβαγμένων στηλών
+	Bar Graph	Ραβδόγραμμα
+	Stacked Bar Graph	Στοιβαγμένο ραβδόγραμμα
+	Line Graph	Γραμμικό γράφημα
+	Area Graph	Γράφημα περιοχής
+	Scatter Graph	Διάγραμμα διασποράς
+	Pie Graph	Κυκλικό γράφημα
+	Radar Graph	Αραχνοειδές γράφημα
 	Graph Design	Σχεδίαση γραφήματος
 	Graph Marker	Δείκτης γραφήματος
 	New Design	Νέο σχέδιο

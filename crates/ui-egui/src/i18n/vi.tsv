@@ -1685,6 +1685,40 @@ file-filter	Templates	Mẫu
 	Chop Design	Cắt thiết kế
 	Scale Design	Co giãn thiết kế
 	Graph Type	Loại biểu đồ
+	Graph Options	Tùy chọn biểu đồ
+	Left Axis	Trục trái
+	Right Axis	Trục phải
+	Category Axis	Trục danh mục
+	Separate Scales	Thang đo riêng
+	Add Drop Shadow	Thêm đổ bóng
+	Add Legend Across Top	Thêm chú giải ở trên cùng
+	First Row in Front	Hàng đầu tiên ở trước
+	First Column in Front	Cột đầu tiên ở trước
+	Legend	Chú giải
+	Column Width	Độ rộng cột
+	Bar Width	Độ rộng thanh
+	Cluster Width	Độ rộng nhóm
+	Mark Data Points	Đánh dấu điểm dữ liệu
+	Connect Data Points	Nối các điểm dữ liệu
+	Edge-to-Edge Lines	Đường từ mép đến mép
+	Draw Filled Lines	Vẽ đường tô đầy
+	Tick Values	Giá trị vạch chia
+	Override Calculated Values	Ghi đè giá trị đã tính
+	Divisions	Số khoảng chia
+	Tick Marks	Vạch chia
+	Tick Marks per Division	Vạch chia mỗi khoảng
+	Draw Tick Marks Between Labels	Vẽ vạch chia giữa các nhãn
+	Add Labels	Thêm nhãn
+	Maximum must be more than Minimum.	Giá trị tối đa phải lớn hơn giá trị tối thiểu.
+	Column Graph	Biểu đồ cột
+	Stacked Column Graph	Biểu đồ cột chồng
+	Bar Graph	Biểu đồ thanh
+	Stacked Bar Graph	Biểu đồ thanh chồng
+	Line Graph	Biểu đồ đường
+	Area Graph	Biểu đồ vùng
+	Scatter Graph	Biểu đồ phân tán
+	Pie Graph	Biểu đồ tròn
+	Radar Graph	Biểu đồ radar
 	Graphic	Đồ họa
 	Graphic Style	Kiểu đồ họa
 	Graphic Style Libraries	Thư viện kiểu đồ họa

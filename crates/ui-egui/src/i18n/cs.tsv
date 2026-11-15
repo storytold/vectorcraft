@@ -3671,6 +3671,40 @@ theme	Appearance	Motiv
 	Create Graph	Vytvořit graf
 	Graph Data	Data grafu
 	Graph Type	Typ grafu
+	Graph Options	Možnosti grafu
+	Left Axis	Levá osa
+	Right Axis	Pravá osa
+	Category Axis	Osa kategorií
+	Separate Scales	Samostatná měřítka
+	Add Drop Shadow	Přidat vržený stín
+	Add Legend Across Top	Přidat legendu nahoru
+	First Row in Front	První řádek vpředu
+	First Column in Front	První sloupec vpředu
+	Legend	Legenda
+	Column Width	Šířka sloupce
+	Bar Width	Šířka pruhu
+	Cluster Width	Šířka skupiny
+	Mark Data Points	Označit datové body
+	Connect Data Points	Spojit datové body
+	Edge-to-Edge Lines	Čáry od okraje k okraji
+	Draw Filled Lines	Kreslit vyplněné čáry
+	Tick Values	Hodnoty značek
+	Override Calculated Values	Přepsat vypočítané hodnoty
+	Divisions	Dílky
+	Tick Marks	Značky
+	Tick Marks per Division	Značek na dílek
+	Draw Tick Marks Between Labels	Kreslit značky mezi popisky
+	Add Labels	Přidat popisky
+	Maximum must be more than Minimum.	Maximum musí být větší než minimum.
+	Column Graph	Sloupcový graf
+	Stacked Column Graph	Skládaný sloupcový graf
+	Bar Graph	Pruhový graf
+	Stacked Bar Graph	Skládaný pruhový graf
+	Line Graph	Spojnicový graf
+	Area Graph	Plošný graf
+	Scatter Graph	Bodový graf
+	Pie Graph	Výsečový graf
+	Radar Graph	Paprskový graf
 	Vector Halftone	Vektorový polotón
 	spot	přímá
 	Text	Text

@@ -10624,7 +10624,7 @@ drag that places the rings' end point, Space held moves the flare at its current
 (dialog `artboardOptions`; the Artboard tool's active artboard while it is in use, else the window's; its `x` and `y`
 are the artboard's top-left corner in document points, while the dialog shows X and Y at the reference point the
 Transform panel uses, counted from the ruler origin), a graph tool's
-the selected graph's Graph Type (an error without one), a Symbolism tool's the Symbolism Tools Options (dialog
+the selected graph's Graph Type (dialog `graphType`, described below; an error without one), a Symbolism tool's the Symbolism Tools Options (dialog
 `symbolismOptions`: `diameter` in points, `intensity` and `density` 1–10, one brush for the eight tools) and the
 Magic Wand tool's its panel. `ui.newArtboard` (Alt-click on the Artboards panel's New Artboard) opens Artboard Options
 for a new artboard, with `new: true` and the name, position and size that `artboard.new {}` would give it. OK runs
@@ -10632,6 +10632,31 @@ for a new artboard, with `new: true` and the name, position and size that `artbo
 `artboard.new` and `artboard.setProps` trim the white space around `name`, and a blank name gives the artboard its
 default name, "Artboard N" for the Nth artboard.
 A canvas-click dialog also has `preview` (initially on): tentative settings draw at the remembered click, Reset refreshes that preview, and Cancel discards it without persisting settings. OK accepts one flare as one Undo step. Toolbar-only options draw no artwork.
+
+Object › Graph › Type… (`graph.setType` without params) and a double-click on a graph tool open Graph Type (dialog
+`graphType`) for the selected graph, or for the series picked in it with Group Selection. Its fields are the options
+`graph.setType {}` returns, under the command's names for them. `legend`, `pieLegend`, `piePosition`, `pieSort`,
+`firstRowInFront`, `firstColumnInFront` and `filledLines` are held for every type, so a type picked in the dialog shows
+the options it uses. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
+value axis and of the right one. While one is on, OK sends `axisMin`, `axisMax` and `ticks` (or `rightAxisMin`,
+`rightAxisMax` and `rightTicks`), and the dialog fills the ones the graph lacks with the values the axis would be
+calculated with for the type, value axis and Separate Scales the dialog shows.
+One that was on and is turned off sends `null`, `null` and `0`, and one left off sends none of the three. `__page` is the
+page the dialog shows: `options` (Graph Options), `valueAxis` (Value Axis, or Left Axis while the value axis is on both
+sides), `rightAxis` (Right Axis, with the value axis on both sides) or `categoryAxis` (column, stacked column, bar,
+stacked bar, line and area graphs); a pie graph has the `options` page alone, and a page the type picked lacks shows
+`options`. With series picked, `type` and `valueAxis` (`left` or `right`) go to those series and the other options to
+the whole graph, as the command applies them; `type` or `valueAxis` is `null` while the picked series differ in it, and
+OK then leaves each series as it is. OK runs `graph.setType` with the fields: `legend` for every type but pie,
+and the three pie options for a pie graph. When the selection changed while the dialog was open, it also sends `id`, and
+`seriesIndexes` while series are picked and a `type` or `valueAxis` goes to them, so it changes the graph and the series
+the dialog opened on. A value axis side without a scale of its own (the right side without Separate Scales, or with
+Separate Scales a side that no series is on) shows the tick values of the scale drawn on it, and its Override Calculated
+Values is dimmed. A value of `axisMin`, `axisMax` or `ticks` (or of the right axis' three) that is not a number is sent
+as it is, and `graph.setType` refuses it. With nothing changed it closes without a step of history. An overridden value
+axis whose maximum is not more than its minimum is the error "Maximum must be more than Minimum." and the dialog stays
+open. The types the dialog dims for picked series (those that cannot go in the graph), the options it dims for a type
+and the pages it lists are VectorCraft's own rules.
 
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"flare","values":{"rays":24,"ringsOn":false}}}}

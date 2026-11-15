@@ -1435,6 +1435,40 @@ file-filter	Templates	Шаблони
 	Graph	Діаграма
 	Graph Data	Дані діаграми
 	Graph Type	Тип діаграми
+	Graph Options	Параметри діаграми
+	Left Axis	Ліва вісь
+	Right Axis	Права вісь
+	Category Axis	Вісь категорій
+	Separate Scales	Окремі шкали
+	Add Drop Shadow	Додати тінь
+	Add Legend Across Top	Додати легенду вгорі
+	First Row in Front	Перший рядок попереду
+	First Column in Front	Перший стовпець попереду
+	Legend	Легенда
+	Column Width	Ширина стовпця
+	Bar Width	Ширина смуги
+	Cluster Width	Ширина групи
+	Mark Data Points	Позначати точки даних
+	Connect Data Points	З'єднувати точки даних
+	Edge-to-Edge Lines	Лінії від краю до краю
+	Draw Filled Lines	Малювати заповнені лінії
+	Tick Values	Значення поділок
+	Override Calculated Values	Замінити обчислені значення
+	Divisions	Поділки
+	Tick Marks	Позначки поділок
+	Tick Marks per Division	Позначок на поділку
+	Draw Tick Marks Between Labels	Малювати позначки між підписами
+	Add Labels	Додати підписи
+	Maximum must be more than Minimum.	Максимум має бути більшим за мінімум.
+	Column Graph	Стовпчикова діаграма
+	Stacked Column Graph	Стовпчикова діаграма з накопиченням
+	Bar Graph	Лінійчата діаграма
+	Stacked Bar Graph	Лінійчата діаграма з накопиченням
+	Line Graph	Графік
+	Area Graph	Діаграма з областями
+	Scatter Graph	Точкова діаграма
+	Pie Graph	Кругова діаграма
+	Radar Graph	Пелюсткова діаграма
 	Graph Design	Дизайн діаграми
 	Graph Marker	Маркер діаграми
 	New Design	Новий дизайн

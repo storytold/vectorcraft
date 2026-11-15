@@ -1420,6 +1420,40 @@ font-technology	Variable	Variables
 	Graph	Gráfico
 	Graph Data	Datos del gráfico
 	Graph Type	Tipo de gráfico
+	Graph Options	Opciones de gráfico
+	Left Axis	Eje izquierdo
+	Right Axis	Eje derecho
+	Category Axis	Eje de categorías
+	Separate Scales	Escalas separadas
+	Add Drop Shadow	Añadir sombra paralela
+	Add Legend Across Top	Añadir leyenda en la parte superior
+	First Row in Front	Primera fila delante
+	First Column in Front	Primera columna delante
+	Legend	Leyenda
+	Column Width	Anchura de columna
+	Bar Width	Anchura de barra
+	Cluster Width	Anchura de grupo
+	Mark Data Points	Marcar puntos de datos
+	Connect Data Points	Conectar puntos de datos
+	Edge-to-Edge Lines	Líneas de borde a borde
+	Draw Filled Lines	Dibujar líneas rellenas
+	Tick Values	Valores de marcas
+	Override Calculated Values	Sustituir valores calculados
+	Divisions	Divisiones
+	Tick Marks	Marcas de graduación
+	Tick Marks per Division	Marcas por división
+	Draw Tick Marks Between Labels	Dibujar marcas entre etiquetas
+	Add Labels	Añadir etiquetas
+	Maximum must be more than Minimum.	El máximo debe ser mayor que el mínimo.
+	Column Graph	Gráfico de columnas
+	Stacked Column Graph	Gráfico de columnas apiladas
+	Bar Graph	Gráfico de barras
+	Stacked Bar Graph	Gráfico de barras apiladas
+	Line Graph	Gráfico de líneas
+	Area Graph	Gráfico de áreas
+	Scatter Graph	Gráfico de dispersión
+	Pie Graph	Gráfico circular
+	Radar Graph	Gráfico de radar
 	Graph Design	Diseño de gráfico
 	Graph Marker	Marcador de gráfico
 	New Design	Nuevo diseño

@@ -3920,6 +3920,40 @@ theme	Appearance	Vormgeving
 	Create Graph	Diagram maken
 	Graph Data	Diagramgegevens
 	Graph Type	Diagramtype
+	Graph Options	Diagramopties
+	Left Axis	Linkeras
+	Right Axis	Rechteras
+	Category Axis	Categorie-as
+	Separate Scales	Aparte schalen
+	Add Drop Shadow	Slagschaduw toevoegen
+	Add Legend Across Top	Legenda bovenaan toevoegen
+	First Row in Front	Eerste rij vooraan
+	First Column in Front	Eerste kolom vooraan
+	Legend	Legenda
+	Column Width	Kolombreedte
+	Bar Width	Staafbreedte
+	Cluster Width	Groepbreedte
+	Mark Data Points	Gegevenspunten markeren
+	Connect Data Points	Gegevenspunten verbinden
+	Edge-to-Edge Lines	Lijnen van rand tot rand
+	Draw Filled Lines	Gevulde lijnen tekenen
+	Tick Values	Maatstreepwaarden
+	Override Calculated Values	Berekende waarden negeren
+	Divisions	Verdelingen
+	Tick Marks	Maatstreepjes
+	Tick Marks per Division	Maatstreepjes per verdeling
+	Draw Tick Marks Between Labels	Maatstreepjes tussen labels tekenen
+	Add Labels	Labels toevoegen
+	Maximum must be more than Minimum.	Het maximum moet groter zijn dan het minimum.
+	Column Graph	Kolomdiagram
+	Stacked Column Graph	Gestapeld kolomdiagram
+	Bar Graph	Staafdiagram
+	Stacked Bar Graph	Gestapeld staafdiagram
+	Line Graph	Lijndiagram
+	Area Graph	Vlakdiagram
+	Scatter Graph	Spreidingsdiagram
+	Pie Graph	Cirkeldiagram
+	Radar Graph	Radardiagram
 	Vector Halftone	Vectorhalftoon
 	spot	spot
 	Text	Tekst

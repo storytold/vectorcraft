@@ -1541,6 +1541,40 @@
 	Graph Design	ગ્રાફ ડિઝાઇન
 	Graph Marker	ગ્રાફ માર્કર
 	Graph Type	ગ્રાફ પ્રકાર
+	Graph Options	ગ્રાફ વિકલ્પો
+	Left Axis	ડાબી અક્ષ
+	Right Axis	જમણી અક્ષ
+	Category Axis	શ્રેણી અક્ષ
+	Separate Scales	અલગ સ્કેલ
+	Add Drop Shadow	ડ્રોપ શેડો ઉમેરો
+	Add Legend Across Top	ઉપર લેજન્ડ ઉમેરો
+	First Row in Front	પ્રથમ પંક્તિ આગળ
+	First Column in Front	પ્રથમ કૉલમ આગળ
+	Legend	લેજન્ડ
+	Column Width	કૉલમ પહોળાઈ
+	Bar Width	બાર પહોળાઈ
+	Cluster Width	જૂથ પહોળાઈ
+	Mark Data Points	ડેટા પોઇન્ટ ચિહ્નિત કરો
+	Connect Data Points	ડેટા પોઇન્ટ જોડો
+	Edge-to-Edge Lines	કિનારીથી કિનારી સુધી રેખાઓ
+	Draw Filled Lines	ભરેલી રેખાઓ દોરો
+	Tick Values	ટિક મૂલ્યો
+	Override Calculated Values	ગણતરી કરેલાં મૂલ્યો બદલો
+	Divisions	વિભાગો
+	Tick Marks	ટિક ચિહ્નો
+	Tick Marks per Division	વિભાગ દીઠ ટિક ચિહ્નો
+	Draw Tick Marks Between Labels	લેબલ વચ્ચે ટિક ચિહ્નો દોરો
+	Add Labels	લેબલ ઉમેરો
+	Maximum must be more than Minimum.	મહત્તમ ન્યૂનતમ કરતાં વધુ હોવું જોઈએ.
+	Column Graph	કૉલમ ગ્રાફ
+	Stacked Column Graph	સ્ટેક્ડ કૉલમ ગ્રાફ
+	Bar Graph	બાર ગ્રાફ
+	Stacked Bar Graph	સ્ટેક્ડ બાર ગ્રાફ
+	Line Graph	રેખા ગ્રાફ
+	Area Graph	ક્ષેત્ર ગ્રાફ
+	Scatter Graph	સ્કેટર ગ્રાફ
+	Pie Graph	પાઇ ગ્રાફ
+	Radar Graph	રડાર ગ્રાફ
 	Graphic Pen…	ગ્રાફિક પેન…
 	Graphic Style	ગ્રાફિક સ્ટાઇલ
 	Graphic Style Libraries	ગ્રાફિક સ્ટાઇલ લાઇબ્રેરીઓ
