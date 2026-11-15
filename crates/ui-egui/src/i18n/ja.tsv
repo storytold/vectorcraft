@@ -463,6 +463,18 @@ digits	Malayalam	マラヤーラム数字
 	Title Case	単語の先頭のみ大文字
 	Sentence case	文頭のみ大文字
 	Smart Punctuation…	欧文用字形の自動置換…
+	Smart Punctuation	欧文用字形の自動置換
+	ff, fi, ffi Ligatures	ff、fi、ffi 合字
+	ff, fl, ffl Ligatures	ff、fl、ffl 合字
+	Smart Quotes	スマート引用符
+	Smart Spaces	スマートスペース
+	En, Em Dashes	EN ダッシュと EM ダッシュ
+	Ellipses	省略記号
+	Expert Fractions	エキスパート分数
+	Replace In	置換範囲
+	Selected Text Only	選択したテキストのみ
+	Entire Document	ドキュメント全体
+	Report Results	結果を表示
 	Create Outlines	アウトラインを作成
 	Optical Margin Alignment	最適なマージン揃え
 	Dynamic Text	ダイナミックテキスト
@@ -2075,6 +2087,7 @@ antiAlias	Sharp	シャープ
 	Images:	イメージ:
 	Import Keyboard Shortcuts…	キーボードショートカットを読み込み…
 	Import PDF	PDF を読み込み
+	Import PDF pages as links	PDF ページをリンクとして読み込み
 	Import PDF Presets	PDF プリセットを読み込み
 	Import Perspective Grid Presets	遠近グリッドプリセットを読み込み
 	Import Print Presets	プリントプリセットを読み込み
@@ -4032,6 +4045,7 @@ file-filter	Templates	テンプレート
 	Small Thumbnails	小さいサムネール
 	Smooth Color	スムーズカラー
 	Social Square Post 1080×1080	ソーシャル正方形投稿 1080×1080
+	Sort by Size	サイズ順に並べ替え
 	Sort by Status	状態順に並べ替え
 	Specified Distance	距離
 	Specified Steps	ステップ数
@@ -7847,6 +7861,7 @@ axis	Y Axis	Y 軸
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF ファイルが大きすぎて、文字として配置できません (最大 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG を展開すると、入れ子の SVG 画像が {0} 個を超えます
 @msg	the SVG expands to more than {0} objects	SVG を展開すると、オブジェクトが {0} 個を超えます
+@msg	the SVG's styles expand to more than {0} MB	SVG のスタイルを展開すると {0} MB を超えます
 @msg	the SVG has no drawable objects	SVG に描画できるオブジェクトがありません
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ ファイルを展開すると {_1} MB を超えます
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文書のプロパティが {MAX_PAGES} ページを超えており、多すぎて配置できません

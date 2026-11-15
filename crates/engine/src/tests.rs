@@ -129,6 +129,7 @@ mod pdffidelity;
 mod pdfmarks;
 mod pdfpresets;
 mod pdfraster;
+mod persp_infer;
 mod persp_planes;
 pub(super) mod persp_select;
 mod persp_text;

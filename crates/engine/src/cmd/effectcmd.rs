@@ -722,7 +722,7 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
 /// sets its Warp style (`warpStyle`), its 3D type (`threeDType`) or visibility (`visible`), as one
 /// undo step. They are checked as `effect.apply` checks them, and a visible 3D effect must still
 /// fit; a hidden one has its given values checked. → `{ids}`.
-fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
+pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
     let mut params = p.get("params").cloned().unwrap_or(Value::Null);

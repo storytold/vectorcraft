@@ -387,6 +387,18 @@
 	Title Case	Jak W Tytule
 	Sentence case	Jak w zdaniu
 	Smart Punctuation…	Inteligentna interpunkcja…
+	Smart Punctuation	Inteligentna interpunkcja
+	ff, fi, ffi Ligatures	Ligatury ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatury ff, fl, ffl
+	Smart Quotes	Inteligentne cudzysłowy
+	Smart Spaces	Inteligentne spacje
+	En, Em Dashes	Półpauzy i pauzy
+	Ellipses	Wielokropki
+	Expert Fractions	Ułamki eksperckie
+	Replace In	Zastąp w
+	Selected Text Only	Tylko zaznaczony tekst
+	Entire Document	Cały dokument
+	Report Results	Raportuj wyniki
 	Create Outlines	Utwórz kontury
 	Optical Margin Alignment	Optyczne wyrównanie marginesów
 	Dynamic Text	Tekst dynamiczny
@@ -2199,6 +2211,7 @@ digits	Malayalam	Malajalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	wpis {i} w paths wymaga path i ids (identyfikatorów obiektów, których nie ma żaden inny wpis)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder przyjmuje path: w folderze tego pliku szukane są pozostałe brakujące łącza
 	Show Missing	Pokaż brakujące
+	Sort by Size	Sortuj według rozmiaru
 	Sort by Status	Sortuj według stanu
 	Clear Overrides	Wyczyść zastąpienia
 	Create New {kind} Style	Utwórz nowy styl: {kind}
@@ -2552,6 +2565,7 @@ digits	Malayalam	Malajalam
 	e.g. 1-3, 5	np. 1-3, 5
 	First Page	Pierwsza strona
 	Import PDF	Importuj PDF
+	Import PDF pages as links	Importuj strony PDF jako łącza
 	Last Page	Ostatnia strona
 	Next Page	Następna strona
 	of {count}	z {count}
@@ -8877,6 +8891,7 @@ breakText	Glyphs	Glify
 @msg	the RTF file is too large to place as type (at most {_1} MB)	plik RTF jest zbyt duży, aby umieścić go jako tekst (najwyżej {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG rozwija się do ponad {0} zagnieżdżonych obrazów SVG
 @msg	the SVG expands to more than {0} objects	SVG rozwija się do ponad {0} obiektów
+@msg	the SVG's styles expand to more than {0} MB	style SVG rozwijają się do ponad {0} MB
 @msg	the SVG has no drawable objects	SVG nie zawiera obiektów, które można narysować
 @msg	the SVGZ file unpacks to more than {_1} MB	plik SVGZ po rozpakowaniu ma ponad {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	dokument Word ma ponad {MAX_PAGES} stron właściwości, zbyt wiele, aby go umieścić

@@ -2107,6 +2107,7 @@ file-filter	Templates	Sablonok
 	Import Library	Könyvtár importálása
 	Import Library…	Könyvtár importálása…
 	Import PDF	PDF importálása
+	Import PDF pages as links	PDF-oldalak importálása csatolásként
 	Import PDF Presets	PDF-előbeállítások importálása
 	Import Perspective Grid Presets	Perspektivikus rács előbeállításainak importálása
 	Import Print Presets	Nyomtatási előbeállítások importálása
@@ -4102,6 +4103,18 @@ mark-style	Japanese	Japán
 	Smart Guides (View → Smart Guides)	Intelligens segédvonalak (Nézet → Intelligens segédvonalak)
 	Smart Guides (⌘U)	Intelligens segédvonalak (⌘U)
 	Smart Punctuation…	Intelligens írásjelek…
+	Smart Punctuation	Intelligens írásjelek
+	ff, fi, ffi Ligatures	ff, fi, ffi ligatúrák
+	ff, fl, ffl Ligatures	ff, fl, ffl ligatúrák
+	Smart Quotes	Intelligens idézőjelek
+	Smart Spaces	Intelligens szóközök
+	En, Em Dashes	Gondolatjelek és nagykötőjelek
+	Ellipses	Három pont
+	Expert Fractions	Szakértői törtek
+	Replace In	Csere helye
+	Selected Text Only	Csak a kijelölt szöveg
+	Entire Document	Teljes dokumentum
+	Report Results	Eredmények jelentése
 	Smooth	Simítás
 	Smooth Color	Sima színátmenet
 	Smooth Tool	Simítás
@@ -4132,6 +4145,7 @@ mark-style	Japanese	Japán
 	Sort by Luminance	Rendezés fénysűrűség szerint
 	Sort by Name	Rendezés név szerint
 	Sort by Popularity	Rendezés gyakoriság szerint
+	Sort by Size	Rendezés méret szerint
 	Sort by Status	Rendezés állapot szerint
 	Source code on GitHub	Forráskód a GitHubon
 	Source Image	Forráskép
@@ -8896,6 +8910,7 @@ breakText	Glyphs	Glifák
 @msg	the RTF file is too large to place as type (at most {_1} MB)	az RTF-fájl túl nagy ahhoz, hogy szövegként elhelyezhető legyen (legfeljebb {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	az SVG kibontva több mint {0} beágyazott SVG-képet tartalmaz
 @msg	the SVG expands to more than {0} objects	az SVG kibontva több mint {0} objektumot tartalmaz
+@msg	the SVG's styles expand to more than {0} MB	az SVG stílusai kibontva több mint {0} MB-ot foglalnak
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	az SVG-fájl nagyobb, mint {MAX_IMPORT_BYTES} bájt
 @msg	the SVG has no drawable objects	az SVG-ben nincsenek kirajzolható objektumok
 @msg	the SVGZ file unpacks to more than {_1} MB	az SVGZ-fájl kicsomagolva nagyobb, mint {_1} MB
