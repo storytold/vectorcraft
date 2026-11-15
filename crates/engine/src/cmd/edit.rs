@@ -1454,6 +1454,8 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         for xf in placements {
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
+                // A pasted symbol set packs from the density recorded for it at Copy.
+                d.carry_set_densities(n, &c, &clip.set_densities);
                 imported.apply(&mut c);
                 let sc = vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() };
                 if xf != Affine::IDENTITY {

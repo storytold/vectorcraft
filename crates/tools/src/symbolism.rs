@@ -11,7 +11,9 @@ use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Shape};
 
 use crate::draw2::{FEEDBACK, GestureTool, points_json};
-use crate::{Action, Cursor, MAX_STROKE_SAMPLES, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, previews_at};
+use crate::{
+    Action, Cursor, MAX_STROKE_SAMPLES, Mods, Overlay, PREVIEW_ALL_UNTIL, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, previews_at,
+};
 
 /// Create a symbolism tool or the brush-aware Paintbrush (None = not one of ours).
 pub fn create(id: &str) -> Option<Box<dyn Tool>> {
@@ -28,6 +30,10 @@ pub const METHODS: [&str; 3] = ["userDefined", "average", "random"];
 
 /// The values of each Symbol Sprayer option in the Symbolism Tools Options.
 pub const SPRAY_MODES: [&str; 2] = ["average", "userDefined"];
+
+/// The smallest change of pen pressure, with Use Pressure Pen, that a drag sample within a step of
+/// the last point gives that point. VectorCraft's own value.
+const PRESSURE_STEP: f64 = 0.05;
 
 /// The Symbol Sprayer options: (tool option, key in `symbol.spray`'s `attributes`).
 pub const SPRAY_ATTRIBUTES: [(&str, &str); 6] = [
@@ -227,11 +233,27 @@ impl Tool for SymbolismTool {
                 // Sprayer: thin the samples to a fraction of the brush; others: every few pixels.
                 let step = if self.id == "symbolSprayer" { (self.diameter * 0.15).max(cx.tol(3.0)) } else { cx.tol(3.0) };
                 // Each preview carries every point so far: a long drag stops growing and previews less often.
-                if self.points.len() >= MAX_STROKE_SAMPLES || self.points.last().is_some_and(|(l, _)| l.distance(p) < step) {
-                    return vec![];
-                }
-                self.points.push(sample);
-                if !previews_at(self.points.len()) {
+                let full = self.points.len() >= MAX_STROKE_SAMPLES;
+                let near = self.points.last().is_some_and(|(l, _)| l.distance(p) < step);
+                let pressed = match self.points.last_mut().filter(|_| full || near) {
+                    // With Use Pressure Pen, the last point takes a pressure change made within a step of it.
+                    Some(last) if near && self.use_pressure && (sample.1 - last.1).abs() >= PRESSURE_STEP => {
+                        last.1 = sample.1;
+                        true
+                    }
+                    Some(_) => return vec![],
+                    None => {
+                        self.points.push(sample);
+                        false
+                    }
+                };
+                // A pressure change adds no point: past the points that all preview, it waits for the
+                // next preview or the release, so a long stroke is not sent again for each change.
+                if !previews_at(self.points.len()) || (pressed && self.points.len() > PREVIEW_ALL_UNTIL) {
+                    // A changed pressure on a point already shown leaves the preview out of date.
+                    if pressed {
+                        self.previewed = 0;
+                    }
                     return vec![];
                 }
                 self.previewed = self.points.len();
@@ -544,6 +566,55 @@ mod tests {
         spinner.set_option("method", &json!("random"));
         let v = press(&mut spinner);
         assert!(v["method"] == "random" && v.get("proportional").is_none(), "{v}");
+    }
+
+    /// With Use Pressure Pen, a pressure change within a step of the last point gives that point the
+    /// new pressure and previews it; a smaller change, or one without the option, adds nothing.
+    #[test]
+    fn a_pressure_change_in_place_is_kept() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let at = |kind, x: f64, pressure: f32| PointerEvent { pressure, ..PointerEvent::new(kind, x, 5.0) };
+        for use_pressure in [true, false] {
+            let mut t = SymbolismTool::new("symbolSizer");
+            t.set_option("usePressure", &json!(use_pressure));
+            t.pointer(&cx, &at(PointerKind::Down, 5.0, 0.0));
+            let a = t.pointer(&cx, &at(PointerKind::Drag, 6.0, 0.8));
+            if use_pressure {
+                let [Action::Preview(_, v)] = a.as_slice() else { panic!("{a:?}") };
+                assert_eq!(v["points"], json!([[5.0, 5.0, f64::from(0.8f32)]]));
+                assert_eq!(t.pointer(&cx, &at(PointerKind::Drag, 6.5, 0.82)), vec![]);
+            } else {
+                assert_eq!(a, vec![]);
+            }
+            assert_eq!(t.pointer(&cx, &at(PointerKind::Up, 6.5, 0.0)), vec![Action::Commit]);
+        }
+    }
+
+    /// Once a drag has its most points, a pressure change away from the last point leaves that
+    /// point's pressure as it was.
+    #[test]
+    fn a_pressure_change_away_from_the_last_point_of_a_full_drag_is_not_kept() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let at = |kind, x: f64, pressure: f32| PointerEvent { pressure, ..PointerEvent::new(kind, x, 5.0) };
+        let mut t = SymbolismTool::new("symbolSizer");
+        t.set_option("usePressure", &json!(true));
+        t.pointer(&cx, &at(PointerKind::Down, 0.0, 0.5));
+        t.points = (0..MAX_STROKE_SAMPLES).map(|i| (Point::new(50.0 * i as f64, 5.0), 0.5)).collect();
+        let far = 50.0 * (MAX_STROKE_SAMPLES + 10) as f64;
+        assert_eq!(t.pointer(&cx, &at(PointerKind::Drag, far, 1.0)), vec![]);
+        assert_eq!((t.points.len(), t.points.last().map(|(_, pressure)| *pressure)), (MAX_STROKE_SAMPLES, Some(0.5)));
+        // Within a step of the last point the change is kept, and the long stroke is not previewed
+        // again for it: the release sends it.
+        let last = 50.0 * (MAX_STROKE_SAMPLES - 1) as f64;
+        assert_eq!(t.pointer(&cx, &at(PointerKind::Drag, last + 1.0, 1.0)), vec![]);
+        assert_eq!(t.points.last().map(|(_, pressure)| *pressure), Some(1.0));
+        let a = t.pointer(&cx, &at(PointerKind::Up, last + 1.0, 0.0));
+        assert!(matches!(a.first(), Some(Action::Preview(_, v)) if v["points"].as_array().map(Vec::len) == Some(MAX_STROKE_SAMPLES)), "{}", a.len());
+        assert_eq!(a.last(), Some(&Action::Commit));
     }
 
     /// A drag begun with Shift sends `shift` with the Shifter, Sizer, Stainer and Styler, and only

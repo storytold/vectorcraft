@@ -84,8 +84,9 @@ pub(super) fn spacing(density: f64) -> f64 {
 }
 
 /// The document key that holds each symbol set's Symbol Set Density: `{set id: density}`, written
-/// when the Symbol Sprayer creates a set and when `symbol.setDensity` spaces it.
-const SET_DENSITY_KEY: &str = "symbolSetDensity";
+/// when the Symbol Sprayer creates a set and when `symbol.setDensity` spaces it, and copied to a
+/// copy of a set by [`Document::reid`].
+const SET_DENSITY_KEY: &str = Document::SYMBOL_SET_DENSITY_KEY;
 
 /// The Symbol Set Density symbol set `set` was created at or last given (None when not recorded).
 fn set_density_of(d: &Document, set: NodeId) -> Option<f64> {

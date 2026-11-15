@@ -3324,7 +3324,8 @@ already walks Image Trace. Short agent entry points:
     style. `attributes` left out means `average` for all six.
   - `symbol.setDensity` moves each instance of a set along the line from the middle of the set's instances, to
     (1.15 − 0.1·`to`) / (1.15 − 0.1·`from`) of its distance from it (each factor at least 0.1), as one undo step, and
-    adds none when no instance moves. `from` is the density each set was created at or last given, and the
+    adds none when no instance moves. `from` is the density each set was created at or last given (a set
+    duplicated has its source's, and a pasted set the one its source had at Copy), and the
     `from` passed applies only to a set without one (a group named "Symbol Set" by hand); the sets moved then have
     density `to`. A locked or hidden instance stays where it is. It returns `{ids, count}`: the sets changed and the
     instances moved.

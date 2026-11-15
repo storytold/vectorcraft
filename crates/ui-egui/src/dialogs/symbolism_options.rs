@@ -12,7 +12,7 @@
 use serde_json::{Map, Value, json};
 use vectorcraft_tools::settings::SYMBOLISM;
 
-use super::{DialogResult, DialogSpec, form, run_and_close};
+use super::{DialogResult, DialogSpec, form, modal, run_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -55,6 +55,13 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Value {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    // The rows scroll when the window is shorter than they are, so the heading and the buttons
+    // stay in view.
+    modal::scrolled_rows(ui, "symbolism-options-rows", |ui| rows(app, ui, d));
+    false
+}
+
+fn rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let unit = app.session.general_unit();
     // The tool whose options show below (the eight tools share one toolbar icon, so they are listed
     // by name).
@@ -103,7 +110,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     ui.add_space(10.0);
     form::check(ui, d, "showBrush", tl!("Show Brush Size and Intensity"));
-    false
 }
 
 /// The selected symbol sets.
@@ -130,6 +136,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui_kittest::kittest::Queryable;
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
@@ -140,6 +147,39 @@ mod tests {
 
     fn painted(app: &mut VectorcraftApp) -> String {
         crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
+    }
+
+    /// In a short window the rows scroll, and the heading, OK and Cancel stay on the screen.
+    #[test]
+    fn the_buttons_stay_in_view_in_a_short_window() {
+        let mut app = app();
+        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                super::super::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(4);
+        for (physical, zoom) in [(egui::vec2(1366.0, 768.0), 1.5), (egui::vec2(1280.0, 720.0), 1.5), (egui::vec2(800.0, 600.0), 1.0)] {
+            h.ctx.set_zoom_factor(zoom);
+            for _ in 0..12 {
+                h.set_size(physical / zoom);
+                h.run_steps(1);
+            }
+            let screen = h.ctx.content_rect();
+            let heading = h.get_by_role_and_label(egui::accesskit::Role::Label, "Symbolism Tools Options").rect();
+            assert!(screen.contains_rect(heading), "{physical:?} at {zoom}: the heading {heading:?} in {screen:?}");
+            for label in ["OK", "Cancel"] {
+                let rect = h.get_by_label(label).rect();
+                assert!(screen.contains_rect(rect), "{physical:?} at {zoom}: {label} {rect:?} in {screen:?}");
+            }
+        }
     }
 
     #[test]

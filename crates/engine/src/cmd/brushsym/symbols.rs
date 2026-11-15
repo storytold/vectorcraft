@@ -975,7 +975,7 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
             if modes.screen
                 && let Some(m) = near
             {
-                n.opacity = (m.opacity as f32).clamp(0.05, 1.0);
+                n.opacity = (m.opacity as f32).clamp(0.0, 1.0);
             }
             // The stain and the style are both the instance's fill: the style, set last, replaces
             // the stain, an averaged one too when the instances under the brush have a fill.
@@ -1113,7 +1113,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let spread = affects_density && !shift;
     // No undo step when no instance changes (none under the brush, or Average with each at the mean).
-    let count = crate::cmd::colorcmds::edit_if_changed(s, label, |_, d| {
+    let count = crate::cmd::colorcmds::edit_if_changed(s, label, |before, d| {
         let mut touched = std::collections::BTreeSet::new();
         for (j, (q, pressure)) in pts.iter().enumerate() {
             let delta = if j > 0 { *q - pts[j - 1].0 } else { Vec2::ZERO };
@@ -1247,7 +1247,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                     _ => {
                         let step = (0.1 * w * share) as f32;
                         n.opacity = match &target {
-                            Some(t) => (n.opacity + ((t.opacity - f64::from(n.opacity)) * w.min(1.0)) as f32).clamp(0.05, 1.0),
+                            Some(t) => (n.opacity + ((t.opacity - f64::from(n.opacity)) * w.min(1.0)) as f32).clamp(0.0, 1.0),
                             None if alt => (n.opacity + step).min(1.0),
                             None => (n.opacity - step).max(0.05),
                         };
@@ -1255,6 +1255,8 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
+        // An instance the brush reached but left as it was (at a limit already) is not counted.
+        touched.retain(|id| d.node(*id) != before.node(*id));
         Ok((touched.len(), !touched.is_empty()))
     })?;
     Ok(json!({ "count": count }))

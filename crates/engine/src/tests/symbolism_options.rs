@@ -136,6 +136,48 @@ fn average_at_the_mean_adds_no_undo_step() {
     assert!(state(&s) == before);
 }
 
+/// An instance the brush reaches but leaves as it is (the Symbol Screener with Alt on an opaque
+/// instance, or without Alt on one at the lowest opacity it gives) is not counted, and a stroke
+/// that changes no instance adds no undo step.
+#[test]
+fn an_instance_left_as_it_is_is_not_counted() {
+    let mut s = session();
+    let (opaque, faint) = (dot(&mut s, 100.0, 150.0), dot(&mut s, 300.0, 150.0));
+    s.execute("transparency.set", &json!({"ids": [faint.0], "opacity": 5})).unwrap();
+    let before = state(&s);
+    let r = adjust(&mut s, json!({"tool": "screen", "points": [[100, 150]], "radius": 30, "intensity": 10, "alt": true}));
+    assert_eq!(r["count"], 0, "Alt on an opaque instance");
+    let r = adjust(&mut s, json!({"tool": "screen", "points": [[300, 150]], "radius": 30, "intensity": 10}));
+    assert_eq!(r["count"], 0, "an instance at 5%");
+    assert!(state(&s) == before, "a stroke that changes nothing changed the document or its history");
+    // A stroke over both counts only the instance it changes.
+    let r = adjust(&mut s, json!({"tool": "screen", "points": [[200, 150]], "radius": 150, "intensity": 10}));
+    assert_eq!(r["count"], 1);
+    assert!(node(&s, opaque).opacity < 1.0 && node(&s, faint).opacity == 0.05);
+}
+
+/// Average gives an opacity below 5% when that is the mean: the Symbol Sprayer's new instance and
+/// the Symbol Screener's instances take the mean of the instances under the brush.
+#[test]
+fn average_keeps_a_mean_opacity_below_five_percent() {
+    let mut s = session();
+    let set = NodeId(s.execute("symbol.spray", &json!({"name": "Dot", "points": [[200, 150]], "radius": 4})).unwrap()["id"].as_u64().unwrap());
+    let first = members(&s, set)[0];
+    s.execute("transparency.set", &json!({"ids": [first.0], "opacity": 2})).unwrap();
+    s.select(|_, sel| sel.set([set])).unwrap();
+    s.execute("symbol.spray", &json!({"name": "Dot", "points": [[215, 150]], "radius": 30})).unwrap();
+    let sprayed = *members(&s, set).last().unwrap();
+    assert!((node(&s, sprayed).opacity - 0.02).abs() < 1e-6, "{}", node(&s, sprayed).opacity);
+    // Two instances at 0% and 4%: Average brings both toward 2%, and neither goes past it.
+    let mut s = session();
+    let (a, b) = (dot(&mut s, 200.0, 150.0), dot(&mut s, 220.0, 150.0));
+    s.execute("transparency.set", &json!({"ids": [a.0], "opacity": 0})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [b.0], "opacity": 4})).unwrap();
+    adjust(&mut s, json!({"tool": "screen", "points": [[210, 150]], "radius": 40, "intensity": 10, "method": "average"}));
+    let (pa, pb) = (node(&s, a).opacity, node(&s, b).opacity);
+    assert!(pa > 0.0 && pa <= 0.02 + 1e-6 && (0.02 - 1e-6..0.04).contains(&pb), "{pa} {pb}");
+}
+
 /// Average evens out the Symbol Stainer's amount and the Symbol Scruncher's spacing.
 #[test]
 fn average_evens_out_the_stain_and_the_spacing() {
@@ -506,6 +548,45 @@ fn set_density_starts_from_the_density_a_set_was_sprayed_at() {
     .unwrap();
     s.execute("symbol.setDensity", &json!({"from": 5, "to": 9, "ids": [group.0]})).unwrap();
     assert!((center(&s, a).x - (150.0 - 50.0 * 0.25 / 0.65)).abs() < 1e-9, "{:?}", center(&s, a));
+}
+
+/// A set duplicated packs from the density recorded for its source, and a pasted set from the
+/// density its source had at Copy: after Cut, after the source is given another density, and in
+/// another document.
+#[test]
+fn a_copied_set_packs_from_the_density_of_its_source() {
+    for copy in ["duplicate", "paste", "cut", "changed after copy", "other document"] {
+        let mut s = session();
+        let row: Vec<Value> = (0..4).map(|i| json!([60.0 + 60.0 * f64::from(i), 150.0])).collect();
+        let set =
+            NodeId(s.execute("symbol.spray", &json!({"name": "Dot", "points": row, "radius": 4, "density": 2})).unwrap()["id"].as_u64().unwrap());
+        s.select(|_, sel| sel.set([set])).unwrap();
+        let first = match copy {
+            "duplicate" => "edit.duplicate",
+            "cut" => "edit.cut",
+            _ => "edit.copy",
+        };
+        s.execute(first, &json!({})).unwrap();
+        if copy == "changed after copy" {
+            s.execute("symbol.setDensity", &json!({"from": 5, "to": 9, "ids": [set.0]})).unwrap();
+        }
+        if copy == "other document" {
+            s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        }
+        if copy != "duplicate" {
+            s.execute("edit.paste", &json!({})).unwrap();
+        }
+        let copied = s.doc().unwrap().selection.objects.clone();
+        assert!(copied.len() == 1 && (copy == "other document" || copied[0] != set), "{copy}: {copied:?}");
+        let ids = members(&s, copied[0]);
+        let xs = |s: &Session| ids.iter().map(|id| center(s, *id).x).collect::<Vec<_>>();
+        let was = xs(&s);
+        let middle = was.iter().sum::<f64>() / 4.0;
+        s.execute("symbol.setDensity", &json!({"from": 5, "to": 9, "ids": [copied[0].0]})).unwrap();
+        for (before, after) in was.iter().zip(xs(&s)) {
+            assert!((after - (middle + (before - middle) * 0.25 / 0.95)).abs() < 1e-9, "{copy}: {before} -> {after}");
+        }
+    }
 }
 
 /// A locked instance of the set stays where it is, and the others move.
