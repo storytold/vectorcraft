@@ -8755,7 +8755,11 @@ indent and bullet or number again.
 ```
 
 `type.createOutlines` (Type › Create Outlines) makes a group with a path per glyph, ruby glyph and underline or
-strikethrough bar, each painted as its characters are. The type object's own fills and strokes (the items around the
+strikethrough bar, each painted as its characters are. When the type is scaled unevenly, sheared or flattened, each of
+these paths takes only its characters' fill, and a path filled with the stroke's paint follows it: the area the
+characters' stroke paints around the glyphs before the type's transform (dashes, caps, joins and alignment), transformed
+with them as the canvas draws it. Under a move, rotation, reflection or uniform scale the paths keep a live stroke, its
+weight and dashes scaled with the type. The type object's own fills and strokes (the items around the
 Appearance panel's Characters row, not the characters' formatting) go on paths of the type's whole outline: the items
 below the Characters row on one path under the glyph paths, the others on one path over them, in their order and with
 their opacity, blend mode, effects and stroke settings. Their gradients that are not placed are fixed to the type's

@@ -515,18 +515,62 @@ fn laid_out(t: &vectorcraft_doc::TextObject) -> (Vec<kurbo::BezPath>, kurbo::Bez
 /// gradient fitted across the whole layout, and the transform also scales its stroke weights and
 /// dashes and transforms its pattern tiles. Placed gradients keep their place in text space and
 /// move with the type.
-pub fn paint_type_piece(piece: &mut Node, style: &vectorcraft_doc::CharStyle, bounds: Rect, xf: Affine) {
+///
+/// When `xf` is not a similarity (it scales unevenly, shears or flattens), one weight can't give
+/// the stroke the thickness the canvas paints in each direction: `piece` keeps only the run's fill,
+/// and the returned path is the area the run's stroke paints around `piece` in text space
+/// ([`crate::stroke::outline_region`]: dashes, caps, joins and alignment), placed by `xf` and
+/// filled with the stroke's paint, to paint over `piece`. `None` under a similarity and for a run
+/// without a stroke.
+pub fn paint_type_piece(piece: &mut Node, style: &vectorcraft_doc::CharStyle, bounds: Rect, xf: Affine) -> Option<Node> {
+    let scaling = vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() };
     let mut ap = style.appearance();
     ap.pin_gradients(bounds);
+    let stroke = if is_similarity(xf) { None } else { filled_stroke(piece, &mut ap) };
     piece.appearance = ap.into();
-    piece.transform(xf, vectorcraft_doc::Scaling { strokes: true, patterns: true, ..Default::default() });
+    piece.transform(xf, scaling);
+    stroke.map(|mut s| {
+        s.transform(xf, scaling);
+        s
+    })
+}
+
+/// Does `xf` keep angles and scale every direction alike (a move, a rotation, a uniform scale or a
+/// reflection), without flattening?
+fn is_similarity(xf: Affine) -> bool {
+    let [a, b, c, d, ..] = xf.as_coeffs();
+    let (x, y) = (a.hypot(b), c.hypot(d));
+    let tol = 1e-9 * x.max(y);
+    x.is_finite() && y.is_finite() && x > 0.0 && y > 0.0 && (x - y).abs() <= tol && (a * c + b * d).abs() <= tol * x.max(y)
+}
+
+/// Takes the stroke out of `ap`, the appearance of `piece` (a path or compound path in text space),
+/// and returns the area it paints there as a path filled with its paint, opacity, blend mode,
+/// effects and overprint, with `piece`'s id. `None` when `ap` has no stroke or it paints nothing.
+fn filled_stroke(piece: &Node, ap: &mut Appearance) -> Option<Node> {
+    let i = ap.items.iter().position(|i| matches!(i, AppearanceItem::Stroke(_)))?;
+    let AppearanceItem::Stroke(st) = ap.items.remove(i) else { return None };
+    let path = PathData::from_bezpath(&piece.stroke_path()?);
+    let region = crate::stroke::outline_region(&path, FillRule::NonZero, &st);
+    if region.is_empty() {
+        return None;
+    }
+    let fill = vectorcraft_doc::FillLayer {
+        opacity: st.opacity,
+        blend: st.blend,
+        effects: st.effects.clone(),
+        overprint: st.overprint,
+        ..vectorcraft_doc::FillLayer::new(st.paint.stroke_as_fill())
+    };
+    Some(Node::path(piece.id, region, Appearance { items: vec![AppearanceItem::Fill(fill)], ..Default::default() }))
 }
 
 /// Type as glyph outlines in document space: one path per run with the run's fill and stroke,
 /// over its colour glyphs (images, art), and (when the object has its own fills/strokes) the whole
 /// outline with the object's items below the characters under them and the others over them, as
 /// the renderer paints them. Each run's path is placed by the type's transform, which also scales its stroke
-/// weights and dashes and transforms its pattern tiles; its unplaced gradients are first fixed to
+/// weights and dashes and transforms its pattern tiles (a transform that is not a similarity puts
+/// the run's stroke on a filled path over it, [`paint_type_piece`]); its unplaced gradients are first fixed to
 /// the layout's bounds in text space. The object's own unplaced gradients are fixed to the
 /// bounding box of those bounds in the document. The group is marked as type's outlines
 /// ([`vectorcraft_doc::NodeExtras::type_outlines`]).
@@ -542,8 +586,9 @@ pub fn outline_text(n: &Node) -> Option<Node> {
             continue;
         }
         let mut piece = Node::path(n.id, PathData::from_bezpath(bp), Appearance::default());
-        paint_type_piece(&mut piece, &run.style, bounds, t.xf);
+        let stroke = paint_type_piece(&mut piece, &run.style, bounds, t.xf);
         children.push(Arc::new(piece));
+        children.extend(stroke.map(Arc::new));
     }
     if !n.appearance.items.is_empty() && !all.elements().is_empty() {
         let (below, above) = n.appearance.split_contents();
