@@ -2,10 +2,11 @@
 //! tip covers, built a bounded amount at a time.
 //!
 //! The drag is cut into pieces of up to [`PIECE_SEGMENTS`] segments (one segment each when the
-//! Size varies with pressure). A call outlines again, in the space where the tip is round, only the
+//! tip varies along the drag). A call outlines again, in the space where the tip is round, only the
 //! pieces it added segments to. A piece's outline then loses the parts that lie inside the area
 //! of another piece, found through a grid of squares that lists the segments near each square, so
-//! the pieces show as one outline. One call takes at most [`POINTS_PER_CALL`] new points and does at most
+//! the pieces show as one outline. When the tip's angle or roundness varies, each segment has its
+//! own space where its tip is round, and the grid is on the page. One call takes at most [`POINTS_PER_CALL`] new points and does at most
 //! [`WORK_PER_CALL`] units of work, plus the one step it was in; what is left waits for the next
 //! call ([`AreaPreview::pending`]). Until then a piece shows the outline it last finished, and the
 //! points not yet taken show as a thin line. The settled pieces show as paths of up to
@@ -15,14 +16,15 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
+use vectorcraft_brush::Variation;
 use vectorcraft_geom::{Affine, BezPath, Line, ParamCurve, PathData, PathEl, PathSeg, Point, SubPath};
 use vectorcraft_pathops as po;
 use vectorcraft_pathops::{Cap, Join};
 
 use super::super::{MIN_BRUSH_SIZE, blob_tip, eraser_tip, pressure_size};
 
-/// The most segments of a drag that one piece of its outline holds, when the Size does not vary
-/// with pressure (a piece then holds one segment).
+/// The most segments of a drag that one piece of its outline holds, when the tip does not vary
+/// along the drag (a piece then holds one segment).
 pub(super) const PIECE_SEGMENTS: usize = 32;
 /// The most points of a drag one call takes.
 pub(super) const POINTS_PER_CALL: usize = 256;
@@ -68,9 +70,25 @@ pub(super) struct AreaKey {
     pub variation: f64,
     pub angle: f64,
     pub roundness: f64,
-    /// Each segment is as wide as the pen pressed there.
-    pub pressure: bool,
+    /// Each segment takes its own tip from the pen's readings at its ends ([`AreaPreview::step`]):
+    /// its own size, and with `shaped` its own angle and roundness.
+    pub varies: bool,
+    /// Each segment's tip has its own angle and roundness.
+    pub shaped: bool,
+    /// The tips at the points take the pen's pressure there: once the pen presses less than fully,
+    /// a point pressed fully takes the tip of full pressure instead of that of a stroke without
+    /// pressure.
+    pub pressed: bool,
+    /// The bearing the tips take at the points before the pen first leaned, when a tip follows the
+    /// bearing: the first lean gives it to the points already outlined.
+    pub first_bearing: Option<f64>,
+    /// The modes and Variations of the angle, roundness and size that the tips at the points follow.
+    pub modes: [Variation; 3],
+    pub variations: [f64; 3],
 }
+
+/// A tip's angle in degrees, roundness in percent and size in points.
+pub(super) type Tip = [f64; 3];
 
 /// The work of the last call.
 #[derive(Clone, Copy, Default, Debug)]
@@ -129,16 +147,24 @@ struct Check {
 pub(super) struct AreaPreview {
     key: AreaKey,
     first: Point,
+    /// The map from the page to the grid's space: where the tip is round, or the page itself when
+    /// each segment's tip has its own angle and roundness.
     squash: Affine,
     stretch: Affine,
-    /// The side of the grid's squares, where the tip is round.
+    /// The side of the grid's squares, in the grid's space.
     side: f64,
-    /// The points taken, where the tip is round.
+    /// The points taken, in the grid's space.
     sq: Vec<Point>,
     /// The last point taken, on the page.
     last: Point,
-    /// The tip's radius along each segment, where the tip is round.
+    /// The tip at the last point taken, when the tip varies along the drag.
+    last_tip: Option<Tip>,
+    /// The tip's radius along each segment, where its tip is round. It is also as far as the
+    /// segment's area reaches from the segment in the grid's space.
     radius: Vec<f64>,
+    /// The map from the grid's space to the space where each segment's tip is round, when each
+    /// segment's tip has its own angle and roundness (empty otherwise: the grid's space).
+    to_round: Vec<Affine>,
     pieces: Vec<Piece>,
     squares: HashMap<(i64, i64), Vec<u32>>,
     /// How many listings the squares hold ([`LISTINGS`]).
@@ -156,8 +182,12 @@ pub(super) struct AreaPreview {
 impl AreaPreview {
     /// The outline of a drag that starts at `first`.
     pub(super) fn new(key: AreaKey, first: Point) -> Self {
-        let stretch = if key.blob { blob_tip(key.angle, key.roundness) } else { eraser_tip(key.angle, key.roundness) };
-        let widest = if key.pressure { pressure_size(key.size, key.variation, 1.0) } else { key.size };
+        let stretch = match key {
+            AreaKey { shaped: true, .. } => Affine::IDENTITY,
+            AreaKey { blob: true, .. } => blob_tip(key.angle, key.roundness),
+            _ => eraser_tip(key.angle, key.roundness),
+        };
+        let widest = if key.varies { pressure_size(key.size, key.variation, 1.0) } else { key.size };
         Self {
             key,
             first,
@@ -166,7 +196,9 @@ impl AreaPreview {
             side: widest.max(MIN_BRUSH_SIZE),
             sq: vec![],
             last: first,
+            last_tip: None,
             radius: vec![],
+            to_round: vec![],
             pieces: vec![],
             squares: HashMap::new(),
             listed: 0,
@@ -208,33 +240,72 @@ impl AreaPreview {
     }
 
     /// Take the points of the drag `pts` added since the last call and check outlines, within this
-    /// call's limits. `pressures` holds the pen pressure at each point when the Size varies with it.
-    pub(super) fn step(&mut self, pts: &[Point], pressures: Option<&[f32]>) {
+    /// call's limits. When the tip varies along the drag, `tip(i)` gives the tip at point `i`, and
+    /// segment `j` takes `middle(j)`, the tip halfway along it. A last point whose tip changed since
+    /// it was taken (a pen turned or tilted in place) gives its segment the new tip.
+    pub(super) fn step(&mut self, pts: &[Point], tip: &dyn Fn(usize) -> Tip, middle: &dyn Fn(usize) -> Tip) {
         self.work = AreaWork::default();
         let mut changed = BTreeSet::new();
+        if self.key.varies
+            && let Some(j) = self.sq.len().checked_sub(2)
+            && self.last_tip.is_some_and(|t| t != tip(j + 1))
+        {
+            let k = self.piece_of(j);
+            let old = self.radius[j];
+            self.set_tip(j, middle(j));
+            self.last_tip = Some(tip(j + 1));
+            changed.insert(k);
+            // The pieces near the old tip or the new one are checked again.
+            let new = self.radius[j];
+            self.radius[j] = old.max(new);
+            self.near(j, k, false);
+            self.radius[j] = new;
+        }
         while self.sq.len() < pts.len() && self.work.points < POINTS_PER_CALL && self.work.work < WORK_PER_CALL {
             let i = self.sq.len();
             self.sq.push(self.squash * pts[i]);
             self.last = pts[i];
             self.work.points += 1;
+            if self.key.varies {
+                self.last_tip = Some(tip(i));
+            }
             let Some(j) = i.checked_sub(1) else { continue };
-            let size = match pressures.filter(|_| self.key.pressure).and_then(|f| f.get(j..=i)) {
-                Some(f) => pressure_size(self.key.size, self.key.variation, f64::from(f[0] + f[1]) / 2.0),
-                None => self.key.size,
-            };
-            self.radius.push(size / 2.0);
-            if self.key.pressure || self.pieces.last().is_none_or(|p| p.to - p.from >= PIECE_SEGMENTS) {
+            if self.key.varies {
+                self.radius.push(0.0);
+                self.set_tip(j, middle(j));
+            } else {
+                self.radius.push(self.key.size / 2.0);
+            }
+            if self.key.varies || self.pieces.last().is_none_or(|p| p.to - p.from >= PIECE_SEGMENTS) {
                 self.pieces.push(Piece { from: j, to: j, outline: vec![], shown: BezPath::new() });
             }
             let k = self.pieces.len() - 1;
             self.pieces[k].to = j + 1;
             changed.insert(k);
-            self.list(j, k);
+            self.near(j, k, true);
         }
         for k in changed {
             self.outline_piece(k);
         }
         self.check_some();
+    }
+
+    /// Give segment `j` the tip `[angle, roundness, size]`, the tip halfway along it: its radius,
+    /// and with `shaped` the map to the space where that tip is round.
+    fn set_tip(&mut self, j: usize, [angle, roundness, size]: Tip) {
+        self.radius[j] = size.max(MIN_BRUSH_SIZE) / 2.0;
+        if self.key.shaped {
+            let round = eraser_tip(angle, roundness).inverse();
+            match self.to_round.get_mut(j) {
+                Some(m) => *m = round,
+                None => self.to_round.push(round),
+            }
+        }
+    }
+
+    /// The map from the grid's space to the space where segment `m`'s tip is round.
+    fn round_of(&self, m: usize) -> Affine {
+        self.to_round.get(m).copied().unwrap_or(Affine::IDENTITY)
     }
 
     /// The paths to show: the settled pieces' outlines, joined [`BLOCK_PIECES`] at a time, the
@@ -281,13 +352,13 @@ impl AreaPreview {
 
     /// How many pieces no longer grow: all of them but a last one with room for more segments.
     fn settled_count(&self) -> usize {
-        let growing = !self.key.pressure && self.pieces.last().is_some_and(|p| p.to - p.from < PIECE_SEGMENTS);
+        let growing = !self.key.varies && self.pieces.last().is_some_and(|p| p.to - p.from < PIECE_SEGMENTS);
         self.pieces.len() - usize::from(growing)
     }
 
     /// The piece that holds segment `j`.
     fn piece_of(&self, j: usize) -> usize {
-        if self.key.pressure { j } else { j / PIECE_SEGMENTS }
+        if self.key.varies { j } else { j / PIECE_SEGMENTS }
     }
 
     /// The square of the grid that holds `p`; `None` far outside any document.
@@ -317,16 +388,16 @@ impl AreaPreview {
         Some(keys)
     }
 
-    /// List segment `j` of piece `k` in the squares its area reaches, and mark the other pieces
-    /// whose outline its area can reach to be checked again.
-    fn list(&mut self, j: usize, k: usize) {
+    /// With `add`, list segment `j` of piece `k` in the squares its area reaches; either way, mark
+    /// the other pieces whose outline its area can reach to be checked again.
+    fn near(&mut self, j: usize, k: usize, add: bool) {
         let (a, b, r) = (self.sq[j], self.sq[j + 1], self.radius[j]);
         let mut near = vec![];
         match self.squares_along(a, b, SEGMENT_SAMPLES) {
             Some(keys) => {
                 for key in keys {
                     self.work.work += 1;
-                    if self.listed >= LISTINGS {
+                    if self.listed >= LISTINGS || !add {
                         near.extend(self.squares.get(&key).into_iter().flatten().map(|m| *m as usize));
                         continue;
                     }
@@ -350,7 +421,7 @@ impl AreaPreview {
                         }
                     }
                 }
-                if self.wide.len() < WIDE_SEGMENTS {
+                if add && self.wide.len() < WIDE_SEGMENTS {
                     self.wide.push(j);
                 }
             }
@@ -374,10 +445,21 @@ impl AreaPreview {
     fn outline_piece(&mut self, k: usize) {
         let settled = self.settled_count();
         let Some(p) = self.pieces.get(k) else { return };
-        let pts = &self.sq[p.from..=p.to];
         let width = 2.0 * self.radius[p.from];
-        self.work.outlined += pts.len();
-        let area = po::outline_stroke(&PathData::single(SubPath::polyline(pts, false)), width, Cap::Round, Join::Round, 4.0).to_bezpath();
+        self.work.outlined += p.to + 1 - p.from;
+        // A piece whose tip has its own angle and roundness (one segment) is outlined where that
+        // tip is round and taken back to the grid's space.
+        let area = match self.to_round.get(p.from) {
+            Some(&round) => {
+                let pts = [round * self.sq[p.from], round * self.sq[p.to]];
+                round.inverse()
+                    * po::outline_stroke(&PathData::single(SubPath::polyline(&pts, false)), width, Cap::Round, Join::Round, 4.0).to_bezpath()
+            }
+            None => {
+                let pts = &self.sq[p.from..=p.to];
+                po::outline_stroke(&PathData::single(SubPath::polyline(pts, false)), width, Cap::Round, Join::Round, 4.0).to_bezpath()
+            }
+        };
         let outline = segments(&area);
         let shown = self.stretch * area;
         if let Some(p) = self.pieces.get_mut(k) {
@@ -454,7 +536,11 @@ impl AreaPreview {
     /// The stretches of `seg` (from and to, 0 at its start, 1 at its end) that lie inside no area
     /// of a segment of the drag but `own`.
     fn visible(&mut self, seg: PathSeg, own: std::ops::Range<usize>) -> Vec<(f64, f64)> {
-        let inside = |s: &Self, q: Point, m: usize| distance_to_segment(q, s.sq[m], s.sq[m + 1]) < s.radius[m] * (1.0 - INSIDE);
+        // Each segment's area is tested where its tip is round.
+        let inside = |s: &Self, q: Point, m: usize| {
+            let round = s.round_of(m);
+            distance_to_segment(round * q, round * s.sq[m], round * s.sq[m + 1]) < s.radius[m] * (1.0 - INSIDE)
+        };
         match seg {
             PathSeg::Line(line) => {
                 let len = line.p0.distance(line.p1);
@@ -482,7 +568,14 @@ impl AreaPreview {
                     keys
                 };
                 let near = self.candidates(keys, &own);
-                let spans = near.iter().filter_map(|&m| capsule_span(line, self.sq[m], self.sq[m + 1], self.radius[m] * (1.0 - INSIDE))).collect();
+                // A map keeps a line's points where they are along it.
+                let spans = near
+                    .iter()
+                    .filter_map(|&m| {
+                        let round = self.round_of(m);
+                        capsule_span(round * line, round * self.sq[m], round * self.sq[m + 1], self.radius[m] * (1.0 - INSIDE))
+                    })
+                    .collect();
                 gaps(&merge_spans(spans))
             }
             _ => {
