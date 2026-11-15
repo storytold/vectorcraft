@@ -800,7 +800,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Cmd+Shift+F6",
         "{} make the open document before the current one in tab order the current one, as a click on its tab does (before the first document it goes to the last, and from the Home screen to the last); each view window.newWindow opened is a step of its own; returns {index}, with `view` for a document with more than one view",
     ),
-    ("tool.select", "Select Tool", "", "{tool: id} (see tools)"),
+    ("tool.select", "Select Tool", "", "{tool: id} (see tools) → {tool}; a tool that cannot be chosen returns the error"),
     (
         "tool.setOption",
         "Tool Option",
@@ -811,7 +811,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.toggleTouchMode",
         "Switch Selection and Drawing Modes",
         "",
-        "{} from the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool, choose the drawing tool chosen last in this window (none yet: the Pencil tool); from any other tool, choose the Selection tool, remembering the tool left as the drawing tool unless it is the Hand, Rotate View, Zoom or Print Tiling tool → {tool}. A two-finger tap on the canvas runs it in the Touch workspace (Enable Touch Gestures on)",
+        "{} from the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool, choose the drawing tool chosen last in this window (none yet: the Pencil tool); from any other tool, choose the Selection tool, remembering the tool left as the drawing tool unless it is the Hand, Rotate View, Zoom or Print Tiling tool → {tool}; a tool that cannot be chosen returns the error and leaves the drawing tool as it was. A two-finger tap on the canvas runs it in the Touch workspace (Enable Touch Gestures on)",
     ),
     (
         "effect.dialog",
@@ -830,7 +830,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.cropImage",
         "Crop Image",
         "",
-        "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect}), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box",
+        "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect}), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box. → {tool}; a tool that cannot be chosen returns the error",
     ),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
     (
@@ -1737,7 +1737,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.runInstalledScript",
         "Run Script",
         "",
-        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (the script is checked again, then script.run runs it by its path, so its #include lines and $.evalFile read beside it), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
+        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (script.run with installed reads the file once, checks it again and runs that text, so its #include lines and $.evalFile read in the folder that read found), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
     ),
     (
         "ui.checkScript",
