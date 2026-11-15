@@ -176,6 +176,24 @@ fn options_of_selected_object_null_items_keep_each_paths_own() {
 }
 
 #[test]
+fn options_of_selected_object_go_when_a_freehand_stroke_changes_the_brush() {
+    let mut s = session();
+    let a = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Arrow", "ids": [a.0]})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"width": 50}})).unwrap();
+    let extend = |s: &mut Session, brush: &str, points: Value| {
+        s.execute("brush.freehand", &json!({"points": points, "style": "brush", "brush": brush, "extend": {"id": a.0}})).unwrap();
+    };
+    // Continuing the path with its own brush keeps the settings.
+    extend(&mut s, "Arrow", json!([[0, 0], [40, 30], [80, 10]]));
+    assert_eq!(own_options(&s, a), json!({"width": 50.0}));
+    // Another brush, with a stroke or with only the brush changing, clears them.
+    extend(&mut s, "Diamonds", json!([[0, 0]]));
+    assert_eq!(brush_of(&s, a).as_deref(), Some("Diamonds"));
+    assert_eq!(own_options(&s, a), json!({}));
+}
+
+#[test]
 fn options_of_selected_object_keys_convert_with_the_document() {
     let mut s = session();
     let a = line(&mut s);

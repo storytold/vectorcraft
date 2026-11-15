@@ -3430,7 +3430,8 @@ already walks Image Trace. Short agent entry points:
   refuses `params` together with `reset`, a selection with no brushed path, paths whose brushes are of different
   types, a bristle brush and a field the type does not take. It records one undo step, and none when nothing changes.
   `brush.options` edits still reach the settings a path does not set, `brush.apply`, a brush change in
-  `stroke.setAdvanced` and removing the brush clear the path's settings, and renaming the brush keeps them. Without
+  `stroke.setAdvanced`, Global Edit or a `brush.freehand` extend, and removing the brush clear the path's settings,
+  and renaming the brush keeps them. Without
   `params` or `reset` the command only returns the first path's settings. The native file saves them on the stroke as `brush_options`.
 - Pen tilt, bearing and barrel rotation (#764): `path.freehand` and `brush.freehand` take points as
   `[x, y, pressure, tiltX, tiltY, rotation]` or `{x, y, pressure?, tiltX?, tiltY?, rotation?}`, with `null` for what a
