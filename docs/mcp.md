@@ -4540,9 +4540,10 @@ darker than the row's average become tints and shades) or `hueShift` (the most s
 the others turn by the same hue). `limitTo` snaps new colours to a swatch library's nearest colour;
 `recolor.randomize {map, order?, saturationBrightness?, seed?}` shuffles or varies new colours; a row with
 `exclude: true` keeps its colours. A row's `from` may be an empty list: the row recolors nothing, adds no library swatch with
-`limitTo` and gives `group` no color, and `recolor.randomize` and `recolor.weigh` keep it. A row without `from`, or with
+`limitTo` and gives `group` no color, and `recolor.randomize` and `recolor.weigh` keep it; `recolor.randomize` leaves its
+new color as it is and shuffles only the rows that hold current colors. A row without `from`, or with
 a current color that is not a color, is refused. With art selected, the Recolor Artwork dialog's New Row button (beside
-Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click another row and Merge to move its colors into it. An
+Merge) adds such a row above the first selected row, or at the top, with that row's new color, and selects it; Shift-click a row below it and Merge to move that row's colors into it (Merge keeps the topmost selected row's new color). An
 empty row does not count toward Colors. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
 linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
