@@ -57,6 +57,7 @@ mod logo;
 mod mosaic;
 mod opaque;
 mod quantize;
+mod seam;
 mod shapes;
 mod smooth;
 mod subpixel;
@@ -71,6 +72,7 @@ pub use gradient::TracedGradient;
 pub use mosaic::mosaic;
 pub use opaque::{ALPHA_MAX_DECODE_BYTES, OUTLINE_MAX_ANCHORS, OUTLINE_MAX_PIXELS, decode_alpha, opaque_outline};
 pub use quantize::{FULL_TONE_MAX, Quantized, TRANSPARENT, denoise, quantize};
+pub use seam::{SEAM_WIDTH, seam_fills};
 pub use shapes::TracedShape;
 use subpixel::Crack;
 

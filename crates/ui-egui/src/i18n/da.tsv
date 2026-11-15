@@ -291,6 +291,7 @@
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en gruppes udfyldning eller streg tegner intet at eksportere
 @msg	The 3D object is too complex to export	3D-objektet er for komplekst til at blive eksporteret
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` skal være et objekt, der kun indeholder `mode` med værdien shaded eller wireframe
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
 @msg	bevel must be none or one of {_1}	bevel skal være none eller en af {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan ikke danne legemer af denne grafik: dens symbolforekomster, blandinger og beskæringsgrupper indeholder for mange objekter
@@ -478,6 +479,7 @@
 @msg	stops must be in order of `offset`	farvestoppene skal stå i rækkefølge efter `offset`
 @msg	the document has no pattern {pattern}	dokumentet har intet mønster {pattern}
 @msg	the document has no swatch {n}	dokumentet har ingen farveprøve {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` kræver et gradientstop, der er knyttet til en spotfarveprøve
 @msg	the output	outputtet
 @msg	the path has no anchor points	kurven har ingen ankerpunkter
 @msg	too many anchor points (limit {MAX_ANCHORS})	for mange ankerpunkter (grænse {MAX_ANCHORS})
@@ -1089,6 +1091,7 @@
 	Rotate (Classic)…	Rotér (klassisk)…
 	Surface	Overflade
 	Wireframe	Trådmodel
+	Render Settings	Renderingsindstillinger
 	No Shading	Ingen skyggelægning
 	Plastic	Plastik
 	Highlight Intensity	Højlysintensitet
@@ -1536,6 +1539,11 @@
 	NTSC Colors	NTSC-farver
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-politik:
+	CMYK Policy:	CMYK-politik:
+	Preserve Embedded Profiles	Bevar indlejrede profiler
+	Convert to Working Space	Konverter til arbejdsfarverum
+	Preserve Numbers	Bevar tal
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Krakelering…
@@ -2035,6 +2043,7 @@ lighting	Light	Lys
 	Align to Artboard	Juster til tegnebræt
 	Align to Glyph Bounds	Juster til glyfafgrænsning
 	Align to Key Object	Juster til nøgleobjekt
+	Align to Key Anchor	Juster til nøgleankerpunkt
 	Align to Selection	Juster til markering
 	Align To:	Juster til:
 	Cancel Key Object	Annullér nøgleobjekt
@@ -2179,11 +2188,55 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Sammensatte skrifttyper
 	Export Composite Fonts	Eksportér sammensatte skrifttyper
 	Import Composite Fonts	Importér sammensatte skrifttyper
+@msg	each font must be {name, parts}	hver skrifttype skal være {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	ukendt nøgle `{k}`; en skrifttype tager name og parts
+@msg	each font needs a name	hver skrifttype skal have et navn
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan ikke være navnet på en sammensat skrifttype (1 til {COMPOSITE_NAME_MAX} tegn, ingen kontroltegn)
+@msg	`{name}`: parts must be an object	`{name}`: parts skal være et objekt
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: ukendt klasse `{k}`; klasserne er kanji, kana, punctuation, symbols, roman og numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} skal være et objekt
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: ukendt nøgle `{k}` i {_1}
+@msg	`{name}`: give the kanji part	`{name}`: angiv delen kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	et dokument har højst {COMPOSITE_FONTS_MAX} sammensatte skrifttyper
+@msg	two composite fonts are named `{_1}`	to sammensatte skrifttyper hedder `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` er navnet på en installeret skrifttype
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} er sat med `{font}`, en sammensat skrifttype
+@msg	give fonts: [{name, parts}…]	angiv fonts: [{name, parts}…]
+@msg	path is empty	path er tom
+@msg	fonts must be a list of composite fonts	fonts skal være en liste med sammensatte skrifttyper
+@msg	names must be strings	names skal være strenge
+@msg	no composite font named `{n}`	ingen sammensat skrifttype hedder `{n}`
+@msg	names must be a list of names	names skal være en liste med navne
+@msg	no composite fonts to export	ingen sammensatte skrifttyper at eksportere
+@msg	not a composite fonts file: {e}	ikke en fil med sammensatte skrifttyper: {e}
+@msg	not a composite fonts file: no compositeFonts list	ikke en fil med sammensatte skrifttyper: ingen liste compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	filen indeholder mere end {COMPOSITE_FONTS_MAX} sammensatte skrifttyper
+@msg	the file is larger than 4 MB	filen er større end 4 MB
+@msg	dataBase64 is not base64	dataBase64 er ikke base64
+@msg	give one of path, data or dataBase64	angiv én af path, data eller dataBase64
+@msg	the file holds no composite fonts	filen indeholder ingen sammensatte skrifttyper
+@msg	the file holds two composite fonts named `{_1}`	filen indeholder to sammensatte skrifttyper, der hedder `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` kan ikke være navnet på en sammensat skrifttype
+@msg	{k}: give a font	{k}: angiv en skrifttype
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: angiv en skrifttype
+@msg	{k}: size must be {_1} to {_2}%	{k}: size skal være {_1} til {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size skal være {_1} til {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline skal være {_1} til {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline skal være {_1} til {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skaleringen skal være {_1} til {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skaleringen skal være {_1} til {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: kun kana, roman og numerals kan skaleres
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: kun kana, roman og numerals kan skaleres
+@msg	{k}: only kana can be scaled at the center	{k}: kun kana kan skaleres fra midten
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: kun kana kan skaleres fra midten
+@msg	no composite font	ingen sammensat skrifttype
 	Delete Font	Slet skrifttype
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Tal
 	Scale at Center	Skalér fra midten
+	Delete Set	Slet sæt
+	Direct Entry	Direkte indtastning
 	Up/Down:	Op/ned:
 	Left/Right:	Venstre/højre:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko op/ned
@@ -3319,6 +3372,7 @@ digits	Malayalam	Malayalam
 	Limit to Library:	Begræns til bibliotek:
 	Link harmony colors	Sammenkæd harmonifarver
 	Merge colors into one row	Flet farver til én række
+	New Row	Ny række
 	No colors to recolor (preserved colors are left out).	Ingen farver at omfarve (bevarede farver er udeladt).
 	Preserve:	Bevar:
 	Randomly change color order	Ændr farverækkefølgen tilfældigt
@@ -3968,6 +4022,40 @@ theme	Appearance	Udseende
 	Create Graph	Opret graf
 	Graph Data	Grafdata
 	Graph Type	Graftype
+	Graph Options	Grafindstillinger
+	Left Axis	Venstre akse
+	Right Axis	Højre akse
+	Category Axis	Kategoriakse
+	Separate Scales	Separate skalaer
+	Add Drop Shadow	Tilføj slagskygge
+	Add Legend Across Top	Tilføj forklaring øverst
+	First Row in Front	Første række forrest
+	First Column in Front	Første kolonne forrest
+	Legend	Forklaring
+	Column Width	Søjlebredde
+	Bar Width	Bjælkebredde
+	Cluster Width	Gruppebredde
+	Mark Data Points	Markér datapunkter
+	Connect Data Points	Forbind datapunkter
+	Edge-to-Edge Lines	Linjer fra kant til kant
+	Draw Filled Lines	Tegn udfyldte linjer
+	Tick Values	Afmærkningsværdier
+	Override Calculated Values	Tilsidesæt beregnede værdier
+	Divisions	Inddelinger
+	Tick Marks	Afmærkninger
+	Tick Marks per Division	Afmærkninger pr. inddeling
+	Draw Tick Marks Between Labels	Tegn afmærkninger mellem etiketter
+	Add Labels	Tilføj etiketter
+	Maximum must be more than Minimum.	Maksimum skal være større end minimum.
+	Column Graph	Søjlediagram
+	Stacked Column Graph	Stablet søjlediagram
+	Bar Graph	Bjælkediagram
+	Stacked Bar Graph	Stablet bjælkediagram
+	Line Graph	Linjediagram
+	Area Graph	Områdediagram
+	Scatter Graph	Spredningsdiagram
+	Pie Graph	Cirkeldiagram
+	Radar Graph	Radardiagram
 	Vector Halftone	Vektorraster
 	spot	spot
 	Text	Tekst
@@ -4555,6 +4643,7 @@ axis	Both	Begge
 	Replace:	Erstat:
 	Type on a Path Options	Indstillinger for tekst på kurve
 	Highlight Variable	Fremhæv variabel
+	Sort Variables	Sortér variabler
 	New Variable	Ny variabel
 	List Variables	Oplist variabler
 	Bind Variable	Tilknyt variabel
@@ -6222,6 +6311,8 @@ mark-style	Japanese	Japansk
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variablen `{name}` kan ikke gemmes i et variabelbibliotek: omdøb den, så den begynder med et bogstav eller `_`, uden mellemrum eller andre symboler end `-`, `_` og `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	datasættet `{name}` indeholder et kontroltegn, som et variabelbibliotek ikke kan indeholde
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	datasættet `{name}` begynder eller slutter med mellemrum, som et variabelbibliotek ikke kan indeholde
+@msg	{k} has control characters	{k} indeholder kontroltegn
+@msg	{k} has control characters or line breaks	{k} indeholder kontroltegn eller linjeskift
 @msg	variables that aren't text were left out: {kinds}	variabler, der ikke er tekst, blev udeladt: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	et nyt dokument læser ikke disse variabler tilbage med deres type: {names}
 @msg	a new document refuses this file because of these variables: {names}	et nyt dokument afviser denne fil på grund af disse variabler: {names}

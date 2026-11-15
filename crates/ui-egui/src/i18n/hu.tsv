@@ -229,6 +229,7 @@
 	Align to Artboard	Igazítás a rajztáblához
 	Align to Glyph Bounds	Igazítás a glifák határaihoz
 	Align to Key Object	Igazítás a kulcsobjektumhoz
+	Align to Key Anchor	Igazítás a kulcs-horgonyponthoz
 	Align to Page	Igazítás az oldalhoz
 	Align to Path	Igazítás az útvonalhoz
 	Align to Selection	Igazítás a kijelöléshez
@@ -695,6 +696,11 @@ font-technology	Variable	Változó
 	CMYK Equivalents	CMYK-megfelelők
 	CMYK profile in effect	Érvényes CMYK-profil
 	CMYK:	CMYK:
+	RGB Policy:	RGB-házirend:
+	CMYK Policy:	CMYK-házirend:
+	Preserve Embedded Profiles	Beágyazott profilok megtartása
+	Convert to Working Space	Konvertálás a munkaszíntérbe
+	Preserve Numbers	Számértékek megtartása
 	Coarse Dots	Durva pontok
 	Collapse Panels to Icons	Panelek ikonná csukása
 	Collapse to Icons	Ikonná csukás
@@ -1479,6 +1485,7 @@ font-technology	Variable	Változó
 	Rotate (Classic)…	Elforgatás (klasszikus)…
 	Surface	Felület
 	Wireframe	Drótváz
+	Render Settings	Renderelési beállítások
 	No Shading	Nincs árnyékolás
 	Plastic	Műanyag
 	Highlight Intensity	Csillanás erőssége
@@ -1764,6 +1771,40 @@ file-filter	Templates	Sablonok
 	Graph	Diagram
 	Graph Data	Diagramadatok
 	Graph Type	Diagramtípus
+	Graph Options	Diagrambeállítások
+	Left Axis	Bal tengely
+	Right Axis	Jobb tengely
+	Category Axis	Kategóriatengely
+	Separate Scales	Külön skálák
+	Add Drop Shadow	Vetett árnyék hozzáadása
+	Add Legend Across Top	Jelmagyarázat felül
+	First Row in Front	Első sor elöl
+	First Column in Front	Első oszlop elöl
+	Legend	Jelmagyarázat
+	Column Width	Oszlopszélesség
+	Bar Width	Sávszélesség
+	Cluster Width	Csoportszélesség
+	Mark Data Points	Adatpontok jelölése
+	Connect Data Points	Adatpontok összekötése
+	Edge-to-Edge Lines	Széltől szélig érő vonalak
+	Draw Filled Lines	Kitöltött vonalak rajzolása
+	Tick Values	Osztásértékek
+	Override Calculated Values	Számított értékek felülírása
+	Divisions	Osztások
+	Tick Marks	Osztásjelek
+	Tick Marks per Division	Osztásjelek osztásonként
+	Draw Tick Marks Between Labels	Osztásjelek a címkék között
+	Add Labels	Címkék hozzáadása
+	Maximum must be more than Minimum.	A maximumnak nagyobbnak kell lennie a minimumnál.
+	Column Graph	Oszlopdiagram
+	Stacked Column Graph	Halmozott oszlopdiagram
+	Bar Graph	Sávdiagram
+	Stacked Bar Graph	Halmozott sávdiagram
+	Line Graph	Vonaldiagram
+	Area Graph	Területdiagram
+	Scatter Graph	Pontdiagram
+	Pie Graph	Kördiagram
+	Radar Graph	Sugárdiagram
 	Select Segments	Szakaszok kijelölése
 	Artistic	Művészi
 	Film Grain…	Filmszemcse…
@@ -1950,6 +1991,7 @@ file-filter	Templates	Sablonok
 	Highlight Substituted Fonts	Helyettesített betűtípusok kiemelése
 	Highlight Substituted Glyphs	Helyettesített glifák kiemelése
 	Highlight Variable	Változó kiemelése
+	Sort Variables	Változók rendezése
 	Hindi	Hindi
 	History	Előzmények
 	History Options…	Előzmények beállításai…
@@ -2528,6 +2570,7 @@ file-filter	Templates	Sablonok
 	Menu Dialog	Menü párbeszédablaka
 	Merge	Összeolvasztás
 	Merge colors into one row	Színek egyesítése egy sorba
+	New Row	Új sor
 	Merge Graphic Styles	Grafikai stílusok egyesítése
 	Merge Graphic Styles…	Grafikai stílusok egyesítése…
 	Merge Layers	Rétegek egyesítése
@@ -4371,11 +4414,55 @@ mark-style	Japanese	Japán
 	Composite Fonts	Összetett betűtípusok
 	Export Composite Fonts	Összetett betűtípusok exportálása
 	Import Composite Fonts	Összetett betűtípusok importálása
+@msg	each font must be {name, parts}	minden betűtípusnak {name, parts} alakúnak kell lennie
+@msg	unknown key `{k}`; a font takes name and parts	ismeretlen kulcs: `{k}`; egy betűtípus name és parts kulcsot fogad
+@msg	each font needs a name	minden betűtípusnak kell egy név
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nem lehet összetett betűtípus neve (1–{COMPOSITE_NAME_MAX} karakter, vezérlőkarakterek nélkül)
+@msg	`{name}`: parts must be an object	`{name}`: a parts értékének objektumnak kell lennie
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: ismeretlen osztály: `{k}`; az osztályok: kanji, kana, punctuation, symbols, roman és numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: a(z) {_1} értékének objektumnak kell lennie
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: ismeretlen kulcs: `{k}` itt: {_1}
+@msg	`{name}`: give the kanji part	`{name}`: adja meg a kanji részt
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	egy dokumentum legfeljebb {COMPOSITE_FONTS_MAX} összetett betűtípust tartalmazhat
+@msg	two composite fonts are named `{_1}`	két összetett betűtípus neve is `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` egy telepített betűtípus neve
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: a(z) {_2} a(z) `{font}` összetett betűtípust használja
+@msg	give fonts: [{name, parts}…]	adja meg: fonts: [{name, parts}…]
+@msg	path is empty	a path üres
+@msg	fonts must be a list of composite fonts	a fonts értékének összetett betűtípusok listájának kell lennie
+@msg	names must be strings	a names elemeinek karakterláncoknak kell lenniük
+@msg	no composite font named `{n}`	nincs `{n}` nevű összetett betűtípus
+@msg	names must be a list of names	a names értékének nevek listájának kell lennie
+@msg	no composite fonts to export	nincs exportálható összetett betűtípus
+@msg	not a composite fonts file: {e}	nem összetettbetűtípus-fájl: {e}
+@msg	not a composite fonts file: no compositeFonts list	nem összetettbetűtípus-fájl: nincs compositeFonts lista
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	a fájl több mint {COMPOSITE_FONTS_MAX} összetett betűtípust tartalmaz
+@msg	the file is larger than 4 MB	a fájl nagyobb 4 MB-nál
+@msg	dataBase64 is not base64	a dataBase64 nem base64
+@msg	give one of path, data or dataBase64	adja meg a path, data vagy dataBase64 egyikét
+@msg	the file holds no composite fonts	a fájl nem tartalmaz összetett betűtípust
+@msg	the file holds two composite fonts named `{_1}`	a fájl két `{_1}` nevű összetett betűtípust tartalmaz
+@msg	`{_1}` can't name a composite font	`{_1}` nem lehet összetett betűtípus neve
+@msg	{k}: give a font	{k}: adjon meg egy betűtípust
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: adjon meg egy betűtípust
+@msg	{k}: size must be {_1} to {_2}%	{k}: a size értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: a size értéke {_1}–{_2}% lehet
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: a baseline értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: a baseline értéke {_1}–{_2}% lehet
+@msg	{k}: scale must be {_1} to {_2}%	{k}: a méretezés {_1}–{_2}% lehet
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: a méretezés {_1}–{_2}% lehet
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: csak a kana, roman és numerals méretezhető
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: csak a kana, roman és numerals méretezhető
+@msg	{k}: only kana can be scaled at the center	{k}: csak a kana méretezhető a középpontból
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: csak a kana méretezhető a középpontból
+@msg	no composite font	nincs összetett betűtípus
 	Delete Font	Betűtípus törlése
 	Kanji	Kandzsi
 	Kana	Kana
 	Numerals	Számjegyek
 	Scale at Center	Méretezés középről
+	Delete Set	Készlet törlése
+	Direct Entry	Közvetlen bevitel
 	Up/Down:	Fel/le:
 	Left/Right:	Balra/jobbra:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko fel/le
@@ -6009,6 +6096,7 @@ imageTrace	Outline	Körvonal
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	a `render` csak `mode` mezőt tartalmazó objektum lehet, shaded vagy wireframe értékkel
 @msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
 @msg	bevel must be none or one of {_1}	a bevel értéke none vagy ezek egyike lehet: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ebből a rajzból nem hozható létre test: a szimbólumpéldányai, összemosásai és vágócsoportjai túl sok objektumot tartalmaznak
@@ -6172,6 +6260,8 @@ imageTrace	Outline	Körvonal
 	Save Variable Library…	Változókönyvtár mentése…
 @msg	a variable library holds text variables, and the document has none	a változókönyvtár szöveges változókat tartalmaz, a dokumentumban pedig nincs ilyen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a(z) `{name}` változó nem menthető változókönyvtárba: nevezze át úgy, hogy betűvel vagy `_` jellel kezdődjön, szóközök és a `-`, `_` és `.` jeltől eltérő szimbólumok nélkül
+@msg	{k} has control characters	{k} vezérlőkaraktereket tartalmaz
+@msg	{k} has control characters or line breaks	{k} vezérlőkaraktereket vagy sortöréseket tartalmaz
 @msg	data set `{name}` holds a control character, which a variable library can't hold	a(z) `{name}` adatkészlet vezérlőkaraktert tartalmaz, amelyet a változókönyvtár nem tartalmazhat
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	a(z) `{name}` adatkészlet szóközzel kezdődik vagy végződik, amelyet a változókönyvtár nem tartalmazhat
 	Make Graph Dynamic	Diagram dinamikussá tétele
@@ -6497,6 +6587,7 @@ axis	Y Axis	Y tengely
 @msg	stops must be in order of `offset`	a színátmenet-pontok `offset` szerint rendezve legyenek
 @msg	the document has no pattern {pattern}	a dokumentumban nincs {pattern} mintázat
 @msg	the document has no swatch {n}	a dokumentumban nincs {n} színminta
+@msg	`plates` requires a stop linked to a spot swatch	a `plates` direktszín-színmintához kapcsolt színátmenet-pontot igényel
 @msg	the output	a kimenet
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})

@@ -742,45 +742,28 @@ fn item_art(id: NodeId, item: &AppearanceItem, shapes: &[(PathData, FillRule)], 
 }
 
 /// The members of a container that [`take_held_guides`] visits, by index, each with the same for
-/// its own members. A ruler guide's entry is empty; a container's is not.
+/// its own members. A ruler guide's entry is empty, whether its container is a layer or a group; a
+/// container's is not.
 #[derive(Default)]
 struct HeldGuides(Vec<(usize, HeldGuides)>);
 
-/// The members of `n` holding or leading to the ruler guides of sublayers, found by looking at each
-/// member at every depth once: the ruler guides (`is_guide`) of `n` when it is a layer, each
-/// sublayer holding one directly or in its sublayers, and each member of another kind with such a
-/// sublayer among its members or its groups' members. With them, whether `n` is a layer holding a
-/// ruler guide directly or in its sublayers. The other members of a layer holding none are not
-/// looked into, unless the layer is the one whose sublayers are gathered (`top`).
-fn held_guides(n: &Node, top: bool, is_guide: &impl Fn(&Node) -> bool) -> (bool, HeldGuides) {
-    let layer = n.is_layer();
-    let (mut holds, mut held, mut other) = (false, vec![], vec![]);
+/// The members of `n` that are ruler guides (`is_guide`), and those holding one at any depth, in
+/// order. Every member at every depth is looked at once: a sublayer or group with no guide of its
+/// own is still looked into, and a guide directly in a group counts as one in a layer does. A
+/// member holding no guide gets no entry.
+fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> HeldGuides {
+    let mut held = vec![];
     for (i, c) in n.children().into_iter().flatten().enumerate() {
         if is_guide(c) {
-            if layer {
-                holds = true;
-                held.push((i, HeldGuides::default()));
-            }
-        } else if c.is_layer() {
-            let (sub_holds, inner) = held_guides(c, false, is_guide);
-            if sub_holds {
-                holds = true;
-                held.push((i, inner));
-            }
-        } else {
-            other.push((i, c));
+            held.push((i, HeldGuides::default()));
+            continue;
+        }
+        let inner = held_guides(c, is_guide);
+        if !inner.0.is_empty() {
+            held.push((i, inner));
         }
     }
-    if !layer || holds || top {
-        for (i, c) in other {
-            let (_, inner) = held_guides(c, false, is_guide);
-            if !inner.0.is_empty() {
-                held.push((i, inner));
-            }
-        }
-        held.sort_unstable_by_key(|(i, _)| *i);
-    }
-    (layer && holds, HeldGuides(held))
+    HeldGuides(held)
 }
 
 /// Move the ruler guides of `n` and of its members that [`held_guides`] found (`held`) to `out`:
@@ -818,15 +801,14 @@ fn take_held_guides(n: &mut Node, held: HeldGuides, out: &mut Vec<Arc<Node>>, hi
     out.append(&mut deeper);
 }
 
-/// Move the ruler guides of the sublayers among the members of `n`, and among its groups'
-/// members, to `out`, in order: a sublayer's own guides, then those of its members. A guide taken
-/// from a hidden or locked sublayer, or from one inside such a sublayer or group, is hidden or
-/// locked itself. Each member at every depth is looked at once at most (`is_guide`), and only
-/// containers holding one are copied.
+/// Move the ruler guides of `n` and those held at any depth by the sublayers and groups among its
+/// members to `out`, in order: a container's own guides, then those of its members. A sublayer or
+/// group with no guide of its own still gives up those of its members. A guide taken from a hidden
+/// or locked sublayer or group, or from one inside such a container, is hidden or locked itself.
+/// Each member at every depth is looked at once (`is_guide`), and only containers holding a guide
+/// are copied.
 fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl Fn(&Node) -> bool) {
-    let (_, mut held) = held_guides(n, true, is_guide);
-    // The ruler guides of `n` itself stay where they are.
-    held.0.retain(|(_, inner)| !inner.0.is_empty());
+    let held = held_guides(n, is_guide);
     take_held_guides(n, held, out, false, false);
 }
 
@@ -850,12 +832,15 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         return None;
     }
     let mut m = n.clone();
-    // A layer's ruler guides take no part: they go back above the evaluated art at the end.
-    let mut guides = m.children_mut().map(|ch| ch.split_off(Node::guide_run_start(ch))).unwrap_or_default();
-    // So do its sublayers' guides, which would otherwise go with the art the effects replace or
-    // copy: they stay on this layer, hidden and locked as their sublayers were.
-    if m.is_layer() && (pathfinder || !fx.is_empty()) {
+    // Its ruler guides take no part: they go back above the evaluated art at the end. With effects
+    // that replace or copy the art, so do its guides among the art and those in its sublayers and
+    // groups, which would otherwise go with that art: they stay on `n`, in order, hidden and
+    // locked as their containers were.
+    let mut guides = vec![];
+    if pathfinder || !fx.is_empty() {
         take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
+    } else if let Some(ch) = m.children_mut() {
+        guides = ch.split_off(Node::guide_run_start(ch));
     }
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
