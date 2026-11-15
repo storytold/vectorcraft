@@ -306,7 +306,7 @@ fn read_source(
     }
     let a = opened_document_art(name, (bytes, opened), path, page, bounding, page_box, cmd)?;
     let bytes = shared.cloned().unwrap_or_else(|| Arc::new(bytes.to_vec()));
-    let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None };
+    let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None, file_font: Default::default() };
     let shown = PlacedDocument {
         link: LinkInfo { page: Some(page), ..LinkInfo::new(path.unwrap_or(name)) },
         key: key.clone(),
