@@ -2618,6 +2618,8 @@ font-technology	Variable	Variabla
 	Proof Setup	Provtrycksinställningar
 	Properties	Egenskaper
 	Proportional Metrics	Proportionella mått
+	H or V Style	Vågrät eller lodrät stil
+	Roman Italics	Romersk kursiv
 	Insert Aki Left	Infoga aki till vänster
 	Insert Aki Right	Infoga aki till höger
 	Tsume	Tsume
@@ -6799,6 +6801,13 @@ axis	Y Axis	Y-axel
 	Graphite Pencil	Grafitpenna
 	Wax Crayon	Vaxkrita
 	Charcoal Dust	Koldamm
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniska kretsar
+	Circuit Trace	Kretsbana
+	Bus Lines	Bussledningar
+	Terminal Nodes	Anslutningspunkter
+
 	Notched Ribbon	Hackat band
 	Double Line	Dubbellinje
 	Wave	Våg

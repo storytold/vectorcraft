@@ -2673,6 +2673,8 @@ font-technology	Variable	Variables
 	Proof Setup	Format d’épreuve
 	Properties	Propriétés
 	Proportional Metrics	Métrique proportionnelle
+	H or V Style	Style horizontal ou vertical
+	Roman Italics	Italique des caractères romains
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
 	Tsume	Tsume
@@ -6814,6 +6816,13 @@ axis	Y Axis	Axe Y
 	Graphite Pencil	Crayon graphite
 	Wax Crayon	Craie grasse
 	Charcoal Dust	Poussière de fusain
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuits techniques
+	Circuit Trace	Piste de circuit
+	Bus Lines	Lignes de bus
+	Terminal Nodes	Nœuds terminaux
+
 	Notched Ribbon	Ruban cranté
 	Double Line	Double ligne
 	Wave	Vague
@@ -9126,7 +9135,7 @@ breakText	Glyphs	Glyphes
 @msg	unexpected resources	ressources inattendues
 @msg	unknown CMYK profile `{name}`	profil CMJN inconnu `{name}`
 @msg	unknown File Info field `{k}`	champ Informations sur le fichier inconnu `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	fonctionnalité OpenType inconnue `{t}` dans featureChanges (les balises qu’accepte `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	paramètre prédéfini PDF inconnu `{name}` (paramètres prédéfinis : {_1})
 @msg	unknown Warp style	style de déformation inconnu

@@ -1622,6 +1622,8 @@ lighting	Light	Světlo
 	Leading	Proklad
 	No Break	Nezalamovat
 	Proportional Metrics	Proporcionální metrika
+	H or V Style	Vodorovný nebo svislý styl
+	Roman Italics	Kurzíva latinky
 	Insert Aki Left	Vložit aki vlevo
 	Insert Aki Right	Vložit aki vpravo
 	Tsume	Tsume
@@ -6819,6 +6821,13 @@ axis	Y Axis	osa Y
 	Graphite Pencil	Grafitová tužka
 	Wax Crayon	Vosková pastelka
 	Charcoal Dust	Uhlový prach
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technické obvody
+	Circuit Trace	Vodivá cesta
+	Bus Lines	Sběrnicové linky
+	Terminal Nodes	Koncové uzly
+
 	Notched Ribbon	Vroubkovaná stuha
 	Double Line	Dvojitá čára
 	Wave	Vlna
@@ -9268,7 +9277,7 @@ breakText	Glyphs	Glyfy
 @msg	unexpected resources	neočekávané prostředky
 @msg	unknown CMYK profile `{name}`	neznámý profil CMYK `{name}`
 @msg	unknown File Info field `{k}`	neznámé pole informací o souboru `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	neznámá funkce OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; předpona - funkci vypne; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom a aalt přijímají číslo alternativy jako `tag=N` s N od 0 do {_1}, například `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	neznámá funkce OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; předpona - funkci vypne; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom a aalt přijímají číslo alternativy jako `tag=N` s N od 0 do {_1}, například `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	neznámá funkce OpenType `{t}` ve featureChanges (značky, které přijímá `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	neznámé přednastavení PDF `{name}` (přednastavení: {_1})
 @msg	unknown Warp style	neznámý styl deformace

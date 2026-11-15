@@ -679,14 +679,11 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "window.nextDocument" => crate::chrome::step_document(app, true),
         "window.previousDocument" => crate::chrome::step_document(app, false),
         "tool.select" => match s("tool") {
-            Some(t) if vectorcraft_tools::tool_info(&t).is_some() => {
-                app.select_tool(&t);
-                Ok(json!({"tool": app.session.tool_id()}))
-            }
+            Some(t) if vectorcraft_tools::tool_info(&t).is_some() => app.try_select_tool(&t).map(|()| json!({"tool": app.session.tool_id()})),
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
-        crate::touch::TOGGLE_MODE => Ok(crate::touch::toggle_mode(app)),
+        crate::touch::TOGGLE_MODE => crate::touch::toggle_mode(app),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
@@ -698,10 +695,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
         "ui.cropImage" if !selected_image(app, |_| true) => Err("select an image".into()),
-        "ui.cropImage" => {
-            app.select_tool(vectorcraft_tools::cropimage::ID);
-            Ok(json!({"tool": app.session.tool_id()}))
-        }
+        "ui.cropImage" => app.try_select_tool(vectorcraft_tools::cropimage::ID).map(|()| json!({"tool": app.session.tool_id()})),
         // Create Object Mosaic… has a dialog of its own, opened on the selected image.
         "ui.paramDialog" if s("command").as_deref() == Some(crate::dialogs::object_mosaic::COMMAND) => {
             crate::dialogs::object_mosaic::open(app, p.get("params").unwrap_or(&Value::Null))
@@ -849,6 +843,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
+        "ui.panelView" => crate::panels::set_view(app, p),
         "ui.flattenTransparencyDialog" => {
             crate::dialogs::flatten::open(app);
             Ok(Value::Null)

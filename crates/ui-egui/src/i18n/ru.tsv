@@ -2710,6 +2710,8 @@ mark-style	Japanese	Японский
 	Proof Setup	Настройка цветопробы
 	Properties	Свойства
 	Proportional Metrics	Пропорциональные метрики
+	H or V Style	Горизонтальный или вертикальный стиль
+	Roman Italics	Римский курсив
 	Insert Aki Left	Вставить аки слева
 	Insert Aki Right	Вставить аки справа
 	Tsume	Цумэ
@@ -6432,6 +6434,13 @@ axis	Y Axis	Ось Y
 	Graphite Pencil	Графитный карандаш
 	Wax Crayon	Восковой мелок
 	Charcoal Dust	Угольная пыль
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технические схемы
+	Circuit Trace	Дорожка схемы
+	Bus Lines	Линии шины
+	Terminal Nodes	Контактные узлы
+
 	Notched Ribbon	Лента с насечками
 	Double Line	Двойная линия
 	Wave	Волна

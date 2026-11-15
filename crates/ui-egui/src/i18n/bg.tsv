@@ -2603,6 +2603,8 @@ font-technology	Variable	Променливи
 	Proof Setup	Настройка на пробен печат
 	Properties	Свойства
 	Proportional Metrics	Пропорционални метрики
+	H or V Style	Хоризонтален или вертикален стил
+	Roman Italics	Римски курсив
 	Insert Aki Left	Вмъкване на аки отляво
 	Insert Aki Right	Вмъкване на аки отдясно
 	Tsume	Цуме
@@ -6262,6 +6264,13 @@ axis	Y Axis	Y ос
 	Graphite Pencil	Графитен молив
 	Wax Crayon	Восъчен пастел
 	Charcoal Dust	Въглен прах
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технологични схеми
+	Circuit Trace	Проводяща писта
+	Bus Lines	Шинни линии
+	Terminal Nodes	Крайни възли
+
 	Notched Ribbon	Назъбена лента
 	Double Line	Двойна линия
 	Wave	Вълна

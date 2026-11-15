@@ -3238,6 +3238,8 @@ mark-style	Japanese	Japán
 	Proof Setup	Színpróba beállítása
 	Properties	Tulajdonságok
 	Proportional Metrics	Arányos metrika
+	H or V Style	Vízszintes vagy függőleges stílus
+	Roman Italics	Latin betűk dőlt változata
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
 	Tsume	Tsume
@@ -6802,6 +6804,13 @@ axis	Y Axis	Y tengely
 	Graphite Pencil	Grafitceruza
 	Wax Crayon	Zsírkréta
 	Charcoal Dust	Szénpor
+
+# Original procedural circuit brushes.
+	Tech Circuit	Műszaki áramkörök
+	Circuit Trace	Vezetősáv
+	Bus Lines	Buszvonalak
+	Terminal Nodes	Csatlakozási pontok
+
 	Notched Ribbon	Csipkézett szalag
 	Double Line	Dupla vonal
 	Wave	Hullám
@@ -9138,7 +9147,7 @@ breakText	Glyphs	Glifák
 @msg	unexpected resources	váratlan erőforrások
 @msg	unknown CMYK profile `{name}`	ismeretlen CMYK-profil: `{name}`
 @msg	unknown File Info field `{k}`	ismeretlen fájlinformációs mező: `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	ismeretlen OpenType-funkció: `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; a - előtag kikapcsolja; a swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom és aalt egy alternatíva számát `tag=N` alakban fogadja, ahol N 0 és {_1} között lehet, például `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	ismeretlen OpenType-funkció: `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; a - előtag kikapcsolja; a swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom és aalt egy alternatíva számát `tag=N` alakban fogadja, ahol N 0 és {_1} között lehet, például `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	ismeretlen OpenType-funkció a featureChanges értékben: `{t}` (a `features` által fogadott címkék használhatók)
 @msg	unknown PDF preset `{name}` (presets: {_1})	ismeretlen PDF-előbeállítás: `{name}` (előbeállítások: {_1})
 @msg	unknown Warp style	ismeretlen hajlítási stílus
