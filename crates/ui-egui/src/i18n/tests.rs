@@ -4811,6 +4811,40 @@ fn polish_plurals_have_three_forms() {
     assert!(count >= 13, "Polish plural rows missing");
 }
 
+/// Every Polish row whose English names art or artwork calls it kompozycja, the catalog's term, and
+/// never grafika (kept for what the English calls a graphic) or rysunek. An artboard's obszar
+/// kompozycji does not count as the term. Line art, the art brush and its class, Art Ribbons,
+/// Art & Illustration, Art Optimized and the literal values `art` and `artwork` are other terms.
+#[test]
+fn polish_rows_call_artwork_kompozycja() {
+    let (entries, _) = parse_entries(pl().0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let english = src.to_lowercase();
+        let words: Vec<&str> = english.split(|c: char| !c.is_ascii_alphabetic()).collect();
+        let names = |list: &[&str]| words.iter().any(|w| list.contains(w));
+        let polish = translation.to_lowercase();
+        let polish_words: Vec<&str> = polish.split(|c: char| !c.is_alphabetic()).filter(|w| !w.is_empty()).collect();
+        let other_term = ["line art", "art brush", "art ribbons", "art & illustration", "art optimized"].iter().any(|t| english.contains(t));
+        let literal = polish_words.iter().any(|w| ["art", "artwork"].contains(w));
+        if !names(&["art", "artwork"]) || other_term || literal || english == "art" {
+            continue;
+        }
+        let term = polish_words.iter().enumerate().any(|(i, w)| w.starts_with("kompozyc") && !(i > 0 && polish_words[i - 1].starts_with("obszar")));
+        let graphic = polish.contains("graf") && !names(&["graphic", "graphics"]);
+        if !term || graphic || polish.contains("rysun") {
+            wrong.push(format!("{src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Polish rows name artwork with another word:\n{}", wrong.len(), wrong.join("\n"));
+    assert_eq!(tr(pl(), "Artwork"), "Kompozycja");
+    assert_eq!(tr(pl(), "Off-Artboard Art"), "Kompozycja poza obszarami kompozycji");
+    assert_eq!(message(pl(), "select the art to export first"), "najpierw zaznacz kompozycję do eksportu");
+    assert_eq!(message(pl(), "the selected art has no width"), "zaznaczona kompozycja nie ma szerokości");
+    assert_eq!(tr(pl(), "Line Art and Text Resolution:"), "Rozdzielczość grafiki liniowej i tekstu:");
+    assert_eq!(tr(pl(), "Art Brush"), "Pędzel artystyczny");
+}
+
 /// Every catalog names each numeral system of Character panel menu › Digits, in the `digits`
 /// context (where the language's name would read wrong) or with its plain row (#4942).
 #[test]

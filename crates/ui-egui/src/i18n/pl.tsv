@@ -2126,8 +2126,8 @@ digits	Malayalam	Malajalam
 	Weight:	Grubość:
 	Art using a deleted global swatch keeps its colour.	Kompozycja używająca usuniętej próbki globalnej zachowa swój kolor.
 	Color Group: {name}	Grupa kolorów: {name}
-	Delete the selected items and their artwork?	Usunąć zaznaczone elementy razem z grafiką?
-	Delete this layer and its artwork?	Usunąć tę warstwę razem z grafiką?
+	Delete the selected items and their artwork?	Usunąć zaznaczone elementy razem z kompozycją?
+	Delete this layer and its artwork?	Usunąć tę warstwę razem z kompozycją?
 	Delete “{name}”?	Usunąć „{name}”?
 	Document Swatches	Próbki dokumentu
 	Edit or Apply Color Group	Edytuj lub zastosuj grupę kolorów
@@ -2553,7 +2553,7 @@ digits	Malayalam	Malajalam
 	Consider Open Filled Paths as Closed	Traktuj otwarte wypełnione ścieżki jako zamknięte
 	In Merge Mode, Clicking Stroke Splits the Path	W trybie scalania kliknięcie obrysu dzieli ścieżkę
 	Pick Color From:	Źródło koloru:
-	Artwork	Grafika
+	Artwork	Kompozycja
 	Cursor Swatch Preview	Podgląd próbek przy kursorze
 	Selection:	Zaznaczanie:
 	Straight Line	Linia prosta
@@ -3107,7 +3107,7 @@ antiAlias	Sharp	Ostre
 	Export Preset:	Ustawienie eksportu:
 	Folders:	Foldery:
 	Insert	Wstaw
-	Nothing is selected. Select the art to export, then open this tab again.	Nic nie zaznaczono. Zaznacz grafikę do eksportu i ponownie otwórz tę kartę.
+	Nothing is selected. Select the art to export, then open this tab again.	Nic nie zaznaczono. Zaznacz kompozycję do eksportu i ponownie otwórz tę kartę.
 	One File of the Selection	Jeden plik z zaznaczenia
 	Start at:	Zacznij od:
 	{n} objects selected	Zaznaczone obiekty: {n}
@@ -4750,7 +4750,7 @@ imageTrace	Outline	Kontur
 @msg	check an asset to export	zaznacz zasób do eksportu
 @msg	check an artboard to export	zaznacz obszar kompozycji do eksportu
 @msg	check a layer to export	zaznacz warstwę do eksportu
-@msg	select the art to export first	najpierw zaznacz grafikę do eksportu
+@msg	select the art to export first	najpierw zaznacz kompozycję do eksportu
 @msg	choice must be "merge" or "add", not `{choice}`	wybór musi mieć wartość "merge" lub "add", nie `{choice}`
 @msg	choose a direction to divide in	wybierz kierunek podziału
 @msg	choose a folder to export to	wybierz folder docelowy eksportu
@@ -5285,7 +5285,7 @@ imageTrace	Outline	Kontur
 @msg	`{what}` closes nothing	`{what}` niczego nie zamyka
 @msg	`{what}` closes something it didn't open	`{what}` zamyka coś, czego nie otworzył
 @msg	a mask that covers several layers comes in as a clipping group in each layer it covers	maska obejmująca kilka warstw jest wczytywana jako grupa przycinająca w każdej obejmowanej warstwie
-@msg	a graph's records don't end where they should: its art was read as it is	rekordy wykresu nie kończą się tam, gdzie powinny: jego grafika została wczytana tak, jak jest
+@msg	a graph's records don't end where they should: its art was read as it is	rekordy wykresu nie kończą się tam, gdzie powinny: jego kompozycja została wczytana tak, jak jest
 @msg	`{w}` takes no operands	`{w}` nie przyjmuje operandów
 @msg	a wraparound group is inside a compound path	grupa oblewania tekstem jest wewnątrz ścieżki złożonej
 @msg	a path has too many points	ścieżka ma zbyt wiele punktów
@@ -5309,7 +5309,7 @@ imageTrace	Outline	Kontur
 @msg	more names that aren't UTF-8 were read as {label} ({count})	kolejne nazwy spoza UTF-8 odczytano jako {label} ({count})
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradient „{name}” nie jest zdefiniowany w pliku: zastąpiono go jednolitym kolorem
 @msg	an image VectorCraft can't read was left out	pominięto obraz, którego VectorCraft nie potrafi odczytać
-@msg	graphs come in as plain art, without their data or settings	wykresy są wczytywane jako zwykła grafika, bez ich danych i ustawień
+@msg	graphs come in as plain art, without their data or settings	wykresy są wczytywane jako zwykłe elementy kompozycji, bez ich danych i ustawień
 @msg	an image whose data is cut short was left out	pominięto obraz z uciętymi danymi
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	osadzony obraz o wymiarach {_1} × {_2} pikseli zmniejszono do {_3} × {_4} pikseli, aby zachować warstwy
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	połączone obrazy pokazują zapisany w pliku podgląd niskiej rozdzielczości, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
@@ -5846,11 +5846,11 @@ mark-style	Japanese	Japońskie
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	obiekt nie ma efektu 3D (Wyciągnięcie i fazowanie, Obrót, Nadmuchanie ani Obróć)
 @msg	its 3D effect builds no solid	jego efekt 3D nie tworzy żadnej bryły
 @msg	bevel must be none or one of {_1}	bevel musi mieć wartość none lub jedną z: {_1}
-@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nie może utworzyć brył z tego rysunku: jego wystąpienia symboli, przejścia i grupy przycinające zawierają zbyt wiele obiektów
-@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} nie może utworzyć bryły z wystąpienia symbolu „{symbol}”: rysunek symbolu jest niedostępny
-@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ścieżka przycinająca jest zbyt złożona, aby przyciąć nią rysunek
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nie może utworzyć brył z tej kompozycji: jej wystąpienia symboli, przejścia i grupy przycinające zawierają zbyt wiele obiektów
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} nie może utworzyć bryły z wystąpienia symbolu „{symbol}”: kompozycja symbolu jest niedostępna
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ścieżka przycinająca jest zbyt złożona, aby przyciąć nią kompozycję
 @msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} przyjmuje najwyżej {MAX_MEMBERS} obiektów
-@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} nie może utworzyć brył z rysunku zagnieżdżonego na więcej niż {MAX_DEPTH} poziomach
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} nie może utworzyć brył z kompozycji zagnieżdżonej na więcej niż {MAX_DEPTH} poziomach
 @msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Farba efektu Obrót jest zbyt złożona dla tej powierzchni; zmniejsz Segmenty lub uprość gradient
 @msg	Revolve edge must be left or right	Obrót: edge musi mieć wartość left lub right
 @msg	Revolve cap must be a boolean	Obrót: cap musi być wartością logiczną
@@ -5873,16 +5873,16 @@ mark-style	Japanese	Japońskie
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musi być tablicą
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie i Obrót
 @msg	Revolve maps graphics onto its side: map them onto the front	Obrót nakłada grafiki na swoją powierzchnię boczną: umieść je na przedniej stronie
-@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiki są zbyt złożone dla tej powierzchni: uprość rysunki symboli lub zmniejsz Segmenty
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiki są zbyt złożone dla tej powierzchni: uprość kompozycje symboli lub zmniejsz Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` przyjmuje najwyżej {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Płaszczyzna ma jedną stronę: umieść jej grafiki na przedniej stronie
-@msg	The graphics are too complex: simplify the symbols' art	Grafiki są zbyt złożone: uprość rysunki symboli
-@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Rysunek grafiki może być zagnieżdżony najwyżej na {MAX_LEVELS} poziomach: uprość rysunek symbolu
-@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Rysunek grafiki może zagnieżdżać symbole najwyżej na {MAX_NESTING} poziomach: uprość rysunek symbolu
-@msg	A graphic's art holds too many objects: simplify the symbol's art	Rysunek grafiki zawiera zbyt wiele obiektów: uprość rysunek symbolu
-@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Grafika rysuje najwyżej {MAX_PIECES} wypełnień i obrysów: uprość rysunek symbolu
+@msg	The graphics are too complex: simplify the symbols' art	Grafiki są zbyt złożone: uprość kompozycje symboli
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Kompozycja grafiki może być zagnieżdżona najwyżej na {MAX_LEVELS} poziomach: uprość kompozycję symbolu
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Kompozycja grafiki może zagnieżdżać symbole najwyżej na {MAX_NESTING} poziomach: uprość kompozycję symbolu
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Kompozycja grafiki zawiera zbyt wiele obiektów: uprość kompozycję symbolu
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Grafika rysuje najwyżej {MAX_PIECES} wypełnień i obrysów: uprość kompozycję symbolu
 @msg	`surface` must be one of {_1}	`surface` musi mieć jedną z wartości: {_1}
-@msg	{label} draws the source art for this object instead of its 3D surface	{label} rysuje dla tego obiektu rysunek źródłowy zamiast jego powierzchni 3D
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} rysuje dla tego obiektu kompozycję źródłową zamiast jego powierzchni 3D
 @msg	{label} draws no faces for this object	{label} nie rysuje żadnych ścian dla tego obiektu
 @msg	the wireframe has more than {MAX_WIRE_EDGES} edges	model szkieletowy ma więcej niż {MAX_WIRE_EDGES} krawędzi
 @msg	The 3D surface is too complex; simplify the shape	Powierzchnia 3D jest zbyt złożona; uprość kształt
@@ -6113,8 +6113,8 @@ mark-style	Japanese	Japońskie
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} otwiera inną aplikację: uruchomić to polecenie może tylko osoba przy klawiaturze
 @msg	“{name}” is not a file	„{name}” nie jest plikiem
 	Enable Guides for 9-Slice Scaling	Włącz linie pomocnicze skalowania 9-slice
-@msg	a mask has more than one art block	maska ma więcej niż jeden blok grafiki
-@msg	mask art ends outside a mask dictionary	grafika maski kończy się poza słownikiem maski
+@msg	a mask has more than one art block	maska ma więcej niż jeden blok kompozycji
+@msg	mask art ends outside a mask dictionary	kompozycja maski kończy się poza słownikiem maski
 @msg	cancelled; nothing was changed	anulowano; nic nie zostało zmienione
 @msg	a linked image can't become a gradient mesh: embed it first	połączony obraz nie może stać się siatką gradientu: najpierw go osadź
 @msg	the image has no usable size or position	obraz nie ma użytecznego rozmiaru ani położenia
@@ -6172,7 +6172,7 @@ mark-style	Japanese	Japońskie
 	Choose a filter	Wybierz filtr
 	Effect Gallery	Galeria efektów
 	Filters	Filtry
-	Select artwork to apply effects	Wybierz grafikę, aby zastosować efekty
+	Select artwork to apply effects	Wybierz kompozycję, aby zastosować efekty
 @msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	nie wszystkie powiązania zmiennych pliku zostały wczytane (pominięte powiązania: {_1}): te obiekty nie są powiązane ze swoimi zmiennymi
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka zmiennych pliku została wczytana tylko częściowo (pominięte wpisy: {_1}): panel Zmienne wyświetla resztę
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	nie udało się wczytać biblioteki zmiennych pliku: panel Zmienne jej nie wyświetla
@@ -6606,7 +6606,7 @@ axis	Y Axis	Oś Y
 	Polar Grid Tool Options	Opcje narzędzia Siatka biegunowa
 	Fill Line	Wypełnij odcinek
 	Pathfinder Options	Opcje odnajdywania ścieżek
-	Divide and Outline Will Remove Unpainted Artwork	Podziel i Kontur usuwają niepomalowaną grafikę
+	Divide and Outline Will Remove Unpainted Artwork	Podziel i Kontur usuwają niepomalowaną kompozycję
 @msg	precision must be from 0.001 to 10 pt	precision musi wynosić od 0,001 do 10 pt
 @msg	`pathfinder` must be an object	`pathfinder` musi być obiektem
 	Add to Brushes	Dodaj do pędzli
@@ -6718,7 +6718,7 @@ anchor	Points:	Punkty:
 @msg	select two open path ends, or two open paths, to average and join	zaznacz dwa końce otwartych ścieżek lub dwie otwarte ścieżki do uśrednienia i połączenia
 
 # Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
-	Artwork Cleanup	Porządkowanie grafiki
+	Artwork Cleanup	Porządkowanie kompozycji
 	Simplify Anchors (Keep Shape)…	Uprość punkty kontrolne (zachowaj kształt)…
 	Health Check	Kontrola stanu
 	Show Issue	Pokaż problem
@@ -6739,7 +6739,7 @@ anchor	Points:	Punkty:
 	Unpainted Objects	Obiekty bez koloru
 	Zero-Opacity Objects	Obiekty o zerowym kryciu
 	Duplicate Objects	Zduplikowane obiekty
-	Off-Artboard Art	Grafika poza obszarami kompozycji
+	Off-Artboard Art	Kompozycja poza obszarami kompozycji
 	Duplicate Anchors	Zduplikowane punkty kontrolne
 	Tiny Handles	Bardzo krótkie uchwyty
 	Collinear Anchors	Współliniowe punkty kontrolne
@@ -7050,9 +7050,9 @@ breakText	Glyphs	Glify
 	Dash 5	Kreska 5
 	Gap 5	Odstęp 5
 
-@msg	{_1}: they came in as the page's art	{_1}: zaimportowano je jako grafikę strony
-@msg	warped text objects that came in as drawn art, not as editable type: {_1}	wypaczone obiekty tekstowe zaimportowane jako grafika, a nie jako edytowalny tekst: {_1}
-@msg	objects that drew differently from the file's own page came in as its art: {_1}	obiekty rysowane inaczej niż własna strona pliku zaimportowano jako grafikę strony: {_1}
+@msg	{_1}: they came in as the page's art	{_1}: zaimportowano je jako elementy kompozycji strony
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	wypaczone obiekty tekstowe zaimportowane jako elementy kompozycji, a nie jako edytowalny tekst: {_1}
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	obiekty rysowane inaczej niż własna strona pliku zaimportowano jako elementy kompozycji strony: {_1}
 
 @msg	You must choose a side pattern.	Musisz wybrać wzór boczny.
 @msg	invalid pattern tile choice	nieprawidłowy wybór kafelka wzoru
@@ -7135,7 +7135,7 @@ breakText	Glyphs	Glify
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` jest symbolem statycznym: najpierw ustaw jego typ symbolu na Dynamiczny
 @msg	Only the fill, stroke, opacity and blend of a path, compound path or type selected in a symbol instance can change	W ścieżce, ścieżce złożonej lub tekście zaznaczonym w wystąpieniu symbolu można zmienić tylko wypełnienie, obrys, krycie i tryb mieszania
 @msg	path must be a list of child indices	path musi być listą indeksów elementów podrzędnych
-@msg	no object at path {shown} in the symbol's art	brak obiektu w ścieżce {shown} w grafice symbolu
+@msg	no object at path {shown} in the symbol's art	brak obiektu w ścieżce {shown} w kompozycji symbolu
 @msg	give fill, stroke, opacity and/or blend	podaj fill, stroke, opacity i/lub blend
 @msg	{key} cannot be set on a guide	nie można ustawić {key} dla linii pomocniczej
 @msg	{key} cannot be set on a blend	nie można ustawić {key} dla przejścia
@@ -7191,7 +7191,7 @@ breakText	Glyphs	Glify
 	Release Type on a Path	Uwolnij tekst na ścieżce
 	Text and Path	Tekst i ścieżka
 	Path Only	Tylko ścieżka
-@msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika jest zbyt duża, aby skopiować ją jako obraz: inne aplikacje nie otrzymają jej w formacie PNG
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Kompozycja jest zbyt duża, aby skopiować ją jako obraz: inne aplikacje nie otrzymają jej w formacie PNG
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
 	Select by Artboards	Zaznacz według obszarów kompozycji
@@ -7369,9 +7369,9 @@ breakText	Glyphs	Glify
 	Stencil Bridges	Mostki szablonu
 	Shortest Crossing	Najkrótsze przejście
 	Direction	Kierunek
-@msg	The selected art has no islands to bridge	Zaznaczona grafika nie ma wysp do połączenia
-@msg	No bridge of this width fits across the selected art	Żaden mostek o tej szerokości nie mieści się w zaznaczonej grafice
-@msg	Some islands could not be joined to the area around the art	Niektórych wysp nie udało się połączyć z obszarem wokół grafiki
+@msg	The selected art has no islands to bridge	Zaznaczona kompozycja nie ma wysp do połączenia
+@msg	No bridge of this width fits across the selected art	Żaden mostek o tej szerokości nie mieści się w zaznaczonej kompozycji
+@msg	Some islands could not be joined to the area around the art	Niektórych wysp nie udało się połączyć z obszarem wokół kompozycji
 @msg	`width` must be from {lo} to {hi} pt	`width` musi mieścić się w zakresie od {lo} do {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musi być liczbą całkowitą od 1 do {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Ramka i linie do wybierania…
@@ -7407,11 +7407,11 @@ breakText	Glyphs	Glify
 @msg	Object.{function} was given a value that is not an object	Object.{function} otrzymało wartość, która nie jest obiektem
 @msg	QName.prototype.toString needs a QName	QName.prototype.toString wymaga obiektu QName
 @msg	RegExp.prototype.{name} was called on a value that is not a RegExp object	RegExp.prototype.{name} wywołano na wartości, która nie jest obiektem RegExp
-@msg	Stencil Bridges: the selected art is too large or too detailed to bridge	Mostki szablonu: zaznaczona grafika jest zbyt duża lub zbyt szczegółowa, aby utworzyć mostki
+@msg	Stencil Bridges: the selected art is too large or too detailed to bridge	Mostki szablonu: zaznaczona kompozycja jest zbyt duża lub zbyt szczegółowa, aby utworzyć mostki
 @msg	String.prototype.toString was called on a value that is not a string	String.prototype.toString wywołano na wartości, która nie jest ciągiem znaków
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Nie udało się odczytać profilu {name}, więc nowy dokument ma ustawienia domyślne: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Zalewka: ponad {_1} par obiektów leży na tyle blisko siebie, że wymaga zalewki, albo zbyt wiele obiektów ma wspólny zakres poziomy; stosuj zalewkę do mniejszej liczby obiektów naraz
-@msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Ramka i linie do wybierania: żadna linia do wybierania nie mieści się poza grafiką, a ramka do wybierania jest wyłączona
+@msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Ramka i linie do wybierania: żadna linia do wybierania nie mieści się poza kompozycją, a ramka do wybierania jest wyłączona
 @msg	\\ at end of pattern	\\ na końcu wzorca
 @msg	`alignOn` cannot be empty	`alignOn` nie może być puste
 @msg	`alignOn` must be a string	`alignOn` musi być ciągiem znaków
@@ -7607,8 +7607,8 @@ breakText	Glyphs	Glify
 @msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	ma rozmiar większy niż {MAX_DICTIONARY_FILE_BYTES} bajtów
 @msg	it isn't a file	to nie jest plik
 @msg	it names {_1} plates, and at most {MAX_PLATES} are read	wymienia {_1} płyt, a odczytywanych jest najwyżej {MAX_PLATES}
-@msg	its art is too long or too detailed for a head	jego grafika jest zbyt długa lub zbyt szczegółowa na grot
-@msg	its art paints nothing	jego grafika niczego nie maluje
+@msg	its art is too long or too detailed for a head	jego kompozycja jest zbyt długa lub zbyt szczegółowa na grot
+@msg	its art paints nothing	jego kompozycja niczego nie maluje
 @msg	its image is too large to read	jego obraz jest zbyt duży do odczytania
 @msg	its plates are too large: more than {MAX_SAMPLES} pixels together	jego płyty są zbyt duże: łącznie ponad {MAX_SAMPLES} pikseli
 @msg	its plates are too large: {_1} plates of {w} × {h} pixels	jego płyty są zbyt duże: {_1} płyt o wymiarach {w} × {h} pikseli
@@ -7658,7 +7658,7 @@ breakText	Glyphs	Glify
 @msg	operand too large	operand jest zbyt duży
 @msg	order is a whole number from 0 to {others}, not `{v}`	order to liczba całkowita od 0 do {others}, a nie `{v}`
 @msg	path chunks must share their boundary point	fragmenty ścieżki muszą mieć wspólny punkt graniczny
-@msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false wymaga obszarów kompozycji, aby zachować edytowalną grafikę, gdy useArtboards ma wartość false
+@msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false wymaga obszarów kompozycji, aby zachować edytowalną kompozycję, gdy useArtboards ma wartość false
 @msg	point x must be a number	współrzędna x punktu musi być liczbą
 @msg	point y must be a number	współrzędna y punktu musi być liczbą
 @msg	points must be [x,y] pairs	points musi zawierać pary [x,y]
@@ -7671,7 +7671,7 @@ breakText	Glyphs	Glify
 @msg	select an object with a 3D effect	zaznacz obiekt z efektem 3D
 @msg	select an object with a 3D effect, or give its id in ids	zaznacz obiekt z efektem 3D albo podaj jego identyfikator w ids
 @msg	select one layer, group or object to rename	zaznacz jedną warstwę, grupę lub obiekt, aby zmienić nazwę
-@msg	select the art to weed	zaznacz grafikę do wybierania
+@msg	select the art to weed	zaznacz kompozycję do wybierania
 @msg	select the banner, or mark every artboard	zaznacz baner albo oznacz każdy obszar kompozycji
 @msg	select type on a path or area type	zaznacz tekst na ścieżce lub tekst akapitowy
 @msg	side is left or right, not `{v}`	side ma wartość left lub right, a nie `{v}`
@@ -7698,7 +7698,7 @@ breakText	Glyphs	Glify
 @msg	the XPath prefix {shown} is not bound to a namespace	prefiks XPath {shown} nie jest powiązany z przestrzenią nazw
 @msg	the XPath variable ${shown} is not bound	zmienna XPath ${shown} nie jest powiązana
 @msg	the argument list is not an object	lista argumentów nie jest obiektem
-@msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	grafika jest zbyt duża dla formatu EPS: pominięto wszystko po 256 MB kodu PostScript
+@msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	kompozycja jest zbyt duża dla formatu EPS: pominięto wszystko po 256 MB kodu PostScript
 @msg	the banner has no width or height	baner nie ma szerokości lub wysokości
 @msg	the bitmaps hold more pixels than one file may	bitmapy zawierają więcej pikseli, niż może mieścić jeden plik
 @msg	the code runs past its last instruction	kod wykracza poza swoją ostatnią instrukcję
@@ -7732,8 +7732,8 @@ breakText	Glyphs	Glify
 @msg	the rectangle or line reaches too many paths to check	prostokąt lub linia sięga zbyt wielu ścieżek, aby je sprawdzić
 @msg	the right side of 'in' is not an object	prawa strona operatora 'in' nie jest obiektem
 @msg	the right side of 'instanceof' is not a function	prawa strona operatora 'instanceof' nie jest funkcją
-@msg	the selected art is nested more than {MAX_DEPTH} levels deep	zaznaczona grafika jest zagnieżdżona głębiej niż na {MAX_DEPTH} poziomów
-@msg	the selected art is too large to measure	zaznaczona grafika jest zbyt duża, aby ją zmierzyć
+@msg	the selected art is nested more than {MAX_DEPTH} levels deep	zaznaczona kompozycja jest zagnieżdżona głębiej niż na {MAX_DEPTH} poziomów
+@msg	the selected art is too large to measure	zaznaczona kompozycja jest zbyt duża, aby ją zmierzyć
 @msg	the selection has no outlines to weed around	zaznaczenie nie ma konturów, wokół których można wybierać
 @msg	the spacing makes more than {MAX_GROMMETS} grommets	odstęp daje więcej niż {MAX_GROMMETS} oczek
 @msg	the value bind was called on is not a function	wartość, na której wywołano bind, nie jest funkcją
@@ -7742,7 +7742,7 @@ breakText	Glyphs	Glify
 @msg	the value is not a valid XML name	wartość nie jest prawidłową nazwą XML
 @msg	the value is not an XML attribute name	wartość nie jest nazwą atrybutu XML
 @msg	the value is not an XML name	wartość nie jest nazwą XML
-@msg	the weeding lines cross the art's outlines too many times to measure; use fewer lines	linie do wybierania przecinają kontury grafiki zbyt wiele razy, aby to zmierzyć; użyj mniejszej liczby linii
+@msg	the weeding lines cross the art's outlines too many times to measure; use fewer lines	linie do wybierania przecinają kontury kompozycji zbyt wiele razy, aby to zmierzyć; użyj mniejszej liczby linii
 @msg	the weeding lines pass too close to too many outline segments to measure; use fewer lines or a smaller gap	linie do wybierania przebiegają zbyt blisko zbyt wielu segmentów konturu, aby to zmierzyć; użyj mniejszej liczby linii lub mniejszego odstępu
 @msg	the weeding lines would be more than {max_pieces} pieces	linie do wybierania składałyby się z więcej niż {max_pieces} części
 @msg	the {_1} plate lies outside the file	płyta {_1} leży poza plikiem
@@ -7814,7 +7814,7 @@ breakText	Glyphs	Glify
 @msg	DXF scale must be a positive number up to {_1}, not {scale}	Skala DXF musi być liczbą dodatnią nie większą niż {_1}, a nie {scale}
 @msg	DXF {field} `{s}`: {allowed}	DXF {field} `{s}`: {allowed}
 @msg	Draw Inside needs exactly one selected path, compound path or text	Rysuj wewnątrz wymaga dokładnie jednej zaznaczonej ścieżki, ścieżki złożonej lub tekstu
-@msg	EPS Save writes all artwork: use document.export for selected-only EPS	Zapis EPS obejmuje całą grafikę: użyj document.export, aby zapisać w EPS tylko zaznaczenie
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	Zapis EPS obejmuje całą kompozycję: użyj document.export, aby zapisać w EPS tylko zaznaczenie
 @msg	EPS flattener: {e}	Spłaszczanie EPS: {e}
 @msg	EPS options: {e}	Opcje EPS: {e}
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
@@ -8002,7 +8002,7 @@ breakText	Glyphs	Glify
 @msg	`{_1}` is built in and always listed	`{_1}` jest wbudowane i zawsze widoczne na liście
 @msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` nie jest plikiem czcionki znalezionym przez ostatnie wyszukiwanie text.findFontFiles
 @msg	`{_1}` would be overwritten by the package: choose a different folder or name	`{_1}` zostałoby nadpisane przez pakiet: wybierz inny folder lub inną nazwę
-@msg	`{file}` has no art to place	`{file}` nie zawiera grafiki do umieszczenia
+@msg	`{file}` has no art to place	`{file}` nie zawiera kompozycji do umieszczenia
 @msg	`{file}` is over {_1} MB	`{file}` ma ponad {_1} MB
 @msg	`{f}` belongs to a VectorCraft that is running	`{f}` należy do uruchomionego programu VectorCraft
 @msg	`{f}` is the copy of a document open now	`{f}` to kopia otwartego teraz dokumentu
@@ -8041,7 +8041,7 @@ breakText	Glyphs	Glify
 @msg	`{name}` can't be edited this way	`{name}` nie można edytować w ten sposób
 @msg	`{name}` can't be renamed	nazwy `{name}` nie można zmienić
 @msg	`{name}` can't name a folder	`{name}` nie może być nazwą folderu
-@msg	`{name}` has no art to place	`{name}` nie zawiera grafiki do umieszczenia
+@msg	`{name}` has no art to place	`{name}` nie zawiera kompozycji do umieszczenia
 @msg	`{name}` has no text to place	`{name}` nie zawiera tekstu do umieszczenia
 @msg	`{name}` in the Word document is not UTF-8 or UTF-16 text	`{name}` w dokumencie Word nie jest tekstem UTF-8 ani UTF-16
 @msg	`{name}` in the Word document is not well-formed XML: {e}	`{name}` w dokumencie Word nie jest poprawnie sformułowanym kodem XML: {e}
@@ -8154,7 +8154,7 @@ breakText	Glyphs	Glify
 @msg	artboardLayout.spacing must be 0–{MAX_SPACING} pt	artboardLayout.spacing musi wynosić 0–{MAX_SPACING} pt
 @msg	artboards must be a non-empty list	artboards musi być niepustą listą
 @msg	artboards must be a number	artboards musi być liczbą
-@msg	asset `{_1}` has no art to export	zasób `{_1}` nie zawiera grafiki do wyeksportowania
+@msg	asset `{_1}` has no art to export	zasób `{_1}` nie zawiera kompozycji do wyeksportowania
 @msg	at most {MAX_KEYWORDS} keywords	najwyżej {MAX_KEYWORDS} słów kluczowych
 @msg	at most {MAX_MATCHES} matches are kept	zachowywanych jest najwyżej {MAX_MATCHES} dopasowań
 @msg	at most {MAX_POINTS} points	najwyżej {MAX_POINTS} punktów
@@ -8422,7 +8422,7 @@ breakText	Glyphs	Glify
 @msg	kind must be 1, 2 or 3, or give a preset `name` (see perspective.presets.list)	kind musi wynosić 1, 2 lub 3, albo podaj `name` ustawienia (patrz perspective.presets.list)
 @msg	kind must be graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle or paraStyle	kind musi mieć wartość graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle lub paraStyle
 @msg	knockout must be "on", "off", "neutral" or a bool, not {v}	knockout musi mieć wartość "on", "off", "neutral" lub wartość logiczną, a nie {v}
-@msg	layer `{name}` has no art to export	warstwa `{name}` nie zawiera grafiki do wyeksportowania
+@msg	layer `{name}` has no art to export	warstwa `{name}` nie zawiera kompozycji do wyeksportowania
 @msg	layer must name a layer or sublayer	layer musi wskazywać warstwę lub podwarstwę
 @msg	layers can't be intertwined: select the objects in them	warstw nie można przeplatać: zaznacz znajdujące się w nich obiekty
 @msg	layers go only at the top level or in layers, objects in layers and groups	warstwy mogą się znajdować tylko na najwyższym poziomie lub w warstwach, a obiekty w warstwach i grupach
@@ -8541,7 +8541,7 @@ breakText	Glyphs	Glify
 @msg	no asset {id}	brak zasobu {id}
 @msg	no asset {id} (see assets.list)	brak zasobu {id} (patrz assets.list)
 @msg	no assets to export	brak zasobów do wyeksportowania
-@msg	no assets yet: collect art for export first (assets.add)	nie ma jeszcze zasobów: najpierw zbierz grafikę do eksportu (assets.add)
+@msg	no assets yet: collect art for export first (assets.add)	nie ma jeszcze zasobów: najpierw zbierz kompozycję do eksportu (assets.add)
 @msg	no brush named `{n}`	brak pędzla o nazwie `{n}`
 @msg	no character at byte {start}	brak znaku w bajcie {start}
 @msg	no colour	brak koloru
@@ -8604,7 +8604,7 @@ breakText	Glyphs	Glify
 @msg	no saved views	brak zapisanych widoków
 @msg	no series {i}	brak serii {i}
 @msg	no slice {n} in the image (see slice.list)	brak plasterka {n} w obrazie (patrz slice.list)
-@msg	no source art	brak grafiki źródłowej
+@msg	no source art	brak kompozycji źródłowej
 @msg	no stop {i} (the gradient has {n})	brak punktu koloru {i} (gradient ma {n})
 @msg	no style `{name}`	brak stylu `{name}`
 @msg	no such assets (see assets.list)	brak takich zasobów (patrz assets.list)
@@ -8664,10 +8664,10 @@ breakText	Glyphs	Glify
 @msg	nothing to change: give dx, dy, hScale, vScale or rotation	nie ma czego zmienić: podaj dx, dy, hScale, vScale lub rotation
 @msg	nothing to crop	nie ma czego kadrować
 @msg	nothing to export	nie ma czego eksportować
-@msg	nothing to export: the document has no visible art	nie ma czego eksportować: dokument nie zawiera widocznej grafiki
+@msg	nothing to export: the document has no visible art	nie ma czego eksportować: dokument nie zawiera widocznej kompozycji
 @msg	nothing to mark	nie ma czego oznaczać
 @msg	nothing to print: every artboard picked is blank	nie ma czego drukować: każdy wybrany obszar kompozycji jest pusty
-@msg	nothing to print: the document has no art that prints	nie ma czego drukować: dokument nie zawiera grafiki przeznaczonej do druku
+@msg	nothing to print: the document has no art that prints	nie ma czego drukować: dokument nie zawiera kompozycji przeznaczonej do druku
 @msg	object is not a path	obiekt nie jest ścieżką
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	przezroczystości obiektu nie można próbkować na wyróżnione znaki; wyłącz Przezroczystość w Opcjach kroplomierza albo zaznacz cały obiekt
 @msg	object {_1} can't be set as point type	obiektu {_1} nie można ustawić jako tekstu punktowego
@@ -8714,12 +8714,12 @@ breakText	Glyphs	Glify
 @msg	overlap: {o} pt is half a tile or more	overlap: {o} pt to co najmniej połowa kafelka
 @msg	overlapping Shaper paths must be in the same layer or group	nakładające się ścieżki narzędzia Kształtowanie muszą znajdować się w tej samej warstwie lub grupie
 @msg	overlapping edits	nakładające się edycje
-@msg	page art conflicts with image data for {key}	grafika strony jest sprzeczna z danymi obrazu dla {key}
-@msg	page art conflicts with pattern {name}	grafika strony jest sprzeczna z wzorkiem {name}
-@msg	page art conflicts with swatch {name}	grafika strony jest sprzeczna z próbką {name}
-@msg	page art is missing image data for {key}	w grafice strony brakuje danych obrazu dla {key}
-@msg	page art is missing pattern {name}	w grafice strony brakuje wzorka {name}
-@msg	page art is missing swatch {name}	w grafice strony brakuje próbki {name}
+@msg	page art conflicts with image data for {key}	kompozycja strony jest sprzeczna z danymi obrazu dla {key}
+@msg	page art conflicts with pattern {name}	kompozycja strony jest sprzeczna ze wzorkiem {name}
+@msg	page art conflicts with swatch {name}	kompozycja strony jest sprzeczna z próbką {name}
+@msg	page art is missing image data for {key}	w kompozycji strony brakuje danych obrazu dla {key}
+@msg	page art is missing pattern {name}	w kompozycji strony brakuje wzorka {name}
+@msg	page art is missing swatch {name}	w kompozycji strony brakuje próbki {name}
 @msg	page must be a whole number from 1	page musi być liczbą całkowitą od 1
 @msg	page thumbnail: {e}	miniatura strony: {e}
 @msg	page {page} of the PDF has no objects	strona {page} pliku PDF nie zawiera obiektów
@@ -8733,7 +8733,7 @@ breakText	Glyphs	Glify
 @msg	passwords can have up to {MAX_PASSWORD} bytes	hasła mogą mieć najwyżej {MAX_PASSWORD} bajtów
 @msg	path has no open end	ścieżka nie ma otwartego końca
 @msg	paths must be strings	paths musi zawierać ciągi znaków
-@msg	pdfCompatible: false needs every artboard to keep the editable artwork	pdfCompatible: false wymaga wszystkich obszarów kompozycji, aby zachować edytowalną grafikę
+@msg	pdfCompatible: false needs every artboard to keep the editable artwork	pdfCompatible: false wymaga wszystkich obszarów kompozycji, aby zachować edytowalną kompozycję
 @msg	pdfs `{m}`: single or multiple	pdfs `{m}`: single lub multiple
 @msg	pickColorFrom is "artwork" or "swatches", not {v}	pickColorFrom ma wartość "artwork" lub "swatches", a nie {v}
 @msg	pins and moved must be non-empty lists of the same length	pins i moved muszą być niepustymi listami tej samej długości
@@ -8812,9 +8812,9 @@ breakText	Glyphs	Glify
 @msg	select area type (text in a frame)	zaznacz tekst akapitowy (tekst w ramce)
 @msg	select area type and closed paths (at least one area type object)	zaznacz tekst akapitowy i ścieżki zamknięte (co najmniej jeden obiekt tekstu akapitowego)
 @msg	select area type whose first line can fit its frame	zaznacz tekst akapitowy, którego pierwszy wiersz mieści się w ramce
-@msg	select artwork to add its colours	zaznacz grafikę, aby dodać jej kolory
-@msg	select artwork to make a group of its colours	zaznacz grafikę, aby utworzyć grupę z jej kolorów
-@msg	select artwork to recolour, or give a colour `group`	zaznacz grafikę do zmiany kolorów albo podaj `group` kolorów
+@msg	select artwork to add its colours	zaznacz kompozycję, aby dodać jej kolory
+@msg	select artwork to make a group of its colours	zaznacz kompozycję, aby utworzyć grupę z jej kolorów
+@msg	select artwork to recolour, or give a colour `group`	zaznacz kompozycję do zmiany kolorów albo podaj `group` kolorów
 @msg	select exactly two path ends to join	zaznacz dokładnie dwa końce ścieżek do połączenia
 @msg	select members of a compound shape	zaznacz elementy kształtu złożonego
 @msg	select objects or give ids	zaznacz obiekty albo podaj ids
@@ -8827,11 +8827,11 @@ breakText	Glyphs	Glify
 @msg	select something to export	zaznacz coś do wyeksportowania
 @msg	select something to export (or turn off selectedOnly)	zaznacz coś do wyeksportowania (albo wyłącz selectedOnly)
 @msg	select text to redefine the style from	zaznacz tekst, na podstawie którego styl ma zostać zdefiniowany ponownie
-@msg	select the art and, on top of it, the mask object	zaznacz grafikę oraz leżący nad nią obiekt maski
-@msg	select the art for the design	zaznacz grafikę dla wzoru
-@msg	select the art for the pattern tile	zaznacz grafikę dla kafelka wzorka
-@msg	select the art to add first	najpierw zaznacz grafikę do dodania
-@msg	select the art to collect (or give its ids)	zaznacz grafikę do zebrania (albo podaj jej identyfikatory)
+@msg	select the art and, on top of it, the mask object	zaznacz kompozycję oraz leżący nad nią obiekt maski
+@msg	select the art for the design	zaznacz kompozycję dla wzoru
+@msg	select the art for the pattern tile	zaznacz kompozycję dla kafelka wzorka
+@msg	select the art to add first	najpierw zaznacz kompozycję do dodania
+@msg	select the art to collect (or give its ids)	zaznacz kompozycję do zebrania (albo podaj jej identyfikatory)
 @msg	select the content and a path on top	zaznacz zawartość oraz leżącą nad nią ścieżkę
 @msg	select the images to relink, or pass ids	zaznacz obrazy do ponownego połączenia albo przekaż ids
 @msg	select the images, or pass ids	zaznacz obrazy albo przekaż ids
@@ -8904,7 +8904,7 @@ breakText	Glyphs	Glify
 @msg	the container of the listed objects is gone	kontener wymienionych obiektów już nie istnieje
 @msg	the copy `{user_id}` can't be read as a library	kopii `{user_id}` nie można odczytać jako biblioteki
 @msg	the copy would leave the canvas	kopia wykroczyłaby poza płótno
-@msg	the cut cannot be made on this art: {e}	na tej grafice nie można wykonać cięcia: {e}
+@msg	the cut cannot be made on this art: {e}	na tej kompozycji nie można wykonać cięcia: {e}
 @msg	the data isn't an EMF or WMF picture	dane nie są ilustracją EMF ani WMF
 @msg	the data isn't an EPS or PostScript picture	dane nie są ilustracją EPS ani PostScript
 @msg	the deferred paste is no longer available	odroczone wklejanie nie jest już dostępne
@@ -8939,7 +8939,7 @@ breakText	Glyphs	Glify
 @msg	the image's transparency doesn't fit it	przezroczystość obrazu do niego nie pasuje
 @msg	the job would print more than {MAX_PAGES} pages	zadanie wydrukowałoby ponad {MAX_PAGES} stron
 @msg	the job would print more than {_1} pages	zadanie wydrukowałoby ponad {_1} stron
-@msg	the layers hold no art to mask	warstwy nie zawierają grafiki do zamaskowania
+@msg	the layers hold no art to mask	warstwy nie zawierają kompozycji do zamaskowania
 @msg	the layout moved	układ uległ przesunięciu
 @msg	the library has a group `{name}` already	biblioteka ma już grupę `{name}`
 @msg	the library has no group `{name}`	biblioteka nie ma grupy `{name}`
@@ -8954,7 +8954,7 @@ breakText	Glyphs	Glify
 @msg	the open and permissions passwords must differ	hasło otwarcia i hasło uprawnień muszą się różnić
 @msg	the operand stack overflowed	stos operandów został przepełniony
 @msg	the page has no area	strona nie ma powierzchni
-@msg	the page's type in an unread object's box isn't in its page art	tekstu strony w polu nieodczytanego obiektu nie ma w grafice tej strony
+@msg	the page's type in an unread object's box isn't in its page art	tekstu strony w polu nieodczytanego obiektu nie ma w kompozycji tej strony
 @msg	the paint behind the proxy is not a gradient	malowanie wskazywane przez wskaźnik wypełnienia lub obrysu nie jest gradientem
 @msg	the parent must be a layer or sublayer	elementem nadrzędnym musi być warstwa lub podwarstwa
 @msg	the path can't be extended	ścieżki nie można przedłużyć
@@ -8967,10 +8967,10 @@ breakText	Glyphs	Glify
 @msg	the program uses too much memory	program zużywa zbyt dużo pamięci
 @msg	the rectangle must have a width and a height	prostokąt musi mieć szerokość i wysokość
 @msg	the rectangle needs a size and must lie on the canvas	prostokąt wymaga rozmiaru i musi leżeć na płótnie
-@msg	the selected art has no width	zaznaczona grafika nie ma szerokości
+@msg	the selected art has no width	zaznaczona kompozycja nie ma szerokości
 @msg	the selection draws nothing	zaznaczenie niczego nie rysuje
 @msg	the selection has no area	zaznaczenie nie ma powierzchni
-@msg	the selection has no art to export	zaznaczenie nie zawiera grafiki do wyeksportowania
+@msg	the selection has no art to export	zaznaczenie nie zawiera kompozycji do wyeksportowania
 @msg	the selection has no bounds	zaznaczenie nie ma granic
 @msg	the selection has no graphic style	zaznaczenie nie ma stylu graficznego
 @msg	the slice would leave the canvas	plasterek wykroczyłby poza płótno
@@ -9191,7 +9191,7 @@ breakText	Glyphs	Glify
 @msg	{std} files are CMYK, and the file would have colours in {_1}	pliki {std} są w CMYK, a plik zawierałby kolory w {_1}
 @msg	{std} files embed their fonts, and the file would have one that isn't	pliki {std} osadzają swoje czcionki, a plik zawierałby czcionkę nieosadzoną
 @msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	{target} to plik, z którego odczytano ten dokument, a przy odczycie pominięto część zawartości ({what}): nadpisanie go spowodowałoby jej trwałą utratę. Zapisz zamiast tego inny plik albo przekaż acknowledgeLoss: true, aby mimo to go zastąpić
-@msg	{ty} brushes need selected art (or params.{k})	pędzle {ty} wymagają zaznaczonej grafiki (lub params.{k})
+@msg	{ty} brushes need selected art (or params.{k})	pędzle {ty} wymagają zaznaczonej kompozycji (lub params.{k})
 @msg	{v} is not an asset id	{v} nie jest identyfikatorem zasobu
 @msg	{what} can't be intertwined	{what} nie można przeplatać
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} nie mieści się na papierze wraz ze spadem i znacznikami
@@ -9239,7 +9239,7 @@ breakText	Glyphs	Glify
 @msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Głębia Targa {_1}: 16, 24 lub 32 bity na piksel
 @msg	Targa encoding failed: the pixel buffer doesn't match the image size	Kodowanie Targa nie powiodło się: bufor pikseli nie odpowiada rozmiarowi obrazu
 @msg	The 3D projection is not finite	Rzut 3D nie jest skończony
-@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	Cień 3D jest zbyt złożony; wyłącz Cienie lub uprość grafikę
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	Cień 3D jest zbyt złożony; wyłącz Cienie lub uprość kompozycję
 @msg	The shape contains invalid coordinates	Kształt zawiera nieprawidłowe współrzędne
 @msg	Too many Revolve faces for visibility evaluation	Zbyt wiele ścian efektu Obrót do obliczenia widoczności
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft odczytuje z pliku wymiany próbek najwyżej {ASE_MAX_ENTRIES} kolorów i grup, a ta biblioteka ma ich {entries}
