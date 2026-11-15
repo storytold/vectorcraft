@@ -2061,8 +2061,7 @@ fn one_selected_graph_has_a_graph_section_whose_buttons_open_the_graph_dialogs()
         app.ui.dialog.take().unwrap_or_else(|| panic!("{label:?} opened no dialog"))
     };
     let d = press(&mut app, "Graph Type…");
-    assert_eq!((d.kind.as_str(), d.str("__command")), ("command", "graph.setType".to_string()));
-    assert_eq!(d.str("type"), "column");
+    assert_eq!((d.kind.as_str(), d.str("type")), (crate::dialogs::graph_type::KIND, "column".to_string()));
     assert_eq!(press(&mut app, "Graph Data…").kind, crate::dialogs::graph_data::KIND);
     assert_eq!(press(&mut app, "Column…").kind, crate::dialogs::graph_design::COLUMN);
 }
