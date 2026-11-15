@@ -5535,6 +5535,8 @@ theme	Appearance	Erscheinungsbild
 # 3D and Materials › Revolve: its options dialog and gizmos.
 	Axis side	Achsenseite
 	Drag rings to rotate. Shift snaps to 15°.	Ziehen Sie die Ringe, um zu drehen. Mit Shift in 15°-Schritten.
+	Track cube	Rotationswürfel
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Ziehen Sie eine Fläche, eine Kante oder den Ring, um zu drehen. Mit Shift um eine Bildschirmachse.
 	Drag the light, or its rings. Shift snaps to 15°.	Ziehen Sie das Licht oder seine Ringe. Mit Shift in 15°-Schritten.
 lighting	Light	Licht
 	Drag values or labels. Double-click a value to type.	Ziehen Sie Werte oder Beschriftungen. Doppelklicken Sie auf einen Wert, um ihn einzugeben.
