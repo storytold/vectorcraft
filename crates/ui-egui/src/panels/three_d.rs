@@ -231,6 +231,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         return;
     };
+    if takes_render(&t.effect) {
+        render_settings(app, ui, &ctx, &t);
+        ui.add_space(6.0);
+    }
     // The applied effect's settings in the dialog's form, with the controls' own state.
     let mut fields = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap_or_default();
     mark_mixed(app, &mut fields);
@@ -267,6 +271,45 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(action) = action {
         run_action(app, &ctx, action);
     }
+}
+
+/// Does 3D effect `id` take render settings (`render`)? Extrude & Bevel, Revolve, Inflate and Rotate
+/// do; the 3D (Classic) effects have a Wireframe surface of their own.
+fn takes_render(id: &str) -> bool {
+    vectorcraft_effects::default_params(id).is_some_and(|d| d.get(vectorcraft_effects::RENDER).is_some())
+}
+
+/// Is target `t`'s 3D effect drawn as a wireframe (`render.mode` is `wireframe`)?
+pub(crate) fn wireframe_on(t: &Target) -> bool {
+    let p = vectorcraft_effects::merged_params(&t.effect, &t.params);
+    p.get(vectorcraft_effects::RENDER).and_then(|r| r.get("mode")).and_then(Value::as_str) == Some("wireframe")
+}
+
+/// The Render Settings menu at the top of the panel: Wireframe, checked while the first selected
+/// object's 3D effect draws the edges of its faces. Choosing it turns wireframe on or off for every
+/// selected object's 3D effect ([`set_wireframe`]).
+fn render_settings(app: &mut VectorcraftApp, ui: &mut Ui, ctx: &egui::Context, t: &Target) {
+    let on = wireframe_on(t);
+    let mut picked = false;
+    ui.menu_button(tl!("Render Settings"), |ui| {
+        if widgets::menu_item(ui, tl!("Wireframe"), true, on) {
+            picked = true;
+            ui.close();
+        }
+    });
+    if picked {
+        set_wireframe(app, ctx, !on);
+    }
+}
+
+/// Render Settings › Wireframe: sets `render.mode` of each selected object's 3D effect to
+/// `wireframe` (`on`) or `shaded`, as one undo step (`effect.setParams`). Objects whose effect does
+/// not take render settings are left as they are.
+pub(crate) fn set_wireframe(app: &mut VectorcraftApp, ctx: &egui::Context, on: bool) {
+    finish(app, ctx);
+    let mut changed = Map::new();
+    changed.insert(vectorcraft_effects::RENDER.into(), json!({"mode": if on { "wireframe" } else { "shaded" }}));
+    send(app, ctx, changed, false);
 }
 
 /// Runs what a click in the Materials tab's Graphics asked for: maps the graphic onto the selected

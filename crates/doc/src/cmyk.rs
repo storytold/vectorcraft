@@ -525,8 +525,8 @@ fn planar<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -
 }
 
 /// The samples of the `n` pixels of the TIFF `d` reads, `per` to a pixel (the number its color
-/// type has), pixel by pixel and 8 bits each (16-bit samples to their high byte), whether the file
-/// stores each pixel's samples together or one plane per channel. `None` when they don't decode to
+/// type has), pixel by pixel and 8 bits each (16-bit samples rounded to the nearest), whether the
+/// file stores each pixel's samples together or one plane per channel. `None` when they don't decode to
 /// that many samples, which includes images whose planes together need more than the decoder's
 /// limit (256 MiB of samples), and, before any decoding, files with more than
 /// [`MAX_EXTRA_SAMPLES_PIXEL`] samples a pixel, files whose samples aren't unsigned integers (a
@@ -535,7 +535,7 @@ fn planar<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -
 pub(crate) fn read_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Vec<u8>> {
     Some(match read_samples_at_depth(d, n, per)? {
         Samples::Eight(v) => v,
-        Samples::Sixteen(v) => v.iter().map(|s| (s >> 8) as u8).collect(),
+        Samples::Sixteen(v) => v.iter().map(|&s| u8::try_from((u32::from(s) + 128) / 257).unwrap_or(u8::MAX)).collect(),
     })
 }
 
@@ -618,13 +618,25 @@ pub fn icc_color_space(icc: &[u8]) -> Option<[u8; 4]> {
     icc.get(16..20)?.try_into().ok()
 }
 
-/// The ICC profile of TIFF tag 34675 (ICCProfile) of the image `d` reads; `None` without one.
+/// The most bytes of an ICC profile a TIFF's tag 34675 is read with (16 MiB).
+const MAX_TIFF_ICC: u64 = 16 << 20;
+
+/// The ICC profile of TIFF tag 34675 (ICCProfile, of type UNDEFINED or BYTE) of the image `d`
+/// reads, as its bytes; `None` without one and for one over [`MAX_TIFF_ICC`] bytes.
 fn tiff_icc(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> Option<Vec<u8>> {
-    d.get_tag_u8_vec(tiff::tags::Tag::IccProfile).ok().filter(|icc| !icc.is_empty())
+    use tiff::tags::{Tag, Type, ValueBuffer};
+    let mut ifd = d.image_ifd();
+    let entry = ifd.find_entry(Tag::IccProfile)?;
+    if !matches!(entry.field_type(), Type::UNDEFINED | Type::BYTE) || entry.count() == 0 || entry.count() > MAX_TIFF_ICC {
+        return None;
+    }
+    let mut buf = ValueBuffer::empty(Type::UNDEFINED);
+    ifd.find_tag_buf(Tag::IccProfile, &mut buf).ok()??;
+    Some(buf.as_bytes().to_vec())
 }
 
-/// The ICC profile of TIFF `bytes`' first image (tag 34675), read with the `tiff` decoder's own
-/// limits, whatever the size of the image; `None` for other images and TIFFs without one.
+/// The ICC profile of TIFF `bytes`' first image (tag 34675), up to [`MAX_TIFF_ICC`] bytes whatever
+/// the size of the image; `None` for other images, TIFFs without one and a longer one.
 pub fn tiff_icc_profile(bytes: &[u8]) -> Option<Vec<u8>> {
     let (_, mut d) = tiff(bytes)?;
     tiff_icc(&mut d)
@@ -636,6 +648,61 @@ fn jpeg_icc(bytes: &[u8]) -> Option<Vec<u8>> {
     let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
     d.decode_headers().ok()?;
     d.icc_profile().filter(|icc| !icc.is_empty())
+}
+
+/// The bytes after an `ICC_PROFILE` APP2 segment's length: its name, then the segment's number and
+/// the count of segments.
+const ICC_SEGMENT: &[u8; 12] = b"ICC_PROFILE\0";
+
+/// JPEG `bytes` carrying `icc` in place of the ICC profile they carry, if any: every
+/// `ICC_PROFILE` APP2 segment before the scan taken out, `icc` written as numbered APP2 segments
+/// after the leading application segments, and the other segments and the scan as they are. `None`
+/// for bytes whose segments before the scan can't be read, an empty `icc`, and one longer than 255
+/// segments hold.
+pub fn jpeg_with_icc(bytes: &[u8], icc: &[u8]) -> Option<Vec<u8>> {
+    // A segment's length counts itself (2 bytes) and the name, number and count (14).
+    const CHUNK: usize = 0xFFFF - 2 - ICC_SEGMENT.len() - 2;
+    let chunks: Vec<&[u8]> = icc.chunks(CHUNK).collect();
+    let count = u8::try_from(chunks.len()).ok().filter(|n| *n > 0)?;
+    if !bytes.starts_with(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut segments = Vec::with_capacity(icc.len() + 18 * chunks.len());
+    for (i, chunk) in chunks.iter().enumerate() {
+        let len = u16::try_from(chunk.len() + 2 + ICC_SEGMENT.len() + 2).ok()?;
+        segments.extend_from_slice(&[0xFF, 0xE2]);
+        segments.extend_from_slice(&len.to_be_bytes());
+        segments.extend_from_slice(ICC_SEGMENT);
+        segments.extend_from_slice(&[u8::try_from(i + 1).ok()?, count]);
+        segments.extend_from_slice(chunk);
+    }
+    let mut out = Vec::with_capacity(bytes.len() + segments.len());
+    out.extend_from_slice(&[0xFF, 0xD8]);
+    let mut icc_segments = Some(segments);
+    let mut at = 2;
+    // The segments before the scan (SOS), each with its length; a marker without one ends them.
+    // Fill bytes (0xFF) before a marker are left out.
+    loop {
+        while bytes.get(at..at + 2) == Some(&[0xFF, 0xFF]) {
+            at += 1;
+        }
+        let (Some(&0xFF), Some(&marker)) = (bytes.get(at), bytes.get(at + 1)) else { return None };
+        let app = (0xE0..=0xEF).contains(&marker);
+        if !app && let Some(s) = icc_segments.take() {
+            out.extend_from_slice(&s);
+        }
+        if matches!(marker, 0xDA | 0xD8 | 0xD9 | 0x01 | 0xD0..=0xD7) {
+            break;
+        }
+        let len = usize::from(u16::from_be_bytes(bytes.get(at + 2..at + 4)?.try_into().ok()?));
+        let segment = bytes.get(at..(at + 2).checked_add(len)?).filter(|_| len >= 2)?;
+        if !(marker == 0xE2 && segment.get(4..16) == Some(ICC_SEGMENT.as_slice())) {
+            out.extend_from_slice(segment);
+        }
+        at += segment.len();
+    }
+    out.extend_from_slice(bytes.get(at..)?);
+    Some(out)
 }
 
 /// `icc` when it is a profile of CMYK colors, which the samples of a CMYK image are in.
@@ -743,6 +810,14 @@ impl ImageBlob {
     /// inch) when it is given and both are finite and above 0.
     pub fn cmyk_tiff_at(inks: &Inks, ppi: Option<(f64, f64)>) -> Option<Self> {
         let tiff = write_cmyk_tiff(inks.width, inks.height, SampleSlice::Eight(&inks.data), ppi, None)?;
+        Some(Self::new("image/tiff", tiff))
+    }
+
+    /// [`ImageBlob::cmyk_tiff`], carrying `icc` as tag 34675 (ICCProfile) when it is a profile of
+    /// CMYK colors; any other profile is left out. The caller checks the rest of the profile.
+    pub fn cmyk_tiff_with_icc(inks: &Inks, icc: Option<&[u8]>) -> Option<Self> {
+        let icc = icc.filter(|icc| icc_color_space(icc) == Some(*b"CMYK"));
+        let tiff = write_cmyk_tiff(inks.width, inks.height, SampleSlice::Eight(&inks.data), None, icc)?;
         Some(Self::new("image/tiff", tiff))
     }
 
@@ -1968,6 +2043,35 @@ mod tests {
         assert_eq!(rgb.get_pixel(1, 0).0, [0, 255, 255]);
     }
 
+    /// A CMYK TIFF written with a CMYK profile carries it byte for byte as tag 34675; a profile of
+    /// other colors, and none, leave the TIFF untagged. The inks are the same either way.
+    #[test]
+    fn a_cmyk_tiff_carries_the_cmyk_profile_it_is_given() {
+        let profile = |space: &[u8; 4]| {
+            let mut icc = vec![0u8; 128];
+            icc[0..4].copy_from_slice(&128u32.to_be_bytes());
+            icc[16..20].copy_from_slice(space);
+            icc[36..40].copy_from_slice(b"acsp");
+            icc
+        };
+        let cmyk = profile(b"CMYK");
+        let b = ImageBlob::cmyk_tiff_with_icc(&inks(), Some(&cmyk)).unwrap();
+        assert_eq!(b.cmyk_icc_profile(), Some(cmyk), "the profile, byte for byte");
+        assert_eq!(b.cmyk(), Some(inks()));
+        // Read back up to 16 MiB; a longer one isn't read.
+        for (len, read) in [(16 << 20, true), ((16 << 20) + 1, false)] {
+            let mut big = profile(b"CMYK");
+            big.resize(len, 0);
+            let b = ImageBlob::cmyk_tiff_with_icc(&inks(), Some(&big)).unwrap();
+            assert_eq!(b.cmyk_icc_profile().is_some_and(|p| p == big), read, "{len} bytes");
+        }
+        for icc in [Some(profile(b"RGB ")), None] {
+            let b = ImageBlob::cmyk_tiff_with_icc(&inks(), icc.as_deref()).unwrap();
+            assert_eq!(tiff_icc_profile(&b.bytes), None, "{icc:?}");
+            assert_eq!(b.cmyk(), Some(inks()));
+        }
+    }
+
     #[test]
     fn a_header_gives_the_size_without_the_samples() {
         assert_eq!(ImageBlob::cmyk_tiff(&inks()).unwrap().header_size(), Some((3, 2)));
@@ -2029,6 +2133,53 @@ mod tests {
         for p in back.data.as_chunks::<4>().0 {
             assert!(p.iter().zip(flat).all(|(a, b)| a.abs_diff(b) <= 2), "{p:?}");
         }
+    }
+
+    /// A CMYK JPEG given a profile carries it in place of its own, its samples as they were; a
+    /// profile longer than 255 segments hold, an empty one and bytes that aren't a JPEG give none.
+    #[test]
+    fn a_cmyk_jpeg_carries_the_profile_it_is_given() {
+        let profile = |len: usize, mark: u8| {
+            let mut icc = vec![mark; len];
+            icc[16..20].copy_from_slice(b"CMYK");
+            icc
+        };
+        let px: Vec<u8> = (0..16 * 16).flat_map(|_| [10u8, 40, 100, 20]).collect();
+        let mut jpg = Vec::new();
+        let mut e = jpeg_encoder::Encoder::new(&mut jpg, 100);
+        e.add_icc_profile(&profile(300_000, 1)).unwrap();
+        e.encode(&px, 16, 16, jpeg_encoder::ColorType::Cmyk).unwrap();
+        let inks = ImageBlob::new("image/jpeg", jpg.clone()).cmyk().unwrap();
+        // One segment holds 65,519 bytes of a profile.
+        for len in [128, 65_519, 65_520, 300_000, 1 << 20] {
+            let icc = profile(len, 2);
+            let b = ImageBlob::new("image/jpeg", jpeg_with_icc(&jpg, &icc).unwrap());
+            assert!(b.cmyk_icc_profile() == Some(icc), "{len} bytes");
+            assert!(b.cmyk() == Some(inks.clone()), "{len} bytes: the samples as they were");
+        }
+        // A profile segment after the quantization table is taken out too.
+        let dqt = jpg.windows(2).position(|w| w == [0xFF, 0xDB]).unwrap();
+        let after = dqt + 2 + usize::from(u16::from_be_bytes([jpg[dqt + 2], jpg[dqt + 3]]));
+        let mut late = jpg.clone();
+        let stale = profile(128, 3);
+        let segment = [&[0xFF, 0xE2, 0, 144][..], ICC_SEGMENT, &[1, 1], &stale].concat();
+        late.splice(after..after, segment);
+        let icc = profile(128, 2);
+        let b = jpeg_with_icc(&late, &icc).unwrap();
+        assert_eq!(b.windows(ICC_SEGMENT.len()).filter(|w| *w == ICC_SEGMENT).count(), 1, "one profile segment");
+        assert!(ImageBlob::new("image/jpeg", b).cmyk_icc_profile() == Some(icc));
+        // Fill bytes before the quantization table's marker are passed over.
+        let mut filled = jpg.clone();
+        filled.splice(dqt..dqt, [0xFF; 3]);
+        assert!(ImageBlob::new("image/jpeg", filled.clone()).cmyk() == Some(inks.clone()), "the decoder reads it");
+        let icc = profile(128, 2);
+        let b = ImageBlob::new("image/jpeg", jpeg_with_icc(&filled, &icc).unwrap());
+        assert!(b.cmyk_icc_profile() == Some(icc), "fill bytes");
+        assert!(b.cmyk() == Some(inks.clone()), "fill bytes: the samples as they were");
+        assert!(jpeg_with_icc(&jpg, &profile(255 * 65_519, 2)).is_some(), "255 segments");
+        assert!(jpeg_with_icc(&jpg, &profile(255 * 65_519 + 1, 2)).is_none(), "256 segments");
+        assert!(jpeg_with_icc(&jpg, &[]).is_none(), "empty");
+        assert!(jpeg_with_icc(&ImageBlob::cmyk_tiff(&inks).unwrap().bytes, &profile(128, 2)).is_none(), "a TIFF");
     }
 
     #[test]

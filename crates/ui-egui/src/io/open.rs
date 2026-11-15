@@ -52,10 +52,12 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
         let load = if swatches { crate::panels::swatches::load_library } else { crate::panels::graphic_styles::load_library };
         return load(app, p).map(|_| Value::Null);
     }
-    // A PDF with several pages or a password asks first (the Import PDF dialog), and so does a
-    // DXF drawing (DXF Import Options).
+    // A PDF with several pages or a password asks first (the Import PDF dialog), and so do a DXF
+    // drawing (DXF Import Options) and a PSD file with several layers or with slices (PSD Import
+    // Options), unless `p` says how its layers come in.
     if crate::dialogs::import_pdf::offer(app, name, bytes, path.clone(), None)
         || crate::dialogs::dxf_import::offer(app, name, bytes, path.clone(), None)
+        || (p.get("layers").is_none() && crate::dialogs::psd_import::offer(app, name, bytes, path.clone(), None))
     {
         return Ok(Value::Null);
     }
@@ -552,9 +554,11 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
     check_import_size(path, false)?;
     let mut bytes = read(app, path)?;
     if background && opens_as(path).is_none() {
-        // A PDF with several pages or a password, or a DXF drawing, asks first, as at once.
+        // A PDF with several pages or a password, a DXF drawing, or a PSD file with several layers
+        // or with slices asks first, as at once.
         if crate::dialogs::import_pdf::offer(app, path, &bytes, Some(path.to_string()), None)
             || crate::dialogs::dxf_import::offer(app, path, &bytes, Some(path.to_string()), None)
+            || (p.get("layers").is_none() && crate::dialogs::psd_import::offer(app, path, &bytes, Some(path.to_string()), None))
         {
             note_recent(app, path);
             return Ok(Value::Null);
