@@ -863,7 +863,8 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str, t: &mut TextObject) 
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
 /// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
-/// filled with the current fill unless that is None or white (black then), in the document's
+/// filled as `[Normal Character Style]` is (black unless redefined; never the current fill,
+/// #7975), in the document's
 /// language. A `size` outside [`super::typecmd::TYPE_SIZES`] is an error.
 pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharStyle> {
     let mut style = CharStyle::default();
@@ -881,8 +882,7 @@ pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharSt
     }
     style.fill = match p.get("color").and_then(color_value) {
         Some(c) => vectorcraft_color::Paint::solid(super::paint::new_color(s, p, c)),
-        None if !s.paint.fill.is_none() && s.paint.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE) => s.paint.fill.clone(),
-        None => vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+        None => s.doc().map_or_else(|_| CharStyle::default().fill, |d| super::textstyles::normal_char_fill(&d.doc)),
     };
     // In the language Document Setup chose, else Preferences › Hyphenation › Default Language; none
     // for the default. Type already in a document keeps its own.
