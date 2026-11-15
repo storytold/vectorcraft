@@ -1,9 +1,11 @@
 //! Reading Photoshop documents (#918): the merged image of every colour mode, depth and
-//! compression, PSB files, transparency, the resolution, and damaged files refused without a panic.
+//! compression, PSB files, transparency, the resolution, the clipping path, and damaged files
+//! refused without a panic.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::{Document, NodeId, NodeKind};
 
-use super::psdread::{decode, is_psd, resolution};
+use super::psdread::{clipping_path, decode, is_psd, resolution};
 use super::*;
 
 /// A Photoshop document built from its parts: `version` 1 (PSD) or 2 (PSB), the header's fields,
@@ -258,6 +260,199 @@ fn pdd_files_open_and_place() {
     assert!(open_filters().any(|f| f == photoshop) && place_filters().any(|f| f == photoshop));
     assert!(!export_extensions().contains(&"pdd"), "exports still name their files .psd");
     assert!(format_for_name("x.pdd").is_none() && writable_format(None, Some("x.pdd")).is_err(), "an export to .pdd is refused as before");
+}
+
+/// An image resource block: `8BIM`, `id`, `name` as a Pascal string padded to an even size, then
+/// `data` padded to an even size.
+fn resource(id: u16, name: &[u8], data: &[u8]) -> Vec<u8> {
+    let mut r = b"8BIM".to_vec();
+    r.extend(id.to_be_bytes());
+    r.push(name.len() as u8);
+    r.extend(name);
+    if name.len().is_multiple_of(2) {
+        r.push(0);
+    }
+    r.extend((data.len() as u32).to_be_bytes());
+    r.extend(data);
+    if !data.len().is_multiple_of(2) {
+        r.push(0);
+    }
+    r
+}
+
+/// A path point record's 8 bytes: `[x, y]` as fractions of the image's width and height, stored
+/// vertical first as signed 8.24 fixed-point numbers.
+fn point([x, y]: [f64; 2]) -> Vec<u8> {
+    [y, x].iter().flat_map(|v| ((v * f64::from(1 << 24)).round() as i32).to_be_bytes()).collect()
+}
+
+/// A saved path's records: the fill rule record, an initial fill record saying whether the fill
+/// starts with all pixels, then each subpath (closed or not) of corner knots without handles.
+fn saved_path(all_pixels: bool, subpaths: &[(bool, &[[f64; 2]])]) -> Vec<u8> {
+    let record = |selector: u16, body: Vec<u8>| {
+        let mut r = selector.to_be_bytes().to_vec();
+        r.extend(body);
+        r.resize(26, 0);
+        r
+    };
+    let mut d = record(6, vec![]);
+    d.extend(record(8, vec![0, u8::from(all_pixels)]));
+    for (closed, knots) in subpaths {
+        d.extend(record(if *closed { 0 } else { 3 }, (knots.len() as u16).to_be_bytes().to_vec()));
+        for k in *knots {
+            d.extend(record(if *closed { 2 } else { 5 }, [point(*k), point(*k), point(*k)].concat()));
+        }
+    }
+    d
+}
+
+/// The clipping path resource (2999) naming the saved path `name`, with a flatness of 0 and the
+/// fill rule left as it is.
+fn clipping_name(name: &[u8]) -> Vec<u8> {
+    let mut d = vec![name.len() as u8];
+    d.extend(name);
+    d.extend([0; 6]);
+    resource(2999, b"", &d)
+}
+
+/// A 100 × 50 pixel red RGB document with `resources`, flat or with a layer count of 0.
+fn red_psd(resources: &[u8]) -> Vec<u8> {
+    psd(1, 3, (100, 50), 8, 3, &[], resources, &[], &raw(&[&[255; 5000], &[0; 5000], &[0; 5000]]))
+}
+
+/// The triangle saved as "Outline", another path saved as "Other", and the clipping path naming
+/// "Outline".
+fn triangle_resources() -> Vec<u8> {
+    let other = saved_path(false, &[(true, &[[0.0, 0.0], [0.1, 0.0], [0.1, 0.1]])]);
+    let outline = saved_path(false, &[(true, &[[0.5, 0.0], [1.0, 1.0], [0.0, 1.0]])]);
+    [resource(2000, b"Other", &other), resource(2001, b"Outline", &outline), clipping_name(b"Outline")].concat()
+}
+
+/// The clip group a PSD file comes in as: its clipping path's anchors (pt), whether that path
+/// uses the even-odd rule, and the image it clips.
+fn clip_group(d: &Document, id: NodeId) -> (Vec<[f64; 2]>, bool, NodeId) {
+    let Some(NodeKind::Group { children, clip: true }) = d.node(id).map(|n| &n.kind) else { panic!("not a clip group: {:?}", d.node(id)) };
+    let [path, image] = &children[..] else { panic!("{} children", children.len()) };
+    let NodeKind::Path { path: p, rule, clipping: true, .. } = &path.kind else { panic!("not a clipping path") };
+    assert!(matches!(image.kind, NodeKind::Image(_)));
+    let anchors = p.anchors().map(|(_, _, a)| [a.p.x, a.p.y]).collect();
+    (anchors, *rule == vectorcraft_geom::FillRule::EvenOdd, image.id)
+}
+
+#[test]
+fn the_clipping_path_clips_the_merged_image_on_place_and_open() {
+    let f = red_psd(&triangle_resources());
+    let triangle = vec![[50.0, 0.0], [100.0, 50.0], [0.0, 50.0]];
+    let data = vectorcraft_format::base64_encode(&f);
+    // Place: one clip group of the named path, not the other, at 100 % (72 ppi: a pixel a point).
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "cut.psd", "dataBase64": data, "at": [50, 25]})).unwrap();
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let (anchors, even_odd, image) = clip_group(&s.doc().unwrap().doc, id);
+    assert_eq!((anchors, even_odd), (triangle.clone(), true));
+    assert_eq!(r["image"], image.0, "{r}");
+    assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(100.0), Some(50.0)));
+    // Open with layers off, and a flat file opened with layers on, as its merged image.
+    for params in [json!({"layers": false}), json!({})] {
+        s.execute("document.open", &merge(json!({"name": "cut.psd", "dataBase64": data}), params.clone())).unwrap();
+        let d = &s.doc().unwrap().doc;
+        let top = d.layers[0].children().unwrap();
+        assert_eq!(top.len(), 1, "{params}");
+        assert_eq!(top[0].name.as_deref(), Some("cut.psd"), "{params}");
+        let group = top[0].id;
+        let (anchors, even_odd, _) = clip_group(d, group);
+        assert_eq!((anchors, even_odd), (triangle.clone(), true), "{params}");
+        // The corner outside the triangle draws nothing; its middle draws red.
+        let png = image::load_from_memory(&exported(&mut s, json!({"format": "png"}))).unwrap().to_rgba8();
+        assert_eq!((png.get_pixel(2, 2).0[3], png.get_pixel(50, 40).0), (0, [255, 0, 0, 255]), "{params}");
+        // The clipping path is an ordinary path: releasing the clipping mask leaves the image whole.
+        s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+        s.execute("object.clippingMask.release", &json!({})).unwrap();
+        let png = image::load_from_memory(&exported(&mut s, json!({"format": "png"}))).unwrap().to_rgba8();
+        assert_eq!(png.get_pixel(2, 2).0, [255, 0, 0, 255], "{params}");
+    }
+}
+
+/// Replace keeps a clipped PSD file's scale, as it keeps an image's.
+#[test]
+fn replacing_a_clipped_psd_keeps_its_scale() {
+    let data = vectorcraft_format::base64_encode(&red_psd(&triangle_resources()));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("file.place", &json!({"name": "cut.psd", "dataBase64": data, "at": [200, 200]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "sy": 200})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "cut.psd", "dataBase64": data, "replace": true})).unwrap();
+    assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(200.0), Some(100.0)), "{r}");
+    let (anchors, _, _) = clip_group(&s.doc().unwrap().doc, NodeId(r["ids"][0].as_u64().unwrap()));
+    assert_eq!(anchors, [[200.0, 150.0], [300.0, 250.0], [100.0, 250.0]]);
+    // Other art replacing the clip group takes its centre only, as before.
+    let plain = vectorcraft_format::base64_encode(&red_psd(&[]));
+    let r = s.execute("file.place", &json!({"name": "plain.psd", "dataBase64": plain, "replace": true})).unwrap();
+    assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(100.0), Some(50.0)), "{r}");
+}
+
+#[test]
+fn a_fill_that_starts_with_all_pixels_puts_the_image_around_the_path() {
+    let hole = saved_path(true, &[(true, &[[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]])]);
+    let f = red_psd(&[resource(2000, b"Hole", &hole), clipping_name(b"Hole")].concat());
+    let path = clipping_path(&f).unwrap();
+    let starts: Vec<_> = path.subpaths.iter().map(|s| (s.anchors[0].p.x, s.anchors[0].p.y, s.closed)).collect();
+    assert_eq!(starts, [(0.0, 0.0, true), (25.0, 12.5, true)], "the image's edges, then the hole");
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"name": "hole.psd", "dataBase64": vectorcraft_format::base64_encode(&f), "layers": false})).unwrap();
+    let png = image::load_from_memory(&exported(&mut s, json!({"format": "png"}))).unwrap().to_rgba8();
+    assert_eq!((png.get_pixel(2, 2).0, png.get_pixel(50, 25).0[3]), ([255, 0, 0, 255], 0));
+}
+
+#[test]
+fn files_naming_no_clipping_path_or_a_missing_one_place_a_plain_image() {
+    let other = saved_path(false, &[(true, &[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])]);
+    let empty = saved_path(false, &[]);
+    for (resources, what) in [
+        (resource(2000, b"Other", &other), "saved paths, none named"),
+        ([resource(2000, b"Other", &other), clipping_name(b"Gone")].concat(), "a name no path has"),
+        ([resource(2000, b"Empty", &empty), clipping_name(b"Empty")].concat(), "a path with no knots"),
+        ([resource(3000, b"Other", &other), clipping_name(b"Other")].concat(), "a resource outside the saved paths"),
+        ([resource(2000, b"Other", &other), [&b"MeSa"[..], &clipping_name(b"Other")[4..]].concat()].concat(), "a block not signed 8BIM"),
+        (vec![], "no resources"),
+    ] {
+        let f = red_psd(&resources);
+        assert!(clipping_path(&f).is_none(), "{what}");
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let r = s.execute("file.place", &json!({"name": "a.psd", "dataBase64": vectorcraft_format::base64_encode(&f)})).unwrap();
+        let id = NodeId(r["ids"][0].as_u64().unwrap());
+        assert!(matches!(s.doc().unwrap().doc.node(id).map(|n| &n.kind), Some(NodeKind::Image(_))), "{what}");
+        assert!(r.get("image").is_none(), "{what}: {r}");
+    }
+}
+
+#[test]
+fn damaged_clipping_paths_are_read_without_a_panic() {
+    let good = red_psd(&triangle_resources());
+    assert!(clipping_path(&good).is_some());
+    // The header, the empty colour mode data, then the resources' length and the resources.
+    let start = 26 + 4;
+    let end = start + 4 + triangle_resources().len();
+    for n in 0..end + 2 {
+        let _ = clipping_path(&good[..n]);
+    }
+    for i in start..end {
+        for v in [0, 1, 0x7f, 0x80, 0xff] {
+            let mut f = good.clone();
+            f[i] = v;
+            let _ = clipping_path(&f);
+        }
+    }
+    // Knots before any length record, and more knots than a length record counts, are left out.
+    let mut extra = saved_path(false, &[(true, &[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])]);
+    extra[26 * 2 + 3] = 2;
+    let mut stray = 2u16.to_be_bytes().to_vec();
+    stray.resize(26, 0);
+    extra.splice(26..26, stray);
+    let path = clipping_path(&red_psd(&[resource(2000, b"P", &extra), clipping_name(b"P")].concat())).unwrap();
+    assert_eq!(path.subpaths.iter().map(|s| s.anchors.len()).collect::<Vec<_>>(), [2]);
 }
 
 #[test]
