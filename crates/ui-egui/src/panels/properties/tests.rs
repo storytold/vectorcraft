@@ -2066,6 +2066,45 @@ fn one_selected_graph_has_a_graph_section_whose_buttons_open_the_graph_dialogs()
     assert_eq!(press(&mut app, "Column…").kind, crate::dialogs::graph_design::COLUMN);
 }
 
+/// At the panel's narrowest, Graph Type… and Graph Data… share a row in English, and a translated
+/// label too long for half of the row puts each of them on a row of its own, drawn whole.
+#[test]
+fn the_graph_sections_long_labels_get_rows_of_their_own() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    graph_doc(&mut app, "column", 0.0);
+    let ctx = egui::Context::default();
+    let width = 220.0;
+    let texts = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(width, 700.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| graph::section(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|s| {
+                if let egui::Shape::Text(t) = &s.shape {
+                    Some((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size())))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    };
+    let rect = |texts: &[(String, Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| *r).unwrap_or_else(|| panic!("no {label:?} in {texts:?}"))
+    };
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let english = texts(&mut app);
+    assert_eq!(rect(&english, "Graph Type…").center().y, rect(&english, "Graph Data…").center().y, "{english:?}");
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let german = texts(&mut app);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (kind, data) = (rect(&german, "Diagrammtyp…"), rect(&german, "Diagrammdaten…"));
+    assert!(kind.bottom() <= data.top(), "{german:?}");
+    for r in [kind, data] {
+        assert!(r.left() >= 0.0 && r.right() <= width, "{r:?} in {german:?}");
+    }
+}
+
 /// Column… shows when every series it would change draws columns or bars, Marker… when every one
 /// draws lines, scatter points or radar lines: series picked with Group Selection count on their
 /// own, and a combined graph selected whole shows neither.
@@ -2095,6 +2134,14 @@ fn the_graph_sections_column_and_marker_follow_the_series_they_would_change() {
         let id = graph_doc(&mut app, kind, 300.0);
         app.run("select.set", json!({"ids": [id]})).unwrap();
         assert_eq!(graph::shown(&app).map(|s| (s.column, s.marker)), Some(shown), "{kind}");
+        app.run("edit.clear", json!({})).unwrap();
+    }
+    // A graph whose data was cleared has no series for Column… or Marker… to change.
+    for kind in ["column", "line"] {
+        let id = graph_doc(&mut app, kind, 300.0);
+        app.run("graph.setData", json!({"id": id, "series": [], "categories": [], "rows": []})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(graph::shown(&app), Some(graph::Shown { column: false, marker: false }), "an empty {kind} graph");
         app.run("edit.clear", json!({})).unwrap();
     }
 }

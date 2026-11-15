@@ -36,7 +36,7 @@ pub(crate) fn shown(app: &VectorcraftApp) -> Option<Shown> {
     }
     let graph = graph?;
     let spec = doc.node(graph)?.extras().graph.as_deref()?;
-    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, MAX_GRAPH_SERIES);
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(MAX_GRAPH_SERIES);
     // The series Column… and Marker… change: those picked with Group Selection when the selection is
     // only series, else every series (as `graph.column` and `graph.marker` pick them).
     let picked: Option<Vec<usize>> = st.selection.objects.iter().map(|id| series_of(doc, graph, *id).filter(|i| *i < count)).collect();
@@ -85,15 +85,26 @@ pub(crate) fn section(app: &mut VectorcraftApp, ui: &mut Ui) {
     if s.marker {
         buttons.push((tl!("Marker…"), "graph.marker"));
     }
-    let w = (ui.available_width() - 6.0) / 2.0;
+    let full = ui.available_width();
+    let w = (full - 6.0) / 2.0;
     for pair in buttons.chunks(2) {
-        ui.horizontal(|ui| {
+        // Two buttons share a row while both labels fit in half of it; a longer translated label
+        // puts each button of the pair on a row of its own.
+        if pair.iter().all(|(label, _)| widgets::flat_button_fit_width(ui, label, 0.0) <= w) {
+            ui.horizontal(|ui| {
+                for (label, id) in pair {
+                    if widgets::flat_button(ui, label, w).clicked() {
+                        crate::menus::invoke(app, id, json!({}));
+                    }
+                }
+            });
+        } else {
             for (label, id) in pair {
-                if widgets::flat_button(ui, label, w).clicked() {
+                if widgets::flat_button_fit(ui, label, full).clicked() {
                     crate::menus::invoke(app, id, json!({}));
                 }
             }
-        });
+        }
     }
     divider(ui);
 }
