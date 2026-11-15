@@ -5079,6 +5079,7 @@ imageTrace	Outline	Ääriviiva
 @msg	result would exceed the canvas (coordinates out of range)	tulos ylittäisi kankaan (koordinaatit alueen ulkopuolella)
 @msg	objects can't be nested more than 32 deep	objekteja ei voi sisäkkäistää yli 32 tason syvyyteen
 @msg	the SVG's elements are nested more than {0} deep	elementit ovat SVG-tiedostossa sisäkkäin yli {0} tason syvyydessä
+@msg	the SVG's style sheets take too long to match	SVG-tiedoston tyylisivujen täsmäytys kestää liian kauan
 @msg	the SVG's styles expand to more than {0} MB	SVG-tiedoston tyylit laajenevat yli {0} megatavuksi
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {s}

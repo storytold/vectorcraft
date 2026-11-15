@@ -8668,6 +8668,7 @@ digits	Hindi	Hindi
 @msg	the subpath has no ends to extend (it is closed or a single point)	delbanan har inga ändar att förlänga (den är stängd eller en enkel punkt)
 @msg	the SVG expands to more than {0} nested SVG images	SVG-filen expanderar till fler än {0} kapslade SVG-bilder
 @msg	the SVG expands to more than {0} objects	SVG-filen expanderar till fler än {0} objekt
+@msg	the SVG's style sheets take too long to match	matchningen av SVG-filens formatmallar tar för lång tid
 @msg	the SVG's styles expand to more than {0} MB	SVG-filens stilar expanderar till mer än {0} MB
 @msg	the SVG has no drawable objects	SVG-filen har inga ritbara objekt
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ-filen packas upp till mer än {_1} MB

@@ -4901,6 +4901,7 @@ axis	Both	Оба
 @msg	result would exceed the canvas (coordinates out of range)	результат превысил бы холст (координаты вне диапазона)
 @msg	objects can't be nested more than 32 deep	объекты нельзя вкладывать глубже 32 уровней
 @msg	the SVG's elements are nested more than {0} deep	элементы SVG вложены глубже {0} уровней
+@msg	the SVG's style sheets take too long to match	сопоставление таблиц стилей SVG занимает слишком много времени
 @msg	the SVG's styles expand to more than {0} MB	после развёртывания стили SVG занимают более {0} МБ
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale должен быть числом от {_1} до {_2}, а не {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale должен быть числом от {_1} до {_2}, а не {s}

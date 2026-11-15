@@ -8893,6 +8893,7 @@ breakText	Glyphs	Glyphes
 @msg	the RTF file is too large to place as type (at most {_1} MB)	le fichier RTF est trop volumineux pour être importé comme texte (au plus {_1} Mo)
 @msg	the SVG expands to more than {0} nested SVG images	le SVG se développe en plus de {0} images SVG imbriquées
 @msg	the SVG expands to more than {0} objects	le SVG se développe en plus de {0} objets
+@msg	the SVG's style sheets take too long to match	la mise en correspondance des feuilles de style du SVG prend trop de temps
 @msg	the SVG's styles expand to more than {0} MB	les styles du SVG se développent en plus de {0} Mo
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	le fichier SVG dépasse {MAX_IMPORT_BYTES} octets
 @msg	the SVG has no drawable objects	le SVG n’a aucun objet dessinable
