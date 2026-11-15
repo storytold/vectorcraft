@@ -296,6 +296,13 @@ fn pen_pressure_is_the_intensity_with_use_pressure() {
             json!({"tool": tool, "points": [[200, 150, "hard"]], "usePressure": true}),
             "a point's pressure must be a number, not \"hard\"",
         );
+        // Also on a point without coordinates, beside one that has them.
+        refused(
+            &mut s,
+            "symbol.adjust",
+            json!({"tool": tool, "points": [[200, 150], [null, 0, "bad"]], "usePressure": true}),
+            "a point's pressure must be a number, not \"bad\"",
+        );
     }
     for key in ["usePressure", "proportional", "affectsDensity"] {
         let mut p = json!({"tool": "size", "points": [[200, 150]]});

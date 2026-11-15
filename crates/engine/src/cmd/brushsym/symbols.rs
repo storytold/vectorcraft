@@ -854,11 +854,12 @@ fn samples(p: &Value, cmd: &str) -> Result<Vec<(Point, f64)>> {
     let a = p.get("points").and_then(Value::as_array).ok_or_else(|| bad(cmd, "missing points [[x,y]…]"))?;
     let mut v = Vec::with_capacity(a.len());
     for q in a {
-        let (Some(x), Some(y)) = (q.get(0).and_then(Value::as_f64), q.get(1).and_then(Value::as_f64)) else { continue };
+        // The pressure is checked first: a point skipped for its coordinates still has a bad one refused.
         let pressure = match q.get(2) {
             None | Some(Value::Null) => 1.0,
             Some(f) => f.as_f64().filter(|f| f.is_finite()).ok_or_else(|| bad(cmd, format!("a point's pressure must be a number, not {f}")))?,
         };
+        let (Some(x), Some(y)) = (q.get(0).and_then(Value::as_f64), q.get(1).and_then(Value::as_f64)) else { continue };
         v.push((Point::new(x, y), pressure.clamp(0.0, 1.0)));
     }
     if v.is_empty() || v.iter().any(|(q, _)| !q.x.is_finite() || !q.y.is_finite()) {
