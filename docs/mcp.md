@@ -9126,13 +9126,20 @@ as outlines.
 `fwid`, `hwid`, `twid` or `qwid` ([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)),
 or `"default"`, the font's default glyphs. A character holds one form at a time, so setting one replaces another. The
 text keeps its characters, and a character the font has no glyph of that form for keeps its own. Runs that differ only
-in their form are shaped as one piece of text. The form is saved only when it is not `"default"`, character styles
-carry it, PDF draws the glyphs the canvas draws, and live SVG text writes it in `font-feature-settings`. Another value
-is refused with `` `glyphForm` must be one of "traditional", … ``. One undo step, and a `text.setFormat` call that
-gives the form the characters already have records none. With Show East Asian Options on, the Glyphs panel menu lists
-the ten forms and Revert To Default Forms: a form is checked when every selected character has it, choosing it again
-does nothing, and it is disabled when none of the faces that draw the selected text, fallback faces included, has a
-feature for it.
+in their form are shaped as one piece of text. A form other than `"default"` also takes away the characters' glyph
+choice (`text.setGlyphAlternate`), which would otherwise keep drawing its own glyph; `"default"` keeps it. The four
+width forms set the characters on a fixed width, so Proportional Metrics (`palt`) is not applied with them and the
+font's pair kerning (`kern`, `apkn`) is turned off, in shaping and in SVG output (`font-kerning: none`);
+`proportionalMetrics` and `kerning` keep their values. The form is saved only when it is not `"default"`, character
+styles carry it, PDF draws the glyphs the canvas draws, and live SVG text writes it in `font-feature-settings`. Another
+value is refused with `` `glyphForm` must be one of "traditional", … ``. One undo step, and a `text.setFormat` call
+that gives the form the characters already have records none. With Show East Asian Options on, the Glyphs panel menu
+lists the ten forms and Revert To Default Forms. They act on the Type tool's selected range, all the text of the object
+at a caret, or all the text of the selected type objects. A form is checked when every one of those characters has
+it, and choosing it again does nothing unless one of them has a glyph choice, which the form takes away. A form is
+disabled when none of the faces that draw the selected text, fallback faces included, has a feature for it: a `GSUB` feature, or for the width
+forms a `GSUB` or `GPOS` feature
+([fwid](https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid)).
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"glyphForm":"jis78"}}}
