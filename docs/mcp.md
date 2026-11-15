@@ -3238,6 +3238,13 @@ already walks Image Trace. Short agent entry points:
   unchanged. No undo step is added when the symbols are already in order. The panel menu's Thumbnail View, Small List
   View and Large List View change only how the panel shows the symbols: thumbnails, or rows with a thumbnail and the
   name (smaller rows in Small List View).
+- Panel views: `ui.panelView {panel, view?}` sets the view of the Swatches, Graphic Styles or Symbols panel, as the
+  view items of its panel menu (and the Swatches panel's list and thumbnail buttons) do. `panel` is `swatches`,
+  `graphicStyles` or `symbols`. The Swatches panel takes `smallThumb`, `mediumThumb` (the default), `largeThumb`,
+  `smallList` or `largeList`; the Graphic Styles and Symbols panels take `thumbnail` (the default), `smallList` or
+  `largeList`. Without `view` the command answers the current one. Each panel keeps its own view for the session, and
+  the document does not change. An unknown panel or view is an error, and then nothing changes. It answers
+  `{panel, view}`.
 - The Brushes panel menu's Select All Unused: `brush.unused` (a query) lists the brushes no stroke paints with, in
   library order, and the panel selects them. Strokes in the art (opacity masks included), symbols, graph designs,
   pattern tiles (with the tiles that pattern editing's Cancel puts back) and graphic styles count, and so do the
@@ -3698,8 +3705,20 @@ already walks Image Trace. Short agent entry points:
   `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group?|id?}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
-  color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill of its front-most
-  covering source, including compound paths with shared curved boundaries. Expand keeps those face fills.
+  color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill rows that draw of
+  its front-most covering source that has one, including compound paths with shared curved boundaries, and each edge
+  the stroke rows that draw of its source. A row draws when it is shown and has paint and an opacity above 0; a
+  stroke also needs a weight above 0, and a source whose opacity is 0 has no rows that draw. The rows keep their order
+  and settings (opacity, blending mode, effects, overprint, and a stroke's weight, caps, joins, dashes and alignment),
+  gradients keep their fit on the source, and the face or edge takes the source's opacity and blending mode. Where a
+  path is cut into several edges, each edge runs the way the path does, its dashes go on from where it starts along
+  the path (Align Dashes to Corners is turned off on it), the arrowheads stay only at the path's own ends, and a width
+  profile or brush stays only on an edge that runs the whole path. A gradient applied along a stroke starts again on
+  each cut edge, and an inside or outside stroke is drawn centered on an edge that is an open piece of a closed path.
+  When `livePaint.gapOptions` or `livePaint.merge` cuts an edge into pieces, each piece takes the edge's paint, with
+  its rows fitted to its part of the edge in the same way. A face or edge given no such row has one unpainted row. Rows that do not draw stay with the stored sources, which
+  `livePaint.release` returns unchanged. The source's object effects and the strokes' pen pressure are not carried.
+  Expand keeps those face fills.
   `livePaint.expand` keeps each face and edge that draws, with all its fill and stroke rows: it is shown, its opacity
   is above 0, and a fill or stroke row is shown, has paint and an opacity above 0 (a stroke also a weight above 0),
   whichever row is on top. A painted lower row under an unpainted top row keeps the part; a part whose only painted
@@ -5699,6 +5718,25 @@ used, as a transform's does.
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"scaleH":50,"scaleV":50,"strokes":false}}}
 ```
 
+## Scale and Reflect on a turned bounding box
+
+`object.scale` and `object.reflect` with a named axis act along the selection's bounding box: after a rotation, `sx`
+stretches along the box's own width and `sy` along its height, and `"vertical"` and `"horizontal"` are the box's own
+axes, until Object › Transform › Reset Bounding Box squares the box to the page. Both take `basis?: "box"|"page"`:
+`"box"` is the default, and `"page"` acts along the page's axes. Any other `basis` is an error, and nothing changes.
+`origin` is still a page point, and a numeric `axis` is still a line on the page at that angle. Selections whose
+objects stand at different angles, and anchors selected with Direct Selection, use the page's axes; with `copy` or
+with `objects: false`, the whole objects or their pattern tiles transform, along the box. The journal entry
+records the `basis` used, so a recorded action replays in the same frame; a saved step without `basis` (an action or
+journal entry recorded before it) plays along the page's axes, as it did when it was recorded. `object.transformAgain` repeats the transform's page matrix, also after Reset Bounding Box. The Scale
+and Reflect dialogs, the Transform and Properties panels' flips, the Scale tool and the Reflect tool's default axis
+and Shift steps follow the box the same way; a Reflect axis drawn with the tool is the line drawn on the page.
+
+```json
+{"name":"run_command","arguments":{"command":"object.scale","params":{"sx":200,"sy":100}}}
+{"name":"run_command","arguments":{"command":"object.reflect","params":{"axis":"vertical","basis":"page"}}}
+```
+
 ## Free Distort on a turned bounding box
 
 `object.distort` maps the corners of `from` (TL, TR, BR, BL) onto `corners`, which are page coordinates. With
@@ -5908,7 +5946,8 @@ commands send `to: "key"` while the selection has a key, else `"artboard"` for o
 anchor points, else the Align To choice. The Distribute commands send `to: "key"` while the selection has a key, else
 the Align To choice, and while there is a key object or a key guide they send the panel's Distribute Spacing value as
 `spacing`. Edit › Keyboard Shortcuts lists them under Align, with no default shortcut, and
-`shortcuts.set {id, shortcut}` gives one a shortcut.
+`shortcuts.set {id, shortcut}` gives one a shortcut. The Object › Distribute menu lists the eight Distribute commands,
+and each item runs its command.
 
 With the Artboard tool chosen, the same buttons and UI commands, and the Control bar's Align and Distribute buttons,
 run `artboard.align`, `artboard.distribute` and `artboard.distributeSpacing` on the artboards the tool has selected.
@@ -6589,7 +6628,8 @@ report warn about it).
 Commands take and return lengths in points (the distances of `object.path.offsetPath`, `object.path.simplify`,
 `object.path.splitIntoGrid` and `text.setStyle` `size`/`leading` also take a string with a unit, `"5 mm"`). A length
 string takes the same arithmetic as the desktop app's fields, where `%` is a share of the value before it:
-`"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. The units
+`"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. A length string with more than 128 `+ - * /` signs is not read
+as a length. The units
 only change what the UI shows and how it reads typed numbers. Preferences ▸ Units has
 four: General (rulers, positions and sizes, the Info panel, dialog distances, canvas measurement labels), Stroke
 (weights, dashes), Type (font size, leading, baseline shift) and East Asian Type (no field uses it yet). General is the active document's units
@@ -7308,6 +7348,14 @@ is mixed with middle gray by its alpha.
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"distort.glass","params":{"distortion":10,"textureImage":{"path":"/tmp/texture.png"}}}}}
+```
+
+Texturizer (`texture.texturizer`) and Rough Pastels (`artistic.roughPastels`) take `params.textureImage` the same
+way, as the surface that Scaling, Relief, Light Direction and Invert act on. With `texture: "loaded"` and no stored
+texture they draw Canvas.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"artistic.roughPastels","params":{"relief":12,"textureImage":{"path":"/tmp/texture.png"}}}}}
 ```
 
 ## Linked images
@@ -8279,6 +8327,16 @@ flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, R
 (converted with the colour settings' CMYK) and Lab, at 1, 8, 16 and 32 bits per channel, sized by their resolution.
 A document with transparency keeps it. `file.place {path}` links the file like any image (`links.update` reads it
 again when it changes); Multichannel files are refused.
+
+A PSD or PSB file that names a clipping path (the saved path its clipping path resource names, in the
+[published PSD file format specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/)) places, and
+opens as its merged image (`layers: false`, a file with no layers, or a file whose layers can't be read), inside a clip group whose clipping
+path is that path, under the even-odd rule, so the image shows only inside it. The clipping path is an ordinary path
+that can be edited or released. `file.place` answers `image`, the id of the image in the clip group. The
+[import options help page](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
+says that a file imported as one flattened image keeps the document's clipping path when it has one. `links.update`
+and `links.relink` read the file's pixels again and leave the clip group and its clipping path as they are. Files that name no clipping path, or name a path
+they don't have, come in as a plain image.
 
 `document.open` converts a PSD or PSB file's layers to objects. In
 [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html),
@@ -9545,6 +9603,24 @@ not kerned). Off by default and saved only when on. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
+```
+
+## H or V Style and Roman Italics
+
+With Show East Asian Options on, the OpenType panel menu has H or V Style and Roman Italics
+([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)). They are the character
+feature tags `hkna` and `ital` of `text.setStyle` and `text.setRangeStyle {features, featureChanges}`
+([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)). `hkna` draws kana with the
+forms the font makes for horizontal type, and in vertical type the shaper applies `vkna`, the forms for vertical type,
+in its place. `ital` draws half-width alphanumerics with the font's italic forms. A font without the feature draws the
+characters unchanged. Both are on or off only: `hkna=2` and `ital=0` are refused as unknown features, and `vkna` is
+not a tag of its own. A menu item is checked when every character the panel acts on has it; choosing it turns the
+feature on for all of them, or off when it is checked, each character keeping its other features, in one undo step.
+Reset OpenType Features turns both off. Character styles carry them, and Character Style Options › OpenType Features
+has an on, off or unset switch for each. Live SVG text writes them in `font-feature-settings`.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":6,"featureChanges":["hkna","ital"]}}}
 ```
 
 ## Variable fonts
