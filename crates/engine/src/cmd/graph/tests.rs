@@ -1109,6 +1109,42 @@ fn aligned_effect_indices_past_the_end_of_a_graph_designs_art_are_refused() {
     assert!(rows(&s, mark).effects.is_empty());
 }
 
+/// With a graph design's art given first and `aligned: true`, `effect.remove` and `effect.duplicate` with `indices` are an
+/// error and change nothing when one of the art's effects is one no other object has, as with that index given alone.
+#[test]
+fn aligned_effect_indices_of_a_graph_designs_art_that_no_object_has_are_refused() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let (mut s, _, art, mark) = aligned_design_art();
+    // The art has a shadow and a roughen, the mark the shadow only.
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [mark.0], "item": null})).unwrap();
+    s.edit("Effects", |d, _| {
+        let effects = d.node(mark).unwrap().appearance.effects.clone();
+        d.node_mut(art).unwrap().appearance.effects = effects;
+        d.node_mut(mark).unwrap().appearance.effects.pop();
+        Ok(())
+    })
+    .unwrap();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    let steps = s.doc().unwrap().history.undo.len();
+    for cmd in ["effect.remove", "effect.duplicate"] {
+        assert!(s.execute(cmd, &json!({"ids": [art.0, mark.0], "item": null, "index": 1, "aligned": true})).is_err(), "{cmd}");
+        let e = s.execute(cmd, &json!({"ids": [art.0, mark.0], "item": null, "indices": [0, 1], "aligned": true})).unwrap_err();
+        assert!(e.to_string().contains("no effects at indices 0, 1"), "{cmd}: {e}");
+        assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was.clone()), "{cmd}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+    }
+    // With the roughen on the mark too, both of its effects are removed.
+    s.edit("Roughen", |d, _| {
+        let roughen = d.node(art).unwrap().appearance.effects[1].clone();
+        d.node_mut(mark).unwrap().appearance.effects.push(roughen);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "indices": [0, 1], "aligned": true})).unwrap();
+    assert!(rows(&s, mark).effects.is_empty());
+}
+
 /// A blur on a series group makes the whole group an image, which draws the design's art with the series' other art:
 /// Expand Appearance does not put the art back beside the image.
 #[test]
