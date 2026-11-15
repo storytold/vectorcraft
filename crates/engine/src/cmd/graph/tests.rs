@@ -768,6 +768,32 @@ fn expand_appearance_moves_design_art_with_its_series_groups_effect() {
     assert!((left(&s) - was - 50.0).abs() < 1e-6, "{} then {}", was, left(&s));
 }
 
+/// The copies that a Transform effect of a series group makes of a design's art keep their own effects when Expand
+/// Appearance bakes the series group's effect, as the art they copy does.
+#[test]
+fn expand_appearance_leaves_the_effects_of_design_art_copies() {
+    let (mut s, id, copy, _, _) = design_art();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let group = series(&n, 0).id;
+    let shadow = an_effect(&mut s, "stylize.dropShadow", json!({}));
+    let copies = an_effect(&mut s, "distort.transform", json!({"moveH": 50, "copies": 2}));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(copy).unwrap().appearance.effects.push(shadow);
+    doc.node_mut(group).unwrap().appearance.effects.push(copies);
+    let shadows = |s: &Session| {
+        let mut count = 0;
+        s.doc().unwrap().doc.node(id).unwrap().walk(&mut |m| count += m.appearance.effects.iter().filter(|e| e.id == "stylize.dropShadow").count());
+        count
+    };
+    let images = |s: &Session| s.doc().unwrap().doc.images.len();
+    let before = images(&s);
+    assert_eq!(shadows(&s), 1);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(shadows(&s), 3, "the art and its two copies keep their shadows");
+    assert_eq!(images(&s), before, "no shadow becomes an image");
+}
+
 /// The commands that give rows, effects or graphic styles refuse the art of a graph design inside a series, given by
 /// id (the design's copy or a path inside it) or selected: the graph draws that art again from the design.
 #[test]
