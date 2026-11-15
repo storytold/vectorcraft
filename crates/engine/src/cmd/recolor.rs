@@ -34,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
             None,
-            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null (in from, to and groupColors, #rrggbbaa and #rgba are refused), exclude?: false (the row's colours are kept), tint?: 100 (percent; with limitTo, art linked to the global or spot swatch the new color is takes this share of its tint)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour] (what `group` is rewritten with; default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true, globalAdjust?: {saturation?: 0, brightness?: 0, temperature?: 0, luminosity?: 0} (Global Adjust: percent from -100 to 100, 0 changes nothing; every colour a row that isn't excluded recolours, and the group's new colours, take the same change after the row's new colour: saturation scales HSB saturation by 1 + saturation/100, brightness moves HSB brightness that share of the way to full or to black, temperature adds 0.2 × temperature/100 to red and takes it from blue, luminosity moves Lab lightness that share of the way to 100 or 0 keeping a and b; with limitTo each row's new colour takes the change before it snaps to the library)} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces (model?: \"keep\" default | \"new\" (the new colour's own model, so a CMYK colour replacing RGB art gives CMYK art) | \"document\" (the document's colour mode)), except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches; art linked to a global swatch of `group` that is rewritten with its row's new color stays linked to it, at its tint, unless the row converts the color into the art's model; other recolored art, and art in a row linked to a global swatch of `group` that is rewritten with another color, keeps its row's new color and loses its swatch link) and the group, as one undo step (none when nothing changes). On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke, and on a graph label the new paint of its characters and rows for every label of its kind (docs/mcp.md) → {changed, swatches: [names added to the document's swatches], relinked?: with group, the other paints linked to its global swatches that took their new colors, note?: set when a colour kept a model other than its new colour's (see model), notChanged: {locked, hidden} (as edit.colors.invert), warning?: set when notChanged counts any object}",
+            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex)], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null (in from, to and groupColors, #rrggbbaa and #rgba are refused), exclude?: false (the row's colours are kept), tint?: 100 (percent; with limitTo, art linked to the global or spot swatch the new color is takes this share of its tint)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour | null] (what `group` is rewritten with, a null removing the group's swatch at its place; default: the rows' new colours, in order, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true, globalAdjust?: {saturation?: 0, brightness?: 0, temperature?: 0, luminosity?: 0} (Global Adjust: percent from -100 to 100, 0 changes nothing; every colour a row that isn't excluded recolours, and the group's new colours, take the same change after the row's new colour: saturation scales HSB saturation by 1 + saturation/100, brightness moves HSB brightness that share of the way to full or to black, temperature adds 0.2 × temperature/100 to red and takes it from blue, luminosity moves Lab lightness that share of the way to 100 or 0 keeping a and b; with limitTo each row's new colour takes the change before it snaps to the library)} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces (model?: \"keep\" default | \"new\" (the new colour's own model, so a CMYK colour replacing RGB art gives CMYK art) | \"document\" (the document's colour mode)), except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches; art linked to a global swatch of `group` that is rewritten with its row's new color stays linked to it, at its tint, unless the row converts the color into the art's model; other recolored art, and art in a row linked to a global swatch of `group` that is rewritten with another color, keeps its row's new color and loses its swatch link) and the group, as one undo step (none when nothing changes). On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke, and on a graph label the new paint of its characters and rows for every label of its kind (docs/mcp.md) → {changed, swatches: [names added to the document's swatches], relinked?: with group, the other paints linked to its global swatches that took their new colors, note?: set when a colour kept a model other than its new colour's (see model), notChanged: {locked, hidden} (as edit.colors.invert), warning?: set when notChanged counts any object}",
             has_doc,
             apply
         ),
@@ -1647,17 +1647,19 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         Some(Value::Array(cs)) => Some(cs),
         Some(_) => return Err(bad(C, "`groupColors` must be an array")),
     };
-    let new: Vec<Color> = match group_colors {
+    // A null in groupColors removes the group's swatch at its place.
+    let new: Vec<Option<Color>> = match group_colors {
         Some(cs) => cs
             .iter()
-            .map(|v| {
-                color_value(v)
+            .map(|v| match v {
+                Value::Null => Ok(None),
+                v => color_value(v)
                     .map(|c| adjust.apply(c))
-                    .map(|c| in_doc_model(palette.as_ref().map_or(c, |pl| pl.nearest(c))))
-                    .ok_or_else(|| bad(C, format!("bad colour {v} in groupColors")))
+                    .map(|c| Some(in_doc_model(palette.as_ref().map_or(c, |pl| pl.nearest(c)))))
+                    .ok_or_else(|| bad(C, format!("bad colour {v} in groupColors"))),
             })
             .collect::<Result<_>>()?,
-        None => rows.iter().filter_map(Row::new_color).map(|c| mapped_adjust.apply(c)).collect(),
+        None => rows.iter().filter_map(Row::new_color).map(|c| Some(mapped_adjust.apply(c))).collect(),
     };
     let rename = text_param(p, "rename", C)?;
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
@@ -1692,7 +1694,8 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
                     .iter()
                     .zip(&new)
                     .filter(|(w, _)| w.global && !w.is_reserved())
-                    .map(|(w, c)| GroupSwatch { name: w.name.clone(), color: *c, shown: d.linked_color(*c, w.spot) })
+                    .filter_map(|(w, c)| Some((w, (*c)?)))
+                    .map(|(w, c)| GroupSwatch { name: w.name.clone(), color: c, shown: d.linked_color(c, w.spot) })
                     .collect()
             })
             .unwrap_or_default();

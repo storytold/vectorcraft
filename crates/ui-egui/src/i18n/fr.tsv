@@ -1493,6 +1493,9 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Afficher la roue chromatique continue
 	Show segmented color wheel	Afficher la roue chromatique segmentée
 	Show color bars	Afficher les barres de couleur
+	Add Color Tool	Outil Ajouter une couleur
+	Remove Color Tool	Outil Supprimer une couleur
+	Remove Color	Supprimer la couleur
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
 	Height	Hauteur

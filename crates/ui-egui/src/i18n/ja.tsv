@@ -1925,6 +1925,9 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Add Color Tool	カラー追加ツール
+	Remove Color Tool	カラー削除ツール
+	Remove Color	カラーを削除
 	Height	高さ
 	Height:	高さ:
 	Help › Search Commands…	ヘルプ › コマンドを検索…

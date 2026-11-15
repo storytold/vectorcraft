@@ -689,6 +689,37 @@ fn recolor_of_everything_counts_locked_art_that_only_loses_its_group_swatch_link
 }
 
 #[test]
+fn a_null_in_group_colors_removes_that_swatch_and_the_ones_after_it_keep_their_places() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#2878f0", "#ff0000", "#00ff00"]}));
+    let group = |s: &Session| -> Vec<(String, String)> {
+        let g = s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches.clone();
+        g.iter().map(|w| (w.name.clone(), w.paint.color().unwrap().to_hex())).collect()
+    };
+    let names: Vec<String> = group(&s).into_iter().map(|(n, _)| n).collect();
+    for name in &names {
+        run(&mut s, "swatch.edit", json!({"name": name, "global": true}));
+    }
+    let red = rect(&mut s, json!("#000000"));
+    let green = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [red.0], "swatch": names[1]}));
+    run(&mut s, "paint.setFill", json!({"ids": [green.0], "swatch": names[2]}));
+    select_all(&mut s);
+    // The middle swatch goes; the last keeps its name and color, and a color added after them is new.
+    run(&mut s, "recolor.apply", json!({"map": [], "group": "Brand", "groupColors": ["#2878f0", null, "#00ff00", "#123456"]}));
+    let g = group(&s);
+    assert_eq!(g.len(), 3, "{g:?}");
+    assert_eq!(g[..2], [(names[0].clone(), "#2878f0".into()), (names[2].clone(), "#00ff00".into())]);
+    assert_eq!(g[2].1, "#123456");
+    let link = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { color, swatch, .. } => (color.to_hex(), swatch),
+        p => panic!("{p:?}"),
+    };
+    assert_eq!(link(&s, red), ("#ff0000".into(), None), "art linked to the removed swatch keeps its color, unlinked");
+    assert_eq!(link(&s, green), ("#00ff00".into(), Some(names[2].clone())), "art linked to a swatch that stays keeps its link");
+}
+
+#[test]
 fn recolor_of_everything_does_not_count_locked_art_whose_pattern_the_group_rewrite_recolors() {
     let mut s = session();
     run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#2878f0", "#ff0000"]}));

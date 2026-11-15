@@ -1915,6 +1915,9 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Add Color Tool	색상 추가 도구
+	Remove Color Tool	색상 제거 도구
+	Remove Color	색상 제거
 	Height	높이
 	Height:	높이:
 	Help › Search Commands…	도움말 › 명령 검색…
