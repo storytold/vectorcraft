@@ -274,7 +274,10 @@ fn export_3d_paints_mapped_graphics_on_their_caps_in_every_format() {
 }
 
 #[test]
-fn a_half_opaque_face_keeps_its_graphics_opaque_in_the_texture() {
+fn a_texture_takes_the_opacity_of_the_fill_and_of_the_object_as_the_canvas_draws_them() {
+    let half = |a: u8| (120..=135).contains(&a);
+    // A half-opaque fill: the face and the graphic over it are each drawn at half opacity, so the
+    // graphic covers three quarters.
     let (mut s, asset) = mapped("usda");
     let doc = &s.active().unwrap().doc;
     let id = doc.asset(asset).unwrap().nodes[0];
@@ -282,11 +285,9 @@ fn a_half_opaque_face_keeps_its_graphics_opaque_in_the_texture() {
     run(&mut s, "select.set", json!({"ids": [id.0]}));
     run(&mut s, "transparency.set", json!({"item": fill, "opacity": 50}));
     let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
-    // The graphic stays opaque where it covers the face, and the face around it is half opaque.
-    let front = &out[1].1;
-    assert_eq!(pixel(front, 64, 64), [255, 0, 0, 255]);
-    let around = pixel(front, 2, 2);
-    assert!(around[2] > 200 && (120..=135).contains(&around[3]), "{around:?}");
+    let (on, around) = (pixel(&out[1].1, 64, 64), pixel(&out[1].1, 2, 2));
+    assert!(on[0] > on[2] && (185..=197).contains(&on[3]), "{on:?}");
+    assert!(around[2] > 200 && half(around[3]), "{around:?}");
     let usda = String::from_utf8(out[0].1.clone()).unwrap();
     assert!(usda.contains("float inputs:opacity.connect"), "the texture's alpha is the opacity");
     // An OBJ's opacity map has the alpha as gray levels.
@@ -294,8 +295,27 @@ fn a_half_opaque_face_keeps_its_graphics_opaque_in_the_texture() {
     let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
     assert_eq!(out[3].0, "Box-texture-1-opacity.png");
     let gray = image::load_from_memory(&out[3].1).unwrap().to_luma8();
-    assert_eq!(gray.get_pixel(64, 64).0, [255]);
-    assert!((120..=135).contains(&gray.get_pixel(2, 2).0[0]), "{:?}", gray.get_pixel(2, 2));
+    let (g_on, g_around) = (gray.get_pixel(64, 64).0[0], gray.get_pixel(2, 2).0[0]);
+    assert!((185..=197).contains(&g_on) && half(g_around), "{g_on} {g_around}");
+    // A half-opaque object: the face and the graphic are drawn opaque, and the whole picture at
+    // half opacity.
+    let (mut s, asset) = mapped("usda");
+    let id = s.active().unwrap().doc.asset(asset).unwrap().nodes[0];
+    run(&mut s, "transparency.set", json!({"ids": [id.0], "opacity": 50}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    let (on, around) = (pixel(&out[1].1, 64, 64), pixel(&out[1].1, 2, 2));
+    assert!(on[0] > 200 && on[2] < 50 && half(on[3]), "{on:?}");
+    assert!(around[2] > 200 && around[0] < 50 && half(around[3]), "{around:?}");
+    // A gradient whose stops are clear: the face is clear, and the graphic keeps its opacity.
+    let (mut s, asset) = mapped("usda");
+    let id = s.active().unwrap().doc.asset(asset).unwrap().nodes[0];
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    let clear = json!({"stops": [{"offset": 0, "color": "#0000ff", "opacity": 0}, {"offset": 1, "color": "#0000ff", "opacity": 0}]});
+    run(&mut s, "paint.setFill", json!({"gradient": clear}));
+    let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
+    let (on, around) = (pixel(&out[1].1, 64, 64), pixel(&out[1].1, 2, 2));
+    assert!(is_red(on), "{on:?}");
+    assert_eq!(around[3], 0, "{around:?}");
 }
 
 #[test]

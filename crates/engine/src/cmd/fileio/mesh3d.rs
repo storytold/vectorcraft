@@ -508,7 +508,7 @@ pub(crate) fn textures(doc: &Document, parts: &[SolidMesh], size: u32, pixels: &
                             ));
                         }
                         let renderer = renderer.get_or_insert_with(vectorcraft_render::Renderer::new);
-                        Some(picture(doc, renderer, part.color, art, (frame, scale), (w, h))?)
+                        Some(picture(doc, renderer, (part.color, g.opacity, g.object), art, (frame, scale), (w, h))?)
                     }
                 };
                 drawn.push((part, frame, png.clone()));
@@ -544,17 +544,19 @@ type Drawn<'a> = (&'a SolidMesh, Rect, Option<Picture>);
 
 /// Do `a` and `b` draw the same graphics on their face?
 fn same_graphics(a: &MeshGraphics, b: &MeshGraphics) -> bool {
-    a.face == b.face && a.center == b.center && a.graphics == b.graphics
+    a.face == b.face && a.center == b.center && a.graphics == b.graphics && a.opacity == b.opacity && a.object == b.object
 }
 
-/// `art` drawn over `color` (at its opacity) as a PNG of `w` × `h` pixels whose top left is `frame`'s
-/// top left, at `scale` pixels a point, with a grayscale PNG of its alpha when some of it is not
-/// opaque.
+/// `art` drawn over `color` as a PNG of `w` × `h` pixels whose top left is `frame`'s top left, at
+/// `scale` pixels a point, with a grayscale PNG of its alpha when some of it is not opaque. As on
+/// the canvas, the art is drawn at `face` (the opacity of the face's fill or stroke), the color at
+/// its own opacity without `object`'s, and `object` (the object's opacity) applies to the whole
+/// picture.
 fn picture(
     doc: &Document,
     renderer: &mut vectorcraft_render::Renderer,
-    color: [f32; 4],
-    art: Node,
+    (color, face, object): ([f32; 4], f32, f32),
+    mut art: Node,
     (frame, scale): (Rect, f64),
     (w, h): (u32, u32),
 ) -> Result<Picture, String> {
@@ -563,8 +565,13 @@ fn picture(
     let back = Rect::new(frame.x0 - reach, frame.y0 - reach, frame.x0 + f64::from(w) / scale + reach, frame.y0 + f64::from(h) / scale + reach);
     let fill = Paint::solid(Color::rgb(color[0], color[1], color[2]));
     let mut ground = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(back), Appearance::basic(fill, Paint::None, 0.0));
-    ground.opacity = color[3];
-    let group = Arc::new(Node::group(NodeId(0), vec![Arc::new(ground), Arc::new(art)]));
+    let unit = |v: f32| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 };
+    let object = unit(object);
+    ground.opacity = if object > 0.0 { unit(color[3] / object) } else { 0.0 };
+    art.opacity *= unit(face);
+    let mut group = Node::group(NodeId(0), vec![Arc::new(ground), Arc::new(art)]);
+    group.opacity = object;
+    let group = Arc::new(group);
     let (pw, ph) = (u16::try_from(w).map_err(|_| "texture too large")?, u16::try_from(h).map_err(|_| "texture too large")?);
     let view = Affine::scale(scale) * Affine::translate((-frame.x0, -frame.y0));
     let drawn = renderer.render_node(doc, &group, pw, ph, view).ok_or_else(|| "the graphics could not be drawn".to_string())?;

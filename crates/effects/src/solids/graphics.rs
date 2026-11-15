@@ -530,6 +530,12 @@ pub struct MeshGraphics {
     pub center: Point,
     /// One for each position of the mesh.
     pub art: Vec<Point>,
+    /// The opacity of the fill or stroke the face is painted with, which the graphics take too, as
+    /// the canvas draws them; neither a gradient's stops nor the object's own opacity is in it.
+    pub opacity: f32,
+    /// The opacity of the object the face belongs to, which applies to the face and its graphics
+    /// together.
+    pub object: f32,
 }
 
 impl MeshGraphics {
