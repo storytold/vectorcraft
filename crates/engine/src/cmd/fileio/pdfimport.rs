@@ -2,11 +2,15 @@
 //! and `file.place` read ([`LoadOptions`]), the pages they import and `document.pdfInfo` (pages,
 //! boxes, a thumbnail; one page for a PostScript file) for the Import PDF dialog.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
-use vectorcraft_doc::{ColorMode, Document};
+use vectorcraft_doc::{Artboard, ColorMode, Document, LayerColor, LinkInfo, Node, NodeKind};
+use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_pdf::{Choice, CropTo, ImportOptions, PdfError, TextAs};
 
 use super::super::colormgmt::Grays;
+use super::super::place::document;
 use super::super::{Result, Session, bad, check_numbers, number_or, parse_range, text_param};
 use super::{err, source};
 
@@ -47,6 +51,9 @@ pub struct LoadOptions {
     /// A PDF or `.ai` saved with Preserve Editing opens from the VectorCraft document it carries;
     /// off, it opens as another app would open it, from the editing copy of its art or its pages.
     pub native: bool,
+    /// Each page of a PDF opens as a placed document linked to that page of its file, on an
+    /// artboard of its own, instead of as editable art (`linkPages`; see [`linked_pages`]).
+    pub link_pages: bool,
 }
 
 impl Default for LoadOptions {
@@ -65,6 +72,7 @@ impl Default for LoadOptions {
             trust_editing_data: false,
             legacy_names: vectorcraft_eps::NameEncoding::default(),
             native: true,
+            link_pages: false,
         }
     }
 }
@@ -74,8 +82,8 @@ impl LoadOptions {
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) with `grays`,
     /// `textAs` (`text` | `outlines`), `layers` (true | false), `hiddenLayers` (true | false),
     /// `editingData` (true | false | `always`),
-    /// `legacyNameEncoding` (one of [`vectorcraft_eps::NameEncoding::LABELS`]) and `dxf` (the DXF
-    /// import options).
+    /// `legacyNameEncoding` (one of [`vectorcraft_eps::NameEncoding::LABELS`]), `linkPages` (true |
+    /// false) and `dxf` (the DXF import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
         let pages = match p.get("pages").filter(|v| !v.is_null()).or_else(|| p.get("page").filter(|v| !v.is_null())) {
             None => None,
@@ -115,6 +123,10 @@ impl LoadOptions {
                 .and_then(vectorcraft_eps::NameEncoding::from_label)
                 .ok_or_else(|| bad(cmd, format!("legacyNameEncoding must be one of {}", vectorcraft_eps::NameEncoding::LABELS.join(", "))))?,
         };
+        let link_pages = match p.get("linkPages").filter(|v| !v.is_null()) {
+            None => false,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "linkPages must be true or false"))?,
+        };
         let dxf = super::dxfimport::options(cmd, p.get("dxf"))?;
         Ok(Self {
             pages,
@@ -130,14 +142,15 @@ impl LoadOptions {
             trust_editing_data,
             legacy_names,
             native: true,
+            link_pages,
         })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another
-    /// box, a password, without its hidden layers, without the VectorCraft document it carries)?
-    /// Writing it back would lose the rest, so Save doesn't (it asks for a name).
+    /// box, a password, without its hidden layers, without the VectorCraft document it carries, its
+    /// pages linked)? Writing it back would lose the rest, so Save doesn't (it asks for a name).
     pub fn is_partial(&self) -> bool {
-        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some() || !self.layers || !self.native
+        self.pages.is_some() || self.crop != CropTo::default() || self.password.is_some() || !self.layers || !self.native || self.link_pages
     }
 
     /// The PDF import options: `pages` resolved against the file's page count. A PDF-compatible
@@ -199,6 +212,82 @@ fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: us
 /// The import options of [`page_document`].
 fn page_options(page: usize, o: &LoadOptions) -> ImportOptions {
     ImportOptions { pages: Some(vec![page]), crop: o.crop, password: o.password.clone(), text_as: o.text_as, layers: false, ..Default::default() }
+}
+
+/// `document.open` with `linkPages`: the pages `o` picks of the PDF (or PDF-compatible `.ai` or
+/// `.ait`) `name`, read from `path`, as a document holding one placed document per page, linked to
+/// that page of the file as File › Place with Link places one ([`document::source`]). Each page
+/// gets an artboard of its `o.crop` box (its art's bounds for `bounding`), in a row from the left
+/// with the gap a PDF's artboards open with, and a layer named after the page. The document opens
+/// in CMYK when most of the pages read in CMYK, unless `o.color_mode` names a mode. Refused without a
+/// path, for any other file, with a password (a linked page is read again without one), with
+/// `textAs: outlines` (a linked page shows the file's own type) and for a file over
+/// [`document::MAX_FILE`] → the document and the notes of reading its pages.
+pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
+    const C: &str = "document.open";
+    let file = super::file_name(name);
+    if !document::is_pdf(name, bytes) {
+        return Err(bad(C, format!("linkPages: `{file}` isn't a PDF or a PDF-compatible .ai file")));
+    }
+    let path = path.ok_or_else(|| bad(C, "linkPages needs the file's path: linked pages are read from it"))?;
+    if o.password.is_some() {
+        return Err(bad(C, "linkPages can't open a file with a password: linked pages are read again without it"));
+    }
+    if o.text_as != TextAs::Text {
+        return Err(bad(C, "linkPages can't be used with textAs: outlines: linked pages show the file's own type"));
+    }
+    if bytes.len() > document::MAX_FILE {
+        return Err(bad(C, format!("linkPages: `{file}` is over {} MB", document::MAX_FILE >> 20)));
+    }
+    let count = vectorcraft_pdf::open_pdf(bytes, None).map_err(err)?.page_count();
+    let picked = match &o.pages {
+        None => (0..count).collect(),
+        Some(range) => parse_range(range, count).map_err(|e| err(format!("pages: {e}")))?,
+    };
+    let bounding = o.crop == CropTo::Bounding;
+    let mut doc = Document::new(1.0, 1.0);
+    let board = doc.artboards.first().cloned().ok_or_else(|| err("a new document has no artboard"))?;
+    doc.artboards.clear();
+    doc.layers.clear();
+    let link = crate::cmd::links::link_info(path, bytes);
+    let gap = ImportOptions::default().artboard_gap;
+    // Every page's object keeps the same one copy of the file.
+    let shared = Arc::new(bytes.to_vec());
+    let (mut x, mut warnings, mut cmyk_pages) = (0.0, Vec::<String>::new(), 0);
+    for (i, &index) in picked.iter().enumerate() {
+        let page = index as u32 + 1;
+        let s = document::shared_source(name, &shared, Some(path), page, bounding, document::page_box(o.crop), C)?;
+        cmyk_pages += usize::from(s.color_mode == ColorMode::Cmyk);
+        let mut node = document::node(&mut doc, &s, LinkInfo { page: Some(page), ..link.clone() }, bounding);
+        if let NodeKind::PlacedDocument(p) = &mut node.kind {
+            p.xf = Affine::translate((x, 0.0));
+        }
+        node.name = Some(file.clone());
+        let mut layer = Node::layer(doc.alloc_id(), &format!("Page {page}"), LayerColor::Preset((i % 27) as u8));
+        if let NodeKind::Layer { children, .. } = &mut layer.kind {
+            children.push(Arc::new(node));
+        }
+        doc.layers.push(Arc::new(layer));
+        let rect = Rect::new(x, 0.0, x + s.frame.width(), s.frame.height());
+        doc.artboards.push(Artboard { id: i as u32 + 1, name: format!("Artboard {}", i + 1), rect, ..board.clone() });
+        x = rect.x1 + gap;
+        for w in s.warnings {
+            if !warnings.contains(&w) {
+                warnings.push(w);
+            }
+        }
+    }
+    // Pages painted mostly in CMYK read as CMYK documents, as opening them as art does: the
+    // document opens in CMYK (with the CMYK default swatches) when most of its pages do.
+    if cmyk_pages * 2 > picked.len() {
+        doc.color_mode = ColorMode::Cmyk;
+        let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
+        (doc.swatches, doc.swatch_groups) = (swatches.into(), groups.into());
+    }
+    if let Some(mode) = o.color_mode.filter(|m| *m != doc.color_mode) {
+        super::super::colormgmt::set_color_mode(&mut doc, mode, true, None, o.grays);
+    }
+    Ok((doc, warnings))
 }
 
 const INFO: &str = "document.pdfInfo";

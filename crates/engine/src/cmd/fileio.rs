@@ -39,7 +39,7 @@ pub mod jxlread;
 mod legacy_ai;
 mod load;
 mod mesh3d;
-pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
+pub(crate) use load::{MAX_RASTER_ALLOC, file_clipped, size_note};
 mod heifread;
 mod hpgl;
 mod jp2read;
@@ -66,11 +66,14 @@ use serde_json::{Value, json};
 
 pub use action_batch::batch_overwrites_one_file;
 pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
-pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, Note, NoteKind, encode, encode_all, encode_with_notes, encode_with_warnings, note_texts};
+pub use encode::{
+    ARTBOARD_PARAMS, ArtboardPick, Encoded, Note, NoteKind, encode, encode_all, encode_with_notes, encode_with_warnings, export_art_bounds,
+    note_texts,
+};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{EXPORT_PARAMS, export_crop, isolated};
-pub use export::{export_doc, export_source, unused_option_notes};
+pub use export::{export_doc, export_source, selection_doc, unused_option_notes};
 use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::is_placeholder;
