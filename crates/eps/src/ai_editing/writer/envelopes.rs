@@ -374,7 +374,6 @@ impl Writer<'_> {
         let start = self.body.len();
         let (state, gs, charges, bound) = (self.state, self.gs, self.charges(), self.bound.len());
         let (outlined, texts, warnings) = (self.outlined, self.texts.written(), self.warnings.len());
-        let area = self.area_written.len();
         self.nest += 1;
         self.hidden += 1;
         // The group before the dictionary: the grid, or the contents while they are edited.
@@ -416,10 +415,6 @@ impl Writer<'_> {
         // wrap options stay in the art's dictionary.
         self.state(n.locked, !n.visible);
         self.drawn_art(n, xy, None, false);
-        // Area type in the contents is not shown area type for a group around the envelope
-        // ([`Self::shown_area_type`]): the reader does not wrap type inside an envelope, and type in
-        // lines taken out below is not written.
-        self.area_written.truncate(area);
         if !opened || outlines || self.left_out_since(charges) {
             let lines = self.body.split_off(start);
             self.give_back(charges, &lines);
