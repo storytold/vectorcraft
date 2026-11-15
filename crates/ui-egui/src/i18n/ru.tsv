@@ -5736,7 +5736,6 @@ lighting	Light	Свет
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D-эффект на заливке или обводке группы ничего не рисует
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-эффект на заливке или обводке группы не рисует ничего для экспорта
 @msg	The 3D object is too complex to export	3D-объект слишком сложен для экспорта
-@msg	give one <filter> element	укажите один элемент <filter>
 @msg	the <filter> element needs an id, the filter's name	элементу <filter> нужен id, имя фильтра
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id фильтра SVG содержит не более {MAX_NAME} символов
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> не является элементом фильтра SVG
