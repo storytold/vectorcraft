@@ -910,3 +910,34 @@ fn paragraphs_aligned_differently_keep_their_alignment() {
         assert_similar(&render_artboard(&d), &render_artboard(&back), 40.0, 0.01);
     }
 }
+
+/// With Kurikaeshi Moji Shori on, live type writes a repeat mark that starts a line as the
+/// character it is drawn as and places the text after it anew, with and without embedded fonts; a
+/// mark inside a line stays.
+#[test]
+fn a_repeat_mark_at_a_line_start_is_written_as_the_character_it_draws() {
+    use vectorcraft_text::test_fonts::{RARE_REPEAT_MARK_FAMILY, rare_repeat_mark_font};
+    vectorcraft_text::FontDb::global().add_font(rare_repeat_mark_font().unwrap());
+    let st = CharStyle { font_family: RARE_REPEAT_MARK_FAMILY.into(), ..style(12.0) };
+    for on in [false, true] {
+        let mut t = TextObject::point(Point::new(20.0, 40.0), "龘\u{2028}々龘龘々", st.clone());
+        t.para.kurikaeshi_moji_shori = on;
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        for embed_fonts in [false, true] {
+            let svg = export(&d, &ExportOptions { embed_fonts, ..Default::default() });
+            if !on {
+                assert!(svg.contains(">々龘龘々<"), "{svg}");
+                continue;
+            }
+            // The drawn character takes the mark's width on the canvas, so the text after it is
+            // placed where the canvas draws it.
+            let rest = svg.find(">龘龘々<").unwrap_or_else(|| panic!("{svg}"));
+            let tag = &svg[svg[..rest].rfind('<').unwrap_or(0)..rest];
+            assert!(tag.contains(" x=\""), "{tag}: {svg}");
+            assert_eq!(svg.matches('々').count(), 1, "only the mark inside the line stays: {svg}");
+        }
+    }
+}

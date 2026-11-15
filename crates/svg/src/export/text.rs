@@ -491,7 +491,11 @@ impl Writer<'_> {
             });
             let Some(chars) = self.fonts.get_mut(at).map(|u| &mut u.chars) else { continue };
             // As written: a list marker's characters, a hyphen where a line breaks, capitals for All
-            // Caps, the style's Digits.
+            // Caps, the style's Digits, the character a repeat mark is drawn as.
+            if let Some(c) = shown_repeat(lay, i, g) {
+                chars.insert(c);
+                continue;
+            }
             let src = lay.marker_text(i).unwrap_or_else(|| if g.len == 0 { "-" } else { plain.get(g.byte..g.byte + g.len).unwrap_or("") });
             for c in src.chars().filter(|c| !c.is_control() && *c != '\u{ad}').map(|c| st.digits.map(c)) {
                 if st.all_caps {
@@ -716,6 +720,17 @@ struct Segment {
 /// given its own position (points).
 const PLACE_TOLERANCE: f64 = 1e-6;
 
+/// Kurikaeshi Moji Shori: the character glyph `i` of `lay` shows when the layout drew a repeat mark
+/// as the character it repeats ([`vectorcraft_text::TextLayout::repeat_marks`]), or None.
+fn shown_repeat(lay: &vectorcraft_text::TextLayout, i: usize, g: &vectorcraft_text::PositionedGlyph) -> Option<char> {
+    if lay.repeat_marks.is_empty() || g.len == 0 || lay.marker_text(i).is_some() {
+        return None;
+    }
+    // The marks are in text order, one per line.
+    let at = lay.repeat_marks.binary_search_by_key(&g.byte, |&(byte, _)| byte).ok()?;
+    lay.repeat_marks.get(at).map(|&(_, c)| c)
+}
+
 /// The laid-out lines of `t` as segments: a new segment at every style change, after tabs and,
 /// on justified lines, after each word space (unless `fewer`). The text comes from the clusters
 /// the layout placed: soft hyphens draw nothing, a line broken by hyphenation ends in `-`, all
@@ -804,9 +819,15 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                 }
                 None => (g.advance, g.origin.x),
             };
-            let src: String = source(line.glyph_start + k, g).chars().filter(|c| *c != '\u{ad}').map(|c| run.style.digits.map(c)).collect();
+            let repeat = shown_repeat(lay, line.glyph_start + k, g);
+            let src: String = match repeat {
+                Some(c) => c.to_string(),
+                None => source(line.glyph_start + k, g).chars().filter(|c| *c != '\u{ad}').map(|c| run.style.digits.map(c)).collect(),
+            };
             let piece = if run.style.all_caps { src.to_uppercase() } else { src };
-            let brk = piece == "\t" || (split_words && !piece.is_empty() && piece.chars().all(char::is_whitespace));
+            // The character a repeat mark is drawn as takes the mark's width on the canvas, which a
+            // reader does not know: the text after it is placed anew.
+            let brk = piece == "\t" || (split_words && !piece.is_empty() && piece.chars().all(char::is_whitespace)) || repeat.is_some();
             // A glyph Glyph Scaling widens or narrows is a segment of its own, stretched to its width.
             let scale = if reader.is_some() && (g.scale - 1.0).abs() > 1e-9 && g.scale.is_finite() { g.scale } else { 1.0 };
             let fresh = std::mem::take(&mut after_inline) || scale != 1.0 || segs.last().is_some_and(|last| last.scale != 1.0);

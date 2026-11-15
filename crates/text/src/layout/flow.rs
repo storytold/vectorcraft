@@ -13,7 +13,7 @@ use super::{
     is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
 use crate::justify::is_format_control;
-use crate::shape::{keep_inseparable_pairs, keep_korean_words};
+use crate::shape::{keep_inseparable_pairs, keep_korean_words, repeated_char, shape_range};
 
 /// Does paragraph `para` push characters in (Kinsoku Shori Type Push In First or Push Out First,
 /// with kinsoku on)?
@@ -213,6 +213,9 @@ struct ParagraphData<'a, 'text> {
     bidi: Option<BidiInfo<'text>>,
     rtl: bool,
     continued: bool,
+    /// Kurikaeshi Moji Shori: the character before a `continued` paragraph in the frames before
+    /// ([`TextObject::first_para_lead`]).
+    lead: Option<char>,
     sg: Vec<SGlyph>,
     compressed: Vec<bool>,
     wakan: Vec<f64>,
@@ -331,6 +334,7 @@ fn prepare_paragraph<'a, 'text>(
         bidi,
         rtl,
         continued,
+        lead: t.first_para_lead.filter(|_| continued),
         sg,
         compressed,
         wakan,
@@ -1272,6 +1276,40 @@ fn emit_line_glyph(
     cx.emit(glyph, Affine::translate(at.to_vec2()), at, 0.0, w.advance, line_index);
 }
 
+/// Kurikaeshi Moji Shori (Paragraph panel menu): the glyph drawn in place of `g`, the first glyph of
+/// a line of the paragraph starting at byte `para_start`, when `g` is a repeat mark, and the
+/// character it shows: the character [`repeated_char`] gives, shaped in the mark's style with the
+/// type's features (so vertical type gets the font's vertical forms), from the same face, with the
+/// mark's advance and place, so the line breaks stay as they are. None when `g` is no repeat mark,
+/// belongs to a tate-chu-yoko or warichu block, nothing before it in the paragraph fits, or the face
+/// draws the character with no glyph or with more than one. `lead` stands before a paragraph that
+/// continues from the frame before ([`TextObject::first_para_lead`]).
+fn repeat_mark_glyph(cx: &Ctx<'_>, para_start: usize, lead: Option<char>, g: &SGlyph) -> Option<(SGlyph, char)> {
+    if g.tcy.is_some() || g.wari.is_some() || g.inline.is_some() {
+        return None;
+    }
+    let c = repeated_char(lead, cx.text.get(para_start..g.byte)?, g.ch)?;
+    let mut buf = [0; 4];
+    let s: &str = c.encode_utf8(&mut buf);
+    let mut shaped = Vec::with_capacity(1);
+    shape_range(cx.db, s, 0..s.len(), &[(0..s.len(), cx.style_at(g.byte))], &[], &cx.opts.features, &[], &mut shaped);
+    let [one] = shaped.as_slice() else { return None };
+    (one.gid != 0 && one.face.id() == g.face.id()).then(|| (SGlyph { gid: one.gid, ..g.clone() }, c))
+}
+
+/// Kurikaeshi Moji Shori: the glyph drawn in place of glyph `first` of `paragraph`, the first
+/// character of a line that ends before glyph `end`, when the paragraph has the setting on and
+/// [`repeat_mark_glyph`] gives one; it is recorded in [`crate::TextLayout::repeat_marks`].
+fn line_start_repeat(cx: &mut Ctx<'_>, paragraph: &ParagraphData<'_, '_>, first: usize, end: usize) -> Option<SGlyph> {
+    if !paragraph.para.kurikaeshi_moji_shori || first >= end {
+        return None;
+    }
+    let g = paragraph.sg.get(first)?;
+    let (glyph, c) = repeat_mark_glyph(cx, paragraph.pr.start, paragraph.lead, g)?;
+    cx.out.repeat_marks.push((g.byte, c));
+    Some(glyph)
+}
+
 /// Lay out `line` of `paragraph` as `justification` aligns it: each glyph placed along the
 /// baseline (tabs as [`tab_glyph`] sets them), its hyphen, and the line's record, then the pen
 /// moved on past it.
@@ -1306,9 +1344,14 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
     let mut marker_tab = 0;
     // The warichu blocks drawn on the line: the byte that names each and where it starts.
     let mut wari_blocks: Vec<(usize, f64)> = Vec::new();
+    // Kurikaeshi Moji Shori: the line's first character after any list marker, drawn as the
+    // character it repeats when it is a repeat mark.
+    let first = index.max(paragraph.marker);
+    let repeat = line_start_repeat(cx, paragraph, first, position.end);
     for (order_index, &offset) in order.iter().enumerate() {
         let glyph_index = index + offset;
         let Some(glyph) = sg.get(glyph_index) else { continue };
+        let glyph = if glyph_index == first { repeat.as_ref().unwrap_or(glyph) } else { glyph };
         let mut advance = glyph.adv;
         if glyph_index + 1 == trimmed {
             advance -= line.end_trim;

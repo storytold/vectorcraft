@@ -67,6 +67,12 @@ pub struct TextObject {
     /// it on a frame that leaves its thread and on a copy. Not saved.
     #[serde(skip)]
     pub first_para_continues: bool,
+    /// Threaded text whose first paragraph continues ([`TextObject::first_para_continues`]): the
+    /// last character of that paragraph in the frames before that a repeat mark could stand for
+    /// (Kurikaeshi Moji Shori), or None. The engine sets it with `first_para_continues`; layout
+    /// reads it only while `first_para_continues` is on. Not saved.
+    #[serde(skip)]
+    pub first_para_lead: Option<char>,
     /// Area Type Options (area type only).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub area: AreaOptions,

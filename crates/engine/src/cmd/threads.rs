@@ -225,7 +225,9 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             .collect();
         let refs: Vec<&TextObject> = frames.iter().collect();
         let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &refs, &story, &paras);
-        for (id, part) in live.iter().zip(parts) {
+        let texts: Vec<String> = parts.iter().map(|p| p.runs.iter().map(|r| r.text.as_str()).collect()).collect();
+        let leads = first_para_leads(&texts, &parts.iter().map(|p| p.continues).collect::<Vec<_>>());
+        for ((id, part), lead) in live.iter().zip(parts).zip(leads) {
             if let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind) {
                 let mut next = (**t).clone();
                 next.runs = part.runs;
@@ -241,6 +243,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     || part.list_count != t.list_count
                     || part.list_level_counts != t.list_level_counts
                     || continues != t.first_para_continues
+                    || lead != t.first_para_lead
                 {
                     t.runs = next.runs;
                     t.para = next.para;
@@ -250,6 +253,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     t.list_count = part.list_count;
                     t.list_level_counts = part.list_level_counts;
                     t.first_para_continues = continues;
+                    t.first_para_lead = lead;
                     refresh_bounds(t);
                 }
             }
@@ -384,15 +388,41 @@ pub(crate) fn mark_continued(doc: &mut Document) {
         let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
         let frames: Vec<&TextObject> = live.iter().filter_map(|id| text_of(doc, *id)).collect();
         let marks = vectorcraft_text::thread::continued(&frames);
-        for (id, on) in live.iter().zip(marks) {
+        let texts: Vec<String> = frames.iter().map(|t| t.plain_text()).collect();
+        let leads = first_para_leads(&texts, &marks);
+        for ((id, on), lead) in live.iter().zip(marks).zip(leads) {
             if let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind)
-                && t.first_para_continues != on
+                && (t.first_para_continues != on || t.first_para_lead != lead)
             {
                 t.first_para_continues = on;
+                t.first_para_lead = lead;
                 refresh_bounds(t);
             }
         }
     }
+}
+
+/// [`TextObject::first_para_lead`] for each frame of a thread, from the frames' plain `texts` and
+/// whether each one's first paragraph `continues` from the frame before: the last character of
+/// that paragraph in the frames before that a repeat mark could stand for, or None.
+fn first_para_leads(texts: &[String], continues: &[bool]) -> Vec<Option<char>> {
+    (0..texts.len())
+        .map(|k| {
+            let mut j = k;
+            while continues.get(j) == Some(&true) && j > 0 {
+                j -= 1;
+                let text = texts.get(j)?;
+                let tail = text.rfind('\n').map_or(Some(text.as_str()), |at| text.get(at + 1..))?;
+                if let Some(c) = vectorcraft_text::repeat_base(tail) {
+                    return Some(c);
+                }
+                if tail.len() != text.len() {
+                    return None;
+                }
+            }
+            None
+        })
+        .collect()
 }
 
 #[cfg(test)]
