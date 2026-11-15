@@ -5686,7 +5686,17 @@ the colour bars are process, spot and black-tint patches. Layers whose Print opt
 The Output and Advanced sections convert colours and write real text. `output: {conversion, destination}` converts
 every colour into the destination profile's model (`destination`; CMYK of another profile too) or only the colours of
 the other model (`preserveNumbers`: colours already in it keep their numbers); grey stays grey, images are converted
-too and printer's marks are not. The destination is any profile `edit.colorSettings` lists (default: the document's
+too and printer's marks are not. With `destination` and an sRGB destination, a gray or RGB image that carries an
+ICC profile is converted from that profile to sRGB with the color settings' intent and written without
+it, at 16 bits a sample when it has them, is not resampled or recompressed and the file is PDF 1.5 or later (an image
+whose profile the color engine can't read, or whose pixels can't be decoded, keeps its profile, with a warning); without
+conversion it keeps its profile. With `destination` and a CMYK destination, or an RGB one other than sRGB that images
+are converted to, an RGB image that carries an ICC profile is converted from that profile to sRGB with the same intent
+and then to the destination, instead of having its numbers read as sRGB (a profile the color engine can't read leaves
+them read as sRGB, with a warning); a gray image keeps its profile, as gray is not converted. An RGB destination other
+than sRGB that is the document's own RGB profile leaves RGB colors and RGB images as they are, so a tagged RGB image keeps its profile
+there.
+`preserveNumbers` still reads an image's numbers as sRGB. The destination is any profile `edit.colorSettings` lists (default: the document's
 for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
 `edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
 the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve (PDF/A, PDF/X-3 and PDF/X-4 files are
