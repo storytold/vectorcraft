@@ -56,6 +56,7 @@ pub mod freehand;
 mod gradient_stop;
 pub mod graph_data;
 pub mod graph_design;
+pub mod graph_type;
 pub mod graphic_style_options;
 pub mod halftone;
 pub mod hyphenation;
@@ -105,6 +106,7 @@ pub mod relink;
 pub mod rename_artboards;
 pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
+pub(crate) mod revolve_lights;
 pub mod safe_mode;
 pub mod saturate;
 pub mod save_brush_library;
@@ -341,6 +343,7 @@ registry! {
     GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
     GraphColumn: [graph_design::COLUMN] => graph_design::COLUMN_SPEC,
     GraphMarker: [graph_design::MARKER] => graph_design::MARKER_SPEC,
+    GraphType: [graph_type::KIND] => graph_type::SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
@@ -517,6 +520,8 @@ fn hidden_controls(d: &Dialog) -> &'static [&'static str] {
         Some(DialogKind::FileInfo) => &["__keyword"],
         // The preset name being typed.
         Some(DialogKind::FlattenTransparency) => &["__presetName"],
+        // The page shown.
+        Some(DialogKind::GraphType) => &[graph_type::PAGE],
         // The Resolution menu's Other.
         Some(DialogKind::RasterOptions | DialogKind::RasterFormatOptions | DialogKind::PsdOptions) => &["__otherPpi"],
         // The category shown, the search text and the three settings kept outside the preferences.

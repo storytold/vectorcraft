@@ -160,6 +160,7 @@
 	Align to Artboard	Allinea alla tavola da disegno
 	Align to Glyph Bounds	Allinea ai limiti del glifo
 	Align to Key Object	Allinea all'oggetto chiave
+	Align to Key Anchor	Allinea al punto di ancoraggio chiave
 	Align to Page	Allinea alla pagina
 	Align to Path	Allinea al tracciato
 	Align to Selection	Allinea alla selezione
@@ -1194,6 +1195,7 @@ font-technology	Variable	Variabili
 	Rotate (Classic)…	Ruota (classico)…
 	Surface	Superficie
 	Wireframe	Reticolo
+	Render Settings	Impostazioni di rendering
 	No Shading	Nessuna ombreggiatura
 	Plastic	Plastica
 	Highlight Intensity	Intensità lucentezza
@@ -1440,6 +1442,40 @@ file-filter	Templates	Modelli
 	Graph	Grafico
 	Graph Data	Dati grafico
 	Graph Type	Tipo di grafico
+	Graph Options	Opzioni grafico
+	Left Axis	Asse sinistro
+	Right Axis	Asse destro
+	Category Axis	Asse delle categorie
+	Separate Scales	Scale separate
+	Add Drop Shadow	Aggiungi ombra esterna
+	Add Legend Across Top	Aggiungi legenda in alto
+	First Row in Front	Prima riga in primo piano
+	First Column in Front	Prima colonna in primo piano
+	Legend	Legenda
+	Column Width	Larghezza colonne
+	Bar Width	Larghezza barre
+	Cluster Width	Larghezza gruppi
+	Mark Data Points	Contrassegna punti dati
+	Connect Data Points	Collega punti dati
+	Edge-to-Edge Lines	Linee da bordo a bordo
+	Draw Filled Lines	Disegna linee piene
+	Tick Values	Valori delle tacche
+	Override Calculated Values	Sostituisci valori calcolati
+	Divisions	Divisioni
+	Tick Marks	Tacche
+	Tick Marks per Division	Tacche per divisione
+	Draw Tick Marks Between Labels	Disegna tacche tra le etichette
+	Add Labels	Aggiungi etichette
+	Maximum must be more than Minimum.	Il massimo deve essere maggiore del minimo.
+	Column Graph	Grafico a colonne
+	Stacked Column Graph	Grafico a colonne in pila
+	Bar Graph	Grafico a barre
+	Stacked Bar Graph	Grafico a barre in pila
+	Line Graph	Grafico a linee
+	Area Graph	Grafico ad area
+	Scatter Graph	Grafico a dispersione
+	Pie Graph	Grafico a torta
+	Radar Graph	Grafico radar
 	Graph Design	Design del grafico
 	Graph Marker	Indicatore del grafico
 	New Design	Nuovo design
@@ -1560,6 +1596,7 @@ file-filter	Templates	Modelli
 	Highlight anchors on mouse over	Evidenzia ancoraggi al passaggio del mouse
 	Highlight Rows	Evidenzia righe
 	Highlight Variable	Evidenzia variabile
+	Sort Variables	Ordina variabili
 	Highlight Substituted Fonts	Evidenzia font sostituiti
 	Highlight Substituted Glyphs	Evidenzia glifi sostituiti
 	History	Cronologia
@@ -2054,6 +2091,7 @@ file-filter	Templates	Modelli
 	Menu Dialog	Finestra di dialogo menu
 	Merge	Fondi
 	Merge colors into one row	Unisci colori in una riga
+	New Row	Nuova riga
 	Merge Graphic Styles	Unisci stili grafici
 	Merge Graphic Styles…	Unisci stili grafici…
 	Merge Layers	Unisci livelli
@@ -3465,6 +3503,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Spazio di un sesto
 	Size	Dimensione
 	Size Tile to Art	Adatta tassello alla grafica
+	Move Tile with Art	Sposta tassello con la grafica
 	Size/Leading	Dimensione/interlinea
 	Size:	Dimensione:
 	Ridges per segment:	Creste per segmento:
@@ -3657,6 +3696,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Inverti riempimento e traccia (Shift+X)
 	Swap start and end arrowheads	Inverti punte di freccia iniziale e finale
 	Swap the selected object for the file, keeping its place and transform	Sostituisci l'oggetto selezionato con il file, mantenendone posizione e trasformazione
+	Show Import Options	Mostra opzioni di importazione
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Chiedi le opzioni di importazione di ogni file PDF, DXF o di testo prima di inserirlo; disattivato: usa le ultime opzioni scelte
 	Stylistic Alternates	Alternative stilistiche
 	Swash	Ornamentale
 	Swatch Conflict	Conflitto campioni
@@ -3746,11 +3787,55 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Font compositi
 	Export Composite Fonts	Esporta font compositi
 	Import Composite Fonts	Importa font compositi
+@msg	each font must be {name, parts}	ogni font deve essere {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	chiave sconosciuta `{k}`; un font accetta name e parts
+@msg	each font needs a name	ogni font deve avere un nome
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` non può essere il nome di un font composito (da 1 a {COMPOSITE_NAME_MAX} caratteri, senza caratteri di controllo)
+@msg	`{name}`: parts must be an object	`{name}`: parts deve essere un oggetto
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: classe sconosciuta `{k}`; le classi sono kanji, kana, punctuation, symbols, roman e numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} deve essere un oggetto
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: chiave sconosciuta `{k}` in {_1}
+@msg	`{name}`: give the kanji part	`{name}`: indica la parte kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un documento contiene al massimo {COMPOSITE_FONTS_MAX} font compositi
+@msg	two composite fonts are named `{_1}`	due font compositi si chiamano `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` è il nome di un font installato
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, un font composito
+@msg	give fonts: [{name, parts}…]	indica fonts: [{name, parts}…]
+@msg	path is empty	path è vuoto
+@msg	fonts must be a list of composite fonts	fonts deve essere un elenco di font compositi
+@msg	names must be strings	names deve contenere stringhe
+@msg	no composite font named `{n}`	nessun font composito di nome `{n}`
+@msg	names must be a list of names	names deve essere un elenco di nomi
+@msg	no composite fonts to export	nessun font composito da esportare
+@msg	not a composite fonts file: {e}	non è un file di font compositi: {e}
+@msg	not a composite fonts file: no compositeFonts list	non è un file di font compositi: manca l’elenco compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	il file contiene più di {COMPOSITE_FONTS_MAX} font compositi
+@msg	the file is larger than 4 MB	il file supera 4 MB
+@msg	dataBase64 is not base64	dataBase64 non è base64
+@msg	give one of path, data or dataBase64	indica path, data o dataBase64
+@msg	the file holds no composite fonts	il file non contiene font compositi
+@msg	the file holds two composite fonts named `{_1}`	il file contiene due font compositi di nome `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` non può essere il nome di un font composito
+@msg	{k}: give a font	{k}: indica un font
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: indica un font
+@msg	{k}: size must be {_1} to {_2}%	{k}: size deve essere tra {_1} e {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size deve essere tra {_1} e {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline deve essere tra {_1} e {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline deve essere tra {_1} e {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: la scala deve essere tra {_1} e {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: la scala deve essere tra {_1} e {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: solo kana, roman e numerals si possono ridimensionare
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: solo kana, roman e numerals si possono ridimensionare
+@msg	{k}: only kana can be scaled at the center	{k}: solo kana si può ridimensionare dal centro
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: solo kana si può ridimensionare dal centro
+@msg	no composite font	nessun font composito
 	Delete Font	Elimina font
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Numeri
 	Scale at Center	Ridimensiona dal centro
+	Delete Set	Elimina set
+	Direct Entry	Immissione diretta
 	Up/Down:	Su/giù:
 	Left/Right:	Sinistra/destra:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko su/giù
@@ -4094,6 +4179,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMYK di lavoro
 	Working CMYK (don't tag)	CMYK di lavoro (senza tag)
 	Working RGB (don't tag)	RGB di lavoro (senza tag)
+	Don't Color Manage This Document	Non gestire il colore di questo documento
+	Working RGB: {name}	RGB di lavoro: {name}
+	Working CMYK: {name}	CMYK di lavoro: {name}
 	Workspace	Area di lavoro
 	Workspace {i}	Area di lavoro {i}
 	Wrinkle Tool	Strumento Grinza
@@ -5263,6 +5351,7 @@ axis	Both	Entrambi
 @msg	every numbered name for {name} is taken in the document's folder	tutti i nomi numerati per {name} sono già usati nella cartella del documento
 @msg	No linked files to look for	Nessun file collegato da cercare
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Il collegamento si trova in un simbolo, un design di grafico, un motivo o una maschera di opacità e non ha una posizione nell’area di disegno
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	la grafica di un design di grafico in una serie del grafico viene ridisegnata dal design: modifica il design per cambiarla
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servizi
@@ -5308,6 +5397,7 @@ axis	Both	Entrambi
 @msg	automation filesystem access is not granted: write authority is absent: {path}	l'automazione non ha accesso al file system: manca l'autorizzazione di scrittura: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	percorso di automazione rifiutato: fuori dalla cartella radice di lettura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	percorso di automazione rifiutato: fuori dalle cartelle radice di lettura {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	un file JavaScript collegato è fuori dalle cartelle radice di lettura
 @msg	automation path rejected: outside the write root {root}: {path}	percorso di automazione rifiutato: fuori dalla cartella radice di scrittura {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	percorso di automazione rifiutato: fuori dalle cartelle radice di scrittura {roots}: {path}
 @msg	automation path rejected: path is empty	percorso di automazione rifiutato: il percorso è vuoto
@@ -5359,6 +5449,11 @@ axis	Both	Entrambi
 @msg	Imported library {name}	Libreria {name} importata
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Criterio RGB:
+	CMYK Policy:	Criterio CMYK:
+	Preserve Embedded Profiles	Mantieni profili incorporati
+	Convert to Working Space	Converti nello spazio di lavoro
+	Preserve Numbers	Mantieni valori numerici
 	Texture	Texture
 	Craquelure…	Craquelé…
 	Grain…	Granulosità…
@@ -5634,6 +5729,7 @@ lighting	Light	Luce
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla da esportare
 @msg	The 3D object is too complex to export	L'oggetto 3D è troppo complesso per essere esportato
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'oggetto non ha alcun effetto 3D (Estrusione e smusso, Rivoluzione, Gonfia o Ruota)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve essere un oggetto che contiene solo `mode`, con valore shaded o wireframe
 @msg	its 3D effect builds no solid	il suo effetto 3D non costruisce alcun solido
 @msg	bevel must be none or one of {_1}	bevel deve essere none o uno dei seguenti: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} non può costruire solidi da questo disegno: le sue istanze di simbolo, fusioni e gruppi di ritaglio contengono troppi oggetti
@@ -5717,6 +5813,9 @@ lighting	Light	Luce
 	Softness	Morbidezza
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto
+	Move Light to Back	Sposta luce dietro
+	Move Light to Front	Sposta luce davanti
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Trascina una luce per spostarla. I tasti freccia spostano la luce attiva; Maiusc a passi di 15°.
 	Shadows	Ombre
 	Distance from Object	Distanza dall'oggetto
 	Shadow Bounds	Limiti dell'ombra
@@ -6129,6 +6228,7 @@ axis	Y Axis	Asse Y
 @msg	stops must be in order of `offset`	i cursori colore devono essere in ordine di `offset`
 @msg	the document has no pattern {pattern}	il documento non ha il motivo {pattern}
 @msg	the document has no swatch {n}	il documento non ha il campione {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` richiede un cursore colore collegato a un campione di colore spot
 @msg	the output	l’output
 @msg	the path has no anchor points	il tracciato non ha punti di ancoraggio
 @msg	too many anchor points (limit {MAX_ANCHORS})	troppi punti di ancoraggio (limite {MAX_ANCHORS})
@@ -6315,6 +6415,8 @@ axis	Y Axis	Asse Y
 	Create New Set	Crea nuovo set
 	Stop Global Edit	Interrompi modifica globale
 	Global Edit Options	Opzioni modifica globale
+	Select Similar Objects	Seleziona oggetti simili
+	Select Similar Options	Opzioni selezione oggetti simili
 	Leave Out of Global Edit	Escludi dalla modifica globale
 	Match	Corrispondenza
 	On Artboards	Sulle tavole da disegno
@@ -6437,6 +6539,13 @@ axis	Y Axis	Asse Y
 	Graphite Pencil	Matita di grafite
 	Wax Crayon	Pastello a cera
 	Charcoal Dust	Polvere di carboncino
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuiti tecnologici
+	Circuit Trace	Pista del circuito
+	Bus Lines	Linee del bus
+	Terminal Nodes	Nodi terminali
+
 	Notched Ribbon	Nastro dentellato
 	Double Line	Doppia linea
 	Wave	Onda
