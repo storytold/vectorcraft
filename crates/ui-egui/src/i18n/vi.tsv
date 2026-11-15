@@ -608,6 +608,11 @@ font-technology	Variable	Biến thiên
 	CMYK Equivalents	Tương đương CMYK
 	CMYK profile in effect	Hồ sơ CMYK đang có hiệu lực
 	CMYK:	CMYK:
+	RGB Policy:	Chính sách RGB:
+	CMYK Policy:	Chính sách CMYK:
+	Preserve Embedded Profiles	Giữ cấu hình nhúng
+	Convert to Working Space	Chuyển sang không gian làm việc
+	Preserve Numbers	Giữ giá trị số
 	Coarse Dots	Chấm thô
 	Collapse Panels to Icons	Thu gọn bảng thành biểu tượng
 	Collapse to Icons	Thu gọn thành biểu tượng

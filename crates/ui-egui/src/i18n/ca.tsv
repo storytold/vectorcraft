@@ -765,6 +765,11 @@ antiAlias	Sharp	Nítid
 	CMYK Equivalents	Equivalents CMYK
 	CMYK profile in effect	Perfil CMYK en vigor
 	CMYK:	CMYK:
+	RGB Policy:	Política RGB:
+	CMYK Policy:	Política CMYK:
+	Preserve Embedded Profiles	Conserva els perfils incrustats
+	Convert to Working Space	Converteix a l'espai de treball
+	Preserve Numbers	Conserva els números
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
 	Collapse Panels to Icons	Replega els panells a icones

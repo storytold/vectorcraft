@@ -946,6 +946,11 @@
 	NTSC Colors	Kolory NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Zasada RGB:
+	CMYK Policy:	Zasada CMYK:
+	Preserve Embedded Profiles	Zachowaj osadzone profile
+	Convert to Working Space	Konwertuj do przestrzeni roboczej
+	Preserve Numbers	Zachowaj wartości liczbowe
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Spękania…

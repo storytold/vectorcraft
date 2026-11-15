@@ -5335,6 +5335,11 @@ imageTrace	Outline	轮廓
 	None (Color Preview)	无 (颜色预览)
 	Preserve	保留
 	CMYK:	CMYK：
+	RGB Policy:	RGB 策略：
+	CMYK Policy:	CMYK 策略：
+	Preserve Embedded Profiles	保留嵌入的配置文件
+	Convert to Working Space	转换为工作空间
+	Preserve Numbers	保留数值
 	Art & Illustration	艺术和插画
 	Branding	品牌
 	Film & Video	影片和视频

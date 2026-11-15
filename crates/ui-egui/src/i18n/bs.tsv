@@ -986,6 +986,11 @@
 	NTSC Colors	NTSC boje
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB pravilo:
+	CMYK Policy:	CMYK pravilo:
+	Preserve Embedded Profiles	Zadrži ugrađene profile
+	Convert to Working Space	Pretvori u radni prostor
+	Preserve Numbers	Zadrži brojeve
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Krakelura…

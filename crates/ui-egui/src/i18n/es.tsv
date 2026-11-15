@@ -5399,6 +5399,11 @@ axis	Both	Ambos
 @msg	Imported library {name}	Biblioteca {name} importada
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Norma RGB:
+	CMYK Policy:	Norma CMYK:
+	Preserve Embedded Profiles	Conservar perfiles incrustados
+	Convert to Working Space	Convertir en espacio de trabajo
+	Preserve Numbers	Conservar números
 	Texture	Textura
 	Craquelure…	Craquelado…
 	Grain…	Granulado…
