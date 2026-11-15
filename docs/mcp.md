@@ -1,6 +1,8 @@
 # VectorCraft MCP server
 
 > **Last updated:** 2026-11-14 · **Change:** Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+>
+> Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
@@ -826,15 +828,30 @@ the `effect.*` commands and `appearance.addEffect`, and the paint, stroke and gr
 `item`, which is a row of the group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected
 group's own rows.
 
-The graph draws the art of a column or marker design in a series again from the design, so the commands that add,
-change, move or remove fill and stroke rows, effects or graphic styles leave that art out: the `appearance.*` commands
-listed above, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit, move or remove an
-effect, `graphicStyle.apply` (and `graphicStyle.addFromLibrary` with `apply`), `transparency.set` with a fill or stroke
-`item`, and `appearance.copyFrom` as the target. The art is any object inside a series group other than a path directly
-in it, whether given by id, selected, or reached through `target: "contents"`. The commands edit the other objects they
-are given, and a command whose objects are all design art is an error. `appearance.transfer` with design art as its
-`target`, or as its `source` without `copy`, is an error. The paint commands leave the art out as well, without an
-error. To change the art, edit the design with `graph.design`.
+When a graph is drawn again (a change to its data, its type, or its column or marker designs), it draws the art of a
+column or marker design in a series again from the design, and an edit made to that art is lost. The art is any object
+inside a series group other than a path directly in it, a legend swatch's included, whether given by id, selected, or
+reached through `target: "contents"`. These commands leave that art out, edit the other objects they are given, and
+are an error when all their objects are design art: the `appearance.*` commands listed above, `effect.apply`,
+`appearance.addEffect` and the other `effect.*` commands that edit, move or remove an effect,
+`effect.expandAppearance` (which also leaves the art inside a selected graph or series group as it was, unless an
+effect of that group turns the whole group into other art, and is disabled when only design art is selected or
+given), `threeD.mapGraphic`,
+`graphicStyle.apply`, `graphicStyle.addFromLibrary` with `apply`, `graphicStyle.breakLink`, `transparency.set`, the
+`paint.freeform.*` commands that edit points and lines, and `appearance.copyFrom` as the target.
+`appearance.transfer` with design art as its `target`, or as its `source` without `copy`, is an error.
+`paint.setFill`, `paint.setStroke`, `paint.swap`, `paint.default`, `paint.invert` and `paint.complement` with an
+`item`, `stroke.set`, `stroke.weightUp`, `stroke.weightDown`, `stroke.setAdvanced`, `paint.editGradient`,
+`paint.setGradientGeom` and `object.setOverprint` leave the art out without an error. When the first selected object is design art, the commands
+do not use the Appearance panel's active row. When the first object given is design art, rows and effects given with
+`aligned: true` are rows of its stack in `appearance.setItem`, `appearance.removeItem`, `appearance.duplicateItem`,
+`transparency.set` with an `item`, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit,
+move or remove an effect: each other object edits the row or effect equal to it, and an object without one is left as
+it is. When no object has one, `appearance.setItem` and `appearance.removeItem` leave the document as it is, as they do
+for a row no object has, and the other commands are an error. `appearance.moveItem`, `effect.move` and
+`appearance.duplicateItem` with `to` are an error when the art's stack differs from the other objects', and
+`appearance.duplicateItem` with `to` is also an error when two or more other objects are given, as it is without the
+art. To change the art, edit the design with `graph.design`.
 
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
@@ -3238,6 +3255,13 @@ already walks Image Trace. Short agent entry points:
   unchanged. No undo step is added when the symbols are already in order. The panel menu's Thumbnail View, Small List
   View and Large List View change only how the panel shows the symbols: thumbnails, or rows with a thumbnail and the
   name (smaller rows in Small List View).
+- Panel views: `ui.panelView {panel, view?}` sets the view of the Swatches, Graphic Styles or Symbols panel, as the
+  view items of its panel menu (and the Swatches panel's list and thumbnail buttons) do. `panel` is `swatches`,
+  `graphicStyles` or `symbols`. The Swatches panel takes `smallThumb`, `mediumThumb` (the default), `largeThumb`,
+  `smallList` or `largeList`; the Graphic Styles and Symbols panels take `thumbnail` (the default), `smallList` or
+  `largeList`. Without `view` the command answers the current one. Each panel keeps its own view for the session, and
+  the document does not change. An unknown panel or view is an error, and then nothing changes. It answers
+  `{panel, view}`.
 - The Brushes panel menu's Select All Unused: `brush.unused` (a query) lists the brushes no stroke paints with, in
   library order, and the panel selects them. Strokes in the art (opacity masks included), symbols, graph designs,
   pattern tiles (with the tiles that pattern editing's Cancel puts back) and graphic styles count, and so do the
@@ -3698,8 +3722,20 @@ already walks Image Trace. Short agent entry points:
   `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group?|id?}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
-  color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill of its front-most
-  covering source, including compound paths with shared curved boundaries. Expand keeps those face fills.
+  color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill rows that draw of
+  its front-most covering source that has one, including compound paths with shared curved boundaries, and each edge
+  the stroke rows that draw of its source. A row draws when it is shown and has paint and an opacity above 0; a
+  stroke also needs a weight above 0, and a source whose opacity is 0 has no rows that draw. The rows keep their order
+  and settings (opacity, blending mode, effects, overprint, and a stroke's weight, caps, joins, dashes and alignment),
+  gradients keep their fit on the source, and the face or edge takes the source's opacity and blending mode. Where a
+  path is cut into several edges, each edge runs the way the path does, its dashes go on from where it starts along
+  the path (Align Dashes to Corners is turned off on it), the arrowheads stay only at the path's own ends, and a width
+  profile or brush stays only on an edge that runs the whole path. A gradient applied along a stroke starts again on
+  each cut edge, and an inside or outside stroke is drawn centered on an edge that is an open piece of a closed path.
+  When `livePaint.gapOptions` or `livePaint.merge` cuts an edge into pieces, each piece takes the edge's paint, with
+  its rows fitted to its part of the edge in the same way. A face or edge given no such row has one unpainted row. Rows that do not draw stay with the stored sources, which
+  `livePaint.release` returns unchanged. The source's object effects and the strokes' pen pressure are not carried.
+  Expand keeps those face fills.
   `livePaint.expand` keeps each face and edge that draws, with all its fill and stroke rows: it is shown, its opacity
   is above 0, and a fill or stroke row is shown, has paint and an opacity above 0 (a stroke also a weight above 0),
   whichever row is on top. A painted lower row under an unpainted top row keeps the part; a part whose only painted
@@ -4567,9 +4603,9 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: nine generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Bristle
+Brush libraries are read-only sets of brushes: ten generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Bristle
 Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
-Charcoal Dust art brushes, id `dry-media`), the `.vectorcraft` files in the user library folder of the desktop app (User
+Charcoal Dust art brushes, id `dry-media`, and Tech Circuit with Circuit Trace (art), Bus Lines and Terminal Nodes (pattern), id `tech-circuit`), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
 `brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
@@ -5699,6 +5735,25 @@ used, as a transform's does.
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"scaleH":50,"scaleV":50,"strokes":false}}}
 ```
 
+## Scale and Reflect on a turned bounding box
+
+`object.scale` and `object.reflect` with a named axis act along the selection's bounding box: after a rotation, `sx`
+stretches along the box's own width and `sy` along its height, and `"vertical"` and `"horizontal"` are the box's own
+axes, until Object › Transform › Reset Bounding Box squares the box to the page. Both take `basis?: "box"|"page"`:
+`"box"` is the default, and `"page"` acts along the page's axes. Any other `basis` is an error, and nothing changes.
+`origin` is still a page point, and a numeric `axis` is still a line on the page at that angle. Selections whose
+objects stand at different angles, and anchors selected with Direct Selection, use the page's axes; with `copy` or
+with `objects: false`, the whole objects or their pattern tiles transform, along the box. The journal entry
+records the `basis` used, so a recorded action replays in the same frame; a saved step without `basis` (an action or
+journal entry recorded before it) plays along the page's axes, as it did when it was recorded. `object.transformAgain` repeats the transform's page matrix, also after Reset Bounding Box. The Scale
+and Reflect dialogs, the Transform and Properties panels' flips, the Scale tool and the Reflect tool's default axis
+and Shift steps follow the box the same way; a Reflect axis drawn with the tool is the line drawn on the page.
+
+```json
+{"name":"run_command","arguments":{"command":"object.scale","params":{"sx":200,"sy":100}}}
+{"name":"run_command","arguments":{"command":"object.reflect","params":{"axis":"vertical","basis":"page"}}}
+```
+
 ## Free Distort on a turned bounding box
 
 `object.distort` maps the corners of `from` (TL, TR, BR, BL) onto `corners`, which are page coordinates. With
@@ -5908,7 +5963,8 @@ commands send `to: "key"` while the selection has a key, else `"artboard"` for o
 anchor points, else the Align To choice. The Distribute commands send `to: "key"` while the selection has a key, else
 the Align To choice, and while there is a key object or a key guide they send the panel's Distribute Spacing value as
 `spacing`. Edit › Keyboard Shortcuts lists them under Align, with no default shortcut, and
-`shortcuts.set {id, shortcut}` gives one a shortcut.
+`shortcuts.set {id, shortcut}` gives one a shortcut. The Object › Distribute menu lists the eight Distribute commands,
+and each item runs its command.
 
 With the Artboard tool chosen, the same buttons and UI commands, and the Control bar's Align and Distribute buttons,
 run `artboard.align`, `artboard.distribute` and `artboard.distributeSpacing` on the artboards the tool has selected.
@@ -6300,7 +6356,10 @@ desktop app) instead and undoes nothing ([the help page](https://helpx.adobe.com
 From the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool it chooses the
 drawing tool chosen last in the window, or the Pencil tool when none has been chosen yet; from any other tool it
 chooses the Selection tool, and the tool left becomes the drawing tool unless it is the Hand, Rotate View, Zoom or Print
-Tiling tool. It returns `{tool}` and adds no undo step. Pencil as the first drawing tool and the list of selection tools
+Tiling tool. It returns `{tool}` and adds no undo step. When the tool cannot be chosen it returns the error, the tool
+and the drawing tool stay as they were, and it adds no undo step; `tool.select`, `ui.cropImage`,
+`addon.pathtools.cornerTool` and `addon.pathtools.sharedEdgeTool` also return the error when their tool cannot be
+chosen. Pencil as the first drawing tool and the list of selection tools
 are VectorCraft's own rules. A tap in Presentation Mode runs nothing. Under VectorCraft's own rule, a tap on the canvas
 while a modal dialog is open runs nothing, and fingers already down when it opens make no tap when they lift, during
 the dialog or after it closes.
@@ -6589,7 +6648,8 @@ report warn about it).
 Commands take and return lengths in points (the distances of `object.path.offsetPath`, `object.path.simplify`,
 `object.path.splitIntoGrid` and `text.setStyle` `size`/`leading` also take a string with a unit, `"5 mm"`). A length
 string takes the same arithmetic as the desktop app's fields, where `%` is a share of the value before it:
-`"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. The units
+`"200mm*50%"` is 100 mm and `"50pt+25%"` is 62.5 pt. A length string with more than 128 `+ - * /` signs is not read
+as a length. The units
 only change what the UI shows and how it reads typed numbers. Preferences ▸ Units has
 four: General (rulers, positions and sizes, the Info panel, dialog distances, canvas measurement labels), Stroke
 (weights, dashes), Type (font size, leading, baseline shift) and East Asian Type (no field uses it yet). General is the active document's units
@@ -7308,6 +7368,14 @@ is mixed with middle gray by its alpha.
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"distort.glass","params":{"distortion":10,"textureImage":{"path":"/tmp/texture.png"}}}}}
+```
+
+Texturizer (`texture.texturizer`) and Rough Pastels (`artistic.roughPastels`) take `params.textureImage` the same
+way, as the surface that Scaling, Relief, Light Direction and Invert act on. With `texture: "loaded"` and no stored
+texture they draw Canvas.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"artistic.roughPastels","params":{"relief":12,"textureImage":{"path":"/tmp/texture.png"}}}}}
 ```
 
 ## Linked images
@@ -8279,6 +8347,16 @@ flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, R
 (converted with the colour settings' CMYK) and Lab, at 1, 8, 16 and 32 bits per channel, sized by their resolution.
 A document with transparency keeps it. `file.place {path}` links the file like any image (`links.update` reads it
 again when it changes); Multichannel files are refused.
+
+A PSD or PSB file that names a clipping path (the saved path its clipping path resource names, in the
+[published PSD file format specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/)) places, and
+opens as its merged image (`layers: false`, a file with no layers, or a file whose layers can't be read), inside a clip group whose clipping
+path is that path, under the even-odd rule, so the image shows only inside it. The clipping path is an ordinary path
+that can be edited or released. `file.place` answers `image`, the id of the image in the clip group. The
+[import options help page](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
+says that a file imported as one flattened image keeps the document's clipping path when it has one. `links.update`
+and `links.relink` read the file's pixels again and leave the clip group and its clipping path as they are. Files that name no clipping path, or name a path
+they don't have, come in as a plain image.
 
 `document.open` converts a PSD or PSB file's layers to objects. In
 [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html),
@@ -9543,6 +9621,24 @@ not kerned). Off by default and saved only when on. One undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
 ```
 
+## H or V Style and Roman Italics
+
+With Show East Asian Options on, the OpenType panel menu has H or V Style and Roman Italics
+([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)). They are the character
+feature tags `hkna` and `ital` of `text.setStyle` and `text.setRangeStyle {features, featureChanges}`
+([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)). `hkna` draws kana with the
+forms the font makes for horizontal type, and in vertical type the shaper applies `vkna`, the forms for vertical type,
+in its place. `ital` draws half-width alphanumerics with the font's italic forms. A font without the feature draws the
+characters unchanged. Both are on or off only: `hkna=2` and `ital=0` are refused as unknown features, and `vkna` is
+not a tag of its own. A menu item is checked when every character the panel acts on has it; choosing it turns the
+feature on for all of them, or off when it is checked, each character keeping its other features, in one undo step.
+Reset OpenType Features turns both off. Character styles carry them, and Character Style Options › OpenType Features
+has an on, off or unset switch for each. Live SVG text writes them in `font-feature-settings`.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":6,"featureChanges":["hkna","ital"]}}}
+```
+
 ## Variable fonts
 
 `text.setFormat {fontAxes: {"wght": 650}}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end,
@@ -9657,7 +9753,9 @@ neighbors, the kerning of the two characters keeps it and the characters after i
 wider or narrower character moves the characters after it by the change in its width. Touch Type gives the character
 before it a kerning value of its own (with `dx`, and with any other change where the font kerned the character with
 its neighbors), and that character can then move by the font's kerning pair with the one before
-it, as with any style change to one character (`text.setRangeStyle`). The type stays editable.
+it, as with any style change to one character (`text.setRangeStyle`). The type stays editable. The characters of type
+on an open path that are not drawn because they fall before the path's start cannot be selected with the tool, and
+`text.touchType` returns an error for them.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.touchType","params":{"id":7,"start":1,"dx":10,"dy":4}}}
@@ -9747,9 +9845,10 @@ same in any language. Saved documents keep what they say, and imported text (PDF
 
 Type on a path flows between a start and an end bracket, stored as fractions of its path's length.
 `type.pathOptions {start?, end?, flip?, effect?, alignToPath?, spacing?, ids?}` sets them and the rest of Type on a
-Path Options: `end: null` puts the end bracket back at the end of the path (or once round a closed one); `flip`
-then turns the type to the other side of its path, the path running the other way and the brackets swapping ends so
-the type keeps its stretch of the path; `alignToPath` runs the `ascender`, `descender`, `center` or `baseline` (the
+Path Options: `end: null` puts the end bracket back at the end of the path (or once round a closed one); on an open
+path a `start` below 0 starts the text that far before the path's start (on a closed path it is the path's start);
+`flip` then turns the type to the other side of its path, the path running the other way and the brackets swapping
+ends so the type keeps its stretch of the path; `alignToPath` runs the `ascender`, `descender`, `center` or `baseline` (the
 default) along the path, each character by its own font, size and vertical scale: `ascender` runs the top of the
 font's em box along it (its ideographic em box, else an em box centered on the cap height), `descender` runs the
 bottom of the font's bounding box along it, and `center` runs a line at half the height of the top of the font's H
@@ -9761,6 +9860,13 @@ Spacing and leaves the brackets where they are. As in the reference app, the Sel
 show selected type on a path's brackets: dragging the start or end bracket (`pointer_gesture`) sets where the type
 begins or ends, dragging the centre bracket slides the type along its path and, dragged across the path, flips it
 (with Cmd/Ctrl held it only slides). Each is one undo step.
+
+Type on an open path that starts before the path's start keeps every character, and the characters whose middle falls
+before the path's start are not drawn. A `flip` starts it at the start bracket, and dragging the center bracket slides
+it from where it starts and no further before the path. Past the path's end, text that does not fit is overflow, as
+for other type on a path. SVG import reads a `<textPath>` anchored or offset before an open path's start this way, and
+SVG export writes it as a negative `startOffset`. Releasing it to point type keeps the first drawn character where it
+was drawn.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.pathOptions","params":{"start":0.25,"end":0.75,"flip":true}}}
@@ -12126,10 +12232,11 @@ VectorCraft addition and changes no parity score.
   the path's fill and stroke), so the released path has no fill and no stroke.
 - **The text** keeps its runs with their character attributes and its paragraph attributes, and becomes point type on
   one straight line along the object's own axis, with the baseline starting where the first character sat on the path
-  (type with no characters starts at its start bracket). Type on a Path Options (effect, align to path, spacing, flip,
-  brackets) don't apply to point type and are dropped. Type with Dynamic Text on (`type.dynamicText`) becomes point
-  type with it off, at the sizes it was drawn at: each size, leading and baseline shift is multiplied by the fit factor.
-  Without `keepOriginal` the type object itself becomes the point
+  (type with no characters starts at its start bracket; type that starts before an open path's start keeps its first
+  drawn character where it was drawn, with the characters that were not drawn before it). Type on a Path Options
+  (effect, align to path, spacing, flip, brackets) don't apply to point type and are dropped. Type with Dynamic Text
+  on (`type.dynamicText`) becomes point type with it off, at the sizes it was drawn at: each size, leading and
+  baseline shift is multiplied by the fit factor. Without `keepOriginal` the type object itself becomes the point
   type, keeping its id, so a frame of threaded text leaves its thread with the text it holds, as
   `type.convertToPointType` does for area type.
 - It acts on the type on a path among `ids` (or `id`, else the selection), groups included; other objects are left
@@ -12171,6 +12278,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-14 | Built-in Tech Circuit brush library (id `tech-circuit`): Circuit Trace, Bus Lines and Terminal Nodes; ten built-in libraries. |
 | 2026-11-13 | The Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides; Snap to Grid and Snap to Pixel still move its ends (#7252). |
 | 2026-11-13 | `path.freehand`: `closed`, when given, decides whether a stroke that continues a path (`extend`) closes it; the Pencil and the Paintbrush send it by Close Paths When Ends Are Within. |
 | 2026-11-13 | Snap to Point with Smart Guides off draws no Smart Guides labels or lines (#7250). |

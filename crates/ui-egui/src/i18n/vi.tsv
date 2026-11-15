@@ -3017,6 +3017,8 @@ mark-style	Japanese	Kiểu Nhật
 	Proof Setup	Thiết lập thử nghiệm
 	Properties	Thuộc tính
 	Proportional Metrics	Số liệu theo tỷ lệ
+	H or V Style	Kiểu ngang hoặc dọc
+	Roman Italics	Nghiêng Roman
 	Insert Aki Left	Chèn aki bên trái
 	Insert Aki Right	Chèn aki bên phải
 	Tsume	Tsume
@@ -6418,6 +6420,13 @@ axis	Y Axis	Trục Y
 	Graphite Pencil	Bút chì than chì
 	Wax Crayon	Bút sáp màu
 	Charcoal Dust	Bụi than
+
+# Original procedural circuit brushes.
+	Tech Circuit	Mạch công nghệ
+	Circuit Trace	Đường mạch
+	Bus Lines	Đường bus
+	Terminal Nodes	Nút đầu cuối
+
 	Notched Ribbon	Dải băng khía
 	Double Line	Đường đôi
 	Wave	Sóng

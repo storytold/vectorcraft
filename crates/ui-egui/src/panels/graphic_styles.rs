@@ -30,9 +30,10 @@ use crate::menus::Item;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, menu_item};
 
-/// The panel's views.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum View {
+/// The panel's views (`ui.panelView {panel: "graphicStyles", view}`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum View {
     #[default]
     Thumbnail,
     SmallList,
@@ -463,7 +464,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let looks = look_hashes(ui.ctx(), app);
     let shown = Shown { d: &doc, looks: &looks, preview: pstate(ui.ctx(), "gs-preview") };
     let sel = selected(ui.ctx(), &doc);
-    let view: View = pstate(ui.ctx(), "gs-view");
+    let view = app.ui.graphic_styles_view;
     let mut ev = Events::default();
     // In a sized panel the list fills the space above the footer (#2992), as the Artboards list
     // does; elsewhere it keeps its 220 pt.
@@ -605,10 +606,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("graphicStyle.sortByName", json!({})).ok();
     }
     ui.separator();
-    let view: View = pstate(ui.ctx(), "gs-view");
+    let view = app.ui.graphic_styles_view;
     for (v, label) in View::ALL {
-        if menu_item(ui, tl!(label), true, view == v) {
-            set_pstate(ui.ctx(), "gs-view", v);
+        if menu_item(ui, tl!(label), true, view == v)
+            && let Err(e) = app.run("ui.panelView", json!({ "panel": "graphicStyles", "view": v }))
+        {
+            app.status(e);
         }
     }
     ui.separator();
@@ -865,7 +868,7 @@ mod tests {
             app.session.execute("graphicStyle.new", &json!({"name": format!("Style {i:02}")})).unwrap();
         }
         let ctx = egui::Context::default();
-        set_pstate(&ctx, "gs-view", View::LargeList);
+        app.ui.graphic_styles_view = View::LargeList;
         // The clip rect of the first style's name: the list's visible area.
         let mut list = |bottom: Option<f32>| {
             let mut clip = None;
@@ -891,7 +894,7 @@ mod tests {
         let mut app = app();
         app.session.execute("graphicStyle.new", &json!({"name": "Mine"})).unwrap();
         let ctx = egui::Context::default();
-        set_pstate(&ctx, "gs-view", View::LargeList);
+        app.ui.graphic_styles_view = View::LargeList;
         let texts = frame(&ctx, |ui| {
             show(&mut app, ui);
             menu(&mut app, ui);
@@ -906,7 +909,7 @@ mod tests {
         let unused: Vec<String> = serde_json::from_value(app.session.execute("graphicStyle.unused", &json!({})).unwrap()["names"].clone()).unwrap();
         assert_eq!(unused.len(), 4);
         set_pstate(&ctx, "gs-sel", unused.clone());
-        set_pstate(&ctx, "gs-view", View::SmallList);
+        app.ui.graphic_styles_view = View::SmallList;
         frame(&ctx, |ui| show(&mut app, ui));
         // Delete asks first; OK deletes, and the panel selection follows.
         delete(&mut app, &unused, false);
@@ -967,7 +970,7 @@ mod tests {
 
         // A style dragged onto the top half of the first row lands first (Small List View: rows
         // of 18 points from the top of the list).
-        set_pstate(&ctx, "gs-view", View::SmallList);
+        app.ui.graphic_styles_view = View::SmallList;
         frame(&ctx, |ui| show(&mut app, ui));
         let release = |at: egui::Pos2| {
             let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
@@ -992,7 +995,7 @@ mod tests {
         let n = names(&app);
         assert_eq!(n.len(), 5);
         let ctx = egui::Context::default();
-        set_pstate(&ctx, "gs-view", View::SmallList);
+        app.ui.graphic_styles_view = View::SmallList;
         frame(&ctx, |ui| show(&mut app, ui));
         // A click on row `i` (Small List View: rows of 18 points, 3 apart) with `modifiers` held,
         // a second after the last one so that two clicks on a row are not a double-click.
