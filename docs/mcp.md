@@ -3238,6 +3238,13 @@ already walks Image Trace. Short agent entry points:
   unchanged. No undo step is added when the symbols are already in order. The panel menu's Thumbnail View, Small List
   View and Large List View change only how the panel shows the symbols: thumbnails, or rows with a thumbnail and the
   name (smaller rows in Small List View).
+- Panel views: `ui.panelView {panel, view?}` sets the view of the Swatches, Graphic Styles or Symbols panel, as the
+  view items of its panel menu (and the Swatches panel's list and thumbnail buttons) do. `panel` is `swatches`,
+  `graphicStyles` or `symbols`. The Swatches panel takes `smallThumb`, `mediumThumb` (the default), `largeThumb`,
+  `smallList` or `largeList`; the Graphic Styles and Symbols panels take `thumbnail` (the default), `smallList` or
+  `largeList`. Without `view` the command answers the current one. Each panel keeps its own view for the session, and
+  the document does not change. An unknown panel or view is an error, and then nothing changes. It answers
+  `{panel, view}`.
 - The Brushes panel menu's Select All Unused: `brush.unused` (a query) lists the brushes no stroke paints with, in
   library order, and the panel selects them. Strokes in the art (opacity masks included), symbols, graph designs,
   pattern tiles (with the tiles that pattern editing's Cancel puts back) and graphic styles count, and so do the
