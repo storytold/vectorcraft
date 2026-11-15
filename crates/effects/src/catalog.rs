@@ -468,8 +468,8 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "blur.radial",
             "Radial Blur…",
             BLUR,
-            "{amount: 1..100 (10; spin: an arc of `amount`°, zoom: the content scaled by up to about ±amount/2 %), method: \"spin\"|\"zoom\" (\"spin\"), quality: \"draft\"|\"good\"|\"best\" (\"good\"; 16, 64 or 256 samples)} blurs around the object's centre",
-            json!({"amount": 10.0, "method": "spin", "quality": "good"}),
+            "{amount: 1..100 (10; spin: an arc of `amount`°, zoom: the content scaled by up to about ±amount/2 %), method: \"spin\"|\"zoom\" (\"spin\"), quality: \"draft\"|\"good\"|\"best\" (\"good\"; 16, 64 or 256 samples), centerX: 0..1 (0.5; the Blur Center across the object's bounds, 0 their left edge), centerY: 0..1 (0.5; the Blur Center down the object's bounds, 0 their top edge)} blurs around the Blur Center, which moves and scales with the object. A centerX or centerY outside 0..1 is refused",
+            json!({"amount": 10.0, "method": "spin", "quality": "good", "centerX": 0.5, "centerY": 0.5}),
         ),
         r(
             "blur.smart",

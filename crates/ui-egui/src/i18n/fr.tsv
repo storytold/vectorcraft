@@ -19,6 +19,7 @@
 	Edge Brightness	Luminosité du bord
 	Smoothness	Lissage
 	Radial Blur…	Flou radial…
+	Blur Center	Centre du flou
 	Smart Blur…	Flou optimisé…
 	Sharpen	Renforcement
 	Unsharp Mask…	Accentuation…
@@ -646,6 +647,7 @@ font-technology	Variable	Variables
 	Copy All Styles	Copier tous les styles
 	Copy Color Value (Hex)	Copier la valeur de couleur (hex)
 	Copy Fonts Used in the Document	Copier les polices utilisées dans le document
+	Copy Info	Copier les informations
 	Copy Links	Copier les liens
 	Copy Selected Style	Copier le style sélectionné
 	Copy to User Defined	Copier dans Défini par l’utilisateur
@@ -917,6 +919,9 @@ font-technology	Variable	Variables
 	The selected character's font is not available.	La police du caractère sélectionné n’est pas disponible.
 	No alternates for the selected character.	Aucune variante pour le caractère sélectionné.
 	Double-click to replace	Double-cliquez pour remplacer
+	Click to replace	Cliquez pour remplacer
+	Show all alternates in the Glyphs panel	Afficher toutes les variantes dans le panneau Glyphes
+	Show Character Alternates	Afficher les variantes de caractère
 	Select one character with the Type tool first.	Sélectionnez d’abord un caractère avec l’outil Texte.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} est un glyphe de {font}, et non de la police du texte sélectionné ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} appartient à {base} (U+{base_code}) {place} ; votre sélection est {sel} (U+{code}).
@@ -1342,6 +1347,7 @@ font-technology	Variable	Variables
 	Format	Format
 	Format Options	Options de format
 	Format Settings	Paramètres de format
+	Format Settings…	Paramètres de format…
 	Format:	Format :
 	Formats:	Formats :
 	Fractional Widths	Largeurs fractionnaires
@@ -1689,6 +1695,7 @@ font-technology	Variable	Variables
 	Images:	Images :
 	Import Keyboard Shortcuts…	Importer des raccourcis clavier…
 	Import PDF	Importer un PDF
+	Import PDF pages as links	Importer les pages PDF comme liens
 	Import PDF Presets	Importer des paramètres prédéfinis PDF
 	Import Perspective Grid Presets	Importer des paramètres prédéfinis de grille de perspective
 	Import Print Presets	Importer des paramètres prédéfinis d’impression
@@ -3443,6 +3450,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Repères commentés (Affichage → Repères commentés)
 	Smart Guides (⌘U)	Repères commentés (⌘U)
 	Smart Punctuation…	Ponctuation typographique…
+	Smart Punctuation	Ponctuation typographique
+	ff, fi, ffi Ligatures	Ligatures ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatures ff, fl, ffl
+	Smart Quotes	Guillemets typographiques
+	Smart Spaces	Espaces typographiques
+	En, Em Dashes	Tirets demi-cadratin et cadratin
+	Ellipses	Points de suspension
+	Expert Fractions	Fractions expertes
+	Replace In	Remplacer dans
+	Selected Text Only	Texte sélectionné uniquement
+	Entire Document	Document entier
+	Report Results	Afficher les résultats
 	Smooth	Lisser
 	Corner	Angle
 	Relative	Relatif
@@ -3473,6 +3492,7 @@ digits	Malayalam	Malayalam
 	Solid	Plein
 	Sort by Kind	Trier par type
 	Sort by Name	Trier par nom
+	Sort by Size	Trier par taille
 	Sort by Status	Trier par état
 	Source code on GitHub	Code source sur GitHub
 	Source Sans 3	Source Sans 3
@@ -4373,6 +4393,7 @@ axis	Both	Les deux
 @msg	there is no script engine named {name}	il n'y a aucun moteur de script nommé {name}
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
+@msg	Copied the link info	Informations sur le lien copiées
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
 @msg	Couldn't copy to the system clipboard: {e}	Impossible de copier dans le presse-papiers du système : {e}
 @msg	Couldn't open {name}: {e}	Impossible d’ouvrir {name} : {e}
@@ -6679,7 +6700,7 @@ axis	Y Axis	Axe Y
 @plural	Result: {n}|Results: {n}	Résultat : {n}|Résultats : {n}
 @msg	select one object	sélectionnez un seul objet
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La modification globale s’applique aux tracés, aux tracés transparents, aux occurrences de symboles et aux groupes de ces objets
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	aucun objet similaire trouvé (les copies pivotées ou symétriques ne sont pas reconnues) ; modifiez les options de modification globale et réessayez
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	aucun objet similaire trouvé (les copies symétriques ne sont pas reconnues) ; modifiez les options de modification globale et réessayez
 @msg	Global Edit is off	La modification globale n’est pas active
 @msg	only an object of the Global Edit other than the one it started from can be left out	seul un objet de la modification globale autre que celui à partir duquel elle a commencé peut être exclu
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards` : all ou une plage telle que 1, 3-5, et non {v}
@@ -7472,6 +7493,9 @@ breakText	Glyphs	Glyphes
 	Open Tutorial Sample	Ouvrir le fichier d’exercice du tutoriel
 	Finish Tutorial	Terminer le tutoriel
 	Next Tutorial	Tutoriel suivant
+	Show Learn Tab	Afficher un onglet d'Apprendre
+	Show Skill	Afficher la compétence
+	Back One Level	Revenir d'un niveau
 	Back to Skills	Retour aux compétences
 @msg	tutorial `{id}` has no practice sample	le tutoriel `{id}` n’a pas de fichier d’exercice
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ouvrez d’abord le fichier d’exercice de `{id}` (voir learn.openSample)
@@ -8882,6 +8906,8 @@ breakText	Glyphs	Glyphes
 @msg	the RTF file is too large to place as type (at most {_1} MB)	le fichier RTF est trop volumineux pour être importé comme texte (au plus {_1} Mo)
 @msg	the SVG expands to more than {0} nested SVG images	le SVG se développe en plus de {0} images SVG imbriquées
 @msg	the SVG expands to more than {0} objects	le SVG se développe en plus de {0} objets
+@msg	the SVG's style sheets take too long to match	la mise en correspondance des feuilles de style du SVG prend trop de temps
+@msg	the SVG's styles expand to more than {0} MB	les styles du SVG se développent en plus de {0} Mo
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	le fichier SVG dépasse {MAX_IMPORT_BYTES} octets
 @msg	the SVG has no drawable objects	le SVG n’a aucun objet dessinable
 @msg	the SVGZ file unpacks to more than {_1} MB	le fichier SVGZ se décompresse en plus de {_1} Mo
@@ -9316,6 +9342,9 @@ breakText	Glyphs	Glyphes
 	Grommets	Œillets
 	Grommet Inset	Distance des œillets au bord
 	Diameter	Diamètre
+	Nest Shapes…	Imbriquer les formes…
+	Nest Shapes	Imbriquer les formes
+	Roll	Rouleau
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Les effets 3D exigent des coordonnées finies comprises dans 100 millions de points

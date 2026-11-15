@@ -272,6 +272,7 @@ impl Tool for TransformTool {
                     None => vec![],
                 }
             }
+            PointerKind::TripleClick => vec![],
             PointerKind::Move => {
                 if self.drag.is_none() {
                     self.hover = if cx.selection.is_empty() { vec![] } else { snap_pick(cx, p).1 };

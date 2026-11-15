@@ -366,6 +366,14 @@ pub enum SvgError {
     /// nested-image expansion bombs, #3564).
     #[error("the SVG expands to more than {0} nested SVG images")]
     TooManyImages(usize),
+    /// The style values the reader would copy into the elements the SVG expands to, `<use>`
+    /// copies and SVG images included, add up to more than this many megabytes.
+    #[error("the SVG's styles expand to more than {0} MB")]
+    StylesTooLarge(usize),
+    /// Matching the style sheets' selectors against the elements the SVG expands to, `<use>`
+    /// copies and SVG images included, takes more tests than the reader allows.
+    #[error("the SVG's style sheets take too long to match")]
+    StylesTooComplex,
 }
 
 /// Export a document as an SVG string (linked images are not returned: see [`export_full`]).
