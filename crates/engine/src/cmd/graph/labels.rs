@@ -149,20 +149,22 @@ impl Gen<'_> {
         refresh_bounds(&mut t);
         t
     }
-    /// A category or series label: a `|` in it starts a new line (Add graph labels). `middle`: the lines are centred
-    /// on `at` (labels beside an axis or in a wedge) instead of running down from it.
+    /// A category or series label: a `|` in it starts a new line (Add graph labels), as does a line break a quoted CSV
+    /// cell keeps. `middle`: the lines are centred on `at` (labels beside an axis or in a wedge) instead of running down
+    /// from it.
     pub(super) fn label(&mut self, role: Role, at: Point, s: &str, justify: Justify, middle: bool) -> Arc<Node> {
-        let lines = s.split('|').count();
+        let text = s.replace('|', "\n");
+        let lines = text.split('\n').count();
         // Default leading puts the first and last baselines this far above and below `at`.
         let half = (lines - 1) as f64 * label_size(self.styles, role) * 1.2 / 2.0;
         let start = if middle { Point::new(at.x, at.y - half) } else { at };
-        let mut t = self.text_object(role, start, &s.replace('|', "\n"), justify);
+        let mut t = self.text_object(role, start, &text, justify);
         // Kept leading or paragraph spacing moves the lines: put the middle of the first and last baselines on `at`. An
         // empty line has no baseline: an empty first or last line leaves the label where the default leading puts it.
         if middle && kept_para(self.styles, role).is_some() {
             let ys: Vec<f64> = t.baselines().map(|(a, _)| a.y).collect();
-            let ends_set = s.split('|').next().is_some_and(|l| !l.is_empty()) && s.split('|').next_back().is_some_and(|l| !l.is_empty());
-            let set = s.split('|').filter(|l| !l.is_empty()).count();
+            let ends_set = text.split('\n').next().is_some_and(|l| !l.is_empty()) && text.split('\n').next_back().is_some_and(|l| !l.is_empty());
+            let set = text.split('\n').filter(|l| !l.is_empty()).count();
             if let (Some(first), Some(last), true) = (ys.first(), ys.last(), ends_set && ys.len() == set) {
                 t.xf = Affine::translate((0.0, half - (first + last) / 2.0)) * t.xf;
             }

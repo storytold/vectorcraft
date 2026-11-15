@@ -12,6 +12,7 @@ use super::{
 thread_local! {
     static BOX_TESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static CANDIDATE_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TRACES_ON_THIS_THREAD: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // ---------- Image Trace ----------
@@ -20,6 +21,22 @@ fn is_trace_group(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { clip: false, .. })
         && n.name.as_deref() == Some(TRACE_NAME)
         && n.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
+}
+
+/// The name of the group that holds an Abutting trace's seam fills (see [`tr::TraceResult::seams`]).
+const SEAM_FILLS_NAME: &str = "Seam Fills";
+
+/// Whether `n` can be a trace's seam fills group: a group named as one, or a group of stroked paths
+/// without fills, so that it is still found after it is renamed or its strokes are edited. (Auto
+/// Grouping groups hold filled paths.)
+fn is_seam_fills(n: &Node) -> bool {
+    let stroke_only = |m: &Arc<Node>| {
+        matches!(m.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+            && m.appearance.fill_paint() == Paint::None
+            && m.appearance.stroke_paint() != Paint::None
+    };
+    matches!(n.kind, NodeKind::Group { clip: false, .. })
+        && (n.name.as_deref() == Some(SEAM_FILLS_NAME) || n.children().is_some_and(|c| !c.is_empty() && c.iter().all(stroke_only)))
 }
 
 const LIVE_PATHFINDER_BY_COLOR: &str = "byColor can't regroup a trace with a live Pathfinder effect: expand without byColor";
@@ -288,9 +305,10 @@ fn trace_library(c: &str, s: &Session, params: &mut tr::TraceParams) -> Result<V
 /// The most anchor points an Image Trace may make, a guard for memory: a trace past it is refused
 /// with advice instead (#525). A trace keeps about 90 bytes an anchor in the document (measured on
 /// code-drawn photos of 2000 × 2000 to 6000 × 4000 pixels), so 8,000,000 anchors are about
-/// 0.7 GB, with a peak of about 1 GB while tracing: a 4000 × 3000 photo at High Fidelity Photo
-/// makes about 1.9 million, and even at Paths 100, Noise 1 and every tone about 7.9 million. On the
-/// web, where a page has at most 4 GB of memory, the limit stays at 2,000,000.
+/// 0.7 GB, with a peak of about 1 GB while tracing: a 4000 × 3000 photo at Limited 64 colors,
+/// Paths 90, Corners 25 and Noise 4 makes about 1.9 million, and even at Paths 100, Noise 1 and
+/// every tone about 7.9 million. On the web, where a page has at most 4 GB of memory, the limit
+/// stays at 2,000,000.
 #[cfg(not(target_arch = "wasm32"))]
 pub const MAX_TRACE_ANCHORS: usize = 8_000_000;
 
@@ -392,11 +410,15 @@ fn by_color_param(cmd: &str, p: &Value) -> Result<bool> {
 /// (by the boxes of everything they paint, effects included, within one point); otherwise it
 /// starts another group of that paint, which keeps the stacking order of those items. Items
 /// farther apart can still share antialiased pixels at small view or raster-export scales, so
-/// their edge pixels may change. A group among `items` (Auto Grouping) is refused.
+/// their edge pixels may change. The seam fills' group, when it is the lowest item, stays as it is,
+/// under every other group. Any other group among `items` (Auto Grouping) is refused.
 fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Vec<Arc<Node>>> {
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Bound::{Excluded, Unbounded};
     use vectorcraft_color::tint_percent;
+    // The seam fills come first, under every path: kept there, they move under nothing.
+    let mut items = items;
+    let seams: Vec<Arc<Node>> = if items.first().is_some_and(|n| is_seam_fills(n)) { items.drain(..1).collect() } else { vec![] };
     // Grouped by the paint: unlinked (its #rrggbb), linked (the swatch and its exact tint), a
     // gradient, or another paint (its label). The name is apart from it: a swatch may be named as
     // a color's `#rrggbb` or as "Gradients".
@@ -516,25 +538,31 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
             }
         }
     }
-    Ok(groups
+    let groups: Vec<Arc<Node>> = groups
         .into_iter()
         .map(|run| {
             let mut g = Node::group(d.alloc_id(), run.members);
             g.name = Some(run.name);
             Arc::new(g)
         })
-        .collect())
+        .collect();
+    Ok(seams.into_iter().chain(groups).collect())
 }
 
-/// What a trace depends on: the document it is made in, the object traced (an image, or an Image
-/// Trace object traced again), its image, the image's encoded bytes, and the settings it is traced
-/// with. The tracer makes the same paths of the same inputs, so a trace made away from the command
-/// ([`TraceRun`]) stands in for the command's own in the same document.
+/// What a trace depends on: the document it is made in and the content it was reverted to, the
+/// object traced (an image, or an Image Trace object traced again), its image, the image's encoded
+/// bytes, and the settings it is traced with. The tracer makes the same paths of the same inputs,
+/// so a trace made away from the command ([`TraceRun`]) stands in for the command's own in the same
+/// document until File › Revert replaces its content.
 #[derive(Clone, Debug, PartialEq)]
 struct TraceInputs {
     /// The [`DocState::uid`](crate::DocState::uid) of the document traced in. A trace made in one
     /// document never stands in for one in another, however alike their images and settings.
     doc: u64,
+    /// The document's [`DocState::reverts`](crate::DocState::reverts) when the trace was prepared.
+    /// A trace prepared before File › Revert never stands in for one after it, even when the
+    /// restored image, pixels, object and settings are the same.
+    reverts: u64,
     target: NodeId,
     image: Box<ImageObject>,
     /// The settings traced with, as JSON.
@@ -603,21 +631,25 @@ fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
     let bytes = Arc::clone(&blob.bytes);
     let library = trace_library(c, s, &mut params)?;
     let traced_with = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
-    let inputs = TraceInputs { doc: s.doc()?.uid, target, image, params: traced_with, swatches: params.swatches.clone(), bytes };
+    let st = s.doc()?;
+    let inputs = TraceInputs { doc: st.uid, reverts: st.reverts, target, image, params: traced_with, swatches: params.swatches.clone(), bytes };
     Ok(Prepared { inputs, trace: params, view, params_json, preset_label, library })
 }
 
-/// What a trace made of an image: the size in pixels it was decoded at, and the paths.
+/// What a trace made of an image: the size in pixels it was decoded at, the paths, and their seam
+/// fills ([`seams_within`]).
 pub struct Traced {
     inputs: TraceInputs,
     raster: (u32, u32),
     res: tr::TraceResult,
+    seams: Vec<tr::TracedPath>,
 }
 
 impl Traced {
     /// Hand it to the next run of its command with the same inputs ([`TraceRun::params`]) in the
     /// document it was made in, which applies it as one undo step instead of tracing again. Any
-    /// other trace drops it, a trace in another document included.
+    /// other trace drops it and traces again, a trace in another document included, and so does
+    /// the command after File › Revert replaced the document's content.
     pub fn hand_in(self, s: &mut Session) {
         s.trace_hand_off = Some(self);
     }
@@ -626,6 +658,8 @@ impl Traced {
 /// Decode the image bytes of `inputs` and trace them with `params`, telling `steps` how far it has
 /// got ([`tr::trace_watched`]); [`EngineError::Cancelled`] once `steps` answers `false`.
 fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
+    #[cfg(test)]
+    TRACES_ON_THIS_THREAD.with(|n| n.set(n.get() + 1));
     // An image over the tracer's size is traced scaled down (the paths are scaled back).
     let raster = tr::Raster::decode_to_fit(&inputs.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
     if !steps(0, 0) {
@@ -635,7 +669,18 @@ fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, steps: &(dyn Fn(u64
         tr::TraceError::Cancelled => EngineError::Cancelled,
         e => EngineError::Other(e.to_string()),
     })?;
-    Ok(Traced { inputs: inputs.clone(), raster: (raster.width, raster.height), res })
+    let seams = seams_within(&res, params, MAX_TRACE_ANCHORS);
+    Ok(Traced { inputs: inputs.clone(), raster: (raster.width, raster.height), res, seams })
+}
+
+/// The seam fills of `res`, traced with `params` ([`tr::seam_fills`]), while the paths and the seam
+/// fills together stay within `max` anchors: the seam fills have at most as many anchors as the
+/// paths, so a trace whose paths have more than half of `max` gets none.
+fn seams_within(res: &tr::TraceResult, params: &tr::TraceParams, max: usize) -> Vec<tr::TracedPath> {
+    if res.anchor_count() > max / 2 {
+        return vec![];
+    }
+    tr::seam_fills(&res.paths, params)
 }
 
 /// An Image Trace made away from its command, off the UI thread (#3098). [`TraceRun::prepare`]
@@ -690,9 +735,16 @@ impl TraceRun {
     }
 
     /// Does it still apply: would the command trace the same object, image, pixels and settings
-    /// now, in the document it was prepared in?
+    /// now, in the document it was prepared in, with no File › Revert since?
     pub fn current(&self, s: &Session) -> bool {
         prepare(s, self.command, &self.params).is_ok_and(|now| now.inputs == self.prepared.inputs)
+    }
+
+    /// Has File › Revert replaced the content of the document it was prepared in since then? False
+    /// when that document is no longer open.
+    pub fn reverted(&self, s: &Session) -> bool {
+        let TraceInputs { doc, reverts, .. } = self.prepared.inputs;
+        s.documents().iter().any(|st| st.uid == doc && st.reverts != reverts)
     }
 
     /// Decode and trace the image, telling `steps` how far it has got → what it traced, or why it
@@ -700,6 +752,12 @@ impl TraceRun {
     /// document, so it can run on any thread.
     pub fn run(&self, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
         trace_now(&self.prepared.inputs, &self.prepared.trace, steps)
+    }
+
+    /// How many images this thread has decoded and traced so far.
+    #[cfg(test)]
+    pub(crate) fn traces_on_this_thread() -> usize {
+        TRACES_ON_THIS_THREAD.with(std::cell::Cell::get)
     }
 }
 
@@ -715,7 +773,7 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
         s.note_journal("savedPreset", recorded);
     }
     // A trace handed in for these very inputs ([`TraceRun`]), else one made now.
-    let Traced { raster, res, .. } = match s.trace_hand_off.take() {
+    let Traced { raster, res, seams: seam_fills, .. } = match s.trace_hand_off.take() {
         Some(traced) if traced.inputs == inputs => traced,
         _ => trace_now(&inputs, &trace, &|_, _| true)?,
     };
@@ -728,6 +786,13 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
     let xf = img.xf * vectorcraft_geom::Affine::scale_non_uniform(sx, sy);
     // Document units per raster pixel (stroke widths).
     let unit = xf.determinant().abs().sqrt();
+    // Seam fills: document units per raster pixel along the direction the image is stretched most,
+    // so that a stroke covers its pixels across an edge at any angle.
+    let seam_unit = {
+        let [a, b, c, d, _, _] = xf.as_coeffs();
+        let (t, det) = (a * a + b * b + c * c + d * d, a * d - b * c);
+        ((t + (t * t - 4.0 * det * det).max(0.0).sqrt()) / 2.0).sqrt()
+    };
     let (npaths, anchors, colors) = (res.paths.len(), res.anchor_count(), res.palette.len());
     let label = if expand { "Image Trace (Make and Expand)" } else { "Image Trace" };
     // A library color fills with the swatch's displayed color (its model kept), unlinked.
@@ -753,8 +818,38 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
             hidden.visible = false;
             children.push(Arc::new(hidden));
         }
+        let paint_of = |tp: &tr::TracedPath| {
+            let solid =
+                by_color.get(&tp.color).map_or_else(|| Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])), |paint| (*paint).clone());
+            // Gradients: a path the tracer found to be a linear gradient is filled with it.
+            tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf))
+        };
+        // Abutting: the seam fills, in a group of their own under every path.
+        let seams: Vec<Arc<Node>> = seam_fills
+            .iter()
+            .filter_map(|tp| {
+                let width = tp.stroke?;
+                let mut n = shape_node(d, tp.path.transformed(xf), None);
+                n.appearance = Appearance {
+                    items: vec![AppearanceItem::Stroke(StrokeLayer {
+                        cap: LineCap::Butt,
+                        join: LineJoin::Round,
+                        ..StrokeLayer::new(paint_of(tp), width * seam_unit)
+                    })],
+                    ..Default::default()
+                }
+                .into();
+                Some(Arc::new(n))
+            })
+            .collect();
+        if !seams.is_empty() {
+            let mut g = Node::group(d.alloc_id(), seams);
+            g.name = Some(SEAM_FILLS_NAME.into());
+            children.push(Arc::new(g));
+        }
         let mut traced = Vec::with_capacity(res.paths.len());
         for tp in res.paths {
+            let paint = paint_of(&tp);
             let path = tp.path.transformed(xf);
             let mut n = shape_node(d, path, None);
             // Shapes: a path the tracer found to be a shape is that live shape.
@@ -763,10 +858,6 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
                 *path = shape.to_path();
                 *live = Some(Box::new(shape));
             }
-            let solid =
-                by_color.get(&tp.color).map_or_else(|| Paint::solid(Color::rgb8(tp.color[0], tp.color[1], tp.color[2])), |paint| (*paint).clone());
-            // Gradients: a path the tracer found to be a linear gradient is filled with it.
-            let paint = tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf));
             n.appearance = match tp.stroke {
                 // Traced lines: round corners, and ends round or square as the tracer found them.
                 Some(width) => Appearance {
@@ -1102,8 +1193,27 @@ mod color_group_tests {
 
 #[cfg(test)]
 mod trace_limit_tests {
-    use super::{MAX_TRACE_ANCHORS, keep_warnings, trace_warnings};
+    use super::{MAX_TRACE_ANCHORS, keep_warnings, seams_within, trace_warnings};
     use vectorcraft_trace as tr;
+
+    #[test]
+    fn seam_fills_count_against_the_anchor_limit() {
+        // Two colors side by side, the edge between them anti-aliased: one seam fill along it.
+        let img = tr::Raster::from_fn(24, 16, |x, _| {
+            let share = (10.4 - f64::from(x)).clamp(0.0, 1.0);
+            let mix = |a: f64, b: f64| (a * share + b * (1.0 - share)).round() as u8;
+            [mix(200.0, 30.0), mix(40.0, 90.0), mix(50.0, 200.0), 255]
+        });
+        let params = tr::TraceParams { mode: tr::Mode::Color, colors: 2, method: tr::Method::Abutting, ..tr::TraceParams::default() };
+        let res = tr::trace(&img, &params);
+        let all = tr::seam_fills(&res.paths, &params);
+        assert!(!all.is_empty(), "{res:?}");
+        let anchors = res.anchor_count();
+        // Twice the paths' anchors leaves room for any seam fills.
+        assert_eq!(seams_within(&res, &params, 2 * anchors), all);
+        // One anchor short of that: none.
+        assert_eq!(seams_within(&res, &params, 2 * anchors - 1), []);
+    }
 
     #[test]
     fn keep_warnings_name_matched_colors_that_produce_no_paths() {
@@ -1139,7 +1249,7 @@ mod trace_limit_tests {
         assert_eq!(w, ["Flat Logo traced the image at 946 × 710 pixels, averaged down from 16000 × 12000."]);
     }
 
-    // A 4000 × 3000 photo at High Fidelity Photo makes about 1.9 million anchors, which must fit;
-    // the limit still guards memory (about 90 bytes an anchor). Checked when the tests build.
+    // A 4000 × 3000 photo at Limited 64 colors, Paths 90, Corners 25 and Noise 4 makes about
+    // 1.9 million anchors, which must fit; the limit still guards memory (about 90 bytes an anchor). Checked when the tests build.
     const _: () = assert!(MAX_TRACE_ANCHORS >= 2_000_000 && MAX_TRACE_ANCHORS <= 16_000_000);
 }

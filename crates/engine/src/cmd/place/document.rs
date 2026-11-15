@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use vectorcraft_doc::links::hash_bytes;
 use vectorcraft_doc::placed_document::{PREVIEW_MAX, PREVIEW_PX_PER_PT, key_for};
-use vectorcraft_doc::{Document, ImageBlob, LinkInfo, Node, NodeKind, PageBox, PlacedDocument, PlacementOptions};
+use vectorcraft_doc::{ColorMode, Document, ImageBlob, LinkInfo, Node, NodeKind, PageBox, PlacedDocument, PlacementOptions};
 use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_pdf::CropTo;
 
@@ -100,6 +100,9 @@ pub(crate) struct DocumentArt {
     /// What is shown: the artboard, or the art's bounds.
     pub frame: Rect,
     pub warnings: Vec<String>,
+    /// Whether a PDF or `.ai` page was read from the file's editing data (its page only a
+    /// placeholder, or its PDF part unreadable) instead of from the page.
+    pub editing_data: bool,
 }
 
 /// Artboard `page` (1-based) of the VectorCraft document `name` (`bytes`, read from `path` when
@@ -109,6 +112,21 @@ pub(crate) struct DocumentArt {
 pub(crate) fn document_art(
     name: &str,
     bytes: &[u8],
+    path: Option<&str>,
+    page: u32,
+    bounding: bool,
+    page_box: PageBox,
+    cmd: &str,
+) -> Result<DocumentArt> {
+    opened_document_art(name, (bytes, None), path, page, bounding, page_box, cmd)
+}
+
+/// [`document_art`] of `bytes` and, for a PDF already read, `opened`: the PDF `bytes` as
+/// [`vectorcraft_pdf::open_pdf`] read it without a password, so its page is read without reading
+/// the file again.
+fn opened_document_art(
+    name: &str,
+    (bytes, opened): (&[u8], Option<&vectorcraft_pdf::Opened>),
     path: Option<&str>,
     page: u32,
     bounding: bool,
@@ -125,7 +143,7 @@ pub(crate) fn document_art(
     }
     if pdf {
         let o = fileio::LoadOptions { crop: crop_to(page_box), ..Default::default() };
-        return super::pdf_art(name, bytes, path, page as usize, o, bounding, cmd);
+        return super::pdf_art(name, (bytes, opened), path, page as usize, o, bounding, cmd);
     }
     let mut l = fileio::load(name, bytes)?;
     // Its linked images show their files; its placed documents stay as they are, unless their
@@ -145,7 +163,7 @@ pub(crate) fn document_art(
     let nodes = super::on_artboard(&symbols, &layers, board);
     let frame = if bounding { super::shown_bounds(&symbols, &nodes) } else { Some(board) };
     let frame = frame.filter(|r| r.width() > 0.0 || r.height() > 0.0).ok_or_else(|| bad(cmd, format!("`{file}` has no art to place")))?;
-    Ok(DocumentArt { doc: l.doc, nodes, clip: (!bounding).then_some(board), frame, warnings: l.warnings })
+    Ok(DocumentArt { doc: l.doc, nodes, clip: (!bounding).then_some(board), frame, warnings: l.warnings, editing_data: false })
 }
 
 /// The most placed documents read inside one another while their links are resolved.
@@ -221,22 +239,74 @@ pub(crate) struct Source {
     /// What is shown, in the file's coordinates: the artboard, the page's box or the art's bounds.
     pub frame: Rect,
     pub warnings: Vec<String>,
+    /// The colour mode the file's art was read in (a PDF page painted mostly in CMYK reads in CMYK).
+    pub color_mode: ColorMode,
+    /// [`DocumentArt::editing_data`].
+    pub editing_data: bool,
 }
 
 /// The VectorCraft document `name` (`bytes`, from `path` when there is one) read for showing
 /// artboard `page`, or the PDF or `.ai` file for showing page `page` clipped to its box
 /// `page_box` (its art's bounds when `bounding`).
 pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bounding: bool, page_box: PageBox, cmd: &str) -> Result<Source> {
+    read_source(name, bytes, None, path, (page, bounding, page_box), cmd)
+}
+
+/// A PDF (or PDF-compatible `.ai`) whose pages are read for placing linked, read once for them all.
+#[derive(Clone, Copy)]
+pub(crate) struct SharedFile<'a> {
+    /// The file's bytes, which every page's blob keeps without a copy of its own.
+    pub bytes: &'a Arc<Vec<u8>>,
+    /// The bytes' hash ([`hash_bytes`]).
+    pub hash: &'a str,
+    /// The bytes as [`vectorcraft_pdf::open_pdf`] read them, without a password.
+    pub opened: &'a vectorcraft_pdf::Opened,
+}
+
+/// [`source`] of page `page` of `file`: several pages of one file read this way share one copy of
+/// it, and the file is hashed and read once for them all.
+pub(crate) fn shared_source(
+    name: &str,
+    file: SharedFile<'_>,
+    path: Option<&str>,
+    page: u32,
+    bounding: bool,
+    page_box: PageBox,
+    cmd: &str,
+) -> Result<Source> {
+    read_source(name, file.bytes, Some(file), path, (page, bounding, page_box), cmd)
+}
+
+/// [`source`], the blob keeping `shared`'s bytes when given (else a copy of `bytes`), its hash
+/// used for the key (else `bytes` hashed) and its pages read from what was read of it; `shown` is
+/// the page (or artboard), whether the art's bounds are shown, and the page's box.
+fn read_source(
+    name: &str,
+    bytes: &[u8],
+    shared: Option<SharedFile<'_>>,
+    path: Option<&str>,
+    shown: (u32, bool, PageBox),
+    cmd: &str,
+) -> Result<Source> {
+    let (page, bounding, page_box) = shown;
+    let hash = shared.map_or_else(|| hash_bytes(bytes), |f| f.hash.to_string());
+    let opened = shared.map(|f| f.opened);
+    let shared = shared.map(|f| f.bytes);
     // The same document placed the same way is read once (placing it again is free).
-    let key = key_for(&hash_bytes(bytes), page, bounding, page_box);
+    let key = key_for(&hash, page, bounding, page_box);
     // Resolving its links depends on where the file is and on what the caller may read, so a hit
     // needs the same path, and nothing is shared with or from a confined (automation) caller.
     let confined = crate::file_access::current().is_some();
-    if !confined && let Some((_, s)) = lock_memo().iter().find(|(at, s)| s.key == key && at.as_deref() == path).cloned() {
+    if !confined && let Some((_, mut s)) = lock_memo().iter().find(|(at, s)| s.key == key && at.as_deref() == path).cloned() {
+        // The same bytes: the copy given is kept instead, so the pages that share it go on sharing.
+        if let Some(b) = shared {
+            s.blob.bytes = b.clone();
+        }
         return Ok(s);
     }
-    let a = document_art(name, bytes, path, page, bounding, page_box, cmd)?;
-    let mut blob = ImageBlob::new(mime(name, bytes), bytes.to_vec());
+    let a = opened_document_art(name, (bytes, opened), path, page, bounding, page_box, cmd)?;
+    let bytes = shared.cloned().unwrap_or_else(|| Arc::new(bytes.to_vec()));
+    let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None };
     let shown = PlacedDocument {
         link: LinkInfo { page: Some(page), ..LinkInfo::new(path.unwrap_or(name)) },
         key: key.clone(),
@@ -249,9 +319,10 @@ pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bo
     };
     let art = group(a.nodes, a.clip);
     blob.proxy = preview(&a.doc, &art, a.frame).map(Arc::new);
+    let (color_mode, editing_data) = (a.doc.color_mode, a.editing_data);
     // Drawing it needn't read it again.
     vectorcraft_doc::placed_document::prime(&shown, blob.bytes.clone(), (a.doc, art, a.frame));
-    let s = Source { blob, key, page_box, frame: a.frame, warnings: a.warnings };
+    let s = Source { blob, key, page_box, frame: a.frame, warnings: a.warnings, color_mode, editing_data };
     if !confined {
         let mut m = lock_memo();
         if m.len() >= MEMO_SIZE {

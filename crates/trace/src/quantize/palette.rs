@@ -158,7 +158,7 @@ pub(super) fn color_palette(used: &[Used], params: &TraceParams) -> Vec<[f64; 3]
         Palette::Limited => limited(),
         Palette::FullTone => full_tone(),
         Palette::Automatic => match flat_colors(used, detail) {
-            Some(n) => kmeans_rgb(used, n, 0.0),
+            Some(n) => flat_palette(used, n),
             None => full_tone(),
         },
         Palette::DocumentLibrary if !params.swatches.is_empty() => library_colors(used, &params.swatches, k),
@@ -172,9 +172,20 @@ pub(super) fn color_palette(used: &[Used], params: &TraceParams) -> Vec<[f64; 3]
 /// noise aside): the bins holding 90% of the pixels are few, and each colour's pixels sit mostly
 /// in one bin. `detail` (0–1) lets smaller colour areas count as colours of their own.
 pub(super) fn flat_colors(used: &[Used], detail: f64) -> Option<usize> {
+    flat_count(used, detail).map(|(n, _)| n)
+}
+
+/// Automatic's palette of `n` colors for flat art.
+pub(super) fn flat_palette(used: &[Used], n: usize) -> Vec<[f64; 3]> {
+    kmeans_rgb(used, n, 0.0)
+}
+
+/// [`flat_colors`], and how many clean levels the picture is made of when it is made of them (see
+/// [`clean_levels`]).
+pub(super) fn flat_count(used: &[Used], detail: f64) -> Option<(usize, Option<usize>)> {
     let total: f64 = used.iter().map(|u| u.2).sum();
     if total <= 0.0 {
-        return Some(2);
+        return Some((2, None));
     }
     let mut by_count: Vec<&Used> = used.iter().collect();
     by_count.sort_by(|a, b| b.2.total_cmp(&a.2));
@@ -195,11 +206,37 @@ pub(super) fn flat_colors(used: &[Used], detail: f64) -> Option<usize> {
     let colours: Vec<&ColorBox> = boxes.iter().filter(|b| b.weight >= min_share).collect();
     let weight: f64 = colours.iter().map(|b| b.weight).sum();
     let peaks: f64 = colours.iter().map(|b| b.peak).sum();
-    (weight >= 0.9 * total && peaks >= 0.5 * weight && colours.len() <= 32).then_some(colours.len().max(2))
+    if weight < 0.9 * total || peaks < 0.5 * weight || colours.len() > 32 {
+        return None;
+    }
+    Some((colours.len().max(2), clean_levels(used, min_share)))
 }
 
 /// The most histogram bins flat art's main colours spread over (a few bins per colour).
 const FLAT_BINS: usize = 96;
+
+/// The most colors [`clean_levels`] counts.
+const CLEAN_LEVELS: usize = 16;
+
+/// How far apart (levels of some channel) the mean colors of two bins must lie for
+/// [`clean_levels`] to count them as two colors.
+const LEVELS_APART: f64 = 12.0;
+
+/// Flat art of 2 to [`CLEAN_LEVELS`] clean colors, one histogram bin each: the number of bins,
+/// when each holds at least `min_share` pixels and every two of them lie at least [`LEVELS_APART`]
+/// apart on some channel; otherwise `None`. Median cut keeps two colors less than 24 levels apart
+/// in one box, so evenly spaced levels 12 to 24 apart would otherwise count as fewer colors.
+/// Noise adds bins closer than that, or more than 16. An anti-aliased edge's blended pixels between
+/// colors more than 20 levels apart are not among `used` (see `own_colours`), and the steps of a
+/// blend between closer colors are less than [`LEVELS_APART`], so such pictures are counted by
+/// median cut.
+fn clean_levels(used: &[Used], min_share: f64) -> Option<usize> {
+    if !(2..=CLEAN_LEVELS).contains(&used.len()) || used.iter().any(|u| u.2 < min_share) {
+        return None;
+    }
+    let apart = |a: [f64; 3], b: [f64; 3]| (0..3).any(|ch| (a[ch] - b[ch]).abs() >= LEVELS_APART);
+    used.iter().enumerate().all(|(i, a)| used[i + 1..].iter().all(|b| apart(a.1, b.1))).then_some(used.len())
+}
 
 /// Document Library: the `k` swatches (at most) that the most pixels are nearest to (see
 /// [`nearest_library`]).
@@ -436,6 +473,53 @@ mod tests {
             None => refine(&used, centers(&median_cut(&used, FULL_TONE_MAX, 96.0 - 88.0 * detail))),
         };
         assert_eq!(palette(Palette::Automatic, 16), automatic);
+    }
+
+    /// `colors`, each with `n` pixels, as histogram bins.
+    fn bins(colors: impl IntoIterator<Item = ([f64; 3], f64)>) -> Vec<Used> {
+        colors.into_iter().enumerate().map(|(i, (c, n))| (i, c, n)).collect()
+    }
+
+    /// `levels` grays evenly spaced from black to white, 1,200 pixels each.
+    fn gray_levels(levels: u32) -> Vec<([f64; 3], f64)> {
+        (0..levels).map(|i| ([f64::from(i * 255 / (levels - 1)); 3], 1200.0)).collect()
+    }
+
+    /// The clean levels `used` is made of, at the default Color Detail (see [`flat_count`]).
+    fn clean(used: &[Used]) -> Option<usize> {
+        flat_count(used, (TraceParams::default().color_detail / 100.0).clamp(0.0, 1.0)).and_then(|(_, levels)| levels)
+    }
+
+    #[test]
+    fn automatic_counts_every_clean_level_of_flat_art() {
+        for levels in [2, 3, 10, 12, 14, 16] {
+            assert_eq!(clean(&bins(gray_levels(levels))), Some(levels as usize), "{levels} grays");
+        }
+        // Sixteen sepia levels, about 13 apart on each channel.
+        let sepia = (0..16u32).map(|i| {
+            let t = f64::from(i) / 15.0;
+            ([45.0 + 205.0 * t, 28.0 + 207.0 * t, 15.0 + 190.0 * t].map(f64::round), 1200.0)
+        });
+        assert_eq!(clean(&bins(sepia)), Some(16), "16 sepia levels");
+        // Levels 12 apart are the closest counted.
+        let close = |apart: f64| bins((0..16).map(|i| ([40.0 + apart * f64::from(i); 3], 1200.0)));
+        assert_eq!(clean(&close(12.0)), Some(16), "16 grays 12 apart");
+        assert_eq!(clean(&close(11.0)), None, "16 grays 11 apart");
+    }
+
+    #[test]
+    fn noise_and_anti_aliasing_add_no_clean_levels() {
+        // Eight grays 34 apart, each with a second bin 6 levels off it holding as many pixels (noise).
+        let noisy = gray_levels(8).into_iter().flat_map(|(c, n)| [(c, n), (c.map(|v| (v + 6.0).min(255.0)), n)]);
+        assert_eq!(clean(&bins(noisy)), None, "eight noisy grays");
+        // Eight grays with a few blended pixels halfway between each two (anti-aliasing).
+        let levels = gray_levels(8);
+        let blends = levels.windows(2).map(|w| ([(w[0].0[0] + w[1].0[0]) / 2.0; 3], 60.0));
+        assert_eq!(clean(&bins(levels.iter().copied().chain(blends))), None, "eight anti-aliased grays");
+        // Seventeen levels or more are counted by median cut.
+        assert_eq!(clean(&bins((0..17).map(|i| ([15.0 * f64::from(i); 3], 1200.0)))), None, "17 grays");
+        // A continuous-tone picture has no count at all.
+        assert_eq!(clean(&ground_and_ramp()), None, "ground and ramp");
     }
 
     #[test]

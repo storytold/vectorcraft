@@ -206,6 +206,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "imageTrace.makeAndExpand",
     "imageTrace.release",
     "imageTrace.setView",
+    "info.readout",
     "layer.clippingMask.toggle",
     "layer.collectInNew",
     "layer.delete",
@@ -474,6 +475,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "perspective.grid.snap",
     "perspective.move",
     "perspective.nudge",
+    "perspective.plane.infer",
     "perspective.plane.matchObject",
     "perspective.plane.move",
     "perspective.plane.set",
@@ -535,6 +537,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "select.same.textStrokeColor",
     "select.segments",
     "select.set",
+    "select.similar",
     "select.storedPath",
     "select.toggle",
     "select.update",
@@ -692,6 +695,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "variable.makeTextDynamic",
     "variable.makeVisibilityDynamic",
     "variable.rename",
+    "variable.sort",
     "variable.unbind",
 ];
 

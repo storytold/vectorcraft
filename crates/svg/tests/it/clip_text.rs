@@ -222,6 +222,27 @@ fn a_clip_path_on_a_use_of_a_text_is_in_the_use_s_user_space() {
 }
 
 #[test]
+fn a_use_and_the_text_it_shows_in_a_clip_path_both_clip() {
+    // The text's own clip keeps y < 120 of its user space; the `<use>`'s keeps x < 250 of the
+    // `<use>`'s, which the text's transform doesn't move. The glyphs keep only what both keep.
+    let body = r##"<defs><clipPath id="k"><rect width="250" height="300"/></clipPath>
+        <clipPath id="half"><rect width="400" height="120"/></clipPath>
+        <text id="t" transform="translate(200 0)" x="0" y="150" font-size="100" clip-path="url(#half)">HI</text></defs>
+        <clipPath id="c"><use href="#t" transform="translate(0 10)" clip-path="url(#k)"/></clipPath>
+        <rect width="400" height="300" clip-path="url(#c)"/>"##;
+    let (d, warnings) = import_with_report(&svg(body)).unwrap();
+    let (clip, _) = clip_group(&top(&d)[0]);
+    let b = clip_bounds(clip);
+    assert!(b.x0 >= 200.0 - 1e-6 && near(b.x1, 250.0, 1e-6), "{b:?}");
+    assert!(near(b.y1, 130.0, 1e-6) && b.y0 > 50.0, "{b:?}");
+    // It clips by the glyphs, not their box: nothing between the stems of the H.
+    let (bp, _) = vectorcraft_effects::clip_outline(clip).unwrap();
+    assert!(bp.contains(Point::new(b.x0 + 2.0, 110.0)), "on a stem");
+    assert!(!bp.contains(Point::new(225.0, 100.0)), "between the stems");
+    assert!(!warnings.iter().any(|w| w.contains("ignored")), "{warnings:?}");
+}
+
+#[test]
 fn a_css_transform_places_a_text_in_a_clip_path() {
     let d = open(
         r##"<style>.moved { transform: translate(100px, 20px) }</style>
