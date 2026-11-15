@@ -440,7 +440,13 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
                 // The text document holds the Ascent first baseline by leaving it out, without a minimum.
                 || (t.area.first_baseline == FirstBaseline::Ascent && t.area.first_baseline_min != 0.0)))
         || (matches!(t.kind, TextKind::OnPath { .. })
-            && (t.path_effect != PathEffect::default() || t.path_align != PathAlign::default() || t.path_spacing != 0.0 || end_read_as_none(t)))
+            && (t.path_effect != PathEffect::default()
+                || t.path_align != PathAlign::default()
+                || t.path_spacing != 0.0
+                || end_read_as_none(t)
+                // The writer writes type that starts before its open path starting at the
+                // path's start.
+                || t.kind.starts_before_path()))
 }
 
 /// Key 35 of a run in style `st`, as the reader's `Texts::style` reads it: 3 for Tate-chu-yoko, 1
