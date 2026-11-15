@@ -1035,6 +1035,7 @@
 	Change Panel Layout	Změnit rozložení panelů
 	Close Panel	Zavřít panel
 	Collapse Panel Group	Sbalit skupinu panelů
+	Cycle Display Sizes	Přepínat velikosti zobrazení
 	Move Panel	Přesunout panel
 	Group with	Seskupit s
 	Resize panels	Změnit velikost panelů
@@ -3704,6 +3705,8 @@ theme	Appearance	Motiv
 	Create Graph	Vytvořit graf
 	Graph Data	Data grafu
 	Graph Type	Typ grafu
+	Graph Type…	Typ grafu…
+	Graph Data…	Data grafu…
 	Graph Options	Možnosti grafu
 	Left Axis	Levá osa
 	Right Axis	Pravá osa
@@ -5448,6 +5451,8 @@ imageTrace	Outline	Obrys
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
 @msg	unknown panel `{raw}`	neznámý panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` nemá velikosti zobrazení k přepínání
+@msg	the panels are not shown	panely nejsou zobrazeny
 @msg	panels can't be shown in Presentation Mode	v režimu prezentace nelze panely zobrazit
 @msg	unknown preference `{key}`	neznámá předvolba `{key}`
 @msg	Preferences imported.	Předvolby byly importovány.
@@ -6300,6 +6305,7 @@ mark-style	Japanese	Japonské
 	Export Data Sets…	Exportovat sady dat…
 	Load Variable Library…	Načíst knihovnu proměnných…
 	Save Variable Library…	Uložit knihovnu proměnných…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„Importovat“ čte soubor zdroje dat s příponou .csv, .tsv, .txt nebo .xml
 @msg	a variable library holds text variables, and the document has none	knihovna proměnných obsahuje textové proměnné a dokument žádné nemá
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	proměnnou `{name}` nelze uložit do knihovny proměnných: přejmenujte ji tak, aby začínala písmenem nebo `_` a neobsahovala mezery ani jiné symboly než `-`, `_` a `.`
 @msg	{k} has control characters	{k} obsahuje řídicí znaky

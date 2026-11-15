@@ -1581,6 +1581,7 @@
 	Change Panel Layout	Skift panelets layout
 	Close Panel	Luk panel
 	Collapse Panel Group	Skjul panelgruppe
+	Cycle Display Sizes	Skift mellem visningsstørrelser
 	Move Panel	Flyt panel
 	Group with	Gruppér med
 	Resize panels	Tilpas størrelse på paneler
@@ -4051,6 +4052,8 @@ theme	Appearance	Udseende
 	Create Graph	Opret graf
 	Graph Data	Grafdata
 	Graph Type	Graftype
+	Graph Type…	Graftype…
+	Graph Data…	Grafdata…
 	Graph Options	Grafindstillinger
 	Left Axis	Venstre akse
 	Right Axis	Højre akse
@@ -5563,6 +5566,8 @@ imageTrace	Outline	Kontur
 @msg	unknown option `{path}.{k}`	ukendt indstilling `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	ukendt panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` har ingen visningsstørrelser at skifte mellem
+@msg	the panels are not shown	panelerne vises ikke
 @msg	unknown preference `{key}`	ukendt præference `{key}`
 @msg	Preferences imported.	Præferencerne er importeret.
 @msg	not a preferences file: {e}	ikke en præferencefil: {e}
@@ -6337,6 +6342,7 @@ mark-style	Japanese	Japansk
 	Export Data Sets…	Eksportér datasæt…
 	Load Variable Library…	Indlæs variabelbibliotek…
 	Save Variable Library…	Gem variabelbibliotek…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	»Importér« læser en datakildefil med filtypenavnet .csv, .tsv, .txt eller .xml
 @msg	a variable library holds text variables, and the document has none	et variabelbibliotek indeholder tekstvariabler, og dokumentet har ingen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variablen `{name}` kan ikke gemmes i et variabelbibliotek: omdøb den, så den begynder med et bogstav eller `_`, uden mellemrum eller andre symboler end `-`, `_` og `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	datasættet `{name}` indeholder et kontroltegn, som et variabelbibliotek ikke kan indeholde
@@ -7609,6 +7615,19 @@ breakText	Glyphs	Glyffer
 	Align New Objects to Pixel Grid	Juster nye objekter efter pixelgitter
 	Not Aligned to Pixel Grid	Ikke justeret efter pixelgitter
 @msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`
+@msg	side is left or right, not `{v}`	side er left eller right, ikke `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order er et heltal fra 0 til {others}, ikke `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (navnet på en værktøjslinje) skal være en streng
+@msg	no toolbar named `{name}`	ingen værktøjslinje med navnet `{name}`
+@msg	toolbar name can't be empty	navnet på en værktøjslinje må ikke være tomt
+@msg	a toolbar name has at most {MAX_NAME} characters	navnet på en værktøjslinje har højst {MAX_NAME} tegn
+@msg	there is already a toolbar named `{name}`	der findes allerede en værktøjslinje med navnet `{name}`
+@msg	there is already a toolbar named `{to}`	der findes allerede en værktøjslinje med navnet `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	et arbejdsområde gemmer højst {MAX} værktøjslinjer
+@msg	name (a toolbar's name) must be a string	name (navnet på en værktøjslinje) skal være en streng
+@msg	name (a toolbar's name) is required	name (navnet på en værktøjslinje) er påkrævet
+@msg	to (the new name) is required	to (det nye navn) er påkrævet
+@msg	name must be a toolbar's name	name skal være navnet på en værktøjslinje
 	Edit Custom Dictionary	Redigér egen ordliste
 	Entry:	Opslag:
 # Script Console

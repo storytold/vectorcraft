@@ -957,6 +957,7 @@
 	Change Panel Layout	Ubah tata letak panel
 	Close Panel	Tutup panel
 	Collapse Panel Group	Ciutkan grup panel
+	Cycle Display Sizes	Ganti ukuran tampilan
 	Move Panel	Pindahkan panel
 	Group with	Grupkan dengan
 	Resize panels	Ubah ukuran panel
@@ -3385,6 +3386,8 @@ theme	Appearance	Tampilan
 	Create Graph	Buat grafik
 	Graph Data	Data grafik
 	Graph Type	Jenis grafik
+	Graph Type…	Jenis grafik…
+	Graph Data…	Data grafik…
 	Graph Options	Opsi grafik
 	Left Axis	Sumbu kiri
 	Right Axis	Sumbu kanan

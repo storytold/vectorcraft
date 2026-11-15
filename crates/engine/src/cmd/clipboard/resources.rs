@@ -1101,10 +1101,13 @@ impl Imported {
             self.relink.renames.entry(r).or_default().insert(from.to_string(), to.clone());
         }
     }
-    /// Point a pasted copy at the document's resources.
+    /// Point a pasted copy at the document's resources. A pie's legend labels in wedges that now show a color of the
+    /// other darkness take the contrast a redraw sets there.
     pub(crate) fn apply(&self, n: &mut Node) {
         if self.relinks {
+            let shades = super::super::graph::wedge_shades(n);
             self.relink.node(n);
+            super::super::graph::follow_wedge_shades(n, &shades);
         }
     }
 }

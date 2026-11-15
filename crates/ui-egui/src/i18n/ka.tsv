@@ -3008,6 +3008,7 @@
 	Change Panel Layout	პანელების განლაგების შეცვლა
 	Close Panel	პანელის დახურვა
 	Collapse Panel Group	პანელების ჯგუფის აკეცვა
+	Cycle Display Sizes	ჩვენების ზომების გადართვა
 	Move Panel	პანელის გადაადგილება
 	Group with	ერთად დაჯგუფება
 	Resize panels	პანელების ზომის შეცვლა
@@ -5358,6 +5359,8 @@ theme	Appearance	იერსახე
 	Create Graph	დიაგრამის შექმნა
 	Graph Data	დიაგრამის მონაცემები
 	Graph Type	დიაგრამის ტიპი
+	Graph Type…	გრაფიკის ტიპი…
+	Graph Data…	გრაფიკის მონაცემები…
 	Graph Options	გრაფიკის პარამეტრები
 	Left Axis	მარცხენა ღერძი
 	Right Axis	მარჯვენა ღერძი
@@ -6872,6 +6875,8 @@ font-technology	Variable	ცვლადი
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
 @msg	unknown panel `{raw}`	უცნობი პანელი `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` პანელს არ აქვს გადასართავი ჩვენების ზომები
+@msg	the panels are not shown	პანელები არ ჩანს
 @msg	panels can't be shown in Presentation Mode	პრეზენტაციის რეჟიმში პანელების ჩვენება შეუძლებელია
 @msg	unknown preference `{key}`	უცნობი პარამეტრი `{key}`
 @msg	Preferences imported.	პარამეტრები იმპორტირებულია.
@@ -8039,6 +8044,7 @@ imageTrace	Outline	კონტური
 	Export Data Sets…	მონაცემთა ნაკრებების ექსპორტი…
 	Load Variable Library…	ცვლადების ბიბლიოთეკის ჩატვირთვა…
 	Save Variable Library…	ცვლადების ბიბლიოთეკის შენახვა…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„იმპორტი“ კითხულობს მონაცემთა წყაროს ფაილს გაფართოებით .csv, .tsv, .txt ან .xml
 @msg	a variable library holds text variables, and the document has none	ცვლადების ბიბლიოთეკა ტექსტურ ცვლადებს შეიცავს, დოკუმენტს კი არცერთი არ აქვს
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	ცვლადი `{name}` ვერ შეინახება ცვლადების ბიბლიოთეკაში: გადაარქვით სახელი ისე, რომ იწყებოდეს ასოთი ან `_`-ით, ჰარეების და `-`, `_` და `.`-ის გარდა სხვა სიმბოლოების გარეშე
 @msg	{k} has control characters	{k} შეიცავს მმართველ სიმბოლოებს
