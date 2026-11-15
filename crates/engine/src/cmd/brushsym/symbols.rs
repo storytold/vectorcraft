@@ -1260,20 +1260,18 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "count": count }))
 }
 
-/// Move the paint of instance `id`'s stain or style (`fill`, with its amount) toward `to` by `t`,
-/// keeping the amount. An instance without a stain or style, or one whose paint does not change, is
-/// left as it is. Returns whether it changed.
+/// Move the paint of instance `id`'s stain or style (`fill`, its topmost fill with the amount)
+/// toward `to` by `t`. The fill keeps its amount and everything else it has, and the instance's
+/// other appearance items stay as they are. An instance without a stain or style, or one whose
+/// paint does not change, is left as it is. Returns whether it changed.
 fn recolor_keeping_amount(d: &mut Document, id: NodeId, fill: Option<(Paint, f64)>, to: &Paint, t: f64) -> bool {
-    let Some((own, amount)) = fill.filter(|(_, o)| *o > 0.0) else { return false };
+    let Some((own, _)) = fill.filter(|(_, o)| *o > 0.0) else { return false };
     let paint = vectorcraft_doc::blend::lerp_paint(&own, to, t.clamp(0.0, 1.0) as f32);
     if paint == own {
         return false;
     }
-    let Some(n) = d.node_mut(id) else { return false };
-    n.appearance.items.retain(|i| !matches!(i, AppearanceItem::Fill(_)));
-    let mut f = FillLayer::new(paint);
-    f.opacity = (amount as f32).min(1.0);
-    n.appearance.items.insert(0, AppearanceItem::Fill(f));
+    let Some(f) = d.node_mut(id).and_then(|n| n.appearance.fill_mut()) else { return false };
+    f.paint = paint;
     true
 }
 

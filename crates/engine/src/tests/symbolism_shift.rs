@@ -140,6 +140,15 @@ fn shift_with_the_stainer_keeps_the_amount_and_changes_the_color() {
     adjust(&mut s, json!({"tool": "stain", "points": [[100, 150], [100, 150]], "radius": 5, "intensity": 10, "color": "#ff0000"}));
     let (red, amount) = fill(&s, a).unwrap();
     assert!(amount > 0.2 && red[0] > 0.99 && red[2] < 0.01, "{red:?} {amount}");
+    // A second fill below the stain, which Shift leaves as it is.
+    s.edit("Add fill", |d, _| {
+        let n = d.node_mut(a).unwrap();
+        let lower = n.appearance.fill().unwrap().clone();
+        n.appearance.items.insert(0, vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer { opacity: 0.5, ..lower }));
+        Ok(())
+    })
+    .unwrap();
+    let lower = node(&s, a).appearance.items[0].clone();
     let stain = |s: &mut Session, x: f64| {
         adjust(s, json!({"tool": "stain", "points": [[x, 150], [x, 150]], "radius": 5, "intensity": 10, "color": "#0000ff", "shift": true}))
     };
@@ -147,6 +156,7 @@ fn shift_with_the_stainer_keeps_the_amount_and_changes_the_color() {
     let (color, kept) = fill(&s, a).unwrap();
     assert_eq!(kept, amount, "the amount stays");
     assert!(color[0] < red[0] && color[2] > 0.01, "toward blue: {color:?}");
+    assert_eq!((node(&s, a).appearance.items.len(), &node(&s, a).appearance.items[0]), (2, &lower), "the other fill stays");
     // More strokes go on toward blue, with the amount still the same.
     for _ in 0..30 {
         stain(&mut s, 100.0);
