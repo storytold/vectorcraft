@@ -3576,9 +3576,9 @@ fn live_paint_bucket_scopes_follow_the_stroke_an_edge_draws() {
     assert_eq!(r["count"], json!(clear.len() + top.len() + hidden.len()));
 }
 
-/// `livePaint.strokeEdge` paints an edge's topmost stroke that is shown, so the edge then draws
-/// with the paint; an edge whose strokes are all hidden takes a new stroke above them. Painting
-/// again changes nothing.
+/// `livePaint.strokeEdge` leaves an edge one stroke, shown, with the paint, so the edge then draws
+/// with it, whether its topmost shown stroke sat under a hidden one or every stroke was hidden.
+/// Painting again changes nothing.
 #[test]
 fn live_paint_stroke_edge_paints_the_shown_stroke() {
     let mut s = session();
@@ -3613,8 +3613,107 @@ fn live_paint_stroke_edge_paints_the_shown_stroke() {
         paint(&mut s, at);
         assert_eq!(history_state(&s).0, depth, "painting {id} again");
     }
-    assert_eq!(node(&s, m).appearance.items.len(), 2, "the hidden stroke stays as it was");
-    assert_eq!(node(&s, l).appearance.items.len(), 2, "a new stroke above the hidden one");
+    assert_eq!(node(&s, m).appearance.items.len(), 1, "one stroke in place of the hidden and the shown one");
+    assert_eq!(node(&s, l).appearance.items.len(), 1, "one shown stroke in place of the hidden one");
+}
+
+/// A face with two fills that draw, under a hidden top fill: the Bucket replaces every fill with
+/// one shown, fully opaque fill of the paint, keeps the face's strokes, opacity and their order,
+/// and a click with the paint the face then has records nothing. A fill of none leaves no fill
+/// that draws. The route that makes the objects into a group first paints the same way.
+#[test]
+fn live_paint_bucket_replaces_every_fill_row() {
+    use vectorcraft_doc::appearance::{FillLayer, StrokeLayer};
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0]);
+    let [f] = faces_at(&s, g, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let stroke = StrokeLayer::new(blue.clone(), 3.0);
+    s.edit("t", |d, _| {
+        let n = d.node_mut(f).unwrap();
+        n.opacity = 0.5;
+        let mut half = FillLayer::new(blue.clone());
+        half.opacity = 0.5;
+        let mut hidden = FillLayer::new(green.clone());
+        hidden.visible = false;
+        n.appearance.items = vec![
+            AppearanceItem::Fill(FillLayer::new(red.clone())),
+            AppearanceItem::Stroke(stroke.clone()),
+            AppearanceItem::Fill(half),
+            AppearanceItem::Fill(hidden),
+        ];
+        Ok(())
+    })
+    .unwrap();
+    let depth = history_state(&s).0;
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 25], "color": "#00ff00"})).unwrap();
+    assert_eq!(history_state(&s).0, depth + 1, "a hidden top fill with the paint does not stop the fill");
+    let n = node(&s, f);
+    assert_eq!(n.appearance.items, vec![AppearanceItem::Stroke(stroke.clone()), AppearanceItem::Fill(FillLayer::new(green.clone()))]);
+    assert_eq!(n.opacity, 0.5, "the face keeps its own opacity");
+    s.recent_colors.clear();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 25], "color": "#00ff00"})).unwrap();
+    assert_eq!((history_state(&s).0, s.recent_colors.len()), (depth + 1, 0), "painting again records nothing");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 25], "none": true})).unwrap();
+    let n = node(&s, f);
+    assert!(!n.appearance.has_drawn_fill(), "no fill draws after a fill of none");
+    assert_eq!(n.appearance.items, vec![AppearanceItem::Stroke(stroke), AppearanceItem::Fill(FillLayer::new(Paint::None))]);
+
+    // Objects made into a Live Paint group by the click: each object's two fills become one.
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    s.edit("t", |d, _| {
+        d.node_mut(id).unwrap().appearance.items.insert(0, AppearanceItem::Fill(FillLayer::new(red.clone())));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let r = s.execute("livePaint.fill", &json!({"point": [25, 25], "color": "#00ff00"})).unwrap();
+    let face = NodeId(r["face"].as_u64().unwrap());
+    let fills: Vec<Paint> = node(&s, face).appearance.items.iter().filter(|i| i.is_fill()).map(|i| i.paint().clone()).collect();
+    assert_eq!(fills, vec![green]);
+}
+
+/// An edge with two strokes that draw: `livePaint.strokeEdge` replaces them with one stroke of the
+/// paint and width, keeping the topmost one's dashes; a stroke of none leaves no stroke that
+/// draws, and `livePaint.info` then lists that one row.
+#[test]
+fn live_paint_stroke_edge_replaces_every_stroke_row() {
+    use vectorcraft_doc::appearance::{Dash, StrokeLayer};
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0]);
+    let middle = edges_in(&s, g, Rect::new(50.0, 0.0, 50.0, 50.0));
+    let [m] = middle[..] else { panic!("one middle edge") };
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let dash = Dash { pattern: vec![4.0, 2.0], offset: 0.0, align_corners: false };
+    s.edit("t", |d, _| {
+        let mut top = StrokeLayer::new(green.clone(), 2.0);
+        top.opacity = 0.5;
+        top.dash = Some(dash.clone());
+        d.node_mut(m).unwrap().appearance.items = vec![AppearanceItem::Stroke(StrokeLayer::new(red.clone(), 6.0)), AppearanceItem::Stroke(top)];
+        Ok(())
+    })
+    .unwrap();
+    let depth = history_state(&s).0;
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [50, 25], "color": "#00ff00", "width": 2})).unwrap();
+    assert_eq!(history_state(&s).0, depth + 1, "a half-transparent top stroke with the paint does not stop the stroke");
+    let mut want = StrokeLayer::new(green.clone(), 2.0);
+    want.dash = Some(dash);
+    assert_eq!(node(&s, m).appearance.items, vec![AppearanceItem::Stroke(want)]);
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [50, 25], "color": "#00ff00", "width": 2})).unwrap();
+    assert_eq!(history_state(&s).0, depth + 1, "painting again records nothing");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [50, 25], "none": true, "width": 2})).unwrap();
+    assert!(!node(&s, m).appearance.has_drawn_stroke(), "no stroke draws after a stroke of none");
+    let info = s.execute("livePaint.info", &json!({"group": g.0})).unwrap();
+    let edge = info["edges"].as_array().unwrap().iter().find(|e| e["id"] == json!(m.0)).unwrap().clone();
+    let rows = edge["appearance"].as_array().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!((&rows[0]["kind"], &rows[0]["drawn"], &edge["stroke"]), (&json!("stroke"), &json!(false), &json!(Paint::None.label())));
 }
 
 /// With Cmd held, the Live Paint Bucket's presses go to the selection tool Cmd lends, and the
@@ -5341,8 +5440,9 @@ fn add_image(s: &mut Session, r: &vectorcraft_trace::Raster, xf: Affine) -> Node
     .unwrap()
 }
 
+/// The traced paths of an Image Trace object: its children but the image and the seam fills.
 fn traced_paths(n: &Node) -> Vec<Arc<Node>> {
-    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).cloned().collect()
+    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_)) && c.name.as_deref() != Some("Seam Fills")).cloned().collect()
 }
 
 #[test]
@@ -5585,6 +5685,57 @@ fn a_trace_run_applies_only_in_its_own_document() {
         assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: one undo step");
         assert!(s.set_active(a));
         assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: the first document is untouched");
+    }
+}
+
+/// A trace prepared before File › Revert doesn't apply after it, even when the document keeps its
+/// uid and the restored image, object and settings are the same: both trace commands drop the
+/// trace handed in and trace the restored image again, as one undo step. Reverting another
+/// document, or a revert that fails, leaves the run current, and a trace prepared after the revert
+/// applies as usual.
+#[test]
+fn a_trace_run_prepared_before_a_revert_does_not_apply_after_it() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut direct = session();
+        image_doc(&mut direct);
+        let want = direct.execute(command, &p).unwrap();
+        let mut s = session();
+        let img = image_doc(&mut s);
+        let a = s.active_index().unwrap();
+        let copy = (*s.doc().unwrap().doc).clone();
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        let b = s.add_document(copy.clone(), None);
+        assert!(s.replace_document(b, copy.clone()));
+        assert!(s.set_active(a));
+        assert!(run.current(&s) && !run.reverted(&s), "{command}: another document reverted");
+        assert!(!s.replace_document(s.documents().len(), copy.clone()));
+        assert!(run.current(&s) && !run.reverted(&s), "{command}: a revert that failed");
+        let (uid, reverts) = (s.doc().unwrap().uid, s.doc().unwrap().reverts);
+        assert!(s.replace_document(a, copy));
+        assert_eq!(s.doc().unwrap().uid, uid, "{command}: the tab keeps its uid");
+        assert_eq!(s.doc().unwrap().reverts, reverts + 1, "{command}");
+        assert!(!run.current(&s), "{command}: reverted");
+        assert!(run.reverted(&s), "{command}");
+        traced.hand_in(&mut s);
+        let traces = cmd::TraceRun::traces_on_this_thread();
+        let got = s.execute(run.command(), run.params()).unwrap();
+        assert_eq!(cmd::TraceRun::traces_on_this_thread(), traces + 1, "{command}: traced again");
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        assert_eq!(got, want, "{command}");
+        let g = NodeId(got["id"].as_u64().unwrap());
+        assert_eq!(node(&s, g), node(&direct, g), "{command}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: one undo step");
+        // A trace prepared after the revert is handed in and applied without tracing again.
+        let after = cmd::TraceRun::prepare(&s, command, run.params()).unwrap();
+        let traced = after.run(&|_, _| true).unwrap();
+        assert!(after.current(&s) && !after.reverted(&s), "{command}: prepared after the revert");
+        traced.hand_in(&mut s);
+        let traces = cmd::TraceRun::traces_on_this_thread();
+        s.execute(after.command(), after.params()).unwrap();
+        assert_eq!(cmd::TraceRun::traces_on_this_thread(), traces, "{command}: the trace handed in applied");
     }
 }
 
@@ -5961,6 +6112,73 @@ fn image_trace_release_and_expand() {
     assert!(s.execute("imageTrace.release", &json!({})).is_err());
 }
 
+/// Abutting with Fills: the strokes along the edges the paths share sit in a "Seam Fills" group
+/// under the paths, in the lower path's color, and stay under them through Expand by color.
+#[test]
+fn image_trace_abutting_seam_fills_sit_under_the_paths() {
+    // Red beside blue, the edge between them anti-aliased.
+    let art = vectorcraft_trace::Raster::from_fn(40, 20, |x, _| {
+        let share = (16.4 - f64::from(x)).clamp(0.0, 1.0);
+        let mix = |a: f64, b: f64| (a * share + b * (1.0 - share)).round() as u8;
+        [mix(200.0, 30.0), mix(40.0, 90.0), mix(50.0, 200.0), 255]
+    });
+    let seams = |n: &Node| n.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Seam Fills")).cloned();
+    let made = |method: &str, cmd: &str, by_color: bool| {
+        let mut s = session();
+        let img = add_image(&mut s, &art, Affine::scale(2.0));
+        let params = json!({"mode": "color", "palette": "limited", "colors": 2, "method": method});
+        let mut p = json!({ "params": params });
+        if by_color {
+            p["byColor"] = json!(true);
+        }
+        let r = s.execute(cmd, &p).unwrap();
+        (s, img, r)
+    };
+    let (mut s, _, r) = made("abutting", "imageTrace.make", false);
+    assert_eq!(r["paths"], 2, "{r}");
+    let g = NodeId(r["id"].as_u64().unwrap());
+    let n = node(&s, g);
+    let kids = n.children().unwrap();
+    assert_eq!(kids.len(), 4, "the image, the seam fills and two paths");
+    assert!(matches!(kids[0].kind, NodeKind::Image(_)));
+    let group = seams(&n).unwrap();
+    assert!(Arc::ptr_eq(&group, &kids[1]), "the seam fills come under the paths");
+    let strokes = group.children().unwrap();
+    assert_eq!(strokes.len(), 1);
+    assert_eq!(strokes[0].appearance.fill_paint(), Paint::None);
+    let AppearanceItem::Stroke(layer) = &strokes[0].appearance.items[0] else { panic!("{:?}", strokes[0].appearance) };
+    assert_eq!((layer.cap, layer.join, layer.width), (LineCap::Butt, LineJoin::Round, 3.0), "1.5 image pixels, the image scaled 2×");
+    assert_eq!(layer.paint, kids[2].appearance.fill_paint(), "the lower path's color");
+    // The stroke runs along the edge, from the image's top to its bottom.
+    let bb = outline(&strokes[0]).0.bounds().unwrap();
+    assert!((bb.center().x - 32.8).abs() < 1.0 && bb.y0.abs() < 1e-9 && (bb.y1 - 40.0).abs() < 1e-9, "{bb:?}");
+    // Expand by color keeps the seam fills under the color groups, renamed too; Release gives the
+    // image back.
+    s.execute("layer.setProps", &json!({"id": group.id.0, "name": "Edges"})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+    let n = node(&s, g);
+    let names: Vec<_> = n.children().unwrap().iter().map(|c| c.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names.len(), 3, "{names:?}");
+    assert_eq!(names[0], "Edges", "{names:?}");
+    assert_eq!(n.children().unwrap()[0].id, group.id);
+    let (mut s, img, _) = made("abutting", "imageTrace.make", false);
+    assert_eq!(ids(&s.execute("imageTrace.release", &json!({})).unwrap()), vec![img]);
+    // Make and Expand by color too.
+    let (s, _, r) = made("abutting", "imageTrace.makeAndExpand", true);
+    let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert_eq!(n.children().unwrap()[0].name.as_deref(), Some("Seam Fills"));
+    // Overlapping paths are stacked: no seam fills.
+    let (s, _, r) = made("overlapping", "imageTrace.make", false);
+    assert!(seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).is_none());
+    // An image stretched 3× across and squeezed to half height: 1.5 pixels at the larger scale.
+    let mut s = session();
+    add_image(&mut s, &art, Affine::scale_non_uniform(3.0, 0.5));
+    let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
+    let group = seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).unwrap();
+    let AppearanceItem::Stroke(layer) = &group.children().unwrap()[0].appearance.items[0] else { panic!("{group:?}") };
+    assert!((layer.width - 4.5).abs() < 1e-9, "{}", layer.width);
+}
+
 /// Expand by color: each color's paths in a group of their own, named by the color, the groups
 /// stacked by the lowest path in each and the art drawn as before; Release to Layers then gives a
 /// sublayer for each color.
@@ -5995,7 +6213,11 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         };
         let (flat, fg) = expand(false);
         let (mut s, g) = expand(true);
-        let paths = node(&flat, fg).children().unwrap().clone();
+        let kids = node(&flat, fg).children().unwrap().clone();
+        // Abutting: the seam fills' group comes first, under every path, with byColor too.
+        let seams = usize::from(method == "abutting");
+        assert!(kids.iter().take(seams).all(|c| c.name.as_deref() == Some("Seam Fills")), "{method}");
+        let paths = kids[seams..].to_vec();
         // Without byColor (the default) the paths sit in the trace's group, with no group of their own.
         assert!(paths.iter().all(|p| !matches!(p.kind, NodeKind::Group { .. })), "{method}");
         let (default, dg) = {
@@ -6004,7 +6226,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
             let r = s.execute("imageTrace.makeAndExpand", &json!({"params": params})).unwrap();
             (s, NodeId(r["id"].as_u64().unwrap()))
         };
-        assert!(*node(&default, dg).children().unwrap() == paths, "{method}: byColor is false when not given");
+        assert!(*node(&default, dg).children().unwrap() == kids, "{method}: byColor is false when not given");
         // The colors in the order they first come in, bottom to top.
         let mut order: Vec<String> = vec![];
         for p in &paths {
@@ -6019,10 +6241,11 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         // Overlapping fills the ring whole and draws the field inside it above the ring: that path starts a second
         // group of the field's color, above the black one.
         let want: Vec<String> = if method == "overlapping" { order.iter().chain(order.first()).cloned().collect() } else { order.clone() };
-        assert_eq!(names(&n), want, "{method}");
+        assert_eq!(names(&n)[seams..], want, "{method}");
+        assert!(n.children().unwrap().iter().take(seams).all(|c| *c == kids[0]), "{method}: the seam fills stay as they are");
         // Each group holds its color's paths, and in turn they are the paths of the trace without
         // byColor, in their order.
-        let groups = n.children().unwrap();
+        let groups = &n.children().unwrap()[seams..];
         for c in groups {
             assert!(matches!(c.kind, NodeKind::Group { .. }), "{method}");
             assert!(c.children().unwrap().iter().all(|m| Some(hex(m)) == c.name), "{method}: {:?}", c.name);
@@ -6033,8 +6256,8 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         // Release to Layers: a sublayer for each color, in the same order.
         let r = s.execute("layer.releaseToLayers", &json!({"id": g.0})).unwrap();
         let subs = ids(&r);
-        assert_eq!(subs.len(), want.len(), "{method}");
-        for (sub, name) in subs.iter().zip(&want) {
+        assert_eq!(subs.len(), seams + want.len(), "{method}");
+        for (sub, name) in subs[seams..].iter().zip(&want) {
             let l = node(&s, *sub);
             assert!(matches!(l.kind, NodeKind::Layer { .. }), "{method}");
             assert_eq!(names(&l), std::slice::from_ref(name), "{method}");
@@ -6051,7 +6274,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
     let mut got = names(&node(&s, g));
     got.sort();
-    assert_eq!(got, ["#000000", "#c82832", "#f0f0dc"]);
+    assert_eq!(got, ["#000000", "#c82832", "#f0f0dc", "Seam Fills"]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
 
@@ -6086,7 +6309,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     });
     add_image(&mut s, &stripes, Affine::IDENTITY);
     let g = NodeId(s.execute("imageTrace.make", &json!({"params": grouped})).unwrap()["id"].as_u64().unwrap());
-    assert!(node(&s, g).children().unwrap().iter().all(|c| !matches!(c.kind, NodeKind::Group { .. })));
+    assert!(traced_paths(&node(&s, g)).iter().all(|c| !matches!(c.kind, NodeKind::Group { .. })));
     let e = s.execute("imageTrace.expand", &json!({"byColor": true})).unwrap_err().to_string();
     assert!(e.contains("Auto Grouping"), "{e}");
     assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
@@ -6103,8 +6326,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     add_image(&mut s, &r, Affine::IDENTITY);
     let limited = json!({"mode": "color", "palette": "limited", "colors": 3});
     let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
-    let paths: Vec<(u64, String)> =
-        node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).map(|c| (c.id.0, hex(c))).collect();
+    let paths: Vec<(u64, String)> = traced_paths(&node(&s, g)).iter().map(|c| (c.id.0, hex(c))).collect();
     let mut colors: Vec<&str> = paths.iter().map(|(_, h)| h.as_str()).collect();
     colors.sort();
     colors.dedup();
@@ -6116,14 +6338,14 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
     let mut got = names(&node(&s, g));
     got.sort();
-    assert_eq!(got, ["#28a03c", "Ink", "Sky 50%"]);
+    assert_eq!(got, ["#28a03c", "Ink", "Seam Fills", "Sky 50%"]);
     // A swatch named as another color's #rrggbb still gets a group of its own.
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("swatch.edit", &json!({"name": "Ink", "newName": "#28a03c"})).unwrap();
     s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
     let mut got = names(&node(&s, g));
     got.sort();
-    assert_eq!(got, ["#28a03c", "#28a03c", "Sky 50%"]);
+    assert_eq!(got, ["#28a03c", "#28a03c", "Seam Fills", "Sky 50%"]);
 
     // Gradient fills share one group, and a stroked line goes by its stroke.
     let ramp = vectorcraft_trace::Raster::from_fn(100, 60, |x, _| {
@@ -6192,7 +6414,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         add_image(&mut s, &stripes, Affine::IDENTITY);
         let limited = json!({"mode": "color", "palette": "limited", "colors": 3, "method": "abutting"});
         let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
-        let paths: Vec<Arc<Node>> = node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).cloned().collect();
+        let paths = traced_paths(&node(&s, g));
         assert_eq!(paths.len(), 3);
         let (first, middle, last) = (&paths[0], &paths[1], &paths[2]);
         s.execute("paint.setFill", &json!({"ids": [last.id.0], "color": hex(first)})).unwrap();
@@ -6220,7 +6442,7 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     for how in ["move", "transform", "shadow", "beside"] {
         let (flat, _) = edited(false, how);
         let (s, g) = edited(true, how);
-        assert_eq!(names(&node(&s, g)).len(), 3, "{how}");
+        assert_eq!(names(&node(&s, g)).len(), 4, "{how}: the seam fills and three colors");
         assert!(shot(&s) == shot(&flat), "{how}: the edited art changed");
     }
 
@@ -6230,14 +6452,14 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
     add_image(&mut s, &stripes, Affine::IDENTITY);
     let limited = json!({"mode": "color", "palette": "limited", "colors": 3});
     let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
-    let paths: Vec<u64> = node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).map(|c| c.id.0).collect();
+    let paths: Vec<u64> = traced_paths(&node(&s, g)).iter().map(|c| c.id.0).collect();
     assert_eq!(paths.len(), 3);
     s.execute("paint.setFill", &json!({"ids": [paths[0]], "swatch": "Sky", "tint": 50.1})).unwrap();
     s.execute("paint.setFill", &json!({"ids": [paths[1], paths[2]], "swatch": "Sky", "tint": 50.4})).unwrap();
     s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
     let groups = node(&s, g).children().unwrap().clone();
-    assert_eq!(names(&node(&s, g)), ["Sky 50%", "Sky 50%"]);
-    assert_eq!(groups.iter().map(|c| c.children().unwrap().len()).collect::<Vec<_>>(), [1, 2]);
+    assert_eq!(names(&node(&s, g)), ["Seam Fills", "Sky 50%", "Sky 50%"]);
+    assert_eq!(groups.iter().skip(1).map(|c| c.children().unwrap().len()).collect::<Vec<_>>(), [1, 2]);
 }
 
 #[test]
@@ -6289,7 +6511,7 @@ fn image_trace_make_and_expand_and_color_presets() {
     assert_eq!(res["paths"], 4);
     let g = node(&s, NodeId(res["id"].as_u64().unwrap()));
     assert!(g.name.is_none());
-    assert_eq!(g.children().unwrap().len(), 4);
+    assert_eq!(traced_paths(&g).len(), 4);
     assert!(s.execute("imageTrace.make", &json!({"preset": "No Such Preset"})).is_err());
     assert!(s.execute("imageTrace.make", &json!({"params": {"mode": "rainbow"}})).is_err());
 }

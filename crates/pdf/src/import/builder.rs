@@ -4,7 +4,7 @@ use super::entry::{
     UNNAMED_CHARACTERS_NOTE, max_objects,
 };
 use super::reshaped;
-use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, line_width, mean_scale, paints, round3, same_stroke, stroke_layer};
+use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, mean_scale, paints, round3, same_stroke, stroke_layer, type_stroke};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
     FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
@@ -961,7 +961,7 @@ impl<'p> Builder<'p> {
             }
             None => (None, 1.0),
         };
-        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| (paint, line_width(p, scale)));
+        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| type_stroke(paint, p, scale));
         let look = Look {
             font: font_key,
             family: info.family,
@@ -1109,7 +1109,7 @@ impl<'p> Builder<'p> {
         };
         // What the glyph is drawn with as an outline, should its line be kept so.
         let drawn = paint.clone().map(|p| (p, stroke.cloned()));
-        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| (paint, line_width(p, scale)));
+        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| type_stroke(paint, p, scale));
         let look = Look {
             font: key,
             family: info.family,
