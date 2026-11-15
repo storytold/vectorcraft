@@ -1021,7 +1021,10 @@ font-technology	Variable	Μεταβλητές
 	Every (minutes)	Κάθε (λεπτά)
 	Every option is at its default.	Όλες οι επιλογές έχουν τις προεπιλεγμένες τιμές τους.
 	Every option matches {base}.	Όλες οι επιλογές ταιριάζουν με το {base}.
-	Every-line Composer	Σύνθεση όλων των γραμμών
+	Middle Eastern & South Asian Single-line Composer	Σύνθεση μονής γραμμής (Μέση Ανατολή και Νότια Ασία)
+	Middle Eastern & South Asian Every-line Composer	Σύνθεση όλων των γραμμών (Μέση Ανατολή και Νότια Ασία)
+	Standard Single-line Composer	Τυπική σύνθεση μονής γραμμής
+	Standard Every-line Composer	Τυπική σύνθεση όλων των γραμμών
 	Exact dash lengths	Ακριβή μήκη παυλών
 	Exceptions (comma separated)	Εξαιρέσεις (χωρισμένες με κόμμα)
 	Exclude	Εξαίρεση
@@ -1323,6 +1326,14 @@ font-technology	Variable	Μεταβλητές
 	Previous Artboard	Προηγούμενος πίνακας σχεδίασης
 	Next Artboard	Επόμενος πίνακας σχεδίασης
 	Last Artboard	Τελευταίος πίνακας σχεδίασης
+	Status Bar Show	Εμφάνιση στη γραμμή κατάστασης
+	Artboard Name	Όνομα πίνακα σχεδίασης
+	Current Tool	Τρέχον εργαλείο
+	Date and Time	Ημερομηνία και ώρα
+	Number of Undos	Αριθμός αναιρέσεων
+	Document Color Profile	Χρωματικό προφίλ εγγράφου
+	Undos	Αναιρέσεις
+	Redos	Επαναλήψεις
 	Go To Link	Μετάβαση στη σύνδεση
 	GPL palettes keep solid colours only, as RGB.	Οι παλέτες GPL διατηρούν μόνο συμπαγή χρώματα σε RGB.
 	GPU Performance	Απόδοση GPU
@@ -2485,6 +2496,18 @@ axis	Both	Και τα δύο
 @msg	`name` must be the name of a script engine	το `name` πρέπει να είναι το όνομα μιας μηχανής σεναρίων
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	η κύρια μηχανή σεναρίων είναι νέα σε κάθε εκτέλεση και δεν διατηρείται ποτέ, οπότε δεν μπορεί να απορριφθεί
 @msg	there is no script engine named {name}	δεν υπάρχει μηχανή σεναρίων με όνομα {name}
+@msg	`answers` must be a list of answers	το `answers` πρέπει να είναι λίστα απαντήσεων
+@msg	`answers` has more than {MAX_ANSWERS} answers	το `answers` έχει περισσότερες από {MAX_ANSWERS} απαντήσεις
+@msg	`answers` is larger than 1 MiB	το `answers` είναι μεγαλύτερο από 1 MiB
+@msg	`answers[{i}]` {e}	το `answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	πρέπει να είναι αντικείμενο με `kind` και `value`
+@msg	must have exactly `kind` and `value`	πρέπει να έχει ακριβώς `kind` και `value`
+@msg	is an alert's answer, whose `value` must be "ok"	είναι απάντηση σε alert, οπότε το `value` πρέπει να είναι "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	είναι απάντηση σε confirm, οπότε το `value` πρέπει να είναι true ή false
+@msg	is longer than 16 KiB	είναι μεγαλύτερο από 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	είναι απάντηση σε prompt, οπότε το `value` πρέπει να είναι συμβολοσειρά ή null
+@msg	must have `kind` alert, confirm or prompt	πρέπει να έχει `kind` alert, confirm ή prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	το `answers` είναι μόνο για εκτέλεση χωρίς κανέναν να ερωτηθεί: στην εφαρμογή, το άτομο απαντά σε κάθε παράθυρο διαλόγου
 @msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Copied the link info	Οι πληροφορίες συνδέσμου αντιγράφηκαν
@@ -4006,7 +4029,6 @@ digits	Malayalam	Μαλαγιάλαμ
 	Single Left Quotation Mark	Μονό αριστερό εισαγωγικό
 	Single Quotes:	Μονά εισαγωγικά:
 	Single Right Quotation Mark	Μονό δεξί εισαγωγικό
-	Single-line Composer	Σύνθεση μονής γραμμής
 	Toggle Line Composer	Εναλλαγή σύνθεσης γραμμών
 	Sixth Space	Διάστημα ενός έκτου
 	Size Tile to Art	Προσαρμογή μεγέθους πλακιδίου στο σχέδιο
@@ -6134,6 +6156,8 @@ effect	Points	Σημεία
 	Save Variable Library…	Αποθήκευση βιβλιοθήκης μεταβλητών…
 @msg	a variable library holds text variables, and the document has none	μια βιβλιοθήκη μεταβλητών περιέχει μεταβλητές κειμένου και το έγγραφο δεν έχει καμία
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	η μεταβλητή `{name}` δεν μπορεί να αποθηκευτεί σε βιβλιοθήκη μεταβλητών: μετονομάστε την ώστε να ξεκινά με γράμμα ή `_`, χωρίς κενά ή σύμβολα εκτός από `-`, `_` και `.`
+@msg	{k} has control characters	{k} περιέχει χαρακτήρες ελέγχου
+@msg	{k} has control characters or line breaks	{k} περιέχει χαρακτήρες ελέγχου ή αλλαγές γραμμής
 @msg	data set `{name}` holds a control character, which a variable library can't hold	το σύνολο δεδομένων `{name}` περιέχει χαρακτήρα ελέγχου, τον οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	το σύνολο δεδομένων `{name}` ξεκινά ή τελειώνει με κενό διάστημα, το οποίο δεν μπορεί να περιέχει μια βιβλιοθήκη μεταβλητών
 	Filter	Φίλτρο
@@ -6506,6 +6530,7 @@ axis	Y Axis	Άξονας Y
 @msg	{what} points outside memory	το {what} δείχνει εκτός μνήμης
 @msg	`angle` must be a number	το `angle` πρέπει να είναι αριθμός
 @msg	`aspect` must be from 0.01 to 100	το `aspect` πρέπει να είναι από 0.01 έως 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	το `axes` πρέπει να είναι [a, b, c, d], καθένα από -1000 έως 1000, με το a·d - b·c να απέχει τουλάχιστον 0.001 από το 0
 @msg	`cap` must be "butt", "round" or "square"	το `cap` πρέπει να είναι "butt", "round" ή "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	το `fillRule` πρέπει να είναι "nonzero" ή "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	το `helpUrl` πρέπει να είναι διεύθυνση https:// έως {MAX_HELP_URL} byte
@@ -6558,6 +6583,7 @@ axis	Y Axis	Άξονας Y
 @msg	stops must be in order of `offset`	τα σημεία χρώματος πρέπει να είναι ταξινομημένα κατά `offset`
 @msg	the document has no pattern {pattern}	το έγγραφο δεν έχει μοτίβο {pattern}
 @msg	the document has no swatch {n}	το έγγραφο δεν έχει δείγμα χρώματος {n}
+@msg	`plates` requires a stop linked to a spot swatch	το `plates` απαιτεί σημείο χρώματος συνδεδεμένο με δείγμα πλακάτου χρώματος
 @msg	the output	η έξοδος
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})
@@ -7718,3 +7744,4 @@ breakText	Glyphs	Γλύφοι
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για JPEG (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για Targa (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	τα {w} × {h} εικονοστοιχεία είναι υπερβολικό μέγεθος για PSD (το πολύ {MAX_SIDE} εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"

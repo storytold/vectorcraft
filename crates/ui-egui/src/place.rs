@@ -61,7 +61,7 @@ pub fn is_document(name: &str) -> bool {
 #[derive(Default)]
 pub struct PlaceState {
     /// Web: the bytes of the files picked for the Place dialog, by name.
-    picked: Vec<(String, Vec<u8>)>,
+    pub(crate) picked: Vec<(String, Vec<u8>)>,
     /// The loaded cursor's thumbnails by file name.
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
@@ -125,10 +125,11 @@ fn engine(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Value, String
 
 /// File → Place… (`file.place`): with a file (`path` or `name` + `dataBase64`), place it, centred
 /// in the view unless `at`, `rect` or `replace` say otherwise (a text file without `text` options,
-/// a DXF drawing without `dxf` options and a PDF with several pages or a password and no `page`
-/// ask for them first, unless `showImportOptions: false` places them with the options confirmed
-/// last); with `paths`, the Place dialog for them; with neither, pick the files first. The file is
-/// read and placed at once (MCP, scripts).
+/// a DXF drawing without `dxf` options, a PSD file embedded without `layers` (when the user places
+/// it) and a PDF with several pages or a password and no `page` ask for them first, unless
+/// `showImportOptions: false` places them with the options confirmed last); with `paths`, the
+/// Place dialog for them; with neither, pick the files first. The file is read and placed at once
+/// (MCP, scripts).
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     place_file(app, p, Read::AtOnce)
 }
@@ -181,6 +182,7 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         if let Some(dxf) = crate::dialogs::dxf_import::last_options(app, &p) {
             p["dxf"] = dxf;
         }
+        crate::dialogs::psd_import::last_options(app, &mut p);
     }
     if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
         return Ok(crate::dialogs::text_import::open(app, &p));
@@ -208,6 +210,12 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     // A DXF drawing asks for its import options.
     if ask && crate::dialogs::dxf_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
+    }
+    // A PSD file with several layers or with slices that the user embeds asks for its import
+    // options. A place run as a command (MCP, scripts) places at once and takes `layers` and
+    // `importSlices` itself.
+    if ask && matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, &p) {
+        return Ok(json!({ "dialog": crate::dialogs::psd_import::KIND }));
     }
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
         && let Some(v) = app.view()
@@ -409,9 +417,15 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
             let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
             let mut q = json!({ "paths": paths, "files": files, "link": link, "template": template });
             if !ask {
-                // Each text file and DXF drawing in the cursor takes the options confirmed last.
+                // Each text file, DXF drawing and embedded PSD file in the cursor takes the options
+                // confirmed last.
                 q["text"] = crate::dialogs::text_import::last_options(app);
                 q["dxf"] = crate::dialogs::dxf_import::remembered(app);
+                if !link || paths.is_empty() {
+                    // Files from bytes have no file to link to; they may carry the dialog's Link.
+                    q["link"] = json!(false);
+                    crate::dialogs::psd_import::queue_options(app, &mut q);
+                }
             }
             queue_files(app, &q, Read::ForUser { dropped: false }, ask)
         }
@@ -714,35 +728,60 @@ pub fn image_summary(i: &Value) -> (String, String) {
 
 /// The Control bar for the one selected image: Linked File or Embedded, its file name, colour mode
 /// and effective resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask,
-/// Crop Image and Remove Background. Whether one image is selected.
-pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
+/// Crop Image and Remove Background. Whether one image is selected. A file name the row has no room
+/// for is left out alone; after it, each control shows only while the row has room for it and
+/// `reserve` after it, and the controls after one left out are left out too.
+pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui, reserve: f32) -> bool {
     let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
     let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return false };
     let t = Tokens::get(ui.ctx());
     // The file name is a link: its menu relinks (replaces) the image and reaches the Links
     // panel's other actions for it.
-    let resp = ui
-        .add(egui::Label::new(egui::RichText::new(&name).size(12.0).color(t.accent).underline()).sense(egui::Sense::click()))
-        .on_hover_cursor(egui::CursorIcon::PointingHand);
-    egui::Popup::menu(&resp).show(|ui| link_menu(app, ui, id, linked));
-    ui.separator();
-    ui.label(egui::RichText::new(details).size(12.0).color(t.text_dim));
-    ui.separator();
-    link_buttons(app, ui, id, linked, &name, None);
-    crate::panels::image_trace::trace_button(app, ui, crate::panels::image_trace::TRACE_BUTTON_W);
+    let name_text = egui::RichText::new(&name).size(12.0).color(t.accent).underline();
+    if crate::chrome::Fit::new(reserve).room(ui, &[widgets::text_width(ui, name_text.clone())]) {
+        let resp = ui.add(egui::Label::new(name_text).sense(egui::Sense::click())).on_hover_cursor(egui::CursorIcon::PointingHand);
+        egui::Popup::menu(&resp).show(|ui| link_menu(app, ui, id, linked));
+        crate::chrome::group_separator(ui);
+    }
+    let mut fit = crate::chrome::Fit::new(reserve);
+    let details = egui::RichText::new(details).size(12.0).color(t.text_dim);
+    if fit.room(ui, &[widgets::text_width(ui, details.clone())]) {
+        ui.label(details);
+    }
+    fit.separator(ui);
+    link_buttons(app, ui, id, linked, &name, LinkButtons::Fit(&mut fit));
+    // The Image Trace button grows past its usual width for a longer translated label.
+    let arrow = widgets::SPLIT_ARROW;
+    let trace = widgets::flat_button_fit_width(ui, tl!("Image Trace"), crate::panels::image_trace::TRACE_BUTTON_W - arrow) + arrow;
+    if fit.room(ui, &[trace]) {
+        crate::panels::image_trace::trace_button(app, ui, trace);
+    }
     for (label, cmd, w) in [
         (tl!("Mask"), "object.maskImage", 52.0),
         (tl!("Crop Image"), "ui.cropImage", 84.0),
         (tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND, 128.0),
     ] {
-        if widgets::flat_button(ui, label, w).clicked() {
+        if fit.room(ui, &[widgets::flat_button_fit_width(ui, label, w)]) && widgets::flat_button_fit(ui, label, w).clicked() {
             crate::menus::invoke(app, cmd, json!({}));
         }
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
     true
 }
+
+/// How [`link_buttons`] sizes its buttons.
+pub(crate) enum LinkButtons<'a> {
+    /// Each button is this wide (Properties).
+    Width(f32),
+    /// Each button fits its label and shows only while the Control bar's row has room for it.
+    Fit(&'a mut crate::chrome::Fit),
+}
+
+/// The least widths of the Embed, Edit Original and Unembed… buttons fitted to their labels.
+const EMBED_WIDTH: f32 = 60.0;
+const EDIT_ORIGINAL_WIDTH: f32 = 92.0;
+const UNEMBED_WIDTH: f32 = 80.0;
 
 /// The menu of the Control bar's file name for image `id`: Replace… (another file takes the
 /// image's place with its own aspect ratio; an embedded image becomes linked), Go To Link, Edit
@@ -771,17 +810,22 @@ fn link_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool)
 }
 
 /// Embed (and Edit Original) for linked image `id`, Unembed… for an embedded one named `name`
-/// (Control bar, Properties). The buttons are `width` wide, or fit their labels.
-pub fn link_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool, name: &str, width: Option<f32>) {
-    let w = |fit: f32| width.unwrap_or(fit);
+/// (Control bar, Properties), sized as `size` says.
+pub(crate) fn link_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool, name: &str, mut size: LinkButtons) {
+    let mut button = |ui: &mut egui::Ui, label: &str, least: f32| match &mut size {
+        LinkButtons::Width(w) => widgets::flat_button(ui, label, *w).clicked(),
+        LinkButtons::Fit(fit) => {
+            fit.room(ui, &[widgets::flat_button_fit_width(ui, label, least)]) && widgets::flat_button_fit(ui, label, least).clicked()
+        }
+    };
     if linked {
-        if widgets::flat_button(ui, tl!("Embed"), w(60.0)).clicked() {
+        if button(ui, tl!("Embed"), EMBED_WIDTH) {
             app.run("links.embed", json!({ "ids": [id] })).ok();
         }
-        if widgets::flat_button(ui, tl!("Edit Original"), w(92.0)).clicked() {
+        if button(ui, tl!("Edit Original"), EDIT_ORIGINAL_WIDTH) {
             crate::menus::invoke(app, "links.editOriginal", json!({ "id": id }));
         }
-    } else if widgets::flat_button(ui, tl!("Unembed…"), w(80.0)).clicked() {
+    } else if button(ui, tl!("Unembed…"), UNEMBED_WIDTH) {
         crate::panels::links::unembed(app, id, name);
     }
 }

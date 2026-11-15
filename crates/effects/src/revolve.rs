@@ -171,7 +171,7 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
                 }
             }
         }
-        let casting = shapes.iter().filter(|s| surface_item(&s.items).is_some_and(|i| paint_of(i).1 * s.opacity > 0.0));
+        let casting = shapes.iter().filter(|s| surface_item(&s.items).is_some_and(|i| crate::solids::shadow::casts(paint_of(i).1 * s.opacity)));
         return check_shadow(p, casting.map(|s| &s.path), b, options);
     }
     let (path, _) = object_profile(n, "Revolve")?;
@@ -350,8 +350,8 @@ fn geometry(path: &PathData, fx: &[Effect], ctx: &GeomContext) -> PathData {
 
 /// The shadow of Revolve `fx` cast by the surface of `path` in `item`'s paint about the axis of
 /// `b`, revolved with `options`, as dark as `item` is opaque and in its blending mode; `None` with
-/// the shadow off, when `item` is fully transparent or when it casts nothing, and an error when
-/// the surface it is cast from is past the limits.
+/// the shadow off, when `item` is fully transparent or its opacity is not a finite number, or when
+/// it casts nothing, and an error when the surface it is cast from is past the limits.
 ///
 /// `kept` holds the faces the surface drawn kept for its shadow ([`surface`]); without them the
 /// surface is swept again for its shadow alone.
@@ -366,7 +366,7 @@ fn shadow_of(
 ) -> Result<Option<Node>, String> {
     let Some(settings) = crate::solids::shadow::options(&merged_params(&fx.id, &fx.params)) else { return Ok(None) };
     let (_, opacity, blend) = paint_of(item);
-    if opacity <= 0.0 {
+    if !crate::solids::shadow::casts(opacity) {
         return Ok(None);
     }
     let mut caster = vectorcraft_three_d::ShadowCaster::new();
@@ -377,7 +377,7 @@ fn shadow_of(
 /// Does Revolve `fx` cast a shadow, so a surface in paint as opaque as `opacity` keeps the faces
 /// its shadow is cast from ([`surface`])?
 fn casts(fx: &Effect, opacity: f32) -> bool {
-    opacity > 0.0 && crate::solids::shadow::options(&merged_params(&fx.id, &fx.params)).is_some()
+    crate::solids::shadow::casts(opacity) && crate::solids::shadow::options(&merged_params(&fx.id, &fx.params)).is_some()
 }
 
 /// Add the surface of `path` about the axis of `b` to `caster`: the faces it kept when it was
@@ -420,9 +420,9 @@ fn group_shadow(
     for s in shapes {
         let kept = kept.next().flatten();
         let Some((_, opacity, blend)) = surface_item(&s.items).map(paint_of) else { continue };
-        // A member whose surface is fully transparent casts nothing.
+        // A member whose surface is fully transparent, or whose opacity is not a finite number, casts nothing.
         let ink = crate::solids::shadow::Ink { opacity: opacity * s.opacity, blend };
-        if ink.opacity <= 0.0 {
+        if !ink.casts() {
             continue;
         }
         let faces = cast_surface(&mut caster, &s.path, b, options, kept)?;
@@ -1859,6 +1859,55 @@ mod tests {
                 assert!(!alone.is_empty() || id == CLASSIC_REVOLVE, "{id} {params}");
                 assert_eq!(format!("{drawn:?}"), format!("{alone:?}"), "{id} {params}");
             }
+        }
+    }
+
+    /// A surface whose fill, or whose member, is at NaN or infinite opacity casts no shadow, as one
+    /// at 0 % does, whether the shadow is cast from the surface drawn or swept for it alone; the
+    /// member beside it still casts its part.
+    #[test]
+    fn a_surface_whose_opacity_is_not_a_finite_number_casts_no_shadow() {
+        let fx = crate::new_effect(REVOLVE, &json!({"shadow": true})).unwrap();
+        let group = |opacity: f32| {
+            let mut other = profile_node();
+            other.id = NodeId(2);
+            other.transform(Affine::translate((120.0, 0.0)), false);
+            other.opacity = opacity;
+            let mut g = Node::group(NodeId(9), vec![Arc::new(profile_node()), Arc::new(other)]);
+            g.appearance.effects.push(fx.clone());
+            g
+        };
+        let group_shadows = |g: &Node| {
+            let shapes = members(g, "").unwrap();
+            let b = union_bounds(&shapes).unwrap();
+            let options = shared_options(&shapes, fx_options(&fx)).unwrap();
+            let kept: Vec<Option<SolidFaces>> = shapes
+                .iter()
+                .map(|s| {
+                    let (paint, opacity, blend) = paint_of(surface_item(&s.items).unwrap());
+                    let cast = casts(&fx, opacity * s.opacity);
+                    surface(None, g, &s.path, b, options, &fx, paint, opacity, blend, false, &mut Copies::default(), cast).unwrap().2
+                })
+                .collect();
+            [group_shadow(g.id, &fx, &shapes, b, options, kept).unwrap(), group_shadow(g.id, &fx, &shapes, b, options, vec![]).unwrap()]
+                .map(|art| format!("{art:?}"))
+        };
+        let expected = group_shadows(&group(0.0));
+        for bad in [f32::NAN, f32::INFINITY] {
+            let mut n = profile_node();
+            if let AppearanceItem::Fill(f) = &mut n.appearance.items[0] {
+                f.opacity = bad;
+            }
+            let (path, _) = profile(&n).unwrap();
+            let b = path.bounds().unwrap();
+            let item = surface_item(&n.appearance.items).unwrap();
+            assert!(!casts(&fx, bad), "{bad}: the surface keeps no faces for a shadow");
+            let (_, kept) = object_surface(None, &n, &path, &fx, item, false, &mut Copies::default()).unwrap();
+            assert_eq!(shadow_of(n.id, &fx, &path, item, b, fx_options(&fx), kept).unwrap(), None, "{bad} drawn");
+            assert_eq!(shadow_of(n.id, &fx, &path, item, b, fx_options(&fx), None).unwrap(), None, "{bad} alone");
+            let shadows = group_shadows(&group(bad));
+            assert!(!expected[0].is_empty() && expected[0] != "[]", "the opaque member casts");
+            assert_eq!(shadows, expected, "{bad}: only the opaque member casts");
         }
     }
 }

@@ -36,6 +36,8 @@ pub struct LoadOptions {
     pub layers: bool,
     /// A PSD or PSB file's hidden layers come in, hidden (`hiddenLayers`; else they are left out).
     pub hidden_layers: bool,
+    /// A PSD or PSB file's slices become user slices (`importSlices`; else they are left out).
+    pub import_slices: bool,
     /// How a DXF drawing comes in (the `dxf` param, see [`super::dxfimport`]).
     pub dxf: vectorcraft_cad::ImportOptions,
     /// An Illustrator EPS or `.ai` that carries the editing copy of its art opens from it (its
@@ -67,6 +69,7 @@ impl Default for LoadOptions {
             text_as: TextAs::default(),
             layers: true,
             hidden_layers: false,
+            import_slices: true,
             dxf: Default::default(),
             editing_data: true,
             trust_editing_data: false,
@@ -81,7 +84,7 @@ impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) with `grays`,
     /// `textAs` (`text` | `outlines`), `layers` (true | false), `hiddenLayers` (true | false),
-    /// `editingData` (true | false | `always`),
+    /// `importSlices` (true | false), `editingData` (true | false | `always`),
     /// `legacyNameEncoding` (one of [`vectorcraft_eps::NameEncoding::LABELS`]), `linkPages` (true |
     /// false) and `dxf` (the DXF import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
@@ -111,6 +114,10 @@ impl LoadOptions {
             None => false,
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "hiddenLayers must be true or false"))?,
         };
+        let import_slices = match p.get("importSlices").filter(|v| !v.is_null()) {
+            None => true,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "importSlices must be true or false"))?,
+        };
         let (editing_data, trust_editing_data) = match p.get("editingData").filter(|v| !v.is_null()) {
             None => (true, false),
             Some(Value::String(s)) if s.eq_ignore_ascii_case("always") => (true, true),
@@ -137,6 +144,7 @@ impl LoadOptions {
             text_as,
             layers,
             hidden_layers,
+            import_slices,
             dxf,
             editing_data,
             trust_editing_data,

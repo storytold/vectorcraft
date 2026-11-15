@@ -1225,7 +1225,7 @@ fn expand_dashes_keeps_the_fill_below_and_follows_aligned_corners() {
     let mut centred = 0;
     for id in ids(&r) {
         let sp = path(&s, id).subpaths[0].clone();
-        if let [a, b, c] = sp.anchors.as_slice()
+        if let [a, b, c] = &*sp.anchors.to_vec()
             && corners.iter().any(|k| b.p.distance(*k) < 1e-6)
         {
             assert!((a.p.distance(b.p) - 5.0).abs() < 1e-6 && (c.p.distance(b.p) - 5.0).abs() < 1e-6, "{sp:?}");
