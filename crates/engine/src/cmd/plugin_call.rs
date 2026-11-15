@@ -540,6 +540,7 @@ struct Saved {
     recent_colors: Vec<vectorcraft_color::Color>,
     recent_urls: Vec<String>,
     global_edit_options: super::globaledit::Options,
+    select_similar: &'static str,
     envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,
 }
 
@@ -564,6 +565,7 @@ impl Saved {
             recent_colors: s.recent_colors.clone(),
             recent_urls: s.recent_urls.clone(),
             global_edit_options: s.global_edit_options.clone(),
+            select_similar: s.select_similar,
             envelope_defaults: s.envelope_defaults,
         }
     }
@@ -587,6 +589,7 @@ impl Saved {
         s.recent_colors = self.recent_colors;
         s.recent_urls = self.recent_urls;
         s.global_edit_options = self.global_edit_options;
+        s.select_similar = self.select_similar;
         s.envelope_defaults = self.envelope_defaults;
         s.pending_paint = None;
     }

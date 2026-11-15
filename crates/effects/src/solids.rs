@@ -36,7 +36,7 @@ pub use graphics::{
 pub(crate) mod shadow;
 
 pub(crate) mod wireframe;
-pub use wireframe::three_d_wireframe_in;
+pub use wireframe::{RENDER, RENDER_MODES, renders_wireframe, three_d_wireframe_in};
 
 pub const EXTRUDE: &str = "threeD.extrude";
 pub const INFLATE: &str = "threeD.inflate";
@@ -274,6 +274,7 @@ fn validate_solid_params(id: &str, p: &Value) -> Result<(), String> {
     crate::lighting::validate(p)?;
     shadow::validate(p)?;
     graphics::validate(id, p)?;
+    wireframe::validate_render(id, p)?;
     if let Some(v) = p.get("bevel")
         && !v.as_str().is_some_and(|s| s == "none" || BevelShape::parse(s).is_some())
     {
@@ -344,9 +345,9 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
 }
 
 /// Does 3D effect `id` with parameters `p` cast a shadow: is it Extrude & Bevel, Inflate or Rotate
-/// with Shadows on?
+/// with Shadows on, shaded? In wireframe mode no shadow is drawn, and none is checked.
 fn casts_shadow(id: &str, p: &Value) -> bool {
-    !is_classic_three_d(id) && shadow::options(p).is_some()
+    !is_classic_three_d(id) && shadow::options(p).is_some() && !wireframe::wireframe_params(id, p)
 }
 
 /// Does `item` of a shape with opacity `member` paint anything, and so cast a shadow?
@@ -1459,6 +1460,10 @@ type ShadowAndSurfaces = (Vec<Arc<Node>>, Vec<Arc<Node>>);
 /// off), cast from the faces the solids drawn kept ([`cast_built`]), to be drawn behind every
 /// surface of the object, and the surfaces.
 fn art_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<ShadowAndSurfaces> {
+    // In wireframe mode the effect draws the edges of the faces it builds, with no shadow.
+    if wireframe::renders_wireframe(fx) {
+        return Some((vec![], wireframe::wire_surfaces(n.id, fx, shapes)?));
+    }
     let p = crate::merged_params(&fx.id, &fx.params);
     let cast = casts_shadow(&fx.id, &p);
     let (art, built) = surfaces_for(doc, n, fx, shapes, cast)?;
@@ -1473,8 +1478,11 @@ fn art_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile]) ->
 }
 
 /// The shadow [`art_for`] draws for effect `fx` on `shapes` behind the surfaces of object `id`:
-/// none with the shadow off, and an error when it is past the limits.
+/// none with the shadow off or in wireframe mode, and an error when it is past the limits.
 pub(crate) fn shadow_for(id: NodeId, fx: &Effect, shapes: &[Profile]) -> Result<Vec<Arc<Node>>, String> {
+    if wireframe::renders_wireframe(fx) {
+        return Ok(vec![]);
+    }
     Ok(match cast_shadow(&fx.id, &crate::merged_params(&fx.id, &fx.params), shapes)? {
         Some((caster, settings, cast)) => shadow::scoped_art(id, &caster, settings, cast, has_masks(shapes)),
         None => vec![],
