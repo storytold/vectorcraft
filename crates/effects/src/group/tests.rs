@@ -1,6 +1,6 @@
 use super::*;
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{CharStyle, Effect, NodeId, TextObject};
+use vectorcraft_doc::{CharStyle, Effect, FillLayer, NodeId, TextObject};
 use vectorcraft_geom::{Point, Rect, shapes};
 
 /// Type tests need glyph outlines, which only the optional craft-fonts build input provides.
@@ -120,9 +120,8 @@ fn divide_and_outline_draw_nothing_for_unpainted_members() {
     }
 }
 
-/// With Remove Unpainted Artwork, Divide keeps the area of a compound shape whose own appearance
-/// has a visible fill and leaves out the area of one without. Outline's open segments of the area
-/// go either way.
+/// With Remove Unpainted Artwork, Divide and Outline keep the area of a compound shape whose own
+/// appearance has a visible fill and leave out the area of one without.
 #[test]
 fn remove_unpainted_keeps_a_filled_compound_shapes_area() {
     for effect in ["pathfinder.divide", "pathfinder.outline"] {
@@ -133,8 +132,40 @@ fn remove_unpainted_keeps_a_filled_compound_shapes_area() {
             }
             g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"removeUnpainted": true}), visible: true });
             let out = pathfinder_children(None, &g, None).unwrap();
-            let kept = filled && effect == "pathfinder.divide";
-            assert_eq!(!out.is_empty(), kept, "{effect}, filled {filled}: {out:#?}");
+            assert_eq!(!out.is_empty(), filled, "{effect}, filled {filled}: {out:#?}");
+        }
+    }
+}
+
+/// Outline strokes a compound shape's area in the shape's own fill (its top visible one that
+/// paints), with Remove Unpainted Artwork on or off, and Divide leaves the area's pieces
+/// unpainted for the shape's fill to paint.
+#[test]
+fn outline_strokes_a_compound_shapes_area_in_its_fill() {
+    let green = Paint::solid(Color::rgb(0.0, 1.0, 0.0));
+    for (remove, covered) in [(false, false), (true, false), (false, true), (true, true)] {
+        for effect in ["pathfinder.divide", "pathfinder.outline"] {
+            let mut g = compound_shape(ShapeMode::Add);
+            if covered {
+                // A hidden fill and an unpainted fill above the green one.
+                let mut hidden = FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+                hidden.visible = false;
+                let mut a = (*g.appearance).clone();
+                a.insert_item(a.items.len(), AppearanceItem::Fill(hidden));
+                a.insert_item(a.items.len(), AppearanceItem::Fill(FillLayer::new(Paint::None)));
+                g.appearance = a.into();
+            }
+            g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"removeUnpainted": remove}), visible: true });
+            let out = pathfinder_children(None, &g, None).unwrap();
+            assert!(!out.is_empty(), "{effect}, remove {remove}");
+            for n in &out {
+                if effect == "pathfinder.outline" {
+                    assert_eq!(n.appearance.stroke_paint(), green, "{effect}, remove {remove}: {n:#?}");
+                    assert!(n.appearance.fill_paint().is_none(), "{effect}, remove {remove}: {n:#?}");
+                } else {
+                    assert!(n.appearance.items.is_empty(), "{effect}, remove {remove}: {n:#?}");
+                }
+            }
         }
     }
 }

@@ -66,7 +66,7 @@ pub const PATHFINDER_EFFECT_PRECISION: std::ops::RangeInclusive<f64> = 0.001..=1
 /// The documentation of [`PATHFINDER_OPTION_KEYS`], as a literal for `concat!`.
 macro_rules! options_doc {
     () => {
-        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing; results are refit to within it and pieces thinner than it are dropped), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, except that Divide keeps every piece when the group or compound shape has a visible fill of its own; the other operations ignore it)"
+        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing; results are refit to within it and pieces thinner than it are dropped), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, a compound shape's area going by the shape's own fill, except that Divide keeps every piece when the group or compound shape has a visible fill of its own; the other operations ignore it)"
     };
 }
 
@@ -555,10 +555,23 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         out.extend(source.iter().skip(art).cloned());
         return Some(out);
     }
-    // The group's own fill paints its members' geometry, a compound shape's area included
-    // ([`evaluate_container`]), so with one Remove Unpainted Artwork leaves out no Divide piece.
-    // Outline's pieces are open segments, which still go by their own fill.
+    // When the group has a visible fill of its own, that fill paints its members' geometry, a
+    // compound shape's area included ([`evaluate_container`]), so Remove Unpainted Artwork keeps
+    // every Divide piece. Outline's open segments still go by their source's fill.
     let own_fill = has_visible_fill(group);
+    // A compound shape's area has no paint of its own: the shape's own appearance paints it. The
+    // shape's top painting fill is the area's fill for Remove Unpainted Artwork and for Outline's
+    // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice.
+    let area_style = group.is_compound_shape().then(|| {
+        let items = group.appearance.items.iter().filter(|i| paints(i)).cloned().collect();
+        Node::path(group.id, PathData::default(), Appearance { items, ..Default::default() })
+    });
+    let style_of = |s: &Node| -> Option<Node> {
+        let a = area_style.as_ref().filter(|_| s.id == group.id && s.appearance.items.is_empty())?;
+        let mut a = a.clone();
+        (a.opacity, a.blend) = (s.opacity, s.blend);
+        Some(a)
+    };
     let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
         // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
         match compound_shape_area(doc, group, hook) {
@@ -654,10 +667,16 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                     PathfinderOp::Outline => true,
                     _ => false,
                 };
+            let fill_sources: Vec<Option<Node>> = sources.iter().map(style_of).collect();
+            let fill_source = |k: u64| fill_sources[k as usize].as_ref().unwrap_or(&sources[k as usize]);
             po::pathfinder_with(op, &shapes, options.precision)
                 .into_iter()
-                .filter(|r| !r.path.is_empty() && !(unpainted && !has_visible_fill(&sources[r.key as usize])))
-                .map(|r| Arc::new(styled(&sources[r.key as usize], tidy(r.path), op == PathfinderOp::Outline)))
+                .filter(|r| !r.path.is_empty() && !(unpainted && !has_visible_fill(fill_source(r.key))))
+                .map(|r| {
+                    let outline = op == PathfinderOp::Outline;
+                    let src = if outline { fill_source(r.key) } else { &sources[r.key as usize] };
+                    Arc::new(styled(src, tidy(r.path), outline))
+                })
                 .collect()
         };
     }
