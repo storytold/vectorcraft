@@ -66,7 +66,8 @@ pages describe it.
   when no selected object has a visible 3D effect.
 - The Lighting tab also holds the Shadows switch and its settings ([Shadows](#shadows)). The Materials tab holds
   the Graphics ([Graphics](#graphics)); base materials and ray-traced rendering are not built (see below). The
-  rotation and light rings on the artboard are part of the options dialog only.
+  rotation and light rings on the artboard are part of the options dialog only. The panel's Lighting tab has the
+  lighting widget instead ([Lighting widget](#lighting-widget)).
 
 ## Extrude & Bevel
 
@@ -301,6 +302,33 @@ applies the same settings through commands, CLI and MCP. The index and item addr
 applied 3D effect. Every target must have a 3D effect at that position; validation is atomic, and
 the whole operation is one undo step. The numeric light settings are saved, not a preset name.
 Existing documents keep their appearance unless a preset is chosen.
+
+### Lighting widget
+
+On the 3D and Materials panel's Lighting tab, above the list of lights, a sphere shows every light of the
+effect where it shines from, as the public
+[3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
+page describes for dragging light sources around the object. The sphere is seen from the front: a light's
+Rotation is its angle around the center, and its Height runs from the rim (0°) to the center (90°). A light in
+front of the object is a sun filled with its color, and a light behind the object is hollow. The selected light
+is drawn larger, above the others.
+
+- Pressing a light selects it in the list of lights and records nothing. Dragging it moves it on its side of the
+  object, rounded to 0.1°; Shift snaps Rotation and Height to 15°. The drag is previewed while the pointer is
+  down and is one undo step when it is released.
+- **Move Light to Back** moves the selected light behind the object, and **Move Light to Front** moves it back
+  in front, as the page's "Move selected light to the back/front of object" does. It sets the same
+  `lightBehind` (or a list light's `behind`) as the **Light behind the object** checkbox.
+- Each light takes the keyboard focus. Left and Right turn the focused light around the object by 1°
+  (counterclockwise and clockwise), Up and Down raise and lower it by 1°, and Shift makes each step 15°. Each
+  press changes only the setting it moves and is one undo step. A
+  step past 90° or below 0° Height changes nothing. Screen readers name each light with its number, Rotation,
+  Height and, for a light behind the object, its side.
+
+The widget sends the same settings as the Rotation, Height and Light behind the object controls
+(`effect.setParams`); there is no command of its own. The sphere's look, the 0.1° rounding and the arrow keys
+are VectorCraft's own. The options dialogs keep the light rings on the artboard instead, and the Lighting tab
+of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) has no lighting widget.
 
 ### Light settings
 
