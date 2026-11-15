@@ -489,14 +489,14 @@ fn at_param(p: &Value) -> Result<Option<Point>> {
 
 /// The transform that puts new art with the natural box `natural` where `old` is: an image's scale
 /// and rotation relative to its 100% size (its resolution's) and its centre are kept (with
-/// `image_xf`), also for an image alone in a clip group when the new art is an image clipped by
-/// its file's clipping path (`clipped`); other objects keep their centre.
-fn replace_xf(d: &Document, old: &Node, natural: Rect, image_xf: bool, clipped: bool) -> Affine {
+/// `image_xf`), also for an image alone in a clip group when the new art is an image, clipped by
+/// its file's clipping path or not (`new_image`); other objects keep their centre.
+fn replace_xf(d: &Document, old: &Node, natural: Rect, image_xf: bool, new_image: bool) -> Affine {
     // An image alone in a clip group (as a PSD or PSB file's clipping path places it,
-    // [`fileio::file_clipped`]) is measured as the image when the new art brings its own clip
-    // group; a DCS file's plates are not.
+    // [`fileio::file_clipped`]) is measured as the image when the new art is an image; a DCS
+    // file's plates are not.
     let image = match &old.kind {
-        NodeKind::Group { children, clip: true } if clipped => match &children[..] {
+        NodeKind::Group { children, clip: true } if new_image => match &children[..] {
             [path, image] if matches!(path.kind, NodeKind::Path { clipping: true, .. }) => match &image.kind {
                 NodeKind::Image(im) if d.images.get(&im.key).is_none_or(|b| b.separated().is_none()) => image,
                 _ => old,
@@ -675,7 +675,7 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
     }
     let natural = loaded.natural;
     let m = match (old_node, rect) {
-        (Some(o), _) => replace_xf(&st.doc, o, natural, !is_text, matches!(loaded.art, Art::Image(_, Some(_)))),
+        (Some(o), _) => replace_xf(&st.doc, o, natural, !is_text, matches!(loaded.art, Art::Image(..))),
         (None, Some(r)) => fit(natural, r),
         // Its artboard's bottom-left corner on the target's.
         (None, None) if let (Some(src), Some(to)) = (loaded.board, target) => Affine::translate((to.x0 - src.x0, to.y1 - src.y1)),
