@@ -1534,13 +1534,15 @@ fn offset_instance(id: u64, symbol: &str) -> Node {
 }
 
 /// `n` baked as an instance inside another instance's art, with `spent` objects of nested symbol
-/// art already baked: the baked object, and the objects counted after it.
+/// art already baked: the baked object, and the objects counted after it, art baked and dropped
+/// included.
 fn bake_nested(d: &mut Document, n: &Node, spent: u64) -> (Option<Node>, u64) {
     INSTANCE_DEPTH.with(|c| c.set(1));
     NESTED_NODES.with(|c| c.set(spent));
+    NESTED_DROPPED.with(|c| c.set(0));
     let out = bake_node(d, n);
     INSTANCE_DEPTH.with(|c| c.set(0));
-    (out, NESTED_NODES.with(|c| c.replace(0)))
+    (out, NESTED_NODES.with(|c| c.replace(0)).saturating_add(NESTED_DROPPED.with(|c| c.replace(0))))
 }
 
 /// The object with id `id` in `n`'s subtree.
@@ -1558,7 +1560,7 @@ fn baked(n: Option<&Node>) -> bool {
 
 /// An instance baked inside another instance's art counts the art it bakes to, the copies its
 /// symbol's effects make included: art that fits exactly takes the last of the budget, and art
-/// whose symbol fits but whose baked art does not leaves the instance as it is.
+/// whose symbol fits but whose baked art does not leaves the instance as it is and still counts.
 #[test]
 fn nested_reshape_counts_baked_art() {
     let mut d = Document::new(400.0, 400.0);
@@ -1575,13 +1577,13 @@ fn nested_reshape_counts_baked_art() {
     assert_eq!(spent, max);
     let (short, spent) = bake_nested(&mut d, &n, max - baked + 1);
     assert!(short.is_none(), "the symbol's {source} objects fit, the {baked} baked ones do not");
-    assert_eq!(spent, max - baked + 1, "the instance left as it is counts nothing");
+    assert_eq!(spent, max + 1, "the art baked for the instance left as it is still counts");
 }
 
-/// An instance left as it is because its baked art does not fit gives back what its art held
-/// while it baked: an instance after it whose baked art fits in what is left is baked.
+/// An instance left as it is because its baked art does not fit still counts the art baked for
+/// it: an instance after it is left as it is too, before its art bakes.
 #[test]
-fn nested_reshape_refusal_restores_budget() {
+fn nested_reshape_refusal_keeps_its_work_counted() {
     let mut d = Document::new(400.0, 400.0);
     add_symbol(&mut d, "Big", gradient_copies(800));
     add_symbol(&mut d, "Small", moved_square(810));
@@ -1592,14 +1594,37 @@ fn nested_reshape_refusal_restores_budget() {
     let first = crate::SYMBOL_ART_MAX_NODES - b + 1;
     let (refused, spent) = bake_nested(&mut d, &big, first);
     assert!(refused.is_none(), "the big art passes the budget");
-    assert_eq!(spent, first);
-    let (later, spent) = bake_nested(&mut d, &small, spent);
-    assert!(later.is_some(), "the small art fits in what the big art gave back");
-    assert_eq!(spent, first + s);
+    assert_eq!(spent, first + b, "the big art baked and dropped counts");
+    let (later, after) = bake_nested(&mut d, &small, spent);
+    assert!(later.is_none(), "the small art does not fit after the dropped art");
+    assert_eq!(after, spent, "the small instance is refused before it bakes");
+}
+
+/// Sibling instances inside other instances' art whose baked art each passes what is left: the
+/// first is baked and dropped, and its art counts, so the others are left as they are before
+/// their art bakes. With room for all of them, every one is baked.
+#[test]
+fn nested_reshape_refused_siblings_bake_once() {
+    let mut d = Document::new(400.0, 400.0);
+    add_symbol(&mut d, "Big", gradient_copies(800));
+    let one = offset_instance(900, "Big");
+    let b = bake_nested(&mut d, &one, 0).0.map_or(0, |m| m.count() as u64);
+    let siblings: Vec<Arc<Node>> = (0..16).map(|i| Arc::new(offset_instance(1000 + i, "Big"))).collect();
+    let group = Node::group(NodeId(999), siblings);
+    let first = crate::SYMBOL_ART_MAX_NODES - b + 1;
+    let (refused, spent) = bake_nested(&mut d, &group, first);
+    let refused = refused.unwrap_or_else(|| group.clone());
+    assert!((0..16).all(|i| !baked(find(&refused, 1000 + i))), "no sibling fits: {refused:?}");
+    assert_eq!(spent, first + b, "only the first sibling's art is baked and counted: {spent}");
+    let (room, spent) = bake_nested(&mut d, &group, 0);
+    let room = room.unwrap_or_else(|| panic!("the siblings are baked"));
+    assert!((0..16).all(|i| baked(find(&room, 1000 + i))), "every sibling is baked");
+    assert_eq!(spent, 16 * b);
 }
 
 /// An instance inside another instance's art whose own art holds a reshaped instance counts that
-/// instance's baked art once: a budget of exactly the outer art's baked objects bakes both.
+/// instance's baked art once: a budget of exactly the outer art's baked objects bakes both, and
+/// with one object less the art baked and dropped still counts.
 #[test]
 fn nested_reshape_counts_successful_descendants_once() {
     let mut d = Document::new(400.0, 400.0);
@@ -1619,5 +1644,6 @@ fn nested_reshape_counts_successful_descendants_once() {
     assert_eq!(spent, max);
     let (short, spent) = bake_nested(&mut d, &outer, max - total + 1);
     assert!(short.as_ref().is_none_or(|m| !baked(find(m, 802))), "with one object less, not both are baked");
-    assert!(spent <= max);
+    assert!(spent > max, "the art baked and dropped counts: {spent}");
+    assert!(spent <= max - total + 1 + 2 * total, "at most the outer and the inner art are dropped: {spent}");
 }

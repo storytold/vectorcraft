@@ -117,6 +117,11 @@ thread_local! {
     /// The objects of symbol art that [`bake_document`] has baked for instances inside the art of
     /// other instances, counted against [`crate::SYMBOL_ART_MAX_NODES`].
     static NESTED_NODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// The objects in the baked art of the instances inside the art of other instances that
+    /// [`bake_node`] baked for one export and then left as they are, counted with
+    /// [`NESTED_NODES`] against [`crate::SYMBOL_ART_MAX_NODES`] before more art is baked. Never
+    /// given back.
+    static NESTED_DROPPED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     /// While [`bake_document_placing_symbols`] bakes: the symbols whose instances become their
     /// placed art ([`placed_symbol_art`]).
     static PLACING: std::cell::RefCell<Option<Rc<Placing>>> = const { std::cell::RefCell::new(None) };
@@ -371,15 +376,17 @@ fn bake_object(d: &mut Document, n: &Node) -> Option<Node> {
         // passes the objects one export bakes that way: an instance of a symbol whose art holds
         // instances of itself is kept as it is there. The symbol's art is held in the count while
         // it bakes, so the instances inside it bake only within what is left; the art it bakes to,
-        // with what its effects add, then takes its place in the count, or the instance stays as it
-        // is and gives its objects back when that art does not fit.
+        // with what its effects add, then takes its place in the count. When that art does not
+        // fit, the instance stays as it is, and the art baked for it, with the art dropped for the
+        // instances inside it, still counts against the instances after it.
         let instance = matches!(n.kind, NodeKind::SymbolInstance { .. });
         let nested = instance && INSTANCE_DEPTH.with(|c| c.get()) > 0;
         let before = NESTED_NODES.with(|c| c.get());
         if nested {
             let count = symbol.as_ref().map_or(0, |a| a.count() as u64);
             let spent = before.saturating_add(count);
-            if INSTANCE_DEPTH.with(|c| c.get()) >= vectorcraft_doc::depth::MAX_DEPTH || spent > crate::SYMBOL_ART_MAX_NODES {
+            let dropped = NESTED_DROPPED.with(|c| c.get());
+            if INSTANCE_DEPTH.with(|c| c.get()) >= vectorcraft_doc::depth::MAX_DEPTH || spent.saturating_add(dropped) > crate::SYMBOL_ART_MAX_NODES {
                 return None;
             }
             NESTED_NODES.with(|c| c.set(spent));
@@ -400,8 +407,9 @@ fn bake_object(d: &mut Document, n: &Node) -> Option<Node> {
         let baked = baked.unwrap_or(m);
         if nested {
             let spent = before.saturating_add(baked.count() as u64);
-            if spent > crate::SYMBOL_ART_MAX_NODES {
+            if spent.saturating_add(NESTED_DROPPED.with(|c| c.get())) > crate::SYMBOL_ART_MAX_NODES {
                 NESTED_NODES.with(|c| c.set(before));
+                NESTED_DROPPED.with(|c| c.set(c.get().saturating_add(baked.count() as u64)));
                 return None;
             }
             NESTED_NODES.with(|c| c.set(spent));
@@ -1087,6 +1095,7 @@ fn bake(doc: &Document, placing: Option<(bool, u64, WrittenLayers)>) -> Option<D
     }
     let mut d = placed.into_owned();
     NESTED_NODES.with(|c| c.set(0));
+    NESTED_DROPPED.with(|c| c.set(0));
     let layers = d.layers.clone();
     d.layers = layers.iter().map(|l| bake_node(&mut d, l).map(Arc::new).unwrap_or_else(|| l.clone())).collect();
     Some(d)
