@@ -172,6 +172,8 @@ pub struct SelectionTool {
     /// The params of the move's last preview: in Shaper's Construction mode the move ends with
     /// them and `releaseOutside` ([`construction`]).
     last_move: Option<Value>,
+    /// How far the move's last preview carried the selection ([`Tool::readout`]).
+    moved: Option<Vec2>,
     /// Held state used for the most recent bounding-box preview.
     last_backquote: bool,
     /// Pointer position used for the most recent bounding-box preview.
@@ -896,6 +898,10 @@ impl Tool for SelectionTool {
 
     fn moving(&self) -> bool {
         matches!(self.state, State::Moving { began: true, .. })
+    }
+
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        self.moved.filter(|_| self.moving()).map(crate::Readout::drag)
     }
 
     fn transforming(&self) -> bool {
@@ -1753,6 +1759,7 @@ impl SelectionTool {
             params["patterns"] = json!(true);
         }
         self.last_move = Some(params.clone());
+        self.moved = Some(d);
         out.push(Action::Preview("object.transform".into(), params));
         out
     }

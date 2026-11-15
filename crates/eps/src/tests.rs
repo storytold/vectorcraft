@@ -1495,6 +1495,228 @@ fn a_field_taken_back_at_the_page_limit_leaves_no_image_behind() {
     assert!(page.setup.contains("/VCim0 VCsrc") && !page.setup.contains("VCim1"), "{}", page.setup);
 }
 
+/// A 200 × 200 pt document holding 8 × 8 pixels of noise as image `pic` and a three-pixel gray ramp
+/// as image `gray`, its first layer holding what `nodes` makes.
+fn image_doc_with(nodes: impl FnOnce(&mut Document) -> Vec<Node>) -> Document {
+    let mut d = Document::new(200.0, 200.0);
+    let mut png = vec![];
+    noise(8, 8).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    d.images.insert("pic".into(), ImageBlob::new("image/png", png));
+    let mut gray = vec![];
+    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(3, 1, vec![0, 128, 255]).unwrap())
+        .write_to(&mut std::io::Cursor::new(&mut gray), image::ImageFormat::Png)
+        .unwrap();
+    d.images.insert("gray".into(), ImageBlob::png(gray));
+    let nodes = nodes(&mut d);
+    let layer = d.layers[0].id;
+    for n in nodes {
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    d
+}
+
+/// One of [`image_doc_with`]'s images: `pic`, or `gray` colorized in process red.
+#[derive(Clone, Copy, Debug)]
+enum Pic {
+    Placed,
+    Colorized,
+}
+
+/// An image of `pic` at (`x`, `y`), its pixels `scale` points wide.
+fn pic_node(d: &mut Document, pic: Pic, x: f64, y: f64, scale: f64) -> Node {
+    let (key, width, height) = match pic {
+        Pic::Placed => ("pic", 8, 8),
+        Pic::Colorized => ("gray", 3, 1),
+    };
+    let im = ImageObject {
+        key: key.into(),
+        width,
+        height,
+        xf: Affine::translate((x, y)) * Affine::scale(scale),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    if let Pic::Colorized = pic {
+        n.extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0))));
+    }
+    n
+}
+
+/// A pattern whose tile is an image of `pic` about 60 points wide.
+fn pic_pattern(d: &mut Document, pic: Pic) -> Paint {
+    let scale = match pic {
+        Pic::Placed => 8.0,
+        Pic::Colorized => 20.0,
+    };
+    let tile = pic_node(d, pic, 0.0, 0.0, scale);
+    d.patterns.push(vectorcraft_doc::PatternDef::new("tile", vec![Arc::new(tile)]));
+    Paint::Pattern { pattern: "tile".into(), xf: Affine::IDENTITY }
+}
+
+/// A 2000-sided shape filled with each of `fills` in turn, and stroked in black when `stroked`.
+fn many_sided(d: &mut Document, fills: &[Paint], stroked: bool) -> Node {
+    let stroke = if stroked { Paint::solid(Color::rgb(0.0, 0.0, 0.0)) } else { Paint::None };
+    let mut n = path(d, shapes::polygon(Point::new(100.0, 100.0), 90.0, 2000, 0.0), fills[0].clone(), stroke, 1.0);
+    let Some(AppearanceItem::Fill(first)) = n.appearance.items.first().cloned() else { panic!("a filled shape") };
+    for (k, paint) in fills.iter().enumerate().skip(1) {
+        let mut fill = first.clone();
+        fill.paint = paint.clone();
+        n.appearance.items.insert(k, AppearanceItem::Fill(fill));
+    }
+    n
+}
+
+/// A page limit that the many-sided shape of `build` (`true`: stroked) passes with its stroke and
+/// not without it.
+fn stroke_passes_the_limit(build: impl Fn(bool) -> Document, o: &EpsOptions) -> usize {
+    let fill = crate::scene::Scene::new(&build(false), o).run().body.len();
+    let both = crate::scene::Scene::new(&build(true), o).run().body.len();
+    assert!(both > fill + 20_000, "{fill} {both}");
+    fill + (both - fill) / 2
+}
+
+/// Art taken back for passing the page limit after it placed an image (a placed or a colorized
+/// one) keeps no encoding of that image, and no cache entry names one. A later placement of the
+/// image is encoded again and written where it is drawn, at both levels.
+#[test]
+fn a_rolled_back_node_frees_its_image_codes() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let build = |stroked: bool, after: bool| {
+                image_doc_with(|d| {
+                    let fill = pic_pattern(d, pic);
+                    let mut nodes = vec![many_sided(d, &[fill], stroked)];
+                    if after {
+                        nodes.push(pic_node(d, pic, 20.0, 20.0, 4.0));
+                    }
+                    nodes
+                })
+            };
+            let o = EpsOptions { level, ..opts(&build(false, false)) };
+            let limit = stroke_passes_the_limit(|stroked| build(stroked, false), &o);
+            let (page, uses, cached) = crate::scene::Scene::new(&build(true, false), &o).with_max_body(limit).run_with_codes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!((uses, cached), (vec![], vec![]), "{case}");
+            assert!(page.body.is_empty() && page.setup.is_empty(), "{case}: {} {}", page.setup, page.body);
+            let (page, uses, cached) = crate::scene::Scene::new(&build(true, true), &o).with_max_body(limit).run_with_codes();
+            assert_eq!((uses, cached), (vec![1], vec![0]), "{case}");
+            let alone = crate::scene::Scene::new(&image_doc_with(|d| vec![pic_node(d, pic, 20.0, 20.0, 4.0)]), &o).run();
+            assert_eq!(alone.body.matches("} exec\n").count(), 1, "{case}: {}", alone.body);
+            assert_eq!((&page.setup, &page.body), (&alone.setup, &alone.body), "{case}");
+        }
+    }
+}
+
+/// A field encoded before an image in art taken back for passing the page limit is forgotten with
+/// it. Two later fields sampled the same share one image, the first one the page keeps.
+#[test]
+fn a_rolled_back_image_does_not_pin_an_earlier_field_code() {
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let build = |stroked: bool, after: bool| {
+                image_doc_with(|d| {
+                    let field = freeform(&[(60.0, 100.0, Color::rgb(0.0, 1.0, 0.0)), (140.0, 100.0, red)]);
+                    let fills = [field, pic_pattern(d, pic)];
+                    let mut nodes = vec![many_sided(d, &fills, stroked)];
+                    if after {
+                        nodes.extend([freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+                    }
+                    nodes
+                })
+            };
+            let o = EpsOptions { level, ..opts(&build(false, false)) };
+            let limit = stroke_passes_the_limit(|stroked| build(stroked, false), &o);
+            let (page, uses, cached) = crate::scene::Scene::new(&build(true, false), &o).with_max_body(limit).run_with_codes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!((uses, cached), (vec![], vec![]), "{case}");
+            let (page, uses, cached) = crate::scene::Scene::new(&build(true, true), &o).with_max_body(limit).run_with_codes();
+            assert_eq!((uses, cached), (vec![2], vec![0]), "{case}");
+            assert_eq!(reuses(&page.body, 0, level), 2, "{case}: {}", page.body);
+            let alone = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+            let alone = crate::scene::Scene::new(&alone, &o).run();
+            assert_eq!((&page.setup, &page.body), (&alone.setup, &alone.body), "{case}");
+        }
+    }
+}
+
+/// An image whose first placement doesn't fit under the page limit is left out with a warning and
+/// keeps no encoding, though the object that draws it fits. The art before it is written.
+#[test]
+fn an_image_rejected_by_the_page_limit_keeps_no_unused_code() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let d = image_doc_with(|d| vec![red_rect(d), pic_node(d, pic, 20.0, 20.0, 4.0)]);
+            let o = EpsOptions { level, ..opts(&d) };
+            let rect = crate::scene::Scene::new(&image_doc_with(|d| vec![red_rect(d)]), &o).run();
+            let full = crate::scene::Scene::new(&d, &o).run().body.len();
+            let (page, uses, cached) = crate::scene::Scene::new(&d, &o).with_max_body(full - 1).run_with_codes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!((uses, cached), (vec![], vec![]), "{case}");
+            assert_eq!((&page.setup, &page.body), (&rect.setup, &rect.body), "{case}");
+        }
+    }
+}
+
+/// An image turned away at the page limit is encoded once, not again at each later placement
+/// that doesn't fit either.
+#[test]
+fn an_image_rejected_by_the_page_limit_is_encoded_once() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let d = image_doc_with(|d| {
+                let mut nodes = vec![red_rect(d)];
+                nodes.extend((0..50).map(|k| pic_node(d, pic, f64::from(k), 20.0, 4.0)));
+                nodes
+            });
+            let o = EpsOptions { level, ..opts(&d) };
+            let rect = crate::scene::Scene::new(&image_doc_with(|d| vec![red_rect(d)]), &o).run();
+            let (page, encodes) = crate::scene::Scene::new(&d, &o).with_max_body(rect.body.len() + 64).run_counting_encodes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!(encodes, 1, "{case}");
+            assert_eq!((&page.setup, &page.body), (&rect.setup, &rect.body), "{case}");
+        }
+    }
+}
+
+/// An image turned away at the page limit inside art that is then taken back is encoded again
+/// once the page has room for it, and written where it is drawn.
+#[test]
+fn an_image_rejected_in_art_taken_back_is_encoded_again_when_it_fits() {
+    for pic in [Pic::Placed, Pic::Colorized] {
+        for level in Level::ALL {
+            let case = format!("{pic:?}, {level:?}");
+            let build = |stroked: bool, after: bool| {
+                image_doc_with(|d| {
+                    let fill = pic_pattern(d, pic);
+                    let mut nodes = vec![many_sided(d, &[fill], stroked)];
+                    if after {
+                        nodes.push(pic_node(d, pic, 20.0, 20.0, 4.0));
+                    }
+                    nodes
+                })
+            };
+            let o = EpsOptions { level, ..opts(&build(false, false)) };
+            let solid = image_doc_with(|d| vec![many_sided(d, &[Paint::solid(Color::rgb(1.0, 0.0, 0.0))], false)]);
+            // The shape's outline fits under this limit, and its first tile of the image doesn't.
+            let limit = crate::scene::Scene::new(&solid, &o).run().body.len() + 64;
+            let (page, encodes) = crate::scene::Scene::new(&build(false, false), &o).with_max_body(limit).run_counting_encodes();
+            assert!(page.warnings.iter().any(|w| w.contains("too large")), "{case}: {:?}", page.warnings);
+            assert_eq!((encodes, page.body.matches("} exec\n").count()), (1, 0), "{case}: {}", page.body);
+            let (page, encodes) = crate::scene::Scene::new(&build(true, true), &o).with_max_body(limit).run_counting_encodes();
+            assert_eq!(encodes, 2, "{case}");
+            let alone = crate::scene::Scene::new(&image_doc_with(|d| vec![pic_node(d, pic, 20.0, 20.0, 4.0)]), &o).run();
+            assert_eq!((&page.setup, &page.body), (&alone.setup, &alone.body), "{case}");
+        }
+    }
+}
+
 #[test]
 fn run_length_and_ascii85_round_trip() {
     let cycle: Vec<u8> = (0..=255u8).cycle().take(1000).collect();
