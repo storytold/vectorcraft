@@ -374,7 +374,8 @@ impl Ctx<'_> {
         // Only the glyph right after an upright glyph can continue its cluster.
         let cluster = self.upright_cluster.take();
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
-        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}';
+        // Joiners and direction marks are format controls: no ink either, whatever glyph the font maps.
+        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}' || crate::justify::is_format_control(g.ch);
         // A colour glyph draws its art (COLR layers, an SVG document) or its image (a bitmap, or
         // COLR paints documents have no form for), not its outline; COLR, then SVG, then bitmaps.
         // Art in the text's colours takes the run's fill (black when it isn't a colour) and

@@ -34,7 +34,6 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-14 | minor | Type: Middle Eastern & South Asian and Standard composers per paragraph (#4935): Paragraph panel menu, paragraph styles, `text.setFormat {composer}` and the native file; the Standard composers set Indic, Arabic and Hebrew type glyph by glyph. `.ai`, EPS and PDF files carry no composer. Scores and estimates unchanged. |
 | 2026-11-13 | minor | PDF import: preserve Type 3 font text runs as named groups `<g>`, or as live text in `TextAs::Text` mode if `/ToUnicode` exists on non-colour fonts (`TextAs::Outlines` produces grouped outlines) (#6740); scores and estimates unchanged. |
 | 2026-11-08 | minor | #3380, deletion only: preserve gradient placement and exact surviving geometry; consume owned subpaths with a shared original-node snapshot; consolidate status/evidence and document command/helper contracts. Compound behavior and the existing M2 status entry are retained. Endpoint highlighting remains open; scores and estimates unchanged. |
 | 2026-11-07 | minor | #3380 (deletion only): independent surviving path objects; transformed appearance, stacking, selection, cubic handles and Undo/Redo covered by `delete_path_pieces`; compound semantics retained. Endpoint highlighting remains open; scores and estimates unchanged. |
@@ -874,6 +873,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | Type: Middle Eastern & South Asian and Standard composers per paragraph (#4935): Paragraph panel menu, paragraph styles, `text.setFormat {composer}` and the native file; the Standard composers set Indic, Arabic and Hebrew type glyph by glyph. `.ai`, EPS and PDF files carry no composer. Scores and estimates unchanged. |
 | 2026-11-12 | minor | 3D: The seams of Extrude & Bevel, Inflate and Rotate under a white light, and of the faces of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), went from miter to round joins (the seams of Revolve and of colored lights, and 3D (Classic) Wireframe edges, were already round): no thorns on edge-on facets, and facets with no neighbour now have rounded convex corners ([three-d.md](three-d.md#seams)). Scores and estimates unchanged. |
 | 2026-11-12 | minor | Explicit editing-data import keeps a single artboard beyond a capped 14,400 pt PDF page (#6865), with a warning; automatic mode stays unchanged. Scores and estimates unchanged. |
 | 2026-11-09 | minor | G4 review (#6084): positional variants no supported feature draws can be applied as glyph choices in both Glyphs views; unlisted glyphs still respect name ownership. OpenType style options keep only a valid last on-value when enabling a set. Existing contextual/ligature lookup and unsupported-feature gaps remain; estimate unchanged. |

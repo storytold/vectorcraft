@@ -107,5 +107,7 @@ fn standard_composers_give_format_characters_no_width() {
         assert_eq!(widths.len(), 3, "{composer:?}: {widths:?}");
         assert_eq!(widths[1], 0.0, "{composer:?}: the non-joiner takes no room: {widths:?}");
         assert!(widths[0] > 0.0 && widths[2] > 0.0, "{composer:?}: {widths:?}");
+        // The test font maps no space: the control must still draw nothing (not glyph 0's outline).
+        assert!(l.glyphs[1].outline.elements().is_empty(), "{composer:?}: the non-joiner has no ink");
     }
 }
