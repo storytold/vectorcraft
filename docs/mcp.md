@@ -3691,6 +3691,16 @@ already walks Image Trace. Short agent entry points:
   black ring around a white disc around a black dot, black gets two groups. `layer.releaseToLayers` on the expanded group then
   gives each group a sublayer. A trace made with `autoGrouping` is refused. Expanding by color also refuses a trace
   with a live Pathfinder effect.
+  An Abutting trace with Fills (not Flat Logo) also holds a group named `Seam Fills` under its paths: for each color, a
+  stroke 1.5 image pixels wide (at the image's larger scale, when it is stretched more one way) with butt caps and round joins along the edges where a filled path of that color meets a
+  filled path drawn after it, in that color (a gradient path's stroke takes its gradient). Without it, a renderer that
+  anti-aliases each path on its own shows a light hairline along every shared edge. The traced paths and their shared
+  edges are the same with or without it, and edges against the image's border, a transparent area or a color left out
+  get no stroke. A trace whose paths have more than half of the trace's anchor limit (8,000,000, 2,000,000 on the web)
+  has no seam fills, so that paths and seam fills together stay within the limit. Both Expand commands keep the group, and `byColor` leaves it under every color's group. The strokes
+  are separate objects: after Expand, recoloring, moving or deleting a traced path leaves them as they are, and deleting
+  the group removes them. The reply's
+  `paths` and `anchors` count the traced paths only.
   With `keepColors` in `params`, the reply's `warnings` name each listed color that no traced color matches, and say
   when nothing was traced.
   `imageTrace.presets.save {name?, newName?, preset?, enhanced?, params?}` saves tracing settings as a preset kept with
