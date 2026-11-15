@@ -5917,7 +5917,11 @@ for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a 
 the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve (PDF/A, PDF/X-3 and PDF/X-4 files are
 always tagged, whatever `profiles` says). A CMYK image that keeps its numbers carries the CMYK profile it embeds
 with `all` and `taggedSource`, and in PDF/A, PDF/X-3 and PDF/X-4 unless `profiles` is `destination`; PDF/X-1a
-images are always untagged CMYK. `outputIntent` embeds a profile as the file's
+images are always untagged CMYK. Left unset (the default; `"default"` unsets it over a preset, while `null` keeps the
+preset's value), `profiles` writes device colours and gray and RGB images keep the profiles they carry (not in
+PDF/X-1a). Set to `none`, it also writes every image without the profile it carries, and a JPEG kept as it is without
+its `ICC_PROFILE` segments, its other segments and compressed samples unchanged; PDF/A, PDF/X-3 and PDF/X-4 files keep
+the profiles they tag images with. The Save PDF dialog lists the unset value as Default. `outputIntent` embeds a profile as the file's
 `/GTS_PDFX` output intent with `outputCondition`, `outputConditionId` and `registry`, and `trapped` sets `/Trapped`
 (PDF/A files keep their own output intent). Type is written as selectable, searchable text in embedded subset fonts
 with a ToUnicode map (fonts whose licence forbids embedding stay outlines, with a warning); `advanced: {outlineText:
