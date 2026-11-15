@@ -545,6 +545,12 @@ impl Tool for GradientTool {
         self.gesture.as_ref().is_some_and(|g| g.began) || self.free.as_ref().is_some_and(freeform::Gesture::began)
     }
 
+    /// The vector a drag on the art has drawn so far.
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        let (start, end) = self.gesture.as_ref().filter(|g| g.began)?.vector?;
+        Some(crate::Readout::drag(end - start))
+    }
+
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         // A freeform gradient: its points instead of the bar.
         match (ev.kind, &mut self.free) {
