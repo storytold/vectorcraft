@@ -1033,6 +1033,10 @@ font-technology	Variable	Variabili
 	Cap Height	Altezza maiuscole
 	x-Height	Altezza x
 	ICF Box	Riquadro ICF
+	Show Sample	Mostra campione
+	Hide Sample	Nascondi campione
+	Max Ascent/Descent	Altezza/profondità max
+	Max Ascender	Ascendente max
 	Em Dash	Lineetta
 	Em Space	Spazio em
 	Embed	Incorpora

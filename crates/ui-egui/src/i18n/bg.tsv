@@ -5013,6 +5013,10 @@ axis	Both	И двете
 	Em Box	Квадратна касетка (Em Box)
 	x-Height	Височина на x
 	ICF Box	Касетка ICF
+	Show Sample	Показване на образец
+	Hide Sample	Скриване на образец
+	Max Ascent/Descent	Макс. височина нагоре/надолу
+	Max Ascender	Макс. възходящ елемент
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` е референцията за стъпка {r}, която се разрешава само от `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` трябва да бъде масив от идентификатори на обекти, а не {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` трябва да бъде масив от цветове, а не {v}

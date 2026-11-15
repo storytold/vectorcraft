@@ -9705,9 +9705,19 @@ font based on the one picked, Delete Font takes it out, Import… adds the fonts
 picked. Custom shows the font's custom character sets: Character Set picks one, New adds a set based on the one picked,
 Delete Set takes it out, and Name renames it. Character › Direct Entry adds the characters typed, and Character ›
 Unicode adds the characters of hexadecimal codes (`3042`, `U+3042`, several separated by spaces or commas); Add skips
-characters the set already lists. Delete takes the character picked out of the set. OK runs `type.compositeFonts.set`
-with every font as one undo step; a refused font keeps the dialog open. `ui.dialog.set` takes `custom`, `entry` and
-`char` (the index of the character picked in the set) as soon as the dialog opens.
+characters the set already lists. Delete takes the character picked out of the set. Show Sample (Hide Sample when it
+shows) draws the font picked in a line of sample text, with the first character of each custom set added, and a button
+beside it for each line it can mark: ICF Box, Em Box, Baseline, Cap Height, Max Ascent/Descent, Max Ascender and
+x-height ([Creating composite fonts](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=300)).
+The em box and ICF box are those of the Kanji part's font, the cap height and x-height those of the face the
+Roman letters are drawn in (a fallback face when the part's font lacks the character), Max Ascent/Descent the highest
+ascent and lowest descent of the faces the sample uses, and Max Ascender the top of its tallest glyph; each takes its
+part's size, baseline and vertical scale. Zoom draws it at 25% to 800% of 36 pt. The
+sample text, the zoom steps and the size are VectorCraft's own. OK runs `type.compositeFonts.set` with every font as one
+undo step; a refused font keeps the dialog open. `ui.dialog.set` takes `custom`, `entry` and `char` (the index of the
+character picked in the set) as soon as the dialog opens, and `sample` (true or false), `zoom` (25, 50, 75, 100, 200,
+400 or 800) and `lineIcfBox`, `lineEmBox`, `lineBaseline`, `lineCapHeight`, `lineAscentDescent`, `lineAscender` and
+`lineXHeight` (true or false; the first three start true); another value is refused.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"},"roman":{"font":"Source Sans 3","size":95,"baseline":-2},"numerals":{"font":"Source Sans 3"}}}]}}}

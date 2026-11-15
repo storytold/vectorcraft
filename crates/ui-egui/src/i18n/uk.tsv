@@ -1027,6 +1027,10 @@ font-technology	Variable	Варіативні
 	Cap Height	Висота великих літер
 	x-Height	Висота малих літер
 	ICF Box	Рамка ICF
+	Show Sample	Показати зразок
+	Hide Sample	Приховати зразок
+	Max Ascent/Descent	Макс. висота/глибина
+	Max Ascender	Макс. виносний елемент вгору
 	Em Dash	Довге тире
 	Em Space	Кругла шпація
 	Embed	Вбудувати

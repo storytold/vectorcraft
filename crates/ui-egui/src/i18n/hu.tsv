@@ -2139,6 +2139,10 @@ file-filter	Templates	Sablonok
 	Em Box	Kvirtmező
 	x-Height	x-magasság
 	ICF Box	ICF-mező
+	Show Sample	Minta megjelenítése
+	Hide Sample	Minta elrejtése
+	Max Ascent/Descent	Max. magasság/mélység
+	Max Ascender	Max. felnyúló szár
 	ICF Top/Right	ICF teteje/jobb oldala
 	Identify Objects By	Objektumok azonosítása
 	Ignore	Kihagy

@@ -5282,6 +5282,10 @@ theme	Appearance	Erscheinungsbild
 	Cap Height	Versalhöhe
 	x-Height	x-Höhe
 	ICF Box	ICF-Rahmen
+	Show Sample	Muster einblenden
+	Hide Sample	Muster ausblenden
+	Max Ascent/Descent	Max. Höhe/Tiefe
+	Max Ascender	Max. Oberlänge
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` muss ein Array von Farben sein, nicht {v}

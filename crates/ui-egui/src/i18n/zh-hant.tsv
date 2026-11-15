@@ -995,6 +995,10 @@ font-technology	Variable	可變
 	Cap Height	大寫字母高度
 	x-Height	x 字高
 	ICF Box	ICF 框
+	Show Sample	顯示樣本
+	Hide Sample	隱藏樣本
+	Max Ascent/Descent	最大上升/下降
+	Max Ascender	最大上伸部
 	Em Dash	長破折號
 	Em Space	全形空格
 	Embed	嵌入

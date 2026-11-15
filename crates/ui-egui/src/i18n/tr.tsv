@@ -5102,6 +5102,10 @@ axis	Both	Her İkisi
 	Em Box	Em Kutusu
 	x-Height	x-Yüksekliği
 	ICF Box	ICF Kutusu
+	Show Sample	Örneği Göster
+	Hide Sample	Örneği Gizle
+	Max Ascent/Descent	Maks. Yükseklik/Derinlik
+	Max Ascender	Maks. Yükselen
 @msg	`colors` must be an array of colors, not {v}	`colors` {v} değil, bir renk dizisi olmalıdır
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`, yalnızca `run` ve `command_batch` komutlarının çözümlediği {r} adım referansıdır
 @msg	`ids` must be an array of object ids, not {v}	`ids` bir nesne kimlikleri dizisi olmalıdır, {v} değil
