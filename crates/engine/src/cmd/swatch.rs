@@ -1226,7 +1226,7 @@ impl GroupEdit {
 }
 
 /// Rewrite colour group `group` with `colors`: its swatches take them in order (keeping their
-/// names, kinds and global or spot flags), a `None` removes the swatch at its place, extra colours
+/// names, kinds and global or spot flags), a `None` removes the swatch at its place, extra colors
 /// are added as new swatches and swatches past the end are removed. Paints linked to its global
 /// swatches follow (a removed swatch's are unlinked); `rename` renames the group. A built-in swatch
 /// (None, Registration) it would change or remove is refused.
@@ -1249,7 +1249,7 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Option<Colo
     let mut relinks = vec![];
     let old = std::mem::take(&mut d.swatch_groups[gi].swatches);
     let old_len = old.len();
-    // The swatches that stay, each with its new colour.
+    // The swatches that stay, each with its new color.
     let mut kept: Vec<(Swatch, Color)> = vec![];
     for (i, w) in old.into_iter().enumerate() {
         match colors.get(i).copied().flatten() {

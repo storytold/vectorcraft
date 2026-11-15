@@ -575,9 +575,9 @@ fn selection(d: &Dialog) -> Vec<usize> {
 }
 
 /// `recolor.apply` parameters: the rows, method, library and the group with its new name and
-/// colours: the new colours of the rows with current colours, each in its swatch's place (`null`
-/// for a row whose new colour was removed, which removes its swatch), then (with art) the group's
-/// colours no row took, then the colours added on the Edit tab.
+/// colors: the new colors of the rows with current colors, each in its swatch's place (`null`
+/// for a row whose new color was removed, which removes its swatch), then (with art) the group's
+/// colors no row took, then the colors added on the Edit tab.
 fn apply_params(d: &Dialog) -> Value {
     let rs = rows(d);
     let group = d.fields.get("group").and_then(Value::as_str).map(|g| {

@@ -1207,7 +1207,7 @@ fn the_add_color_tool_adds_a_row_with_no_current_colors() {
     assert!((hue - 120.0).abs() < 1.0 && (s - 0.5).abs() < 0.01 && (b - v).abs() < 0.01, "{:?}", [hue, s, b]);
     assert_eq!(field(h.state(), "__sel"), json!([2]), "the new color is selected");
     assert_eq!(fills(h.state()), fills_before, "a color with no current colors recolors no art");
-    // A click on the new marker adds another color; the tool stays on.
+    // A second click adds another color; the tool stays on.
     let next = wheel_at(&h, 240.0, 0.75);
     h.input_mut().events.extend(press(next, 1));
     h.run_steps(3);

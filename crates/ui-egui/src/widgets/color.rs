@@ -923,7 +923,7 @@ pub struct WheelResponse {
     /// A colour moved by dragging its marker (a new hue and saturation) or, the selected colour,
     /// the brightness slider (a new brightness): `[h°, s, v]`, `None` where the control kept it.
     pub moved: Option<(usize, [Option<f32>; 3])>,
-    /// A click on the wheel: the colour whose marker is within reach of it (if any), and the hue
+    /// A click on the wheel: the color whose marker is within reach of it (if any), and the hue
     /// (degrees) and saturation under the pointer (1 for a marker past the wheel's edge).
     pub clicked: Option<(Option<usize>, [f32; 2])>,
 }
