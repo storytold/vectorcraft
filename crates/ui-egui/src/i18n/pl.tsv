@@ -1525,6 +1525,8 @@ lighting	Light	Światło
 	Leading	Interlinia
 	No Break	Bez podziału
 	Proportional Metrics	Metryka proporcjonalna
+	H or V Style	Styl poziomy lub pionowy
+	Roman Italics	Kursywa łacińska
 	Insert Aki Left	Wstaw aki z lewej
 	Insert Aki Right	Wstaw aki z prawej
 	Tsume	Tsume
@@ -7770,7 +7772,7 @@ breakText	Glyphs	Glify
 @msg	too many arguments	zbyt wiele argumentów
 @msg	too many quantifiers	zbyt wiele kwantyfikatorów
 @msg	turn on at least one side	włącz co najmniej jedną stronę
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	nieznana funkcja OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefiks - wyłącza funkcję; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom i aalt przyjmują numer wariantu w postaci `tag=N`, gdzie N to liczba od 0 do {_1}, na przykład `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	nieznana funkcja OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefiks - wyłącza funkcję; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom i aalt przyjmują numer wariantu w postaci `tag=N`, gdzie N to liczba od 0 do {_1}, na przykład `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	nieznane rozpraszanie `{d}` (diffusion, pattern, noise lub none)
 @msg	unknown panel `{panel}`	nieznany panel `{panel}`
 @msg	unknown parameter `{key}`	nieznany parametr `{key}`

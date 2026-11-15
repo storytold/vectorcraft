@@ -48,6 +48,8 @@ const OT_SWITCHES: &[(&str, &str)] = &[
     ("ot_titl", "titl"),
     ("ot_ordn", "ordn"),
     ("ot_frac", "frac"),
+    ("ot_hkna", "hkna"),
+    ("ot_ital", "ital"),
 ];
 /// The feature tags the Figure menu sets.
 const FIGURE_TAGS: [&str; 4] = ["tnum", "onum", "pnum", "lnum"];
@@ -56,8 +58,21 @@ const FIGURE_VALUES: [&str; 5] = ["default", "tabularLining", "proportionalLinin
 /// The values of the Position field, in the order of the OpenType panel's Position menu.
 const POSITION_VALUES: [&str; 5] = ["default", "superscript", "subscript", "numerator", "denominator"];
 /// The fields of OpenType Features.
-const OT_FIELDS: &[&str] =
-    &["ot_figure", "ot_position", "ot_liga", "ot_calt", "ot_dlig", "ot_swsh", "ot_salt", "ot_titl", "ot_ordn", "ot_frac", "ot_sets"];
+const OT_FIELDS: &[&str] = &[
+    "ot_figure",
+    "ot_position",
+    "ot_liga",
+    "ot_calt",
+    "ot_dlig",
+    "ot_swsh",
+    "ot_salt",
+    "ot_titl",
+    "ot_ordn",
+    "ot_frac",
+    "ot_hkna",
+    "ot_ital",
+    "ot_sets",
+];
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Character Style Options").into(),
@@ -106,6 +121,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "ot_titl",
             "ot_ordn",
             "ot_frac",
+            "ot_hkna",
+            "ot_ital",
             "ot_sets",
             "section",
         ]
@@ -926,6 +943,8 @@ pub(crate) fn opentype_body(ui: &mut egui::Ui, d: &mut Dialog) {
             ("ot_titl", tl!("Titling Alternates")),
             ("ot_ordn", tl!("Ordinals")),
             ("ot_frac", tl!("Fractions")),
+            ("ot_hkna", tl!("H or V Style")),
+            ("ot_ital", tl!("Roman Italics")),
         ] {
             switch(ui, d, key, caption, true);
         }
@@ -2042,6 +2061,23 @@ mod tests {
         assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["frac"]));
     }
 
+    /// H or V Style and Roman Italics are on, off or unset switches of OpenType Features: they show
+    /// the style's `hkna` and `ital` tags, a changed switch replaces its tag and keeps the others, an
+    /// unset one removes it, and a style without them keeps none.
+    #[test]
+    fn kana_style_and_roman_italics_are_opentype_switches() {
+        let mut d = dialog_for(json!({"features": ["hkna", "-ital", "dlig"]}));
+        assert_eq!((&d.fields["ot_hkna"], &d.fields["ot_ital"]), (&json!(true), &json!(false)));
+        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["hkna", "-ital", "dlig"]), "untouched");
+        d.fields.insert("ot_ital".into(), json!(true));
+        d.fields.insert("ot_hkna".into(), Value::Null);
+        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["dlig", "ital"]));
+        let mut d = dialog_for(json!({}));
+        assert!(d.fields["ot_hkna"].is_null() && d.fields["ot_ital"].is_null());
+        d.fields.insert("ot_hkna".into(), json!(true));
+        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["hkna"]));
+    }
+
     #[test]
     fn color_and_opentype_sections_show_their_controls() {
         let mut d = dialog_for(json!({}));
@@ -2066,6 +2102,8 @@ mod tests {
             "Titling Alternates",
             "Ordinals",
             "Fractions",
+            "H or V Style",
+            "Roman Italics",
             "Stylistic Sets",
             "ss01",
             "ss20",

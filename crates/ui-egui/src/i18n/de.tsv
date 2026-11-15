@@ -2637,6 +2637,8 @@ mark-style	Japanese	Japanisch
 	Proof Setup	Proof einrichten
 	Properties	Eigenschaften
 	Proportional Metrics	Proportionale Metrik
+	H or V Style	Horizontaler oder vertikaler Stil
+	Roman Italics	Lateinische Kursive
 	Insert Aki Left	Aki links einfügen
 	Insert Aki Right	Aki rechts einfügen
 	Tsume	Tsume
@@ -7481,7 +7483,7 @@ breakText	Glyphs	Glyphen
 @msg	toString is not a function	toString ist keine Funktion
 @msg	too many arguments	zu viele Argumente
 @msg	too many quantifiers	zu viele Quantifizierer
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	unbekannte OpenType-Funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; mit vorangestelltem - ausschalten; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom und aalt nehmen die Nummer einer Alternative als `tag=N` mit N von 0 bis {_1}, etwa `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	unbekannte OpenType-Funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; mit vorangestelltem - ausschalten; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom und aalt nehmen die Nummer einer Alternative als `tag=N` mit N von 0 bis {_1}, etwa `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	unbekanntes Dithering `{d}` (diffusion, pattern, noise oder none)
 @msg	unknown panel `{panel}`	unbekanntes Bedienfeld `{panel}`
 @msg	unknown parameter `{key}`	unbekannter Parameter `{key}`
