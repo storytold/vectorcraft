@@ -52,6 +52,22 @@ impl Harness {
         }
     }
 
+    /// Scrolls the dialog's body to its end with the wheel over `text`, and lets the scroll finish.
+    fn scroll_to_end(&mut self, text: &str) {
+        let p = self.rect(text).center();
+        let wheel = Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -4000.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        };
+        self.frame(vec![Event::PointerMoved(p), wheel]);
+        for _ in 0..60 {
+            self.frame(vec![]);
+        }
+    }
+
     fn rect(&self, text: &str) -> Rect {
         self.texts.iter().find(|(s, _)| s == text).map(|(_, r)| *r).unwrap_or_else(|| panic!("missing text {text:?}"))
     }
@@ -420,17 +436,12 @@ fn classic_extrude_bevel_shows_its_options_and_applies_as_one_step() {
     }
     h.click(h.rect("Lighting").center());
     h.settle();
-    for text in [
-        "Surface",
-        "Plastic",
-        "Light Intensity",
-        "Ambient Light",
-        "Highlight Intensity",
-        "Highlight Size",
-        "Blend Steps",
-        "Shading Color",
-        "Draw Hidden Faces",
-    ] {
+    for text in ["Surface", "Plastic", "Move Light to Back", "Light Intensity"] {
+        h.rect(text);
+    }
+    // The lighting sphere makes the tab taller than the dialog's body, which scrolls.
+    h.scroll_to_end("Light Intensity");
+    for text in ["Ambient Light", "Highlight Intensity", "Highlight Size", "Blend Steps", "Shading Color", "Draw Hidden Faces"] {
         h.rect(text);
     }
     assert!(h.ctx.read_response(Id::unique(("revolve-reset", "highlightSize"))).unwrap().enabled());
@@ -481,7 +492,11 @@ fn classic_revolve_shows_its_options_and_applies_as_one_step() {
     }
     h.click(h.rect("Lighting").center());
     h.settle();
-    for text in ["Surface", "Plastic", "Light Intensity", "Ambient Light", "Highlight Size", "Blend Steps", "Shading Color"] {
+    for text in ["Surface", "Plastic", "Move Light to Back", "Light Intensity"] {
+        h.rect(text);
+    }
+    h.scroll_to_end("Light Intensity");
+    for text in ["Ambient Light", "Highlight Size", "Blend Steps", "Shading Color"] {
         h.rect(text);
     }
     assert!(!h.texts.iter().any(|(t, _)| t == "Draw Hidden Faces"), "every face is drawn");
@@ -519,7 +534,11 @@ fn classic_rotate_shows_its_options_and_applies_as_one_step() {
     assert!(!h.texts.iter().any(|(t, _)| t == "Object" || t == "Depth" || t == "Angle"), "no Object tab");
     h.click(h.rect("Lighting").center());
     h.settle();
-    for text in ["Surface", "Diffuse", "Light Intensity", "Ambient Light", "Blend Steps", "Shading Color"] {
+    for text in ["Surface", "Diffuse", "Move Light to Back", "Light Intensity"] {
+        h.rect(text);
+    }
+    h.scroll_to_end("Light Intensity");
+    for text in ["Ambient Light", "Blend Steps", "Shading Color"] {
         h.rect(text);
     }
     assert!(

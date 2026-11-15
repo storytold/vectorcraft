@@ -1,7 +1,7 @@
 //! The own controls of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) in the
 //! compact 3D dialog: the extrude and bevel options, or the revolve options, on the Object tab
-//! (Rotate (Classic) has none), and the surface with its lights, highlight, blend steps, shading
-//! color and Preserve Spot Colors on the Lighting tab. Position (presets, rotation, perspective) is the Rotation tab every 3D
+//! (Rotate (Classic) has none), and the surface with its lighting sphere, lights, highlight, blend
+//! steps, shading color and Preserve Spot Colors on the Lighting tab. Position (presets, rotation, perspective) is the Rotation tab every 3D
 //! effect shares; the classic effects add the track cube to it ([`track_cube`]).
 
 use egui::{Color32, Id, Pos2, Rect, Sense, Stroke, Vec2, vec2};
@@ -395,16 +395,18 @@ pub(super) fn revolve_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     map_art_button(ui, d);
 }
 
-/// The surface, then for Diffuse and Plastic the lights, Ambient Light, the highlight (Plastic
-/// only, and not for Rotate (Classic), which has no Plastic surface), Blend Steps, Shading Color and
-/// Preserve Spot Colors (unavailable while Shading Color is Custom); Draw Hidden Faces last, for Extrude & Bevel (Classic) (Revolve (Classic) draws every face, and
-/// Rotate (Classic)'s plane is seen from either side).
+/// The surface, then for Diffuse and Plastic the lighting sphere, the lights, Ambient Light, the
+/// highlight (Plastic only, and not for Rotate (Classic), which has no Plastic surface), Blend Steps,
+/// Shading Color and Preserve Spot Colors (unavailable while Shading Color is Custom); Draw Hidden
+/// Faces last, for Extrude & Bevel (Classic) (Revolve (Classic) draws every face, and Rotate
+/// (Classic)'s plane is seen from either side). The sphere shows in the dialog as well as in the panel.
 pub(super) fn surface_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     let id = d.str("__effect");
     let effect = if id == CLASSIC_ROTATE { CLASSIC_ROTATE } else { CLASSIC_EXTRUDE };
     choice(ui, d, "surface", tl!("Surface"), &options_of(effect, "surface"));
     let surface = d.str("surface");
     ui.add_enabled_ui(surface == "diffuse" || surface == "plastic", |ui| {
+        super::revolve_lights::show(ui, d);
         light_list(ui, d);
         let mut selected = selected_light(d);
         let before = light_record(&selected);

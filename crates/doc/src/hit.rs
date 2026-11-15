@@ -323,34 +323,31 @@ fn path_options(nodes: &[&Node], chain: &[NodeId], opt: HitOptions) -> Option<Hi
 /// The objects under `p` that [`Hit::top_object`] picks in `scope` (isolation mode), topmost
 /// first: what clicks there select, one below the other (Cmd/Ctrl-click selects behind).
 pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>) -> Vec<NodeId> {
-    let walk = ArtWalk::open();
+    let _walk = ArtWalk::open();
     let opt = HitOptions { scope: scope.or(opt.scope), ..opt };
     // Normally one hit test per *object* suffices: layers and sublayers aren't selectable,
     // while a group (including a clipping group) is selected as one object. Repeatedly
     // searching the full tree for each hit made a stack of n overlapping paths O(n^2).
     // Isolation and Edit Contents change where selection groups begin; keep the original
     // traversal for those cases rather than change their Select Behind semantics.
-    if opt.scope.is_some() {
+    // Malformed files may contain non-layer roots; let the general traversal handle them.
+    if opt.scope.is_some() || doc.layers.iter().any(|l| !l.is_layer()) {
         return objects_at_repeated(doc, p, opt, scope);
     }
     let mut tops = Vec::new();
     let mut seen = HashSet::new();
     let symbols = doc.symbol_boxes();
     for layer in doc.layers.iter().rev() {
-        // Malformed files may contain non-layer roots; let the general traversal handle them.
-        if !layer.is_layer() {
-            walk.restart();
-            return objects_at_repeated(doc, p, opt, scope);
-        }
         if !layer.visible || layer.locked || layer.is_template() || doc.pattern_edit.as_ref().is_some_and(|e| e.layer != layer.id) {
             continue;
         }
         if !objects_at_layer(layer, p, opt, &symbols, &mut tops, &mut seen) {
             // An envelope in Edit Contents may expose objects *within* a top-level group.
-            // The repeated traversal handles that mixed hierarchy precisely, with the whole
-            // limit of symbol art to walk.
-            walk.restart();
-            return objects_at_repeated(doc, p, opt, scope);
+            // The repeated traversal handles that mixed hierarchy precisely. The objects found
+            // so far lie above the envelope and stay first; the repeated traversal finds the
+            // rest with what is left of the limit of symbol art to walk.
+            tops = objects_at_repeated_after(doc, p, opt, scope, tops);
+            break;
         }
     }
     // The objects on a locked artboard can't be selected, as `hit_test_skipping` passes over them.
@@ -414,7 +411,11 @@ fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
 
 /// The general selection order also handles isolation and nested Edit Contents.
 fn objects_at_repeated(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>) -> Vec<NodeId> {
-    let mut tops: Vec<NodeId> = vec![];
+    objects_at_repeated_after(doc, p, opt, scope, vec![])
+}
+
+/// [`objects_at_repeated`] after `tops`, the topmost objects under `p` already found.
+fn objects_at_repeated_after(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>, mut tops: Vec<NodeId>) -> Vec<NodeId> {
     // Each round leaves out the objects found so far (and everything inside them).
     while let Some(top) = hit_test_skipping(doc, p, opt, &|id| tops.contains(&id), true).map(|h| h.top_object(scope)) {
         if tops.contains(&top) {

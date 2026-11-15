@@ -245,7 +245,8 @@ pub(crate) fn stroke_width(face: &Facet, p: &Value) -> f64 {
 /// for each facet: the edges of the faces on Wireframe, else each face filled in its paint shaded by
 /// its tone and highlight (with Preserve Spot Colors, a color linked to a swatch as [`linked_face`]
 /// draws it). A gradient with transparent stops is shaded opaque and then masked by
-/// its own transparency, so the shading follows the gradient's coverage.
+/// its own transparency, so the shading follows the gradient's coverage; without a placement of its
+/// own, it is placed once on all the faces ([`crate::lighting::opaque_surface_paint`]).
 ///
 /// With `mapped`, a face that carries mapped art is a group of the face and that art, which the
 /// surface's opacity mask covers too. Shade Artwork gives the art its face's tone and highlight,
@@ -268,7 +269,7 @@ pub(crate) fn surface(
     let shade = shading_color(p);
     let preserve = preserves_spot_colors(p);
     let wire = shading.surface == ClassicSurface::Wireframe;
-    let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_paint(source) };
+    let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_surface_paint(source, || super::facets_bounds(&facets)) };
     let paint = &paint;
     // The mapped art of each facet, and whether the faces themselves are left out. Art past the
     // limits is left out, and the faces draw.
