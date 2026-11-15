@@ -131,7 +131,7 @@ impl Tool for ExtendPathTool {
                 // Back where it started: nothing to keep.
                 if length == 0.0 { vec![Action::Cancel] } else { vec![preview, Action::Commit] }
             }
-            PointerKind::DoubleClick => vec![],
+            PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
     }
 

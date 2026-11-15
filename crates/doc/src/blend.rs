@@ -840,15 +840,19 @@ fn reorient_strokes(n: &mut Node, o: Orient) {
     }
 }
 
-/// Turn the strokes of path `n` for Reverse Path Direction, before its subpaths flagged in
-/// `reversed` are reversed with [`SubPath::reverse`] (a closed one then starts at its last
-/// anchor): each stroke's width profile (sides swapped), pen pressure, tilt, bearing and rotation
-/// then run the new way, so the stroke draws as it did. A stroke reads one profile along every
-/// subpath, so it turns only when all of them turn alike. Arrowheads stay at the path's start and
-/// end.
+/// Turn the strokes of path or compound path `n` for Reverse Path Direction, before its subpaths
+/// flagged in `reversed` are reversed with [`SubPath::reverse`] (a closed one then starts at its
+/// last anchor): each stroke's width profile (sides swapped), pen pressure, tilt, bearing and
+/// rotation then run the new way, so the stroke draws as it did. A compound path's subpaths are
+/// its members' subpaths in order. A stroke reads one profile along every subpath, so it turns
+/// only when all of them turn alike. Arrowheads stay at the path's start and end.
 pub fn reverse_stroke_records(n: &mut Node, reversed: &[bool]) {
-    let NodeKind::Path { path, .. } = &n.kind else { return };
-    let mut turns = path.subpaths.iter().enumerate().map(|(i, sp)| {
+    let subpaths: Vec<&SubPath> = match &n.kind {
+        NodeKind::Path { path, .. } => path.subpaths.iter().collect(),
+        NodeKind::Compound { children, .. } => children.iter().filter_map(|c| c.path_data()).flat_map(|pd| &pd.subpaths).collect(),
+        _ => return,
+    };
+    let mut turns = subpaths.into_iter().enumerate().map(|(i, sp)| {
         let mut o = Orient::of(sp);
         if reversed.get(i).copied().unwrap_or(false) {
             if sp.closed {
