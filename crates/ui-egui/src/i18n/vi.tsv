@@ -5882,6 +5882,8 @@ theme	Appearance	Giao diện
 	Save Variable Library…	Lưu thư viện biến số…
 @msg	a variable library holds text variables, and the document has none	thư viện biến số chứa các biến số văn bản, và tài liệu không có biến số văn bản nào
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	không thể lưu biến số `{name}` vào thư viện biến số: hãy đổi tên để bắt đầu bằng một chữ cái hoặc `_`, không có khoảng trắng hay ký hiệu nào ngoài `-`, `_` và `.`
+@msg	{k} has control characters	{k} chứa ký tự điều khiển
+@msg	{k} has control characters or line breaks	{k} chứa ký tự điều khiển hoặc ngắt dòng
 @msg	data set `{name}` holds a control character, which a variable library can't hold	tập dữ liệu `{name}` chứa ký tự điều khiển mà thư viện biến số không thể chứa
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	tập dữ liệu `{name}` bắt đầu hoặc kết thúc bằng khoảng trắng mà thư viện biến số không thể chứa
 	Make Graph Dynamic	Tạo biểu đồ động
@@ -6213,6 +6215,7 @@ axis	Y Axis	Trục Y
 @msg	stops must be in order of `offset`	các điểm dừng phải theo thứ tự của `offset`
 @msg	the document has no pattern {pattern}	tài liệu không có họa tiết {pattern}
 @msg	the document has no swatch {n}	tài liệu không có mẫu màu {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` cần một điểm dừng chuyển sắc liên kết với mẫu màu đặc biệt
 @msg	the output	đầu ra
 @msg	the path has no anchor points	đường dẫn không có điểm neo
 @msg	too many anchor points (limit {MAX_ANCHORS})	quá nhiều điểm neo (giới hạn {MAX_ANCHORS})

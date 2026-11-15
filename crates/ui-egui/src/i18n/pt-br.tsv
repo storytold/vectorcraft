@@ -6517,6 +6517,7 @@ axis	Y Axis	Eixo Y
 @msg	stops must be in order of `offset`	as paradas devem estar em ordem de `offset`
 @msg	the document has no pattern {pattern}	o documento não tem o padrão {pattern}
 @msg	the document has no swatch {n}	o documento não tem a amostra {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` requer uma parada vinculada a uma amostra de cor spot
 @msg	the output	a saída
 @msg	the path has no anchor points	o caminho não tem pontos de ancoragem
 @msg	too many anchor points (limit {MAX_ANCHORS})	pontos de ancoragem demais (limite {MAX_ANCHORS})
@@ -9587,7 +9588,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	os arquivos {kind} não têm transparência, e o arquivo teria {what}: achate-a primeiro (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	as imagens {kind} não podem ser abertas (veja document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` não é uma das opções
-@msg	{k} has control characters{_1}	{k} tem caracteres de controle{_1}
+@msg	{k} has control characters	{k} tem caracteres de controle
+@msg	{k} has control characters or line breaks	{k} tem caracteres de controle ou quebras de linha
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} é longo demais (no máximo {MAX_TEXT} caracteres)
 @msg	{k} must be > 0	{k} deve ser > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} deve ser um número (pt) ou um comprimento como "210 mm"
