@@ -4088,20 +4088,21 @@ fn predefined_mojikumi_sets_are_reported_as_left_out() {
     }
 }
 
-/// The text document has no Bunri-Kinshi: a paragraph with it on and an inseparable pair in it is
-/// reported as left out, and comes back off; with it off, or with no pair, nothing is reported.
+/// Bunri-Kinshi comes back on or off, with or without an inseparable pair in the paragraph, and
+/// nothing is reported.
 #[test]
-fn bunri_kinshi_is_reported_only_for_paragraphs_with_a_pair() {
+fn bunri_kinshi_comes_back_with_or_without_a_pair() {
     use vectorcraft_doc::TextObject;
-    for (text, on, reported) in [
-        ("Wait——now", true, true),
-        ("Wait——now", false, false),
-        ("Wait—now", true, false),
-        ("Wait……now", true, true),
-        ("Wait‥‥now", true, true),
-        ("あ〳〵い", true, true),
-        ("あ〴〵い", true, true),
-        ("あ〵〳い", true, false),
+    for (text, on) in [
+        ("Wait——now", true),
+        ("Wait——now", false),
+        ("Wait—now", true),
+        ("Wait……now", true),
+        ("Wait‥‥now", true),
+        ("あ〳〵い", true),
+        ("あ〴〵い", true),
+        ("あ〵〳い", true),
+        ("あ〵〳い", false),
     ] {
         let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), text, style(14.0, Color::BLACK));
         t.para.bunri_kinshi = on;
@@ -4110,7 +4111,7 @@ fn bunri_kinshi_is_reported_only_for_paragraphs_with_a_pair() {
         let n = text_node(&mut doc, t);
         doc.insert(Some(layer), usize::MAX, n).unwrap();
         let out = export_ai_editing(&doc, &opts()).unwrap();
-        assert_eq!(!out.warnings.is_empty(), reported, "{text} {on}: {:?}", out.warnings);
+        assert!(out.warnings.is_empty(), "{text} {on}: {:?}", out.warnings);
         let mut all = vec![];
         paths(&read_back(&doc).layers, &mut all);
         let paras: Vec<bool> = all
@@ -4120,8 +4121,85 @@ fn bunri_kinshi_is_reported_only_for_paragraphs_with_a_pair() {
                 _ => None,
             })
             .collect();
-        assert_eq!(paras, [false], "{text} {on}");
+        assert_eq!(paras, [on], "{text} {on}");
     }
+}
+
+/// Each paragraph's Kinsoku set, Kinsoku Shori Type, Burasagari and Bunri-Kinshi come back, and
+/// nothing is reported: every value of each, mixed across the paragraphs of one object, Burasagari
+/// and Bunri-Kinshi kept under Kinsoku None. The text document lists the Hard and Soft sets, and
+/// every paragraph, the normal paragraph style and the document's defaults write all four keys.
+/// Another attribute the text document leaves out is still reported.
+#[test]
+fn kinsoku_settings_come_back_on_each_paragraph() {
+    use vectorcraft_doc::{Burasagari, Kinsoku, KinsokuShoriType, ParaStyle, TextObject};
+    let cases = [
+        (Kinsoku::None, KinsokuShoriType::PushInFirst, Burasagari::Forced, true),
+        (Kinsoku::Soft, KinsokuShoriType::PushOutFirst, Burasagari::Standard, false),
+        (Kinsoku::Hard, KinsokuShoriType::PushOutOnly, Burasagari::None, true),
+        (Kinsoku::Hard, KinsokuShoriType::PushInFirst, Burasagari::Standard, false),
+        (Kinsoku::Soft, KinsokuShoriType::PushOutOnly, Burasagari::Forced, true),
+    ];
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "かな。\n「かな」、\nあ——い\nかな\nかな。", style(14.0, Color::BLACK));
+    t.set_paragraph_styles(
+        cases
+            .iter()
+            .map(|&(kinsoku, kinsoku_type, burasagari, bunri_kinshi)| ParaStyle {
+                kinsoku,
+                kinsoku_type,
+                burasagari,
+                bunri_kinshi,
+                ..ParaStyle::default()
+            })
+            .collect(),
+    );
+    let mut doc = Document::new(200.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&type_lines(&back), &type_lines(&doc));
+    let mut all = vec![];
+    paths(&back.layers, &mut all);
+    let read: Vec<_> = all
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => {
+                Some(t.paragraph_styles().iter().map(|p| (p.kinsoku, p.kinsoku_type, p.burasagari, p.bunri_kinshi)).collect::<Vec<_>>())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(read, [cases.to_vec()]);
+    let decoded = text_document(&program(&doc));
+    let hard = decoded.find("PhotoshopKinsokuHard").unwrap_or_else(|| panic!("{decoded}"));
+    let soft = decoded.find("PhotoshopKinsokuSoft").unwrap_or_else(|| panic!("{decoded}"));
+    assert!(hard < soft, "{decoded}");
+    // Five paragraphs, then the normal paragraph style and the document's defaults (Hard, Push Out
+    // Only, no Burasagari, Bunri-Kinshi off).
+    for (key, count) in [
+        ("/27 /nil", 1),
+        ("/27 0", 4),
+        ("/27 1", 2),
+        ("/25 0", 2),
+        ("/25 1", 1),
+        ("/25 2", 4),
+        ("/24 0", 3),
+        ("/24 1", 2),
+        ("/24 2", 2),
+        ("/23 true", 3),
+        ("/23 false", 4),
+    ] {
+        assert_eq!(decoded.matches(key).count(), count, "{key}: {decoded}");
+    }
+    let mut lossy = doc.clone();
+    let id = lossy.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = lossy.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.underline = true;
+    }
+    assert_eq!(export_ai_editing(&lossy, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
 }
 
 #[test]
