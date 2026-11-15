@@ -61,7 +61,10 @@ pub(super) const REPLACE_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Replace the saved presets that have these names?").into(),
     body: |_, ui, d| {
         let names: Vec<&str> = d.fields.get("names").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
-        ui.label(egui::RichText::new(names.join("\n")).color(Tokens::get(ui.ctx()).text_dim));
+        // A long list scrolls, so Replace and Cancel stay on screen.
+        super::modal::scrolled_rows(ui, "tracing-replace-names", |ui| {
+            ui.label(egui::RichText::new(names.join("\n")).color(Tokens::get(ui.ctx()).text_dim));
+        });
         false
     },
     confirm: confirm_replace,
@@ -267,7 +270,18 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, bytes: &[u8]) -> Result<(), St
     if bytes.len() > TRACE_PRESET_MAX_BYTES {
         return Err(too_big());
     }
-    let file = json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) });
+    open_import(app, json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }))
+}
+
+/// [`open_file`] for the tracing presets file at `path` (File › Open, a drop): the file is read no
+/// further than one byte past the size limit, as Import… reads it.
+pub(crate) fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
+    let file = file_contents(app, json!({ "path": path }))?;
+    open_import(app, file)
+}
+
+/// The import of an opened tracing presets file `file` (`{dataBase64}`), over the dialog open now.
+fn open_import(app: &mut VectorcraftApp, file: Value) -> Result<(), String> {
     let (imported, skipped) = import_file(app, &file)?;
     let mut under = app.ui.dialog.take();
     if let (Some(d), Some(first)) = (under.as_mut().filter(|d| d.kind == KIND), imported.get(0).and_then(Value::as_str)) {

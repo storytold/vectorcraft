@@ -327,3 +327,61 @@ fn a_file_with_a_fault_changes_nothing() {
     assert!(app.session.prefs.trace_presets.is_empty());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// File › Open reads a tracing presets file no further than one byte past the size limit, and
+/// refuses a larger one, without the whole-file reader.
+#[test]
+fn an_opened_file_is_read_no_further_than_the_limit() {
+    let dir = std::env::temp_dir().join(format!("vc-tracing-presets-open-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let fine = dir.join("fine.vctracepresets");
+    std::fs::write(&fine, r#"{"format": "vctracepresets", "version": 1, "presets": [{"name": "Fine", "params": {}}]}"#).unwrap();
+    let big = dir.join("big.vctracepresets");
+    std::fs::write(&big, vec![b' '; TRACE_PRESET_MAX_BYTES + 1]).unwrap();
+    let read_head = |p: &str, max: usize| {
+        use std::io::Read as _;
+        assert_eq!(max, TRACE_PRESET_MAX_BYTES + 1);
+        let mut bytes = vec![];
+        std::fs::File::open(p).and_then(|f| f.take(max as u64).read_to_end(&mut bytes)).map_err(|e| e.to_string())?;
+        Ok(bytes)
+    };
+    let read = |p: &str| -> Result<Vec<u8>, String> { Err(format!("`{p}` was read in full")) };
+    let services = crate::Services { read_head: Some(Box::new(read_head)), read: Some(Box::new(read)), ..Default::default() };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    crate::io::open_path(&mut app, &fine.to_string_lossy()).unwrap();
+    assert_eq!(saved_names(&app), ["Fine"]);
+    let e = crate::io::open_path(&mut app, &big.to_string_lossy()).unwrap_err();
+    assert!(e.contains("tracing presets file is larger than 4 MiB"), "{e}");
+    assert_eq!(saved_names(&app), ["Fine"]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The question's list of names scrolls, so a long one keeps Replace and Cancel on a small screen.
+#[test]
+fn a_long_list_of_names_keeps_replace_on_screen() {
+    fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let names: Vec<Value> = (0..200).map(|i| json!(format!("Tracing Preset {i}"))).collect();
+    app.ui.dialog = Some(ask_replace(None, names, json!({ "dataBase64": "" })));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 600.0));
+    let mut texts = vec![];
+    for k in 0..6 {
+        let raw = egui::RawInput { screen_rect: Some(screen), time: Some(f64::from(k) * 0.25), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| super::super::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        texts.clear();
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+    }
+    for button in ["Replace", "Cancel"] {
+        let rect = texts.iter().find(|(t, _)| t == button).map(|(_, r)| *r);
+        assert!(rect.is_some_and(|r| screen.contains_rect(r)), "{button} is drawn on screen: {rect:?}");
+    }
+}

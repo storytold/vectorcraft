@@ -552,6 +552,12 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
         note_recent(app, path);
         return Ok(Value::Null);
     }
+    // A tracing presets file is read up to its size limit, as Import… reads it.
+    if let Some(OpensAs::Presets { import: "imageTrace.presets.import", .. }) = opens_as(path) {
+        dialogs::tracing_presets::open_path(app, path)?;
+        note_recent(app, path);
+        return Ok(Value::Null);
+    }
     // A file only an importer plug-in reads is not read past the importer's input limit.
     check_import_size(path, false)?;
     let mut bytes = read(app, path)?;
