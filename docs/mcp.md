@@ -2374,8 +2374,10 @@ In the app, a script past the growth limit stops at a question to continue or to
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
 runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`. In
 the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`. The
-report of a failed run has the same fields after `kind`, `message`, `line`, `column`, `file` (when the error is in
-another file than the script) and `fuelLeft`.
+report of a failed run has the same fields after `kind`, `message`, `messageOrigin`, `line`, `column`, `file` (when
+the error is in another file than the script) and `fuelLeft`. `messageOrigin` is `script` when `message` is text the
+script supplied (a value it threw, or an error it made or whose name or message it changed) and `built-in` for the
+app's own errors, syntax errors and limits. The status bar shows a `script` message as it is, untranslated.
 
 - `runTimeMs` is the time the script ran, its commands included. Waits between frames and for a person's answer are
   left out. `timingAvailable` is false on the web, where `runTimeMs` is 0.

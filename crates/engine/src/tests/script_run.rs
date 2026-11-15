@@ -170,6 +170,58 @@ fn an_error_names_the_script_its_place_and_kind() {
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
 
+/// A failed run's report keeps its message and kind and says where the message came from: text the
+/// script supplied, or one of the app's own errors. The status text and the console line read the
+/// same either way, and only the app's own errors get advice about other applications' objects.
+#[test]
+fn failed_script_report_keeps_message_and_adds_origin() {
+    let mut s = two_docs();
+    for (source, kind, message, origin) in [
+        ("throw new Error('invalid array length');", "thrown", "Error: invalid array length", "script"),
+        ("throw new RangeError('invalid array length');", "thrown", "RangeError: invalid array length", "script"),
+        ("throw 'invalid array length';", "thrown", "invalid array length", "script"),
+        ("throw 'ReferenceError: app is not defined';", "thrown", "ReferenceError: app is not defined", "script"),
+        ("try { new Array(-1); } catch (e) { throw new Error(e.message); }", "thrown", "Error: invalid array length", "script"),
+        ("new Array(-1);", "thrown", "RangeError: invalid array length", "built-in"),
+        ("try { new Array(-1); } catch (e) { throw e; }", "thrown", "RangeError: invalid array length", "built-in"),
+        ("vc.run();", "thrown", "TypeError: vc.run: give a command id, as a string", "built-in"),
+    ] {
+        let e = run(&mut s, source).unwrap_err().to_string();
+        let report = s.script_report().unwrap().clone();
+        assert_eq!(
+            (report["kind"].as_str(), report["message"].as_str(), report["messageOrigin"].as_str()),
+            (Some(kind), Some(message), Some(origin)),
+            "{source}"
+        );
+        let (line, column) = (&report["line"], &report["column"]);
+        let before = format!("t.js: line {line}, column {column}: ");
+        assert_eq!(e, format!("{before}{message} ({kind})"), "{source}");
+        assert_eq!(s.script_failure_text().as_deref(), Some(e.as_str()));
+        let authored = s.script_authored_failure();
+        assert_eq!(authored, (origin == "script").then(|| (before.clone(), message, format!(" ({kind})"))), "{source}");
+        let console = s.execute("script.console", &json!({})).unwrap();
+        let error = console["lines"].as_array().unwrap().iter().rev().find(|l| l["kind"] == "error").map(|l| l["text"].clone());
+        assert_eq!(error, Some(json!(format!("t.js:{line}:{column}: {message}"))), "{source}");
+    }
+    // The app's own reference error names the `vc` object; the same text a script threw does not.
+    run(&mut s, "app.activeDocument;").unwrap_err();
+    assert!(s.script_report().unwrap()["message"].as_str().unwrap().contains("`vc`"));
+    assert_eq!(s.script_report().unwrap()["messageOrigin"], "built-in");
+    // An error in code `eval` compiled keeps where its message came from.
+    let e = run(&mut s, "eval(\"throw new Error('invalid array length')\");").unwrap_err().to_string();
+    assert_eq!(e, "t.js: Error: invalid array length (thrown)");
+    assert_eq!(s.script_authored_failure(), Some(("t.js: ".to_string(), "Error: invalid array length", " (thrown)".to_string())));
+    // Syntax errors and limits are the app's own.
+    run(&mut s, "var = 1;").unwrap_err();
+    assert_eq!((s.script_report().unwrap()["kind"].as_str(), s.script_authored_failure()), (Some("syntax"), None));
+    s.execute("script.run", &json!({"source": "while (true) {}", "name": "t.js", "maxFuel": 100_000})).unwrap_err();
+    assert_eq!((s.script_report().unwrap()["messageOrigin"].as_str(), s.script_authored_failure()), (Some("built-in"), None));
+    // A run that completes has no failure to split.
+    run(&mut s, "throw 'x';").unwrap_err();
+    run(&mut s, "1").unwrap();
+    assert_eq!(s.script_authored_failure(), None);
+}
+
 /// An error raised where the run has no place for it, such as in code `eval` compiled, is named
 /// with the script and its kind alone, with one colon after the script's name.
 #[test]

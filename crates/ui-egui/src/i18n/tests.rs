@@ -3252,6 +3252,21 @@ fn script_errors_are_translated() {
     }
 }
 
+/// A message with a value kept as it is translates the words around the value and shows the value
+/// unchanged, whatever it reads like; when the words around it cannot hold its place once, the
+/// message stays English.
+#[test]
+fn a_kept_value_is_shown_as_it_is_in_a_translated_message() {
+    let de = Lang::from_code("de").expect("registered");
+    let (before, after) = ("t.js: line 1, column 1: ", " (thrown)");
+    for kept in ["invalid array length", "", "{e}", "\u{FFFC}", "a\nb", "t.js: line 1, column 1: x (thrown)"] {
+        assert_eq!(message_keeping(de, before, kept, after), format!("t.js: Zeile 1, Spalte 1: {kept} (ausgelöst)"), "{kept:?}");
+    }
+    assert_eq!(message_keeping(de, "t.js\u{FFFC}: line 1, column 1: ", "x", after), "t.js\u{FFFC}: line 1, column 1: x (thrown)");
+    assert_eq!(message_keeping(de, "no such message ", "x", ""), "no such message x");
+    assert_eq!(message_keeping(Lang::EN, before, "invalid array length", after), "t.js: line 1, column 1: invalid array length (thrown)");
+}
+
 /// The errors a script's `$` object, its `alert`, `confirm` and `prompt` dialogs, `vc.document`,
 /// `vc.log`, the methods of its `File` and `Folder` objects and a run's limits give, and the errors
 /// of the script engine commands, are translated in every language of [`COMPLETE_MESSAGES`], on

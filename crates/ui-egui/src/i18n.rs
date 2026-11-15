@@ -765,6 +765,35 @@ pub fn msg(s: &str) -> String {
     out
 }
 
+/// Stands in for the value [`message_keeping`] shows as it is while the text around it is
+/// translated.
+const KEPT_VALUE: char = '\u{FFFC}';
+
+/// The message `before`, `kept` and `after` make, with `before` and `after` translated as
+/// [`message`] translates a message and `kept` (such as text a script threw) shown as it is, even
+/// when it reads like a message that has a translation. When the translation does not hold the
+/// place of `kept` exactly once, the message is shown in English.
+pub fn message_keeping(lang: Lang, before: &str, kept: &str, after: &str) -> String {
+    keeping(|s| message(lang, s), before, kept, after)
+}
+
+/// [`message_keeping`] in the current language, remembering the last translation as [`msg`] does.
+pub fn msg_keeping(before: &str, kept: &str, after: &str) -> String {
+    keeping(msg, before, kept, after)
+}
+
+fn keeping(translate: impl Fn(&str) -> String, before: &str, kept: &str, after: &str) -> String {
+    let english = || format!("{before}{kept}{after}");
+    if before.contains(KEPT_VALUE) || after.contains(KEPT_VALUE) {
+        return english();
+    }
+    let shown = translate(&format!("{before}{KEPT_VALUE}{after}"));
+    match shown.split_once(KEPT_VALUE) {
+        Some((head, tail)) if !tail.contains(KEPT_VALUE) => format!("{head}{kept}{tail}"),
+        _ => english(),
+    }
+}
+
 /// [`trn`] in the current language.
 pub fn tn(n: u64, one: &str, other: &str) -> String {
     trn(current(), n, one, other)
