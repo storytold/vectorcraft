@@ -13,6 +13,7 @@
 	Edge Brightness	Яркост на ръба
 	Smoothness	Гладкост
 	Radial Blur…	Лъчезарно размазване…
+	Blur Center	Център на размазването
 	Smart Blur…	Интелигентно размазване…
 	Sharpen	Изостряне
 	Unsharp Mask…	Контурна маска…
@@ -145,6 +146,7 @@
 	Align to Artboard	Подравняване спрямо работната област
 	Align to Glyph Bounds	Подравняване спрямо границите на глифа
 	Align to Key Object	Подравняване спрямо ключов обект
+	Align to Key Anchor	Подравняване спрямо ключова опорна точка
 	Align to Page	Подравняване спрямо страницата
 	Align to Path	Подравняване спрямо пътя
 	Align to Selection	Подравняване спрямо селекцията
@@ -630,6 +632,7 @@ font-technology	Variable	Променливи
 	Copy All Styles	Копиране на всички стилове
 	Copy Color Value (Hex)	Копиране на цветова стойност (Hex)
 	Copy Fonts Used in the Document	Копиране на шрифтовете, използвани в документа
+	Copy Info	Копиране на информация
 	Copy Links	Копиране на връзките
 	Copy Selected Style	Копиране на избрания стил
 	Copy to User Defined	Копиране в потребителски
@@ -889,6 +892,9 @@ font-technology	Variable	Променливи
 	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
 	No alternates for the selected character.	Няма алтернативи за избрания знак.
 	Double-click to replace	Двойно щракване за замяна
+	Click to replace	Щракване за замяна
+	Show all alternates in the Glyphs panel	Показване на всички алтернативи в панела „Глифи“
+	Show Character Alternates	Показване на алтернативите на знака
 	Select one character with the Type tool first.	Първо изберете един знак с инструмента „Текст“.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} е глиф на {font}, а не на шрифта, с който е зададен избраният текст ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} принадлежи на {base} (U+{base_code}) {place}; избраният от вас знак е {sel} (U+{code}).
@@ -1048,7 +1054,10 @@ font-technology	Variable	Променливи
 	Every (minutes)	На всеки (минути)
 	Every option is at its default.	Всички опции са в състояние по подразбиране.
 	Every option matches {base}.	Всички опции съответстват на {base}.
-	Every-line Composer	Композитор за всеки ред
+	Middle Eastern & South Asian Single-line Composer	Ред по ред композитор (Близък изток и Южна Азия)
+	Middle Eastern & South Asian Every-line Composer	Композитор за всеки ред (Близък изток и Южна Азия)
+	Standard Single-line Composer	Стандартен ред по ред композитор
+	Standard Every-line Composer	Стандартен композитор за всеки ред
 	Exact dash lengths	Точни дължини на тиретата
 	Exceptions (comma separated)	Изключения (разделени със запетаи)
 	Exclude	Изключване
@@ -1146,6 +1155,7 @@ font-technology	Variable	Променливи
 	Rotate (Classic)…	Ротация (класическа)…
 	Surface	Повърхност
 	Wireframe	Телена рамка
+	Render Settings	Настройки за рендериране
 	No Shading	Без засенчване
 	Plastic	Пластмаса
 	Highlight Intensity	Интензивност на отблясъка
@@ -1284,6 +1294,7 @@ font-technology	Variable	Променливи
 	Format	Формат
 	Format Options	Опции за формат
 	Format Settings	Настройки на формата
+	Format Settings…	Настройки на формата…
 	Format:	Формат:
 	Formats:	Формати:
 	Fractional Widths	Дробни ширини
@@ -1340,6 +1351,14 @@ font-technology	Variable	Променливи
 	Previous Artboard	Предишна работна област
 	Next Artboard	Следваща работна област
 	Last Artboard	Последна работна област
+	Status Bar Show	Показване в лентата на състоянието
+	Artboard Name	Име на работната област
+	Current Tool	Текущ инструмент
+	Date and Time	Дата и час
+	Number of Undos	Брой отмени
+	Document Color Profile	Цветови профил на документа
+	Undos	Отмени
+	Redos	Повторения
 	Go To Link	Към връзката
 	GPL palettes keep solid colours only, as RGB.	Палитрите GPL запазват само плътни цветове като RGB.
 	GPU Performance	Производителност на графичния процесор
@@ -1359,6 +1378,40 @@ font-technology	Variable	Променливи
 	Graph	Диаграма
 	Graph Data	Данни за диаграма
 	Graph Type	Тип диаграма
+	Graph Options	Опции на диаграмата
+	Left Axis	Лява ос
+	Right Axis	Дясна ос
+	Category Axis	Ос на категориите
+	Separate Scales	Отделни скали
+	Add Drop Shadow	Добавяне на падаща сянка
+	Add Legend Across Top	Добавяне на легенда отгоре
+	First Row in Front	Първият ред отпред
+	First Column in Front	Първата колона отпред
+	Legend	Легенда
+	Column Width	Ширина на колоната
+	Bar Width	Ширина на стълба
+	Cluster Width	Ширина на групата
+	Mark Data Points	Маркиране на точките от данни
+	Connect Data Points	Свързване на точките от данни
+	Edge-to-Edge Lines	Линии от край до край
+	Draw Filled Lines	Чертане на запълнени линии
+	Tick Values	Стойности на отметките
+	Override Calculated Values	Замяна на изчислените стойности
+	Divisions	Деления
+	Tick Marks	Отметки
+	Tick Marks per Division	Отметки на деление
+	Draw Tick Marks Between Labels	Чертане на отметки между етикетите
+	Add Labels	Добавяне на етикети
+	Maximum must be more than Minimum.	Максимумът трябва да е по-голям от минимума.
+	Column Graph	Колонна диаграма
+	Stacked Column Graph	Колонна диаграма с натрупване
+	Bar Graph	Стълбчеста диаграма
+	Stacked Bar Graph	Стълбчеста диаграма с натрупване
+	Line Graph	Линейна диаграма
+	Area Graph	Площна диаграма
+	Scatter Graph	Диаграма на разсейване
+	Pie Graph	Кръгова диаграма
+	Radar Graph	Радарна диаграма
 	Graph Design	Дизайн на диаграма
 	Graph Marker	Маркер на диаграма
 	New Design	Нов дизайн
@@ -1478,6 +1531,7 @@ font-technology	Variable	Променливи
 	Highlight anchors on mouse over	Маркиране на опорните точки при задържане на мишката
 	Highlight Rows	Маркиране на редовете
 	Highlight Variable	Маркиране на променливи
+	Sort Variables	Сортиране на променливите
 	Highlight Substituted Fonts	Маркиране на заменени шрифтове
 	Highlight Substituted Glyphs	Маркиране на заменени глифи
 	History	История
@@ -1630,6 +1684,7 @@ font-technology	Variable	Променливи
 	Images:	Изображения:
 	Import Keyboard Shortcuts…	Импортиране на клавишни комбинации…
 	Import PDF	Импортиране на PDF
+	Import PDF pages as links	Импортиране на страниците на PDF като връзки
 	Import PDF Presets	Импортиране на PDF предварителни настройки
 	Import Perspective Grid Presets	Импортиране на предварителни настройки за перспективна мрежа
 	Import Print Presets	Импортиране на предварителни настройки за печат
@@ -1939,6 +1994,7 @@ font-technology	Variable	Променливи
 	Menu Dialog	Диалогов прозорец на менюто
 	Merge	Сливане
 	Merge colors into one row	Сливане на цветовете в един ред
+	New Row	Нов ред
 	Merge Graphic Styles	Сливане на графични стилове
 	Merge Graphic Styles…	Сливане на графични стилове…
 	Merge Layers	Сливане на слоеве
@@ -2586,6 +2642,8 @@ font-technology	Variable	Променливи
 	Proof Setup	Настройка на пробен печат
 	Properties	Свойства
 	Proportional Metrics	Пропорционални метрики
+	H or V Style	Хоризонтален или вертикален стил
+	Roman Italics	Римски курсив
 	Insert Aki Left	Вмъкване на аки отляво
 	Insert Aki Right	Вмъкване на аки отдясно
 	Tsume	Цуме
@@ -3313,11 +3371,11 @@ digits	Malayalam	Малаялам
 	Single Left Quotation Mark	Лява единична кавичка
 	Single Quotes:	Единични кавички:
 	Single Right Quotation Mark	Дясна единична кавичка
-	Single-line Composer	Ред по ред композитор
 	Toggle Line Composer	Превключване на композитора на редове
 	Sixth Space	Шесто разстояние
 	Size	Размер
 	Size Tile to Art	Оразмеряване на плочката според обектите
+	Move Tile with Art	Преместване на плочката заедно с обектите
 	Size/Leading	Размер/междуредие
 	Size:	Размер:
 	Ridges per segment:	Изпъкналости на сегмент:
@@ -3348,6 +3406,18 @@ digits	Malayalam	Малаялам
 	Smart Guides (View → Smart Guides)	Интелигентни водачи (Изглед → Интелигентни водачи)
 	Smart Guides (⌘U)	Интелигентни водачи (⌘U)
 	Smart Punctuation…	Интелигентна пунктуация…
+	Smart Punctuation	Интелигентна пунктуация
+	ff, fi, ffi Ligatures	Лигатури ff, fi, ffi
+	ff, fl, ffl Ligatures	Лигатури ff, fl, ffl
+	Smart Quotes	Интелигентни кавички
+	Smart Spaces	Интелигентни интервали
+	En, Em Dashes	Средни и дълги тирета
+	Ellipses	Многоточия
+	Expert Fractions	Експертни дроби
+	Replace In	Замяна в
+	Selected Text Only	Само избрания текст
+	Entire Document	Целия документ
+	Report Results	Отчет за резултатите
 	Smooth	Гладък
 	Corner	Ъгъл
 	Relative	Относителен
@@ -3378,6 +3448,7 @@ digits	Malayalam	Малаялам
 	Solid	Плътен
 	Sort by Kind	Сортиране по вид
 	Sort by Name	Сортиране по име
+	Sort by Size	Сортиране по размер
 	Sort by Status	Сортиране по състояние
 	Source code on GitHub	Изходен код в GitHub
 	Source Sans 3	Source Sans 3
@@ -3497,6 +3568,8 @@ digits	Malayalam	Малаялам
 	Swap Fill and Stroke (Shift+X)	Размяна на запълването и щриха (Shift+X)
 	Swap start and end arrowheads	Размяна на началната и крайната стрелка
 	Swap the selected object for the file, keeping its place and transform	Замяна на избрания обект с файла, като се запазват мястото и трансформациите му
+	Show Import Options	Показване на опциите за импортиране
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Питане за опциите за импортиране на всеки PDF, DXF или текстов файл преди поставянето му; изключено: използват се последно избраните опции
 	Stylistic Alternates	Стилистични алтернативи
 	Set {n}	Набор {n}
 	Swash	Декоративен елемент
@@ -3592,6 +3665,8 @@ digits	Malayalam	Малаялам
 	Kana	Кана
 	Numerals	Цифри
 	Scale at Center	Мащабиране от центъра
+	Delete Set	Изтриване на набор
+	Direct Entry	Директно въвеждане
 	Up/Down:	Нагоре/надолу:
 	Left/Right:	Наляво/надясно:
 	Tate-chu-yoko Up/Down	Тате-чу-йоко нагоре/надолу
@@ -3933,6 +4008,9 @@ digits	Malayalam	Малаялам
 	Working CMYK	Работен CMYK
 	Working CMYK (don't tag)	Работен CMYK (без етикет)
 	Working RGB (don't tag)	Работен RGB (без етикет)
+	Don't Color Manage This Document	Без управление на цветовете за този документ
+	Working RGB: {name}	Работен RGB: {name}
+	Working CMYK: {name}	Работен CMYK: {name}
 	Workspace	Работно пространство
 	Workspace {i}	Работно пространство {i}
 	Wrinkle Tool	Инструмент „Набръчкване“
@@ -4163,6 +4241,7 @@ axis	Both	И двете
 	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Този скрипт добави изключително много обекти. Да продължи ли, или да се спре и да се отменят промените му?
 @msg	Copied the script report	Копиран е отчетът за скрипта
+@msg	Copied the link info	Информацията за връзката е копирана
 @msg	Corners edits the corners of a path	Ъглите редактират ъглите на пътя
 @msg	Couldn't copy to the system clipboard: {e}	Неуспешно копиране в системния клипборд: {e}
 @msg	Couldn't open {name}: {e}	Неуспешно отваряне на {name}: {e}
@@ -4984,6 +5063,11 @@ axis	Both	И двете
 @msg	Imported library {name}	Импортирана библиотека {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Правило за RGB:
+	CMYK Policy:	Правило за CMYK:
+	Preserve Embedded Profiles	Запазване на вградените профили
+	Convert to Working Space	Преобразуване в работното пространство
+	Preserve Numbers	Запазване на числата
 	Texture	Текстура
 	Craquelure…	Кракелюр…
 	Grain…	Зърнистост…
@@ -5688,6 +5772,9 @@ theme	Appearance	Външен вид
 	Softness	Мекота
 	Ambient Light	Околна светлина
 	Light behind the object	Светлина зад обекта
+	Move Light to Back	Премести светлината отзад
+	Move Light to Front	Премести светлината отпред
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Плъзнете светлина, за да я преместите. Клавишите със стрелки местят фокусираната светлина; Shift я мести с 15°.
 	Shadows	Сенки
 	Distance from Object	Разстояние от обекта
 	Shadow Bounds	Граници на сянката
@@ -6120,6 +6207,8 @@ axis	Y Axis	Y ос
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране
+	Select Similar Objects	Избор на подобни обекти
+	Select Similar Options	Опции за избор на подобни
 	Leave Out of Global Edit	Изключване от глобалното редактиране
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобалното редактиране работи с пътища, съставни пътища, екземпляри на символи и групи от тях
 	Match	Съвпадение
@@ -6231,6 +6320,13 @@ axis	Y Axis	Y ос
 	Graphite Pencil	Графитен молив
 	Wax Crayon	Восъчен пастел
 	Charcoal Dust	Въглен прах
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технологични схеми
+	Circuit Trace	Проводяща писта
+	Bus Lines	Шинни линии
+	Terminal Nodes	Крайни възли
+
 	Notched Ribbon	Назъбена лента
 	Double Line	Двойна линия
 	Wave	Вълна
@@ -6860,6 +6956,9 @@ breakText	Glyphs	Глифи
 	Open Tutorial Sample	Отваряне на примерния файл на урока
 	Finish Tutorial	Завършване на урок
 	Next Tutorial	Следващ урок
+	Show Learn Tab	Показване на раздел в Обучение
+	Show Skill	Показване на умение
+	Back One Level	Едно ниво назад
 	Back to Skills	Обратно към уменията
 @msg	tutorial `{id}` has no practice sample	урокът `{id}` няма примерен файл за упражнение
 @msg	open the practice sample of `{id}` first (see learn.openSample)	първо отворете примерния файл за упражнение на `{id}` (вижте learn.openSample)
@@ -6893,3 +6992,7 @@ breakText	Glyphs	Глифи
 	Grommets	Капси
 	Grommet Inset	Отстъп на капсите от ръба
 	Diameter	Диаметър
+	Nest Shapes…	Подреждане на форми…
+	Nest Shapes	Подреждане на форми
+	Roll	Ролка
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

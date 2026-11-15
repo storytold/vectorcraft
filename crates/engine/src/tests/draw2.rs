@@ -612,6 +612,100 @@ fn eraser_size_follows_the_pen_pressure() {
     assert!(err.to_string().contains("sizeMode"), "{err}");
 }
 
+/// Eraser Tool Options' Angle, Roundness and Size variation menus: a value on Rotation, Bearing,
+/// Tilt or Pressure takes what the pen read along the drag, Random stays within its Variation, a
+/// drag without the reading erases at the value itself, an open path is cut where the varied tip
+/// covers it, and an unknown mode or a variation out of its range is refused with nothing erased.
+#[test]
+fn the_eraser_tip_varies_with_its_modes() {
+    // Which of `probes` a level drag through the middle of a 400 by 200 rectangle erases, each of
+    // its points `[x, 100]` followed by `pen` ([pressure, tiltX, tiltY, rotation]).
+    let erased = |tip: serde_json::Value, pen: serde_json::Value, probes: &[(f64, f64)]| -> Vec<bool> {
+        let mut s = session();
+        rect(&mut s, 0.0, 0.0, 400.0, 200.0);
+        let points: Vec<_> = (0..=20)
+            .map(|i| {
+                let mut p = vec![json!(100.0 + f64::from(i) * 10.0), json!(100.0)];
+                p.extend(pen.as_array().cloned().unwrap_or_default());
+                serde_json::Value::Array(p)
+            })
+            .collect();
+        s.execute("path.eraseRegion", &with(&json!({"points": points, "size": 20}), tip.clone())).unwrap();
+        let filled = |x: f64, y: f64| {
+            paths(&s).iter().any(|(_, pd)| vectorcraft_geom::hit::fill_contains(&pd.to_bezpath(), FillRule::NonZero, Point::new(x, y)))
+        };
+        assert!(filled(200.0, 150.0), "{tip} {pen}: the rest of the rectangle stays");
+        probes.iter().map(|&(x, y)| !filled(x, y)).collect()
+    };
+    let none = json!(null);
+    // A 20 by 2 pt tip lying level erases a band 2 pt tall; standing upright it erases one 20 pt tall.
+    let level = json!({"roundness": 10});
+    let probes = [(200.0, 100.5), (200.0, 108.0)];
+    assert_eq!(erased(level.clone(), json!([]), &probes), [true, false], "Fixed");
+    let on_rotation = with(&level, json!({"angleMode": "rotation", "angleVariation": 90}));
+    // The barrel turned half way round reads the most, which turns the tip upright.
+    assert_eq!(erased(on_rotation.clone(), json!([none, none, none, 180]), &probes), [true, true], "Rotation");
+    assert_eq!(erased(on_rotation.clone(), json!([]), &probes), [true, false], "Rotation without a reading");
+    // Leaning to the left (a bearing of 180°) reads the most too.
+    let on_bearing = with(&level, json!({"angleMode": "bearing", "angleVariation": 90}));
+    assert_eq!(erased(on_bearing.clone(), json!([none, -45, 0, none]), &probes), [true, true], "Bearing");
+    assert_eq!(erased(on_bearing, json!([none, 45, 0, none]), &probes), [true, false], "Bearing at 0°");
+    // A round tip: upright the pen gives 28 pt, nearly flat about 12 pt.
+    let on_tilt = json!({"sizeMode": "tilt", "sizeVariation": 8});
+    let wide = [(200.0, 105.0), (200.0, 113.0)];
+    assert_eq!(erased(on_tilt.clone(), json!([none, 0, 0, none]), &wide), [true, true], "Tilt upright");
+    assert_eq!(erased(on_tilt, json!([none, 89, 0, none]), &wide), [true, false], "Tilt flat");
+    // Roundness from 10 % less 90 (kept to 1 %) at the lightest pressure to 100 % at the heaviest.
+    let on_pressure = with(&level, json!({"roundnessMode": "pressure", "roundnessVariation": 90}));
+    assert_eq!(erased(on_pressure.clone(), json!([1.0]), &probes), [true, true], "Pressure at the heaviest");
+    // At the lightest the tip is 0.2 pt across, narrower than the 2 pt band Fixed erases.
+    assert_eq!(erased(on_pressure, json!([0.0]), &[(200.0, 100.0), (200.0, 100.5)]), [true, false], "Pressure at the lightest");
+    // Random: one size for the drag, from 16 to 24 pt.
+    let random = json!({"sizeMode": "random", "sizeVariation": 4});
+    assert_eq!(erased(random, json!([]), &[(200.0, 107.5), (200.0, 112.5)]), [true, false], "Random");
+    // A press on a line with the tip turned upright by its rotation cuts 5 pt of it, not 20.
+    let left_of_line = |pen: serde_json::Value| {
+        let mut s = session();
+        line(&mut s, 300.0, 150.0, 500.0, 150.0);
+        let mut point = vec![json!(400), json!(150)];
+        point.extend(pen.as_array().cloned().unwrap_or_default());
+        let tip = json!({"points": [point], "size": 20, "roundness": 25, "angleMode": "rotation", "angleVariation": 90});
+        s.execute("path.eraseRegion", &tip).unwrap();
+        paths(&s).iter().map(|p| p.1.length()).sum::<f64>()
+    };
+    let upright = left_of_line(json!([none, none, none, 180]));
+    assert!((upright - 195.0).abs() < 0.3, "the upright tip left {upright} pt of the line");
+    let level_tip = left_of_line(json!([]));
+    assert!((level_tip - 180.0).abs() < 0.3, "the level tip left {level_tip} pt of the line");
+    // A 1500 pt tip on Tilt erases 1500 pt across with a mouse, as it does on Fixed.
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 4000.0, 4000.0);
+    let big = json!({"points": [[1000, 2000], [3000, 2000]], "size": 1500, "sizeMode": "tilt", "sizeVariation": 10});
+    s.execute("path.eraseRegion", &big).unwrap();
+    let filled =
+        |x: f64, y: f64| paths(&s).iter().any(|(_, pd)| vectorcraft_geom::hit::fill_contains(&pd.to_bezpath(), FillRule::NonZero, Point::new(x, y)));
+    assert_eq!((filled(2000.0, 2740.0), filled(2000.0, 2760.0)), (false, true), "a 1500 pt tip");
+    // A Size Variation kept while Size is Fixed leaves the size alone.
+    let kept = with(&on_rotation, json!({"sizeMode": "fixed", "sizeVariation": 1000000}));
+    assert_eq!(erased(kept, json!([]), &probes), [true, false], "Size on Fixed with a Variation");
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let stroke = json!({"points": [[-10, 50], [110, 50]]});
+    let modes = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\" or \"rotation\"";
+    for (extra, want) in [
+        (json!({"angleMode": "wheel"}), format!("angleMode is one of {modes}, not `wheel`")),
+        (json!({"roundnessMode": 3}), format!("roundnessMode is one of {modes}, not 3")),
+        (json!({"sizeMode": "stylusWheel"}), format!("sizeMode is one of {modes}, not `stylusWheel`")),
+        (json!({"angleVariation": 181}), "angleVariation must be at most 180".to_string()),
+        (json!({"roundnessVariation": 101}), "roundnessVariation must be at most 100".to_string()),
+        (json!({"roundnessVariation": -1}), "roundnessVariation must be 0 or more".to_string()),
+    ] {
+        refuses_with(&mut s, "path.eraseRegion", &with(&stroke, extra), &want);
+    }
+    refuses_a_number_given_as_text(&mut s, "path.eraseRegion", &stroke, "angleVariation");
+}
+
 /// A Blob Brush stroke merges with the topmost matching path it touches and with the touched
 /// matching paths next to it in stacking order in the same group or layer; matching paths in other
 /// layers or groups, or below an object of another kind, are left alone.
@@ -796,7 +890,7 @@ fn curvature_rubber_band_is_the_path_the_click_makes() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 450.0, 400.0), v).unwrap();
     let made = path(&s, id).subpaths[0].clone();
     assert_eq!(made.anchors.len(), 4);
-    let tail = vectorcraft_geom::SubPath::new(made.anchors[1..].to_vec(), false);
+    let tail = vectorcraft_geom::SubPath::new(made.anchors.to_vec()[1..].to_vec(), false);
     assert_eq!(preview, bez(&tail));
 }
 
@@ -1124,7 +1218,7 @@ fn scissors_cut_ellipse_end_drags_alone() {
             s.pointer(&PointerEvent::new(PointerKind::Up, cut.x + 8.0, cut.y + 8.0).with_mods(m), v).unwrap();
             assert_eq!(undo_steps(&s), undo + 1);
             let after = path(&s, id);
-            let (old, new) = (&sp.anchors, &after.subpaths[0].anchors);
+            let (old, new) = (&sp.anchors.to_vec(), &after.subpaths[0].anchors.to_vec());
             assert_eq!(new.len(), old.len());
             assert_eq!(new[1..], old[1..], "only the dragged end moves (at anchor: {at_anchor}, {m:?})");
             let d = Point::new(cut.x + 8.0, cut.y + 8.0) - cut;
@@ -1478,7 +1572,7 @@ fn a_short_smooth_drag_leaves_the_rest_of_long_segments_alone() {
     drag(&mut s, "smooth", &[(195.0, 194.0), (205.0, 194.0)], Mods::default());
     let p = path(&s, id);
     assert_ne!(p, before, "the bump is smoothed");
-    let a = &p.subpaths[0].anchors;
+    let a = &p.subpaths[0].anchors.to_vec();
     let (first, second, last) = (a[0], a[1], a[a.len() - 1]);
     assert!(first.p == Point::new(50.0, 200.0) && !first.has_out() && !second.has_in(), "the left side is a line still: {first:?} {second:?}");
     assert!(last.p == Point::new(350.0, 200.0) && !last.has_in() && !a[a.len() - 2].has_out(), "and the right one: {last:?}");
@@ -1689,7 +1783,7 @@ fn smoothing_over_a_closed_paths_first_anchor_keeps_its_start() {
     assert_ne!(after, before, "the bump is smoothed");
     assert_starts_nearest(&after, old, 12.0);
     let kept = &after.subpaths[0].anchors;
-    for a in &before.subpaths[0].anchors[2..=10] {
+    for a in &before.subpaths[0].anchors.to_vec()[2..=10] {
         assert!(kept.iter().any(|k| k.p == a.p), "{:?} is out of reach and stays: {kept:?}", a.p);
     }
     s.execute("edit.undo", &json!({})).unwrap();
@@ -2021,6 +2115,260 @@ fn smoothing_leaves_paths_out_of_reach_and_straight_segments_alone() {
     let before = path(&s, line);
     assert_eq!(smooth_pass_ids(&mut s, &smooth_drag_along(400.0, 190.0, 210.0)), json!([]), "a straight segment");
     assert_eq!(path(&s, line), before);
+}
+
+/// The turn, in degrees, of `sp` at each of its anchors: round a closed path, and 0 at an open
+/// path's first and last anchors.
+fn smooth_anchor_turns(sp: &vectorcraft_geom::SubPath) -> Vec<f64> {
+    let (n, segs) = (sp.anchors.len(), sp.segment_count());
+    (0..n)
+        .map(|i| {
+            if segs == 0 || !sp.closed && (i == 0 || i == n - 1) {
+                return 0.0;
+            }
+            let (a, b) = (sp.segment((i + segs - 1) % segs), sp.segment(i % segs));
+            let tin = [a.p3 - a.p2, a.p3 - a.p1, a.p3 - a.p0].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or_default();
+            let tout = [b.p1 - b.p0, b.p2 - b.p0, b.p3 - b.p0].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or_default();
+            tin.cross(tout).atan2(tin.dot(tout)).abs().to_degrees()
+        })
+        .collect()
+}
+
+/// The turn of `sp` at its anchor on `at`, `None` when no anchor is there.
+fn smooth_turn_at(sp: &vectorcraft_geom::SubPath, at: Point) -> Option<f64> {
+    let i = sp.anchors.iter().position(|a| a.p.distance(at) < 1e-9)?;
+    smooth_anchor_turns(sp).get(i).copied()
+}
+
+/// An open polyline with a corner at (300, 300) whose angle inside is `inside` degrees: a 100 pt
+/// leg along y = 300 from the left, then a 100 pt leg turning by 180 - `inside` degrees, each leg cut
+/// into `per_leg` segments. Returns the path, the corner, and a drag along the path from 40 pt
+/// before the corner to 40 pt after it.
+fn smooth_corner_path(s: &mut Session, inside: f64, per_leg: usize) -> (NodeId, Point, Vec<Point>) {
+    let v = Point::new(300.0, 300.0);
+    let d = kurbo::Vec2::from_angle(-(180.0 - inside).to_radians());
+    let back = kurbo::Vec2::new(-100.0, 0.0);
+    let legs = per_leg as f64;
+    let mut pts: Vec<Point> = (0..per_leg).map(|k| v + back * (1.0 - k as f64 / legs)).collect();
+    pts.extend((0..=per_leg).map(|k| v + d * (100.0 * k as f64 / legs)));
+    let anchors: Vec<_> = pts.iter().map(|p| json!({"x": p.x, "y": p.y})).collect();
+    let id = smooth_test_path(s, &anchors, false);
+    let mut drag: Vec<Point> = (0..8).map(|k| v - kurbo::Vec2::new(40.0 - 5.0 * f64::from(k), 0.0)).collect();
+    drag.extend((0..=8).map(|k| v + d * (5.0 * f64::from(k))));
+    (id, v, drag)
+}
+
+/// A Smooth drag over a corner keeps it where the path turns there by more than 57.5° (an angle
+/// inside the corner under 122.5°), whether each leg is one segment or ten and at any Fidelity. A
+/// wider corner is not kept: when the drag changes the path, no anchor is left turning as sharply
+/// there, and a leg of ten segments at the default Fidelity always rounds it.
+#[test]
+fn the_smooth_tool_keeps_corners_sharper_than_its_threshold() {
+    let mut wrong = vec![];
+    for inside in [30.0f64, 60.0, 90.0, 120.0, 122.4, 122.6, 125.0, 135.0, 150.0, 170.0] {
+        let kept = inside < 122.5;
+        for per_leg in [1, 10] {
+            for fidelity in [0.5, 2.5, 10.0] {
+                let mut s = session();
+                let (id, v, drag) = smooth_corner_path(&mut s, inside, per_leg);
+                let before = path(&s, id);
+                let pts: Vec<_> = drag.iter().map(|p| json!([p.x, p.y])).collect();
+                s.execute("path.smoothRegion", &json!({"points": pts, "radius": 12, "fidelity": fidelity})).unwrap();
+                let p = path(&s, id);
+                let turn = 180.0 - inside;
+                let at = smooth_turn_at(&p.subpaths[0], v);
+                let changed = p != before;
+                let rounded = changed && at.is_none_or(|t| t < turn - 1.0);
+                let right = if kept { at.is_some_and(|t| (t - turn).abs() < 0.01) } else { rounded || !changed && per_leg == 1 };
+                let most = smooth_anchor_turns(&p.subpaths[0]).into_iter().fold(0.0, f64::max);
+                if !right || !kept && most > 57.5 || !kept && per_leg == 10 && fidelity == 2.5 && !rounded {
+                    wrong.push(format!(
+                        "{inside}° inside, {per_leg} segments a leg, Fidelity {fidelity}: turn {at:?}, changed {changed}, sharpest {most}°"
+                    ));
+                }
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Three Smooth drags over a 90° and a 120° corner leave the corner where it was and as sharp, while
+/// the first one smooths a wobble on the same leg.
+#[test]
+fn smooth_drags_again_and_again_keep_a_corner_in_place() {
+    for inside in [90.0f64, 120.0] {
+        let mut s = session();
+        let v = Point::new(300.0, 300.0);
+        let d = kurbo::Vec2::from_angle(-(180.0 - inside).to_radians());
+        let mut anchors: Vec<_> = (0..=18).map(|k| json!({"x": 180.0 + 5.0 * f64::from(k), "y": if k % 2 == 1 { 301.5 } else { 300.0 }})).collect();
+        anchors.push(json!({"x": v.x, "y": v.y}));
+        let c = v + d * 100.0;
+        anchors.push(json!({"x": c.x, "y": c.y}));
+        let id = smooth_test_path(&mut s, &anchors, false);
+        let mut drag = smooth_drag_along(300.0, 175.0, 300.0);
+        drag.extend((1..=8).map(|k| v + d * (5.0 * f64::from(k))));
+        let mut before = path(&s, id);
+        for pass in 1..=3 {
+            smooth_pass(&mut s, &drag);
+            let p = path(&s, id);
+            let at = smooth_turn_at(&p.subpaths[0], v);
+            assert!(at.is_some_and(|t| (t - (180.0 - inside)).abs() < 0.01), "{inside}°, pass {pass}: {at:?}");
+            if pass == 1 {
+                assert!(p.anchor_count() < before.anchor_count(), "{inside}°: the wobble is smoothed: {} anchors", p.anchor_count());
+                assert!(total_turning(&p) < total_turning(&before), "{inside}°: the path turns less");
+            }
+            before = p;
+        }
+    }
+}
+
+/// A Smooth drag along a line with 1 pt jags, each turning by 90°, smooths them all: none is kept
+/// as a corner, since the line hardly turns over the tool's reach.
+#[test]
+fn smoothing_keeps_no_small_jag_as_a_corner() {
+    let mut s = session();
+    let anchors: Vec<_> = (0..=200).map(|i| json!({"x": 100.0 + f64::from(i), "y": if i % 2 == 1 { 201.0 } else { 200.0 }})).collect();
+    let id = smooth_test_path(&mut s, &anchors, false);
+    assert!(smooth_anchor_turns(&path(&s, id).subpaths[0]).iter().skip(1).take(199).all(|t| (t - 90.0).abs() < 1e-6));
+    smooth_pass(&mut s, &smooth_drag_along(200.5, 90.0, 310.0));
+    let p = path(&s, id);
+    let sp = &p.subpaths[0];
+    assert!(sp.anchors.len() < 50, "the jags are smoothed: {} anchors", sp.anchors.len());
+    let most = smooth_anchor_turns(sp).into_iter().fold(0.0, f64::max);
+    assert!(most <= 57.5, "a jag is kept, turning {most}°");
+}
+
+/// A closed path with 90° corners at (200, 200), where it starts, and at (400, 200), 75° ones at
+/// (400, 400) and (200, 400), a 30° bend at (300, 426.79), and a top side jagged by 1 pt. With
+/// `from_bend` the path starts at the bend instead.
+fn smooth_house(s: &mut Session, from_bend: bool) -> (NodeId, [Point; 4], Point) {
+    let corners = [Point::new(200.0, 200.0), Point::new(400.0, 200.0), Point::new(400.0, 400.0), Point::new(200.0, 400.0)];
+    let bend = Point::new(300.0, 400.0 + 100.0 / 75f64.to_radians().tan());
+    let mut anchors = vec![json!({"x": 200.0, "y": 200.0})];
+    anchors.extend((1..40).map(|k| json!({"x": 200.0 + 5.0 * f64::from(k), "y": if k % 2 == 1 { 201.0 } else { 200.0 }})));
+    for p in [corners[1], corners[2], bend, corners[3]] {
+        anchors.push(json!({"x": p.x, "y": p.y}));
+    }
+    if from_bend {
+        let at_bend = anchors.len() - 2;
+        anchors.rotate_left(at_bend);
+    }
+    (smooth_test_path(s, &anchors, true), corners, bend)
+}
+
+/// A Smooth drag round the whole of a closed path, and one along its top side only, keep its corners,
+/// the one where the path starts included, and smooth the jags; the path still starts where it did,
+/// at a corner or at the bend, which the refit keeps, and the bend out of the second drag's reach
+/// stays as it was.
+#[test]
+fn smoothing_a_closed_path_keeps_its_corners() {
+    let turns: Vec<f64> = {
+        let mut s = session();
+        let (id, corners, _) = smooth_house(&mut s, false);
+        corners.iter().map(|c| smooth_turn_at(&path(&s, id).subpaths[0], *c).unwrap()).collect()
+    };
+    for from_bend in [false, true] {
+        let mut s = session();
+        let (id, corners, bend) = smooth_house(&mut s, from_bend);
+        let before = path(&s, id);
+        let mut ring: Vec<Point> = vec![];
+        for (a, b) in [(corners[0], corners[1]), (corners[1], corners[2]), (corners[2], bend), (bend, corners[3]), (corners[3], corners[0])] {
+            let n = (a.distance(b) / 5.0).ceil();
+            ring.extend((0..n as usize).map(|k| a.lerp(b, k as f64 / n)));
+        }
+        ring.push(corners[0]);
+        smooth_pass(&mut s, &ring);
+        let p = path(&s, id);
+        let sp = &p.subpaths[0];
+        assert!(sp.closed && sp.anchors.len() < before.subpaths[0].anchors.len(), "{} anchors", sp.anchors.len());
+        assert_eq!(sp.anchors[0].p, before.subpaths[0].anchors[0].p, "the path still starts where it did");
+        for (c, t) in corners.iter().zip(&turns) {
+            let at = smooth_turn_at(sp, *c);
+            assert!(at.is_some_and(|a| (a - t).abs() < 0.01), "the corner at {c:?} turning {t}° is kept: {at:?}");
+        }
+    }
+
+    let mut s = session();
+    let (id, corners, bend) = smooth_house(&mut s, false);
+    let before = path(&s, id);
+    smooth_pass(&mut s, &smooth_drag_along(200.0, 190.0, 410.0));
+    let p = path(&s, id);
+    let sp = &p.subpaths[0];
+    assert!(sp.closed && sp.anchors.len() < before.subpaths[0].anchors.len(), "the top is smoothed: {} anchors", sp.anchors.len());
+    for (c, t) in corners.iter().zip(&turns) {
+        let at = smooth_turn_at(sp, *c);
+        assert!(at.is_some_and(|a| (a - t).abs() < 0.01), "part of the path: the corner at {c:?} turning {t}° is kept: {at:?}");
+    }
+    assert!(smooth_turn_at(sp, bend).is_some_and(|t| (t - 30.0).abs() < 0.01), "the bend out of reach stays");
+}
+
+/// A Smooth drag over an anchor whose curved legs meet at a corner keeps the corner, taking the turn
+/// from the directions the curves arrive and leave along, a handle of no length included.
+#[test]
+fn smoothing_keeps_a_corner_between_curves() {
+    use kurbo::ParamCurve;
+    let v = Point::new(200.0, 300.0);
+    let with_in = json!({"x": 200.0, "y": 300.0, "in": [170.0, 270.0], "out": [230.0, 270.0]});
+    let no_in = json!({"x": 200.0, "y": 300.0, "out": [230.0, 270.0]});
+    for (corner, first_out) in [(with_in, [130.0, 260.0]), (no_in, [170.0, 230.0])] {
+        let mut s = session();
+        let anchors = [json!({"x": 100.0, "y": 300.0, "out": first_out}), corner, json!({"x": 300.0, "y": 300.0, "in": [270.0, 260.0]})];
+        let id = smooth_test_path(&mut s, &anchors, false);
+        let before = path(&s, id);
+        let turn = smooth_turn_at(&before.subpaths[0], v).unwrap();
+        assert!(turn > 80.0, "{turn}");
+        let (a, b) = (before.subpaths[0].segment(0), before.subpaths[0].segment(1));
+        let mut drag: Vec<Point> = (0..=10).map(|k| a.eval(0.6 + 0.04 * f64::from(k))).collect();
+        drag.extend((1..=10).map(|k| b.eval(0.04 * f64::from(k))));
+        smooth_pass(&mut s, &drag);
+        let at = smooth_turn_at(&path(&s, id).subpaths[0], v);
+        assert!(at.is_some_and(|t| (t - turn).abs() < 0.01), "the corner turning {turn}° is kept: {at:?}");
+    }
+}
+
+/// A corner at the first anchor of the stretch a drag smooths, just out of its reach, keeps its
+/// place and its turn.
+#[test]
+fn a_corner_at_the_end_of_the_smoothed_stretch_stays() {
+    let mut s = session();
+    let mut anchors = vec![json!({"x": 100.0, "y": 300.0}), json!({"x": 200.0, "y": 300.0})];
+    anchors.extend((1..=20).map(|k| json!({"x": if k % 2 == 1 { 201.0 } else { 200.0 }, "y": 300.0 - 5.0 * f64::from(k)})));
+    let id = smooth_test_path(&mut s, &anchors, false);
+    let before = path(&s, id);
+    let turn = smooth_turn_at(&before.subpaths[0], Point::new(200.0, 300.0)).unwrap();
+    let drag: Vec<Point> = (0..=19).map(|k| Point::new(200.0, 287.0 - 5.0 * f64::from(k))).collect();
+    smooth_pass(&mut s, &drag);
+    let p = path(&s, id);
+    let sp = &p.subpaths[0];
+    assert_ne!(p, before, "the jagged leg is smoothed");
+    assert_eq!(sp.anchors[0], before.subpaths[0].anchors[0]);
+    let at = smooth_turn_at(sp, Point::new(200.0, 300.0));
+    assert!(at.is_some_and(|t| (t - turn).abs() < 0.01), "the corner turning {turn}° stays: {at:?}");
+}
+
+/// A Smooth drag over corners it keeps, with nothing else to smooth, changes nothing and adds no
+/// undo step: an open path's corner and a square's four corners.
+#[test]
+fn a_smooth_drag_that_only_meets_corners_adds_no_undo_step() {
+    let mut s = session();
+    let (id, v, drag) = smooth_corner_path(&mut s, 90.0, 1);
+    let before = path(&s, id);
+    let undo = s.doc().unwrap().history.undo.len();
+    assert_eq!(smooth_pass_ids(&mut s, &drag), json!([]), "a corner at {v:?}");
+    assert_eq!(path(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+
+    let square = [(100.0, 100.0), (200.0, 100.0), (200.0, 200.0), (100.0, 200.0)].map(|(x, y)| json!({"x": x, "y": y}));
+    let id = smooth_test_path(&mut s, &square, true);
+    let before = path(&s, id);
+    let undo = s.doc().unwrap().history.undo.len();
+    let mut ring = smooth_drag_along(100.0, 100.0, 200.0);
+    ring.extend((1..=20).map(|k| Point::new(200.0, 100.0 + 5.0 * f64::from(k))));
+    ring.extend(smooth_drag_along(200.0, 100.0, 200.0).into_iter().rev().skip(1));
+    ring.extend((1..=20).map(|k| Point::new(100.0, 200.0 - 5.0 * f64::from(k))));
+    assert_eq!(smooth_pass_ids(&mut s, &ring), json!([]), "a square");
+    assert_eq!(path(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
 }
 
 #[test]
@@ -3537,7 +3885,7 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     assert!(left.is_empty());
     assert!(s.doc().unwrap().selection.objects.is_empty());
     assert_eq!(s.clipboard.nodes.len(), 1);
-    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors[1..3]);
+    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors.to_vec()[1..3]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(paths(&s), vec![(id, original.clone())]);
     assert_eq!(s.doc().unwrap().selection, picked);

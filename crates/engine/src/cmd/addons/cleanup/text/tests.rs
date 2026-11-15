@@ -379,6 +379,38 @@ fn remove_breaks_reads_the_threads_once() {
     }
 }
 
+/// Remove Breaks reads each named frame of a story that is not all named on its own, in the order
+/// named and each once, as one undo step, and goes through that story's frames once for all of them.
+#[test]
+fn remove_breaks_goes_through_a_partly_named_story_once() {
+    for (kind, brk) in [("line", '\u{2028}'), ("paragraph", '\n')] {
+        let mut s = session();
+        let a = text(&mut s, json!({"x": 10, "y": 20, "text": "a\u{2028}b\n".repeat(40), "size": 12, "area": {"width": 150, "height": 60}}));
+        let mut roots = vec![a];
+        for i in 0..4 {
+            let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 100 + 70 * i, "width": 150, "height": 60})).unwrap();
+            roots.push(NodeId(r["id"].as_u64().unwrap()));
+        }
+        select(&mut s, &roots);
+        s.execute("text.thread.create", &json!({})).unwrap();
+        let f = s.doc().unwrap().doc.text_threads[0].clone();
+        assert_eq!(f.len(), 5);
+        let named = [f[4], f[1], f[3]];
+        let breaks: Vec<usize> = named.iter().map(|id| obj(&s, *id).plain_text().matches(brk).count()).collect();
+        assert!(breaks.iter().all(|n| *n > 0), "{kind}: each named frame holds breaks: {breaks:?}");
+        let before = doc_json(&s);
+        let steps = undo_steps(&s);
+        let builds = crate::cmd::threads::story_builds();
+        let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": kind, "ids": [f[4].0, f[1].0, f[4].0, f[3].0]})).unwrap();
+        assert_eq!(crate::cmd::threads::story_builds() - builds, 1, "{kind}: the story's frames are gone through once");
+        assert_eq!(r["removed"].as_u64(), Some(breaks.iter().sum::<usize>() as u64), "{kind}");
+        assert_eq!(ids(&r), named, "{kind}");
+        assert_eq!(undo_steps(&s), steps + 1, "{kind}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(doc_json(&s), before, "{kind}");
+    }
+}
+
 /// Lock `id` (`locked`), else hide it, as an undo step of its own.
 fn lock_or_hide(s: &mut Session, id: NodeId, locked: bool) {
     s.edit("Lock or Hide", |d, _| {

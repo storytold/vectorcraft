@@ -177,6 +177,90 @@ fn meshes_in_blends_are_outlines_and_clear_meshes_draw_nothing() {
     assert_eq!(t.matches("PD").count(), 3, "{t}");
 }
 
+/// `plots_nothing` picks the objects and layers that a plot draws nothing of: a path that paints
+/// nothing, objects at 0% opacity, placed images, meshes with every point at 0% opacity and
+/// non-printing layers, and not a painted path or a mesh.
+#[test]
+fn plots_nothing_picks_what_a_plot_draws_nothing_of() {
+    type Make = fn(&mut Document) -> Node;
+    let cases: [(&str, Make, bool); 7] = [
+        ("stroked", |d| stroked(d, rect(10.0, 10.0, 40.0, 40.0), Color::BLACK), false),
+        ("unpainted", |d| Node::path(d.alloc_id(), rect(10.0, 10.0, 40.0, 40.0), Appearance::basic(Paint::None, Paint::None, 1.0)), true),
+        (
+            "clear",
+            |d| {
+                let mut n = filled(d, rect(10.0, 10.0, 40.0, 40.0), Color::BLACK);
+                n.opacity = 0.0;
+                n
+            },
+            true,
+        ),
+        (
+            "image",
+            |d| {
+                let image = vectorcraft_doc::ImageObject {
+                    key: "raster-1".into(),
+                    width: 4,
+                    height: 2,
+                    xf: Affine::translate((10.0, 20.0)) * Affine::scale(5.0),
+                    link: None,
+                    placement: Default::default(),
+                    pixels: None,
+                };
+                Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)))
+            },
+            true,
+        ),
+        (
+            "image with Crop Marks",
+            |d| {
+                let image = vectorcraft_doc::ImageObject {
+                    key: "raster-1".into(),
+                    width: 4,
+                    height: 2,
+                    xf: Affine::translate((10.0, 20.0)) * Affine::scale(5.0),
+                    link: None,
+                    placement: Default::default(),
+                    pixels: None,
+                };
+                let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)));
+                n.appearance.effects.push(vectorcraft_doc::Effect { id: "cropMarks".into(), params: serde_json::json!({}), visible: true });
+                n
+            },
+            false,
+        ),
+        ("mesh", |d| Node::new(d.alloc_id(), NodeKind::Mesh(mesh_at(10.0))), false),
+        (
+            "clear mesh",
+            |d| {
+                let mut clear = mesh_at(10.0);
+                clear.points.iter_mut().for_each(|p| p.opacity = 0.0);
+                Node::new(d.alloc_id(), NodeKind::Mesh(clear))
+            },
+            true,
+        ),
+    ];
+    for (name, make, nothing) in cases {
+        let mut held = None;
+        let d = doc_with(|d| {
+            let n = make(d);
+            held = Some(n.clone());
+            vec![n]
+        });
+        let Some(n) = held else { panic!("{name}") };
+        assert_eq!(plots_nothing(&d, &n), nothing, "{name}");
+        assert_eq!(text(&plot(&d, &opts(&d))) == "IN;PU;SP0;", nothing, "{name}");
+    }
+    let mut d = doc_with(|d| vec![stroked(d, rect(10.0, 10.0, 40.0, 40.0), Color::BLACK)]);
+    let layer = d.layers[0].id;
+    assert!(!plots_nothing(&d, &d.layers[0]));
+    if let Some(NodeKind::Layer { printable, .. }) = d.node_mut(layer).map(|n| &mut n.kind) {
+        *printable = false;
+    }
+    assert!(plots_nothing(&d, &d.layers[0]));
+    assert_eq!(text(&plot(&d, &opts(&d))), "IN;PU;SP0;");
+}
+
 /// Live art that makes more objects than the plot's limit (1,000 in tests) is left out with a
 /// warning.
 #[test]
@@ -663,6 +747,86 @@ fn a_clipping_path_is_drawn_where_it_paints() {
     });
     let t = text(&plot(&open_doc, &opts(&open_doc)));
     assert!(t.ends_with("SP2;PU282,1129;PD564,1129,564,847,282,1129;PU;SP0;"), "{t}");
+    // A stroke with a geometry effect of its own is drawn once, over the art it clips, in its color.
+    let moved = doc_with(|d| {
+        let (blue, red) = (Paint::solid(Color::rgb8(0, 0, 255)), Paint::solid(Color::rgb8(255, 0, 0)));
+        let mut clip = Node::path(d.alloc_id(), rect(20.0, 20.0, 40.0, 40.0), Appearance::basic(blue, red, 1.0));
+        for item in &mut clip.appearance.items {
+            if let AppearanceItem::Stroke(s) = item {
+                let params = serde_json::json!({"moveH": 5});
+                s.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+            }
+        }
+        let clipped = Node::path(d.alloc_id(), line((0.0, 30.0), (200.0, 30.0)), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0));
+        let mut group = Node::group(d.alloc_id(), vec![Arc::new(clip), Arc::new(clipped)]);
+        if let NodeKind::Group { clip, .. } = &mut group.kind {
+            *clip = true;
+        }
+        vec![group]
+    });
+    assert_eq!(plot(&moved, &opts(&moved)).pens, [[0, 0, 0], [255, 0, 0]]);
+    // So are the stroke's pieces when an effect around them put them in a group of their own.
+    let grouped = |opacity: f32| {
+        doc_with(|d| {
+            // One path for each, carrying only that fill or stroke.
+            let piece = |d: &mut Document, fill: bool| {
+                let mut a = Appearance::basic(Paint::solid(Color::rgb8(0, 0, 255)), Paint::solid(Color::rgb8(255, 0, 0)), 1.0);
+                a.items.retain(|i| matches!(i, AppearanceItem::Fill(_)) == fill);
+                Arc::new(Node::path(d.alloc_id(), rect(20.0, 20.0, 40.0, 40.0), a))
+            };
+            let (fill, stroke) = (piece(d, true), piece(d, false));
+            let mut copies = Node::group(d.alloc_id(), vec![stroke]);
+            copies.opacity = opacity;
+            let mut clip = Node::group(d.alloc_id(), vec![fill, Arc::new(copies)]);
+            clip.extras_mut().clip_pieces = true;
+            let black = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+            let clipped = Node::path(d.alloc_id(), line((0.0, 30.0), (200.0, 30.0)), black);
+            let mut group = Node::group(d.alloc_id(), vec![Arc::new(clip), Arc::new(clipped)]);
+            if let NodeKind::Group { clip, .. } = &mut group.kind {
+                *clip = true;
+            }
+            vec![group]
+        })
+    };
+    let shown = grouped(1.0);
+    assert_eq!(plot(&shown, &opts(&shown)).pens, [[0, 0, 0], [255, 0, 0]]);
+    // In a group at 0% opacity they are not drawn, and the clipping path is drawn in its fill.
+    let faded = grouped(0.0);
+    assert_eq!(plot(&faded, &opts(&faded)).pens, [[0, 0, 255], [0, 0, 0]]);
+    // An open clipping path with a fill is drawn closed also where its stroke's effect moved it.
+    let open_moved = |fill_opacity: f32| {
+        doc_with(|d| {
+            let mut open = BezPath::new();
+            open.move_to((20.0, 20.0));
+            open.line_to((40.0, 20.0));
+            open.line_to((40.0, 40.0));
+            let a = Appearance::basic(Paint::solid(Color::rgb8(0, 0, 255)), Paint::solid(Color::rgb8(255, 0, 0)), 1.0);
+            let mut clip = Node::path(d.alloc_id(), PathData::from_bezpath(&open), a);
+            for item in &mut clip.appearance.items {
+                match item {
+                    AppearanceItem::Fill(f) => f.opacity = fill_opacity,
+                    AppearanceItem::Stroke(s) => {
+                        let params = serde_json::json!({"moveH": 5});
+                        s.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+                    }
+                }
+            }
+            let black = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+            let clipped = Node::path(d.alloc_id(), line((0.0, 30.0), (200.0, 30.0)), black);
+            let mut group = Node::group(d.alloc_id(), vec![Arc::new(clip), Arc::new(clipped)]);
+            if let NodeKind::Group { clip, .. } = &mut group.kind {
+                *clip = true;
+            }
+            vec![group]
+        })
+    };
+    let filled = open_moved(1.0);
+    let t = text(&plot(&filled, &opts(&filled)));
+    assert!(t.ends_with("SP2;PU353,1129;PD635,1129,635,847,353,1129;PU;SP0;"), "{t}");
+    // A fill at 0% opacity does not close it.
+    let unfilled = open_moved(0.0);
+    let t = text(&plot(&unfilled, &opts(&unfilled)));
+    assert!(t.ends_with("SP2;PU353,1129;PD635,1129,635,847;PU;SP0;"), "{t}");
 }
 
 /// A symbol `art` and an instance of it at its place.
