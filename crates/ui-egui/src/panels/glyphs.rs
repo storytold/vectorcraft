@@ -978,6 +978,35 @@ fn selection_faces(app: &VectorcraftApp, ui: &Ui) -> Vec<u32> {
     ids
 }
 
+/// The value `f` gives every character [`glyph_form_items`] acts on: the Type tool's selected
+/// range, all the text of the object at a caret (the menu formats all of it there), else every
+/// frame of the selected stories. `None` where they differ, or with no type.
+fn selection_shared<T: PartialEq>(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> T) -> Option<T> {
+    match super::character::text_editing(app) {
+        Some((id, a, b)) if b <= a && super::character::text_story(app).is_none() => {
+            let NodeKind::Text(t) = &app.session.active()?.doc.node(id)?.kind else { return None };
+            let mut acc = super::character::Shared::None;
+            for r in &t.runs {
+                acc.add(f(&r.style));
+            }
+            acc.value()
+        }
+        _ => super::character::shared(app, f),
+    }
+}
+
+/// The East Asian glyph form every character [`glyph_form_items`] acts on has ([`selection_shared`]).
+fn selection_glyph_form(app: &VectorcraftApp) -> Option<GlyphForm> {
+    selection_shared(app, |s| s.glyph_form)
+}
+
+/// Does choosing `form` change the characters [`glyph_form_items`] acts on? Not when they all have
+/// it already, unless one of them has a glyph choice, which a form other than the default takes
+/// away.
+fn glyph_form_changes(app: &VectorcraftApp, form: GlyphForm) -> bool {
+    selection_glyph_form(app) != Some(form) || (form != GlyphForm::Default && selection_shared(app, |s| s.glyph_alternate.is_none()) != Some(true))
+}
+
 /// The East Asian glyph forms of the panel menu, with Show East Asian Options: each draws the
 /// selected characters (all the text of the selected type objects without a Type tool range) in
 /// one form of their font, and is checked when they all have it; a form none of the faces that
@@ -989,10 +1018,12 @@ fn glyph_form_items(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has = super::character::text_style(app).is_some();
     let db = FontDb::global();
     let faces: Vec<_> = selection_faces(app, ui).into_iter().filter_map(|id| db.face_by_id(id)).collect();
-    let current = super::character::shared(app, |s| s.glyph_form);
+    let current = selection_glyph_form(app);
     for form in GlyphForm::ALL {
+        // A width form may be drawn with other widths for the same glyphs (`GPOS`) instead of
+        // other glyphs.
         let enabled = match form.feature() {
-            Some(tag) => faces.iter().any(|f| f.has_substitution_feature(*tag)),
+            Some(tag) => faces.iter().any(|f| f.has_substitution_feature(*tag) || (form.is_width() && f.has_positioning_feature(*tag))),
             None => has,
         };
         let checked = form != GlyphForm::Default && current == Some(form);
@@ -1000,7 +1031,7 @@ fn glyph_form_items(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.separator();
         }
         // Choosing the form every selected character already has changes nothing.
-        if menu_item(ui, tl!(glyph_form_label(form)), enabled, checked) && current != Some(form) {
+        if menu_item(ui, tl!(glyph_form_label(form)), enabled, checked) && glyph_form_changes(app, form) {
             super::character::format(app, json!({"glyphForm": form.id()}));
         }
     }
@@ -1259,6 +1290,51 @@ mod tests {
         assert_eq!(forms(&app)[1].1, GlyphForm::Jis78);
         choose(&ctx, &mut app, "Revert To Default Forms");
         assert!(forms(&app).iter().all(|(_, f)| *f == GlyphForm::Default), "{:?}", forms(&app));
+    }
+
+    /// At a caret the glyph form items act on all the text of the object, so they are checked, and
+    /// skipped as changing nothing, by every character's form, not the caret's: with the caret in
+    /// text of the default form and other text in JIS 78 forms, Revert To Default Forms reverts
+    /// that text.
+    #[test]
+    fn glyph_form_items_at_a_caret_follow_all_the_text() {
+        let (mut app, id) = editing("亜唖");
+        app.session.prefs.show_east_asian_options = true;
+        let ctx = egui::Context::default();
+        let node = NodeId(id.as_u64().unwrap_or(0));
+        let forms = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(node).unwrap().kind {
+            NodeKind::Text(t) => t.runs.iter().map(|r| r.style.glyph_form).collect::<Vec<_>>(),
+            _ => panic!("text"),
+        };
+        app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 3, "glyphForm": "jis78"})).unwrap();
+        select(&mut app, 6, 6);
+        assert_eq!(selection_glyph_form(&app), None, "the caret's form is not every character's");
+        choose(&ctx, &mut app, "Revert To Default Forms");
+        assert!(forms(&app).iter().all(|f| *f == GlyphForm::Default), "{:?}", forms(&app));
+        app.run("text.setRangeStyle", json!({"id": id, "glyphForm": "jis78"})).unwrap();
+        select(&mut app, 6, 6);
+        assert_eq!(selection_glyph_form(&app), Some(GlyphForm::Jis78));
+    }
+
+    /// Choosing the form every character already has is skipped as changing nothing, unless a
+    /// character has a glyph choice: a form other than the default takes it away, and Revert To
+    /// Default Forms keeps it.
+    #[test]
+    fn a_glyph_choice_lets_the_current_form_be_chosen_again() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+        FontDb::global().add_font(alternates_font(false).expect("the test font builds"));
+        let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        let (mut app, id) = editing("xay");
+        app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(false), "glyphForm": "jis78"})).unwrap();
+        select(&mut app, 3, 3);
+        assert!(!glyph_form_changes(&app, GlyphForm::Jis78), "every character has it");
+        assert!(glyph_form_changes(&app, GlyphForm::Default));
+        app.run("text.setGlyphAlternate", json!({"id": id, "start": 1, "gid": u1})).unwrap();
+        select(&mut app, 3, 3);
+        assert!(glyph_form_changes(&app, GlyphForm::Jis78), "it takes away the glyph choice");
+        app.run("text.setRangeStyle", json!({"id": id, "glyphForm": "default"})).unwrap();
+        select(&mut app, 3, 3);
+        assert!(!glyph_form_changes(&app, GlyphForm::Default), "Revert To Default Forms keeps the glyph choice");
     }
 
     /// Show › Alternates for Current Selection lists the selected character's alternates from the

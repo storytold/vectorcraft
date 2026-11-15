@@ -3966,6 +3966,9 @@ effect	Points	Punkte
 	Working CMYK	CMYK-Arbeitsfarbraum
 	Working CMYK (don't tag)	CMYK-Arbeitsfarbraum (nicht kennzeichnen)
 	Working RGB (don't tag)	RGB-Arbeitsfarbraum (nicht kennzeichnen)
+	Don't Color Manage This Document	Kein Farbmanagement für dieses Dokument
+	Working RGB: {name}	RGB-Arbeitsfarbraum: {name}
+	Working CMYK: {name}	CMYK-Arbeitsfarbraum: {name}
 	Workspace	Arbeitsbereich
 	Workspace {i}	Arbeitsbereich {i}
 	Wrinkle Tool	Zerknittern-Werkzeug
@@ -5683,6 +5686,9 @@ effect	Soft	Weich
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+	Move Light to Back	Licht nach hinten
+	Move Light to Front	Licht nach vorne
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Ziehen Sie ein Licht, um es zu verschieben. Die Pfeiltasten verschieben das fokussierte Licht; mit Umschalt in Schritten von 15°.
 	Shadows	Schatten
 	Distance from Object	Abstand vom Objekt
 	Shadow Bounds	Schattenbegrenzung

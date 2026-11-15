@@ -3956,6 +3956,9 @@ digits	Malayalam	Малаялам
 	Working CMYK	Работен CMYK
 	Working CMYK (don't tag)	Работен CMYK (без етикет)
 	Working RGB (don't tag)	Работен RGB (без етикет)
+	Don't Color Manage This Document	Без управление на цветовете за този документ
+	Working RGB: {name}	Работен RGB: {name}
+	Working CMYK: {name}	Работен CMYK: {name}
 	Workspace	Работно пространство
 	Workspace {i}	Работно пространство {i}
 	Wrinkle Tool	Инструмент „Набръчкване“
@@ -5712,6 +5715,9 @@ theme	Appearance	Външен вид
 	Softness	Мекота
 	Ambient Light	Околна светлина
 	Light behind the object	Светлина зад обекта
+	Move Light to Back	Премести светлината отзад
+	Move Light to Front	Премести светлината отпред
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Плъзнете светлина, за да я преместите. Клавишите със стрелки местят фокусираната светлина; Shift я мести с 15°.
 	Shadows	Сенки
 	Distance from Object	Разстояние от обекта
 	Shadow Bounds	Граници на сянката

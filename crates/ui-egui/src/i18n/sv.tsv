@@ -3969,6 +3969,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	Arbets-CMYK
 	Working CMYK (don't tag)	Arbets-CMYK (tagga inte)
 	Working RGB (don't tag)	Arbets-RGB (tagga inte)
+	Don't Color Manage This Document	Färghantera inte det här dokumentet
+	Working RGB: {name}	Arbets-RGB: {name}
+	Working CMYK: {name}	Arbets-CMYK: {name}
 	Workspace	Arbetslayout
 	Workspace {i}	Arbetslayout {i}
 	Wrinkle Tool	Skrynkelverktyg
@@ -5994,6 +5997,9 @@ theme	Appearance	Utseende
 	Softness	Mjukhet
 	Ambient Light	Omgivande ljus
 	Light behind the object	Ljus bakom objektet
+	Move Light to Back	Flytta ljus bakåt
+	Move Light to Front	Flytta ljus framåt
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Dra ett ljus för att flytta det. Piltangenterna flyttar ljuset med fokus; Skift flyttar det 15° i taget.
 	Shadows	Skuggor
 	Distance from Object	Avstånd från objektet
 	Shadow Bounds	Skuggans gränser
