@@ -645,7 +645,7 @@ fn find_params(d: &Dialog) -> Option<Value> {
     let dimmed = |c: Color| {
         (0..FIND_TRIES)
             .map(|n| c.tinted(FIND_DIM - n as f32 * 0.01))
-            .find(|t| !found_keys.contains(&ColorKey::of(t)) && !found_hex.contains(&t.to_hex()))
+            .find(|t| !found_keys.contains(&ColorKey::of(t)) && !found_hex_entries.contains(&t.to_hex()))
             .map(|t| key(&t))
     };
     // The current colors of the rows that aren't selected, and the preserved colors.
@@ -2275,11 +2275,22 @@ mod tests {
         assert!(p["commands"][0]["params"]["map"].get("rgb 255 0 0").is_none(), "{p}");
         // A dimmed color that a selected row lists would be recolored with it: a lighter tint is taken.
         let mut rs = rows();
-        rs[0]["from"] = json!(["rgb 255 0 0", "rgb 191 191 255"]);
+        rs[0]["from"] = json!(["rgb 255 0 0", "rgb 191.25 191.25 255"]);
         d.fields.insert("rows".into(), json!(rs));
         let p = find_params(&d).unwrap();
         let to = color_value(&p["commands"][0]["params"]["map"]["rgb 0 0 255"]).unwrap();
         assert_eq!(to.to_hex(), "#c2c2ff", "{p}");
+        // So is one that a selected "#rrggbb" entry matches by its hex.
+        rs[0]["from"] = json!(["rgb 255 0 0", "#bfbfff"]);
+        d.fields.insert("rows".into(), json!(rs));
+        let p = find_params(&d).unwrap();
+        let to = color_value(&p["commands"][0]["params"]["map"]["rgb 0 0 255"]).unwrap();
+        assert_eq!(to.to_hex(), "#c2c2ff", "{p}");
+        // Another key of the same hex matches only itself, so the tint is kept.
+        rs[0]["from"] = json!(["rgb 255 0 0", "rgb 191 191 255"]);
+        d.fields.insert("rows".into(), json!(rs));
+        let p = find_params(&d).unwrap();
+        assert_eq!(p["commands"][0]["params"]["map"]["rgb 0 0 255"], dim("rgb 0 0 255"), "{p}");
         // Every row selected with Preview off: nothing to show.
         d.fields.insert("__sel".into(), json!([0, 1, 2]));
         assert_eq!(find_params(&d), None);
