@@ -4599,8 +4599,9 @@ its row shows, and every other swatch keeps its color. After a `save` with art, 
 Adjust and it goes back to 0%; when the save recolored linked art, the rows are read from the art again and a row with a
 color the save gave the art is excluded, also when other art has that color, since a row recolors every use of its
 colors alike. Until the rows or the Global Adjust change, OK changes the saved group only by the name
-in `groupName`. `save` and `delete` with no group selected answer `` missing `group` ``, and any other value is
-refused. After a Delete without art, OK saves the rows as a new color group.
+in `groupName`. `save` and `delete` with no group selected answer `` missing `group` ``. `save` on a group with a
+swatch that is not a color (a gradient, pattern or None swatch) is refused, because the rows hold only the group's
+colors. Any other value is refused. After a Delete without art, OK saves the rows as a new color group.
 
 ```json
 {"name":"answer_dialog","arguments":{"set":[{"field":"group","value":"Brights"},{"field":"groupAction","value":"save"}]}}

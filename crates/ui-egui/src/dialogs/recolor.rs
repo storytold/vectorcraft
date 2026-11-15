@@ -527,7 +527,7 @@ fn select_group(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> 
 /// `delete` removes the selected group and its swatches. Each is an undo step of its own on the
 /// document, not on the preview, which runs again afterwards.
 fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Result<(), String> {
-    check_group_action(d, action)?;
+    check_group_action(app, d, action)?;
     let group = d.fields.get("group").and_then(Value::as_str).map(str::to_owned);
     // The rows as OK reads them (a group just selected reduces the art again).
     sync(app, d);
@@ -704,15 +704,28 @@ const SAVED_ROWS: &str = "__savedRows";
 /// The selected group's colors after Save Changes, which OK gives it again with a new name.
 const SAVED_COLORS: &str = "__savedColors";
 
-/// Refuse a `groupAction` other than `save`, `new` or `delete`, and `save` or `delete` with no
-/// group selected.
-fn check_group_action(d: &Dialog, action: &Value) -> Result<(), String> {
-    match action.as_str() {
-        Some("new") => Ok(()),
-        Some("save" | "delete") if d.fields.get("group").is_some_and(Value::is_string) => Ok(()),
-        Some("save" | "delete") => Err("missing `group`".into()),
+/// Refuse a `groupAction` other than `save`, `new` or `delete`, `save` or `delete` with no group
+/// selected, and `save` on a group with a swatch that is not a color (a gradient, pattern or None
+/// swatch): the rows hold only the group's colors, so the save would replace or remove it.
+fn check_group_action(app: &VectorcraftApp, d: &Dialog, action: &Value) -> Result<(), String> {
+    let group = d.fields.get("group").and_then(Value::as_str);
+    match (action.as_str(), group) {
+        (Some("new"), _) => Ok(()),
+        (Some("save"), Some(g)) if holds_other_paints(app, g) => {
+            Err(format!("color group `{g}` holds swatches that are not colors, which Save Changes can't keep"))
+        }
+        (Some("save" | "delete"), Some(_)) => Ok(()),
+        (Some("save" | "delete"), None) => Err("missing `group`".into()),
         _ => Err(format!("`{GROUP_ACTION}` must be \"save\", \"new\" or \"delete\", not {action}")),
     }
+}
+
+/// Whether color group `group` has a swatch that is not a color, in the document as it is without
+/// the preview (which can rewrite or rename the group).
+fn holds_other_paints(app: &VectorcraftApp, group: &str) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let doc = st.interaction.as_ref().map_or(&st.doc, |it| &it.doc);
+    doc.swatch_groups.iter().any(|g| g.name == group && g.swatches.iter().any(|w| w.paint.color().is_none()))
 }
 
 /// Run the button of the Color Groups list that `groupAction` holds, if any.
@@ -730,7 +743,7 @@ pub(super) fn field_set(app: &mut VectorcraftApp, field: &str) -> Result<(), Str
     let r = match field {
         "group" => select_group(app, &mut d),
         GROUP_ACTION => match d.fields.get(GROUP_ACTION).cloned() {
-            Some(a) => check_group_action(&d, &a),
+            Some(a) => check_group_action(app, &d, &a),
             None => Ok(()),
         },
         GROUP_STORAGE if !d.fields.get(GROUP_STORAGE).is_some_and(Value::is_boolean) => Err(format!("`{GROUP_STORAGE}` must be true or false")),
@@ -2931,6 +2944,78 @@ mod tests {
         let last: Vec<String> = doc.swatch_groups.last().unwrap().swatches.iter().filter_map(|w| w.paint.color()).map(|c| c.to_hex()).collect();
         assert_eq!(last, ["#000000", "#ffff00", "#ffffff"]);
         assert_eq!(group_hex(&app, "A"), Some(vec!["#ff0000".into(), "#00ff00".into()]), "other groups are left as they are");
+    }
+
+    /// Save Changes on a group with a swatch that is not a color is refused, renamed or not, and
+    /// leaves the group as it is: the rows hold only its colors.
+    #[test]
+    fn saving_a_group_with_a_swatch_that_is_not_a_color_is_refused() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Mixed", "colors": ["#ff0000", "#00ff00"], "keepModel": true})).unwrap();
+        let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+        let g = doc.swatch_groups.iter_mut().find(|g| g.name == "Mixed").unwrap();
+        g.swatches.insert(1, fade_swatch());
+        app.run("ui.recolorDialog", json!({"group": "Mixed"})).unwrap();
+        assert_eq!(new_colors(&app), [json!("rgb 255 0 0"), json!("rgb 0 255 0")]);
+        let undo = undo_len(&app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        rs[0]["to"] = json!("rgb 0 0 0");
+        d.fields.insert("rows".into(), Value::Array(rs));
+        let refused: Result<(), String> = Err("color group `Mixed` holds swatches that are not colors, which Save Changes can't keep".into());
+        assert_eq!(act(&mut app, &ctx, 0.1, "save"), refused);
+        app.ui.dialog.as_mut().unwrap().fields.insert("groupName".into(), json!("Renamed"));
+        assert_eq!(act(&mut app, &ctx, 0.2, "save"), refused);
+        // OK first runs a save set together with it, and the dialog stays open.
+        app.ui.dialog.as_mut().unwrap().fields.insert(GROUP_ACTION.into(), json!("save"));
+        assert!(crate::dialogs::confirm(&mut app).is_err());
+        assert!(app.ui.dialog.is_some());
+        let g = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Mixed").unwrap();
+        assert_eq!(g.swatches[1], fade_swatch(), "the swatch is kept");
+        assert_eq!(group_hex(&app, "Mixed"), Some(vec!["#ff0000".into(), "#00ff00".into()]));
+        assert_eq!(undo_len(&app), undo, "no step");
+    }
+
+    /// A gradient swatch, for a color group.
+    fn fade_swatch() -> vectorcraft_color::Swatch {
+        let paint = vectorcraft_color::Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(Default::default())));
+        vectorcraft_color::Swatch { name: "Fade".into(), paint, global: false, spot: false }
+    }
+
+    /// With art, the preview rewrites the group being edited, its other swatch included; Save
+    /// Changes is still refused, as the group is without the preview, and Cancel leaves it as it was.
+    #[test]
+    fn saving_a_group_with_a_swatch_that_is_not_a_color_is_refused_while_previewing() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Mixed", "colors": ["#ff0000", "#0000ff"], "keepModel": true})).unwrap();
+        let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+        let g = doc.swatch_groups.iter_mut().find(|g| g.name == "Mixed").unwrap();
+        g.swatches.push(fade_swatch());
+        let (red, blue) = (square(&mut app, 10.0, "#ff0000"), square(&mut app, 40.0, "#0000ff"));
+        app.run("select.set", json!({"ids": [red, blue]})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "Mixed"})).unwrap();
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let undo = undo_len(&app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        rs[0]["to"] = json!("rgb 0 0 0");
+        d.fields.insert("rows".into(), Value::Array(rs));
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert!(app.session.in_interaction(), "the art previews");
+        let previewed = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Mixed").map(|g| g.swatches.len());
+        assert_eq!(previewed, Some(2), "the preview's rewrite of the group leaves out its other swatch");
+        let refused: Result<(), String> = Err("color group `Mixed` holds swatches that are not colors, which Save Changes can't keep".into());
+        assert_eq!(act(&mut app, &ctx, 0.2, "save"), refused);
+        crate::dialogs::cancel(&mut app);
+        let g = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Mixed").unwrap();
+        assert_eq!(g.swatches.last(), Some(&fade_swatch()), "the swatch is kept");
+        assert_eq!(group_hex(&app, "Mixed"), Some(vec!["#ff0000".into(), "#0000ff".into()]));
+        assert_eq!(undo_len(&app), undo, "no step");
     }
 
     /// Save Changes on a group whose global swatches the selected art is linked to: the art takes
