@@ -885,7 +885,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
     if paint {
         // A clip group whose clipping type paints strokes is now a group of a clip group and those
-        // strokes ([`crate::reshape::painted_type_clip`]): its own fills and strokes paint inside
+        // strokes ([`crate::reshape::paint_type_clip`]): its own fills and strokes paint inside
         // that clip group. Such groups among the members are measured as their clip groups.
         let wrapped = n.clips() && crate::reshape::painted_clip_inner(&m).is_some();
         let (shapes, bounds) = (member_shapes(doc, &m), crate::reshape::clip_bounds(&m));
