@@ -746,9 +746,13 @@ pub(crate) fn clipping_text_outline(t: &Node) -> Option<Node> {
 
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
-/// its outlines with its visibility and effects ([`clipping_text_outline`]). The swatches and
-/// patterns that live-effect plug-ins painting their pieces name are looked up in `doc`.
+/// its outlines with its visibility and effects ([`clipping_text_outline`]), and its fills and
+/// strokes become art of their own ([`paint_type_clip`]). The swatches and patterns that
+/// live-effect plug-ins painting their pieces name are looked up in `doc`.
 pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping: bool) {
+    if !clipping {
+        paint_type_clip(doc, n);
+    }
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {
@@ -763,6 +767,36 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
         } else if c.children().is_some() {
             outline_nested_text(doc, Arc::make_mut(c), clipping);
         }
+    }
+}
+
+/// When `n` is a clip group or clipping layer whose clipping path is type that paints
+/// ([`Node::clip_paint`]), make it the art the canvas draws for it: the type's outlines clip
+/// ([`clipping_text_outline`]), its fills as art ([`as_art`]) paint behind the clipped art inside
+/// the clip, and its strokes as art paint over it, outside the clip, in a group that `n` becomes
+/// (keeping its id, name and transparency) with the clip group inside. The other members stay as
+/// they are. Hidden type paints nothing.
+pub(crate) fn paint_type_clip(doc: Option<&Document>, n: &mut Node) {
+    let Some((first, rest)) = n.children().and_then(|ch| ch.split_first()) else { return };
+    if !n.clips() || !matches!(first.kind, NodeKind::Text(_)) || !first.visible {
+        return;
+    }
+    let paint = first.clip_paint();
+    if paint.fill.is_none() && paint.stroke.is_none() {
+        return;
+    }
+    let Some(clip) = clipping_text_outline(first) else { return };
+    let art = |part: Option<Node>| part.and_then(|p| as_art(doc, &p, None)).map(Arc::new);
+    let members: Vec<Arc<Node>> = std::iter::once(Arc::new(clip)).chain(art(paint.fill)).chain(rest.iter().cloned()).collect();
+    let stroke = art(paint.stroke);
+    let id = n.id;
+    match (&mut n.kind, stroke) {
+        (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }, None) => *children = members,
+        (NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. }, Some(stroke)) => {
+            *children = vec![Arc::new(Node::new(id, NodeKind::Group { children: members, clip: true })), stroke];
+            *clip = false;
+        }
+        _ => {}
     }
 }
 
