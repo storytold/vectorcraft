@@ -1038,7 +1038,8 @@ fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
 /// The documents [`the_writer_counts_objects_as_the_reader_reads_them`] writes: groups, compound
 /// paths, guides, sublayers, clipping groups and layers, painted clipping paths, opacity masks,
 /// gradients, pattern definitions and tiles, images, type, symbol definitions and instances,
-/// objects with art styles, objects bound to variables and live envelopes.
+/// objects with art styles, objects bound to variables, live envelopes, and the rectangles of the
+/// bounds of wrapped objects written as their art.
 fn counted() -> Vec<(&'static str, Document)> {
     vec![
         ("sample", sample()),
@@ -1054,7 +1055,26 @@ fn counted() -> Vec<(&'static str, Document)> {
         ("blend", blend_doc()),
         ("brushes", brushes_document()),
         ("envelopes", envelopes_document()),
+        ("wrap bounds", wrap_bounds_doc()),
     ]
+}
+
+/// Area type below a wrapped symbol instance written as its art and wrapped type written as its
+/// outlines, each with the rectangle of its bounds.
+fn wrap_bounds_doc() -> Document {
+    let mut doc = over_area_type(|doc| {
+        two_leaves(doc);
+        let mut n = instance(doc, "Leaf", Affine::new([3.0, 0.0, 0.0, 3.0, 150.0, 100.0]));
+        n.isolate = true;
+        wrapped(n, 4.5, false)
+    });
+    let mut label = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Ill", style(60.0, Color::BLACK));
+    // Mirrored, so written as its outlines.
+    label.xf = Affine::new([-1.0, 0.0, 0.0, 1.0, 150.0, 120.0]);
+    let label = wrapped(text_node(&mut doc, label), -2.0, true);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, label).unwrap();
+    doc
 }
 
 /// A blend of two squares 20 pt apart with a step every 10 pt, written as its steps.
@@ -11085,6 +11105,42 @@ fn text_wrap_options_of_type_and_envelopes_are_read_back() {
     same_wraps(&wraps(top), &[(Some("Bent".into()), 2.5, true)]);
 }
 
+/// The wrap shapes that `doc`'s first area type on its first layer takes from the objects above it,
+/// in the type's own space: the bounds of each one's subpaths, and its options.
+fn area_wrap_region(doc: &Document) -> Vec<(Vec<[f64; 4]>, f64, bool)> {
+    use vectorcraft_doc::TextKind;
+    let mut doc = doc.clone();
+    vectorcraft_doc::text::resolve_wrap(None, &mut doc);
+    let top = doc.layers[0].children().unwrap();
+    let Some(NodeKind::Text(t)) = top.iter().map(|n| &n.kind).find(|k| matches!(k, NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. })))
+    else {
+        panic!("no area type");
+    };
+    t.wrap
+        .iter()
+        .map(|s| {
+            let parts = s
+                .path
+                .subpaths
+                .iter()
+                .map(|sp| {
+                    let b = PathData::new(vec![sp.clone()]).bounds().unwrap_or_default();
+                    [b.x0, b.y0, b.x1, b.y1]
+                })
+                .collect();
+            (parts, s.wrap.offset, s.wrap.invert)
+        })
+        .collect()
+}
+
+/// `before` and `after` hold as many wrap shapes, each with as many subpaths, with bounds within
+/// `1e-3`, and the same options.
+fn same_region(before: &[(Vec<[f64; 4]>, f64, bool)], after: &[(Vec<[f64; 4]>, f64, bool)]) -> bool {
+    let close =
+        |b: &[[f64; 4]], a: &[[f64; 4]]| b.len() == a.len() && b.iter().zip(a).all(|(b, a)| b.iter().zip(a).all(|(x, y)| (x - y).abs() < 1e-3));
+    before.len() == after.len() && before.iter().zip(after).all(|(b, a)| close(&b.0, &a.0) && (b.1 - a.1).abs() < 1e-6 && b.2 == a.2)
+}
+
 /// Type written as its outlines wraps area type below it by its bounds, as it did before saving,
 /// not by its glyphs: its text wrap options go on an unpainted rectangle of its bounds, the last
 /// member of the outlines' group, which keeps the type's name and has no options of its own.
@@ -11173,6 +11229,266 @@ fn type_written_as_outlines_keeps_wrapping_by_its_bounds() {
     let top = back.layers[0].children().unwrap();
     assert!(wraps(top).is_empty(), "{text_out}");
     assert_eq!(top[1].name.as_deref(), Some("Label"), "{text_out}");
+}
+
+/// A 300 × 200 document of area type "Body" filling the page, with `top` above it.
+fn over_area_type(make: impl FnOnce(&mut Document) -> Node) -> Document {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut body = TextObject::point(vectorcraft_geom::Point::ZERO, "", style(10.0, Color::BLACK));
+    body.runs = vec![TextRun::new("one two three four five six seven eight nine ten eleven twelve", style(10.0, Color::BLACK))];
+    body.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 290.0, 190.0)) };
+    body.xf = Affine::IDENTITY;
+    let body = named(text_node(&mut doc, body), "Body");
+    let top = make(&mut doc);
+    for n in [body, top] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    doc
+}
+
+/// Symbol "Leaf": two squares in opposite corners of the 20 × 20 square around the origin, apart.
+fn two_leaves(doc: &mut Document) {
+    let a = square(doc, Rect::new(-10.0, -10.0, -6.0, -6.0), LEAF);
+    let b = square(doc, Rect::new(6.0, 6.0, 10.0, 10.0), LEAF);
+    let art = group(doc, vec![a, b], false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+}
+
+/// A symbol instance written as its art (its isolation is a group's), a blend and an intertwine,
+/// each written as a group of its art, wrap area type below them by their bounds after reopening,
+/// as they did before saving, not by the members of that art: the text wrap options go on an
+/// unpainted rectangle of the bounds, the group's last member, and the group, which keeps the
+/// object's name, isolation, lock and visibility, has none. A positive offset, a negative offset
+/// with Invert Wrap, and hidden and locked.
+#[test]
+fn live_art_written_as_a_group_keeps_wrapping_by_its_bounds() {
+    let instance_of = |offset: f64, invert: bool, visible: bool, locked: bool| {
+        move |doc: &mut Document| {
+            two_leaves(doc);
+            let mut n = instance(doc, "Leaf", Affine::new([3.0, 0.0, 0.0, 3.0, 150.0, 100.0]));
+            n.isolate = true;
+            (n.visible, n.locked) = (visible, locked);
+            wrapped(named(n, "Thing"), offset, invert)
+        }
+    };
+    let blend = |doc: &mut Document| {
+        let keys = vec![
+            Arc::new(square(doc, Rect::new(60.0, 80.0, 70.0, 90.0), Color::gray(0.5))),
+            Arc::new(square(doc, Rect::new(220.0, 110.0, 230.0, 120.0), Color::gray(0.5))),
+        ];
+        let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(60.0), ..Default::default() };
+        wrapped(named(Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) }), "Thing"), 4.5, false)
+    };
+    let intertwine = |doc: &mut Document| {
+        let a = Arc::new(square(doc, Rect::new(60.0, 60.0, 80.0, 80.0), Color::gray(0.5)));
+        let b = Arc::new(square(doc, Rect::new(200.0, 120.0, 220.0, 140.0), Color::gray(0.5)));
+        wrapped(named(Node::new(doc.alloc_id(), NodeKind::Intertwine { children: vec![a, b] }), "Thing"), 2.0, true)
+    };
+    let repeat = |doc: &mut Document| {
+        let a = Arc::new(square(doc, Rect::new(100.0, 80.0, 110.0, 90.0), Color::gray(0.5)));
+        let spec = vectorcraft_doc::RepeatSpec::grid(vec![a], 8.0, 12.0);
+        wrapped(named(Node::new(doc.alloc_id(), NodeKind::Repeat(spec)), "Thing"), 1.5, false)
+    };
+    // A Fidelity that isn't a whole number: written as its distorted art.
+    let envelope = |doc: &mut Document| {
+        use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+        let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+        wrapped(named(envelope_node(doc, kind, 50.5, false, EnvelopeOptions::NEW), "Thing"), -3.0, true)
+    };
+    let docs = [
+        ("instance", over_area_type(instance_of(4.5, false, true, false)), 4.5, false, true, false),
+        ("instance, inverted", over_area_type(instance_of(-2.0, true, true, false)), -2.0, true, true, false),
+        ("instance, hidden and locked", over_area_type(instance_of(3.0, false, false, true)), 3.0, false, false, true),
+        ("blend", over_area_type(blend), 4.5, false, true, false),
+        ("intertwine", over_area_type(intertwine), 2.0, true, true, false),
+        ("repeat", over_area_type(repeat), 1.5, false, true, false),
+        ("envelope", over_area_type(envelope), -3.0, true, true, false),
+    ];
+    for (name, doc, offset, invert, visible, locked) in docs {
+        let thing = &doc.layers[0].children().unwrap()[1];
+        let want = thing.geometric_bounds().unwrap();
+        let text_out = program(&doc);
+        let back = read_back(&doc);
+        let (before, after) = (area_wrap_region(&doc), area_wrap_region(&back));
+        assert_eq!(before.len(), usize::from(visible), "{name}");
+        assert!(same_region(&before, &after), "{name}\n{before:?}\n{after:?}\n{text_out}");
+        assert_eq!(text_out.matches("(AI11TextWrapOffset)").count(), 1, "{name}: {text_out}");
+        let top = back.layers[0].children().unwrap();
+        same_wraps(&wraps(top), &[(None, offset, invert)]);
+        let g = &top[1];
+        assert!(matches!(g.kind, NodeKind::Group { clip: false, .. }), "{name}: {text_out}");
+        assert_eq!(
+            (g.name.as_deref(), g.extras().wrap, g.visible, g.locked, g.isolate),
+            (Some("Thing"), None, visible, locked, thing.isolate),
+            "{name}"
+        );
+        let last = g.children().unwrap().last().unwrap();
+        assert!(matches!(last.kind, NodeKind::Path { guide: false, .. }) && last.appearance.items.is_empty(), "{name}: {text_out}");
+        assert_eq!((last.visible, last.locked), (visible, locked), "{name}");
+        let b = last.geometric_bounds().unwrap();
+        assert!([b.x0 - want.x0, b.y0 - want.y0, b.x1 - want.x1, b.y1 - want.y1].iter().all(|d| d.abs() < 1e-3), "{name}: {b:?} {want:?}");
+    }
+
+    // An envelope written live opens live and wraps by its bounds, its options its own.
+    let live = |doc: &mut Document| {
+        use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+        let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+        wrapped(named(envelope_node(doc, kind, 50.0, false, EnvelopeOptions::NEW), "Thing"), -3.0, true)
+    };
+    let doc = over_area_type(live);
+    let text_out = program(&doc);
+    let back = read_back(&doc);
+    let (before, after) = (area_wrap_region(&doc), area_wrap_region(&back));
+    assert_eq!(before.len(), 1);
+    assert!(same_region(&before, &after), "{before:?}\n{after:?}\n{text_out}");
+    let top = back.layers[0].children().unwrap();
+    assert!(matches!(top[1].kind, NodeKind::Envelope { .. }), "{text_out}");
+    same_wraps(&wraps(top), &[(Some("Thing".into()), -3.0, true)]);
+}
+
+/// The rectangle that keeps a blend written as its art wrapping by its bounds counts toward the
+/// object limit; without room for it, the options are left out with the limit's warning, and the
+/// group does not take them. An instance whose art holds area type keeps its options on the group,
+/// with no rectangle, so that type is not wrapped by the instance's own bounds after reopening;
+/// hidden area type, which is not wrapped, and area type written as its outlines do not count.
+#[test]
+fn wrap_bounds_of_live_art_fit_the_object_limit_and_skip_art_with_area_type() {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    // A blend alone, without a symbol definition, so the rectangle is the one object left out.
+    let mut doc = Document::new(300.0, 200.0);
+    let keys = vec![
+        Arc::new(square(&mut doc, Rect::new(60.0, 80.0, 70.0, 90.0), Color::gray(0.5))),
+        Arc::new(square(&mut doc, Rect::new(220.0, 110.0, 230.0, 120.0), Color::gray(0.5))),
+    ];
+    let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(60.0), ..Default::default() };
+    let thing = wrapped(named(Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) }), "Thing"), 4.5, false);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, thing).unwrap();
+    let steps = export_ai_editing(&doc, &opts()).unwrap();
+    let steps = crate::ai_alone(&steps.program).unwrap().0.layers[0].children().unwrap()[0].children().unwrap().len() - 1;
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let all = export_within(&doc, &opts(), read).unwrap();
+    assert!(!all.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", all.warnings);
+    let out = export_within(&doc, &opts(), read - 1).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", out.warnings);
+    let text_out = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+    assert!(!text_out.contains("(AI11TextWrapOffset)"), "{text_out}");
+    let (back, _) = crate::ai_alone(&out.program).unwrap();
+    let top = back.layers[0].children().unwrap();
+    assert!(wraps(top).is_empty(), "{text_out}");
+    assert_eq!(top[0].name.as_deref(), Some("Thing"), "{text_out}");
+    assert_eq!(top[0].children().map(Vec::len), Some(steps), "only the art: {text_out}");
+
+    // Area type in the symbol's art, shown or hidden, of `words`, in a hidden group with `in_hidden`.
+    let make = |shown: bool, words: &'static str, in_hidden: bool| {
+        move |doc: &mut Document| {
+            let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "", style(2.0, Color::BLACK));
+            t.runs = vec![TextRun::new(words, style(2.0, Color::BLACK))];
+            t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(-10.0, -10.0, -6.0, -6.0)) };
+            t.xf = Affine::IDENTITY;
+            let mut t = text_node(doc, t);
+            t.visible = shown;
+            if in_hidden {
+                t = group(doc, vec![t], false);
+                t.visible = false;
+            }
+            let s = square(doc, Rect::new(6.0, 6.0, 10.0, 10.0), LEAF);
+            let art = group(doc, vec![t, s], false);
+            doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+            let mut n = instance(doc, "Leaf", Affine::new([3.0, 0.0, 0.0, 3.0, 150.0, 100.0]));
+            n.isolate = true;
+            wrapped(named(n, "Thing"), 4.5, false)
+        }
+    };
+    // Hidden type, or type in a hidden group, is not wrapped, and type of spaces alone is written
+    // as its outlines, which are not type: the rectangle keeps the bounds.
+    for (what, shown, words, in_hidden) in
+        [("hidden", false, "leaf", false), ("in a hidden group", true, "leaf", true), ("spaces", true, "   ", false)]
+    {
+        let doc = over_area_type(make(shown, words, in_hidden));
+        let text_out = program(&doc);
+        let back = read_back(&doc);
+        let (before, after) = (area_wrap_region(&doc), area_wrap_region(&back));
+        assert!(same_region(&before, &after), "{what}\n{before:?}\n{after:?}\n{text_out}");
+        let g = &back.layers[0].children().unwrap()[1];
+        assert_eq!(g.extras().wrap, None, "{what}: {text_out}");
+        let last = g.children().unwrap().last().unwrap();
+        assert!(matches!(last.kind, NodeKind::Path { guide: false, .. }) && last.appearance.items.is_empty(), "{what}: {text_out}");
+    }
+
+    let doc = over_area_type(make(true, "leaf", false));
+    let text_out = program(&doc);
+    assert_eq!(text_out.matches("(AI11TextWrapOffset)").count(), 1, "{text_out}");
+    let back = read_back(&doc);
+    let g = &back.layers[0].children().unwrap()[1];
+    assert!(matches!(g.kind, NodeKind::Group { clip: false, .. }), "{text_out}");
+    assert_eq!(g.extras().wrap, Some(vectorcraft_doc::TextWrap { offset: 4.5, invert: false }), "{text_out}");
+    let mut resolved = back.clone();
+    vectorcraft_doc::text::resolve_wrap(None, &mut resolved);
+    let mut inner = vec![];
+    resolved.layers[0].children().unwrap()[1].walk(&mut |m| {
+        if let NodeKind::Text(t) = &m.kind {
+            inner.push((matches!(t.kind, TextKind::Area { .. }), t.wrap.len()));
+        }
+    });
+    assert_eq!(inner, [(true, 0)], "{text_out}");
+}
+
+/// A blend with no keys, written as an empty group, has no bounds for a rectangle: its group keeps
+/// the text wrap options, and they read back.
+#[test]
+fn live_art_without_bounds_keeps_its_text_wrap_on_the_group() {
+    let mut doc = Document::new(300.0, 200.0);
+    let spec = vectorcraft_doc::BlendSpec::default();
+    let thing = wrapped(named(Node::new(doc.alloc_id(), NodeKind::Blend { children: vec![], spec: Box::new(spec) }), "Thing"), 4.5, true);
+    assert_eq!(thing.geometric_bounds(), None);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, thing).unwrap();
+    let text_out = program(&doc);
+    assert_eq!(text_out.matches("(AI11TextWrapOffset)").count(), 1, "{text_out}");
+    let back = read_back(&doc);
+    same_wraps(&wraps(back.layers[0].children().unwrap()), &[(Some("Thing".into()), 4.5, true)]);
+}
+
+/// A symbol instance written as its art, whose art holds an envelope of area type beside a square,
+/// wraps area type below it by its bounds after reopening. The envelope there is written as its art,
+/// and the type written for it as a live envelope and taken back does not count as shown area type:
+/// the group has no text wrap options, and its last member is the rectangle of the bounds.
+#[test]
+fn an_envelope_of_area_type_in_written_art_leaves_the_wrap_on_the_bounds() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    let doc = over_area_type(|doc| {
+        let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+        let mut envelope = envelope_node(doc, kind, 50.0, false, EnvelopeOptions::NEW);
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "", style(10.0, Color::BLACK));
+        t.runs = vec![TextRun::new("bent", style(10.0, Color::BLACK))];
+        t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(60.0, 30.0, 140.0, 70.0)) };
+        t.xf = Affine::IDENTITY;
+        let t = text_node(doc, t);
+        let NodeKind::Envelope { content, .. } = &mut envelope.kind else { unreachable_envelope() };
+        content.push(Arc::new(t));
+        let s = square(doc, Rect::new(250.0, 150.0, 260.0, 160.0), LEAF);
+        let art = group(doc, vec![envelope, s], false);
+        doc.symbols.push(Symbol { dynamic: false, name: "Bent".into(), art: Arc::new(art) });
+        let mut n = instance(doc, "Bent", Affine::IDENTITY);
+        n.isolate = true;
+        wrapped(named(n, "Thing"), 4.5, false)
+    });
+    let text_out = program(&doc);
+    let back = read_back(&doc);
+    let (before, after) = (area_wrap_region(&doc), area_wrap_region(&back));
+    assert_eq!(before.len(), 1);
+    assert!(same_region(&before, &after), "{before:?}\n{after:?}\n{text_out}");
+    let g = &back.layers[0].children().unwrap()[1];
+    assert_eq!(g.extras().wrap, None, "{text_out}");
+    let mut live = 0;
+    g.walk(&mut |m| live += usize::from(matches!(m.kind, NodeKind::Envelope { .. })));
+    assert_eq!(live, 0, "{text_out}");
+    let last = g.children().unwrap().last().unwrap();
+    assert!(matches!(last.kind, NodeKind::Path { guide: false, .. }) && last.appearance.items.is_empty(), "{text_out}");
 }
 
 /// A clipping path inside art cut to a clipping object is written as its fills and its strokes,

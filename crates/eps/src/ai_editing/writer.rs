@@ -308,6 +308,11 @@ pub(super) struct Writer<'a> {
     series_tag: Option<String>,
     /// Where the `Go` lines of the graph being written start in [`Self::body`].
     graph_tags: Vec<usize>,
+    /// How many hidden objects the object being written is, or is in ([`Self::node`]).
+    unshown: u32,
+    /// For each area type written as type, not as its outlines ([`Self::text`]), in the order
+    /// written: [`Self::unshown`] as it was written.
+    area_written: Vec<u32>,
 }
 
 impl<'a> Writer<'a> {
@@ -385,6 +390,8 @@ impl<'a> Writer<'a> {
             in_graph: false,
             series_tag: None,
             graph_tags: vec![],
+            unshown: 0,
+            area_written: vec![],
         }
     }
 
@@ -658,8 +665,17 @@ impl<'a> Writer<'a> {
         }
     }
 
-    /// One object: its state before it, its transparency, and its name and opacity mask after it.
+    /// One object: its state before it, its transparency, and its name and opacity mask after it
+    /// ([`Self::write_node`]), counted in [`Self::unshown`] while it is written when it is hidden.
     fn node(&mut self, n: &Node) {
+        let hidden = u32::from(!n.visible);
+        self.unshown += hidden;
+        self.write_node(n);
+        self.unshown -= hidden;
+    }
+
+    /// One object, written by [`Self::node`].
+    fn write_node(&mut self, n: &Node) {
         let tag = self.series_tag.take();
         if let NodeKind::Layer { .. } = n.kind {
             return self.write_layer(n, &[]);
@@ -754,6 +770,8 @@ impl<'a> Writer<'a> {
                 if !self.open_group("u") {
                     return;
                 }
+                let state = self.state;
+                let mut area_type = false;
                 // The canvas places an instance inside a symbol's art where the outer instance puts
                 // it (9-slice guides, stains and patterns included), and this art doesn't move with it.
                 self.wrote_fixed |= self.in_symbol;
@@ -789,21 +807,26 @@ impl<'a> Writer<'a> {
                         art.visible = true;
                         art.locked = false;
                         art.name = None;
+                        let from = self.area_written.len();
                         self.nest += 1;
                         self.drawn += 1;
                         self.node(&art);
                         self.drawn -= 1;
                         self.nest -= 1;
+                        area_type = self.shown_area_type(from);
                     } else {
                         self.warn(SYMBOL_LIMIT);
                     }
                 }
+                if !area_type {
+                    self.wrap_on_bounds(n, state);
+                }
                 self.end_group("U", xy);
             }
             NodeKind::Envelope { .. } if self.envelope(n, xy) => {}
-            NodeKind::Envelope { .. } => self.drawn_art(n, xy, Some(envelopes::ENVELOPES)),
+            NodeKind::Envelope { .. } => self.drawn_art(n, xy, Some(envelopes::ENVELOPES), true),
             NodeKind::Blend { .. } | NodeKind::Mesh(_) | NodeKind::Repeat(_) | NodeKind::PlacedDocument(_) | NodeKind::Intertwine { .. } => {
-                self.drawn_art(n, xy, Some(LIVE));
+                self.drawn_art(n, xy, Some(LIVE), true);
             }
             // Ruler guides are kept in the document's native copy only.
             NodeKind::RulerGuide { .. } => {}
@@ -870,15 +893,20 @@ impl<'a> Writer<'a> {
     }
 
     /// Live object `n`, of transparency `xy`, as a group of its art, with `warning` when it is given.
-    fn drawn_art(&mut self, n: &Node, xy: Xy, warning: Option<&str>) {
+    /// With `bounds`, `n`'s text wrap options go on the rectangle of its bounds, the group's last
+    /// member ([`Self::wrap_on_bounds`]); without it, in the group's dictionary.
+    fn drawn_art(&mut self, n: &Node, xy: Xy, warning: Option<&str>, bounds: bool) {
         if !self.open_group("u") {
             return;
         }
+        let state = self.state;
         if let Some(w) = warning {
             self.warn(w);
         }
+        let mut area_type = false;
         if self.nest < MAX_NEST {
             let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+            let from = self.area_written.len();
             self.nest += 1;
             self.drawn += 1;
             for c in g.children().map(Vec::as_slice).unwrap_or_default() {
@@ -886,8 +914,43 @@ impl<'a> Writer<'a> {
             }
             self.drawn -= 1;
             self.nest -= 1;
+            area_type = self.shown_area_type(from);
+        }
+        if bounds && !area_type {
+            self.wrap_on_bounds(n, state);
         }
         self.end_group("U", xy);
+    }
+
+    /// Was area type written as type ([`Self::text`]) in the art written since `from` in
+    /// [`Self::area_written`], shown wherever the art is shown? Written as a group without text
+    /// wrap options, such art has that type wrapped by the objects above it in the group; hidden
+    /// type, and type written as its outlines, are not wrapped
+    /// ([`vectorcraft_doc::text::resolve_wrap`]). The entries since `from` are replaced by the
+    /// fewest hidden objects any of them was in, which is all a group around this one asks.
+    fn shown_area_type(&mut self, from: usize) -> bool {
+        let fewest = self.area_written.get(from..).and_then(|w| w.iter().min().copied());
+        self.area_written.truncate(from);
+        self.area_written.extend(fewest);
+        fewest == Some(self.unshown)
+    }
+
+    /// After the members of the group that object `n` is written as, when the group's dictionary
+    /// would hold `n`'s text wrap options: the rectangle of `n`'s bounds with them, the group's last
+    /// member ([`Self::wrap_bounds`]), then lock and hidden state `state` again. The group's
+    /// dictionary leaves the options out, so the group wraps type by `n`'s bounds, as `n` does
+    /// ([`vectorcraft_doc::text::resolve_wrap`]), not by its members. When `n` has no finite bounds,
+    /// nothing, and the group's dictionary keeps the options.
+    fn wrap_on_bounds(&mut self, n: &Node, state: Option<(bool, bool)>) {
+        let Some(w) = n.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look) else { return };
+        if finite_bounds(n).is_none() {
+            return;
+        }
+        self.wrap_bounds(n, w);
+        self.wrap_moved = true;
+        if let Some((locked, hidden)) = state {
+            self.state(locked, hidden);
+        }
     }
 
     /// `n`'s `/ArtDictionary`, after it, when it has a name (`AI10_ArtUID`, see [`Self::take_id`]),
@@ -1470,6 +1533,9 @@ impl<'a> Writer<'a> {
         // are read only from a state block after it, as a group's are.
         self.set_object_xy(xy.object());
         texts::stub(&mut self.body, story, frame, t, self.to_art);
+        if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) {
+            self.area_written.push(self.unshown);
+        }
         if xy.isolate || xy.knockout != Knockout::Neutral {
             self.state_block(xy);
         }
@@ -1536,23 +1602,20 @@ impl<'a> Writer<'a> {
         for c in over {
             self.node(c);
         }
-        // Type wraps by its bounds: its text wrap options go on a rectangle of its bounds, the
-        // group's last member, and the group's dictionary leaves them out.
-        if let Some(w) = n.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look) {
-            self.wrap_bounds(n, w);
-            self.wrap_moved = true;
-        }
+        // Type wraps by its bounds.
+        self.wrap_on_bounds(n, state);
         if let Some((locked, hidden)) = state {
             self.state(locked, hidden);
         }
         self.end_group("U", xy);
     }
 
-    /// An unpainted closed rectangle at the geometric bounds of type `n`, the region its text wraps
-    /// around, with `n`'s lock and hidden state and text wrap options `w` in its dictionary. Nothing
+    /// An unpainted closed rectangle at the geometric bounds of type, a symbol instance or a live
+    /// object `n`, the region its text wraps around ([`vectorcraft_doc::text::resolve_wrap`]), with
+    /// `n`'s lock and hidden state and text wrap options `w` in its dictionary. Nothing
     /// when `n` has no finite bounds, or without room for it ([`Self::take_objects`]).
     fn wrap_bounds(&mut self, n: &Node, w: TextWrap) {
-        let Some(b) = n.geometric_bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite())) else { return };
+        let Some(b) = finite_bounds(n) else { return };
         self.state(n.locked, !n.visible);
         let objects = self.objects;
         self.plain_object(&shapes::rectangle(b), FillRule::NonZero, None, None, Xy::PLAIN);
@@ -1739,6 +1802,11 @@ impl<'a> Writer<'a> {
             })
             .collect()
     }
+}
+
+/// `n`'s geometric bounds, when they are finite.
+fn finite_bounds(n: &Node) -> Option<vectorcraft_geom::Rect> {
+    n.geometric_bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()))
 }
 
 /// The gradient of paint `p`, when it has one.
