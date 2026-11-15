@@ -511,6 +511,8 @@ impl crate::Document {
             st.aki_left = num("akiLeft").unwrap_or(st.aki_left);
             st.aki_right = num("akiRight").unwrap_or(st.aki_right);
             st.tsume = num("tsume").unwrap_or(st.tsume);
+            st.diacritic_horizontal = num("diacriticHorizontal").unwrap_or(st.diacritic_horizontal);
+            st.diacritic_vertical = num("diacriticVertical").unwrap_or(st.diacritic_vertical);
             st.warichu_gap = num("warichuGap").unwrap_or(st.warichu_gap);
             st.warichu_scale = num("warichuScale").unwrap_or(st.warichu_scale);
             st.keep_dimensions_in_range();
@@ -537,6 +539,8 @@ impl crate::Document {
                 ("akiLeft", Some(st.aki_left)),
                 ("akiRight", Some(st.aki_right)),
                 ("tsume", Some(st.tsume)),
+                ("diacriticHorizontal", Some(st.diacritic_horizontal)),
+                ("diacriticVertical", Some(st.diacritic_vertical)),
                 ("leading", st.leading),
             ];
             for (k, v) in kept {

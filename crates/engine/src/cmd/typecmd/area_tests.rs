@@ -1921,6 +1921,66 @@ fn tsume_is_a_character_attribute() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
 }
 
+/// Adjust Horizontal and Vertical Diacritic Position (Character panel, Middle Eastern options):
+/// character attributes in thousandths of an em, 0 by default and saved only when not 0. Both
+/// commands set them in one undo step, setting one leaves the other, a call that gives the values
+/// the text already has records none, and a value that is not a number or lies outside -1000 to
+/// 1000 is refused, naming the key, before anything changes; the native file and a character style
+/// captured from the characters carry them.
+#[test]
+fn diacritic_positions_are_character_attributes() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "بَب"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let moved = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.diacritic_horizontal, r.style.diacritic_vertical)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("diacriticHorizontal").is_none() && saved.get("diacriticVertical").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"diacriticHorizontal": -150})).unwrap();
+    s.execute("text.setFormat", &json!({"diacriticVertical": 250})).unwrap();
+    assert_eq!(moved(&s), [("بَب".to_string(), -150.0, 250.0)], "setting one leaves the other");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"diacriticHorizontal": -150, "diacriticVertical": 250})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step without a change");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(moved(&s), [("بَب".to_string(), -150.0, 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+
+    let mark = "بَ".len();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": "ب".len(), "end": mark, "diacriticVertical": -1000})).unwrap();
+    assert_eq!(moved(&s), [("ب".to_string(), -150.0, 250.0), ("\u{064E}".to_string(), -150.0, -1000.0), ("ب".to_string(), -150.0, 250.0)]);
+    let saved = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert_eq!((saved["diacriticHorizontal"].clone(), saved["diacriticVertical"].clone()), (json!(-150.0), json!(-1000.0)));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.diacritic_horizontal, r.style.diacritic_vertical)).collect();
+    assert_eq!(reopened, moved(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[1].style);
+    assert_eq!((attrs["diacriticHorizontal"].clone(), attrs["diacriticVertical"].clone()), (json!(-150.0), json!(-1000.0)));
+
+    let before = moved(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"diacriticHorizontal": "50"}), "`diacriticHorizontal` must be a number"),
+        ("text.setFormat", json!({"diacriticVertical": 1000.5}), "`diacriticVertical` must be from -1000 to 1000"),
+        ("text.setRangeStyle", json!({"id": id, "diacriticVertical": true}), "`diacriticVertical` must be a number"),
+        (
+            "text.setRangeStyle",
+            json!({"id": id, "start": 0, "end": mark, "diacriticHorizontal": -1001}),
+            "`diacriticHorizontal` must be from -1000 to 1000",
+        ),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(moved(&s), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
+}
+
 /// Standard Vertical Roman Alignment (Character panel menu, East Asian options): a character
 /// attribute, off by default and saved only when on. Documents written before it read as off; a
 /// character style captured from the characters carries it.
@@ -2006,6 +2066,38 @@ fn glyph_form_is_one_character_attribute_saved_only_when_set() {
     assert!(s.execute("charStyle.new", &json!({"name": "Bad", "attrs": {"glyphForm": "jis2004"}})).is_err());
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(runs(&s).iter().all(|r| r.style.glyph_form == GlyphForm::Default));
+}
+
+/// A glyph choice (`text.setGlyphAlternate`) would keep drawing its own glyph over a glyph form,
+/// so setting a form other than "default" takes it away, in `text.setRangeStyle` and in
+/// `text.setFormat`; "default" (Revert To Default Forms) and calls without `glyphForm` keep it.
+#[test]
+fn a_glyph_form_takes_away_the_characters_glyph_choice() {
+    use vectorcraft_doc::{GlyphChoice, GlyphForm};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "亜唖"})).unwrap()["id"].as_u64().unwrap();
+    let choice = GlyphChoice { ch: '唖', gid: 42, font: "Test-Regular".into(), version: "1".into() };
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(NodeId(id)).map(|n| &mut n.kind) {
+        vectorcraft_text::edit::style_range(&mut t.runs, 3, 6, |st| st.glyph_alternate = Some(choice.clone()));
+    }
+    let state = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.glyph_form, r.style.glyph_alternate.is_some())).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    s.execute("text.setRangeStyle", &json!({"id": id, "size": 30})).unwrap();
+    assert_eq!(state(&s), [("亜".into(), GlyphForm::Default, false), ("唖".into(), GlyphForm::Default, true)], "no glyphForm: kept");
+    s.execute("text.setRangeStyle", &json!({"id": id, "glyphForm": "default"})).unwrap();
+    assert_eq!(state(&s)[1], ("唖".into(), GlyphForm::Default, true), "default: kept");
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 3, "end": 6, "glyphForm": "jis78"})).unwrap();
+    assert_eq!(state(&s), [("亜".into(), GlyphForm::Default, false), ("唖".into(), GlyphForm::Jis78, false)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(state(&s)[1], ("唖".into(), GlyphForm::Default, true), "one undo step brings both back");
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"glyphForm": "default"})).unwrap();
+    assert!(state(&s).iter().any(|r| r.2), "default: kept");
+    s.execute("text.setFormat", &json!({"glyphForm": "traditional"})).unwrap();
+    assert!(state(&s).iter().all(|r| r.1 == GlyphForm::Traditional && !r.2), "{:?}", state(&s));
 }
 
 /// No Break is a character attribute, saved only when on.

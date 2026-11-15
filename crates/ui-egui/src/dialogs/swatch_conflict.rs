@@ -5,7 +5,8 @@
 //!
 //! Fields: `conflicts` (as `clipboard.conflicts` lists them: `[{name, document, clipboard, spot}]`),
 //! `index` (the one asked about), `choice` (`merge` or `add`), `applyToAll`, `choices` (the
-//! answers so far, by swatch name), `__command` and `__params` (the paste to run).
+//! answers so far, by swatch name), `__command` and `__params` (the paste to run), and `__doc`
+//! (the uid of the document it asks about).
 
 use egui::vec2;
 use serde_json::{Map, Value, json};
@@ -39,7 +40,7 @@ pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Di
     let conflicts = found["swatches"].as_array().filter(|a| !a.is_empty())?.clone();
     let fields = json!({
         "conflicts": conflicts, "index": 0, "choice": "merge", "applyToAll": false, "choices": {},
-        "__command": command, "__params": params,
+        "__command": command, "__params": params, DOC: app.session.active().map(|doc| doc.uid),
     });
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND) {
         crate::placing::cancel_swatch_paste(app);
@@ -47,6 +48,9 @@ pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Di
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Some(Ok(json!({ "dialog": KIND })))
 }
+
+/// The field that holds the uid of the document the question is about.
+const DOC: &str = "__doc";
 
 fn conflicts(d: &Dialog) -> &[Value] {
     d.fields.get("conflicts").and_then(Value::as_array).map_or(&[], Vec::as_slice)
@@ -102,8 +106,14 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// Record the answer; ask about the next conflict, or paste once every one is answered.
+/// Record the answer; ask about the next conflict, or paste once every one is answered. When
+/// another document has become the active one since an immediate paste asked, it closes as Cancel
+/// does and pastes nothing (a deferred paste goes back to its own document).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
+    if d.fields.get("__deferredPaste").is_none() && d.fields.get(DOC).and_then(Value::as_u64) != app.session.active().map(|doc| doc.uid) {
+        app.ui.dialog = None;
+        return Ok(json!({}));
+    }
     let choice = d.str("choice");
     if !matches!(choice.as_str(), "merge" | "add") {
         return Err(format!("choice must be \"merge\" or \"add\", not `{choice}`"));

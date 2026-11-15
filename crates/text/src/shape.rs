@@ -128,6 +128,27 @@ pub(crate) fn joins(script: Script) -> bool {
     )
 }
 
+/// Is `script` one a Standard composer leaves unshaped: Indic (conjuncts, half forms, marks placed
+/// by the font's layout tables), the joining scripts ([`joins`]: Arabic, Syriac, N'Ko, Mongolian…)
+/// and Hebrew?
+fn is_complex_script(script: Script) -> bool {
+    joins(script)
+        || matches!(
+            script,
+            Script::Hebrew
+                | Script::Devanagari
+                | Script::Bengali
+                | Script::Gurmukhi
+                | Script::Gujarati
+                | Script::Oriya
+                | Script::Tamil
+                | Script::Telugu
+                | Script::Kannada
+                | Script::Malayalam
+                | Script::Sinhala
+        )
+}
+
 /// How `vpal` and the vertical kerning with it move an upright glyph in vertical type and change
 /// its length down the column, in points: `advance` down the column, `dx` and `dy` in glyph space
 /// (y down; `dy` is down the column once the glyph stands upright). `proportional`: `vpal` itself
@@ -1032,6 +1053,10 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         warichu_scale: _,
         warichu_align: _,
         digits,
+        // A mark glyph moves by its own run's values ([`shape_segment`]), so a mark keeps its
+        // letter whatever they are.
+        diacritic_horizontal: _,
+        diacritic_vertical: _,
         font_height_reference,
         no_break,
         language,
@@ -1106,7 +1131,8 @@ pub(crate) fn warichu_alike(a: &CharStyle, b: &CharStyle) -> bool {
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
 /// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
 /// run's, see [`shape_segment`]), the space before a line's first character ([`space_before`]),
-/// Insert Aki ([`aki`]), Tsume ([`tighten`]), the OpenType features and the East Asian glyph form (each run's apply to its own characters, as features
+/// Insert Aki ([`aki`]), Tsume ([`tighten`]), the Adjust Diacritic Positions (each mark glyph takes
+/// its run's), the OpenType features and the East Asian glyph form (each run's apply to its own characters, as features
 /// over a range of the one buffer) and the tracking, as long as the tracking keeps or drops
 /// standard ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
@@ -1165,6 +1191,8 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         warichu_scale: _,
         warichu_align: _,
         digits,
+        diacritic_horizontal: _,
+        diacritic_vertical: _,
         font_height_reference,
         no_break,
         language,
@@ -1394,7 +1422,13 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let source_runs = &(source_runs.start + first..source_runs.start + last);
     let text_seg = &text[range.clone()];
     // The segment's script: that of its first character of a script of its own.
-    let cursive = text_seg.chars().map(|c| c.script()).find(|s| !matches!(s, Script::Common | Script::Inherited)).is_some_and(joins);
+    let first_script = text_seg.chars().map(|c| c.script()).find(|s| !matches!(s, Script::Common | Script::Inherited));
+    // A Standard composer sets a complex script glyph by glyph (no layout tables, nominal glyphs).
+    // shortcut: decided for the whole segment by its first strong script, as `cursive` is; segments
+    // already split where the script changes.
+    let unshaped = feats.unshaped_complex && first_script.is_some_and(is_complex_script);
+    // Unshaped letters don't join, so they are not bent along a path as joined ones are.
+    let cursive = first_script.is_some_and(joins) && !unshaped;
     let full = st.size.max(0.0);
     // Superscript/subscript and small capitals shrink the glyphs; line metrics keep the full size.
     let (_, pos_shift) = st.position.scale_shift(full);
@@ -1437,11 +1471,21 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     if !manual_ends.is_empty() {
         return shape_apart(manual_ends, out);
     }
-    // Harakat styled apart from their letters (paint only): shaped with them, each glyph then
-    // takes its own character's run ([`crate::harakat`]).
+    // Harakat styled apart from their letters (paint only), and harakat and Hebrew points with
+    // diacritic positions of their own: shaped with them, each glyph then takes its own
+    // character's run ([`crate::harakat`]).
     let mark_boundaries: Vec<usize> = boundaries()
-        .filter(|&b| run_at(b - 1).1 != run_at(b).1 && crate::harakat::paint_only_mark_boundary(text, b, run_at(b - 1).1, run_at(b).1))
+        .filter(|&b| {
+            let (before, after) = (run_at(b - 1).1, run_at(b).1);
+            before != after
+                && (crate::harakat::paint_only_mark_boundary(text, b, before, after)
+                    || crate::harakat::diacritic_mark_boundary(text, b, before, after))
+        })
         .collect();
+    // The face's mark classes, read once when any of the segment's runs moves its marks.
+    let moves_marks =
+        runs.get(source_runs.clone()).unwrap_or_default().iter().any(|(_, s)| s.diacritic_horizontal != 0.0 || s.diacritic_vertical != 0.0);
+    let diacritic_classes = if moves_marks { crate::harakat::mark_classes(face) } else { None };
     // Source run starts are sorted. Reuse their classification when checking cluster splits.
     let styled_marks = !mark_boundaries.is_empty();
     let char_level = std::cell::Cell::new(false);
@@ -1475,7 +1519,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             .and_then(|l| l.parse::<harfrust::Language>().ok());
         let mut shaped = Shaped::default();
         let Shaped { raw, proportional, vpal, chars, unkerned } = &mut shaped;
-        let hb_shaped = face.hb().map(|hb| {
+        let hb_shaped = face.hb().filter(|_| !unshaped).map(|hb| {
             let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
             // The baseline and character-level pass use exactly the same resolved features.
             // Alternate positioning passes still resolve their own features, with `more` last.
@@ -1545,7 +1589,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 char_level.set(false);
                 *chars = crate::harakat::own_chars(raw, &by_char, range.end, text, |gid| classes.get(skrifa::GlyphId::new(gid)) == 3);
             }
-            if feats.proportional(st) {
+            // Runs shaped together may differ in their glyph form, and a width form turns `palt` off.
+            if feats.proportional(st) || runs.get(source_runs.clone()).unwrap_or_default().iter().any(|(_, s)| feats.proportional(s)) {
                 // `palt` is positioning only: the same glyphs set on their full widths tell which
                 // advances it changed (kerning and the rest change both alike).
                 let full = shape(&with_more(&|s| feats.resolve_fixed_width(s)), along);
@@ -1590,7 +1635,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             }
         });
         if hb_shaped.is_none() {
-            // Fallback: nominal glyphs and hmtx advances, no shaping.
+            // Fallback: nominal glyphs and hmtx advances, no shaping (also a complex script under a
+            // Standard composer).
             if let Some(f) = face.skrifa() {
                 let cmap = f.charmap();
                 let gm = f.glyph_metrics(Size::unscaled(), face.location());
@@ -1599,8 +1645,14 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                     let c = st.digits.map(c);
                     let chars: Vec<char> = if upper { c.to_uppercase().collect() } else { vec![c] };
                     for u in chars {
-                        let g = cmap.map(u).unwrap_or_default();
-                        let adv = gm.advance_width(g).unwrap_or(face.upem as f32 * 0.5);
+                        // Format characters (joiners, direction marks) have no glyph of their own in most
+                        // fonts, and the shaper hides them: draw the space's glyph with no advance.
+                        let (g, adv) = if crate::justify::is_format_control(u) {
+                            (cmap.map(' ').unwrap_or_default(), 0.0)
+                        } else {
+                            let g = cmap.map(u).unwrap_or_default();
+                            (g, gm.advance_width(g).unwrap_or(face.upem as f32 * 0.5))
+                        };
                         raw.push((g.to_u32(), cl, adv.round() as i32, 0, 0));
                     }
                 }
@@ -1734,11 +1786,21 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     for (gi, &(gid, cl, xa, xo, yo)) in raw.iter().enumerate() {
         let cl = cl as usize;
         let (run, gst) = run_at(cl);
-        // A glyph of a harakat styled apart takes its own character's run (paint only).
-        let run = match chars.get(gi).map(|&c| run_at(c as usize)) {
-            Some((own, own_st)) if crate::harakat::paint_only(gst, own_st) => own,
-            _ => run,
+        // A glyph of a harakat styled apart takes its own character's run (paint and diacritic
+        // positions only).
+        let (run, run_st) = match chars.get(gi).map(|&c| run_at(c as usize)) {
+            Some((own, own_st)) if crate::harakat::paint_only(gst, own_st) => (own, own_st),
+            _ => (run, gst),
         };
+        // A mark glyph (GDEF class 3) moves by its run's Adjust Diacritic Positions, thousandths
+        // of the em it is set in: right and up for positive values.
+        let (mut dx, mut dy) = (xo as f64 * k * hs, -(yo as f64) * k * vs);
+        if let Some(classes) = &diacritic_classes
+            && classes.get(skrifa::GlyphId::new(gid)) == 3
+        {
+            dx += run_st.diacritic_horizontal / 1000.0 * size * hs;
+            dy -= run_st.diacritic_vertical / 1000.0 * size * vs;
+        }
         let end = cluster_end(cl);
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
@@ -1793,8 +1855,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             run,
             adv,
             tracking: tracked,
-            dx: xo as f64 * k * hs,
-            dy: -(yo as f64) * k * vs,
+            dx,
+            dy,
             kern_shift,
             aki_shift,
             aki: aki_in_adv,
