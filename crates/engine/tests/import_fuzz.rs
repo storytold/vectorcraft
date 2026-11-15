@@ -2904,9 +2904,9 @@ fn arb_body() -> impl Strategy<Value = Vec<u8>> {
 }
 
 /// WMF record functions VectorCraft reads, and one it doesn't.
-const WMF_FUNCTIONS: [u16; 33] = [
+const WMF_FUNCTIONS: [u16; 35] = [
     0x0324, 0x0325, 0x0538, 0x041B, 0x0418, 0x061C, 0x0817, 0x081A, 0x0830, 0x0416, 0x0415, 0x02FA, 0x02FC, 0x02FB, 0x012D, 0x01F0, 0x0521, 0x0A32,
-    0x0F43, 0x0B41, 0x0940, 0x061D, 0x0213, 0x0214, 0x001E, 0x0127, 0x0106, 0x0209, 0x012E, 0x00F7, 0x01F9, 0x0142, 0x0999,
+    0x0F43, 0x0B41, 0x0940, 0x061D, 0x0213, 0x0214, 0x001E, 0x0127, 0x0106, 0x0209, 0x012E, 0x00F7, 0x01F9, 0x0142, 0x0103, 0x0104, 0x0999,
 ];
 
 proptest! {
@@ -2931,6 +2931,30 @@ proptest! {
     #[test]
     fn random_wmf_records_never_panic(records in prop::collection::vec((prop::sample::select(WMF_FUNCTIONS.to_vec()), arb_body()), 0..32)) {
         survive_metafile("WMF records", "x.wmf", &wmf_of(&records))?;
+    }
+
+    #[test]
+    fn random_headerless_wmf_records_never_panic(records in prop::collection::vec((prop::sample::select(WMF_FUNCTIONS.to_vec()), arb_body()), 0..32)) {
+        // Without the placeable header, the map and mix modes the records set decide the scale.
+        survive_metafile("headerless WMF records", "x.wmf", &wmf_of(&records)[22..])?;
+    }
+
+    #[test]
+    fn random_emf_plus_records_never_panic(records in prop::collection::vec((0x4001u16..0x403B, any::<u16>(), arb_body()), 0..32)) {
+        // One comment of EMF+ records (type, flags, data) after an EmfPlusHeader.
+        let mut plus = vec![];
+        let header = (0x4001u16, 0u16, [0xDBC0_1002u32, 0, 96, 96].iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>());
+        for (kind, flags, data) in std::iter::once(&header).chain(&records) {
+            plus.extend(kind.to_le_bytes());
+            plus.extend(flags.to_le_bytes());
+            plus.extend((12 + data.len() as u32).to_le_bytes());
+            plus.extend((data.len() as u32).to_le_bytes());
+            plus.extend(data);
+        }
+        let mut comment = (4 + plus.len() as u32).to_le_bytes().to_vec();
+        comment.extend(b"EMF+");
+        comment.extend(plus);
+        survive_metafile("EMF+ records", "x.emf", &emf_of(&[(70, comment)]))?;
     }
 
     #[test]

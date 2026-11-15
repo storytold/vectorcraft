@@ -508,12 +508,17 @@ impl ColorPainter for Tree<'_> {
             return;
         };
         let Some(clip) = self.groups.get(at).and_then(|g| g.clip.clone()) else { return };
-        if at + 1 == self.groups.len()
-            && let Some(g) = self.groups.last_mut()
-        {
-            g.flooded = g.children.is_empty();
-        }
+        let innermost = at + 1 == self.groups.len();
+        let before = self.groups.last().map_or(0, |g| g.children.len());
         self.fill_path(&clip, &brush);
+        // Flooded only when this fill added the group's first child. A fill that paints nothing
+        // adds none and leaves the flag as it was, so the clip stays around what comes after it.
+        if innermost
+            && let Some(g) = self.groups.last_mut()
+            && g.children.len() > before
+        {
+            g.flooded = before == 0;
+        }
     }
 
     /// The glyph's outline filled, the brush moved by `brush_transform` (the glyph stays).

@@ -671,10 +671,11 @@ fn a_document_replaced_in_the_back_is_measured_before_it_comes_to_the_front() {
 }
 
 /// Type a document replaced in the back sets in a composite font that only the front document
-/// defines is measured in that font while the front one is registered, and again, as missing, when
-/// the replaced document comes to the front.
+/// defines is measured as missing, though the front one is registered, also when the replaced
+/// document defines no composite font, and still as missing when it comes to the front.
 #[test]
-fn a_document_replaced_in_the_back_measures_a_font_it_lacks_again_in_front() {
+fn a_document_replaced_in_the_back_measures_a_font_it_lacks_as_missing() {
+    let db = vectorcraft_text::FontDb::global();
     let mut s = session();
     let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab12", "size": 20, "font": "CF Lacked"})).unwrap()["id"].as_u64().unwrap();
     let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
@@ -682,8 +683,16 @@ fn a_document_replaced_in_the_back_measures_a_font_it_lacks_again_in_front() {
     s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Lacked")]})).unwrap();
     assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
     let back = text_in(&s, 0, id);
-    let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &back).bounds;
-    assert_eq!(back.cached_bounds, Some(expected));
+    assert!(s.documents()[0].doc.composite_fonts.is_empty());
+    let in_front = vectorcraft_text::layout(db, &back).bounds;
+    // The same type set in a family nothing defines.
+    let mut nowhere = back.clone();
+    for r in &mut nowhere.runs {
+        r.style.font_family = "No Such Family CF Lacked".into();
+    }
+    let missing = vectorcraft_text::layout(db, &nowhere).bounds;
+    assert!((in_front.width() - missing.width()).abs() > 1e-6, "the front document's font draws otherwise");
+    assert_eq!(back.cached_bounds, Some(missing));
     assert!(s.set_active(0));
     assert!(vectorcraft_text::FontDb::global().composite_font("CF Lacked").is_none());
     let actual = text(&s, id);

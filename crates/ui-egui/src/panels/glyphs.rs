@@ -9,12 +9,14 @@
 //! that glyph as one of its alternates in its word. A glyph no feature reaches whose name does
 //! not belong to another letter is applied as a glyph choice, which may not join. Other glyphs
 //! are drawn dimmed, and their tooltips say why they cannot be applied to the selection.
+//! With Show East Asian Options, the panel menu sets the selected characters' East Asian glyph
+//! form ([`glyph_form_items`]).
 
 use std::collections::HashMap;
 
 use egui::{Color32, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
-use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
+use vectorcraft_doc::{CharStyle, GlyphForm, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, BezPath, PathEl};
 use vectorcraft_text::FontDb;
 
@@ -564,6 +566,129 @@ fn apply_alternate(app: &mut VectorcraftApp, id: NodeId, bytes: (usize, usize), 
     }
 }
 
+/// The most alternate glyphs the canvas shows beside a selected character. Public behavior: at
+/// most five alternates show on the canvas, and an icon to their right opens the Glyphs panel when
+/// the font has more ("Replace a character with on-canvas alternate glyphs",
+/// <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=479>).
+pub(crate) const ON_CANVAS_ALTERNATES: usize = 5;
+
+/// The alternate glyphs the canvas offers beside the Type tool's one selected character
+/// ([`on_canvas`]).
+pub(crate) struct OnCanvas {
+    /// The text the character is in.
+    pub id: NodeId,
+    /// The character's bytes in the text, start and end.
+    pub bytes: (usize, usize),
+    /// The face that draws the character's glyph.
+    face: std::sync::Arc<vectorcraft_text::FontFace>,
+    /// Up to [`ON_CANVAS_ALTERNATES`] glyphs, none of them the glyph the character is drawn with.
+    cells: Vec<Variant>,
+    /// Whether the character has alternates that [`Self::cells`] leaves out.
+    pub more: bool,
+    features: Vec<String>,
+    has_choice: bool,
+}
+
+impl OnCanvas {
+    /// How many glyphs are offered: 1 to [`ON_CANVAS_ALTERNATES`].
+    pub fn count(&self) -> usize {
+        self.cells.len()
+    }
+
+    /// The id of glyph `i`.
+    #[cfg(test)]
+    pub fn gid(&self, i: usize) -> Option<u32> {
+        self.cells.get(i).map(|c| c.gid)
+    }
+
+    /// The preview of glyph `i` in a square of `px` pixels.
+    pub fn texture(&self, ctx: &egui::Context, i: usize, px: u32) -> Option<egui::TextureHandle> {
+        self.cells.get(i).map(|c| glyph_texture(ctx, &self.face, c.gid, px))
+    }
+
+    /// The tooltip of glyph `i`: its id, the feature that draws it, and what a click does.
+    pub fn tip(&self, i: usize) -> String {
+        let Some(c) = self.cells.get(i) else { return String::new() };
+        let glyph = crate::i18n::fmt(tl!("glyph {id}"), &[("id", &c.gid.to_string())]);
+        let glyph = match (&c.apply, c.default) {
+            (_, true) => glyph,
+            (Some(tag), _) => format!("{glyph}  ({tag})"),
+            (None, _) => format!("{glyph}  ({})", String::from_utf8_lossy(&c.feature)),
+        };
+        let mut tip = format!("{glyph}\n{}", tl!("Click to replace"));
+        if !c.default && c.apply.is_none() {
+            tip.push('\n');
+            tip.push_str(tl!("No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors."));
+        }
+        tip
+    }
+
+    /// Draw the character with glyph `i`, as a double-click on that glyph in Show › Alternates for
+    /// Current Selection does: one command, so one undo step.
+    pub fn pick(&self, app: &mut VectorcraftApp, i: usize) {
+        let Some(c) = self.cells.get(i) else { return };
+        let pick = match (&c.apply, c.default) {
+            (_, true) => Pick::Default,
+            (Some(tag), _) => Pick::Feature(tag.clone()),
+            (None, _) => Pick::Glyph(c.gid),
+        };
+        super::character::end_typing(app);
+        apply_alternate(app, self.id, self.bytes, &self.features, self.has_choice, pick);
+    }
+}
+
+/// What the canvas offers beside the Type tool's selection: the alternates of the selected
+/// character as it stands in its word ([`alternates_found`], found once for each document
+/// revision), in the font's order and without the glyph the character is drawn with. A character
+/// drawn with an alternate gets its default glyph first. `None` unless the Type tool's selection
+/// is exactly one character of one type object whose font is available and gives it another glyph.
+pub(crate) fn on_canvas(app: &VectorcraftApp, ui: &Ui) -> Option<OnCanvas> {
+    let (_, a, b) = super::character::text_editing(app)?;
+    if a == b || super::character::text_story(app).is_some() {
+        return None;
+    }
+    let target = selected_target(app)?;
+    let (start, end) = (a.min(b), a.max(b));
+    if target.byte != start || start + target.ch.len_utf8() != end {
+        return None;
+    }
+    let db = FontDb::global();
+    let face = db.style_face(target.style).filter(|_| db.has_family(&target.style.font_family))?;
+    let found = alternates_found(app, ui, target.id, start, face.id())?;
+    let face = db.face_by_id(found.font_id).unwrap_or(face);
+    let default = (found.default != found.current).then_some(Variant { gid: found.default, feature: [0; 4], apply: None, default: true });
+    let others = found.alternates.iter().filter(|a| a.gid != found.default && a.gid != found.current).map(|a| Variant {
+        gid: a.gid,
+        feature: a.feature,
+        apply: a.apply.clone(),
+        default: false,
+    });
+    let mut cells: Vec<Variant> = default.into_iter().chain(others).collect();
+    if cells.is_empty() {
+        return None;
+    }
+    let more = cells.len() > ON_CANVAS_ALTERNATES;
+    cells.truncate(ON_CANVAS_ALTERNATES);
+    Some(OnCanvas {
+        id: target.id,
+        bytes: (start, end),
+        face,
+        cells,
+        more,
+        features: target.style.features.clone(),
+        has_choice: target.style.glyph_alternate.is_some(),
+    })
+}
+
+/// Show the Glyphs panel on Show › Alternates for Current Selection, for the canvas's control that
+/// stands for the alternates it leaves out. A panel that is already shown stays where it is.
+pub(crate) fn show_alternates(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    set_pstate(ctx, "gl-subset", SUBSETS.len());
+    if let Err(e) = crate::panel_docking::reveal_panel(app, "glyphs") {
+        app.status(e);
+    }
+}
+
 /// The Type tool's selected character, and what its word offers, for a double-click on a glyph no
 /// character maps in Show › Entire Font ([`Fit::pick`]).
 struct Fit {
@@ -781,11 +906,115 @@ fn zoom_button(ui: &mut Ui, id: &str, label: &str, tip: &str, enabled: bool) -> 
     resp.on_hover_text(tl!(tip)).clicked() && enabled
 }
 
-pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
+/// The menu label of East Asian glyph form `form` ([`GlyphForm::ALL`]).
+fn glyph_form_label(form: GlyphForm) -> &'static str {
+    match form {
+        GlyphForm::Traditional => "Traditional Forms",
+        GlyphForm::Expert => "Expert Forms",
+        GlyphForm::Jis04 => "JIS 04 Forms",
+        GlyphForm::Jis90 => "JIS 90 Forms",
+        GlyphForm::Jis78 => "JIS 78 Forms",
+        GlyphForm::Jis83 => "JIS 83 Forms",
+        GlyphForm::FullWidth => "Monospaced Full-Width Forms",
+        GlyphForm::HalfWidth => "Monospaced Half-Width Forms",
+        GlyphForm::ThirdWidth => "Monospaced Third-Width Forms",
+        GlyphForm::QuarterWidth => "Monospaced Quarter-Width Forms",
+        GlyphForm::Default => "Revert To Default Forms",
+    }
+}
+
+/// The ids of the faces that draw the characters [`glyph_form_items`] acts on: the faces the
+/// fonts of their styles name, and the faces layout draws them with, fallback faces included:
+/// the Type tool's selected range (every frame of its story after Select All in threaded text,
+/// the whole text object at a caret), else every frame of the selected stories. Laid out once for
+/// each document revision, selection and set of fonts while the menu is open, overflow text
+/// included.
+fn selection_faces(app: &VectorcraftApp, ui: &Ui) -> Vec<u32> {
+    type Key = (u64, u64, u64, Option<(NodeId, usize, usize)>, Vec<NodeId>);
+    let editing = super::character::text_editing(app).map(|(id, a, b)| (id, a.min(b), a.max(b)));
+    let Some(state) = app.session.active() else { return vec![] };
+    let story = super::character::text_story(app);
+    let stories = match editing {
+        Some(_) => story.clone().unwrap_or_default(),
+        None => super::character::selected_stories(app),
+    };
+    let db = FontDb::global();
+    let key: Key = (state.uid, state.revision, db.generation(), editing, stories);
+    let slot = ui.scope_id().with("gl-form-faces");
+    if let Some((cached, ids)) = ui.ctx().data(|d| d.get_temp::<(Key, Vec<u32>)>(slot))
+        && cached == key
+    {
+        return ids;
+    }
+    let mut ids: Vec<u32> =
+        super::character::selected_fonts(app).iter().filter_map(|(family, style)| db.face(family, style)).map(|f| f.id()).collect();
+    let mut add = |t: &vectorcraft_doc::TextObject, range: Option<(usize, usize)>| {
+        // Laid out as point type, so that text overflowing its area or path counts too.
+        let mut all = t.clone();
+        all.kind = vectorcraft_doc::TextKind::Point;
+        for g in vectorcraft_text::layout(db, &all).glyphs {
+            // A glyph counts when its characters overlap the range (a ligature may start before it).
+            if range.is_none_or(|(a, b)| g.byte < b && g.byte + g.len.max(1) > a) && !ids.contains(&g.font_id) {
+                ids.push(g.font_id);
+            }
+        }
+    };
+    let text = |id: NodeId| match state.doc.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => Some(t),
+        _ => None,
+    };
+    match (editing, story) {
+        // After Select All in threaded text: every frame of the story.
+        (Some(_), Some(frames)) => frames.into_iter().filter_map(text).for_each(|t| add(t, None)),
+        (Some((id, a, b)), None) => {
+            if let Some(t) = text(id) {
+                // A caret applies the form to all the text of the object.
+                add(t, (a < b).then_some((a, b)));
+            }
+        }
+        (None, _) => super::character::selected_story_texts(app).into_iter().for_each(|t| add(t, None)),
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(slot, (key, ids.clone())));
+    ids
+}
+
+/// The East Asian glyph forms of the panel menu, with Show East Asian Options: each draws the
+/// selected characters (all the text of the selected type objects without a Type tool range) in
+/// one form of their font, and is checked when they all have it; a form none of the faces that
+/// draw the selected text has a feature for ([`selection_faces`]) is disabled. Revert To Default
+/// Forms draws the font's default glyphs.
+/// Public behavior: [Format East Asian characters](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)
+/// (Replace Asian characters with a different glyph form).
+fn glyph_form_items(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let has = super::character::text_style(app).is_some();
+    let db = FontDb::global();
+    let faces: Vec<_> = selection_faces(app, ui).into_iter().filter_map(|id| db.face_by_id(id)).collect();
+    let current = super::character::shared(app, |s| s.glyph_form);
+    for form in GlyphForm::ALL {
+        let enabled = match form.feature() {
+            Some(tag) => faces.iter().any(|f| f.has_substitution_feature(*tag)),
+            None => has,
+        };
+        let checked = form != GlyphForm::Default && current == Some(form);
+        if form == GlyphForm::Default {
+            ui.separator();
+        }
+        // Choosing the form every selected character already has changes nothing.
+        if menu_item(ui, tl!(glyph_form_label(form)), enabled, checked) && current != Some(form) {
+            super::character::format(app, json!({"glyphForm": form.id()}));
+        }
+    }
+}
+
+pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Use the Selected Text's Font"), true, false) {
         set_pstate::<Option<(String, String)>>(ui.ctx(), "gl-font", None);
     }
     ui.separator();
+    if app.session.prefs.show_east_asian_options {
+        glyph_form_items(app, ui);
+        ui.separator();
+    }
     for (i, (name, _, _)) in SUBSETS.iter().enumerate() {
         let cur: usize = pstate(ui.ctx(), "gl-subset");
         if menu_item(ui, tl!(name), true, cur == i) {
@@ -977,6 +1206,59 @@ mod tests {
 
     fn texts(ctx: &egui::Context, app: &mut VectorcraftApp) -> Vec<String> {
         text_anchors(&shapes(ctx, app, vec![])).into_iter().map(|(t, _)| t).collect()
+    }
+
+    /// With Show East Asian Options, the panel menu lists the East Asian glyph forms; choosing one
+    /// draws the Type tool's selected characters in it, checks it, and Revert To Default Forms
+    /// takes it away. A form the font has no feature for is disabled. The second half needs
+    /// craft-fonts' BIZ UDMincho, which has JIS 78 forms and no JIS 04 forms (skipped without it).
+    #[test]
+    fn east_asian_glyph_forms_in_the_panel_menu_set_the_selected_characters_form() {
+        let (mut app, id) = editing("亜唖");
+        let ctx = egui::Context::default();
+        let labels = |app: &mut VectorcraftApp| menu_texts(&ctx, app, vec![]).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+        let plain = |l: &String| l.trim_start_matches(['✓', ' ']).to_string();
+        app.session.prefs.show_east_asian_options = false;
+        assert!(!labels(&mut app).iter().map(plain).any(|l| l == "JIS 78 Forms"), "hidden without Show East Asian Options");
+        app.session.prefs.show_east_asian_options = true;
+        let shown: Vec<String> = labels(&mut app).iter().map(plain).collect();
+        for form in GlyphForm::ALL {
+            assert!(shown.iter().any(|l| l == glyph_form_label(form)), "{form:?} in {shown:?}");
+        }
+        const FAMILY: &str = "BIZ UDMincho";
+        if FontDb::global().face(FAMILY, "Regular").is_none_or(|f| f.family != FAMILY) {
+            eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+            return;
+        }
+        app.run("text.setRangeStyle", json!({"id": id, "font": FAMILY})).unwrap();
+        let forms = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap_or(0))).unwrap().kind {
+            NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.glyph_form)).collect::<Vec<_>>(),
+            _ => panic!("text"),
+        };
+        select(&mut app, 3, 6);
+        choose(&ctx, &mut app, "JIS 78 Forms");
+        assert_eq!(forms(&app), [("亜".to_string(), GlyphForm::Default), ("唖".to_string(), GlyphForm::Jis78)]);
+        assert!(labels(&mut app).iter().any(|l| l.starts_with('✓') && l.ends_with("JIS 78 Forms")), "checked");
+        // A selection whose first font has no JIS 83 forms, and whose second one does, takes them.
+        let fallback = vectorcraft_text::FALLBACK_FAMILY;
+        if FontDb::global().face(fallback, "Regular").is_some_and(|f| !f.has_substitution_feature(*b"jp83")) {
+            app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 3, "font": fallback})).unwrap();
+            select(&mut app, 0, 6);
+            choose(&ctx, &mut app, "JIS 83 Forms");
+            assert!(forms(&app).iter().all(|(_, f)| *f == GlyphForm::Jis83), "{:?}", forms(&app));
+            app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 3, "font": FAMILY})).unwrap();
+            app.run("text.setRangeStyle", json!({"id": id, "glyphForm": "default"})).unwrap();
+            select(&mut app, 3, 6);
+            choose(&ctx, &mut app, "JIS 78 Forms");
+        }
+        // Choosing it again changes nothing, and the font has no JIS 04 forms: that item is disabled.
+        let n = app.session.active().unwrap().history.undo.len();
+        choose(&ctx, &mut app, "JIS 78 Forms");
+        choose(&ctx, &mut app, "JIS 04 Forms");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), n);
+        assert_eq!(forms(&app)[1].1, GlyphForm::Jis78);
+        choose(&ctx, &mut app, "Revert To Default Forms");
+        assert!(forms(&app).iter().all(|(_, f)| *f == GlyphForm::Default), "{:?}", forms(&app));
     }
 
     /// Show › Alternates for Current Selection lists the selected character's alternates from the
