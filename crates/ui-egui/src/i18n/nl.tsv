@@ -907,6 +907,18 @@
 	Title Case	Koptitel
 	Sentence case	Zinsvorm
 	Smart Punctuation…	Slimme interpunctie…
+	Smart Punctuation	Slimme interpunctie
+	ff, fi, ffi Ligatures	Ligaturen ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligaturen ff, fl, ffl
+	Smart Quotes	Slimme aanhalingstekens
+	Smart Spaces	Slimme spaties
+	En, Em Dashes	Halve en hele gedachtestreepjes
+	Ellipses	Beletseltekens
+	Expert Fractions	Expertbreuken
+	Replace In	Vervangen in
+	Selected Text Only	Alleen geselecteerde tekst
+	Entire Document	Hele document
+	Report Results	Resultaten rapporteren
 	Create Outlines	Omzetten in curven
 	Optical Margin Alignment	Optische marge-uitlijning
 	Dynamic Text	Dynamische tekst
@@ -1419,6 +1431,7 @@
 	Free Transform	Vrij transformeren
 	Perspective Distort	Perspectief vervormen
 	Radial Blur…	Radiaal vervagen…
+	Blur Center	Middelpunt van vervaging
 	Smart Blur…	Slim vervagen…
 	Sharpen	Verscherpen
 	Unsharp Mask…	Onscherp maskeren…
@@ -2598,6 +2611,7 @@ digits	Malayalam	Malayalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	item {i} van paths heeft path en ids nodig (object-id's die geen ander item heeft)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder neemt path: in de map van dat bestand wordt naar de andere ontbrekende koppelingen gezocht
 	Show Missing	Ontbrekende weergeven
+	Sort by Size	Sorteren op grootte
 	Sort by Status	Sorteren op status
 	Clear Overrides	Onderdrukkingen wissen
 	Create New {kind} Style	Nieuwe {kind}stijl maken
@@ -2937,6 +2951,7 @@ digits	Malayalam	Malayalam
 	e.g. 1-3, 5	bijv. 1-3, 5
 	First Page	Eerste pagina
 	Import PDF	PDF importeren
+	Import PDF pages as links	PDF-pagina's importeren als koppelingen
 	Last Page	Laatste pagina
 	Next Page	Volgende pagina
 	of {count}	van {count}
@@ -3020,6 +3035,7 @@ digits	Malayalam	Malayalam
 	Transparent Background	Transparante achtergrond
 	Choose…	Kies…
 	Copy Fonts Used in the Document	In het document gebruikte lettertypen kopiëren
+	Copy Info	Info kopiëren
 	Copy Links	Koppelingen kopiëren
 	Create Report	Rapport maken
 	Fonts whose licence doesn't allow embedding are not copied.	Lettertypen waarvan de licentie insluiten niet toestaat, worden niet gekopieerd.
@@ -4802,6 +4818,7 @@ imageTrace	Outline	Contour
 	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Dit script heeft heel veel objecten toegevoegd. Doorgaan, of het stoppen en de wijzigingen ervan ongedaan maken?
 @msg	Copied the script report	Scriptrapport gekopieerd
+@msg	Copied the link info	Koppelingsinfo gekopieerd
 @msg	Corners edits the corners of a path	Hoeken bewerkt de hoeken van een pad
 @msg	Couldn't copy to the system clipboard: {e}	Kon niet naar het systeemklembord kopiëren: {e}
 @msg	Couldn't open {name}: {e}	Kon {name} niet openen: {e}
@@ -6961,6 +6978,8 @@ imageTrace	Outline	Contour
 @msg	the RTF file is too large to place as type (at most {_1} MB)	het RTF-bestand is te groot om als tekst te plaatsen (maximaal {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	de SVG wordt uitgevouwen tot meer dan {0} geneste SVG-afbeeldingen
 @msg	the SVG expands to more than {0} objects	de SVG wordt uitgevouwen tot meer dan {0} objecten
+@msg	the SVG's style sheets take too long to match	het vergelijken van de stijlbladen van de SVG duurt te lang
+@msg	the SVG's styles expand to more than {0} MB	de stijlen van de SVG worden uitgevouwen tot meer dan {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	het SVG-bestand is groter dan {MAX_IMPORT_BYTES} bytes
 @msg	the SVG has no drawable objects	de SVG heeft geen tekenbare objecten
 @msg	the SVGZ file unpacks to more than {_1} MB	het SVGZ-bestand wordt uitgepakt tot meer dan {_1} MB

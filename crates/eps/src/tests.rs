@@ -1655,6 +1655,59 @@ fn an_instance_whose_brush_art_reaches_the_region_is_written() {
 }
 
 #[test]
+fn a_path_whose_brush_art_reaches_the_region_is_written() {
+    // A line from (-5, 40) to (-5, 60) with a 1 pt red stroke painted by a 20 pt round nib lies
+    // left of the artboard, and the nib paints 10 pt either side of it, onto the artboard: alone, in
+    // a group and as a compound path. Without its brush, or 100 pt left of the artboard, where the
+    // nib does not reach it, the line is left out.
+    let red = |x: f64, brushed: bool| {
+        let mut n = Node::path(
+            vectorcraft_doc::NodeId(0),
+            shapes::line((x, 40.0).into(), (x, 60.0).into()),
+            Appearance::basic(Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 1.0),
+        );
+        if brushed {
+            n.appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+        }
+        n
+    };
+    let cases: [(&str, f64, bool, bool); 5] = [
+        ("path", -5.0, true, true),
+        ("group", -5.0, true, true),
+        ("compound path", -5.0, true, true),
+        ("unbrushed path", -5.0, false, false),
+        ("far path", -100.0, true, false),
+    ];
+    for (what, x, brushed, written) in cases {
+        let mut d = Document::new(200.0, 200.0);
+        let mut lib = vectorcraft_brush::library(&d);
+        let Some(vectorcraft_brush::BrushKind::Calligraphic(c)) = lib.iter_mut().find(|b| b.name == "3 pt. Round").map(|b| &mut b.kind) else {
+            panic!("the 3 pt. Round brush")
+        };
+        c.size = 20.0;
+        vectorcraft_brush::store(&mut d, &lib);
+        let line = red(x, brushed);
+        let mut n = match what {
+            "group" => Node::group(vectorcraft_doc::NodeId(0), vec![Arc::new(line)]),
+            "compound path" => {
+                let mut c = Node::new(
+                    vectorcraft_doc::NodeId(0),
+                    NodeKind::Compound { children: vec![Arc::new(red(x, false))], rule: vectorcraft_geom::FillRule::NonZero },
+                );
+                c.appearance = line.appearance;
+                c
+            }
+            _ => line,
+        };
+        n.id = d.alloc_id();
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+        let page = page_of(&d, &opts(&d));
+        assert_eq!(page.contains("1 0 0 rg") || page.contains("1 0 0 RG"), written, "{what}: {page}");
+    }
+}
+
+#[test]
 fn symbol_art_effects_are_written_where_they_draw() {
     // The symbol's square at (10, 40), which a Transform effect moves 100 pt right, is drawn from
     // x = 110 and not from x = 10.

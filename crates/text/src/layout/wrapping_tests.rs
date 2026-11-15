@@ -22,6 +22,8 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: 1.0,
             sy: 1.0,
             bshift: 0.0,
@@ -644,6 +646,149 @@ fn a_negative_advance_after_a_tab_keeps_a_fitting_line_whole() {
         fits,
     );
     assert_eq!(ended, (5, false));
+}
+
+/// A tabbed line of glyphs with negative advances, past the frame in the order of its text: `a`,
+/// a tab to the default stop at 36 pt, `y` stepping back 1 pt, then `n` times `b` (1 pt), `z`
+/// (−1 pt) and a space, so its glyphs other than the tab never fill the frame. Its breaks end the
+/// line before glyph 2 and before 6 + 3u for each u.
+fn stepping_back_tabbed_line(n: usize) -> (String, Vec<SGlyph>) {
+    let text = format!("a\ty{}", "bz ".repeat(n));
+    let specs: Vec<_> = text
+        .char_indices()
+        .map(|(byte, ch)| {
+            let adv = match ch {
+                'y' | 'z' => -1.0,
+                ' ' => 0.0,
+                _ => 1.0,
+            };
+            (byte, ch.len_utf8(), adv, ch)
+        })
+        .collect();
+    let glyphs = synthetic_glyphs(&specs);
+    (text, glyphs)
+}
+
+/// A tabbed line with glyphs stepping back stops reading a bounded number of breaks past where it
+/// overflows in the order of its text: a long paragraph is not read to its end to set one line.
+#[test]
+fn a_tabbed_line_stepping_back_stops_reading_past_its_overflow() {
+    let (text, glyphs) = stepping_back_tabbed_line(2000);
+    // The latest break the line reads is the first it measures as drawn.
+    let furthest = std::cell::Cell::new(0);
+    let measured = std::cell::Cell::new(0usize);
+    let drawn_fits = |end: usize, _hyphenated: bool| {
+        furthest.set(furthest.get().max(end));
+        measured.set(measured.get() + 1);
+        end <= 10
+    };
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 30.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (9, false));
+    // 1,024 breaks past the overflow at `y`: the break before glyph 6 + 3 × 1,023.
+    assert_eq!(furthest.get(), 3075, "read up to glyph {} of {}", furthest.get(), glyphs.len());
+    assert!(measured.get() <= 1100, "measured {} breaks as drawn", measured.get());
+}
+
+/// Where a tabbed line with glyphs stepping back stops reading, it ends at the latest break read
+/// that fits as drawn, even when a break past those fits too.
+#[test]
+fn a_tabbed_line_stepping_back_ends_at_the_latest_break_read_that_fits() {
+    let (text, glyphs) = stepping_back_tabbed_line(1500);
+    let end = |drawn_fits: &dyn Fn(usize, bool) -> bool| {
+        break_line(
+            &text,
+            &glyphs,
+            0,
+            30.0,
+            &[],
+            0.0,
+            None,
+            Burasagari::None,
+            Kinsoku::None,
+            KinsokuShoriType::PushOutOnly,
+            false,
+            false,
+            &[],
+            Some(drawn_fits),
+        )
+    };
+    // The break before glyph 4002 is past the 1,024 breaks read after the overflow (up to 3075).
+    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 4002), (9, false));
+    // A break among those read keeps its place.
+    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 600), (600, false));
+    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 3075), (3075, false));
+}
+
+/// A tabbed line with glyphs stepping back that stops reading at a soft hyphen ending the text ends
+/// there without a hyphen, as a line that reads to the end of the text does.
+#[test]
+fn a_tabbed_line_stepping_back_ends_at_a_final_soft_hyphen_without_a_hyphen() {
+    // The 1,023 spaces and the soft hyphen are the 1,024 breaks the line reads past its overflow.
+    let text = format!("a\ty{}b\u{00AD}", "bz ".repeat(1023));
+    let specs: Vec<_> = text
+        .char_indices()
+        .map(|(byte, ch)| {
+            let adv = match ch {
+                'y' | 'z' => -1.0,
+                ' ' | '\u{00AD}' => 0.0,
+                _ => 1.0,
+            };
+            (byte, ch.len_utf8(), adv, ch)
+        })
+        .collect();
+    let glyphs = synthetic_glyphs(&specs);
+    let len = glyphs.len();
+    let drawn_fits = |end: usize, _hyphenated: bool| end <= 10 || end == len;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 30.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (len, false));
+}
+
+/// A tabbed line with glyphs stepping back whose last break read comes right before a forced line
+/// break ends after the forced break, so the next line does not start with it and draw empty.
+#[test]
+fn a_tabbed_line_stepping_back_keeps_a_forced_break_after_its_last_break_read() {
+    // The 1,024th space is the 1,024th break past the overflow, and glyph 3075 after it is U+2028.
+    let text = format!("a\ty{}\u{2028}bbb", "bz ".repeat(1024));
+    let specs: Vec<_> = text
+        .char_indices()
+        .map(|(byte, ch)| {
+            let adv = match ch {
+                'y' | 'z' => -1.0,
+                ' ' | '\u{2028}' => 0.0,
+                _ => 1.0,
+            };
+            (byte, ch.len_utf8(), adv, ch)
+        })
+        .collect();
+    let glyphs = synthetic_glyphs(&specs);
+    assert_eq!(glyphs[3075].ch, '\u{2028}');
+    let drawn_fits = |end: usize, _hyphenated: bool| end <= 10 || end >= 3075;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 30.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (3076, false));
+}
+
+/// A tab to a default or left stop does not read the text after it, which only right, center and
+/// decimal stops align: the first tab of a long paragraph does not read the paragraph to its end.
+#[test]
+fn a_tab_to_a_default_or_left_stop_reads_no_text_after_it() {
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let (_, glyphs) = stepping_back_tabbed_line(2000);
+    let read = std::cell::Cell::new(0usize);
+    let rest = || glyphs[2..].iter().inspect(|_| read.set(read.get() + 1));
+    let left = [TabStop { position: 100.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+    assert_eq!(tab_advance(&[], 0.0, 1.0, rest()).0, 35.0);
+    assert_eq!(tab_advance(&left, 0.0, 1.0, rest()).0, 99.0);
+    assert_eq!(read.get(), 0, "read {} glyphs after the tab", read.get());
+    // A right stop reads up to the next tab and aligns that text on the stop.
+    let right = [TabStop { position: 100.0, align: TabAlign::Right, leader: String::new(), align_on: '.' }];
+    let short = synthetic_glyphs(&[(0, 1, 2.0, 'b'), (1, 1, 3.0, 'b'), (2, 1, 0.0, '\t'), (3, 1, 7.0, 'b')]);
+    assert_eq!(tab_advance(&right, 0.0, 1.0, short.iter()).0, 94.0);
 }
 
 /// A long tabbed line with a glyph that steps back ends at the latest break that fits as drawn, even

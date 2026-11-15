@@ -254,6 +254,90 @@ fn a_plot_of_the_arts_bounds_leaves_out_images_in_symbol_art() {
     }
 }
 
+/// In the art of a dynamic symbol a placed image and a path that paints nothing are left out as
+/// well, until an instance paints the path, and a document whose only other visible art is an
+/// instance of a dynamic symbol of an image is refused.
+#[test]
+fn a_plot_of_the_arts_bounds_leaves_out_images_in_dynamic_symbol_art() {
+    let mut s = two_boards();
+    let plot = |s: &mut Session| s.execute("document.export", &json!({"format": "hpgl", "useArtboards": false})).map(|v| bytes(&v));
+    let bounds = |s: &Session| super::export_art_bounds(&s.doc().unwrap().doc, "hpgl").unwrap();
+    let same = |a: vectorcraft_geom::Rect, b: vectorcraft_geom::Rect| {
+        [(a.x0, b.x0), (a.y0, b.y0), (a.x1, b.x1), (a.y1, b.y1)].iter().all(|(a, b)| (a - b).abs() < 1e-6)
+    };
+    let printing = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.new", &json!({})).unwrap();
+    let mut png = vec![];
+    image::DynamicImage::new_rgb8(4, 4).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let image = s.execute("file.place", &json!({"name": "far.png", "dataBase64": b64(&png), "at": [-600, 800]})).unwrap()["ids"][0].clone();
+    let square = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap()["id"].clone();
+    let bare = s.execute("shape.rectangle", &json!({"x": 500, "y": -400, "width": 20, "height": 20})).unwrap()["id"].clone();
+    s.execute("paint.setStroke", &json!({"ids": [bare], "none": true})).unwrap();
+    let before = bounds(&s);
+    let inst = s.execute("symbol.new", &json!({"name": "Mixed", "ids": [image, square, bare], "type": "dynamic"})).unwrap()["id"].clone();
+    let after = bounds(&s);
+    assert!(same(before, after), "{before:?} {after:?}");
+
+    // A change of the path's blending mode leaves it painting nothing; once the instance paints the
+    // path, the path is measured.
+    let art = s.doc().unwrap().doc.symbols[0].art.clone();
+    let x0 = |c: &std::sync::Arc<vectorcraft_doc::Node>| c.visual_bounds().map_or(f64::MIN, |b| b.x0);
+    let at = (0..art.children().unwrap().len()).max_by(|a, b| x0(&art.children().unwrap()[*a]).total_cmp(&x0(&art.children().unwrap()[*b]))).unwrap();
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst, "path": [at], "blend": "multiply"})).unwrap();
+    let blended = bounds(&s);
+    assert!(same(before, blended), "{before:?} {blended:?}");
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst, "path": [at], "stroke": "#000000"})).unwrap();
+    let painted = bounds(&s);
+    assert!(painted.x1 > 500.0 && painted.y0 < -390.0, "{painted:?}");
+    // A later change to the same object, as a file can hold, takes the paint off again.
+    {
+        let id = vectorcraft_doc::NodeId(inst.as_u64().unwrap());
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let n = d.node_mut(id).unwrap();
+        let mut overrides = n.extras().symbol_overrides.clone();
+        overrides.push(vectorcraft_doc::SymbolOverride { path: vec![at as u32], opacity: Some(0.0), ..Default::default() });
+        n.extras_mut().symbol_overrides = overrides.clone();
+        let taken_off = bounds(&s);
+        assert!(same(before, taken_off), "{before:?} {taken_off:?}");
+        overrides.pop();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        d.node_mut(id).unwrap().extras_mut().symbol_overrides = overrides;
+    }
+    // Another instance, far above, that doesn't paint the path is measured without it, whether or
+    // not the first one paints it.
+    let other = s.execute("symbol.place", &json!({"name": "Mixed", "x": 0, "y": -5000})).unwrap()["id"].clone();
+    let with_paint = bounds(&s);
+    s.execute("symbol.instance.reset", &json!({"ids": [inst]})).unwrap();
+    let without_paint = bounds(&s);
+    assert!((with_paint.y0 - without_paint.y0).abs() < 1e-6, "{with_paint:?} {without_paint:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let undone = bounds(&s);
+    assert!(same(undone, with_paint), "{undone:?} {with_paint:?}");
+    s.execute("select.set", &json!({"ids": [other]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+
+    s.execute("select.set", &json!({"ids": [inst]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.execute("layer.setProps", &json!({"id": printing, "visible": false})).unwrap();
+    let image = s.execute("file.place", &json!({"name": "far.png", "dataBase64": b64(&png), "at": [-600, 800]})).unwrap()["ids"][0].clone();
+    s.execute("symbol.new", &json!({"name": "Image", "ids": [image], "type": "dynamic"})).unwrap();
+    let e = plot(&mut s).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+
+    // An instance that brings a group at 0% opacity back to full opacity still draws nothing when
+    // the group holds only an image.
+    let image = s.execute("file.place", &json!({"name": "far.png", "dataBase64": b64(&png), "at": [-600, 800]})).unwrap()["ids"][0].clone();
+    let group = s.execute("object.group", &json!({"ids": [image]})).unwrap()["id"].clone();
+    s.execute("transparency.set", &json!({"ids": [group], "opacity": 0})).unwrap();
+    let inst = s.execute("symbol.new", &json!({"name": "Clear", "ids": [group], "type": "dynamic"})).unwrap()["id"].clone();
+    let id = vectorcraft_doc::NodeId(inst.as_u64().unwrap());
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    d.node_mut(id).unwrap().extras_mut().symbol_overrides =
+        [vec![], vec![0]].into_iter().map(|path| vectorcraft_doc::SymbolOverride { path, opacity: Some(1.0), ..Default::default() }).collect();
+    let e = plot(&mut s).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+}
+
 /// A placed image with a Vector Halftone effect is measured when the effect makes dots, and left
 /// out when it would take more cells than the effect makes.
 #[test]

@@ -227,6 +227,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         None if id == TWEAK => tweak_fields(ui, d, app.session.general_unit()),
         None if id == DROP_SHADOW => drop_shadow_fields(ui, d, app.session.general_unit()),
         None if id == "artistic.filmGrain" => film_grain_fields(ui, d),
+        None if id == RADIAL_BLUR => radial_blur_fields(ui, d, app.session.general_unit()),
         None if id == free_distort::FREE_DISTORT => {
             free_distort::fields(app, ui, d);
             values_changed(d)
@@ -285,6 +286,127 @@ fn film_grain_fields(ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         form::slider_w(ui, d, (key, label, label_w), 0.0..=max, "", &grey_rail);
     }
     before != d.fields
+}
+
+/// The Radial Blur effect (Effect › Blur › Radial Blur…).
+const RADIAL_BLUR: &str = "blur.radial";
+/// Radial Blur's Blur Center: its parameters (0..1 across and down the object's bounds).
+const BLUR_CENTER: [&str; 2] = ["centerX", "centerY"];
+
+/// Radial Blur: Amount, Blur Method and Quality as the other effects show their parameters, then
+/// the Blur Center box with its Horizontal and Vertical fields. Returns whether the values differ
+/// from those last previewed.
+fn radial_blur_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Unit) -> bool {
+    let before = d.fields.clone();
+    // The center is the box's, not a pair of plain number rows.
+    let center: Vec<(String, Value)> = BLUR_CENTER.iter().filter_map(|k| d.fields.remove(*k).map(|v| (k.to_string(), v))).collect();
+    let doc = vectorcraft_effects::effect_info(RADIAL_BLUR).map(|e| e.params).unwrap_or_default();
+    form::param_fields(ui, d, &|_| false, &|k| choices(RADIAL_BLUR, k), &|k| doc_rank(doc, k), unit);
+    d.fields.extend(center);
+    ui.add_space(6.0);
+    blur_center(ui, d);
+    before != d.fields
+}
+
+/// The Blur Center box's side (points).
+const CENTER_BOX: f32 = 120.0;
+
+/// A Blur Center coordinate kept to a hundredth of a percent of the box.
+fn center_round(x: f64) -> f64 {
+    (x * 1e4).round() / 1e4
+}
+
+/// Radial Blur's Blur Center: a box standing for the object's bounds, with the blur's pattern (rays
+/// for Zoom, rings for Spin) drawn about the center. A press or a drag in the box puts the center
+/// there; with the keyboard focus the arrow keys move it 1 % of the box (10 % with Shift). The
+/// Horizontal and Vertical fields beside it type the same position in percent of the bounds' width
+/// and height. Changes go to `d.fields["centerX"]` and `["centerY"]`.
+fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
+    use egui::{Key, Modifiers, Sense, Stroke};
+    let [kx, ky] = BLUR_CENTER;
+    let mut c = [d.f64(kx, 0.5).clamp(0.0, 1.0), d.f64(ky, 0.5).clamp(0.0, 1.0)];
+    let before = c;
+    let t = Tokens::get(ui.ctx());
+    let zoom = d.str("method").eq_ignore_ascii_case("zoom");
+    form::caption(ui, "Blur Center");
+    ui.horizontal(|ui| {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(CENTER_BOX, CENTER_BOX), Sense::hover());
+        let id = ui.scope_id().with("radial-blur-center");
+        let resp = ui.interact(rect, id, Sense::click_and_drag());
+        let percent = |v: f64| (v * 1000.0).round() / 10.0;
+        let name = tl!("Blur Center").to_string();
+        let value = format!("{}: {}%, {}: {}%", tl!("Horizontal"), percent(c[0]), tl!("Vertical"), percent(c[1]));
+        let enabled = ui.is_enabled();
+        resp.widget_info(|| egui::WidgetInfo {
+            current_text_value: Some(value.clone()),
+            ..egui::WidgetInfo::labeled(egui::Role::Slider, enabled, &name)
+        });
+        if resp.drag_started() || resp.clicked() {
+            resp.request_focus();
+        }
+        if let Some(p) = resp.interact_pointer_pos()
+            && (resp.dragged() || resp.clicked() || resp.drag_started())
+        {
+            let unit = |v: f32, lo: f32| f64::from(((v - lo) / CENTER_BOX).clamp(0.0, 1.0));
+            c = [center_round(unit(p.x, rect.left())), center_round(unit(p.y, rect.top()))];
+        }
+        if resp.has_focus() {
+            ui.memory_mut(|m| {
+                m.set_focus_lock_filter(id, egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, ..Default::default() })
+            });
+            for (key, dx, dy) in [(Key::ArrowLeft, -1.0, 0.0), (Key::ArrowRight, 1.0, 0.0), (Key::ArrowUp, 0.0, -1.0), (Key::ArrowDown, 0.0, 1.0)] {
+                // Shift first: a key without modifiers also matches the key with Shift.
+                for (modifiers, step) in [(Modifiers::SHIFT, 0.1), (Modifiers::NONE, 0.01)] {
+                    if ui.input_mut(|i| i.consume_key(modifiers, key)) {
+                        c = [center_round((c[0] + dx * step).clamp(0.0, 1.0)), center_round((c[1] + dy * step).clamp(0.0, 1.0))];
+                    }
+                }
+            }
+        }
+        if resp.hovered() || resp.dragged() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        }
+        // The box, and the pattern about the center: rays for Zoom, rings for Spin.
+        let painter = ui.painter_at(rect);
+        painter.rect_filled(rect, 2.0, t.input);
+        let at = egui::pos2(rect.left() + c[0] as f32 * CENTER_BOX, rect.top() + c[1] as f32 * CENTER_BOX);
+        let faint = Stroke::new(1.0, t.text_dim.gamma_multiply(0.6));
+        let reach = CENTER_BOX * std::f32::consts::SQRT_2;
+        if zoom {
+            for k in 0..24 {
+                let a = k as f32 * std::f32::consts::TAU / 24.0;
+                let dir = egui::vec2(a.cos(), a.sin());
+                painter.line_segment([at + dir * 6.0, at + dir * reach], faint);
+            }
+        } else {
+            for k in 1..=12 {
+                painter.circle_stroke(at, k as f32 * reach / 12.0, faint);
+            }
+        }
+        painter.circle(at, 3.5, if resp.has_focus() { t.accent } else { t.panel }, Stroke::new(1.5, t.text));
+        let border = if resp.has_focus() { t.accent } else { t.input_border };
+        painter.rect_stroke(rect, 2.0, Stroke::new(1.0, border), egui::StrokeKind::Inside);
+        // The same position typed in percent.
+        ui.vertical(|ui| {
+            egui::Grid::new("blur-center-fields").num_columns(2).spacing([8.0, 8.0]).show(ui, |ui| {
+                for (i, label) in ["Horizontal", "Vertical"].into_iter().enumerate() {
+                    let row = ui.label(egui::RichText::new(format!("{}:", tl!(label))).color(t.text));
+                    ui.label_inputs_by(row.id, |ui| {
+                        if let Some(x) =
+                            widgets::range_field_named(ui, ("blur-center", i), None, c[i] * 100.0, 0.0..=100.0, &form::unit_suffix("%"), 1, 72.0)
+                        {
+                            c[i] = center_round((x / 100.0).clamp(0.0, 1.0));
+                        }
+                    });
+                    ui.end_row();
+                }
+            });
+        });
+    });
+    if c != before {
+        d.fields.insert(kx.into(), json!(c[0]));
+        d.fields.insert(ky.into(), json!(c[1]));
+    }
 }
 
 /// The Glass effect (Effect › Distort › Glass…).
@@ -1257,5 +1379,70 @@ mod tests {
             let param = |k: &str| fx.params.get(k).and_then(Value::as_f64);
             assert_eq!((param("opacity"), param("blur")), (Some(99.0), Some(0.0)), "{effect}: OK applies them");
         }
+    }
+
+    /// Effect > Blur > Radial Blur: a press in the Blur Center box puts the center there, the
+    /// arrow keys move it 1 % (10 % with Shift) and stop at the edges, screen readers get its
+    /// position, the generic rows leave it to the box, and OK applies it.
+    #[test]
+    fn radial_blur_center_box_sets_the_center_by_pointer_and_keys() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": RADIAL_BLUR})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let time = std::cell::Cell::new(0.0);
+        // One frame → the box's screen-reader node (bounds, value) and the labels drawn.
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            time.set(time.get() + 0.05);
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time.get()), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+            let labels: Vec<String> = nodes.iter().filter_map(|(_, n)| n.label().map(str::to_string)).collect();
+            let center = nodes.iter().find(|(_, n)| n.label() == Some("Blur Center") && n.role() == egui::accesskit::Role::Slider).map(|(_, n)| {
+                let b = n.bounds().unwrap_or_default();
+                (egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)), n.value().map(str::to_string))
+            });
+            (center, labels)
+        };
+        for _ in 0..6 {
+            frame(&mut app, vec![]);
+        }
+        let (Some((rect, value)), labels) = frame(&mut app, vec![]) else { panic!("the dialog has a Blur Center box") };
+        assert_eq!(value.as_deref(), Some("Horizontal: 50%, Vertical: 50%"), "the default center is the middle");
+        assert!(!labels.iter().any(|l| l.starts_with("Center")), "no plain Center X or Center Y rows: {labels:?}");
+        let field = |app: &VectorcraftApp, k: &str| app.ui.dialog.as_ref().unwrap().fields.get(k).and_then(Value::as_f64);
+        let pos = rect.min + egui::vec2(0.25 * rect.width(), 0.75 * rect.height());
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, vec![egui::Event::PointerMoved(pos), button(true)]);
+        frame(&mut app, vec![button(false)]);
+        frame(&mut app, vec![]);
+        let at = |app: &VectorcraftApp| (field(app, "centerX").unwrap_or(-1.0), field(app, "centerY").unwrap_or(-1.0));
+        let (x, y) = at(&app);
+        assert!((x - 0.25).abs() < 0.01 && (y - 0.75).abs() < 0.01, "the press puts the center there: {x}, {y}");
+        let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+        app.ui.dialog.as_mut().unwrap().fields.insert("centerX".into(), json!(0.25));
+        app.ui.dialog.as_mut().unwrap().fields.insert("centerY".into(), json!(0.75));
+        frame(&mut app, vec![key(egui::Key::ArrowRight, egui::Modifiers::NONE)]);
+        frame(&mut app, vec![key(egui::Key::ArrowUp, egui::Modifiers::SHIFT)]);
+        assert_eq!(at(&app), (0.26, 0.65), "the arrow keys move it 1 %, 10 % with Shift");
+        for _ in 0..10 {
+            frame(&mut app, vec![key(egui::Key::ArrowDown, egui::Modifiers::SHIFT)]);
+        }
+        assert_eq!(at(&app), (0.26, 1.0), "it stops at the edge");
+        let (Some((_, value)), _) = frame(&mut app, vec![]) else { panic!("the box is still there") };
+        assert_eq!(value.as_deref(), Some("Horizontal: 26%, Vertical: 100%"));
+        super::super::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+        assert_eq!(
+            (fx.id.as_str(), fx.params["centerX"].as_f64(), fx.params["centerY"].as_f64()),
+            (RADIAL_BLUR, Some(0.26), Some(1.0)),
+            "OK applies it"
+        );
     }
 }
