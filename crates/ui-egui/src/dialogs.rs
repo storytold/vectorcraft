@@ -22,6 +22,7 @@ pub mod brush_options;
 pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
+pub mod check_spelling;
 pub mod color_balance;
 pub mod color_guide_options;
 pub(crate) mod color_picker;
@@ -56,6 +57,7 @@ pub mod freehand;
 mod gradient_stop;
 pub mod graph_data;
 pub mod graph_design;
+pub mod graph_type;
 pub mod graphic_style_options;
 pub mod halftone;
 pub mod hyphenation;
@@ -96,6 +98,7 @@ pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
+pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
@@ -342,6 +345,7 @@ registry! {
     GraphDesign: [graph_design::DESIGN] => graph_design::DESIGN_SPEC,
     GraphColumn: [graph_design::COLUMN] => graph_design::COLUMN_SPEC,
     GraphMarker: [graph_design::MARKER] => graph_design::MARKER_SPEC,
+    GraphType: [graph_type::KIND] => graph_type::SPEC,
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
@@ -415,6 +419,7 @@ registry! {
     PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
     SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
+    PsdImport: [psd_import::KIND] => psd_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
     PsdOptions: ["psdOptions"] => png_options::SPEC,
@@ -456,6 +461,7 @@ registry! {
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     EditViews: [edit_views::KIND] => edit_views::SPEC,
     EditCustomDictionary: [custom_dictionary::KIND] => custom_dictionary::SPEC,
+    CheckSpelling: [check_spelling::KIND] => check_spelling::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
@@ -518,6 +524,8 @@ fn hidden_controls(d: &Dialog) -> &'static [&'static str] {
         Some(DialogKind::FileInfo) => &["__keyword"],
         // The preset name being typed.
         Some(DialogKind::FlattenTransparency) => &["__presetName"],
+        // The page shown.
+        Some(DialogKind::GraphType) => &[graph_type::PAGE],
         // The Resolution menu's Other.
         Some(DialogKind::RasterOptions | DialogKind::RasterFormatOptions | DialogKind::PsdOptions) => &["__otherPpi"],
         // The category shown, the search text and the three settings kept outside the preferences.
@@ -681,6 +689,7 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == script_run::NOTICE_KIND {
             script_run::notice_cancel(app, &d);
         }
+        missing_links::cancelled(app, &d);
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.

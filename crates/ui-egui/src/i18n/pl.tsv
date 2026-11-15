@@ -486,6 +486,7 @@
 	Rotate (Classic)…	Obróć (klasyczny)…
 	Surface	Powierzchnia
 	Wireframe	Szkielet
+	Render Settings	Ustawienia renderowania
 	No Shading	Bez cieniowania
 	Plastic	Plastik
 	Highlight Intensity	Intensywność połysku
@@ -951,6 +952,11 @@
 	NTSC Colors	Kolory NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Zasada RGB:
+	CMYK Policy:	Zasada CMYK:
+	Preserve Embedded Profiles	Zachowaj osadzone profile
+	Convert to Working Space	Konwertuj do przestrzeni roboczej
+	Preserve Numbers	Zachowaj wartości liczbowe
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Spękania…
@@ -995,6 +1001,8 @@
 	Step up or down	Zwiększ lub zmniejsz o krok
 	Drag values or labels. Double-click a value to type.	Przeciągaj wartości lub etykiety. Kliknij dwukrotnie wartość, aby ją wpisać.
 	Drag rings to rotate. Shift snaps to 15°.	Przeciągaj pierścienie, aby obracać. Shift przyciąga co 15°.
+	Track cube	Kostka obrotu
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Przeciągnij ścianę, krawędź lub pierścień, aby obracać. Shift obraca wokół jednej osi ekranu.
 	Drag the light, or its rings. Shift snaps to 15°.	Przeciągaj światło lub jego pierścienie. Shift przyciąga co 15°.
 lighting	Light	Światło
 	Keep visible surfaces only when expanding	Przy rozszerzaniu zachowaj tylko widoczne powierzchnie
@@ -1045,6 +1053,14 @@ lighting	Light	Światło
 	Previous Artboard	Poprzedni obszar kompozycji
 	Next Artboard	Następny obszar kompozycji
 	Last Artboard	Ostatni obszar kompozycji
+	Status Bar Show	Pokaż na pasku stanu
+	Artboard Name	Nazwa obszaru kompozycji
+	Current Tool	Bieżące narzędzie
+	Date and Time	Data i godzina
+	Number of Undos	Liczba cofnięć
+	Document Color Profile	Profil kolorów dokumentu
+	Undos	Cofnięcia
+	Redos	Ponowienia
 	Graphic Style Options…	Opcje stylu graficznego…
 	Symbol Options	Opcje symbolu
 	Symbol Options…	Opcje symbolu…
@@ -1438,6 +1454,7 @@ lighting	Light	Światło
 	Align to Artboard	Wyrównaj do obszaru kompozycji
 	Align to Glyph Bounds	Wyrównaj do granic glifów
 	Align to Key Object	Wyrównaj do obiektu kluczowego
+	Align to Key Anchor	Wyrównaj do kluczowego punktu kontrolnego
 	Align to Selection	Wyrównaj do zaznaczenia
 	Align To:	Wyrównaj do:
 	Cancel Key Object	Anuluj obiekt kluczowy
@@ -1536,6 +1553,8 @@ lighting	Light	Światło
 	Insert Aki Left	Wstaw aki z lewej
 	Insert Aki Right	Wstaw aki z prawej
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Dostosuj poziome położenie znaków diakrytycznych
+	Adjust Vertical Diacritic Position	Dostosuj pionowe położenie znaków diakrytycznych
 	Character Direction	Kierunek znaków
 	Digits	Cyfry
 	Arabic	Arabskie
@@ -1582,11 +1601,55 @@ digits	Malayalam	Malajalam
 	Composite Fonts	Fonty złożone
 	Export Composite Fonts	Eksportuj fonty złożone
 	Import Composite Fonts	Importuj fonty złożone
+@msg	each font must be {name, parts}	każdy font musi mieć postać {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	nieznany klucz `{k}`; font przyjmuje name i parts
+@msg	each font needs a name	każdy font musi mieć nazwę
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nie może być nazwą fontu złożonego (od 1 do {COMPOSITE_NAME_MAX} znaków, bez znaków sterujących)
+@msg	`{name}`: parts must be an object	`{name}`: parts musi być obiektem
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: nieznana klasa `{k}`; klasy to kanji, kana, punctuation, symbols, roman i numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} musi być obiektem
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: nieznany klucz `{k}` w {_1}
+@msg	`{name}`: give the kanji part	`{name}`: podaj część kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	dokument może zawierać najwyżej {COMPOSITE_FONTS_MAX} fontów złożonych
+@msg	two composite fonts are named `{_1}`	dwa fonty złożone mają nazwę `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` to nazwa zainstalowanego fontu
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} używa `{font}`, który jest fontem złożonym
+@msg	give fonts: [{name, parts}…]	podaj fonts: [{name, parts}…]
+@msg	path is empty	path jest puste
+@msg	fonts must be a list of composite fonts	fonts musi być listą fontów złożonych
+@msg	names must be strings	names muszą być ciągami znaków
+@msg	no composite font named `{n}`	brak fontu złożonego o nazwie `{n}`
+@msg	names must be a list of names	names musi być listą nazw
+@msg	no composite fonts to export	brak fontów złożonych do eksportu
+@msg	not a composite fonts file: {e}	to nie jest plik fontów złożonych: {e}
+@msg	not a composite fonts file: no compositeFonts list	to nie jest plik fontów złożonych: brak listy compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	plik zawiera więcej niż {COMPOSITE_FONTS_MAX} fontów złożonych
+@msg	the file is larger than 4 MB	plik jest większy niż 4 MB
+@msg	dataBase64 is not base64	dataBase64 nie jest w formacie base64
+@msg	give one of path, data or dataBase64	podaj path, data lub dataBase64
+@msg	the file holds no composite fonts	plik nie zawiera fontów złożonych
+@msg	the file holds two composite fonts named `{_1}`	plik zawiera dwa fonty złożone o nazwie `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` nie może być nazwą fontu złożonego
+@msg	{k}: give a font	{k}: podaj font
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: podaj font
+@msg	{k}: size must be {_1} to {_2}%	{k}: size musi wynosić od {_1} do {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size musi wynosić od {_1} do {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline musi wynosić od {_1} do {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline musi wynosić od {_1} do {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skala musi wynosić od {_1} do {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skala musi wynosić od {_1} do {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: skalować można tylko kana, roman i numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: skalować można tylko kana, roman i numerals
+@msg	{k}: only kana can be scaled at the center	{k}: od środka można skalować tylko kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: od środka można skalować tylko kana
+@msg	no composite font	brak fontu złożonego
 	Delete Font	Usuń font
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Cyfry
 	Scale at Center	Skaluj od środka
+	Delete Set	Usuń zestaw
+	Direct Entry	Wprowadzanie bezpośrednie
 	Up/Down:	W górę/w dół:
 	Left/Right:	W lewo/w prawo:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko w górę/w dół
@@ -1974,7 +2037,8 @@ digits	Malayalam	Malajalam
 	Tabular Lining	Tabelaryczne nowoczesne
 	Tabular Oldstyle	Tabelaryczne nautyczne
 	Titling Alternates	Alternatywy tytułowe
-	Every-line Composer	Kompozytor wielowierszowy
+	Middle Eastern & South Asian Every-line Composer	Kompozytor wielowierszowy (Bliski Wschód i Azja Południowa)
+	Standard Every-line Composer	Standardowy kompozytor wielowierszowy
 	First-line Left Indent	Wcięcie pierwszego wiersza
 	Hyphenation…	Dzielenie wyrazów…
 	Words Longer Than:	Wyrazy dłuższe niż:
@@ -2014,7 +2078,8 @@ digits	Malayalam	Malajalam
 	East Asian Composition Settings	Ustawienia składu wschodnioazjatyckiego
 	Korean Composition Settings	Ustawienia składu koreańskiego
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
-	Single-line Composer	Kompozytor jednowierszowy
+	Middle Eastern & South Asian Single-line Composer	Kompozytor jednowierszowy (Bliski Wschód i Azja Południowa)
+	Standard Single-line Composer	Standardowy kompozytor jednowierszowy
 	Toggle Line Composer	Przełącz kompozytor wierszy
 	Space After Paragraph	Odstęp po akapicie
 	Space Before Paragraph	Odstęp przed akapitem
@@ -2839,10 +2904,12 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Pokaż płynne koło kolorów
 	Show segmented color wheel	Pokaż segmentowe koło kolorów
 	Show color bars	Pokaż paski kolorów
+	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
 	Link harmony colors	Połącz kolory harmonii
 	Merge colors into one row	Scal kolory w jeden wiersz
+	New Row	Nowy wiersz
 	No colors to recolor (preserved colors are left out).	Brak kolorów do zmiany (zachowane kolory są pomijane).
 	Preserve:	Zachowaj:
 	Randomly change color order	Losowo zmień kolejność kolorów
@@ -3513,6 +3580,40 @@ theme	Appearance	Wygląd
 	Create Graph	Utwórz wykres
 	Graph Data	Dane wykresu
 	Graph Type	Typ wykresu
+	Graph Options	Opcje wykresu
+	Left Axis	Lewa oś
+	Right Axis	Prawa oś
+	Category Axis	Oś kategorii
+	Separate Scales	Oddzielne skale
+	Add Drop Shadow	Dodaj cień
+	Add Legend Across Top	Dodaj legendę u góry
+	First Row in Front	Pierwszy wiersz z przodu
+	First Column in Front	Pierwsza kolumna z przodu
+	Legend	Legenda
+	Column Width	Szerokość kolumny
+	Bar Width	Szerokość słupka
+	Cluster Width	Szerokość grupy
+	Mark Data Points	Oznacz punkty danych
+	Connect Data Points	Połącz punkty danych
+	Edge-to-Edge Lines	Linie od krawędzi do krawędzi
+	Draw Filled Lines	Rysuj wypełnione linie
+	Tick Values	Wartości podziałki
+	Override Calculated Values	Zastąp obliczone wartości
+	Divisions	Podziały
+	Tick Marks	Znaczniki podziałki
+	Tick Marks per Division	Znaczniki na podział
+	Draw Tick Marks Between Labels	Rysuj znaczniki między etykietami
+	Add Labels	Dodaj etykiety
+	Maximum must be more than Minimum.	Maksimum musi być większe niż minimum.
+	Column Graph	Wykres kolumnowy
+	Stacked Column Graph	Skumulowany wykres kolumnowy
+	Bar Graph	Wykres słupkowy
+	Stacked Bar Graph	Skumulowany wykres słupkowy
+	Line Graph	Wykres liniowy
+	Area Graph	Wykres warstwowy
+	Scatter Graph	Wykres punktowy
+	Pie Graph	Wykres kołowy
+	Radar Graph	Wykres radarowy
 	Vector Halftone	Półton wektorowy
 	spot	dodatkowy
 	Text	Tekst
@@ -4084,6 +4185,7 @@ axis	Both	Obie
 	Replace:	Zastąp:
 	Type on a Path Options	Opcje tekstu na ścieżce
 	Highlight Variable	Wyróżnij zmienną
+	Sort Variables	Sortuj zmienne
 	New Variable	Nowa zmienna
 	List Variables	Wyświetl zmienne
 	Bind Variable	Powiąż zmienną
@@ -5865,6 +5967,7 @@ mark-style	Japanese	Japońskie
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efekt 3D na wypełnieniu lub obrysie grupy nie rysuje niczego do eksportu
 @msg	The 3D object is too complex to export	Obiekt 3D jest zbyt złożony, aby go wyeksportować
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	obiekt nie ma efektu 3D (Wyciągnięcie i fazowanie, Obrót, Nadmuchanie ani Obróć)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musi być obiektem zawierającym tylko `mode` o wartości shaded lub wireframe
 @msg	its 3D effect builds no solid	jego efekt 3D nie tworzy żadnej bryły
 @msg	bevel must be none or one of {_1}	bevel musi mieć wartość none lub jedną z: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nie może utworzyć brył z tego rysunku: jego wystąpienia symboli, przejścia i grupy przycinające zawierają zbyt wiele obiektów
@@ -6051,6 +6154,8 @@ mark-style	Japanese	Japońskie
 	Save Variable Library…	Zapisz bibliotekę zmiennych…
 @msg	a variable library holds text variables, and the document has none	biblioteka zmiennych zawiera zmienne tekstowe, a dokument nie ma żadnej
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	nie można zapisać zmiennej `{name}` w bibliotece zmiennych: zmień jej nazwę tak, aby zaczynała się literą lub `_`, bez spacji i symboli innych niż `-`, `_` i `.`
+@msg	{k} has control characters	{k} zawiera znaki sterujące
+@msg	{k} has control characters or line breaks	{k} zawiera znaki sterujące lub podziały wierszy
 @msg	data set `{name}` holds a control character, which a variable library can't hold	zestaw danych `{name}` zawiera znak sterujący, którego biblioteka zmiennych nie może zawierać
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	zestaw danych `{name}` zaczyna się lub kończy białym znakiem, którego biblioteka zmiennych nie może zawierać
 	Make Graph Dynamic	Uczyń wykres dynamicznym
@@ -6382,6 +6487,7 @@ axis	Y Axis	Oś Y
 @msg	stops must be in order of `offset`	punkty koloru muszą być uporządkowane według `offset`
 @msg	the document has no pattern {pattern}	dokument nie ma wzorku {pattern}
 @msg	the document has no swatch {n}	dokument nie ma próbki {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` wymaga punktu koloru połączonego z próbką koloru dodatkowego
 @msg	the output	wyjście
 @msg	the path has no anchor points	ścieżka nie ma punktów kontrolnych
 @msg	too many anchor points (limit {MAX_ANCHORS})	za dużo punktów kontrolnych (limit {MAX_ANCHORS})
@@ -7457,6 +7563,7 @@ breakText	Glyphs	Glify
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` dla tego okna dialogowego {kind} musi mieć jedną z wartości: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` zawiera więcej niż {MAX_ANSWERS} odpowiedzi
 @msg	`answers` is larger than 1 MiB	`answers` ma rozmiar większy niż 1 MiB
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` służy tylko do uruchomienia, w którym nie ma kogo zapytać: w aplikacji na każde okno dialogowe odpowiada użytkownik
 @msg	`answers` must be a list of answers	`answers` musi być listą odpowiedzi
 @msg	`artboard` must be the index of an artboard of the document	`artboard` musi być indeksem obszaru kompozycji dokumentu
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` musi mieć postać [x, y]
@@ -7489,6 +7596,7 @@ breakText	Glyphs	Glify
 @msg	`name` must be a name that is not empty	`name` musi być niepustą nazwą
 @msg	`name` must not be empty	`name` nie może być puste
 @msg	`origin` must be [x, y] in points	`origin` musi mieć postać [x, y] w punktach
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` musi mieć postać [a, b, c, d], każda wartość od -1000 do 1000, a a·d - b·c musi różnić się od 0 o co najmniej 0,001
 @msg	`picks` must be an array (got {v})	`picks` musi być tablicą (podano {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` musi zawierać od 1 do {MAX_PICKS} wskazań (podano {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` musi zawierać od 2 do 100000 punktów
@@ -7864,6 +7972,7 @@ breakText	Glyphs	Glify
 @msg	Image Trace failed: {e}	Obrys obrazu nie powiódł się: {e}
 @msg	Image Trace finished, but its document was closed	Obrys obrazu został ukończony, ale jego dokument został zamknięty
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Obrys obrazu został ukończony, ale obraz lub jego ustawienia zmieniły się w międzyczasie: obrysuj go ponownie
+@msg	Image Trace finished, but its document was reverted: trace it again	Obrys obrazu został ukończony, ale jego dokument został przywrócony: obrysuj go ponownie
 @msg	Join: a subpath went missing	Połącz: brakuje ścieżki podrzędnej
 @msg	Lock Workspace is not available in VectorCraft	Polecenie Zablokuj obszar roboczy nie jest dostępne w programie VectorCraft
 @msg	Move Panel to New Window is not available: floating panels stay in the main window	Polecenie Przenieś panel do nowego okna nie jest dostępne: panele pływające pozostają w oknie głównym
@@ -8276,7 +8385,7 @@ breakText	Glyphs	Glify
 @msg	column: true floats the whole column and takes no onto, above or below	column: true odłącza całą kolumnę i nie przyjmuje onto, above ani below
 @msg	command must be a shape.* command	command musi być poleceniem shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: brak `command`
-@msg	composer must be "singleLine" or "everyLine"	composer musi mieć wartość "singleLine" lub "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer musi mieć wartość "singleLine", "everyLine", "standardSingleLine" lub "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	kształty złożone przyjmują ścieżki, ścieżki złożone, grupy, kształty złożone, tekst, przejścia i koperty
 @msg	compound {_1} must contain exactly one open path to join	obiekt złożony {_1} musi zawierać dokładnie jedną otwartą ścieżkę do połączenia
 @msg	connect needs a path other than the one extended	connect wymaga ścieżki innej niż przedłużana
@@ -9207,7 +9316,6 @@ breakText	Glyphs	Glify
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	pliki {kind} nie obsługują przezroczystości, a plik zawierałby {what}: najpierw spłaszcz przezroczystość (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	obrazów {kind} nie można otwierać (patrz document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` nie jest jedną z dostępnych opcji
-@msg	{k} has control characters{_1}	{k} zawiera znaki sterujące{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} jest zbyt długie (najwyżej {MAX_TEXT} znaków)
 @msg	{k} must be > 0	{k} musi być > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} musi być liczbą (pt) lub długością, na przykład "210 mm"
@@ -9355,3 +9463,20 @@ breakText	Glyphs	Glify
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu JPEG (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu Targa (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pikseli to za dużo dla formatu PSD (najwyżej {MAX_SIDE} pikseli na bok): zmniejsz rozdzielczość
+	Packaging Tools	Narzędzia do opakowań
+	Fold Lines	Linie zgięcia
+	Make Cut Line	Utwórz linię cięcia
+	Make Crease Line	Utwórz linię bigowania
+	Make Partial Cut Line	Utwórz linię nacięcia
+	Make Perforation Line	Utwórz linię perforacji
+	Make Fold Line	Utwórz linię zgięcia
+	Role Swatches…	Próbki rodzajów linii…
+	Role Swatches	Próbki rodzajów linii
+	Role	Rodzaj linii
+	Cut Line	Linia cięcia
+	Crease Line	Linia bigowania
+	Partial Cut Line	Linia nacięcia
+	Perforation Line	Linia perforacji
+	No objects are selected.	Nie zaznaczono żadnych obiektów.
+	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
+	Remove Fold Line Role	Usuń rodzaj linii

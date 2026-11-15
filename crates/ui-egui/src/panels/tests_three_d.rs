@@ -149,6 +149,48 @@ fn the_panel_shows_the_dialog_controls_of_each_type() {
     assert!(!painted_text(&mut app, show).contains("Show axis"));
 }
 
+/// Render Settings › Wireframe: shown for the panel's four effects, it sets `render.mode` on every
+/// selected 3D effect that takes it in one undo step, the type switch keeps it, and choosing it
+/// again draws the shaded surface. A 3D (Classic) effect beside them is left as it is, and the
+/// menu is not shown for it alone.
+#[test]
+fn render_settings_wireframe_turns_the_mode_on_and_off_for_the_selection() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    assert!(painted_text(&mut app, show).contains("Render Settings"));
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.revolve", "item": null})).unwrap();
+    let c = app.run("shape.rectangle", json!({"x": 100, "y": 250, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.classicExtrude", "item": null})).unwrap();
+    let mode = |app: &VectorcraftApp, id: u64| {
+        let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+        n.appearance.effects[0].params.get("render").and_then(|r| r.get("mode")).and_then(Value::as_str).map(str::to_string)
+    };
+    app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
+    let ctx = egui::Context::default();
+    let history = undo_len(&app);
+    super::set_wireframe(&mut app, &ctx, true);
+    assert_eq!(undo_len(&app), history + 1);
+    assert_eq!((mode(&app, a).as_deref(), mode(&app, b).as_deref()), (Some("wireframe"), Some("wireframe")));
+    assert_eq!(mode(&app, c), None, "the classic effect takes no render settings");
+    assert!(super::wireframe_on(&target(&app).unwrap()));
+    // The object type changes in place and keeps the mode.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    set_type(&mut app, "inflate").unwrap();
+    assert_eq!(mode(&app, a).as_deref(), Some("wireframe"));
+    let history = undo_len(&app);
+    super::set_wireframe(&mut app, &ctx, false);
+    assert_eq!(undo_len(&app), history + 1);
+    assert_eq!(mode(&app, a).as_deref(), Some("shaded"));
+    assert!(!super::wireframe_on(&target(&app).unwrap()));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(mode(&app, a).as_deref(), Some("wireframe"));
+    // The 3D (Classic) effect alone has no Render Settings.
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    assert!(!painted_text(&mut app, show).contains("Render Settings"));
+}
+
 #[test]
 fn a_drag_previews_and_records_one_undo_step_when_released() {
     let mut app = app();
@@ -982,6 +1024,73 @@ fn the_arrow_keys_move_the_light_pressed_last() {
     frame_events(&ctx, &mut app, vec![], show);
     let rotations = effect(&app).1["lights"].as_array().unwrap().iter().map(|l| l["rotation"].clone()).collect::<Vec<_>>();
     assert_eq!(rotations, [json!(0.0), json!(-179.0)]);
+}
+
+fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
+    app.run("assets.list", json!({})).unwrap()["assets"].as_array().unwrap().clone()
+}
+
+/// The panel always shows Export 3D Object; it adds only the selected objects that have a 3D
+/// effect to Asset Export as 3D assets, in one undo step, selects their assets there and shows the
+/// Asset Export panel. Run again, it records nothing and still selects them.
+#[test]
+fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
+    let mut app = app();
+    assert!(painted_text(&mut app, show).contains("Export 3D Object"));
+    let ctx = egui::Context::default();
+    // Without a 3D object: an error, nothing recorded, no asset.
+    let history = undo_len(&app);
+    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    assert_eq!((undo_len(&app), assets(&mut app).len()), (history, 0));
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    app.run("layer.setProps", json!({"id": a, "name": "Box"})).unwrap();
+    assert!(painted_text(&mut app, show).contains("Export 3D Object"));
+    let plain = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    // A hidden 3D effect draws nothing to export: the object is left out like one without.
+    let hidden = app.run("shape.rectangle", json!({"x": 100, "y": 250, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("effect.setParams", json!({"index": 0, "item": null, "visible": false})).unwrap();
+    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    app.run("select.set", json!({"ids": [plain, a, hidden]})).unwrap();
+    assert_eq!(super::selected_3d_objects(&app), [a]);
+    assert!(!crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    let history = undo_len(&app);
+    super::export_3d_object(&mut app, &ctx).unwrap();
+    assert_eq!(undo_len(&app), history + 1);
+    let list = assets(&mut app);
+    assert_eq!(list.len(), 1, "{list:?}");
+    assert_eq!((list[0]["name"].clone(), list[0]["format3D"].clone()), (json!("Box"), json!("usda")));
+    let asset = list[0]["id"].as_u64().unwrap();
+    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
+    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    // Already an asset: no undo step, the same asset selected again, the panel left showing.
+    super::set_pstate(&ctx, "asset-export-selected", Vec::<u64>::new());
+    super::export_3d_object(&mut app, &ctx).unwrap();
+    assert_eq!((undo_len(&app), assets(&mut app).len()), (history + 1, 1));
+    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
+    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    // Undo takes the asset away.
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(assets(&mut app).is_empty());
+}
+
+/// A selected 3D object inside another selected 3D object is not collected on its own: the outer
+/// object's asset holds it.
+#[test]
+fn export_3d_object_leaves_out_a_3d_object_inside_another() {
+    let mut app = app();
+    let inner = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    let other = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [inner, other]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [inner, group]})).unwrap();
+    let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+    assert!(selected.contains(&inner) && selected.contains(&group), "{selected:?}");
+    assert_eq!(super::selected_3d_objects(&app), [group]);
 }
 
 #[test]

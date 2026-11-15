@@ -1128,6 +1128,42 @@ fn aligned_effect_indices_past_the_end_of_a_graph_designs_art_are_refused() {
     assert!(rows(&s, mark).effects.is_empty());
 }
 
+/// With a graph design's art given first and `aligned: true`, `effect.remove` and `effect.duplicate` with `indices` are an
+/// error and change nothing when one of the art's effects is one no other object has, as with that index given alone.
+#[test]
+fn aligned_effect_indices_of_a_graph_designs_art_that_no_object_has_are_refused() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let (mut s, _, art, mark) = aligned_design_art();
+    // The art has a shadow and a roughen, the mark the shadow only.
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "ids": [mark.0], "item": null})).unwrap();
+    s.edit("Effects", |d, _| {
+        let effects = d.node(mark).unwrap().appearance.effects.clone();
+        d.node_mut(art).unwrap().appearance.effects = effects;
+        d.node_mut(mark).unwrap().appearance.effects.pop();
+        Ok(())
+    })
+    .unwrap();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    let steps = s.doc().unwrap().history.undo.len();
+    for cmd in ["effect.remove", "effect.duplicate"] {
+        assert!(s.execute(cmd, &json!({"ids": [art.0, mark.0], "item": null, "index": 1, "aligned": true})).is_err(), "{cmd}");
+        let e = s.execute(cmd, &json!({"ids": [art.0, mark.0], "item": null, "indices": [0, 1], "aligned": true})).unwrap_err();
+        assert!(e.to_string().contains("no effects at indices 0, 1"), "{cmd}: {e}");
+        assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was.clone()), "{cmd}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+    }
+    // With the roughen on the mark too, both of its effects are removed.
+    s.edit("Roughen", |d, _| {
+        let roughen = d.node(art).unwrap().appearance.effects[1].clone();
+        d.node_mut(mark).unwrap().appearance.effects.push(roughen);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "indices": [0, 1], "aligned": true})).unwrap();
+    assert!(rows(&s, mark).effects.is_empty());
+}
+
 /// A blur on a series group makes the whole group an image, which draws the design's art with the series' other art:
 /// Expand Appearance does not put the art back beside the image.
 #[test]
@@ -4687,6 +4723,58 @@ fn group_selected_series_go_on_the_chosen_axis() {
     assert_eq!(s.execute("graph.setType", &json!({})).unwrap()["valueAxis"], "right");
     s.execute("graph.setType", &json!({"valueAxis": "left"})).unwrap();
     assert!(spec(&s, id).right_series.is_empty());
+}
+
+/// The Graph Type dialog's subject: the selected graph, the series picked in it, and the tick values each value axis
+/// is drawn with while they are calculated, which are the ones the graph's value labels show.
+#[test]
+fn graph_type_subject_gives_the_picked_series_and_the_calculated_tick_values() {
+    let mut s = Session::new();
+    assert!(super::graph_type_subject(&s).is_err(), "no document");
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    assert!(super::graph_type_subject(&s).is_err(), "no graph selected");
+    // Q1 3, 2; Q2 5, 4; Q3 -1, 6.
+    let id = graph(&mut s, "column");
+    let subject = super::graph_type_subject(&s).unwrap();
+    assert_eq!((subject.id, subject.series), (id, vec![]));
+    assert_eq!(subject.calculated, [(-2.0, 6.0, 4); 2]);
+    let shown = |s: &Session| value_labels(s, id).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+    assert_eq!(shown(&s), ["-2", "0", "2", "4", "6"]);
+    // Overriding with them draws the same axis, and the calculated values stay the data's.
+    s.execute("graph.setType", &json!({"axisMin": -2, "axisMax": 6, "ticks": 4})).unwrap();
+    assert_eq!(shown(&s), ["-2", "0", "2", "4", "6"]);
+    s.execute("graph.setType", &json!({"axisMin": 0, "axisMax": 100, "ticks": 0})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated[0], (-2.0, 6.0, 4));
+    // A single bound is calculated with, as the axis is drawn.
+    s.execute("graph.setType", &json!({"axisMin": -10, "axisMax": null})).unwrap();
+    let (lo, hi, _) = super::graph_type_subject(&s).unwrap().calculated[0];
+    let labels = shown(&s);
+    assert!(lo <= -10.0, "{lo}");
+    assert_eq!((labels.first().and_then(|t| t.parse::<f64>().ok()), labels.last().and_then(|t| t.parse::<f64>().ok())), (Some(lo), Some(hi)));
+    s.execute("graph.setType", &json!({"axisMin": null, "axisMax": null})).unwrap();
+    // Stacked columns stack their positive and their negative values: Q2 reaches 9, Q3 from -1 to 6.
+    s.execute("graph.setType", &json!({"type": "stackedColumn"})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated[0], (-2.0, 10.0, 6));
+    assert_eq!(shown(&s), ["-2", "0", "2", "4", "6", "8", "10"]);
+    // A radar graph's axis starts at 0, and a pie graph has none.
+    s.execute("graph.setType", &json!({"type": "radar"})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 6.0, 3); 2]);
+    s.execute("graph.setType", &json!({"type": "pie"})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 1.0, 5); 2]);
+    // Series picked with Group Selection.
+    s.execute("graph.setType", &json!({"type": "column"})).unwrap();
+    let picked = series(s.doc().unwrap().doc.node(id).unwrap(), 1).id;
+    s.execute("select.set", &json!({"ids": [picked.0]})).unwrap();
+    let subject = super::graph_type_subject(&s).unwrap();
+    assert_eq!((subject.id, subject.series), (id, vec![1]));
+    // Separate Scales: the right axis has the tick values of its own series.
+    let mut s = Session::new();
+    let id = two_scale_graph(&mut s);
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 1000.0, 5); 2]);
+    s.execute("graph.setType", &json!({"seriesIndexes": [1], "valueAxis": "right"})).unwrap();
+    s.execute("graph.setType", &json!({"valueAxis": "both", "separateScales": true})).unwrap();
+    assert_eq!(super::graph_type_subject(&s).unwrap().calculated, [(0.0, 10.0, 5), (0.0, 1000.0, 5)]);
+    assert_eq!(spec(&s, id).right_series, [1]);
 }
 
 #[test]
