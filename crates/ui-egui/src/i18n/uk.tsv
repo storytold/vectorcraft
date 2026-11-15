@@ -3651,6 +3651,8 @@ effect	Points	Точки
 	Swap Fill and Stroke (Shift+X)	Змінити заливку та обведення (Shift+X)
 	Swap start and end arrowheads	Поміняти початкову та кінцеву стрілки
 	Swap the selected object for the file, keeping its place and transform	Замінити виділений об’єкт файлом, зберігши його положення та перетворення
+	Show Import Options	Показувати параметри імпорту
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запитувати параметри імпорту кожного файлу PDF, DXF чи текстового файлу перед розміщенням; якщо вимкнено, використовуються останні вибрані параметри
 	Stylistic Alternates	Стилістичні альтернативи
 	Swash	Розчерк
 	Swatch Conflict	Конфлікт зразків
@@ -6304,6 +6306,8 @@ axis	Y Axis	Вісь Y
 	Create New Set	Створити новий набір
 	Stop Global Edit	Завершити глобальне редагування
 	Global Edit Options	Параметри глобального редагування
+	Select Similar Objects	Виділити схожі об’єкти
+	Select Similar Options	Параметри виділення схожих
 	Leave Out of Global Edit	Виключити з глобального редагування
 	Match	Збіг
 	On Artboards	На монтажних областях

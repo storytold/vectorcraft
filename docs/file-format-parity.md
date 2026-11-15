@@ -192,7 +192,8 @@ private editing data. VectorCraft:
   14; #868: round trip with Illustrator 2018 loses layers and groups), some files 4× slower to open since the
   editing data is read whole (#758), live effects that are not read or have settings that are not read, and
   brushes come in as their drawn look (#637; pattern fills are read since #1025, and symbols and their instances
-  open live, as do the symbols of a symbol library without layers); legacy `.ai` without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868; guides
+  open live, those that files of versions 10 to 13 place with a `TransformMatrix` included, as do the symbols of a
+  symbol library without layers); legacy `.ai` without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868; guides
   open as ruler guides and guide paths since #5057 (#779), hidden, locked and named ruler guides with their state.
   Type under a Warp effect is compared with the art saved with it: type that draws as that art stays editable with
   the effect live, and type that draws differently, or that the file's limit of checks has no check left for, opens
