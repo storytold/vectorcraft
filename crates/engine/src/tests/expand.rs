@@ -415,6 +415,63 @@ fn a_click_on_the_grown_fill_of_an_image_in_the_art_selects_the_instance() {
     assert_eq!(hit_at(&s, 60.0, opt), None, "a click past the grown fill");
 }
 
+/// A group in the symbol's art with Effect › Pathfinder › Subtract: the instance's fill effect
+/// grows the result, and a click past both shapes where only the subtracted shape would grow does
+/// not select the instance.
+#[test]
+fn a_click_on_a_shape_a_pathfinder_effect_in_the_art_subtracts_misses_the_instance() {
+    let mut s = session();
+    // The back square runs from 50 to 110 and the front one from 80 to 140; the result runs from 50 to 80.
+    let back = NodeId(run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 60, "height": 100}))["id"].as_u64().unwrap());
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "paint.setStroke", json!({"color": "#0000ff"}));
+    run(&mut s, "stroke.set", json!({"weight": 4}));
+    let front = NodeId(run(&mut s, "shape.rectangle", json!({"x": 80, "y": 50, "width": 60, "height": 100}))["id"].as_u64().unwrap());
+    let g = NodeId(run(&mut s, "object.group", json!({"ids": [back.0, front.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "pathfinder.subtract"}));
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Subtracted"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() };
+    assert_eq!(hit_at(&s, 45.0, opt), None);
+    offset_row(&mut s, id, row, 10.0);
+    let r = render(&s);
+    assert!(near(r.pixel(45, 100), RED), "the result's fill grows by the offset: {:?}", r.pixel(45, 100));
+    assert!(near(r.pixel(145, 100), WHITE), "the subtracted shape is not drawn: {:?}", r.pixel(145, 100));
+    assert_eq!(hit_at(&s, 45.0, opt), Some(id), "a click on the result's grown fill");
+    assert_eq!(hit_at(&s, 145.0, opt), None, "a click where only the subtracted shape would grow");
+}
+
+/// A Shaper group in the symbol's art: the instance's fill effect grows the faces it shows, and a
+/// click where only its original shapes would grow does not select the instance.
+#[test]
+fn a_click_on_a_shaper_groups_original_shapes_in_the_art_misses_the_instance() {
+    let mut s = session();
+    run(&mut s, "paint.setStroke", json!({"none": true, "ids": []}));
+    for x in [0, 50] {
+        run(&mut s, "paint.setFill", json!({"color": "#ff0000", "ids": []}));
+        run(&mut s, "shape.rectangle", json!({"x": x, "y": 50, "width": 100, "height": 100}));
+    }
+    // The scribble inside the overlap removes the front rectangle's face; the face left runs from 0 to 50.
+    let g = NodeId(run(&mut s, "shaper.scribble", json!({"points": [[65, 70], [85, 90], [65, 110], [85, 130]]}))["id"].as_u64().unwrap());
+    assert!(node(&s, g).extras().shaper.is_some());
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Shaped"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    let opt = vectorcraft_doc::hit::HitOptions { tol: 1.0, ..Default::default() };
+    assert_eq!(hit_at(&s, 57.0, opt), None);
+    offset_row(&mut s, id, row, 10.0);
+    let r = render(&s);
+    assert!(near(r.pixel(57, 100), RED), "the face's fill grows by the offset: {:?}", r.pixel(57, 100));
+    assert!(near(r.pixel(125, 100), WHITE), "the original shapes are not drawn: {:?}", r.pixel(125, 100));
+    assert_eq!(hit_at(&s, 57.0, opt), Some(id), "a click on the face's grown fill");
+    assert_eq!(hit_at(&s, 125.0, opt), None, "a click on an original shape");
+}
+
 /// Of several fills, only the topmost one's effects reach the art, and only while it is visible.
 #[test]
 fn only_the_topmost_visible_instance_fill_reshapes_the_art() {

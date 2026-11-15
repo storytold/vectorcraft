@@ -256,17 +256,8 @@ impl Node {
                     .map(|b| b.inflate(o, o))
             }
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.reach(symbols))),
-            // The frame and each shape the image's own fills and strokes paint, or a symbol
-            // instance's box and each shape its art paints with the geometry effects of the
-            // instance's own fill or stroke, a stroke's grown by the farthest it can reach from its
-            // shape.
-            NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
-                let start = if matches!(self.kind, NodeKind::Image(_)) { self.geometric(symbols) } else { self.visual(symbols) };
-                crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(start, |acc, (bp, _, item)| {
-                    let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
-                    vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
-                })
-            }
+            // The frame and each shape the image's own fills and strokes paint.
+            NodeKind::Image(_) => self.with_own_paint(self.geometric(symbols), symbols),
             // Keys and steps placed on a spine, turned to it with Align to Path, can reach past the
             // keys and the spine.
             NodeKind::Blend { children, spec } => {
@@ -277,13 +268,15 @@ impl Node {
             NodeKind::Layer { children, clip: true, .. } | NodeKind::Group { children, clip: true } => {
                 vectorcraft_geom::union_opt(self.visual(symbols), children.first().and_then(|c| crate::hit::reshaped_clip_box(c)))
             }
-            // The live geometry effects of the clipping paths in the art can draw it past its box.
+            // The live geometry effects of the clipping paths in the art can draw it past its box,
+            // and the box takes in each shape the art paints with the geometry effects of the
+            // instance's own fill or stroke.
             NodeKind::SymbolInstance { symbol, xf } => {
                 let Some((s, art, region)) = symbols.and_then(|s| {
                     let a = s.art(symbol)?;
                     Some((s, a, a.reshaped?))
                 }) else {
-                    return self.visual(symbols);
+                    return self.with_own_paint(self.visual(symbols), symbols);
                 };
                 let map = s.document().symbol_slice_map_of(symbol, art.geometric, *xf);
                 let placed = if moves_only(*xf) && map.is_none() {
@@ -299,10 +292,20 @@ impl Node {
                     map.map_or_else(|| xf.transform_rect_bbox(all), |m| m.placement_bounds(all)).inflate(grow, grow)
                 };
                 let o = self.appearance.outset();
-                vectorcraft_geom::union_opt(self.visual(symbols), self.projected(Some(placed)).map(|b| b.inflate(o, o)))
+                self.with_own_paint(vectorcraft_geom::union_opt(self.visual(symbols), self.projected(Some(placed)).map(|b| b.inflate(o, o))), symbols)
             }
             _ => self.visual(symbols),
         }
+    }
+
+    /// `start` grown by each shape the node's own fills and strokes paint
+    /// ([`crate::hit::set_image_paint`]), a stroke's grown by the farthest it can reach from its
+    /// shape.
+    fn with_own_paint(&self, start: Option<Rect>, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
+        crate::hit::image_paint(symbols.map(SymbolBoxes::document), self).iter().fold(start, |acc, (bp, _, item)| {
+            let o = if let crate::AppearanceItem::Stroke(s) = item { s.reach() } else { 0.0 };
+            vectorcraft_geom::union_opt(acc, (!bp.elements().is_empty()).then(|| bp.bounding_box().inflate(o, o)))
+        })
     }
 
     /// Geometric bounds (no stroke), recursively. Clip groups are bounded by their clip path. A

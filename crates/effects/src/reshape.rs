@@ -489,10 +489,11 @@ fn push_painted(doc: Option<&Document>, c: &Node, out: &mut Vec<(BezPath, FillRu
 /// its active fill and stroke ([`has_item_geometry`]): the paths of the art [`reshape`] makes of it,
 /// each with its own geometry effects and those of each fill and stroke applied
 /// ([`crate::bake_type_appearance`], [`push_painted`]), the paths that the own fills and strokes of
-/// the groups and layers in the art paint ([`crate::evaluate_container`]), the shapes that the own
-/// fills and strokes of the images in the art paint ([`image_paint`]), and the instances in that
-/// art that took those effects, in turn. Hidden objects, clipping paths, guides and the members of
-/// clip groups add nothing, and neither does an instance more than
+/// the groups and layers in the art paint and the results of their Pathfinder effects
+/// ([`crate::evaluate_container`]), the shapes that the own fills and strokes of the images in the
+/// art paint ([`image_paint`]), and the instances in that art that took those effects, in turn.
+/// Hidden objects, clipping paths, guides, the members of clip groups and the original shapes of
+/// Shaper groups add nothing, and neither does an instance more than
 /// [`vectorcraft_doc::depth::MAX_DEPTH`] deep or whose symbol's art would take the objects measured
 /// so far past `budget`.
 fn instance_paint(doc: Option<&Document>, n: &Node, depth: usize, budget: &mut u64, out: &mut Vec<(BezPath, FillRule, AppearanceItem)>) {
@@ -526,12 +527,16 @@ fn painted_in(doc: Option<&Document>, n: &Node, depth: usize, budget: &mut u64, 
         NodeKind::SymbolInstance { .. } => instance_paint(doc, n, depth + 1, budget, out),
         _ if n.clips() => {}
         _ => {
-            let evaluated = crate::has_container_appearance(n).then(|| crate::evaluate_container(doc, n)).flatten();
+            // A Pathfinder effect paints its result, not the members it combines.
+            let evaluated = (crate::has_container_appearance(n) || crate::has_pathfinder(n)).then(|| crate::evaluate_container(doc, n)).flatten();
             let g = evaluated.as_ref().unwrap_or(n);
             if g.clips() {
                 return;
             }
-            for c in g.children().into_iter().flatten() {
+            // A Shaper group's first member holds its original shapes, which are not drawn. The
+            // group's own fills and strokes can be painted before it, so it is found by its id.
+            let sources = n.extras().shaper.is_some().then(|| n.children().and_then(|c| c.first()).map(|c| c.id)).flatten();
+            for c in g.children().into_iter().flatten().filter(|c| Some(c.id) != sources) {
                 painted_in(doc, c, depth, budget, out);
             }
         }
