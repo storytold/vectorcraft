@@ -1393,8 +1393,7 @@ mod tests {
     /// Choosing Quiet in Preferences (`uiColorScheme` = "quiet") is what applies it.
     #[test]
     fn choosing_quiet_in_the_preferences_applies_it() {
-        let mut prefs = vectorcraft_engine::Prefs::default();
-        prefs.ui_color_scheme = "quiet".into();
+        let prefs = vectorcraft_engine::Prefs { ui_color_scheme: "quiet".into(), ..Default::default() };
         let scheme = Scheme::parse(&prefs.ui_color_scheme).unwrap_or_default();
         assert_eq!(scheme, Scheme::Quiet);
         for b in Brightness::ALL {
