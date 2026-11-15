@@ -763,14 +763,15 @@ fn percentages_in_a_symbol_are_of_its_view_box() {
 }
 
 /// #1598: the warning for a filter that neither the live effects nor an SVG filter effect can hold
-/// (here, on turned objects) names the filter, its primitives and the object, and says it is drawn
-/// without it (not "a group": usvg wraps the element in one). Such a filter on an object that
-/// isn't turned comes in as an SVG filter effect holding the filter's XML.
+/// (here, on objects skewed past what the effect measures) names the filter, its primitives and the
+/// object, and says it is drawn without it (not "a group": usvg wraps the element in one). Such a
+/// filter on an object that isn't skewed that far comes in as an SVG filter effect holding the
+/// filter's XML.
 #[test]
 fn unsupported_filters_are_named_in_the_warning() {
     let body = r#"<filter id="f"><feColorMatrix type="saturate" values="0"/></filter><filter id="t"><feTurbulence baseFrequency="0.05"/></filter>
-        <rect x="20" y="20" width="60" height="60" fill="red" transform="rotate(10 50 50)" filter="url(#f)"/>
-        <rect id="r" x="100" y="20" width="60" height="60" fill="blue" transform="rotate(10 130 50)" filter="url(#t)"/>
+        <rect x="0.02" y="0.02" width="0.06" height="0.06" fill="red" transform="skewX(89.95)" filter="url(#f)"/>
+        <rect id="r" x="0.1" y="0.02" width="0.06" height="0.06" fill="blue" transform="skewX(89.95)" filter="url(#t)"/>
         <rect x="20" y="90" width="20" height="20" fill="red" filter="url(#f)"/>"#;
     let (d, w) = import_with_report(&svg(body)).unwrap();
     assert!(w.iter().any(|w| w == "filter 'f' (feColorMatrix) on an object isn't supported; drawn without it"), "{w:?}");
@@ -947,6 +948,21 @@ fn nested_svg_images_past_count_cap_are_left_out() {
     let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500">{images}</svg>"#);
     let (_d, warnings) = import_with(&svg, &ImportOptions::default()).unwrap();
     assert!(warnings.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images"))));
+}
+
+/// A data URL shown by `<use>` elements, in the SVG and in an SVG image of it, imports as one
+/// image shown at each use.
+#[test]
+fn data_url_images_shown_by_uses_import_at_each_use() {
+    let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg==";
+    let image = format!(r#"<image id="p" href="data:image/png;base64,{png}" width="4" height="4"/>"#);
+    let uses = r##"<use href="#p" x="5"/>"##.repeat(3);
+    let inner = format!(r#"<svg {SVG_NS} width="20" height="10"><defs>{image}</defs>{uses}</svg>"#);
+    let (d, w) = import_with_report(&svg(&format!("<defs>{image}</defs>{uses}{}", image_of("image/svg+xml", &inner)))).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let found = images(&d);
+    assert_eq!(found.len(), 6);
+    assert!(found.iter().all(|(_, im)| im.key == found[0].1.key && (im.width, im.height) == (1, 1)));
 }
 
 /// Nested SVG images that can't be read: text that isn't XML, and an SVG without a size.

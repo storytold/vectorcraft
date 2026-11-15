@@ -143,6 +143,10 @@
 //!   A path or compound path with a brush the reader reads live is written with an art style whose
 //!   stroke is the brush's filter (`writer::brushes`). A brush is written only when the reader reads
 //!   it back with its settings.
+//! - Graphs, as the reader reads them (`read/graph.rs`): a graph on the layers whose records the
+//!   reader reads back as the same graph ([`crate::ai_graph`]) is written as its group between
+//!   `%_Gs`, its functional records and `%_GS`, each series' group tagged `Go` right after its end;
+//!   any other graph, and a graph with art left out, as its art, with a warning.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
@@ -270,6 +274,7 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     // The objects that may keep their effects in an art style, as they are before baking (not on
     // a large canvas, whose scale the styles' strokes and effects would need).
     let styled = writer::styled_objects(doc);
+    let (symbol_styled, pattern_styled) = writer::styled_definitions(doc);
     let own_styles = doc.graphic_styles != Document::new(1.0, 1.0).graphic_styles;
     let links = writer::style_links(doc);
     // Live geometry effects as their result, as the PDF part draws them.
@@ -307,15 +312,13 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     w.reserve_swatch_gradients();
     if scale == 1.0 {
         w.styled = styled;
+        (w.symbol_styled, w.pattern_styled) = (symbol_styled, pattern_styled);
         w.panel_styles();
-    } else if !styled.is_empty() || own_styles || links > 0 {
+    } else if !styled.is_empty() || !symbol_styled.is_empty() || !pattern_styled.is_empty() || own_styles || links > 0 {
         w.warnings.push(writer::LARGE_CANVAS_STYLES.to_string());
     }
     for layer in &doc.layers {
         w.layer(layer);
-    }
-    if scale == 1.0 {
-        w.lost_links(links);
     }
     // The symbols no instance uses too; their art adds definitions.
     w.symbols();
@@ -324,6 +327,10 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     // The palette first: its gradient and pattern swatches add definitions.
     let mut palette = String::new();
     w.palette(&mut palette);
+    // Once every definition is written: their opacity masks' art keeps links too.
+    if scale == 1.0 {
+        w.lost_links(links);
+    }
     let library = w.variable_library();
     let first = to_art.transform_rect_bbox(board);
     let art = doc
