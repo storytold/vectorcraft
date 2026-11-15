@@ -3282,6 +3282,7 @@ mark-style	Japanese	日本式
 	Single-line Composer	1 行ずつ組む
 	Toggle Line Composer	行の組版方式を切り替え
 	Size Tile to Art	タイルをアートワークのサイズに合わせる
+	Move Tile with Art	タイルをアートワークと一緒に移動
 	Size/Leading	サイズ/行送り
 	Size:	サイズ:
 	Ridges per segment:	セグメントごとの山数:
@@ -4058,6 +4059,8 @@ file-filter	Templates	テンプレート
 	Superscript	上付き文字
 	Swap Fill and Stroke (Shift+X)	塗りと線を入れ替え (Shift+X)
 	Swap the selected object for the file, keeping its place and transform	選択したオブジェクトを、位置と変形を保ったままファイルに置き換え
+	Show Import Options	読み込みオプションを表示
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	配置する前に PDF、DXF、テキストファイルごとの読み込みオプションを確認。オフのときは前回選んだオプションを使用
 	Swatch Libraries Menu	スウォッチライブラリメニュー
 	System Layout	システムレイアウト
 	Tabular Lining	等幅ライニング
@@ -4123,6 +4126,9 @@ file-filter	Templates	テンプレート
 	Windows	Windows
 	Working CMYK (don't tag)	作業用 CMYK (タグなし)
 	Working RGB (don't tag)	作業用 RGB (タグなし)
+	Don't Color Manage This Document	このドキュメントにカラーマネジメントを適用しない
+	Working RGB: {name}	作業用 RGB: {name}
+	Working CMYK: {name}	作業用 CMYK: {name}
 	Workspace {i}	ワークスペース {i}
 	Yellow	イエロー
 	[Normal Character Style]	[標準文字スタイル]
@@ -5331,6 +5337,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	No linked files to look for	検索するリンクファイルがありません
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	このリンクはシンボル、グラフデザイン、パターン、または不透明マスクの中にあり、カンバス上に位置がありません
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	グラフの系列にあるグラフデザインのアートはデザインから描き直されます: 変更するにはデザインを編集してください
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
@@ -5350,6 +5357,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	automation filesystem access is not granted: write authority is absent: {path}	自動化にはファイルシステムへのアクセスが許可されていません: 書き込み権限がありません: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	自動化のパスを拒否しました: 読み込みルート {root} の外です: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	自動化のパスを拒否しました: 読み込みルート {roots} のいずれの中でもありません: {path}
+@msg	a linked JavaScript file is outside the read roots	リンクされた JavaScript ファイルが読み込みルートの外にあります
 @msg	automation path rejected: outside the write root {root}: {path}	自動化のパスを拒否しました: 書き込みルート {root} の外です: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	自動化のパスを拒否しました: 書き込みルート {roots} のいずれの中でもありません: {path}
 @msg	automation path rejected: path is empty	自動化のパスを拒否しました: パスが空です
@@ -5761,6 +5769,9 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+	Move Light to Back	ライトを背面へ
+	Move Light to Front	ライトを前面へ
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	ライトをドラッグして移動します。矢印キーでフォーカスのあるライトを移動し、Shift キーで 15° ずつ移動します。
 	Shadows	シャドウ
 	Distance from Object	オブジェクトからの距離
 	Shadow Bounds	シャドウの範囲
@@ -8188,6 +8199,8 @@ axis	Y Axis	Y 軸
 	Create New Set	新規セットを作成
 	Stop Global Edit	グローバル編集を終了
 	Global Edit Options	グローバル編集オプション
+	Select Similar Objects	類似オブジェクトを選択
+	Select Similar Options	類似オブジェクトの選択オプション
 	Leave Out of Global Edit	グローバル編集から除外
 	Match	一致
 	On Artboards	アートボード上
@@ -8310,6 +8323,13 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	黒鉛鉛筆
 	Wax Crayon	ワックスクレヨン
 	Charcoal Dust	木炭の粉
+
+# Original procedural circuit brushes.
+	Tech Circuit	電子回路
+	Circuit Trace	回路配線
+	Bus Lines	バス配線
+	Terminal Nodes	端子ノード
+
 	Notched Ribbon	ノッチリボン
 	Double Line	二重線
 	Wave	波

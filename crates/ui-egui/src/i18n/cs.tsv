@@ -2134,6 +2134,7 @@ digits	Malayalam	Malajálamské
 	Show Swatch Bounds	Zobrazit hranice položky vzorníku
 	Show Tile Edge	Zobrazit okraj dlaždice
 	Size Tile to Art	Velikost dlaždice podle kresby
+	Move Tile with Art	Přesouvat dlaždici s kresbou
 	Tile Type:	Typ dlaždice:
 	Top in Front	Horní vpředu
 	V Spacing:	Svislá mezera:
@@ -2176,6 +2177,9 @@ digits	Malayalam	Malajálamské
 	Use Black Point Compensation	Použít kompenzaci černého bodu
 	Working CMYK (don't tag)	Pracovní CMYK (neoznačovat)
 	Working RGB (don't tag)	Pracovní RGB (neoznačovat)
+	Don't Color Manage This Document	Nespravovat barvy tohoto dokumentu
+	Working RGB: {name}	Pracovní RGB: {name}
+	Working CMYK: {name}	Pracovní CMYK: {name}
 	{name} (spot)	{name} (přímá)
 	Add to Profiles…	Přidat do profilů…
 	Align Stroke to Center	Zarovnat tah na střed
@@ -2788,6 +2792,8 @@ digits	Malayalam	Malajálamské
 	Keep a link to an image file instead of only embedding it	Ponechat propojení na soubor obrázku, ne jen ho vložit
 	Place onto a new locked, dimmed template layer below the current layer	Umístit do nové zamčené, ztlumené vrstvy šablony pod aktuální vrstvou
 	Swap the selected object for the file, keeping its place and transform	Nahradit vybraný objekt souborem se zachováním jeho polohy a transformace
+	Show Import Options	Zobrazit možnosti importu
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Před umístěním se zeptat na možnosti importu každého souboru PDF, DXF nebo textového souboru; vypnuto: použijí se naposledy zvolené možnosti
 	On: one locked object showing the document, updated when it changes.	Zapnuto: jeden zamčený objekt zobrazující dokument, aktualizovaný při jeho změně.
 	Off: an editable copy of its art, embedded in this document.	Vypnuto: upravitelná kopie jeho kresby vložená do tohoto dokumentu.
 	Images: link to the file instead of only embedding it.	Obrázky: propojit se souborem místo pouhého vložení.
@@ -5521,6 +5527,7 @@ imageTrace	Outline	Obrys
 @msg	every numbered name for {name} is taken in the document's folder	ve složce dokumentu jsou obsazena všechna číslovaná jména pro {name}
 @msg	No linked files to look for	Žádné propojené soubory k vyhledání
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Propojení je uvnitř symbolu, návrhu grafu, vzorku nebo masky krytí a nemá na plátně žádné místo
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	kresba návrhu grafu v datové řadě grafu se znovu vykresluje podle návrhu: chcete-li ji změnit, upravte návrh
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který vyhodnocují jen `run` a `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musí být pole ID objektů, ne {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` musí být pole barev, ne {v}
@@ -5540,6 +5547,7 @@ imageTrace	Outline	Obrys
 @msg	automation filesystem access is not granted: write authority is absent: {path}	přístup automatizace k systému souborů není udělen: chybí oprávnění k zápisu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro čtení {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro čtení {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	propojený soubor JavaScript je mimo kořeny pro čtení
 @msg	automation path rejected: outside the write root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro zápis {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro zápis {roots}: {path}
 @msg	automation path rejected: path is empty	cesta automatizace odmítnuta: cesta je prázdná
@@ -6101,6 +6109,9 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+	Move Light to Back	Přesunout světlo dozadu
+	Move Light to Front	Přesunout světlo dopředu
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Přetažením světlo přesunete. Šipky posouvají světlo s fokusem; se Shiftem po 15°.
 	Shadows	Stíny
 	Distance from Object	Vzdálenost od objektu
 	Shadow Bounds	Hranice stínu
@@ -6690,6 +6701,8 @@ axis	Y Axis	osa Y
 	Create New Set	Vytvořit novou sadu
 	Stop Global Edit	Ukončit globální úpravy
 	Global Edit Options	Možnosti globálních úprav
+	Select Similar Objects	Vybrat podobné objekty
+	Select Similar Options	Možnosti výběru podobných
 	Leave Out of Global Edit	Vyřadit z globálních úprav
 	Match	Shoda
 	On Artboards	Na pracovních plochách
@@ -6812,6 +6825,13 @@ axis	Y Axis	osa Y
 	Graphite Pencil	Grafitová tužka
 	Wax Crayon	Vosková pastelka
 	Charcoal Dust	Uhlový prach
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technické obvody
+	Circuit Trace	Vodivá cesta
+	Bus Lines	Sběrnicové linky
+	Terminal Nodes	Koncové uzly
+
 	Notched Ribbon	Vroubkovaná stuha
 	Double Line	Dvojitá čára
 	Wave	Vlna

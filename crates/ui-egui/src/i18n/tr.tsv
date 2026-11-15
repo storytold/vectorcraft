@@ -910,12 +910,12 @@ font-technology	Variable	Değişken
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Resmi buraya sürükleyin veya seçip + işaretine tıklayın. Birkaç nesneden oluşan bir varlık için Alt tuşunu basılı tutun.
 	Drag onto art to apply this appearance	Bu görünümü uygulamak için resmin üzerine sürükleyin
 	Drag the art to move it on the paper	Resmi kağıt üzerinde taşımak için sürükleyin
-	Draw	Beraberlik
+	Draw	Çiz
 	Draw Behind	Arkaya Çiz
 	Draw in Perspective	Perspektifte Çiz
 	Draw Inside	İçini Çiz
 	Draw Normal	Normal Çiz
-	Draw:	Beraberlik:
+	Draw:	Çiz:
 	Drawing Mode	Çizim Modu
 	Drop Shadow	Alt Gölge
 	Drop Shadow…	Alt Gölge…
@@ -3219,6 +3219,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Altıncı Uzay
 	Size	Boyut
 	Size Tile to Art	Sanata Boyut Döşeme
+	Move Tile with Art	Döşemeyi Sanatla Taşı
 	Size/Leading	Boyut/Satır Aralığı
 	Size:	Boyut:
 	Ridges per segment:	Segment başına sırtlar:
@@ -3398,6 +3399,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Dolgu ve Konturu Değiştir (Shift+X)
 	Swap start and end arrowheads	Başlangıç ve bitiş ok uçlarını değiştirin
 	Swap the selected object for the file, keeping its place and transform	Seçilen nesneyi, yerini koruyarak dosyayla değiştirin ve dönüştürün
+	Show Import Options	İçe Aktarma Seçeneklerini Göster
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Her PDF, DXF veya metin dosyasını yerleştirmeden önce içe aktarma seçeneklerini sor; kapalıyken son seçilen seçenekleri kullan
 	Stylistic Alternates	Stilistik Alternatifler
 	Swash	çalkalama
 	Swatch Conflict	Renk Örneği Çatışması
@@ -3828,6 +3831,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMYK'de çalışıyor
 	Working CMYK (don't tag)	CMYK çalışıyor (etiketlemeyin)
 	Working RGB (don't tag)	Çalışan RGB (etiketlemeyin)
+	Don't Color Manage This Document	Bu belgede renk yönetimi yapma
+	Working RGB: {name}	Çalışma RGB'si: {name}
+	Working CMYK: {name}	Çalışma CMYK'sı: {name}
 	Workspace	Çalışma Alanı
 	Workspace {i}	Çalışma Alanı {i}
 	Wrinkle Tool	Kırışıklık Aracı
@@ -5865,7 +5871,7 @@ theme	Appearance	Görünüm
 	Drawer menu	Çekmece menüsü
 	Toolbar: Show Controls	Araç Çubuğu: Kontrolleri Göster
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control fillStroke, coloring, drawMode veya screenMode olmalıdır
-@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	bilinmeyen kontrol `{name}`: fillStroke, colouring,drawMode veya screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	bilinmeyen kontrol `{name}`: fillStroke, coloring, drawMode veya screenMode
 @msg	give a fraction `t` from 0 to 1	0'dan 1'e kadar bir `t` kesri verin
 @msg	give the path `id`	`id` yolunu ver
 @msg	invalid stroke widths	geçersiz kontur genişlikleri
@@ -5878,6 +5884,9 @@ theme	Appearance	Görünüm
 	Softness	Yumuşaklık
 	Ambient Light	Ortam Işığı
 	Light behind the object	Nesnenin arkasındaki ışık
+	Move Light to Back	Işığı Arkaya Taşı
+	Move Light to Front	Işığı Öne Taşı
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Işığı taşımak için sürükleyin. Ok tuşları odaktaki ışığı taşır; Shift ile 15° adımlarla.
 	Shadows	Gölgeler
 	Distance from Object	Nesneden uzaklık
 	Shadow Bounds	Gölge sınırları
@@ -5885,7 +5894,7 @@ theme	Appearance	Görünüm
 	Below Object	Nesnenin altında
 	Registration:	Kayıt:
 	Dimension	Boyut
-	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : Gerçek boyut — 1:10 etiketler sayfada 10 adet olarak 1 adettir.
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : gerçek boyut — 1:10, sayfadaki 1 birimi 10 olarak etiketler.
 	Preview (1 inch on the page)	Önizleme (sayfada 1 inç)
 	Set as Default	Varsayılan Olarak Ayarla
 	 out from a highlighted edge to place its dimension  |  	 boyutunu yerleştirmek için vurgulanan kenardan dışarı |  
@@ -5923,7 +5932,7 @@ theme	Appearance	Görünüm
 @msg	Measured segment no longer exists	Ölçülen segment artık mevcut değil
 @msg	Non-finite dimension	Sonlu olmayan boyut
 @msg	Only linear dimensions are horizontal or vertical	Yalnızca doğrusal boyutlar yatay veya dikey olabilir
-@msg	Scale must be drawing:real, for example 1:10	Ölçek çizim olmalıdır:gerçek, örneğin 1:10
+@msg	Scale must be drawing:real, for example 1:10	Ölçek çizim:gerçek biçiminde olmalıdır, örneğin 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Ölçek oranı 1:1000000 ile 1000000:1 arasında olmalıdır
 @msg	Second measured segment no longer exists	Ölçülen ikinci segment artık mevcut değil
 @msg	Unknown dimension mode	Bilinmeyen boyut modu
@@ -8568,6 +8577,8 @@ axis	Y Axis	Y ekseni
 	Create New Set	Yeni Set Oluştur
 	Stop Global Edit	Genel Düzenlemeyi Durdur
 	Global Edit Options	Genel Düzenleme Seçenekleri
+	Select Similar Objects	Benzer Nesneleri Seç
+	Select Similar Options	Benzer Seçimi Seçenekleri
 	Leave Out of Global Edit	Genel Düzenlemenin Dışında Bırak
 	Match	Eşleştir
 	On Artboards	Çalışma Yüzeylerinde
@@ -8690,6 +8701,13 @@ axis	Y Axis	Y ekseni
 	Graphite Pencil	Grafit Kalem
 	Wax Crayon	Mum Boya
 	Charcoal Dust	Kömür Tozu
+
+# Original procedural circuit brushes.
+	Tech Circuit	Teknik devreler
+	Circuit Trace	Devre izi
+	Bus Lines	Veriyolu hatları
+	Terminal Nodes	Bağlantı düğümleri
+
 	Notched Ribbon	Çentikli Şerit
 	Double Line	Çift Çizgi
 	Wave	Dalga
