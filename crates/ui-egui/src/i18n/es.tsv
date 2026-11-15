@@ -7752,9 +7752,6 @@ breakText	Glyphs	Glifos
 @msg	`alignOn` must be a string	`alignOn` debe ser una cadena
 @msg	`align` must be a string	`align` debe ser una cadena
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` para este cuadro de diálogo {kind} debe ser uno de: {_1}
-@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tiene más de {MAX_ANSWERS} respuestas
-@msg	`answers` is larger than 1 MiB	`answers` ocupa más de 1 MiB
-@msg	`answers` must be a list of answers	`answers` debe ser una lista de respuestas
 @msg	`artboard` must be the index of an artboard of the document	`artboard` debe ser el índice de una mesa de trabajo del documento
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` debe ser [x, y]
 @msg	`artboards` names an artboard the document does not have	`artboards` nombra una mesa de trabajo que el documento no tiene
@@ -7924,10 +7921,6 @@ breakText	Glyphs	Glifos
 @msg	invalid regular expression flag '{_1}'	indicador de expresión regular no válido '{_1}'
 @msg	invalid regular expression: {m}	expresión regular no válida: {m}
 @msg	invalid time value	valor de tiempo no válido
-@msg	is a confirm's answer, whose `value` must be true or false	es la respuesta de un confirm, cuyo `value` debe ser true o false
-@msg	is a prompt's answer, whose `value` must be a string or null	es la respuesta de un prompt, cuyo `value` debe ser una cadena o null
-@msg	is an alert's answer, whose `value` must be "ok"	es la respuesta de un alert, cuyo `value` debe ser "ok"
-@msg	is longer than 16 KiB	ocupa más de 16 KiB
 @msg	it draws its image through a clipping path	dibuja su imagen a través de un trazado de recorte
 @msg	it draws no image	no dibuja ninguna imagen
 @msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	ocupa más de {MAX_DICTIONARY_FILE_BYTES} bytes
@@ -7945,9 +7938,6 @@ breakText	Glyphs	Glifos
 @msg	localize: the first argument must be a localization object or a string	localize: el primer argumento debe ser un objeto de localización o una cadena
 @msg	missing `picks`	falta `picks`
 @msg	missing `word`	falta `word`
-@msg	must be an object with `kind` and `value`	debe ser un objeto con `kind` y `value`
-@msg	must have `kind` alert, confirm or prompt	debe tener `kind` alert, confirm o prompt
-@msg	must have exactly `kind` and `value`	debe tener exactamente `kind` y `value`
 @msg	needs a closing quote after the name	necesita unas comillas de cierre después del nombre
 @msg	needs a name	necesita un nombre
 @msg	needs a name of at most 64 bytes	necesita un nombre de como máximo 64 bytes
