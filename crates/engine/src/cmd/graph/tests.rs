@@ -588,6 +588,48 @@ fn paint_edits_of_design_art_alone_leave_the_defaults() {
     assert_ne!(defaults(&s), was);
 }
 
+/// A spread or a negative aspect for the art of a graph design alone changes nothing, whatever kind of gradient the
+/// default fill is; a bad value is still an error.
+#[test]
+fn gradient_edits_of_design_art_alone_skip_the_default_kind_checks() {
+    let (mut s, _, _, art, _) = design_art();
+    for (default, p) in [("freeform", json!({"spread": "repeat"})), ("linear", json!({"aspect": -50}))] {
+        s.execute("select.set", &json!({"ids": []})).unwrap();
+        s.execute("paint.editGradient", &json!({"kind": default})).unwrap();
+        let (was, art_was, steps) = (format!("{:?}", s.paint), look(&s, art), s.doc().unwrap().history.undo.len());
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        s.execute("paint.editGradient", &q).unwrap_or_else(|e| panic!("{q}: {e}"));
+        assert_eq!(format!("{:?}", s.paint), was, "{default}");
+        assert_eq!(look(&s, art), art_was, "{default}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{default}");
+    }
+    assert!(s.execute("paint.editGradient", &json!({"ids": [art.0], "spread": "sideways"})).is_err());
+}
+
+/// Invert given a group around a graph recolors the group's own fill and the series marks, and leaves the art of a
+/// graph design as it is. With `target: "contents"` the group's own fill stays as it is.
+#[test]
+fn invert_of_a_group_recolors_its_own_fill_and_leaves_design_art() {
+    let (mut s, graph, _, art, mark) = design_art();
+    s.execute("select.set", &json!({"ids": [graph.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.addFill", &json!({"ids": [group.0]})).unwrap();
+    let row = top_row(&s, group, true);
+    s.execute("paint.setFill", &json!({"ids": [group.0], "item": row, "color": "#ff0000"})).unwrap();
+    let own = |s: &Session| format!("{:?}", s.doc().unwrap().doc.node(group).unwrap().appearance.items);
+    let (own_was, art_was, mark_was) = (own(&s), look(&s, art), look(&s, mark));
+    s.execute("paint.invert", &json!({"ids": [group.0]})).unwrap();
+    assert_ne!(own(&s), own_was, "the group's own fill");
+    assert_ne!(look(&s, mark), mark_was);
+    assert_eq!(look(&s, art), art_was);
+    let (own_was, mark_was) = (own(&s), look(&s, mark));
+    s.execute("paint.invert", &json!({"ids": [group.0], "target": "contents"})).unwrap();
+    assert_eq!(own(&s), own_was, "target: contents");
+    assert_ne!(look(&s, mark), mark_was);
+    assert_eq!(look(&s, art), art_was);
+}
+
 /// `transparency.set` without `item` refuses the art of a graph design in a series, and given it with other objects
 /// sets only theirs.
 #[test]

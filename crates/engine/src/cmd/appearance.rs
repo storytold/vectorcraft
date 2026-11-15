@@ -389,7 +389,7 @@ pub(crate) fn items_per_target(d: &vectorcraft_doc::Document, ids: &[NodeId], id
 }
 
 /// Whether the `target` param asks for the contents of groups and layers (see the module docs).
-fn targets_contents(p: &Value) -> Result<bool> {
+pub(crate) fn targets_contents(p: &Value) -> Result<bool> {
     match p.get("target") {
         None | Some(Value::Null) => Ok(false),
         Some(v) => match v.as_str() {

@@ -558,7 +558,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let for_default = match p.get("aspect").and_then(Value::as_f64) {
-        Some(a) if a < 0.0 && !ids.is_empty() && default_kind != Some(GradientKind::Conic) => {
+        Some(a) if a < 0.0 && selected && default_kind != Some(GradientKind::Conic) => {
             let mut q = p.clone();
             q["aspect"] = json!(-a);
             std::borrow::Cow::Owned(q)
@@ -568,7 +568,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     // A spread for selected gradients leaves a freeform default (which has no ends) as it is.
     let spreads = matches!(spread_param(p), Ok(Some(sp)) if !sp.is_pad());
     let for_default = match for_default {
-        q if spreads && !ids.is_empty() && default_kind == Some(GradientKind::Freeform) => {
+        q if spreads && selected && default_kind == Some(GradientKind::Freeform) => {
             let mut q = q.into_owned();
             if let Some(o) = q.as_object_mut() {
                 o.remove("spread");

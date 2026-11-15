@@ -1107,14 +1107,31 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
             (json!({ "changed": changed }), Some(index))
         }
         // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
-        // Design art inside a given graph or series group is left out too.
+        // A given group's own fills and strokes change with the objects inside it, except with `target: "contents"`; other
+        // objects change as their paint targets do (a compound path's member stands for the compound path). Design art
+        // inside a given graph or series group is left out.
         ItemTarget::Top => {
-            let leaves = targets;
-            if leaves.is_empty() {
+            let contents = super::appearance::targets_contents(p)?;
+            let mut roots = vec![];
+            for id in &ids {
+                let group = !contents
+                    && s.doc()?.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !n.is_compound_shape());
+                if group {
+                    roots.push(*id);
+                } else {
+                    roots.extend(leaf_targets(s, &[*id])?);
+                }
+            }
+            let d = &s.doc()?.doc;
+            let mut seen = std::collections::HashSet::new();
+            roots.retain(|id| seen.insert(*id));
+            let roots = super::appearance::drop_design_art(d, roots);
+            if roots.is_empty() {
                 return Ok(json!({ "changed": 0 }));
             }
-            let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": leaves.iter().map(|i| i.0).collect::<Vec<_>>()});
-            (super::colorcmds::recolor(s, &q, cmd, label, f)?, None)
+            let art = super::appearance::design_art_in(d, &roots).into_iter().collect();
+            let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": roots.iter().map(|i| i.0).collect::<Vec<_>>()});
+            (super::colorcmds::recolor_except(s, &q, cmd, label, f, art)?, None)
         }
     };
     let shown_ids = if shown_item.is_some() { ids } else { super::appearance::drop_design_art(&s.doc()?.doc, leaf_targets(s, &ids)?) };
