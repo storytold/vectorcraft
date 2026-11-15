@@ -43,6 +43,7 @@ pub(crate) mod graph;
 mod halftone;
 pub mod help;
 pub mod importmatches;
+mod info;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
@@ -344,6 +345,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(docmenu::specs());
         v.extend(variablecmds::specs());
         v.extend(docinfo::specs());
+        v.extend(info::specs());
         v.extend(panelcmds::specs());
         v.extend(artboardalign::specs());
         v.extend(buildcmds::specs());
