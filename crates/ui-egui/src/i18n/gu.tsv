@@ -601,7 +601,7 @@
 	Close Path…	પાથ બંધ કરો…
 	Close or Join	બંધ કરો અથવા જોડો
 	Close paths when ends are within:	છેડા આ અંતરમાં હોય ત્યારે પાથ બંધ કરો:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ ખુલ્લી રાખે છે.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ પણ બંધ કરે છે.
 	Closing bracket with no opening one	ખુલતા કૌંસ વગરનો બંધ થતો કૌંસ
 	Coincidence:	સંયોગ:
 	Collapse Panel Group	પેનલ ગ્રૂપ સંકોચો

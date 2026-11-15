@@ -753,7 +753,7 @@ antiAlias	Sharp	Nítid
 	Close Panel	Tanca el panell
 	Close Path	Tanca el traçat
 	Close paths when ends are within:	Tanca els traçats quan els extrems siguin a menys de:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Tanca els extrems circulars dels perfils oberts. Els escombrats parcials mantenen oberts els costats tallats.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Tanca els extrems circulars dels perfils oberts. Els escombrats parcials també tanquen els costats tallats.
 	Closed	Tancat
 	Closing bracket with no opening one	Delimitador de tancament sense un d’obertura
 	Clumped	Agrupat

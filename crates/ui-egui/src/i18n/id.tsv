@@ -5584,7 +5584,7 @@ mark-style	Japanese	Jepang
 @msg	Unknown dimension orientation	Orientasi dimensi tidak dikenal
 @msg	Unknown dimension style	Gaya dimensi tidak dikenal
 @msg	Unknown unit	Satuan tidak dikenal
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Menutup ujung melingkar profil terbuka. Sapuan parsial mempertahankan sisi potongannya tetap terbuka.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Menutup ujung melingkar profil terbuka. Sapuan parsial juga menutup sisi potongannya.
 	Darkness	Kegelapan
 	Isolate Selected Object	Isolasikan objek terpilih
 	Keep selected	Tetap terseleksi

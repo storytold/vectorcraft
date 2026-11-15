@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, Node, NodeId, NodeKind};
-use vectorcraft_geom::{PathData, PathEl, Point, Rect, Vec2};
+use vectorcraft_geom::{FillRule, PathData, PathEl, Point, Rect, Vec2};
 use vectorcraft_three_d::{Edge, Revolve, SolidFaces};
 
 use crate::solids::wireframe::WireFace;
@@ -105,6 +105,7 @@ pub fn revolve_options(p: &Value) -> Revolve {
         shade: flag(p, "shade", true),
         smooth_shading: true,
         cap_ends: flag(p, "cap", true),
+        fill_rule: FillRule::NonZero,
         curve_samples: None,
         map_surface: false,
     }
@@ -222,7 +223,7 @@ fn check_shadow<'a>(p: &Value, paths: impl IntoIterator<Item = &'a PathData>, b:
         return Ok(());
     }
     let mut caster = vectorcraft_three_d::ShadowCaster::new();
-    paths.into_iter().try_for_each(|path| caster.revolve(path, vectorcraft_geom::FillRule::NonZero, b, options).map(|_| ()))
+    paths.into_iter().try_for_each(|path| caster.revolve(path, options.fill_rule, b, options).map(|_| ()))
 }
 
 /// [`validate_revolve`] for a Revolve with parameters `p` at index `index` of the effects of
@@ -380,7 +381,7 @@ fn cast_surface(
         None => {
             #[cfg(test)]
             crate::solids::SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
-            caster.revolve(path, vectorcraft_geom::FillRule::NonZero, b, options)
+            caster.revolve(path, options.fill_rule, b, options)
         }
     }
 }
@@ -411,7 +412,7 @@ fn group_shadow(
         if ink.opacity <= 0.0 {
             continue;
         }
-        let faces = cast_surface(&mut caster, &s.path, b, options, kept)?;
+        let faces = cast_surface(&mut caster, &s.path, b, Revolve { fill_rule: s.rule, ..options }, kept)?;
         cast.push((s.scopes.as_slice(), ink, faces));
     }
     Ok(crate::solids::shadow::scoped_art(id, &caster, settings, cast, crate::solids::has_masks(shapes)))
@@ -607,13 +608,16 @@ fn in_order<T>(items: Vec<T>, order: &[usize]) -> Vec<T> {
     order.iter().filter_map(|&k| slots.get_mut(k).and_then(Option::take)).collect()
 }
 
-/// A surface of one object about the bounds of `path`, built with options derived from `fx`, and
-/// when `fx` casts a shadow from it, the faces it is cast from ([`surface`]). `copies` is the count
-/// [`surface`] adds to; its graphics take the symbols of `doc`.
+/// A surface of one object about the bounds of `path`, filled with `rule`, built with options
+/// derived from `fx` ([`rule_options`]), and when `fx` casts a shadow from it, the faces it is cast
+/// from ([`surface`]). `copies` is the count [`surface`] adds to; its graphics take the symbols of
+/// `doc`.
+#[allow(clippy::too_many_arguments)]
 fn object_surface(
     doc: Option<&Document>,
     n: &Node,
     path: &PathData,
+    rule: FillRule,
     fx: &Effect,
     item: &AppearanceItem,
     expand: bool,
@@ -622,7 +626,13 @@ fn object_surface(
     let b = path.bounds()?;
     let (paint, opacity, blend) = paint_of(item);
     let cast = casts(fx, opacity);
-    surface(doc, n, path, b, fx_options(fx), fx, paint, opacity, blend, expand, copies, cast).map(|(_, art, kept)| (art, kept))
+    surface(doc, n, path, b, rule_options(fx, rule), fx, paint, opacity, blend, expand, copies, cast).map(|(_, art, kept)| (art, kept))
+}
+
+/// The options effect `fx` sweeps the surface of a profile filled with `rule` with: its cut sides
+/// leave open the holes `rule` leaves in the profile.
+fn rule_options(fx: &Effect, rule: FillRule) -> Revolve {
+    Revolve { fill_rule: rule, ..fx_options(fx) }
 }
 
 /// The paint of a graphic's solid color `c` on `face`, shaded as the face shades a solid fill of
@@ -750,11 +760,11 @@ pub(crate) fn revolve_face_paths(doc: Option<&Document>, n: &Node) -> Result<cra
         let options = shared_options(&shapes, fx_options(fx))?;
         let mut out = vec![];
         for s in shapes.iter().filter(|s| surface_item(&s.items).is_some()) {
-            out.extend(faces(&s.path, b, fx, options)?);
+            out.extend(faces(&s.path, b, fx, Revolve { fill_rule: s.rule, ..options })?);
         }
         return Ok((out, group_shadow(n.id, fx, &shapes, b, options, vec![])?));
     }
-    let (path, _) = object_profile(n, "Revolve")?;
+    let (path, rule) = object_profile(n, "Revolve")?;
     let ctx = GeomContext::of(n);
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id)) {
         let Some(fx) = n.appearance.effects.get(index) else { return Ok((vec![], vec![])) };
@@ -762,8 +772,8 @@ pub(crate) fn revolve_face_paths(doc: Option<&Document>, n: &Node) -> Result<cra
         let paints = solid_paints(n);
         let item = surface_item(&paints).ok_or("the revolved object has no fill or stroke")?;
         let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
-        let surface = faces(&path, b, fx, fx_options(fx))?;
-        let shadow = shadow_of(n.id, fx, &path, item, b, fx_options(fx), None)?;
+        let surface = faces(&path, b, fx, rule_options(fx, rule))?;
+        let shadow = shadow_of(n.id, fx, &path, item, b, rule_options(fx, rule), None)?;
         return Ok((surface, shadow.into_iter().map(Arc::new).collect()));
     }
     let path = geometry(&path, &n.appearance.effects, &ctx);
@@ -774,7 +784,7 @@ pub(crate) fn revolve_face_paths(doc: Option<&Document>, n: &Node) -> Result<cra
         {
             let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
             let b = p.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
-            let surface = faces(&p, b, fx, fx_options(fx))?;
+            let surface = faces(&p, b, fx, rule_options(fx, rule))?;
             out.extend(crate::solids::wireframe::reshaped(surface, item.effects().get(index + 1..).unwrap_or_default(), &GeomContext { doc, ..ctx }));
         }
     }
@@ -824,9 +834,9 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
         let paints = solid_paints(n);
         let item = surface_item(&paints)?;
         let expand = expand && !n.appearance.effects.iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-        let (surface, kept) = object_surface(doc, n, &path, fx, item, expand, &mut copies)?;
+        let (surface, kept) = object_surface(doc, n, &path, rule, fx, item, expand, &mut copies)?;
         if let Some(b) = path.bounds()
-            && let Some(shadow) = shadow_of(n.id, fx, &path, item, b, fx_options(fx), kept).ok()?
+            && let Some(shadow) = shadow_of(n.id, fx, &path, item, b, rule_options(fx, rule), kept).ok()?
         {
             children.push(Arc::new(shadow));
         }
@@ -850,10 +860,10 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
                 let fx = item.effects().get(index)?;
                 let p = geometry(&path, item.effects().get(..index)?, &ctx.item(original));
                 let expand = expand && !item.effects().iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-                let (mut art, kept) = object_surface(doc, n, &p, fx, item, expand, &mut copies)?;
+                let (mut art, kept) = object_surface(doc, n, &p, rule, fx, item, expand, &mut copies)?;
                 art.appearance.effects = item.effects().iter().skip(index + 1).filter(|e| !is_revolve(&e.id)).cloned().collect();
                 if let Some(b) = p.bounds()
-                    && let Some(mut shadow) = shadow_of(n.id, fx, &p, item, b, fx_options(fx), kept).ok()?
+                    && let Some(mut shadow) = shadow_of(n.id, fx, &p, item, b, rule_options(fx, rule), kept).ok()?
                 {
                     shadow.appearance.effects = art.appearance.effects.clone();
                     shadows.push(Arc::new(shadow));
@@ -1021,6 +1031,7 @@ fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
         let expand = expand && s.scopes.is_empty();
         let doc = doc.filter(|_| longest == Some(k));
         let cast = casts(fx, opacity * s.opacity);
+        let options = Revolve { fill_rule: s.rule, ..options };
         let (depths, art, faces) = surface(doc, n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies, cast)?;
         surfaces.push((depths, art, s.scopes.as_slice()));
         kept.push(faces);
@@ -1771,7 +1782,7 @@ mod tests {
                 let mut fx = crate::new_effect(id, &json!({})).unwrap();
                 fx.params = params.clone();
                 let n = profile_node();
-                let (path, _) = profile(&n).unwrap();
+                let (path, rule) = profile(&n).unwrap();
                 let b = path.bounds().unwrap();
                 let mut half = n.clone();
                 if let AppearanceItem::Fill(f) = &mut half.appearance.items[0] {
@@ -1779,9 +1790,9 @@ mod tests {
                 }
                 for n in [n, half] {
                     let item = surface_item(&n.appearance.items).unwrap();
-                    let (_, kept) = object_surface(None, &n, &path, &fx, item, false, &mut Copies::default()).unwrap();
-                    let drawn = shadow_of(n.id, &fx, &path, item, b, fx_options(&fx), kept).unwrap();
-                    let alone = shadow_of(n.id, &fx, &path, item, b, fx_options(&fx), None).unwrap();
+                    let (_, kept) = object_surface(None, &n, &path, rule, &fx, item, false, &mut Copies::default()).unwrap();
+                    let drawn = shadow_of(n.id, &fx, &path, item, b, rule_options(&fx, rule), kept).unwrap();
+                    let alone = shadow_of(n.id, &fx, &path, item, b, rule_options(&fx, rule), None).unwrap();
                     assert!(alone.is_some() || id == CLASSIC_REVOLVE, "{id} {params}");
                     assert_eq!(format!("{drawn:?}"), format!("{alone:?}"), "{id} {params}");
                 }

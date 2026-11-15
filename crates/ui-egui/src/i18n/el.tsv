@@ -6030,7 +6030,7 @@ effect	Points	Σημεία
 	By Object	Ανά αντικείμενο
 	Check an artboard to save.	Επιλέξτε έναν πίνακα σχεδίασης για αποθήκευση.
 	Clear All	Εκκαθάριση όλων
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Κλείσιμο των κυκλικών άκρων των ανοιχτών προφίλ. Οι μερικές περιστροφές κρατούν ανοιχτές τις πλευρές τομής τους.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Κλείσιμο των κυκλικών άκρων των ανοιχτών προφίλ. Οι μερικές περιστροφές κλείνουν επίσης τις πλευρές τομής τους.
 	Color Panel Options	Επιλογές πίνακα χρώματος
 	Color blindness – Tritanopia-type	Αχρωματοψία – τύπου τριτανοπίας
 	Create Dimension	Δημιουργία διάστασης

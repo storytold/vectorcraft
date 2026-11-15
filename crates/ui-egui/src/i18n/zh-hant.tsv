@@ -5856,7 +5856,7 @@ lighting	Light	光源
 	X:	X：
 	Y:	Y：
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	封閉開放輪廓的圓形端部。部分旋轉的切割側面保持開放。
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	封閉開放輪廓的圓形端部。部分旋轉的切割側面也會封閉。
 	Distance	距離
 	Make Image Dynamic	使影像動態化
 	Import Data Sets…	匯入資料集…

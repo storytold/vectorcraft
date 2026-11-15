@@ -5780,7 +5780,7 @@ theme	Appearance	Giao diện
 @msg	Unknown dimension style	Kiểu kích thước không xác định
 @msg	Unknown unit	Đơn vị không xác định
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên vẫn mở.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Đóng các đầu tròn của biên dạng mở. Khi xoay một phần, các mặt cắt bên cũng được đóng.
 	Distance	Khoảng cách
 @msg	span must be "object" or "selection", got {v}	span phải là "object" hoặc "selection", không phải {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" đặt một `gradient`, không phải mẫu màu

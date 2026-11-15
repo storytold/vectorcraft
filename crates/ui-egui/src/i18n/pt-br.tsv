@@ -6057,7 +6057,7 @@ mark-style	Japanese	Japonesas
 	Create Dimension	Criar Cota
 	Update Dimensions	Atualizar Cotas
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Fecha as extremidades circulares dos perfis abertos. Giros parciais mantêm as faces de corte abertas.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Fecha as extremidades circulares dos perfis abertos. Giros parciais também fecham as faces de corte.
 @msg	span must be "object" or "selection", got {v}	span deve ser "object" ou "selection", não {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" posiciona um `gradient`, não uma amostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" posiciona um degradê: informe `gradient`

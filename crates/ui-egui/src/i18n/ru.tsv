@@ -5782,7 +5782,7 @@ lighting	Light	Свет
 @msg	Unknown dimension style	Неизвестный стиль размера
 @msg	Unknown unit	Неизвестная единица
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Закрывает круглые торцы открытых профилей. При неполном вращении боковые срезы остаются открытыми.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Закрывает круглые торцы открытых профилей. При неполном вращении боковые срезы тоже закрываются.
 	Distance	Расстояние
 @msg	span must be "object" or "selection", got {v}	span должен быть "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" размещает `gradient`, а не образец

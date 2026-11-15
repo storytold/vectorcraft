@@ -7988,7 +7988,7 @@ mark-style	Japanese	Japans
 @msg	Unknown dimension orientation	Onbekende maatlijnrichting
 @msg	Unknown dimension style	Onbekende maatlijnstijl
 @msg	Unknown unit	Onbekende eenheid
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sluit de ronde uiteinden van open profielen. Gedeeltelijke omwentelingen houden hun afgesneden zijden open.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Sluit de ronde uiteinden van open profielen. Gedeeltelijke omwentelingen sluiten ook hun afgesneden zijden.
 	Darkness	Donkerte
 	Isolate Selected Object	Geselecteerd object isoleren
 	Keep selected	Geselecteerd houden

@@ -5756,7 +5756,7 @@ lighting	Light	광원
 @msg	Unknown dimension style	알 수 없는 치수 스타일
 @msg	Unknown unit	알 수 없는 단위
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면이 열린 상태로 유지됩니다.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면도 닫힙니다.
 	Distance	거리
 @msg	span must be "object" or "selection", got {v}	span은 "object" 또는 "selection"이어야 합니다. {v}은(는) 사용할 수 없습니다
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection"은 `gradient`를 배치합니다. 견본은 배치할 수 없습니다

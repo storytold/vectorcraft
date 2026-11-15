@@ -528,7 +528,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   across the shape) is refused because the 3D surface is too complex; a closed path of 65,536 points round a
   circle builds.
 - **3D (Classic)**: Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) are built, with their surface
-  types and blend steps. Revolve (Classic) sweeps the surface Revolve sweeps, at 64 segments for a full turn, and draws
+  types and blend steps. Revolve (Classic) sweeps the surface Revolve sweeps, with Cap closing a partial sweep's cut
+  sides ([revolve.md](revolve.md)), at 64 segments for a full turn, and draws
   every face back to front, so it has no Draw Hidden Faces setting. Rotate (Classic) turns the plane Rotate turns, seen
   from either side, with the No Shading and Diffuse surfaces only. The track cube, map art, Turntable and 3D export
   are separate, unbuilt items.

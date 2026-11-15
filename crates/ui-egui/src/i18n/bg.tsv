@@ -5817,7 +5817,7 @@ theme	Appearance	Външен вид
 @msg	Unknown dimension orientation	Непозната ориентация на размера
 @msg	Unknown dimension style	Непознат стил на размера
 @msg	Unknown unit	Непозната единица
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Затваря кръговите краища на отворени профили. При частично завъртане срязаните страни остават отворени.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Затваря кръговите краища на отворени профили. При частично завъртане срязаните страни също се затварят.
 
 # Strings added with Drop Shadow Darkness, Isolate Selected Object, Pencil Keep selected, Sample Color from Screen, Tritanopia proofing, Panels Except Tools and Control
 	Darkness	Затъмняване
