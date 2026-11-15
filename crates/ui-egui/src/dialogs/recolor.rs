@@ -599,8 +599,9 @@ fn apply_params(d: &Dialog) -> Value {
 /// aren't selected shows while it is on (VectorCraft's own amount: [`Color::tinted`]).
 const FIND: &str = "findColors";
 const FIND_DIM: f32 = 0.25;
-/// The lighter tints, a percent apart, tried when a dimmed color is one a selected row lists.
-const FIND_TRIES: usize = 20;
+/// The tints tried when a dimmed color is one a selected row lists: [`FIND_DIM`] and each lighter
+/// one a percent apart, down to 1%.
+const FIND_TRIES: usize = 25;
 /// The colors of the art that the rows leave out (Preserve White, Black and Grays), as
 /// `recolor.reduce` returned them.
 const PRESERVED: &str = "__preserved";
@@ -2299,6 +2300,15 @@ mod tests {
         let p = find_params(&d).unwrap();
         let to = color_value(&p["commands"][0]["params"]["map"]["rgb 0 0 255"]).unwrap();
         assert_eq!(to.to_hex(), "#c2c2ff", "{p}");
+        // When the twenty tints from 25% through 6% are all listed, the 5% tint is taken.
+        let blue = color_value(&json!("rgb 0 0 255")).unwrap();
+        let tint = |n: usize| key(&blue.tinted(FIND_DIM - n as f32 * 0.01));
+        let mut from = vec![json!("rgb 255 0 0")];
+        from.extend((0..20).map(tint));
+        rs[0]["from"] = json!(from);
+        d.fields.insert("rows".into(), json!(rs));
+        let p = find_params(&d).unwrap();
+        assert_eq!(p["commands"][0]["params"]["map"]["rgb 0 0 255"], tint(20), "{p}");
         // Another key of the same hex matches only itself, so the tint is kept.
         rs[0]["from"] = json!(["rgb 255 0 0", "rgb 191 191 255"]);
         d.fields.insert("rows".into(), json!(rs));
