@@ -127,6 +127,29 @@ fn the_mesh_closes_a_cut_side_that_crosses_itself_with_both_of_its_loops() {
 }
 
 #[test]
+fn a_region_thinner_than_a_millionth_of_a_point_is_debris_and_closes_no_cut_side() {
+    // 0.0000005 pt wide and 80 pt tall, beside a square 40 pt across.
+    let path = profile("M40 10 L40.0000005 10 L40.0000005 90 L40 90 Z M50 10 L90 10 L90 50 L50 50 Z");
+    let bounds = path.bounds().unwrap();
+    let o = Revolve { angle: 90.0, offset: 10.0, ..options() };
+    let mesh = revolve_mesh(&path, FillRule::NonZero, bounds, o).unwrap();
+    let start = area_facing(&mesh, [0.0, 0.0, -1.0]);
+    assert!((start - 40.0 * 40.0).abs() < 1e-6, "{start}");
+}
+
+#[test]
+fn cut_sides_whose_holes_cannot_be_found_within_the_limit_are_refused() {
+    // 2,100 squares on top of each other: each test of a point meets every square.
+    let square = "M20 10 L60 10 L60 50 L20 50 Z ";
+    let path = profile(&square.repeat(2100));
+    let bounds = path.bounds().unwrap();
+    let o = Revolve { angle: 90.0, offset: 10.0, ..options() };
+    assert_eq!(revolve(&path, bounds, o).err().as_deref(), Some(TOO_COMPLEX_PROFILE));
+    // Hollow, the sweep has no cut sides to close.
+    assert!(revolve(&path, bounds, Revolve { cap_ends: false, ..o }).is_ok());
+}
+
+#[test]
 fn visibility_keeps_both_of_two_separate_regions_wound_opposite_ways() {
     let path = profile("M20 10 L30 10 L30 50 L20 50 Z M40 10 L40 50 L50 50 L50 10 Z");
     let bounds = path.bounds().unwrap();

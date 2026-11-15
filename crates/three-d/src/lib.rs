@@ -1089,6 +1089,7 @@ fn cut_region(points: &[Point], closed: bool, axis: f64) -> Vec<Vec<Point>> {
         return vec![];
     }
     let crossed = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&ring, true)]);
+    // A loop thinner than 0.000001 pt is left out, as the solids' rings leave out such debris.
     match vectorcraft_pathops::try_unite_all_with(&[(&crossed, FillRule::NonZero)], 1e-6) {
         Ok(loops) => loops
             .subpaths
@@ -1096,7 +1097,8 @@ fn cut_region(points: &[Point], closed: bool, axis: f64) -> Vec<Vec<Point>> {
             .map(|s| s.anchors.iter().map(|a| a.p).collect::<Vec<_>>())
             .filter(|l| l.len() >= 3 && ring_area(l).abs() > 1e-10)
             .collect(),
-        // Past the boolean's limits, the region is kept as the profile draws it.
+        // Past the boolean's limits the region is kept as the profile draws it, as the solids'
+        // rings keep theirs.
         Err(_) if ring_area(&ring).abs() > 1e-10 => vec![ring],
         Err(_) => vec![],
     }
@@ -1204,13 +1206,12 @@ fn oriented(regions: impl IntoIterator<Item = (Vec<Vec<Point>>, bool)>) -> Vec<V
 
 /// Whether each of the closed contours `contours` of `path` walls a hole under `rule`: the fill is
 /// outside it and not inside at most of its segments' middles. An open contour, or every contour
-/// when there is only one or the search passes its limits, walls none.
-fn holes_of(path: &PathData, rule: FillRule, contours: &[usize]) -> Vec<bool> {
-    let none = vec![false; contours.len()];
+/// when there is only one, walls none. An error when the search passes its limits.
+fn holes_of(path: &PathData, rule: FillRule, contours: &[usize]) -> Result<Vec<bool>, String> {
     if contours.len() < 2 {
-        return none;
+        return Ok(vec![false; contours.len()]);
     }
-    let Ok(mut search) = HoleSearch::new(path, rule) else { return none };
+    let mut search = HoleSearch::new(path, rule)?;
     let mut out = Vec::with_capacity(contours.len());
     for &k in contours {
         let Some(sp) = path.subpaths.get(k).filter(|sp| sp.closed) else {
@@ -1219,14 +1220,11 @@ fn holes_of(path: &PathData, rule: FillRule, contours: &[usize]) -> Vec<bool> {
         };
         let mut walls = 0;
         for segment in 0..sp.anchors.len() {
-            match search.is_hole(k, sp.segment(segment).eval(0.5)) {
-                Ok(hole) => walls += usize::from(hole),
-                Err(_) => return none,
-            }
+            walls += usize::from(search.is_hole(k, sp.segment(segment).eval(0.5))?);
         }
         out.push(walls * 2 > sp.anchors.len());
     }
-    out
+    Ok(out)
 }
 
 impl CutRegions {
@@ -1279,7 +1277,7 @@ impl CutRegions {
             lose_mesh(draw, mesh, lost, e)?;
         }
         let contours: Vec<usize> = self.drawn.iter().map(|(_, k)| *k).collect();
-        let holes = holes_of(path, rule, &contours);
+        let holes = holes_of(path, rule, &contours)?;
         cut_faces(at, &oriented(self.drawn.iter().map(|(r, _)| r.clone()).zip(holes)), eye, light)
     }
 }
