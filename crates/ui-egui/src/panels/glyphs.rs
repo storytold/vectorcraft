@@ -975,7 +975,7 @@ fn alternates_popup(ui: &mut Ui, face: &vectorcraft_text::FontFace, c: Option<ch
 /// The cell's own glyph inserts the character as a double-click on the cell does
 /// ([`insert_character`]). An alternate needs the Type tool's caret or selection in text set in
 /// `face`: when the selection is exactly one `c` in one type object, that character is drawn with
-/// the glyph; else `c` goes in at the caret, in place of the selection (with the rest of a
+/// the glyph, and the selection follows it to the frame the text flows it to; else `c` goes in at the caret, in place of the selection (with the rest of a
 /// threaded story that Select All selected), and is drawn with it, the two as one undo step. The
 /// glyph goes on as a double-click in Show › Alternates for Current Selection puts it
 /// ([`draw_selected_with`]). An Arabic presentation form goes in as its base letter, as a
@@ -1012,7 +1012,12 @@ fn insert_alternate(app: &mut VectorcraftApp, ctx: &egui::Context, face: &vector
     let story = super::character::text_story(app).unwrap_or_default();
     let one = story.is_empty() && selected_target(app).is_some_and(|t| t.ch == c && (a.min(b), a.max(b)) == (t.byte, t.byte + c.len_utf8()));
     if one {
-        draw_selected_with(app, face, c, picked);
+        let Some(at) = app.session.active().map(|st| story_start(&st.doc, editing, &[]) + a.min(b)) else { return };
+        if draw_selected_with(app, face, c, picked) {
+            // The glyph can change the character's width and flow it on to the next frame: the
+            // selection follows it there.
+            select_in_story(app, (editing, at), c, (0, c.len_utf8()));
+        }
         return;
     }
     // Inside an undo group that is already open, the insertion and the glyph are part of that
@@ -2253,6 +2258,56 @@ mod tests {
         assert_eq!((plain(&app, a), plain(&app, b)), ("a中".to_string(), "a中中".to_string()), "status: {}", app.ui.status);
         assert_eq!(glyph_ids(&app, &json!(b))[0], u2);
         assert_eq!(super::super::character::text_editing(&app), Some((NodeId(b), 1, 1)), "the caret is after the character");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// A pick on the selected last character of a full frame of threaded text, with a glyph wider
+    /// than the one it had, flows the character on to the next frame: the Type tool edits that
+    /// frame with the character still selected.
+    #[test]
+    fn a_wider_pick_on_the_selected_character_moves_the_selection_with_it() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let face = FontDb::global().face(alternates_family(true), "Regular").expect("the test face");
+        let gid = |c| face.chars().into_iter().find(|(x, _)| *x == c).map(|(_, g)| g).expect("a glyph");
+        let plain_a = gid('a');
+        // The pop-up's glyphs in its order: the cell's own glyph, then the alternates.
+        let mut list = vec![plain_a];
+        for alt in face.alternates('a') {
+            if !list.contains(&alt.gid) {
+                list.push(alt.gid);
+            }
+        }
+        let (index, wide) =
+            list.iter().copied().enumerate().max_by(|x, y| face.advance(x.1).total_cmp(&face.advance(y.1))).expect("the pop-up lists glyphs");
+        assert!(face.advance(wide) > face.advance(plain_a), "an alternate wider than the a");
+        // The first frame holds "x a" with the plain a, and not with the wider glyph.
+        let pt = |g: u32| face.advance(g) * 12.0 / face.units_per_em();
+        let width = pt(gid('x')) + pt(gid(' ')) + (pt(plain_a) + pt(wide)) / 2.0;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let area = json!({"x": 10, "y": 10, "text": "x a", "size": 12, "area": {"width": width, "height": 16}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        for id in [a, b] {
+            app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        }
+        let plain = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("text"),
+        };
+        assert_eq!((plain(&app, a), plain(&app, b)), ("x a".to_string(), String::new()));
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 2, "caret": 3}));
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-subset", 1usize);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[index].center());
+        assert_eq!((plain(&app, a), plain(&app, b)), ("x ".to_string(), "a".to_string()), "status: {}", app.ui.status);
+        assert_eq!(glyph_ids(&app, &json!(b)), [wide]);
+        assert_eq!(super::super::character::text_editing(&app), Some((NodeId(b), 0, 1)), "the character stays selected");
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
     }
 
