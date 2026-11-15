@@ -9485,7 +9485,7 @@ Justification adds no space inside a pair or sequence. The setting works only wi
 and the menu item is unavailable. Off by default, for new type and for paragraphs saved before the option. It is saved
 with the paragraph (`bunri_kinshi` in `para`) only when on, paragraph styles carry it (Paragraph Style Options › East
 Asian Composition Settings), and Reset Panel turns it off. A value that is not true or false is refused. One undo
-step. `.ai` editing data does not hold it, and a save reports a paragraph with it on and a pair in it as left out. The help page:
+step. An `.ai` save writes it with each paragraph, under Kinsoku Set None too, and it reopens as set. The help page:
 https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html
 
 ```json
