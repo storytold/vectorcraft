@@ -1076,15 +1076,7 @@ fn ring_area(ring: &[Point]) -> f64 {
 /// crosses itself, such as a bow tie, gives a loop for each part it encloses. None when the contour
 /// encloses no area.
 fn cut_region(points: &[Point], closed: bool, axis: f64) -> Vec<Vec<Point>> {
-    let (Some(&first), Some(&last)) = (points.first(), points.last()) else { return vec![] };
-    let mut ring = points.to_vec();
-    if !closed && first.distance(last) > 1e-10 {
-        ring.extend([Point::new(axis, last.y), Point::new(axis, first.y)]);
-    }
-    ring.dedup_by(|a, b| a.distance(*b) <= 1e-10);
-    while ring.len() > 1 && ring.first().zip(ring.last()).is_some_and(|(a, b)| a.distance(*b) <= 1e-10) {
-        ring.pop();
-    }
+    let ring = cut_ring(points, closed, axis);
     if ring.len() < 3 {
         return vec![];
     }
@@ -1102,6 +1094,21 @@ fn cut_region(points: &[Point], closed: bool, axis: f64) -> Vec<Vec<Point>> {
         Err(_) if ring_area(&ring).abs() > 1e-10 => vec![ring],
         Err(_) => vec![],
     }
+}
+
+/// The ring around the region of one contour's profile `points` ([`cut_region`]), without repeated
+/// points or a last point that repeats the first.
+fn cut_ring(points: &[Point], closed: bool, axis: f64) -> Vec<Point> {
+    let (Some(&first), Some(&last)) = (points.first(), points.last()) else { return vec![] };
+    let mut ring = points.to_vec();
+    if !closed && first.distance(last) > 1e-10 {
+        ring.extend([Point::new(axis, last.y), Point::new(axis, first.y)]);
+    }
+    ring.dedup_by(|a, b| a.distance(*b) <= 1e-10);
+    while ring.len() > 1 && ring.first().zip(ring.last()).is_some_and(|(a, b)| a.distance(*b) <= 1e-10) {
+        ring.pop();
+    }
+    ring
 }
 
 /// The steps at whose ends the two cut sides of a partial sweep lie, each with its outward normal
@@ -1178,51 +1185,63 @@ fn cut_faces(at: &Sweeping, regions: &[Vec<Point>], eye: Option<f64>, light: V3)
     Ok(out)
 }
 
-/// The regions the cut sides of a partial sweep close ([`cut_region`]), contour by contour: those
-/// of the profile drawn, each with its contour's index, and those of the profile kept for a mesh,
-/// each with whether it walls a hole.
+/// The profiles whose regions the cut sides of a partial sweep close, contour by contour, each with
+/// whether its contour is closed: those of the profile drawn, and those of the profile kept for a
+/// mesh. Each profile is added as its faces are swept, with any anchor [`ring_cut`] adds, so the
+/// cut sides have a corner at every corner of the edges they share with the side.
 struct CutRegions {
     /// A partial sweep with caps: there are cut sides to close.
     on: bool,
-    drawn: Vec<(Vec<Vec<Point>>, usize)>,
-    kept: Vec<(Vec<Vec<Point>>, bool)>,
+    drawn: Vec<(Vec<Point>, bool)>,
+    kept: Vec<(Vec<Point>, bool)>,
 }
 
-/// The loops of each contour's region in `regions` turned so a region runs counterclockwise in the
-/// profile's plane, or clockwise when it is marked as a hole: filled with the nonzero rule, the
-/// holes stay open and every outline fills. A region's largest loop decides, and loops inside it
-/// that run the other way stay holes of it.
-fn oriented(regions: impl IntoIterator<Item = (Vec<Vec<Point>>, bool)>) -> Vec<Vec<Point>> {
+/// The loops of one contour's region turned so the region runs counterclockwise in the profile's
+/// plane: filled with the nonzero rule, it fills. Its largest loop decides, and loops inside it that
+/// run the other way stay holes of it.
+fn outlined(mut loops: Vec<Vec<Point>>) -> Vec<Vec<Point>> {
+    let largest = loops.iter().map(|l| ring_area(l)).max_by(|a, b| a.abs().total_cmp(&b.abs())).unwrap_or_default();
+    if largest < 0.0 {
+        loops.iter_mut().for_each(|l| l.reverse());
+    }
+    loops
+}
+
+/// The regions the cut sides of a partial sweep close for the profiles `contours`, as loops that
+/// the nonzero rule fills: outlines run counterclockwise in the profile's plane and holes clockwise.
+/// Each open contour closes its own region ([`cut_region`]). The closed contours together close
+/// what `rule` fills of them, so a contour that walls a hole leaves it open, and the parts where
+/// contours overlap are filled or left open as `rule` fills them; a closed contour alone closes its
+/// own region. Every corner of the closed contours' profiles on the region's edge stays a corner
+/// of it. An error when the closed contours pass the limits of combining them.
+fn cut_loops(contours: &[(Vec<Point>, bool)], rule: FillRule, axis: f64) -> Result<Vec<Vec<Point>>, String> {
     let mut out = vec![];
-    for (mut loops, hole) in regions {
-        let largest = loops.iter().map(|l| ring_area(l)).max_by(|a, b| a.abs().total_cmp(&b.abs())).unwrap_or_default();
-        if (largest < 0.0) != hole {
-            loops.iter_mut().for_each(|l| l.reverse());
+    let mut rings = vec![];
+    for (points, closed) in contours {
+        if *closed {
+            rings.push(points);
+        } else {
+            out.extend(outlined(cut_region(points, false, axis)));
         }
-        out.extend(loops);
     }
-    out
-}
-
-/// Whether each of the closed contours `contours` of `path` walls a hole under `rule`: the fill is
-/// outside it and not inside at most of its segments' middles. An open contour, or every contour
-/// when there is only one, walls none. An error when the search passes its limits.
-fn holes_of(path: &PathData, rule: FillRule, contours: &[usize]) -> Result<Vec<bool>, String> {
-    if contours.len() < 2 {
-        return Ok(vec![false; contours.len()]);
-    }
-    let mut search = HoleSearch::new(path, rule)?;
-    let mut out = Vec::with_capacity(contours.len());
-    for &k in contours {
-        let Some(sp) = path.subpaths.get(k).filter(|sp| sp.closed) else {
-            out.push(false);
-            continue;
-        };
-        let mut walls = 0;
-        for segment in 0..sp.anchors.len() {
-            walls += usize::from(search.is_hole(k, sp.segment(segment).eval(0.5))?);
+    match rings.as_slice() {
+        [] => {}
+        [one] => out.extend(outlined(cut_region(one, true, axis))),
+        _ => {
+            let subpaths =
+                rings.iter().map(|r| cut_ring(r, true, axis)).filter(|r| r.len() >= 3).map(|r| vectorcraft_geom::SubPath::polyline(&r, true));
+            let path = PathData::new(subpaths.collect());
+            let filled = vectorcraft_pathops::try_unite_all_with(&[(&path, rule)], 1e-6).map_err(|_| TOO_COMPLEX_PROFILE.to_string())?;
+            // The union gives outlines counterclockwise and holes clockwise. A loop thinner than
+            // 0.000001 pt is left out, as in [`cut_region`].
+            out.extend(
+                filled
+                    .subpaths
+                    .iter()
+                    .map(|s| s.anchors.iter().map(|a| a.p).collect::<Vec<_>>())
+                    .filter(|l| l.len() >= 3 && ring_area(l).abs() > 1e-10),
+            );
         }
-        out.push(walls * 2 > sp.anchors.len());
     }
     Ok(out)
 }
@@ -1233,33 +1252,22 @@ impl CutRegions {
         Self { on: o.cap_ends && o.angle > 0.0 && o.angle < 360.0, drawn: vec![], kept: vec![] }
     }
 
-    /// Add the regions of contour `contour`'s profiles: `drawn`, when faces are drawn, and `kept`,
-    /// when a mesh keeps them.
-    fn add(&mut self, contour: usize, drawn: Option<&Swept>, kept: Option<&Swept>, closed: bool, axis: f64) {
-        if !self.on {
-            return;
-        }
-        if let Some(region) = drawn.map(|s| cut_region(&s.points, closed, axis)).filter(|r| !r.is_empty()) {
-            self.drawn.push((region, contour));
-        }
-        if let Some(s) = kept {
-            let region = cut_region(&s.points, closed, axis);
-            // A contour walls a hole when most of its parts do.
-            let walls = s.holes.iter().filter(|h| **h).count();
-            if !region.is_empty() {
-                self.kept.push((region, walls * 2 > s.holes.len()));
-            }
+    /// Add a contour's profile `s`, drawn or kept for a mesh as `kept` says.
+    fn add(&mut self, s: &Swept, closed: bool, kept: bool) {
+        if self.on {
+            let to = if kept { &mut self.kept } else { &mut self.drawn };
+            to.push((s.points.clone(), closed));
         }
     }
 
-    /// Close the cut sides of sweep `at` of `path`: keep them for the mesh, if any, of `kept`
-    /// (whether faces are drawn, the mesh, and the error that stopped it, as [`lose_mesh`] takes
-    /// them) within `face_limit` faces, and give them drawn ([`cut_faces`]), the holes `rule`
-    /// leaves in `path` left open.
+    /// Close the cut sides of sweep `at` about `axis`, the holes `rule` leaves left open: keep them
+    /// for the mesh, if any, of `kept` (whether faces are drawn, the mesh, and the error that
+    /// stopped it, as [`lose_mesh`] takes them) within `face_limit` faces, and give them drawn
+    /// ([`cut_faces`]).
     fn close(
         &self,
         at: &Sweeping,
-        (path, rule): (&PathData, FillRule),
+        (rule, axis): (FillRule, f64),
         kept: (bool, &mut Option<&mut Vec<solid::Face3>>, &mut Option<String>),
         face_limit: usize,
         eye: Option<f64>,
@@ -1267,32 +1275,33 @@ impl CutRegions {
     ) -> Result<Vec<Face>, String> {
         let (draw, mesh, lost) = kept;
         let result = match mesh.as_deref_mut() {
-            Some(m) => keep_cuts(at, &self.kept, |contours, normal| {
-                m.push((contours, normal));
-                if m.len() > face_limit { Err(TOO_COMPLEX_SURFACE.to_string()) } else { Ok(()) }
+            Some(m) => cut_loops(&self.kept, rule, axis).and_then(|loops| {
+                keep_cuts(at, &loops, |contours, normal| {
+                    m.push((contours, normal));
+                    if m.len() > face_limit { Err(TOO_COMPLEX_SURFACE.to_string()) } else { Ok(()) }
+                })
             }),
             None => Ok(()),
         };
         if let Err(e) = result {
             lose_mesh(draw, mesh, lost, e)?;
         }
-        let contours: Vec<usize> = self.drawn.iter().map(|(_, k)| *k).collect();
-        let holes = holes_of(path, rule, &contours)?;
-        cut_faces(at, &oriented(self.drawn.iter().map(|(r, _)| r.clone()).zip(holes)), eye, light)
+        if !draw {
+            return Ok(vec![]);
+        }
+        cut_faces(at, &cut_loops(&self.drawn, rule, axis)?, eye, light)
     }
 }
 
-/// Keep for a mesh the two cut sides of a partial sweep: the regions `regions` of every contour
-/// ([`cut_region`]), each marked when it walls a hole, turned to each side. Outlines run one way
-/// round and holes the other, so the mesh leaves the holes open. `keep` keeps one face with its
-/// outward normal.
-fn keep_cuts(at: &Sweeping, regions: &[(Vec<Vec<Point>>, bool)], mut keep: impl FnMut(Vec<Vec<V3>>, V3) -> Result<(), String>) -> Result<(), String> {
-    if regions.is_empty() {
+/// Keep for a mesh the two cut sides of a partial sweep: the loops `loops` of their regions
+/// ([`cut_loops`]) turned to each side. Outlines run one way round and holes the other, so the mesh
+/// leaves the holes open. `keep` keeps one face with its outward normal.
+fn keep_cuts(at: &Sweeping, loops: &[Vec<Point>], mut keep: impl FnMut(Vec<Vec<V3>>, V3) -> Result<(), String>) -> Result<(), String> {
+    if loops.is_empty() {
         return Ok(());
     }
-    let oriented = oriented(regions.iter().cloned());
     for (step, normal) in cut_sides(at) {
-        let contours = oriented.iter().map(|r| r.iter().map(|p| at.vertex(*p, step)).collect()).collect();
+        let contours = loops.iter().map(|r| r.iter().map(|p| at.vertex(*p, step)).collect()).collect();
         keep(contours, at.o.rotate(normal))?;
     }
     Ok(())
@@ -1490,7 +1499,6 @@ fn revolve_sweep(
                 }
             }
         }
-        cuts.add(contour, draw.then_some(&drawn), mesh.is_some().then_some(&kept), sp.closed, axis);
         // Which way a profile runs round the region it sweeps (closed against the axis at its ends
         // when it is open), so the faces' normals point out of the solid. A closed contour that does
         // not touch the axis has its side cut opposite the middle of its outer side; an anchor goes
@@ -1521,6 +1529,7 @@ fn revolve_sweep(
         };
         if let Some(m) = mesh.as_deref_mut() {
             let turn = prepare(&mut kept);
+            cuts.add(&kept, sp.closed, true);
             let caps: Vec<usize> = rings.iter().enumerate().filter_map(|(i, r)| r.as_ref().map(|_| i)).collect();
             let kept = keep_profile(&at, &kept, turn, &caps, |face, normal| keep(m, face, normal));
             if let Err(e) = kept {
@@ -1531,6 +1540,7 @@ fn revolve_sweep(
             continue;
         }
         let turn = prepare(&mut drawn);
+        cuts.add(&drawn, sp.closed, false);
         let profile = &drawn.points;
         let along = along_profile(profile, axis, sp.closed);
         for (i, ((pair, [ta, tb]), hole)) in profile.windows(2).zip(drawn.tangents.iter().copied()).zip(drawn.holes.iter().copied()).enumerate() {
@@ -1591,7 +1601,7 @@ fn revolve_sweep(
             }
         }
     }
-    cuts.close(&at, (path, rule), (draw, &mut mesh, &mut lost), face_limit, eye, light)?.into_iter().try_for_each(|face| emit(Some(face), 1))?;
+    cuts.close(&at, (rule, axis), (draw, &mut mesh, &mut lost), face_limit, eye, light)?.into_iter().try_for_each(|face| emit(Some(face), 1))?;
     faces.sort_by(|a, b| a.depth.total_cmp(&b.depth));
     Ok((faces, lost))
 }

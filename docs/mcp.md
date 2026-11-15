@@ -4164,9 +4164,9 @@ default 0), `ambient` (Ambient Light, 0..200%, default 25; an earlier `lightAzim
 as the same light), `cap` (boolean, default true), and `expandVisibleOnly` (boolean, default true). A vertical-line profile needs a positive offset to have a radius.
 `cap` closes each circular endpoint of an open profile with one curved, uniformly shaded
 vector path. Body faces share that curved rim. Partial sweeps use sectors, and `cap` also closes their two
-angular cut sides with flat faces: the region between each open subpath and the axis and the area of each closed
-subpath, one face for each region. A closed subpath that walls a hole under the object's fill rule leaves that
-hole open.
+angular cut sides with flat faces: the region between each open subpath and the axis and the area the closed
+subpaths fill together under the object's fill rule, one face for each region. A closed subpath that walls a hole
+leaves that hole open, and an overlap of closed subpaths is filled or left open as the fill rule fills it.
 Exported 3D meshes include the cut sides.
 Missing `cap` enables caps; set it to false for open endpoints and open cut sides (hollow). Shaded Revolve surfaces automatically interpolate curved-surface lighting with vector gradients while preserving profile corners and flat caps. There is no separate smoothing parameter. `shade: false` disables all lighting. Visibility of intersecting surfaces is approximate.
 `lights` is null by default, retaining the earlier single-light controls. Set an array of one to ten objects to replace that light: `{color: "#rrggbb", intensity: 0..100, rotation: -180..180, height: 0..90, softness: 0..100, behind: bool}`. Defaults per light are white, 80%, 125.26 degrees, 30 degrees, 0%, false. Omitted fields use defaults; unknown nested keys and malformed lists are refused before mutation. `ambient` is shared and counted once. Set `lights: null` to restore the earlier controls. The list is saved in the native file and survives preview, undo and expansion.

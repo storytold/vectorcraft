@@ -87,13 +87,11 @@ fn an_even_odd_hole_wound_with_its_outline_stays_open_in_the_drawn_cut_sides() {
         assert!(!filled.contains(filled.bounding_box().center()));
         assert!((area(cut) - (40.0 * 40.0 - 20.0 * 20.0)).abs() < 1e-6, "{}", area(cut));
     }
-    // Under the nonzero rule the inner contour fills too: each side is the outer square and the
-    // inner one drawn over it.
+    // Under the nonzero rule the inner contour fills too: each side is the whole outer square.
     let faces = revolve(&path, bounds, Revolve { fill_rule: FillRule::NonZero, ..o }).unwrap();
-    let mut areas: Vec<f64> = cut_sides(&faces).iter().map(|f| area(f)).collect();
-    areas.sort_by(f64::total_cmp);
-    assert_eq!(areas.len(), 4);
-    assert!(areas.iter().zip([400.0, 400.0, 1600.0, 1600.0]).all(|(a, b)| (a - b).abs() < 1e-6), "{areas:?}");
+    let areas: Vec<f64> = cut_sides(&faces).iter().map(|f| area(f)).collect();
+    assert_eq!(areas.len(), 2);
+    assert!(areas.iter().all(|a| (a - 1600.0).abs() < 1e-6), "{areas:?}");
 }
 
 #[test]
@@ -245,6 +243,47 @@ fn the_mesh_closes_both_cut_sides_and_leaves_holes_open_under_either_fill_rule()
     let path = profile(ring);
     let hollow = revolve_mesh(&path, FillRule::NonZero, path.bounds().unwrap(), Revolve { cap_ends: false, ..o }).unwrap();
     assert_eq!(area_facing(&hollow, [0.0, 0.0, -1.0]), 0.0);
+}
+
+#[test]
+fn overlapping_contours_close_the_cut_sides_with_what_the_fill_rule_fills() {
+    // Two squares of 1,600 pt² that overlap in 300 pt², and only one corner of each lies inside
+    // the other. The even-odd rule leaves the overlap open; the nonzero rule fills it once.
+    let path = profile("M20 10 L60 10 L60 50 L20 50 Z M50 20 L90 20 L90 60 L50 60 Z");
+    let bounds = path.bounds().unwrap();
+    let o = Revolve { angle: 180.0, offset: 10.0, ..options() };
+    for (rule, expected) in [(FillRule::EvenOdd, 2.0 * (1600.0 - 300.0)), (FillRule::NonZero, 2.0 * 1600.0 - 300.0)] {
+        let faces = revolve(&path, bounds, Revolve { fill_rule: rule, ..o }).unwrap();
+        let cuts = cut_sides(&faces);
+        let total: f64 = cuts.iter().map(|f| area(f)).sum();
+        assert!((total - 2.0 * expected).abs() < 1e-6, "{rule:?}: both sides cover {total}, not twice {expected}");
+        let mesh = revolve_mesh(&path, rule, bounds, Revolve { angle: 90.0, ..o }).unwrap();
+        let start = area_facing(&mesh, [0.0, 0.0, -1.0]);
+        assert!((start - expected).abs() < 1e-6, "{rule:?}: {start}");
+    }
+}
+
+#[test]
+fn the_cut_sides_kept_for_a_mesh_have_a_corner_at_every_corner_of_the_side() {
+    // With graphics mapped, the square's side is cut half way round from its outer side, at
+    // (20, 30), which is not an anchor: the cut side takes that corner too.
+    let path = profile("M20 10 L60 10 L60 50 L20 50 Z");
+    let bounds = path.bounds().unwrap();
+    let o = Revolve { angle: 90.0, offset: 10.0, map_surface: true, ..options() };
+    let mut faces = vec![];
+    revolve_faces(&path, FillRule::NonZero, bounds, o, Some(&mut faces)).unwrap();
+    // The corners in the plane where the sweep starts, of every face kept for the mesh and of the
+    // cut side's alone, which faces back against the sweep.
+    let in_plane = |all: bool| {
+        let start = |n: &V3| (n.0.abs() + n.1.abs() + (n.2 + 1.0).abs()) < 1e-9;
+        let kept = faces.iter().filter(|(_, n)| all || start(n));
+        kept.flat_map(|(contours, _)| contours.iter().flatten().copied()).filter(|v| v.2.abs() < 1e-9).collect::<Vec<V3>>()
+    };
+    let cut = in_plane(false);
+    assert!(!cut.is_empty());
+    for p in in_plane(true) {
+        assert!(cut.iter().any(|q| (p.0 - q.0).hypot(p.1 - q.1) < 1e-9), "{p:?} is not a corner of the cut side");
+    }
 }
 
 #[test]

@@ -80,10 +80,12 @@ An endpoint on the axis needs no cap. Each open subpath of a compound profile is
 With an Angle below 360°, Cap also closes the two angular cut sides, so the object appears solid; with Cap
 off it is hollow ([Revolve options](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=185)).
 Each cut side is flat and uniformly shaded, and is drawn in depth order with the rest of the surface. It covers the
-region between each open subpath and the axis, and the area each closed subpath encloses, with one face for each
-region. A closed subpath that walls a hole under the object's fill rule leaves that hole open in the face of the
-region around it, and the other regions are filled. A self-intersecting subpath fills what the nonzero rule fills,
-with one face for each loop it encloses; this is VectorCraft's own rule. A cut side seen edge on is not drawn.
+region between each open subpath and the axis, and the area the closed subpaths fill together under the object's
+fill rule, with one face for each region. A closed subpath that walls a hole leaves that hole open in the face of
+the region around it, and where closed subpaths overlap, the overlap is filled or left open as the fill rule fills
+it. A self-intersecting open subpath, or a self-intersecting closed subpath that is the only closed one, fills what
+the nonzero rule fills, with one face for each loop it encloses; this is VectorCraft's own rule. A cut side seen edge
+on is not drawn.
 The cut sides appear in preview, SVG/PDF export, Expand Appearance, Expand as Wireframes, Revolve (Classic) and
 exported 3D meshes. Cap does not make intersecting profiles into a watertight solid.
 
