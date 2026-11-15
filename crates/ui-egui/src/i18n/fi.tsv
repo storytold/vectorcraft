@@ -3617,6 +3617,8 @@ theme	Appearance	Ulkoasu
 	Find Font Files	Etsi fonttitiedostoja
 	Add Font Files	Lisää fonttitiedostoja
 	Font List	Fonttiluettelo
+	Show Similar Fonts	Näytä samankaltaiset fontit
+	Clear Similar Fonts	Tyhjennä samankaltaiset fontit
 	Fonts in Document	Asiakirjan fontit
 	Refresh Font List	Päivitä fonttiluettelo
 	Replace Font	Korvaa fontti

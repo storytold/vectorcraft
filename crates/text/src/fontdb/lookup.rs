@@ -9,7 +9,7 @@ use super::names::SYSTEM_FALLBACKS;
 use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, font_files};
-use super::traits::{Alias, FontMatch, FontTraits};
+use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
 use super::{
     Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, DrawSettings, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX,
     Ordering, Size,
@@ -86,24 +86,75 @@ impl FontDb {
     /// loaded face, else from the system font scan. Variable when any of its faces, loaded or
     /// scanned, is: a family may install static files beside a variable one. Cheap: no font file
     /// is read, and a loaded family doesn't start the scan. A composite font takes its base font's.
+    /// Its likeness is the one of its face nearest an upright Regular, loaded or scanned.
     pub fn family_traits(&self, family: &str) -> FontTraits {
         if let Some((base, _)) = self.composite_base(family) {
             return self.family_traits(&base);
         }
         let loaded = {
             let faces = self.read_faces();
-            let mut of_family = faces.iter().filter(|f| f.family.eq_ignore_ascii_case(family));
-            of_family.next().map(|first| FontTraits { variable: first.traits.variable || of_family.any(|f| f.traits.variable), ..first.traits })
+            let mut found: Option<FontTraits> = None;
+            for f in faces.iter().filter(|f| f.family.eq_ignore_ascii_case(family)) {
+                match &mut found {
+                    None => found = Some(f.traits),
+                    Some(traits) => {
+                        traits.variable |= f.traits.variable;
+                        if regular_rank(&f.traits.likeness) < regular_rank(&traits.likeness) {
+                            traits.likeness = f.traits.likeness;
+                        }
+                    }
+                }
+            }
+            found
         };
         let scanned = |catalog: &Catalog| catalog.get(&family.to_ascii_lowercase()).and_then(|c| c.traits);
         match loaded {
             None => scanned(&self.read_catalog()).unwrap_or_default(),
-            Some(traits) if traits.variable => traits,
-            Some(traits) => {
-                let variable = scanned(&self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner)).is_some_and(|t| t.variable);
-                FontTraits { variable, ..traits }
+            Some(mut traits) => {
+                // What the scan found so far, without starting it.
+                if let Some(found) = scanned(&self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner)) {
+                    traits.variable |= found.variable;
+                    if regular_rank(&found.likeness) < regular_rank(&traits.likeness) {
+                        traits.likeness = found.likeness;
+                    }
+                }
+                traits
             }
         }
+    }
+
+    /// `families` ordered by how alike they look to `family` (Show Similar Fonts): `family` itself
+    /// first when listed, then the families that set the same script as it (Japanese, Thai or
+    /// neither, as [`FontTraits`] tells), then the others, each group nearest first by
+    /// [`FontLikeness::distance`](super::FontLikeness::distance) of their
+    /// [`family_traits`](Self::family_traits), a family of another kind ([`FontTraits::class`])
+    /// counting 2 further. Families equally far keep their order in `families`. Reads no font
+    /// file, as `family_traits` does not.
+    pub fn similar_families(&self, family: &str, families: &[String]) -> Vec<String> {
+        let base = self.family_traits(family);
+        let script = |t: &FontTraits| {
+            if t.japanese {
+                0
+            } else if t.thai {
+                1
+            } else {
+                2
+            }
+        };
+        let mut keyed: Vec<(bool, f32, &String)> = families
+            .iter()
+            .map(|f| {
+                let traits = self.family_traits(f);
+                let d = if f.eq_ignore_ascii_case(family) {
+                    -1.0
+                } else {
+                    base.likeness.distance(&traits.likeness) + if traits.class == base.class { 0.0 } else { 2.0 }
+                };
+                (script(&traits) != script(&base), d, f)
+            })
+            .collect();
+        keyed.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        keyed.into_iter().map(|(_, _, f)| f.clone()).collect()
     }
 
     /// [`face`](Self::face) by any of the family's names ([`canonical`](Self::canonical)), and how

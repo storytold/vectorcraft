@@ -34,6 +34,39 @@ fn the_font_list_names_every_available_family_with_its_styles() {
     assert!(s.execute("text.fontList", &json!({"family": "No Such Font"})).is_err());
 }
 
+/// Show Similar Fonts (`text.similarFonts`): every listed family, the asked one first, in the
+/// order the font menus show; bad params are refused.
+#[test]
+fn similar_fonts_lists_every_family_by_likeness() {
+    let mut s = Session::new();
+    let db = FontDb::global();
+    let r = s.execute("text.similarFonts", &json!({"family": "source sans 3"})).unwrap();
+    assert_eq!(r["family"], "Source Sans 3");
+    let order = names(&r["families"]);
+    assert_eq!(order.first().map(String::as_str), Some("Source Sans 3"));
+    let mut sorted = order.clone();
+    sorted.sort();
+    let mut listed = db.menu_family_list().to_vec();
+    listed.sort();
+    // Other tests running at the same time add and remove composite fonts; the installed families are compared.
+    let installed_only = |list: &[String]| list.iter().filter(|f| db.has_installed_family(f)).cloned().collect::<Vec<_>>();
+    assert_eq!(installed_only(&sorted), installed_only(&listed), "every family once");
+    let two = s.execute("text.similarFonts", &json!({"family": "Source Sans 3", "limit": 2})).unwrap();
+    assert_eq!(names(&two["families"]), order[..2]);
+    for (params, error) in [
+        (json!({}), "`family` is required"),
+        (json!({"family": " "}), "`family` is required"),
+        (json!({"family": 3}), "`family` must be a string"),
+        (json!({"family": "No Such Font"}), "font family `No Such Font` is not available"),
+        (json!({"family": "Inter", "limit": 0}), "`limit` must be a whole number from 1 to 100000"),
+        (json!({"family": "Inter", "limit": 2.5}), "`limit` must be a whole number from 1 to 100000"),
+        (json!({"family": "Inter", "limit": "2"}), "`limit` must be a whole number from 1 to 100000"),
+    ] {
+        let e = s.execute("text.similarFonts", &params).unwrap_err().to_string();
+        assert!(e.contains(error), "{params}: {e}");
+    }
+}
+
 #[test]
 fn refreshing_the_font_list_redraws_type_without_editing_the_document() {
     let mut s = Session::new();

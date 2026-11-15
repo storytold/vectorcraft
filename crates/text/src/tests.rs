@@ -28,6 +28,7 @@ mod path_joins;
 mod ruby;
 mod scripts;
 mod shape_plans;
+mod similar;
 mod snap;
 mod svg_glyphs;
 mod sysfonts;

@@ -54,6 +54,15 @@ pub fn specs() -> Vec<CommandSpec> {
             font_list
         ),
         cmd!(
+            query "text.similarFonts",
+            "Show Similar Fonts",
+            [],
+            None,
+            "{family (any of its names), limit?: whole number 1..100000 (default: all)} → {family: the family's own name, families: [names]}: the families `text.fontList` lists, ordered as a font menu's Show Similar Fonts orders them: the family itself first, then those that set the same script (Japanese, Thai or neither), then the others, each group nearest first by VectorCraft's own measure of the faces nearest an upright Regular (OS/2 PANOSE digits, weight and width classes, x-height, cap height and average character width, the italic angle, and the kind); an error when the family isn't available or the font menus don't list it, or `limit` is not a whole number from 1 to 100000",
+            always,
+            similar_fonts
+        ),
+        cmd!(
             "text.rescanFonts",
             "Refresh Font List",
             [],
@@ -1135,6 +1144,36 @@ fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
         }
         None => Ok(json!({ "families": *db.menu_family_list() })),
     }
+}
+
+/// The most families `text.similarFonts` takes as its `limit`.
+const MAX_SIMILAR: u64 = 100_000;
+
+fn similar_fonts(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.similarFonts";
+    let db = vectorcraft_text::FontDb::global();
+    let family = match p.get("family") {
+        Some(Value::String(f)) if !f.trim().is_empty() => f.as_str(),
+        Some(Value::String(_)) | None => return Err(bad(C, "`family` is required")),
+        Some(_) => return Err(bad(C, "`family` must be a string")),
+    };
+    let limit = match p.get("limit") {
+        None => None,
+        Some(v) => Some(
+            v.as_u64()
+                .filter(|n| (1..=MAX_SIMILAR).contains(n))
+                .ok_or_else(|| bad(C, format!("`limit` must be a whole number from 1 to {MAX_SIMILAR}")))?,
+        ),
+    };
+    // Any of the family's names, spelled as the font menus list it; a family they don't list is not available.
+    let menu = db.menu_family_list();
+    let listed = db.has_family(family).then(|| db.canonical(family, "").0).and_then(|c| menu.iter().find(|f| f.eq_ignore_ascii_case(&c)).cloned());
+    let Some(family) = listed else { return Err(bad(C, format!("font family `{family}` is not available"))) };
+    let mut families = db.similar_families(&family, &menu);
+    if let Some(n) = limit.and_then(|n| usize::try_from(n).ok()) {
+        families.truncate(n);
+    }
+    Ok(json!({ "family": family, "families": families }))
 }
 
 pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
