@@ -2116,6 +2116,40 @@ antiAlias	Sharp	शार्प
 	Graph Design	ग्राफ़ डिजाइन
 	Graph Marker	ग्राफ़ मार्कर
 	Graph Type	ग्राफ़ टाइप
+	Graph Options	ग्राफ़ विकल्प
+	Left Axis	बायाँ एक्सिस
+	Right Axis	दायाँ एक्सिस
+	Category Axis	श्रेणी एक्सिस
+	Separate Scales	अलग स्केल
+	Add Drop Shadow	ड्रॉप शैडो जोड़ें
+	Add Legend Across Top	ऊपर लेजेंड जोड़ें
+	First Row in Front	पहली पंक्ति आगे
+	First Column in Front	पहला कॉलम आगे
+	Legend	लेजेंड
+	Column Width	कॉलम चौड़ाई
+	Bar Width	बार चौड़ाई
+	Cluster Width	समूह चौड़ाई
+	Mark Data Points	डेटा पॉइंट चिह्नित करें
+	Connect Data Points	डेटा पॉइंट जोड़ें
+	Edge-to-Edge Lines	किनारे से किनारे तक रेखाएँ
+	Draw Filled Lines	भरी हुई रेखाएँ बनाएँ
+	Tick Values	टिक मान
+	Override Calculated Values	परिकलित मानों को बदलें
+	Divisions	विभाजन
+	Tick Marks	टिक चिह्न
+	Tick Marks per Division	प्रति विभाजन टिक चिह्न
+	Draw Tick Marks Between Labels	लेबलों के बीच टिक चिह्न बनाएँ
+	Add Labels	लेबल जोड़ें
+	Maximum must be more than Minimum.	अधिकतम, न्यूनतम से अधिक होना चाहिए।
+	Column Graph	कॉलम ग्राफ़
+	Stacked Column Graph	स्टैक्ड कॉलम ग्राफ़
+	Bar Graph	बार ग्राफ़
+	Stacked Bar Graph	स्टैक्ड बार ग्राफ़
+	Line Graph	लाइन ग्राफ़
+	Area Graph	एरिया ग्राफ़
+	Scatter Graph	स्कैटर ग्राफ़
+	Pie Graph	पाई ग्राफ़
+	Radar Graph	रडार ग्राफ़
 	Graphic	ग्राफिक
 	Graphic Pen	ग्राफ़िक पेन
 	Graphic Pen…	ग्राफ़िक पेन…
@@ -2271,6 +2305,7 @@ antiAlias	Sharp	शार्प
 	Highlight Substituted Glyphs	बदले हुए ग्लिफ़ हाइलाइट करें
 	Highlight Tracking	हाइलाइट ट्रैकिंग
 	Highlight Variable	वेरिएबल हाइलाइट करें
+	Sort Variables	वेरिएबल क्रमबद्ध करें
 	Highlight:	हाइलाइट:
 	Hindi	हिन्दी
 	History	हिस्ट्री
@@ -2819,6 +2854,7 @@ antiAlias	Sharp	शार्प
 	Menu Dialog	मेन्यू डायलॉग
 	Merge	मर्ज करें
 	Merge colors into one row	रंगों को एक पंक्ति में मिलाएं
+	New Row	नई पंक्ति
 	Merge Graphic Styles	मर्ज ग्राफिक स्टाइल्स
 	Merge Graphic Styles…	मर्ज ग्राफिक स्टाइल्स…
 	Merge Layers	लेयर्स मर्ज करें
@@ -5074,6 +5110,48 @@ antiAlias	Sharp	शार्प
 	Composite Fonts	कंपोज़िट फ़ॉन्ट
 	Export Composite Fonts	कंपोज़िट फ़ॉन्ट एक्सपोर्ट करें
 	Import Composite Fonts	कंपोज़िट फ़ॉन्ट इम्पोर्ट करें
+@msg	each font must be {name, parts}	हर फ़ॉन्ट {name, parts} होना चाहिए
+@msg	unknown key `{k}`; a font takes name and parts	अज्ञात कुंजी `{k}`; फ़ॉन्ट name और parts लेता है
+@msg	each font needs a name	हर फ़ॉन्ट का एक नाम होना चाहिए
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` कंपोज़िट फ़ॉन्ट का नाम नहीं हो सकता (1 से {COMPOSITE_NAME_MAX} अक्षर, कोई नियंत्रण अक्षर नहीं)
+@msg	`{name}`: parts must be an object	`{name}`: parts एक ऑब्जेक्ट होना चाहिए
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: अज्ञात वर्ग `{k}`; वर्ग kanji, kana, punctuation, symbols, roman और numerals हैं
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} एक ऑब्जेक्ट होना चाहिए
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1} में अज्ञात कुंजी `{k}`
+@msg	`{name}`: give the kanji part	`{name}`: kanji भाग दें
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	एक दस्तावेज़ में अधिकतम {COMPOSITE_FONTS_MAX} कंपोज़िट फ़ॉन्ट रहते हैं
+@msg	two composite fonts are named `{_1}`	दो कंपोज़िट फ़ॉन्ट का नाम `{_1}` है
+@msg	`{_1}` is the name of an installed font	`{_1}` एक इंस्टॉल किए गए फ़ॉन्ट का नाम है
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} `{font}` में सेट है, जो एक कंपोज़िट फ़ॉन्ट है
+@msg	give fonts: [{name, parts}…]	fonts दें: [{name, parts}…]
+@msg	path is empty	path खाली है
+@msg	fonts must be a list of composite fonts	fonts कंपोज़िट फ़ॉन्ट की सूची होनी चाहिए
+@msg	names must be strings	names स्ट्रिंग होने चाहिए
+@msg	no composite font named `{n}`	`{n}` नाम का कोई कंपोज़िट फ़ॉन्ट नहीं है
+@msg	names must be a list of names	names नामों की सूची होनी चाहिए
+@msg	no composite fonts to export	एक्सपोर्ट करने के लिए कोई कंपोज़िट फ़ॉन्ट नहीं है
+@msg	not a composite fonts file: {e}	यह कंपोज़िट फ़ॉन्ट फ़ाइल नहीं है: {e}
+@msg	not a composite fonts file: no compositeFonts list	यह कंपोज़िट फ़ॉन्ट फ़ाइल नहीं है: compositeFonts सूची नहीं है
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	फ़ाइल में {COMPOSITE_FONTS_MAX} से अधिक कंपोज़िट फ़ॉन्ट हैं
+@msg	the file is larger than 4 MB	फ़ाइल 4 MB से बड़ी है
+@msg	dataBase64 is not base64	dataBase64 base64 नहीं है
+@msg	give one of path, data or dataBase64	path, data या dataBase64 में से एक दें
+@msg	the file holds no composite fonts	फ़ाइल में कोई कंपोज़िट फ़ॉन्ट नहीं है
+@msg	the file holds two composite fonts named `{_1}`	फ़ाइल में `{_1}` नाम के दो कंपोज़िट फ़ॉन्ट हैं
+@msg	`{_1}` can't name a composite font	`{_1}` कंपोज़िट फ़ॉन्ट का नाम नहीं हो सकता
+@msg	{k}: give a font	{k}: एक फ़ॉन्ट दें
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: एक फ़ॉन्ट दें
+@msg	{k}: size must be {_1} to {_2}%	{k}: size {_1} से {_2}% तक होना चाहिए
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size {_1} से {_2}% तक होना चाहिए
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline {_1} से {_2}% तक होना चाहिए
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline {_1} से {_2}% तक होना चाहिए
+@msg	{k}: scale must be {_1} to {_2}%	{k}: स्केल {_1} से {_2}% तक होना चाहिए
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: स्केल {_1} से {_2}% तक होना चाहिए
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: केवल kana, roman और numerals को स्केल किया जा सकता है
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: केवल kana, roman और numerals को स्केल किया जा सकता है
+@msg	{k}: only kana can be scaled at the center	{k}: केंद्र से केवल kana को स्केल किया जा सकता है
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: केंद्र से केवल kana को स्केल किया जा सकता है
+@msg	no composite font	कोई कंपोज़िट फ़ॉन्ट नहीं
 	Delete Font	फ़ॉन्ट हटाएँ
 	Kanji	कांजी
 	Kana	काना
@@ -8950,6 +9028,124 @@ theme	Appearance	अपीयरेंस
 	Grommets	आईलेट
 	Grommet Inset	किनारे से आईलेट की दूरी
 	Diameter	व्यास
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D इफ़ेक्ट्स के लिए 100 मिलियन पॉइंट के भीतर परिमित निर्देशांक चाहिए
+@msg	3D effects require one to ten lights	3D इफ़ेक्ट्स के लिए एक से दस लाइटें चाहिए
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP डेप्थ {_1}: प्रति पिक्सेल 1, 4, 8, 16, 24 या 32 बिट
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP एन्कोडिंग विफल: {width} × {height} पिक्सेल न फ़ॉर्मैट में फ़िट होते हैं, न पिक्सेल बफ़र में
+@msg	GIF encoding failed: the palette image is malformed	GIF एन्कोडिंग विफल: पैलेट इमेज विकृत है
+@msg	GIF encoding failed: {e}	GIF एन्कोडिंग विफल: {e}
+@msg	JPEG colour profile: {e}	JPEG कलर प्रोफ़ाइल: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	JPEG encoding failed: {e}	JPEG एन्कोडिंग विफल: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	PNG encoding failed: the palette image is malformed	PNG एन्कोडिंग विफल: पैलेट इमेज विकृत है
+@msg	PNG encoding failed: {e}	PNG एन्कोडिंग विफल: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG एन्कोडिंग विफल: {width} × {height} पिक्सेल मान्य इमेज आकार नहीं है
+@msg	PSD colour profile: {e}	PSD कलर प्रोफ़ाइल: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	Revolve profile contains invalid coordinates	रिवॉल्व प्रोफ़ाइल में अमान्य निर्देशांक हैं
+@msg	Revolve profile is too complex	रिवॉल्व प्रोफ़ाइल बहुत जटिल है
+@msg	Revolve projection is not finite	रिवॉल्व प्रोजेक्शन परिमित नहीं है
+@msg	Revolve requires finite profile coordinates within 100 million points	रिवॉल्व के लिए 100 मिलियन पॉइंट के भीतर परिमित प्रोफ़ाइल निर्देशांक चाहिए
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	रिवॉल्व सतह बहुत जटिल है; सेगमेंट कम करें या प्रोफ़ाइल सरल करें
+@msg	Revolve surface is too complex; simplify the profile	रिवॉल्व सतह बहुत जटिल है; प्रोफ़ाइल सरल करें
+@msg	Revolve visibility cannot split the projected boundary	रिवॉल्व दृश्यता प्रोजेक्ट की गई सीमा को विभाजित नहीं कर सकती
+@msg	Revolve visibility creates too many fragments	रिवॉल्व दृश्यता बहुत अधिक टुकड़े बनाती है
+@msg	Revolve visibility creates too many vector anchors	रिवॉल्व दृश्यता बहुत अधिक वेक्टर एंकर बनाती है
+@msg	Revolve visibility exceeds its geometry work limit	रिवॉल्व दृश्यता अपनी ज्यामिति गणना की सीमा से आगे निकल जाती है
+@msg	Revolve visibility exceeds its spatial index limit	रिवॉल्व दृश्यता अपनी स्पेशियल इंडेक्स सीमा से आगे निकल जाती है
+@msg	Revolve visibility has too many boundary crossings	रिवॉल्व दृश्यता में सीमा के बहुत अधिक क्रॉसिंग हैं
+@msg	Revolve visibility has too many input anchors	रिवॉल्व दृश्यता में बहुत अधिक इनपुट एंकर हैं
+@msg	Revolve visibility requires convex cap sectors	रिवॉल्व दृश्यता के लिए उत्तल कैप सेक्टर चाहिए
+@msg	Revolve visibility requires finite projected faces	रिवॉल्व दृश्यता के लिए परिमित प्रोजेक्ट किए गए फ़ेस चाहिए
+@msg	SVG options: {e}	SVG ऑप्शन्स: {e}
+@msg	Save for Web settings: {e}	वेब के लिए सेव करें की सेटिंग्स: {e}
+@msg	TIFF colour profile: {e}	TIFF कलर प्रोफ़ाइल: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	TIFF encoding failed: {e}	TIFF एन्कोडिंग विफल: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa डेप्थ {_1}: प्रति पिक्सेल 16, 24 या 32 बिट
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa एन्कोडिंग विफल: पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	The 3D projection is not finite	3D प्रोजेक्शन परिमित नहीं है
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D छाया बहुत जटिल है; छायाएँ बंद करें या आर्टवर्क सरल करें
+@msg	The shape contains invalid coordinates	शेप में अमान्य निर्देशांक हैं
+@msg	Too many Revolve faces for visibility evaluation	दृश्यता की गणना के लिए रिवॉल्व के फ़ेस बहुत अधिक हैं
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft स्वॉच एक्सचेंज फ़ाइल से अधिकतम {ASE_MAX_ENTRIES} रंग और ग्रुप पढ़ता है, और इस लाइब्रेरी में {entries} हैं
+@msg	WebP encoding failed: {e}	WebP एन्कोडिंग विफल: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`index` must be a whole number	`index` पूरी संख्या होनी चाहिए
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` smallThumb, mediumThumb, largeThumb, smallList या largeList होता है
+@msg	a line can't run from a point to itself	कोई लाइन किसी पॉइंट से उसी पॉइंट तक नहीं जा सकती
+@msg	a line needs at least two points	लाइन के लिए कम से कम दो पॉइंट चाहिए
+@msg	a number cannot be read	एक संख्या पढ़ी नहीं जा सकती
+@msg	a swatch exchange block is too long	स्वॉच एक्सचेंज का एक ब्लॉक बहुत लंबा है
+@msg	a swatch exchange name is too long	स्वॉच एक्सचेंज का एक नाम बहुत लंबा है
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	{sw} × {sh} इमेज का आकार बदलकर {width} × {height} पिक्सेल नहीं किया जा सकता
+@msg	a {width} × {height} image is too large	{width} × {height} इमेज बहुत बड़ी है
+@msg	a {width} × {height} image: {e}	{width} × {height} इमेज: {e}
+@msg	an image could not be written: {e}	एक इमेज लिखी नहीं जा सकी: {e}
+@msg	an image that couldn't be read was left out	जो इमेज पढ़ी नहीं जा सकी, उसे छोड़ दिया गया
+@msg	can't open “{name}”: {e}	“{name}” ओपन नहीं किया जा सकता: {e}
+@msg	cannot align zip entries to {align} bytes	ज़िप एंट्री को {align} बाइट पर अलाइन नहीं किया जा सकता
+@msg	cannot open the automation {kind} root `{_1}`: {e}	ऑटोमेशन {kind} रूट `{_1}` ओपन नहीं किया जा सकता: {e}
+@msg	cannot read profile: {0}	प्रोफ़ाइल पढ़ी नहीं जा सकती: {0}
+@msg	color book version {version} isn't supported (only 1)	कलर बुक वर्ज़न {version} समर्थित नहीं है (केवल 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	कलर स्पेस {other} वाली कलर बुक समर्थित नहीं हैं (केवल RGB, CMYK और Lab)
+@msg	file name too long to zip: {_1}	ज़िप करने के लिए फ़ाइल का नाम बहुत लंबा है: {_1}
+@msg	file name too long to zip: {name}	ज़िप करने के लिए फ़ाइल का नाम बहुत लंबा है: {name}
+@msg	freeform line {i}: {e}	फ्रीफॉर्म लाइन {i}: {e}
+@msg	freeform point {i}: {e}	फ्रीफॉर्म पॉइंट {i}: {e}
+@msg	give `{key}` or `{other}`, not both	`{key}` या `{other}` दें, दोनों नहीं
+@msg	grayscale profiles can't be working spaces yet	ग्रेस्केल प्रोफ़ाइल अभी वर्किंग स्पेस नहीं हो सकतीं
+@msg	input contains NaN or infinite coordinates	इनपुट में NaN या अनंत निर्देशांक हैं
+@msg	input path could not be closed	इनपुट पाथ बंद नहीं किया जा सका
+@msg	invalid ICC profile: {0}	अमान्य ICC प्रोफ़ाइल: {0}
+@msg	invalid scale {scale}	अमान्य स्केल {scale}
+@msg	its localized names take more than {_1} KB	इसके स्थानीयकृत नाम {_1} KB से अधिक जगह लेते हैं
+@msg	its objects are nested too deep ({e})	इसके ऑब्जेक्ट बहुत गहराई तक नेस्ट किए गए हैं ({e})
+@msg	its tag table lists the `{_1}` tag more than once	इसकी टैग तालिका में `{_1}` टैग एक से अधिक बार है
+@msg	knockout groups with brushed strokes over other translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	जिन नॉकआउट ग्रुप में ब्रश स्ट्रोक दूसरे पारदर्शी एलिमेंट के ऊपर हैं, वे PDF नॉकआउट ग्रुप के रूप में लिखे जाते हैं: उनके पारदर्शी एलिमेंट अपने नीचे का पूरा हिस्सा नॉकआउट करते हैं
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	बहुत अधिक ओवरलैप करने वाले पारदर्शी एलिमेंट वाले नॉकआउट ग्रुप PDF नॉकआउट ग्रुप के रूप में लिखे जाते हैं: उनके पारदर्शी एलिमेंट अपने नीचे का पूरा हिस्सा नॉकआउट करते हैं
+@msg	not a graphic style library: {e}	यह ग्राफ़िक स्टाइल लाइब्रेरी नहीं है: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	यह स्वॉच लाइब्रेरी नहीं है (.vcswatches या .gpl)
+@msg	not a swatch library (format `{_1}`)	यह स्वॉच लाइब्रेरी नहीं है (फ़ॉर्मैट `{_1}`)
+@msg	not a swatch library: {e}	यह स्वॉच लाइब्रेरी नहीं है: {e}
+@msg	not an action set file ({e})	यह एक्शन सेट फ़ाइल नहीं है ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	प्रोफ़ाइल का कलर स्पेस {other} RGB, CMYK या Gray नहीं है
+@msg	regular expression too large	रेगुलर एक्सप्रेशन बहुत बड़ा है
+@msg	script file is not UTF-8 text: {value}	स्क्रिप्ट फ़ाइल UTF-8 टेक्स्ट नहीं है: {value}
+@msg	stop {i}: {e}	स्टॉप {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	स्वॉच एक्सचेंज वर्ज़न {major}.{minor} समर्थित नहीं है (केवल 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	कलर बुक में {ASE_MAX_ENTRIES} से अधिक रंग हैं
+@msg	the color book is cut short	कलर बुक अधूरी है
+@msg	the color book's names take more than {_1} MB	कलर बुक के नाम {_1} MB से अधिक जगह लेते हैं
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	इमेज {w} × {h} पिक्सेल की होगी; रास्टर एक्सपोर्ट हर तरफ़ अधिकतम {MAX_RASTER_SIDE} पिक्सेल और {_1} मेगापिक्सेल तक सीमित हैं: स्केल या रिज़ॉल्यूशन कम करें
+@msg	the optimised image can't be read back: {e}	ऑप्टिमाइज़ की गई इमेज वापस पढ़ी नहीं जा सकती: {e}
+@msg	the pixel buffer doesn't match the image size	पिक्सेल बफ़र इमेज के आकार से मेल नहीं खाता
+@msg	the preview: {e}	प्रीव्यू: {e}
+@msg	the request may not read the New Document profiles folder	अनुरोध नया डॉक्यूमेंट प्रोफ़ाइल फ़ोल्डर नहीं पढ़ सकता
+@msg	the shapes are too degenerate to combine	शेप इतने विकृत हैं कि उन्हें मिलाया नहीं जा सकता
+@msg	the shapes cross themselves and each other too often to combine	शेप खुद को और एक-दूसरे को इतनी बार काटते हैं कि उन्हें मिलाया नहीं जा सकता
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	स्वॉच एक्सचेंज फ़ाइल में {ASE_MAX_ENTRIES} से अधिक रंग और ग्रुप हैं
+@msg	the swatch exchange file is cut short	स्वॉच एक्सचेंज फ़ाइल अधूरी है
+@msg	the {_1} plate can't be read: {e}	{_1} प्लेट पढ़ी नहीं जा सकती: {e}
+@msg	this binary DXF file is damaged or cut short	यह बाइनरी DXF फ़ाइल क्षतिग्रस्त या अधूरी है
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	यह एक DWG ड्रॉइंग है, जिसे पढ़ा नहीं जा सकता: इसे CAD ऐप से DXF के रूप में सेव करें और वह फ़ाइल ओपन करें
+@msg	too many classes	बहुत अधिक क्लास
+@msg	too many groups	बहुत अधिक ग्रुप
+@msg	too many layers for PSD (at most 32767)	PSD के लिए बहुत अधिक लेयर्स (अधिकतम 32767)
+@msg	too many swatch exchange blocks	स्वॉच एक्सचेंज के बहुत अधिक ब्लॉक
+@msg	unknown colour profile: {0}	अज्ञात कलर प्रोफ़ाइल: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} किसी अंतर्निहित प्रोफ़ाइल के नाम से टकराता है
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} पिक्सेल GIF के लिए बहुत बड़ा है (हर तरफ़ अधिकतम 65535 पिक्सेल): रिज़ॉल्यूशन कम करें
+@msg	{_1}: no usable transform to/from sRGB	{_1}: sRGB में या sRGB से बदलने का कोई उपयोगी ट्रांसफ़ॉर्म नहीं है
+@msg	{name} is not a CMYK profile	{name} CMYK प्रोफ़ाइल नहीं है
+@msg	{name} is not an RGB profile	{name} RGB प्रोफ़ाइल नहीं है
+@msg	{path}: could not be read	{path}: पढ़ा नहीं जा सका
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} पिक्सेल JPEG के लिए बहुत बड़ा है (हर तरफ़ अधिकतम 65535 पिक्सेल): रिज़ॉल्यूशन कम करें
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} पिक्सेल Targa के लिए बहुत बड़ा है (हर तरफ़ अधिकतम 65535 पिक्सेल): रिज़ॉल्यूशन कम करें
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} पिक्सेल PSD के लिए बहुत बड़ा है (हर तरफ़ अधिकतम {MAX_SIDE} पिक्सेल): रिज़ॉल्यूशन कम करें
 	Nest Shapes…	आकृतियाँ सटाकर रखें…
 	Nest Shapes	आकृतियाँ सटाकर रखें
 	Roll	रोल
