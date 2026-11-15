@@ -118,6 +118,7 @@
 	Align to Artboard	對齊工作區域
 	Align to Glyph Bounds	對齊字符邊界
 	Align to Key Object	對齊關鍵物件
+	Align to Key Anchor	對齊關鍵錨點
 	Align to Page	對齊頁面
 	Align to Path	對齊路徑
 	Align to Selection	對齊選取範圍
@@ -1158,6 +1159,7 @@ font-technology	Variable	可變
 	Rotate (Classic)…	旋轉 (經典)…
 	Surface	表面
 	Wireframe	線框
+	Render Settings	演算設定
 	No Shading	無網底
 	Plastic	塑膠
 	Highlight Intensity	亮部強度
@@ -1404,6 +1406,40 @@ file-filter	Templates	範本
 	Graph	圖表
 	Graph Data	圖表資料
 	Graph Type	圖表類型
+	Graph Options	圖表選項
+	Left Axis	左軸
+	Right Axis	右軸
+	Category Axis	類別軸
+	Separate Scales	分開刻度
+	Add Drop Shadow	加入投影
+	Add Legend Across Top	在頂端加入圖例
+	First Row in Front	第一列在前
+	First Column in Front	第一欄在前
+	Legend	圖例
+	Column Width	直條寬度
+	Bar Width	橫條寬度
+	Cluster Width	群組寬度
+	Mark Data Points	標示資料點
+	Connect Data Points	連接資料點
+	Edge-to-Edge Lines	邊到邊線條
+	Draw Filled Lines	繪製填色線條
+	Tick Values	刻度值
+	Override Calculated Values	覆寫計算值
+	Divisions	刻度數
+	Tick Marks	刻度記號
+	Tick Marks per Division	每個刻度的記號數
+	Draw Tick Marks Between Labels	在標籤之間繪製刻度記號
+	Add Labels	加入標籤
+	Maximum must be more than Minimum.	最大值必須大於最小值。
+	Column Graph	直條圖
+	Stacked Column Graph	堆疊直條圖
+	Bar Graph	橫條圖
+	Stacked Bar Graph	堆疊橫條圖
+	Line Graph	折線圖
+	Area Graph	區域圖
+	Scatter Graph	散佈圖
+	Pie Graph	圓形圖
+	Radar Graph	雷達圖
 	Graph Design	圖表設計
 	Graph Marker	圖表標記
 	New Design	新增設計
@@ -1525,6 +1561,7 @@ file-filter	Templates	範本
 	Highlight anchors on mouse over	滑鼠移過時醒目提示錨點
 	Highlight Rows	反白顯示列
 	Highlight Variable	突出顯示變數
+	Sort Variables	排序變數
 	Highlight Substituted Fonts	醒目提示被取代的字體
 	Highlight Substituted Glyphs	醒目提示被取代的字符
 	History	步驟記錄
@@ -2705,6 +2742,7 @@ file-filter	Templates	範本
 @msg	every numbered name for {name} is taken in the document's folder	文件所在資料夾中 {name} 的所有編號名稱都已被使用
 @msg	No linked files to look for	沒有要尋找的連結檔案
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	此連結位於符號、圖表設計、圖樣或不透明度遮色片中，在畫布上沒有位置
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	圖表數列中圖表設計的圖稿會依設計重新繪製：若要變更，請編輯設計
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步驟參照 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必須是由物件 id 組成的陣列，而非 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必須是由顏色組成的陣列，而非 {v}
@@ -2716,6 +2754,7 @@ file-filter	Templates	範本
 @msg	automation filesystem access is not granted: write authority is absent: {path}	未授予自動化檔案系統存取權：沒有寫入權限：{path}
 @msg	automation path rejected: outside the read root {root}: {path}	已拒絕自動化路徑：位於讀取根目錄 {root} 之外：{path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	已拒絕自動化路徑：位於所有讀取根目錄 {roots} 之外：{path}
+@msg	a linked JavaScript file is outside the read roots	連結的 JavaScript 檔案位於所有讀取根目錄之外
 @msg	automation path rejected: outside the write root {root}: {path}	已拒絕自動化路徑：位於寫入根目錄 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒絕自動化路徑：位於所有寫入根目錄 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒絕自動化路徑：路徑是空的
@@ -3110,6 +3149,7 @@ file-filter	Templates	範本
 	Menu Dialog	選單對話框
 	Merge	合併
 	Merge colors into one row	將顏色合併為一列
+	New Row	新增列
 	Merge Graphic Styles	合併繪圖樣式
 	Merge Graphic Styles…	合併繪圖樣式…
 	Merge Layers	合併圖層
@@ -4538,6 +4578,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Sixth Space	六分之一空格
 	Size	大小
 	Size Tile to Art	拼貼符合圖稿大小
+	Move Tile with Art	拼貼隨圖稿移動
 	Size/Leading	大小/行距
 	Size:	大小：
 	Ridges per segment:	每段起伏數：
@@ -4730,6 +4771,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Swap Fill and Stroke (Shift+X)	對調填色與筆畫 (Shift+X)
 	Swap start and end arrowheads	對調起點與終點箭頭
 	Swap the selected object for the file, keeping its place and transform	以檔案取代選取的物件，並保留其位置與變形
+	Show Import Options	顯示讀入選項
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前詢問每個 PDF、DXF 或文字檔案的讀入選項；關閉時使用上次選擇的選項
 	Stylistic Alternates	風格替代字
 	Swash	花體字
 	Swatch Conflict	色票衝突
@@ -4819,11 +4862,55 @@ digits	Malayalam	馬來亞拉姆數字
 	Composite Fonts	複合字體
 	Export Composite Fonts	匯出複合字體
 	Import Composite Fonts	匯入複合字體
+@msg	each font must be {name, parts}	每個字體都必須是 {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	未知的鍵 `{k}`；字體可用的鍵為 name 和 parts
+@msg	each font needs a name	每個字體都需要名稱
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` 不能作為複合字體的名稱（1 到 {COMPOSITE_NAME_MAX} 個字元，不含控制字元）
+@msg	`{name}`: parts must be an object	`{name}`：parts 必須是物件
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`：未知的類別 `{k}`；類別為 kanji、kana、punctuation、symbols、roman 和 numerals
+@msg	`{name}`: {_1} must be an object	`{name}`：{_1} 必須是物件
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`：{_1} 中有未知的鍵 `{k}`
+@msg	`{name}`: give the kanji part	`{name}`：請指定 kanji 部分
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	一份文件最多保存 {COMPOSITE_FONTS_MAX} 個複合字體
+@msg	two composite fonts are named `{_1}`	有兩個複合字體都名為 `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` 是已安裝字體的名稱
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`：{_2} 使用了複合字體 `{font}`
+@msg	give fonts: [{name, parts}…]	請指定 fonts：[{name, parts}…]
+@msg	path is empty	path 為空
+@msg	fonts must be a list of composite fonts	fonts 必須是複合字體清單
+@msg	names must be strings	names 必須是字串
+@msg	no composite font named `{n}`	沒有名為 `{n}` 的複合字體
+@msg	names must be a list of names	names 必須是名稱清單
+@msg	no composite fonts to export	沒有可匯出的複合字體
+@msg	not a composite fonts file: {e}	不是複合字體檔案：{e}
+@msg	not a composite fonts file: no compositeFonts list	不是複合字體檔案：沒有 compositeFonts 清單
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	檔案包含超過 {COMPOSITE_FONTS_MAX} 個複合字體
+@msg	the file is larger than 4 MB	檔案大於 4 MB
+@msg	dataBase64 is not base64	dataBase64 不是 base64
+@msg	give one of path, data or dataBase64	請指定 path、data 或 dataBase64 其中之一
+@msg	the file holds no composite fonts	檔案不含複合字體
+@msg	the file holds two composite fonts named `{_1}`	檔案中有兩個複合字體都名為 `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` 不能作為複合字體的名稱
+@msg	{k}: give a font	{k}：請指定字體
+@msg	`{name}`: {k}: give a font	`{name}`: {k}：請指定字體
+@msg	{k}: size must be {_1} to {_2}%	{k}：size 必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}：size 必須為 {_1}% 到 {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}：baseline 必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}：baseline 必須為 {_1}% 到 {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}：縮放必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}：縮放必須為 {_1}% 到 {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}：只有 kana、roman 和 numerals 可以縮放
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}：只有 kana、roman 和 numerals 可以縮放
+@msg	{k}: only kana can be scaled at the center	{k}：只有 kana 可以從中心縮放
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}：只有 kana 可以從中心縮放
+@msg	no composite font	沒有複合字體
 	Delete Font	刪除字體
 	Kanji	漢字
 	Kana	假名
 	Numerals	數字
 	Scale at Center	從中心縮放
+	Delete Set	刪除集
+	Direct Entry	直接輸入
 	Up/Down:	上/下：
 	Left/Right:	左/右：
 	Tate-chu-yoko Up/Down	縱中橫上/下
@@ -5189,6 +5276,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Working CMYK	使用中的 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加標記)
 	Working RGB (don't tag)	工作 RGB (不加標記)
+	Don't Color Manage This Document	不對此文件進行色彩管理
+	Working RGB: {name}	工作 RGB：{name}
+	Working CMYK: {name}	工作 CMYK：{name}
 	Workspace	工作區
 	Workspace {i}	工作區 {i}
 	Wrinkle Tool	皺摺工具
@@ -5477,6 +5567,11 @@ axis	Both	兩者
 	Interpolation	內插
 	RGB:	RGB：
 	CMYK:	CMYK：
+	RGB Policy:	RGB 原則：
+	CMYK Policy:	CMYK 原則：
+	Preserve Embedded Profiles	保留內嵌描述檔
+	Convert to Working Space	轉換為工作空間
+	Preserve Numbers	保留數值
 	Texture	紋理
 	Craquelure…	龜裂紋…
 	Grain…	顆粒…
@@ -5723,6 +5818,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必須是只含 `mode` 的物件，值為 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
 @msg	bevel must be none or one of {_1}	bevel 必須是 none 或 {_1} 其中之一
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}無法從此圖稿產生實體：其符號實例、漸變和剪裁群組包含的物件過多
@@ -5802,6 +5898,9 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
+	Move Light to Back	將光源移到後方
+	Move Light to Front	將光源移到前方
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	拖曳光源即可移動。方向鍵會移動具有焦點的光源；按住 Shift 以 15° 為間距。
 	Shadows	陰影
 	Distance from Object	與物件的距離
 	Shadow Bounds	陰影邊界
@@ -5854,6 +5953,8 @@ lighting	Light	光源
 	Save Variable Library…	儲存變數資料庫…
 @msg	a variable library holds text variables, and the document has none	變數資料庫包含文字變數，但文件中沒有文字變數
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	無法將變數 `{name}` 儲存到變數資料庫：請重新命名，使其以字母或 `_` 開頭，且不含空格或 `-`、`_`、`.` 以外的符號
+@msg	{k} has control characters	{k} 包含控制字元
+@msg	{k} has control characters or line breaks	{k} 包含控制字元或換行
 @msg	data set `{name}` holds a control character, which a variable library can't hold	資料集 `{name}` 包含變數資料庫無法儲存的控制字元
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	資料集 `{name}` 的開頭或結尾有變數資料庫無法儲存的空白字元
 	Make Graph Dynamic	使圖表動態化
@@ -6149,6 +6250,7 @@ axis	Y Axis	Y 軸
 @msg	stops must be in order of `offset`	色標必須依 `offset` 排序
 @msg	the document has no pattern {pattern}	文件中沒有圖樣 {pattern}
 @msg	the document has no swatch {n}	文件中沒有色票 {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` 需要連結到特別色色票的漸層色標
 @msg	the output	輸出
 @msg	the path has no anchor points	路徑沒有錨點
 @msg	too many anchor points (limit {MAX_ANCHORS})	錨點過多（上限 {MAX_ANCHORS}）
@@ -6335,6 +6437,8 @@ axis	Y Axis	Y 軸
 	Create New Set	建立新組
 	Stop Global Edit	停止整體編輯
 	Global Edit Options	整體編輯選項
+	Select Similar Objects	選取相似物件
+	Select Similar Options	選取相似物件選項
 	Leave Out of Global Edit	從整體編輯中排除
 	Match	符合
 	On Artboards	在工作區域上
@@ -6457,6 +6561,13 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	石墨鉛筆
 	Wax Crayon	蠟筆
 	Charcoal Dust	炭粉
+
+# Original procedural circuit brushes.
+	Tech Circuit	電子電路
+	Circuit Trace	電路走線
+	Bus Lines	匯流排
+	Terminal Nodes	端子節點
+
 	Notched Ribbon	凹口緞帶
 	Double Line	雙線
 	Wave	波浪

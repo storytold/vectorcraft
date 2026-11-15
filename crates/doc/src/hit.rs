@@ -504,7 +504,7 @@ fn object_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, editab
 /// [`hit_test`] passing over the nodes `skip` names (and their contents), and with
 /// `editable_only` over the objects of layers and sublayers on a locked artboard, and over all of
 /// an isolated group on one ([`crate::LockedArtboards::holds`]). Symbol instances are measured by their art
-/// ([`Node::geometric_bounds_with`]).
+/// ([`Node::geometric_bounds_with`]), and are also hit outside that box where their art paints.
 fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool, editable_only: bool) -> Option<Hit> {
     let finish = |mut h: Hit| {
         h.contents_of = h.ancestry.iter().rev().copied().find(|a| doc.node(*a).is_some_and(edits_contents));
@@ -1055,8 +1055,16 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
                 AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
             })
         }
-        NodeKind::Text(_) | NodeKind::PlacedDocument(_) | NodeKind::SymbolInstance { .. } => {
+        NodeKind::Text(_) | NodeKind::PlacedDocument(_) => {
             n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
+        }
+        // A symbol instance is hit within its bounds, and outside them where its art paints
+        // ([`instance_art_hit`]).
+        NodeKind::SymbolInstance { .. } => {
+            if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+                return Some(HitKind::Bounds);
+            }
+            instance_art_hit(n, p, opt, symbols)
         }
         // A blend or an envelope is hit within its bounds, and outside them where its evaluated
         // art paints: a blend's keys and steps on a spine can reach past the keys and the spine,
@@ -1211,64 +1219,94 @@ fn moved(n: &Node, xf: vectorcraft_geom::Affine) -> Node {
 /// layer, is tested in outline ([`HitOptions::outline`]), as the canvas draws it. `None` when `inst` is not a symbol instance or
 /// no editable object of its art is under `p`.
 pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) -> Option<Vec<u32>> {
-    struct Find<'a> {
-        art: &'a InstanceArt<'a>,
-        p: Point,
-        opt: HitOptions,
-        symbols: &'a SymbolBoxes<'a>,
-    }
-    impl Find<'_> {
-        fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>, opt: HitOptions) -> bool {
-            self.art.place(n, whole).is_some_and(|n| hit_any(&n, self.p, opt, self.symbols).is_some())
-        }
-        fn skips_guide(&self, n: &Node) -> bool {
-            self.opt.skip_guides && matches!(n.kind, NodeKind::Path { guide: true, .. })
-        }
-        /// `outline`: the view is in Outline, or a layer around `n` has Preview off.
-        fn find(&self, n: &Node, path: &mut Vec<u32>, whole: Option<vectorcraft_geom::Affine>, outline: bool) -> bool {
-            if !n.visible || n.locked || n.is_template() || self.skips_guide(n) {
-                return false;
-            }
-            let outline = outline || previews_off(n);
-            let opt = HitOptions { outline, ..self.opt };
-            let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole, opt) };
-            if path.len() >= crate::symbol_overrides::MAX_PATH_DEPTH {
-                return self.hit(n, whole, opt);
-            }
-            let whole = self.art.whole(n, whole);
-            if n.clips()
-                && let Some(first) = children.first()
-            {
-                let Some(clip) = self.art.place_unclipped(first, whole) else { return false };
-                if self.opt.clip_outlines && first.visible && !first.locked && !self.skips_guide(first) && clip_outline(&clip, self.p, opt).is_some()
-                {
-                    path.push(0);
-                    return true;
-                }
-                if !clip_contains(&clip, self.p, outline) {
-                    return false;
-                }
-            }
-            for (i, c) in children.iter().enumerate().rev() {
-                // A Shaper group's original shapes are not drawn; symbol art has no isolation scope.
-                if shaper_hides(n, i, None) {
-                    continue;
-                }
-                let Ok(i) = u32::try_from(i) else { continue };
-                path.push(i);
-                if self.find(c, path, whole, outline) {
-                    return true;
-                }
-                path.pop();
-            }
-            false
-        }
-    }
     let art = InstanceArt::of(doc, inst)?;
     let symbols = doc.symbol_boxes();
     let mut path = vec![];
     let outline = opt.outline || below_preview_off(doc, inst, opt.scope);
-    Find { art: &art, p, opt, symbols: &symbols }.find(&art.art, &mut path, None, outline).then_some(path)
+    let find = FindPart { art: &art, p, opt, symbols: &symbols, whole_instance: false };
+    find.find(&art.art, &mut path, None, outline).map(|_| path)
+}
+
+/// The walk of a symbol instance's placed art that [`symbol_part_at`] and [`instance_art_hit`] make.
+struct FindPart<'a> {
+    art: &'a InstanceArt<'a>,
+    p: Point,
+    opt: HitOptions,
+    symbols: &'a SymbolBoxes<'a>,
+    /// For [`instance_art_hit`]: locked and template objects of the art count, as the canvas draws
+    /// them, and clipping paths are not picked by their outline.
+    whole_instance: bool,
+}
+
+impl FindPart<'_> {
+    fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>, opt: HitOptions) -> Option<HitKind> {
+        self.art.place(n, whole).and_then(|n| hit_any(&n, self.p, opt, self.symbols))
+    }
+
+    fn skips_guide(&self, n: &Node) -> bool {
+        self.opt.skip_guides && matches!(n.kind, NodeKind::Path { guide: true, .. })
+    }
+
+    /// What a click at `p` hits on object `n` of the art, with `path` the child indices that lead
+    /// to what it hits. `outline`: the view is in Outline, or a layer around `n` has Preview off.
+    fn find(&self, n: &Node, path: &mut Vec<u32>, whole: Option<vectorcraft_geom::Affine>, outline: bool) -> Option<HitKind> {
+        if !n.visible || !self.whole_instance && (n.locked || n.is_template()) || self.skips_guide(n) {
+            return None;
+        }
+        let outline = outline || previews_off(n);
+        let opt = HitOptions { outline, ..self.opt };
+        let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole, opt) };
+        if path.len() >= crate::symbol_overrides::MAX_PATH_DEPTH {
+            return self.hit(n, whole, opt);
+        }
+        let whole = self.art.whole(n, whole);
+        if n.clips()
+            && let Some(first) = children.first()
+        {
+            let clip = self.art.place_unclipped(first, whole)?;
+            if !self.whole_instance
+                && self.opt.clip_outlines
+                && first.visible
+                && !first.locked
+                && !self.skips_guide(first)
+                && let Some(kind) = clip_outline(&clip, self.p, opt)
+            {
+                path.push(0);
+                return Some(kind);
+            }
+            if !clip_contains(&clip, self.p, outline) {
+                return None;
+            }
+        }
+        for (i, c) in children.iter().enumerate().rev() {
+            // A Shaper group's original shapes are not drawn; symbol art has no isolation scope.
+            if shaper_hides(n, i, None) {
+                continue;
+            }
+            let Ok(i) = u32::try_from(i) else { continue };
+            path.push(i);
+            if let Some(kind) = self.find(c, path, whole, outline) {
+                return Some(kind);
+            }
+            path.pop();
+        }
+        None
+    }
+}
+
+/// What a click at `p` hits of symbol instance `n`'s art where the canvas draws it (`None` in
+/// Outline, [`HitOptions::outline`]): its strokes, and the art that the live geometry effects of a
+/// clipping path in it show past the art's box. `None` for an instance of a missing symbol, of a
+/// symbol that holds an instance of itself or nests too deep ([`SymbolBoxes::art`]), and of art past
+/// the 9-slice object limit ([`InstanceArt::of`]).
+fn instance_art_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
+    let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return None };
+    if opt.outline || symbols.art(symbol).is_none() {
+        return None;
+    }
+    let art = InstanceArt::of(symbols.document(), n)?;
+    let opt = HitOptions { clip_outlines: false, ..opt };
+    FindPart { art: &art, p, opt, symbols, whole_instance: true }.find(&art.art, &mut vec![], None, false)
 }
 
 /// Is `n` below a layer whose Preview is off, so that the canvas draws it in outline? As for clicks
@@ -1435,7 +1473,8 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 
 /// Objects (children of layers, or of `scope` in isolation mode) touched by a marquee rect, leaving
 /// out those on a locked artboard ([`crate::LockedArtboards::holds_id`]). Symbol instances are measured
-/// by their art ([`Node::geometric_bounds_with`]). The art of a clip group or of a layer with a
+/// by their art ([`Node::geometric_bounds_with`]), and outside that box, except in outline, they are
+/// touched where the live geometry effects of a clipping path in their art show it. The art of a clip group or of a layer with a
 /// clipping mask counts only when the marquee meets the region its clipping path clips to, and then
 /// only within that region's bounds. In isolation mode the clipping mask of the isolated container,
 /// or of the parent of the single object isolated, does not limit the marquee, as it does not limit
@@ -1573,13 +1612,32 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             }
             NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds, outline)),
             NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds, outline)),
-            // A box with no width or no height (an instance of a symbol that draws a straight
-            // line) is touched where the marquee crosses it.
-            _ => n.geometric_bounds_with(s).is_some_and(|b| {
-                let crosses = (b.width() == 0.0 || b.height() == 0.0) && b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1;
-                b.intersect(r).area() > 0.0 || r.contains(b.origin()) || crosses
-            }),
+            // A symbol instance is touched by its box, and outside it where the live geometry
+            // effects of a clipping path in its art show the art.
+            NodeKind::SymbolInstance { .. } => box_touches(n, s, r) || !outline && instance_art_touches(n, s, r, whole_compounds),
+            _ => box_touches(n, s, r),
         }
+    }
+    /// Does the marquee `r` touch the box of `n`? A box with no width or no height (an instance of
+    /// a symbol that draws a straight line) is touched where the marquee crosses it.
+    fn box_touches(n: &Node, s: &SymbolBoxes, r: Rect) -> bool {
+        n.geometric_bounds_with(s).is_some_and(|b| {
+            let crosses = (b.width() == 0.0 || b.height() == 0.0) && b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1;
+            b.intersect(r).area() > 0.0 || r.contains(b.origin()) || crosses
+        })
+    }
+    /// Does the marquee `r` touch the art of symbol instance `n` placed as the canvas draws it, as
+    /// it touches a group of that art? Only for art whose clipping paths have live geometry effects
+    /// ([`SymbolBoxes::art`]), and only when `r` meets the instance's reach
+    /// ([`Node::reach_bounds_with`]): elsewhere the art lies within the instance's box.
+    fn instance_art_touches(n: &Node, s: &SymbolBoxes, r: Rect, whole_compounds: bool) -> bool {
+        let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return false };
+        let meets = |b: Rect| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1;
+        if s.art(symbol).is_none_or(|a| a.reshaped.is_none()) || !n.reach_bounds_with(s).is_some_and(meets) {
+            return false;
+        }
+        let Some(art) = InstanceArt::of(s.document(), n) else { return false };
+        art.place(&art.art, None).is_some_and(|placed| placed.visible && touches(&placed, s, r, None, whole_compounds, false))
     }
     fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool, out: &mut Vec<NodeId>) {
         match &n.kind {
