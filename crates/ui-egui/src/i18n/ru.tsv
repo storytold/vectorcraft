@@ -1568,6 +1568,7 @@ file-filter	Templates	Шаблоны
 	Show smooth color wheel	Показать плавный цветовой круг
 	Show segmented color wheel	Показать сегментированный цветовой круг
 	Show color bars	Показать цветовые полосы
+	Find the selected colors in the artwork	Найти выбранные цвета в рисунке
 	Harmony Sets	Наборы гармонии
 	Height	Высота
 	Height:	Высота:
@@ -2765,6 +2766,8 @@ mark-style	Japanese	Японский
 	Insert Aki Left	Вставить аки слева
 	Insert Aki Right	Вставить аки справа
 	Tsume	Цумэ
+	Adjust Horizontal Diacritic Position	Настроить горизонтальное положение диакритических знаков
+	Adjust Vertical Diacritic Position	Настроить вертикальное положение диакритических знаков
 	Character Direction	Направление символов
 	Digits	Цифры
 	Arabic	Арабские
@@ -5602,6 +5605,8 @@ axis	Both	Оба
 	Step up or down	Шаг вверх или вниз
 	Drag values or labels. Double-click a value to type.	Перетаскивайте значения или подписи. Для ввода дважды щёлкните значение.
 	Drag rings to rotate. Shift snaps to 15°.	Перетаскивайте кольца для вращения. Shift задаёт шаг 15°.
+	Track cube	Куб вращения
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Перетащите грань, ребро или кольцо для вращения. Shift вращает вокруг одной оси экрана.
 	Drag the light, or its rings. Shift snaps to 15°.	Перетаскивайте источник света или кольца. Shift задаёт шаг 15°.
 lighting	Light	Свет
 	Keep visible surfaces only when expanding	При разборе сохранять только видимые поверхности
@@ -9696,5 +9701,22 @@ shape	Open	Открытый
 @msg	{path}: could not be read	{path}: не удалось прочитать
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для JPEG (не более 65535 пикселей по стороне): уменьшите разрешение
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для Targa (не более 65535 пикселей по стороне): уменьшите разрешение
+	Packaging Tools	Инструменты упаковки
+	Fold Lines	Линии сгиба
+	Make Cut Line	Сделать линией реза
+	Make Crease Line	Сделать линией биговки
+	Make Partial Cut Line	Сделать линией надреза
+	Make Perforation Line	Сделать линией перфорации
+	Make Fold Line	Сделать линией сгиба
+	Role Swatches…	Образцы типов линий…
+	Role Swatches	Образцы типов линий
+	Role	Тип линии
+	Cut Line	Линия реза
+	Crease Line	Линия биговки
+	Partial Cut Line	Линия надреза
+	Perforation Line	Линия перфорации
+	No objects are selected.	Объекты не выделены.
+	Open a document to mark its fold lines.	Откройте документ, чтобы отметить его линии сгиба.
+	Remove Fold Line Role	Убрать тип линии
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

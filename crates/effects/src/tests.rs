@@ -11,6 +11,7 @@ mod rasterfollow;
 mod scale;
 mod solidcontext;
 mod transformfx;
+mod typestroke;
 
 fn fx(id: &str, params: Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
