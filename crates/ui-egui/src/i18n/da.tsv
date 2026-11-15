@@ -145,6 +145,18 @@
 @msg	`name` must be the name of a script engine	`name` skal være navnet på en scriptmotor
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hovedscriptmotoren er ny ved hver kørsel og bevares aldrig, så den kan ikke fjernes
 @msg	there is no script engine named {name}	der findes ingen scriptmotor med navnet {name}
+@msg	`answers` must be a list of answers	`answers` skal være en liste med svar
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har flere end {MAX_ANSWERS} svar
+@msg	`answers` is larger than 1 MiB	`answers` er større end 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	skal være et objekt med `kind` og `value`
+@msg	must have exactly `kind` and `value`	skal have præcis `kind` og `value`
+@msg	is an alert's answer, whose `value` must be "ok"	er svaret på en alert, hvis `value` skal være "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	er svaret på en confirm, hvis `value` skal være true eller false
+@msg	is longer than 16 KiB	er længere end 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	er svaret på en prompt, hvis `value` skal være en streng eller null
+@msg	must have `kind` alert, confirm or prompt	skal have `kind` alert, confirm eller prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` er kun til en kørsel uden nogen at spørge: i appen besvarer personen hver dialog
 @msg	Running a script	Kører et script
 @msg	Data Recovery can't keep copies in {path}: {e}	Datagendannelse kan ikke opbevare kopier i {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kan ikke indlæses fra {path}: {e}
@@ -427,6 +439,7 @@
 @msg	{what} points outside memory	{what} peger uden for hukommelsen
 @msg	`angle` must be a number	`angle` skal være et tal
 @msg	`aspect` must be from 0.01 to 100	`aspect` skal være fra 0,01 til 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` skal være [a, b, c, d], hver fra -1000 til 1000, med a·d - b·c mindst 0,001 fra 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` skal være "butt", "round" eller "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` skal være "nonzero" eller "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` skal være en https://-adresse på højst {MAX_HELP_URL} byte
@@ -1587,6 +1600,8 @@
 	Reset all Revolve settings to their defaults.	Nulstil alle indstillinger for omdrejning til standardværdierne.
 	Drag values or labels. Double-click a value to type.	Træk i værdier eller etiketter. Dobbeltklik på en værdi for at indtaste.
 	Drag rings to rotate. Shift snaps to 15°.	Træk i ringe for at rotere. Shift fastgør til 15°.
+	Track cube	Rotationsterning
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Træk i en flade, en kant eller ringen for at rotere. Shift roterer om én skærmakse.
 	Drag the light, or its rings. Shift snaps to 15°.	Træk i lyset eller dets ringe. Shift fastgør til 15°.
 lighting	Light	Lys
 	Keep visible surfaces only when expanding	Behold kun synlige flader ved udvidelse
@@ -2143,6 +2158,8 @@ lighting	Light	Lys
 	Insert Aki Left	Indsæt aki til venstre
 	Insert Aki Right	Indsæt aki til højre
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Juster vandret placering af diakritiske tegn
+	Adjust Vertical Diacritic Position	Juster lodret placering af diakritiske tegn
 	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
@@ -2520,7 +2537,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Tabulære versalcifre
 	Tabular Oldstyle	Tabulære mediævalcifre
 	Titling Alternates	Titelalternativer
-	Every-line Composer	Hverlinjesætter
+	Middle Eastern & South Asian Single-line Composer	Enlinjesætter (Mellemøsten og Sydasien)
+	Middle Eastern & South Asian Every-line Composer	Hverlinjesætter (Mellemøsten og Sydasien)
+	Standard Single-line Composer	Standard-enlinjesætter
+	Standard Every-line Composer	Standard-hverlinjesætter
 	First-line Left Indent	Venstre indrykning af første linje
 	Hyphenation…	Orddeling…
 	Justification…	Justering…
@@ -2552,7 +2572,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Indstillinger for østasiatisk komposition
 	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
-	Single-line Composer	Enlinjesætter
 	Toggle Line Composer	Skift linjesætter
 	Space After Paragraph	Mellemrum efter afsnit
 	Space Before Paragraph	Mellemrum før afsnit
@@ -3367,6 +3386,7 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vis glat farvehjul
 	Show segmented color wheel	Vis segmenteret farvehjul
 	Show color bars	Vis farvebjælker
+	Find the selected colors in the artwork	Find de valgte farver i grafikken
 	Harmony Rules	Harmoniregler
 	Keep this row's colors (exclude)	Behold farverne i denne række (ekskludér)
 	Limit to Library:	Begræns til bibliotek:
@@ -5399,6 +5419,7 @@ imageTrace	Outline	Kontur
 @msg	plug-in failed: {0}	plug-in fejlede: {0}
 @msg	plug-in manifest: {0}	plug-in-manifest: {0}
 @msg	plug-in output: {0}	plug-in-output: {0}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	plug-in parameters: {0}	plug-in-parametre: {0}
 @msg	plug-in trapped: {0}	plug-in'et blev fanget: {0}
 @msg	print settings are not an object	printindstillingerne er ikke et objekt
@@ -6514,6 +6535,14 @@ swatch	Bright Violet	Kraftig violet
 	Color wheel	Farvehjul
 	First Artboard	Første kunstplade
 	Last Artboard	Sidste kunstplade
+	Status Bar Show	Vis i statuslinjen
+	Artboard Name	Kunstpladens navn
+	Current Tool	Aktuelt værktøj
+	Date and Time	Dato og klokkeslæt
+	Number of Undos	Antal fortrydelser
+	Document Color Profile	Dokumentets farveprofil
+	Undos	Fortrydelser
+	Redos	Gentagelser
 	Next Artboard	Næste kunstplade
 	Previous Artboard	Forrige kunstplade
 	Step up or down	Trinvis op eller ned
@@ -7656,3 +7685,21 @@ breakText	Glyphs	Glyffer
 	Nest Shapes…	Pak figurer tæt…
 	Nest Shapes	Pak figurer tæt
 	Roll	Rulle
+	Packaging Tools	Emballageværktøjer
+	Fold Lines	Foldelinjer
+	Make Cut Line	Gør til skærelinje
+	Make Crease Line	Gør til rillelinje
+	Make Partial Cut Line	Gør til delvis skærelinje
+	Make Perforation Line	Gør til perforeringslinje
+	Make Fold Line	Gør til foldelinje
+	Role Swatches…	Farveprøver for linjetyper…
+	Role Swatches	Farveprøver for linjetyper
+	Role	Linjetype
+	Cut Line	Skærelinje
+	Crease Line	Rillelinje
+	Partial Cut Line	Delvis skærelinje
+	Perforation Line	Perforeringslinje
+	No objects are selected.	Ingen objekter er markeret.
+	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
+	Remove Fold Line Role	Fjern linjetype
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

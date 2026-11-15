@@ -145,6 +145,7 @@
 @msg	`name` must be the name of a script engine	`name` moet de naam van een scriptengine zijn
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	de hoofdscriptengine is bij elke uitvoering nieuw en wordt nooit bewaard, dus kan hij niet worden verwijderd
 @msg	there is no script engine named {name}	er is geen scriptengine met de naam {name}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` is alleen voor een uitvoering zonder iemand om te vragen: in de app beantwoordt de persoon elk dialoogvenster
 @msg	Running a script	Er wordt een script uitgevoerd
 @msg	Data Recovery can't keep copies in {path}: {e}	Gegevensherstel kan geen kopieën bewaren in {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kunnen niet worden geladen uit {path}: {e}
@@ -1495,6 +1496,8 @@
 	Reset all Revolve settings to their defaults.	Stelt alle draai-instellingen opnieuw in op de standaardwaarden.
 	Drag values or labels. Double-click a value to type.	Sleep waarden of labels. Dubbelklik op een waarde om te typen.
 	Drag rings to rotate. Shift snaps to 15°.	Sleep de ringen om te roteren. Shift lijnt uit op 15°.
+	Track cube	Rotatiekubus
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Sleep een vlak, een rand of de ring om te roteren. Shift roteert om één schermas.
 	Drag the light, or its rings. Shift snaps to 15°.	Sleep het licht of de ringen ervan. Shift lijnt uit op 15°.
 lighting	Light	Licht
 	Keep visible surfaces only when expanding	Alleen zichtbare oppervlakken behouden bij het uitbreiden
@@ -2051,6 +2054,8 @@ lighting	Light	Licht
 	Insert Aki Left	Aki links invoegen
 	Insert Aki Right	Aki rechts invoegen
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Horizontale positie van diakritische tekens aanpassen
+	Adjust Vertical Diacritic Position	Verticale positie van diakritische tekens aanpassen
 	Character Direction	Tekenrichting
 	Digits	Cijfers
 	Arabic	Arabisch
@@ -2428,7 +2433,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Tabulaire lining
 	Tabular Oldstyle	Tabulaire oldstyle
 	Titling Alternates	Titelalternatieven
-	Every-line Composer	Compositie per alinea
+	Middle Eastern & South Asian Single-line Composer	Compositie per regel (Midden-Oosten en Zuid-Azië)
+	Middle Eastern & South Asian Every-line Composer	Compositie per alinea (Midden-Oosten en Zuid-Azië)
+	Standard Single-line Composer	Standaardcompositie per regel
+	Standard Every-line Composer	Standaardcompositie per alinea
 	First-line Left Indent	Eerste regel links inspringen
 	Hyphenation…	Afbreken…
 	Justification…	Uitvullen…
@@ -2460,7 +2468,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Instellingen voor Oost-Aziatische zetting
 	Korean Composition Settings	Instellingen voor Koreaanse zetting
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
-	Single-line Composer	Compositie per regel
 	Toggle Line Composer	Compositiemethode wisselen
 	Space After Paragraph	Ruimte na alinea
 	Space Before Paragraph	Ruimte voor alinea
@@ -3275,6 +3282,7 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vloeiend kleurenwiel tonen
 	Show segmented color wheel	Gesegmenteerd kleurenwiel tonen
 	Show color bars	Kleurbalken tonen
+	Find the selected colors in the artwork	De geselecteerde kleuren zoeken in de artwork
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
 	Limit to Library:	Beperken tot bibliotheek:
@@ -5726,6 +5734,7 @@ imageTrace	Outline	Contour
 @msg	Image Trace failed: {e}	Afbeelding traceren is mislukt: {e}
 @msg	Image Trace finished, but its document was closed	Afbeelding traceren is voltooid, maar het document ervan is gesloten
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Afbeelding traceren is voltooid, maar de afbeelding of de instellingen ervan zijn intussen gewijzigd: traceer de afbeelding opnieuw
+@msg	Image Trace finished, but its document was reverted: trace it again	Afbeelding traceren is voltooid, maar het document ervan is teruggezet: traceer de afbeelding opnieuw
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG-filter importeren leest SVG-bestanden, geen SVGZ
 @msg	Invalid dimension offset	Ongeldige verschuiving van de maatlijn
 @msg	Invalid point	Ongeldig punt
@@ -5900,6 +5909,7 @@ imageTrace	Outline	Contour
 @msg	`names` must be an array of style names	`names` moet een array van stijlnamen zijn
 @msg	`new` is a design name, or true	`new` is de naam van een ontwerp, of true
 @msg	`origin` must be [x, y] in points	`origin` moet [x, y] in punten zijn
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` moet [a, b, c, d] zijn, elk van -1000 tot 1000, met a·d - b·c minstens 0,001 van 0 af
 @msg	`path` must be a folder	`path` moet een map zijn
 @msg	`path` must be a path object	`path` moet een padobject zijn
 @msg	`picks` must be an array (got {v})	`picks` moet een array zijn (kreeg {v})
@@ -6308,7 +6318,7 @@ imageTrace	Outline	Contour
 @msg	column: true floats the whole column and takes no onto, above or below	column: true laat de hele kolom zweven en accepteert geen onto, above of below
 @msg	command must be a shape.* command	command moet een shape.*-opdracht zijn
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` ontbreekt
-@msg	composer must be "singleLine" or "everyLine"	composer moet "singleLine" of "everyLine" zijn
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer moet "singleLine", "everyLine", "standardSingleLine" of "standardEveryLine" zijn
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	samengestelde vormen accepteren paden, samengestelde paden, groepen, samengestelde vormen, tekst, mengsels en omvormingen
 @msg	compound {_1} must contain exactly one open path to join	samengesteld object {_1} moet precies één open pad bevatten om te verbinden
 @msg	connect needs a path other than the one extended	connect heeft een ander pad nodig dan het pad dat wordt verlengd
@@ -8304,6 +8314,14 @@ swatch	Bright Violet	Felviolet
 	Color wheel	Kleurenwiel
 	First Artboard	Eerste tekenbord
 	Last Artboard	Laatste tekenbord
+	Status Bar Show	Weergeven in statusbalk
+	Artboard Name	Naam van tekenbord
+	Current Tool	Huidig gereedschap
+	Date and Time	Datum en tijd
+	Number of Undos	Aantal ongedaan gemaakte stappen
+	Document Color Profile	Kleurprofiel van document
+	Undos	Ongedaan maken
+	Redos	Opnieuw uitvoeren
 	Next Artboard	Volgende tekenbord
 	Previous Artboard	Vorige tekenbord
 	Step up or down	Stapsgewijs verhogen of verlagen
@@ -9611,3 +9629,20 @@ breakText	Glyphs	Glyphs
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor JPEG (maximaal 65535 pixels per zijde): verlaag de resolutie
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor Targa (maximaal 65535 pixels per zijde): verlaag de resolutie
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels is te groot voor PSD (maximaal {MAX_SIDE} pixels per zijde): verlaag de resolutie
+	Packaging Tools	Verpakkingsgereedschap
+	Fold Lines	Vouwlijnen
+	Make Cut Line	Snijlijn maken
+	Make Crease Line	Rillijn maken
+	Make Partial Cut Line	Halve snijlijn maken
+	Make Perforation Line	Perforatielijn maken
+	Make Fold Line	Vouwlijn maken
+	Role Swatches…	Stalen van lijnsoorten…
+	Role Swatches	Stalen van lijnsoorten
+	Role	Lijnsoort
+	Cut Line	Snijlijn
+	Crease Line	Rillijn
+	Partial Cut Line	Halve snijlijn
+	Perforation Line	Perforatielijn
+	No objects are selected.	Er zijn geen objecten geselecteerd.
+	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
+	Remove Fold Line Role	Lijnsoort verwijderen

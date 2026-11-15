@@ -61,7 +61,7 @@ pub fn is_document(name: &str) -> bool {
 #[derive(Default)]
 pub struct PlaceState {
     /// Web: the bytes of the files picked for the Place dialog, by name.
-    picked: Vec<(String, Vec<u8>)>,
+    pub(crate) picked: Vec<(String, Vec<u8>)>,
     /// The loaded cursor's thumbnails by file name.
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
@@ -87,6 +87,11 @@ pub struct PlaceState {
 /// that opened it ([`PlaceState::asked`]); hidden from the dialog's fields and removed before the
 /// file is placed.
 const ASKED: &str = "__placeCursorAsk";
+
+/// The `file.place` param that keeps where a file dropped on a canvas goes (`{doc, reverts}`, as
+/// [`DropAt`]) through the import options dialog the drop opened, so its OK places the file in that
+/// document; hidden from the dialog's fields and removed before the file is placed.
+const DROPPED: &str = "__dropTarget";
 
 /// A place cursor thumbnail: decoded when the cursor is loaded, uploaded when first drawn (and
 /// again in a new graphics context).
@@ -125,10 +130,11 @@ fn engine(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Value, String
 
 /// File → Place… (`file.place`): with a file (`path` or `name` + `dataBase64`), place it, centred
 /// in the view unless `at`, `rect` or `replace` say otherwise (a text file without `text` options,
-/// a DXF drawing without `dxf` options and a PDF with several pages or a password and no `page`
-/// ask for them first, unless `showImportOptions: false` places them with the options confirmed
-/// last); with `paths`, the Place dialog for them; with neither, pick the files first. The file is
-/// read and placed at once (MCP, scripts).
+/// a DXF drawing without `dxf` options, a PSD file embedded without `layers` (when the user places
+/// it) and a PDF with several pages or a password and no `page` ask for them first, unless
+/// `showImportOptions: false` places them with the options confirmed last); with `paths`, the
+/// Place dialog for them; with neither, pick the files first. The file is read and placed at once
+/// (MCP, scripts).
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     place_file(app, p, Read::AtOnce)
 }
@@ -148,7 +154,23 @@ enum Read {
     ForUser { dropped: bool },
 }
 
-fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
+fn place_file(app: &mut VectorcraftApp, p: &Value, mut read: Read) -> Result<Value, String> {
+    // A file dropped on a canvas, and the OK of the import options its drop asked for, go to the
+    // document it was dropped on, which becomes active again; not when that document has closed or
+    // been reverted since.
+    if let Some(target) = p.get(DROPPED) {
+        let field = |k: &str| target.get(k).and_then(Value::as_u64);
+        let Some(i) = app.session.documents().iter().position(|st| Some(st.uid) == field("doc")) else {
+            return Err("the document it was dropped on was closed".into());
+        };
+        if app.session.documents().get(i).is_some_and(|st| Some(st.reverts) != field("reverts")) {
+            return Err("the document it was dropped on was reverted".into());
+        }
+        app.session.set_active(i);
+        if let Read::ForUser { .. } = read {
+            read = Read::ForUser { dropped: true };
+        }
+    }
     // The OK of import options a click of the place cursor asked for places within the roots the
     // cursor was loaded in. A caller with roots of its own places within those.
     let Some(token) = p.get(ASKED) else { return place_file_in(app, p, read) };
@@ -181,6 +203,7 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         if let Some(dxf) = crate::dialogs::dxf_import::last_options(app, &p) {
             p["dxf"] = dxf;
         }
+        crate::dialogs::psd_import::last_options(app, &mut p);
     }
     if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
         return Ok(crate::dialogs::text_import::open(app, &p));
@@ -209,6 +232,12 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     if ask && crate::dialogs::dxf_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
     }
+    // A PSD file with several layers or with slices that the user embeds asks for its import
+    // options. A place run as a command (MCP, scripts) places at once and takes `layers` and
+    // `importSlices` itself.
+    if ask && matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, &p) {
+        return Ok(json!({ "dialog": crate::dialogs::psd_import::KIND }));
+    }
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
         && let Some(v) = app.view()
     {
@@ -216,6 +245,7 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     }
     if let Some(o) = p.as_object_mut() {
         o.remove(ASKED);
+        o.remove(DROPPED);
     }
     match read {
         Read::ForUser { dropped } if crate::placing::available(app) => {
@@ -409,9 +439,15 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
             let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
             let mut q = json!({ "paths": paths, "files": files, "link": link, "template": template });
             if !ask {
-                // Each text file and DXF drawing in the cursor takes the options confirmed last.
+                // Each text file, DXF drawing and embedded PSD file in the cursor takes the options
+                // confirmed last.
                 q["text"] = crate::dialogs::text_import::last_options(app);
                 q["dxf"] = crate::dialogs::dxf_import::remembered(app);
+                if !link || paths.is_empty() {
+                    // Files from bytes have no file to link to; they may carry the dialog's Link.
+                    q["link"] = json!(false);
+                    crate::dialogs::psd_import::queue_options(app, &mut q);
+                }
             }
             queue_files(app, &q, Read::ForUser { dropped: false }, ask)
         }
@@ -605,29 +641,20 @@ pub type DropFile = (String, Option<String>, Vec<u8>);
 /// Files dropped on the window, each placed on a canvas or opened (and added to Open Recent
 /// Files) as its target says: the placed ones first, so the last document opened is the one
 /// shown. A file for a canvas goes to the document it was dropped on, which becomes active again;
-/// it isn't placed when that document has closed or been reverted since.
+/// it isn't placed when that document has closed or been reverted since, and neither is it by the
+/// OK of an import options dialog the drop opened ([`DROPPED`]).
 pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile)>) {
     files.sort_by_key(|(target, _)| *target == DropTarget::Open);
     for (target, (name, path, bytes)) in files {
-        if let DropTarget::Place(d) = target {
-            let Some(i) = app.session.documents().iter().position(|st| st.uid == d.doc) else {
-                app.status(format!("Couldn't place {name}: the document it was dropped on was closed"));
-                continue;
-            };
-            if app.session.documents().get(i).is_some_and(|st| st.reverts != d.reverts) {
-                app.status(format!("Couldn't place {name}: the document it was dropped on was reverted"));
-                continue;
-            }
-            app.session.set_active(i);
-        }
         let r = match target {
-            DropTarget::Place(DropAt { at, embed, .. }) => {
+            DropTarget::Place(DropAt { doc, reverts, at, embed }) => {
                 let mut p = match &path {
                     Some(path) => json!({ "path": path }),
                     None => json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes) }),
                 };
                 p["at"] = json!([at.x, at.y]);
                 p["link"] = json!(!embed);
+                p[DROPPED] = json!({ "doc": doc, "reverts": reverts });
                 place_file(app, &p, Read::ForUser { dropped: true }).map(|_| ())
             }
             DropTarget::Open => match path.as_deref() {

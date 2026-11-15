@@ -995,6 +995,8 @@
 	Step up or down	Zwiększ lub zmniejsz o krok
 	Drag values or labels. Double-click a value to type.	Przeciągaj wartości lub etykiety. Kliknij dwukrotnie wartość, aby ją wpisać.
 	Drag rings to rotate. Shift snaps to 15°.	Przeciągaj pierścienie, aby obracać. Shift przyciąga co 15°.
+	Track cube	Kostka obrotu
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Przeciągnij ścianę, krawędź lub pierścień, aby obracać. Shift obraca wokół jednej osi ekranu.
 	Drag the light, or its rings. Shift snaps to 15°.	Przeciągaj światło lub jego pierścienie. Shift przyciąga co 15°.
 lighting	Light	Światło
 	Keep visible surfaces only when expanding	Przy rozszerzaniu zachowaj tylko widoczne powierzchnie
@@ -1045,6 +1047,14 @@ lighting	Light	Światło
 	Previous Artboard	Poprzedni obszar kompozycji
 	Next Artboard	Następny obszar kompozycji
 	Last Artboard	Ostatni obszar kompozycji
+	Status Bar Show	Pokaż na pasku stanu
+	Artboard Name	Nazwa obszaru kompozycji
+	Current Tool	Bieżące narzędzie
+	Date and Time	Data i godzina
+	Number of Undos	Liczba cofnięć
+	Document Color Profile	Profil kolorów dokumentu
+	Undos	Cofnięcia
+	Redos	Ponowienia
 	Graphic Style Options…	Opcje stylu graficznego…
 	Symbol Options	Opcje symbolu
 	Symbol Options…	Opcje symbolu…
@@ -1537,6 +1547,8 @@ lighting	Light	Światło
 	Insert Aki Left	Wstaw aki z lewej
 	Insert Aki Right	Wstaw aki z prawej
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Dostosuj poziome położenie znaków diakrytycznych
+	Adjust Vertical Diacritic Position	Dostosuj pionowe położenie znaków diakrytycznych
 	Character Direction	Kierunek znaków
 	Digits	Cyfry
 	Arabic	Arabskie
@@ -2019,7 +2031,8 @@ digits	Malayalam	Malajalam
 	Tabular Lining	Tabelaryczne nowoczesne
 	Tabular Oldstyle	Tabelaryczne nautyczne
 	Titling Alternates	Alternatywy tytułowe
-	Every-line Composer	Kompozytor wielowierszowy
+	Middle Eastern & South Asian Every-line Composer	Kompozytor wielowierszowy (Bliski Wschód i Azja Południowa)
+	Standard Every-line Composer	Standardowy kompozytor wielowierszowy
 	First-line Left Indent	Wcięcie pierwszego wiersza
 	Hyphenation…	Dzielenie wyrazów…
 	Words Longer Than:	Wyrazy dłuższe niż:
@@ -2059,7 +2072,8 @@ digits	Malayalam	Malajalam
 	East Asian Composition Settings	Ustawienia składu wschodnioazjatyckiego
 	Korean Composition Settings	Ustawienia składu koreańskiego
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
-	Single-line Composer	Kompozytor jednowierszowy
+	Middle Eastern & South Asian Single-line Composer	Kompozytor jednowierszowy (Bliski Wschód i Azja Południowa)
+	Standard Single-line Composer	Standardowy kompozytor jednowierszowy
 	Toggle Line Composer	Przełącz kompozytor wierszy
 	Space After Paragraph	Odstęp po akapicie
 	Space Before Paragraph	Odstęp przed akapitem
@@ -2884,6 +2898,7 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Pokaż płynne koło kolorów
 	Show segmented color wheel	Pokaż segmentowe koło kolorów
 	Show color bars	Pokaż paski kolorów
+	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
 	Link harmony colors	Połącz kolory harmonii
@@ -7535,6 +7550,7 @@ breakText	Glyphs	Glify
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` dla tego okna dialogowego {kind} musi mieć jedną z wartości: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` zawiera więcej niż {MAX_ANSWERS} odpowiedzi
 @msg	`answers` is larger than 1 MiB	`answers` ma rozmiar większy niż 1 MiB
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` służy tylko do uruchomienia, w którym nie ma kogo zapytać: w aplikacji na każde okno dialogowe odpowiada użytkownik
 @msg	`answers` must be a list of answers	`answers` musi być listą odpowiedzi
 @msg	`artboard` must be the index of an artboard of the document	`artboard` musi być indeksem obszaru kompozycji dokumentu
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` musi mieć postać [x, y]
@@ -7567,6 +7583,7 @@ breakText	Glyphs	Glify
 @msg	`name` must be a name that is not empty	`name` musi być niepustą nazwą
 @msg	`name` must not be empty	`name` nie może być puste
 @msg	`origin` must be [x, y] in points	`origin` musi mieć postać [x, y] w punktach
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` musi mieć postać [a, b, c, d], każda wartość od -1000 do 1000, a a·d - b·c musi różnić się od 0 o co najmniej 0,001
 @msg	`picks` must be an array (got {v})	`picks` musi być tablicą (podano {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` musi zawierać od 1 do {MAX_PICKS} wskazań (podano {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` musi zawierać od 2 do 100000 punktów
@@ -7942,6 +7959,7 @@ breakText	Glyphs	Glify
 @msg	Image Trace failed: {e}	Obrys obrazu nie powiódł się: {e}
 @msg	Image Trace finished, but its document was closed	Obrys obrazu został ukończony, ale jego dokument został zamknięty
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Obrys obrazu został ukończony, ale obraz lub jego ustawienia zmieniły się w międzyczasie: obrysuj go ponownie
+@msg	Image Trace finished, but its document was reverted: trace it again	Obrys obrazu został ukończony, ale jego dokument został przywrócony: obrysuj go ponownie
 @msg	Join: a subpath went missing	Połącz: brakuje ścieżki podrzędnej
 @msg	Lock Workspace is not available in VectorCraft	Polecenie Zablokuj obszar roboczy nie jest dostępne w programie VectorCraft
 @msg	Move Panel to New Window is not available: floating panels stay in the main window	Polecenie Przenieś panel do nowego okna nie jest dostępne: panele pływające pozostają w oknie głównym
@@ -8354,7 +8372,7 @@ breakText	Glyphs	Glify
 @msg	column: true floats the whole column and takes no onto, above or below	column: true odłącza całą kolumnę i nie przyjmuje onto, above ani below
 @msg	command must be a shape.* command	command musi być poleceniem shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: brak `command`
-@msg	composer must be "singleLine" or "everyLine"	composer musi mieć wartość "singleLine" lub "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer musi mieć wartość "singleLine", "everyLine", "standardSingleLine" lub "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	kształty złożone przyjmują ścieżki, ścieżki złożone, grupy, kształty złożone, tekst, przejścia i koperty
 @msg	compound {_1} must contain exactly one open path to join	obiekt złożony {_1} musi zawierać dokładnie jedną otwartą ścieżkę do połączenia
 @msg	connect needs a path other than the one extended	connect wymaga ścieżki innej niż przedłużana
@@ -9431,3 +9449,20 @@ breakText	Glyphs	Glify
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu JPEG (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu Targa (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pikseli to za dużo dla formatu PSD (najwyżej {MAX_SIDE} pikseli na bok): zmniejsz rozdzielczość
+	Packaging Tools	Narzędzia do opakowań
+	Fold Lines	Linie zgięcia
+	Make Cut Line	Utwórz linię cięcia
+	Make Crease Line	Utwórz linię bigowania
+	Make Partial Cut Line	Utwórz linię nacięcia
+	Make Perforation Line	Utwórz linię perforacji
+	Make Fold Line	Utwórz linię zgięcia
+	Role Swatches…	Próbki rodzajów linii…
+	Role Swatches	Próbki rodzajów linii
+	Role	Rodzaj linii
+	Cut Line	Linia cięcia
+	Crease Line	Linia bigowania
+	Partial Cut Line	Linia nacięcia
+	Perforation Line	Linia perforacji
+	No objects are selected.	Nie zaznaczono żadnych obiektów.
+	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
+	Remove Fold Line Role	Usuń rodzaj linii

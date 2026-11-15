@@ -22,6 +22,7 @@ pub mod brush_options;
 pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
+pub mod check_spelling;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -97,6 +98,7 @@ pub mod plugin;
 mod png_options;
 pub mod print;
 pub mod print_presets;
+pub mod psd_import;
 mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
@@ -417,6 +419,7 @@ registry! {
     PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
     SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
+    PsdImport: [psd_import::KIND] => psd_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
     PsdOptions: ["psdOptions"] => png_options::SPEC,
@@ -458,6 +461,7 @@ registry! {
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
     EditViews: [edit_views::KIND] => edit_views::SPEC,
     EditCustomDictionary: [custom_dictionary::KIND] => custom_dictionary::SPEC,
+    CheckSpelling: [check_spelling::KIND] => check_spelling::SPEC,
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
