@@ -3,17 +3,14 @@ use super::PathBuf;
 use super::build::{instanced, style_distance, style_italic, style_weight};
 use super::cache::Catalog;
 use super::face::{FALLBACK_FAMILY, FontFace, MAX_LIVE_INSTANCES, Variation, VariationAxis};
-use super::glyph_pen::{FlipPen, svg_drawn};
+use super::glyph_pen::svg_drawn;
 #[cfg(not(target_arch = "wasm32"))]
 use super::names::SYSTEM_FALLBACKS;
 use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, font_files};
 use super::traits::{Alias, FontMatch, FontTraits};
-use super::{
-    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, DrawSettings, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX,
-    Ordering, Size,
-};
+use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
 
 /// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
 const MAX_POSTSCRIPT_FACES: usize = 16;
@@ -566,13 +563,13 @@ impl FontDb {
         if let Some(p) = self.outlines.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
             return p.clone();
         }
-        let mut pen = FlipPen(BezPath::new());
-        if let Some(f) = face.skrifa()
-            && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
-        {
-            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
-        }
-        let p = Arc::new(pen.0);
+        let path = craft_font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations())
+            .and_then(|font| font.outline_recovering(gid))
+            // The old pen kept a partial path when drawing failed. Keep that behavior while
+            // the shared implementation bounds the number of elements from untrusted fonts.
+            .map(|(path, _status)| kurbo::Affine::scale_non_uniform(1.0, -1.0) * path)
+            .unwrap_or_default();
+        let p = Arc::new(path);
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= OUTLINE_CACHE_MAX {
             cache.clear();
@@ -632,5 +629,32 @@ impl FontDb {
         let key = (face.id, gid, if used { coloured } else { None });
         self.colours.lock().unwrap_or_else(std::sync::PoisonError::into_inner).keep(key, content.clone());
         content
+    }
+}
+
+#[cfg(test)]
+mod shared_outline_tests {
+    use super::super::glyph_pen::FlipPen;
+    use super::*;
+    use skrifa::instance::Size;
+    use skrifa::outline::DrawSettings;
+    use skrifa::{GlyphId, MetadataProvider};
+
+    #[test]
+    fn shared_outlines_match_original_pen_for_variable_instances() {
+        let db = FontDb::with_font_dirs(vec![]);
+        let Some(bytes) = crate::test_fonts::variable_font() else { return };
+        assert!(db.add_font(bytes) > 0);
+        let face = db.face(crate::test_fonts::VARIABLE_FAMILY, "Bold").expect("named instance is registered");
+        let f = face.skrifa().expect("font parses");
+        for ch in ['A', 'V', ' ', 'a'] {
+            let Some(glyph) = f.charmap().map(ch) else { continue };
+            let mut old = FlipPen(BezPath::new());
+            if let Some(outline) = f.outline_glyphs().get(GlyphId::new(glyph.to_u32())) {
+                // Match the prior production behavior, including a partial path on error.
+                let _ = outline.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut old);
+            }
+            assert_eq!(*db.outline(&face, glyph.to_u32()), old.0, "glyph {ch}");
+        }
     }
 }

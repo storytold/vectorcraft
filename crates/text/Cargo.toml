@@ -9,6 +9,8 @@ description = "VectorCraft text: font database, shaping, layout, glyph outlines"
 workspace = true
 
 [dependencies]
+# Pending shared extraction; pin the immutable official PR head until it merges.
+craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "14bccd4e09094820babc434d2681297be8873bd9", default-features = false }
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
 kurbo = { workspace = true }
