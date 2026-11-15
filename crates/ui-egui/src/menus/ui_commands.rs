@@ -168,6 +168,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} toggle a red underline under the words of the document's type its dictionaries don't know (text.spelling.check lists them), kept up to date as the type changes; type with effects isn't underlined → whether Auto Spell Check is on",
     ),
+    (
+        crate::dialogs::check_spelling::COMMAND,
+        "Check Spelling…",
+        "Cmd+I",
+        "{} open the Check Spelling dialog to walk through unrecognized words with suggestions, ignore, change and dictionary options",
+    ),
     ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
     ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),
@@ -650,6 +656,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Collapse Panel Group",
         "",
         "{panel, collapsed?: bool} minimize the group holding a panel to its tabs (in a floating window, the window to its title bar), or restore it, as a double-click on a tab or the drag bar does; the same as window.panel.minimize {panel, minimized}. Without `collapsed` it toggles. Returns {panel, collapsed, layout}",
+    ),
+    (
+        "window.panel.cycleOptions",
+        "Cycle Display Sizes",
+        "",
+        "{panel} show a panel at its next display size, as the double triangle at the right end of its tab strip does: the sizes are the states of its panel menu's Show/Hide Options (Transparency: options and thumbnails, thumbnails alone, neither), largest first, and the smallest goes back to the largest; Align, Attributes, Character, Color, Flattener Preview, Gradient, Info, Paragraph, Stroke, Transform and Transparency have them. An unknown panel or one without display sizes is an error and changes nothing. Returns {panel, size: 0 for the largest, sizes: how many it has}",
     ),
     (
         "window.panel.float",

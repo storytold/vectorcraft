@@ -155,6 +155,12 @@ fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
     copied_file_within(paths, mimes, MAX_BYTES)
 }
 
+/// Whether a paste of one of `mimes` can take a copied file: one of them is not text.
+#[cfg_attr(windows, allow(dead_code))]
+fn takes_files(mimes: &[&'static str]) -> bool {
+    mimes.iter().any(|&m| m != TEXT)
+}
+
 /// [`copied_file`] with a file of more than `limit` bytes skipped.
 fn copied_file_within(paths: Vec<PathBuf>, mimes: &[&'static str], limit: usize) -> Option<Flavour> {
     paths.into_iter().find_map(|path| {
@@ -727,7 +733,7 @@ mod portable {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{BITMAP, ClipboardRead, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, text_of};
+    use super::{BITMAP, ClipboardRead, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, takes_files, text_of};
 
     /// What our last write put on the clipboard.
     #[derive(Clone)]
@@ -741,7 +747,7 @@ mod portable {
     }
 
     /// A read of arboard's clipboard.
-    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     enum Request {
         Text,
         Image,
@@ -811,6 +817,19 @@ mod portable {
             Request::Image => Answer::Image(cb.get_image().map_err(|e| e.to_string())),
             Request::Files => Answer::Files(cb.get().file_list().unwrap_or_default()),
         }
+    }
+
+    /// Whether a paste of one of `mimes` can take what `cb` holds: text that is not empty when one
+    /// of `mimes` is text (`text` reads it), else files copied in a file manager when one of `mimes`
+    /// is not text (`files` reads the list). The list is read only when the text doesn't do, and no
+    /// copied file is opened: Paste checks the files themselves.
+    fn arboard_has<B>(
+        mimes: &[&'static str],
+        cb: &mut B,
+        text: impl FnOnce(&mut B) -> Result<String, String>,
+        files: impl FnOnce(&mut B) -> Vec<PathBuf>,
+    ) -> bool {
+        (mimes.contains(&TEXT) && text(cb).is_ok_and(|t| !t.is_empty())) || (takes_files(mimes) && !files(cb).is_empty())
     }
 
     /// `request` read on `reads`' worker, waiting `wait` at most.
@@ -1441,10 +1460,11 @@ mod portable {
             read
         }
 
-        /// Text, on macOS vector art or a bitmap (by the pasteboard's types), and on the Wayland
-        /// core protocol copied files, SVG, text or PNG (by the types offered, nothing read).
+        /// Text or files copied in a file manager (their list read, no file opened:
+        /// [`arboard_has`]), on macOS vector art or a bitmap (by the pasteboard's types), and on the
+        /// Wayland core protocol copied files, SVG, text or PNG (by the types offered, nothing read).
         /// arboard has no cheap way to ask for a bitmap (reading one costs as much as pasting it):
-        /// the paste keys take it, the menu item waits for text.
+        /// the paste keys take it, the menu item waits for text or copied files.
         fn has(&mut self, mimes: &[&'static str]) -> bool {
             #[cfg(target_os = "macos")]
             if super::mac::has(mimes) {
@@ -1455,7 +1475,7 @@ mod portable {
             if let Backend::Wayland(wl) = cb {
                 return wl.has(mimes);
             }
-            mimes.contains(&TEXT) && cb.get_text().is_ok_and(|t| !t.is_empty())
+            arboard_has(mimes, cb, Backend::get_text, Backend::file_list)
         }
     }
 
@@ -1617,6 +1637,40 @@ mod portable {
             assert_eq!(Answer::Files(vec![]).text(), Err(MIXED.to_string()));
             assert!(Answer::Text(Ok(String::new())).image().is_err());
             assert!(Answer::Text(Ok("art.svg".into())).files().is_empty());
+        }
+
+        #[test]
+        fn paste_is_available_for_files_copied_in_a_file_manager() {
+            use vectorcraft_engine::cmd::clipboard::{PASTE_ORDER, SVG};
+            /// What the clipboard holds, and which reads [`arboard_has`] made.
+            struct Held {
+                text: Option<String>,
+                files: Vec<PathBuf>,
+                reads: Vec<Request>,
+            }
+            fn has(mimes: &[&'static str], text: Option<&str>, files: &[&str]) -> (bool, Vec<Request>) {
+                let mut held = Held { text: text.map(String::from), files: files.iter().map(PathBuf::from).collect(), reads: vec![] };
+                let text = |h: &mut Held| {
+                    h.reads.push(Request::Text);
+                    h.text.clone().ok_or_else(|| "no text".to_string())
+                };
+                let files = |h: &mut Held| {
+                    h.reads.push(Request::Files);
+                    h.files.clone()
+                };
+                let has = arboard_has(mimes, &mut held, text, files);
+                (has, held.reads)
+            }
+            // Files a file manager copied, with no text: the Paste menu item is available.
+            assert_eq!(has(&PASTE_ORDER, None, &["/tmp/art.svg"]), (true, vec![Request::Text, Request::Files]));
+            assert_eq!(has(&PASTE_ORDER, Some(""), &["/tmp/art.svg"]), (true, vec![Request::Text, Request::Files]));
+            assert_eq!(has(&[SVG], None, &["/tmp/art.svg"]), (true, vec![Request::Files]));
+            // Text does, and the list is not read.
+            assert_eq!(has(&PASTE_ORDER, Some("hello"), &[]), (true, vec![Request::Text]));
+            // An empty list and no text: nothing to paste.
+            assert_eq!(has(&PASTE_ORDER, None, &[]), (false, vec![Request::Text, Request::Files]));
+            // A paste of text alone can't take copied files, and their list is not read.
+            assert_eq!(has(&[TEXT], None, &["/tmp/art.svg"]), (false, vec![Request::Text]));
         }
 
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
@@ -1925,7 +1979,7 @@ mod wayland {
     use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, WEnum};
 
     use super::loads::{Asker, GONE, LOAD_WAIT, Loads, wait_for_answer};
-    use super::{BITMAP, Flavour, MAX_BYTES, PNG, PathBuf, SVG, TEXT, copied_file, gnome_copied_paths, uri_list_paths};
+    use super::{BITMAP, Flavour, MAX_BYTES, PNG, PathBuf, SVG, TEXT, copied_file, gnome_copied_paths, takes_files, uri_list_paths};
 
     /// The types text is offered under and read from, best first: `text/plain;charset=utf-8` (GTK
     /// and Qt apps), `UTF8_STRING` (X11 apps through XWayland) and `text/plain`.
@@ -2014,11 +2068,6 @@ mod wayland {
             }
         }
         Some(first)
-    }
-
-    /// Whether a paste of one of `mimes` can take a copied file: one of them is not text.
-    fn takes_files(mimes: &[&'static str]) -> bool {
-        mimes.iter().any(|&m| m != TEXT)
     }
 
     /// The first type among `offered` that lists copied files ([`FILE_LISTS`]), in any letter case.

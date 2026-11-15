@@ -1065,6 +1065,7 @@ Commands (`panel` and every panel parameter take a panel id in any case or its d
 | `window.panel.activate`, `.close`, `.closeGroup`, `.closeOthers` | `{panel}` | shows and selects, or hides |
 | `window.panel.minimize` | `{panel, minimized?}` | minimizes a dock group to its tabs, or a floating window to its title bar; omitted toggles |
 | `window.panel.collapse` | `{panel, collapsed?}` | `window.panel.minimize`; returns `{panel, collapsed, layout}` |
+| `window.panel.cycleOptions` | `{panel}` | shows the panel at its next display size (its Show/Hide Options states, largest first), as the double triangle on its tab strip does; a panel without sizes is an error; returns `{panel, size, sizes}` |
 | `window.panel.iconic` | `{panel, iconic?}` | collapses the panel's dock column to icons, or expands it |
 | `window.panel.layout`, `ui.dock` | `{action}` | one craft-ui `Action`, externally tagged, e.g. `{"MoveFloating":{"panel":"swatches","rect":[44,66,360,450]}}` or `{"ResizeSplit":{"path":[],"size":{"Ratio":0.35}}}`; `ui.dock` also takes craft-ui's `{operation, …}` |
 

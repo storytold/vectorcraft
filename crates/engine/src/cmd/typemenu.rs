@@ -1783,6 +1783,13 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
 
 fn paste_plain(s: &mut Session, p: &Value) -> Result<Value> {
     let saved = s.clipboard.nodes.clone();
+    // Pasted colors linked to a swatch merged with the document's show its color, so a pasted pie's legend labels take
+    // the contrast of the wedges as pasted. A `swatchConflict` the paste refuses is left to its error.
+    if let (Ok(choices), Ok(st)) = (super::clipboard::SwatchChoices::parse("edit.pasteWithoutFormatting", p), s.doc()) {
+        let same_doc = s.clipboard.source_doc == Some(st.uid);
+        let d = std::sync::Arc::clone(&st.doc);
+        s.clipboard.show_merged_colors(&d, &choices, same_doc);
+    }
     for n in &mut s.clipboard.nodes {
         strip_formatting(n);
     }

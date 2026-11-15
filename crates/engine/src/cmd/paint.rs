@@ -96,7 +96,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Invert",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's solid color changes for this instance only, and a gradient or pattern, or type whose characters differ in color, is refused; with nothing selected, invert the default. On a path directly in a graph series, the graph also stores the new color of the topmost visible fill or stroke, and on a graph label the new color of its characters and rows for every label of its kind (docs/mcp.md); no undo step when no color changes → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, aligned?: bool (as paint.setFill), target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents and, except with target \"contents\", their own fills and strokes; a compound path's member stands for its compound path) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's solid color changes for this instance only, and a gradient or pattern, or type whose characters differ in color, is refused; with nothing selected, invert the default. On a path directly in a graph series, the graph also stores the new color of the topmost visible fill or stroke, and on a graph label the new color of its characters and rows for every label of its kind (docs/mcp.md); no undo step when no color changes → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.invert", "Invert", &super::colorcmds::invert)
         ),
@@ -555,9 +555,15 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
     let of = super::appearance::reference_of(s, p, item, cmd)?;
     let paint = if span {
-        // With a design's art, the gradient spans only the objects with a row equal to the art's, which take it.
-        let spanned: Vec<NodeId> = ids.iter().zip(item.per_target_of(s, of, &ids)).filter_map(|(id, it)| it.map(|_| *id)).collect();
-        placed_across(&s.doc()?.doc, &spanned, paint, p, fill)
+        // With a design's art, the gradient spans only the objects with a row equal to the art's, which take it. Each
+        // object's box is that of the row it edits.
+        let d = &s.doc()?.doc;
+        let mut spanned = Vec::with_capacity(ids.len());
+        for (id, it) in ids.iter().zip(item.per_target_of(s, of, &ids)) {
+            let (Some(it), Some(n)) = (it, d.node(*id)) else { continue };
+            spanned.push((*id, it.resolve(&n.appearance, fill, cmd)?));
+        }
+        placed_across(d, &spanned, paint, p, fill)
     } else {
         paint
     };
@@ -730,14 +736,15 @@ fn spans_targets(p: &Value, paint: &Paint) -> std::result::Result<bool, String> 
     Ok(true)
 }
 
-/// `paint` placed once on the union of the bounds of `ids` (each one's fill box, or the box its
-/// stroke paints), at the gradient's angle and aspect: every target gets the same vector in
-/// document coordinates, so the ramp runs on across them (#2127).
-fn placed_across(d: &Document, ids: &[NodeId], paint: Paint, p: &Value, fill: bool) -> Paint {
+/// `paint` placed once on the union of the bounds of `ids` (each one's fill box, or the box the
+/// stroke it edits paints: the row given with it, `None` for the topmost), at the gradient's angle
+/// and aspect: every target gets the same vector in document coordinates, so the ramp runs on
+/// across them (#2127).
+fn placed_across(d: &Document, ids: &[(NodeId, Option<usize>)], paint: Paint, p: &Value, fill: bool) -> Paint {
     let union = ids
         .iter()
-        .filter_map(|id| d.node(*id))
-        .filter_map(|n| item_paint_bounds(n, None, fill).or_else(|| n.geometric_bounds()))
+        .filter_map(|(id, index)| Some((d.node(*id)?, *index)))
+        .filter_map(|(n, index)| item_paint_bounds(n, index, fill).or_else(|| n.geometric_bounds()))
         .filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()))
         .reduce(|a, b| a.union(b));
     let (Some(union), Paint::Gradient(g)) = (union, &paint) else { return paint };
@@ -975,7 +982,13 @@ pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>
 }
 
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, paint_targets(s, p)?);
+    let targets = paint_targets(s, p)?;
+    let given = !targets.is_empty();
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, targets);
+    // Only design art was given or selected: nothing changes, the defaults included.
+    if given && ids.is_empty() {
+        return ok();
+    }
     if !ids.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
@@ -1010,7 +1023,13 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = super::appearance::drop_design_art(&s.doc()?.doc, paint_targets(s, p)?);
+    let targets = paint_targets(s, p)?;
+    let given = !targets.is_empty();
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, targets);
+    // Only design art was given or selected: nothing changes, the defaults included.
+    if given && ids.is_empty() {
+        return ok();
+    }
     if !ids.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
@@ -1079,10 +1098,26 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
         return Ok(json!({ "changed": changed as usize }));
     }
     let item = item_target(s, p, cmd)?.of_kind(s, !stroke);
+    // Read before the check below, so that a bad param (such as `target` or `aligned`, or an explicit `item` the art has
+    // no row for) is still an error.
+    let targets = super::appearance::drop_design_art_rows(s, item.targets(s, p)?, item, !stroke, cmd)?;
+    let of = match item {
+        ItemTarget::Item { .. } => super::appearance::reference_of(s, p, item, cmd)?,
+        ItemTarget::Top => None,
+    };
+    // Read before the check below too: `targets` reads no `target` for the topmost fill or stroke.
+    let contents = super::appearance::targets_contents(p)?;
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
+    // Only design art was given or selected: nothing changes, the defaults and remembered colors included.
+    if ids.is_empty() {
+        return Ok(json!({ "changed": 0 }));
+    }
     let (r, shown_at) = match item {
         ItemTarget::Item { .. } => {
-            let targets = super::appearance::drop_design_art(&s.doc()?.doc, item.targets(s, p)?);
-            let of = super::appearance::reference_of(s, p, item, cmd)?;
+            // Only design art was given or selected: nothing changes, the remembered colors included.
+            if targets.is_empty() {
+                return Ok(json!({ "changed": 0 }));
+            }
             // The row shown is the one edited in the first object that has it: an aligned row maps to each object's equal row.
             let shown_at = super::appearance::first_edited(s, item, of, &targets).and_then(|(id, it)| match it {
                 ItemTarget::Item { index, .. } => Some((id, Some(index))),
@@ -1098,9 +1133,56 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
             (json!({ "changed": changed }), shown_at)
         }
         // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
+        // A given group's own fills and strokes change with the objects inside it, except with `target: "contents"`; other
+        // objects change as their paint targets do (a compound path's member stands for the compound path). Design art
+        // inside a given graph or series group is left out.
         ItemTarget::Top => {
-            let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
-            (super::colorcmds::recolor(s, &q, cmd, label, f)?, leaf_targets(s, &ids)?.first().map(|id| (*id, None)))
+            let mut roots = vec![];
+            for id in &ids {
+                let n = s.doc()?.doc.node(*id);
+                let group =
+                    !contents && n.is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !n.is_compound_shape());
+                if group {
+                    roots.push(*id);
+                } else {
+                    roots.extend(leaf_targets(s, &[*id])?);
+                }
+            }
+            let d = &s.doc()?.doc;
+            let mut seen = std::collections::HashSet::new();
+            roots.retain(|id| seen.insert(*id));
+            let roots = super::appearance::drop_design_art(d, roots);
+            if roots.is_empty() {
+                return Ok(json!({ "changed": 0 }));
+            }
+            let art = super::appearance::design_art_in(d, &roots).into_iter().collect();
+            // The fill or stroke the proxy shows of each group among the roots, before the edit.
+            let own = |d: &Document, id: NodeId| {
+                d.node(id)
+                    .filter(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
+                    .and_then(|n| n.proxy_paint_only(stroke, None))
+                    .cloned()
+            };
+            let own_before: std::collections::HashMap<NodeId, Paint> = roots.iter().filter_map(|id| Some((*id, own(d, *id)?))).collect();
+            let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": roots.iter().map(|i| i.0).collect::<Vec<_>>()});
+            let r = super::colorcmds::recolor_except(s, &q, cmd, label, f, art)?;
+            // As the proxy shows a group: its own fill or stroke when the edit changed it, else the first object inside it
+            // that is not design art (which keeps its paint). The first object given that has either shows it.
+            let d = &s.doc()?.doc;
+            let mut shown_at = None;
+            for id in &ids {
+                if let Some(was) = own_before.get(id)
+                    && own(d, *id).as_ref() != Some(was)
+                {
+                    shown_at = Some((*id, None));
+                    break;
+                }
+                if let Some(leaf) = super::appearance::drop_design_art(d, leaf_targets(s, &[*id])?).first() {
+                    shown_at = Some((*leaf, None));
+                    break;
+                }
+            }
+            (r, shown_at)
         }
     };
     // The paint remembered is one the edit recolored: a graph design's art that the item edit leaves out gives none.
