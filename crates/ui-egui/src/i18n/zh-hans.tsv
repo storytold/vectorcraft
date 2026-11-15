@@ -591,6 +591,7 @@ antiAlias	Sharp	锐利
 	Copy All Styles	复制所有样式
 	Copy Color Value (Hex)	复制颜色值 (十六进制)
 	Copy Fonts Used in the Document	复制文档中使用的字体
+	Copy Info	复制信息
 	Copy Links	复制链接
 	Copy Selected Style	复制所选样式
 	Copy to User Defined	复制到用户定义
@@ -4889,6 +4890,7 @@ imageTrace	Outline	轮廓
 @msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
+@msg	Copied the link info	已复制链接信息
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
 @msg	unknown highlight `{h}`	未知的高亮显示 `{h}`

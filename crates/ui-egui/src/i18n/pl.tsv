@@ -2648,6 +2648,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Przezroczyste tło
 	Choose…	Wybierz…
 	Copy Fonts Used in the Document	Kopiuj czcionki użyte w dokumencie
+	Copy Info	Kopiuj informacje
 	Copy Links	Kopiuj łącza
 	Create Report	Utwórz raport
 	Fonts whose licence doesn't allow embedding are not copied.	Czcionki, których licencja nie zezwala na osadzanie, nie są kopiowane.
@@ -4528,6 +4529,7 @@ imageTrace	Outline	Kontur
 @msg	there is no script engine named {name}	nie ma silnika skryptów o nazwie {name}
 @msg	Running a script	Uruchamianie skryptu
 @msg	Copied the script report	Skopiowano raport skryptu
+@msg	Copied the link info	Skopiowano informacje o łączu
 @msg	Corners edits the corners of a path	Narożniki edytuje narożniki ścieżki
 @msg	Couldn't copy to the system clipboard: {e}	Nie udało się skopiować do schowka systemowego: {e}
 @msg	Couldn't open {name}: {e}	Nie udało się otworzyć {name}: {e}

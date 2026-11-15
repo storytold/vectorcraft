@@ -930,6 +930,7 @@ antiAlias	Sharp	Nítid
 	Copy Guide	Copia la guia
 	Copy in Perspective	Copia en perspectiva
 	Copy into the document's folder	Copia a la carpeta del document
+	Copy Info	Copia la informació
 	Copy Links	Copia els enllaços
 	Copy only fonts you own or are licensed to install.	Copia només els tipus de lletra que tinguis o que tinguis llicència per instal·lar.
 	Copy Report	Copia l’informe
@@ -5598,6 +5599,7 @@ digits	Malayalam	Malaiàlam
 @msg	there is no script engine named {name}	no hi ha cap motor d'scripts anomenat {name}
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
+@msg	Copied the link info	S’ha copiat la informació de l’enllaç
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
 @msg	could not decode image: {0}	no s’ha pogut descodificar la imatge: {0}
 @msg	Couldn't copy to the system clipboard: {e}	No s’ha pogut copiar al porta-retalls del sistema: {e}

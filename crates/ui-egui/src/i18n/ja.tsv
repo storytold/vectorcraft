@@ -3775,6 +3775,7 @@ gradient-kind	Radial	円形
 	Convert To Outlines	アウトラインに変換
 	Copy All Objects	すべてのオブジェクトをコピー
 	Copy Fonts Used in the Document	ドキュメントで使用しているフォントをコピー
+	Copy Info	情報をコピー
 	Copy Links	リンクをコピー
 	Couldn't copy to the system clipboard: {e}	システムのクリップボードにコピーできませんでした：{e}
 	Couldn't paste from the clipboard: {e}	クリップボードからペーストできませんでした：{e}
@@ -5210,6 +5211,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	there is no script engine named {name}	{name} という名前のスクリプトエンジンはありません
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
+@msg	Copied the link info	リンク情報をコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
 @msg	unknown highlight `{h}`	`{h}` は不明なハイライトの指定です

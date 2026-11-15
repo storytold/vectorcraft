@@ -646,6 +646,7 @@ font-technology	Variable	Variabili
 	Copy All Styles	Copia tutti gli stili
 	Copy Color Value (Hex)	Copia valore colore (hex)
 	Copy Fonts Used in the Document	Copia i font usati nel documento
+	Copy Info	Copia informazioni
 	Copy Links	Copia collegamenti
 	Copy Selected Style	Copia stile selezionato
 	Copy to User Defined	Copia in Definito dall'utente
@@ -4445,6 +4446,7 @@ axis	Both	Entrambi
 @msg	there is no script engine named {name}	non esiste un motore di script chiamato {name}
 @msg	Running a script	Esecuzione di uno script
 @msg	Copied the script report	Rapporto dello script copiato
+@msg	Copied the link info	Informazioni collegamento copiate
 @msg	Corners edits the corners of a path	Angoli modifica gli angoli di un tracciato
 @msg	Couldn't copy to the system clipboard: {e}	Impossibile copiare negli appunti di sistema: {e}
 @msg	Couldn't open {name}: {e}	Impossibile aprire {name}: {e}

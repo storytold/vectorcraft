@@ -2679,6 +2679,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Läpinäkyvä tausta
 	Choose…	Valitse…
 	Copy Fonts Used in the Document	Kopioi asiakirjassa käytetyt fontit
+	Copy Info	Kopioi tiedot
 	Copy Links	Kopioi linkit
 	Create Report	Luo raportti
 	Fonts whose licence doesn't allow embedding are not copied.	Fontteja, joiden lisenssi ei salli upottamista, ei kopioida.
@@ -4618,6 +4619,7 @@ imageTrace	Outline	Ääriviiva
 @msg	there is no script engine named {name}	skriptimoottoria nimeltä {name} ei ole
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
+@msg	Copied the link info	Linkin tiedot kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}
 @msg	Couldn't open {name}: {e}	Tiedostoa {name} ei voitu avata: {e}

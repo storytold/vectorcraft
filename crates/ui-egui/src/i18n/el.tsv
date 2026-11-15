@@ -605,6 +605,7 @@ font-technology	Variable	Μεταβλητές
 	Copy All Styles	Αντιγραφή όλων των στυλ
 	Copy Color Value (Hex)	Αντιγραφή τιμής χρώματος (Hex)
 	Copy Fonts Used in the Document	Αντιγραφή γραμματοσειρών που χρησιμοποιούνται στο έγγραφο
+	Copy Info	Αντιγραφή πληροφοριών
 	Copy Links	Αντιγραφή συνδέσεων
 	Copy Selected Style	Αντιγραφή επιλεγμένου στυλ
 	Copy to User Defined	Αντιγραφή σε ορισμένα από τον χρήστη
@@ -2449,6 +2450,7 @@ axis	Both	Και τα δύο
 @msg	there is no script engine named {name}	δεν υπάρχει μηχανή σεναρίων με όνομα {name}
 @msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
+@msg	Copied the link info	Οι πληροφορίες συνδέσμου αντιγράφηκαν
 @msg	Corners edits the corners of a path	Η εντολή Γωνίες επεξεργάζεται τις γωνίες μιας διαδρομής
 @msg	Couldn't copy to the system clipboard: {e}	Δεν ήταν δυνατή η αντιγραφή στο πρόχειρο συστήματος: {e}
 @msg	Couldn't open {name}: {e}	Δεν ήταν δυνατό το άνοιγμα του {name}: {e}

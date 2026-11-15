@@ -7632,6 +7632,12 @@ bounds; `clip` puts it in a clip group of the old bounds when it is larger). The
 except for a placed document, which opens in a tab. With the preference `editOriginalSystemDefaults` (Preferences ›
 File Handling › Use System Defaults for Edit Original, on by default) off, Edit Original opens a raster image in the app
 that made it, PhotoCraft, where it is installed, and anything else in the system's default app (#5236).
+The UI command `links.copyInfo {ids?}` (the panel menu's Copy Info) copies the file names of images and placed
+documents `ids` to the clipboard, one per line in the order given, and returns `{text, names}`. Without `ids` (or with
+`ids: null`, as for the other `ids` commands) it copies the selected ones, and the rows outside the layer tree picked in
+the panel, in the order `links.list` gives them; the panel menu passes the selected rows in the order the panel shows
+them. An embedded image gives the name its row shows. An id that is not an image or a placed document, a
+malformed `ids`, or nothing to copy is an error, and the clipboard is left as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"links.list","params":{"show":"missing"}}}
