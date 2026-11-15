@@ -7533,6 +7533,18 @@ breakText	Glyphs	Glyffer
 	Box	Ramme
 	Swatch	Farveprøve
 	Direction	Retning
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` skal være større end 0 og højst {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` skal være fra 0 til {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` skal være fra 0,01 til 1000 pt
+@msg	select the banner, or mark every artboard	markér banneret, eller afmærk alle tegneflader
+@msg	the banner has no width or height	banneret har ingen bredde eller højde
+@msg	the grommet inset is too large for the banner	maljernes afstand fra kanten er for stor til banneret
+@msg	the hem is too deep for the banner	sømmen er for dyb til banneret
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	mellemrummet giver mere end {MAX_GROMMETS} maljer
+@msg	there is no banner to mark	der er intet banner at afmærke
+@msg	turn on at least one side	slå mindst én side til
+@msg	with no hem and no grommets there is nothing to mark	uden søm og uden maljer er der intet at afmærke
+@msg	{saving} failed: {e}	{saving} mislykkedes: {e}
 	Banner Hems and Grommets…	Bannersømme og maljer…
 	Banner Hems and Grommets	Bannersømme og maljer
 	Hem	Søm

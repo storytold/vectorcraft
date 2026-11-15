@@ -2374,6 +2374,27 @@ fn plugin_messages_are_translated_in_every_complete_catalog() {
     assert!(missing.is_empty(), "{} plug-in messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
 }
 
+/// Banner Hems and Grommets' errors and the status of a recovery copy that failed without a folder
+/// to name have an `@msg` row in every complete-message catalog.
+#[test]
+fn banner_and_recovery_messages_are_translated_in_every_complete_catalog() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../engine/src/cmd/addons/cutting/banner.rs");
+    let code = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut messages = source_messages(without_test_module(&code), &[("bad(", 1)], &std::collections::BTreeMap::new());
+    assert!(messages.len() >= 11, "scan found only {} banner messages: {messages:?}", messages.len());
+    let recovery = "{saving} failed: {e}";
+    assert!(message_literals_in(&["ui-egui"]).contains(recovery), "the scan skips {recovery:?}");
+    messages.push(recovery.to_string());
+    let mut missing = vec![];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: std::collections::BTreeSet<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        missing.extend(messages.iter().filter(|m| !rows.contains(m.as_str())).map(|m| format!("{code}: {m}")));
+    }
+    assert!(missing.is_empty(), "{} banner and recovery messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
+}
+
 /// Errors the plug-in host returns are translated whole in every complete-message catalog, the
 /// reason inside the error's kind included, and keep their numbers, JSON shapes, permission names
 /// and nested reasons as written.
@@ -3028,6 +3049,42 @@ fn unreadable(e: impl std::fmt::Display) -> String {
     let render = message_literals_in(&["render"]);
     assert!(render.contains("GIF encoding failed: {e}") && render.contains("JPEG encoding failed: {e}"));
     assert!(message_literals_in(&["engine"]).contains("Data Recovery can't keep copies in {path}: {e}"));
+}
+
+/// The scan reads the values of a local that a `.status(name)` shows, from the nearest `let` of
+/// that name in the same function: a `format!` string and each arm of a `match`. It skips a local
+/// that no status shows, a `let` of the name in another function, and a status given a value.
+#[test]
+fn message_scan_reads_locals_given_to_a_status() {
+    let code = r#"
+fn other() {
+    let line = format!("the other function's line: {e}");
+    log(line);
+}
+
+fn saved(app: &mut App, saving: &str, e: &str, place: Option<&str>) {
+    let unused = format!("a line no status shows: {e}");
+    let line = format!("{saving} failed: {e}");
+    app.status(line);
+    let line = match place {
+        Some(folder) => format!("Couldn't save to {folder}: {e}"),
+        None => "Couldn't save".to_string(),
+    };
+    log(&line);
+    app.status(line);
+    app.status(true);
+}
+"#;
+    let want = ["{saving} failed: {e}", "Couldn't save to {folder}: {e}", "Couldn't save"];
+    assert_eq!(source_messages(code, &[], &std::collections::BTreeMap::new()), want);
+    let ui = message_literals_in(&["ui-egui"]);
+    for m in [
+        "{saving} failed: {e}",
+        "Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)",
+        "Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)",
+    ] {
+        assert!(ui.contains(m), "the scan skips {m:?}");
+    }
 }
 
 /// The scan stops at a test module whose `cfg` is `test` or `all(test, …)`, and reads on past a
@@ -4477,6 +4534,7 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 /// [`LATER_MESSAGE_VARIANTS`] gives; not [`NAME_VARIANTS`]),
 /// the messages a `.map_err` closure returns (`.map_err(|e| format!("…: {e}"))`, see
 /// [`closure_returns`]) or the handler a `.map_err(name)` names returns (see [`handler_returns`]),
+/// the values of a local that a `.status(name)` shows (see [`status_locals`]),
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
 /// its message), a literal, a `format!` string or the name of one of `consts` (see
 /// [`str_consts`]), each one with or without a `&` before it. A key's name alone (`` `tint` ``)
@@ -4508,6 +4566,7 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
         }
     }
     let in_handlers = handlers.into_iter().flat_map(|name| handler_returns(code, name));
+    let in_status_locals = status_locals(code).into_iter().map(|rest| (rest, false));
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
             .filter(|&(at, _)| call.starts_with('.') || !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
@@ -4519,7 +4578,7 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
     let mut out = vec![];
     let in_map_err = in_map_err.map(|rest| (rest, false));
     let in_handlers = in_handlers.map(|rest| (rest, false));
-    for (rest, takes_format) in after_markers.chain(in_variants).chain(in_map_err).chain(in_handlers).chain(in_helpers) {
+    for (rest, takes_format) in after_markers.chain(in_variants).chain(in_map_err).chain(in_handlers).chain(in_status_locals).chain(in_helpers) {
         let rest = rest.trim_start();
         let rest = rest.strip_prefix('&').map_or(rest, str::trim_start);
         let formatted = rest.strip_prefix("format!(").map(str::trim_start);
@@ -4591,6 +4650,29 @@ fn handler_returns<'a>(code: &'a str, name: &str) -> Vec<&'a str> {
             }
         } else if let Some(open) = rest.find('{') {
             out.extend(closure_returns(&rest[open + 1..]));
+        }
+    }
+    out
+}
+
+/// Where each value of a local that a `.status(name)` in `code` shows can start: the statement of
+/// the nearest `let name = ` before that call in the same function (`let line = format!("…");`,
+/// `let line = match place { … };`, up to its `;`), read as [`closure_returns`] reads a closure. A
+/// local that no `.status(name)` shows is not read.
+fn status_locals(code: &str) -> Vec<&str> {
+    let mut out = vec![];
+    for (at, m) in code.match_indices(".status(") {
+        let rest = &code[at + m.len()..];
+        let name = &rest[..rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len())];
+        if !name.starts_with(|c: char| c.is_ascii_lowercase() || c == '_') || !rest[name.len()..].starts_with(')') {
+            continue;
+        }
+        let bound = format!("let {name} = ");
+        let nearest = code[..at].rmatch_indices(bound.as_str()).find(|&(b, _)| !code[..b].ends_with(|c: char| c.is_alphanumeric() || c == '_'));
+        if let Some((b, _)) = nearest
+            && !code[b..at].contains("fn ")
+        {
+            out.extend(closure_returns(statement(&code[b + bound.len()..])));
         }
     }
     out
