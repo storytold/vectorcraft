@@ -558,6 +558,7 @@ pub(super) fn brush_object_options(s: &mut Session, p: &Value) -> Result<Value> 
             let keys = b.kind.stroke_option_keys();
             let mut merged: serde_json::Map<String, Value> =
                 own.iter().filter(|(k, _)| keys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+            let was = merged.clone();
             // A colorization object changes only the fields it gives, and a null item of an
             // array keeps the stroke's own item (else the brush's).
             for (k, v) in &params {
@@ -572,6 +573,7 @@ pub(super) fn brush_object_options(s: &mut Session, p: &Value) -> Result<Value> 
                 };
                 merged.insert(k.clone(), next);
             }
+            keep_drawn_modes(b, &was, &params, &mut merged);
             b.stroke_options_that_differ(&merged).map_err(|e| bad(C, e))?
         };
         options.get_or_insert_with(|| next.clone());
@@ -591,6 +593,47 @@ pub(super) fn brush_object_options(s: &mut Session, p: &Value) -> Result<Value> 
         })?;
     }
     Ok(json!({ "ids": ids_json(&out), "changed": ids_json(&changed), "options": options.unwrap_or_default() }))
+}
+
+/// The modes brush `b` draws with, for a Calligraphic or a Scatter brush.
+fn drawn_modes(b: &Brush) -> Option<Vec<Value>> {
+    let modes = match &b.kind {
+        BrushKind::Calligraphic(c) => serde_json::to_value(c.modes()),
+        BrushKind::Scatter(s) => serde_json::to_value(s.modes()),
+        _ => return None,
+    };
+    match modes {
+        Ok(Value::Array(m)) => Some(m),
+        _ => None,
+    }
+}
+
+/// Keep each mode a stroke of brush `b` draws with (with its own settings `was`) that `params`
+/// does not set (no `modes`, or a `null` item) and that `merged`, its settings with `params`,
+/// would change. A mode the stroke leaves to its values follows them, so without this a changed
+/// variation or range would also change the mode.
+fn keep_drawn_modes(
+    b: &Brush,
+    was: &serde_json::Map<String, Value>,
+    params: &serde_json::Map<String, Value>,
+    merged: &mut serde_json::Map<String, Value>,
+) {
+    let given = match params.get("modes") {
+        None | Some(Value::Null) => vec![],
+        Some(Value::Array(m)) => m.clone(),
+        // A value of the wrong kind is refused when the settings are checked.
+        Some(_) => return,
+    };
+    let (Some(before), Some(after)) =
+        (b.with_stroke_options(was).ok().as_ref().and_then(drawn_modes), b.with_stroke_options(merged).ok().as_ref().and_then(drawn_modes))
+    else {
+        return;
+    };
+    if before == after {
+        return;
+    }
+    let kept = before.into_iter().zip(after).enumerate().map(|(j, (w, a))| if given.get(j).is_some_and(|g| !g.is_null()) { a } else { w }).collect();
+    merged.insert("modes".into(), Value::Array(kept));
 }
 
 /// The name `brush.placeArt` gives each pattern brush tile it places, by tile, in the order it

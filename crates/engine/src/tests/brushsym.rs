@@ -175,6 +175,38 @@ fn options_of_selected_object_null_items_keep_each_paths_own() {
     assert_eq!(own_options(&s, c)["size"], json!([brush_size[0], 150.0]), "brush size {brush_size}");
 }
 
+/// The size mode the first stroke of `id`, painted with Confetti, draws with.
+fn confetti_size_mode(s: &Session, id: NodeId) -> vectorcraft_brush::Variation {
+    let lib = vectorcraft_brush::library(&s.doc().unwrap().doc);
+    let b = lib.iter().find(|b| b.name == "Confetti").unwrap();
+    match b.with_stroke_options(own_options(s, id).as_object().unwrap()).unwrap().kind {
+        vectorcraft_brush::BrushKind::Scatter(sc) => sc.modes()[0],
+        k => panic!("not a scatter brush: {k:?}"),
+    }
+}
+
+#[test]
+fn options_of_selected_object_keep_the_modes_each_path_draws_with() {
+    use vectorcraft_brush::Variation;
+    let mut s = session();
+    let a = line(&mut s);
+    let b = line(&mut s);
+    select(&mut s, &[a, b]);
+    s.execute("brush.apply", &json!({"name": "Confetti"})).unwrap();
+    // Confetti's sizes vary at random from 60% to 140%; the second path's follow the pressure.
+    select(&mut s, &[b]);
+    s.execute("brush.objectOptions", &json!({"params": {"modes": ["pressure", null, null, null]}})).unwrap();
+    assert_eq!((confetti_size_mode(&s, a), confetti_size_mode(&s, b)), (Variation::Random, Variation::Pressure));
+    // One size with no mode keeps each path's mode.
+    select(&mut s, &[a, b]);
+    s.execute("brush.objectOptions", &json!({"params": {"size": [80, 80]}})).unwrap();
+    assert_eq!((confetti_size_mode(&s, a), confetti_size_mode(&s, b)), (Variation::Random, Variation::Pressure));
+    assert_eq!(own_options(&s, a)["size"], json!([80.0, 80.0]));
+    // A mode the params give is set on each path.
+    s.execute("brush.objectOptions", &json!({"params": {"size": [70, 90], "modes": ["fixed", null, null, null]}})).unwrap();
+    assert_eq!((confetti_size_mode(&s, a), confetti_size_mode(&s, b)), (Variation::Fixed, Variation::Fixed));
+}
+
 #[test]
 fn options_of_selected_object_go_when_a_freehand_stroke_changes_the_brush() {
     let mut s = session();

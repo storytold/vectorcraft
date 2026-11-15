@@ -925,6 +925,41 @@ fn options_of_selected_object_change_only_the_values_edited_on_each_path() {
     assert_eq!(own_options(&app, b)["size"], json!([40.0, 120.0]), "the second path keeps its own largest size");
 }
 
+/// The modes the first stroke of path `id` draws its brush `brush` with.
+fn drawn_modes(app: &VectorcraftApp, id: u64, brush: &str) -> Vec<Variation> {
+    let lib = vectorcraft_brush::library(&app.session.active().unwrap().doc);
+    let b = lib.iter().find(|b| b.name == brush).unwrap();
+    let own = own_options(app, id);
+    match b.with_stroke_options(own.as_object().unwrap()).unwrap().kind {
+        BrushKind::Calligraphic(c) => c.modes().to_vec(),
+        BrushKind::Scatter(s) => s.modes().to_vec(),
+        _ => vec![],
+    }
+}
+
+#[test]
+fn options_of_selected_object_keep_the_modes_they_show_when_a_value_changes() {
+    let mut app = app();
+    // Confetti's size varies at random from 60% to 140%; a size of 60% to 60% leaves the mode the
+    // dialog shows.
+    let s = brushed_line(&mut app, 50.0, "Confetti");
+    select(&mut app, &[s]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("sizeMode"), "random");
+    set(&mut app, json!({"sizeMax": 60}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, s)["size"], json!([60.0, 60.0]));
+    assert_eq!(drawn_modes(&app, s, "Confetti")[0], Variation::Random);
+    // 6 pt. Flat's angle is Fixed; a variation set without a mode keeps it Fixed.
+    let c = brushed_line(&mut app, 100.0, "6 pt. Flat");
+    select(&mut app, &[c]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("angleMode"), "fixed");
+    set(&mut app, json!({"angleVariation": 30}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(drawn_modes(&app, c, "6 pt. Flat")[0], Variation::Fixed);
+}
+
 #[test]
 fn options_of_selected_object_show_what_a_path_can_set_for_each_type() {
     let mut app = app();
