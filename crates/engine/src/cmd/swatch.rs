@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Options",
             ["Window", "Swatches"],
             None,
-            "{name, newName?, color? (e.g. {l, a, b} for a Lab colour; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill; the swatch's own color and a color given with mode keep their model), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient} or {swatch}) or {pattern: name} replacing the swatch's colour; gradient or pattern with one of the same kind (stored as swatch.new stores it: a gradient keeps its aspect with or without start/end and holds no swatch link; a pattern is untransformed)} edit a swatch in any colour group, as one undo step. Fills, strokes, text, gradient stops and tint swatches linked to a global swatch take its new colour (at their own tint) and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only; a tint swatch only takes a new name (edit its base) → {name, relinked: paints changed}",
+            "{name, newName?, color? (e.g. {l, a, b} for a Lab colour; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill; the swatch's own color and a color given with mode keep their model), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient} or {swatch}) or {pattern: name} replacing the swatch's colour; gradient or pattern with one of the same kind (stored as swatch.new stores it: a gradient keeps its aspect with or without start/end and holds no swatch link; a pattern is untransformed)} edit a swatch in any colour group, as one undo step. Fills, strokes, text, gradient stops and tint swatches linked to a global swatch take its new colour (at their own tint) and name; turning Global off unlinks them (they keep their colour). A fold line role the swatch carries (addon.packaging.roles) stays with it under its new name, and moves to a new swatch name when Global is turned off. Colour, mode and spot apply to solid colours only; a tint swatch only takes a new name (edit its base) → {name, relinked: paints changed}",
             has_doc,
             swatch_edit
         ),
@@ -93,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Merge Swatches",
             ["Window", "Swatches"],
             None,
-            "{names: [two or more solid-colour swatches], name?: the merged swatch's name (one swatch kept)} keep the first (its name and colour) and delete the others; paints linked to them take its colour and link to it (or unlink when it isn't global), and gradient stops linked to them drop their process plates, as one undo step → {name, merged: [deleted names], relinked}",
+            "{names: [two or more solid-colour swatches], name?: the merged swatch's name (one swatch kept)} keep the first (its name and colour) and delete the others; paints linked to them take its colour and link to it (or unlink when it isn't global), and gradient stops linked to them drop their process plates, as one undo step. When the kept swatch is global and carries no fold line role (addon.packaging.roles), it takes the role of the first merged swatch that carried one → {name, merged: [deleted names], relinked}",
             has_doc,
             swatch_merge
         ),
@@ -937,6 +937,8 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         let relinked = map_swatch_links(d, &mut |c, l, t| relink.apply(c, l, t));
+        // A fold line role carried by the swatch follows its new name, as the strokes do.
+        super::addons::role_swatch_edited(d, &name, &to, global);
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok(relinked)
     })?;
@@ -1139,6 +1141,8 @@ fn swatch_merge(s: &mut Session, p: &Value) -> Result<Value> {
         take_swatches(d, merged, |_| true);
         map_all_paints(d, &mut unplate);
         let relinked = map_swatch_links(d, &mut relink);
+        // The lines of a merged role swatch link to the kept swatch, which takes that role.
+        super::addons::role_swatches_merged(d, merged, keep, link.is_some());
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok(relinked)
     })?;

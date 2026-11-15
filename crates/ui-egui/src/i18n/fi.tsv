@@ -1038,6 +1038,8 @@
 	Step up or down	Askel ylös tai alas
 	Drag values or labels. Double-click a value to type.	Vedä arvoja tai nimiöitä. Kirjoita arvo kaksoisnapsauttamalla.
 	Drag rings to rotate. Shift snaps to 15°.	Kierrä vetämällä renkaita. Vaihto kohdistaa 15°:n välein.
+	Track cube	Kiertokuutio
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Kierrä vetämällä tahkoa, särmää tai rengasta. Vaihto kiertää yhden näytön akselin ympäri.
 	Drag the light, or its rings. Shift snaps to 15°.	Vedä valoa tai sen renkaita. Vaihto kohdistaa 15°:n välein.
 lighting	Light	Valo
 	Keep visible surfaces only when expanding	Säilytä laajennettaessa vain näkyvät pinnat
@@ -1607,6 +1609,8 @@ lighting	Light	Valo
 	Insert Aki Left	Lisää aki vasemmalle
 	Insert Aki Right	Lisää aki oikealle
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Säädä tarkkeiden vaakasijaintia
+	Adjust Vertical Diacritic Position	Säädä tarkkeiden pystysijaintia
 	Character Direction	Merkkien suunta
 	Digits	Numerot
 	Arabic	Arabia
@@ -2935,6 +2939,7 @@ digits	Malayalam	Malajalam
 	Select Shade	Valitse sävy
 	Add New Color	Lisää uusi väri
 	Set Current Color As Base Color	Aseta nykyinen väri perusväriksi
+	Find the selected colors in the artwork	Etsi valitut värit kuvituksesta
 	Harmony Rules	Harmoniasäännöt
 	Keep this row's colors (exclude)	Säilytä tämän rivin värit (jätä pois)
 	Limit to Library:	Rajoita kirjastoon:
@@ -7834,4 +7839,21 @@ breakText	Glyphs	Merkit
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseliä on liian suuri JPEG-kuvalle (enintään 65535 pikseliä sivua kohti): pienennä tarkkuutta
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseliä on liian suuri Targa-kuvalle (enintään 65535 pikseliä sivua kohti): pienennä tarkkuutta
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pikseliä on liian suuri PSD-kuvalle (enintään {MAX_SIDE} pikseliä sivua kohti): pienennä tarkkuutta
+	Packaging Tools	Pakkaustyökalut
+	Fold Lines	Taittoviivat
+	Make Cut Line	Tee leikkausviiva
+	Make Crease Line	Tee nuuttausviiva
+	Make Partial Cut Line	Tee osittainen leikkausviiva
+	Make Perforation Line	Tee rei’itysviiva
+	Make Fold Line	Tee taittoviiva
+	Role Swatches…	Viivatyyppien värimallit…
+	Role Swatches	Viivatyyppien värimallit
+	Role	Viivatyyppi
+	Cut Line	Leikkausviiva
+	Crease Line	Nuuttausviiva
+	Partial Cut Line	Osittainen leikkausviiva
+	Perforation Line	Rei’itysviiva
+	No objects are selected.	Objekteja ei ole valittu.
+	Open a document to mark its fold lines.	Avaa asiakirja, niin voit merkitä sen taittoviivat.
+	Remove Fold Line Role	Poista viivatyyppi
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
