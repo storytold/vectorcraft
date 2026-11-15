@@ -1364,6 +1364,7 @@ font-technology	Variable	Biến thiên
 	Rotate (Classic)…	Xoay (cổ điển)…
 	Surface	Bề mặt
 	Wireframe	Khung dây
+	Render Settings	Cài đặt kết xuất
 	No Shading	Không tô bóng
 	Plastic	Nhựa
 	Highlight Intensity	Cường độ điểm sáng
@@ -1684,6 +1685,40 @@ file-filter	Templates	Mẫu
 	Chop Design	Cắt thiết kế
 	Scale Design	Co giãn thiết kế
 	Graph Type	Loại biểu đồ
+	Graph Options	Tùy chọn biểu đồ
+	Left Axis	Trục trái
+	Right Axis	Trục phải
+	Category Axis	Trục danh mục
+	Separate Scales	Thang đo riêng
+	Add Drop Shadow	Thêm đổ bóng
+	Add Legend Across Top	Thêm chú giải ở trên cùng
+	First Row in Front	Hàng đầu tiên ở trước
+	First Column in Front	Cột đầu tiên ở trước
+	Legend	Chú giải
+	Column Width	Độ rộng cột
+	Bar Width	Độ rộng thanh
+	Cluster Width	Độ rộng nhóm
+	Mark Data Points	Đánh dấu điểm dữ liệu
+	Connect Data Points	Nối các điểm dữ liệu
+	Edge-to-Edge Lines	Đường từ mép đến mép
+	Draw Filled Lines	Vẽ đường tô đầy
+	Tick Values	Giá trị vạch chia
+	Override Calculated Values	Ghi đè giá trị đã tính
+	Divisions	Số khoảng chia
+	Tick Marks	Vạch chia
+	Tick Marks per Division	Vạch chia mỗi khoảng
+	Draw Tick Marks Between Labels	Vẽ vạch chia giữa các nhãn
+	Add Labels	Thêm nhãn
+	Maximum must be more than Minimum.	Giá trị tối đa phải lớn hơn giá trị tối thiểu.
+	Column Graph	Biểu đồ cột
+	Stacked Column Graph	Biểu đồ cột chồng
+	Bar Graph	Biểu đồ thanh
+	Stacked Bar Graph	Biểu đồ thanh chồng
+	Line Graph	Biểu đồ đường
+	Area Graph	Biểu đồ vùng
+	Scatter Graph	Biểu đồ phân tán
+	Pie Graph	Biểu đồ tròn
+	Radar Graph	Biểu đồ radar
 	Graphic	Đồ họa
 	Graphic Style	Kiểu đồ họa
 	Graphic Style Libraries	Thư viện kiểu đồ họa
@@ -1787,6 +1822,7 @@ file-filter	Templates	Mẫu
 	Highlight Substituted Fonts	Đánh dấu phông thay thế
 	Highlight Substituted Glyphs	Đánh dấu Glyph bị thay thế
 	Highlight Variable	Đánh dấu biến
+	Sort Variables	Sắp xếp biến
 	Hindi	Tiếng Hindi
 digits	Hindi	Hindi
 	History	Lịch sử
@@ -2353,6 +2389,7 @@ digits	Hindi	Hindi
 	Menu Dialog	Hộp thoại menu
 	Merge	Hợp nhất
 	Merge colors into one row	Hợp nhất màu vào một hàng
+	New Row	Hàng mới
 	Merge Graphic Styles	Hợp nhất kiểu đồ họa
 	Merge Graphic Styles…	Hợp nhất kiểu đồ họa…
 	Merge Layers	Hợp nhất lớp
@@ -4025,6 +4062,8 @@ mark-style	Japanese	Kiểu Nhật
 	Swap Fill and Stroke (Shift+X)	Đổi màu tô và nét (Shift+X)
 	Swap start and end arrowheads	Đổi đầu mũi tên bắt đầu và kết thúc
 	Swap the selected object for the file, keeping its place and transform	Thay đối tượng đã chọn bằng tệp, giữ nguyên vị trí và biến đổi
+	Show Import Options	Hiện tùy chọn nhập
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Hỏi tùy chọn nhập của từng tệp PDF, DXF hoặc văn bản trước khi đặt; khi tắt, dùng các tùy chọn đã chọn gần nhất
 	Stylistic Alternates	Ký tự thay thế theo phong cách
 	Swash	Swash
 	Swatch Conflict	Xung đột mẫu màu
@@ -4086,6 +4125,48 @@ mark-style	Japanese	Kiểu Nhật
 	Composite Fonts	Phông chữ tổ hợp
 	Export Composite Fonts	Xuất phông chữ tổ hợp
 	Import Composite Fonts	Nhập phông chữ tổ hợp
+@msg	each font must be {name, parts}	mỗi phông chữ phải là {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	khóa không xác định `{k}`; một phông chữ nhận name và parts
+@msg	each font needs a name	mỗi phông chữ cần có tên
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` không thể là tên phông chữ tổ hợp (từ 1 đến {COMPOSITE_NAME_MAX} ký tự, không có ký tự điều khiển)
+@msg	`{name}`: parts must be an object	`{name}`: parts phải là một đối tượng
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: lớp không xác định `{k}`; các lớp là kanji, kana, punctuation, symbols, roman và numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} phải là một đối tượng
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: khóa không xác định `{k}` trong {_1}
+@msg	`{name}`: give the kanji part	`{name}`: hãy cung cấp phần kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	một tài liệu chứa tối đa {COMPOSITE_FONTS_MAX} phông chữ tổ hợp
+@msg	two composite fonts are named `{_1}`	có hai phông chữ tổ hợp cùng tên `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` là tên của một phông chữ đã cài đặt
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} dùng `{font}`, một phông chữ tổ hợp
+@msg	give fonts: [{name, parts}…]	hãy cung cấp fonts: [{name, parts}…]
+@msg	path is empty	path trống
+@msg	fonts must be a list of composite fonts	fonts phải là danh sách phông chữ tổ hợp
+@msg	names must be strings	names phải là chuỗi
+@msg	no composite font named `{n}`	không có phông chữ tổ hợp nào tên `{n}`
+@msg	names must be a list of names	names phải là danh sách tên
+@msg	no composite fonts to export	không có phông chữ tổ hợp nào để xuất
+@msg	not a composite fonts file: {e}	không phải tệp phông chữ tổ hợp: {e}
+@msg	not a composite fonts file: no compositeFonts list	không phải tệp phông chữ tổ hợp: không có danh sách compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	tệp chứa hơn {COMPOSITE_FONTS_MAX} phông chữ tổ hợp
+@msg	the file is larger than 4 MB	tệp lớn hơn 4 MB
+@msg	dataBase64 is not base64	dataBase64 không phải base64
+@msg	give one of path, data or dataBase64	hãy cung cấp path, data hoặc dataBase64
+@msg	the file holds no composite fonts	tệp không chứa phông chữ tổ hợp nào
+@msg	the file holds two composite fonts named `{_1}`	tệp chứa hai phông chữ tổ hợp cùng tên `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` không thể là tên phông chữ tổ hợp
+@msg	{k}: give a font	{k}: hãy cung cấp một phông chữ
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: hãy cung cấp một phông chữ
+@msg	{k}: size must be {_1} to {_2}%	{k}: size phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size phải từ {_1} đến {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline phải từ {_1} đến {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: tỷ lệ phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: tỷ lệ phải từ {_1} đến {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: chỉ kana, roman và numerals mới co giãn được
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: chỉ kana, roman và numerals mới co giãn được
+@msg	{k}: only kana can be scaled at the center	{k}: chỉ kana mới co giãn từ tâm được
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: chỉ kana mới co giãn từ tâm được
+@msg	no composite font	không có phông chữ tổ hợp
 	Delete Font	Xóa phông chữ
 	Kanji	Kanji
 	Kana	Kana
@@ -5410,6 +5491,7 @@ theme	Appearance	Giao diện
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` phải là một đối tượng chỉ chứa `mode`, với giá trị shaded hoặc wireframe
 @msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
 @msg	bevel must be none or one of {_1}	bevel phải là none hoặc một trong {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} không thể tạo khối từ hình vẽ này: các phiên bản ký hiệu, hòa trộn và nhóm cắt của nó chứa quá nhiều đối tượng
@@ -6309,6 +6391,8 @@ axis	Y Axis	Trục Y
 	Create New Set	Tạo bộ mới
 	Stop Global Edit	Dừng chỉnh sửa toàn cục
 	Global Edit Options	Tùy chọn chỉnh sửa toàn cục
+	Select Similar Objects	Chọn các đối tượng tương tự
+	Select Similar Options	Tùy chọn chọn đối tượng tương tự
 	Leave Out of Global Edit	Loại khỏi chỉnh sửa toàn cục
 	Match	Khớp
 	On Artboards	Trên các bảng vẽ

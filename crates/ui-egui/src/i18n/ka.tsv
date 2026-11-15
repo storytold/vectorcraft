@@ -452,6 +452,7 @@
 	Rotate (Classic)…	შემობრუნება (კლასიკური)…
 	Surface	ზედაპირი
 	Wireframe	მავთულის ჩარჩო
+	Render Settings	რენდერის პარამეტრები
 	No Shading	დაჩრდილვის გარეშე
 	Plastic	პლასტიკური
 	Highlight Intensity	ელვარების ინტენსივობა
@@ -1508,6 +1509,48 @@ digits	Malayalam	მალაიალამური
 	Composite Fonts	კომპოზიტური შრიფტები
 	Export Composite Fonts	კომპოზიტური შრიფტების ექსპორტი
 	Import Composite Fonts	კომპოზიტური შრიფტების იმპორტი
+@msg	each font must be {name, parts}	თითოეული შრიფტი უნდა იყოს {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	უცნობი გასაღები `{k}`; შრიფტი იღებს name-სა და parts-ს
+@msg	each font needs a name	თითოეულ შრიფტს სახელი სჭირდება
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ვერ იქნება კომპოზიტური შრიფტის სახელი (1-დან {COMPOSITE_NAME_MAX} სიმბოლომდე, მმართველი სიმბოლოების გარეშე)
+@msg	`{name}`: parts must be an object	`{name}`: parts უნდა იყოს ობიექტი
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: უცნობი კლასი `{k}`; კლასებია: kanji, kana, punctuation, symbols, roman და numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} უნდა იყოს ობიექტი
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: უცნობი გასაღები `{k}` ნაწილში {_1}
+@msg	`{name}`: give the kanji part	`{name}`: მიუთითეთ ნაწილი kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	დოკუმენტი შეიცავს არაუმეტეს {COMPOSITE_FONTS_MAX} კომპოზიტურ შრიფტს
+@msg	two composite fonts are named `{_1}`	ორ კომპოზიტურ შრიფტს ჰქვია `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` დაინსტალირებული შრიფტის სახელია
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} იყენებს `{font}`-ს, რომელიც კომპოზიტური შრიფტია
+@msg	give fonts: [{name, parts}…]	მიუთითეთ fonts: [{name, parts}…]
+@msg	path is empty	path ცარიელია
+@msg	fonts must be a list of composite fonts	fonts უნდა იყოს კომპოზიტური შრიფტების სია
+@msg	names must be strings	names უნდა იყოს სტრიქონები
+@msg	no composite font named `{n}`	კომპოზიტური შრიფტი სახელით `{n}` არ არსებობს
+@msg	names must be a list of names	names უნდა იყოს სახელების სია
+@msg	no composite fonts to export	საექსპორტო კომპოზიტური შრიფტები არ არის
+@msg	not a composite fonts file: {e}	ეს არ არის კომპოზიტური შრიფტების ფაილი: {e}
+@msg	not a composite fonts file: no compositeFonts list	ეს არ არის კომპოზიტური შრიფტების ფაილი: სია compositeFonts არ არის
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	ფაილი შეიცავს {COMPOSITE_FONTS_MAX}-ზე მეტ კომპოზიტურ შრიფტს
+@msg	the file is larger than 4 MB	ფაილი 4 MB-ზე დიდია
+@msg	dataBase64 is not base64	dataBase64 არ არის base64
+@msg	give one of path, data or dataBase64	მიუთითეთ path, data ან dataBase64
+@msg	the file holds no composite fonts	ფაილი კომპოზიტურ შრიფტებს არ შეიცავს
+@msg	the file holds two composite fonts named `{_1}`	ფაილი შეიცავს ორ კომპოზიტურ შრიფტს სახელით `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` ვერ იქნება კომპოზიტური შრიფტის სახელი
+@msg	{k}: give a font	{k}: მიუთითეთ შრიფტი
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: მიუთითეთ შრიფტი
+@msg	{k}: size must be {_1} to {_2}%	{k}: size უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	{k}: scale must be {_1} to {_2}%	{k}: მასშტაბი უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: მასშტაბი უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: მასშტაბირება შეიძლება მხოლოდ kana, roman და numerals ნაწილებში
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: მასშტაბირება შეიძლება მხოლოდ kana, roman და numerals ნაწილებში
+@msg	{k}: only kana can be scaled at the center	{k}: ცენტრიდან მასშტაბირება შეიძლება მხოლოდ kana ნაწილში
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: ცენტრიდან მასშტაბირება შეიძლება მხოლოდ kana ნაწილში
+@msg	no composite font	კომპოზიტური შრიფტი არ არის
 	Delete Font	შრიფტის წაშლა
 	Kanji	კანძი
 	Kana	კანა
@@ -2496,6 +2539,8 @@ digits	Malayalam	მალაიალამური
 	Keep a link to an image file instead of only embedding it	გამოსახულების ფაილის ბმულის შენარჩუნება მხოლოდ ჩაშენების ნაცვლად
 	Place onto a new locked, dimmed template layer below the current layer	ახალ ჩაკეტილ, ჩამქრალ შაბლონის შრეზე განთავსება მიმდინარე შრის ქვემოთ
 	Swap the selected object for the file, keeping its place and transform	მონიშნული ობიექტის ფაილით ჩანაცვლება მისი ადგილისა და გარდაქმნის შენარჩუნებით
+	Show Import Options	იმპორტის პარამეტრების ჩვენება
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	განთავსებამდე თითოეული PDF, DXF ან ტექსტური ფაილის იმპორტის პარამეტრების მოთხოვნა; გამორთულისას ბოლოს არჩეული პარამეტრები გამოიყენება
 	On: one locked object showing the document, updated when it changes.	ჩართული: ერთი ჩაკეტილი ობიექტი, რომელიც დოკუმენტს აჩვენებს და მისი ცვლილებისას ახლდება.
 	Off: an editable copy of its art, embedded in this document.	გამორთული: მისი ნახატის რედაქტირებადი ასლი, ჩაშენებული ამ დოკუმენტში.
 	Images: link to the file instead of only embedding it.	გამოსახულებები: ფაილის ბმული მხოლოდ ჩაშენების ნაცვლად.
@@ -2624,6 +2669,7 @@ digits	Malayalam	მალაიალამური
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
 	Link harmony colors	ჰარმონიის ფერების დაკავშირება
 	Merge colors into one row	ფერების ერთ სტრიქონში შერწყმა
+	New Row	ახალი სტრიქონი
 	No colors to recolor (preserved colors are left out).	ხელახლა შესაფერადებელი ფერები არ არის (შენარჩუნებული ფერები გამოტოვებულია).
 	Preserve:	შენარჩუნება:
 	Randomly change color order	ფერების რიგის შემთხვევითი შეცვლა
@@ -3203,6 +3249,40 @@ theme	Appearance	იერსახე
 	Create Graph	გრაფიკის შექმნა
 	Graph Data	გრაფიკის მონაცემები
 	Graph Type	გრაფიკის ტიპი
+	Graph Options	გრაფიკის პარამეტრები
+	Left Axis	მარცხენა ღერძი
+	Right Axis	მარჯვენა ღერძი
+	Category Axis	კატეგორიების ღერძი
+	Separate Scales	ცალკე სკალები
+	Add Drop Shadow	ჩრდილის დამატება
+	Add Legend Across Top	ლეგენდის დამატება ზემოთ
+	First Row in Front	პირველი მწკრივი წინ
+	First Column in Front	პირველი სვეტი წინ
+	Legend	ლეგენდა
+	Column Width	სვეტის სიგანე
+	Bar Width	ზოლის სიგანე
+	Cluster Width	ჯგუფის სიგანე
+	Mark Data Points	მონაცემთა წერტილების მონიშვნა
+	Connect Data Points	მონაცემთა წერტილების შეერთება
+	Edge-to-Edge Lines	ხაზები კიდიდან კიდემდე
+	Draw Filled Lines	შევსებული ხაზების დახატვა
+	Tick Values	დანაყოფების მნიშვნელობები
+	Override Calculated Values	გამოთვლილი მნიშვნელობების შეცვლა
+	Divisions	დანაყოფები
+	Tick Marks	დანაყოფის ნიშნები
+	Tick Marks per Division	ნიშნები თითო დანაყოფზე
+	Draw Tick Marks Between Labels	ნიშნების დახატვა წარწერებს შორის
+	Add Labels	წარწერების დამატება
+	Maximum must be more than Minimum.	მაქსიმუმი მინიმუმზე მეტი უნდა იყოს.
+	Column Graph	სვეტოვანი გრაფიკი
+	Stacked Column Graph	დაწყობილი სვეტოვანი გრაფიკი
+	Bar Graph	ზოლოვანი გრაფიკი
+	Stacked Bar Graph	დაწყობილი ზოლოვანი გრაფიკი
+	Line Graph	ხაზოვანი გრაფიკი
+	Area Graph	არეების გრაფიკი
+	Scatter Graph	გაფანტული გრაფიკი
+	Pie Graph	წრიული გრაფიკი
+	Radar Graph	რადარული გრაფიკი
 	Vector Halftone	ვექტორული ნახევარტონი
 	spot	სპოტ
 	Text	ტექსტი
@@ -3765,6 +3845,7 @@ axis	Both	ორივე
 	Replace:	ჩანაცვლება:
 	Type on a Path Options	ტრაექტორიაზე ტექსტის პარამეტრები
 	Highlight Variable	ცვლადის გამოკვეთა
+	Sort Variables	ცვლადების დალაგება
 	New Variable	ახალი ცვლადი
 	List Variables	ცვლადების სია
 	Bind Variable	ცვლადის მიბმა
@@ -5307,6 +5388,7 @@ font-technology	Variable	ცვლადი
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი ექსპორტისთვის არაფერს ხატავს
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ობიექტს არ აქვს 3D ეფექტი (ამოწევა და წაკვეთა, ბრუნვა, გაბერვა ან შემობრუნება)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` უნდა იყოს ობიექტი, რომელიც შეიცავს მხოლოდ `mode`-ს, მნიშვნელობით shaded ან wireframe
 @msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
 @msg	bevel must be none or one of {_1}	bevel უნდა იყოს none ან ერთ-ერთი: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ამ ნახატიდან სხეულების შექმნა შეუძლებელია: მისი სიმბოლოს ეგზემპლარები, გადასვლები და მომჭრელი ჯგუფები ზედმეტად ბევრ ობიექტს შეიცავს
@@ -6653,6 +6735,8 @@ axis	Y Axis	Y ღერძი
 	Create New Set	ახალი ნაკრების შექმნა
 	Stop Global Edit	გლობალური რედაქტირების დასრულება
 	Global Edit Options	გლობალური რედაქტირების პარამეტრები
+	Select Similar Objects	მსგავსი ობიექტების მონიშვნა
+	Select Similar Options	მსგავსის მონიშვნის პარამეტრები
 	Leave Out of Global Edit	გლობალური რედაქტირებიდან გამორიცხვა
 	Match	დამთხვევა
 	On Artboards	სამუშაო დაფებზე
