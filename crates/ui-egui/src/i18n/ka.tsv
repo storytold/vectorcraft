@@ -7754,19 +7754,6 @@ imageTrace	Outline	კონტური
 @msg	$.evalFile requires a file path	$.evalFile-ს სჭირდება ფაილის მისამართი
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: დროის ლიმიტი უნდა იყოს მილიწამების სასრული რიცხვი, 0 ან მეტი
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: იღებს ფაილის მისამართს და დროის ლიმიტს
-@msg	assignment to a constant binding	მინიჭება მუდმივ ბმაზე
-@msg	invalid array length	მასივის არასწორი სიგრძე
-@msg	array literal too long	მასივის ლიტერალი ძალიან გრძელია
-@msg	the value is not a function	მნიშვნელობა არ არის ფუნქცია
-@msg	apply was called on a value that is not a function	apply გამოიძახეს მნიშვნელობაზე, რომელიც არ არის ფუნქცია
-@msg	the argument list is not an object	არგუმენტების სია არ არის ობიექტი
-@msg	too many arguments	ზედმეტად ბევრი არგუმენტი
-@msg	the value is not a constructor	მნიშვნელობა არ არის კონსტრუქტორი
-@msg	cannot convert the object to a primitive value	ობიექტი პრიმიტიულ მნიშვნელობად ვერ გარდაიქმნება
-@msg	cannot convert undefined or null to an object	undefined ან null ობიექტად ვერ გარდაიქმნება
-@msg	the right side of 'in' is not an object	'in' ოპერატორის მარჯვენა მხარე არ არის ობიექტი
-@msg	the right side of 'instanceof' is not a function	'instanceof' ოპერატორის მარჯვენა მხარე არ არის ფუნქცია
-@msg	the function's prototype is not an object	ფუნქციის პროტოტიპი არ არის ობიექტი
 @msg	Error: {e}	Error: {e}
 @msg	TypeError: {e}	TypeError: {e}
 @msg	ReferenceError: {e}	ReferenceError: {e}

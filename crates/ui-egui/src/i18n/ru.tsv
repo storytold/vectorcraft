@@ -4478,19 +4478,6 @@ axis	Both	Оба
 @msg	$.evalFile requires a file path	$.evalFile требует путь к файлу
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: тайм-аут должен быть конечным числом миллисекунд, 0 или больше
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: принимает путь к файлу и тайм-аут
-@msg	assignment to a constant binding	присваивание константной привязке
-@msg	invalid array length	недопустимая длина массива
-@msg	array literal too long	литерал массива слишком длинный
-@msg	the value is not a function	значение не является функцией
-@msg	apply was called on a value that is not a function	apply вызван для значения, которое не является функцией
-@msg	the argument list is not an object	список аргументов не является объектом
-@msg	too many arguments	слишком много аргументов
-@msg	the value is not a constructor	значение не является конструктором
-@msg	cannot convert the object to a primitive value	невозможно преобразовать объект в примитивное значение
-@msg	cannot convert undefined or null to an object	невозможно преобразовать undefined или null в объект
-@msg	the right side of 'in' is not an object	правая часть 'in' не является объектом
-@msg	the right side of 'instanceof' is not a function	правая часть 'instanceof' не является функцией
-@msg	the function's prototype is not an object	прототип функции не является объектом
 @msg	Error: {e}	Error: {e}
 @msg	TypeError: {e}	TypeError: {e}
 @msg	ReferenceError: {e}	ReferenceError: {e}
