@@ -32,7 +32,7 @@ use crate::DocState;
 
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = vec![
-        cmd!(query "clipboard.exportSvg", "Clipboard as SVG", [], None, "{} → {svg} the copied objects as standalone SVG (null when the clipboard is empty)", always, export_svg),
+        cmd!(query "clipboard.exportSvg", "Clipboard as SVG", [], None, "{} → {svg} the copied objects as standalone SVG (null when the clipboard is empty). Under automation read roots it is refused while the SVG would name a linked image's file outside them (an image whose pixels the clipboard doesn't hold; a relative path is followed from the document the objects came from while it is open)", always, export_svg),
         cmd!(
             query "clipboard.importSvg",
             "Load SVG into Clipboard",
@@ -435,14 +435,37 @@ impl Clipboard {
 }
 
 impl Session {
-    /// The internal clipboard as standalone SVG (`None` when it is empty).
+    /// The internal clipboard as standalone SVG (`None` when it is empty, and when the SVG would name
+    /// a linked image's file the caller asking now may not be shown: [`Self::clipboard_svg_refused`]).
     pub fn clipboard_svg(&self) -> Option<String> {
+        if self.clipboard_svg_refused() {
+            return None;
+        }
         self.clipboard.svg()
+    }
+
+    /// Would the internal clipboard's SVG name a linked image's file outside the read roots in
+    /// force? It names the file of an image whose pixels the clipboard doesn't hold. A relative
+    /// path is followed from the document the objects came from while it is open; otherwise it
+    /// counts as outside.
+    pub fn clipboard_svg_refused(&self) -> bool {
+        self.check_clipboard_svg("clipboard.exportSvg").is_err()
+    }
+
+    /// [`Self::clipboard_svg_refused`] as `cmd`'s error, which names no file or folder.
+    fn check_clipboard_svg(&self, cmd: &str) -> Result<()> {
+        if crate::file_access::current().is_none() || !self.clipboard.has_art() {
+            return Ok(());
+        }
+        let from = self.docs.iter().find(|d| Some(d.uid) == self.clipboard.source_doc);
+        let base = from.map_or_else(super::links::LinkBase::default, super::links::LinkBase::of);
+        super::fileio::check_images_in(cmd, "svg", &self.clipboard.to_document(), base, &json!({}))
     }
 }
 
 fn export_svg(s: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({ "svg": s.clipboard_svg() }))
+    s.check_clipboard_svg("clipboard.exportSvg")?;
+    Ok(json!({ "svg": s.clipboard.svg() }))
 }
 
 fn import_svg(s: &mut Session, p: &Value) -> Result<Value> {
