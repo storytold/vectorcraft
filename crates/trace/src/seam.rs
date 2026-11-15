@@ -84,7 +84,7 @@ fn fills(paths: &[TracedPath]) -> Vec<TracedPath> {
                 continue;
             }
             if sp.closed && marks.iter().all(|&m| m) {
-                runs.push(SubPath::new(sp.anchors.clone(), true));
+                runs.push(sp.clone());
                 continue;
             }
             // Start after an unmarked segment, so that a run across the subpath's first anchor

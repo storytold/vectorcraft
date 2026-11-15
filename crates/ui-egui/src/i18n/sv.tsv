@@ -1361,6 +1361,14 @@ font-technology	Variable	Variabla
 	Previous Artboard	Föregående rityta
 	Next Artboard	Nästa rityta
 	Last Artboard	Sista ritytan
+	Status Bar Show	Visa i statusfältet
+	Artboard Name	Ritytans namn
+	Current Tool	Aktuellt verktyg
+	Date and Time	Datum och tid
+	Number of Undos	Antal ångringar
+	Document Color Profile	Dokumentets färgprofil
+	Undos	Ångringar
+	Redos	Gör om
 	Go To Link	Gå till länk
 	GPL palettes keep solid colours only, as RGB.	GPL-paletter sparar bara enfärgade färger, som RGB.
 	GPU Performance	GPU-prestanda

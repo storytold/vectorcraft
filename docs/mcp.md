@@ -6624,6 +6624,22 @@ Reset Rotate View is the command `view.rotateReset`:
 the angle the selected objects share (`selectionRotation` in `document.inspect`, 0 when their angles differ), so their
 bounding box is square to the window. It returns `{angle}`, and with nothing selected it returns "nothing selected".
 
+`view.statusBarShow` (desktop app, the Show menu that a click on the status bar's info field opens) chooses what that
+field shows, with `show` set to one of these values:
+
+- `artboardName`: the name of the artboard the status bar's navigator shows.
+- `currentTool`: the name of the tool in use. This is the default.
+- `dateTime`: the date and time, as `2026-11-15 14:03`. The desktop app shows local time, and the web build shows UTC
+  with ` UTC` after it.
+- `undos`: the active document's undo and redo step counts, as `Undos: 3  Redos: 1`.
+- `colorProfile`: the profile the active document's colors use. That is the profile assigned for its color mode
+  (Edit › Assign Profile), or that mode's working space (Edit › Color Settings) when none is assigned or the
+  assigned one is not available.
+
+It returns the value set. The choice is kept with the UI state. A missing or other `show` fails with
+``` `show` must be one of artboardName, currentTool, dateTime, undos, colorProfile ``` and leaves the choice as it was.
+Without a document, the readouts that need one show a dash.
+
 The Smart Guides preferences (Preferences › Smart Guides) apply to `pointer_gesture` with Smart Guides on (the
 default view) and to the mouse; they change what the tools show and how far a target pulls, and only Construction
 Guides change where a snapped point lands:
