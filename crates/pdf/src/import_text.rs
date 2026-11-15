@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, Node, ParaDirection, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, LineCap, LineJoin, Node, ParaDirection, TextKind, TextObject, TextRun};
 use vectorcraft_text::TextLayout;
 
 /// One glyph's placement: its baseline origin, advance direction, size and horizontal scale.
@@ -70,8 +70,19 @@ pub(crate) struct Upright {
     pub top: Point,
 }
 
+/// A stroke on type: its paint and width, and the cap, join and miter limit the file strokes the
+/// glyphs with (#7741).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TypeStroke {
+    pub paint: Paint,
+    pub width: f64,
+    pub cap: LineCap,
+    pub join: LineJoin,
+    pub miter_limit: f64,
+}
+
 /// What a run of type is drawn with: its font (cache key, family and style), size, horizontal
-/// scale, fill and stroke (paint and width).
+/// scale, fill and stroke.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Look {
     pub font: u128,
@@ -82,7 +93,7 @@ pub(crate) struct Look {
     pub size: f64,
     pub h_scale: f64,
     pub fill: Option<Paint>,
-    pub stroke: Option<(Paint, f64)>,
+    pub stroke: Option<TypeStroke>,
     /// The fill, the stroke overprints.
     pub overprint_fill: bool,
     pub overprint_stroke: bool,
@@ -102,7 +113,11 @@ impl Look {
     }
 
     fn style(&self) -> CharStyle {
-        let (stroke, stroke_width) = self.stroke.clone().unwrap_or((Paint::None, 0.0));
+        let default = CharStyle::default();
+        let (stroke, stroke_width, stroke_cap, stroke_join, stroke_miter_limit) = match self.stroke.clone() {
+            Some(s) => (s.paint, s.width, s.cap, s.join, s.miter_limit),
+            None => (Paint::None, 0.0, default.stroke_cap, default.stroke_join, default.stroke_miter_limit),
+        };
         CharStyle {
             font_family: self.family.clone(),
             font_style: self.style.clone(),
@@ -112,9 +127,12 @@ impl Look {
             fill: self.fill.clone().unwrap_or(Paint::None),
             stroke,
             stroke_width,
+            stroke_cap,
+            stroke_join,
+            stroke_miter_limit,
             overprint_fill: self.overprint_fill,
             overprint_stroke: self.overprint_stroke,
-            ..CharStyle::default()
+            ..default
         }
     }
 }
@@ -463,7 +481,7 @@ impl TextLine {
     /// The reader fills a whole Tj/TJ before replaying its glyphs as strokes. A replay
     /// must neither consume the replacement nor rewind the pen. Only the first glyph's
     /// style belongs to the replacement; suppressed glyphs have no text to restyle.
-    pub fn stroke_actual(&mut self, font: u128, at: Placement, stroke: (Paint, f64), overprint: bool) -> bool {
+    pub fn stroke_actual(&mut self, font: u128, at: Placement, stroke: TypeStroke, overprint: bool) -> bool {
         let key = (font, at.origin.x.to_bits(), at.origin.y.to_bits());
         let Some(run) = self.actual_fills.remove(&key) else { return false };
         if let Some((look, ..)) = run.and_then(|i| self.runs.get_mut(i)) {
@@ -501,10 +519,10 @@ impl TextLine {
         Some(bp)
     }
 
-    /// A stroke (`stroke`: paint and width) over the glyph just drawn at `at` in `font` (fill
+    /// A stroke (`stroke`: paint, width, cap, join and miter limit) over the glyph just drawn at `at` in `font` (fill
     /// and stroke rendering), which `overprint`s or not: the run is stroked. `false`: it isn't
     /// that glyph.
-    pub fn stroke_last(&mut self, font: u128, at: Placement, stroke: (Paint, f64), overprint: bool) -> bool {
+    pub fn stroke_last(&mut self, font: u128, at: Placement, stroke: TypeStroke, overprint: bool) -> bool {
         let Some((look, ..)) = self.runs.last_mut().filter(|(l, ..)| l.font == font && (at.origin - self.last).hypot() < self.at.size * 1e-3) else {
             return false;
         };
