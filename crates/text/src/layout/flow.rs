@@ -1298,18 +1298,17 @@ fn emit_line_glyph(
 }
 
 /// Kurikaeshi Moji Shori (Paragraph panel menu): the glyph drawn in place of `g`, the first glyph of
-/// a line of `paragraph`, when `g` is a repeat mark, and the character it shows: the character
-/// [`repeated_char`] gives, shaped in the mark's style with the type's features (so vertical type
-/// gets the font's vertical forms), from the same face, with the mark's advance and place, so the
-/// line breaks stay as they are. None when `g` is no repeat mark, belongs to a tate-chu-yoko or
-/// warichu block, nothing before it in the paragraph fits, or the face draws the character with no
-/// glyph or with more than one. The paragraph's `lead` stands before a paragraph that continues
-/// from the frame before ([`TextObject::first_para_lead`]).
-fn repeat_mark_glyph(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, g: &SGlyph) -> Option<(SGlyph, char)> {
+/// a line, when `g` is a repeat mark, and the character it shows: the character [`repeated_char`]
+/// gives for the character `base` finds before the mark, shaped in the mark's style with the type's
+/// features (so vertical type gets the font's vertical forms), from the same face, with the mark's
+/// advance and place, so the line breaks stay as they are. None when `g` is no repeat mark, belongs
+/// to a tate-chu-yoko or warichu block, `base` gives None, nothing before it fits, or the face draws
+/// the character with no glyph or with more than one. `base` runs only for a repeat mark.
+pub(super) fn repeat_mark_glyph(cx: &Ctx<'_>, g: &SGlyph, base: impl FnOnce() -> Option<Option<char>>) -> Option<(SGlyph, char)> {
     if g.tcy.is_some() || g.wari.is_some() || g.inline.is_some() || !matches!(g.ch, '々' | 'ゝ' | 'ゞ' | 'ヽ' | 'ヾ') {
         return None;
     }
-    let c = repeated_char(paragraph.repeat_base_before(cx.text, g.byte)?, "", g.ch)?;
+    let c = repeated_char(base()?, "", g.ch)?;
     let mut buf = [0; 4];
     let s: &str = c.encode_utf8(&mut buf);
     let mut shaped = Vec::with_capacity(1);
@@ -1320,13 +1319,16 @@ fn repeat_mark_glyph(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, g: &SGlyph
 
 /// Kurikaeshi Moji Shori: the glyph drawn in place of glyph `first` of `paragraph`, the first
 /// character of a line that ends before glyph `end`, when the paragraph has the setting on and
-/// [`repeat_mark_glyph`] gives one; it is recorded in [`crate::TextLayout::repeat_marks`].
+/// [`repeat_mark_glyph`] gives one for the character before it in the paragraph, or the paragraph's
+/// `lead` before a paragraph that continues from the frame before ([`TextObject::first_para_lead`]);
+/// it is recorded in [`crate::TextLayout::repeat_marks`].
 fn line_start_repeat(cx: &mut Ctx<'_>, paragraph: &ParagraphData<'_, '_>, first: usize, end: usize) -> Option<SGlyph> {
     if !paragraph.para.kurikaeshi_moji_shori || first >= end {
         return None;
     }
     let g = paragraph.sg.get(first)?;
-    let (glyph, c) = repeat_mark_glyph(cx, paragraph, g)?;
+    let text = cx.text;
+    let (glyph, c) = repeat_mark_glyph(cx, g, || paragraph.repeat_base_before(text, g.byte))?;
     cx.out.repeat_marks.push((g.byte, c));
     Some(glyph)
 }

@@ -2808,6 +2808,24 @@ fn kurikaeshi_moji_shori_draws_the_repeated_character_at_a_line_start() {
     let on = layout(&db, &t);
     assert_eq!(gid_of(&on, 0), glyph('時'), "the frame's first 々 is drawn as 時");
     assert_eq!(gid_of(&on, "々す\n".len()), glyph('々'), "the next paragraph's first mark keeps its glyph");
+    assert_eq!(on.repeat_marks, [(0, '時')]);
+    // Type on a path is one line: a threaded frame on a path starts it the same way.
+    let mut line = BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let on = layout(&db, &t);
+    assert!(on.on_path);
+    assert_eq!(gid_of(&on, 0), glyph('時'), "type on a path: the frame's first 々 is drawn as 時");
+    assert_eq!(gid_of(&on, "々す\n".len()), glyph('々'), "type on a path: the next paragraph's first mark keeps its glyph");
+    assert_eq!(on.repeat_marks, [(0, '時')]);
+    t.para.kurikaeshi_moji_shori = false;
+    let off = layout(&db, &t);
+    assert_eq!(gid_of(&off, 0), glyph('々'), "type on a path with the setting off");
+    assert!(off.repeat_marks.is_empty());
+    t.para.kurikaeshi_moji_shori = true;
+    t.first_para_continues = false;
+    assert_eq!(gid_of(&layout(&db, &t), 0), glyph('々'), "type on a path in a frame that does not continue");
 }
 
 /// Kurikaeshi Moji Shori: a paragraph with a repeat mark at the start of each of many lines is laid
