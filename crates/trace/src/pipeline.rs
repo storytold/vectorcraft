@@ -270,7 +270,10 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
     drop(grays);
     // Noise clears specks, not the regions of a rare colour Automatic kept on purpose.
     let keep: Vec<bool> = q.palette.iter().map(|c| rare.contains(c)).collect();
-    quantize::denoise_keeping(&mut q.labels, w, h, params.noise as usize, &keep);
+    // A speck far from the color around it joins the color beside it nearest its own pixels.
+    let labs = quantize::palette_labs(&q.palette);
+    let source = quantize::Source { labs: &labs, rgba: &img.rgba, gray: matches!(params.mode, Mode::Grayscale | Mode::BlackAndWhite) };
+    quantize::denoise_nearest(&mut q.labels, w, h, params.noise as usize, &keep, Some(&source));
     go_on()?;
     // Ignore Color, background only: the labels traced, with the ignored color's areas that reach
     // the edge left out. Its other areas are traced with the rest. Edges are still placed by

@@ -899,10 +899,10 @@ fn presets_have_their_paths_corners_and_noise() {
         ("High Fidelity Photo", 50.0, 50.0, 5),
         ("Low Fidelity Photo", 50.0, 50.0, 10),
         ("3 Colors", 50.0, 50.0, 15),
-        ("6 Colors", 50.0, 50.0, 15),
-        ("16 Colors", 50.0, 50.0, 15),
+        ("6 Colors", 50.0, 50.0, 8),
+        ("16 Colors", 50.0, 50.0, 8),
         ("Shades of Gray", 50.0, 50.0, 15),
-        ("Black and White Logo", 50.0, 75.0, 25),
+        ("Black and White Logo", 50.0, 75.0, 5),
         ("Sketched Art", 50.0, 50.0, 20),
         ("Silhouettes", 50.0, 50.0, 90),
         ("Line Art", 50.0, 75.0, 20),
@@ -1928,7 +1928,9 @@ fn contour_spread(res: &TraceResult) -> (f64, usize) {
 
 #[test]
 fn the_borders_of_a_gradients_bands_follow_its_contours() {
-    let res = trace(&wavy_bands(), &sixteen_colors());
+    // At the Noise this test was written for: at 16 Colors' Noise 8 the 6 levels of noise leave more
+    // small regions along the borders.
+    let res = trace(&wavy_bands(), &TraceParams { noise: 15, ..sixteen_colors() });
     // The square's sides are edges: it keeps its four corners.
     let [l, t, r, b] = WAVY_SQUARE;
     let square = res.paths.iter().find(|p| p.color.iter().all(|&c| c < 40)).expect("the dark square");

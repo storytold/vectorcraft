@@ -3847,6 +3847,12 @@ already walks Image Trace. Short agent entry points:
   `paths` and `anchors` count the traced paths only.
   With `keepColors` in `params`, the reply's `warnings` name each listed color that no traced color matches, and say
   when nothing was traced.
+  `noise` (Color, Grayscale and Black and White, not Flat Logo) merges areas smaller than that many pixels into a
+  neighboring color. Each one joins the color it shares the longest border with, unless that color is 10 or more apart from its own (Oklab
+  × 100). Then it joins the neighboring color nearest the average of its source pixels, among the colors that share at
+  least a tenth of the longest border. A single pixel whose longest border is tied between two or more colors always
+  joins by border. These distances and fractions are VectorCraft's own values. The built-in presets 6 Colors and 16
+  Colors use Noise 8, and Black and White Logo uses Noise 5.
   `imageTrace.presets.save {name?, newName?, preset?, enhanced?, params?}` saves tracing settings as a preset kept with
   the preferences: `params` over `preset`'s (default: the saved preset `name`, else Default), checked as `imageTrace.make`
   checks them; without `name` it is a new "Tracing Preset N", and `newName` renames a saved preset (the reply's
