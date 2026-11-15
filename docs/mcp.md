@@ -7183,7 +7183,10 @@ that draws the image does not decode the file again.
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
 effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
 with `pointer_gesture` (a click places at 100% with the top-left corner there, a drag at the dragged size) and
-`press_key` (Left/Right/Up/Down cycle, Escape discards the current file). `file.place`, `file.place.queue` and
+`press_key` (Left/Right/Up/Down cycle, Escape discards the current file). The cursor keeps an encrypted PDF, `.ai`
+or `.ait` file that it cannot read without the password, at 612 × 792 pt (VectorCraft's own size) with
+`needsPassword: true` and no thumbnail; in the app a click or drag on it asks for the password, and headless it places
+nothing. `file.place`, `file.place.queue` and
 `file.place.info` refuse, of the keys each one takes, a `link`, `replace` or `template` that is not true or false and a `thumbnail` that is not a
 number, naming the key, and place nothing; null is the same as leaving the key out.
 
@@ -7194,7 +7197,8 @@ slices (Place PSD). `showImportOptions: false` places such a file without asking
 its dialog: the text options, the DXF fit, lineweight, centering and layer choices with the drawing at 1:1 in its own
 unit, and the PSD conversion, hidden-layer and Import Slices choices. A PDF is placed on page 1 (or `page`) and its
 crop box, and an encrypted PDF given no
-`password` still asks for the password. A `showImportOptions` that is not true or false is refused, and nothing is placed. The
+`password` still asks for the password. An encrypted PDF given a `page` and no `password` asks for the password with
+Show Import Options on too, and places that page. A `showImportOptions` that is not true or false is refused, and nothing is placed. The
 Place dialog (File › Place, or `file.place {paths}`) has a Show Import Options checkbox after Link, Template and
 Replace ([Place multiple files in a document](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/place-multiple-files-in-a-document.html)).
 It is on by default and saved with the preferences. On, each file that has import options asks for them before it is
