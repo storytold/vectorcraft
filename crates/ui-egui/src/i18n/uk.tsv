@@ -1417,6 +1417,14 @@ file-filter	Templates	Шаблони
 	Previous Artboard	Попередня монтажна область
 	Next Artboard	Наступна монтажна область
 	Last Artboard	Остання монтажна область
+	Status Bar Show	Показ у рядку стану
+	Artboard Name	Назва монтажної області
+	Current Tool	Поточний інструмент
+	Date and Time	Дата й час
+	Number of Undos	Кількість скасувань
+	Document Color Profile	Колірний профіль документа
+	Undos	Скасування
+	Redos	Повтори
 	Go To Link	Перейти за посиланням
 	GPL palettes keep solid colours only, as RGB.	Палітри GPL зберігають лише суцільні кольори RGB.
 	GPU Performance	Продуктивність GPU
