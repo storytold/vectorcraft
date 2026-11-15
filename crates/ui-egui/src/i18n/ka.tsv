@@ -879,6 +879,7 @@
 	Free Transform	თავისუფალი გარდაქმნა
 	Perspective Distort	პერსპექტიული დეფორმაცია
 	Radial Blur…	რადიალური გაბუნდოვნება…
+	Blur Center	გაბუნდოვნების ცენტრი
 	Smart Blur…	ჭკვიანი გაბუნდოვნება…
 	Sharpen	გამკვეთრება
 	Unsharp Mask…	არამკვეთრი ნიღაბი…
@@ -1456,6 +1457,8 @@ lighting	Light	სინათლე
 	Leading	სტრიქონთა დაშორება
 	No Break	გადატანის გარეშე
 	Proportional Metrics	პროპორციული მეტრიკა
+	H or V Style	ჰორიზონტალური ან ვერტიკალური სტილი
+	Roman Italics	ლათინური კურსივი
 	Insert Aki Left	აკის ჩასმა მარცხნივ
 	Insert Aki Right	აკის ჩასმა მარჯვნივ
 	Tsume	ცუმე
@@ -1860,6 +1863,7 @@ digits	Malayalam	მალაიალამური
 	Show Swatch Bounds	ფერის ნიმუშის საზღვრების ჩვენება
 	Show Tile Edge	ფილის კიდის ჩვენება
 	Size Tile to Art	ფილის ზომის ნახატზე მორგება
+	Move Tile with Art	ფილის ნახატთან ერთად გადატანა
 	Tile Type:	ფილის ტიპი:
 	Top in Front	ზედა წინ
 	V Spacing:	ვერტ. დაშორება:
@@ -1902,6 +1906,9 @@ digits	Malayalam	მალაიალამური
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
 	Working RGB (don't tag)	სამუშაო RGB (ტეგის გარეშე)
+	Don't Color Manage This Document	ამ დოკუმენტის ფერების მართვის გარეშე
+	Working RGB: {name}	სამუშაო RGB: {name}
+	Working CMYK: {name}	სამუშაო CMYK: {name}
 	{name} (spot)	{name} (სპოტ)
 	Add to Profiles…	პროფილებში დამატება…
 	Align Stroke to Center	კონტურის ცენტრზე სწორება
@@ -2438,6 +2445,7 @@ digits	Malayalam	მალაიალამური
 	Transparent Background	გამჭვირვალე ფონი
 	Choose…	არჩევა…
 	Copy Fonts Used in the Document	დოკუმენტში გამოყენებული შრიფტების კოპირება
+	Copy Info	ინფორმაციის კოპირება
 	Copy Links	ბმულების კოპირება
 	Create Report	ანგარიშის შექმნა
 	Fonts whose licence doesn't allow embedding are not copied.	შრიფტები, რომელთა ლიცენზია ჩაშენების უფლებას არ იძლევა, არ კოპირდება.
@@ -4864,6 +4872,9 @@ font-technology	Variable	ცვლადი
 @msg	automation filesystem access is not granted: write authority is absent: {path}	ავტომატიზაციას ფაილურ სისტემაზე წვდომა არ აქვს: ჩაწერის უფლება არ არის: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირების {roots} გარეთაა: {path}
+@msg	a linked JavaScript file is outside the read roots	დაკავშირებული JavaScript ფაილი წაკითხვის ძირების გარეთაა
+@msg	the library's file is outside the read roots	ბიბლიოთეკის ფაილი წაკითხვის ძირების გარეთაა
+@msg	{file} names more than one linked JavaScript file	{file} ერთზე მეტ დაკავშირებულ JavaScript ფაილს შეესაბამება
 @msg	automation path rejected: outside the write root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირების {roots} გარეთაა: {path}
 @msg	automation path rejected: path is empty	ავტომატიზაციის გზა უარყოფილია: გზა ცარიელია
@@ -5225,6 +5236,7 @@ font-technology	Variable	ცვლადი
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	No linked files to look for	მოსაძებნი დაკავშირებული ფაილები არ არის
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	ბმული სიმბოლოში, დიაგრამის დიზაინში, პატერნში ან გაუმჭვირვალობის ნიღაბშია და ტილოზე ადგილი არ აქვს
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	დიაგრამის სერიაში დიაგრამის დიზაინის გრაფიკა დიზაინიდან თავიდან იხატება: მის შესაცვლელად დაარედაქტირეთ დიზაინი
 	Ruler Origin	სახაზავების სათავე
 	Reset Ruler Origin	სახაზავების სათავის ჩამოყრა
 	Artistic	მხატვრული
@@ -5620,6 +5632,7 @@ imageTrace	Outline	კონტური
 @msg	there is no script engine named {name}	სკრიპტის ძრავა სახელით {name} არ არსებობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
+@msg	Copied the link info	კოპირებულია ბმულის ინფორმაცია
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
 	Load EPS into Clipboard	EPS-ის ბუფერში ჩატვირთვა
@@ -5652,6 +5665,9 @@ imageTrace	Outline	კონტური
 	In the File	ფაილში
 	Keys	კლავიშები
 	Light behind the object	სინათლე ობიექტის უკან
+	Move Light to Back	სინათლის უკან გადატანა
+	Move Light to Front	სინათლის წინ გადატანა
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	გადაათრიეთ სინათლე მის გადასაადგილებლად. ისრიანი ღილაკები ფოკუსირებულ სინათლეს ამოძრავებს; Shift-ით 15°-იანი ბიჯით.
 	Shadows	ჩრდილები
 	Distance from Object	მანძილი ობიექტიდან
 	Shadow Bounds	ჩრდილის საზღვრები
@@ -5700,6 +5716,7 @@ imageTrace	Outline	კონტური
 @msg	object has no weighted stroke	ობიექტს ცვლადი სისქის კონტური არ აქვს
 @msg	objects can't be nested more than 32 deep	ობიექტების ჩადგმის სიღრმე 32-ს ვერ გადააჭარბებს
 @msg	the SVG's elements are nested more than {0} deep	SVG-ის ელემენტების ჩადგმის სიღრმე {0}-ს აჭარბებს
+@msg	the SVG's style sheets take too long to match	SVG-ის სტილის ფურცლების შედარებას ძალიან დიდი დრო სჭირდება
 @msg	the SVG's styles expand to more than {0} MB	SVG-ის სტილები გაშლისას {0} MB-ს აჭარბებს
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	უცნობი control `{name}`: fillStroke, coloring, drawMode ან screenMode
 @plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	ემთხვევა ნაგულისხმევ მალსახმობებს: {n}|ემთხვევა ნაგულისხმევ მალსახმობებს: {n}
@@ -6762,6 +6779,13 @@ axis	Y Axis	Y ღერძი
 	Graphite Pencil	გრაფიტის ფანქარი
 	Wax Crayon	ცვილის ფანქარი
 	Charcoal Dust	ნახშირის მტვერი
+
+# Original procedural circuit brushes.
+	Tech Circuit	ტექნიკური სქემები
+	Circuit Trace	სქემის გამტარი
+	Bus Lines	სალტის ხაზები
+	Terminal Nodes	ტერმინალური კვანძები
+
 	Notched Ribbon	დაკბილული ლენტი
 	Double Line	ორმაგი ხაზი
 	Wave	ტალღა

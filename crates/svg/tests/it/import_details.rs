@@ -911,6 +911,33 @@ fn svg_images_whose_styles_expand_past_the_limit_refuse_the_svg() {
     assert!(!art(&d).is_empty());
 }
 
+/// The SVG images share the element limit with the SVG showing them: each image's `<use>` chain
+/// makes 655,356 elements, so one imports and two together are refused before usvg makes the
+/// second.
+#[test]
+fn svg_images_share_the_element_limit() {
+    let chain = use_chain(16, "");
+    let unshown = chain.replacen(r##"<use href="#g16"/>"##, "", 1);
+    assert_ne!(chain, unshown);
+    let image = image_of("image/svg+xml", &unshown);
+    let rect = r#"<rect width="1" height="1"/>"#;
+    assert!(import_with(&svg(&format!("{rect}{image}")), &ImportOptions::default()).is_ok());
+    let err = import_with(&svg(&format!("{rect}{}", image.repeat(2))), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::TooLarge(n) if n == vectorcraft_svg::MAX_NODES.min(999_999)), "{err:?}");
+}
+
+/// A `:not()` rule, which only the import's own style cascade reads, counts toward the style limit
+/// the SVG images share: each image's rule gives 400 groups the long style (about 40 MB), so one
+/// imports and two together are refused.
+#[test]
+fn svg_images_share_the_style_limit_with_not_rules() {
+    let groups = svg(&format!(r#"<style>g:not(.x){{{}}}</style>{}<rect width="1" height="1"/>"#, long_style(), "<g/>".repeat(400)));
+    let image = image_of("image/svg+xml", &groups);
+    assert!(import_with(&svg(&image), &ImportOptions::default()).is_ok());
+    let err = import_with(&svg(&image.repeat(2)), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::StylesTooLarge(64)), "{err:?}");
+}
+
 /// Nested SVG images exceeding `MAX_NESTED_SVG_IMAGES` are left out with a warning note (#3564).
 #[test]
 fn nested_svg_images_past_count_cap_are_left_out() {
@@ -920,6 +947,21 @@ fn nested_svg_images_past_count_cap_are_left_out() {
     let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500">{images}</svg>"#);
     let (_d, warnings) = import_with(&svg, &ImportOptions::default()).unwrap();
     assert!(warnings.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images"))));
+}
+
+/// A data URL shown by `<use>` elements, in the SVG and in an SVG image of it, imports as one
+/// image shown at each use.
+#[test]
+fn data_url_images_shown_by_uses_import_at_each_use() {
+    let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg==";
+    let image = format!(r#"<image id="p" href="data:image/png;base64,{png}" width="4" height="4"/>"#);
+    let uses = r##"<use href="#p" x="5"/>"##.repeat(3);
+    let inner = format!(r#"<svg {SVG_NS} width="20" height="10"><defs>{image}</defs>{uses}</svg>"#);
+    let (d, w) = import_with_report(&svg(&format!("<defs>{image}</defs>{uses}{}", image_of("image/svg+xml", &inner)))).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let found = images(&d);
+    assert_eq!(found.len(), 6);
+    assert!(found.iter().all(|(_, im)| im.key == found[0].1.key && (im.width, im.height) == (1, 1)));
 }
 
 /// Nested SVG images that can't be read: text that isn't XML, and an SVG without a size.

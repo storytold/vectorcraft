@@ -563,6 +563,33 @@ fn area_anchors_move_in_document_space() {
     assert_eq!(t, before);
 }
 
+/// Type on an open path may start before the path's start: the start is kept, saved and read back,
+/// while the start bracket stays at the path's start. On a closed path, and for a start that is not
+/// finite, the start is the start bracket as before.
+#[test]
+fn type_on_an_open_path_starts_before_the_path() {
+    let pts = [Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 100.0)];
+    let on = |closed: bool, start: f64| TextKind::OnPath {
+        path: PathData::new(vec![vectorcraft_geom::SubPath::polyline(&pts, closed)]),
+        start,
+        end: None,
+    };
+    let open = on(false, -0.25);
+    assert_eq!(open.path_text_start(), Some(-0.25));
+    assert!(open.starts_before_path());
+    assert_eq!(open.path_span(), Some((0.0, 1.0)));
+    let saved = serde_json::to_value(&open).unwrap();
+    assert_eq!(saved["start"], -0.25);
+    assert_eq!(serde_json::from_value::<TextKind>(saved).unwrap(), open);
+    assert_eq!(on(false, -1e9).path_text_start(), Some(-PATH_LEAD_MAX));
+    assert_eq!(on(false, f64::NEG_INFINITY).path_text_start(), Some(0.0));
+    assert_eq!(on(false, 0.25).path_text_start(), Some(0.25));
+    assert!(!on(false, 0.0).starts_before_path());
+    assert_eq!(on(true, -0.25).path_text_start(), Some(0.0));
+    assert!(!on(true, -0.25).starts_before_path());
+    assert_eq!(TextKind::Point.path_text_start(), None);
+}
+
 /// Builds from before [`Justify::Auto`] read new type's alignment as Left or Right (and ignore
 /// `justify_auto`); this build reads Auto back.
 #[test]
