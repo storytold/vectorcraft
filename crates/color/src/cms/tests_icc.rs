@@ -283,9 +283,46 @@ fn cmyk_profiles_convert_into_each_other_directly() {
     let device = IccProfile::from_bytes(Some("B".into()), &icc_bytes(DEVICE_CMYK).unwrap()).unwrap();
     let srgb = IccProfile::from_bytes(None, &icc_bytes(SRGB).unwrap()).unwrap();
     let inks = [0.2, 0.4, 0.6, 0.1];
-    let out = generic.to_same_model_of(&device, &inks, Intent::RelativeColorimetric).unwrap();
+    let out = generic.to_same_model_of(&device, &inks, Intent::RelativeColorimetric, false).unwrap();
     assert_eq!(out.len(), 4);
     assert!(out.iter().zip(inks).any(|(a, b)| (a - b).abs() > 0.01), "{out:?}");
-    assert!(generic.to_same_model_of(&srgb, &inks, Intent::RelativeColorimetric).is_none());
-    assert!(generic.to_same_model_of(&device, &inks[..3], Intent::RelativeColorimetric).is_none());
+    assert!(generic.to_same_model_of(&srgb, &inks, Intent::RelativeColorimetric, false).is_none());
+    assert!(generic.to_same_model_of(&device, &inks[..3], Intent::RelativeColorimetric, false).is_none());
+}
+
+/// With black-point compensation, a CMYK profile's darkest ink converts into an ink as dark as a
+/// darker profile's darkest ink, and a dark grey of a darker profile converts lighter into a
+/// profile whose black is lighter; absolute colorimetric never compensates.
+#[test]
+fn cmyk_to_cmyk_compensates_the_black_point() {
+    let generic = IccProfile::from_bytes(Some("A".into()), &icc_bytes(GENERIC_CMYK).unwrap()).unwrap();
+    let device = IccProfile::from_bytes(Some("B".into()), &icc_bytes(DEVICE_CMYK).unwrap()).unwrap();
+    let rel = Intent::RelativeColorimetric;
+    let lightness = |p: &IccProfile, inks: &[f32]| lab::srgb_to_lab(p.to_srgb(inks, rel).unwrap()).l;
+    let black = |p: &IccProfile| p.from_srgb([0.0; 3], rel).unwrap();
+    // Generic CMYK's black is a dark grey, the uncalibrated profile's is black.
+    let (light, dark) = (lightness(&generic, &black(&generic)), lightness(&device, &black(&device)));
+    assert!(light > dark + 5.0, "{light} vs {dark}");
+    let into_device = |bpc| lightness(&device, &generic.to_same_model_of(&device, &black(&generic), rel, bpc).unwrap());
+    let (on, off) = (into_device(true), into_device(false));
+    assert!((on - dark).abs() < 1.5 && off > dark + 5.0, "with {on}, without {off}, the black {dark}");
+    let grey = device.from_srgb([0.2; 3], rel).unwrap();
+    let into_generic = |bpc| lightness(&generic, &device.to_same_model_of(&generic, &grey, rel, bpc).unwrap());
+    let (on, off) = (into_generic(true), into_generic(false));
+    assert!(on > off + 1.0, "with {on}, without {off}");
+    for (from, to, inks) in [(&generic, &device, black(&generic)), (&device, &generic, grey)] {
+        let abs = |bpc| from.to_same_model_of(to, &inks, Intent::AbsoluteColorimetric, bpc).unwrap();
+        assert_eq!(abs(true), abs(false));
+    }
+    // Convert to Working Space (Cms::convert_into) compensates as Color Settings say.
+    let device_name = register_icc(&icc_bytes(DEVICE_CMYK).unwrap(), Some("Test ICC Device CMYK".into())).unwrap().name;
+    let rich = Color::Cmyk { c: 0.9, m: 0.8, y: 0.8, k: 1.0 };
+    let convert = |bpc| {
+        let dest = Cms::new(&ColorSettings { cmyk: device_name.clone(), bpc, ..ColorSettings::default() }).unwrap();
+        icc_cmyk(bpc).convert_into(&dest, &rich, rel)
+    };
+    assert_ne!(convert(true), convert(false));
+    // White is untouched.
+    let white = generic.to_same_model_of(&device, &[0.0; 4], rel, true).unwrap();
+    assert!(white.iter().all(|v| *v < 0.01), "{white:?}");
 }

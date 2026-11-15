@@ -877,7 +877,8 @@ fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
 /// Off and Preserve Numbers take them off and keep the color numbers, and Convert to Working Space
 /// converts the colors into the working spaces, keeping how they look, and takes them off. A
 /// document a policy changed opens with unsaved changes, and the open reply names each profile.
-/// A profile that is the working space stays, and File › Revert applies the policies too.
+/// A profile that is the working space stays, and File › Revert and File › New from Template apply
+/// the policies too.
 #[test]
 fn color_management_policies_keep_take_off_or_convert_a_tagged_profile() {
     let _g = settings();
@@ -989,6 +990,17 @@ fn color_management_policies_keep_take_off_or_convert_a_tagged_profile() {
     let r = exec(&mut reverted, "file.revert", json!({"confirmed": true}));
     assert_eq!(doc_profiles(&reverted.doc().unwrap().doc), (Some(cms::WIDE_GAMUT_RGB.into()), None));
     assert_eq!((fill(&reverted, blue), notes(&r)), (blue0, 1));
+
+    // File › New from Template applies the policies as opening does.
+    let mut from_template = session();
+    exec(&mut from_template, "edit.colorSettings", json!({"rgbPolicy": "convert", "cmykPolicy": "off"}));
+    let r = exec(&mut from_template, "file.newFromTemplate", json!({"path": tagged.to_str().unwrap()}));
+    assert_eq!(doc_profiles(&from_template.doc().unwrap().doc), (None, None));
+    assert_eq!(notes(&r), 2);
+    assert_eq!(fill(&from_template, ink), ink0, "Off keeps the CMYK numbers");
+    let blue2 = fill(&from_template, blue);
+    assert!(blue2 != blue0 && cms::delta_e2000(source.lab(&blue0), working.lab(&blue2)) < 1.0, "{blue0:?} → {blue2:?}");
+    assert!(from_template.doc().unwrap().is_dirty());
 }
 
 /// The policies are checked, come back in the reply and in `Color Settings.json`, and a saved file

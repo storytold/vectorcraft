@@ -21,9 +21,10 @@
 //! - State: hidden `Xw`, locked `A`, transparency `mode opacity isolate knockout shape Xy`.
 //! - Names: an `/ArtDictionary` after an object, its `AI10_ArtUID` the name's XML id.
 //! - Artboards: the `ArtboardArray` of the `/Document` dictionary, with each one's display
-//!   options, else `%AI3_Cropmarks`, else the art size around the template box's centre
-//!   (`%AI3_TemplateBox`, `%%TemplateBox` in older files), else (a file in the legacy format
-//!   another app wrote) the bounding box.
+//!   options, else `%AI3_Cropmarks`, else the art size (`%AI5_ArtSize`; VectorCraft's own default,
+//!   US Letter, in a `.ai` of versions 3 and 4, which don't give it) around the template box's center (`%AI3_TemplateBox`,
+//!   `%%TemplateBox` in older files), which the version 7 specification (§2.2) puts at the
+//!   artboard's center, else (a file in the legacy format another app wrote) the bounding box.
 //! - Document settings: Document Raster Effects Settings from the `/Document` dictionary's
 //!   `AI Auto Rasterize`; the author from the header's `%%For`; swatches for the custom colors of
 //!   `%%CMYKCustomColor` and `%%RGBCustomColor` that the document has none of.
@@ -102,8 +103,10 @@
 //!   in the Symbols panel's order. An instance: `/SymbolInstance : (name) /SymbolRef , a b c d tx
 //!   ty /RTransformMatrix ;`, the matrix taking the symbol's art to art space; in a symbol's art,
 //!   it takes it to art space about the canvas point of art space's origin, as a pattern's
-//!   gradients are. Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after
-//!   it.
+//!   gradients are. Files of versions 10 to 13 write `a b c d tx ty /TransformMatrix` instead,
+//!   the matrix taking the symbol's art to the canvas (y down, art space's origin at the canvas
+//!   point the template box gives); in a symbol's art, it takes the art to that symbol's space.
+//!   Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after it.
 //!
 //! Sections the reader doesn't need (styles, filters) are skipped; type, instances of symbols it
 //! can't read, fills with a pattern it can't read, placed files without a preview and operators
@@ -271,12 +274,28 @@ pub(crate) fn read_over_page(data: &[u8], large_canvas: bool, names: NameEncodin
     read_with(data, large_canvas, true, names)
 }
 
-fn read_with(data: &[u8], large_canvas: bool, page_art: bool, names: NameEncoding) -> Result<Structure, String> {
+/// [`read_in`] (or [`read_over_page`] when `page_art`) for the program of a `.ai` in the legacy
+/// format: one of versions 3 and 4 that has a template box but no art size has a US Letter
+/// artboard ([`Reader::sized_board`]).
+pub(crate) fn read_program(data: &[u8], large_canvas: bool, page_art: bool, names: NameEncoding) -> Result<Structure, String> {
     let mut r = Reader::with_names(data, names);
-    r.large_canvas = large_canvas.then_some(1.0);
-    r.page_art = page_art;
-    r.run()?;
-    r.finish()
+    r.legacy_ai = true;
+    r.read_as(large_canvas, page_art)
+}
+
+fn read_with(data: &[u8], large_canvas: bool, page_art: bool, names: NameEncoding) -> Result<Structure, String> {
+    Reader::with_names(data, names).read_as(large_canvas, page_art)
+}
+
+impl Reader<'_> {
+    /// The structure read, the declared large canvas scale applied when `large_canvas`, the page's
+    /// art replacing the objects not read when `page_art` ([`read_over_page`]).
+    fn read_as(mut self, large_canvas: bool, page_art: bool) -> Result<Structure, String> {
+        self.large_canvas = large_canvas.then_some(1.0);
+        self.page_art = page_art;
+        self.run()?;
+        self.finish()
+    }
 }
 
 /// How many objects [`read`] counts against [`MAX_NODES`] in the editing data `data`.
@@ -643,6 +662,11 @@ struct Reader<'a> {
     /// The artboard's size and centre in files without artboards or crop marks.
     art_size: Option<(f64, f64)>,
     template_center: Option<(f64, f64)>,
+    /// The data is the program of a `.ai` in the legacy format ([`read_program`]), not an EPS's:
+    /// without an art size, its artboard can be US Letter ([`Reader::sized_board`]).
+    legacy_ai: bool,
+    /// The header has `%AI5_FileFormat`, which files of version 5 and later write.
+    file_format: bool,
     /// `%AI24_LargeCanvasScale`: a Large Canvas document's editing data is written at 1/N scale
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
@@ -825,6 +849,8 @@ impl<'a> Reader<'a> {
             xml_id_bytes: 0,
             art_size: None,
             template_center: None,
+            legacy_ai: false,
+            file_format: false,
             large_canvas: None,
             page_art: false,
             canvas_scale: 1.0,

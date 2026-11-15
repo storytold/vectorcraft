@@ -611,7 +611,7 @@ impl Cms {
             Color::Cmyk { c, m, y, k } => {
                 let inks = [c, m, y, k].map(|v| v.clamp(0.0, 1.0));
                 let direct = match (&self.cmyk, &dest.cmyk) {
-                    (CmykSpace::Icc(s), CmykSpace::Icc(d)) => s.to_same_model_of(d, &inks, intent),
+                    (CmykSpace::Icc(s), CmykSpace::Icc(d)) => s.to_same_model_of(d, &inks, intent, self.settings.bpc),
                     _ => None,
                 };
                 let [c, m, y, k] = match direct.as_deref() {

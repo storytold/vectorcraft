@@ -15,7 +15,7 @@
 //! version 6 so older builds refuse them rather than fail at that step. Other sets use version 1, and
 //! earlier version 1 to 5 files still work.
 //! Load Actions… also reads the action sets another app saves as text (`.aia`, through
-//! `actionSet.read`).
+//! `actionSet.read`), a Set Selection step as a Select Object step.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -398,6 +398,45 @@ fn step_commands() -> std::collections::HashMap<String, Option<&'static str>> {
     by_label
 }
 
+/// The `/internalName` of a step of another app's action set that selects objects by their note: the
+/// Set Selection step.
+const SET_SELECTION: &str = "adobe_setSelection"; // brand-ok: the step's internal name in the file format
+
+/// The `/key` of a Set Selection step's note (`text`), of its Whole Word option (`word`) and of its
+/// Case Sensitive option (`case`): four characters read as a big-endian number.
+const NOTE_KEY: i64 = 0x7465_7874;
+const WHOLE_WORD_KEY: i64 = 0x776f_7264;
+const CASE_SENSITIVE_KEY: i64 = 0x6361_7365;
+
+/// The Select Object step ([`super::SELECT_OBJECT_STEP`]) a Set Selection step of `actionSet.read`'s
+/// answer stands for. The step must have exactly three recorded values, all kept: the note, of type
+/// `ustring` and UTF-8, and Whole Word and Case Sensitive, each of type `boolean` and 0 or 1. The note
+/// is as [`super::select_object_params`] takes it (trimmed, not empty, at most 1,024 bytes). Anything
+/// else stands for nothing.
+fn select_object_step(step: &Value) -> Option<(String, Value)> {
+    let values = step.get("values").and_then(Value::as_array)?;
+    if values.len() != 3 || step.get("params").and_then(Value::as_u64) != Some(3) {
+        return None;
+    }
+    let value = |key: i64, kind: &str| {
+        let mut found = values.iter().filter(|v| v.get("key").and_then(Value::as_i64) == Some(key));
+        let v = found.next().filter(|v| v.get("type").and_then(Value::as_str) == Some(kind))?;
+        if found.next().is_some() {
+            return None;
+        }
+        v.get("value")
+    };
+    let flag = |key: i64| match value(key, "boolean")?.as_i64()? {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    };
+    let note = value(NOTE_KEY, "ustring")?.as_str()?;
+    let params = json!({"note": note, "caseSensitive": flag(CASE_SENSITIVE_KEY)?, "wholeWord": flag(WHOLE_WORD_KEY)?});
+    let (note, case_sensitive, whole_word) = super::select_object_params(&params).ok()?;
+    Some((super::SELECT_OBJECT_STEP.to_string(), json!({"note": note, "caseSensitive": case_sensitive, "wholeWord": whole_word})))
+}
+
 /// The command a step of another app's action set stands for ([`step_commands`]).
 #[cfg(test)]
 pub(super) fn step_command(label: &str) -> Option<&'static str> {
@@ -414,8 +453,9 @@ struct AiaLoad {
 }
 
 /// The set of `read`, `actionSet.read`'s answer, named `name` when the file gives none. A step comes
-/// in as the command it stands for ([`step_name`], [`step_commands`]), with no params, and excluded
-/// from playback when it is off in the file. An action with no name is called `Action N`.
+/// in as the command it stands for ([`step_name`], [`step_commands`]), with no params, or a Set
+/// Selection step as a Select Object step ([`select_object_step`]), and excluded from playback when
+/// it is off in the file. An action with no name is called `Action N`.
 fn aia_set(read: &Value, name: &str) -> AiaLoad {
     let (mut skipped, mut left_out) = (vec![], 0usize);
     let commands = step_commands();
@@ -432,7 +472,12 @@ fn aia_set(read: &Value, name: &str) -> AiaLoad {
             let (mut steps, mut excluded_steps) = (vec![], std::collections::BTreeSet::new());
             for s in a.get("steps").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default() {
                 let (name, can_stand) = step_name(s);
-                let Some(id) = commands.get(&bare_label(&name)).copied().flatten().filter(|_| can_stand) else {
+                let step = if s.get("name").and_then(Value::as_str) == Some(SET_SELECTION) {
+                    select_object_step(s)
+                } else {
+                    commands.get(&bare_label(&name)).copied().flatten().filter(|_| can_stand).map(|id| (id.to_string(), json!({})))
+                };
+                let Some(step) = step else {
                     left_out += 1;
                     if skipped.len() < MAX_SKIPPED {
                         skipped.push(json!({ "action": action, "step": name }));
@@ -442,7 +487,7 @@ fn aia_set(read: &Value, name: &str) -> AiaLoad {
                 if s.get("on").and_then(Value::as_bool) == Some(false) {
                     excluded_steps.insert(steps.len());
                 }
-                steps.push((id.to_string(), json!({})));
+                steps.push(step);
             }
             Action { excluded_steps, ..Action::new(action, steps) }
         })
@@ -496,7 +541,8 @@ fn load_aia(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
 ///
 /// An action set another app saved as text (`.aia`, read with `actionSet.read`) comes in with its
 /// actions and the steps that stand for a VectorCraft command ([`step_name`], [`step_commands`]),
-/// with no params; a step that is off in the file is excluded from playback. A set with no name is
+/// with no params, and its Set Selection steps as Select Object steps ([`select_object_step`]); a
+/// step that is off in the file is excluded from playback. A set with no name is
 /// called after the file, else `Actions`. The other steps are left out and listed, and the status
 /// bar says how many → `{set, name, actions, skipped: [{action, step}] (at most 1,000), leftOut: n}`.
 /// Such a file that `actionSet.read` marks `truncated` is refused, and so is one whose set Save

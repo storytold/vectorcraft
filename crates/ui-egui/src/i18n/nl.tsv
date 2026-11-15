@@ -145,6 +145,7 @@
 @msg	`name` must be the name of a script engine	`name` moet de naam van een scriptengine zijn
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	de hoofdscriptengine is bij elke uitvoering nieuw en wordt nooit bewaard, dus kan hij niet worden verwijderd
 @msg	there is no script engine named {name}	er is geen scriptengine met de naam {name}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` is alleen voor een uitvoering zonder iemand om te vragen: in de app beantwoordt de persoon elk dialoogvenster
 @msg	Running a script	Er wordt een script uitgevoerd
 @msg	Data Recovery can't keep copies in {path}: {e}	Gegevensherstel kan geen kopieën bewaren in {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kunnen niet worden geladen uit {path}: {e}
@@ -374,6 +375,7 @@
 @msg	stops must be in order of `offset`	kleurstops moeten op volgorde van `offset` staan
 @msg	the document has no pattern {pattern}	het document heeft geen patroon {pattern}
 @msg	the document has no swatch {n}	het document heeft geen staal {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` vereist een verloopstop die aan een steunkleurstaal is gekoppeld
 @msg	the output	de uitvoer
 @msg	the path has no anchor points	het pad heeft geen ankerpunten
 @msg	too many anchor points (limit {MAX_ANCHORS})	te veel ankerpunten (limiet {MAX_ANCHORS})
@@ -998,6 +1000,7 @@
 	Rotate (Classic)…	Roteren (klassiek)…
 	Surface	Oppervlak
 	Wireframe	Draadmodel
+	Render Settings	Renderinstellingen
 	No Shading	Geen arcering
 	Plastic	Plastic
 	Highlight Intensity	Glansintensiteit
@@ -1967,6 +1970,7 @@ lighting	Light	Licht
 	Align to Artboard	Uitlijnen op tekengebied
 	Align to Glyph Bounds	Uitlijnen op glyphbegrenzing
 	Align to Key Object	Uitlijnen op sleutelobject
+	Align to Key Anchor	Uitlijnen op sleutelankerpunt
 	Align to Selection	Uitlijnen op selectie
 	Align To:	Uitlijnen op:
 	Cancel Key Object	Sleutelobject annuleren
@@ -2111,11 +2115,55 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Samengestelde lettertypen
 	Export Composite Fonts	Samengestelde lettertypen exporteren
 	Import Composite Fonts	Samengestelde lettertypen importeren
+@msg	each font must be {name, parts}	elk lettertype moet {name, parts} zijn
+@msg	unknown key `{k}`; a font takes name and parts	onbekende sleutel `{k}`; een lettertype neemt name en parts
+@msg	each font needs a name	elk lettertype heeft een naam nodig
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan geen naam van een samengesteld lettertype zijn (1 tot {COMPOSITE_NAME_MAX} tekens, geen besturingstekens)
+@msg	`{name}`: parts must be an object	`{name}`: parts moet een object zijn
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: onbekende klasse `{k}`; de klassen zijn kanji, kana, punctuation, symbols, roman en numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} moet een object zijn
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: onbekende sleutel `{k}` in {_1}
+@msg	`{name}`: give the kanji part	`{name}`: geef het deel kanji op
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	een document bevat hoogstens {COMPOSITE_FONTS_MAX} samengestelde lettertypen
+@msg	two composite fonts are named `{_1}`	twee samengestelde lettertypen heten `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` is de naam van een geïnstalleerd lettertype
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} gebruikt `{font}`, een samengesteld lettertype
+@msg	give fonts: [{name, parts}…]	geef fonts op: [{name, parts}…]
+@msg	path is empty	path is leeg
+@msg	fonts must be a list of composite fonts	fonts moet een lijst van samengestelde lettertypen zijn
+@msg	names must be strings	names moeten tekenreeksen zijn
+@msg	no composite font named `{n}`	geen samengesteld lettertype met de naam `{n}`
+@msg	names must be a list of names	names moet een lijst van namen zijn
+@msg	no composite fonts to export	geen samengestelde lettertypen om te exporteren
+@msg	not a composite fonts file: {e}	geen bestand met samengestelde lettertypen: {e}
+@msg	not a composite fonts file: no compositeFonts list	geen bestand met samengestelde lettertypen: geen lijst compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	het bestand bevat meer dan {COMPOSITE_FONTS_MAX} samengestelde lettertypen
+@msg	the file is larger than 4 MB	het bestand is groter dan 4 MB
+@msg	dataBase64 is not base64	dataBase64 is geen base64
+@msg	give one of path, data or dataBase64	geef path, data of dataBase64 op
+@msg	the file holds no composite fonts	het bestand bevat geen samengestelde lettertypen
+@msg	the file holds two composite fonts named `{_1}`	het bestand bevat twee samengestelde lettertypen met de naam `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` kan geen naam van een samengesteld lettertype zijn
+@msg	{k}: give a font	{k}: geef een lettertype op
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: geef een lettertype op
+@msg	{k}: size must be {_1} to {_2}%	{k}: size moet tussen {_1} en {_2}% liggen
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size moet tussen {_1} en {_2}% liggen
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline moet tussen {_1} en {_2}% liggen
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline moet tussen {_1} en {_2}% liggen
+@msg	{k}: scale must be {_1} to {_2}%	{k}: de schaal moet tussen {_1} en {_2}% liggen
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: de schaal moet tussen {_1} en {_2}% liggen
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: alleen kana, roman en numerals kunnen worden geschaald
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: alleen kana, roman en numerals kunnen worden geschaald
+@msg	{k}: only kana can be scaled at the center	{k}: alleen kana kan vanuit het midden worden geschaald
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: alleen kana kan vanuit het midden worden geschaald
+@msg	no composite font	geen samengesteld lettertype
 	Delete Font	Lettertype verwijderen
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Cijfers
 	Scale at Center	Schalen vanuit het midden
+	Delete Set	Set verwijderen
+	Direct Entry	Directe invoer
 	Up/Down:	Omhoog/omlaag:
 	Left/Right:	Links/rechts:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko omhoog/omlaag
@@ -2399,7 +2447,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Tabulaire lining
 	Tabular Oldstyle	Tabulaire oldstyle
 	Titling Alternates	Titelalternatieven
-	Every-line Composer	Compositie per alinea
+	Middle Eastern & South Asian Single-line Composer	Compositie per regel (Midden-Oosten en Zuid-Azië)
+	Middle Eastern & South Asian Every-line Composer	Compositie per alinea (Midden-Oosten en Zuid-Azië)
+	Standard Single-line Composer	Standaardcompositie per regel
+	Standard Every-line Composer	Standaardcompositie per alinea
 	First-line Left Indent	Eerste regel links inspringen
 	Hyphenation…	Afbreken…
 	Justification…	Uitvullen…
@@ -2431,7 +2482,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Instellingen voor Oost-Aziatische zetting
 	Korean Composition Settings	Instellingen voor Koreaanse zetting
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
-	Single-line Composer	Compositie per regel
 	Toggle Line Composer	Compositiemethode wisselen
 	Space After Paragraph	Ruimte na alinea
 	Space Before Paragraph	Ruimte voor alinea
@@ -3115,6 +3165,8 @@ digits	Malayalam	Malayalam
 	Keep a link to an image file instead of only embedding it	Een koppeling met een afbeeldingsbestand behouden in plaats van het alleen in te sluiten
 	Place onto a new locked, dimmed template layer below the current layer	Plaatsen op een nieuwe, vergrendelde, gedimde sjabloonlaag onder de huidige laag
 	Swap the selected object for the file, keeping its place and transform	Het geselecteerde object vervangen door het bestand, met behoud van positie en transformatie
+	Show Import Options	Importopties tonen
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Vóór het plaatsen naar de importopties van elk PDF-, DXF- of tekstbestand vragen; uit: de laatst gekozen opties gebruiken
 	On: one locked object showing the document, updated when it changes.	Aan: één vergrendeld object dat het document weergeeft, bijgewerkt wanneer het verandert.
 	Off: an editable copy of its art, embedded in this document.	Uit: een bewerkbare kopie van de artwork, ingesloten in dit document.
 	Images: link to the file instead of only embedding it.	Afbeeldingen: koppel aan het bestand in plaats van het alleen in te sluiten.
@@ -3249,6 +3301,7 @@ digits	Malayalam	Malayalam
 	Limit to Library:	Beperken tot bibliotheek:
 	Link harmony colors	Harmoniekleuren koppelen
 	Merge colors into one row	Kleuren samenvoegen in één rij
+	New Row	Nieuwe rij
 	No colors to recolor (preserved colors are left out).	Geen kleuren om opnieuw te kleuren (behouden kleuren zijn weggelaten).
 	Preserve:	Behouden:
 	Randomly change color order	Kleurvolgorde willekeurig wijzigen
@@ -3898,6 +3951,40 @@ theme	Appearance	Vormgeving
 	Create Graph	Diagram maken
 	Graph Data	Diagramgegevens
 	Graph Type	Diagramtype
+	Graph Options	Diagramopties
+	Left Axis	Linkeras
+	Right Axis	Rechteras
+	Category Axis	Categorie-as
+	Separate Scales	Aparte schalen
+	Add Drop Shadow	Slagschaduw toevoegen
+	Add Legend Across Top	Legenda bovenaan toevoegen
+	First Row in Front	Eerste rij vooraan
+	First Column in Front	Eerste kolom vooraan
+	Legend	Legenda
+	Column Width	Kolombreedte
+	Bar Width	Staafbreedte
+	Cluster Width	Groepbreedte
+	Mark Data Points	Gegevenspunten markeren
+	Connect Data Points	Gegevenspunten verbinden
+	Edge-to-Edge Lines	Lijnen van rand tot rand
+	Draw Filled Lines	Gevulde lijnen tekenen
+	Tick Values	Maatstreepwaarden
+	Override Calculated Values	Berekende waarden negeren
+	Divisions	Verdelingen
+	Tick Marks	Maatstreepjes
+	Tick Marks per Division	Maatstreepjes per verdeling
+	Draw Tick Marks Between Labels	Maatstreepjes tussen labels tekenen
+	Add Labels	Labels toevoegen
+	Maximum must be more than Minimum.	Het maximum moet groter zijn dan het minimum.
+	Column Graph	Kolomdiagram
+	Stacked Column Graph	Gestapeld kolomdiagram
+	Bar Graph	Staafdiagram
+	Stacked Bar Graph	Gestapeld staafdiagram
+	Line Graph	Lijndiagram
+	Area Graph	Vlakdiagram
+	Scatter Graph	Spreidingsdiagram
+	Pie Graph	Cirkeldiagram
+	Radar Graph	Radardiagram
 	Vector Halftone	Vectorhalftoon
 	spot	spot
 	Text	Tekst
@@ -4485,6 +4572,7 @@ axis	Both	Beide
 	Replace:	Vervangen:
 	Type on a Path Options	Opties voor tekst op pad
 	Highlight Variable	Variabele markeren
+	Sort Variables	Variabelen sorteren
 	New Variable	Nieuwe variabele
 	List Variables	Variabelen weergeven
 	Bind Variable	Variabele binden
@@ -5659,6 +5747,7 @@ imageTrace	Outline	Contour
 @msg	Image Trace failed: {e}	Afbeelding traceren is mislukt: {e}
 @msg	Image Trace finished, but its document was closed	Afbeelding traceren is voltooid, maar het document ervan is gesloten
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Afbeelding traceren is voltooid, maar de afbeelding of de instellingen ervan zijn intussen gewijzigd: traceer de afbeelding opnieuw
+@msg	Image Trace finished, but its document was reverted: trace it again	Afbeelding traceren is voltooid, maar het document ervan is teruggezet: traceer de afbeelding opnieuw
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG-filter importeren leest SVG-bestanden, geen SVGZ
 @msg	Invalid dimension offset	Ongeldige verschuiving van de maatlijn
 @msg	Invalid point	Ongeldig punt
@@ -5833,6 +5922,7 @@ imageTrace	Outline	Contour
 @msg	`names` must be an array of style names	`names` moet een array van stijlnamen zijn
 @msg	`new` is a design name, or true	`new` is de naam van een ontwerp, of true
 @msg	`origin` must be [x, y] in points	`origin` moet [x, y] in punten zijn
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` moet [a, b, c, d] zijn, elk van -1000 tot 1000, met a·d - b·c minstens 0,001 van 0 af
 @msg	`path` must be a folder	`path` moet een map zijn
 @msg	`path` must be a path object	`path` moet een padobject zijn
 @msg	`picks` must be an array (got {v})	`picks` moet een array zijn (kreeg {v})
@@ -6050,6 +6140,7 @@ imageTrace	Outline	Contour
 @msg	a layer's form has no dictionary	het formulier van een laag heeft geen woordenboek
 @msg	a legend draws at most {MAX_CHIPS} swatches	een legenda tekent maximaal {MAX_CHIPS} stalen
 @msg	a linked JavaScript file is outside the read roots	een gekoppeld JavaScript-bestand staat buiten de leesroots
+@msg	a linked image file is outside the read roots	een gekoppeld afbeeldingsbestand staat buiten de leesroots
 @msg	a name names one asset: give multiple: false, or one object	een naam noemt één asset: geef multiple: false, of één object
 @msg	a namespace declaration uses a reserved prefix or URI	een naamruimtedeclaratie gebruikt een gereserveerd voorvoegsel of een gereserveerde URI
 @msg	a namespace qualifier is undefined	een naamruimtekwalificatie is niet gedefinieerd
@@ -6240,7 +6331,7 @@ imageTrace	Outline	Contour
 @msg	column: true floats the whole column and takes no onto, above or below	column: true laat de hele kolom zweven en accepteert geen onto, above of below
 @msg	command must be a shape.* command	command moet een shape.*-opdracht zijn
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` ontbreekt
-@msg	composer must be "singleLine" or "everyLine"	composer moet "singleLine" of "everyLine" zijn
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer moet "singleLine", "everyLine", "standardSingleLine" of "standardEveryLine" zijn
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	samengestelde vormen accepteren paden, samengestelde paden, groepen, samengestelde vormen, tekst, mengsels en omvormingen
 @msg	compound {_1} must contain exactly one open path to join	samengesteld object {_1} moet precies één open pad bevatten om te verbinden
 @msg	connect needs a path other than the one extended	connect heeft een ander pad nodig dan het pad dat wordt verlengd
@@ -7804,6 +7895,7 @@ mark-style	Japanese	Japans
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	een 3D-effect op de vulling of contour van een groep tekent niets om te exporteren
 @msg	The 3D object is too complex to export	Het 3D-object is te complex om te exporteren
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	het object heeft geen 3D-effect (Extruderen en afschuinen, Draaien, Opblazen of Roteren)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` moet een object zijn met alleen `mode`, ingesteld op shaded of wireframe
 @msg	its 3D effect builds no solid	het 3D-effect ervan maakt geen massief object
 @msg	bevel must be none or one of {_1}	bevel moet none of een van {_1} zijn
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan van deze illustratie geen massieve objecten maken: de symboolinstanties, vermengingen en knipgroepen ervan bevatten te veel objecten
@@ -8034,6 +8126,8 @@ mark-style	Japanese	Japans
 	Save Variable Library…	Variabelenbibliotheek opslaan…
 @msg	a variable library holds text variables, and the document has none	een variabelenbibliotheek bevat tekstvariabelen, en het document heeft er geen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabele `{name}` kan niet in een variabelenbibliotheek worden opgeslagen: geef haar een naam die met een letter of `_` begint, zonder spaties of andere symbolen dan `-`, `_` en `.`
+@msg	{k} has control characters	{k} bevat stuurtekens
+@msg	{k} has control characters or line breaks	{k} bevat stuurtekens of regeleinden
 @msg	data set `{name}` holds a control character, which a variable library can't hold	gegevensset `{name}` bevat een stuurteken, dat een variabelenbibliotheek niet kan bevatten
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	gegevensset `{name}` begint of eindigt met witruimte, die een variabelenbibliotheek niet kan bevatten
 	Make Graph Dynamic	Grafiek dynamisch maken
@@ -8233,6 +8327,14 @@ swatch	Bright Violet	Felviolet
 	Color wheel	Kleurenwiel
 	First Artboard	Eerste tekenbord
 	Last Artboard	Laatste tekenbord
+	Status Bar Show	Weergeven in statusbalk
+	Artboard Name	Naam van tekenbord
+	Current Tool	Huidig gereedschap
+	Date and Time	Datum en tijd
+	Number of Undos	Aantal ongedaan gemaakte stappen
+	Document Color Profile	Kleurprofiel van document
+	Undos	Ongedaan maken
+	Redos	Opnieuw uitvoeren
 	Next Artboard	Volgende tekenbord
 	Previous Artboard	Vorige tekenbord
 	Step up or down	Stapsgewijs verhogen of verlagen
@@ -8634,6 +8736,8 @@ axis	Y Axis	Y-as
 	Create New Set	Nieuwe set maken
 	Stop Global Edit	Globale bewerking stoppen
 	Global Edit Options	Opties voor globale bewerking
+	Select Similar Objects	Vergelijkbare objecten selecteren
+	Select Similar Options	Opties voor vergelijkbare objecten selecteren
 	Leave Out of Global Edit	Uitsluiten van globale bewerking
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale bewerking werkt op paden, samengestelde paden, symboolinstanties en groepen daarvan
 	Match	Overeenkomst
