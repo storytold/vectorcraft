@@ -926,6 +926,12 @@ pub struct WheelResponse {
     /// A click on the wheel: the color whose marker is within reach of it (if any), and the hue
     /// (degrees) and saturation under the pointer (1 for a marker past the wheel's edge).
     pub clicked: Option<(Option<usize>, [f32; 2])>,
+    /// A right-click on the wheel, or on a marker past its edge: the color whose marker is within
+    /// reach of it (if any), the color on whose line from the centre it is (when it is on no
+    /// marker), and the hue (degrees) and saturation under the pointer.
+    pub secondary: Option<(Option<usize>, Option<usize>, [f32; 2])>,
+    /// The wheel's own response, for a right-click menu.
+    pub response: Option<egui::Response>,
 }
 
 /// The harmony wheel of Recolor Artwork's Edit tab and the Color Themes panel: a hue and saturation
@@ -933,21 +939,40 @@ pub struct WheelResponse {
 /// marker per colour joined to the centre (the selected colour, `base`, larger) and a Brightness
 /// slider for the selected colour below it.
 pub fn harmony_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel(ui, id, size, colors, base, false)
+    wheel(ui, id, size, colors, base, base, false)
 }
 
-/// [`harmony_wheel`] drawn as solid patches (24 hues by 5 saturations, each in its
-/// [`segment_color`]). The markers sit at their colors' own hue and
+/// Recolor Artwork's wheel: [`harmony_wheel`] with the base color's marker (`base`) larger and the
+/// selected color's (`selected`, when another) ringed, at the selected color's brightness, with the
+/// Brightness slider for it. With `segmented` it is drawn as solid patches (24 hues by 5
+/// saturations, each in its [`segment_color`]); the markers sit at their colors' own hue and
 /// saturation, and a drag moves them as freely as on the smooth wheel.
-pub fn segmented_wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>) -> WheelResponse {
-    wheel(ui, id, size, colors, base, true)
+pub fn recolor_wheel(
+    ui: &mut Ui,
+    id: &str,
+    size: f32,
+    colors: &[Color],
+    base: Option<usize>,
+    selected: Option<usize>,
+    segmented: bool,
+) -> WheelResponse {
+    wheel(ui, id, size, colors, base, selected.or(base), segmented)
 }
 
-/// [`harmony_wheel`], or with `segmented` [`segmented_wheel`].
-fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>, segmented: bool) -> WheelResponse {
+/// The distance from `p` to the segment from `a` to `b`.
+fn segment_distance(p: egui::Pos2, a: egui::Pos2, b: egui::Pos2) -> f32 {
+    let ab = b - a;
+    let len2 = ab.length_sq();
+    let t = if len2 > 0.0 { ((p - a).dot(ab) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    p.distance(a + ab * t)
+}
+
+/// [`harmony_wheel`] or [`recolor_wheel`]: the big marker is `base`'s, and the wheel's brightness
+/// and the Brightness slider are `selected`'s.
+fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>, selected: Option<usize>, segmented: bool) -> WheelResponse {
     let t = Tokens::get(ui.ctx());
     let mut out = WheelResponse::default();
-    let base_hsb = base.and_then(|b| colors.get(b)).map(Color::to_hsb);
+    let base_hsb = selected.and_then(|b| colors.get(b)).map(Color::to_hsb);
     let v = base_hsb.map_or(1.0, |c| c[2]);
     ui.horizontal(|ui| {
         ui.add_space(((ui.available_width() - size) / 2.0).max(0.0));
@@ -965,6 +990,24 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
             painter.line_segment([c, p], Stroke::new(1.0, Color32::from_white_alpha(160)));
             painter.circle(p, if big { 8.0 } else { 5.5 }, crate::panels::c32(col), Stroke::new(1.5, Color32::WHITE));
             painter.circle_stroke(p, if big { 9.0 } else { 6.5 }, Stroke::new(1.0, Color32::BLACK));
+            if Some(i) == selected && selected != base {
+                painter.circle_stroke(p, 8.5, Stroke::new(1.5, t.accent));
+            }
+        }
+        // A right-click: the marker under it, or else the line from the centre to a marker.
+        if resp.secondary_clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let near = colors.iter().map(at).enumerate().map(|(i, m)| (i, m.distance(p))).filter(|x| x.1 <= 14.0).min_by(|a, b| a.1.total_cmp(&b.1));
+            let dv = p - c;
+            if dv.length() <= r || near.is_some() {
+                let line = near.is_none().then(|| {
+                    let on = colors.iter().map(at).enumerate().map(|(i, m)| (i, segment_distance(p, c, m))).filter(|x| x.1 <= 4.0);
+                    on.min_by(|a, b| a.1.total_cmp(&b.1)).map(|x| x.0)
+                });
+                let h = (-dv.y).atan2(dv.x).to_degrees().rem_euclid(360.0);
+                out.secondary = Some((near.map(|x| x.0), line.flatten(), [h, (dv.length() / r).clamp(0.0, 1.0)]));
+            }
         }
         // Drag a marker: the nearest one within reach of the press.
         let drag = ui.scope_id().with((id, "drag"));
@@ -991,6 +1034,7 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
         }
         let name = if segmented { tl!("Segmented color wheel") } else { tl!("Color wheel") };
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, ui.is_enabled(), name));
+        out.response = Some(resp);
     });
     ui.add_space(6.0);
     ui.horizontal(|ui| {
@@ -998,7 +1042,7 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
         ui.add_sized([70.0, 22.0], egui::Label::new(egui::RichText::new(tl!("Brightness")).color(t.text_dim)));
         // Screen readers get the brightness in percent, as the Color panel's HSB B field shows it.
         let shown = SliderValue::field((f64::from(v) * 100.0).round(), 0.0..=100.0, "%", 0);
-        if let (Some(b), Some([h, s, _])) = (base, base_hsb)
+        if let (Some(b), Some([h, s, _])) = (selected, base_hsb)
             && let (Some(nv), _) = color_slider_valued(ui, (id, "brightness"), tl!("Brightness"), Some(shown), v, size, &|x| {
                 crate::panels::c32(&Color::from_hsb(h, s, x))
             })

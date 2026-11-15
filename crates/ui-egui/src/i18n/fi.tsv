@@ -2931,6 +2931,10 @@ digits	Malayalam	Malajalam
 	Add Color Tool	Lisää väri -työkalu
 	Remove Color Tool	Poista väri -työkalu
 	Remove Color	Poista väri
+	Set As Base Color	Aseta perusväriksi
+	Select Shade	Valitse sävy
+	Add New Color	Lisää uusi väri
+	Set Current Color As Base Color	Aseta nykyinen väri perusväriksi
 	Harmony Rules	Harmoniasäännöt
 	Keep this row's colors (exclude)	Säilytä tämän rivin värit (jätä pois)
 	Limit to Library:	Rajoita kirjastoon:

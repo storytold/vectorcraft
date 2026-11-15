@@ -1539,6 +1539,10 @@ file-filter	Templates	Vorlagen
 	Add Color Tool	Farbe-hinzufügen-Werkzeug
 	Remove Color Tool	Farbe-entfernen-Werkzeug
 	Remove Color	Farbe entfernen
+	Set As Base Color	Als Grundfarbe festlegen
+	Select Shade	Schattierung auswählen
+	Add New Color	Neue Farbe hinzufügen
+	Set Current Color As Base Color	Aktuelle Farbe als Grundfarbe festlegen
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
 	Height:	Höhe:

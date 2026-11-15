@@ -27,7 +27,14 @@
 //! Remove Color tool removes the color whose marker is clicked; a bar's right-click menu has Remove
 //! Color too. The base color can't be removed. A removed color's row goes, unless it has current
 //! colors and art or a group is open: it then keeps them, with no new color, so that art keeps its
-//! colors and the group's swatch at that place goes. With art, the Prominent Colors bar under the wheel shows the new
+//! colors and the group's swatch at that place goes. The base color is the one the harmony rules
+//! build from, drawn with the larger marker; it stays the base when another color is selected for
+//! the sliders. A right-click on a marker or a color bar offers Set As Base Color, Select Shade (a
+//! grid of the color's hue at 7 saturations by 7 brightnesses; a click moves the marker there as a
+//! drag would), Color Picker and Remove Color; a right-click elsewhere on the wheel offers Add New
+//! Color, which adds the hue and saturation there as the Add Color tool does, and a color added on
+//! the line from the centre to a marker moves with that marker when the colors are unlinked. Set
+//! Current Color As Base Color, before the color chips, makes the selected color the base. With art, the Prominent Colors bar under the wheel shows the new
 //! colors, each part as wide as its row's share of the art's uses, the largest first; dragging the
 //! edge between two parts moves width between them, and when the drag ends the rows' current
 //! colors move toward those widths (`recolor.weigh`), and the art previews them. The New Color
@@ -48,7 +55,10 @@
 //!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
 //! color, added?}]; a row with no current colors, `from: []`, recolors no art, and with `added: true`
-//! (a color the Add Color tool added) adds its new color to the color group; `to: null`, no new color), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
+//! (a color the Add Color tool added) adds its new color to the color group; `to: null`, no new color;
+//! `base: true`, the base color, else the first color the Edit tab shows; `tie: n` on a marker and
+//! `follows: n` on a color added on its line, which moves with it; the dialog sends `recolor.apply`
+//! the rows without these three), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
 //! `preserveGrays`, `limitTo` (library id, "document" for the document's swatches, "" for none),
 //! `group`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`,
 //! `sliderMode` (`hsb`, `rgb`, `cmyk`, `lab` or `tint`; unset: the row color's own model, HSB for
@@ -280,7 +290,9 @@ fn sync_weights(app: &mut VectorcraftApp, d: &mut Dialog) {
         match app.session.execute("recolor.weigh", &json!({"map": rows(d), "weights": w})) {
             Ok(r) => {
                 if let Some(m) = r["map"].as_array() {
-                    d.fields.insert("rows".into(), Value::Array(m.clone()));
+                    let mut m = m.clone();
+                    keep_marks(&rows(d), &mut m);
+                    d.fields.insert("rows".into(), Value::Array(m));
                 }
             }
             Err(e) => app.status(e.to_string()),
@@ -599,8 +611,10 @@ fn apply_params(d: &Dialog) -> Value {
         let rename = (!name.trim().is_empty() && name != g).then_some(name);
         json!({"group": g, "groupColors": colors, "rename": rename})
     });
-    // A row edited with the sliders carries `model: "new"`: its art takes the mode they showed.
-    let mut p = json!({"map": rs, "method": d.str("method"), "limitTo": d.str("limitTo")});
+    // A row edited with the sliders carries `model: "new"`: its art takes the mode they showed. The
+    // Edit tab's own marks (the base color, colors tied to a marker) stay in the dialog.
+    let map: Vec<Value> = rs.iter().map(without_marks).collect();
+    let mut p = json!({"map": map, "method": d.str("method"), "limitTo": d.str("limitTo")});
     // The Global Adjust amounts, kept while the sliders show another mode; at 0% they are left out.
     let values = adjust_values(d);
     if values.iter().any(|v| *v != 0.0) {
@@ -647,7 +661,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     }
     let mut rs = rows(d);
     let top = ui.cursor().top();
-    let (changed, pick) = if d.str("tab") == "edit" { (edit_tab(app, ui, d, &mut rs), None) } else { assign_tab(app, ui, d, &mut rs) };
+    let (changed, pick) = if d.str("tab") == "edit" { edit_tab(app, ui, d, &mut rs) } else { assign_tab(app, ui, d, &mut rs) };
     if d.str("tab") != "edit" {
         ui.add_space((TAB_H - (ui.cursor().top() - top)).max(0.0));
     }
@@ -892,7 +906,9 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                 let p = json!({"map": rows, "order": !sb, "saturationBrightness": sb, "seed": seed});
                 match app.session.execute("recolor.randomize", &p) {
                     Ok(r) => {
-                        *rows = r["map"].as_array().cloned().unwrap_or_default();
+                        let mut shuffled = r["map"].as_array().cloned().unwrap_or_default();
+                        keep_marks(rows, &mut shuffled);
+                        *rows = shuffled;
                         if !sb {
                             d.fields.insert(SHUFFLED.into(), json!(true));
                         }
@@ -1244,6 +1260,21 @@ fn merge(rows: &mut Vec<Value>, sel: &[usize]) {
     for &i in rest.iter().rev() {
         let row = rows.remove(i);
         moved.splice(0..0, row["from"].as_array().cloned().unwrap_or_default());
+        // The base color merged into another row makes that row the base, and the colors that
+        // followed the merged row's marker follow that row's.
+        if row[BASE] == json!(true) {
+            rows[first][BASE] = json!(true);
+        }
+        if let Some(t) = row[TIE].as_u64() {
+            match rows[first][TIE].as_u64() {
+                Some(to) => {
+                    for r in rows.iter_mut().filter(|r| r[FOLLOWS].as_u64() == Some(t)) {
+                        r[FOLLOWS] = json!(to);
+                    }
+                }
+                None => rows[first][TIE] = json!(t),
+            }
+        }
     }
     if let Some(dst) = rows[first]["from"].as_array_mut() {
         dst.extend(moved);
@@ -1255,7 +1286,17 @@ fn separate(rows: &mut Vec<Value>, sel: &[usize]) {
     let mut out = vec![];
     for (i, row) in rows.drain(..).enumerate() {
         match row["from"].as_array() {
-            Some(a) if sel.contains(&i) && a.len() > 1 => out.extend(a.iter().map(|k| json!({"from": [k], "to": k}))),
+            Some(a) if sel.contains(&i) && a.len() > 1 => {
+                let at = out.len();
+                out.extend(a.iter().map(|k| json!({"from": [k], "to": k})));
+                // A separated row's marks (the base color, a marker's tie, a color it follows) go
+                // to the row of its first color.
+                for k in [BASE, TIE, FOLLOWS] {
+                    if let Some(v) = row.get(k) {
+                        out[at][k] = v.clone();
+                    }
+                }
+            }
             _ => out.push(row),
         }
     }
@@ -1278,13 +1319,29 @@ fn active_rows(rows: &[Value]) -> Vec<usize> {
 }
 
 /// Set row `i`'s new colour to hue/saturation/brightness `hsb` ([`move_on_wheel`]: with `linked`
-/// the other rows keep their relation to it). Excluded rows stay.
+/// the other rows keep their relation to it; unlinked, the colors added on its marker's line, which
+/// follow its `tie`, and those that follow theirs, keep theirs). Excluded rows stay.
 fn move_color(rows: &mut [Value], i: usize, hsb: [f32; 3], linked: bool) {
-    let active = active_rows(rows);
+    let all = active_rows(rows);
+    let active: Vec<usize> = if linked {
+        all
+    } else {
+        // Row `i` and the rows that follow it, directly or through another follower.
+        let mut moving = vec![i];
+        let mut n = 0;
+        while let Some(&j) = moving.get(n) {
+            if let Some(t) = rows.get(j).and_then(|r| r[TIE].as_u64()) {
+                let next: Vec<usize> = all.iter().copied().filter(|&k| rows[k][FOLLOWS].as_u64() == Some(t) && !moving.contains(&k)).collect();
+                moving.extend(next);
+            }
+            n += 1;
+        }
+        all.into_iter().filter(|j| moving.contains(j)).collect()
+    };
     let Some(k) = active.iter().position(|&j| j == i) else { return };
     let before: Vec<Color> = active.iter().filter_map(|&j| to_color(&rows[j])).collect();
     let mut colors = before.clone();
-    move_on_wheel(&mut colors, k, hsb, linked);
+    move_on_wheel(&mut colors, k, hsb, true);
     for ((&j, c), old) in active.iter().zip(&colors).zip(&before) {
         if key(c) != key(old) {
             set_to(&mut rows[j], c);
@@ -1299,8 +1356,8 @@ const DRAG: &str = "__drag";
 const WHEEL_TOOL: &str = "wheelTool";
 
 /// The new color the Add Color tool gives a click at hue `h` (degrees) and saturation `s`: at the
-/// brightness of `base` (the base color, whose brightness the wheel shows; full without one), the
-/// segmented wheel's patch color with `segmented`, in `base`'s model.
+/// brightness of `base` (the selected color, whose brightness the wheel shows; full without one),
+/// the segmented wheel's patch color with `segmented`, in `base`'s model.
 fn added_color(base: Option<Color>, h: f32, s: f32, segmented: bool) -> Color {
     let v = base.map_or(1.0, |b| b.to_hsb()[2]);
     let c = if segmented { widgets::segment_color(h, s, v) } else { Color::from_hsb(h, s, v) };
@@ -1348,14 +1405,221 @@ fn removed(d: &mut Dialog, base: usize) {
     d.fields.remove(COMPS);
 }
 
-/// The Edit tab. Returns true when the rows changed.
-fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> bool {
+/// A row's mark as the base color, the color the harmony rules build from (`true`).
+const BASE: &str = "base";
+/// A row's number on a marker that the colors added on its line follow.
+const TIE: &str = "tie";
+/// A row's mark as a color added on a marker's line: the marker's `tie`, which it moves with.
+const FOLLOWS: &str = "follows";
+/// The target of the wheel's right-click menu: `{marker, line, hs}` (row indexes and the hue and
+/// saturation clicked).
+const MENU_AT: &str = "__wheelMenu";
+/// Select Shade's grid: saturations across, from 0% to 100%, and brightnesses down, from 100%.
+const SHADE_COLS: usize = 7;
+const SHADE_ROWS: usize = 7;
+const SHADE_CELL: f32 = 16.0;
+
+/// The base color's row: the row of `active` (the rows the Edit tab shows) marked `base`, else
+/// the first of them.
+fn base_row(rows: &[Value], active: &[usize]) -> Option<usize> {
+    active.iter().copied().find(|&i| rows[i][BASE] == json!(true)).or(active.first().copied())
+}
+
+/// Whether Set As Base Color would change anything for row `i`: it is shown on the Edit tab, and it
+/// isn't the base already, or it is the base only because the marked row is hidden (excluded, or
+/// with no new color), whose mark would make it the base again once shown.
+fn can_set_base(rows: &[Value], i: usize) -> bool {
+    let active = active_rows(rows);
+    active.contains(&i) && (base_row(rows, &active) != Some(i) || rows.iter().enumerate().any(|(k, r)| k != i && r[BASE] == json!(true)))
+}
+
+/// Make row `i` the base color (Set As Base Color). Returns false when that changes nothing
+/// ([`can_set_base`]).
+fn set_base(rows: &mut [Value], i: usize) -> bool {
+    if !can_set_base(rows, i) {
+        return false;
+    }
+    for r in rows.iter_mut() {
+        if let Some(o) = r.as_object_mut() {
+            o.remove(BASE);
+        }
+    }
+    rows[i][BASE] = json!(true);
+    true
+}
+
+/// Make row `follower` move with the marker of row `leader`: the leader keeps its `tie` (a new
+/// number, past every `tie` and `follows`, when it has none, so that colors left from a removed
+/// marker follow no other) and the follower takes it as `follows`.
+fn tie_to(rows: &mut [Value], leader: usize, follower: usize) {
+    if leader == follower || leader >= rows.len() || follower >= rows.len() {
+        return;
+    }
+    let used = rows.iter().flat_map(|r| [r[TIE].as_u64(), r[FOLLOWS].as_u64()]).flatten().max();
+    let t = rows[leader][TIE].as_u64().unwrap_or_else(|| used.map_or(1, |m| m.saturating_add(1)));
+    rows[leader][TIE] = json!(t);
+    rows[follower][FOLLOWS] = json!(t);
+}
+
+/// Give each row of `after` the base, tie and follows marks of the row at its place in `before`,
+/// when the two have as many rows (the engine's `recolor.randomize` and `recolor.weigh` keep the
+/// rows in order and return them without the dialog's own marks).
+fn keep_marks(before: &[Value], after: &mut [Value]) {
+    if before.len() != after.len() {
+        return;
+    }
+    for (a, b) in after.iter_mut().zip(before) {
+        for k in [BASE, TIE, FOLLOWS] {
+            if a.get(k).is_none()
+                && let Some(v) = b.get(k)
+            {
+                a[k] = v.clone();
+            }
+        }
+    }
+}
+
+/// `row` without the dialog's base, tie and follows marks.
+fn without_marks(row: &Value) -> Value {
+    let mut r = row.clone();
+    if let Some(o) = r.as_object_mut() {
+        for k in [BASE, TIE, FOLLOWS] {
+            o.remove(k);
+        }
+    }
+    r
+}
+
+/// The saturation and brightness of Select Shade's cell in column `col` and row `row`.
+fn shade_at(col: usize, row: usize) -> [f32; 2] {
+    [col as f32 / (SHADE_COLS - 1) as f32, 1.0 - row as f32 / SHADE_ROWS as f32]
+}
+
+/// Select Shade's grid of `c`'s hue, the cell nearest `c` framed. Returns the saturation and
+/// brightness of the cell clicked.
+fn shade_grid(ui: &mut Ui, c: &Color) -> Option<[f32; 2]> {
+    let t = Tokens::get(ui.ctx());
+    let [h, s0, v0] = c.to_hsb();
+    let near = ((s0 * (SHADE_COLS - 1) as f32).round() as usize, (((1.0 - v0) * SHADE_ROWS as f32).round() as usize).min(SHADE_ROWS - 1));
+    let mut out = None;
+    egui::Grid::new("recolor-shades").spacing([2.0, 2.0]).show(ui, |ui| {
+        for row in 0..SHADE_ROWS {
+            for col in 0..SHADE_COLS {
+                let [s, v] = shade_at(col, row);
+                let (r, resp) = ui.allocate_exact_size(vec2(SHADE_CELL, SHADE_CELL), Sense::click());
+                ui.painter().rect_filled(r, 1.0, c32(&Color::from_hsb(h, s, v)));
+                if (col, row) == near {
+                    ui.painter().rect_stroke(r, 1.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
+                }
+                let name = format!("{} {}%, {} {}%", tl!("Saturation"), (s * 100.0).round(), tl!("Brightness"), (v * 100.0).round());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+                if resp.clicked() {
+                    out = Some([s, v]);
+                    ui.close();
+                }
+            }
+            ui.end_row();
+        }
+    });
+    out
+}
+
+/// What a marker's or a color bar's right-click menu, or the wheel's, chose.
+enum MenuChoice {
+    /// Set As Base Color for the row.
+    Base(usize),
+    /// Select Shade: the row's color at this saturation and brightness.
+    Shade(usize, [f32; 2]),
+    /// Color Picker for the row.
+    Picker(usize),
+    /// Remove Color for the row.
+    Remove(usize),
+    /// Add New Color at this hue and saturation, moving with the marker of the row on whose line
+    /// it is.
+    Add([f32; 2], Option<usize>),
+}
+
+/// A marker's or a color bar's right-click menu for row `i`: Set As Base Color and Remove Color
+/// (neither for the base color `base`), Select Shade and Color Picker.
+fn color_menu(ui: &mut Ui, rows: &[Value], i: usize, base: Option<usize>) -> Option<MenuChoice> {
+    let mut choice = None;
+    if widgets::menu_item_name(ui, tl!("Set As Base Color"), can_set_base(rows, i), false) {
+        choice = Some(MenuChoice::Base(i));
+    }
+    if let Some(c) = rows.get(i).and_then(to_color) {
+        // Indented like the items beside it (their check column).
+        ui.menu_button(format!("   {}", tl!("Select Shade")), |ui| {
+            if let Some(sv) = shade_grid(ui, &c) {
+                choice = Some(MenuChoice::Shade(i, sv));
+            }
+        });
+    }
+    if widgets::menu_item_name(ui, tl!("Color Picker"), true, false) {
+        choice = Some(MenuChoice::Picker(i));
+    }
+    if widgets::menu_item_name(ui, tl!("Remove Color"), Some(i) != base, false) {
+        choice = Some(MenuChoice::Remove(i));
+    }
+    choice
+}
+
+/// Carry out a right-click menu's `choice` on the rows (`base`: the base color's row; `shown`: the
+/// color whose brightness the wheel shows; `segmented`: the menu was on the segmented wheel).
+/// Returns whether the rows changed and the row whose new color the Color Picker is to edit.
+fn choose(
+    d: &mut Dialog,
+    rows: &mut Vec<Value>,
+    choice: MenuChoice,
+    base: Option<usize>,
+    shown: Option<Color>,
+    segmented: bool,
+) -> (bool, Option<usize>) {
+    match choice {
+        MenuChoice::Base(i) => (set_base(rows, i), None),
+        MenuChoice::Shade(i, [s, v]) => {
+            let Some(h) = rows.get(i).and_then(to_color).map(|c| c.to_hsb()[0]) else { return (false, None) };
+            let before = rows.clone();
+            move_color(rows, i, [h, s, v], d.bool("linked"));
+            d.fields.insert("__sel".into(), json!([i]));
+            d.fields.remove(COMPS);
+            (*rows != before, None)
+        }
+        MenuChoice::Picker(i) => {
+            d.fields.insert("__sel".into(), json!([i]));
+            (false, Some(i))
+        }
+        MenuChoice::Remove(i) => match remove_color(rows, i, base, keeps_rows(d)) {
+            Some(b) => {
+                removed(d, b);
+                (true, None)
+            }
+            None => (false, None),
+        },
+        MenuChoice::Add([h, s], line) => {
+            let i = add_color(rows, &added_color(shown, h, s, segmented));
+            if let Some(l) = line {
+                tie_to(rows, l, i);
+            }
+            d.fields.insert("__sel".into(), json!([i]));
+            d.fields.remove(COMPS);
+            (true, None)
+        }
+    }
+}
+
+/// The Edit tab. Returns whether the rows changed and the row whose new color a right-click menu's
+/// Color Picker is to edit.
+fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> (bool, Option<usize>) {
     let top = ui.cursor().top();
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
+    let mut pick = None;
     let linked = d.bool("linked");
     let active = active_rows(rows);
-    let base = selection(d).into_iter().find(|i| active.contains(i)).or(active.first().copied());
+    // The harmony rules build from the base color; the sliders and the Brightness slider edit the
+    // selected color (the base color when none is selected).
+    let base = base_row(rows, &active);
+    let sel = selection(d).into_iter().find(|i| active.contains(i)).or(base);
     let target = SliderTarget::of(app, d, rows);
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(tl!("Harmony Rules:")).color(t.text_dim));
@@ -1401,6 +1665,9 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
     }
     let colors: Vec<Color> = active.iter().filter_map(|&i| to_color(&rows[i])).collect();
     let marked = base.and_then(|b| active.iter().position(|&i| i == b));
+    let selected = sel.and_then(|s| active.iter().position(|&i| i == s));
+    let shown = sel.and_then(|s| to_color(&rows[s]));
+    let mut choice = None;
     let display = d.str("display");
     let tool = d.str(WHEEL_TOOL);
     // The tools act on either wheel, not on the color bars.
@@ -1429,16 +1696,56 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
             }
         });
         ui.vertical(|ui| match display.as_str() {
-            "segmented" => w = widgets::segmented_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
-            "bars" => changed |= color_bars(ui, d, rows, &active, base),
-            _ => w = widgets::harmony_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
+            "bars" => {
+                let (moved, chosen) = color_bars(ui, d, rows, &active, base);
+                changed |= moved;
+                choice = chosen;
+            }
+            _ => w = widgets::recolor_wheel(ui, "recolor-wheel", WHEEL, &colors, marked, selected, display == "segmented"),
         });
     });
+    // A right-click on the wheel: a marker's menu, or Add New Color elsewhere. Its target is kept
+    // while the menu stays open.
+    if let Some((hit, line, hs)) = w.secondary {
+        d.fields.insert(MENU_AT.into(), json!({"marker": hit.map(|k| active[k]), "line": line.map(|k| active[k]), "hs": hs}));
+    } else if w.response.as_ref().is_some_and(egui::Response::secondary_clicked) {
+        // A right-click off the wheel (in a corner of its square) targets nothing: its menu's Add
+        // New Color is off, and no earlier marker is changed.
+        d.fields.remove(MENU_AT);
+    }
+    if let Some(resp) = &w.response {
+        let at = d.fields.get(MENU_AT).cloned().unwrap_or_default();
+        let row = |k: &str| at[k].as_u64().map(|i| i as usize).filter(|i| active.contains(i));
+        let hs = at["hs"].as_array().and_then(|a| Some([a.first()?.as_f64()? as f32, a.get(1)?.as_f64()? as f32]));
+        resp.context_menu(|ui| match row("marker") {
+            Some(i) => choice = color_menu(ui, rows, i, base),
+            None => {
+                if widgets::menu_item_name(ui, tl!("Add New Color"), hs.is_some(), false)
+                    && let Some(hs) = hs
+                {
+                    choice = Some(MenuChoice::Add(hs, row("line")));
+                }
+            }
+        });
+    }
+    // A menu's choice changes the rows the wheel's indexes were for, so the wheel's own clicks and
+    // drags of this frame are left alone.
+    let chosen = choice.is_some();
+    if let Some(c) = choice {
+        let (did, picked) = choose(d, rows, c, base, shown, display == "segmented");
+        changed |= did;
+        pick = picked;
+    }
+    if chosen {
+        w.pressed = None;
+        w.moved = None;
+        w.clicked = None;
+    }
     // A click with a wheel tool adds a color there, or removes the color of the marker clicked.
     let clicked = w.clicked.filter(|_| on_wheel && matches!(tool.as_str(), "add" | "remove"));
     if let Some((hit, [h, s])) = clicked {
         if tool == "add" {
-            let c = added_color(base.and_then(|b| to_color(&rows[b])), h, s, display == "segmented");
+            let c = added_color(shown, h, s, display == "segmented");
             let i = add_color(rows, &c);
             d.fields.insert("__sel".into(), json!([i]));
             d.fields.remove(COMPS);
@@ -1482,24 +1789,35 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
     }
     // A color added or removed above changed the rows, so the sliders and chips read them afresh.
     let active = active_rows(rows);
-    let base = selection(d).into_iter().find(|i| active.contains(i)).or(active.first().copied());
+    let base = base_row(rows, &active);
+    let sel = selection(d).into_iter().find(|i| active.contains(i)).or(base);
     if d.str("sliderMode") == GLOBAL {
-        let sample = base.and_then(|b| to_color(&rows[b])).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
+        let sample = sel.and_then(|b| to_color(&rows[b])).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
         global_sliders(ui, d, sample);
     } else {
         changed |= sliders(app, ui, d, rows);
     }
-    // The new colours: click one to make it the base colour.
+    // The new colours: click one to select it; Set Current Color As Base Color, before them, makes
+    // the selected one the base color, which carries a double ring as its marker does.
     let min_height = (TAB_H - (ui.cursor().top() - top)).max(0.0);
+    let mut make_base = None;
     super::modal::scrolled_rows(ui, "recolor-edit-colors", |ui| {
         // Keep the usual tab height when it fits; the empty space scrolls with the chips.
         ui.set_min_height(min_height);
         ui.horizontal_wrapped(|ui| {
+            let can = sel.is_some_and(|s| can_set_base(rows, s));
+            if widgets::icon_button_enabled(ui, "circle-dot", tl!("Set Current Color As Base Color"), false, can, 20.0).clicked() {
+                make_base = sel;
+            }
             for &i in &active {
                 let (r, resp) = ui.allocate_exact_size(vec2(28.0, 20.0), Sense::click());
                 chip(ui, r, to_color(&rows[i]).unwrap_or_default(), false);
-                if Some(i) == base {
+                if Some(i) == sel {
                     ui.painter().rect_stroke(r.expand(1.5), 2.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
+                }
+                if Some(i) == base {
+                    ui.painter().circle_stroke(r.center(), 4.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
+                    ui.painter().circle_stroke(r.center(), 5.5, egui::Stroke::new(1.0, egui::Color32::BLACK));
                 }
                 if resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default()).clicked() {
                     d.fields.insert("__sel".into(), json!([i]));
@@ -1507,18 +1825,21 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
             }
         });
     });
-    changed
+    if let Some(i) = make_base {
+        changed |= set_base(rows, i);
+    }
+    (changed, pick)
 }
 
 /// The Edit tab's color bars: a solid bar per row of `active` with its new color, in row order, the
 /// base row's framed, scrolling past the wheel's height. A click on a bar selects its row (the
 /// sliders under it edit that row's new color); a drag moves the bar's row to where the line under
-/// the pointer shows, keeping every new color. A bar's right-click menu has Remove Color (not for the
-/// base row's). Returns true when the rows moved or a color was removed.
-fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>, active: &[usize], base: Option<usize>) -> bool {
+/// the pointer shows, keeping every new color. A bar's right-click menu is a marker's
+/// ([`color_menu`]). Returns true when the rows moved, and the menu's choice.
+fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value], active: &[usize], base: Option<usize>) -> (bool, Option<MenuChoice>) {
     let t = Tokens::get(ui.ctx());
     let mut rects: Vec<Rect> = Vec::with_capacity(active.len());
-    let (mut dragging, mut released, mut dropped, mut remove) = (None, None, None, None);
+    let (mut dragging, mut released, mut dropped, mut choice) = (None, None, None, None);
     // The area is given its full height first: in the row beside the display buttons a scroll area
     // alone is only as tall as the room the row has.
     let area = vec2(ui.available_width(), BARS_H);
@@ -1551,8 +1872,8 @@ fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>, active: &[usiz
                 rects.push(r);
                 let resp = resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default());
                 resp.context_menu(|ui| {
-                    if widgets::menu_item_name(ui, tl!("Remove Color"), Some(i) != base, false) {
-                        remove = Some(i);
+                    if let Some(c) = color_menu(ui, rows, i, base) {
+                        choice = Some(c);
                     }
                 });
             }
@@ -1569,15 +1890,14 @@ fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>, active: &[usiz
             dropped = released.zip(at);
         });
     });
-    if let Some(b) = remove.and_then(|i| remove_color(rows, i, base, keeps_rows(d))) {
-        removed(d, b);
-        return true;
+    if choice.is_some() {
+        return (false, choice);
     }
-    let Some(moved) = dropped.and_then(|(n, to)| move_bar(rows, active, n, to)) else { return false };
+    let Some(moved) = dropped.and_then(|(n, to)| move_bar(rows, active, n, to)) else { return (false, None) };
     d.fields.insert("__sel".into(), json!([moved]));
     // The slider values held are those of a row index that may now hold another row.
     d.fields.remove(COMPS);
-    true
+    (true, None)
 }
 
 /// Move the row of the `from`th active row (of `active`, ascending row indexes) to before the
@@ -1794,6 +2114,117 @@ mod tests {
         let mut r = rows();
         apply_rule(&mut r, Harmony::Triad, 0, Color::rgb(1.0, 0.0, 0.0), &[0, 1, 2]);
         assert_eq!([&r[0]["to"], &r[1]["to"], &r[2]["to"]], ["rgb 255 0 0", "rgb 0 255 0", "rgb 0 0 255"]);
+    }
+
+    /// The base color is the row marked `base`, else the first row shown; Set As Base Color moves the
+    /// mark, and does nothing for the base row already or a row the Edit tab doesn't show.
+    #[test]
+    fn set_base_moves_the_base_mark() {
+        let mut r = rows();
+        assert_eq!(base_row(&r, &active_rows(&r)), Some(0));
+        assert!(!set_base(&mut r, 0), "the first row is the base already");
+        assert!(set_base(&mut r, 2));
+        assert_eq!(base_row(&r, &active_rows(&r)), Some(2));
+        assert!(set_base(&mut r, 1));
+        assert_eq!(r.iter().filter(|x| x[BASE] == json!(true)).count(), 1, "one base mark: {r:?}");
+        assert!(!set_base(&mut r, 1));
+        r[2]["exclude"] = json!(true);
+        assert!(!set_base(&mut r, 2), "an excluded row isn't shown");
+        assert!(!set_base(&mut r, 9));
+        // An excluded base row leaves the first row shown as the base.
+        r[1]["exclude"] = json!(true);
+        assert_eq!(base_row(&r, &active_rows(&r)), Some(0));
+        // Setting that row as the base keeps it the base once the marked row is shown again.
+        assert!(set_base(&mut r, 0), "the hidden row's mark moves to it");
+        r[1]["exclude"] = json!(false);
+        assert_eq!(base_row(&r, &active_rows(&r)), Some(0), "{r:?}");
+    }
+
+    /// Merge and Separate keep the base mark on a row of the base color's colors; Randomize's rows
+    /// (as the engine returns them) take the marks at their places again; `recolor.apply` gets no marks.
+    #[test]
+    fn the_base_mark_follows_merge_separate_and_randomize() {
+        let mut r = rows();
+        set_base(&mut r, 2);
+        merge(&mut r, &[0, 2]);
+        assert_eq!(r[0][BASE], json!(true), "merged into the first row: {r:?}");
+        let mut r = rows();
+        set_base(&mut r, 1);
+        separate(&mut r, &[1]);
+        assert_eq!(r.len(), 4);
+        assert_eq!((r[1][BASE].clone(), r[2].get(BASE)), (json!(true), None), "{r:?}");
+        // A marker's tie goes with it too.
+        let mut t = rows();
+        t[1][TIE] = json!(1);
+        separate(&mut t, &[1]);
+        assert_eq!((t[1][TIE].clone(), t[2].get(TIE)), (json!(1), None));
+        let mut t = rows();
+        t[0][TIE] = json!(1);
+        t[2][TIE] = json!(3);
+        t.push(json!({"from": [], "to": "rgb 1 2 3", "follows": 3}));
+        merge(&mut t, &[0, 2]);
+        assert_eq!((t[0][TIE].clone(), t[2][FOLLOWS].clone()), (json!(1), json!(1)), "its follower follows the row merged into: {t:?}");
+        let before = r.clone();
+        let mut shuffled: Vec<Value> = r.iter().map(without_marks).collect();
+        assert!(shuffled.iter().all(|x| x.get(BASE).is_none()));
+        keep_marks(&before, &mut shuffled);
+        assert_eq!(shuffled, before);
+        let mut fewer = vec![json!({"from": [], "to": "rgb 1 1 1"})];
+        keep_marks(&before, &mut fewer);
+        assert!(fewer[0].get(BASE).is_none(), "rows of another count take no marks");
+        let mut d = Dialog::new(KIND, json!({}));
+        d.fields.insert("rows".into(), json!(before));
+        assert!(apply_params(&d)["map"].as_array().unwrap().iter().all(|x| x.get(BASE).is_none()));
+    }
+
+    /// A color added on a marker's line moves with that marker when the colors are unlinked; it
+    /// moves alone itself, and linked colors all move together as before.
+    #[test]
+    fn a_color_added_on_a_markers_line_moves_with_it() {
+        let hue = |r: &[Value], i: usize| to_color(&r[i]).unwrap().to_hsb()[0];
+        let mut r = rows();
+        let added = add_color(&mut r, &Color::from_hsb(240.0, 0.5, 1.0));
+        tie_to(&mut r, 1, added);
+        assert_eq!((r[1][TIE].clone(), r[added][FOLLOWS].clone()), (json!(1), json!(1)));
+        move_color(&mut r, 1, [270.0, 1.0, 1.0], false);
+        assert!((hue(&r, added) - 270.0).abs() < 0.5, "the added color turns with its marker: {}", hue(&r, added));
+        assert!((hue(&r, 0) - 0.0).abs() < 0.5 && (hue(&r, 2) - 120.0).abs() < 0.5, "the others stay");
+        move_color(&mut r, added, [300.0, 0.5, 1.0], false);
+        assert!((hue(&r, 1) - 270.0).abs() < 0.5, "its marker stays");
+        // A second color tied to the same marker shares its number.
+        let next = add_color(&mut r, &Color::from_hsb(270.0, 0.2, 1.0));
+        tie_to(&mut r, 1, next);
+        assert_eq!(r[next][FOLLOWS], json!(1));
+        let other = add_color(&mut r, &Color::from_hsb(0.0, 0.2, 1.0));
+        tie_to(&mut r, 0, other);
+        assert_eq!(r[0][TIE], json!(2), "another marker takes a new number");
+        tie_to(&mut r, 0, 0);
+        assert!(r[0].get(FOLLOWS).is_none(), "a row isn't tied to itself");
+        // Colors left from a removed marker follow no marker tied later.
+        let mut r = rows();
+        let added = add_color(&mut r, &Color::from_hsb(240.0, 0.5, 1.0));
+        tie_to(&mut r, 1, added);
+        r.remove(1);
+        let next = add_color(&mut r, &Color::from_hsb(0.0, 0.5, 1.0));
+        tie_to(&mut r, 0, next);
+        assert_eq!(r[0][TIE], json!(2), "{r:?}");
+        // A color added on an added color's line moves with the first marker too.
+        let mut r = rows();
+        let added = add_color(&mut r, &Color::from_hsb(240.0, 0.5, 1.0));
+        tie_to(&mut r, 1, added);
+        let chained = add_color(&mut r, &Color::from_hsb(240.0, 0.25, 1.0));
+        tie_to(&mut r, added, chained);
+        move_color(&mut r, 1, [250.0, 1.0, 1.0], false);
+        assert!((hue(&r, chained) - 250.0).abs() < 0.5, "{r:?}");
+    }
+
+    /// Select Shade's grid runs from 0% to 100% saturation across and from 100% brightness down.
+    #[test]
+    fn the_shade_grid_spans_saturation_and_brightness() {
+        assert_eq!(shade_at(0, 0), [0.0, 1.0]);
+        assert_eq!(shade_at(SHADE_COLS - 1, 0)[0], 1.0);
+        let last = shade_at(0, SHADE_ROWS - 1)[1];
+        assert!(last > 0.0 && last < 0.2, "{last}");
     }
 
     /// A rule or a wheel move that gives a row a new color drops the row's tint; a row whose

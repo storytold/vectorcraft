@@ -3385,6 +3385,10 @@ digits	Malayalam	Malayalam
 	Add Color Tool	Værktøjet Tilføj farve
 	Remove Color Tool	Værktøjet Fjern farve
 	Remove Color	Fjern farve
+	Set As Base Color	Angiv som grundfarve
+	Select Shade	Vælg nuance
+	Add New Color	Tilføj ny farve
+	Set Current Color As Base Color	Angiv aktuel farve som grundfarve
 	Harmony Rules	Harmoniregler
 	Keep this row's colors (exclude)	Behold farverne i denne række (ekskludér)
 	Limit to Library:	Begræns til bibliotek:

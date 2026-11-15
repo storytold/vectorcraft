@@ -1496,6 +1496,10 @@ font-technology	Variable	Променливи
 	Add Color Tool	Инструмент „Добавяне на цвят“
 	Remove Color Tool	Инструмент „Премахване на цвят“
 	Remove Color	Премахване на цвят
+	Set As Base Color	Задаване като основен цвят
+	Select Shade	Избор на нюанс
+	Add New Color	Добавяне на нов цвят
+	Set Current Color As Base Color	Задаване на текущия цвят като основен
 	Harmony Sets	Набори от хармонии
 	Height	Височина
 	Height:	Височина:

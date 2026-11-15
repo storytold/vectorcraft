@@ -1534,6 +1534,10 @@ file-filter	Templates	範本
 	Add Color Tool	新增顏色工具
 	Remove Color Tool	移除顏色工具
 	Remove Color	移除顏色
+	Set As Base Color	設為基色
+	Select Shade	選取色調
+	Add New Color	新增顏色
+	Set Current Color As Base Color	將目前顏色設為基色
 	Harmony Sets	色彩調和組
 	Height	高度
 	Height:	高度：

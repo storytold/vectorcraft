@@ -1339,3 +1339,166 @@ fn a_color_bars_menu_removes_its_color() {
     assert!(h.query_by_role_and_label(egui::accesskit::Role::Button, "Color 2").is_none(), "its bar goes");
     assert_eq!(field(h.state(), "__sel"), json!([0]));
 }
+
+/// Right-clicks the point `at`.
+fn right_click_at(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, at: Pos2) {
+    h.event(Event::PointerMoved(at));
+    h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: true, modifiers: Modifiers::NONE });
+    h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: false, modifiers: Modifiers::NONE });
+    h.run_steps(2);
+}
+
+/// The smaller angle between hues `a` and `b`, in degrees.
+fn hue_gap(a: f32, b: f32) -> f32 {
+    (a - b).rem_euclid(360.0).min((b - a).rem_euclid(360.0))
+}
+
+/// A marker's right-click menu has Set As Base Color, Select Shade, Color Picker and Remove Color.
+/// Set As Base Color marks the row as the base, whose menu then has neither Set As Base Color nor
+/// Remove Color; with another color selected, a harmony rule builds from the base color, and OK
+/// recolors the art.
+#[test]
+fn a_markers_menu_sets_the_base_color_that_the_rules_build_from() {
+    let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+    let hsb = new_hsb(h.state());
+    let at = wheel_at(&h, hsb[1][0], hsb[1][1]);
+    right_click_at(&mut h, at);
+    for item in ["   Set As Base Color", "   Select Shade", "   Color Picker", "   Remove Color"] {
+        assert!(h.query_by_label(item).is_some(), "{item}");
+    }
+    h.get_by_label("   Set As Base Color").click();
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!(rows[1]["base"], json!(true), "{rows}");
+    assert!(rows[0].get("base").is_none() && rows[2].get("base").is_none());
+    right_click_at(&mut h, at);
+    assert!(h.get_by_label("   Set As Base Color").accesskit_node().is_disabled(), "it is the base already");
+    assert!(h.get_by_label("   Remove Color").accesskit_node().is_disabled(), "the base color can't be removed");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    // The selected color is another one; the rule still builds from the base.
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(3);
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Harmony Rules:").click();
+    h.run_steps(2);
+    h.get_by_label("Triad").click();
+    h.run_steps(3);
+    let now = new_hsb(h.state());
+    assert!(hue_gap(now[1][0], hsb[1][0]) < 1.0, "the base color keeps its hue: {hsb:?} -> {now:?}");
+    assert!(hue_gap(now[0][0], now[1][0]) > 110.0 && hue_gap(now[2][0], now[1][0]) > 110.0, "the others are a triad from it: {now:?}");
+    assert_eq!(field(h.state(), "rows")[1]["base"], json!(true), "the rule keeps the base mark");
+    let before = fills(h.state());
+    let app = h.state_mut();
+    dialogs::confirm(app).unwrap();
+    assert_eq!(fills(app), before, "OK keeps the previewed colors");
+}
+
+/// Select Shade on a marker's menu shows a grid of the color's hue; a click on a cell gives the color
+/// that saturation and brightness, keeping its hue, and closes the menu. Unlinked, the other colors
+/// stay; linked, they move as a drag would move them.
+#[test]
+fn select_shade_gives_a_marker_the_shade_clicked() {
+    for linked in [false, true] {
+        let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+        set(h.state_mut(), "linked", json!(linked));
+        h.run_steps(3);
+        let hsb = new_hsb(h.state());
+        let at = wheel_at(&h, hsb[0][0], hsb[0][1]);
+        right_click_at(&mut h, at);
+        h.get_by_label("   Select Shade").click();
+        h.run_steps(2);
+        let cell = "Saturation 50%, Brightness 57%";
+        h.get_by_label(cell).click();
+        h.run_steps(3);
+        let now = new_hsb(h.state());
+        assert!(hue_gap(now[0][0], hsb[0][0]) < 1.0 && (now[0][1] - 0.5).abs() < 0.01 && (now[0][2] - 4.0 / 7.0).abs() < 0.01, "{now:?}");
+        let other_moved = (now[1][2] - hsb[1][2]).abs() > 0.01;
+        assert_eq!(other_moved, linked, "linked {linked}: {hsb:?} -> {now:?}");
+        assert!(h.query_by_label(cell).is_none(), "the menu closes");
+        assert_eq!(field(h.state(), "__sel"), json!([0]));
+    }
+}
+
+/// Color Picker on a marker's menu opens the Color Picker for that color.
+#[test]
+fn a_markers_menu_opens_the_color_picker() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+    let hsb = new_hsb(h.state());
+    let at = wheel_at(&h, hsb[1][0], hsb[1][1]);
+    right_click_at(&mut h, at);
+    h.get_by_label("   Color Picker").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("colorPicker"));
+}
+
+/// A right-click on the wheel away from the markers offers Add New Color, which adds the hue and
+/// saturation there as a new color. A color added on the line from the centre to a marker moves
+/// with that marker when the colors are unlinked, and the others stay.
+#[test]
+fn add_new_color_on_a_markers_line_moves_with_that_marker() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+    set(h.state_mut(), "linked", json!(false));
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(4);
+    let hsb = new_hsb(h.state());
+    let at = wheel_at(&h, 90.0, 0.6);
+    right_click_at(&mut h, at);
+    assert!(h.query_by_label("   Set As Base Color").is_none(), "no marker there");
+    h.get_by_label("   Add New Color").click();
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!(rows.as_array().unwrap().len(), 3, "{rows}");
+    assert_eq!((&rows[2]["from"], &rows[2]["added"]), (&json!([]), &json!(true)));
+    assert!(rows[2].get("follows").is_none(), "off every marker's line");
+    let [hue, s, v] = new_hsb(h.state())[2];
+    assert!((hue - 90.0).abs() < 1.0 && (s - 0.6).abs() < 0.01 && (v - hsb[0][2]).abs() < 0.01, "{:?}", [hue, s, v]);
+    assert_eq!(field(h.state(), "__sel"), json!([2]));
+    // Halfway along the second color's line.
+    let on_line = wheel_at(&h, hsb[1][0], hsb[1][1] / 2.0);
+    right_click_at(&mut h, on_line);
+    h.get_by_label("   Add New Color").click();
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!(rows.as_array().unwrap().len(), 4);
+    assert!(rows[1]["tie"].is_u64() && rows[3]["follows"] == rows[1]["tie"], "{rows}");
+    // Drag the second color's marker a little way round: the color on its line turns with it.
+    let before = new_hsb(h.state());
+    let start = wheel_at(&h, before[1][0], before[1][1]);
+    h.hover_at(start);
+    h.run_steps(1);
+    h.drag_at(start);
+    h.run_steps(1);
+    let mut p = start;
+    for k in 1..=6 {
+        p = wheel_at(&h, before[1][0] + 5.0 * k as f32, before[1][1]);
+        h.hover_at(p);
+        h.run_steps(1);
+    }
+    h.drop_at(p);
+    h.run_steps(2);
+    let after = new_hsb(h.state());
+    let turned = hue_gap(after[1][0], before[1][0]);
+    assert!(turned > 20.0, "the marker turned: {before:?} -> {after:?}");
+    assert!((hue_gap(after[3][0], before[3][0]) - turned).abs() < 1.0, "the color on its line turned as far: {before:?} -> {after:?}");
+    assert!(hue_gap(after[0][0], before[0][0]) < 0.5 && hue_gap(after[2][0], before[2][0]) < 0.5, "the others stay: {before:?} -> {after:?}");
+}
+
+/// Set Current Color As Base Color makes the selected color the base; it is off while the selected
+/// color is the base. A color bar's menu has Set As Base Color too.
+#[test]
+fn set_current_color_as_base_color_marks_the_selected_color() {
+    let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+    let name = "Set Current Color As Base Color";
+    assert!(h.get_by_role_and_label(egui::accesskit::Role::Button, name).accesskit_node().is_disabled(), "the base color is the selected one");
+    set(h.state_mut(), "__sel", json!([2]));
+    h.run_steps(3);
+    click_button(&mut h, name);
+    assert_eq!(field(h.state(), "rows")[2]["base"], json!(true));
+    assert!(h.get_by_role_and_label(egui::accesskit::Role::Button, name).accesskit_node().is_disabled());
+    show_display(&mut h, "Show color bars");
+    right_click_bar(&mut h, "Color 1");
+    h.get_by_label("   Set As Base Color").click();
+    h.run_steps(3);
+    let rows = field(h.state(), "rows");
+    assert_eq!((&rows[0]["base"], rows[2].get("base")), (&json!(true), None), "{rows}");
+}

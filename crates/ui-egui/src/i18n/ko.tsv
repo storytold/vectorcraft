@@ -1931,6 +1931,10 @@ antiAlias	Sharp	날카롭게
 	Add Color Tool	색상 추가 도구
 	Remove Color Tool	색상 제거 도구
 	Remove Color	색상 제거
+	Set As Base Color	기본 색상으로 설정
+	Select Shade	음영 선택
+	Add New Color	새 색상 추가
+	Set Current Color As Base Color	현재 색상을 기본 색상으로 설정
 	Height	높이
 	Height:	높이:
 	Help › Search Commands…	도움말 › 명령 검색…

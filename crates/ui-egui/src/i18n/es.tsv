@@ -1550,6 +1550,10 @@ font-technology	Variable	Variables
 	Add Color Tool	Herramienta Añadir color
 	Remove Color Tool	Herramienta Eliminar color
 	Remove Color	Eliminar color
+	Set As Base Color	Establecer como color base
+	Select Shade	Seleccionar matiz
+	Add New Color	Añadir nuevo color
+	Set Current Color As Base Color	Establecer el color actual como color base
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
 	Height:	Altura:

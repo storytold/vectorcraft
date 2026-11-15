@@ -1337,6 +1337,10 @@ antiAlias	Sharp	Nítido
 	Add Color Tool	Ferramenta Adicionar cor
 	Remove Color Tool	Ferramenta Remover cor
 	Remove Color	Remover cor
+	Set As Base Color	Definir como cor base
+	Select Shade	Selecionar tonalidade
+	Add New Color	Adicionar nova cor
+	Set Current Color As Base Color	Definir cor atual como cor base
 	Harmony Sets	Conjuntos de Harmonia
 	Height	Altura
 	Height:	Altura:

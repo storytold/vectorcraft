@@ -1464,6 +1464,10 @@ font-technology	Variable	Değişken
 	Add Color Tool	Renk Ekle aracı
 	Remove Color Tool	Renk Kaldır aracı
 	Remove Color	Rengi kaldır
+	Set As Base Color	Temel renk olarak ayarla
+	Select Shade	Ton seç
+	Add New Color	Yeni renk ekle
+	Set Current Color As Base Color	Geçerli rengi temel renk olarak ayarla
 	Harmony Sets	Armoni Setleri
 	Height	Yükseklik
 	Height:	Yükseklik:

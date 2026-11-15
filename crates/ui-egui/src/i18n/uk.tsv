@@ -1563,6 +1563,10 @@ file-filter	Templates	Шаблони
 	Add Color Tool	Інструмент «Додати колір»
 	Remove Color Tool	Інструмент «Вилучити колір»
 	Remove Color	Вилучити колір
+	Set As Base Color	Зробити базовим кольором
+	Select Shade	Вибрати відтінок
+	Add New Color	Додати новий колір
+	Set Current Color As Base Color	Зробити поточний колір базовим
 	Harmony Sets	Набори гармонії
 	Height	Висота
 	Height:	Висота:

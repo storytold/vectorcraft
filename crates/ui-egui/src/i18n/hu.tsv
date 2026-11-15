@@ -1954,6 +1954,10 @@ file-filter	Templates	Sablonok
 	Add Color Tool	Szín hozzáadása eszköz
 	Remove Color Tool	Szín eltávolítása eszköz
 	Remove Color	Szín eltávolítása
+	Set As Base Color	Beállítás alapszínként
+	Select Shade	Árnyalat kiválasztása
+	Add New Color	Új szín hozzáadása
+	Set Current Color As Base Color	Aktuális szín beállítása alapszínként
 	Harmony Sets	Harmóniakészletek
 	HDTV 1080p	HDTV 1080p
 	HDTV 720p	HDTV 720p

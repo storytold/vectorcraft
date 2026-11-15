@@ -1543,6 +1543,10 @@ font-technology	Variable	Variables
 	Add Color Tool	Outil Ajouter une couleur
 	Remove Color Tool	Outil Supprimer une couleur
 	Remove Color	Supprimer la couleur
+	Set As Base Color	Définir comme couleur de base
+	Select Shade	Sélectionner une nuance
+	Add New Color	Ajouter une nouvelle couleur
+	Set Current Color As Base Color	Définir la couleur actuelle comme couleur de base
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
 	Height	Hauteur

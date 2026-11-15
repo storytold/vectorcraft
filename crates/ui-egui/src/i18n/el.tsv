@@ -1471,6 +1471,10 @@ font-technology	Variable	Μεταβλητές
 	Add Color Tool	Εργαλείο προσθήκης χρώματος
 	Remove Color Tool	Εργαλείο αφαίρεσης χρώματος
 	Remove Color	Αφαίρεση χρώματος
+	Set As Base Color	Ορισμός ως βασικό χρώμα
+	Select Shade	Επιλογή απόχρωσης
+	Add New Color	Προσθήκη νέου χρώματος
+	Set Current Color As Base Color	Ορισμός τρέχοντος χρώματος ως βασικού
 	Harmony Sets	Σύνολα χρωματικής αρμονίας
 	Height	Ύψος
 	Height:	Ύψος:
