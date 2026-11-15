@@ -1075,7 +1075,10 @@ font-technology	Variable	Вариативные
 	Every (minutes)	Каждые (минут)
 	Every option is at its default.	Все параметры имеют значения по умолчанию.
 	Every option matches {base}.	Все параметры совпадают с {base}.
-	Every-line Composer	Компоновщик всех строк
+	Middle Eastern & South Asian Single-line Composer	Однострочный компоновщик (Ближний Восток и Южная Азия)
+	Middle Eastern & South Asian Every-line Composer	Компоновщик всех строк (Ближний Восток и Южная Азия)
+	Standard Single-line Composer	Стандартный однострочный компоновщик
+	Standard Every-line Composer	Стандартный компоновщик всех строк
 	Exact dash lengths	Точная длина штрихов
 	Exceptions (comma separated)	Исключения (через запятую)
 	Exclude	Исключить
@@ -3493,7 +3496,6 @@ digits	Malayalam	Малаялам
 	Single Left Quotation Mark	Одинарная открывающая кавычка
 	Single Quotes:	Одинарные кавычки:
 	Single Right Quotation Mark	Одинарная закрывающая кавычка
-	Single-line Composer	Однострочный компоновщик
 	Toggle Line Composer	Переключить компоновщик строк
 	Sixth Space	Шестая шпация
 	Size	Размер
@@ -9684,3 +9686,4 @@ shape	Open	Открытый
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для JPEG (не более 65535 пикселей по стороне): уменьшите разрешение
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для Targa (не более 65535 пикселей по стороне): уменьшите разрешение
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

@@ -54,6 +54,7 @@ pub mod ppi;
 pub mod progress;
 mod psdlayers;
 pub mod psdread;
+mod psdslices;
 mod pxrread;
 mod save;
 mod screens;
@@ -93,6 +94,9 @@ pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
 pub(crate) use pdfimport::opened_page_document;
 pub use pdfimport::{LoadOptions, page_document};
+pub(crate) use psdlayers::import_active as psd_layers;
+pub use psdlayers::{PsdInfo, info as psd_info};
+pub(crate) use psdslices::over as psd_slices;
 pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;
 pub use save::{
@@ -240,6 +244,8 @@ mod tests_psd;
 mod tests_psdlayers;
 #[cfg(test)]
 mod tests_psdread;
+#[cfg(test)]
+mod tests_psdslices;
 
 #[cfg(test)]
 mod tests_heifread;

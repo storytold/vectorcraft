@@ -532,17 +532,26 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
         // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
-        "psd" | "psb" if opts.layers => {
-            let cms = vectorcraft_color::cms::active();
-            match super::psdlayers::import(bytes, opts.hidden_layers, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)) {
-                Ok(Some((doc, warnings))) => (doc, warnings, false),
-                Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
-                Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
-            }
-        }
+        "psd" | "psb" if opts.layers => match super::psdlayers::import_active(bytes, opts.hidden_layers) {
+            Ok(Some((doc, warnings))) => (doc, warnings, false),
+            Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
+            Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
+        },
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
+    // A PSD or PSB file's slices become user slices over its canvas (`importSlices`, default on),
+    // whether its layers or its merged image came in.
+    if matches!(format.id, "psd" | "psb")
+        && opts.import_slices
+        && let Some(canvas) = doc.artboards.first().map(|a| a.rect)
+    {
+        let (slices, notes) = super::psd_slices(bytes, canvas);
+        for (rect, options) in slices {
+            crate::cmd::slices::add_slice(&mut doc, rect, options);
+        }
+        warnings.extend(notes);
+    }
     // A PDF, `.ai` or `.ait` read from its pages or its editing copy, not restored from the document
     // it carries, opens with the File Info it gives (a PostScript `.ai` gives none).
     if matches!(format.id, "pdf" | "ai" | "ait")
