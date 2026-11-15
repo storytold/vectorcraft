@@ -1084,35 +1084,10 @@ dependencies = [
 [[package]]
 name = "craft-image-codecs"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639#b3b8521ab4029033a9ffc4ebad53f4901cbdf639"
-dependencies = [
- "craft-jpeg 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
- "craft-metadata 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
- "crc32fast",
- "exr",
- "flate2",
- "half",
- "hayro-jpeg2000",
- "image",
- "image-webp",
- "jpeg-encoder",
- "png 0.18.1",
- "rayon",
- "serde_json",
- "thiserror 2.0.21",
- "tiff",
- "zune-core",
- "zune-jpeg",
- "zune-jpegxl",
-]
-
-[[package]]
-name = "craft-image-codecs"
-version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=d6cd7836d364177661b0ae17f48a0805e83a5f32#d6cd7836d364177661b0ae17f48a0805e83a5f32"
 dependencies = [
- "craft-jpeg 0.1.0 (git+https://github.com/storytold/craft-libs?rev=d6cd7836d364177661b0ae17f48a0805e83a5f32)",
- "craft-metadata 0.1.0 (git+https://github.com/storytold/craft-libs?rev=d6cd7836d364177661b0ae17f48a0805e83a5f32)",
+ "craft-jpeg",
+ "craft-metadata",
  "exr",
  "flate2",
  "half",
@@ -1128,14 +1103,6 @@ dependencies = [
  "zune-core",
  "zune-jpeg",
  "zune-jpegxl",
-]
-
-[[package]]
-name = "craft-jpeg"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639#b3b8521ab4029033a9ffc4ebad53f4901cbdf639"
-dependencies = [
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1169,23 +1136,11 @@ dependencies = [
 [[package]]
 name = "craft-metadata"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639#b3b8521ab4029033a9ffc4ebad53f4901cbdf639"
-dependencies = [
- "brotli-decompressor 6.3.1",
- "chrono",
- "craft-tiff 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
- "quick-xml 0.41.0",
- "serde",
-]
-
-[[package]]
-name = "craft-metadata"
-version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=d6cd7836d364177661b0ae17f48a0805e83a5f32#d6cd7836d364177661b0ae17f48a0805e83a5f32"
 dependencies = [
  "brotli-decompressor 6.3.1",
  "chrono",
- "craft-tiff 0.1.0 (git+https://github.com/storytold/craft-libs?rev=d6cd7836d364177661b0ae17f48a0805e83a5f32)",
+ "craft-tiff",
  "quick-xml 0.41.0",
  "serde",
 ]
@@ -1264,7 +1219,7 @@ name = "craft-svg"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=d6cd7836d364177661b0ae17f48a0805e83a5f32#d6cd7836d364177661b0ae17f48a0805e83a5f32"
 dependencies = [
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=d6cd7836d364177661b0ae17f48a0805e83a5f32)",
+ "craft-image-codecs",
  "craft-xml",
  "flate2",
  "kurbo 0.13.1",
@@ -1274,15 +1229,6 @@ dependencies = [
  "usvg 0.48.1",
  "vectorcraft-geom 0.18.0",
  "vectorcraft-pathops 0.18.0",
-]
-
-[[package]]
-name = "craft-tiff"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639#b3b8521ab4029033a9ffc4ebad53f4901cbdf639"
-dependencies = [
- "serde",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -6657,7 +6603,7 @@ name = "vectorcraft-affinity"
 version = "0.24.1"
 dependencies = [
  "craft-affinity",
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "crc32fast",
  "proptest",
 ]
@@ -6686,7 +6632,7 @@ name = "vectorcraft-cad"
 version = "0.24.1"
 dependencies = [
  "craft-dxf",
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "image",
  "kurbo 0.13.1",
  "serde_json",
@@ -6739,6 +6685,7 @@ name = "vectorcraft-doc"
 version = "0.24.1"
 dependencies = [
  "chrono",
+ "craft-image-codecs",
  "hayro-ccitt",
  "image",
  "jpeg-encoder",
@@ -6757,7 +6704,7 @@ dependencies = [
 name = "vectorcraft-effects"
 version = "0.24.1"
 dependencies = [
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "craft-svg",
  "image",
  "kurbo 0.13.1",
@@ -6782,7 +6729,7 @@ dependencies = [
  "chrono",
  "craft-docpath",
  "craft-heif",
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "craft-jxl",
  "craft-proof",
  "craft-xml",
@@ -6828,12 +6775,12 @@ name = "vectorcraft-eps"
 version = "0.24.1"
 dependencies = [
  "craft-eps",
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "craft-pdf",
- "craft-stream-codecs",
  "encoding_rs",
  "fax",
  "flate2",
+ "hayro-ccitt",
  "image",
  "kurbo 0.13.1",
  "memchr",
@@ -6906,7 +6853,7 @@ dependencies = [
 name = "vectorcraft-mcp"
 version = "0.24.1"
 dependencies = [
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "image",
  "log",
  "proptest",
@@ -6926,7 +6873,7 @@ dependencies = [
 name = "vectorcraft-metafile"
 version = "0.24.1"
 dependencies = [
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "craft-metafile",
  "image",
  "kurbo 0.13.1",
@@ -6967,7 +6914,7 @@ version = "0.24.1"
 dependencies = [
  "aes",
  "chrono",
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "craft-pdf",
  "craft-stream-codecs",
  "craft-xml",
@@ -7001,7 +6948,7 @@ dependencies = [
 name = "vectorcraft-plugins"
 version = "0.24.1"
 dependencies = [
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "craft-vectorcraft-format",
  "log",
  "serde",
@@ -7021,10 +6968,10 @@ name = "vectorcraft-render"
 version = "0.24.1"
 dependencies = [
  "craft-gif",
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "craft-psd",
  "craft-stream-codecs",
- "craft-tiff 0.1.0 (git+https://github.com/storytold/craft-libs?rev=d6cd7836d364177661b0ae17f48a0805e83a5f32)",
+ "craft-tiff",
  "flate2",
  "image",
  "log",
@@ -7059,7 +7006,7 @@ name = "vectorcraft-svg"
 version = "0.24.1"
 dependencies = [
  "craft-docpath",
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "craft-svg",
  "data-url",
  "flate2",
@@ -7088,7 +7035,7 @@ dependencies = [
 name = "vectorcraft-testkit"
 version = "0.24.1"
 dependencies = [
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "fax",
  "kurbo 0.13.1",
  "proptest",
@@ -7135,7 +7082,7 @@ dependencies = [
 name = "vectorcraft-tools"
 version = "0.24.1"
 dependencies = [
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "kurbo 0.13.1",
  "serde",
  "serde_json",
@@ -7152,7 +7099,7 @@ dependencies = [
 name = "vectorcraft-trace"
 version = "0.24.1"
 dependencies = [
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "image",
  "kurbo 0.13.1",
  "serde",
@@ -7167,7 +7114,7 @@ version = "0.24.1"
 dependencies = [
  "bytemuck",
  "chrono",
- "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=b3b8521ab4029033a9ffc4ebad53f4901cbdf639)",
+ "craft-image-codecs",
  "craft-keymap",
  "craft-ui",
  "craft-update",
