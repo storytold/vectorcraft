@@ -3726,6 +3726,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	Mostra opzioni di importazione
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Chiedi le opzioni di importazione di ogni file PDF, DXF o di testo prima di inserirlo; disattivato: usa le ultime opzioni scelte
 	Stylistic Alternates	Alternative stilistiche
+	Ligatures	Legature
+	Ornaments	Ornamenti
+	Figures	Cifre
 	Swash	Ornamentale
 	Swatch Conflict	Conflitto campioni
 	Swatch Conflicts	Conflitti campioni

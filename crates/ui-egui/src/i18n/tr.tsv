@@ -3458,6 +3458,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	İçe Aktarma Seçeneklerini Göster
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Her PDF, DXF veya metin dosyasını yerleştirmeden önce içe aktarma seçeneklerini sor; kapalıyken son seçilen seçenekleri kullan
 	Stylistic Alternates	Stilistik Alternatifler
+	Ligatures	Bitişik Harfler
+	Ornaments	Süslemeler
+	Figures	Rakamlar
 	Swash	çalkalama
 	Swatch Conflict	Renk Örneği Çatışması
 	Swatch Conflicts	Renk Örneği Çatışmaları

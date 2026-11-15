@@ -4376,6 +4376,9 @@ mark-style	Japanese	Japán
 	Show Import Options	Importálási beállítások megjelenítése
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Elhelyezés előtt rákérdez minden PDF-, DXF- vagy szövegfájl importálási beállításaira; kikapcsolva a legutóbb választott beállításokat használja
 	Stylistic Alternates	Stilisztikai változatok
+	Ligatures	Ligatúrák
+	Ornaments	Díszek
+	Figures	Számjegyek
 	Swash	Cifra változatok
 	Swatch Conflict	Színminta-ütközés
 	Swatch Conflicts	Színminta-ütközések

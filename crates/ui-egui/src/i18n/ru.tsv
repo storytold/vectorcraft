@@ -3712,6 +3712,9 @@ digits	Malayalam	Малаялам
 	Show Import Options	Показывать параметры импорта
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запрашивать параметры импорта каждого файла PDF, DXF или текстового файла перед помещением; если выключено, используются последние выбранные параметры
 	Stylistic Alternates	Стилистические альтернативы
+	Ligatures	Лигатуры
+	Ornaments	Орнаменты
+	Figures	Цифры
 	Swash	Росчерк
 	Swatch Conflict	Конфликт образцов
 	Swatch Conflicts	Конфликты образцов

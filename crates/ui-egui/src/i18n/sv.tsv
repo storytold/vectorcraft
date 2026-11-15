@@ -3602,6 +3602,9 @@ digits	Malayalam	Malayalam
 	Show Import Options	Visa importalternativ
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Fråga efter importalternativ för varje PDF-, DXF- eller textfil innan den placeras; av: använd de senast valda alternativen
 	Stylistic Alternates	Stilistiska alternativ
+	Ligatures	Ligaturer
+	Ornaments	Ornament
+	Figures	Siffror
 	Swash	Swash
 	Swatch Conflict	Färgrutekonflikt
 	Swatch Conflicts	Färgrutekonflikter

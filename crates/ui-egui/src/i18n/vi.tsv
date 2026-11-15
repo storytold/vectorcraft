@@ -4101,6 +4101,9 @@ mark-style	Japanese	Kiểu Nhật
 	Show Import Options	Hiện tùy chọn nhập
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Hỏi tùy chọn nhập của từng tệp PDF, DXF hoặc văn bản trước khi đặt; khi tắt, dùng các tùy chọn đã chọn gần nhất
 	Stylistic Alternates	Ký tự thay thế theo phong cách
+	Ligatures	Chữ ghép
+	Ornaments	Hoa văn
+	Figures	Chữ số
 	Swash	Swash
 	Swatch Conflict	Xung đột mẫu màu
 	Swatch Conflicts	Xung đột mẫu màu

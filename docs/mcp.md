@@ -10327,6 +10327,24 @@ off.
 {"name":"run_command","arguments":{"command":"text.setGlyphAlternate","params":{"id":7,"start":2,"gid":1043}}}
 ```
 
+After Alternates for Current Selection, the Glyphs panel's Show menu and panel menu list the OpenType categories the
+browsed font has, and choosing one shows the glyphs its features give: characters first, then glyphs no character maps,
+which a double-click applies to the selected character as Entire Font does. `text.glyphCategories {family, style?}`
+lists them: `{family, style, categories: [{id, name?, glyphs: [glyph id]}]}`, from the single, alternate, multiple and
+ligature substitutions of the font's `GSUB` features, each glyph once, in this order: `ligatures` (`liga`, `dlig`,
+`hlig`), `swashes` (`swsh`, `cswh`), `stylisticAlternates` (`salt`), `ss01` to `ss20`, `smallCaps` (`smcp`, `c2sc`),
+`ornaments` (`ornm`), `fractions` (`frac`, `afrc`, `numr`, `dnom`) and `figures` (`lnum`, `onum`, `pnum`, `tnum`). A
+category without glyphs is left out, a stylistic set carries the font's name for it as `name` when the font gives one
+(the menu shows that name, else Set N), and contextual lookups are not followed. Without `style` the family's first
+style is used. The command refuses a family or style that is not available and a `family` or `style` that is not a
+string. The categories, their features, their names and their order are VectorCraft's own; the panel restricting its
+glyphs to a category chosen from the Show menu is described in [Glyphs panel
+overview](https://helpx.adobe.com/illustrator/desktop/design-with-text/special-characters-glyphs/glyphs-panel-overview.html).
+
+```json
+{"name":"run_command","arguments":{"command":"text.glyphCategories","params":{"family":"Source Sans 3","style":"Regular"}}}
+```
+
 ### Alternates as OpenType feature values
 
 `text.setGlyphAlternate`'s choice swaps a glyph id into one character and shapes that character apart from its neighbours.
