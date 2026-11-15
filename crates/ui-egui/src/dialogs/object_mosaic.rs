@@ -87,10 +87,41 @@ fn follower(d: &Dialog) -> Option<&'static str> {
 const SIZE_RANGE: std::ops::RangeInclusive<f64> = 0.1..=1.0e6;
 
 /// With Constrain Ratio on, the side that follows set from the side that leads, in the image's
-/// proportions.
+/// proportions. A size `ui.dialog.set` gave the following side that the command refuses stays,
+/// for OK to report.
 fn follow_ratio(d: &mut Dialog) {
-    if let Some((key, v)) = derived(d) {
-        d.fields.insert(key.into(), json!(v));
+    let Some((key, v)) = derived(d) else { return };
+    if d.bool(&kept(key)) {
+        if !takes(d, key) {
+            return;
+        }
+        d.fields.remove(&kept(key));
+    }
+    d.fields.insert(key.into(), json!(v));
+}
+
+/// The field that is true while size field `key` holds a value `ui.dialog.set` gave and the
+/// command refuses.
+fn kept(key: &str) -> String {
+    format!("__kept.{key}")
+}
+
+/// Whether the command takes size field `key` as it is: a number from 0.1 to 1,000,000.
+fn takes(d: &Dialog, key: &str) -> bool {
+    number(d, key, 0.0).as_f64().is_some_and(|x| SIZE_RANGE.contains(&x))
+}
+
+/// `ui.dialog.set` of `field`: a new size the command refuses (not a number, or outside 0.1 to
+/// 1,000,000) stays in its field while it is refused, also on the side Constrain Ratio sets, instead
+/// of being replaced by the size worked out from the kept side.
+pub(super) fn note_set(d: &mut Dialog, field: &str) {
+    if !matches!(field, "width" | "height") {
+        return;
+    }
+    if takes(d, field) {
+        d.fields.remove(&kept(field));
+    } else {
+        d.fields.insert(kept(field), json!(true));
     }
 }
 
@@ -514,15 +545,35 @@ mod tests {
             assert!(e.contains(field), "{field}: {e}");
             assert_eq!(mosaic(&app), None, "{field}");
         }
-        // With Constrain Ratio on, a value the command refuses, set on the side it sets, is refused too.
+        // With Constrain Ratio on, a value the command refuses, set on the side it sets, is refused
+        // too, also after a frame.
         for value in [json!("abc"), json!(0)] {
             app.run("select.set", json!({"ids": [image_id(&app)]})).unwrap();
             open(&mut app, &json!({"constrain": "width"})).unwrap();
             crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "height".into(), value.clone());
+            frame(&mut app, &ctx);
             let e = crate::dialogs::confirm(&mut app).unwrap_err();
             assert!(e.contains("height"), "{value}: {e}");
             assert_eq!(mosaic(&app), None, "{value}");
         }
+        // Once that side holds a size the command takes, Constrain Ratio sets it again.
+        app.run("select.set", json!({"ids": [image_id(&app)]})).unwrap();
+        open(&mut app, &json!({"constrain": "width"})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        for (field, value) in [("height", json!(0)), ("lock", json!(false)), ("height", json!(80)), ("lock", json!(true))] {
+            crate::dialogs::set_field(d, field.into(), value);
+        }
+        frame(&mut app, &ctx);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("height", 0.0), 50.0);
+        // A refused height stays while a refused width is set and then corrected.
+        let d = app.ui.dialog.as_mut().unwrap();
+        for (field, value) in [("height", json!(0)), ("width", json!(0)), ("width", json!(100))] {
+            crate::dialogs::set_field(d, field.into(), value);
+        }
+        frame(&mut app, &ctx);
+        let e = crate::dialogs::confirm(&mut app).unwrap_err();
+        assert!(e.contains("height"), "{e}");
+        assert_eq!(mosaic(&app), None);
     }
 
     /// The id of the image in the document.

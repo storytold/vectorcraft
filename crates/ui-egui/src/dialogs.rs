@@ -601,9 +601,13 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
         return;
     }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
+    let mosaic = (d.kind == object_mosaic::KIND).then(|| field.clone());
     d.fields.insert(field, value);
     if let Some(field) = dxf {
         dxf_options::note_set(d, &field);
+    }
+    if let Some(field) = mosaic {
+        object_mosaic::note_set(d, &field);
     }
 }
 
