@@ -658,6 +658,7 @@ fn fit_to_edge(row: &mut AppearanceItem, run: Option<(f64, bool, bool, bool)>) {
         }
         s.profile = None;
         s.brush = None;
+        s.brush_options.clear();
     }
     if !starts {
         s.start_arrow = None;

@@ -769,6 +769,7 @@ fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut
                 arrow_scale,
                 profile,
                 brush,
+                brush_options,
                 opacity,
                 blend,
                 visible,
@@ -781,7 +782,11 @@ fn give_item(a: &AppearanceItem, b: &AppearanceItem, m: &AppearanceItem, n: &mut
                 bearing: _,
                 rotation: _,
             } = m;
-            give_fields!(a, b, n: paint, width, cap, join, miter_limit, align, dash, start_arrow, end_arrow, arrow_scale, profile, brush, opacity, blend, visible, effects, arrow_align, overprint, gradient_mode);
+            give_fields!(a, b, n: paint, width, cap, join, miter_limit, align, dash, start_arrow, end_arrow, arrow_scale, profile, brush, brush_options, opacity, blend, visible, effects, arrow_align, overprint, gradient_mode);
+            // A stroke's own brush settings go with the brush they set: a new brush takes the model's.
+            if a.brush != b.brush {
+                n.brush_options = brush_options.clone();
+            }
         }
         _ => {}
     }

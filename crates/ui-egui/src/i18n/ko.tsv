@@ -1190,6 +1190,12 @@ antiAlias	Sharp	날카롭게
 	Brush Affects:	브러시 적용 대상:
 	Brush Definition	브러시 정의
 	Brush Options…	브러시 옵션…
+	Options of Selected Object…	선택한 오브젝트 옵션…
+	Options of Selected Object	선택한 오브젝트 옵션
+@msg	no path painted with a brush is selected	브러시로 칠한 패스가 선택되지 않았습니다
+@msg	the selected paths are painted with brushes of different types	선택한 패스가 서로 다른 유형의 브러시로 칠해져 있습니다
+@msg	give `params` or `reset`, not both	`params`와 `reset` 중 하나만 지정하세요
+@msg	a bristle brush has no options of its own on a path	강모 브러시는 패스별 옵션이 없습니다
 	Built-in presets are read-only: New… starts an editable copy.	기본 제공 프리셋은 읽기 전용입니다. 새로 만들기…를 누르면 편집 가능한 복사본이 만들어집니다.
 	Built-in presets don't change: New makes a copy you can edit.	기본 제공 프리셋은 변경되지 않습니다. 새로 만들기를 누르면 편집 가능한 복사본이 만들어집니다.
 	Built-in presets don't change: New… starts an editable copy.	기본 제공 프리셋은 변경되지 않습니다. 새로 만들기…를 누르면 편집 가능한 복사본이 만들어집니다.

@@ -788,6 +788,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.newBrush" => crate::dialogs::new_brush::open(app, p.get("ids").cloned()),
         "ui.brushOptions" => crate::dialogs::brush_options::open(app, s("name").as_deref()),
+        "ui.brushObjectOptions" => crate::dialogs::brush_options::open_object(app),
         "tool.options" => crate::toolbar::open_options(app, &s("tool").unwrap_or_default()),
         _ => return None,
     };

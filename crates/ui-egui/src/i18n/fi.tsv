@@ -3351,6 +3351,12 @@ theme	Appearance	Ulkoasu
 	Break Link to Symbol	Katkaise linkki symboliin
 	Brush Definition	Siveltimen määritys
 	Brush Options…	Siveltimen asetukset…
+	Options of Selected Object…	Valitun objektin asetukset…
+	Options of Selected Object	Valitun objektin asetukset
+@msg	no path painted with a brush is selected	siveltimellä maalattua polkua ei ole valittu
+@msg	the selected paths are painted with brushes of different types	valitut polut on maalattu eri tyyppisillä siveltimillä
+@msg	give `params` or `reset`, not both	anna `params` tai `reset`, ei molempia
+@msg	a bristle brush has no options of its own on a path	harjassiveltimellä ei ole polulla omia asetuksia
 	Current Brush	Nykyinen sivellin
 	Current Symbol	Nykyinen symboli
 	Delete Brush	Poista sivellin

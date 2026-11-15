@@ -3291,6 +3291,12 @@ theme	Appearance	Wygląd
 	Break Link to Symbol	Zerwij łącze z symbolem
 	Brush Definition	Definicja pędzla
 	Brush Options…	Opcje pędzla…
+	Options of Selected Object…	Opcje zaznaczonego obiektu…
+	Options of Selected Object	Opcje zaznaczonego obiektu
+@msg	no path painted with a brush is selected	nie zaznaczono ścieżki malowanej pędzlem
+@msg	the selected paths are painted with brushes of different types	zaznaczone ścieżki są malowane pędzlami różnych typów
+@msg	give `params` or `reset`, not both	podaj `params` albo `reset`, nie oba
+@msg	a bristle brush has no options of its own on a path	pędzel włosiankowy nie ma własnych opcji na ścieżce
 	Current Brush	Bieżący pędzel
 	Current Symbol	Bieżący symbol
 	Delete Brush	Usuń pędzel

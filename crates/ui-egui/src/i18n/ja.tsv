@@ -1200,6 +1200,12 @@ antiAlias	Sharp	シャープ
 	Brush Affects:	ブラシの影響:
 	Brush Definition	ブラシの定義
 	Brush Options…	ブラシオプション…
+	Options of Selected Object…	選択中のオブジェクトのオプション…
+	Options of Selected Object	選択中のオブジェクトのオプション
+@msg	no path painted with a brush is selected	ブラシで描かれたパスが選択されていません
+@msg	the selected paths are painted with brushes of different types	選択したパスは種類の異なるブラシで描かれています
+@msg	give `params` or `reset`, not both	`params` と `reset` は同時に指定できません
+@msg	a bristle brush has no options of its own on a path	剛毛ブラシにはパスごとのオプションがありません
 	Built-in presets are read-only: New… starts an editable copy.	組み込みのプリセットは読み取り専用です。「新規…」で編集可能なコピーを作成できます。
 	Built-in presets don't change: New makes a copy you can edit.	組み込みのプリセットは変更できません。「新規」で編集可能なコピーを作成します。
 	Built-in presets don't change: New… starts an editable copy.	組み込みのプリセットは変更できません。「新規…」で編集できる複製を作成します。

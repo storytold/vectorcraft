@@ -455,6 +455,24 @@ fn a_stroke_weight_change_leaves_each_members_own_fill_and_stroke_colour() {
 }
 
 #[test]
+fn a_brush_change_clears_each_members_own_brush_settings_and_other_changes_keep_them() {
+    let mut s = session();
+    let [a, b, c, ..] = squares(&mut s);
+    s.execute("brush.apply", &json!({"name": "Arrow", "ids": [a.0, b.0, c.0]})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [b.0], "params": {"width": 50}})).unwrap();
+    let own = |s: &Session, id: NodeId| Value::Object(node(s, id).appearance.stroke().unwrap().brush_options.clone());
+    assert_eq!(own(&s, b), json!({"width": 50.0}));
+    start(&mut s, a, json!({}));
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    assert_eq!(own(&s, b), json!({"width": 50.0}), "a weight change keeps the copy's own settings");
+    s.execute("brush.apply", &json!({"name": "Diamonds"})).unwrap();
+    for id in [a, b, c] {
+        assert_eq!(node(&s, id).appearance.stroke().unwrap().brush.as_deref(), Some("Diamonds"));
+        assert_eq!(own(&s, id), json!({}), "the settings for the old brush go with it");
+    }
+}
+
+#[test]
 fn a_fill_colour_change_reaches_the_fills_and_not_the_strokes() {
     let mut s = session();
     let [a, b, c, ..] = squares(&mut s);

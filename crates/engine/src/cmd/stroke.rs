@@ -542,6 +542,10 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         let Some(st) = n.appearance.stroke_at_mut(index) else { return Ok(()) };
         arrows_and_profile(st);
         if let Some(b) = &brush {
+            // The path's own brush settings (Options of Selected Object) go with the brush they set.
+            if st.brush != *b {
+                st.brush_options.clear();
+            }
             st.brush = b.clone();
         }
         Ok(())

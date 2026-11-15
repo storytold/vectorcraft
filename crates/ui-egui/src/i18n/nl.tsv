@@ -3663,6 +3663,12 @@ theme	Appearance	Vormgeving
 	Break Link to Symbol	Koppeling met symbool verbreken
 	Brush Definition	Penseeldefinitie
 	Brush Options…	Penseelopties…
+	Options of Selected Object…	Opties voor geselecteerd object…
+	Options of Selected Object	Opties voor geselecteerd object
+@msg	no path painted with a brush is selected	geen met een penseel geschilderd pad geselecteerd
+@msg	the selected paths are painted with brushes of different types	de geselecteerde paden zijn geschilderd met penselen van verschillende typen
+@msg	give `params` or `reset`, not both	geef `params` of `reset`, niet beide
+@msg	a bristle brush has no options of its own on a path	een borstelpenseel heeft geen eigen opties op een pad
 	Current Brush	Huidig penseel
 	Current Symbol	Huidig symbool
 	Delete Brush	Penseel verwijderen

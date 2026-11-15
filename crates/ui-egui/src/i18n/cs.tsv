@@ -3412,6 +3412,12 @@ theme	Appearance	Motiv
 	Break Link to Symbol	Zrušit propojení se symbolem
 	Brush Definition	Definice štětce
 	Brush Options…	Možnosti štětce…
+	Options of Selected Object…	Možnosti vybraného objektu…
+	Options of Selected Object	Možnosti vybraného objektu
+@msg	no path painted with a brush is selected	není vybrána žádná cesta malovaná štětcem
+@msg	the selected paths are painted with brushes of different types	vybrané cesty jsou malovány štětci různých typů
+@msg	give `params` or `reset`, not both	zadejte `params` nebo `reset`, ne obojí
+@msg	a bristle brush has no options of its own on a path	štětinový štětec nemá na cestě vlastní možnosti
 	Current Brush	Aktuální štětec
 	Current Symbol	Aktuální symbol
 	Delete Brush	Odstranit štětec

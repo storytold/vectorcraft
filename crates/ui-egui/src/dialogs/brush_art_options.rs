@@ -472,6 +472,13 @@ fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.insert("widthMode".into(), json!(m.id()));
         }
     });
+    // A path sets its own width, flips, overlap and colorization, not how the art scales or runs.
+    if d.bool(super::brush_options::OBJECT) {
+        flips(ui, d);
+        ui.add_space(4.0);
+        super::form::check(ui, d, "overlap", tl!("Overlap"));
+        return;
+    }
     ui.add_space(4.0);
     widgets::section_header(ui, tl!("Brush Scale Options"));
     let scales = [
@@ -532,8 +539,11 @@ fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
     slider_row(ui, d, "scale", tl!("Scale:"), PatternBrush::SCALE_RANGE);
     widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| number(ui, d, "spacing", PatternBrush::SPACING_RANGE, "%", true));
     ui.add_space(6.0);
-    tiles(ui, d);
-    ui.add_space(6.0);
+    // The tiles belong to the brush; a path sets its own scale, spacing, flips, fit and colorization.
+    if !d.bool(super::brush_options::OBJECT) {
+        tiles(ui, d);
+        ui.add_space(6.0);
+    }
     flips(ui, d);
     widgets::section_header(ui, tl!("Fit"));
     let fits = [("stretch", tl!("Stretch to fit")), ("addSpace", tl!("Add space to fit")), ("approximate", tl!("Approximate path"))];

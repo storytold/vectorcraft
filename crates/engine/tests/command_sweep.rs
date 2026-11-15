@@ -604,6 +604,17 @@ fn structured_junk() {
         ("brush.options", json!({"name": "Arrow", "params": {"width": -5, "direction": "diagonal", "flip_along": "yes"}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "flip_across": true}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 0, "spacing": 1e308, "fit": "nope", "side": null}})),
+        ("brush.apply", json!({"name": "Chain", "id": 2})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "colorization": {"method": "hueShift"}}}),
+        ),
+        ("brush.objectOptions", json!({"id": 2, "params": {"scale": "x", "fit": "nope", "side": null}})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"colorization": {"method": "hueShift", "key": {"model": "rgb", "r": 1e308, "g": -1e308, "b": 0}}}}),
+        ),
+        ("brush.objectOptions", json!({"ids": [1e308, -1], "params": {}, "reset": true})),
         ("path.curvature", json!({"points": [{"x": 0, "y": 0}]})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 1000, "x": 0, "y": 0})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 0, "x": 1e308, "y": -1e308})),

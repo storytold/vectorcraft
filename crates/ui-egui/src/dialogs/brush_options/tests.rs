@@ -862,3 +862,88 @@ fn art_width_and_pattern_scale_have_sliders() {
     let shown = tree(|ui| super::super::show(&mut app, ui.ctx()));
     assert_eq!(slider_value(&shown, "Scale:"), (Some(100.0), Some(1.0), Some(10000.0), Some("100%".into())));
 }
+
+/// A level line, selected, painted with brush `brush`.
+fn brushed_line(app: &mut VectorcraftApp, y: f64, brush: &str) -> u64 {
+    let id = app.run("shape.line", json!({"x1": 20, "y1": y, "x2": 220, "y2": y})).unwrap()["id"].as_u64().unwrap();
+    app.run("brush.apply", json!({"name": brush, "ids": [id]})).unwrap();
+    id
+}
+
+/// The own brush settings of the first stroke of path `id`.
+fn own_options(app: &VectorcraftApp, id: u64) -> Value {
+    let st = app.session.active().unwrap().doc.node(NodeId(id)).and_then(|n| n.appearance.stroke().cloned()).unwrap();
+    Value::Object(st.brush_options)
+}
+
+fn select(app: &mut VectorcraftApp, ids: &[u64]) {
+    app.run("select.set", json!({ "ids": ids })).unwrap();
+}
+
+#[test]
+fn options_of_selected_object_set_one_paths_art_brush_settings() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Arrow");
+    let b = brushed_line(&mut app, 100.0, "Arrow");
+    select(&mut app, &[a]);
+    assert!(object_available(&app));
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    let text = shown(&mut app);
+    for label in ["Options of Selected Object", "Width:", "Flip Along", "Flip Across", "Overlap", "Colorization", "OK"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    for label in ["Name:", "Brush Scale Options", "Direction:"] {
+        assert!(!text.contains(label), "{label} in {text}");
+    }
+    set(&mut app, json!({"width": 50}));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(own_options(&app, a), json!({"width": 50.0}));
+    assert_eq!(own_options(&app, b), json!({}));
+    assert_eq!(app.run("brush.get", json!({"name": "Arrow"})).unwrap()["width"], json!(100.0), "the brush keeps its width");
+    // Opened again, it shows the path's own width, and OK without a change changes nothing.
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("width", 0.0), 50.0);
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"width": 50.0}));
+}
+
+#[test]
+fn options_of_selected_object_show_what_a_path_can_set_for_each_type() {
+    let mut app = app();
+    // Calligraphic: OK without a change leaves the path on the brush's settings.
+    let c = brushed_line(&mut app, 40.0, "6 pt. Flat");
+    select(&mut app, &[c]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    let text = shown(&mut app);
+    for label in ["Angle:", "Roundness:", "Size:"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, c), json!({}));
+    // Pattern: scale, spacing, flips and fit, not the tiles.
+    let p = brushed_line(&mut app, 80.0, "Diamonds");
+    select(&mut app, &[p]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    let text = shown(&mut app);
+    for label in ["Scale:", "Spacing:", "Fit", "Flip Along"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    assert!(!text.contains("Side Tile"), "{text}");
+    set(&mut app, json!({"scale": 200}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, p), json!({"scale": 200.0}));
+    // Bristle brushes, nothing selected and two brush types are refused.
+    let r = brushed_line(&mut app, 120.0, "Bristle Round");
+    select(&mut app, &[r]);
+    assert!(!object_available(&app));
+    assert!(app.run("ui.brushObjectOptions", json!({})).is_err());
+    select(&mut app, &[c, p]);
+    assert!(!object_available(&app), "the menu item is off for two brush types");
+    assert!(app.run("ui.brushObjectOptions", json!({})).is_err());
+    assert!(app.ui.dialog.is_none());
+    select(&mut app, &[p, r]);
+    assert!(!object_available(&app), "the menu item is off for a pattern and a bristle brush");
+    app.run("select.none", json!({})).unwrap();
+    assert!(!object_available(&app));
+}

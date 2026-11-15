@@ -308,6 +308,12 @@ antiAlias	Sharp	锐利
 	Brush Definition	画笔定义
 	Brush Libraries	画笔库
 	Brush Options…	画笔选项…
+	Options of Selected Object…	所选对象的选项…
+	Options of Selected Object	所选对象的选项
+@msg	no path painted with a brush is selected	未选择用画笔绘制的路径
+@msg	the selected paths are painted with brushes of different types	所选路径使用了不同类型的画笔
+@msg	give `params` or `reset`, not both	请提供 `params` 或 `reset`，不能同时提供
+@msg	a bristle brush has no options of its own on a path	鬃毛画笔在路径上没有自己的选项
 	Brush Strokes	画笔描边
 	Brushes	画笔
 	Built-in Libraries	内置库

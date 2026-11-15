@@ -2988,6 +2988,12 @@ theme	Appearance	იერსახე
 	Break Link to Symbol	სიმბოლოსთან კავშირის გაწყვეტა
 	Brush Definition	ფუნჯის განსაზღვრება
 	Brush Options…	ფუნჯის პარამეტრები…
+	Options of Selected Object…	მონიშნული ობიექტის პარამეტრები…
+	Options of Selected Object	მონიშნული ობიექტის პარამეტრები
+@msg	no path painted with a brush is selected	ფუნჯით დახატული კონტური მონიშნული არ არის
+@msg	the selected paths are painted with brushes of different types	მონიშნული კონტურები სხვადასხვა ტიპის ფუნჯებითაა დახატული
+@msg	give `params` or `reset`, not both	მიუთითეთ `params` ან `reset`, არა ორივე
+@msg	a bristle brush has no options of its own on a path	ჯაგრის ფუნჯს კონტურზე საკუთარი პარამეტრები არ აქვს
 	Current Brush	მიმდინარე ფუნჯი
 	Current Symbol	მიმდინარე სიმბოლო
 	Delete Brush	ფუნჯის წაშლა

@@ -81,6 +81,116 @@ fn apply_and_remove_brush_with_undo() {
     assert!(s.execute("brush.apply", &json!({"name": "Nope"})).is_err());
 }
 
+/// The own brush settings of the first stroke of `id`.
+fn own_options(s: &Session, id: NodeId) -> Value {
+    Value::Object(node(s, id).appearance.stroke().map(|st| st.brush_options.clone()).unwrap_or_default())
+}
+
+/// The height of the brush art of `id`, drawn along a level line.
+fn art_height(s: &Session, id: NodeId) -> f64 {
+    let d = &s.doc().unwrap().doc;
+    vectorcraft_brush::pieces_bounds(&vectorcraft_brush::node_pieces(d, &node(s, id)).unwrap()).unwrap().height()
+}
+
+#[test]
+fn options_of_selected_object_change_one_path_and_leave_the_brush() {
+    let mut s = session();
+    let a = line(&mut s);
+    let b = line(&mut s);
+    select(&mut s, &[a, b]);
+    s.execute("brush.apply", &json!({"name": "Arrow"})).unwrap();
+    let width = s.execute("brush.get", &json!({"name": "Arrow"})).unwrap()["width"].clone();
+    select(&mut s, &[a]);
+    let steps = undo_steps(&s);
+    let r = s.execute("brush.objectOptions", &json!({"params": {"width": 50, "flip_along": false}})).unwrap();
+    assert_eq!(r["changed"], json!([a.0]));
+    assert_eq!(own_options(&s, a), json!({"width": 50.0}), "flip_along equals the brush's own value and is dropped");
+    assert_eq!(own_options(&s, b), json!({}));
+    assert_eq!(s.execute("brush.get", &json!({"name": "Arrow"})).unwrap()["width"], width, "the brush keeps its width");
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert!((art_height(&s, a) * 2.0 - art_height(&s, b)).abs() < 1e-6, "{} vs {}", art_height(&s, a), art_height(&s, b));
+    // The same settings again, and a call without params, change nothing and add no undo step.
+    assert_eq!(s.execute("brush.objectOptions", &json!({"params": {"width": 50}})).unwrap()["changed"], json!([]));
+    assert_eq!(s.execute("brush.objectOptions", &json!({})).unwrap()["options"], json!({"width": 50.0}));
+    assert_eq!(undo_steps(&s), steps + 1);
+    // An edit of the brush reaches the settings the path does not set.
+    s.execute("brush.options", &json!({"name": "Arrow", "params": {"width": 200, "flip_across": true}})).unwrap();
+    assert_eq!(own_options(&s, a), json!({"width": 50.0}));
+    // The settings are saved in the native file.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let st = back.node(a).and_then(|n| n.appearance.stroke().cloned()).unwrap();
+    assert_eq!(Value::Object(st.brush_options), json!({"width": 50.0}));
+    // Undo puts the path back on the brush's settings.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(own_options(&s, a), json!({"width": 50.0}));
+    // Reset clears them, and so do applying a brush and removing it.
+    s.execute("brush.objectOptions", &json!({"reset": true})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    s.execute("brush.objectOptions", &json!({"params": {"overlap": true}})).unwrap();
+    s.execute("brush.apply", &json!({"name": "Arrow"})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    s.execute("brush.objectOptions", &json!({"params": {"overlap": true}})).unwrap();
+    s.execute("brush.remove", &json!({})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    // Stroke Options' brush change clears them as well, and keeping the same brush keeps them.
+    s.execute("brush.apply", &json!({"name": "Arrow"})).unwrap();
+    s.execute("brush.objectOptions", &json!({"params": {"overlap": true}})).unwrap();
+    s.execute("stroke.setAdvanced", &json!({"brush": "Arrow"})).unwrap();
+    assert_eq!(own_options(&s, a), json!({"overlap": true}));
+    s.execute("stroke.setAdvanced", &json!({"brush": null})).unwrap();
+    assert_eq!(own_options(&s, a), json!({}));
+    // Asking for the settings changes nothing, even when the brush has come to equal them.
+    s.execute("brush.apply", &json!({"name": "Arrow"})).unwrap();
+    s.execute("brush.objectOptions", &json!({"params": {"overlap": true}})).unwrap();
+    s.execute("brush.options", &json!({"name": "Arrow", "params": {"overlap": true}})).unwrap();
+    let steps = undo_steps(&s);
+    assert_eq!(s.execute("brush.objectOptions", &json!({})).unwrap()["options"], json!({"overlap": true}));
+    assert_eq!(own_options(&s, a), json!({"overlap": true}));
+    assert_eq!(undo_steps(&s), steps);
+}
+
+#[test]
+fn options_of_selected_object_keys_convert_with_the_document() {
+    let mut s = session();
+    let a = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Arrow", "ids": [a.0]})).unwrap();
+    let key = json!({"model": "rgb", "r": 0.2, "g": 0.6, "b": 0.3});
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"colorization": {"method": "hueShift", "key": key}}})).unwrap();
+    assert_eq!(own_options(&s, a)["colorization"]["key"]["model"], json!("rgb"));
+    s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    assert_eq!(own_options(&s, a)["colorization"]["key"]["model"], json!("cmyk"), "{}", own_options(&s, a));
+}
+
+#[test]
+fn options_of_selected_object_refuse_what_they_cannot_set() {
+    let mut s = session();
+    let a = line(&mut s);
+    let c = line(&mut s);
+    let plain = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("brush.apply", &json!({"name": "Arrow", "ids": [a.0]})).unwrap();
+    s.execute("brush.apply", &json!({"name": "3 pt. Round", "ids": [c.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let err = |s: &mut Session, p: Value| s.execute("brush.objectOptions", &p).unwrap_err().to_string();
+    assert!(err(&mut s, json!({"ids": [plain.0], "params": {"width": 50}})).contains("brush"));
+    assert!(err(&mut s, json!({"ids": [a.0, c.0], "params": {"width": 50}})).contains("different types"));
+    assert!(err(&mut s, json!({"ids": [a.0], "params": {"angle": 10}})).contains("angle"));
+    assert!(!err(&mut s, json!({"ids": [a.0], "params": {"width": "wide"}})).is_empty());
+    assert!(!err(&mut s, json!({"ids": [a.0], "params": [1]})).is_empty());
+    assert!(err(&mut s, json!({"ids": [a.0], "params": {"width": 50}, "reset": true})).contains("reset"));
+    assert!(err(&mut s, json!({"ids": [a.0], "reset": "yes"})).contains("reset"));
+    s.execute("brush.apply", &json!({"name": "Bristle Round", "ids": [c.0]})).unwrap();
+    let steps_bristle = undo_steps(&s);
+    assert!(err(&mut s, json!({"ids": [c.0], "params": {"size": 2}})).contains("bristle"));
+    assert_eq!(undo_steps(&s), steps_bristle);
+    assert_eq!(steps + 1, steps_bristle, "only the bristle brush's apply added a step");
+    // Values outside their ranges are clamped, as brush.options clamps them.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"width": 1e308}})).unwrap();
+    assert_eq!(own_options(&s, a), json!({"width": 1000.0}));
+}
+
 #[test]
 fn apply_adds_a_stroke_when_missing_and_reaches_into_groups() {
     let mut s = session();

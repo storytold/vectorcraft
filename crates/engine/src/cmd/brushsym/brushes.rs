@@ -1,7 +1,7 @@
 use super::{
     AppearanceItem, Arc, BTreeSet, Bristle, Brush, BrushKind, Color, Document, EngineError, Node, NodeId, NodeKind, Paint, Result, Session, Value,
     anchor, bad, brush, check_numbers, find_command, id_param, ids_json, json, name_param, names_param, ok, roots, selection_art, set_unknown,
-    str_param,
+    str_param, switch_or,
 };
 
 // ---------- brushes ----------
@@ -57,6 +57,8 @@ pub(crate) fn apply_brush(d: &mut Document, ids: &[NodeId], name: &str, stroke: 
                 st.width = 1.0;
             }
             st.brush = Some(name.to_string());
+            // The path's own brush settings (Options of Selected Object) go with the brush they set.
+            st.brush_options.clear();
         }
     }
 }
@@ -85,6 +87,7 @@ pub(super) fn brush_remove(s: &mut Session, p: &Value) -> Result<Value> {
                 for it in &mut n.appearance.items {
                     if let AppearanceItem::Stroke(st) = it {
                         st.brush = None;
+                        st.brush_options.clear();
                     }
                 }
             }
@@ -129,13 +132,17 @@ fn merge(base: &mut Value, patch: &Value) {
     }
 }
 
-/// Sets brush `to` on the strokes in `items` that paint with brush `from`.
+/// Sets brush `to` on the strokes in `items` that paint with brush `from`. A renamed brush keeps
+/// each stroke's own settings for it; a stroke left without a brush loses them.
 fn set_stroke_brush(items: &mut [AppearanceItem], from: &str, to: Option<&str>) {
     for it in items {
         if let AppearanceItem::Stroke(st) = it
             && st.brush.as_deref() == Some(from)
         {
             st.brush = to.map(str::to_string);
+            if to.is_none() {
+                st.brush_options.clear();
+            }
         }
     }
 }
@@ -492,6 +499,85 @@ pub(super) fn brush_options(s: &mut Session, p: &Value) -> Result<Value> {
     let rename = new_name.map(|nn| (name, Some(nn)));
     save_library(s, "Brush Options", lib, rename.as_slice())?;
     Ok(json!({ "name": out }))
+}
+
+/// Options of Selected Object: set the brush settings of the brushed strokes of the selected paths
+/// (or `ids`) on those strokes only, leaving the brush as it is. `params` adds to each stroke's
+/// own settings, `reset` clears them; without either, nothing changes and the settings are given.
+pub(super) fn brush_object_options(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "brush.objectOptions";
+    let params = match p.get("params") {
+        None | Some(Value::Null) => serde_json::Map::new(),
+        Some(Value::Object(o)) => o.clone(),
+        Some(_) => {
+            let key = "params";
+            return Err(bad(C, format!("`{key}` must be an object")));
+        }
+    };
+    let reset = switch_or(p, "reset", false, C)?;
+    if reset && !params.is_empty() {
+        return Err(bad(C, "give `params` or `reset`, not both"));
+    }
+    let d = &s.doc()?.doc;
+    let lib = brush::library(d);
+    let ids = brush_targets(d, &roots(s, p)?);
+    // Each brushed stroke: its path, its place in the appearance, its brush and its settings now.
+    let mut strokes = vec![];
+    for id in &ids {
+        let Some(n) = d.node(*id) else { continue };
+        for (i, it) in n.appearance.items.iter().enumerate() {
+            let AppearanceItem::Stroke(st) = it else { continue };
+            if let Some(b) = st.brush.as_deref().and_then(|name| lib.iter().find(|b| b.name == name)) {
+                strokes.push((*id, i, b, &st.brush_options));
+            }
+        }
+    }
+    let Some(&(_, _, first, _)) = strokes.first() else { return Err(bad(C, "no path painted with a brush is selected")) };
+    if strokes.iter().any(|(_, _, b, _)| b.kind.type_id() != first.kind.type_id()) {
+        return Err(bad(C, "the selected paths are painted with brushes of different types"));
+    }
+    // Only a bristle brush has none.
+    if first.kind.stroke_option_keys().is_empty() {
+        return Err(bad(C, "a bristle brush has no options of its own on a path"));
+    }
+    let out: Vec<NodeId> = ids.iter().copied().filter(|id| strokes.iter().any(|(s, ..)| s == id)).collect();
+    // Without params or reset the settings are only given: nothing is normalized or changed.
+    if !reset && params.is_empty() {
+        let keys = first.kind.stroke_option_keys();
+        let own: serde_json::Map<String, Value> =
+            strokes[0].3.iter().filter(|(k, _)| keys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+        return Ok(json!({ "ids": ids_json(&out), "changed": [], "options": own }));
+    }
+    let mut changes = vec![];
+    let mut options = None;
+    for (id, i, b, own) in &strokes {
+        let next = if reset {
+            serde_json::Map::new()
+        } else {
+            // Settings saved for another type of brush are left out.
+            let keys = b.kind.stroke_option_keys();
+            let mut merged: serde_json::Map<String, Value> =
+                own.iter().filter(|(k, _)| keys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+            merged.extend(params.clone());
+            b.stroke_options_that_differ(&merged).map_err(|e| bad(C, e))?
+        };
+        options.get_or_insert_with(|| next.clone());
+        if &next != *own {
+            changes.push((*id, *i, next));
+        }
+    }
+    let changed: Vec<NodeId> = ids.iter().copied().filter(|id| changes.iter().any(|(c, ..)| c == id)).collect();
+    if !changes.is_empty() {
+        s.edit("Options of Selected Object", |d, _| {
+            for (id, i, next) in changes {
+                if let Some(AppearanceItem::Stroke(st)) = d.node_mut(id).and_then(|n| n.appearance.items.get_mut(i)) {
+                    st.brush_options = next;
+                }
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "ids": ids_json(&out), "changed": ids_json(&changed), "options": options.unwrap_or_default() }))
 }
 
 /// The name `brush.placeArt` gives each pattern brush tile it places, by tile, in the order it

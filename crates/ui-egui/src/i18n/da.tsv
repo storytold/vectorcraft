@@ -3754,6 +3754,12 @@ theme	Appearance	Udseende
 	Break Link to Symbol	Bryd link til symbol
 	Brush Definition	Penseldefinition
 	Brush Options…	Penselindstillinger…
+	Options of Selected Object…	Indstillinger for markeret objekt…
+	Options of Selected Object	Indstillinger for markeret objekt
+@msg	no path painted with a brush is selected	ingen sti malet med en pensel er markeret
+@msg	the selected paths are painted with brushes of different types	de markerede stier er malet med pensler af forskellige typer
+@msg	give `params` or `reset`, not both	angiv `params` eller `reset`, ikke begge
+@msg	a bristle brush has no options of its own on a path	en børstepensel har ingen egne indstillinger på en sti
 	Current Brush	Aktuel pensel
 	Current Symbol	Aktuelt symbol
 	Delete Brush	Slet pensel
