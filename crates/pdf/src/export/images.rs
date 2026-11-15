@@ -138,20 +138,25 @@ impl Exporter<'_> {
         }
         let doc = self.doc;
         let out = self.out.clone();
+        let profiles = !out.standard.cmyk_only();
+        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit });
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
             if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk {
                 self.rgb_in_cmyk.images.insert(key.to_string());
             }
             let r = if cmyk_image {
-                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None)
+                let icc = out.cmyk_image_icc(blob);
+                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, icc.as_deref())
             } else {
-                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels())
+                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles, to_srgb)
             };
-            if let Some(w) = r.warning {
+            let img = r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles));
+            // An image left out gets the warning below instead.
+            for w in [r.warning, r.note].into_iter().flatten().filter(|_| img.is_some()) {
                 self.warn(w);
             }
-            r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit))
+            img
         });
         if img.is_none() {
             self.warn(UNDECODED);
@@ -191,7 +196,8 @@ impl Exporter<'_> {
         let doc = self.doc;
         let img = doc.image_blob(im).filter(|b| b.is_cmyk()).and_then(|blob| {
             let alpha = crate::images::mask_alpha(doc.image_blob(mi)?, im.width, im.height, m.clip)?;
-            let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha));
+            let icc = self.out.cmyk_image_icc(blob);
+            let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha), icc.as_deref());
             if let (Some(w), Some(_)) = (r.warning, &r.image) {
                 self.warn(w);
             }
@@ -313,22 +319,32 @@ pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
     Some(png)
 }
 
-/// Most pixels an image may have to be embedded: twice what the app reads (64 million), so every image
-/// it holds is still written.
-const MAX_EMBED_PIXELS: u64 = 1 << 27;
-
 /// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
-/// other formats decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG of 16 bits a
-/// sample is written at 8 bits ([`png_8_bit`]).
-pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool) -> Option<Image> {
+/// other formats (a TIFF) decoded with their 16-bit samples and, when `profiles` allows it (not in
+/// PDF/X-1a), the ICC profile they carry ([`crate::images::decoded_image`]). Without `profiles`, an
+/// image that carries a gray or RGB profile is written without it, and so is one whose gray or RGB
+/// profile is malformed ([`crate::images::valid_icc`]): a JPEG with its data unchanged, an image of
+/// another format decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG or another image of
+/// 16 bits a sample is written at 8 bits ([`png_8_bit`]).
+pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool, profiles: bool) -> Option<Image> {
     // The header's size first: the writer's decoders allocate what it declares, and the encoded
     // bytes of an image that is far larger than any the app reads may be a few kilobytes.
     let size = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions();
-    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > MAX_EMBED_PIXELS) {
+    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > crate::images::MAX_EMBED_PIXELS) {
         return None;
     }
     let bytes = blob.bytes.as_ref().clone();
+    // The PDF writer keeps a gray or RGB image's ICC profile: without `profiles`, or when the
+    // profile is malformed, such a JPEG is written without its profile, and an image of another
+    // format is decoded and written without it. The color space is read from the header's bytes
+    // 16..20 even in a profile cut short, as the PDF writer reads it.
+    let strip = crate::images::source_icc(&bytes).is_some_and(|icc| match icc.get(16..20) {
+        Some(space @ (b"GRAY" | b"RGB ")) => !profiles || <[u8; 4]>::try_from(space).is_ok_and(|s| !crate::images::valid_icc(&icc, s)),
+        _ => false,
+    });
     let direct = match blob.mime.as_str() {
+        "image/jpeg" | "image/jpg" if strip => Image::from_jpeg_with_icc(bytes.clone().into(), None, interpolate).ok(),
+        _ if strip => None,
         "image/png" if !sixteen_bit && png_16_bit(&bytes) => png_8_bit(&bytes).and_then(|png| Image::from_png(png.into(), interpolate).ok()),
         "image/png" => Image::from_png(bytes.clone().into(), interpolate).ok(),
         "image/jpeg" | "image/jpg" => Image::from_jpeg(bytes.clone().into(), interpolate).ok(),
@@ -336,11 +352,7 @@ pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixtee
         "image/webp" => Image::from_webp(bytes.clone().into(), interpolate).ok(),
         _ => None,
     };
-    direct.or_else(|| {
-        let rgba = image::load_from_memory(&bytes).ok()?.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        Some(Image::from_rgba8(rgba.into_raw(), w, h))
-    })
+    direct.or_else(|| crate::images::decoded_image(&bytes, interpolate, sixteen_bit, profiles))
 }
 
 #[cfg(test)]
@@ -359,7 +371,7 @@ mod tests {
         let crc =
             !png[12..29].iter().fold(!0u32, |c, b| (0..8).fold(c ^ u32::from(*b), |c, _| if c & 1 == 1 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 }));
         png[29..33].copy_from_slice(&crc.to_be_bytes());
-        assert!(super::embed(&ImageBlob::png(png), false, true).is_none());
+        assert!(super::embed(&ImageBlob::png(png), false, true, true).is_none());
     }
 
     #[test]

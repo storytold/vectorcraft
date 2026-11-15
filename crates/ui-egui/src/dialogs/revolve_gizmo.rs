@@ -186,13 +186,13 @@ struct Drag {
     fields: serde_json::Map<String, serde_json::Value>,
 }
 
-fn wrap(n: f64, snap: bool) -> f64 {
+pub(super) fn wrap(n: f64, snap: bool) -> f64 {
     let n = if snap { (n / 15.0).round() * 15.0 } else { n };
     (n + 180.0).rem_euclid(360.0) - 180.0
 }
 
 /// A Height, 0° to 90°, on 15° steps with Shift.
-fn snap_height(height: f64, snap: bool) -> f64 {
+pub(super) fn snap_height(height: f64, snap: bool) -> f64 {
     (if snap { (height / 15.0).round() * 15.0 } else { height }).clamp(0.0, 90.0)
 }
 

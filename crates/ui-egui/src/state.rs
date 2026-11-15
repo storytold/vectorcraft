@@ -424,10 +424,11 @@ pub struct UiState {
     /// is on screen. Not saved.
     #[serde(skip)]
     pub learn_locate: Option<crate::panels::learn::locate::Locate>,
-    /// The tutorials whose practice samples were opened and the tutorials finished, kept while the
-    /// app runs.
+    /// The tutorials whose practice samples were opened, kept while the app runs.
     #[serde(skip)]
     pub learn_practice: crate::panels::learn::Practice,
+    /// The Learn panel's tutorials finished and steps marked done, saved with the preferences.
+    pub learn_progress: crate::panels::learn::progress::Progress,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -574,6 +575,10 @@ pub struct UiState {
     #[serde(skip)]
     pub touch_drawing_tool: Option<String>,
     pub status: String,
+    /// How many times [`crate::VectorcraftApp::status`] has set `status`, so that work finishing
+    /// later can tell whether the line it started with is still the latest one. Not saved.
+    #[serde(skip)]
+    pub status_sets: u64,
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
@@ -744,6 +749,14 @@ pub struct UiState {
     /// File → Place: Link is on (the Place dialog remembers it).
     #[serde(default = "yes")]
     pub place_link: bool,
+    /// File → Place: Show Import Options is on (the Place dialog remembers it). Each placed file
+    /// with import options (a PDF's page and box, a DXF drawing, a text file) asks for them first;
+    /// off, it is placed with the options last confirmed for its format.
+    #[serde(default = "yes")]
+    pub place_import_options: bool,
+    /// The Text Import Options confirmed last (`file.place`'s `text` options; null: never used).
+    #[serde(default)]
+    pub text_import: Value,
     /// The file the open dialog reads, kept out of its JSON fields (Import PDF); dropped when no
     /// dialog is open.
     #[serde(skip)]
@@ -783,6 +796,9 @@ pub struct UiState {
     /// dialog opens on them (#1152).
     #[serde(default)]
     pub offset_path: Value,
+    /// The Smart Punctuation fields confirmed last (null: never used): its dialog opens on them.
+    #[serde(default)]
+    pub smart_punctuation: Value,
     /// The Average & Join fields confirmed last (`to`; null: never used): its dialog opens on them.
     #[serde(default)]
     pub average_join: Value,
@@ -830,6 +846,14 @@ pub struct UiState {
     /// Search All text does.
     #[serde(skip)]
     pub layers_filter: crate::panels::layers::Filter,
+    /// The Swatches, Graphic Styles and Symbols panels' views, chosen in their panel menus
+    /// (`ui.panelView`). They are not saved and last the session.
+    #[serde(skip)]
+    pub swatches_view: crate::panels::swatches::View,
+    #[serde(skip)]
+    pub graphic_styles_view: crate::panels::graphic_styles::View,
+    #[serde(skip)]
+    pub symbols_view: crate::panels::symbols::View,
     /// The Image Trace panel's Advanced section is open (as it was last left).
     #[serde(default = "yes")]
     pub image_trace_advanced: bool,
@@ -1117,6 +1141,7 @@ impl Default for UiState {
             learn: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
+            learn_progress: Default::default(),
             control_bar: false,
             control_bar_bottom: false,
             control_bar_floating: false,
@@ -1163,6 +1188,7 @@ impl Default for UiState {
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             touch_drawing_tool: None,
             status: String::new(),
+            status_sets: 0,
             replace_font_warning: None,
             status_notes: None,
             palette_open: false,
@@ -1209,6 +1235,8 @@ impl Default for UiState {
             swatches_show_recent_colors: true,
             svg_options: Value::Null,
             place_link: true,
+            place_import_options: true,
+            text_import: Value::Null,
             dialog_file: None,
             made_text_style: vec![],
             pending_fonts: vec![],
@@ -1219,6 +1247,7 @@ impl Default for UiState {
             dxf_options: Value::Null,
             eps_options: Value::Null,
             offset_path: Value::Null,
+            smart_punctuation: Value::Null,
             average_join: Value::Null,
             recolor_preserve: Value::Null,
             simplify: Value::Null,
@@ -1231,6 +1260,9 @@ impl Default for UiState {
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
             layers_filter: Default::default(),
+            swatches_view: Default::default(),
+            graphic_styles_view: Default::default(),
+            symbols_view: Default::default(),
             image_trace_advanced: true,
             image_trace_preview: true,
             glyphs_preview: 0,

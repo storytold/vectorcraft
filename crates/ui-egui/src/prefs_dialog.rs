@@ -404,7 +404,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
         ui.add_space(14.0);
-        ui.horizontal(|ui| {
+        // Export, Import and Reset share one row, which wraps when it is wider than the dialog.
+        ui.horizontal_wrapped(|ui| {
             if widgets::secondary_button(ui, tl!("Export Preferences…")).on_hover_text(tl!("Save the applied preferences to a JSON file")).clicked()
             {
                 export_preferences(app, &mut d);
@@ -417,15 +418,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             {
                 import_preferences(app, &mut d);
             }
-        });
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
             if widgets::secondary_button(ui, tl!("Reset Preferences"))
                 .on_hover_text(tl!("Restore every preference to its default (applied on OK)"))
                 .clicked()
             {
                 reset = true;
             }
+        });
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if widgets::primary_button(ui, tl!("OK")).clicked() {
                     ok = true;

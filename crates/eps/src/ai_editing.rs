@@ -143,6 +143,10 @@
 //!   A path or compound path with a brush the reader reads live is written with an art style whose
 //!   stroke is the brush's filter (`writer::brushes`). A brush is written only when the reader reads
 //!   it back with its settings.
+//! - Graphs, as the reader reads them (`read/graph.rs`): a graph on the layers whose records the
+//!   reader reads back as the same graph ([`crate::ai_graph`]) is written as its group between
+//!   `%_Gs`, its functional records and `%_GS`, each series' group tagged `Go` right after its end;
+//!   any other graph, and a graph with art left out, as its art, with a warning.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
@@ -228,8 +232,9 @@ const GRID_GRAY: f64 = 200.0 / 255.0;
 
 /// `%%Creator`: the creator line VectorCraft writes in the header of the editing data. It names
 /// VectorCraft and the format's app, and holds no version number; the version is written on its
-/// own in `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]).
-const CREATOR_TEXT: &str = "VectorCraft, editing data for Illustrator"; // brand-ok: the creator line VectorCraft writes
+/// own in `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]). The reader reads the symbols of data with
+/// this creator at their own size, as [`export_ai_editing`] writes them on a large canvas.
+pub(crate) const CREATOR_TEXT: &str = "VectorCraft, editing data for Illustrator"; // brand-ok: the creator line VectorCraft writes
 
 /// The first line of a PostScript file (the DSC version comment).
 const PS_HEADER: &str = "%!PS-Adobe-3.0"; // brand-ok: the PostScript header comment

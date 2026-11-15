@@ -79,13 +79,7 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
 /// Run `cmd` on the paragraphs the Paragraph panel acts on ([`format`]) and return its result. With
 /// the Selection tool these are the paragraphs of every frame of the selected stories
 /// ([`super::character::selected_stories`]).
-pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, p: Value) -> Result<Value, String> {
-    run_on(app, cmd, p, true)
-}
-
-/// [`run_on_paragraphs`], with the Selection tool on the selected type objects alone unless
-/// `stories`.
-fn run_on(app: &mut VectorcraftApp, cmd: &str, mut p: Value, stories: bool) -> Result<Value, String> {
+pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Value) -> Result<Value, String> {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
         match super::character::text_story(app) {
@@ -97,7 +91,7 @@ fn run_on(app: &mut VectorcraftApp, cmd: &str, mut p: Value, stories: bool) -> R
                 p["end"] = json!(b);
             }
         }
-    } else if stories {
+    } else {
         super::character::target_selected_stories(app, &mut p);
     }
     app.run(cmd, p)
@@ -260,7 +254,7 @@ pub(crate) fn shared_single_word_justify(app: &VectorcraftApp) -> Option<SingleW
 }
 
 /// A paragraph attribute shared by every paragraph in scope, or `None` when they differ.
-pub(crate) fn shared_para<T: PartialEq + Copy>(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> T) -> Option<T> {
+pub(crate) fn shared_para<T: PartialEq>(app: &VectorcraftApp, field: impl Fn(&ParaStyle) -> T) -> Option<T> {
     let mut acc = Shared::None;
     let mut any = false;
     visit_paragraphs(app, |p| {
@@ -405,7 +399,7 @@ fn control_bar_link_text(ui: &Ui) -> egui::RichText {
 /// Character controls: the Paragraph link, which opens the Paragraph panel in a popover under it,
 /// and the Align left, Align center and Align right buttons, `size` points square as the bar's others. `reserve` gives the room the controls
 /// after them keep, asked only when type is selected: short of room, the buttons are left out,
-/// then the link too. Returns whether the link shows.
+/// then the link too, each noted with [`crate::chrome::left_out`]. Returns whether the link shows.
 pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, reserve: impl FnOnce(&Ui) -> f32) -> bool {
     let Some((_, para)) = text_style(app) else { return false };
     let text = control_bar_link_text(ui);
@@ -413,6 +407,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, rese
     let room = ui.available_width() - reserve(ui);
     let link_room = link_width + ui.spacing().item_spacing.x;
     if room < link_room {
+        crate::chrome::left_out(ui);
         return false;
     }
     let link = ui.link(text).on_hover_text(tl!("Paragraph options"));
@@ -425,6 +420,8 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, size: f32, rese
         ui.spacing_mut().item_spacing.x = CONTROL_BAR_BUTTON_SPACING;
         first_alignment_buttons(app, ui, &para, size, CONTROL_BAR_ALIGNMENTS);
         ui.spacing_mut().item_spacing.x = spacing;
+    } else {
+        crate::chrome::left_out(ui);
     }
     true
 }
@@ -474,12 +471,13 @@ pub(crate) fn number_sample(style: vectorcraft_doc::text::NumberStyle, n: u32) -
 }
 
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`): the markers of the
-/// list paragraphs of the selected type, or of those the Type tool's selection touches, become
-/// characters of the text and the lists are turned off (`text.convertListToText`, which also moves
-/// the Type tool's anchor and caret past the characters inserted at or before them).
+/// list paragraphs the Paragraph panel acts on ([`run_on_paragraphs`]: with the Selection tool,
+/// every frame of the selected stories) become characters of the text and the lists are turned
+/// off (`text.convertListToText`, which also moves the Type tool's anchor and caret past the
+/// characters inserted at or before them).
 pub(crate) fn convert_list_to_text(app: &mut VectorcraftApp) -> Result<Value, String> {
     text_style(app).ok_or("select some type first")?;
-    run_on(app, "text.convertListToText", json!({}), false)
+    run_on_paragraphs(app, "text.convertListToText", json!({}))
 }
 
 /// The Bullets button and the arrow beside it (Paragraph panel). The button makes the paragraphs

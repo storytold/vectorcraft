@@ -1173,7 +1173,7 @@ fn a_file_whose_document_was_reverted_meanwhile_is_not_placed() {
     for kind in ["place", "drop", "queue"] {
         let (mut app, _) = saved_and_changed(app(true), &format!("reverted-{kind}"));
         let read = |app: &mut VectorcraftApp| match kind {
-            "queue" => start_queue(app, &json!({"paths": [tif]})),
+            "queue" => start_queue(app, &json!({"paths": [tif]}), false),
             _ => start(app, &json!({"path": tif}), kind == "drop"),
         };
         read(&mut app).unwrap();

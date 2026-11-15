@@ -54,6 +54,42 @@ fn click(app: &mut VectorcraftApp, label: &str) {
     frame(app, &ctx, vec![]);
 }
 
+/// The names and places of the buttons the task bar draws, from the accessibility tree: an
+/// icon-only button is named by its hover text.
+fn buttons(app: &mut VectorcraftApp) -> (egui::Context, Vec<(String, Rect)>) {
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    frame(app, &ctx, vec![]);
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 700.0));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(app, ui));
+    out.textures_delta.clear();
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let named = nodes
+        .iter()
+        .filter(|(_, n)| n.role() == egui::accesskit::Role::Button)
+        .filter_map(|(_, n)| {
+            let b = n.bounds()?;
+            Some((n.label()?.to_string(), Rect::from_min_max(Pos2::new(b.x0 as f32, b.y0 as f32), Pos2::new(b.x1 as f32, b.y1 as f32))))
+        })
+        .collect();
+    (ctx, named)
+}
+
+/// Click the task bar's button named `name` (its label, or an icon-only button's hover text).
+fn click_button(app: &mut VectorcraftApp, name: &str) {
+    let (ctx, named) = buttons(app);
+    let p = named.iter().find(|(n, _)| n == name).unwrap_or_else(|| panic!("no button named {name:?} in {named:?}")).1.center();
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, &ctx, vec![Event::PointerMoved(p)]);
+    frame(app, &ctx, vec![press(true)]);
+    frame(app, &ctx, vec![press(false)]);
+    frame(app, &ctx, vec![]);
+}
+
+const TO_CORNER: &str = "Convert Selected Anchor Points to Corner";
+const TO_SMOOTH: &str = "Convert Selected Anchor Points to Smooth";
+
 fn select(app: &mut VectorcraftApp, ids: &[u64]) {
     app.run("select.set", json!({"ids": ids})).unwrap();
 }
@@ -293,27 +329,67 @@ fn direct_selection_of_a_whole_path_offers_its_anchor_actions() {
     click(&mut app, "Edit Path");
     assert_eq!(app.session.tool_id(), "directSelection");
     assert!(app.session.active().unwrap().selection.anchors.is_empty(), "the path is selected whole");
+    let (_, named) = buttons(&mut app);
+    let names: Vec<&str> = named.iter().map(|(n, _)| n.as_str()).collect();
+    for name in ["Connect", TO_CORNER, TO_SMOOTH, "Simplify", "Smooth", "Duplicate"] {
+        assert!(names.contains(&name), "{name}: {names:?}");
+    }
+    for name in ["Edit Path", "Offset Path", "Join", "Remove Anchor Points", "Cut Path"] {
+        assert!(!names.contains(&name), "{name}: {names:?}");
+    }
+    // The convert buttons show their icons alone: the bar draws no convert text, and one "Smooth".
     let (_, texts) = bar(&mut app);
-    for label in ["Connect", "Corner", "Smooth", "Simplify", "Duplicate"] {
-        assert!(has(&texts, label), "{label}: {texts:?}");
-    }
-    for label in ["Edit Path", "Offset Path", "Join", "Remove Anchor Points", "Cut Path"] {
-        assert!(!has(&texts, label), "{label}: {texts:?}");
-    }
-    // Smooth and Corner convert every anchor of the path, one undo step each.
-    click(&mut app, "Smooth");
+    assert!(!has(&texts, "Corner") && !texts.iter().any(|(t, _)| t.starts_with("Convert")), "{texts:?}");
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Smooth").count(), 1, "{texts:?}");
+    // The convert buttons convert every anchor of the path, one undo step each.
+    click_button(&mut app, TO_SMOOTH);
     let a = anchors(&app, line);
     assert_eq!(a[1].kind, vectorcraft_geom::AnchorKind::Smooth, "{a:?}");
     assert!(a[1].has_in() && a[1].has_out(), "{a:?}");
-    click(&mut app, "Corner");
+    click_button(&mut app, TO_CORNER);
     assert!(anchors(&app, line).iter().all(|a| !a.has_in() && !a.has_out()), "{:?}", anchors(&app, line));
     app.run("edit.undo", json!({})).unwrap();
     assert!(anchors(&app, line)[1].has_in(), "Corner undoes in one step");
     // Connect closes the open path; a closed one isn't offered it.
     click(&mut app, "Connect");
     assert!(matches!(kind(&app, line), NodeKind::Path { path, .. } if path.is_closed()));
-    let (_, texts) = bar(&mut app);
-    assert!(!has(&texts, "Connect") && has(&texts, "Corner"), "{texts:?}");
+    let (_, named) = buttons(&mut app);
+    assert!(!named.iter().any(|(n, _)| n == "Connect") && named.iter().any(|(n, _)| n == TO_CORNER), "{named:?}");
+}
+
+/// With the Direct Selection tool, the bar's Smooth smooths the path's curvature: it opens the
+/// Smooth slider, as Object › Path › Smooth… does, and changes nothing until the slider is
+/// confirmed (#6784). Simplify opens its slider in the same way.
+#[test]
+fn direct_selection_smooth_opens_the_smooth_slider() {
+    for (name, kind) in [("Smooth", crate::dialogs::smooth_slider::KIND), ("Simplify", crate::dialogs::simplify_slider::KIND)] {
+        let mut app = app();
+        // A jagged line of 40 anchor points, which Smooth changes at its opening level.
+        let anchors_in: Vec<_> = (0..40).map(|i| json!({"x": 50 + i * 5, "y": 150 + (i % 2) * 6})).collect();
+        let line = id(app.run("path.create", json!({"anchors": anchors_in})).unwrap());
+        app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
+        select(&mut app, &[line]);
+        let before = anchors(&app, line);
+        let undo = app.session.active().unwrap().history.undo.len();
+        click_button(&mut app, name);
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{name} opens its slider: {}", app.ui.status));
+        assert_eq!(d.kind, kind, "{name}");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "{name} adds no undo step before it is confirmed");
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(anchors(&app, line), before, "{name}: canceling leaves the path as it was");
+        if name != "Smooth" {
+            continue;
+        }
+        // Confirmed, the slider smooths the path as one undo step, which is not the anchor convert.
+        click_button(&mut app, name);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let history = &app.session.active().unwrap().history.undo;
+        assert_eq!(history.len(), undo + 1, "one undo step");
+        assert_ne!(history.last().unwrap().label, "Convert Anchor Points");
+        assert_ne!(anchors(&app, line), before, "Smooth changes the path's curvature");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(anchors(&app, line), before, "undo restores the path");
+    }
 }
 
 /// Anchors picked out with the Direct Selection tool keep the full set: Remove and Cut need them.
@@ -323,11 +399,12 @@ fn direct_selected_anchors_still_offer_remove_and_cut() {
     let line = id(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 150, "y": 80}, {"x": 250, "y": 200}]})).unwrap());
     app.run("tool.select", json!({"tool": "directSelection"})).unwrap();
     app.run("select.anchors", json!({"id": line, "anchors": [[0, 1]]})).unwrap();
-    let (_, texts) = bar(&mut app);
-    for label in ["Remove Anchor Points", "Connect", "Cut Path", "Corner", "Smooth"] {
-        assert!(has(&texts, label), "{label}: {texts:?}");
+    let (_, named) = buttons(&mut app);
+    let names: Vec<&str> = named.iter().map(|(n, _)| n.as_str()).collect();
+    for name in ["Remove Anchor Points", "Connect", "Cut Path", TO_CORNER, TO_SMOOTH] {
+        assert!(names.contains(&name), "{name}: {names:?}");
     }
-    assert!(!has(&texts, "Edit Path"), "{texts:?}");
+    assert!(!names.contains(&"Edit Path"), "{names:?}");
 }
 
 /// Click the task bar's button left of More Options (Lock, or a basic shape's Shape Properties),

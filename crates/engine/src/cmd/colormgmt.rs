@@ -9,7 +9,8 @@
 //! ([`use_front_profiles`]): when they are assigned, when the working settings change, and when the
 //! document comes to the front or its assignment comes back (an open, a switch, a close, a revert,
 //! an undo or a rollback, [`Session::sync_front_profiles`]); the working spaces stay as Edit → Color
-//! Settings set them.
+//! Settings set them. A document drawn while another is in front draws through its own profiles
+//! ([`doc_cms`]).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -63,7 +64,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Assign Profile…",
             ["Edit"],
             None,
-            "{rgb?: profile|null, cmyk?: profile|null} tag the document with profiles (color numbers are kept; null: the working space). Colors then show and convert through the profiles assigned; the working spaces stay as edit.colorSettings set them → {rgb, cmyk}",
+            "{rgb?: profile|null, cmyk?: profile|null} tag the document with profiles (color numbers are kept; null: no profile, Don't Color Manage This Document, so colors show through the working space; the working space's name: that profile stays assigned when the working space changes). Colors then show and convert through the profiles assigned; the working spaces stay as edit.colorSettings set them → {rgb, cmyk}",
             has_doc,
             assign_profile
         ),
@@ -236,6 +237,9 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
     } else if proof_targets(&info.name) {
         // A new file of the CMYK profile View → Proof Setup targets: redraw.
         touch_all(s);
+    } else {
+        // Documents behind the front one draw through their own profiles: those assigned it redraw.
+        touch_assigned(s, &info.name);
     }
     Ok(json!({"name": info.name, "kind": info.kind, "remembered": remembered}))
 }
@@ -266,7 +270,19 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     if proof_targets(&info.name) {
         touch_all(s);
     }
+    // Documents behind the front one draw through their own profiles: those assigned it redraw.
+    touch_assigned(s, &info.name);
     Ok(json!({"removed": info.name}))
+}
+
+/// Redraw the open documents assigned the profile `name`.
+fn touch_assigned(s: &mut Session, name: &str) {
+    for d in &mut s.docs {
+        let (rgb, cmyk) = doc_profiles(&d.doc);
+        if [rgb, cmyk].iter().any(|n| n.as_deref() == Some(name)) {
+            d.revision += 1;
+        }
+    }
 }
 
 /// Whether View → Proof Setup targets the CMYK profile `name`.
@@ -283,6 +299,14 @@ fn load_profile(_: &mut Session, _: &Value) -> Result<Value> {
 pub fn doc_profiles(d: &vectorcraft_doc::Document) -> (Option<String>, Option<String>) {
     let get = |n: &Option<String>| n.as_deref().map(|n| cms::canonical_name(n).to_string());
     (get(&d.color_profiles.rgb), get(&d.color_profiles.cmyk))
+}
+
+/// The color-management context the document draws through: the working settings with its
+/// assigned profiles in place of the working spaces, whether or not it is in front
+/// ([`cms::for_document`]).
+pub fn doc_cms(d: &vectorcraft_doc::Document) -> Arc<cms::Cms> {
+    let (rgb, cmyk) = doc_profiles(d);
+    cms::for_document(rgb.as_deref(), cmyk.as_deref())
 }
 
 fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
@@ -662,8 +686,15 @@ fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color
         }
     }
     let styles = &mut g.label_styles;
-    for st in [&mut styles.values, &mut styles.categories, &mut styles.legend].into_iter().flatten() {
-        map_paint_colors(&mut st.fill, f);
+    // A legend fill of the labels' own stays theirs when `f` makes it black. The default black legend fill stays black,
+    // so the labels on dark pie wedges are still drawn white.
+    styles.mark_own_legend_fill();
+    let own = styles.legend_fill_is_own();
+    for (st, fill) in [(&mut styles.values, true), (&mut styles.categories, true), (&mut styles.legend, own)] {
+        let Some(st) = st else { continue };
+        if fill {
+            map_paint_colors(&mut st.fill, f);
+        }
         map_paint_colors(&mut st.stroke, f);
     }
     for r in [&mut styles.values_rows, &mut styles.categories_rows, &mut styles.legend_rows].into_iter().flatten() {

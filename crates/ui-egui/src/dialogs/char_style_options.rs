@@ -26,9 +26,10 @@ const NUMBERS: &[&str] = &["size", "leading", "kerning", "tracking"];
 /// The on, off or unset checkboxes.
 const SWITCHES: &[&str] = &["underline", "strikethrough", "standardVerticalRoman"];
 /// The attributes of Advanced Character Formats, in the order the section shows them.
-const ADVANCED: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "akiLeft", "akiRight", "language"];
+const ADVANCED: &[&str] =
+    &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "akiLeft", "akiRight", "tsume", "language"];
 /// The number fields of Advanced Character Formats.
-const ADVANCED_NUMBERS: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "akiLeft", "akiRight"];
+const ADVANCED_NUMBERS: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "akiLeft", "akiRight", "tsume"];
 /// The Insert Aki Left and Right fields, which take the Character panel's presets and stop at
 /// [`vectorcraft_doc::text::MAX_AKI`].
 const AKI: [&str; 2] = ["akiLeft", "akiRight"];
@@ -47,6 +48,8 @@ const OT_SWITCHES: &[(&str, &str)] = &[
     ("ot_titl", "titl"),
     ("ot_ordn", "ordn"),
     ("ot_frac", "frac"),
+    ("ot_hkna", "hkna"),
+    ("ot_ital", "ital"),
 ];
 /// The feature tags the Figure menu sets.
 const FIGURE_TAGS: [&str; 4] = ["tnum", "onum", "pnum", "lnum"];
@@ -55,8 +58,21 @@ const FIGURE_VALUES: [&str; 5] = ["default", "tabularLining", "proportionalLinin
 /// The values of the Position field, in the order of the OpenType panel's Position menu.
 const POSITION_VALUES: [&str; 5] = ["default", "superscript", "subscript", "numerator", "denominator"];
 /// The fields of OpenType Features.
-const OT_FIELDS: &[&str] =
-    &["ot_figure", "ot_position", "ot_liga", "ot_calt", "ot_dlig", "ot_swsh", "ot_salt", "ot_titl", "ot_ordn", "ot_frac", "ot_sets"];
+const OT_FIELDS: &[&str] = &[
+    "ot_figure",
+    "ot_position",
+    "ot_liga",
+    "ot_calt",
+    "ot_dlig",
+    "ot_swsh",
+    "ot_salt",
+    "ot_titl",
+    "ot_ordn",
+    "ot_frac",
+    "ot_hkna",
+    "ot_ital",
+    "ot_sets",
+];
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Character Style Options").into(),
@@ -86,6 +102,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "rotation",
             "akiLeft",
             "akiRight",
+            "tsume",
             "language",
             "fill",
             "fill_tint",
@@ -104,6 +121,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "ot_titl",
             "ot_ordn",
             "ot_frac",
+            "ot_hkna",
+            "ot_ital",
             "ot_sets",
             "section",
         ]
@@ -275,6 +294,7 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
         "rotation" => tl!("Character Rotation"),
         "akiLeft" => tl!("Insert Aki Left"),
         "akiRight" => tl!("Insert Aki Right"),
+        "tsume" => tl!("Tsume"),
         "fill_tint" => tl!("Fill Tint"),
         "stroke_tint" => tl!("Stroke Tint"),
         "stroke_width" => tl!("Weight"),
@@ -322,6 +342,8 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
             // Insert Aki stops at 0 and at the largest value the style takes, as the Character
             // panel's fields do.
             let n = if AKI.contains(&key) { n.clamp(0.0, vectorcraft_doc::text::MAX_AKI) } else { n };
+            // Tsume stops at 0% and 100% the same way.
+            let n = if key == "tsume" { n.clamp(0.0, vectorcraft_doc::text::MAX_TSUME) } else { n };
             Ok(Some(json!(n)))
         }
     }
@@ -600,7 +622,7 @@ pub(crate) fn reset_basic(d: &mut Dialog) {
     }
 }
 
-/// Reset Panel in Advanced Character Formats: its nine attributes become unset.
+/// Reset Panel in Advanced Character Formats: its ten attributes become unset.
 pub(crate) fn reset_advanced(d: &mut Dialog) {
     d.fields.insert("__resetAdvanced".into(), json!(true));
     for key in ADVANCED_NUMBERS {
@@ -755,8 +777,8 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 /// Advanced Character Formats: Horizontal Scale, Vertical Scale, Baseline Shift, the Tate-chu-yoko
-/// Up/Down and Left/Right, Character Rotation, Insert Aki Left and Right (with the Character
-/// panel's presets) and Language, each empty (unset) or set.
+/// Up/Down and Left/Right, Character Rotation, Insert Aki Left and Right and Tsume (with the
+/// Character panel's presets) and Language, each empty (unset) or set.
 pub(crate) fn advanced_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("character-style-advanced").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         for (key, caption, unit) in [
@@ -787,6 +809,17 @@ pub(crate) fn advanced_body(ui: &mut egui::Ui, d: &mut Dialog) {
             }
             ui.end_row();
         }
+        let presets: Vec<String> = crate::panels::character::TSUME_PRESETS.iter().map(f64::to_string).collect();
+        let presets: Vec<&str> = presets.iter().map(String::as_str).collect();
+        let row = ui.label(tl!("Tsume"));
+        let value = if d.fields.get("tsume").is_none_or(Value::is_null) { String::new() } else { d.str("tsume") };
+        ui.horizontal(|ui| {
+            if let Some(v) = ui.label_inputs_by(row.id, |ui| crate::widgets::text_presets(ui, (KIND, "tsume"), &value, &presets, 160.0)) {
+                d.fields.insert("tsume".into(), json!(v));
+            }
+            ui.label("%");
+        });
+        ui.end_row();
         let row = ui.label(tl!("Language:"));
         let names: Vec<&str> = std::iter::once(" ").chain(vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, _, _)| *name)).collect();
         let current = d.fields.get("language").and_then(Value::as_str).unwrap_or("").to_string();
@@ -910,6 +943,8 @@ pub(crate) fn opentype_body(ui: &mut egui::Ui, d: &mut Dialog) {
             ("ot_titl", tl!("Titling Alternates")),
             ("ot_ordn", tl!("Ordinals")),
             ("ot_frac", tl!("Fractions")),
+            ("ot_hkna", tl!("H or V Style")),
+            ("ot_ital", tl!("Roman Italics")),
         ] {
             switch(ui, d, key, caption, true);
         }
@@ -1847,6 +1882,50 @@ mod tests {
         assert!(t.runs.iter().all(|r| (r.style.aki_left, r.style.aki_right) == (250.0, 1000.0)));
     }
 
+    /// Tsume in Advanced Character Formats: empty is unset, an explicit 0 stays set, a typed value
+    /// stops at 0 and 100, Reset Panel unsets it, and the field is drawn and commits to the style
+    /// and the text set in it.
+    #[test]
+    fn tsume_field_shows_sets_resets_and_commits() {
+        let d = dialog_for(json!({"size": 12.0}));
+        assert_eq!(d.fields["tsume"], json!(""));
+        let mut d = dialog_for(json!({"tsume": 50.0}));
+        assert_eq!(d.fields["tsume"], json!(50.0));
+        for (typed, kept) in [("0", 0.0), ("25.5", 25.5), ("150", 100.0), ("-5", 0.0)] {
+            d.fields.insert("tsume".into(), json!(typed));
+            assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tsume": kept})), "{typed}");
+        }
+        d.fields.insert("tsume".into(), json!(""));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({})));
+        d.fields.insert("tsume".into(), json!("tight"));
+        assert_eq!(edited_attrs(&d).unwrap_err(), "Tsume must be a number");
+        let mut d = dialog_for(json!({"tsume": 50.0, "size": 12.0}));
+        d.fields.insert("section".into(), json!("advanced"));
+        reset_section(&mut d);
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0})));
+
+        let mut app = app();
+        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
+        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
+        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+        open(&mut app, "Body").unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 900.0));
+        let mut d = app.ui.dialog.clone().unwrap();
+        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| advanced_body(ui, &mut d));
+        let texts = texts_of(&out);
+        out.textures_delta.clear();
+        assert!(texts.iter().any(|(text, _)| text == "Tsume"), "Tsume is drawn: {texts:?}");
+        app.ui.dialog.as_mut().unwrap().fields.insert("tsume".into(), json!("75"));
+        super::super::confirm(&mut app).unwrap();
+        let state = app.session.doc().unwrap();
+        assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "tsume": 75.0})));
+        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert!(t.runs.iter().all(|r| r.style.tsume == 75.0));
+    }
+
     /// The negated tags of the twenty stylistic sets: an explicit empty Stylistic Sets choice.
     fn no_sets() -> Vec<String> {
         vectorcraft_text::EXTRA_FEATURES[..20].iter().map(|s| format!("-{s}")).collect()
@@ -1982,6 +2061,23 @@ mod tests {
         assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["frac"]));
     }
 
+    /// H or V Style and Roman Italics are on, off or unset switches of OpenType Features: they show
+    /// the style's `hkna` and `ital` tags, a changed switch replaces its tag and keeps the others, an
+    /// unset one removes it, and a style without them keeps none.
+    #[test]
+    fn kana_style_and_roman_italics_are_opentype_switches() {
+        let mut d = dialog_for(json!({"features": ["hkna", "-ital", "dlig"]}));
+        assert_eq!((&d.fields["ot_hkna"], &d.fields["ot_ital"]), (&json!(true), &json!(false)));
+        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["hkna", "-ital", "dlig"]), "untouched");
+        d.fields.insert("ot_ital".into(), json!(true));
+        d.fields.insert("ot_hkna".into(), Value::Null);
+        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["dlig", "ital"]));
+        let mut d = dialog_for(json!({}));
+        assert!(d.fields["ot_hkna"].is_null() && d.fields["ot_ital"].is_null());
+        d.fields.insert("ot_hkna".into(), json!(true));
+        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["hkna"]));
+    }
+
     #[test]
     fn color_and_opentype_sections_show_their_controls() {
         let mut d = dialog_for(json!({}));
@@ -2006,6 +2102,8 @@ mod tests {
             "Titling Alternates",
             "Ordinals",
             "Fractions",
+            "H or V Style",
+            "Roman Italics",
             "Stylistic Sets",
             "ss01",
             "ss20",

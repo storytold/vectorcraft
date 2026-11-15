@@ -478,6 +478,31 @@ fn aligned_text_on_path_anchors_within_its_span() {
     }
 }
 
+/// Type on an open path that starts before the path is written with a negative `startOffset` and
+/// reads back starting there, with the same characters drawn.
+#[test]
+fn text_on_an_open_path_starting_before_it_round_trips() {
+    let mut line = vectorcraft_geom::BezPath::new();
+    line.move_to((0.0, 100.0));
+    line.line_to((200.0, 100.0));
+    let mut d = Document::new(200.0, 200.0);
+    let mut t = TextObject::point(Point::ZERO, "Before", CharStyle { size: 14.0, ..CharStyle::default() });
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -0.1, end: None };
+    let shown = |t: &TextObject| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| !g.outline.elements().is_empty()).collect::<Vec<_>>()
+    };
+    let before = shown(&t);
+    assert!(before.contains(&true) && before.contains(&false), "{before:?}");
+    let id = d.alloc_id();
+    let svg = export(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &ExportOptions::default());
+    assert!(svg.contains("startOffset=\"-10%\""), "{svg}");
+    let r = import(&svg).unwrap();
+    let NodeKind::Text(t) = &art(&r)[0].kind else { panic!() };
+    let TextKind::OnPath { start, .. } = &t.kind else { panic!("not type on a path: {:?}", t.kind) };
+    assert!((start + 0.1).abs() < 1e-6, "start {start}");
+    assert_eq!(shown(t), before);
+}
+
 /// An end bracket, Align to Path or Spacing, which `<textPath>` can't express, keep their look as
 /// outlines (#429).
 #[test]
