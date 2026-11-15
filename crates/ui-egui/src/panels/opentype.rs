@@ -119,30 +119,41 @@ fn shown_figure(app: &VectorcraftApp) -> Option<usize> {
 }
 
 /// Whether `flag` is on for every character a toggle changes (`Some(true)`), for none of them
-/// (`Some(false)`), or only for some (`None`). At a Type tool caret the command styles all the
-/// text ([`run_features`]), so every character of the text counts, as in [`edit`].
+/// (`Some(false)`), or only for some (`None`). At a Type tool caret, and after Select All in a
+/// threaded story, the command styles all the text ([`run_features`]), so every character of it
+/// counts, as in [`edit`].
 fn shown_flag(app: &VectorcraftApp, flag: Flag) -> Option<bool> {
     let on = |s: &CharStyle| flag.get(&OtFeatures::from_tags(s.features.iter().map(String::as_str)));
-    if let Some(runs) = caret_text(app).map(|t| &t.runs)
-        && let Some(first) = runs.first()
-    {
+    if let Some(mut runs) = whole_text_runs(app) {
+        // A run with no text, such as an empty frame's, counts only when no run has text.
+        if runs.iter().any(|r| !r.text.is_empty()) {
+            runs.retain(|r| !r.text.is_empty());
+        }
+        let Some(first) = runs.first() else {
+            return shared(app, on);
+        };
         let v = on(&first.style);
         return runs.iter().all(|r| on(&r.style) == v).then_some(v);
     }
     shared(app, on)
 }
 
-/// The text object of the Type tool's caret (an empty selection), whose text the panel's
-/// commands style as a whole.
-fn caret_text(app: &VectorcraftApp) -> Option<&vectorcraft_doc::TextObject> {
+/// The runs the panel's commands style as a whole while the Type tool edits text: those of every
+/// frame of the story after Select All in threaded text, else at a caret (an empty selection)
+/// those of the text object. `None` for a range in one text object, or with no Type tool editing.
+fn whole_text_runs(app: &VectorcraftApp) -> Option<Vec<&vectorcraft_doc::TextRun>> {
     let (id, a, b) = text_editing(app)?;
-    if b > a {
-        return None;
-    }
-    match &app.session.active()?.doc.node(id)?.kind {
-        NodeKind::Text(t) => Some(t),
+    let st = app.session.active()?;
+    let ids = match super::character::text_story(app) {
+        Some(story) => story,
+        None if b <= a => vec![id],
+        None => return None,
+    };
+    let runs = ids.into_iter().filter_map(|id| match &st.doc.node(id)?.kind {
+        NodeKind::Text(t) => Some(t.runs.iter()),
         _ => None,
-    }
+    });
+    Some(runs.flatten().collect())
 }
 
 /// The Figure menu's text for entry `shown`: Mixed when the characters differ.
@@ -172,8 +183,9 @@ impl Change {
 }
 
 /// Make `change` to the features of each character the panel acts on, from the character's own
-/// features (`featureChanges`), unless it changes none of them. At a Type tool caret the
-/// command styles all the text, so every character of the text is checked.
+/// features (`featureChanges`), unless it changes none of them. At a Type tool caret, and after
+/// Select All in a threaded story, the command styles all the text, so every character of it is
+/// checked ([`whole_text_runs`]).
 fn edit(app: &mut VectorcraftApp, change: Change) {
     let same = |s: &CharStyle| {
         let before = OtFeatures::from_tags(s.features.iter().map(String::as_str));
@@ -181,8 +193,8 @@ fn edit(app: &mut VectorcraftApp, change: Change) {
         change.apply(&mut after);
         after == before
     };
-    let unchanged = match caret_text(app) {
-        Some(t) => Some(t.runs.iter().all(|r| same(&r.style))),
+    let unchanged = match whole_text_runs(app) {
+        Some(runs) => Some(runs.iter().all(|r| same(&r.style))),
         None => shared(app, same),
     };
     if unchanged != Some(true) {
@@ -833,6 +845,47 @@ mod tests {
             super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
             let runs = run_features(&mut app, &id, 8);
             assert!(runs.iter().all(|(_, f)| f.as_array().is_some_and(|f| f.iter().any(|x| x == tag))), "{label}: {runs:?}");
+        }
+    }
+
+    /// After Select All in a threaded story whose edited frame is empty, the item reads the text
+    /// of every frame the command styles: with the story's text set with H or V Style or Roman
+    /// Italics it shows checked, and choosing it turns the feature off for that text.
+    #[test]
+    fn select_all_from_an_empty_frame_reads_the_whole_story() {
+        for (label, tag) in [("H or V Style", "hkna"), ("Roman Italics", "ital")] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.prefs.show_east_asian_options = true;
+            app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+            let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+            let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+            let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+            let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+            app.run("select.set", json!({"ids": [a, b]})).unwrap();
+            app.run("text.thread.create", json!({})).unwrap();
+            app.session.select_tool("type", Default::default()).unwrap();
+            app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+            app.run("select.all", json!({})).unwrap();
+            // A frame threaded in before the first takes the whole text, leaving the edited frame empty.
+            let c = app.run("text.thread.add", json!({"from": a, "before": true, "rect": [700, 10, 400, 600]})).unwrap()["id"].as_u64().unwrap();
+            app.run("text.setRangeStyle", json!({"id": c, "features": [tag]})).unwrap();
+            assert_eq!(text_editing(&app).map(|(id, a, b)| (id.0, a, b)), Some((a, 0, 0)), "{label}");
+            assert_eq!(super::super::character::text_story(&app).map(|frames| frames.len()), Some(3), "{label}");
+            // The empty frames' runs, which hold no character, without the feature.
+            for id in [a, b] {
+                let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+                let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("no frame {id}") };
+                for r in &mut t.runs {
+                    r.style.features.clear();
+                }
+            }
+            let ctx = egui::Context::default();
+            let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+            let Some((text, at)) = texts.into_iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label) else { panic!("{label} missing") };
+            assert!(text.starts_with('✓'), "{label}: {text:?}");
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            let runs = run_features(&mut app, &json!(c), story.len());
+            assert!(runs.iter().all(|(_, f)| !f.as_array().is_some_and(|f| f.iter().any(|x| x == tag))), "{label}: {runs:?}");
         }
     }
 }
