@@ -13,6 +13,7 @@ use vectorcraft_doc::NodeKind;
 
 use super::{DialogSpec, form, run_and_close};
 use crate::state::Dialog;
+use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
 /// The dialog kind of Create Object Mosaic.
@@ -77,29 +78,51 @@ fn keeps_width(d: &Dialog) -> bool {
     d.str("constrain") != "height"
 }
 
+/// With Constrain Ratio on, the size field that follows the kept side.
+fn follower(d: &Dialog) -> Option<&'static str> {
+    d.bool("lock").then(|| if keeps_width(d) { "height" } else { "width" })
+}
+
+/// The new sizes the command takes, in points or percentages (`object.createObjectMosaic`).
+const SIZE_RANGE: std::ops::RangeInclusive<f64> = 0.1..=1.0e6;
+
 /// With Constrain Ratio on, the side that follows set from the side that leads, in the image's
 /// proportions.
 fn follow_ratio(d: &mut Dialog) {
-    if !d.bool("lock") {
-        return;
-    }
-    let (iw, ih) = image(d);
-    let pct = d.bool("percentages");
-    if keeps_width(d) {
-        let w = d.f64("width", 0.0);
-        d.fields.insert("height".into(), json!(if pct { w } else { w * ih / iw }));
-    } else {
-        let h = d.f64("height", 0.0);
-        d.fields.insert("width".into(), json!(if pct { h } else { h * iw / ih }));
+    if let Some((key, v)) = derived(d) {
+        d.fields.insert(key.into(), json!(v));
     }
 }
 
+/// With Constrain Ratio on, the side that follows and the size it gets from the side that leads.
+fn derived(d: &Dialog) -> Option<(&'static str, f64)> {
+    let key = follower(d)?;
+    let (iw, ih) = image(d);
+    let pct = d.bool("percentages");
+    Some(if key == "height" {
+        let w = d.f64("width", 0.0);
+        (key, if pct { w } else { w * ih / iw })
+    } else {
+        let h = d.f64("height", 0.0);
+        (key, if pct { h } else { h * iw / ih })
+    })
+}
+
 /// Resize Using Percentages turned on or off: the new size shown the other way, so it stays the
-/// same size.
+/// same size. When a size the command takes (all but the side Constrain Ratio sets) falls outside
+/// what the command accepts the other way, the fields and the mode stay as they are and the dialog
+/// shows the limit.
 fn switch_percentages(d: &mut Dialog, on: bool) {
     let (iw, ih) = image(d);
     let (w, h) = (d.f64("width", iw), d.f64("height", ih));
     let (w, h) = if on { (w / iw * 100.0, h / ih * 100.0) } else { (iw * w / 100.0, ih * h / 100.0) };
+    let skip = follower(d);
+    if let Some((key, v)) = [("width", w), ("height", h)].into_iter().find(|(k, v)| skip != Some(*k) && !SIZE_RANGE.contains(v)) {
+        let why = format!("`{key}` must be between {} and {} (got {v})", SIZE_RANGE.start(), SIZE_RANGE.end());
+        d.fields.insert(form::REFUSED.into(), json!(why));
+        return;
+    }
+    d.fields.remove(form::REFUSED);
     d.fields.insert("width".into(), json!(w));
     d.fields.insert("height".into(), json!(h));
     d.fields.insert("percentages".into(), json!(on));
@@ -125,6 +148,7 @@ fn use_ratio(app: &VectorcraftApp, d: &mut Dialog) {
     p["useRatio"] = json!(if keeps_width(d) { "width" } else { "height" });
     match vectorcraft_engine::cmd::mosaic_counts(&app.session, &p) {
         Ok((cols, rows)) => {
+            d.fields.remove(form::REFUSED);
             d.fields.insert("columns".into(), json!(cols));
             d.fields.insert("rows".into(), json!(rows));
         }
@@ -149,15 +173,24 @@ fn switch(d: &Dialog, key: &str) -> Value {
     d.fields.get(key).cloned().unwrap_or(json!(false))
 }
 
-/// `object.createObjectMosaic` parameters from the fields.
+/// `object.createObjectMosaic` parameters from the fields. With Constrain Ratio on, the side it
+/// sets is left out while it holds the size Constrain Ratio gives it: the command works it out from
+/// the kept side and grows both in proportion to its 0.1 pt minimum. Any other value set on that
+/// side is passed on for the command to check.
 fn params(d: &Dialog) -> Value {
-    json!({
+    let mut p = json!({
         "columns": number(d, "columns", 10.0), "rows": number(d, "rows", 10.0),
         "width": number(d, "width", 100.0), "height": number(d, "height", 100.0), "percentages": switch(d, "percentages"),
         "constrain": if d.bool("lock") { json!(if keeps_width(d) { "width" } else { "height" }) } else { Value::Null },
         "spacingX": number(d, "spacingX", 0.0), "spacingY": number(d, "spacingY", 0.0),
         "gray": switch(d, "gray"), "deleteRaster": switch(d, "deleteRaster"),
-    })
+    });
+    if let (Some((key, v)), Some(o)) = (derived(d), p.as_object_mut())
+        && o.get(key).and_then(Value::as_f64).is_some_and(|x| x == v)
+    {
+        o.remove(key);
+    }
+    p
 }
 
 /// A Width and a Height field for `keys`: lengths in `unit` of at least `least` points, or
@@ -187,7 +220,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         widgets::dim_name(ui, &unit.format(ih));
     });
     ui.add_space(4.0);
-    let follows = d.bool("lock").then(|| if keeps_width(d) { "height" } else { "width" });
+    let follows = follower(d);
     let pct = d.bool("percentages");
     widgets::label_row(ui, tl!("New Size:"), LABEL_W, |ui| pair(ui, d, ["width", "height"], unit, (pct, 0.1), follows));
     follow_ratio(d);
@@ -233,6 +266,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             form::check(ui, d, "deleteRaster", tl!("Delete Raster"));
         });
     });
+    if let Some(why) = d.fields.get(form::REFUSED).and_then(Value::as_str) {
+        ui.add_space(4.0);
+        ui.add(egui::Label::new(egui::RichText::new(why).color(Tokens::get(ui.ctx()).warning)).wrap());
+    }
     ui.add_space(6.0);
     if widgets::flat_button(ui, tl!("Use Ratio"), 96.0).clicked() {
         use_ratio(app, d);
@@ -389,6 +426,23 @@ mod tests {
         assert_eq!(mosaic(&app), Some((300.0, 150.0, 32)));
     }
 
+    /// With Constrain Ratio on, a kept width of 0.1 pt over a 100 × 50 pt image sets a height of
+    /// 0.05 pt, under the command's minimum: OK makes the 0.2 × 0.1 pt mosaic the command grows it to.
+    #[test]
+    fn a_constrained_size_under_the_minimum_grows_in_proportion() {
+        let mut app = app_with_image();
+        open(&mut app, &json!({})).unwrap();
+        let ctx = context();
+        frame(&mut app, &ctx);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("lock".into(), json!(true));
+        d.fields.insert("width".into(), json!(0.1));
+        frame(&mut app, &ctx);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("height", 0.0), 0.05, "height follows the width");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(mosaic(&app).map(|m| (m.0, m.1)), Some((0.2, 0.1)));
+    }
+
     /// A caller's params open the dialog with their values, and OK makes the mosaic they ask for.
     #[test]
     fn a_callers_params_open_the_dialog_with_their_values() {
@@ -435,6 +489,23 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(mosaic(&app).map(|m| (m.0, m.1)), Some((200.0, 100.0)));
         app.run("edit.undo", json!({})).unwrap();
+        // 0.1 × 0.1 pt of a 1000 × 500 pt image are 0.01% × 0.02%, under the command's 0.1%: the
+        // points stay, with the limit shown, and OK makes that size.
+        app.run("select.set", json!({"ids": [image_id(&app)]})).unwrap();
+        app.run("object.scale", json!({"sx": 1000, "sy": 1000})).unwrap();
+        open(&mut app, &json!({"width": 0.1, "height": 0.1})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        crate::dialogs::set_field(d, "percentages".into(), json!(true));
+        assert_eq!((d.f64("width", 0.0), d.f64("height", 0.0), d.bool("percentages")), (0.1, 0.1, false));
+        assert!(d.str(form::REFUSED).contains("`width` must be between 0.1"), "{}", d.str(form::REFUSED));
+        let ctx = context();
+        frame(&mut app, &ctx);
+        let texts = frame(&mut app, &ctx);
+        assert!(texts.iter().any(|t| t.contains("must be between")), "the limit is shown: {texts:?}");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(mosaic(&app).map(|m| (m.0, m.1)), Some((0.1, 0.1)));
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
         for (field, value) in [("percentages", json!("yes")), ("width", json!("abc")), ("gray", json!(1))] {
             app.run("select.set", json!({"ids": [image_id(&app)]})).unwrap();
             open(&mut app, &json!({})).unwrap();
@@ -442,6 +513,15 @@ mod tests {
             let e = crate::dialogs::confirm(&mut app).unwrap_err();
             assert!(e.contains(field), "{field}: {e}");
             assert_eq!(mosaic(&app), None, "{field}");
+        }
+        // With Constrain Ratio on, a value the command refuses, set on the side it sets, is refused too.
+        for value in [json!("abc"), json!(0)] {
+            app.run("select.set", json!({"ids": [image_id(&app)]})).unwrap();
+            open(&mut app, &json!({"constrain": "width"})).unwrap();
+            crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "height".into(), value.clone());
+            let e = crate::dialogs::confirm(&mut app).unwrap_err();
+            assert!(e.contains("height"), "{value}: {e}");
+            assert_eq!(mosaic(&app), None, "{value}");
         }
     }
 
