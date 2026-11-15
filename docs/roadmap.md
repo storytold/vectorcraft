@@ -208,7 +208,6 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-14 | minor | G12: Swatches item context menus implemented in list and thumbnail views, with clicked-item actions and reserved/missing-swatch guards. Harness tests added; execution and visual verification pending. Scores and estimates unchanged. |
 | 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
 | 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
 | 2026-11-15 | minor | G12: Swatches item menus validated in all five views: 39 focused tests passed, regression fails without the menu hooks, rendered list/thumbnail layouts inspected, and fresh local deep CodeRabbit review found zero issues. Full workspace CI passed on Linux/WSL on the merged branch (all 13 gates), including the test-helper correction for the upstream compile error tracked in #7727; native Windows full CI has two unchanged engine-test failures. Scores and estimates unchanged. |

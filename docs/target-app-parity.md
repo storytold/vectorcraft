@@ -61,7 +61,6 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-14 | minor | Swatches item context menus added in all list/thumbnail views, with clicked-item selection, Options/Duplicate/Delete and reserved/missing-swatch guards. Headless regressions added; execution and visual verification pending. Scores and estimates unchanged. |
 | 2026-11-14 | minor | G5: Weather Icons joins Basic Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons as a sixth built-in symbol library (Sun, Moon, Cloud, Rain, Thunder, Snow; original procedural vector symbols generated in code, no default 9-slice); area score and estimate unchanged. |
 | 2026-11-14 | minor | G5: Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
 | 2026-11-15 | minor | G12: Swatches item menus validated in all five views: 39 focused tests passed, regression fails without the menu hooks, rendered list/thumbnail layouts inspected, and fresh local deep CodeRabbit review found zero issues. Full workspace CI passed on Linux/WSL on the merged branch (all 13 gates), including the test-helper correction for the upstream compile error tracked in #7727; native Windows full CI has two unchanged engine-test failures. Scores and estimates unchanged. |
@@ -2506,7 +2505,6 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-14 | minor | G12: Swatches item context menus implemented in list and thumbnail views, with clicked-item actions and reserved/missing-swatch guards. Harness tests added; execution and visual verification pending. Scores and estimates unchanged. |
 | 2026-11-14 | minor | G5: Weather Icons joins Basic Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons as a sixth built-in symbol library (Sun, Moon, Cloud, Rain, Thunder, Snow; original procedural vector symbols generated in code, no default 9-slice); area score and estimate unchanged. |
 | 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
 | 2026-11-15 | minor | G12: Swatches item menus validated in all five views: 39 focused tests passed, regression fails without the menu hooks, rendered list/thumbnail layouts inspected, and fresh local deep CodeRabbit review found zero issues. Full workspace CI passed on Linux/WSL on the merged branch (all 13 gates), including the test-helper correction for the upstream compile error tracked in #7727; native Windows full CI has two unchanged engine-test failures. Scores and estimates unchanged. |
