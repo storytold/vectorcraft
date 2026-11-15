@@ -1077,7 +1077,10 @@ font-technology	Variable	Variables
 	Every (minutes)	Cada (minutos)
 	Every option is at its default.	Todas las opciones tienen su valor predeterminado.
 	Every option matches {base}.	Todas las opciones coinciden con {base}.
-	Every-line Composer	Composición de todas las líneas
+	Middle Eastern & South Asian Single-line Composer	Composición de una línea (Oriente Medio y Sur de Asia)
+	Middle Eastern & South Asian Every-line Composer	Composición de todas las líneas (Oriente Medio y Sur de Asia)
+	Standard Single-line Composer	Composición estándar de una línea
+	Standard Every-line Composer	Composición estándar de todas las líneas
 	Exact dash lengths	Longitudes exactas de guion
 	Exceptions (comma separated)	Excepciones (separadas por comas)
 	Exclude	Excluir
@@ -1402,6 +1405,14 @@ font-technology	Variable	Variables
 	Previous Artboard	Mesa de trabajo anterior
 	Next Artboard	Mesa de trabajo siguiente
 	Last Artboard	Última mesa de trabajo
+	Status Bar Show	Mostrar en la barra de estado
+	Artboard Name	Nombre de la mesa de trabajo
+	Current Tool	Herramienta actual
+	Date and Time	Fecha y hora
+	Number of Undos	Número de deshacer
+	Document Color Profile	Perfil de color del documento
+	Undos	Deshacer
+	Redos	Rehacer
 	Go To Link	Ir al vínculo
 	GPL palettes keep solid colours only, as RGB.	Las paletas GPL solo conservan colores sólidos, en RGB.
 	GPU Performance	Rendimiento de GPU
@@ -1421,6 +1432,8 @@ font-technology	Variable	Variables
 	Graph	Gráfico
 	Graph Data	Datos del gráfico
 	Graph Type	Tipo de gráfico
+	Graph Type…	Tipo de gráfico…
+	Graph Data…	Datos del gráfico…
 	Graph Options	Opciones de gráfico
 	Left Axis	Eje izquierdo
 	Right Axis	Eje derecho
@@ -1536,6 +1549,7 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Mostrar rueda de color continua
 	Show segmented color wheel	Mostrar rueda de color segmentada
 	Show color bars	Mostrar barras de color
+	Find the selected colors in the artwork	Buscar los colores seleccionados en la ilustración
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
 	Height:	Altura:
@@ -2714,6 +2728,8 @@ font-technology	Variable	Variables
 	Insert Aki Left	Insertar aki a la izquierda
 	Insert Aki Right	Insertar aki a la derecha
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajustar posición horizontal de los diacríticos
+	Adjust Vertical Diacritic Position	Ajustar posición vertical de los diacríticos
 	Character Direction	Dirección de caracteres
 	Digits	Dígitos
 	Arabic	Árabes
@@ -3453,7 +3469,6 @@ digits	Malayalam	Malayálam
 	Single Left Quotation Mark	Comilla simple de apertura
 	Single Quotes:	Comillas simples:
 	Single Right Quotation Mark	Comilla simple de cierre
-	Single-line Composer	Composición de una línea
 	Toggle Line Composer	Alternar composición de líneas
 	Sixth Space	Sexto de espacio
 	Size	Tamaño
@@ -4482,6 +4497,17 @@ axis	Both	Ambos
 @msg	`name` must be the name of a script engine	`name` debe ser el nombre de un motor de scripts
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor de scripts principal es nuevo en cada ejecución y nunca se conserva, por lo que no se puede descartar
 @msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
+@msg	`answers` must be a list of answers	`answers` debe ser una lista de respuestas
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tiene más de {MAX_ANSWERS} respuestas
+@msg	`answers` is larger than 1 MiB	`answers` ocupa más de 1 MiB
+@msg	must be an object with `kind` and `value`	debe ser un objeto con `kind` y `value`
+@msg	must have exactly `kind` and `value`	debe tener exactamente `kind` y `value`
+@msg	is an alert's answer, whose `value` must be "ok"	es la respuesta de un alert, cuyo `value` debe ser "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	es la respuesta de un confirm, cuyo `value` debe ser true o false
+@msg	is longer than 16 KiB	ocupa más de 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	es la respuesta de un prompt, cuyo `value` debe ser una cadena o null
+@msg	must have `kind` alert, confirm or prompt	debe tener `kind` alert, confirm o prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` solo es para una ejecución sin nadie a quien preguntar: en la aplicación, la persona responde cada cuadro de diálogo
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
 @msg	Copied the link info	Se copió la información del vínculo
@@ -5111,6 +5137,8 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panel desconocido `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` no tiene tamaños de visualización que alternar
+@msg	the panels are not shown	los paneles no se muestran
 @msg	panels can't be shown in Presentation Mode	los paneles no se pueden mostrar en el modo de presentación
 @msg	unknown preference `{key}`	preferencia desconocida `{key}`
 @msg	Preferences imported.	Preferencias importadas.
@@ -5486,6 +5514,7 @@ axis	Both	Ambos
 	Change Panel Layout	Cambiar distribución de paneles
 	Close Panel	Cerrar panel
 	Collapse Panel Group	Contraer grupo de paneles
+	Cycle Display Sizes	Alternar tamaños de visualización
 	Move Panel	Mover panel
 	Group with	Agrupar con
 	Resize panels	Cambiar tamaño de los paneles
@@ -5531,6 +5560,8 @@ axis	Both	Ambos
 	Step up or down	Subir o bajar un paso
 	Drag values or labels. Double-click a value to type.	Arrastra los valores o las etiquetas. Haz doble clic en un valor para escribir.
 	Drag rings to rotate. Shift snaps to 15°.	Arrastra los anillos para girar. Shift ajusta a pasos de 15°.
+	Track cube	Cubo de rotación
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Arrastra una cara, una arista o el anillo para girar. Shift gira sobre un eje de la pantalla.
 	Drag the light, or its rings. Shift snaps to 15°.	Arrastra la luz o sus anillos. Shift ajusta a pasos de 15°.
 lighting	Light	Luz
 	Keep visible surfaces only when expanding	Conservar solo superficies visibles al expandir
@@ -6220,6 +6251,7 @@ mark-style	Japanese	Japonesas
 	Export Data Sets…	Exportar conjuntos de datos…
 	Load Variable Library…	Cargar biblioteca de variables…
 	Save Variable Library…	Guardar biblioteca de variables…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Importar» lee un archivo de origen de datos con extensión .csv, .tsv, .txt o .xml
 @msg	a variable library holds text variables, and the document has none	una biblioteca de variables contiene variables de texto y el documento no tiene ninguna
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no se puede guardar en una biblioteca de variables: cámbiele el nombre para que empiece por una letra o `_`, sin espacios ni símbolos distintos de `-`, `_` y `.`
 @msg	{k} has control characters	{k} contiene caracteres de control
@@ -6497,6 +6529,7 @@ axis	Y Axis	Eje Y
 @msg	{what} points outside memory	{what} apunta fuera de la memoria
 @msg	`angle` must be a number	`angle` debe ser un número
 @msg	`aspect` must be from 0.01 to 100	`aspect` debe estar entre 0.01 y 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` debe ser [a, b, c, d], cada uno entre -1000 y 1000, con a·d - b·c a al menos 0.001 de 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` debe ser "butt", "round" o "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` debe ser "nonzero" o "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` debe ser una dirección https:// de {MAX_HELP_URL} bytes como máximo
@@ -7613,6 +7646,19 @@ breakText	Glyphs	Glifos
 	Not Aligned to Pixel Grid	No alineado con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`
+@msg	side is left or right, not `{v}`	side es left o right, no `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order es un número entero de 0 a {others}, no `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (el nombre de una barra de herramientas) debe ser una cadena de texto
+@msg	no toolbar named `{name}`	no hay ninguna barra de herramientas llamada `{name}`
+@msg	toolbar name can't be empty	el nombre de la barra de herramientas no puede estar vacío
+@msg	a toolbar name has at most {MAX_NAME} characters	el nombre de una barra de herramientas tiene como máximo {MAX_NAME} caracteres
+@msg	there is already a toolbar named `{name}`	ya hay una barra de herramientas llamada `{name}`
+@msg	there is already a toolbar named `{to}`	ya hay una barra de herramientas llamada `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	un espacio de trabajo guarda como máximo {MAX} barras de herramientas
+@msg	name (a toolbar's name) must be a string	name (el nombre de una barra de herramientas) debe ser una cadena de texto
+@msg	name (a toolbar's name) is required	Se requiere name (el nombre de una barra de herramientas)
+@msg	to (the new name) is required	Se requiere to (el nuevo nombre)
+@msg	name must be a toolbar's name	name debe ser el nombre de una barra de herramientas
 	Ignore All	Omitir todo
 	Add to Dictionary	Añadir al diccionario
 	No Suggestions	No hay sugerencias
@@ -7709,3 +7755,21 @@ breakText	Glyphs	Glifos
 	Nest Shapes…	Anidar formas…
 	Nest Shapes	Anidar formas
 	Roll	Rollo
+	Packaging Tools	Herramientas de embalaje
+	Fold Lines	Líneas de plegado
+	Make Cut Line	Convertir en línea de corte
+	Make Crease Line	Convertir en línea de hendido
+	Make Partial Cut Line	Convertir en línea de corte parcial
+	Make Perforation Line	Convertir en línea de perforación
+	Make Fold Line	Convertir en línea de plegado
+	Role Swatches…	Muestras de los tipos de línea…
+	Role Swatches	Muestras de los tipos de línea
+	Role	Tipo de línea
+	Cut Line	Línea de corte
+	Crease Line	Línea de hendido
+	Partial Cut Line	Línea de corte parcial
+	Perforation Line	Línea de perforación
+	No objects are selected.	No hay objetos seleccionados.
+	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
+	Remove Fold Line Role	Quitar tipo de línea
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
