@@ -5535,11 +5535,28 @@ moves that point alone as the focal point, with or without Shift (Shift keeps th
 focal points stay highlighted where it left them; Escape during a drag puts the path back and keeps them, and
 switching to another tool clears them.
 
+`path.eraseRegion` (the Eraser) takes a variation mode for each of its tip's values, as the variation menus of
+Eraser Tool Options set them ([Erase paths using the Eraser
+tool](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/erase-paths-using-eraser-tool.html)):
+`angleMode` with `angleVariation` (degrees, 0 to 180), `roundnessMode` with `roundnessVariation` (percent, 0 to 100)
+and `sizeMode` with `sizeVariation` (points, 0 or more), each `"fixed"` (the default), `"random"`, `"pressure"`,
+`"tilt"`, `"bearing"` or `"rotation"`. A value that varies takes up to its variation either way. Random draws one
+value for the drag. Pressure goes from the value less the variation where the pen presses lightest to the value plus
+it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright. Bearing and
+Rotation go from less at −180° to more at 180° of the way the pen leans or its barrel turns. The tip at each point of
+the drag takes what the pen read there (the points' pressure, tilt and rotation, as `path.freehand` takes them); a
+drag without that reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way
+Tilt, Bearing and Rotation run, and the value itself without a reading are VectorCraft's own rules.
+The command refuses another mode, and a variation below 0 or past its range, and erases nothing. In the desktop app
+the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases.
+`tool.setOption {tool: "eraser"}` takes the same keys.
+
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
 naming the key; the document does not change and no undo step is recorded: `t`, `dx` and `dy` in
 `path.reshapeSegment` and `object.blend.spine.reshapeSegment`; `x`, `y` and `t` in `path.curvatureEdit`; `x` and `y`
 in `path.convertAnchor`; `t` in `path.insertAnchor`; `fidelity` and the `within` of `redraw` in `path.freehand` (and in
-`brush.freehand`, which runs it); `size`, `sizeVariation`, `angle` and `roundness` in `path.eraseRegion`;
+`brush.freehand`, which runs it); `size`, `sizeVariation`, `angle`, `angleVariation`, `roundness` and
+`roundnessVariation` in `path.eraseRegion`;
 `size`, `sizeVariation`, `angle`, `roundness` and `fidelity` in `path.blob`; `width` in `path.eraseSegments`;
 `radius` and `fidelity` in `path.smoothRegion`; `tolerance` in `path.joinScrub`; `dx` and `dy` in `path.moveAnchors`;
 and `dx`, `dy`, `tol` and `radius` in `path.reshape`. A null is read as a key left out. `path.convertAnchor` refuses
