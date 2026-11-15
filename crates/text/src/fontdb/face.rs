@@ -98,9 +98,6 @@ pub(super) const MAX_AXES: usize = 64;
 
 pub(super) const MAX_INSTANCES: usize = 512;
 
-/// The most shaping plans a face keeps ([`FontFace::shape_plan`]); past it the oldest is dropped.
-const MAX_PLANS: usize = 32;
-
 /// One axis of a variable font's design space, as its `fvar` table lists it: the tag (`wght`), its
 /// name in the font's name table (`Weight`; the tag when it has none) and its range and default,
 /// in the axis's own units.
@@ -188,7 +185,7 @@ pub struct FontFace {
     /// [`Self::variations`] for the shaper (advances, kerning, feature variations).
     pub(crate) instance: Option<harfrust::ShaperInstance>,
     /// The shaping plans made for this face, newest last ([`Self::shape_plan`]).
-    pub(super) plans: std::sync::Mutex<Vec<Arc<harfrust::ShapePlan>>>,
+    pub(super) plans: craft_font_catalog::ShapePlanCache,
     /// [`Self::ideographic_centre`], read once: layout asks for it per glyph.
     pub(super) ideographic_centre: std::sync::OnceLock<f64>,
     /// [`Self::icf_margins`], read once.
@@ -262,7 +259,7 @@ impl FontFace {
     }
     /// The shaping plan for a buffer of `direction`, `script` and `language` shaped with
     /// `features` by `shaper` (made from this face at [`Self::instance`]): the plan made earlier for
-    /// the same properties, else a new one, which the face keeps for later (at most [`MAX_PLANS`]).
+    /// the same properties, else a new one, which the face keeps for later (at most 32).
     /// A plan depends on these properties alone, so text shaped with it comes out as with a plan
     /// made for it.
     pub(crate) fn shape_plan(
@@ -277,27 +274,12 @@ impl FontFace {
         if !crate::test_fonts::keeps_shape_plans() {
             return Arc::new(harfrust::ShapePlan::new(shaper, direction, script, language, features));
         }
-        let key = harfrust::ShapePlanKey::new(script, direction).language(language).instance(self.instance.as_ref()).features(features);
-        let kept = |plans: &[Arc<harfrust::ShapePlan>]| plans.iter().rev().find(|p| key.matches(p)).cloned();
-        if let Some(plan) = kept(&self.plans.lock().unwrap_or_else(|e| e.into_inner())) {
-            return plan;
-        }
-        // Made without the lock held: other threads keep shaping with this face meanwhile.
-        let plan = Arc::new(harfrust::ShapePlan::new(shaper, direction, script, language, features));
-        let mut plans = self.plans.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(made) = kept(&plans) {
-            return made;
-        }
-        if plans.len() >= MAX_PLANS {
-            plans.remove(0);
-        }
-        plans.push(plan.clone());
-        plan
+        self.plans.get_or_create(shaper, self.instance.as_ref(), direction, script, language, features)
     }
     /// Tests: how many shaping plans the face holds.
     #[cfg(test)]
     pub(crate) fn plans_kept(&self) -> usize {
-        self.plans.lock().unwrap_or_else(|e| e.into_inner()).len()
+        self.plans.len()
     }
     /// The face's index in its font file (collections hold several).
     pub(crate) fn index(&self) -> u32 {

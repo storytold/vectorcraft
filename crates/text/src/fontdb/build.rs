@@ -72,7 +72,7 @@ pub(super) fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Opt
         bytes,
         index,
         path,
-        plans: std::sync::Mutex::new(Vec::new()),
+        plans: craft_font_catalog::ShapePlanCache::default(),
         ideographic_centre: std::sync::OnceLock::new(),
         icf_margins: std::sync::OnceLock::new(),
         path_align: std::sync::OnceLock::new(),
