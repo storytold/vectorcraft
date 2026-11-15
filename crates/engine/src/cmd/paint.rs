@@ -1114,8 +1114,9 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
             let contents = super::appearance::targets_contents(p)?;
             let mut roots = vec![];
             for id in &ids {
-                let group = !contents
-                    && s.doc()?.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !n.is_compound_shape());
+                let n = s.doc()?.doc.node(*id);
+                let group =
+                    !contents && n.is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !n.is_compound_shape());
                 if group {
                     roots.push(*id);
                 } else {
