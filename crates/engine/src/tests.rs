@@ -2133,7 +2133,7 @@ mod pen_interactions {
                 gesture(&mut s, &[(400.0, 500.0)], Mods::default(), v);
                 let extended = path(&s, id);
                 assert_eq!(extended.anchor_count(), 3);
-                assert_eq!(extended.subpaths[0].anchors[..2], reversed.subpaths[0].anchors);
+                assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], reversed.subpaths[0].anchors);
                 assert!(!s.in_interaction() && !s.tool_busy());
                 assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
             }
@@ -2168,7 +2168,7 @@ mod pen_interactions {
         gesture(&mut s, &[(300.0, 400.0)], Mods::default(), v);
         let extended = path(&s, id);
         assert_eq!(extended.anchor_count(), 3);
-        assert_eq!(extended.subpaths[0].anchors[..2], converted.subpaths[0].anchors);
+        assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], converted.subpaths[0].anchors);
         assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
     }
 
@@ -2227,7 +2227,7 @@ mod pen_interactions {
         }
         let extended = path(&s, id);
         assert_eq!(extended.anchor_count(), 3);
-        assert_eq!(extended.subpaths[0].anchors[..2], before.subpaths[0].anchors);
+        assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], before.subpaths[0].anchors);
         let a = extended.subpaths[0].anchors[2];
         assert_eq!(a.p, Point::new(320.0, 450.0));
         assert_eq!(a.h_in, Point::new(290.0, 430.0), "Alt freezes the incoming handle and Space translates it");
@@ -3381,7 +3381,7 @@ fn reshape_open_path(s: &mut Session, anchors: Value) -> NodeId {
 
 /// The anchors of the path's first subpath.
 fn reshape_anchors(s: &Session, id: NodeId) -> Vec<vectorcraft_geom::Anchor> {
-    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.clone()
+    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.to_vec()
 }
 
 /// The share of the drag an anchor takes at `u` of the way from an end to the grabbed point.

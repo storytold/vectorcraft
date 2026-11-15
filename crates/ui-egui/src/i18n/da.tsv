@@ -166,6 +166,18 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`name` must be the name of a script engine	`name` skal være navnet på en scriptmotor
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hovedscriptmotoren er ny ved hver kørsel og bevares aldrig, så den kan ikke fjernes
 @msg	there is no script engine named {name}	der findes ingen scriptmotor med navnet {name}
+@msg	`answers` must be a list of answers	`answers` skal være en liste med svar
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har flere end {MAX_ANSWERS} svar
+@msg	`answers` is larger than 1 MiB	`answers` er større end 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	skal være et objekt med `kind` og `value`
+@msg	must have exactly `kind` and `value`	skal have præcis `kind` og `value`
+@msg	is an alert's answer, whose `value` must be "ok"	er svaret på en alert, hvis `value` skal være "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	er svaret på en confirm, hvis `value` skal være true eller false
+@msg	is longer than 16 KiB	er længere end 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	er svaret på en prompt, hvis `value` skal være en streng eller null
+@msg	must have `kind` alert, confirm or prompt	skal have `kind` alert, confirm eller prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` er kun til en kørsel uden nogen at spørge: i appen besvarer personen hver dialog
 @msg	Running a script	Kører et script
 @msg	Data Recovery can't keep copies in {path}: {e}	Datagendannelse kan ikke opbevare kopier i {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kan ikke indlæses fra {path}: {e}
@@ -448,6 +460,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	{what} points outside memory	{what} peger uden for hukommelsen
 @msg	`angle` must be a number	`angle` skal være et tal
 @msg	`aspect` must be from 0.01 to 100	`aspect` skal være fra 0,01 til 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` skal være [a, b, c, d], hver fra -1000 til 1000, med a·d - b·c mindst 0,001 fra 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` skal være "butt", "round" eller "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` skal være "nonzero" eller "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` skal være en https://-adresse på højst {MAX_HELP_URL} byte

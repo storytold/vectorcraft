@@ -500,8 +500,8 @@ impl Writer<'_> {
     /// `<circle>` when its radii are written the same, else `<ellipse>`.
     fn ellipse_shape(&self, sp: &SubPath, m: Affine) -> Option<(&'static str, String)> {
         let tol = 10f64.powi(-i32::from(self.opts.decimals));
-        let (anchors, closed) = (sp.anchors.as_slice(), sp.closed);
-        let [a0, a1, a2, a3] = anchors else { return None };
+        let (anchors, closed) = (sp.anchors.contiguous(), sp.closed);
+        let [a0, a1, a2, a3] = &*anchors else { return None };
         let [p0, p1, p2, p3] = [a0.p, a1.p, a2.p, a3.p].map(|p| m * p);
         let c = p0.midpoint(p2);
         let near = |a: f64, b: f64| (a - b).abs() <= tol;
