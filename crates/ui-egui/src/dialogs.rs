@@ -679,6 +679,7 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == script_run::NOTICE_KIND {
             script_run::notice_cancel(app, &d);
         }
+        missing_links::cancelled(app, &d);
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
