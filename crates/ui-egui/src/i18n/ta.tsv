@@ -300,6 +300,7 @@
 	Align to Corners and Ends	மூலைகள் மற்றும் முனைகளுக்கு ஏற்ப சீரமை
 	Align to Glyph Bounds	குறியெழுத்து எல்லைகளுக்கு ஏற்ப சீரமை
 	Align to Key Object	முக்கியப் பொருளுக்கு ஏற்ப சீரமை
+	Align to Key Anchor	முக்கிய நங்கூரப் புள்ளிக்கு ஏற்ப சீரமை
 	Align to Page	பக்கத்திற்கு ஏற்ப சீரமை
 	Align to Path	பாதைக்கு ஏற்ப சீரமை
 	Align to Selection	தேர்வுக்கேற்பச் சீரமை
@@ -880,6 +881,11 @@ antiAlias	Sharp	கூர்மையான
 	CMYK Images	CMYK படங்கள்
 	CMYK profile in effect	செயலில் உள்ள CMYK சுயவிவரம்
 	CMYK:	CMYK:
+	RGB Policy:	RGB கொள்கை:
+	CMYK Policy:	CMYK கொள்கை:
+	Preserve Embedded Profiles	உட்பொதிக்கப்பட்ட சுயவிவரங்களைப் பாதுகா
+	Convert to Working Space	பணி நிறவெளிக்கு மாற்று
+	Preserve Numbers	எண்களைப் பாதுகா
 	Coarse Dots	கரடுமுரடான புள்ளிகள்
 	Coincidence:	ஒன்றிப்பு வரம்பு:
 	Collapse Panel Group	பலகக் குழுவைச் சுருக்கு
@@ -1054,6 +1060,7 @@ antiAlias	Sharp	கூர்மையான
 	Copy Artboard	ஆர்ட்போர்டை நகலெடு
 	Copy Color Value (Hex)	நிற மதிப்பை நகலெடு (Hex)
 	Copy Fonts Used in the Document	ஆவணத்தில் பயன்படுத்திய எழுத்துருக்களை நகலெடு
+	Copy Info	தகவலை நகலெடு
 	Copy Guide	வழிகாட்டியை நகலெடு
 	Copy in Perspective	முன்னோக்கில் நகலெடு
 	Copy into the document's folder	ஆவணத்தின் கோப்புறையில் நகலெடு
@@ -1459,6 +1466,9 @@ antiAlias	Sharp	கூர்மையான
 	Double-click to insert	செருக இருமுறை சொடுக்கு
 	Double-click to rename	பெயர் மாற்ற இருமுறை சொடுக்கு
 	Double-click to replace	மாற்ற இருமுறை சொடுக்கவும்
+	Click to replace	மாற்றிட சொடுக்கவும்
+	Show all alternates in the Glyphs panel	வரியுருக்கள் பலகத்தில் எல்லா மாற்றுகளையும் காட்டு
+	Show Character Alternates	எழுத்து மாற்றுகளைக் காட்டு
 	Double-click to target the contents	உள்ளடக்கத்தை இலக்காக்க இருமுறை சொடுக்கு
 	Down (right reading)	கீழ் (சரியான வாசிப்பு)
 	Download	பதிவிறக்கு
@@ -1686,6 +1696,8 @@ antiAlias	Sharp	கூர்மையான
 	Every (minutes)	ஒவ்வொரு (நிமிடங்கள்)
 	Every option is at its default.	எல்லா விருப்பங்களும் அவற்றின் இயல்புநிலையில் உள்ளன.
 	Every option matches {base}.	எல்லா விருப்பங்களும் {base} உடன் பொருந்துகின்றன.
+	Middle Eastern & South Asian Every-line Composer	மத்திய கிழக்கு & தெற்காசிய ஒவ்வொரு வரி அமைப்பான்
+	Standard Every-line Composer	நிலையான ஒவ்வொரு வரி அமைப்பான்
 	Every-line Composer	ஒவ்வொரு வரி அமைப்பான்
 	Exact	சரியான
 	Exact dash lengths	துல்லியமான கோட்டு நீளங்கள்
@@ -1800,6 +1812,7 @@ antiAlias	Sharp	கூர்மையான
 	Rotate (Classic)…	சுழற்று (பாரம்பரியம்)…
 	Surface	மேற்பரப்பு
 	Wireframe	கம்பிச்சட்டம்
+	Render Settings	காட்சியாக்க அமைப்புகள்
 	No Shading	நிழலிடல் இல்லை
 	Plastic	பிளாஸ்டிக்
 	Highlight Intensity	ஒளிர்பகுதித் தீவிரம்
@@ -1975,6 +1988,7 @@ antiAlias	Sharp	கூர்மையான
 	Format Options	வடிவமைப்பு விருப்பங்கள்
 	Format Presets	வடிவ முன்னமைவுகள்
 	Format Settings	வடிவ அமைப்புகள்
+	Format Settings…	வடிவமைப்பு அமைப்புகள்…
 	Format:	வடிவமைப்பு:
 	Formats:	வடிவங்கள்:
 	Fractional Widths	பின்ன அகலங்கள்
@@ -2043,6 +2057,8 @@ antiAlias	Sharp	கூர்மையான
 	Global Adjust	பொதுச் சரிசெய்தல்
 	Global Brush Dimensions	பொது தூரிகை அளவுகள்
 	Global Edit Options	பொதுத் திருத்த விருப்பங்கள்
+	Select Similar Objects	ஒத்த பொருள்களைத் தேர்ந்தெடு
+	Select Similar Options	ஒத்தவற்றைத் தேர்ந்தெடுக்கும் விருப்பங்கள்
 	Global Process Color	பொது செயல்முறை நிறம்
 	Global Process Color, CMYK	பொது செயல்முறை நிறம், CMYK
 	Glow Amount	ஒளிர்வு அளவு
@@ -2086,6 +2102,40 @@ antiAlias	Sharp	கூர்மையான
 	Graph Design	வரைபட வடிவமைப்பு
 	Graph Marker	வரைபட குறியீடு
 	Graph Type	வரைபட வகை
+	Graph Options	வரைபட விருப்பங்கள்
+	Left Axis	இடது அச்சு
+	Right Axis	வலது அச்சு
+	Category Axis	வகை அச்சு
+	Separate Scales	தனித்தனி அளவுகோல்கள்
+	Add Drop Shadow	விழும் நிழலைச் சேர்
+	Add Legend Across Top	மேற்புறம் குறுக்கே விளக்கத்தைச் சேர்
+	First Row in Front	முதல் வரிசை முன்னால்
+	First Column in Front	முதல் நெடுவரிசை முன்னால்
+	Legend	விளக்கம்
+	Column Width	நெடுவரிசை அகலம்
+	Bar Width	பட்டை அகலம்
+	Cluster Width	கொத்து அகலம்
+	Mark Data Points	தரவுப் புள்ளிகளைக் குறி
+	Connect Data Points	தரவுப் புள்ளிகளை இணை
+	Edge-to-Edge Lines	விளிம்பிலிருந்து விளிம்பு வரை கோடுகள்
+	Draw Filled Lines	நிரப்பிய கோடுகளை வரை
+	Tick Values	அளவுக்குறி மதிப்புகள்
+	Override Calculated Values	கணக்கிட்ட மதிப்புகளை மேலெழுது
+	Divisions	பிரிவுகள்
+	Tick Marks	அளவுக்குறிகள்
+	Tick Marks per Division	ஒரு பிரிவுக்கான அளவுக்குறிகள்
+	Draw Tick Marks Between Labels	லேபிள்களுக்கு இடையே அளவுக்குறிகளை வரை
+	Add Labels	லேபிள்களைச் சேர்
+	Maximum must be more than Minimum.	அதிகபட்சம் குறைந்தபட்சத்தை விட அதிகமாக இருக்க வேண்டும்.
+	Column Graph	நெடுவரிசை வரைபடம்
+	Stacked Column Graph	அடுக்கிய நெடுவரிசை வரைபடம்
+	Bar Graph	பட்டை வரைபடம்
+	Stacked Bar Graph	அடுக்கிய பட்டை வரைபடம்
+	Line Graph	கோட்டு வரைபடம்
+	Area Graph	பரப்பு வரைபடம்
+	Scatter Graph	சிதறல் வரைபடம்
+	Pie Graph	வட்ட வரைபடம்
+	Radar Graph	ரேடார் வரைபடம்
 	Graphic	வரைகலை
 	Graphic Pen	வரைகலைப் பேனா
 	Graphic Pen…	வரைகலைப் பேனா…
@@ -2241,6 +2291,7 @@ antiAlias	Sharp	கூர்மையான
 	Highlight Substituted Glyphs	மாற்றப்பட்ட குறியெழுத்துகளை முன்னிலைப்படுத்து
 	Highlight Tracking	எழுத்துவரிசை இடைவெளியை முன்னிலைப்படுத்து
 	Highlight Variable	மாறியை முன்னிலைப்படுத்து
+	Sort Variables	மாறிகளை வரிசைப்படுத்து
 	Highlight:	முன்னிலைப்படுத்தல்:
 	Hindi	இந்தி
 	History	வரலாறு
@@ -2314,6 +2365,7 @@ antiAlias	Sharp	கூர்மையான
 	Import Library…	நூலகத்தை இறக்குமதி செய்…
 	Import Matches	இறக்குமதிப் பொருத்தங்கள்
 	Import PDF	PDF ஐ இறக்குமதி செய்
+	Import PDF pages as links	PDF பக்கங்களை இணைப்புகளாக இறக்குமதி செய்
 	Import PDF Presets	PDF முன்னமைவுகளை இறக்குமதி செய்
 	Import Perspective Grid Presets	முன்னோக்குக் கட்ட முன்னமைவுகளை இறக்குமதி செய்
 	Import Preset…	முன்னமைவை இறக்குமதி செய்…
@@ -2498,6 +2550,14 @@ antiAlias	Sharp	கூர்மையான
 	Lasso Tool	லாசோ கருவி
 	Last	கடைசி
 	Last Artboard	கடைசி ஆர்ட்போர்டு
+	Status Bar Show	நிலைப்பட்டியில் காட்டு
+	Artboard Name	ஆர்ட்போர்டு பெயர்
+	Current Tool	தற்போதைய கருவி
+	Date and Time	தேதியும் நேரமும்
+	Number of Undos	செயல்தவிர்ப்புகளின் எண்ணிக்கை
+	Document Color Profile	ஆவண நிறச் சுயவிவரம்
+	Undos	செயல்தவிர்ப்புகள்
+	Redos	மீண்டும் செய்தவை
 	Last commit	கடைசி கமிட்
 	Last Effect: {}	கடைசி விளைவு: {}
 	Last Effect: {name}	கடைசி விளைவு: {name}
@@ -2559,6 +2619,9 @@ antiAlias	Sharp	கூர்மையான
 	Ligatures are off while the text is tracked.	உரைக்கு இடைவெளி இடப்பட்டிருக்கும்போது இணைப்பு எழுத்துகள் முடக்கப்படும்.
 	Light	வெளிர்
 	Light behind the object	பொருளுக்குப் பின்னால் ஒளி
+	Move Light to Back	ஒளியைப் பின்னுக்கு நகர்த்து
+	Move Light to Front	ஒளியை முன்னுக்கு நகர்த்து
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	ஒளியை நகர்த்த அதை இழுக்கவும். அம்புக்குறி விசைகள் குவியத்திலுள்ள ஒளியை நகர்த்தும்; Shift 15° படிகளாக நகர்த்தும்.
 	Shadows	நிழல்கள்
 	Distance from Object	பொருளிலிருந்து தூரம்
 	Shadow Bounds	நிழல் எல்லைகள்
@@ -2785,6 +2848,7 @@ antiAlias	Sharp	கூர்மையான
 	Menu Dialog	மெனு உரையாடல் பெட்டி
 	Merge	ஒன்றிணை
 	Merge colors into one row	நிறங்களை ஒரே வரிசையில் இணை
+	New Row	புதிய வரிசை
 	Merge Graphic Styles	வரைகலை பாணிகளை இணை
 	Merge Graphic Styles…	வரைகலை பாணிகளை இணை…
 	Merge Layers	அடுக்குகளை ஒன்றிணை
@@ -3675,6 +3739,8 @@ antiAlias	Sharp	கூர்மையான
 	Properties	பண்புகள்
 	Proportional Lining	விகிதாசார நேர்கோட்டு எண்கள்
 	Proportional Metrics	விகித அளவீடுகள்
+	H or V Style	கிடை அல்லது செங்குத்துப் பாணி
+	Roman Italics	ரோமன் சாய்வெழுத்துகள்
 	Insert Aki Left	இடது Aki ஐச் செருகு
 	Insert Aki Right	வலது Aki ஐச் செருகு
 	Tsume	Tsume
@@ -3706,6 +3772,7 @@ antiAlias	Sharp	கூர்மையான
 	Radial	ஆரவடிவம்
 	Radial Blur	ஆர மங்கல்
 	Radial Blur…	ஆர மங்கல்…
+	Blur Center	மங்கலாக்கல் மையம்
 	Radial Dividers:	ஆர பிரிப்பான்கள்:
 	Radial Glows	ஆர ஒளிர்வுகள்
 	Radial Gradient	ஆர நிறச்சாய்வு
@@ -4650,11 +4717,14 @@ antiAlias	Sharp	கூர்மையான
 	Single Left Quotation Mark	ஒற்றை இடது மேற்கோள் குறி
 	Single Quotes:	ஒற்றை மேற்கோள்கள்:
 	Single Right Quotation Mark	ஒற்றை வலது மேற்கோள் குறி
+	Middle Eastern & South Asian Single-line Composer	மத்திய கிழக்கு & தெற்காசிய ஒற்றை வரி அமைப்பான்
+	Standard Single-line Composer	நிலையான ஒற்றை வரி அமைப்பான்
 	Single Word Justification:	ஒற்றைச் சொல் நியாயப்படுத்தல்:
 	Single-line Composer	ஒற்றை வரி அமைப்பான்
 	Sixth Space	ஆறில் ஒரு இடைவெளி
 	Size	அளவு
 	Size Tile to Art	ஓடின் அளவை ஓவியத்திற்கு ஏற்ப மாற்று
+	Move Tile with Art	ஓட்டைக் கலைப்படைப்புடன் நகர்த்து
 	Size:	அளவு:
 	Size: {size}  Tracking: {tracking}	அளவு: {size}  எழுத்துவரிசை இடைவெளி: {tracking}
 	Size/Leading	அளவு/வரியிடைவெளி
@@ -4701,6 +4771,18 @@ antiAlias	Sharp	கூர்மையான
 	Smart Pen Panel	திறன்மிகு பேனா பலகம்
 	Smart Pen Tool	திறன்மிகு பேனா கருவி
 	Smart Punctuation…	ஸ்மார்ட் நிறுத்தற்குறி…
+	Smart Punctuation	ஸ்மார்ட் நிறுத்தற்குறி
+	ff, fi, ffi Ligatures	ff, fi, ffi இணைப்பெழுத்துகள்
+	ff, fl, ffl Ligatures	ff, fl, ffl இணைப்பெழுத்துகள்
+	Smart Quotes	ஸ்மார்ட் மேற்கோள் குறிகள்
+	Smart Spaces	ஸ்மார்ட் இடைவெளிகள்
+	En, Em Dashes	En, Em இடைக்கோடுகள்
+	Ellipses	முப்புள்ளிகள்
+	Expert Fractions	நிபுணர் பின்னங்கள்
+	Replace In	இதில் மாற்று
+	Selected Text Only	தேர்ந்தெடுத்த உரை மட்டும்
+	Entire Document	முழு ஆவணம்
+	Report Results	முடிவுகளை அறிவி
 	Smooth	மென்மையாக்கு
 	Smooth Anchors	நங்கூரங்களை மென்மையாக்கு
 	Smooth Anchors…	நங்கூரங்களை மென்மையாக்கு…
@@ -4739,6 +4821,7 @@ antiAlias	Sharp	கூர்மையான
 	Sort by Kind	வகை வாரியாக வரிசைப்படுத்து
 	Sort by Luminance	ஒளிர்வு வாரியாக வரிசைப்படுத்து
 	Sort by Name	பெயர் வாரியாக வரிசைப்படுத்து
+	Sort by Size	அளவு வாரியாக வரிசைப்படுத்து
 	Sort by Popularity	பிரபலத்தன்மை வாரியாக வரிசைப்படுத்து
 	Sort by Status	நிலை வாரியாக வரிசைப்படுத்து
 	Sort By:	இதன்படி வரிசைப்படுத்து:
@@ -4909,6 +4992,8 @@ antiAlias	Sharp	கூர்மையான
 	Swap Objects and Sizes	பொருட்களையும் அளவுகளையும் இடமாற்று
 	Swap start and end arrowheads	தொடக்க மற்றும் முடிவு அம்புத் தலைகளை மாற்று
 	Swap the selected object for the file, keeping its place and transform	தேர்ந்த பொருளை கோப்புடன் மாற்று, அதன் இடத்தையும் உருமாற்றத்தையும் வைத்திருக்கவும்
+	Show Import Options	இறக்குமதி விருப்பங்களைக் காட்டு
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	ஒவ்வொரு PDF, DXF அல்லது உரைக் கோப்பையும் வைப்பதற்கு முன் அதன் இறக்குமதி விருப்பங்களைக் கேள்; முடக்கினால், கடைசியாகத் தேர்ந்தெடுத்த விருப்பங்களைப் பயன்படுத்து
 	Swash	அலங்கார எழுத்து
 	Swatch Conflict	வண்ண மாதிரி முரண்பாடு
 	Swatch Conflicts	வண்ண மாதிரி முரண்பாடுகள்
@@ -4995,11 +5080,55 @@ antiAlias	Sharp	கூர்மையான
 	Composite Fonts	கூட்டு எழுத்துருக்கள்
 	Export Composite Fonts	கூட்டு எழுத்துருக்களை ஏற்றுமதி செய்
 	Import Composite Fonts	கூட்டு எழுத்துருக்களை இறக்குமதி செய்
+@msg	each font must be {name, parts}	ஒவ்வொரு எழுத்துருவும் {name, parts} ஆக இருக்க வேண்டும்
+@msg	unknown key `{k}`; a font takes name and parts	அறியப்படாத திறவுச்சொல் `{k}`; ஒரு எழுத்துரு name, parts ஆகியவற்றை மட்டுமே எடுக்கும்
+@msg	each font needs a name	ஒவ்வொரு எழுத்துருவுக்கும் ஒரு பெயர் தேவை
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` கூட்டு எழுத்துருவின் பெயராக இருக்க முடியாது (1 முதல் {COMPOSITE_NAME_MAX} எழுத்துகள், கட்டுப்பாட்டு எழுத்துகள் இல்லாமல்)
+@msg	`{name}`: parts must be an object	`{name}`: parts ஒரு பொருளாக இருக்க வேண்டும்
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: அறியப்படாத வகை `{k}`; வகைகள்: kanji, kana, punctuation, symbols, roman, numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} ஒரு பொருளாக இருக்க வேண்டும்
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: அறியப்படாத திறவுச்சொல் `{k}` ({_1}-இல்)
+@msg	`{name}`: give the kanji part	`{name}`: kanji பகுதியைக் கொடுக்கவும்
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ஓர் ஆவணம் அதிகபட்சம் {COMPOSITE_FONTS_MAX} கூட்டு எழுத்துருக்களை வைத்திருக்கும்
+@msg	two composite fonts are named `{_1}`	இரண்டு கூட்டு எழுத்துருக்களுக்கு `{_1}` என்ற பெயர் உள்ளது
+@msg	`{_1}` is the name of an installed font	`{_1}` என்பது நிறுவப்பட்ட ஓர் எழுத்துருவின் பெயர்
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} ஆனது `{font}` என்ற கூட்டு எழுத்துருவில் அமைக்கப்பட்டுள்ளது
+@msg	give fonts: [{name, parts}…]	fonts: [{name, parts}…] கொடுக்கவும்
+@msg	path is empty	path காலியாக உள்ளது
+@msg	fonts must be a list of composite fonts	fonts கூட்டு எழுத்துருக்களின் பட்டியலாக இருக்க வேண்டும்
+@msg	names must be strings	names உரைகளாக இருக்க வேண்டும்
+@msg	no composite font named `{n}`	`{n}` என்ற பெயரில் கூட்டு எழுத்துரு இல்லை
+@msg	names must be a list of names	names பெயர்களின் பட்டியலாக இருக்க வேண்டும்
+@msg	no composite fonts to export	ஏற்றுமதி செய்யக் கூட்டு எழுத்துருக்கள் இல்லை
+@msg	not a composite fonts file: {e}	கூட்டு எழுத்துருக் கோப்பு அல்ல: {e}
+@msg	not a composite fonts file: no compositeFonts list	கூட்டு எழுத்துருக் கோப்பு அல்ல: compositeFonts பட்டியல் இல்லை
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	கோப்பில் {COMPOSITE_FONTS_MAX}-க்கும் மேற்பட்ட கூட்டு எழுத்துருக்கள் உள்ளன
+@msg	the file is larger than 4 MB	கோப்பு 4 MB-ஐ விடப் பெரியது
+@msg	dataBase64 is not base64	dataBase64 என்பது base64 அல்ல
+@msg	give one of path, data or dataBase64	path, data, dataBase64 ஆகியவற்றில் ஒன்றைக் கொடுக்கவும்
+@msg	the file holds no composite fonts	கோப்பில் கூட்டு எழுத்துருக்கள் எதுவும் இல்லை
+@msg	the file holds two composite fonts named `{_1}`	கோப்பில் `{_1}` என்ற பெயரில் இரண்டு கூட்டு எழுத்துருக்கள் உள்ளன
+@msg	`{_1}` can't name a composite font	`{_1}` கூட்டு எழுத்துருவின் பெயராக இருக்க முடியாது
+@msg	{k}: give a font	{k}: ஓர் எழுத்துருவைக் கொடுக்கவும்
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: ஓர் எழுத்துருவைக் கொடுக்கவும்
+@msg	{k}: size must be {_1} to {_2}%	{k}: size (அளவு) {_1} முதல் {_2}% வரை இருக்க வேண்டும்
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size (அளவு) {_1} முதல் {_2}% வரை இருக்க வேண்டும்
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline (அடிப்படைக்கோடு) {_1} முதல் {_2}% வரை இருக்க வேண்டும்
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline (அடிப்படைக்கோடு) {_1} முதல் {_2}% வரை இருக்க வேண்டும்
+@msg	{k}: scale must be {_1} to {_2}%	{k}: அளவு விகிதம் {_1} முதல் {_2}% வரை இருக்க வேண்டும்
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: அளவு விகிதம் {_1} முதல் {_2}% வரை இருக்க வேண்டும்
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: kana, roman, numerals ஆகியவற்றை மட்டுமே அளவு மாற்ற முடியும்
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: kana, roman, numerals ஆகியவற்றை மட்டுமே அளவு மாற்ற முடியும்
+@msg	{k}: only kana can be scaled at the center	{k}: kana-வை மட்டுமே மையத்தில் அளவு மாற்ற முடியும்
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: kana-வை மட்டுமே மையத்தில் அளவு மாற்ற முடியும்
+@msg	no composite font	கூட்டு எழுத்துரு இல்லை
 	Delete Font	எழுத்துருவை நீக்கு
 	Kanji	கான்ஜி
 	Kana	கானா
 	Numerals	எண்கள்
 	Scale at Center	மையத்தில் அளவிடு
+	Delete Set	தொகுப்பை நீக்கு
+	Direct Entry	நேரடி உள்ளீடு
 	Technical Drawing	தொழில்நுட்ப வரைபடம்
 	Telugu	தெலுங்கு
 	Temperature	வெப்பநிலை
@@ -5501,6 +5630,9 @@ antiAlias	Sharp	கூர்மையான
 	Working CMYK	செயல்பாட்டு CMYK
 	Working CMYK (don't tag)	பணி CMYK (குறியிட வேண்டாம்)
 	Working RGB (don't tag)	பணி RGB (குறியிட வேண்டாம்)
+	Don't Color Manage This Document	இந்த ஆவணத்துக்கு நிற மேலாண்மை வேண்டாம்
+	Working RGB: {name}	பணி RGB: {name}
+	Working CMYK: {name}	பணி CMYK: {name}
 	Working RGB	பணி RGB
 	Workspace	பணியிடம்
 	Workspace {i}	பணியிடம் {i}
@@ -5595,6 +5727,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	stops must be in order of `offset`	நிறுத்தங்கள் `offset` இன் வரிசைப்படி இருக்க வேண்டும்
 @msg	the document has no pattern {pattern}	ஆவணத்தில் {pattern} என்ற வடிவமாதிரி இல்லை
 @msg	the document has no swatch {n}	ஆவணத்தில் {n} என்ற வண்ண மாதிரி இல்லை
+@msg	`plates` requires a stop linked to a spot swatch	`plates`-க்கு ஒரு தனி நிற வண்ண மாதிரியுடன் இணைக்கப்பட்ட நிறுத்தம் தேவை
 @msg	the output	வெளியீடு
 @msg	the path has no anchor points	பாதையில் நங்கூரப் புள்ளிகள் இல்லை
 @msg	too many anchor points (limit {MAX_ANCHORS})	மிக அதிகமான நங்கூரப் புள்ளிகள் (வரம்பு {MAX_ANCHORS})
@@ -5769,6 +5902,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	{id} is not a slice	{id} ஒரு துண்டு அல்ல
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} மற்றொரு பயன்பாட்டைத் திறக்கிறது: விசைப்பலகையில் இருக்கும் நபர் மட்டுமே இதை இயக்க முடியும்
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` அனுமதிக்கப்பட்ட விருப்பங்களில் ஒன்றல்ல
+@msg	{k} has control characters	{k}-இல் கட்டுப்பாட்டு எழுத்துகள் உள்ளன
+@msg	{k} has control characters or line breaks	{k}-இல் கட்டுப்பாட்டு எழுத்துகள் அல்லது வரி முறிவுகள் உள்ளன
 @msg	{k} has control characters{_1}	{k}-இல் கட்டுப்பாட்டு எழுத்துகள்{_1} உள்ளன
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} மிக நீளமாக உள்ளது (அதிகபட்சம் {MAX_TEXT} எழுத்துகள்)
 @msg	{k} must be {{size?, position?}}	{k} ஆனது {{size?, position?}} ஆக இருக்க வேண்டும்
@@ -5907,6 +6042,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` என்பது smallThumb, mediumThumb, largeThumb, smallList அல்லது largeList ஆகும்
 @msg	a line can't run from a point to itself	ஒரு கோடு ஒரு புள்ளியிலிருந்து அதே புள்ளிக்குச் செல்ல முடியாது
 @msg	a line needs at least two points	ஒரு கோட்டுக்குக் குறைந்தது இரண்டு புள்ளிகள் தேவை
+@msg	a linked JavaScript file is outside the read roots	இணைக்கப்பட்ட JavaScript கோப்பு படிக்க அனுமதிக்கப்பட்ட மூலக் கோப்புறைகளுக்கு வெளியே உள்ளது
+@msg	a linked image file is outside the read roots	இணைக்கப்பட்ட படக் கோப்பு படிக்க அனுமதிக்கப்பட்ட மூலக் கோப்புறைகளுக்கு வெளியே உள்ளது
 @msg	a number cannot be read	ஓர் எண்ணைப் படிக்க முடியவில்லை
 @msg	a swatch exchange block is too long	ஒரு வண்ண மாதிரி பரிமாற்றத் தொகுதி மிக நீளமானது
 @msg	a swatch exchange name is too long	ஒரு வண்ண மாதிரி பரிமாற்றப் பெயர் மிக நீளமானது
@@ -5944,6 +6081,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	script file is not UTF-8 text: {value}	ஸ்கிரிப்ட் கோப்பு UTF-8 உரை அல்ல: {value}
 @msg	stop {i}: {e}	நிறுத்தம் {i}: {e}
 @msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	வண்ண மாதிரி பரிமாற்றப் பதிப்பு {major}.{minor} ஆதரிக்கப்படவில்லை (1.x மட்டும்)
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	வரைபடத் தொடரில் உள்ள வரைபட வடிவமைப்பின் கலைப்படைப்பு அந்த வடிவமைப்பிலிருந்து மீண்டும் வரையப்படுகிறது: அதை மாற்ற வடிவமைப்பைத் திருத்தவும்
 @msg	the color book holds more than {ASE_MAX_ENTRIES} colors	நிறப் புத்தகத்தில் {ASE_MAX_ENTRIES} க்கும் மேற்பட்ட நிறங்கள் உள்ளன
 @msg	the color book is cut short	நிறப் புத்தகம் இடையில் துண்டிக்கப்பட்டுள்ளது
 @msg	the color book's names take more than {_1} MB	நிறப் புத்தகத்தின் பெயர்கள் {_1} MB-க்கு மேல் எடுக்கின்றன
@@ -5982,12 +6120,16 @@ antiAlias	Sharp	கூர்மையான
 @msg	there is no banner to mark	குறிக்க பேனர் எதுவும் இல்லை
 @msg	turn on at least one side	குறைந்தது ஒரு பக்கத்தையாவது இயக்கவும்
 @msg	with no hem and no grommets there is nothing to mark	மடிப்பு ஓரமும் கண்ணி வளையங்களும் இல்லாததால் குறிக்க எதுவும் இல்லை
+@msg	{saving} failed: {e}	{saving} தோல்வியடைந்தது: {e}
 	Banner Hems and Grommets…	பேனர் மடிப்பு ஓரங்களும் கண்ணி வளையங்களும்…
 	Banner Hems and Grommets	பேனர் மடிப்பு ஓரங்களும் கண்ணி வளையங்களும்
 	Hem	மடிப்பு ஓரம்
 	Grommets	கண்ணி வளையங்கள்
 	Grommet Inset	கண்ணி வளைய உள்தள்ளல்
 	Diameter	விட்டம்
+	Nest Shapes…	வடிவங்களைச் செறிவாக அடுக்கு…
+	Nest Shapes	வடிவங்களைச் செறிவாக அடுக்கு
+	Roll	சுருள்
 @msg	`{_1}` can't be edited or removed	`{_1}` ஐத் திருத்தவோ அகற்றவோ முடியாது
 @msg	`{_1}` has no brushes to apply	`{_1}` இல் பயன்படுத்துவதற்குத் தூரிகைகள் இல்லை
 @msg	`{_1}` has no symbols to place	`{_1}` இல் இடுவதற்குக் குறியீடுகள் இல்லை
@@ -6669,6 +6811,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	command `{0}` is not available right now: {1}	கட்டளை `{0}` இப்போது கிடைக்கவில்லை: {1}
 @msg	command must be a shape.* command	command ஆனது ஒரு shape.* கட்டளையாக இருக்க வேண்டும்
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` கொடுக்கப்படவில்லை
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer என்பது "singleLine", "everyLine", "standardSingleLine" அல்லது "standardEveryLine" ஆக இருக்க வேண்டும்
 @msg	composer must be "singleLine" or "everyLine"	composer "singleLine" அல்லது "everyLine" ஆக இருக்க வேண்டும்
 @msg	compound {_1} must contain exactly one open path to join	இணைப்பதற்கு, கூட்டுப் பாதை {_1} இல் சரியாக ஒரு திறந்த பாதை இருக்க வேண்டும்
 @msg	compound paths can only contain paths	கூட்டுப் பாதைகளில் பாதைகள் மட்டுமே இருக்க முடியும்
@@ -6789,6 +6932,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	there is no script engine named {name}	{name} என்ற பெயரில் ஸ்கிரிப்ட் எஞ்சின் எதுவும் இல்லை
 @msg	Running a script	ஸ்கிரிப்ட் இயங்குகிறது
 @msg	Copied the script report	ஸ்கிரிப்ட் அறிக்கை நகலெடுக்கப்பட்டது
+@msg	Copied the link info	இணைப்புத் தகவல் நகலெடுக்கப்பட்டது
 @msg	copy needs path: the file to copy into the document's folder	copy க்கு path தேவை: ஆவணத்தின் கோப்புறைக்குள் நகலெடுக்க வேண்டிய கோப்பு
 @msg	copy takes images only: relink placed documents where their files are	copy படங்களை மட்டுமே ஏற்கும்: இடப்பட்ட ஆவணங்களை அவற்றின் கோப்புகள் உள்ள இடத்திலேயே மீண்டும் இணைக்கவும்
 @msg	copying a file isn't available on the web	இணையத்தில் கோப்பை நகலெடுக்கும் வசதி இல்லை
@@ -7043,6 +7187,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	give x, y, or a handle's length or angle	x, y, அல்லது ஒரு கைப்பிடியின் நீளம் அல்லது கோணத்தைக் கொடுக்கவும்
 @msg	Global Edit is off	பொதுத் திருத்தம் முடக்கத்தில் உள்ளது
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	பொதுத் திருத்தம் பாதைகள், கூட்டுப் பாதைகள், சின்ன நிகழ்வுகள் மற்றும் அவற்றின் குழுக்களில் மட்டுமே செயல்படும்
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	ஒத்த பொருள்கள் எதுவும் கிடைக்கவில்லை (பிரதிபலித்த நகல்கள் பொருத்தப்படுவதில்லை); பொதுத் திருத்த விருப்பங்களை மாற்றி மீண்டும் முயலவும்
 @msg	global must be true or false	global ஆனது true அல்லது false ஆக இருக்க வேண்டும்
 @msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	எழுத்தின் பாணியின்படி (அனைத்தும் பெரிய எழுத்துகள், சிறு பெரிய எழுத்துகள் அல்லது ஓர் எண் முறைமை போன்றவை) {ch} க்குக் குறியெழுத்து {_1} வரையப்படுவதில்லை
 @msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	{_1} {_2} இல் குறியெழுத்து {g} என்பது {ch} இன் மாற்று அல்ல
@@ -7081,6 +7226,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	படக் கண்டறிதல் தோல்வியடைந்தது: உள் பிழை: அதன் இழை நின்றுவிட்டது (இந்தப் பிழையைத் தெரிவிக்கவும்)
 @msg	Image Trace finished, but its document was closed	படக் கண்டறிதல் முடிந்தது, ஆனால் அதன் ஆவணம் மூடப்பட்டுவிட்டது
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	படக் கண்டறிதல் முடிந்தது, ஆனால் இதற்கிடையில் படம் அல்லது அதன் அமைப்புகள் மாறிவிட்டன: மீண்டும் கண்டறியவும்
+@msg	Image Trace finished, but its document was reverted: trace it again	படக் கண்டறிதல் முடிந்தது, ஆனால் அதன் ஆவணம் முந்தைய நிலைக்குத் திருப்பப்பட்டுவிட்டது: மீண்டும் கண்டறியவும்
 @msg	Image Trace: the traced image is missing	படக் கண்டறிதல்: கண்டறியப்பட்ட படம் இல்லை
 @msg	image would be too large; lower the resolution	படம் மிகப் பெரியதாக இருக்கும்; தெளிவுத்திறனைக் குறைக்கவும்
 @msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client அல்லது server ஆக இருக்க வேண்டும்
@@ -8102,6 +8248,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	குழுவின் நிரப்பு அல்லது கோட்டின் மீதான 3D விளைவு ஏற்றுமதி செய்ய எதையும் வரையாது
 @msg	The 3D object is too complex to export	3D பொருள் ஏற்றுமதி செய்ய முடியாத அளவுக்குச் சிக்கலானது
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	பொருளில் 3D விளைவு இல்லை (வெளித்தள்ளல் மற்றும் சரிவு, சுழற்றி உருவாக்கு, ஊதிப்பெருக்கு அல்லது சுழற்று)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` என்பது `mode`-ஐ மட்டும் கொண்ட ஒரு பொருளாக இருக்க வேண்டும்; அதன் மதிப்பு shaded அல்லது wireframe
 @msg	its 3D effect builds no solid	அதன் 3D விளைவு எந்தத் திடப்பொருளையும் உருவாக்கவில்லை
 @msg	bevel must be none or one of {_1}	bevel ஆனது none ஆகவோ {_1} இல் ஒன்றாகவோ இருக்க வேண்டும்
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: இந்த ஓவியத்திலிருந்து திடப்பொருட்களை உருவாக்க முடியாது: அதன் சின்ன நிகழ்வுகள், கலப்புகள் மற்றும் வெட்டுக் குழுக்களில் மிக அதிகமான பொருட்கள் உள்ளன
@@ -8380,6 +8527,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	the subpath is closed or too short to close	துணைப் பாதை மூடப்பட்டுள்ளது அல்லது மூட முடியாத அளவுக்குக் குட்டையாக உள்ளது
 @msg	the SVG expands to more than {0} nested SVG images	SVG {0}-க்கும் அதிகமான உள்ளமைந்த SVG படங்களாக விரிவடைகிறது
 @msg	the SVG expands to more than {0} objects	SVG {0}-க்கும் அதிகமான பொருட்களாக விரிவடைகிறது
+@msg	the SVG's style sheets take too long to match	SVG-இன் பாணித் தாள்களைப் பொருத்த அதிக நேரம் ஆகிறது
+@msg	the SVG's styles expand to more than {0} MB	SVG-இன் பாணிகள் {0} MB-க்கும் மேல் விரிவடைகின்றன
 @msg	the SVG has no drawable objects	SVG இல் வரையக்கூடிய பொருட்கள் எதுவும் இல்லை
 @msg	the SVG's elements are nested more than {0} deep	SVG இன் கூறுகள் {0} நிலைகளுக்கு மேல் உள்ளமைக்கப்பட்டுள்ளன
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ கோப்பு விரிக்கப்படும்போது {_1} MB ஐ விடப் பெரிதாகிறது
@@ -8945,6 +9094,9 @@ theme	Appearance	தோற்றப்பாணி
 	Open Tutorial Sample	பயிற்சி மாதிரியைத் திற
 	Finish Tutorial	பயிற்சியை முடி
 	Next Tutorial	அடுத்த பயிற்சி
+	Show Learn Tab	கற்றல் தாவலைக் காட்டு
+	Show Skill	திறனைக் காட்டு
+	Back One Level	ஒரு நிலை பின்செல்
 	Back to Skills	திறன்களுக்குத் திரும்பு
 @msg	tutorial `{id}` has no practice sample	`{id}` என்ற பயிற்சிக்குப் பயிற்சி மாதிரி இல்லை
 @msg	open the practice sample of `{id}` first (see learn.openSample)	முதலில் `{id}` இன் பயிற்சி மாதிரியைத் திறக்கவும் (learn.openSample ஐப் பார்க்கவும்)
@@ -9040,6 +9192,10 @@ theme	Appearance	தோற்றப்பாணி
 	Graphite Pencil	கிராஃபைட் பென்சில்
 	Wax Crayon	மெழுகு வண்ணக்குச்சி
 	Charcoal Dust	கரித் தூள்
+	Tech Circuit	தொழில்நுட்பச் சுற்று
+	Circuit Trace	சுற்றுத் தடம்
+	Bus Lines	பஸ் இணைப்புக் கோடுகள்
+	Terminal Nodes	முனை முடிச்சுகள்
 	Notched Ribbon	வெட்டுவாய் ரிப்பன்
 	Double Line	இரட்டைக் கோடு
 	Wave	அலை
@@ -9099,6 +9255,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	`answer` for this {kind} dialog must be one of: {_1}	இந்த {kind} உரையாடல் பெட்டிக்கான `answer` இவற்றில் ஒன்றாக இருக்க வேண்டும்: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` இல் {MAX_ANSWERS} க்கும் மேற்பட்ட பதில்கள் உள்ளன
 @msg	`answers` is larger than 1 MiB	`answers` 1 MiB ஐ விடப் பெரியது
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` கேட்க யாரும் இல்லாத இயக்கத்துக்கு மட்டுமே: செயலியில், ஒவ்வொரு உரையாடலுக்கும் பயனரே பதிலளிப்பார்
 @msg	`answers` must be a list of answers	`answers` பதில்களின் பட்டியலாக இருக்க வேண்டும்
 @msg	`artboard` must be the index of an artboard of the document	`artboard` ஆவணத்திலுள்ள ஓர் ஆர்ட்போர்டின் குறியீடாக இருக்க வேண்டும்
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` [x, y] ஆக இருக்க வேண்டும்
@@ -9130,6 +9287,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	`name` must be a name that is not empty	`name` காலியல்லாத ஒரு பெயராக இருக்க வேண்டும்
 @msg	`name` must not be empty	`name` காலியாக இருக்கக்கூடாது
 @msg	`origin` must be [x, y] in points	`origin` புள்ளி அலகுகளில் [x, y] ஆக இருக்க வேண்டும்
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` என்பது [a, b, c, d] ஆக இருக்க வேண்டும், ஒவ்வொன்றும் -1000 முதல் 1000 வரை; a·d - b·c ஆனது 0-இலிருந்து குறைந்தது 0.001 தொலைவில் இருக்க வேண்டும்
 @msg	`picks` must be an array (got {v})	`picks` ஒரு வரிசையாக இருக்க வேண்டும் (கிடைத்தது {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` இல் 1 முதல் {MAX_PICKS} தேர்வுகள் இருக்க வேண்டும் (கிடைத்தது {_1})
 @msg	`radius` must be 0 or more	`radius` 0 அல்லது அதற்கு மேல் இருக்க வேண்டும்
@@ -9425,6 +9583,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	toString is not a function	toString ஒரு செயல்பாடு அல்ல
 @msg	too many arguments	மிக அதிகமான செயலுருபுகள்
 @msg	too many quantifiers	மிக அதிகமான அளவுக்குறிகள்
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	தெரியாத OpenType அம்சம் `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; முடக்க, முன்னால் - ஐச் சேர்க்கவும்; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt ஆகியவை ஒரு மாற்றின் எண்ணை `tag=N` ஆக ஏற்கும், N 0 முதல் {_1} வரை, எடுத்துக்காட்டாக `salt=2`)
 @msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	தெரியாத OpenType அம்சம் `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; முடக்க, முன்னால் - ஐச் சேர்க்கவும்; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt ஆகியவை ஒரு மாற்றின் எண்ணை `tag=N` ஆக ஏற்கும், N 0 முதல் {_1} வரை, எடுத்துக்காட்டாக `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	அறியப்படாத நிறக் கலப்பு `{d}` (diffusion, pattern, noise அல்லது none)
 @msg	unknown panel `{panel}`	அறியப்படாத பலகம் `{panel}`
