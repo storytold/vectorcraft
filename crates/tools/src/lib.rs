@@ -71,6 +71,10 @@ pub enum Overlay {
     SelectionMarquee { rect: Rect, enclosed: bool, pointer: Point },
     /// A path preview (e.g. pen rubber band) in a colour (RGB).
     Path { path: BezPath, color: [u8; 3], width: f32, dashed: bool },
+    /// A solid path preview that later calls return again, as the same shared `path`, for as long
+    /// as it does not change (the settled outline of a long Blob Brush or Eraser drag). The host
+    /// can keep what it built to draw it while `path` is the same allocation.
+    SharedPath { path: std::sync::Arc<BezPath>, color: [u8; 3], width: f32 },
     /// A line segment (smart guide, handle line).
     Line { a: Point, b: Point, color: [u8; 3], dashed: bool },
     /// An anchor square: filled = selected.
