@@ -29,8 +29,11 @@ const MAX_SLICES: usize = 10_000;
 /// The deepest descriptor objects and lists nest.
 const MAX_DEPTH: usize = 16;
 
-/// The most values one descriptor holds, nested ones included.
+/// The most values the descriptors of one slices resource hold together, nested ones included.
 const MAX_VALUES: usize = 200_000;
+
+/// The error of descriptors that hold more than [`MAX_VALUES`].
+const TOO_MANY_VALUES: &str = "the slices' descriptor holds too many values";
 
 /// One slice as the file stores it.
 #[derive(Clone, Debug, PartialEq)]
@@ -60,13 +63,14 @@ fn read(bytes: &[u8]) -> Result<Option<Stored>, String> {
 /// The slices of resource 1050's `data`.
 fn decode(data: &[u8]) -> Result<Vec<PsdSlice>, String> {
     let mut r = Reader::new(data);
+    // The values every descriptor of the resource may hold together.
+    let mut budget = MAX_VALUES;
     match r.u32()? {
-        6 => version_6(&mut r),
+        6 => version_6(&mut r, &mut budget),
         7 | 8 => {
             if r.u32()? != 16 {
                 return Err("the slices' descriptor has a version other than 16".into());
             }
-            let mut budget = MAX_VALUES;
             let d = descriptor(&mut r, 0, &mut budget)?;
             from_descriptor(&d)
         }
@@ -75,7 +79,8 @@ fn decode(data: &[u8]) -> Result<Vec<PsdSlice>, String> {
 }
 
 /// Version 6: the bounds of all the slices, the group's name, the count, then each slice's record.
-fn version_6(r: &mut Reader<'_>) -> Result<Vec<PsdSlice>, String> {
+/// The descriptors that follow the records spend one `budget` of values between them.
+fn version_6(r: &mut Reader<'_>, budget: &mut usize) -> Result<Vec<PsdSlice>, String> {
     r.take(16)?;
     unicode(r)?;
     let count = r.u32()? as usize;
@@ -111,13 +116,18 @@ fn version_6(r: &mut Reader<'_>) -> Result<Vec<PsdSlice>, String> {
             format!("#{red:02x}{green:02x}{blue:02x}")
         };
         // Photoshop 7 and later may follow a record with a descriptor (version 16); a record that
-        // doesn't start one is the next slice.
+        // doesn't start one is the next slice. A descriptor read that uses up the budget is an
+        // error.
         if r.rest().starts_with(&16u32.to_be_bytes()) {
             let mut ahead = Reader::new(r.rest());
-            let mut budget = MAX_VALUES;
-            if ahead.u32().is_ok() && descriptor(&mut ahead, 0, &mut budget).is_ok() {
-                let used = r.rest().len() - ahead.rest().len();
-                r.take(used)?;
+            ahead.u32()?;
+            match descriptor(&mut ahead, 0, budget) {
+                Ok(_) => {
+                    let used = r.rest().len() - ahead.rest().len();
+                    r.take(used)?;
+                }
+                Err(e) if e == TOO_MANY_VALUES => return Err(e),
+                Err(_) => {}
             }
         }
         // Origin 0 is a slice generated automatically.
@@ -278,7 +288,7 @@ fn descriptor(r: &mut Reader<'_>, depth: usize, budget: &mut usize) -> Result<Ve
 
 /// A value of type `kind`.
 fn value(r: &mut Reader<'_>, kind: &[u8; 4], depth: usize, budget: &mut usize) -> Result<Value, String> {
-    *budget = budget.checked_sub(1).ok_or("the slices' descriptor holds too many values")?;
+    *budget = budget.checked_sub(1).ok_or(TOO_MANY_VALUES)?;
     Ok(match kind {
         b"long" => Value::Long(r.u32()? as i32),
         b"doub" => Value::Double(f64::from_be_bytes(r.array()?)),
@@ -322,7 +332,7 @@ fn value(r: &mut Reader<'_>, kind: &[u8; 4], depth: usize, budget: &mut usize) -
         b"obj " => {
             let count = r.u32()? as usize;
             for _ in 0..count {
-                *budget = budget.checked_sub(1).ok_or("the slices' descriptor holds too many values")?;
+                *budget = budget.checked_sub(1).ok_or(TOO_MANY_VALUES)?;
                 match &r.array::<4>()? {
                     b"prop" => {
                         class(r)?;

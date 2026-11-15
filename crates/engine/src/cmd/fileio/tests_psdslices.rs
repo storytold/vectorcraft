@@ -263,6 +263,24 @@ fn photoshop_7_descriptors_after_version_6_records_are_read_past() {
 }
 
 #[test]
+fn version_6_descriptors_share_one_budget_of_values() {
+    // Each record's descriptor holds 2,501 values, well under the 200,000 one descriptor may hold;
+    // 100 of them hold 250,100 together.
+    let list = D::List((0..2_500).map(D::Long).collect());
+    let trailing = [16u32.to_be_bytes().to_vec(), descriptor(&[("many", list)])].concat();
+    let records: Vec<S> = (0..100).map(|_| user("a", [0, 0, 5, 5])).collect();
+    // Alone, one such descriptor is read past.
+    let (s, r) = open(&with_resource(&psd(false), 1050, &v6(&records[..1], &trailing)), json!({}));
+    assert!(warnings(&r).is_empty(), "{r}");
+    assert_eq!(slices(&s).len(), 1);
+    // Together they are refused, and the file opens without slices.
+    let (s, r) = open(&with_resource(&psd(false), 1050, &v6(&records, &trailing)), json!({}));
+    let w = warnings(&r);
+    assert!(w.iter().any(|w| w.starts_with("the slices can't be read (") && w.contains("too many values")), "{w:?}");
+    assert!(slices(&s).is_empty());
+}
+
+#[test]
 fn version_7_and_8_descriptors_open_as_user_slices() {
     let slice = |origin: &'static str, kind: &'static str, l: i32, t: i32, r: i32, b: i32| {
         D::Obj(vec![
