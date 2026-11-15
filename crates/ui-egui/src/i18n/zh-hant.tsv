@@ -1405,6 +1405,40 @@ file-filter	Templates	範本
 	Graph	圖表
 	Graph Data	圖表資料
 	Graph Type	圖表類型
+	Graph Options	圖表選項
+	Left Axis	左軸
+	Right Axis	右軸
+	Category Axis	類別軸
+	Separate Scales	分開刻度
+	Add Drop Shadow	加入投影
+	Add Legend Across Top	在頂端加入圖例
+	First Row in Front	第一列在前
+	First Column in Front	第一欄在前
+	Legend	圖例
+	Column Width	直條寬度
+	Bar Width	橫條寬度
+	Cluster Width	群組寬度
+	Mark Data Points	標示資料點
+	Connect Data Points	連接資料點
+	Edge-to-Edge Lines	邊到邊線條
+	Draw Filled Lines	繪製填色線條
+	Tick Values	刻度值
+	Override Calculated Values	覆寫計算值
+	Divisions	刻度數
+	Tick Marks	刻度記號
+	Tick Marks per Division	每個刻度的記號數
+	Draw Tick Marks Between Labels	在標籤之間繪製刻度記號
+	Add Labels	加入標籤
+	Maximum must be more than Minimum.	最大值必須大於最小值。
+	Column Graph	直條圖
+	Stacked Column Graph	堆疊直條圖
+	Bar Graph	橫條圖
+	Stacked Bar Graph	堆疊橫條圖
+	Line Graph	折線圖
+	Area Graph	區域圖
+	Scatter Graph	散佈圖
+	Pie Graph	圓形圖
+	Radar Graph	雷達圖
 	Graph Design	圖表設計
 	Graph Marker	圖表標記
 	New Design	新增設計
@@ -1526,6 +1560,7 @@ file-filter	Templates	範本
 	Highlight anchors on mouse over	滑鼠移過時醒目提示錨點
 	Highlight Rows	反白顯示列
 	Highlight Variable	突出顯示變數
+	Sort Variables	排序變數
 	Highlight Substituted Fonts	醒目提示被取代的字體
 	Highlight Substituted Glyphs	醒目提示被取代的字符
 	History	步驟記錄
@@ -3113,6 +3148,7 @@ file-filter	Templates	範本
 	Menu Dialog	選單對話框
 	Merge	合併
 	Merge colors into one row	將顏色合併為一列
+	New Row	新增列
 	Merge Graphic Styles	合併繪圖樣式
 	Merge Graphic Styles…	合併繪圖樣式…
 	Merge Layers	合併圖層

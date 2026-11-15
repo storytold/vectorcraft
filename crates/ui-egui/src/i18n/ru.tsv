@@ -1430,6 +1430,40 @@ file-filter	Templates	Шаблоны
 	Graph	Диаграмма
 	Graph Data	Данные диаграммы
 	Graph Type	Тип диаграммы
+	Graph Options	Параметры диаграммы
+	Left Axis	Левая ось
+	Right Axis	Правая ось
+	Category Axis	Ось категорий
+	Separate Scales	Раздельные шкалы
+	Add Drop Shadow	Добавить тень
+	Add Legend Across Top	Добавить легенду сверху
+	First Row in Front	Первая строка спереди
+	First Column in Front	Первый столбец спереди
+	Legend	Легенда
+	Column Width	Ширина столбца
+	Bar Width	Ширина полосы
+	Cluster Width	Ширина группы
+	Mark Data Points	Отмечать точки данных
+	Connect Data Points	Соединять точки данных
+	Edge-to-Edge Lines	Линии от края до края
+	Draw Filled Lines	Рисовать заполненные линии
+	Tick Values	Значения делений
+	Override Calculated Values	Заменить вычисленные значения
+	Divisions	Деления
+	Tick Marks	Метки делений
+	Tick Marks per Division	Меток на деление
+	Draw Tick Marks Between Labels	Рисовать метки между подписями
+	Add Labels	Добавить подписи
+	Maximum must be more than Minimum.	Максимум должен быть больше минимума.
+	Column Graph	Столбчатая диаграмма
+	Stacked Column Graph	Столбчатая диаграмма с накоплением
+	Bar Graph	Линейчатая диаграмма
+	Stacked Bar Graph	Линейчатая диаграмма с накоплением
+	Line Graph	График
+	Area Graph	Диаграмма с областями
+	Scatter Graph	Точечная диаграмма
+	Pie Graph	Круговая диаграмма
+	Radar Graph	Лепестковая диаграмма
 	Graph Design	Дизайн диаграммы
 	Graph Marker	Маркер диаграммы
 	New Design	Новый дизайн
@@ -1550,6 +1584,7 @@ file-filter	Templates	Шаблоны
 	Highlight anchors on mouse over	Выделять опорные точки при наведении
 	Highlight Rows	Выделять строки
 	Highlight Variable	Подсветить переменную
+	Sort Variables	Сортировать переменные
 	Highlight Substituted Fonts	Выделять заменённые шрифты
 	Highlight Substituted Glyphs	Выделять заменённые глифы
 	History	История
@@ -2044,6 +2079,7 @@ file-filter	Templates	Шаблоны
 	Menu Dialog	Диалоговое окно меню
 	Merge	Объединить
 	Merge colors into one row	Объединить цвета в одну строку
+	New Row	Новая строка
 	Merge Graphic Styles	Объединить графические стили
 	Merge Graphic Styles…	Объединить графические стили…
 	Merge Layers	Объединить слои

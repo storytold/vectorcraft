@@ -3363,6 +3363,7 @@ digits	Malayalam	Malayalam
 	Limit to Library:	Begræns til bibliotek:
 	Link harmony colors	Sammenkæd harmonifarver
 	Merge colors into one row	Flet farver til én række
+	New Row	Ny række
 	No colors to recolor (preserved colors are left out).	Ingen farver at omfarve (bevarede farver er udeladt).
 	Preserve:	Bevar:
 	Randomly change color order	Ændr farverækkefølgen tilfældigt
@@ -4012,6 +4013,40 @@ theme	Appearance	Udseende
 	Create Graph	Opret graf
 	Graph Data	Grafdata
 	Graph Type	Graftype
+	Graph Options	Grafindstillinger
+	Left Axis	Venstre akse
+	Right Axis	Højre akse
+	Category Axis	Kategoriakse
+	Separate Scales	Separate skalaer
+	Add Drop Shadow	Tilføj slagskygge
+	Add Legend Across Top	Tilføj forklaring øverst
+	First Row in Front	Første række forrest
+	First Column in Front	Første kolonne forrest
+	Legend	Forklaring
+	Column Width	Søjlebredde
+	Bar Width	Bjælkebredde
+	Cluster Width	Gruppebredde
+	Mark Data Points	Markér datapunkter
+	Connect Data Points	Forbind datapunkter
+	Edge-to-Edge Lines	Linjer fra kant til kant
+	Draw Filled Lines	Tegn udfyldte linjer
+	Tick Values	Afmærkningsværdier
+	Override Calculated Values	Tilsidesæt beregnede værdier
+	Divisions	Inddelinger
+	Tick Marks	Afmærkninger
+	Tick Marks per Division	Afmærkninger pr. inddeling
+	Draw Tick Marks Between Labels	Tegn afmærkninger mellem etiketter
+	Add Labels	Tilføj etiketter
+	Maximum must be more than Minimum.	Maksimum skal være større end minimum.
+	Column Graph	Søjlediagram
+	Stacked Column Graph	Stablet søjlediagram
+	Bar Graph	Bjælkediagram
+	Stacked Bar Graph	Stablet bjælkediagram
+	Line Graph	Linjediagram
+	Area Graph	Områdediagram
+	Scatter Graph	Spredningsdiagram
+	Pie Graph	Cirkeldiagram
+	Radar Graph	Radardiagram
 	Vector Halftone	Vektorraster
 	spot	spot
 	Text	Tekst
@@ -4599,6 +4634,7 @@ axis	Both	Begge
 	Replace:	Erstat:
 	Type on a Path Options	Indstillinger for tekst på kurve
 	Highlight Variable	Fremhæv variabel
+	Sort Variables	Sortér variabler
 	New Variable	Ny variabel
 	List Variables	Oplist variabler
 	Bind Variable	Tilknyt variabel

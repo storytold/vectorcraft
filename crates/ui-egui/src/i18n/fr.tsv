@@ -1414,6 +1414,40 @@ font-technology	Variable	Variables
 	Graph	Graphe
 	Graph Data	Données du graphe
 	Graph Type	Type de graphe
+	Graph Options	Options du graphe
+	Left Axis	Axe gauche
+	Right Axis	Axe droit
+	Category Axis	Axe des catégories
+	Separate Scales	Échelles distinctes
+	Add Drop Shadow	Ajouter une ombre portée
+	Add Legend Across Top	Ajouter la légende en haut
+	First Row in Front	Première ligne au premier plan
+	First Column in Front	Première colonne au premier plan
+	Legend	Légende
+	Column Width	Largeur des colonnes
+	Bar Width	Largeur des barres
+	Cluster Width	Largeur des groupes
+	Mark Data Points	Marquer les points de données
+	Connect Data Points	Relier les points de données
+	Edge-to-Edge Lines	Lignes bord à bord
+	Draw Filled Lines	Tracer des lignes pleines
+	Tick Values	Valeurs des graduations
+	Override Calculated Values	Remplacer les valeurs calculées
+	Divisions	Divisions
+	Tick Marks	Graduations
+	Tick Marks per Division	Graduations par division
+	Draw Tick Marks Between Labels	Tracer les graduations entre les étiquettes
+	Add Labels	Ajouter des étiquettes
+	Maximum must be more than Minimum.	Le maximum doit être supérieur au minimum.
+	Column Graph	Graphe à colonnes
+	Stacked Column Graph	Graphe à colonnes empilées
+	Bar Graph	Graphe à barres
+	Stacked Bar Graph	Graphe à barres empilées
+	Line Graph	Graphe linéaire
+	Area Graph	Graphe de zones
+	Scatter Graph	Graphe de dispersion
+	Pie Graph	Graphe à secteurs
+	Radar Graph	Graphe radar
 	Graph Design	Conception de graphe
 	Graph Marker	Marqueur de graphe
 	New Design	Nouvelle conception
@@ -1534,6 +1568,7 @@ font-technology	Variable	Variables
 	Highlight anchors on mouse over	Mettre en évidence les points d’ancrage au survol
 	Highlight Rows	Surligner les lignes
 	Highlight Variable	Surligner la variable
+	Sort Variables	Trier les variables
 	Highlight Substituted Fonts	Surligner les polices remplacées
 	Highlight Substituted Glyphs	Surligner les glyphes remplacés
 	History	Historique
@@ -2011,6 +2046,7 @@ font-technology	Variable	Variables
 	Menu Dialog	Boîte de dialogue du menu
 	Merge	Fusionner
 	Merge colors into one row	Fusionner les couleurs sur une ligne
+	New Row	Nouvelle ligne
 	Merge Graphic Styles	Fusionner les styles graphiques
 	Merge Graphic Styles…	Fusionner les styles graphiques…
 	Merge Layers	Fusionner les calques
