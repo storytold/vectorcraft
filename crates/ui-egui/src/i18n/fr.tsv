@@ -1443,6 +1443,7 @@ font-technology	Variable	Variables
 	Connect Data Points	Relier les points de données
 	Edge-to-Edge Lines	Lignes bord à bord
 	Draw Filled Lines	Tracer des lignes pleines
+	Line Width	Épaisseur de ligne
 	Tick Values	Valeurs des graduations
 	Override Calculated Values	Remplacer les valeurs calculées
 	Divisions	Divisions

@@ -3879,6 +3879,7 @@ file-filter	Templates	템플릿
 	Connect Data Points	데이터 요소 연결
 	Edge-to-Edge Lines	가장자리 간 선
 	Draw Filled Lines	채워진 선 그리기
+	Line Width	선 너비
 	Tick Values	눈금 값
 	Override Calculated Values	계산된 값 재정의
 	Divisions	구간

@@ -1374,6 +1374,7 @@ font-technology	Variable	Değişken
 	Connect Data Points	Veri Noktalarını Bağla
 	Edge-to-Edge Lines	Kenardan Kenara Çizgiler
 	Draw Filled Lines	Dolgulu Çizgiler Çiz
+	Line Width	Çizgi Genişliği
 	Tick Values	Onay İşareti Değerleri
 	Override Calculated Values	Hesaplanan Değerleri Geçersiz Kıl
 	Divisions	Bölümler

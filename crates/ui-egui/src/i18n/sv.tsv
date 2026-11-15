@@ -1406,6 +1406,7 @@ font-technology	Variable	Variabla
 	Connect Data Points	Förbind datapunkter
 	Edge-to-Edge Lines	Linjer från kant till kant
 	Draw Filled Lines	Rita fyllda linjer
+	Line Width	Linjebredd
 	Tick Values	Skalstrecksvärden
 	Override Calculated Values	Åsidosätt beräknade värden
 	Divisions	Indelningar

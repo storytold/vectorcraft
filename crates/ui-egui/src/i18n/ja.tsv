@@ -3891,6 +3891,7 @@ file-filter	Templates	テンプレート
 	Connect Data Points	データポイントを線でつなぐ
 	Edge-to-Edge Lines	端から端までの線
 	Draw Filled Lines	線を塗りつぶして描く
+	Line Width	線幅
 	Tick Values	目盛りの値
 	Override Calculated Values	計算値を上書き
 	Divisions	分割数

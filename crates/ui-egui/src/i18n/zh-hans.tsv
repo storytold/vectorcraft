@@ -1397,6 +1397,7 @@ file-filter	Templates	模板
 	Connect Data Points	连接数据点
 	Edge-to-Edge Lines	边到边线条
 	Draw Filled Lines	绘制填充线
+	Line Width	线宽
 	Tick Values	刻度值
 	Override Calculated Values	覆盖计算值
 	Divisions	刻度数

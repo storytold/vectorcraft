@@ -1801,6 +1801,7 @@ file-filter	Templates	Sablonok
 	Connect Data Points	Adatpontok összekötése
 	Edge-to-Edge Lines	Széltől szélig érő vonalak
 	Draw Filled Lines	Kitöltött vonalak rajzolása
+	Line Width	Vonalvastagság
 	Tick Values	Osztásértékek
 	Override Calculated Values	Számított értékek felülírása
 	Divisions	Osztások

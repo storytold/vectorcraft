@@ -6443,6 +6443,54 @@ fn filled_lines_keep_the_line_colour_and_fall_back_to_thin_lines() {
     assert!(series_parts(&s, big, 0)[0].appearance.fill_paint().is_none());
 }
 
+/// Line Width sets how wide Draw Filled Lines draws the bands and is kept through save and open. A width outside 0.01
+/// to 1000 pt is refused, the same width again records no undo step, and the default 3 pt is stored as no width.
+#[test]
+fn filled_lines_take_a_line_width() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = make(&mut s, "line", ",a\nQ1,2\nQ2,2\nQ3,2");
+    s.execute("graph.setType", &json!({"id": id.0, "filledLines": true})).unwrap();
+    let height = |s: &Session| series_parts(s, id, 0)[0].geometric_bounds().unwrap().height();
+    assert!((height(&s) - 3.0).abs() < 1e-6, "3 pt by default: {}", height(&s));
+    assert_eq!(s.execute("graph.setType", &json!({"id": id.0})).unwrap()["lineWidth"], json!(3.0));
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 8})).unwrap();
+    assert!((height(&s) - 8.0).abs() < 1e-6, "{}", height(&s));
+    assert_eq!(s.execute("graph.setType", &json!({"id": id.0})).unwrap()["lineWidth"], json!(8.0));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    for p in [json!({"id": id.0, "lineWidth": 8}), json!({"id": id.0, "lineWidth": 8.0, "filledLines": true}), json!({"id": id.0, "lineWidth": null})]
+    {
+        s.execute("graph.setType", &p).unwrap();
+        assert_eq!(steps(&s), before, "nothing changed: {p}");
+    }
+    for w in [json!(0), json!(-2), json!(0.005), json!(1000.5)] {
+        let e = s.execute("graph.setType", &json!({"id": id.0, "lineWidth": w})).unwrap_err().to_string();
+        assert!(e.contains(&format!("`lineWidth` must be from 0.01 to 1000 pt, not {}", w.as_f64().unwrap())), "{e}");
+        assert_eq!((steps(&s), spec(&s, id).line_width), (before, Some(8.0)), "{w}");
+    }
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 0.01})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(0.01));
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 1000})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(1000.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(8.0));
+    // Kept through save and open.
+    let dir = vectorcraft_testkit::TempDir::new("graph-line-width");
+    let path = dir.join("width.vectorcraft");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    assert_eq!(spec(&s, id).line_width, Some(8.0));
+    assert!((height(&s) - 8.0).abs() < 1e-6, "{}", height(&s));
+    // The default width is stored as no width, so the file keeps no `lineWidth`.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setType", &json!({"id": id.0, "lineWidth": 3})).unwrap();
+    assert_eq!(spec(&s, id).line_width, None);
+    assert!(serde_json::to_value(spec(&s, id)).unwrap().get("lineWidth").is_none());
+    assert!((height(&s) - 3.0).abs() < 1e-6, "{}", height(&s));
+}
+
 #[test]
 fn overlapping_columns_keep_clear_of_the_legend_and_options_follow_the_graph_type() {
     let mut s = Session::new();
@@ -8029,6 +8077,7 @@ fn graph_commands_refuse_params_of_the_wrong_type() {
         ("firstRowInFront", json!("yes"), "`firstRowInFront` must be true or false"),
         ("firstColumnInFront", json!(0), "`firstColumnInFront` must be true or false"),
         ("filledLines", json!("on"), "`filledLines` must be true or false"),
+        ("lineWidth", json!("4"), "`lineWidth` must be a number, not \"4\""),
         ("dropShadow", json!(1), "`dropShadow` must be true or false"),
         ("legendAcrossTop", json!("x"), "`legendAcrossTop` must be true or false"),
         ("type", json!(5), "`type` must be a string"),

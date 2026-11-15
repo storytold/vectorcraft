@@ -1370,6 +1370,7 @@ font-technology	Variable	Μεταβλητές
 	Connect Data Points	Σύνδεση σημείων δεδομένων
 	Edge-to-Edge Lines	Γραμμές από άκρη σε άκρη
 	Draw Filled Lines	Σχεδίαση γεμισμένων γραμμών
+	Line Width	Πλάτος γραμμής
 	Tick Values	Τιμές υποδιαιρέσεων
 	Override Calculated Values	Αντικατάσταση υπολογισμένων τιμών
 	Divisions	Διαιρέσεις

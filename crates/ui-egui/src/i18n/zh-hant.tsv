@@ -1432,6 +1432,7 @@ file-filter	Templates	範本
 	Connect Data Points	連接資料點
 	Edge-to-Edge Lines	邊到邊線條
 	Draw Filled Lines	繪製填色線條
+	Line Width	線寬
 	Tick Values	刻度值
 	Override Calculated Values	覆寫計算值
 	Divisions	刻度數
