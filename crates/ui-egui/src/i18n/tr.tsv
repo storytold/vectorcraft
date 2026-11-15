@@ -145,6 +145,7 @@
 	Align to Artboard	Çalışma Yüzeyine Hizala
 	Align to Glyph Bounds	Glif Sınırlarına Hizala
 	Align to Key Object	Anahtar Nesneye Hizala
+	Align to Key Anchor	Anahtar Bağlantı Noktasına Hizala
 	Align to Page	Sayfaya Hizala
 	Align to Path	Yola Hizala
 	Align to Selection	Seçime Hizala
@@ -1047,7 +1048,10 @@ font-technology	Variable	Değişken
 	Every (minutes)	Her (dakika)
 	Every option is at its default.	Her seçenek varsayılan değerdedir.
 	Every option matches {base}.	Her seçenek {base} ile eşleşir.
-	Every-line Composer	Her Satır Bestecisi
+	Middle Eastern & South Asian Single-line Composer	Tek Satır Oluşturucu (Orta Doğu ve Güney Asya)
+	Middle Eastern & South Asian Every-line Composer	Her Satır Bestecisi (Orta Doğu ve Güney Asya)
+	Standard Single-line Composer	Standart Tek Satır Oluşturucu
+	Standard Every-line Composer	Standart Her Satır Bestecisi
 	Exact dash lengths	Tam çizgi uzunlukları
 	Exceptions (comma separated)	İstisnalar (virgülle ayrılmış)
 	Exclude	Hariç tut
@@ -1353,6 +1357,40 @@ font-technology	Variable	Değişken
 	Graph	Grafik
 	Graph Data	Grafik Verileri
 	Graph Type	Grafik Türü
+	Graph Options	Grafik Seçenekleri
+	Left Axis	Sol Eksen
+	Right Axis	Sağ Eksen
+	Category Axis	Kategori Ekseni
+	Separate Scales	Ayrı Ölçekler
+	Add Drop Shadow	Alt Gölge Ekle
+	Add Legend Across Top	Göstergeyi Üste Ekle
+	First Row in Front	İlk Satır Önde
+	First Column in Front	İlk Sütun Önde
+	Legend	Gösterge
+	Column Width	Sütun Genişliği
+	Bar Width	Çubuk Genişliği
+	Cluster Width	Küme Genişliği
+	Mark Data Points	Veri Noktalarını İşaretle
+	Connect Data Points	Veri Noktalarını Bağla
+	Edge-to-Edge Lines	Kenardan Kenara Çizgiler
+	Draw Filled Lines	Dolgulu Çizgiler Çiz
+	Tick Values	Onay İşareti Değerleri
+	Override Calculated Values	Hesaplanan Değerleri Geçersiz Kıl
+	Divisions	Bölümler
+	Tick Marks	Ölçek İşaretleri
+	Tick Marks per Division	Bölüm Başına Ölçek İşareti
+	Draw Tick Marks Between Labels	Etiketler Arasına Ölçek İşaretleri Çiz
+	Add Labels	Etiket Ekle
+	Maximum must be more than Minimum.	En çok, en azdan büyük olmalıdır.
+	Column Graph	Sütun Grafik
+	Stacked Column Graph	Yığılmış Sütun Grafik
+	Bar Graph	Çubuk Grafik
+	Stacked Bar Graph	Yığılmış Çubuk Grafik
+	Line Graph	Çizgi Grafik
+	Area Graph	Alan Grafik
+	Scatter Graph	Dağılım Grafik
+	Pie Graph	Pasta Grafik
+	Radar Graph	Radar Grafik
 	Graph Design	Grafik Tasarımı
 	Graph Marker	Grafik İşaretleyici
 	New Design	Yeni Tasarım
@@ -1462,6 +1500,7 @@ font-technology	Variable	Değişken
 	Highlight anchors on mouse over	Fareyle üzerine gelindiğinde bağlantı noktalarını vurgulayın
 	Highlight Rows	Satırları Vurgula
 	Highlight Variable	Değişkeni Vurgula
+	Sort Variables	Değişkenleri Sırala
 	Highlight Substituted Fonts	Değiştirilen Yazı Tiplerini Vurgula
 	Highlight Substituted Glyphs	Değiştirilen Glifleri Vurgula
 	History	Geçmiş
@@ -1849,6 +1888,7 @@ font-technology	Variable	Değişken
 	Menu Dialog	Menü İletişim Kutusu
 	Merge	Birleştir
 	Merge colors into one row	Renkleri tek satırda birleştirme
+	New Row	Yeni satır
 	Merge Graphic Styles	Grafik Stillerini Birleştir
 	Merge Graphic Styles…	Grafik Stillerini Birleştir…
 	Merge Layers	Katmanları Birleştir
@@ -3215,7 +3255,6 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Tek Sol Tırnak İşareti
 	Single Quotes:	Tek Alıntılar:
 	Single Right Quotation Mark	Tek Sağ Tırnak İşareti
-	Single-line Composer	Tek Satır Oluşturucu
 	Toggle Line Composer	Satır Oluşturucuyu Değiştir
 	Sixth Space	Altıncı Uzay
 	Size	Boyut
@@ -3538,6 +3577,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Rakamlar
 	Scale at Center	Merkezden Ölçekle
+	Delete Set	Seti Sil
+	Direct Entry	Doğrudan Giriş
 	Up/Down:	Yukarı/Aşağı:
 	Left/Right:	Sol/Sağ:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko Yukarı/Aşağı
@@ -4217,6 +4258,7 @@ axis	Both	Her İkisi
 @msg	`name` must be the name of a script engine	`name` bir betik motorunun adı olmalıdır
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	ana betik motoru her çalıştırmada yenidir ve hiç saklanmaz, bu yüzden bırakılamaz
 @msg	there is no script engine named {name}	{name} adlı bir betik motoru yok
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` yalnızca sorulacak kimsenin olmadığı bir çalıştırma içindir: uygulamada her iletişim kutusunu kişi yanıtlar
 @msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı
 @msg	Copied the link info	Bağlantı bilgisi kopyalandı
@@ -5166,6 +5208,11 @@ axis	Both	Her İkisi
 @msg	Imported library {name}	İçe aktarılan kitaplık {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB İlkesi:
+	CMYK Policy:	CMYK İlkesi:
+	Preserve Embedded Profiles	Gömülü Profilleri Koru
+	Convert to Working Space	Çalışma Alanına Dönüştür
+	Preserve Numbers	Sayıları Koru
 	Texture	Doku
 	Craquelure…	Küçük çatlak…
 	Grain…	Tahıl…
@@ -6091,6 +6138,14 @@ theme	Appearance	Görünüm
 	JavaScript:	JavaScript:
 	Large Gaps	Büyük Boşluklar
 	Last Artboard	Son Çalışma Yüzeyi
+	Status Bar Show	Durum Çubuğunda Göster
+	Artboard Name	Çalışma Yüzeyi Adı
+	Current Tool	Geçerli Araç
+	Date and Time	Tarih ve Saat
+	Number of Undos	Geri Alma Sayısı
+	Document Color Profile	Belge Renk Profili
+	Undos	Geri Al
+	Redos	Yinele
 	Levels	Düzeyler
 	Library Panel Options	Kütüphane Paneli Seçenekleri
 	Link JavaScript Files…	JavaScript Dosyalarını Bağla…
@@ -6339,6 +6394,8 @@ theme	Appearance	Görünüm
 	Save Variable Library…	Değişken Kitaplığını Kaydet…
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	`{name}` değişkeni değişken kitaplığına kaydedilemiyor: adını bir harf veya `_` ile başlayacak, boşluk ya da `-`, `_` ve `.` dışında simge içermeyecek şekilde değiştirin
+@msg	{k} has control characters	{k} denetim karakterleri içeriyor
+@msg	{k} has control characters or line breaks	{k} denetim karakterleri veya satır sonları içeriyor
 @msg	data set `{name}` holds a control character, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir denetim karakteri içeriyor
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir boşlukla başlıyor veya bitiyor
 	Long	Uzun
@@ -6633,6 +6690,7 @@ axis	Y Axis	Y ekseni
 @msg	stops must be in order of `offset`	duraklar `offset` sırasında olmalıdır
 @msg	the document has no pattern {pattern}	belgede {pattern} deseni yok
 @msg	the document has no swatch {n}	belgede {n} renk örneği yok
+@msg	`plates` requires a stop linked to a spot swatch	`plates`, nokta rengi örneğine bağlı bir degrade durağı gerektirir
 @msg	the output	çıktı
 @msg	the path has no anchor points	yolun bağlantı noktası yok
 @msg	too many anchor points (limit {MAX_ANCHORS})	çok fazla bağlantı noktası (sınır {MAX_ANCHORS})
@@ -6869,6 +6927,7 @@ axis	Y Axis	Y ekseni
 @msg	`name` must be a name that is not empty	`name` boş olmayan bir ad olmalıdır
 @msg	`name` must not be empty	`name` boş olmamalıdır
 @msg	`origin` must be [x, y] in points	`origin` punto cinsinden [x, y] olmalıdır
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` [a, b, c, d] olmalıdır; her biri -1000 ile 1000 arasında, a·d - b·c ise 0'dan en az 0.001 uzakta olmalıdır
 @msg	`picks` must be an array (got {v})	`picks` bir dizi olmalıdır (verilen: {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` 1 ile {MAX_PICKS} arasında seçim içermelidir (verilen: {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` 2 ile 100000 arasında nokta içermelidir
@@ -7237,6 +7296,7 @@ axis	Y Axis	Y ekseni
 @msg	Image Trace failed: {e}	Görüntü İzleme başarısız oldu: {e}
 @msg	Image Trace finished, but its document was closed	Görüntü İzleme tamamlandı, ancak belgesi kapatılmıştı
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Görüntü İzleme tamamlandı, ancak bu sırada görüntü veya ayarları değişti: yeniden izleyin
+@msg	Image Trace finished, but its document was reverted: trace it again	Görüntü İzleme tamamlandı, ancak belgesi geri döndürüldü: yeniden izleyin
 @msg	Invalid dimension offset	Geçersiz boyut ofseti
 @msg	Invalid point	Geçersiz nokta
 @msg	Join: a subpath went missing	Birleştir: bir alt yol kayboldu
@@ -7651,7 +7711,7 @@ axis	Y Axis	Y ekseni
 @msg	column: true floats the whole column and takes no onto, above or below	column: true tüm sütunu yüzdürür ve onto, above veya below almaz
 @msg	command must be a shape.* command	command bir shape.* komutu olmalıdır
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` eksik
-@msg	composer must be "singleLine" or "everyLine"	composer "singleLine" veya "everyLine" olmalıdır
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer "singleLine", "everyLine", "standardSingleLine" veya "standardEveryLine" olmalıdır
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	bileşik şekiller yolları, bileşik yolları, grupları, bileşik şekilleri, metni, karışımları ve zarfları alır
 @msg	compound {_1} must contain exactly one open path to join	bileşik {_1}, birleştirilecek tam olarak bir açık yol içermelidir
 @msg	connect needs a path other than the one extended	connect için uzatılan yoldan başka bir yol gerekir

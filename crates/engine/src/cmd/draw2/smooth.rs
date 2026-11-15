@@ -274,7 +274,7 @@ fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64, free: [bool; 2]) -> Vec<A
     for a in &mut out {
         *a = Anchor::with_handles(a.p, a.h_in, a.h_out);
     }
-    out
+    out.into_vec()
 }
 
 /// Distance (points) from an anchor within which a smoothed closed path starts at that anchor
@@ -549,7 +549,7 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
     if sp.closed {
         let start = sp.anchors[0].p;
         let Some(k) = marked.iter().position(|m| !m) else {
-            let corners = smooth_corners(&sp.anchors, true, radius);
+            let corners = smooth_corners(&sp.anchors.contiguous(), true, radius);
             let Some(c) = corners.iter().position(|c| *c) else {
                 // Everything is in range and nothing is a corner: smooth the whole closed path,
                 // across its start too.
@@ -557,7 +557,7 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
                 return f.subpaths.into_iter().next().map(|r| start_nearest(r, start, sp));
             };
             // Cut the path open at a corner, which then ends the last part as well as starting the first.
-            let mut open = sp.anchors.clone();
+            let mut open = sp.anchors.to_vec();
             open.rotate_left(c);
             let mut cut = corners;
             cut.rotate_left(c);
@@ -576,15 +576,14 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
             return Some(start_nearest(SubPath::new(res, true), start, sp));
         };
         // Rotate so an untouched anchor comes first, duplicate it at the end and treat as open.
-        let mut open = sp.clone();
-        open.anchors.rotate_left(k);
+        let mut open = sp.anchors.to_vec();
+        open.rotate_left(k);
         let mut m = marked.clone();
         m.rotate_left(k);
-        open.anchors.push(open.anchors[0]);
+        open.push(open[0]);
         m.push(false);
-        open.closed = false;
-        let mut res = smooth_open(&open.anchors, &m, near, tol, sigma, radius, false);
-        if same_anchors(&res, &open.anchors) {
+        let mut res = smooth_open(&open, &m, near, tol, sigma, radius, false);
+        if same_anchors(&res, &open) {
             return None;
         }
         let l = res.pop()?;
@@ -595,8 +594,9 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
         let res = SubPath::new(res, true);
         return Some(if k == 0 { res } else { start_nearest(res, start, sp) });
     }
-    let res = smooth_open(&sp.anchors, &marked, near, tol, sigma, radius, true);
-    (!same_anchors(&res, &sp.anchors)).then(|| SubPath::new(res, false))
+    let anchors = sp.anchors.contiguous();
+    let res = smooth_open(&anchors, &marked, near, tol, sigma, radius, true);
+    (!same_anchors(&res, &anchors)).then(|| SubPath::new(res, false))
 }
 
 /// The segment `c`, which ends in the drag's reach (`near`) and starts outside it, split where it

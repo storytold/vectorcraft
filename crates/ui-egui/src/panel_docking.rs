@@ -51,6 +51,8 @@ pub(crate) struct Runtime {
     raise: Option<String>,
     /// The panel the user last clicked or pressed in (a tab, a panel body, a drop).
     focused: Option<String>,
+    /// Hidden panels shown from the window's edges ([`peek`]).
+    peek: peek::State,
 }
 
 /// Every docking control the main window drew last frame with its rect. Controls in floating
@@ -72,6 +74,7 @@ pub(crate) fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "hidden": app.ui.docking_hidden.keys().collect::<Vec<_>>(),
         "autoCollapse": app.session.prefs.auto_collapse_icon_panels,
         "panelsShown": app.ui.dock && app.ui.screen_mode < 3,
+        "peek": peek::shown(app),
         "hitRects": hits,
     })
 }
@@ -322,6 +325,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Opt
     match id {
         "window.panel" => return Some(show_panel(app, params)),
         "window.collapseDock" => return Some(crate::menus::opt_bool(params, "collapsed").and_then(|c| collapse_dock(app, c))),
+        "window.panels.peek" => return Some(peek::command(app, params)),
         "window.panel.collapse" => {
             let minimized = match crate::menus::opt_bool(params, "collapsed") {
                 Ok(c) => c,
@@ -1167,6 +1171,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if modal || egui::Popup::is_any_open(&ctx) {
         blocked.push(ctx.content_rect());
     }
+    // Panels hidden by Tab or Shift+Tab show on the side of the window edge the pointer rests on.
+    let peeking = peek::update(app, &ctx, ui.available_rect_before_wrap(), &layout, !blocked.is_empty()).map(|edge| peek::edge_panels(&layout, edge));
+    let shown_from_edge = |panel: &String| peeking.as_ref().is_some_and(|panels| panels.contains(panel));
     let style = dock_style(ui);
     let mut dock = craft_ui::docking::DockArea::new(area)
         .blocked_rects(&blocked)
@@ -1187,7 +1194,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // Tab and Shift+Tab (`window.dock`, `window.panels`) and the full screen modes hide the panels;
     // the canvas stays.
     if !app.ui.dock || app.ui.screen_mode >= 3 {
-        dock = dock.hide_panels(HidePanels::All);
+        dock = dock.hide_panels(if peeking.is_some() { HidePanels::Except(&shown_from_edge) } else { HidePanels::All });
     }
     if let Some(panel) = app.dock_rt.raise.take() {
         dock = dock.raise_panel(panel);
@@ -1220,7 +1227,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.open_dropped_files(window.dropped, None, shift);
     }
     forward_keys(app, &ctx, output.forwarded_events, output.forwarded_modifiers);
-    if !thumbnail_panel_showing(&app.ui, &ctx) {
+    if peeking.is_none() && !thumbnail_panel_showing(&app.ui, &ctx) {
         // No panel can ask for these rows again this pass. Keep the cache of open documents, but
         // discard worker jobs queued behind the one already rendering.
         crate::panels::layers::show_thumbs_of(None);
@@ -1383,8 +1390,10 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     /// Draw a registered panel body, fitting untouched flyouts and pinning sized panels' footers.
     fn body(&mut self, ui: &mut egui::Ui, id: &String) {
         if id == CANVAS {
-            crate::toolbar::show_beside_canvas(self.app, ui);
-            self.app.canvas_area(ui);
+            peek::canvas(self.app, ui, |app, ui| {
+                crate::toolbar::show_beside_canvas(app, ui);
+                app.canvas_area(ui);
+            });
             return;
         }
         let floating = ui.ctx().viewport_id() != egui::ViewportId::ROOT;
@@ -1512,6 +1521,8 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         }
     }
 }
+
+mod peek;
 
 #[cfg(test)]
 mod tests;

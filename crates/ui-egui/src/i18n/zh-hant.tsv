@@ -118,6 +118,7 @@
 	Align to Artboard	對齊工作區域
 	Align to Glyph Bounds	對齊字符邊界
 	Align to Key Object	對齊關鍵物件
+	Align to Key Anchor	對齊關鍵錨點
 	Align to Page	對齊頁面
 	Align to Path	對齊路徑
 	Align to Selection	對齊選取範圍
@@ -1049,7 +1050,8 @@ font-technology	Variable	可變
 	Every (minutes)	每隔 (分鐘)
 	Every option is at its default.	所有選項皆為預設值。
 	Every option matches {base}.	所有選項皆與{base}相同。
-	Every-line Composer	逐行排版程式
+	Middle Eastern & South Asian Every-line Composer	逐行排版程式（中東與南亞）
+	Standard Every-line Composer	標準逐行排版程式
 	Exact dash lengths	精確虛線長度
 	Exceptions (comma separated)	例外 (以逗號分隔)
 	Exclude	差集
@@ -1386,6 +1388,14 @@ file-filter	Templates	範本
 	Previous Artboard	上一個工作區域
 	Next Artboard	下一個工作區域
 	Last Artboard	最後一個工作區域
+	Status Bar Show	狀態列顯示
+	Artboard Name	工作區域名稱
+	Current Tool	目前工具
+	Date and Time	日期和時間
+	Number of Undos	復原次數
+	Document Color Profile	文件色彩描述檔
+	Undos	復原
+	Redos	重做
 	Go To Link	前往連結
 	GPL palettes keep solid colours only, as RGB.	GPL 調色盤僅保留純色，並以 RGB 儲存。
 	GPU Performance	GPU 效能
@@ -1405,6 +1415,40 @@ file-filter	Templates	範本
 	Graph	圖表
 	Graph Data	圖表資料
 	Graph Type	圖表類型
+	Graph Options	圖表選項
+	Left Axis	左軸
+	Right Axis	右軸
+	Category Axis	類別軸
+	Separate Scales	分開刻度
+	Add Drop Shadow	加入投影
+	Add Legend Across Top	在頂端加入圖例
+	First Row in Front	第一列在前
+	First Column in Front	第一欄在前
+	Legend	圖例
+	Column Width	直條寬度
+	Bar Width	橫條寬度
+	Cluster Width	群組寬度
+	Mark Data Points	標示資料點
+	Connect Data Points	連接資料點
+	Edge-to-Edge Lines	邊到邊線條
+	Draw Filled Lines	繪製填色線條
+	Tick Values	刻度值
+	Override Calculated Values	覆寫計算值
+	Divisions	刻度數
+	Tick Marks	刻度記號
+	Tick Marks per Division	每個刻度的記號數
+	Draw Tick Marks Between Labels	在標籤之間繪製刻度記號
+	Add Labels	加入標籤
+	Maximum must be more than Minimum.	最大值必須大於最小值。
+	Column Graph	直條圖
+	Stacked Column Graph	堆疊直條圖
+	Bar Graph	橫條圖
+	Stacked Bar Graph	堆疊橫條圖
+	Line Graph	折線圖
+	Area Graph	區域圖
+	Scatter Graph	散佈圖
+	Pie Graph	圓形圖
+	Radar Graph	雷達圖
 	Graph Design	圖表設計
 	Graph Marker	圖表標記
 	New Design	新增設計
@@ -1526,6 +1570,7 @@ file-filter	Templates	範本
 	Highlight anchors on mouse over	滑鼠移過時醒目提示錨點
 	Highlight Rows	反白顯示列
 	Highlight Variable	突出顯示變數
+	Sort Variables	排序變數
 	Highlight Substituted Fonts	醒目提示被取代的字體
 	Highlight Substituted Glyphs	醒目提示被取代的字符
 	History	步驟記錄
@@ -2590,6 +2635,7 @@ file-filter	Templates	範本
 @msg	`name` must be the name of a script engine	`name` 必須是指令碼引擎的名稱
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主指令碼引擎在每次執行時都是新的，從不保留，因此無法捨棄
 @msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 僅適用於沒有人可詢問的執行：在應用程式中，由使用者回答每個對話框
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
 @msg	Copied the link info	已複製連結資訊
@@ -3113,6 +3159,7 @@ file-filter	Templates	範本
 	Menu Dialog	選單對話框
 	Merge	合併
 	Merge colors into one row	將顏色合併為一列
+	New Row	新增列
 	Merge Graphic Styles	合併繪圖樣式
 	Merge Graphic Styles…	合併繪圖樣式…
 	Merge Layers	合併圖層
@@ -4536,7 +4583,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Single Left Quotation Mark	左單引號
 	Single Quotes:	單引號：
 	Single Right Quotation Mark	右單引號
-	Single-line Composer	單行排版程式
+	Middle Eastern & South Asian Single-line Composer	單行排版程式（中東與南亞）
+	Standard Single-line Composer	標準單行排版程式
 	Toggle Line Composer	切換行排版程式
 	Sixth Space	六分之一空格
 	Size	大小
@@ -4872,6 +4920,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Kana	假名
 	Numerals	數字
 	Scale at Center	從中心縮放
+	Delete Set	刪除集
+	Direct Entry	直接輸入
 	Up/Down:	上/下：
 	Left/Right:	左/右：
 	Tate-chu-yoko Up/Down	縱中橫上/下
@@ -5528,6 +5578,11 @@ axis	Both	兩者
 	Interpolation	內插
 	RGB:	RGB：
 	CMYK:	CMYK：
+	RGB Policy:	RGB 原則：
+	CMYK Policy:	CMYK 原則：
+	Preserve Embedded Profiles	保留內嵌描述檔
+	Convert to Working Space	轉換為工作空間
+	Preserve Numbers	保留數值
 	Texture	紋理
 	Craquelure…	龜裂紋…
 	Grain…	顆粒…
@@ -5909,6 +5964,8 @@ lighting	Light	光源
 	Save Variable Library…	儲存變數資料庫…
 @msg	a variable library holds text variables, and the document has none	變數資料庫包含文字變數，但文件中沒有文字變數
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	無法將變數 `{name}` 儲存到變數資料庫：請重新命名，使其以字母或 `_` 開頭，且不含空格或 `-`、`_`、`.` 以外的符號
+@msg	{k} has control characters	{k} 包含控制字元
+@msg	{k} has control characters or line breaks	{k} 包含控制字元或換行
 @msg	data set `{name}` holds a control character, which a variable library can't hold	資料集 `{name}` 包含變數資料庫無法儲存的控制字元
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	資料集 `{name}` 的開頭或結尾有變數資料庫無法儲存的空白字元
 	Make Graph Dynamic	使圖表動態化
@@ -6205,6 +6262,7 @@ axis	Y Axis	Y 軸
 @msg	stops must be in order of `offset`	色標必須依 `offset` 排序
 @msg	the document has no pattern {pattern}	文件中沒有圖樣 {pattern}
 @msg	the document has no swatch {n}	文件中沒有色票 {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` 需要連結到特別色色票的漸層色標
 @msg	the output	輸出
 @msg	the path has no anchor points	路徑沒有錨點
 @msg	too many anchor points (limit {MAX_ANCHORS})	錨點過多（上限 {MAX_ANCHORS}）
@@ -7430,6 +7488,7 @@ breakText	Glyphs	字符
 @msg	`name` must be a name that is not empty	`name` 必須是不為空的名稱
 @msg	`name` must not be empty	`name` 不能為空
 @msg	`origin` must be [x, y] in points	`origin` 必須是以點為單位的 [x, y]
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` 必須是 [a, b, c, d]，每個值介於 -1000 到 1000 之間，且 a·d - b·c 與 0 的差至少為 0.001
 @msg	`picks` must be an array (got {v})	`picks` 必須是陣列 (收到 {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` 必須包含 1 到 {MAX_PICKS} 個選擇 (收到 {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` 必須包含 2 到 100000 個點
@@ -7808,6 +7867,7 @@ breakText	Glyphs	字符
 @msg	Image Trace failed: {e}	影像描圖失敗：{e}
 @msg	Image Trace finished, but its document was closed	影像描圖已完成，但其文件已關閉
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	影像描圖已完成，但影像或其設定在此期間已變更：請重新描圖
+@msg	Image Trace finished, but its document was reverted: trace it again	影像描圖已完成，但其文件已回復：請重新描圖
 @msg	Invalid dimension offset	尺寸標註位移無效
 @msg	Invalid point	點無效
 @msg	Join: a subpath went missing	連接：有一條子路徑不見了
@@ -8222,7 +8282,7 @@ breakText	Glyphs	字符
 @msg	column: true floats the whole column and takes no onto, above or below	column: true 會讓整欄浮動，不接受 onto、above 或 below
 @msg	command must be a shape.* command	command 必須是 shape.* 指令
 @msg	commands[{i}]: missing `command`	commands[{i}]：未提供 `command`
-@msg	composer must be "singleLine" or "everyLine"	composer 必須是 "singleLine" 或 "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer 必須是 "singleLine"、"everyLine"、"standardSingleLine" 或 "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	複合形狀接受路徑、複合路徑、群組、複合形狀、文字、漸變物件和封套
 @msg	compound {_1} must contain exactly one open path to join	複合路徑 {_1} 必須剛好包含一條可連接的開放路徑
 @msg	connect needs a path other than the one extended	connect 需要延伸路徑以外的另一條路徑

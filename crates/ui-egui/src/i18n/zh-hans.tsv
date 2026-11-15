@@ -109,6 +109,7 @@
 	Align to Artboard	对齐画板
 	Align to Glyph Bounds	对齐到字形边界
 	Align to Key Object	对齐关键对象
+	Align to Key Anchor	对齐关键锚点
 	Align to Page	对齐页面
 	Align to Path	对齐路径
 	Align to Selection	对齐选区
@@ -1018,7 +1019,8 @@ antiAlias	Sharp	锐利
 	Every (minutes)	每隔 (分钟)
 	Every option is at its default.	所有选项皆为默认值。
 	Every option matches {base}.	所有选项皆与{base}相同。
-	Every-line Composer	逐行排版器
+	Middle Eastern & South Asian Every-line Composer	逐行排版器（中东和南亚）
+	Standard Every-line Composer	标准逐行排版器
 	Exact dash lengths	精确虚线长度
 	Exceptions (comma separated)	例外词 (逗号分隔)
 	Exclude	差集
@@ -1351,6 +1353,14 @@ file-filter	Templates	模板
 	Previous Artboard	上一个画板
 	Next Artboard	下一个画板
 	Last Artboard	最后一个画板
+	Status Bar Show	状态栏显示
+	Artboard Name	画板名称
+	Current Tool	当前工具
+	Date and Time	日期和时间
+	Number of Undos	撤销次数
+	Document Color Profile	文档颜色配置文件
+	Undos	撤销
+	Redos	重做
 	Go To Link	转到链接
 	GPL palettes keep solid colours only, as RGB.	GPL 调板仅保留为 RGB 的纯色。
 	GPU Performance	GPU 性能
@@ -1370,6 +1380,40 @@ file-filter	Templates	模板
 	Graph	图表
 	Graph Data	图表数据
 	Graph Type	图表类型
+	Graph Options	图表选项
+	Left Axis	左轴
+	Right Axis	右轴
+	Category Axis	类别轴
+	Separate Scales	分开刻度
+	Add Drop Shadow	添加投影
+	Add Legend Across Top	在顶部添加图例
+	First Row in Front	第一行在前
+	First Column in Front	第一列在前
+	Legend	图例
+	Column Width	列宽
+	Bar Width	条形宽度
+	Cluster Width	簇宽度
+	Mark Data Points	标记数据点
+	Connect Data Points	连接数据点
+	Edge-to-Edge Lines	边到边线条
+	Draw Filled Lines	绘制填充线
+	Tick Values	刻度值
+	Override Calculated Values	覆盖计算值
+	Divisions	刻度数
+	Tick Marks	刻度线
+	Tick Marks per Division	每个刻度的刻度线数
+	Draw Tick Marks Between Labels	在标签之间绘制刻度线
+	Add Labels	添加标签
+	Maximum must be more than Minimum.	最大值必须大于最小值。
+	Column Graph	柱形图
+	Stacked Column Graph	堆积柱形图
+	Bar Graph	条形图
+	Stacked Bar Graph	堆积条形图
+	Line Graph	折线图
+	Area Graph	面积图
+	Scatter Graph	散点图
+	Pie Graph	饼图
+	Radar Graph	雷达图
 	Graph Design	图表设计
 	Graph Marker	图表标记
 	New Design	新建设计
@@ -1926,6 +1970,7 @@ file-filter	Templates	模板
 	Menu Dialog	菜单对话框
 	Merge	合并
 	Merge colors into one row	将颜色合并为一行
+	New Row	新建行
 	Merge Graphic Styles	合并图形样式
 	Merge Graphic Styles…	合并图形样式…
 	Merge Layers	合并图层
@@ -3276,7 +3321,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Single Left Quotation Mark	左单引号
 	Single Quotes:	单引号：
 	Single Right Quotation Mark	右单引号
-	Single-line Composer	单行排版器
+	Middle Eastern & South Asian Single-line Composer	单行排版器（中东和南亚）
+	Standard Single-line Composer	标准单行排版器
 	Toggle Line Composer	切换行排版器
 	Sixth Space	六分之一空格
 	Size	大小
@@ -3611,6 +3657,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Kana	假名
 	Numerals	数字
 	Scale at Center	从中心缩放
+	Delete Set	删除集
+	Direct Entry	直接输入
 	Up/Down:	上/下：
 	Left/Right:	左/右：
 	Tate-chu-yoko Up/Down	纵中横上/下
@@ -5297,6 +5345,11 @@ imageTrace	Outline	轮廓
 	None (Color Preview)	无 (颜色预览)
 	Preserve	保留
 	CMYK:	CMYK：
+	RGB Policy:	RGB 策略：
+	CMYK Policy:	CMYK 策略：
+	Preserve Embedded Profiles	保留嵌入的配置文件
+	Convert to Working Space	转换为工作空间
+	Preserve Numbers	保留数值
 	Art & Illustration	艺术和插画
 	Branding	品牌
 	Film & Video	影片和视频
@@ -5476,6 +5529,7 @@ font-technology	Variable	可变
 	High Performance (discrete)	高性能 (独立显卡)
 	Highlight Rows	突出显示行
 	Highlight Variable	突出显示变量
+	Sort Variables	对变量排序
 	Lock Others	锁定其他
 	Merge Selected	合并所选图层
 	Move Rows	移动行
@@ -6075,6 +6129,8 @@ lighting	Light	光源
 	Save Variable Library…	保存变量库…
 @msg	a variable library holds text variables, and the document has none	变量库包含文本变量，而文档中没有文本变量
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	无法将变量 `{name}` 保存到变量库中：请重命名，使其以字母或 `_` 开头，且不含空格或 `-`、`_`、`.` 以外的符号
+@msg	{k} has control characters	{k} 包含控制字符
+@msg	{k} has control characters or line breaks	{k} 包含控制字符或换行
 @msg	data set `{name}` holds a control character, which a variable library can't hold	数据集 `{name}` 包含变量库无法保存的控制字符
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	数据集 `{name}` 的开头或结尾有变量库无法保存的空白字符
 	Make Graph Dynamic	使图表动态化
@@ -6398,6 +6454,7 @@ axis	Y Axis	Y 轴
 @msg	stops must be in order of `offset`	色标必须按 `offset` 排序
 @msg	the document has no pattern {pattern}	文档中没有图案 {pattern}
 @msg	the document has no swatch {n}	文档中没有色板 {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` 需要链接到专色色板的渐变色标
 @msg	the output	输出
 @msg	the path has no anchor points	路径没有锚点
 @msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
@@ -7470,6 +7527,7 @@ breakText	Glyphs	字形
 @msg	`answer` for this {kind} dialog must be one of: {_1}	此 {kind} 对话框的 `answer` 必须是以下之一：{_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` 中的回答超过 {MAX_ANSWERS} 个
 @msg	`answers` is larger than 1 MiB	`answers` 大于 1 MiB
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 仅用于无人可问的运行：在应用中，由用户回答每个对话框
 @msg	`answers` must be a list of answers	`answers` 必须是回答的列表
 @msg	`artboard` must be the index of an artboard of the document	`artboard` 必须是文档中某个画板的索引
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` 必须是 [x, y]
@@ -7502,6 +7560,7 @@ breakText	Glyphs	字形
 @msg	`name` must be a name that is not empty	`name` 必须是非空的名称
 @msg	`name` must not be empty	`name` 不能为空
 @msg	`origin` must be [x, y] in points	`origin` 必须是以点为单位的 [x, y]
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` 必须是 [a, b, c, d]，每个值在 -1000 到 1000 之间，且 a·d - b·c 与 0 的差至少为 0.001
 @msg	`picks` must be an array (got {v})	`picks` 必须是数组 (实际为 {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` 必须包含 1 到 {MAX_PICKS} 个拾取项 (实际为 {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` 必须包含 2 到 100000 个点
@@ -7880,6 +7939,7 @@ breakText	Glyphs	字形
 @msg	Image Trace failed: {e}	图像描摹失败：{e}
 @msg	Image Trace finished, but its document was closed	图像描摹已完成，但其文档已关闭
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	图像描摹已完成，但图像或其设置在此期间发生了更改：请重新描摹
+@msg	Image Trace finished, but its document was reverted: trace it again	图像描摹已完成，但其文档已恢复：请重新描摹
 @msg	Invalid dimension offset	尺寸标注的偏移无效
 @msg	Invalid point	点无效
 @msg	Join: a subpath went missing	连接：有一条子路径丢失
@@ -8294,7 +8354,7 @@ breakText	Glyphs	字形
 @msg	column: true floats the whole column and takes no onto, above or below	column: true 会使整列浮动，不能再给出 onto、above 或 below
 @msg	command must be a shape.* command	command 必须是 shape.* 命令
 @msg	commands[{i}]: missing `command`	commands[{i}]：缺少 `command`
-@msg	composer must be "singleLine" or "everyLine"	composer 必须是 "singleLine" 或 "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer 必须是 "singleLine"、"everyLine"、"standardSingleLine" 或 "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	复合形状接受路径、复合路径、编组、复合形状、文字、混合和封套
 @msg	compound {_1} must contain exactly one open path to join	复合对象 {_1} 必须恰好包含一条要连接的开放路径
 @msg	connect needs a path other than the one extended	connect 需要一条不同于被延伸路径的路径
@@ -9224,7 +9284,6 @@ breakText	Glyphs	字形
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 文件不支持透明度，而该文件会包含 {what}：请先拼合 (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	无法打开 {kind} 图像 (参见 document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` 不在可选项之中
-@msg	{k} has control characters{_1}	{k} 含有控制字符{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} 过长 (最多 {MAX_TEXT} 个字符)
 @msg	{k} must be > 0	{k} 必须 > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} 必须是数字 (pt) 或 "210 mm" 这样的长度
