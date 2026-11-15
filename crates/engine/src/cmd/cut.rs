@@ -356,7 +356,8 @@ fn mirror_open(sp: &SubPath, axis: &Axis, m: Affine) -> Vec<SubPath> {
     if !end_on {
         run.reverse();
     }
-    let Some((last, body)) = run.anchors.split_last() else { return vec![] };
+    let run = run.anchors.into_vec();
+    let Some((last, body)) = run.split_last() else { return vec![] };
     let q = axis.project(last.p);
     let mut anchors = body.to_vec();
     anchors.push(Anchor::with_handles(q, last.h_in, m * last.h_in));

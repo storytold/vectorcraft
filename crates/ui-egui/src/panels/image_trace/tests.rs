@@ -1051,7 +1051,7 @@ fn the_control_bar_and_properties_show_a_renamed_or_changed_preset_as_the_panel_
             if properties {
                 crate::panels::properties::show(app, ui);
             } else {
-                ui.horizontal(|ui| control_bar(app, ui));
+                ui.horizontal(|ui| control_bar(app, ui, 0.0));
             }
         });
         out.textures_delta.clear();

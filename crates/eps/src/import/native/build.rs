@@ -19,6 +19,16 @@ pub(super) enum Page {
     Art,
     /// A `.ai` is read on its (first and only) artboard.
     Artboard,
+    /// A `.ai` in the legacy format (PostScript, not an EPS): its page is its art's bounding box, as
+    /// an EPS's is, and its artboard is the one its header gives.
+    Program,
+}
+
+impl Page {
+    /// Is the page the art's bounding box?
+    fn of_art(self) -> bool {
+        matches!(self, Page::Art | Page::Program)
+    }
 }
 
 /// How art moved from a page to its place in the layers' document transforms: its pattern tiles
@@ -62,8 +72,12 @@ pub(super) fn build(
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    let large_canvas = matches!(page, Page::Art);
-    let structure = if visible.is_some() { ai::read_over_page(data, large_canvas, names)? } else { ai::read_in(data, large_canvas, names)? };
+    let large_canvas = page.of_art();
+    let structure = match page {
+        Page::Program => ai::read_program(data, large_canvas, visible.is_some(), names)?,
+        _ if visible.is_some() => ai::read_over_page(data, large_canvas, names)?,
+        _ => ai::read_in(data, large_canvas, names)?,
+    };
     build_from(structure, data, visible, page, outlined, trust, unit)
 }
 
@@ -184,7 +198,7 @@ fn page_scale_alone(structure: &Structure, pages: &[(f64, f64)], unit: f64) -> O
 /// page, which draws nothing for them, the linked images' `placeholders`. A PDF part draws those
 /// images' pixels, which the placeholders don't match.
 fn left_out_of_comparisons(page: Page, mut restyled: Vec<Rect>, placeholders: Vec<Rect>) -> Vec<Rect> {
-    if matches!(page, Page::Art) {
+    if page.of_art() {
         restyled.extend(placeholders);
     }
     restyled
@@ -295,7 +309,7 @@ pub(super) fn build_weighing(
     let mut frame = None;
     if let Some(visible) = visible {
         let art_box = match page {
-            Page::Art => bbox.map(|[a, b, c, d]| Rect::new(a, b, c, d)).ok_or("its editing data doesn't say where its art is")?,
+            Page::Art | Page::Program => bbox.map(|[a, b, c, d]| Rect::new(a, b, c, d)).ok_or("its editing data doesn't say where its art is")?,
             Page::Artboard => artboard.ok_or("its editing data doesn't say where its artboard is")?,
         };
         let page_rect = visible.artboards.first().map(|a| a.rect).ok_or("it has no page")?;
@@ -393,8 +407,9 @@ pub(super) fn build_weighing(
         // An EPS saved as its artboard has the art outside it left out of its page.
         let artboard_page =
             artboard.is_some_and(|a| [a.x0 - art_box.x0, a.y0 - art_box.y0, a.x1 - art_box.x1, a.y1 - art_box.y1].iter().all(|d| d.abs() <= 1.0));
-        let whole = matches!(page, Page::Art) && !artboard_page;
-        if whole {
+        let whole = page.of_art() && !artboard_page;
+        // A `.ai` keeps the artboard its editing copy gives, with the art outside it.
+        if whole && matches!(page, Page::Art) {
             // Its page is the file's own (its bounding box), as when it comes in as its page: art
             // reaching past the editing data's artboard stays on it (#1102).
             doc.artboards.truncate(1);
@@ -1815,7 +1830,7 @@ fn last_boards(boards: &[vectorcraft_doc::Artboard], pages: &[Rect]) -> Option<V
 /// the one whose art draws most like the page, the first of them on a tie. Else (and for an EPS,
 /// whose page is its art) the first artboard (0).
 fn shown_artboard(doc: &Document, visible: &Document, page: Page, page_rect: Rect, fits: impl Fn(&Rect) -> bool) -> usize {
-    if matches!(page, Page::Art) || visible.artboards.len() >= doc.artboards.len() {
+    if page.of_art() || visible.artboards.len() >= doc.artboards.len() {
         return 0;
     }
     let pages: Vec<Rect> = visible.artboards.iter().map(|a| a.rect).collect();
