@@ -210,23 +210,11 @@ fn copy_within(size: Option<usize>, limit: usize, copy: impl FnOnce() -> Option<
     copy().filter(|data| data.len() <= limit)
 }
 
-/// The copies of `ids`' data, in order, [`copy_within`] what is left of `limit` bytes once the
-/// copies before them are taken: an id whose data doesn't fit is skipped and the next one is tried.
+/// The most bytes of UTF-8 that `utf16` bytes of UTF-16 text come to: a code unit (2 bytes) is at
+/// most 3 bytes of UTF-8, and a surrogate pair (4 bytes) is 4.
 #[cfg_attr(not(windows), allow(dead_code))]
-fn copies_within<T: Copy>(
-    ids: impl IntoIterator<Item = T>,
-    limit: usize,
-    mut size: impl FnMut(T) -> Option<usize>,
-    mut copy: impl FnMut(T) -> Option<Vec<u8>>,
-) -> Vec<Vec<u8>> {
-    let mut left = limit;
-    ids.into_iter()
-        .filter_map(|id| {
-            let data = copy_within(size(id), left, || copy(id))?;
-            left = left.saturating_sub(data.len());
-            Some(data)
-        })
-        .collect()
+fn utf8_most(utf16: usize) -> usize {
+    utf16.div_ceil(2).saturating_mul(3)
 }
 
 /// Whether a Windows file list (`CF_HDROP`: a `DROPFILES` header, then file names each ended by a
@@ -346,8 +334,8 @@ mod win {
     use clipboard_win::{formats, options::NoClear, raw};
 
     use super::{
-        BITMAP, ClipboardRead, Cursor, Flavour, MAX_BYTES, MAX_URIS, PNG, SVG, SystemClipboard, TEXT, copied_file, copies_within, copy_within,
-        decode_png, dib_image, drop_files_within, png_flavour, windows_formats,
+        BITMAP, ClipboardRead, Cursor, Flavour, MAX_BYTES, MAX_URIS, PNG, SVG, SystemClipboard, TEXT, copied_file, copy_within, decode_png,
+        dib_image, drop_files_within, png_flavour, utf8_most, windows_formats,
     };
 
     /// The device-independent bitmaps, the one that carries alpha first. Each is there whenever the
@@ -484,16 +472,16 @@ mod win {
     }
 
     /// Copy both bitmap formats while the clipboard is open, then decode them in preference order.
-    /// `size` gives each format's size before `get` copies it, and the two copies come to at most
-    /// [`MAX_BYTES`] together ([`copies_within`]).
-    pub(super) fn read_dibs(size: impl FnMut(u32) -> Option<usize>, get: impl FnMut(u32) -> Option<Vec<u8>>) -> Option<ClipboardRead> {
-        let dibs = copies_within(DIBS, MAX_BYTES, size, get);
+    /// `size` gives each format's size before `get` copies it, and a format of more than
+    /// [`MAX_BYTES`] is not copied ([`copy_within`]) and the next one is tried.
+    pub(super) fn read_dibs(mut size: impl FnMut(u32) -> Option<usize>, mut get: impl FnMut(u32) -> Option<Vec<u8>>) -> Option<ClipboardRead> {
+        let dibs: Vec<_> = DIBS.into_iter().filter_map(|id| copy_within(size(id), MAX_BYTES, || get(id))).collect();
         (!dibs.is_empty()).then_some(ClipboardRead::Later(Box::new(move || dibs.iter().find_map(|dib| dib_png(dib)))))
     }
 
     /// One flavour, while the clipboard is open. A device-independent bitmap is copied here, and
     /// the work that comes back decodes each captured format in preference order. Text whose
-    /// UTF-16 block is larger than [`MAX_BYTES`], or comes to more as UTF-8, is not read.
+    /// UTF-16 block could come to more than [`MAX_BYTES`] as UTF-8 ([`utf8_most`]) is not read.
     fn read_one(mime: &'static str) -> Option<ClipboardRead> {
         let (mime, mut data) = match mime {
             BITMAP => match read_registered(PNG) {
@@ -507,7 +495,7 @@ mod win {
                 }
             },
             TEXT => {
-                let text = copy_within(size_of(formats::CF_UNICODETEXT), MAX_BYTES, || {
+                let text = copy_within(size_of(formats::CF_UNICODETEXT).map(utf8_most), MAX_BYTES, || {
                     let mut text = vec![];
                     raw::get_string(&mut text).ok()?;
                     Some(text)
@@ -3424,24 +3412,21 @@ mod tests {
         assert_eq!(MAX_BYTES, 64 << 20);
     }
 
-    /// Formats copied together come to the limit at most: one that doesn't fit what is left is
-    /// skipped without a copy and the next one is tried.
+    /// The UTF-8 that UTF-16 text comes to is bounded from the UTF-16 block's size alone, before
+    /// the text is converted: a block that could pass the limit as UTF-8 is not read.
     #[test]
-    fn formats_copied_together_share_the_limit() {
-        let sizes = [5, 4, 2, 0];
-        let mut asked = vec![];
-        let copies = copies_within(
-            0..sizes.len(),
-            8,
-            |i| sizes.get(i).copied(),
-            |i| {
-                asked.push(i);
-                Some(vec![0; sizes[i]])
-            },
-        );
-        assert_eq!(copies.iter().map(Vec::len).collect::<Vec<_>>(), [5, 2]);
-        assert_eq!(asked, [0, 2]);
-        assert!(copies_within([0], 8, |_| None, |_| Some(vec![0])).is_empty());
+    fn text_is_bounded_by_what_its_utf8_could_come_to() {
+        for text in ["", "a", "\u{20ac}\u{20ac}\u{20ac}", "\u{1f600}", "a\u{20ac}\u{1f600}\u{ffff}"] {
+            let utf16 = text.encode_utf16().count() * 2;
+            assert!(utf8_most(utf16) >= text.len(), "{text:?}");
+        }
+        // Every code unit at 3 bytes of UTF-8: the bound is exact.
+        assert_eq!(utf8_most("\u{20ac}\u{20ac}".encode_utf16().count() * 2), "\u{20ac}\u{20ac}".len());
+        let copied = |utf16: usize| copy_within(Some(utf8_most(utf16)), MAX_BYTES, || Some(vec![])).is_some();
+        assert!(copied(MAX_BYTES / 3 * 2));
+        assert!(!copied(MAX_BYTES / 3 * 2 + 2));
+        assert!(!copied(MAX_BYTES));
+        assert_eq!(utf8_most(usize::MAX), usize::MAX);
     }
 
     /// A Windows file list (CF_HDROP) of `names`: a DROPFILES header, the names in UTF-16 or one
@@ -3566,6 +3551,19 @@ mod tests {
         )
         .unwrap();
         assert_eq!(captured, [CF_DIB]);
+        assert_eq!(read.flavour().map(|f| f.mime), Some(PNG));
+        // Each format has the limit to itself: a first one at the limit that doesn't decode
+        // leaves the second to paste.
+        captured.clear();
+        let read = win::read_dibs(
+            |id| if id == CF_DIBV5 { Some(MAX_BYTES) } else { get(id).map(|d| d.len()) },
+            |id| {
+                captured.push(id);
+                get(id)
+            },
+        )
+        .unwrap();
+        assert_eq!(captured, [CF_DIBV5, CF_DIB]);
         assert_eq!(read.flavour().map(|f| f.mime), Some(PNG));
     }
 
