@@ -8220,6 +8220,42 @@ flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, R
 A document with transparency keeps it. `file.place {path}` links the file like any image (`links.update` reads it
 again when it changes); Multichannel files are refused.
 
+`file.place` with `layers: true` embeds a PSD or PSB file's layers as objects instead, and `hiddenLayers: true`
+brings the hidden layers in, hidden. The
+[PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
+offer the conversion and the hidden layers only for a file that is opened or embedded, and a linked file shows its
+flat image. The rest are VectorCraft's own rules:
+
+- The layers are read as `document.open` reads them (below) and placed as one group named after the file. A layer
+  becomes an image and a layer group becomes a group, each with the layer's name, visibility, opacity, blend mode
+  and opacity mask. A Pass Through group is not isolated; a group in any other mode is.
+- The group takes the place the merged image would take: `at` centers the file's canvas and `rect` fits it. When
+  layers reach past the canvas, hidden layers included, the group is a clip group whose clipping path is the canvas.
+- The layers are never linked. With `layers: true`, `link` is false unless it is given, and `link: true` is an
+  error.
+- `hiddenLayers: true` without `layers: true` is an error.
+- A file without layers is embedded as its merged image, and so is a file whose layers are all left out, with the
+  import's warnings. A file whose layers can't be read is embedded as its merged image with a warning.
+- `file.place.queue` and `file.place.info` take `layers` and `hiddenLayers` too.
+
+`document.psdInfo` reads a PSD or PSB file without opening it: its `format` (`psd` or `psb`), the canvas `width`
+and `height` in pixels, and the counts `layers` (group markers left out), `hiddenLayers` and `groups`. A file
+without layer records, or whose layer records can't be read, has `layers: 0`. A file that is not a PSD or PSB file
+is an error.
+
+In the app, File › Open of a PSD or PSB file with two or more layers shows PSD Import Options: Convert Layers to
+Objects (with Import Hidden Layers) or Flatten Layers to a Single Image. File › Place shows the same dialog for
+such a file placed without Link, and so does a file dropped on the canvas with Shift held. The dialog starts from
+the choices made last, at first Convert Layers to Objects without hidden layers. A file with fewer than two
+layers, a file placed with Link, and `document.open` and `file.place` run as commands don't show it. Several files
+placed together without Link load the place cursor without asking, and each PSD or PSB file among them comes in
+with the choices made last.
+
+```json
+{"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/poster.psd","layers":true,"hiddenLayers":true}}}
+{"name":"run_command","arguments":{"command":"document.psdInfo","params":{"path":"/tmp/poster.psd"}}}
+```
+
 `document.open` converts a PSD or PSB file's layers to objects. In
 [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html),
 the option that converts layers to objects keeps as much of the layer structure as it can, merges the layers of a
@@ -8268,8 +8304,7 @@ Each layer's pixels must fit the memory allowed for one image, and the pixels of
 canvases the merges make, must together fit eight times that; a file past either limit opens as its merged image,
 with a warning. The canvases one step of a merge holds at once must also fit the memory allowed for one image; when
 they don't, the layer that needed the merge comes in alone, with a warning: in the Normal mode, or as a layer of its
-own instead of clipped. File › Open in the app has no PSD import options dialog: it converts the layers and leaves
-hidden layers out.
+own instead of clipped.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/poster.psd","hiddenLayers":true}}}

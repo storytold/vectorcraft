@@ -92,6 +92,8 @@ pub use naming::{NameParts as FileNameParts, parse_date as parse_file_date, rend
 pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
 pub use pdfimport::{LoadOptions, page_document};
+pub(crate) use psdlayers::import_active as psd_layers;
+pub use psdlayers::{PsdInfo, info as psd_info};
 pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;
 pub use save::{

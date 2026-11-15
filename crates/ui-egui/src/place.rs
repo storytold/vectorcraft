@@ -152,6 +152,11 @@ fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, 
     if crate::dialogs::dxf_import::offer_place(app, p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
     }
+    // A PSD file with several layers that the user embeds asks for its import options. A place
+    // run as a command (MCP, scripts) places at once and takes `layers` itself.
+    if matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, p) {
+        return Ok(json!({ "dialog": crate::dialogs::psd_import::KIND }));
+    }
     let mut p = p.clone();
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
         && let Some(v) = app.view()
@@ -343,7 +348,11 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
         many => {
             let paths: Vec<&Value> = many.iter().filter_map(|s| s.get("path")).collect();
             let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
-            queue_files(app, &json!({ "paths": paths, "files": files, "link": link, "template": template }), Read::ForUser { dropped: false })
+            let mut q = json!({ "paths": paths, "files": files, "link": link, "template": template });
+            if !link {
+                crate::dialogs::psd_import::queue_options(app, &mut q);
+            }
+            queue_files(app, &q, Read::ForUser { dropped: false })
         }
     };
     app.place.picked.clear();
