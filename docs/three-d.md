@@ -161,6 +161,12 @@ How a facet carries its seam depends on the lights and the paint:
 - Revolve, with shading on: when a `lights` list is given (even one of white lights), a solid-color or gradient face fills its light
   ramps through a clip of the face and its 0.75 pt seam, outlined with round joins. With the single legacy light,
   a face is a path and a seam; with a colored `lightColor` a gradient face fills through the same kind of clip.
+  Under a colored `lightColor` or a `lights` list, the faces of a solid-color or gradient surface lie over an underlay
+  of themselves under one clip, as colored Inflate's facets do; in a group, each run of one member's faces in the
+  shared depth order takes its own underlay, and a face with a part of a mapped graphic keeps that part right after
+  it. Faces in a gradient with transparent stops carry its opacity mask and are drawn without an underlay. At 1:1,
+  away from the surface's outline, a pixel is opaque where the same art drawn at 3x and averaged down is opaque
+  (VectorCraft's own measure).
 
 A facet seen almost edge-on is a sliver, and a seam with mitered joins would reach past the solid as a thorn; a round
 one reaches no more than half its width past its facet. So where a facet has no neighbor (Rotate's plane, every
