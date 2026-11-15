@@ -1129,6 +1129,7 @@ font-technology	Variable	Μεταβλητές
 	Rotate (Classic)…	Περιστροφή (κλασικό)…
 	Surface	Επιφάνεια
 	Wireframe	Συρματόπλεγμα
+	Render Settings	Ρυθμίσεις απόδοσης
 	No Shading	Χωρίς σκίαση
 	Plastic	Πλαστικό
 	Highlight Intensity	Ένταση ανταύγειας
@@ -3977,6 +3978,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Toggle Line Composer	Εναλλαγή σύνθεσης γραμμών
 	Sixth Space	Διάστημα ενός έκτου
 	Size Tile to Art	Προσαρμογή μεγέθους πλακιδίου στο σχέδιο
+	Move Tile with Art	Μετακίνηση πλακιδίου μαζί με το σχέδιο
 	Size/Leading	Μέγεθος/διάστιχο
 	Ridges per segment:	Ράχες ανά τμήμα:
 	Size: {size}  Tracking: {tracking}	Μέγεθος: {size}  Απόσταση χαρακτήρων: {tracking}
@@ -4112,6 +4114,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Swap Fill and Stroke (Shift+X)	Εναλλαγή γεμίσματος και περιγράμματος (Shift+X)
 	Swap start and end arrowheads	Εναλλαγή αρχικής και τελικής αιχμής βέλους
 	Swap the selected object for the file, keeping its place and transform	Αντικατάσταση επιλεγμένου αντικειμένου με το αρχείο, διατηρώντας θέση και μετασχηματισμό
+	Show Import Options	Εμφάνιση επιλογών εισαγωγής
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Ερώτηση για τις επιλογές εισαγωγής κάθε αρχείου PDF, DXF ή κειμένου πριν από την τοποθέτηση· απενεργοποιημένο: χρήση των τελευταίων επιλογών
 	Swatch Conflict	Διένεξη δείγματος χρώματος
 	Swatch Conflicts	Διενέξεις δειγμάτων χρωμάτων
 	Swatch exchange files keep solid colors only.	Τα αρχεία ανταλλαγής δειγμάτων διατηρούν μόνο συμπαγή χρώματα.
@@ -4191,6 +4195,48 @@ digits	Malayalam	Μαλαγιάλαμ
 	Composite Fonts	Σύνθετες γραμματοσειρές
 	Export Composite Fonts	Εξαγωγή σύνθετων γραμματοσειρών
 	Import Composite Fonts	Εισαγωγή σύνθετων γραμματοσειρών
+@msg	each font must be {name, parts}	κάθε γραμματοσειρά πρέπει να είναι {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	άγνωστο κλειδί `{k}`· μια γραμματοσειρά δέχεται name και parts
+@msg	each font needs a name	κάθε γραμματοσειρά χρειάζεται όνομα
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	το `{raw}` δεν μπορεί να είναι όνομα σύνθετης γραμματοσειράς (1 έως {COMPOSITE_NAME_MAX} χαρακτήρες, χωρίς χαρακτήρες ελέγχου)
+@msg	`{name}`: parts must be an object	`{name}`: το parts πρέπει να είναι αντικείμενο
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: άγνωστη κλάση `{k}`· οι κλάσεις είναι kanji, kana, punctuation, symbols, roman και numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: το {_1} πρέπει να είναι αντικείμενο
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: άγνωστο κλειδί `{k}` στο {_1}
+@msg	`{name}`: give the kanji part	`{name}`: δώστε το τμήμα kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ένα έγγραφο περιέχει το πολύ {COMPOSITE_FONTS_MAX} σύνθετες γραμματοσειρές
+@msg	two composite fonts are named `{_1}`	δύο σύνθετες γραμματοσειρές ονομάζονται `{_1}`
+@msg	`{_1}` is the name of an installed font	το `{_1}` είναι όνομα εγκατεστημένης γραμματοσειράς
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: το {_2} χρησιμοποιεί την `{font}`, που είναι σύνθετη γραμματοσειρά
+@msg	give fonts: [{name, parts}…]	δώστε fonts: [{name, parts}…]
+@msg	path is empty	το path είναι κενό
+@msg	fonts must be a list of composite fonts	το fonts πρέπει να είναι λίστα σύνθετων γραμματοσειρών
+@msg	names must be strings	τα names πρέπει να είναι συμβολοσειρές
+@msg	no composite font named `{n}`	δεν υπάρχει σύνθετη γραμματοσειρά με όνομα `{n}`
+@msg	names must be a list of names	το names πρέπει να είναι λίστα ονομάτων
+@msg	no composite fonts to export	δεν υπάρχουν σύνθετες γραμματοσειρές για εξαγωγή
+@msg	not a composite fonts file: {e}	δεν είναι αρχείο σύνθετων γραμματοσειρών: {e}
+@msg	not a composite fonts file: no compositeFonts list	δεν είναι αρχείο σύνθετων γραμματοσειρών: δεν υπάρχει λίστα compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	το αρχείο περιέχει περισσότερες από {COMPOSITE_FONTS_MAX} σύνθετες γραμματοσειρές
+@msg	the file is larger than 4 MB	το αρχείο είναι μεγαλύτερο από 4 MB
+@msg	dataBase64 is not base64	το dataBase64 δεν είναι base64
+@msg	give one of path, data or dataBase64	δώστε path, data ή dataBase64
+@msg	the file holds no composite fonts	το αρχείο δεν περιέχει σύνθετες γραμματοσειρές
+@msg	the file holds two composite fonts named `{_1}`	το αρχείο περιέχει δύο σύνθετες γραμματοσειρές με όνομα `{_1}`
+@msg	`{_1}` can't name a composite font	το `{_1}` δεν μπορεί να είναι όνομα σύνθετης γραμματοσειράς
+@msg	{k}: give a font	{k}: δώστε γραμματοσειρά
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: δώστε γραμματοσειρά
+@msg	{k}: size must be {_1} to {_2}%	{k}: το size πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: το size πρέπει να είναι από {_1} έως {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: το baseline πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: το baseline πρέπει να είναι από {_1} έως {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: η κλίμακα πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: η κλίμακα πρέπει να είναι από {_1} έως {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: μόνο τα kana, roman και numerals αλλάζουν κλίμακα
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: μόνο τα kana, roman και numerals αλλάζουν κλίμακα
+@msg	{k}: only kana can be scaled at the center	{k}: μόνο το kana αλλάζει κλίμακα από το κέντρο
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: μόνο το kana αλλάζει κλίμακα από το κέντρο
+@msg	no composite font	καμία σύνθετη γραμματοσειρά
 	Delete Font	Διαγραφή γραμματοσειράς
 	Kanji	Κάντζι
 	Kana	Κάνα
@@ -4438,6 +4484,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Width Tool	Πλάτος (Width Tool)
 	Working CMYK (don't tag)	Χώρος εργασίας CMYK (χωρίς ετικέτα)
 	Working RGB (don't tag)	Χώρος εργασίας RGB (χωρίς ετικέτα)
+	Don't Color Manage This Document	Χωρίς διαχείριση χρωμάτων για αυτό το έγγραφο
+	Working RGB: {name}	Χώρος εργασίας RGB: {name}
+	Working CMYK: {name}	Χώρος εργασίας CMYK: {name}
 	Workspace {i}	Χώρος εργασίας {i}
 	Wrinkle Tool	Πτυχώσεις (Wrinkle Tool)
 	Write Layers	Εγγραφή επιπέδων
@@ -5167,6 +5216,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	every numbered name for {name} is taken in the document's folder	όλα τα αριθμημένα ονόματα για το {name} χρησιμοποιούνται ήδη στον φάκελο εγγράφου
 @msg	No linked files to look for	Δεν υπάρχουν συνδεδεμένα αρχεία για αναζήτηση
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Ο σύνδεσμος βρίσκεται μέσα σε σύμβολο, σχεδιασμό γραφήματος, μοτίβο ή μάσκα αδιαφάνειας και δεν έχει θέση στον καμβά
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	το έργο ενός σχεδιασμού γραφήματος σε μια σειρά γραφήματος σχεδιάζεται ξανά από τον σχεδιασμό: επεξεργαστείτε τον σχεδιασμό για να το αλλάξετε
 	Hide VectorCraft	Απόκρυψη VectorCraft
 	Bring All to Front	Μεταφορά όλων στο προσκήνιο
 	Break Link	Κατάργηση σύνδεσης
@@ -5224,6 +5274,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	automation filesystem access is not granted: write authority is absent: {path}	δεν έχει επιτραπεί πρόσβαση αυτοματισμού στο σύστημα αρχείων: δεν υπάρχει δικαίωμα εγγραφής: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας ανάγνωσης {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός των ριζών ανάγνωσης {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	ένα συνδεδεμένο αρχείο JavaScript είναι εκτός των ριζών ανάγνωσης
+@msg	the library's file is outside the read roots	το αρχείο της βιβλιοθήκης είναι εκτός των ριζών ανάγνωσης
+@msg	{file} names more than one linked JavaScript file	το {file} αντιστοιχεί σε περισσότερα από ένα συνδεδεμένα αρχεία JavaScript
 @msg	automation path rejected: outside the write root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας εγγραφής {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός των ριζών εγγραφής {roots}: {path}
 @msg	automation path rejected: path is empty	απορρίφθηκε η διαδρομή αυτοματισμού: η διαδρομή είναι κενή
@@ -5384,6 +5437,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα για εξαγωγή
 @msg	The 3D object is too complex to export	Το αντικείμενο 3D είναι πολύ σύνθετο για εξαγωγή
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	το αντικείμενο δεν έχει εφέ 3D (Εξώθηση και λοξότμηση, Περιστροφή γύρω από άξονα, Φούσκωμα ή Περιστροφή)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	το `render` πρέπει να είναι αντικείμενο που περιέχει μόνο `mode`, με τιμή shaded ή wireframe
 @msg	its 3D effect builds no solid	το εφέ 3D του δεν δημιουργεί στερεό
 @msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	το bevel πρέπει να είναι none, ένα από τα {_1} ή custom με {BEVEL_PROFILE}
 @msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	το bevel custom χρειάζεται το {BEVEL_PROFILE}, τα σημεία της λοξότμησης
@@ -5787,6 +5841,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	 to set spacing and orientation	 για ορισμό απόστασης και προσανατολισμού
 	:	:
 	Light behind the object	Φως πίσω από το αντικείμενο
+	Move Light to Back	Μετακίνηση φωτός πίσω
+	Move Light to Front	Μετακίνηση φωτός μπροστά
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Σύρετε ένα φως για να το μετακινήσετε. Τα πλήκτρα βέλους μετακινούν το εστιασμένο φως· με Shift ανά 15°.
 	Shadows	Σκιές
 	Distance from Object	Απόσταση από το αντικείμενο
 	Shadow Bounds	Όρια σκιάς
@@ -6651,6 +6708,8 @@ axis	Y Axis	Άξονας Y
 	Create New Set	Δημιουργία νέου συνόλου
 	Stop Global Edit	Τερματισμός καθολικής επεξεργασίας
 	Global Edit Options	Επιλογές καθολικής επεξεργασίας
+	Select Similar Objects	Επιλογή παρόμοιων αντικειμένων
+	Select Similar Options	Επιλογές επιλογής παρόμοιων
 	Leave Out of Global Edit	Εξαίρεση από την καθολική επεξεργασία
 	Match	Αντιστοίχιση
 	On Artboards	Σε πίνακες σχεδίασης

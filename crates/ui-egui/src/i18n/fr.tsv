@@ -1180,6 +1180,7 @@ font-technology	Variable	Variables
 	Rotate (Classic)…	Rotation (classique)…
 	Surface	Surface
 	Wireframe	Fil de fer
+	Render Settings	Paramètres de rendu
 	No Shading	Sans ombrage
 	Plastic	Plastique
 	Highlight Intensity	Intensité de la brillance
@@ -3417,6 +3418,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Espace d’un sixième
 	Size	Taille
 	Size Tile to Art	Ajuster le carreau à l’illustration
+	Move Tile with Art	Déplacer le carreau avec l’illustration
 	Size/Leading	Taille/interlignage
 	Size:	Taille :
 	Ridges per segment:	Crêtes par segment :
@@ -3608,6 +3610,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Permuter le fond et le contour (Maj+X)
 	Swap start and end arrowheads	Permuter les pointes de flèche de début et de fin
 	Swap the selected object for the file, keeping its place and transform	Remplacer l’objet sélectionné par le fichier, en conservant sa position et sa transformation
+	Show Import Options	Afficher les options d’importation
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demander les options d’importation de chaque fichier PDF, DXF ou texte avant de le placer, sinon utiliser les dernières options choisies
 	Stylistic Alternates	Variantes stylistiques
 	Swash	Lettres ornées
 	Swatch Conflict	Conflit de nuances
@@ -3697,6 +3701,48 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Polices composites
 	Export Composite Fonts	Exporter des polices composites
 	Import Composite Fonts	Importer des polices composites
+@msg	each font must be {name, parts}	chaque police doit être {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	clé inconnue `{k}` ; une police prend name et parts
+@msg	each font needs a name	chaque police doit avoir un nom
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ne peut pas nommer une police composite (1 à {COMPOSITE_NAME_MAX} caractères, sans caractères de contrôle)
+@msg	`{name}`: parts must be an object	`{name}` : parts doit être un objet
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}` : classe inconnue `{k}` ; les classes sont kanji, kana, punctuation, symbols, roman et numerals
+@msg	`{name}`: {_1} must be an object	`{name}` : {_1} doit être un objet
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}` : clé inconnue `{k}` dans {_1}
+@msg	`{name}`: give the kanji part	`{name}` : indiquez la partie kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un document contient au plus {COMPOSITE_FONTS_MAX} polices composites
+@msg	two composite fonts are named `{_1}`	deux polices composites s’appellent `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` est le nom d’une police installée
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}` : {_2} utilise `{font}`, une police composite
+@msg	give fonts: [{name, parts}…]	indiquez fonts : [{name, parts}…]
+@msg	path is empty	path est vide
+@msg	fonts must be a list of composite fonts	fonts doit être une liste de polices composites
+@msg	names must be strings	names doit contenir des chaînes
+@msg	no composite font named `{n}`	aucune police composite nommée `{n}`
+@msg	names must be a list of names	names doit être une liste de noms
+@msg	no composite fonts to export	aucune police composite à exporter
+@msg	not a composite fonts file: {e}	ce n’est pas un fichier de polices composites : {e}
+@msg	not a composite fonts file: no compositeFonts list	ce n’est pas un fichier de polices composites : pas de liste compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	le fichier contient plus de {COMPOSITE_FONTS_MAX} polices composites
+@msg	the file is larger than 4 MB	le fichier dépasse 4 Mo
+@msg	dataBase64 is not base64	dataBase64 n’est pas du base64
+@msg	give one of path, data or dataBase64	indiquez path, data ou dataBase64
+@msg	the file holds no composite fonts	le fichier ne contient aucune police composite
+@msg	the file holds two composite fonts named `{_1}`	le fichier contient deux polices composites nommées `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` ne peut pas nommer une police composite
+@msg	{k}: give a font	{k} : indiquez une police
+@msg	`{name}`: {k}: give a font	`{name}`: {k} : indiquez une police
+@msg	{k}: size must be {_1} to {_2}%	{k} : size doit être compris entre {_1} et {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k} : size doit être compris entre {_1} et {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k} : baseline doit être compris entre {_1} et {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k} : baseline doit être compris entre {_1} et {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k} : l’échelle doit être comprise entre {_1} et {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k} : l’échelle doit être comprise entre {_1} et {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k} : seuls kana, roman et numerals peuvent être mis à l’échelle
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k} : seuls kana, roman et numerals peuvent être mis à l’échelle
+@msg	{k}: only kana can be scaled at the center	{k} : seul kana peut être mis à l’échelle depuis le centre
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k} : seul kana peut être mis à l’échelle depuis le centre
+@msg	no composite font	aucune police composite
 	Delete Font	Supprimer la police
 	Kanji	Kanji
 	Kana	Kana
@@ -4043,6 +4089,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMJN de travail
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
 	Working RGB (don't tag)	RVB de travail (sans balise)
+	Don't Color Manage This Document	Ne pas gérer les couleurs de ce document
+	Working RGB: {name}	RVB de travail : {name}
+	Working CMYK: {name}	CMJN de travail : {name}
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
 	Wrinkle Tool	Outil Fronces
@@ -5203,6 +5252,7 @@ axis	Both	Les deux
 @msg	every numbered name for {name} is taken in the document's folder	tous les noms numérotés pour {name} sont déjà pris dans le dossier du document
 @msg	No linked files to look for	Aucun fichier lié à rechercher
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Le lien se trouve dans un symbole, une conception de graphe, un motif ou un masque d’opacité et n’a pas de place sur le canevas
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	l’illustration d’une conception de graphe dans une série de graphe est redessinée à partir de la conception, qu’il faut modifier pour la changer
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services
@@ -5268,6 +5318,7 @@ axis	Both	Les deux
 @msg	automation filesystem access is not granted: write authority is absent: {path}	l’automatisation n’a pas accès au système de fichiers : aucune autorisation d’écriture : {path}
 @msg	automation path rejected: outside the read root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine de lecture {root} : {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines de lecture {roots} : {path}
+@msg	a linked JavaScript file is outside the read roots	un fichier JavaScript lié est hors des dossiers racines de lecture
 @msg	automation path rejected: outside the write root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine d’écriture {root} : {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines d’écriture {roots} : {path}
 @msg	automation path rejected: path is empty	chemin d’automatisation refusé : le chemin est vide
@@ -5591,6 +5642,7 @@ lighting	Light	Lumière
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d'un groupe ne dessine rien à exporter
 @msg	The 3D object is too complex to export	L'objet 3D est trop complexe pour être exporté
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'objet n'a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` doit être un objet ne contenant que `mode`, avec la valeur shaded ou wireframe
 @msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume
 @msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel doit valoir none, l’une des valeurs {_1}, ou custom avec {BEVEL_PROFILE}
 @msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom nécessite {BEVEL_PROFILE}, les points du biseau
@@ -6104,6 +6156,9 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+	Move Light to Back	Placer la lumière derrière
+	Move Light to Front	Placer la lumière devant
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Faites glisser une lumière pour la déplacer. Les touches fléchées déplacent la lumière active ; Maj par pas de 15°.
 	Shadows	Ombres
 	Distance from Object	Distance de l'objet
 	Shadow Bounds	Limites de l'ombre
@@ -6692,6 +6747,8 @@ axis	Y Axis	Axe Y
 	Create New Set	Créer un jeu
 	Stop Global Edit	Arrêter la modification globale
 	Global Edit Options	Options de modification globale
+	Select Similar Objects	Sélectionner les objets similaires
+	Select Similar Options	Options de sélection des objets similaires
 	Leave Out of Global Edit	Exclure de la modification globale
 	Match	Correspondance
 	On Artboards	Sur les plans de travail

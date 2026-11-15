@@ -452,6 +452,7 @@
 	Rotate (Classic)…	შემობრუნება (კლასიკური)…
 	Surface	ზედაპირი
 	Wireframe	მავთულის ჩარჩო
+	Render Settings	რენდერის პარამეტრები
 	No Shading	დაჩრდილვის გარეშე
 	Plastic	პლასტიკური
 	Highlight Intensity	ელვარების ინტენსივობა
@@ -1508,6 +1509,48 @@ digits	Malayalam	მალაიალამური
 	Composite Fonts	კომპოზიტური შრიფტები
 	Export Composite Fonts	კომპოზიტური შრიფტების ექსპორტი
 	Import Composite Fonts	კომპოზიტური შრიფტების იმპორტი
+@msg	each font must be {name, parts}	თითოეული შრიფტი უნდა იყოს {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	უცნობი გასაღები `{k}`; შრიფტი იღებს name-სა და parts-ს
+@msg	each font needs a name	თითოეულ შრიფტს სახელი სჭირდება
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ვერ იქნება კომპოზიტური შრიფტის სახელი (1-დან {COMPOSITE_NAME_MAX} სიმბოლომდე, მმართველი სიმბოლოების გარეშე)
+@msg	`{name}`: parts must be an object	`{name}`: parts უნდა იყოს ობიექტი
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: უცნობი კლასი `{k}`; კლასებია: kanji, kana, punctuation, symbols, roman და numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} უნდა იყოს ობიექტი
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: უცნობი გასაღები `{k}` ნაწილში {_1}
+@msg	`{name}`: give the kanji part	`{name}`: მიუთითეთ ნაწილი kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	დოკუმენტი შეიცავს არაუმეტეს {COMPOSITE_FONTS_MAX} კომპოზიტურ შრიფტს
+@msg	two composite fonts are named `{_1}`	ორ კომპოზიტურ შრიფტს ჰქვია `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` დაინსტალირებული შრიფტის სახელია
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} იყენებს `{font}`-ს, რომელიც კომპოზიტური შრიფტია
+@msg	give fonts: [{name, parts}…]	მიუთითეთ fonts: [{name, parts}…]
+@msg	path is empty	path ცარიელია
+@msg	fonts must be a list of composite fonts	fonts უნდა იყოს კომპოზიტური შრიფტების სია
+@msg	names must be strings	names უნდა იყოს სტრიქონები
+@msg	no composite font named `{n}`	კომპოზიტური შრიფტი სახელით `{n}` არ არსებობს
+@msg	names must be a list of names	names უნდა იყოს სახელების სია
+@msg	no composite fonts to export	საექსპორტო კომპოზიტური შრიფტები არ არის
+@msg	not a composite fonts file: {e}	ეს არ არის კომპოზიტური შრიფტების ფაილი: {e}
+@msg	not a composite fonts file: no compositeFonts list	ეს არ არის კომპოზიტური შრიფტების ფაილი: სია compositeFonts არ არის
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	ფაილი შეიცავს {COMPOSITE_FONTS_MAX}-ზე მეტ კომპოზიტურ შრიფტს
+@msg	the file is larger than 4 MB	ფაილი 4 MB-ზე დიდია
+@msg	dataBase64 is not base64	dataBase64 არ არის base64
+@msg	give one of path, data or dataBase64	მიუთითეთ path, data ან dataBase64
+@msg	the file holds no composite fonts	ფაილი კომპოზიტურ შრიფტებს არ შეიცავს
+@msg	the file holds two composite fonts named `{_1}`	ფაილი შეიცავს ორ კომპოზიტურ შრიფტს სახელით `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` ვერ იქნება კომპოზიტური შრიფტის სახელი
+@msg	{k}: give a font	{k}: მიუთითეთ შრიფტი
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: მიუთითეთ შრიფტი
+@msg	{k}: size must be {_1} to {_2}%	{k}: size უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	{k}: scale must be {_1} to {_2}%	{k}: მასშტაბი უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: მასშტაბი უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: მასშტაბირება შეიძლება მხოლოდ kana, roman და numerals ნაწილებში
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: მასშტაბირება შეიძლება მხოლოდ kana, roman და numerals ნაწილებში
+@msg	{k}: only kana can be scaled at the center	{k}: ცენტრიდან მასშტაბირება შეიძლება მხოლოდ kana ნაწილში
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: ცენტრიდან მასშტაბირება შეიძლება მხოლოდ kana ნაწილში
+@msg	no composite font	კომპოზიტური შრიფტი არ არის
 	Delete Font	შრიფტის წაშლა
 	Kanji	კანძი
 	Kana	კანა
@@ -1863,6 +1906,7 @@ digits	Malayalam	მალაიალამური
 	Show Swatch Bounds	ფერის ნიმუშის საზღვრების ჩვენება
 	Show Tile Edge	ფილის კიდის ჩვენება
 	Size Tile to Art	ფილის ზომის ნახატზე მორგება
+	Move Tile with Art	ფილის ნახატთან ერთად გადატანა
 	Tile Type:	ფილის ტიპი:
 	Top in Front	ზედა წინ
 	V Spacing:	ვერტ. დაშორება:
@@ -1905,6 +1949,9 @@ digits	Malayalam	მალაიალამური
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
 	Working RGB (don't tag)	სამუშაო RGB (ტეგის გარეშე)
+	Don't Color Manage This Document	ამ დოკუმენტის ფერების მართვის გარეშე
+	Working RGB: {name}	სამუშაო RGB: {name}
+	Working CMYK: {name}	სამუშაო CMYK: {name}
 	{name} (spot)	{name} (სპოტ)
 	Add to Profiles…	პროფილებში დამატება…
 	Align Stroke to Center	კონტურის ცენტრზე სწორება
@@ -2492,6 +2539,8 @@ digits	Malayalam	მალაიალამური
 	Keep a link to an image file instead of only embedding it	გამოსახულების ფაილის ბმულის შენარჩუნება მხოლოდ ჩაშენების ნაცვლად
 	Place onto a new locked, dimmed template layer below the current layer	ახალ ჩაკეტილ, ჩამქრალ შაბლონის შრეზე განთავსება მიმდინარე შრის ქვემოთ
 	Swap the selected object for the file, keeping its place and transform	მონიშნული ობიექტის ფაილით ჩანაცვლება მისი ადგილისა და გარდაქმნის შენარჩუნებით
+	Show Import Options	იმპორტის პარამეტრების ჩვენება
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	განთავსებამდე თითოეული PDF, DXF ან ტექსტური ფაილის იმპორტის პარამეტრების მოთხოვნა; გამორთულისას ბოლოს არჩეული პარამეტრები გამოიყენება
 	On: one locked object showing the document, updated when it changes.	ჩართული: ერთი ჩაკეტილი ობიექტი, რომელიც დოკუმენტს აჩვენებს და მისი ცვლილებისას ახლდება.
 	Off: an editable copy of its art, embedded in this document.	გამორთული: მისი ნახატის რედაქტირებადი ასლი, ჩაშენებული ამ დოკუმენტში.
 	Images: link to the file instead of only embedding it.	გამოსახულებები: ფაილის ბმული მხოლოდ ჩაშენების ნაცვლად.
@@ -4869,6 +4918,9 @@ font-technology	Variable	ცვლადი
 @msg	automation filesystem access is not granted: write authority is absent: {path}	ავტომატიზაციას ფაილურ სისტემაზე წვდომა არ აქვს: ჩაწერის უფლება არ არის: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირების {roots} გარეთაა: {path}
+@msg	a linked JavaScript file is outside the read roots	დაკავშირებული JavaScript ფაილი წაკითხვის ძირების გარეთაა
+@msg	the library's file is outside the read roots	ბიბლიოთეკის ფაილი წაკითხვის ძირების გარეთაა
+@msg	{file} names more than one linked JavaScript file	{file} ერთზე მეტ დაკავშირებულ JavaScript ფაილს შეესაბამება
 @msg	automation path rejected: outside the write root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირების {roots} გარეთაა: {path}
 @msg	automation path rejected: path is empty	ავტომატიზაციის გზა უარყოფილია: გზა ცარიელია
@@ -5230,6 +5282,7 @@ font-technology	Variable	ცვლადი
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	No linked files to look for	მოსაძებნი დაკავშირებული ფაილები არ არის
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	ბმული სიმბოლოში, დიაგრამის დიზაინში, პატერნში ან გაუმჭვირვალობის ნიღაბშია და ტილოზე ადგილი არ აქვს
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	დიაგრამის სერიაში დიაგრამის დიზაინის გრაფიკა დიზაინიდან თავიდან იხატება: მის შესაცვლელად დაარედაქტირეთ დიზაინი
 	Ruler Origin	სახაზავების სათავე
 	Reset Ruler Origin	სახაზავების სათავის ჩამოყრა
 	Artistic	მხატვრული
@@ -5304,6 +5357,7 @@ font-technology	Variable	ცვლადი
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი ექსპორტისთვის არაფერს ხატავს
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ობიექტს არ აქვს 3D ეფექტი (ამოწევა და წაკვეთა, ბრუნვა, გაბერვა ან შემობრუნება)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` უნდა იყოს ობიექტი, რომელიც შეიცავს მხოლოდ `mode`-ს, მნიშვნელობით shaded ან wireframe
 @msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
 @msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel უნდა იყოს none, ერთ-ერთი: {_1}, ან custom და {BEVEL_PROFILE}
 @msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom მოითხოვს {BEVEL_PROFILE}, წაკვეთის წერტილები
@@ -5661,6 +5715,9 @@ imageTrace	Outline	კონტური
 	In the File	ფაილში
 	Keys	კლავიშები
 	Light behind the object	სინათლე ობიექტის უკან
+	Move Light to Back	სინათლის უკან გადატანა
+	Move Light to Front	სინათლის წინ გადატანა
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	გადაათრიეთ სინათლე მის გადასაადგილებლად. ისრიანი ღილაკები ფოკუსირებულ სინათლეს ამოძრავებს; Shift-ით 15°-იანი ბიჯით.
 	Shadows	ჩრდილები
 	Distance from Object	მანძილი ობიექტიდან
 	Shadow Bounds	ჩრდილის საზღვრები
@@ -6650,6 +6707,8 @@ axis	Y Axis	Y ღერძი
 	Create New Set	ახალი ნაკრების შექმნა
 	Stop Global Edit	გლობალური რედაქტირების დასრულება
 	Global Edit Options	გლობალური რედაქტირების პარამეტრები
+	Select Similar Objects	მსგავსი ობიექტების მონიშვნა
+	Select Similar Options	მსგავსის მონიშვნის პარამეტრები
 	Leave Out of Global Edit	გლობალური რედაქტირებიდან გამორიცხვა
 	Match	დამთხვევა
 	On Artboards	სამუშაო დაფებზე

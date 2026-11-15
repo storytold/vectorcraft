@@ -910,12 +910,12 @@ font-technology	Variable	Değişken
 	Drag art here, or select it and click +. Hold Alt for one asset of several objects.	Resmi buraya sürükleyin veya seçip + işaretine tıklayın. Birkaç nesneden oluşan bir varlık için Alt tuşunu basılı tutun.
 	Drag onto art to apply this appearance	Bu görünümü uygulamak için resmin üzerine sürükleyin
 	Drag the art to move it on the paper	Resmi kağıt üzerinde taşımak için sürükleyin
-	Draw	Beraberlik
+	Draw	Çiz
 	Draw Behind	Arkaya Çiz
 	Draw in Perspective	Perspektifte Çiz
 	Draw Inside	İçini Çiz
 	Draw Normal	Normal Çiz
-	Draw:	Beraberlik:
+	Draw:	Çiz:
 	Drawing Mode	Çizim Modu
 	Drop Shadow	Alt Gölge
 	Drop Shadow…	Alt Gölge…
@@ -1156,6 +1156,7 @@ font-technology	Variable	Değişken
 	Rotate (Classic)…	Çevir (Klasik)…
 	Surface	Yüzey
 	Wireframe	Tel Kafes
+	Render Settings	Oluşturma Ayarları
 	No Shading	Gölgeleme Yok
 	Plastic	Plastik
 	Highlight Intensity	Parlama Yoğunluğu
@@ -3223,6 +3224,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Altıncı Uzay
 	Size	Boyut
 	Size Tile to Art	Sanata Boyut Döşeme
+	Move Tile with Art	Döşemeyi Sanatla Taşı
 	Size/Leading	Boyut/Satır Aralığı
 	Size:	Boyut:
 	Ridges per segment:	Segment başına sırtlar:
@@ -3402,6 +3404,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Dolgu ve Konturu Değiştir (Shift+X)
 	Swap start and end arrowheads	Başlangıç ve bitiş ok uçlarını değiştirin
 	Swap the selected object for the file, keeping its place and transform	Seçilen nesneyi, yerini koruyarak dosyayla değiştirin ve dönüştürün
+	Show Import Options	İçe Aktarma Seçeneklerini Göster
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Her PDF, DXF veya metin dosyasını yerleştirmeden önce içe aktarma seçeneklerini sor; kapalıyken son seçilen seçenekleri kullan
 	Stylistic Alternates	Stilistik Alternatifler
 	Swash	çalkalama
 	Swatch Conflict	Renk Örneği Çatışması
@@ -3491,6 +3495,48 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Bileşik Fontlar
 	Export Composite Fonts	Bileşik Fontları Dışa Aktar
 	Import Composite Fonts	Bileşik Fontları İçe Aktar
+@msg	each font must be {name, parts}	her font {name, parts} biçiminde olmalı
+@msg	unknown key `{k}`; a font takes name and parts	bilinmeyen anahtar `{k}`; bir font name ve parts alır
+@msg	each font needs a name	her fontun bir adı olmalı
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` bir bileşik fontun adı olamaz (1 ile {COMPOSITE_NAME_MAX} karakter arası, denetim karakteri olmadan)
+@msg	`{name}`: parts must be an object	`{name}`: parts bir nesne olmalı
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: bilinmeyen sınıf `{k}`; sınıflar: kanji, kana, punctuation, symbols, roman ve numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} bir nesne olmalı
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1} içinde bilinmeyen anahtar `{k}`
+@msg	`{name}`: give the kanji part	`{name}`: kanji bölümünü verin
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	bir belge en fazla {COMPOSITE_FONTS_MAX} bileşik font tutar
+@msg	two composite fonts are named `{_1}`	iki bileşik fontun adı `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` yüklü bir fontun adı
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2}, bir bileşik font olan `{font}` ile ayarlı
+@msg	give fonts: [{name, parts}…]	fonts verin: [{name, parts}…]
+@msg	path is empty	path boş
+@msg	fonts must be a list of composite fonts	fonts bir bileşik font listesi olmalı
+@msg	names must be strings	names dizeler olmalı
+@msg	no composite font named `{n}`	`{n}` adlı bileşik font yok
+@msg	names must be a list of names	names bir ad listesi olmalı
+@msg	no composite fonts to export	dışa aktarılacak bileşik font yok
+@msg	not a composite fonts file: {e}	bileşik font dosyası değil: {e}
+@msg	not a composite fonts file: no compositeFonts list	bileşik font dosyası değil: compositeFonts listesi yok
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	dosyada {COMPOSITE_FONTS_MAX} taneden fazla bileşik font var
+@msg	the file is larger than 4 MB	dosya 4 MB'tan büyük
+@msg	dataBase64 is not base64	dataBase64 base64 değil
+@msg	give one of path, data or dataBase64	path, data veya dataBase64 değerlerinden birini verin
+@msg	the file holds no composite fonts	dosyada bileşik font yok
+@msg	the file holds two composite fonts named `{_1}`	dosyada `{_1}` adlı iki bileşik font var
+@msg	`{_1}` can't name a composite font	`{_1}` bir bileşik fontun adı olamaz
+@msg	{k}: give a font	{k}: bir font verin
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: bir font verin
+@msg	{k}: size must be {_1} to {_2}%	{k}: size %{_1} ile %{_2} arasında olmalı
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size %{_1} ile %{_2} arasında olmalı
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline %{_1} ile %{_2} arasında olmalı
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline %{_1} ile %{_2} arasında olmalı
+@msg	{k}: scale must be {_1} to {_2}%	{k}: ölçek %{_1} ile %{_2} arasında olmalı
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: ölçek %{_1} ile %{_2} arasında olmalı
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: yalnızca kana, roman ve numerals ölçeklenebilir
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: yalnızca kana, roman ve numerals ölçeklenebilir
+@msg	{k}: only kana can be scaled at the center	{k}: merkezden yalnızca kana ölçeklenebilir
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: merkezden yalnızca kana ölçeklenebilir
+@msg	no composite font	bileşik font yok
 	Delete Font	Fontu Sil
 	Kanji	Kanji
 	Kana	Kana
@@ -3832,6 +3878,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMYK'de çalışıyor
 	Working CMYK (don't tag)	CMYK çalışıyor (etiketlemeyin)
 	Working RGB (don't tag)	Çalışan RGB (etiketlemeyin)
+	Don't Color Manage This Document	Bu belgede renk yönetimi yapma
+	Working RGB: {name}	Çalışma RGB'si: {name}
+	Working CMYK: {name}	Çalışma CMYK'sı: {name}
 	Workspace	Çalışma Alanı
 	Workspace {i}	Çalışma Alanı {i}
 	Wrinkle Tool	Kırışıklık Aracı
@@ -5353,6 +5402,7 @@ lighting	Light	Işık
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt dışa aktarılacak hiçbir şey çizmez
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Döndür, Şişir veya Döndür)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`, yalnızca değeri shaded veya wireframe olan `mode` içeren bir nesne olmalıdır
 @msg	its 3D effect builds no solid	3 boyutlu efekti hiçbir katı oluşturmuyor
 @msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel; none, {_1} değerlerinden biri veya {BEVEL_PROFILE} ile custom olmalıdır
 @msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom için {BEVEL_PROFILE}, yani eğimin noktaları gerekir
@@ -5872,7 +5922,7 @@ theme	Appearance	Görünüm
 	Drawer menu	Çekmece menüsü
 	Toolbar: Show Controls	Araç Çubuğu: Kontrolleri Göster
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control fillStroke, coloring, drawMode veya screenMode olmalıdır
-@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	bilinmeyen kontrol `{name}`: fillStroke, colouring,drawMode veya screenMode
+@msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	bilinmeyen kontrol `{name}`: fillStroke, coloring, drawMode veya screenMode
 @msg	give a fraction `t` from 0 to 1	0'dan 1'e kadar bir `t` kesri verin
 @msg	give the path `id`	`id` yolunu ver
 @msg	invalid stroke widths	geçersiz kontur genişlikleri
@@ -5885,6 +5935,9 @@ theme	Appearance	Görünüm
 	Softness	Yumuşaklık
 	Ambient Light	Ortam Işığı
 	Light behind the object	Nesnenin arkasındaki ışık
+	Move Light to Back	Işığı Arkaya Taşı
+	Move Light to Front	Işığı Öne Taşı
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Işığı taşımak için sürükleyin. Ok tuşları odaktaki ışığı taşır; Shift ile 15° adımlarla.
 	Shadows	Gölgeler
 	Distance from Object	Nesneden uzaklık
 	Shadow Bounds	Gölge sınırları
@@ -5892,7 +5945,7 @@ theme	Appearance	Görünüm
 	Below Object	Nesnenin altında
 	Registration:	Kayıt:
 	Dimension	Boyut
-	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : Gerçek boyut — 1:10 etiketler sayfada 10 adet olarak 1 adettir.
+	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : gerçek boyut — 1:10, sayfadaki 1 birimi 10 olarak etiketler.
 	Preview (1 inch on the page)	Önizleme (sayfada 1 inç)
 	Set as Default	Varsayılan Olarak Ayarla
 	 out from a highlighted edge to place its dimension  |  	 boyutunu yerleştirmek için vurgulanan kenardan dışarı |  
@@ -5930,7 +5983,7 @@ theme	Appearance	Görünüm
 @msg	Measured segment no longer exists	Ölçülen segment artık mevcut değil
 @msg	Non-finite dimension	Sonlu olmayan boyut
 @msg	Only linear dimensions are horizontal or vertical	Yalnızca doğrusal boyutlar yatay veya dikey olabilir
-@msg	Scale must be drawing:real, for example 1:10	Ölçek çizim olmalıdır:gerçek, örneğin 1:10
+@msg	Scale must be drawing:real, for example 1:10	Ölçek çizim:gerçek biçiminde olmalıdır, örneğin 1:10
 @msg	Scale ratio must be between 1:1000000 and 1000000:1	Ölçek oranı 1:1000000 ile 1000000:1 arasında olmalıdır
 @msg	Second measured segment no longer exists	Ölçülen ikinci segment artık mevcut değil
 @msg	Unknown dimension mode	Bilinmeyen boyut modu
@@ -8575,6 +8628,8 @@ axis	Y Axis	Y ekseni
 	Create New Set	Yeni Set Oluştur
 	Stop Global Edit	Genel Düzenlemeyi Durdur
 	Global Edit Options	Genel Düzenleme Seçenekleri
+	Select Similar Objects	Benzer Nesneleri Seç
+	Select Similar Options	Benzer Seçimi Seçenekleri
 	Leave Out of Global Edit	Genel Düzenlemenin Dışında Bırak
 	Match	Eşleştir
 	On Artboards	Çalışma Yüzeylerinde

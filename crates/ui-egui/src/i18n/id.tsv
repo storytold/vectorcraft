@@ -480,6 +480,7 @@
 	Rotate (Classic)…	Putar (klasik)…
 	Surface	Permukaan
 	Wireframe	Kerangka kawat
+	Render Settings	Pengaturan render
 	No Shading	Tanpa pengarsiran
 	Plastic	Plastik
 	Highlight Intensity	Intensitas kilau
@@ -1934,6 +1935,7 @@ digits	Malayalam	Malayalam
 	Show Swatch Bounds	Tampilkan batas swatch
 	Show Tile Edge	Tampilkan tepi ubin
 	Size Tile to Art	Sesuaikan ukuran ubin dengan karya seni
+	Move Tile with Art	Pindahkan ubin bersama karya seni
 	Tile Type:	Jenis ubin:
 	Top in Front	Atas di depan
 	V Spacing:	Jarak V:
@@ -1976,6 +1978,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Gunakan kompensasi titik hitam
 	Working CMYK (don't tag)	CMYK kerja (tanpa tag)
 	Working RGB (don't tag)	RGB kerja (tanpa tag)
+	Don't Color Manage This Document	Jangan kelola warna dokumen ini
+	Working RGB: {name}	RGB kerja: {name}
+	Working CMYK: {name}	CMYK kerja: {name}
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Tambahkan ke profil…
 	Align Stroke to Center	Ratakan stroke ke tengah
@@ -2570,6 +2575,8 @@ digits	Malayalam	Malayalam
 	Keep a link to an image file instead of only embedding it	Pertahankan tautan ke file gambar alih-alih hanya menyematkannya
 	Place onto a new locked, dimmed template layer below the current layer	Tempatkan pada lapisan templat baru yang terkunci dan diredupkan di bawah lapisan saat ini
 	Swap the selected object for the file, keeping its place and transform	Tukar objek terpilih dengan file, mempertahankan tempat dan transformasinya
+	Show Import Options	Tampilkan Opsi Impor
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Tanyakan opsi impor setiap file PDF, DXF, atau teks sebelum menempatkannya; nonaktif: gunakan opsi yang terakhir dipilih
 	On: one locked object showing the document, updated when it changes.	Aktif: satu objek terkunci yang menampilkan dokumen, diperbarui saat dokumen berubah.
 	Off: an editable copy of its art, embedded in this document.	Nonaktif: salinan karya seninya yang dapat diedit, tersemat dalam dokumen ini.
 	Images: link to the file instead of only embedding it.	Gambar: tautkan ke file alih-alih hanya menyematkannya.
@@ -5449,6 +5456,9 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	Move Light to Back	Pindahkan Cahaya ke Belakang
+	Move Light to Front	Pindahkan Cahaya ke Depan
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Seret cahaya untuk memindahkannya. Tombol panah memindahkan cahaya yang difokuskan; Shift memindahkannya 15°.
 	Shadows	Bayangan
 	Distance from Object	Jarak dari objek
 	Shadow Bounds	Batas bayangan
@@ -6164,6 +6174,8 @@ axis	Y Axis	Sumbu Y
 	Create New Set	Buat set baru
 	Stop Global Edit	Hentikan edit global
 	Global Edit Options	Opsi edit global
+	Select Similar Objects	Pilih objek serupa
+	Select Similar Options	Opsi pilih serupa
 	Leave Out of Global Edit	Keluarkan dari edit global
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edit global berfungsi pada jalur, jalur gabungan, instans simbol, dan grupnya
 	Match	Cocokkan
