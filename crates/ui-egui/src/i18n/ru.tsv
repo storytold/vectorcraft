@@ -5591,6 +5591,8 @@ axis	Both	Оба
 	Step up or down	Шаг вверх или вниз
 	Drag values or labels. Double-click a value to type.	Перетаскивайте значения или подписи. Для ввода дважды щёлкните значение.
 	Drag rings to rotate. Shift snaps to 15°.	Перетаскивайте кольца для вращения. Shift задаёт шаг 15°.
+	Track cube	Куб вращения
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Перетащите грань, ребро или кольцо для вращения. Shift вращает вокруг одной оси экрана.
 	Drag the light, or its rings. Shift snaps to 15°.	Перетаскивайте источник света или кольца. Shift задаёт шаг 15°.
 lighting	Light	Свет
 	Keep visible surfaces only when expanding	При разборе сохранять только видимые поверхности
