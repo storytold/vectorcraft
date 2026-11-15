@@ -9295,8 +9295,19 @@ value out of range, a scale on another class, an unknown class or key, a name th
 characters, shared by two fonts (in any case) or the name of an installed font, and a part set in a composite font are
 each refused with an error, and nothing changes. A document keeps at most 256.
 
+`custom` lists a font's custom character sets
+([Customize characters in a composite font](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=348)),
+each `{name, characters?, font?, style?, size?, baseline?, hScale?, vScale?}`. A set sets the characters it lists in
+its own font, style, size, baseline and scales, ahead of their class; a value left out is the `kanji` part's. When two
+sets list a character, the later set sets it. A set's name is trimmed and unique in its font in any case. Its
+characters are each listed once, none a control character or past U+FFFF. A set may list no characters, and then sets
+none. A font keeps at most 64 sets and a set at most 8,192 characters, VectorCraft's own limits. A set name that is
+empty or shared, a character listed twice or not allowed, `scaleAtCenter` on a set, or an unknown key is refused with
+an error, and nothing changes.
+
 Type set in a composite font names it as its family (`text.setStyle {font: "My Composite"}`), and the font menus list
-composite fonts first. The layout sets each character in its class's font, a letter and its combining marks together.
+composite fonts first. The layout sets each character in its custom set's or its class's font, a letter and its
+combining marks together.
 A composite font taken out of the document leaves its type naming it, and the type shows as missing. Composite fonts
 are saved with the document. SVG and legacy `.ai` write type in one of the document's composite fonts as outlines, and
 SVG, PDF, EPS and legacy `.ai` export draw it in the font's parts also when the document was read without an open app.
@@ -9309,18 +9320,24 @@ parts its characters are drawn in, and `missingGlyphs` counts the characters tha
 characters are drawn in. `text.glyphAlternates` lists the alternates of a character from its part's font.
 
 `type.compositeFonts.export {path?, names?, fonts?}` writes the document's composite fonts (all, or those `names`
-lists), or the `fonts` given, to a `.vccomposite` file; without `path` it returns the file's text as `data`.
+lists), or the `fonts` given, to a `.vccomposite` file; without `path` it returns the file's text as `data`. Fonts
+whose file would be larger than 4 MB, the most Import reads, are refused with an error.
 `type.compositeFonts.import {path | data | dataBase64, apply?}` reads a file of at most 4 MB. With `apply` (the
 default) its fonts join the document's, replacing a font of the same name, as one undo step; with `apply: false` it
 only returns them. Opening a `.vccomposite` file imports it.
 
 Type › Composite Fonts… (shown with Show East Asian Options) opens the Composite Fonts dialog on the document's fonts:
-Font picks one, and a table sets each class's font, style, size, baseline and scales. New adds a font based on the one
-picked, Delete Font takes it out, Import… adds the fonts of a file and Export… writes the one picked. OK runs
-`type.compositeFonts.set` with every font as one undo step; a refused font keeps the dialog open.
+Font picks one, and a table sets each class's and each custom set's font, style, size, baseline and scales. New adds a
+font based on the one picked, Delete Font takes it out, Import… adds the fonts of a file and Export… writes the one
+picked. Custom shows the font's custom character sets: Character Set picks one, New adds a set based on the one picked,
+Delete Set takes it out, and Name renames it. Character › Direct Entry adds the characters typed, and Character ›
+Unicode adds the characters of hexadecimal codes (`3042`, `U+3042`, several separated by spaces or commas); Add skips
+characters the set already lists. Delete takes the character picked out of the set. OK runs `type.compositeFonts.set`
+with every font as one undo step; a refused font keeps the dialog open.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"},"roman":{"font":"Source Sans 3","size":95,"baseline":-2},"numerals":{"font":"Source Sans 3"}}}]}}}
+{"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"}},"custom":[{"name":"Marks","characters":"※〒","font":"Source Sans 3","size":90}]}]}}}
 ```
 
 ## Optical Margin Alignment
