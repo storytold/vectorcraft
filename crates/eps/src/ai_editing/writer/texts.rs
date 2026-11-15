@@ -22,15 +22,15 @@ use kurbo::{ParamCurveArclen, PathSeg};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::text::MAX_AKI;
 use vectorcraft_doc::{
-    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, LineCap, LineJoin, Mojikumi, Node, NodeId, NodeKind, ParaDirection,
-    ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
+    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, Kinsoku, KinsokuShoriType, LineCap, LineJoin, Mojikumi, Node, NodeId,
+    NodeKind, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
 };
 use vectorcraft_geom::{Affine, PathData, Point};
 
 use crate::ps;
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, Insert Aki, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, Insert Aki, paragraph alignment, indents, space before and after, hyphenation on or off, right-to-left direction, Kinsoku set, Kinsoku Shori Type, Burasagari and Bunri-Kinshi (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -160,6 +160,10 @@ fn fines(v: &[f64]) -> V {
 fn dict(pairs: Vec<(u32, V)>) -> V {
     V::Dict(pairs)
 }
+
+/// The document's Kinsoku sets, in order, each by its name: a paragraph's key 27 is its set's index
+/// here (0 Hard, 1 Soft), as the reader's `kinsoku_sets` reads them.
+const KINSOKU_SETS: [&str; 2] = ["PhotoshopKinsokuHard", "PhotoshopKinsokuSoft"];
 
 /// A resource set: its resources, each `<< /0 resource >>`, and its display list.
 fn set(resources: Vec<V>, display: bool) -> V {
@@ -401,7 +405,6 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
         }
         let hangul =
             text.chars().any(|c| matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{AC00}'..='\u{D7FF}' | '\u{FFA0}'..='\u{FFDC}'));
-        let pairs = text.chars().zip(text.chars().skip(1)).any(|(a, b)| vectorcraft_text::inseparable(a, b));
         let held = ParaStyle {
             justify: p.justify,
             left_indent: p.left_indent,
@@ -411,16 +414,16 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             space_after: p.space_after,
             hyphenate: p.hyphenate,
             direction: p.direction.filter(|d| *d == ParaDirection::RightToLeft),
-            // The composition of Japanese punctuation new type gets (Line-end Punctuation Half
-            // Width, Standard burasagari) isn't reported: it changes no other script's lines.
+            // The Mojikumi set new type gets (Line-end Punctuation Half Width) isn't reported: it
+            // changes no other script's lines.
             mojikumi: if p.mojikumi == Mojikumi::LineEndHalf { p.mojikumi } else { ParaStyle::default().mojikumi },
-            burasagari: if p.burasagari == Burasagari::Standard { p.burasagari } else { ParaStyle::default().burasagari },
+            kinsoku: p.kinsoku,
+            kinsoku_type: p.kinsoku_type,
+            burasagari: p.burasagari,
+            bunri_kinshi: p.bunri_kinshi,
             // The text document has no Korean Line Break Anywhere: it reads back off, which
             // changes only the lines of a paragraph with Hangul in it.
             korean_line_break_anywhere: p.korean_line_break_anywhere && !hangul,
-            // Nor Bunri-Kinshi: it reads back off, which changes only the lines of a paragraph
-            // with an inseparable pair in it.
-            bunri_kinshi: p.bunri_kinshi && !pairs,
             ..ParaStyle::default()
         };
         *p != held
@@ -756,6 +759,32 @@ impl TextDoc {
             (4, len(p.space_before)),
             (5, len(p.space_after)),
             (9, V::Bool(p.hyphenate)),
+            (23, V::Bool(p.bunri_kinshi)),
+            (
+                24,
+                V::Int(match p.burasagari {
+                    Burasagari::None => 0,
+                    Burasagari::Standard => 1,
+                    Burasagari::Forced => 2,
+                }),
+            ),
+            (
+                25,
+                V::Int(match p.kinsoku_type {
+                    KinsokuShoriType::PushInFirst => 0,
+                    KinsokuShoriType::PushOutFirst => 1,
+                    KinsokuShoriType::PushOutOnly => 2,
+                }),
+            ),
+            // The Kinsoku set: `/nil` for None, else its index in the document's sets ([`KINSOKU_SETS`]).
+            (
+                27,
+                match p.kinsoku {
+                    Kinsoku::None => V::Name("nil"),
+                    Kinsoku::Hard => V::Int(0),
+                    Kinsoku::Soft => V::Int(1),
+                },
+            ),
         ];
         if rtl {
             d.push((33, V::Int(1)));
@@ -1110,7 +1139,7 @@ impl TextDoc {
             (1, set(fonts, true)),
             (2, empty()),
             (3, empty()),
-            (4, empty()),
+            (4, set(KINSOKU_SETS.iter().map(|name| dict(vec![(0, V::Str((*name).into()))])).collect(), false)),
             (5, set(vec![normal_char], true)),
             (6, set(vec![normal_para], true)),
             (8, set(self.frames.iter().map(clone_v).collect(), false)),
