@@ -1389,6 +1389,8 @@ font-technology	Variable	Variabla
 	Graph	Diagram
 	Graph Data	Diagramdata
 	Graph Type	Diagramtyp
+	Graph Type…	Diagramtyp…
+	Graph Data…	Diagramdata…
 	Graph Options	Diagramalternativ
 	Left Axis	Vänster axel
 	Right Axis	Höger axel
@@ -5028,6 +5030,8 @@ axis	Both	Båda
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	okänd panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` har inga visningsstorlekar att växla mellan
+@msg	the panels are not shown	panelerna visas inte
 @msg	panels can't be shown in Presentation Mode	paneler kan inte visas i presentationsläge
 @msg	unknown preference `{key}`	okänd inställning `{key}`
 @msg	Preferences imported.	Inställningarna har importerats.
@@ -5419,6 +5423,7 @@ effect	Soft	Mjuk
 	Change Panel Layout	Ändra panellayout
 	Close Panel	Stäng panel
 	Collapse Panel Group	Komprimera panelgrupp
+	Cycle Display Sizes	Växla visningsstorlekar
 	Move Panel	Flytta panel
 	Group with	Gruppera med
 	Resize panels	Ändra storlek på paneler
@@ -6155,6 +6160,7 @@ theme	Appearance	Utseende
 	Export Data Sets…	Exportera datauppsättningar…
 	Load Variable Library…	Läs in variabelbibliotek…
 	Save Variable Library…	Spara variabelbibliotek…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	”Importera” läser en datakällfil med filändelsen .csv, .tsv, .txt eller .xml
 @msg	a variable library holds text variables, and the document has none	ett variabelbibliotek innehåller textvariabler, och dokumentet har inga
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabeln `{name}` kan inte sparas i ett variabelbibliotek: byt namn på den så att den börjar med en bokstav eller `_`, utan mellanslag eller andra symboler än `-`, `_` och `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	datauppsättningen `{name}` innehåller ett kontrolltecken, som ett variabelbibliotek inte kan innehålla
@@ -9018,6 +9024,8 @@ digits	Hindi	Hindi
 	Not Aligned to Pixel Grid	Inte justerade mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
+@msg	side is left or right, not `{v}`	side är left eller right, inte `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order är ett heltal från 0 till {others}, inte `{v}`
 	Ignore All	Ignorera alla
 	Add to Dictionary	Lägg till i ordlistan
 	No Suggestions	Inga förslag

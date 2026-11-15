@@ -1451,6 +1451,8 @@ file-filter	Templates	Modelli
 	Graph	Grafico
 	Graph Data	Dati grafico
 	Graph Type	Tipo di grafico
+	Graph Type…	Tipo di grafico…
+	Graph Data…	Dati grafico…
 	Graph Options	Opzioni grafico
 	Left Axis	Asse sinistro
 	Right Axis	Asse destro
@@ -5175,6 +5177,8 @@ axis	Both	Entrambi
 @msg	unknown option `{path}.{k}`	opzione sconosciuta `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	valore di sovrastampa sconosciuto `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	pannello sconosciuto `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` non ha dimensioni di visualizzazione da scorrere
+@msg	the panels are not shown	i pannelli non sono visualizzati
 @msg	panels can't be shown in Presentation Mode	i pannelli non possono essere mostrati in modalità presentazione
 @msg	unknown preference `{key}`	preferenza sconosciuta `{key}`
 @msg	Preferences imported.	Preferenze importate.
@@ -5552,6 +5556,7 @@ effect	Regular	Normale
 	Change Panel Layout	Modifica disposizione dei pannelli
 	Close Panel	Chiudi pannello
 	Collapse Panel Group	Comprimi gruppo di pannelli
+	Cycle Display Sizes	Scorri le dimensioni di visualizzazione
 	Move Panel	Sposta pannello
 	Group with	Raggruppa con
 	Resize panels	Ridimensiona pannelli
@@ -5911,6 +5916,7 @@ lighting	Light	Luce
 	Export Data Sets…	Esporta set di dati…
 	Load Variable Library…	Carica libreria di variabili…
 	Save Variable Library…	Salva libreria di variabili…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Importa» legge un file di origine dati con estensione .csv, .tsv, .txt o .xml
 @msg	a variable library holds text variables, and the document has none	una libreria di variabili contiene variabili di testo e il documento non ne ha
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variabile `{name}` non può essere salvata in una libreria di variabili: rinominala in modo che inizi con una lettera o `_`, senza spazi né simboli diversi da `-`, `_` e `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	il set di dati `{name}` contiene un carattere di controllo, che una libreria di variabili non può contenere

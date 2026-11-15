@@ -611,6 +611,7 @@
 	Closing bracket with no opening one	ખુલતા કૌંસ વગરનો બંધ થતો કૌંસ
 	Coincidence:	સંયોગ:
 	Collapse Panel Group	પેનલ ગ્રૂપ સંકોચો
+	Cycle Display Sizes	પ્રદર્શન કદ બદલો
 	Collapse Panels to Icons	પેનલ્સને આઇકનમાં સંકોચો
 	Collapse to Icons	આઇકનમાં સંકોચો
 	Collate	ક્રમમાં ગોઠવો
@@ -1548,6 +1549,8 @@
 	Graph Design	ગ્રાફ ડિઝાઇન
 	Graph Marker	ગ્રાફ માર્કર
 	Graph Type	ગ્રાફ પ્રકાર
+	Graph Type…	ગ્રાફ પ્રકાર…
+	Graph Data…	ગ્રાફ ડેટા…
 	Graph Options	ગ્રાફ વિકલ્પો
 	Left Axis	ડાબી અક્ષ
 	Right Axis	જમણી અક્ષ

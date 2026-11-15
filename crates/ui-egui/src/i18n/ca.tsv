@@ -772,6 +772,7 @@ antiAlias	Sharp	Nítid
 	Preserve Numbers	Conserva els números
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
+	Cycle Display Sizes	Alterna les mides de visualització
 	Collapse Panels to Icons	Replega els panells a icones
 	Collapse to Icons	Replega a icones
 	Collate	Intercala
@@ -1910,6 +1911,8 @@ digits	Malayalam	Malaiàlam
 	Graph Design	Disseny del gràfic
 	Graph Marker	Marcador del gràfic
 	Graph Type	Tipus de gràfic
+	Graph Type…	Tipus de gràfic…
+	Graph Data…	Dades del gràfic…
 	Graph Options	Opcions del gràfic
 	Left Axis	Eix esquerre
 	Right Axis	Eix dret
@@ -2495,6 +2498,7 @@ digits	Malayalam	Malaiàlam
 	Load Variable Library	Carrega la biblioteca de variables
 	Load Variable Library…	Carrega la biblioteca de variables…
 	Save Variable Library…	Desa la biblioteca de variables…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Importa» llegeix un fitxer d’origen de dades amb l’extensió .csv, .tsv, .txt o .xml
 @msg	a variable library holds text variables, and the document has none	una biblioteca de variables conté variables de text, i el document no en té cap
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no es pot desar en una biblioteca de variables: canvieu-li el nom perquè comenci amb una lletra o `_`, sense espais ni símbols que no siguin `-`, `_` i `.`
 @msg	{k} has control characters	{k} conté caràcters de control
@@ -6548,6 +6552,8 @@ digits	Malayalam	Malaiàlam
 @msg	unknown option `{path}.{k}`	opció desconeguda `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressions desconegudes `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panell desconegut `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` no té mides de visualització per alternar
+@msg	the panels are not shown	els panells no es mostren
 @msg	panels can't be shown in Presentation Mode	els panells no es poden mostrar en el mode de presentació
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paràmetre desconegut `{key}`; volies dir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	paràmetre desconegut `{key}`; l’ordre no admet cap paràmetre
@@ -7564,6 +7570,19 @@ breakText	Glyphs	Glifs
 	Not Aligned to Pixel Grid	No alineat a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
+@msg	side is left or right, not `{v}`	side ha de ser left o right, no `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order ha de ser un nombre enter de 0 a {others}, no `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (el nom d’una barra d’eines) ha de ser una cadena
+@msg	no toolbar named `{name}`	no hi ha cap barra d’eines anomenada `{name}`
+@msg	toolbar name can't be empty	el nom de la barra d’eines no pot ser buit
+@msg	a toolbar name has at most {MAX_NAME} characters	un nom de barra d’eines té com a màxim {MAX_NAME} caràcters
+@msg	there is already a toolbar named `{name}`	ja hi ha una barra d’eines anomenada `{name}`
+@msg	there is already a toolbar named `{to}`	ja hi ha una barra d’eines anomenada `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	un espai de treball conté com a màxim {MAX} barres d’eines
+@msg	name (a toolbar's name) must be a string	name (el nom d’una barra d’eines) ha de ser una cadena
+@msg	name (a toolbar's name) is required	cal name (el nom d’una barra d’eines)
+@msg	to (the new name) is required	cal to (el nom nou)
+@msg	name must be a toolbar's name	name ha de ser el nom d’una barra d’eines
 	Ignore All	Ignora-ho tot
 	Add to Dictionary	Afegeix al diccionari
 	No Suggestions	No hi ha suggeriments

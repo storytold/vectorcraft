@@ -1445,6 +1445,8 @@ file-filter	Templates	Шаблони
 	Graph	Діаграма
 	Graph Data	Дані діаграми
 	Graph Type	Тип діаграми
+	Graph Type…	Тип діаграми…
+	Graph Data…	Дані діаграми…
 	Graph Options	Параметри діаграми
 	Left Axis	Ліва вісь
 	Right Axis	Права вісь
@@ -5159,6 +5161,8 @@ axis	Both	Обидві
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
 @msg	unknown panel `{raw}`	невідома панель `{raw}`
+@msg	`{panel}` has no display sizes to cycle	панель `{panel}` не має розмірів відображення для перемикання
+@msg	the panels are not shown	панелі не показано
 @msg	panels can't be shown in Presentation Mode	у режимі презентації панелі показати не можна
 @msg	unknown preference `{key}`	невідоме налаштування `{key}`
 @msg	Preferences imported.	Налаштування імпортовано.
@@ -5534,6 +5538,7 @@ axis	Both	Обидві
 	Change Panel Layout	Змінити розташування панелей
 	Close Panel	Закрити панель
 	Collapse Panel Group	Згорнути групу панелей
+	Cycle Display Sizes	Перемкнути розміри відображення
 	Move Panel	Перемістити панель
 	Group with	Згрупувати з
 	Resize panels	Змінити розмір панелей
@@ -5891,6 +5896,7 @@ lighting	Light	Світло
 	Export Data Sets…	Експортувати набори даних…
 	Load Variable Library…	Завантажити бібліотеку змінних…
 	Save Variable Library…	Зберегти бібліотеку змінних…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Імпорт» читає файл джерела даних із розширенням .csv, .tsv, .txt або .xml
 @msg	a variable library holds text variables, and the document has none	бібліотека змінних містить текстові змінні, а в документі їх немає
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	змінну `{name}` не можна зберегти в бібліотеці змінних: перейменуйте її так, щоб ім’я починалося з літери або `_` і не містило пробілів і символів, крім `-`, `_` і `.`
 @msg	{k} has control characters	{k} містить керівні символи

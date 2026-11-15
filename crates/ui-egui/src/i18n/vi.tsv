@@ -598,6 +598,7 @@ font-technology	Variable	Biến thiên
 	Close Library	Đóng thư viện
 	Close Panel	Đóng bảng
 	Collapse Panel Group	Thu gọn nhóm bảng
+	Cycle Display Sizes	Chuyển kích thước hiển thị
 	Close Path	Đóng đường dẫn
 	Close paths when ends are within:	Đóng đường dẫn khi hai đầu cách nhau trong:
 	Clumped	Dạng cụm
@@ -1704,6 +1705,8 @@ file-filter	Templates	Mẫu
 	Chop Design	Cắt thiết kế
 	Scale Design	Co giãn thiết kế
 	Graph Type	Loại biểu đồ
+	Graph Type…	Loại biểu đồ…
+	Graph Data…	Dữ liệu biểu đồ…
 	Graph Options	Tùy chọn biểu đồ
 	Left Axis	Trục trái
 	Right Axis	Trục phải
@@ -5697,6 +5700,8 @@ theme	Appearance	Giao diện
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)
 @msg	unknown panel `{raw}`	bảng không xác định `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` không có kích thước hiển thị để chuyển
+@msg	the panels are not shown	các bảng không được hiển thị
 @msg	panels can't be shown in Presentation Mode	không thể hiển thị bảng trong chế độ trình bày
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tham số không xác định `{key}`; ý bạn là `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tham số không xác định `{key}`; lệnh này không nhận tham số
@@ -5907,6 +5912,7 @@ theme	Appearance	Giao diện
 	Export Data Sets…	Xuất tập dữ liệu…
 	Load Variable Library…	Tải thư viện biến số…
 	Save Variable Library…	Lưu thư viện biến số…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"Nhập" đọc tệp nguồn dữ liệu có phần mở rộng .csv, .tsv, .txt hoặc .xml
 @msg	a variable library holds text variables, and the document has none	thư viện biến số chứa các biến số văn bản, và tài liệu không có biến số văn bản nào
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	không thể lưu biến số `{name}` vào thư viện biến số: hãy đổi tên để bắt đầu bằng một chữ cái hoặc `_`, không có khoảng trắng hay ký hiệu nào ngoài `-`, `_` và `.`
 @msg	{k} has control characters	{k} chứa ký tự điều khiển
@@ -7194,6 +7200,19 @@ breakText	Glyphs	Glyph
 	Not Aligned to Pixel Grid	Chưa căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`
+@msg	side is left or right, not `{v}`	side là left hoặc right, không phải `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order là số nguyên từ 0 đến {others}, không phải `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (tên một thanh công cụ) phải là chuỗi
+@msg	no toolbar named `{name}`	không có thanh công cụ tên `{name}`
+@msg	toolbar name can't be empty	tên thanh công cụ không được để trống
+@msg	a toolbar name has at most {MAX_NAME} characters	tên thanh công cụ có tối đa {MAX_NAME} ký tự
+@msg	there is already a toolbar named `{name}`	đã có thanh công cụ tên `{name}`
+@msg	there is already a toolbar named `{to}`	đã có thanh công cụ tên `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	một không gian làm việc giữ tối đa {MAX} thanh công cụ
+@msg	name (a toolbar's name) must be a string	name (tên một thanh công cụ) phải là chuỗi
+@msg	name (a toolbar's name) is required	name (tên một thanh công cụ) là bắt buộc
+@msg	to (the new name) is required	to (tên mới) là bắt buộc
+@msg	name must be a toolbar's name	name phải là tên của một thanh công cụ
 	Ignore All	Bỏ qua tất cả
 	Add to Dictionary	Thêm vào từ điển
 	No Suggestions	Không có gợi ý
