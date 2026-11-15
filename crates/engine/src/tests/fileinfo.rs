@@ -779,6 +779,15 @@ fn the_templates_folder_lists_only_xmp_files_and_can_be_made() {
     assert_eq!(r["author"], "Grace");
     let r = s.execute("file.info.applyTemplate", &json!({"name": "b.XMP.xmp", "mode": "replace", "apply": false})).unwrap();
     assert_eq!(r["author"], "Ada");
+    // A name that is not a file name never opens the template its safe form names.
+    let grace = vectorcraft_pdf::metadata_template(&vectorcraft_pdf::FileInfo { author: Some("Grace".into()), ..Default::default() });
+    std::fs::write(folder.join("a-b.xmp"), grace).unwrap();
+    let r = s.execute("file.info.applyTemplate", &json!({"name": "a-b", "mode": "replace", "apply": false})).unwrap();
+    assert_eq!(r["author"], "Grace");
+    for name in ["a/b", "a\\b", "a:b"] {
+        let e = s.execute("file.info.applyTemplate", &json!({"name": name, "mode": "replace", "apply": false})).unwrap_err();
+        assert!(e.to_string().contains("isn't usable as a file name"), "{name}: {e}");
+    }
 }
 
 #[test]

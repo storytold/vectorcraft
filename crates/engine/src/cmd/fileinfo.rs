@@ -257,6 +257,9 @@ fn template_bytes(s: &Session, p: &Value) -> Result<Vec<u8>> {
                 .min_by_key(|f| (f != name, *f != own));
             if let Some(file) = listed {
                 path = dir.join(file).to_string_lossy().into_owned();
+            } else if std::path::Path::new(&path).file_stem().map(|s| s.to_string_lossy()).as_deref() != Some(name) {
+                // A name that is not a file name as it is never opens another template.
+                return Err(bad(APPLY, "the template name isn't usable as a file name"));
             }
             let plain_file = |path: &str| std::fs::symlink_metadata(path).is_ok_and(|m| m.is_file());
             if std::fs::symlink_metadata(&path).is_ok() && !plain_file(&path) {

@@ -7608,7 +7608,7 @@ A PDF, `.ai` or `.ait` also opens with the `authorTitle` and `rating` its XMP pa
 `xmp:Rating`, a whole number from 0 to 5).
 
 Metadata templates (the menu at the top of File Info: Save Metadata Template…, Import…, the saved templates and
-Templates Folder; https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260) keep File
+Templates Folder; https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=278) keep File
 Info fields in an XMP file. `file.info.saveTemplate {name?, path?, fields?}` writes the `title` (when it is not the
 document's name), `author`, `authorTitle`, `description`, `keywords`, `rating` (from 1), `copyrightStatus`,
 `copyrightNotice` and `copyrightUrl` that have a value as an XMP packet, using the properties listed above; the dates
