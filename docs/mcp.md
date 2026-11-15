@@ -921,7 +921,8 @@ its own, can move or scale the plot at the next redraw. When all of a graph's ar
 the art measured has no width or no height, a redraw leaves the plot where it is and does not follow a move or scale of
 the graph. A graph opened from a `.ai` file
 saves `placedArt` too. A graph saved without `placedArt`, or with a `placedArt` that has no width or height, is
-measured on `placed`.
+measured on `placed`. `placed` includes the labels, so in such a graph moving an outermost label on its own can move or
+scale the plot at the next redraw.
 
 The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, and the paint, stroke, gradient and
 transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
@@ -1420,9 +1421,11 @@ Drive a tool like a mouse:
 
 Edit a gradient with the Gradient tool's annotator (the bar runs along the vector; stop chips sit 10 px under
 it, midpoint diamonds 7 px above): a click on the bar adds a stop, dragging a chip moves it (drag it off the bar to
-delete it, hold Alt to copy it), dragging the end handle changes the vector. Both ends of a vector drawn on the art,
-the start of one a click applies, and the dragged start and end handles snap as drawn points do; with Shift, the end
-or the handle keeps to 45° steps and snaps along them. The selected stop
+delete it, hold Alt to copy it), dragging the end handle changes the length (the end stays on the bar's line, at
+least 10 px from the start), and Alt-dragging it changes the length and angle together. Both ends of a vector drawn
+on the art, the start of one a click applies, and the dragged start and end handles snap as drawn points do (the end
+handle without Alt only onto points on the bar's line); with Shift, the end of a drawn vector, the Alt-dragged end
+handle or the start handle keeps to 45° steps and snaps along them. The selected stop
 (`gradient.selectStop`) takes Delete and ←/→:
 
 ```json
@@ -10101,8 +10104,8 @@ other marks take the values of their letter. Setting one value leaves the other 
 saved only when not 0, and character styles carry them (`charStyle.new`, `charStyle.setAttrs` and `charStyle.edit`
 refuse a value outside the range). A value that is not a number is refused with `` `diacriticHorizontal` must be a
 number ``, and one outside the range with `` `diacriticHorizontal` must be from -1000 to 1000 ``, naming the key. One
-undo step, and a `text.setFormat` call that gives the values the characters already have records none. With Show Middle Eastern
-Options on, the Character panel shows both fields, blank where the selected characters differ, with -200, -100, -50,
+undo step, and a `text.setFormat` call that gives the values the characters already have records none. With Show Indic Options
+on, the Character panel shows both fields, blank where the selected characters differ, with -200, -100, -50,
 0, 50, 100 and 200 in their menus, and a value typed past either end sets that end; Reset Panel sets both to 0.
 Character Style Options shows both fields in Advanced Character Formats. The canvas, PDF export and outlines draw the
 moved marks; SVG export writes type with a moved mark as outlines.

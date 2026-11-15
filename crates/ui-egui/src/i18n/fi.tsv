@@ -3633,6 +3633,8 @@ theme	Appearance	Ulkoasu
 	Create Graph	Luo kaavio
 	Graph Data	Kaavion tiedot
 	Graph Type	Kaavion tyyppi
+	Graph Type…	Kaavion tyyppi…
+	Graph Data…	Kaavion tiedot…
 	Graph Options	Kaavion asetukset
 	Left Axis	Vasen akseli
 	Right Axis	Oikea akseli
