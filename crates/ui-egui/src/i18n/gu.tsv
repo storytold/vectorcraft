@@ -2744,6 +2744,8 @@
 	Proof Setup	પ્રૂફ સેટઅપ
 	Properties	ગુણધર્મો
 	Proportional Metrics	પ્રમાણસર મેટ્રિક્સ
+	H or V Style	આડી અથવા ઊભી શૈલી
+	Roman Italics	રોમન ઇટાલિક
 	Pucker	પકર
 	Pucker & Bloat…	પકર અને બ્લોટ…
 	Pucker Tool	પકર ટૂલ
@@ -4501,6 +4503,13 @@ antiAlias	Sharp	શાર્પ
 	Graphite Pencil	ગ્રેફાઇટ પેન્સિલ
 	Wax Crayon	વેક્સ ક્રેયોન
 	Charcoal Dust	ચારકોલનો ભૂકો
+
+# Original procedural circuit brushes.
+	Tech Circuit	ટેક સર્કિટ
+	Circuit Trace	સર્કિટ પથ
+	Bus Lines	બસ રેખાઓ
+	Terminal Nodes	ટર્મિનલ નોડ્સ
+
 	Notched Ribbon	ખાંચાવાળી રિબન
 	Double Line	બેવડી રેખા
 	Wave	તરંગ

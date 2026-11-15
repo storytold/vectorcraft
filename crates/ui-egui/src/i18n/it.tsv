@@ -2713,6 +2713,8 @@ mark-style	Japanese	Giapponese
 	Proof Setup	Impostazione prova
 	Properties	Proprietà
 	Proportional Metrics	Metrica proporzionale
+	H or V Style	Stile orizzontale o verticale
+	Roman Italics	Corsivo romano
 	Insert Aki Left	Inserisci aki a sinistra
 	Insert Aki Right	Inserisci aki a destra
 	Tsume	Tsume
@@ -6456,6 +6458,13 @@ axis	Y Axis	Asse Y
 	Graphite Pencil	Matita di grafite
 	Wax Crayon	Pastello a cera
 	Charcoal Dust	Polvere di carboncino
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuiti tecnologici
+	Circuit Trace	Pista del circuito
+	Bus Lines	Linee del bus
+	Terminal Nodes	Nodi terminali
+
 	Notched Ribbon	Nastro dentellato
 	Double Line	Doppia linea
 	Wave	Onda
@@ -7547,7 +7556,7 @@ breakText	Glyphs	Glifi
 @msg	toString is not a function	toString non è una funzione
 @msg	too many arguments	troppi argomenti
 @msg	too many quantifiers	troppi quantificatori
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	funzione OpenType sconosciuta `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; anteponi - per disattivarla; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt accettano il numero di un'alternativa come `tag=N` con N da 0 a {_1}, ad esempio `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	funzione OpenType sconosciuta `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; anteponi - per disattivarla; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt accettano il numero di un'alternativa come `tag=N` con N da 0 a {_1}, ad esempio `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	dithering sconosciuto `{d}` (diffusion, pattern, noise o none)
 @msg	unknown panel `{panel}`	pannello sconosciuto `{panel}`
 @msg	unknown parameter `{key}`	parametro sconosciuto `{key}`

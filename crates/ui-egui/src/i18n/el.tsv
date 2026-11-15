@@ -3455,6 +3455,8 @@ theme	Appearance	Εμφάνιση
 	Profile inclusion:	Συμπερίληψη προφίλ:
 	Projecting Cap	Προεξέχον άκρο
 	Proportional Metrics	Αναλογικές μετρικές
+	H or V Style	Οριζόντιο ή κατακόρυφο στυλ
+	Roman Italics	Λατινικά πλάγια
 	Insert Aki Left	Εισαγωγή aki αριστερά
 	Insert Aki Right	Εισαγωγή aki δεξιά
 	Tsume	Tsume
@@ -6784,6 +6786,13 @@ axis	Y Axis	Άξονας Y
 	Graphite Pencil	Μολύβι γραφίτη
 	Wax Crayon	Κηρομπογιά
 	Charcoal Dust	Σκόνη κάρβουνου
+
+# Original procedural circuit brushes.
+	Tech Circuit	Τεχνολογικά κυκλώματα
+	Circuit Trace	Διαδρομή κυκλώματος
+	Bus Lines	Γραμμές διαύλου
+	Terminal Nodes	Τερματικοί κόμβοι
+
 	Notched Ribbon	Οδοντωτή κορδέλα
 	Double Line	Διπλή γραμμή
 	Wave	Κύμα

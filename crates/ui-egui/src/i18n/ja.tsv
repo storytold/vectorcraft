@@ -50,6 +50,8 @@ font-technology	Variable	バリアブル
 	x-Height	x ハイト
 	ICF Box	平均字面
 	Proportional Metrics	プロポーショナルメトリクス
+	H or V Style	横組み・縦組み用かな
+	Roman Italics	欧文イタリック
 	Insert Aki Left	前にアキを挿入
 	Insert Aki Right	後ろにアキを挿入
 	Tsume	文字ツメ
@@ -6754,7 +6756,7 @@ axis	Y Axis	Y 軸
 @msg	toString is not a function	toString は関数ではありません
 @msg	too many arguments	引数が多すぎます
 @msg	too many quantifiers	量指定子が多すぎます
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	`{t}` は不明な OpenType 機能です (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt。オフにするには先頭に - を付けます。swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt には、`salt=2` のように `tag=N` の形式で代替字形の番号を指定できます。N は 0 から {_1} まで)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	`{t}` は不明な OpenType 機能です (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital。オフにするには先頭に - を付けます。swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt には、`salt=2` のように `tag=N` の形式で代替字形の番号を指定できます。N は 0 から {_1} まで)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	`{d}` は不明なディザの指定です (diffusion、pattern、noise、none のいずれか)
 @msg	unknown panel `{panel}`	`{panel}` は不明なパネルです
 @msg	unknown parameter `{key}`	`{key}` は不明なパラメーターです
@@ -8328,6 +8330,13 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	黒鉛鉛筆
 	Wax Crayon	ワックスクレヨン
 	Charcoal Dust	木炭の粉
+
+# Original procedural circuit brushes.
+	Tech Circuit	電子回路
+	Circuit Trace	回路配線
+	Bus Lines	バス配線
+	Terminal Nodes	端子ノード
+
 	Notched Ribbon	ノッチリボン
 	Double Line	二重線
 	Wave	波

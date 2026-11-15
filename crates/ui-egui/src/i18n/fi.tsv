@@ -1587,6 +1587,8 @@ lighting	Light	Valo
 	Leading	Riviväli
 	No Break	Ei katkoa
 	Proportional Metrics	Suhteelliset metriikat
+	H or V Style	Vaaka- tai pystytyyli
+	Roman Italics	Latinalainen kursiivi
 	Insert Aki Left	Lisää aki vasemmalle
 	Insert Aki Right	Lisää aki oikealle
 	Tsume	Tsume
@@ -6862,6 +6864,13 @@ axis	Y Axis	Y-akseli
 	Graphite Pencil	Grafiittikynä
 	Wax Crayon	Vahaliitu
 	Charcoal Dust	Hiilipöly
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniset virtapiirit
+	Circuit Trace	Piirijohdin
+	Bus Lines	Väylälinjat
+	Terminal Nodes	Liitäntäpisteet
+
 	Notched Ribbon	Lovettu nauha
 	Double Line	Kaksoisviiva
 	Wave	Aalto

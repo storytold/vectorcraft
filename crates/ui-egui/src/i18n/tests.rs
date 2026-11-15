@@ -437,7 +437,7 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
         .collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 43, "{names:?}");
+    assert_eq!(names.len(), 46, "{names:?}");
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
@@ -1912,6 +1912,13 @@ fn vi() -> Lang {
 
 fn uk() -> Lang {
     Lang::from_code("uk").expect("uk registered")
+}
+
+/// The Ukrainian Color Library labels use the word for colors (кольорів), not flowers (квітів).
+#[test]
+fn ukrainian_color_library_labels_name_colors() {
+    assert_eq!(uk().catalog().plain("Color Library"), Some("Бібліотека кольорів"));
+    assert_eq!(uk().catalog().plain("Color Library…"), Some("Бібліотека кольорів…"));
 }
 
 /// Every Ukrainian plural has all three forms; exercise different endings through real lookups.
