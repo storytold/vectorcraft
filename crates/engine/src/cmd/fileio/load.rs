@@ -864,7 +864,9 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// they are, with their ink amounts ([`ImageBlob::cmyk`]), except that ones storing one plane per
 /// ink are written again with their inks together ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]);
 /// CMYK TIFFs with an alpha channel, which the decoder can't read, become RGBA in the active color
-/// settings' CMYK, as do CMYK Photoshop documents, whose merged image is read ([`psdread`]).
+/// settings' CMYK, whichever of their extra channels is the alpha
+/// ([`vectorcraft_doc::cmyk::extra_samples_tiff_rgba`]), as do CMYK Photoshop documents, whose
+/// merged image is read ([`psdread`]).
 /// 1-bit TIFFs compressed with CCITT Group 3, which the decoder can't read either, become RGBA
 /// too ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]).
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read
