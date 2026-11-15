@@ -3260,8 +3260,8 @@ already walks Image Trace. Short agent entry points:
   with no stroke (a continued or redrawn path without one, or a new filled "pencil" path while the stroke is None)
   with "cannot apply brush `<name>`: path has no stroke", and a key that neither `path.freehand` nor `brush` names
   with "unknown parameter"; the document does not change and no undo step is recorded. A stroke drawn with a brush
-  is one undo step: Undo removes the path and its brush together. The Paintbrush skips a tool brush or current brush that has been deleted and
-  paints with the other, or draws the plain path when neither is in the document. A document or brush
+  is one undo step: Undo removes the path and its brush together. The Paintbrush skips a tool brush or current
+  brush that has been deleted and paints with the other, or draws the plain path when neither is in the document. A document or brush
   library file whose brushes repeat a name is read with the first brush of that name as stored and each later one
   numbered with the first "`<name>` 2", "`<name>` 3"… the file does not have; strokes of the name keep the first
   brush. `brush.new`,
