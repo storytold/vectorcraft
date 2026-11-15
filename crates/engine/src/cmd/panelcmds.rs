@@ -255,7 +255,7 @@ pub(crate) fn artboard_indices(d: &vectorcraft_doc::Document, p: &Value, cmd: &s
 /// list of artboard indices", and a list with an entry that is not a whole number is "`{key}` must
 /// contain whole numbers"; a whole number past the last artboard is `no such artboard`. Every entry
 /// is checked for its form before any is checked against the artboards.
-fn listed_artboards(d: &vectorcraft_doc::Document, v: &Value, key: &str, cmd: &str) -> Result<Vec<usize>> {
+pub(crate) fn listed_artboards(d: &vectorcraft_doc::Document, v: &Value, key: &str, cmd: &str) -> Result<Vec<usize>> {
     let entries = v.as_array().ok_or_else(|| bad(cmd, format!("`{key}` must be a list of artboard indices")))?;
     if entries.is_empty() {
         return Err(bad(cmd, format!("`{key}` must be a non-empty list of artboard indices")));

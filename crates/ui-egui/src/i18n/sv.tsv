@@ -4392,6 +4392,18 @@ axis	Both	Båda
 @msg	`name` must be the name of a script engine	`name` måste vara namnet på en skriptmotor
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	huvudskriptmotorn är ny för varje körning och sparas aldrig, så den kan inte tas bort
 @msg	there is no script engine named {name}	det finns ingen skriptmotor med namnet {name}
+@msg	`answers` must be a list of answers	`answers` måste vara en lista med svar
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har fler än {MAX_ANSWERS} svar
+@msg	`answers` is larger than 1 MiB	`answers` är större än 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	måste vara ett objekt med `kind` och `value`
+@msg	must have exactly `kind` and `value`	måste ha exakt `kind` och `value`
+@msg	is an alert's answer, whose `value` must be "ok"	är svaret på en alert, vars `value` måste vara "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	är svaret på en confirm, vars `value` måste vara true eller false
+@msg	is longer than 16 KiB	är längre än 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	är svaret på en prompt, vars `value` måste vara en sträng eller null
+@msg	must have `kind` alert, confirm or prompt	måste ha `kind` alert, confirm eller prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` är bara för en körning utan någon att fråga: i appen svarar personen på varje dialogruta
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Copied the link info	Kopierade länkinfo
@@ -6533,6 +6545,7 @@ axis	Y Axis	Y-axel
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	kräver godkännande: det begär {0}, som användaren beviljar när pluginet installeras för sig
 @msg	`angle` must be a number	`angle` måste vara ett tal
 @msg	`aspect` must be from 0.01 to 100	`aspect` måste vara från 0.01 till 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` måste vara [a, b, c, d], vart och ett från -1000 till 1000, med a·d - b·c minst 0.001 från 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` måste vara "butt", "round" eller "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` måste vara "nonzero" eller "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` måste vara en https://-adress på högst {MAX_HELP_URL} byte
@@ -8204,6 +8217,7 @@ digits	Hindi	Hindi
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Bildkalkering misslyckades: internt fel: dess tråd stoppades (rapportera gärna felet)
 @msg	Image Trace finished, but its document was closed	Bildkalkeringen är klar, men dess dokument har stängts
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Bildkalkeringen är klar, men bilden eller dess inställningar ändrades under tiden: vektorisera den igen
+@msg	Image Trace finished, but its document was reverted: trace it again	Bildkalkeringen är klar, men dess dokument har återgått till sparad version: vektorisera den igen
 @msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client eller server
 @msg	index out of range	index utanför intervallet
 @msg	instances must be 1..1000	instances måste vara 1..1000

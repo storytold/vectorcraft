@@ -964,7 +964,8 @@ them in the Swatches panel does); give colour group names instead to reorder the
 in the app runs `paint.setFill` (or `paint.setStroke`, the active proxy) with `ids: [the object under the pointer]`.
 The Swatches panel menu's commands: `swatch.addUsedColors {selection?, global?}`, `swatch.unused` (a query: the
 names Select All Unused selects; a spot swatch counts as used while an image placed from a DCS file has a plate of
-its ink), `swatch.merge {names}` (the first is kept), `swatch.ungroup {name}` and
+its ink), `swatch.merge {names}` (the first is kept; gradient stops linked to the others drop their process
+plates), `swatch.ungroup {name}` and
 `swatch.sortByKind`.
 `brush.move {name | names, to?, type?}` reorders brushes among the brushes of their type, as dragging one onto
 another of its type in the Brushes panel does. `to` is an index among the brushes of that type in `brush.list`
@@ -2861,7 +2862,10 @@ group selected on its own, or, for `symbolInstance`, an object that is not a sym
 leaves the selection empty. A selected object that is hidden or locked, inside a hidden or locked group or layer, on a
 template layer, on a locked artboard while nothing is isolated, or outside the isolated group is passed over. New art,
 such as a symbol instance just placed, is not passed over for being on a locked artboard while it stays selected. When
-the selection holds no other object, they return the error "nothing selected".
+the selection holds no other object, they return the error "nothing selected". `appearanceAttribute {item?}` takes
+the fill or stroke at appearance item `item`, or the Appearance panel's active item when the call gives none or null; a
+value that is not a whole number of 0 or more fails with "`item` must be a whole number" and leaves the selection as it
+was.
 
 `select.similar {by?}` is the Control bar's Select Similar Objects button and the Select Similar Options menu beside it
 ([help](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=165)). It selects the
@@ -3201,7 +3205,9 @@ number. `guide.add {vertical, pos, artboard?}` makes one (the x of a
 vertical guide, the y of a horizontal one, in points) → `{index}`. With `artboard` (an artboard's index) it is an
 artboard guide: it runs across that artboard only, moves with it (`artboard.move`, a pure move in
 `artboard.setProps`, `artboard.rearrange`), scales with it (`artboard.setProps {scaleArt}`), is copied with it (`artboard.duplicate`, `artboard.move {copy}`) and is
-deleted with it (`artboard.delete`); without, a canvas guide runs across the whole canvas. `guide.list` →
+deleted with it (`artboard.delete`); without, or with null, a canvas guide runs across the whole canvas. An `artboard`
+that is not a whole number of 0 or more fails with "`artboard` must be a whole number", and an index past the last
+artboard with `no such artboard`; neither adds a guide. `guide.list` →
 `[{index, id, vertical, pos, selected, artboard?, layer?, hidden, locked, shown, editable}…]` (`artboard` only for
 artboard guides; `id` is the guide's node and `layer` the layer it is on; `hidden` and `locked` are its own state,
 `shown` and `editable` also take its layer into account). `layer.setProps {ids: [id…], visible?, locked?}` hides or
@@ -5566,17 +5572,30 @@ SVG Filter (New, Edit, Delete, Import…), and from the Appearance panel it edit
 
 The canvas, raster export, printing and PDF draw the filter with the object as its source graphic, its user space
 starting at `origin` (`[x, y]` in points, `[0, 0]` by default) with its units `scale` points (1 by default), its
-object bounding box the drawn object's, and at the Document Raster Effects resolution when the view is finer. The
+axes along `axes` (`[a, b, c, d]`: one unit along the filter's x axis points `[a, b]` in the document and one along
+its y axis `[c, d]`, before `scale`; absent or `[1, 0, 0, 1]`, the document's axes, and `effect.setParams` sets them
+back with `[1, 0, 0, 1]`, since the commands refuse `null`; each number -1000 to 1000 and `a·d - b·c` at least
+0.001 from 0, or the command refuses it), its object bounding box the drawn object's, and at the Document Raster Effects resolution when the view is finer. The
 filter runs on coarser pixels when a morphology radius or kernel unit would span more than 32 of them, or a standard
-deviation more than 512. An effect whose XML these rules refuse (from a file or a script) is not drawn or exported. The
+deviation more than 512. With `axes`, the filter runs on pixels lined up with its own axes, so offsets, blurs and the
+region run along them, and the result is drawn onto the object's pixels through `axes`; those pixels are about as fine
+along each axis as the object's and coarser when there would be more than 4 times as many, or when a radius, kernel
+unit or standard deviation would span more than 32 or 512 of them. The object's box is then
+its box in that user space: a region measured against it, and a region or primitive lengths in `objectBoundingBox`
+units, are measured against that box. Moving, turning, scaling or skewing the object moves `origin` with it and
+leaves `axes` as they are, and `scale` too unless Scale Strokes & Effects scales it. An effect whose XML or `axes` these rules refuse (from a file or a script) is not drawn or exported. The
 filter is drawn and written rebuilt from its filter elements and their filter attributes alone, without comments,
 text, descriptions or other attributes. An image in a filter is drawn only when its bytes are a PNG, JPEG, GIF or WebP
 within the pixel limit. A filter region in user space given in percentages is measured against the object's box (x
 and y from its top-left corner), and one in em or ex or left out takes the default region of that box (10% beyond
 each side); these are VectorCraft's own rules. Scale Strokes & Effects scales
-`scale`. SVG export writes the filter as a `<filter>` element when it is the object's last effect, its only pixel
-effect and `scale` is 1 (with a region measured against the object's box, its only raster effect), with the object in a
-group that places the filter's user space and such a region written in user units. The filter is written in SVG 1.1
+`scale`. SVG export writes the filter as a `<filter>` element when it is the object's last effect and its only pixel
+effect (with a region measured against the object's box, its only raster effect) and SVG import can store its user
+space again (`scale` and `axes` together within the import limits below), with the object in a
+group that places the filter's user space and such a region written in user units. When `scale` isn't 1 or the effect
+has `axes`, that group's transform is the filter's user space and the object is written in document coordinates in a
+group inside the filter whose transform is the inverse, so its strokes keep their widths; SVG import reads that back
+as the same `scale`, `origin` and `axes`. The filter is written in SVG 1.1
 terms: `feImage`'s reference as `xlink:href`; each `feDropShadow` as the blur, offset, flood, composite and merge that
 [Filter Effects](https://www.w3.org/TR/filter-effects-1/#feDropShadowElement) gives as its equivalent; colors as
 `#rrggbb` with a flood color's alpha in `flood-opacity`; `image-rendering` as `optimizeSpeed` or `optimizeQuality`;
@@ -5588,9 +5607,12 @@ whose `flood-color` is `currentColor` or with `primitiveUnits="objectBoundingBox
 its shadows are expanded, has no SVG 1.1 form. Neither does a filter whose written form, with its region and id, is
 one SVG import would not read, such as one longer than 64 KB. In that case, otherwise, and with the SVG Tiny 1.2 profile, the object
 becomes an image. SVG import keeps a filter that the live effects (Drop Shadow, the
-glows, Gaussian Blur, Feather) can't express as an `svg.filter` effect holding the filter's XML, with `scale` and
-`origin` from the object's user space, unless that user space is turned, skewed or scaled past 0.001 to 1000 points
-to a unit, or the filter is styled by the document's style sheets: such a filter is left out with a warning. The native format keeps the document's filters and the effects.
+glows, Gaussian Blur, Feather) can't express as an `svg.filter` effect holding the filter's XML, with `scale`,
+`origin` and, when the object's user space is turned, skewed or scaled unevenly (a `rotate`, `skewX`, `skewY`, uneven
+`scale` or `matrix` transform), `axes` from that user space, so the filter runs in the element's user space as
+[SVG 1.1](https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion) defines it. A filter is left out with a
+warning when that user space is scaled past 0.001 to 1000 points to a unit (the square root of its area scale), its
+`axes` would pass the limits above, or the filter is styled by the document's style sheets. The native format keeps the document's filters and the effects.
 
 ```json
 {"name":"run_command","arguments":{"command":"svgFilter.define","params":{"xml":"<filter id=\"Soft\"><feGaussianBlur stdDeviation=\"2\"/></filter>"}}}
@@ -6119,8 +6141,12 @@ below 3 or above 1000 counts as 3 or 1000, and a fractional or negative `sides` 
 Without `artboard`, or with an index the document doesn't have, it aligns them to the artboard under the center of the
 selection, or to the first artboard when no artboard is under the center. With `to: "selection"` or `"key"`,
 `object.align` does not use `artboard`. `select.allOnArtboard {artboard?}` (Select › All on Active Artboard) selects
-the objects on artboard `artboard`, or on the first artboard when the call gives none; an index the document doesn't
-have is an error.
+the objects on artboard `artboard`, or on the first artboard when the call gives none or null. A value that is not a
+whole number of 0 or more fails with "`artboard` must be a whole number", and an index the document doesn't have with
+`no such artboard`; either leaves the selection as it was. `select.font {family, style?, scope?}` (Select Text
+by Font) takes `scope: {artboards: [index…]}` the same way: an entry that is not a whole number fails with
+"`scope.artboards` must contain whole numbers" before any entry is looked up, and an index the document doesn't have
+fails with `no such artboard`.
 
 `object.distribute {to: "artboard", artboard?}` and `object.distributeSpacing {to: "artboard", artboard?}` (the
 Distribute Objects and Distribute Spacing buttons with Align to Artboard) use the same artboard as `object.align`.
@@ -11456,7 +11482,11 @@ that starts with `/version`) without changing anything. Give exactly one of `pat
 the set's name (`set`, else the file's name, else empty), its `version`, and its `actions`, each with its `name` and
 `steps`. A step lists its `name` (the file's `/internalName`), its `label` (the `/localizedName` it is shown with, or
 null when it has none or it is blank), `on` (false when the file sets `/isOn 0`), `params` (how many recorded values it
-has) and its `line`. `unread` lists the tokens the reader skipped, with their lines. The reader stops at 8 MiB, 16 open
+has), `values` and its `line`. `values` lists the step's recorded values in order, each as `{key, type, value, bytes?}`:
+the block's `/key` and `/type` (null when it has none), and its `/value` when that is a whole number, or text in
+parentheses or hexadecimal text that is UTF-8, with `bytes` giving the text's length in bytes; any other value, and text
+that is not UTF-8, is null. Only the first 100,000 recorded values in the set are listed, so a step's `values` can be
+shorter than its `params`. `unread` lists the tokens the reader skipped, with their lines. The reader stops at 8 MiB, 16 open
 blocks, 1,000 actions, 10,000 steps in an action and 100,000 steps in the set, and cuts names at 1,024 bytes. It sets
 `truncated` when it reaches one of these limits, when the text ends inside a block or a value or after a field's name,
 when `/actionCount`, `/eventCount` or a step's `/parameterCount` differs from the actions, steps or recorded values read
@@ -11471,8 +11501,12 @@ label, in English or in the interface language, in any case and without a final 
 that label and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with
 no values and opens no dialog (Group, Ungroup). A submenu's items, file and document commands, Paste, Undo, Redo and
 add-on commands are never matched. The step runs with no params, and a step that is off in the file is excluded from
-playback. Other steps are left out, including every step with no label and every step recorded with values (recorded
-menu items too). The reply lists the first 1,000 in `skipped` (`{action, step}`, the step by its label, else its name),
+playback. A Set Selection step, found by its `/internalName` whatever its label, comes in as a Select Object step
+(`select.byNote` with `{note, caseSensitive, wholeWord}`) when it has exactly three recorded values: the note (key
+`text`, 1952807028, of type `ustring`, UTF-8), Whole Word (key `word`, 2003792484) and Case Sensitive (key `case`,
+1667330917), each of type `boolean` and 0 or 1. The note loses its leading and trailing spaces and must then be 1 to
+1,024 bytes long. A Set Selection step with any other values is left out; no option is filled in. Other steps are left
+out, including every other step with no label and every other step recorded with values (recorded menu items too). The reply lists the first 1,000 in `skipped` (`{action, step}`, the step by its label, else its name),
 `leftOut` counts them, and the status bar says how many were left out. An action with no name is called `Action N`, by
 its place in the file. Function keys and colors are not read. A file marked `truncated` is refused, and no set is added.
 Text that starts `/version` and is not an action set gives "not an action set file". Tokens in `unread` do not stop a
@@ -12154,8 +12188,10 @@ overlapping the artboard or the centre on it), `inside` (the bounds wholly withi
 straddling two touching artboards is inside neither) or `outside` (on none of them). It looks at the objects Select All
 takes, or the isolated container's in isolation mode, so hidden and locked objects, objects on hidden, locked or template
 layers and art held by a locked artboard are left out. Bounds are geometric, a symbol instance's measured by its art. It
-returns the `count` selected. An empty list, an index with no artboard, a value that isn't an index, or another
-relation is an error, and the selection is left as it was.
+returns the `count` selected. An empty list, an index with no artboard (`no such artboard`), a value that isn't a list
+("`artboards` must be a list of artboard indices"), an entry that isn't a whole number of 0 or more ("`artboards` must
+contain whole numbers", checked before any entry is looked up), or another relation is an error, and the selection is
+left as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.select.byArtboards","params":{"artboards":[2,6,11],"relation":"inside"}}}

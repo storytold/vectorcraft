@@ -4482,6 +4482,17 @@ axis	Both	Ambos
 @msg	`name` must be the name of a script engine	`name` debe ser el nombre de un motor de scripts
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor de scripts principal es nuevo en cada ejecución y nunca se conserva, por lo que no se puede descartar
 @msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
+@msg	`answers` must be a list of answers	`answers` debe ser una lista de respuestas
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tiene más de {MAX_ANSWERS} respuestas
+@msg	`answers` is larger than 1 MiB	`answers` ocupa más de 1 MiB
+@msg	must be an object with `kind` and `value`	debe ser un objeto con `kind` y `value`
+@msg	must have exactly `kind` and `value`	debe tener exactamente `kind` y `value`
+@msg	is an alert's answer, whose `value` must be "ok"	es la respuesta de un alert, cuyo `value` debe ser "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	es la respuesta de un confirm, cuyo `value` debe ser true o false
+@msg	is longer than 16 KiB	ocupa más de 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	es la respuesta de un prompt, cuyo `value` debe ser una cadena o null
+@msg	must have `kind` alert, confirm or prompt	debe tener `kind` alert, confirm o prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` solo es para una ejecución sin nadie a quien preguntar: en la aplicación, la persona responde cada cuadro de diálogo
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
 @msg	Copied the link info	Se copió la información del vínculo
@@ -6497,6 +6508,7 @@ axis	Y Axis	Eje Y
 @msg	{what} points outside memory	{what} apunta fuera de la memoria
 @msg	`angle` must be a number	`angle` debe ser un número
 @msg	`aspect` must be from 0.01 to 100	`aspect` debe estar entre 0.01 y 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` debe ser [a, b, c, d], cada uno entre -1000 y 1000, con a·d - b·c a al menos 0.001 de 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` debe ser "butt", "round" o "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` debe ser "nonzero" o "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` debe ser una dirección https:// de {MAX_HELP_URL} bytes como máximo

@@ -7516,6 +7516,7 @@ breakText	Glyphs	字形
 @msg	`answer` for this {kind} dialog must be one of: {_1}	此 {kind} 对话框的 `answer` 必须是以下之一：{_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` 中的回答超过 {MAX_ANSWERS} 个
 @msg	`answers` is larger than 1 MiB	`answers` 大于 1 MiB
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 仅用于无人可问的运行：在应用中，由用户回答每个对话框
 @msg	`answers` must be a list of answers	`answers` 必须是回答的列表
 @msg	`artboard` must be the index of an artboard of the document	`artboard` 必须是文档中某个画板的索引
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` 必须是 [x, y]
@@ -7548,6 +7549,7 @@ breakText	Glyphs	字形
 @msg	`name` must be a name that is not empty	`name` 必须是非空的名称
 @msg	`name` must not be empty	`name` 不能为空
 @msg	`origin` must be [x, y] in points	`origin` 必须是以点为单位的 [x, y]
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` 必须是 [a, b, c, d]，每个值在 -1000 到 1000 之间，且 a·d - b·c 与 0 的差至少为 0.001
 @msg	`picks` must be an array (got {v})	`picks` 必须是数组 (实际为 {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` 必须包含 1 到 {MAX_PICKS} 个拾取项 (实际为 {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` 必须包含 2 到 100000 个点
@@ -7926,6 +7928,7 @@ breakText	Glyphs	字形
 @msg	Image Trace failed: {e}	图像描摹失败：{e}
 @msg	Image Trace finished, but its document was closed	图像描摹已完成，但其文档已关闭
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	图像描摹已完成，但图像或其设置在此期间发生了更改：请重新描摹
+@msg	Image Trace finished, but its document was reverted: trace it again	图像描摹已完成，但其文档已恢复：请重新描摹
 @msg	Invalid dimension offset	尺寸标注的偏移无效
 @msg	Invalid point	点无效
 @msg	Join: a subpath went missing	连接：有一条子路径丢失

@@ -4956,6 +4956,17 @@ theme	Appearance	Giao diện
 @msg	`name` must be the name of a script engine	`name` phải là tên của một bộ máy tập lệnh
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	bộ máy tập lệnh chính được tạo mới cho mỗi lần chạy và không bao giờ được giữ lại, nên không thể loại bỏ nó
 @msg	there is no script engine named {name}	không có bộ máy tập lệnh nào tên {name}
+@msg	`answers` must be a list of answers	`answers` phải là một danh sách câu trả lời
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` có hơn {MAX_ANSWERS} câu trả lời
+@msg	`answers` is larger than 1 MiB	`answers` lớn hơn 1 MiB
+@msg	must be an object with `kind` and `value`	phải là một đối tượng có `kind` và `value`
+@msg	must have exactly `kind` and `value`	phải có đúng `kind` và `value`
+@msg	is an alert's answer, whose `value` must be "ok"	là câu trả lời cho alert, nên `value` phải là "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	là câu trả lời cho confirm, nên `value` phải là true hoặc false
+@msg	is longer than 16 KiB	dài hơn 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	là câu trả lời cho prompt, nên `value` phải là chuỗi hoặc null
+@msg	must have `kind` alert, confirm or prompt	phải có `kind` là alert, confirm hoặc prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` chỉ dành cho lần chạy không có ai để hỏi: trong ứng dụng, người dùng trả lời từng hộp thoại
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
 @msg	Copied the link info	Đã sao chép thông tin liên kết
@@ -6163,6 +6174,7 @@ axis	Y Axis	Trục Y
 @msg	{what} points outside memory	{what} trỏ ra ngoài bộ nhớ
 @msg	`angle` must be a number	`angle` phải là một số
 @msg	`aspect` must be from 0.01 to 100	`aspect` phải từ 0.01 đến 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` phải là [a, b, c, d], mỗi số từ -1000 đến 1000, và a·d - b·c phải cách 0 ít nhất 0.001
 @msg	`cap` must be "butt", "round" or "square"	`cap` phải là "butt", "round" hoặc "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` phải là "nonzero" hoặc "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` phải là một địa chỉ https:// dài tối đa {MAX_HELP_URL} byte

@@ -4471,6 +4471,7 @@ axis	Both	Les deux
 @msg	`name` must be the name of a script engine	`name` doit être le nom d'un moteur de script
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	le moteur de script principal est nouveau à chaque exécution et n'est jamais conservé, il ne peut donc pas être supprimé
 @msg	there is no script engine named {name}	il n'y a aucun moteur de script nommé {name}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l'application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
 @msg	Copied the link info	Informations sur le lien copiées
@@ -7672,6 +7673,7 @@ breakText	Glyphs	Glyphes
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Échec de la vectorisation de l’image : erreur interne : son thread s’est arrêté (merci de signaler ce bogue)
 @msg	Image Trace failed: {e}	Échec de la vectorisation de l’image : {e}
 @msg	Image Trace finished, but its document was closed	La vectorisation de l’image est terminée, mais son document a été fermé
+@msg	Image Trace finished, but its document was reverted: trace it again	La vectorisation de l’image est terminée, mais son document a été rétabli à la version précédente : vectorisez-la à nouveau
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	La vectorisation de l’image est terminée, mais l’image ou ses réglages ont changé entre-temps : vectorisez-la à nouveau
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importer un filtre SVG lit les fichiers SVG, pas SVGZ
 @msg	Invalid dimension offset	Décalage de cote non valide
@@ -7844,6 +7846,7 @@ breakText	Glyphs	Glyphes
 @msg	`names` must be an array of style names	`names` doit être une liste de noms de styles
 @msg	`new` is a design name, or true	`new` est un nom de motif, ou true
 @msg	`origin` must be [x, y] in points	`origin` doit être [x, y] en points
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` doit être [a, b, c, d], chacun compris entre -1000 et 1000, avec a·d - b·c à au moins 0.001 de 0
 @msg	`path` must be a folder	`path` doit être un dossier
 @msg	`path` must be a path object	`path` doit être un objet tracé
 @msg	`picks` must be an array (got {v})	`picks` doit être une liste (reçu : {v})
