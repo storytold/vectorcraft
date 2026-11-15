@@ -51,6 +51,9 @@ pub struct CanvasCache {
     /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
     /// does not draw them drops them ([`canvas::show`]).
     pub selection_marks: canvas::SelectionMarks,
+    /// The meshes the tools' shared paths (a long Blob Brush or Eraser drag's settled outline) were
+    /// drawn with in the last frame. A frame that does not draw them drops them ([`canvas::show`]).
+    pub shared_paths: canvas::SharedPaths,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds and
     /// Measure Type by Glyph Bounds).
     pub selection_box: Option<((u64, u64, vectorcraft_effects::preview::Measure), Option<vectorcraft_doc::OrientedBox>)>,
@@ -164,6 +167,17 @@ pub struct CacheKey {
     /// The display profile the frame is converted into ([`crate::display_profile::DisplayProfile::key`]),
     /// 0 for none.
     pub display: u64,
+    /// The paper under the art that translucent art is blended with before the conversion
+    /// ([`crate::display_profile::convert_over`]). None without a display profile, and in Outline.
+    pub backdrop: Option<std::sync::Arc<crate::display_profile::Backdrop>>,
+}
+
+impl CacheKey {
+    /// [`Self::backdrop`] with the zoom its grid's cells are measured at, as
+    /// [`crate::display_profile::convert_over`] takes it.
+    pub(crate) fn over(&self) -> Option<(&crate::display_profile::Backdrop, f64)> {
+        self.backdrop.as_deref().map(|b| (b, self.zoom))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

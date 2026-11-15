@@ -128,6 +128,7 @@ mod tests {
             to_doc: Affine::scale(1.0),
             px: 1.0,
             center: Point::new(wd / 2.0, wd / 2.0),
+            size: vectorcraft_geom::Vec2::new(wd, wd),
             channels: Channels::Rgb,
             line: 1.0,
             extent: 0.5 * wd.hypot(wd),
