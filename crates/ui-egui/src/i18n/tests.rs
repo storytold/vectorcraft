@@ -2230,6 +2230,70 @@ fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
     }
 }
 
+/// The warning about an SVG's variables that aren't text shows each kind VectorCraft names in the
+/// interface language and each `trait` the file names, in backticks, as the warning writes it, the
+/// entries in their order with their counts and joined as the language joins a list, in every
+/// complete-message language.
+#[test]
+fn svg_variable_kinds_left_out_translate_in_every_complete_catalog() {
+    const KINDS: [&str; 4] = ["Visibility", "Linked File", "Graph Data", "Unknown"];
+    let warning = |kinds: &str| format!("variables that aren't text were left out: {kinds}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let cat = lang.catalog();
+        for ctx in ["variable-list-two", "variable-list-middle", "variable-list-end"] {
+            assert!(cat.contextual(ctx, "{0}, {1}").is_some(), "{code} has no {ctx} row");
+        }
+        let kind = |k: &str| cat.contextual("variable-kind", k).unwrap_or_else(|| panic!("{code} has no variable-kind row for {k}"));
+        let template = message(lang, &warning("{kinds}"));
+        assert!(template.contains("{kinds}"), "{code}: {template}");
+        let shown_with = |list: &str| template.replace("{kinds}", list);
+        let join = |ctx: &str, a: &str, b: &str| cat.contextual(ctx, "{0}, {1}").unwrap_or("{0}, {1}").replace("{0}", a).replace("{1}", b);
+        for k in KINDS {
+            // One kind, with its count.
+            let shown = message(lang, &warning(&format!("{k} (3)")));
+            assert_eq!(shown, shown_with(&format!("{} (3)", kind(k))), "{code}");
+            assert_ne!(kind(k), k, "{code}: {k} stays English");
+        }
+        // Two entries, one a `trait` that holds a backtick, a list separator and a count.
+        let shown = message(lang, &warning("Unknown (1), `a``b (1), c` (2)"));
+        assert_eq!(shown, shown_with(&join("variable-list-two", &format!("{} (1)", kind("Unknown")), "`a``b (1), c` (2)")), "{code}");
+        // Every kind, in the engine's order and in reverse, then a `trait` that is a kind's name.
+        for kinds in [KINDS.to_vec(), KINDS.iter().rev().copied().collect()] {
+            let list = kinds.iter().enumerate().map(|(i, k)| format!("{k} ({})", i + 1)).collect::<Vec<_>>().join(", ");
+            let shown = message(lang, &warning(&format!("{list}, `Visibility` (12)")));
+            let entries: Vec<String> =
+                kinds.iter().enumerate().map(|(i, k)| format!("{} ({})", kind(k), i + 1)).chain(["`Visibility` (12)".to_string()]).collect();
+            let head = entries[1..entries.len() - 1].iter().fold(entries[0].clone(), |acc, e| join("variable-list-middle", &acc, e));
+            assert_eq!(shown, shown_with(&join("variable-list-end", &head, &entries[entries.len() - 1])), "{code}");
+        }
+    }
+    let de = Lang::from_code("de").expect("registered");
+    assert_eq!(
+        message(de, &warning("Visibility (2), Linked File (1), Graph Data (4), Unknown (1)")),
+        "die Variablen, die kein Text sind, wurden ausgelassen: Sichtbarkeit (2), Verknüpfte Datei (1), Diagrammdaten (4) und Unbekannt (1)"
+    );
+    assert_eq!(
+        message(de, &warning("Unknown (1), `a``b (1), c` (2)")),
+        "die Variablen, die kein Text sind, wurden ausgelassen: Unbekannt (1) und `a``b (1), c` (2)"
+    );
+    assert_eq!(message(de, &warning("`Visibility` (1)")), "die Variablen, die kein Text sind, wurden ausgelassen: `Visibility` (1)");
+    let fr = Lang::from_code("fr").expect("registered");
+    assert_eq!(message(fr, &warning("Visibility (1)")), "les variables qui ne sont pas du texte ont été ignorées : Visibilité (1)");
+    let ja = Lang::from_code("ja").expect("registered");
+    assert_eq!(
+        message(ja, &warning("Visibility (1), Linked File (2), Unknown (1)")),
+        "テキスト以外の変数は除外されました: 表示状態 (1)、リンクファイル (2)、不明 (1)"
+    );
+    // A list not in the warning's form, and a `trait` whose backticks don't close, stay as written.
+    for kinds in ["fileref (1)", "`abc (1)", "Visibility (x)", "Visibility (1),Linked File (2)"] {
+        assert_eq!(message(de, &warning(kinds)), format!("die Variablen, die kein Text sind, wurden ausgelassen: {kinds}"));
+    }
+    // English shows the warning as the engine wrote it.
+    let english = warning("Visibility (2), `a``b (1), c` (1)");
+    assert_eq!(message(Lang::EN, &english), english);
+}
+
 /// Every complete-message catalog has a row for each error that `type.compositeFonts.set`,
 /// `.export` and `.import`, the composite font checks behind them and the Composite Fonts dialog
 /// give, and translates them with the font name, the key and the class key kept, and the reason

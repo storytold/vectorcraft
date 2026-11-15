@@ -619,7 +619,21 @@ pub(crate) fn give_svg_library(doc: &mut Document, lib: Library, found: &HashMap
         }
     }
     doc.variables = vars.into();
-    left_out_warning(other.iter().map(|v| v.trait_name.as_deref().unwrap_or_else(|| v.kind.label())))
+    left_out_warning(other.iter().map(|v| left_out_kind(v.kind, v.trait_name.as_deref())))
+}
+
+/// How the warning about variables that aren't text names the kind of one: Visibility, Linked File
+/// or Graph Data for a `trait` VectorCraft reads, Unknown for a variable without a `trait`, and any
+/// other `trait` as the file writes it, in backticks, each backtick in it doubled, so that a `trait`
+/// such as `Unknown` or `a (1), b` reads as one kind the file names.
+fn left_out_kind(kind: VariableKind, trait_name: Option<&str>) -> String {
+    match (kind, trait_name) {
+        (VariableKind::Visibility, _) => "Visibility".into(),
+        (VariableKind::Image, _) => "Linked File".into(),
+        (VariableKind::Graph, _) => "Graph Data".into(),
+        (_, None) => "Unknown".into(),
+        (_, Some(t)) => format!("`{}`", t.replace('`', "``")),
+    }
 }
 
 /// Load Variable Library: replace the document's variables and data sets with a variable library's
@@ -668,10 +682,11 @@ pub(super) fn load_library(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"variables": declared, "deleted": deleted, "deletedDataSets": deleted_sets, "names": names}))
 }
 
-/// The warning about variables that aren't text and were left out, given the kind of each: every
-/// kind once, in the order it first comes, with how many variables have it. `None` without any.
-fn left_out_warning<'a>(kinds: impl Iterator<Item = &'a str>) -> Option<String> {
-    let mut counted: Vec<(&str, usize)> = Vec::new();
+/// The warning about variables that aren't text and were left out, given the kind of each
+/// ([`left_out_kind`]): every kind once, in the order it first comes, with how many variables have
+/// it. `None` without any.
+fn left_out_warning(kinds: impl Iterator<Item = String>) -> Option<String> {
+    let mut counted: Vec<(String, usize)> = Vec::new();
     for t in kinds {
         match counted.iter_mut().find(|(k, _)| *k == t) {
             Some((_, n)) => *n += 1,

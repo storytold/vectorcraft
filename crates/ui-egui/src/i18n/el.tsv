@@ -5116,6 +5116,13 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	περισσότερα από {MAX_CSV_ROWS} σύνολα δεδομένων: η Εισαγωγή συνόλων δεδομένων διαβάζει έως {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	περισσότερες από {MAX_CSV_COLS} μεταβλητές: η Εισαγωγή συνόλων δεδομένων διαβάζει έως {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	οι μεταβλητές που δεν είναι κειμένου παραλείφθηκαν: {kinds}
+variable-kind	Visibility	Ορατότητα
+variable-kind	Linked File	Συνδεδεμένο αρχείο
+variable-kind	Graph Data	Δεδομένα γραφήματος
+variable-kind	Unknown	Άγνωστο
+variable-list-two	{0}, {1}	{0} και {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} και {1}
 @msg	a new document won't read these variables back with their kind: {names}	ένα νέο έγγραφο δεν θα διαβάσει ξανά αυτές τις μεταβλητές με το είδος τους: {names}
 @msg	a new document refuses this file because of these variables: {names}	ένα νέο έγγραφο απορρίπτει αυτό το αρχείο λόγω αυτών των μεταβλητών: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	η κεφαλίδα `{header}` για το `{name}` θα διαβαζόταν ως η μεταβλητή `{other}`: μετονομάστε μία από τις δύο

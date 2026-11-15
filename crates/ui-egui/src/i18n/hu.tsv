@@ -5986,6 +5986,13 @@ imageTrace	Outline	Körvonal
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	több mint {MAX_CSV_ROWS} adatkészlet: az Adatkészletek importálása legfeljebb {MAX_CSV_ROWS} adatkészletet olvas be
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	több mint {MAX_CSV_COLS} változó: az Adatkészletek importálása legfeljebb {MAX_CSV_COLS} változót olvas be
 @msg	variables that aren't text were left out: {kinds}	a nem szöveges változók kimaradtak: {kinds}
+variable-kind	Visibility	Láthatóság
+variable-kind	Linked File	Csatolt fájl
+variable-kind	Graph Data	Diagramadatok
+variable-kind	Unknown	Ismeretlen
+variable-list-two	{0}, {1}	{0} és {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} és {1}
 @msg	a new document won't read these variables back with their kind: {names}	egy új dokumentum nem a fajtájukkal olvassa vissza ezeket a változókat: {names}
 @msg	a new document refuses this file because of these variables: {names}	egy új dokumentum ezen változók miatt elutasítja ezt a fájlt: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	a(z) `{name}` változó `{header}` fejléce a(z) `{other}` változóként olvasódna vissza: nevezze át az egyiket

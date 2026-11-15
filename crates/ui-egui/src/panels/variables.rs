@@ -792,12 +792,12 @@ mod tests {
         let xml = r#"<variableSets><variableSet><variables><variable varName="Logo" trait="other"/></variables></variableSet></variableSets>"#;
         app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
         assert_eq!(app.ui.status, status, "the load gives no warning");
-        let warning = "variables that aren't text were left out: other (1)";
+        let warning = "variables that aren't text were left out: `other` (1)";
         let langs: Vec<Lang> = Lang::all().filter(|l| l.code() != "en").collect();
         assert!(langs.len() >= 23, "{} languages", langs.len());
         for l in langs {
             let shown = message(l, warning);
-            assert!(!shown.contains("left out") && shown.contains("other") && shown.contains('1'), "{}: {shown}", l.code());
+            assert!(!shown.contains("left out") && shown.contains("`other` (1)"), "{}: {shown}", l.code());
         }
     }
 

@@ -1029,7 +1029,12 @@ data larger than 8 MiB or holding more than 2,000,000 XML nodes is left out (the
 reads), each with a warning. With `outlineText`, the bound type is written as outlines, so its text variables open
 unbound (with a warning). `document.open` reads the variable data of an SVG back (unless the SVG reopens from
 Preserve Editing): its text variables and data sets, no active data set, and each text variable bound to the type
-object its `docRef` names; the art stays as the file draws it. Variable data that `variable.loadLibrary` would refuse
+object its `docRef` names; the art stays as the file draws it. Variables of other kinds are left out with one warning
+that names each kind once, in the order it first comes, with its count: ``variables that aren't text were left out:
+Visibility (2), Linked File (1), Unknown (1), `custom` (1)``. Visibility, Linked File and Graph Data are the
+`visibility`, `fileref` and `graphdata` traits, Unknown is a variable without a `trait`, and any other `trait` is
+written as the file writes it, in backticks, with each backtick in it doubled. The status bar shows the kinds VectorCraft
+names in the interface language. Variable data that `variable.loadLibrary` would refuse
 is left out with the warning "the file's variable data wasn't read", and the art opens. `svgz` takes the same options and writes the SVG gzipped (`.svgz` files also open,
 place and paste). `run_command document.save {path: "x.svg", svg: {…}}` saves as SVG (or `.svgz`).
 Colorized grayscale and 1-bit images export in their fill color; linked mode writes a coverage PNG, and Tiny 1.2 writes a colorized PNG.

@@ -3474,12 +3474,12 @@ fn an_svg_without_readable_variable_data_opens_its_art() {
     // A variable without a `trait` is of unknown kind: the SVG leaves it out like the other kinds
     // that aren't text.
     let (o, warnings) = svg_opened(&untraited, "untraited.svg");
-    assert!(warnings.contains(&json!("variables that aren't text were left out: unknown (1)")), "{warnings:?}");
+    assert!(warnings.contains(&json!("variables that aren't text were left out: Unknown (1)")), "{warnings:?}");
     assert!(o.doc().unwrap().doc.variables.variables.is_empty());
     // The values of the other kinds aren't read, so one that Load Variable Library would refuse
     // leaves the text variables and their values as they open.
     let (o, warnings) = svg_opened(&relative, "relative.svg");
-    assert!(warnings.contains(&json!("variables that aren't text were left out: fileref (1)")), "{warnings:?}");
+    assert!(warnings.contains(&json!("variables that aren't text were left out: Linked File (1)")), "{warnings:?}");
     let vars = &o.doc().unwrap().doc.variables;
     assert_eq!(vars.variables.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), ["T"]);
     assert_eq!(vars.dataset("D").map(|d| d.values.clone()), Some([("T".to_string(), vectorcraft_doc::DataValue::Text("kept".into()))].into()));
@@ -3490,6 +3490,42 @@ fn an_svg_without_readable_variable_data_opens_its_art() {
     let d = &o.doc().unwrap().doc;
     assert!(d.variables.variables.is_empty());
     assert_eq!(vectorcraft_testkit::svg_shapes(&vectorcraft_svg::export(d, &Default::default())), 1, "the art opens");
+}
+
+/// The warning about an SVG's variables that aren't text names each kind once, in the order it
+/// first comes, with its count: Visibility, Linked File and Graph Data for the traits VectorCraft
+/// reads, Unknown for a variable without a `trait`, and any other `trait` as the file writes it, in
+/// backticks with each backtick in it doubled, so a `trait` that looks like a kind or a list entry
+/// stays one entry of its own.
+#[test]
+fn svg_variable_data_warning_names_each_kind_left_out() {
+    let variables = [
+        ("V1", Some("visibility")),
+        ("I1", Some("fileref")),
+        ("V2", Some("visibility")),
+        ("T", Some("textcontent")),
+        ("G1", Some("graphdata")),
+        ("U1", None),
+        ("X1", Some("unknown")),
+        ("X2", Some("a`b (1), c")),
+        ("X3", Some("Visibility")),
+        ("I2", Some("fileref")),
+        ("U2", None),
+    ];
+    let declared: String = variables
+        .iter()
+        .map(|(name, t)| match t {
+            Some(t) => format!("<variable varName=\"{name}\" trait=\"{t}\"/>"),
+            None => format!("<variable varName=\"{name}\"/>"),
+        })
+        .collect();
+    let svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\"><variableSets><variableSet><variables>{declared}</variables></variableSet></variableSets><rect x=\"1\" y=\"1\" width=\"5\" height=\"5\"/></svg>"
+    );
+    let (o, warnings) = svg_opened(&svg, "kinds.svg");
+    let warning = "variables that aren't text were left out: Visibility (2), Linked File (2), Graph Data (1), Unknown (2), `unknown` (1), `a``b (1), c` (1), `Visibility` (1)";
+    assert!(warnings.contains(&json!(warning)), "{warnings:?}");
+    assert_eq!(o.doc().unwrap().doc.variables.variables.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), ["T"]);
 }
 
 /// Five variables of three kinds, defined out of every order: `beta` (text, on type named Mike),

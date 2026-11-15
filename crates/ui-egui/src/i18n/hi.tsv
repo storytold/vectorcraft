@@ -8698,7 +8698,14 @@ antiAlias	Sharp	शार्प
 @msg	variable `{name}` is declared twice	वेरिएबल `{name}` दो बार घोषित है
 @msg	variable `{to}` already exists	वेरिएबल `{to}` पहले से मौजूद है
 @msg	variables are locked	वेरिएबल्स लॉक हैं
-@msg	variables that aren't text were left out: {kinds}	वेरिएबल जो टेक्स्ट नहीं छोड़े गए थे: {kinds}
+@msg	variables that aren't text were left out: {kinds}	जो वेरिएबल टेक्स्ट नहीं हैं, उन्हें छोड़ दिया गया: {kinds}
+variable-kind	Visibility	दृश्यता
+variable-kind	Linked File	लिंक्ड फ़ाइल
+variable-kind	Graph Data	ग्राफ़ डेटा
+variable-kind	Unknown	अज्ञात
+variable-list-two	{0}, {1}	{0} और {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} और {1}
 @msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version ने {v} लौटाया; यह होस्ट संस्करण {ABI_VERSION} लागू करता है
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc ने 0 लौटाया (मेमोरी खत्म)
 @msg	vc_alloc returned a block outside memory	vc_alloc ने मेमोरी के बाहर का ब्लॉक लौटाया

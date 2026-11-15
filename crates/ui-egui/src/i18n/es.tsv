@@ -5166,6 +5166,13 @@ axis	Both	Ambos
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	más de {MAX_CSV_ROWS} conjuntos de datos: Importar conjuntos de datos lee como máximo {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	más de {MAX_CSV_COLS} variables: Importar conjuntos de datos lee como máximo {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	se omitieron las variables que no son de texto: {kinds}
+variable-kind	Visibility	Visibilidad
+variable-kind	Linked File	Archivo vinculado
+variable-kind	Graph Data	Datos del gráfico
+variable-kind	Unknown	Desconocido
+variable-list-two	{0}, {1}	{0} y {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} y {1}
 @msg	a new document won't read these variables back with their kind: {names}	un documento nuevo no volverá a leer estas variables con su tipo: {names}
 @msg	a new document refuses this file because of these variables: {names}	un documento nuevo rechaza este archivo por estas variables: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	el encabezado `{header}` de `{name}` se leería como la variable `{other}`: cambie el nombre de una de las dos

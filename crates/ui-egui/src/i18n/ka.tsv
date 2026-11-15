@@ -8398,6 +8398,13 @@ imageTrace	Outline	კონტური
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	{MAX_CSV_ROWS}-ზე მეტი მონაცემთა ნაკრები: მონაცემთა ნაკრებების იმპორტი კითხულობს მაქსიმუმ {MAX_CSV_ROWS}-ს
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	{MAX_CSV_COLS}-ზე მეტი ცვლადი: მონაცემთა ნაკრებების იმპორტი კითხულობს მაქსიმუმ {MAX_CSV_COLS}-ს
 @msg	variables that aren't text were left out: {kinds}	ცვლადები, რომლებიც ტექსტი არ არის, გამოტოვებულია: {kinds}
+variable-kind	Visibility	ხილვადობა
+variable-kind	Linked File	დაკავშირებული ფაილი
+variable-kind	Graph Data	დიაგრამის მონაცემები
+variable-kind	Unknown	უცნობი
+variable-list-two	{0}, {1}	{0} და {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} და {1}
 @msg	a new document won't read these variables back with their kind: {names}	ახალი დოკუმენტი ამ ცვლადებს მათი ტიპით ვერ წაიკითხავს: {names}
 @msg	a new document refuses this file because of these variables: {names}	ახალი დოკუმენტი ამ ფაილს ამ ცვლადების გამო უარყოფს: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}`-ის სათაური `{header}` წაიკითხება როგორც ცვლადი `{other}`: გადაარქვით სახელი ერთ-ერთს

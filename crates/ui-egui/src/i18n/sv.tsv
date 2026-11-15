@@ -5058,6 +5058,13 @@ axis	Both	Båda
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	fler än {MAX_CSV_ROWS} datauppsättningar: Importera datauppsättningar läser högst {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	fler än {MAX_CSV_COLS} variabler: Importera datauppsättningar läser högst {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	variabler som inte är text utelämnades: {kinds}
+variable-kind	Visibility	Synlighet
+variable-kind	Linked File	Länkad fil
+variable-kind	Graph Data	Diagramdata
+variable-kind	Unknown	Okänd
+variable-list-two	{0}, {1}	{0} och {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} och {1}
 @msg	a new document won't read these variables back with their kind: {names}	ett nytt dokument läser inte tillbaka dessa variabler med deras typ: {names}
 @msg	a new document refuses this file because of these variables: {names}	ett nytt dokument avvisar den här filen på grund av dessa variabler: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	rubriken `{header}` för `{name}` skulle läsas som variabeln `{other}`: byt namn på en av dem

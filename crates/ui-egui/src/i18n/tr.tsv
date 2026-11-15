@@ -6488,6 +6488,13 @@ theme	Appearance	Görünüm
 @msg	an image has no pixels and was left out	piksel içermeyen bir görüntü dışarıda bırakıldı
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: {n}. sayfa yok (dosyada 1 sayfa var)
 @msg	variables that aren't text were left out: {kinds}	metin olmayan değişkenler dışarıda bırakıldı: {kinds}
+variable-kind	Visibility	Görünürlük
+variable-kind	Linked File	Bağlantılı Dosya
+variable-kind	Graph Data	Grafik Verileri
+variable-kind	Unknown	Bilinmiyor
+variable-list-two	{0}, {1}	{0} ve {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} ve {1}
 @msg	a new document won't read these variables back with their kind: {names}	yeni bir belge bu değişkenleri türleriyle geri okumaz: {names}
 @msg	a new document refuses this file because of these variables: {names}	yeni bir belge bu değişkenler nedeniyle bu dosyayı reddeder: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` için `{header}` başlığı `{other}` değişkeni olarak okunur: birini yeniden adlandırın

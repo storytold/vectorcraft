@@ -5203,6 +5203,13 @@ axis	Both	Оба
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	больше {MAX_CSV_ROWS} наборов данных: «Импортировать наборы данных» читает не более {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	больше {MAX_CSV_COLS} переменных: «Импортировать наборы данных» читает не более {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	переменные, которые не являются текстовыми, пропущены: {kinds}
+variable-kind	Visibility	Видимость
+variable-kind	Linked File	Связанный файл
+variable-kind	Graph Data	Данные диаграммы
+variable-kind	Unknown	Неизвестно
+variable-list-two	{0}, {1}	{0} и {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} и {1}
 @msg	a new document won't read these variables back with their kind: {names}	новый документ не прочитает эти переменные обратно с их типом: {names}
 @msg	a new document refuses this file because of these variables: {names}	новый документ отклоняет этот файл из-за этих переменных: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	заголовок `{header}` для `{name}` будет прочитан как переменная `{other}`: переименуйте одну из них
