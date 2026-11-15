@@ -69,6 +69,11 @@ pub struct PlaceState {
     /// The Place dialog's lines about its files while they are read off the UI thread: the
     /// dialog's files, and the lines once they are read.
     reading_lines: Option<(Value, std::sync::mpsc::Receiver<Vec<String>>)>,
+    /// The files of the loaded place cursor ask for their import options when clicked or dragged
+    /// (the Place dialog loaded it with Show Import Options on).
+    queue_asks: bool,
+    /// The loaded cursor's files by name, with the size a click places them at.
+    queue_sizes: Vec<(String, f64, f64)>,
 }
 
 /// A place cursor thumbnail: decoded when the cursor is loaded, uploaded when first drawn (and
@@ -107,9 +112,11 @@ fn engine(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Value, String
 // ---------- File → Place… ----------
 
 /// File → Place… (`file.place`): with a file (`path` or `name` + `dataBase64`), place it, centred
-/// in the view unless `at`, `rect` or `replace` say otherwise (a text file without `text` options
-/// asks for them first); with `paths`, the Place dialog for them; with neither, pick the files
-/// first. The file is read and placed at once (MCP, scripts).
+/// in the view unless `at`, `rect` or `replace` say otherwise (a text file without `text` options,
+/// a DXF drawing without `dxf` options and a PDF with several pages or a password and no `page`
+/// ask for them first, unless `showImportOptions: false` places them with the options confirmed
+/// last); with `paths`, the Place dialog for them; with neither, pick the files first. The file is
+/// read and placed at once (MCP, scripts).
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     place_file(app, p, Read::AtOnce)
 }
@@ -130,8 +137,27 @@ enum Read {
 }
 
 fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
-    if p.get("text").is_none() && crate::dialogs::text_import::is_text(p) {
-        return Ok(crate::dialogs::text_import::open(app, p));
+    let show = match p.get("showImportOptions") {
+        None | Some(Value::Null) => None,
+        Some(Value::Bool(b)) => Some(*b),
+        Some(_) => return Err("`showImportOptions` must be true or false".into()),
+    };
+    let ask = show.unwrap_or(true);
+    let mut p = p.clone();
+    if let Some(o) = p.as_object_mut() {
+        o.remove("showImportOptions");
+    }
+    if !ask {
+        // Placed with the options confirmed last for the format.
+        if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
+            p["text"] = crate::dialogs::text_import::last_options(app);
+        }
+        if let Some(dxf) = crate::dialogs::dxf_import::last_options(app, &p) {
+            p["dxf"] = dxf;
+        }
+    }
+    if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
+        return Ok(crate::dialogs::text_import::open(app, &p));
     }
     if p.get("path").is_none() && p.get("dataBase64").is_none() {
         let files: Vec<Value> = match p.get("paths").and_then(Value::as_array) {
@@ -142,17 +168,21 @@ fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, 
             return Err("paths: give at least one file".into());
         }
         open_dialog(app, files);
+        if let (Some(show), Some(d)) = (show, app.ui.dialog.as_mut()) {
+            d.fields.insert("showImportOptions".into(), json!(show));
+        }
         return Ok(Value::Null);
     }
-    // A PDF with several pages or a password asks for the page, box and password first.
-    if crate::dialogs::import_pdf::offer_place(app, p) {
+    // A PDF with several pages or a password asks for the page, box and password first; with
+    // Show Import Options off, only an encrypted one asks, for its password.
+    let offered = if ask { crate::dialogs::import_pdf::offer_place(app, &p) } else { crate::dialogs::import_pdf::offer_place_password(app, &p) };
+    if offered {
         return Ok(Value::Null);
     }
     // A DXF drawing asks for its import options.
-    if crate::dialogs::dxf_import::offer_place(app, p) {
+    if ask && crate::dialogs::dxf_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
     }
-    let mut p = p.clone();
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
         && let Some(v) = app.view()
     {
@@ -203,6 +233,7 @@ fn open_dialog(app: &mut VectorcraftApp, files: Vec<Value>) {
             "link": app.ui.place_link,
             "template": false,
             "replace": false,
+            "showImportOptions": app.ui.place_import_options,
             "__replace": files.len() == 1 && one_object,
             "__documents": linked.contains(&true),
             "__others": linked.contains(&false),
@@ -319,15 +350,18 @@ fn fmt_ppi(v: f64) -> String {
 }
 
 /// Place (the dialog's OK): one file is placed centred in the view (or replaces the selection);
-/// several load the place cursor.
+/// several load the place cursor. With Show Import Options on, each file that has import options
+/// asks for them before it is placed (the cursor's files when clicked or dragged); off, each is
+/// placed with the options confirmed last for its format.
 pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Value, String> {
     let files: Vec<Value> = d.fields.get("files").and_then(Value::as_array).cloned().unwrap_or_default();
     let sources: Vec<Value> = files.iter().filter_map(|f| source(app, f)).collect();
     if sources.is_empty() {
         return Err("no files to place".into());
     }
-    let (link, template) = (d.bool("link"), d.bool("template"));
+    let (link, template, ask) = (d.bool("link"), d.bool("template"), d.bool("showImportOptions"));
     app.ui.place_link = link;
+    app.ui.place_import_options = ask;
     app.ui.dialog = None;
     app.place.reading_lines = None;
     let r = match &sources[..] {
@@ -335,6 +369,7 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
             let mut p = one.clone();
             p["link"] = json!(link);
             p["template"] = json!(template);
+            p["showImportOptions"] = json!(ask);
             if d.bool("replace") && d.bool("__replace") {
                 p["replace"] = json!(true);
             }
@@ -343,7 +378,13 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
         many => {
             let paths: Vec<&Value> = many.iter().filter_map(|s| s.get("path")).collect();
             let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
-            queue_files(app, &json!({ "paths": paths, "files": files, "link": link, "template": template }), Read::ForUser { dropped: false })
+            let mut q = json!({ "paths": paths, "files": files, "link": link, "template": template });
+            if !ask {
+                // Each text file and DXF drawing in the cursor takes the options confirmed last.
+                q["text"] = crate::dialogs::text_import::last_options(app);
+                q["dxf"] = crate::dialogs::dxf_import::remembered(app);
+            }
+            queue_files(app, &q, Read::ForUser { dropped: false }, ask)
         }
     };
     app.place.picked.clear();
@@ -355,35 +396,41 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
 /// `file.place.queue` with thumbnails for the cursor (unless `thumbnail` is given), the files read
 /// at once (MCP, scripts).
 pub fn queue(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    queue_files(app, p, Read::AtOnce)
+    queue_files(app, p, Read::AtOnce, false)
 }
 
-fn queue_files(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
+/// `file.place.queue` with `p`; `asks`: the cursor's files ask for their import options when placed.
+fn queue_files(app: &mut VectorcraftApp, p: &Value, read: Read, asks: bool) -> Result<Value, String> {
     let mut p = p.clone();
     if p.get("thumbnail").is_none() {
         p["thumbnail"] = json!(THUMB);
     }
     if matches!(read, Read::ForUser { .. }) && crate::placing::available(app) {
-        let r = crate::placing::start_queue(app, &p);
+        let r = crate::placing::start_queue(app, &p, asks);
         if let Err(e) = &r {
             app.status(e.clone());
         }
         return r;
     }
     let r = engine(app, "file.place.queue", &p)?;
-    show_thumbnails(app, &r);
+    show_thumbnails(app, &r, asks);
     Ok(r)
 }
 
 /// The file a click or drag of the place cursor places (`file.place` with `p`, its `rect` set):
 /// read off the UI thread where the files the user places are ([`crate::placing::start`]), else at
-/// once. An error shows in the status bar.
+/// once. When the Place dialog loaded the cursor with Show Import Options on, a file that has
+/// import options asks for them first (Cancel leaves it unplaced). An error shows in the status bar.
 pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     // Read within the automation roots of whoever loaded the cursor, even on a click of the person
     // at the keyboard: an agent's queue reaches no file it wasn't given.
     let roots = app.session.place_queue_roots();
     vectorcraft_engine::file_access::confine(roots.as_ref(), || {
-        if crate::placing::available(app) {
+        if app.place.queue_asks {
+            // Placing shows its own errors in the status bar.
+            let p = clicked_at_full_size(app, p);
+            let _ = place_file(app, &p, Read::ForUser { dropped: false });
+        } else if crate::placing::available(app) {
             if let Err(e) = crate::placing::start(app, p, false) {
                 app.status(e);
             }
@@ -393,8 +440,40 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     });
 }
 
-/// The cursor's thumbnails from `file.place.queue`'s reply `r`.
-pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value) {
+/// The params of a cursor click (`rect` at the file's queued size) on a PDF or DXF file, whose
+/// import options may change its size (another page, another scale): placed as its options place
+/// it at the click (`at`, the center of the box the click gave), as File › Place of that one file
+/// places it, instead of fitted into the box of the first page or the default scale. A drag keeps
+/// its `rect`; one to exactly the queued size gives the same `rect` as a click, and is taken as one.
+fn clicked_at_full_size(app: &VectorcraftApp, p: &Value) -> Value {
+    let mut p = p.clone();
+    let Some(name) = p.get("path").or_else(|| p.get("name")).and_then(Value::as_str).map(fileio::file_name) else { return p };
+    if !matches!(fileio::extension(&name).as_str(), "pdf" | "ai" | "ait" | "dxf") {
+        return p;
+    }
+    let r: Vec<f64> = p.get("rect").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+    let [x, y, w, h] = r[..] else { return p };
+    // Files of the same name in the cursor must all have that size: the place tool's request names
+    // the file, not its place in the cursor.
+    let mut same_name = app.place.queue_sizes.iter().filter(|(n, ..)| *n == name).peekable();
+    let queued = same_name.peek().is_some() && same_name.all(|(_, qw, qh)| (qw - w).abs() < 1e-6 && (qh - h).abs() < 1e-6);
+    if queued && let Some(o) = p.as_object_mut() {
+        o.remove("rect");
+        o.insert("at".into(), json!([x + w / 2.0, y + h / 2.0]));
+    }
+    p
+}
+
+/// The cursor's thumbnails and its files' sizes from `file.place.queue`'s reply `r` once the cursor
+/// is loaded; `asks`: its files ask for their import options when placed.
+pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value, asks: bool) {
+    app.place.queue_asks = asks;
+    app.place.queue_sizes = r["files"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|f| Some((f["name"].as_str()?.to_string(), f["width"].as_f64()?, f["height"].as_f64()?)))
+        .collect();
     app.place.thumbs = r["files"]
         .as_array()
         .into_iter()

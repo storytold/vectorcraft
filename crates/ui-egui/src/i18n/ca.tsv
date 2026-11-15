@@ -4587,6 +4587,8 @@ digits	Malayalam	Malaiàlam
 	Swap Fill and Stroke (Shift+X)	Intercanvia el farciment i el traç (Maj+X)
 	Swap start and end arrowheads	Intercanvia les puntes de fletxa inicial i final
 	Swap the selected object for the file, keeping its place and transform	Substitueix l’objecte seleccionat pel fitxer, mantenint-ne la posició i la transformació
+	Show Import Options	Mostra les opcions d’importació
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demana les opcions d’importació de cada fitxer PDF, DXF o de text abans de col·locar-lo; desactivat: s’usen les últimes opcions triades
 	Stylistic Alternates	Alternatives estilístiques
 	Swash	Volada
 	Swatch Conflict	Conflicte de mostres

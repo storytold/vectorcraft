@@ -3639,6 +3639,8 @@ digits	Malayalam	Малаялам
 	Swap Fill and Stroke (Shift+X)	Поменять заливку и обводку (Shift+X)
 	Swap start and end arrowheads	Поменять начальную и конечную стрелки
 	Swap the selected object for the file, keeping its place and transform	Заменить выделенный объект файлом, сохранив его положение и преобразование
+	Show Import Options	Показывать параметры импорта
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запрашивать параметры импорта каждого файла PDF, DXF или текстового файла перед помещением; если выключено, используются последние выбранные параметры
 	Stylistic Alternates	Стилистические альтернативы
 	Swash	Росчерк
 	Swatch Conflict	Конфликт образцов
