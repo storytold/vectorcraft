@@ -44,6 +44,8 @@ const ROWS: &[Row] = &[
             "affectsDensity",
         ],
     ),
+    // The graphic style the Symbol Styler applies, set from the Graphic Styles panel.
+    (&["symbolStyler"], None, &["style"]),
     (&["mirrorCut"], None, &["axis", "keep"]),
     (&["puppetWarp"], None, &["showMesh", "expand"]),
     (&["arc"], None, &["closed", "lengthX", "lengthY", "reference", "baseAlong", "slope", "fillArc"]),

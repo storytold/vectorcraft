@@ -3304,7 +3304,9 @@ already walks Image Trace. Short agent entry points:
   [the archived manual](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=118)):
   `symbol.adjust` takes `method` (`userDefined`, `average` or `random`; not used by `shift`), `usePressure` with
   `points` as `[x, y, pressure]` (each point's pen pressure, 0..1, is the intensity there), and for `size`
-  `proportional` (true) and `affectsDensity` (false). `symbol.spray` takes `attributes`
+  `proportional` (true) and `affectsDensity` (false). With `tool: style`, a `style` name the document has no graphic style
+  for counts as none (the document's first style after the default one). The Symbol Styler sends the style last
+  clicked into the Graphic Styles panel's selection. `symbol.spray` takes `attributes`
   `{scrunch?, size?, spin?, screen?, stain?, style?}`, each `average` or `userDefined`, with `color`, `keepModel` and
   `style` for the User Defined stain and style. `symbol.setDensity {from, to, ids?|id?}` gives the selected symbol
   sets a new Symbol Set Density. VectorCraft's own rules:

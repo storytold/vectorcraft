@@ -205,6 +205,26 @@ fn shift_with_the_styler_keeps_the_amount_and_changes_the_style() {
     assert!(blue[2] > 0.99 && blue[0] < 0.01, "{blue:?}");
 }
 
+/// A style name the document has no style for (the Styler's style from another document, or one
+/// since renamed or deleted) moves the fill toward the same style as no name.
+#[test]
+fn the_styler_takes_the_first_style_for_a_name_the_document_lacks() {
+    let styled = |style: Option<&str>| {
+        let mut s = session();
+        let a = dot(&mut s, 100.0, 150.0);
+        s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+        s.select(|_, sel| sel.clear()).unwrap();
+        adjust(&mut s, json!({"tool": "stain", "points": [[100, 150]], "radius": 5, "intensity": 10, "color": "#ff0000"}));
+        let mut p = json!({"tool": "style", "points": [[100, 150]], "radius": 5, "intensity": 10, "shift": true});
+        if let Some(n) = style {
+            p["style"] = json!(n);
+        }
+        adjust(&mut s, p);
+        fill(&s, a).unwrap()
+    };
+    assert_eq!(styled(Some("No Such Style")), styled(None));
+}
+
 /// A `shift` that is not true, false or null is refused and changes nothing.
 #[test]
 fn a_bad_shift_is_refused() {

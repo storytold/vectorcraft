@@ -868,13 +868,15 @@ fn samples(p: &Value, cmd: &str) -> Result<Vec<(Point, f64)>> {
     Ok(v)
 }
 
-/// The fill of the graphic style `p` names with `style`, else of the document's first style after
-/// the default one.
+/// The fill of the graphic style `p` names with `style`, else (no name, or one the document has no
+/// style for, such as the Symbol Styler's style from another document) of the document's first
+/// style after the default one.
 fn style_paint(d: &Document, p: &Value) -> Option<Paint> {
-    match str_param(p, "style") {
-        Some(n) => d.graphic_styles.iter().find(|g| g.name == n).map(|g| g.appearance.fill_paint()),
-        None => d.graphic_styles.get(1).or(d.graphic_styles.first()).map(|g| g.appearance.fill_paint()),
-    }
+    str_param(p, "style")
+        .and_then(|n| d.graphic_styles.iter().find(|g| g.name == n))
+        .or(d.graphic_styles.get(1))
+        .or(d.graphic_styles.first())
+        .map(|g| g.appearance.fill_paint())
 }
 
 /// Deterministic per-point jitter in [-1, 1]² (so previews re-applied on the snapshot agree).
