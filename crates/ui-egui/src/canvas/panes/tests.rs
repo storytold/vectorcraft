@@ -323,6 +323,40 @@ fn other_panes_show_pixel_preview() {
     assert!(x1 > x0 && y1 > y0);
 }
 
+/// A pane more device pixels across than the largest texture side the display supports renders
+/// its document within that size, as the canvas does, and the frame covers the pane.
+#[test]
+fn other_panes_render_within_the_largest_texture_side() {
+    let mut app = app_with(2);
+    app.canvas.panes.worker_started = true; // every pane renders on this thread
+    let ctx = egui::Context::default();
+    ctx.set_pixels_per_point(2.0);
+    app.run("window.arrange.tile", json!({})).unwrap();
+    // The first frame sets the pixels a point, the second draws at them.
+    for _ in 0..2 {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
+            max_texture_side: Some(1024),
+            ..Default::default()
+        };
+        ctx.run_ui(raw, |ui| app.canvas_area(ui)).textures_delta.clear();
+    }
+    let uid = (app.session.documents()[0].uid, 1);
+    let (key, tex) = app.canvas.panes.shown.get(&uid).map(|(k, t)| (k.clone(), t.size())).expect("the other document's pane rendered");
+    assert_eq!(tex[0].max(tex[1]), 1024, "the pane's frame is {tex:?} pixels");
+    let (docs, cells) = panes(&app);
+    let pane = docs.iter().zip(cells).find(|(i, _)| **i == 0).map(|(_, r)| r).unwrap();
+    let rect = view_rects(&app, pane, ctx.pixels_per_point()).1;
+    assert!(rect.width().max(rect.height()) * ctx.pixels_per_point() > 1024.0, "the pane is {rect:?} at {} pixels a point", ctx.pixels_per_point());
+    assert!(
+        (key.w as f32 / key.ppp - rect.width()).abs() < 1.0 && (key.h as f32 / key.ppp - rect.height()).abs() < 1.0,
+        "the frame covers the pane {rect:?}: {} × {} pixels at {} a point",
+        key.w,
+        key.h,
+        key.ppp
+    );
+}
+
 /// A pane's render key takes its document's [`CacheKey::placed`] value ([`placed_key`]), which a
 /// bitmap made for a test running beside this one does not move: the document holds no images.
 #[test]
