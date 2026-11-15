@@ -1121,10 +1121,12 @@ fn on_type_path(n: &Node, t: &crate::TextObject, p: Point, tol: f64) -> bool {
     stroke_contains(&path.to_bezpath(), 0.0, tol, p)
 }
 
-/// Hit anywhere in an evaluated subtree (groups recurse; leaves use [`hit_leaf`]).
+/// Hit anywhere in an evaluated subtree (groups recurse; leaves use [`hit_leaf`]). In symbol art
+/// placed by [`FindPart`], each object visited takes one object of the [`ArtWalk`] limit, and
+/// nothing more is tested once the limit is used up.
 fn hit_any(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
     // Hidden art does not hit.
-    if !n.visible {
+    if !n.visible || ArtWalk::charged() && !ArtWalk::take(1) {
         return None;
     }
     // Nor art whose reach does not hold `p`, as in [`may_hit`]: a blend's steps far from `p` are
@@ -1257,8 +1259,12 @@ struct FindPart<'a> {
 }
 
 impl FindPart<'_> {
+    /// What a click at `p` hits on object `n` of the art, placed. [`hit_any`] takes `n` and each
+    /// object it visits inside `n` from the [`ArtWalk`] limit.
     fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>, opt: HitOptions) -> Option<HitKind> {
-        self.art.place(n, whole).and_then(|n| hit_any(&n, self.p, opt, self.symbols))
+        let placed = self.art.place(n, whole)?;
+        let _charged = ArtWalk::charge();
+        hit_any(&placed, self.p, opt, self.symbols)
     }
 
     fn skips_guide(&self, n: &Node) -> bool {
@@ -1268,7 +1274,7 @@ impl FindPart<'_> {
     /// What a click at `p` hits on object `n` of the art, with `path` the child indices that lead
     /// to what it hits. `outline`: the view is in Outline, or a layer around `n` has Preview off.
     fn find(&self, n: &Node, path: &mut Vec<u32>, whole: Option<vectorcraft_geom::Affine>, outline: bool) -> Option<HitKind> {
-        if !n.visible || !self.whole_instance && (n.locked || n.is_template()) || self.skips_guide(n) || !ArtWalk::take(1) {
+        if !n.visible || !self.whole_instance && (n.locked || n.is_template()) || self.skips_guide(n) || ArtWalk::used_up() {
             return None;
         }
         let outline = outline || previews_off(n);
@@ -1276,6 +1282,9 @@ impl FindPart<'_> {
         let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole, opt) };
         if path.len() >= crate::symbol_overrides::MAX_PATH_DEPTH {
             return self.hit(n, whole, opt);
+        }
+        if !ArtWalk::take(1) {
+            return None;
         }
         let whole = self.art.whole(n, whole);
         if n.clips()
@@ -1370,6 +1379,8 @@ thread_local! {
     /// How many more objects of symbol art the click or marquee under way may visit ([`ArtWalk`]),
     /// `None` outside one.
     static ART_WALK_LEFT: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+    /// Whether [`hit_any`] is testing symbol art that [`FindPart`] placed ([`ArtWalk::charge`]).
+    static ART_WALK_CHARGED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 #[cfg(test)]
@@ -1420,6 +1431,19 @@ impl ArtWalk {
         ART_WALK_LEFT.set(Some(rest.unwrap_or(0)));
         rest.is_some()
     }
+
+    /// While the guard lives, each object [`hit_any`] visits takes one object from what is left:
+    /// [`FindPart`] holds one while it tests a placed object of symbol art, so that the members of an
+    /// Intertwine group, and the objects of groups nested deeper than
+    /// [`crate::symbol_overrides::MAX_PATH_DEPTH`], count toward the limit.
+    fn charge() -> ArtWalkCharge {
+        ArtWalkCharge { was: ART_WALK_CHARGED.replace(true) }
+    }
+
+    /// Does [`hit_any`] take the objects it visits from what is left ([`Self::charge`])?
+    fn charged() -> bool {
+        ART_WALK_CHARGED.get()
+    }
 }
 
 impl Drop for ArtWalk {
@@ -1427,6 +1451,17 @@ impl Drop for ArtWalk {
         if self.outermost {
             ART_WALK_LEFT.set(None);
         }
+    }
+}
+
+/// The guard of [`ArtWalk::charge`].
+struct ArtWalkCharge {
+    was: bool,
+}
+
+impl Drop for ArtWalkCharge {
+    fn drop(&mut self) {
+        ART_WALK_CHARGED.set(self.was);
     }
 }
 
