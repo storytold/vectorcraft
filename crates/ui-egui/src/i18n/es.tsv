@@ -1402,6 +1402,14 @@ font-technology	Variable	Variables
 	Previous Artboard	Mesa de trabajo anterior
 	Next Artboard	Mesa de trabajo siguiente
 	Last Artboard	Última mesa de trabajo
+	Status Bar Show	Mostrar en la barra de estado
+	Artboard Name	Nombre de la mesa de trabajo
+	Current Tool	Herramienta actual
+	Date and Time	Fecha y hora
+	Number of Undos	Número de deshacer
+	Document Color Profile	Perfil de color del documento
+	Undos	Deshacer
+	Redos	Rehacer
 	Go To Link	Ir al vínculo
 	GPL palettes keep solid colours only, as RGB.	Las paletas GPL solo conservan colores sólidos, en RGB.
 	GPU Performance	Rendimiento de GPU

@@ -550,6 +550,10 @@ pub struct UiState {
     #[serde(default)]
     pub toolbar_right: bool,
     pub status_bar: bool,
+    /// What the status bar's info field shows (its Show menu, `view.statusBarShow`): Current Tool by
+    /// default and in state saved without it ([`crate::chrome::deserialize_status_bar_show`]).
+    #[serde(default, deserialize_with = "crate::chrome::deserialize_status_bar_show")]
+    pub status_bar_show: crate::chrome::StatusBarShow,
     pub help_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
@@ -1177,6 +1181,7 @@ impl Default for UiState {
             tools_beside_canvas: false,
             toolbar_right: false,
             status_bar: true,
+            status_bar_show: crate::chrome::StatusBarShow::CurrentTool,
             help_bar: true,
             dock: true,
             tab_hid: None,

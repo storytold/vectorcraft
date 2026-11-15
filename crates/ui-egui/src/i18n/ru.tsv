@@ -1412,6 +1412,14 @@ file-filter	Templates	Шаблоны
 	Previous Artboard	Предыдущая монтажная область
 	Next Artboard	Следующая монтажная область
 	Last Artboard	Последняя монтажная область
+	Status Bar Show	Показ в строке состояния
+	Artboard Name	Имя монтажной области
+	Current Tool	Текущий инструмент
+	Date and Time	Дата и время
+	Number of Undos	Число отмен
+	Document Color Profile	Цветовой профиль документа
+	Undos	Отмены
+	Redos	Повторы
 	Go To Link	Перейти по ссылке
 	GPL palettes keep solid colours only, as RGB.	Палитры GPL сохраняют только сплошные цвета в RGB.
 	GPU Performance	Производительность GPU

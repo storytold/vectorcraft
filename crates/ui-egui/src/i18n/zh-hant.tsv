@@ -1387,6 +1387,14 @@ file-filter	Templates	範本
 	Previous Artboard	上一個工作區域
 	Next Artboard	下一個工作區域
 	Last Artboard	最後一個工作區域
+	Status Bar Show	狀態列顯示
+	Artboard Name	工作區域名稱
+	Current Tool	目前工具
+	Date and Time	日期和時間
+	Number of Undos	復原次數
+	Document Color Profile	文件色彩描述檔
+	Undos	復原
+	Redos	重做
 	Go To Link	前往連結
 	GPL palettes keep solid colours only, as RGB.	GPL 調色盤僅保留純色，並以 RGB 儲存。
 	GPU Performance	GPU 效能

@@ -1348,6 +1348,14 @@ font-technology	Variable	Променливи
 	Previous Artboard	Предишна работна област
 	Next Artboard	Следваща работна област
 	Last Artboard	Последна работна област
+	Status Bar Show	Показване в лентата на състоянието
+	Artboard Name	Име на работната област
+	Current Tool	Текущ инструмент
+	Date and Time	Дата и час
+	Number of Undos	Брой отмени
+	Document Color Profile	Цветови профил на документа
+	Undos	Отмени
+	Redos	Повторения
 	Go To Link	Към връзката
 	GPL palettes keep solid colours only, as RGB.	Палитрите GPL запазват само плътни цветове като RGB.
 	GPU Performance	Производителност на графичния процесор
