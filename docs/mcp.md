@@ -9606,9 +9606,15 @@ around them ([the help page](https://helpx.adobe.com/illustrator/using/formattin
 the default and how the space is measured are VectorCraft's own rules: the value is from 0 to 100, 0 by default and
 saved only when not 0, and it is the share of the blank space on each side of a character's ink, inside the
 character's own width, that is taken away. 50 halves that space, and 100 sets the ink against the characters before and
-after it; the glyph keeps its shape. A character without ink, such as a space, keeps its width. A ligature or a letter
-with its marks takes the value of its first character. Tracking, kerning and Insert Aki are added after it, and
-justification keeps it. Tsume applies to horizontal type; vertical type keeps its spacing. Character styles carry it
+after it; the glyph keeps its shape. The ink of a color glyph is the color art or bitmap drawn for it, not its outline.
+A character without ink, such as a space, keeps its width. A ligature or a letter with its marks takes the value of its
+first character. Tracking, kerning and Insert Aki are added after it, and justification keeps it. Vertical type takes
+it too ([the help page](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/format-east-asian-characters-in-vertical-text.html)):
+a character that stands upright loses the share of the space above and below its ink, inside its cell down the column
+(its vertical advance from the font's vertical metrics, else at least one em, with the Proportional Metrics change to
+it), and moves up with it; a character lying on its side is measured along its own width, as in horizontal type; the
+characters of a tate-chu-yoko block move closer across the column, and the block keeps its one em down the column. A
+mark in an upright character's cluster moves with it, and Tsume measures the character's own ink only. Character styles carry it
 (`charStyle.new`, `charStyle.setAttrs` and `charStyle.edit` refuse a value outside the range). A value that is not a
 number is refused with `` `tsume` must be a number ``, and one outside the range with `` `tsume` must be from 0 to
 100 ``. One undo step, and a call that gives the value the characters already have records none. With Show East Asian
