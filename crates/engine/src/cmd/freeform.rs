@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Freeform Point",
             [],
             None,
-            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it. On a path directly in a graph series, the graph also stores the edited gradient when it is on the topmost visible fill or stroke, as for the other paint.freeform edits (docs/mcp.md); on a graph label's row, the graph stores the label's topmost visible fill and stroke rows for every label of its kind; the points on a label's characters are not stored → {index}",
+            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it. On a path directly in a graph series, the graph also stores the edited gradient when it is on the topmost visible fill or stroke, as for the other paint.freeform edits (docs/mcp.md); on a graph label's row, the graph stores the label's topmost visible fill and stroke rows for every label of its kind; the points on a label's characters are not stored → {index}",
             has_doc,
             add_point
         ),
@@ -28,7 +28,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Freeform Point",
             [],
             None,
-            "{index? (default: the selected point), at?: [x,y] (document coordinates), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient → {index}",
+            "{index? (default: the selected point), at?: [x,y] (document coordinates), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} move or recolour a point of the freeform gradient → {index}",
             has_doc,
             set_point
         ),
@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Freeform Point",
             [],
             None,
-            "{index? (default: the selected point), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} remove a point (never the last one); lines through it close up around it and lines left with one point go → {index}",
+            "{index? (default: the selected point), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} remove a point (never the last one); lines through it close up around it and lines left with one point go → {index}",
             has_doc,
             delete_point
         ),
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Freeform Line",
             [],
             None,
-            "{points: [index, …] (at least two), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} join points with a smooth line through them, in order → {line}",
+            "{points: [index, …] (at least two), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} join points with a smooth line through them, in order → {line}",
             has_doc,
             add_line
         ),
@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Split Freeform Line",
             [],
             None,
-            "{line: line index, segment: the segment from the line's point `segment` to the next, t?: 0..1 along it (default 0.5), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point on a line there (colour, opacity and spread between the segment's ends) and select it → {index}",
+            "{line: line index, segment: the segment from the line's point `segment` to the next, t?: 0..1 along it (default 0.5), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\"} add a point on a line there (colour, opacity and spread between the segment's ends) and select it → {index}",
             has_doc,
             split_line
         ),
@@ -182,7 +182,8 @@ fn edit<R>(s: &mut Session, p: &Value, cmd: &str, mut f: impl FnMut(&mut Freefor
     let item = item_target(s, p, cmd)?;
     let stroke = edits_stroke(s, p, item, !s.fill_active, cmd)?;
     let item = item.of_kind(s, !stroke);
-    let ids = item.targets(s, p)?;
+    // The art of a graph design in a series keeps the design's gradient.
+    let ids = super::appearance::without_design_art(&s.doc()?.doc, item.targets(s, p)?, cmd)?;
     if ids.is_empty() {
         return Err(bad(cmd, "select an object with a freeform gradient"));
     }
@@ -200,7 +201,9 @@ fn edit<R>(s: &mut Session, p: &Value, cmd: &str, mut f: impl FnMut(&mut Freefor
         first.get_or_insert(r);
         Ok(())
     };
-    edit_items(s, &ids, item, cmd, "Gradient", !stroke, |n, index| {
+    let of = super::appearance::reference_of(s, p, item, cmd)?;
+    let shown_at = super::appearance::first_edited(s, item, of, &ids);
+    edit_items(s, &ids, item, of, cmd, "Gradient", !stroke, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
         {
@@ -221,7 +224,9 @@ fn edit<R>(s: &mut Session, p: &Value, cmd: &str, mut f: impl FnMut(&mut Freefor
     })?;
     let r = first.ok_or_else(|| bad(cmd, NOT_FREEFORM))?;
     // The edited gradient is the last one used (`paint.lastGradient`).
-    let shown = s.doc()?.doc.node(ids[0]).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, cmd).ok().flatten()));
+    let shown = shown_at.and_then(|(id, item)| {
+        s.doc().ok()?.doc.node(id).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, cmd).ok().flatten()))
+    });
     if let Some(p) = shown {
         s.remember_paint(&p);
     }

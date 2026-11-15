@@ -594,6 +594,9 @@ fn write_plan(
         })
     };
     let failed = target.clone().unwrap_or_default();
+    // The status line before the save starts: on the worker, the save sets one line ("<label>…")
+    // right after this; written right away, it sets none before `then` runs.
+    let (sets, started_line) = (app.ui.status_sets, format!("{label}…"));
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
         if r.is_err()
             && location_refused.load(std::sync::atomic::Ordering::Relaxed)
@@ -623,7 +626,10 @@ fn write_plan(
             let beside: Vec<String> = beside.filter(|p| *p != path).map(str::to_string).collect();
             app.picks.written_beside.insert(uid, beside);
         }
-        report_saved(app, &path, &r);
+        // A line set while the file was written (another command's, another job's) stays.
+        if background::status_unchanged(app, sets, &started_line) {
+            report_saved(app, &path, &r);
+        }
         Ok(r)
     };
     let mut r = background::run(app, enabled, label, Some(uid), work, then)?;
