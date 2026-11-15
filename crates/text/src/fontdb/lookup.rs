@@ -657,4 +657,37 @@ mod shared_outline_tests {
             assert_eq!(*db.outline(&face, glyph.to_u32()), old.0, "glyph {ch}");
         }
     }
+
+    #[test]
+    fn malformed_cff_prefix_matches_original_pen() {
+        use skrifa::raw::ps::cff::CffFontRef;
+        let Ok(dir) = std::env::var("CRAFT_FONTS_DIR") else { return };
+        let mut bytes = std::fs::read(std::path::Path::new(&dir).join("fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf")).unwrap();
+        let (gid, start) = {
+            let f = skrifa::FontRef::new(&bytes).unwrap();
+            let table = f.table_data(skrifa::Tag::new(b"CFF ")).unwrap().as_bytes();
+            let cff = CffFontRef::new(table, 0, None).unwrap();
+            let (gid, cs) = (0..cff.num_glyphs())
+                .find_map(|gid| {
+                    let cs = cff.charstrings().get(gid as usize)?;
+                    (cs.len() >= 8).then_some((gid, cs))
+                })
+                .unwrap();
+            (gid, cs.as_ptr() as usize - bytes.as_ptr() as usize)
+        };
+        bytes[start..start + 8].copy_from_slice(&[139, 139, 21, 239, 139, 5, 10, 14]);
+        let f = skrifa::FontRef::new(&bytes).unwrap();
+        let mut old = FlipPen(BezPath::new());
+        let result = f
+            .outline_glyphs()
+            .get(GlyphId::new(gid))
+            .unwrap()
+            .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old);
+        assert!(result.is_err());
+        assert!(!old.0.elements().is_empty());
+        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
+        let (path, status) = shared.outline_recovering(gid).unwrap();
+        assert!(status.is_err());
+        assert_eq!(kurbo::Affine::scale_non_uniform(1.0, -1.0) * path, old.0);
+    }
 }
