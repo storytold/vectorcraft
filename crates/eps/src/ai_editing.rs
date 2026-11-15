@@ -143,6 +143,10 @@
 //!   A path or compound path with a brush the reader reads live is written with an art style whose
 //!   stroke is the brush's filter (`writer::brushes`). A brush is written only when the reader reads
 //!   it back with its settings.
+//! - Graphs, as the reader reads them (`read/graph.rs`): a graph on the layers whose records the
+//!   reader reads back as the same graph ([`crate::ai_graph`]) is written as its group between
+//!   `%_Gs`, its functional records and `%_GS`, each series' group tagged `Go` right after its end;
+//!   any other graph, and a graph with art left out, as its art, with a warning.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the

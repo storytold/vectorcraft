@@ -140,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text; no undo step when no character, paragraph or graph label style changes) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; \"hkna\" is H or V Style, kana in the font's forms for the writing direction, shaped as `vkna` in vertical type, and \"ital\" is Roman Italics, half-width alphanumerics in the font's italic forms, both on or off only), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text; no undo step when no character, paragraph or graph label style changes) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -616,6 +616,21 @@ fn scale_text_attributes(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "changed": changed }))
 }
 
+/// A path (or compound path) of `outline`, a piece of type `t`'s outline in text space, painted as
+/// run `run` and placed in the document as the canvas paints it ([`paint_type_piece`]: unplaced
+/// gradients fitted to `bounds`, the layout's bounds, stroke weights scaled by the type's
+/// transform); `None` when the piece has no path.
+fn type_piece(d: &mut Document, t: &TextObject, bounds: kurbo::Rect, run: usize, outline: &kurbo::BezPath) -> Option<Node> {
+    let path = PathData::from_bezpath(outline);
+    if path.is_empty() {
+        return None;
+    }
+    let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
+    let mut node = shape_node(d, path, None);
+    vectorcraft_render::effects::paint_type_piece(&mut node, &st, bounds, t.xf);
+    Some(node)
+}
+
 fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Create Outlines", |d, sel| {
@@ -660,14 +675,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                         children.push(Arc::new(d.reid(&art)));
                         break 'glyph;
                     }
-                    let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
-                    if path.is_empty() {
-                        break 'glyph;
+                    if let Some(node) = type_piece(d, t, lay.bounds, g.run, &g.outline) {
+                        children.push(Arc::new(node));
                     }
-                    let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                    let mut node = shape_node(d, path, None);
-                    node.appearance = st.appearance().into();
-                    children.push(Arc::new(node));
                 }
                 run_end.insert(g.run, children.len());
             }
@@ -676,13 +686,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             // nothing there either).
             let mut ruby: Vec<(usize, Arc<Node>)> = vec![];
             for g in &lay.ruby {
-                let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
-                if path.is_empty() {
-                    continue;
-                }
-                let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                let mut node = shape_node(d, path, None);
-                node.appearance = st.appearance().into();
+                let Some(node) = type_piece(d, t, lay.bounds, g.run, &g.outline) else { continue };
                 // After the glyphs of its run and of the runs before it.
                 let at = run_end.range(..=g.run).map(|(_, end)| *end).max().unwrap_or(0);
                 ruby.push((at, Arc::new(node)));
@@ -707,10 +711,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
                 all.extend(bar.iter());
-                let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                let mut node = shape_node(d, PathData::from_bezpath(&bar).transformed(t.xf), None);
-                node.appearance = st.appearance().into();
-                children.push(Arc::new(node));
+                if let Some(node) = type_piece(d, t, lay.bounds, run, &bar) {
+                    children.push(Arc::new(node));
+                }
             }
             // The object's own fills and strokes (not its characters') paint the whole outline:
             // those below the Characters row under the characters, the others over them, with

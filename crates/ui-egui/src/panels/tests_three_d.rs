@@ -149,6 +149,48 @@ fn the_panel_shows_the_dialog_controls_of_each_type() {
     assert!(!painted_text(&mut app, show).contains("Show axis"));
 }
 
+/// Render Settings › Wireframe: shown for the panel's four effects, it sets `render.mode` on every
+/// selected 3D effect that takes it in one undo step, the type switch keeps it, and choosing it
+/// again draws the shaded surface. A 3D (Classic) effect beside them is left as it is, and the
+/// menu is not shown for it alone.
+#[test]
+fn render_settings_wireframe_turns_the_mode_on_and_off_for_the_selection() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    assert!(painted_text(&mut app, show).contains("Render Settings"));
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.revolve", "item": null})).unwrap();
+    let c = app.run("shape.rectangle", json!({"x": 100, "y": 250, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.classicExtrude", "item": null})).unwrap();
+    let mode = |app: &VectorcraftApp, id: u64| {
+        let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+        n.appearance.effects[0].params.get("render").and_then(|r| r.get("mode")).and_then(Value::as_str).map(str::to_string)
+    };
+    app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
+    let ctx = egui::Context::default();
+    let history = undo_len(&app);
+    super::set_wireframe(&mut app, &ctx, true);
+    assert_eq!(undo_len(&app), history + 1);
+    assert_eq!((mode(&app, a).as_deref(), mode(&app, b).as_deref()), (Some("wireframe"), Some("wireframe")));
+    assert_eq!(mode(&app, c), None, "the classic effect takes no render settings");
+    assert!(super::wireframe_on(&target(&app).unwrap()));
+    // The object type changes in place and keeps the mode.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    set_type(&mut app, "inflate").unwrap();
+    assert_eq!(mode(&app, a).as_deref(), Some("wireframe"));
+    let history = undo_len(&app);
+    super::set_wireframe(&mut app, &ctx, false);
+    assert_eq!(undo_len(&app), history + 1);
+    assert_eq!(mode(&app, a).as_deref(), Some("shaded"));
+    assert!(!super::wireframe_on(&target(&app).unwrap()));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(mode(&app, a).as_deref(), Some("wireframe"));
+    // The 3D (Classic) effect alone has no Render Settings.
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    assert!(!painted_text(&mut app, show).contains("Render Settings"));
+}
+
 #[test]
 fn a_drag_previews_and_records_one_undo_step_when_released() {
     let mut app = app();
@@ -792,6 +834,196 @@ fn quick_actions_show_on_the_object_tab_only() {
     }
     let d = Dialog::new("x", json!({"__effect": REVOLVE, "__tab": "rotation", "__gizmo": "rotation"}));
     assert!(super::quick_actions_shown(&d));
+}
+
+/// An app with an Extrude & Bevel square given `params`, and the panel on its Lighting tab with the
+/// accessibility tree on.
+fn lighting_app(params: Value) -> (VectorcraftApp, egui::Context) {
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    let mut app = app();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": params})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Lighting").center(), show);
+    (app, ctx)
+}
+
+/// The lighting widget's node for light `n` (from 1): its screen-reader name and its center.
+fn light_node(app: &mut VectorcraftApp, ctx: &egui::Context, n: usize) -> (String, egui::Pos2) {
+    let nodes = controls(app, ctx);
+    let prefix = format!("Light {n}:");
+    let node = nodes
+        .iter()
+        .find(|x| x.role() == egui::accesskit::Role::Slider && x.label().is_some_and(|l| l.starts_with(&prefix)))
+        .unwrap_or_else(|| panic!("no lighting widget node for light {n}"));
+    let r = node.bounds().unwrap();
+    (node.label().unwrap_or_default().to_string(), egui::pos2(((r.x0 + r.x1) / 2.0) as f32, ((r.y0 + r.y1) / 2.0) as f32))
+}
+
+fn pointer(pos: egui::Pos2, pressed: Option<bool>) -> egui::Event {
+    match pressed {
+        Some(pressed) => egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() },
+        None => egui::Event::PointerMoved(pos),
+    }
+}
+
+fn merged_light(app: &VectorcraftApp) -> (f64, f64) {
+    let (id, params) = effect(app);
+    let merged = vectorcraft_effects::merged_params(&id, &params);
+    (merged["lightRotation"].as_f64().unwrap(), merged["lightHeight"].as_f64().unwrap())
+}
+
+/// Dragging a light in the lighting widget previews its new Rotation and Height while the pointer
+/// is down and records one undo step when it is released, at the point of release; the rim of the
+/// sphere is Height 0.
+#[test]
+fn the_lighting_widget_drags_a_light_in_one_undo_step() {
+    use crate::dialogs::revolve_lights::RADIUS;
+    use crate::panels::tests_appearance::frame_events;
+    let (mut app, ctx) = lighting_app(json!({}));
+    let (name, from) = light_node(&mut app, &ctx, 1);
+    assert_eq!(name, "Light 1: Rotation 125.3°, Height 30.0°");
+    let light = crate::dialogs::revolve_lights::lights(&crate::state::Dialog::new(
+        "x",
+        json!({"__effect": "threeD.extrude", "lightRotation": vectorcraft_three_d::DEFAULT_LIGHT.0, "lightHeight": 30.0}),
+    ))[0];
+    let center = from - light.offset() * RADIUS;
+    let history = undo_len(&app);
+    frame_events(&ctx, &mut app, vec![pointer(from, None)], show);
+    frame_events(&ctx, &mut app, vec![pointer(from, Some(true))], show);
+    // Halfway out along the light's own direction, then onto the rim straight right of the center.
+    frame_events(&ctx, &mut app, vec![pointer(center + egui::vec2(0.0, -RADIUS * 0.5), None)], show);
+    assert_eq!(merged_light(&app), (90.0, 60.0), "the light follows the pointer while it is down");
+    let rim = center + egui::vec2(RADIUS, 0.0);
+    frame_events(&ctx, &mut app, vec![pointer(rim, None)], show);
+    assert_eq!(merged_light(&app), (0.0, 0.0));
+    assert_eq!(undo_len(&app), history, "nothing is recorded while the pointer is down");
+    // A frame that moves the pointer below the center and releases it there drops the light there.
+    let below = center + egui::vec2(0.0, RADIUS);
+    frame_events(&ctx, &mut app, vec![pointer(below, None), pointer(below, Some(false))], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    assert_eq!(undo_len(&app), history + 1);
+    assert_eq!(merged_light(&app), (-90.0, 0.0));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(merged_light(&app), (vectorcraft_three_d::DEFAULT_LIGHT.0, 30.0));
+    // A drag that comes back to the press drops the light there, not where it last was.
+    for event in [pointer(from, None), pointer(from, Some(true)), pointer(center + egui::vec2(0.0, -RADIUS * 0.5), None), pointer(from, None)] {
+        frame_events(&ctx, &mut app, vec![event], show);
+    }
+    frame_events(&ctx, &mut app, vec![pointer(from, Some(false))], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    assert_eq!(merged_light(&app), (125.3, 30.0));
+}
+
+/// With objects whose lights differ in Height, an arrow key that turns the light changes only
+/// the Rotation, and each object keeps its own Height.
+#[test]
+fn a_key_leaves_the_other_setting_as_each_selected_effect_has_it() {
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"lightRotation": 0.0, "lightHeight": 20.0}})).unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"lightRotation": 0.0, "lightHeight": 40.0}})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Lighting").center(), show);
+    let (_, at) = light_node(&mut app, &ctx, 1);
+    click(&ctx, &mut app, at, show);
+    let left = egui::Event::Key { key: egui::Key::ArrowLeft, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    frame_events(&ctx, &mut app, vec![left], show);
+    let light = |id: u64| {
+        let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        let merged = vectorcraft_effects::merged_params("threeD.extrude", &n.appearance.effects[0].params);
+        (merged["lightRotation"].as_f64().unwrap(), merged["lightHeight"].as_f64().unwrap())
+    };
+    assert_eq!((light(a), light(b)), ((1.0, 20.0), (1.0, 40.0)));
+}
+
+/// A press on a light selects it in the list without an undo step, and the button below the sphere
+/// moves only the selected light to the back of the object, then back to the front.
+#[test]
+fn the_lighting_widget_selects_a_light_and_moves_it_behind_the_object() {
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    let light =
+        |rotation: f64| json!({"color": "#ffffff", "intensity": 80.0, "rotation": rotation, "height": 30.0, "softness": 0.0, "behind": false});
+    let (mut app, ctx) = lighting_app(json!({"lights": [light(0.0), light(180.0)]}));
+    let history = undo_len(&app);
+    let (_, second) = light_node(&mut app, &ctx, 2);
+    click(&ctx, &mut app, second, show);
+    assert_eq!(undo_len(&app), history, "a press on a light changes nothing");
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    assert!(texts.iter().any(|(s, _)| s == "Light 2"), "the list shows the pressed light: {texts:?}");
+    click(&ctx, &mut app, text_rect(&texts, "Move Light to Back").center(), show);
+    assert_eq!(undo_len(&app), history + 1);
+    let behind = |app: &VectorcraftApp| effect(app).1["lights"].as_array().unwrap().iter().map(|l| l["behind"].clone()).collect::<Vec<_>>();
+    assert_eq!(behind(&app), [json!(false), json!(true)]);
+    let (name, _) = light_node(&mut app, &ctx, 2);
+    assert_eq!(name, "Light 2: Rotation 180.0°, Height 30.0°, Light behind the object");
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "Move Light to Front").center(), show);
+    assert_eq!(behind(&app), [json!(false), json!(false)]);
+    assert_eq!(undo_len(&app), history + 2);
+}
+
+/// A light the pointer took has the keyboard focus: the arrow keys raise and lower it and turn it
+/// around the object, 1° a press or 15° with Shift, changing only the setting each press moves, one
+/// undo step a frame, and a press at a limit records nothing.
+#[test]
+fn the_arrow_keys_move_the_focused_light() {
+    use crate::panels::tests_appearance::{click, frame_events};
+    let (mut app, ctx) = lighting_app(json!({"lightRotation": 10.04, "lightHeight": 89.5}));
+    let (_, at) = light_node(&mut app, &ctx, 1);
+    click(&ctx, &mut app, at, show);
+    let history = undo_len(&app);
+    let key = |key: egui::Key, modifiers: egui::Modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::ArrowUp, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    assert_eq!(merged_light(&app), (10.04, 90.0), "Up leaves the Rotation as it is");
+    assert_eq!(undo_len(&app), history + 1);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::ArrowUp, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    assert_eq!(merged_light(&app), (10.04, 90.0));
+    assert_eq!(undo_len(&app), history + 1, "Height stays at 90° and nothing is recorded");
+    // Down then Up in one frame, in that order: back at 90°.
+    frame_events(&ctx, &mut app, vec![key(egui::Key::ArrowDown, egui::Modifiers::NONE), key(egui::Key::ArrowUp, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    assert_eq!(merged_light(&app), (10.04, 90.0));
+    assert_eq!(undo_len(&app), history + 1);
+    // Presses that arrive in one frame all move the light, as one undo step.
+    let presses = vec![
+        key(egui::Key::ArrowLeft, egui::Modifiers::SHIFT),
+        key(egui::Key::ArrowDown, egui::Modifiers::NONE),
+        key(egui::Key::ArrowDown, egui::Modifiers::NONE),
+    ];
+    frame_events(&ctx, &mut app, presses, show);
+    frame_events(&ctx, &mut app, vec![], show);
+    assert_eq!(merged_light(&app), (25.0, 88.0));
+    assert_eq!(undo_len(&app), history + 2);
+}
+
+/// A press on another light selects it and gives it the keyboard focus, so the next arrow key
+/// moves that light and leaves the one selected before where it is.
+#[test]
+fn the_arrow_keys_move_the_light_pressed_last() {
+    use crate::panels::tests_appearance::{click, frame_events};
+    let light =
+        |rotation: f64| json!({"color": "#ffffff", "intensity": 80.0, "rotation": rotation, "height": 30.0, "softness": 0.0, "behind": false});
+    let (mut app, ctx) = lighting_app(json!({"lights": [light(0.0), light(180.0)]}));
+    let (_, first) = light_node(&mut app, &ctx, 1);
+    click(&ctx, &mut app, first, show);
+    let (_, second) = light_node(&mut app, &ctx, 2);
+    click(&ctx, &mut app, second, show);
+    let left = egui::Event::Key { key: egui::Key::ArrowLeft, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    frame_events(&ctx, &mut app, vec![left], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    let rotations = effect(&app).1["lights"].as_array().unwrap().iter().map(|l| l["rotation"].clone()).collect::<Vec<_>>();
+    assert_eq!(rotations, [json!(0.0), json!(-179.0)]);
 }
 
 #[test]
