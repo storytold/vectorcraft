@@ -363,6 +363,28 @@ fn escape_a_click_or_a_drag_drops_the_shift_clicked_points() {
     assert!(!t.ends_on_escape(&c), "a move of the selection drops them");
 }
 
+/// Escape pressed while the third Shift-click is held drops the points and the press, so the
+/// release draws no circle.
+#[test]
+fn escape_during_the_third_shift_click_drops_the_points_and_the_press() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    for (x, y) in [(10.0, 10.0), (90.0, 10.0)] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift));
+    }
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 70.0).with_mods(shift));
+    assert!(t.claims_key(&cx, ToolKey::Escape));
+    assert_eq!(t.key(&cx, ToolKey::Escape, shift), vec![]);
+    assert!(!t.ends_on_escape(&cx) && t.overlays(&cx).is_empty());
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 70.0).with_mods(shift)), vec![]);
+    assert!(!t.ends_on_escape(&cx), "the release places no point");
+}
+
 /// Once a point is placed, a Shift-click on the selection's side handle or centre point places a
 /// point instead of scaling or moving the selection, and the cursor over them is the crosshair.
 #[test]

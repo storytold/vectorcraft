@@ -678,10 +678,15 @@ impl Tool for ShapeTool {
                 _ => vec![],
             };
         }
-        // Escape drops the points Shift-clicks placed for a circle; the document stays as it is.
-        if key == ToolKey::Escape && self.start.is_none() && !self.through.is_empty() {
+        // Escape drops the points Shift-clicks placed for a circle; the document stays as it is. A
+        // press that has not begun a drag is dropped too, so its release places no point.
+        if key == ToolKey::Escape && !self.began && !self.through.is_empty() {
             self.through.clear();
             self.hover = None;
+            if self.start.take().is_some() {
+                self.places_point = false;
+                self.snap.clear();
+            }
             return vec![];
         }
         let Some(s) = self.start.filter(|_| self.began) else { return vec![] };
