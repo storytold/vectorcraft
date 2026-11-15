@@ -229,6 +229,7 @@
 	Align to Artboard	Igazítás a rajztáblához
 	Align to Glyph Bounds	Igazítás a glifák határaihoz
 	Align to Key Object	Igazítás a kulcsobjektumhoz
+	Align to Key Anchor	Igazítás a kulcs-horgonyponthoz
 	Align to Page	Igazítás az oldalhoz
 	Align to Path	Igazítás az útvonalhoz
 	Align to Selection	Igazítás a kijelöléshez
@@ -695,6 +696,11 @@ font-technology	Variable	Változó
 	CMYK Equivalents	CMYK-megfelelők
 	CMYK profile in effect	Érvényes CMYK-profil
 	CMYK:	CMYK:
+	RGB Policy:	RGB-házirend:
+	CMYK Policy:	CMYK-házirend:
+	Preserve Embedded Profiles	Beágyazott profilok megtartása
+	Convert to Working Space	Konvertálás a munkaszíntérbe
+	Preserve Numbers	Számértékek megtartása
 	Coarse Dots	Durva pontok
 	Collapse Panels to Icons	Panelek ikonná csukása
 	Collapse to Icons	Ikonná csukás
@@ -4455,6 +4461,8 @@ mark-style	Japanese	Japán
 	Kana	Kana
 	Numerals	Számjegyek
 	Scale at Center	Méretezés középről
+	Delete Set	Készlet törlése
+	Direct Entry	Közvetlen bevitel
 	Up/Down:	Fel/le:
 	Left/Right:	Balra/jobbra:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko fel/le

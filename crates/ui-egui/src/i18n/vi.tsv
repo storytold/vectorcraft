@@ -175,6 +175,7 @@
 	Align to Artboard	Căn theo bảng vẽ
 	Align to Glyph Bounds	Căn theo giới hạn glyph
 	Align to Key Object	Căn theo đối tượng chính
+	Align to Key Anchor	Căn theo điểm neo chính
 	Align to Page	Căn theo trang
 	Align to Path	Căn theo đường dẫn
 	Align to Selection	Căn theo vùng chọn
@@ -607,6 +608,11 @@ font-technology	Variable	Biến thiên
 	CMYK Equivalents	Tương đương CMYK
 	CMYK profile in effect	Hồ sơ CMYK đang có hiệu lực
 	CMYK:	CMYK:
+	RGB Policy:	Chính sách RGB:
+	CMYK Policy:	Chính sách CMYK:
+	Preserve Embedded Profiles	Giữ cấu hình nhúng
+	Convert to Working Space	Chuyển sang không gian làm việc
+	Preserve Numbers	Giữ giá trị số
 	Coarse Dots	Chấm thô
 	Collapse Panels to Icons	Thu gọn bảng thành biểu tượng
 	Collapse to Icons	Thu gọn thành biểu tượng
@@ -4172,6 +4178,8 @@ mark-style	Japanese	Kiểu Nhật
 	Kana	Kana
 	Numerals	Chữ số
 	Scale at Center	Co giãn từ tâm
+	Delete Set	Xóa bộ
+	Direct Entry	Nhập trực tiếp
 	Up/Down:	Lên/Xuống:
 	Left/Right:	Trái/Phải:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko lên/xuống

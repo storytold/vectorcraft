@@ -145,6 +145,7 @@
 	Align to Artboard	Çalışma Yüzeyine Hizala
 	Align to Glyph Bounds	Glif Sınırlarına Hizala
 	Align to Key Object	Anahtar Nesneye Hizala
+	Align to Key Anchor	Anahtar Bağlantı Noktasına Hizala
 	Align to Page	Sayfaya Hizala
 	Align to Path	Yola Hizala
 	Align to Selection	Seçime Hizala
@@ -3573,6 +3574,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Rakamlar
 	Scale at Center	Merkezden Ölçekle
+	Delete Set	Seti Sil
+	Direct Entry	Doğrudan Giriş
 	Up/Down:	Yukarı/Aşağı:
 	Left/Right:	Sol/Sağ:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko Yukarı/Aşağı
@@ -5201,6 +5204,11 @@ axis	Both	Her İkisi
 @msg	Imported library {name}	İçe aktarılan kitaplık {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB İlkesi:
+	CMYK Policy:	CMYK İlkesi:
+	Preserve Embedded Profiles	Gömülü Profilleri Koru
+	Convert to Working Space	Çalışma Alanına Dönüştür
+	Preserve Numbers	Sayıları Koru
 	Texture	Doku
 	Craquelure…	Küçük çatlak…
 	Grain…	Tahıl…

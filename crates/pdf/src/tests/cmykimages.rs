@@ -962,6 +962,35 @@ fn gradients_with_a_stop_that_is_not_process_cmyk_stay_rgb_images() {
     assert_eq!(w[0].space, "DeviceCMYK", "{w:?}");
 }
 
+/// A stop linked to a spot swatch that prints no ink (it colors only clear stretches, sits out of
+/// order where it colors nothing, or has a tint of 0 and no process plates) leaves a dithered
+/// gradient of CMYK stops a CMYK image without the spot warning; a drawn stop with process plates
+/// at a tint of 0 still prints, so its gradient stays an RGB image with the warning.
+#[test]
+fn gradients_whose_spot_stops_print_nothing_stay_cmyk_images() {
+    let gold = Color::cmyk(0.0, 0.2, 0.8, 0.1);
+    let stop = |offset: f32, color: Color, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, color) };
+    let spot = |offset: f32, opacity: f32| GradientStop { swatch: Some("Gold".into()), ..stop(offset, gold, opacity) };
+    let (cyan, black) = (Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let clear = vec![stop(0.0, cyan, 1.0), stop(0.5, black, 1.0), stop(0.6, black, 0.0), spot(0.8, 0.0), stop(1.0, black, 0.0)];
+    let out_of_order = vec![stop(0.0, cyan, 1.0), stop(0.6, black, 1.0), spot(0.3, 1.0), stop(0.6, black, 1.0), stop(1.0, black, 1.0)];
+    let no_tint = vec![stop(0.0, cyan, 1.0), GradientStop { tint: 0.0, ..spot(1.0, 1.0) }];
+    let plates = vec![stop(0.0, cyan, 1.0), GradientStop { tint: 0.0, plates: Some([0.0, 0.0, 0.0, 0.5]), ..spot(1.0, 1.0) }];
+    for (name, stops, prints) in
+        [("clear", clear, false), ("out of order", out_of_order, false), ("tint 0", no_tint, false), ("plates", plates, true)]
+    {
+        let mut d = gradient_doc(ColorMode::Cmyk, drawn_as_pixels(GradientKind::Linear, stops, true));
+        d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(gold), global: true, spot: true });
+        let out = export_with_report(&d, &opts(json!({}))).unwrap();
+        let w = written(&out.bytes);
+        let warned = out.warnings.iter().any(|m| m.contains("written in process colors"));
+        let space = if prints { "DeviceRGB" } else { "DeviceCMYK" };
+        assert!(w.iter().any(|i| i.space == space), "{name}: {w:?}");
+        assert!(!w.iter().any(|i| i.space == if prints { "DeviceCMYK" } else { "DeviceRGB" }), "{name}: {w:?}");
+        assert_eq!(warned, prints, "{name}: {:?}", out.warnings);
+    }
+}
+
 #[test]
 fn freeform_gradients_of_lab_points_are_written_as_their_lab_mix() {
     let d = freeform_doc(ColorMode::Rgb, Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0), 1.0);

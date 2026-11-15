@@ -55,6 +55,51 @@ fn composite_runs_split_by_class() {
     assert!(db.composite_split(&TextObject::point(Point::ZERO, "Ab", style("Inter", 12.0))).is_none());
 }
 
+/// A custom character set takes the characters it lists ahead of their class, the later of two
+/// sets wins a character both list, and the set's part sizes, raises and scales them. The fonts
+/// used for the text, how it is covered and the face of one character follow the sets too.
+#[test]
+fn custom_character_sets_take_their_characters_first() {
+    use vectorcraft_doc::{CompositePart, CustomCharSet};
+    let db = FontDb::with_font_dirs(vec![]);
+    let mut f = mixed("Custom");
+    let mut part = CompositePart::new("Inter", "Regular");
+    part.size = 150.0;
+    part.baseline = -10.0;
+    part.h_scale = 90.0;
+    let mut first = CustomCharSet::new("Letters", CompositePart::new("Source Sans 3", "Regular"));
+    first.characters = "Bか".into();
+    let mut second = CustomCharSet::new("B only", part);
+    second.characters = "B".into();
+    f.custom = vec![first, second];
+    db.set_composite_font(&f);
+    let t = TextObject::point(Point::ZERO, "ABか1", style("Custom", 20.0));
+    let (split, from) = db.composite_split(&t).expect("split");
+    let pieces: Vec<(&str, &str)> = split.runs.iter().map(|r| (r.text.as_str(), r.style.font_family.as_str())).collect();
+    assert_eq!(pieces, [("A", "JetBrains Mono"), ("B", "Inter"), ("か", "Source Sans 3"), ("1", "Inter")]);
+    assert_eq!(from, [0, 0, 0, 0]);
+    let b = &split.runs[1].style;
+    assert_eq!((b.size, b.baseline_shift, b.h_scale, b.v_scale), (30.0, -2.0, 90.0, 100.0));
+    // か is in a set, so the Kana part's Scale at Center does not apply to it.
+    let ka = &split.runs[2].style;
+    assert_eq!((ka.v_scale, ka.baseline_shift), (100.0, 0.0));
+    assert_eq!(db.composite_face("Custom", 'B').map(|(_, id)| id), Some(face_id(&db, "Inter")));
+    let fonts = db.composite_fonts_for("Custom", "BA").unwrap();
+    assert_eq!(fonts, [("Inter".to_string(), "Regular".to_string()), ("JetBrains Mono".to_string(), "Regular".to_string())]);
+    let l = layout(&db, &t);
+    let ids: Vec<u32> = l.glyphs.iter().map(|g| g.font_id).collect();
+    assert_eq!(ids[1], face_id(&db, "Inter"));
+    // A changed set is a changed definition: lending it lays the type out again.
+    let mut changed = f.clone();
+    changed.custom[1].characters = "A".into();
+    let g0 = db.generation();
+    let lent = db.lend_composite_fonts(&[changed]);
+    assert_ne!(db.generation(), g0);
+    let (split, _) = db.composite_split(&t).expect("split");
+    assert_eq!(split.runs[0].style.font_family, "Inter");
+    drop(lent);
+}
+
 /// Laid out, each character is drawn in its class's font, sized by its part, and the glyphs still
 /// name the run of the text they belong to.
 #[test]

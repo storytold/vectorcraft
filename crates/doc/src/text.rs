@@ -23,8 +23,8 @@ pub use char_style::{
     WARICHU_LINES, WARICHU_SCALE, WarichuAlign,
 };
 pub use composite::{
-    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
-    CompositeParts,
+    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX, CharClass,
+    CompositeClass, CompositeClasses, CompositeFont, CompositePart, CompositeParts, CustomCharSet,
 };
 pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFontFace, FileFonts, MAX_FILE_FONTS, text_hash};
 pub use para_style::{
