@@ -636,6 +636,7 @@ pub(crate) mod testutil {
             typed_lists: true,
             smart_guide_color: guides::MAGENTA,
             alignment_guides: true,
+            snap_to_stroke_edges: false,
             anchor_path_labels: true,
             measurement_labels: true,
             transform_tools_guides: true,

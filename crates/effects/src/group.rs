@@ -372,6 +372,7 @@ fn styled(src: &Node, path: PathData, outline: bool) -> Node {
         appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], ..Default::default() };
     }
     let mut n = Node::path(src.id, path, appearance);
+    crate::bake::carry_query_origin(src, &mut n);
     n.opacity = src.opacity;
     n.blend = src.blend;
     n
@@ -866,8 +867,20 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if paint {
         let shapes = member_shapes(doc, &m);
         let bounds = m.geometric_bounds();
-        let art =
-            |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
+        let art = |items: &[AppearanceItem]| -> Vec<Arc<Node>> {
+            if n.extras().query_origin.0.is_none() {
+                return items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect();
+            }
+            let start = items.first().and_then(|first| m.appearance.items.iter().position(|i| std::ptr::eq(i, first))).unwrap_or(0);
+            items
+                .iter()
+                .enumerate()
+                .filter_map(|(index, item)| {
+                    item_art(n.id, item, &shapes, bounds)
+                        .map(|made| Arc::new(crate::bake::query_paint(n, start + index, matches!(item, AppearanceItem::Stroke(_)), made)))
+                })
+                .collect()
+        };
         let (below, above) = m.appearance.split_contents();
         let (below, above) = (art(below), art(above));
         let at = usize::from(m.clips());
@@ -881,6 +894,9 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     m.appearance.contents_index = None;
     if let Some(ch) = m.children_mut() {
         ch.extend(guides);
+    }
+    if pathfinder || !fx.is_empty() {
+        crate::bake::query_geometry(n, &mut m);
     }
     Some(m)
 }

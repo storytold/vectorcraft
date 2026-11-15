@@ -656,3 +656,92 @@ fn an_alt_click_on_a_locked_artboards_add_button_does_not_duplicate_it() {
     let a = t.pointer(&c, &ev(PointerKind::Down, left.x, left.y));
     assert_eq!(a, vec![Action::Exec("artboard.new".into(), json!({"beside": 0, "side": "left"})), Action::Notify("created".into())]);
 }
+
+/// Pixel snapping is per operation: moving-only pixels must not suppress the
+/// ordinary Artboard resize's enabled stroke-edge targets.
+#[test]
+fn resizing_to_stroke_edges_uses_scaling_pixel_option_not_moving() {
+    let (mut d, id) = doc_with_rect();
+    d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().width = 10.0;
+    d.artboards[0].rect = Rect::new(300.0, 100.0, 400.0, 200.0);
+    let (selection, paint) = (Selection::default(), paint());
+    for (scaling, expected) in [(false, 205.0), (true, 207.0)] {
+        let mut c = cx(&d, &selection, &paint);
+        c.smart_guides = true;
+        c.snap_to_stroke_edges = true;
+        c.snapping_tolerance = 4.0;
+        c.snap_to_grid = false;
+        c.snap_to_pixel = true;
+        c.pixel_snap.moving = true;
+        c.pixel_snap.scaling = scaling;
+        c.pixel_snap.drawing = false;
+        let mut tool = ArtboardTool::default();
+        tool.pointer(&c, &ev(PointerKind::Down, 300.0, 150.0));
+        let actions = tool.pointer(&c, &ev(PointerKind::Drag, 207.0, 150.0));
+        assert!(
+            actions.iter().any(|a| matches!(a,Action::Preview(id,_) if id=="artboard.setProps")),
+            "the real pointer gesture must resize, not move/create"
+        );
+        let v = preview_params(&actions);
+        assert_eq!(v["x"].as_f64(), Some(expected), "scaling pixels={scaling}");
+        assert_eq!(v["width"].as_f64(), Some(400.0 - expected));
+        assert_eq!((v["y"].as_f64(), v["height"].as_f64()), (Some(100.0), Some(100.0)));
+        assert!(matches!(tool.pointer(&c, &ev(PointerKind::Up, 207.0, 150.0)).as_slice(), [Action::Commit]));
+    }
+}
+
+fn artboard_with_sloping_stroke(a: Point, b: Point) -> vectorcraft_doc::Document {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.artboards[0].rect = Rect::new(300.0, 100.0, 400.0, 200.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut appearance = vectorcraft_doc::Appearance::default_art();
+    appearance.set_fill(vectorcraft_color::Paint::None);
+    appearance.stroke_mut().unwrap().width = 10.0;
+    d.insert(Some(layer), 0, vectorcraft_doc::Node::path(id, vectorcraft_geom::shapes::line(a, b), appearance)).unwrap();
+    d
+}
+
+/// An edge handle must meet the sloping outline on its horizontal way;
+/// discarding the y of a free nearest point would leave it off the stroke.
+#[test]
+fn resizing_an_artboard_edge_contacts_a_sloping_stroke_on_its_axis() {
+    let d = artboard_with_sloping_stroke(Point::new(100.0, 100.0), Point::new(200.0, 200.0));
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+    let mut tool = ArtboardTool::default();
+    tool.pointer(&c, &ev(PointerKind::Down, 300.0, 150.0));
+    let actions = tool.pointer(&c, &ev(PointerKind::Drag, 159.0, 150.0));
+    assert!(actions.iter().any(|a| matches!(a, Action::Preview(id, _) if id == "artboard.setProps")));
+    let v = preview_params(&actions);
+    let x = v["x"].as_f64().unwrap();
+    let expected = 150.0 + 5.0 * std::f64::consts::SQRT_2;
+    assert!((x - expected).abs() < 1e-8, "{v:?}");
+    assert!((v["width"].as_f64().unwrap() - (400.0 - expected)).abs() < 1e-8);
+    assert_eq!((v["y"].as_f64(), v["height"].as_f64()), (Some(100.0), Some(100.0)));
+    assert!(((x - 150.0) / std::f64::consts::SQRT_2 - 5.0).abs() < 1e-8, "the final handle is on the 10 pt stroke outline");
+    assert!(matches!(tool.pointer(&c, &ev(PointerKind::Up, 159.0, 150.0)).as_slice(), [Action::Commit]));
+}
+
+/// Shift constrains a corner before finding its contour contact, so the
+/// resulting bounds remain square and keep the opposite corner fixed.
+#[test]
+fn resizing_an_artboard_proportionally_contacts_a_sloping_stroke() {
+    let d = artboard_with_sloping_stroke(Point::new(0.0, 180.0), Point::new(220.0, -40.0));
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+    let shift = Mods { shift: true, ..Mods::default() };
+    let mut tool = ArtboardTool::default();
+    tool.pointer(&c, &ev(PointerKind::Down, 300.0, 100.0).with_mods(shift));
+    let actions = tool.pointer(&c, &ev(PointerKind::Drag, 194.5, 30.0).with_mods(shift));
+    assert!(actions.iter().any(|a| matches!(a, Action::Preview(id, _) if id == "artboard.setProps")));
+    let v = preview_params(&actions);
+    let [x, y, w, h] = ["x", "y", "width", "height"].map(|key| v[key].as_f64().unwrap());
+    let band = 5.0 * std::f64::consts::SQRT_2;
+    let expected_x = (380.0 + band) / 2.0;
+    let expected_y = expected_x - 200.0;
+    assert!((x - expected_x).abs() < 1e-8 && (y - expected_y).abs() < 1e-8, "{v:?}");
+    assert!((w - h).abs() < 1e-8 && (x + w - 400.0).abs() < 1e-8 && (y + h - 200.0).abs() < 1e-8, "{v:?}");
+    assert!(((x + y - 180.0) / std::f64::consts::SQRT_2 - 5.0).abs() < 1e-8, "the final proportional corner contacts the outline");
+    assert!(matches!(tool.pointer(&c, &ev(PointerKind::Up, 194.5, 30.0).with_mods(shift)).as_slice(), [Action::Commit]));
+}

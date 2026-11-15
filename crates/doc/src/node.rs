@@ -26,7 +26,7 @@ mod wire;
 
 pub use attributes::{ForeignAttribute, ImageMap, MAX_SVG_SCRIPTS, ObjectAttributes, SVG_EVENTS};
 pub use clip::{ClipPaint, Uniter};
-pub use extras::{Extras, ExtrasMut, NodeExtras};
+pub use extras::{Extras, ExtrasMut, NodeExtras, QueryOrigin, QueryPaintKind, QueryPaintOrigin};
 pub use ids::{LAYER_COLORS, LayerColor, NodeId};
 pub use kind::{ImageObject, MAX_BUFFERED_VALUES, NodeKind, with_buffered_value_budget};
 pub use live_shape::{LiveShape, Scaling};

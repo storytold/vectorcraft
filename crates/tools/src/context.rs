@@ -301,6 +301,8 @@ pub struct ToolContext<'a> {
     /// Smart Guides → Alignment Guides: the lines along the edges and centres the art lines up
     /// with show. Off, the art still snaps into line.
     pub alignment_guides: bool,
+    /// Smart Guides also target visible vector stroke contours; off keeps existing targets.
+    pub snap_to_stroke_edges: bool,
     /// Smart Guides → Anchor/Path Labels: the "anchor", "center", "path"… labels show.
     pub anchor_path_labels: bool,
     /// Smart Guides → Measurement Labels: the size and offset readouts while drawing and moving.

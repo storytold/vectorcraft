@@ -805,3 +805,28 @@ fn mapping_ruler_guide_positions_looks_at_each_child_of_nested_layers_once() {
     assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
     assert_eq!(calls, 0);
 }
+
+/// Geometry queries can carry paint provenance through copies without turning
+/// it into document state, changing equality, or allocating normal extras.
+#[test]
+fn query_paint_origin_survives_copies_but_is_not_document_state() {
+    let ordinary = Node::path(NodeId(7), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
+    assert!(ordinary.extras_box().is_none());
+    let bytes = serde_json::to_vec(&ordinary).unwrap();
+    let origin = QueryPaintOrigin { geometry_source: NodeId(7), paint_owner: NodeId(9), item: 2, kind: QueryPaintKind::Stroke };
+    let mut query = ordinary.clone();
+    query.extras_mut().query_origin.0 = Some(origin);
+    assert_eq!(query.extras().query_origin.0, Some(origin));
+    assert!(query.extras_box().is_some());
+    assert_eq!(query, ordinary);
+    assert_eq!(serde_json::to_vec(&query).unwrap(), bytes);
+    let mut copy = query.clone();
+    copy.transform(Affine::translate((10.0, 3.0)), true);
+    assert_eq!(copy.extras().query_origin.0, Some(origin));
+    let read: Node = serde_json::from_slice(&serde_json::to_vec(&copy).unwrap()).unwrap();
+    assert!(read.extras().query_origin.0.is_none());
+    assert!(read.extras_box().is_none());
+    assert_eq!(copy, read);
+    query.extras_mut().query_origin.0 = None;
+    assert!(query.extras_box().is_none());
+}

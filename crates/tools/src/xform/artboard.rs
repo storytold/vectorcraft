@@ -195,20 +195,24 @@ impl ArtboardTool {
 
     /// Gather the Smart Guide targets for dragging artboard `index` (call before the first preview,
     /// while the document still shows where everything started).
-    fn begin_snapping(&mut self, cx: &ToolContext, index: usize, art_moves: bool) {
+    fn begin_snapping(&mut self, cx: &ToolContext, index: usize, art_moves: bool, op: PixelOp) {
         self.guides.clear();
         self.targets = cx.smart_guides.then(|| {
             let art = if art_moves { cx.doc.art_moving_with(index, cx.move_locked_with_artboard) } else { vec![] };
-            Targets::for_artboard(cx.doc, index, &art).styled(cx)
+            let t = Targets::for_artboard(cx.doc, index, &art).styled(cx);
+            if cx.snaps_to_pixel(op) { t } else { t.with_stroke_edges(cx, &art, None) }
         });
         // Nothing to skip: no artboard has this index.
-        self.copy_targets = cx.smart_guides.then(|| Targets::for_artboard(cx.doc, usize::MAX, &[]).styled(cx));
+        self.copy_targets = cx.smart_guides.then(|| {
+            let t = Targets::for_artboard(cx.doc, usize::MAX, &[]).styled(cx);
+            if cx.snaps_to_pixel(op) { t } else { t.with_stroke_edges(cx, &[], None) }
+        });
     }
 
     /// Snap a dragged handle: to whole pixels (Snap to Pixel's While Scaling option), the grid, or
     /// Smart Guides (in that order, as when drawing). With Smart Guides the bleed edge `bleed`
     /// beyond the handle may snap instead.
-    fn snap_handle(&mut self, cx: &ToolContext, p: Point, bleed: Vec2) -> Point {
+    fn snap_handle(&mut self, cx: &ToolContext, p: Point, bleed: Vec2, rect: Rect, handle: Handle, mods: Mods) -> Point {
         self.guides.clear();
         if cx.snaps_to_pixel(PixelOp::Scaling) {
             return Point::new(p.x.round(), p.y.round());
@@ -218,6 +222,29 @@ impl ArtboardTool {
         }
         let Some(t) = &self.targets else { return p };
         let offsets: &[Vec2] = if bleed == Vec2::ZERO { &[] } else { &[bleed] };
+        if cx.snap_to_stroke_edges {
+            let proportional = mods.shift || self.scale_art;
+            let current = scale_for_drag(rect, handle, p, proportional, mods.alt);
+            let at = current * handle.pos(rect);
+            let origin = if mods.alt { rect.center() } else { handle.opposite().pos(rect) };
+            let along = (!handle.is_corner() || proportional).then_some(handle.pos(rect) - origin);
+            if let Some((q, ov)) = t.snap_stroke_point_with(p, at, offsets, along, cx.snap_tol()) {
+                let snapped = scale_for_drag(rect, handle, q, proportional, mods.alt);
+                let [sx, _, _, sy, _, _] = snapped.as_coeffs();
+                let [before_x, _, _, before_y, _, _] = current.as_coeffs();
+                let bounds = snapped.transform_rect_bbox(rect);
+                let valid_scale = [(sx, before_x), (sy, before_y)].iter().all(|(s, before)| s.abs() > 1e-4 && s * before > 0.0);
+                if snapped.as_coeffs().iter().all(|v| v.is_finite())
+                    && bounds.is_finite()
+                    && bounds.width() >= MIN_SIDE
+                    && bounds.height() >= MIN_SIDE
+                    && valid_scale
+                {
+                    self.guides = ov;
+                    return q;
+                }
+            }
+        }
         let (q, ov) = t.snap_point_with(p, offsets, cx.snap_tol());
         self.guides = ov;
         q
@@ -421,7 +448,7 @@ impl Tool for ArtboardTool {
                         return out;
                     }
                     out.push(Action::Begin(label(m.alt).into()));
-                    self.begin_snapping(cx, index, self.move_art);
+                    self.begin_snapping(cx, index, self.move_art, PixelOp::Moving);
                 } else if m.alt != copy {
                     // Alt pressed or released mid-drag: start over as a copy or a move.
                     out.push(Action::Cancel);
@@ -441,10 +468,10 @@ impl Tool for ArtboardTool {
                 let mut out = vec![];
                 if !began {
                     out.push(Action::Begin("Resize Artboard".into()));
-                    self.begin_snapping(cx, index, self.scale_art);
+                    self.begin_snapping(cx, index, self.scale_art, PixelOp::Scaling);
                 }
                 self.drag = Some(Drag::Resize { index, handle, rect, grab, began: true });
-                let h = self.snap_handle(cx, p + grab, bleed_offset(cx, rect, handle));
+                let h = self.snap_handle(cx, p + grab, bleed_offset(cx, rect, handle), rect, handle, m);
                 let proportional = m.shift || self.scale_art;
                 let mut nr = scale_for_drag(rect, handle, h, proportional, m.alt).transform_rect_bbox(rect);
                 if proportional {

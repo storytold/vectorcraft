@@ -86,7 +86,7 @@ pub(crate) fn hold_on_path(path: &vectorcraft_geom::PathData, p: Point, reach: f
 
 /// Snap `p` for a drawing tool when smart guides (or grid snapping) are on.
 pub fn snap_draw(cx: &ToolContext, p: Point, exclude: &[NodeId]) -> (Point, Vec<Overlay>) {
-    snap_with(cx, p, || Targets::collect(cx.doc, exclude, None))
+    snap_with(cx, p, || Targets::collect(cx.doc, exclude, None).with_stroke_edges(cx, exclude, None))
 }
 
 /// Snap `p` to pixels or the grid when they are on, else to the smart guide `targets`, else (Snap
@@ -142,7 +142,7 @@ impl PointSnap {
     /// window as targets ([`Targets::for_drawing`]), live text as Snap to Glyph asks.
     pub fn drawn(cx: &ToolContext) -> Self {
         let glyphs = (cx.snap_to_glyph && cx.smart_guides && cx.alignment_guides).then_some(cx.glyph_snap);
-        Self::new(cx, || Targets::for_drawing(cx.doc, &[], visible(cx), glyphs))
+        Self::new(cx, || Targets::for_drawing(cx.doc, &[], visible(cx), glyphs).with_stroke_edges(cx, &[], visible(cx)))
     }
 
     /// Where `p` goes, and the guides showing why.
@@ -335,7 +335,7 @@ struct SnapKey {
     revision: (u64, u64),
     exclude: Vec<NodeId>,
     screen: Option<ScreenFrame>,
-    view: [bool; 7],
+    view: [bool; 8],
     /// The Snap to Glyph options while it gives guides.
     snap_to_glyph: Option<GlyphSnap>,
     style: GuideStyle,
@@ -356,6 +356,7 @@ impl SnapKey {
                 cx.guides,
                 cx.snap_tangent,
                 cx.snap_perpendicular,
+                cx.snap_to_stroke_edges,
             ],
             snap_to_glyph: (cx.snap_to_glyph && cx.smart_guides && cx.alignment_guides).then_some(cx.glyph_snap),
             style: GuideStyle::of(cx),
@@ -396,7 +397,7 @@ impl DrawSnap {
         let key = SnapKey::of(cx, &[]);
         let glyphs = key.snap_to_glyph.is_some();
         if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
-            let snap = PointSnap::new(cx, || Targets::for_measure(cx.doc, visible(cx), key.snap_to_glyph));
+            let snap = PointSnap::new(cx, || Targets::for_measure(cx.doc, visible(cx), key.snap_to_glyph).with_stroke_edges(cx, &[], visible(cx)));
             self.targets = Some((Some(key), snap));
         }
         let q = self.snap(cx, p, from);
@@ -409,7 +410,13 @@ impl DrawSnap {
     /// Snap the point pressed at `p` onto the art's anchors and paths alone, within the Smart
     /// Guides snapping tolerance (the Knife's straight cut). The targets serve this press only.
     pub fn press_on_paths(&mut self, cx: &ToolContext, p: Point) -> Point {
-        let targets = Targets::for_drawing(cx.doc, &[], visible(cx), None).styled(cx).anchors_and_paths();
+        let mut targets = Targets::for_drawing(cx.doc, &[], visible(cx), None);
+        // This direct press bypasses PointSnap::new: pixels already win, so
+        // avoid evaluating a stroke view that this drawing operation cannot use.
+        if !cx.snaps_to_pixel(PixelOp::Drawing) {
+            targets = targets.with_stroke_edges(cx, &[], visible(cx));
+        }
+        let targets = targets.styled(cx).anchors_and_paths();
         self.targets = Some((None, PointSnap { targets: Some((targets, cx.snapping_tolerance)), op: PixelOp::Drawing }));
         self.snap(cx, p, None)
     }
@@ -440,7 +447,9 @@ impl DrawSnap {
     }
 
     fn gather(&mut self, cx: &ToolContext, key: SnapKey) {
-        let snap = PointSnap::new(cx, || Targets::for_drawing(cx.doc, &key.exclude, visible(cx), key.snap_to_glyph));
+        let snap = PointSnap::new(cx, || {
+            Targets::for_drawing(cx.doc, &key.exclude, visible(cx), key.snap_to_glyph).with_stroke_edges(cx, &key.exclude, visible(cx))
+        });
         self.targets = Some((Some(key), snap));
     }
 
@@ -473,7 +482,7 @@ impl HandleSnap {
             return (a.p + constrain_angle_from(p - a.p, 45.0, cx.constrain_angle), vec![]);
         }
         if self.0.targets.is_none() {
-            self.0.hold(cx, || Targets::for_handle(cx.doc, id));
+            self.0.hold(cx, || Targets::for_handle(cx.doc, id).with_stroke_edges(cx, &[id], None));
         }
         let q = self.0.drag(cx, p, None);
         (q, self.0.guides().to_vec())
@@ -483,14 +492,48 @@ impl HandleSnap {
 /// Snap a picked point (a transform tool's reference point) to the nearest anchor or centre of the
 /// selection or of the object under the pointer, when Snap to Point or Smart Guides is on.
 pub fn snap_pick(cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
-    if !(cx.snap_to_point || cx.smart_guides) {
-        return (p, vec![]);
+    PickSnap::default().snap(cx, p)
+}
+
+/// Transform reference-point hover keeps the expensive contour channel while
+/// its actual roots/document/view/options stay unchanged. Hit tests and legacy
+/// nearby points remain cheap per pointer, and the pointer is NOT a cache key.
+#[derive(Default)]
+pub(crate) struct PickSnap {
+    contours: Option<(SnapKey, Vec<NodeId>, std::sync::Arc<super::stroke::Contours>)>,
+}
+
+impl PickSnap {
+    pub(crate) fn snap(&mut self, cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
+        if !(cx.snap_to_point || cx.smart_guides) {
+            self.contours = None;
+            return (p, vec![]);
+        }
+        let tol = if cx.smart_guides { cx.snap_tol() } else { cx.tol(cx.snap_tolerance) };
+        let mut roots = cx.selection.objects.clone();
+        roots.extend(hit_test(cx.doc, p, HitOptions { tol, skip_guides: false, ..cx.hit_options() }).map(|h| h.leaf));
+        let near = Rect::new(p.x - tol, p.y - tol, p.x + tol, p.y + tol);
+        let mut targets = Targets::points_near(cx.doc, &roots, near).styled(cx);
+        if cx.smart_guides && cx.snap_to_stroke_edges && !cx.snap_to_grid && !cx.snaps_to_pixel(PixelOp::Drawing) {
+            // Legacy points preserve selection + hit order, including tie
+            // priority. Only this new channel's cache uses a normalized set.
+            let mut contour_roots = roots.clone();
+            contour_roots.sort_unstable();
+            contour_roots.dedup();
+            let key = SnapKey::of(cx, &[]);
+            if self.contours.as_ref().is_none_or(|(old, old_roots, _)| *old != key || *old_roots != contour_roots) {
+                let contours = super::stroke::gather(cx, &[], visible(cx), Some(&contour_roots));
+                self.contours = Some((key, contour_roots, std::sync::Arc::new(contours)));
+            }
+            if let Some((_, _, contours)) = &self.contours {
+                targets.stroke_contours = std::sync::Arc::clone(contours);
+                targets.stroke_points = true;
+            }
+        } else {
+            self.contours = None;
+        }
+        targets.snap_point(p, tol)
     }
-    let tol = if cx.smart_guides { cx.snap_tol() } else { cx.tol(cx.snap_tolerance) };
-    let mut roots = cx.selection.objects.clone();
-    roots.extend(hit_test(cx.doc, p, HitOptions { tol, skip_guides: false, ..cx.hit_options() }).map(|h| h.leaf));
-    let near = Rect::new(p.x - tol, p.y - tol, p.x + tol, p.y + tol);
-    Targets::points_near(cx.doc, &roots, near).styled(cx).snap_point(p, tol)
 }
 
 /// Distance Guides (Smart Guides → Invoke Distance Guides): how far the selection's bounds `from`

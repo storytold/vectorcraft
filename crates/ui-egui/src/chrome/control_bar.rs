@@ -113,6 +113,7 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.separator();
         for (key, label, on) in [
             ("alignmentGuides", tl!("Alignment Guides"), app.session.prefs.alignment_guides),
+            ("snapToStrokeEdges", tl!("Snap to Stroke Edges"), app.session.prefs.snap_to_stroke_edges),
             ("snapTangent", tl!("Snap to Tangent"), app.session.prefs.snap_tangent),
             ("snapPerpendicular", tl!("Snap to Perpendicular"), app.session.prefs.snap_perpendicular),
         ] {

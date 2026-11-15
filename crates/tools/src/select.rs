@@ -319,7 +319,8 @@ impl MoveSnap {
                 taken = [true; 2];
                 on_path = true;
             } else {
-                let (adj, ov, axes) = t.snap_rects_axes(&[b + d], cx.snap_tol());
+                let (adj, ov, axes, contact) = t.snap_rects_axes_contact(&[b + d], cx.snap_tol());
+                on_path = contact;
                 d += adj;
                 guides = ov;
                 taken = axes;
@@ -352,7 +353,7 @@ impl MoveSnap {
     /// every snap slides the move along that line. With Snap to Grid or Snap to Pixel, the move
     /// slides along the line by the shorter of the two distances that put it on a gridline or a
     /// whole pixel on either axis (the one axis of a level or upright line). The bounds line up
-    /// with the other art ([`Targets::snap_rects_along`]) and the grabbed point lands where the line
+    /// with the other art ([`Targets::snap_rects_along_contact`]) and the grabbed point lands where the line
     /// passes an anchor or crosses a ruler guide ([`Targets::snap_point_along`]). A move of zero
     /// length does not snap, and Snap to Last Location goes back to where the move began first, as
     /// in [`Self::snap`].
@@ -377,6 +378,7 @@ impl MoveSnap {
             return (Vec2::ZERO, ov);
         }
         let mut guides = vec![];
+        let mut on_contour = false;
         if cx.snap_to_grid
             && let Some(b) = self.bounds
         {
@@ -392,13 +394,18 @@ impl MoveSnap {
                 let (q, ov) = t.snap_point_along(start + d, u, cx.snap_tol());
                 d = q - start;
                 guides = ov;
+            } else if let Some((q, ov)) = t.snap_stroke_along(start + d, u, cx.snap_tol()) {
+                d = q - start;
+                guides = ov;
+                on_contour = true;
             } else {
-                let (adj, ov) = t.snap_rects_along(&[b + d], u, cx.snap_tol());
+                let (adj, ov, contact) = t.snap_rects_along_contact(&[b + d], u, cx.snap_tol());
+                on_contour = contact;
                 d += adj;
                 guides = ov;
             }
         }
-        if let Some(t) = &self.rulers {
+        if let Some(t) = self.rulers.as_ref().filter(|_| !on_contour) {
             let (q, ov) = t.snap_point_along(start + d, u, cx.snap_tol());
             if q != start + d {
                 d = q - start;

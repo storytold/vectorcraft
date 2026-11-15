@@ -258,6 +258,7 @@ pub(super) struct NodeWire {
 impl From<NodeWire> for Node {
     fn from(w: NodeWire) -> Self {
         let extras = NodeExtras {
+            query_origin: Default::default(),
             mask: w.mask,
             trace: w.trace,
             wrap: w.wrap,

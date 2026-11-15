@@ -266,6 +266,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("distanceGuides", "Smart Guides", "Display Options", "Invoke Distance Guides", bool),
     p!("snapToLastLocation", "Smart Guides", "Display Options", "Snap to Last Location", bool),
     p!("snappingTolerance", "Smart Guides", "", "Snapping Tolerance", num(0.0, 40.0, "pt")),
+    p!("snapToStrokeEdges", "Smart Guides", "Geometric Guides", "Snap to Stroke Edges", bool),
     p!("snapTangent", "Smart Guides", "Geometric Guides", "Snap to Tangent", bool),
     p!("snapPerpendicular", "Smart Guides", "Geometric Guides", "Snap to Perpendicular", bool),
     // Slices

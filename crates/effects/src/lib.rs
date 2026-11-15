@@ -69,8 +69,8 @@ pub use adjust::{
     is_channel,
 };
 pub use bake::{
-    StrokeArt, WrittenLayers, bake_appearance, bake_document, bake_document_placing_symbols, bake_type_appearance, expand_art, expand_leaf,
-    fresh_ids, needs_bake,
+    ResolvedStrokePaint, StrokeArt, WrittenLayers, bake_appearance, bake_document, bake_document_placing_symbols, bake_type_appearance, expand_art,
+    expand_leaf, fresh_ids, needs_bake, resolved_stroke_paints, stroke_paint_view,
 };
 pub use clip::{WarpSeams, clip_outline, knockout_silhouette, reshaped_clip_outline, warp_pieces_translucent};
 pub use group::{

@@ -18,7 +18,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::target_overlays;
 use crate::bbox::rotate_for_drag;
-use crate::guides::{PointSnap, Targets, snap_pick};
+use crate::guides::{PickSnap, PointSnap, Targets};
 use crate::select::{matrix_json, selection_bounds, selection_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Readout, Tool, ToolContext, ToolKey};
 
@@ -104,6 +104,7 @@ pub struct TransformTool {
     hover: Vec<Overlay>,
     /// What the dragged pointer snaps to, gathered when the drag begins.
     snap: Option<PointSnap>,
+    pick_snap: PickSnap,
 }
 
 fn about(o: Point, a: Affine) -> Affine {
@@ -128,7 +129,7 @@ pub fn reflect_matrix(o: Point, theta: f64) -> Affine {
 
 impl TransformTool {
     pub fn new(kind: TransformKind) -> Self {
-        Self { kind, origin: None, drag: None, measure: None, readout: None, hover: vec![], snap: None }
+        Self { kind, origin: None, drag: None, measure: None, readout: None, hover: vec![], snap: None, pick_snap: PickSnap::default() }
     }
 
     /// The effective reference point: the custom one if it belongs to the current selection,
@@ -295,7 +296,7 @@ impl Tool for TransformTool {
             PointerKind::Down => {
                 let Some(bounds) = selection_bounds(cx) else { return vec![] };
                 self.hover.clear();
-                let (pick, _) = snap_pick(cx, p);
+                let (pick, _) = self.pick_snap.snap(cx, p);
                 // Alt: decided on release. A click sets the point and opens the dialog; a drag
                 // transforms a copy about the reference point as it was.
                 let origin = self.reference_point(cx).unwrap_or(bounds.center());
@@ -326,7 +327,7 @@ impl Tool for TransformTool {
                     d.began = true;
                     // The selection moves, so only the other objects are targets. The Scale tool's
                     // drag scales; the others move the art about the reference point.
-                    let targets = || Targets::collect(cx.doc, &cx.selection.objects, None);
+                    let targets = || Targets::collect(cx.doc, &cx.selection.objects, None).with_stroke_edges(cx, &cx.selection.objects, None);
                     self.snap =
                         Some(if self.kind == TransformKind::Scale { PointSnap::scaling(cx, targets) } else { PointSnap::moving(cx, targets) });
                     out.push(Action::Begin(self.kind.label().into()));
@@ -369,7 +370,7 @@ impl Tool for TransformTool {
             PointerKind::TripleClick => vec![],
             PointerKind::Move => {
                 if self.drag.is_none() {
-                    self.hover = if cx.selection.is_empty() { vec![] } else { snap_pick(cx, p).1 };
+                    self.hover = if cx.selection.is_empty() { vec![] } else { self.pick_snap.snap(cx, p).1 };
                 }
                 vec![]
             }

@@ -35,6 +35,132 @@ use crate::{
     has_instance_row_raster, has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, reshape,
 };
 
+/// Carry provenance only on detached geometry-query clones. Geometry-origin
+/// nodes keep their own paints distinct; a materialized paint remains the same
+/// source paint through copies, filled outlines, symbol art and brush pieces.
+pub(crate) fn carry_query_origin(source: &Node, art: &mut Node) {
+    if let Some(origin) = source.extras().query_origin.0 {
+        carry_query_from(origin, art, 0);
+    }
+}
+
+fn carry_query_from(origin: vectorcraft_doc::QueryPaintOrigin, n: &mut Node, depth: usize) {
+    if depth >= vectorcraft_doc::depth::MAX_DRAWN_DEPTH {
+        return;
+    }
+    use vectorcraft_doc::QueryPaintKind;
+    let current = n.extras().query_origin.0;
+    let origin = if origin.kind == QueryPaintKind::Geometry { current.unwrap_or(origin) } else { origin };
+    let new_paint = current != Some(origin) && origin.kind != QueryPaintKind::Geometry;
+    if current != Some(origin) {
+        n.extras_mut().query_origin.0 = Some(origin);
+    }
+    // A materializer can clone the tagged root and install fresh children.
+    // Check those immediate children even when the root already has its tag.
+    // Existing tagged subtrees need no recursive provenance rebuild. A newly
+    // assigned paint tag overrides the geometry in its new piece exactly once;
+    // an existing paint does not erase an explicit Transform-copy boundary.
+    for c in n.children_mut().into_iter().flatten() {
+        if new_paint || c.extras().query_origin.0.is_none() {
+            carry_query_from(origin, Arc::make_mut(c), depth + 1);
+        }
+    }
+}
+
+pub(crate) fn query_paint(source: &Node, index: usize, stroke: bool, mut art: Node) -> Node {
+    use vectorcraft_doc::QueryPaintKind;
+    if let Some(mut origin) = source.extras().query_origin.0 {
+        if origin.kind == QueryPaintKind::Geometry {
+            origin.item = index;
+            origin.kind = if stroke { QueryPaintKind::Stroke } else { QueryPaintKind::Fill };
+        }
+        carry_query_from(origin, &mut art, 0);
+    }
+    art
+}
+
+/// Copies are separate paints, not one unioned stroke silhouette. A geometry
+/// wrapper under a paint is the local partition boundary; copied children
+/// retain their original Fill/Stroke provenance. No source id changes.
+pub(crate) fn query_copy_group(art: &mut Node) {
+    if let Some(mut origin) = art.extras().query_origin.0 {
+        origin.kind = vectorcraft_doc::QueryPaintKind::Geometry;
+        art.extras_mut().query_origin.0 = Some(origin);
+    }
+}
+
+/// A container geometry effect can make a sibling's shape depend on the
+/// selected member's reference bounds. Keep that geometry owner separately
+/// from the paint owner, so exclusions do not discard unrelated plain siblings.
+pub(crate) fn query_geometry(source: &Node, art: &mut Node) {
+    let Some(source) = source.extras().query_origin.0 else { return };
+    fn carry(n: &mut Node, geometry_source: vectorcraft_doc::NodeId, depth: usize) {
+        if depth >= vectorcraft_doc::depth::MAX_DRAWN_DEPTH {
+            return;
+        }
+        if let Some(mut origin) = n.extras().query_origin.0 {
+            origin.geometry_source = geometry_source;
+            n.extras_mut().query_origin.0 = Some(origin);
+        }
+        for c in n.children_mut().into_iter().flatten() {
+            carry(Arc::make_mut(c), geometry_source, depth + 1);
+        }
+    }
+    carry(art, source.geometry_source, 0);
+}
+
+/// Resolve one detached query view using the existing effective-document
+/// traversal. Original paints/geometry stay present for bounds and clipping.
+/// This is called once when stroke-edge targets are gathered, never per stroke.
+pub fn stroke_paint_view(doc: &Document) -> Document {
+    fn mark(n: &mut Node, depth: usize) {
+        if depth >= vectorcraft_doc::depth::MAX_DEPTH {
+            return;
+        }
+        n.extras_mut().query_origin.0 = Some(vectorcraft_doc::QueryPaintOrigin {
+            geometry_source: n.id,
+            paint_owner: n.id,
+            item: 0,
+            kind: vectorcraft_doc::QueryPaintKind::Geometry,
+        });
+        for c in n.children_mut().into_iter().flatten() {
+            mark(Arc::make_mut(c), depth + 1);
+        }
+    }
+    let mut view = doc.clone();
+    for layer in &mut view.layers {
+        mark(Arc::make_mut(layer), 0);
+    }
+    bake_document_placing_symbols(&view, true, WrittenLayers { hidden: true, non_printing: true }).unwrap_or(view)
+}
+
+/// A leaf's item geometry and Carry, before a caller creates the final band or
+/// brush art. This shares the same object/item operation order as baking.
+pub struct ResolvedStrokePaint {
+    pub path: PathData,
+    pub rule: FillRule,
+    pub item: AppearanceItem,
+    pub index: usize,
+}
+
+pub fn resolved_stroke_paints(n: &Node) -> Vec<ResolvedStrokePaint> {
+    let Some((g, rule, ctx, m)) = leaf_base(n) else { return vec![] };
+    n.appearance
+        .items
+        .iter()
+        .zip(&m.appearance.items)
+        .enumerate()
+        .filter_map(|(index, (item, carried))| {
+            if !paints(item) || item.opacity() <= 0.0 {
+                return None;
+            }
+            let (path, mut item) = apply_item(item, carried, &g, &ctx);
+            clear_item_effects(&mut item);
+            Some(ResolvedStrokePaint { path, rule, item, index })
+        })
+        .collect()
+}
+
 pub(crate) fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
     match item {
         AppearanceItem::Fill(f) => &f.effects,
@@ -176,6 +302,9 @@ pub struct WrittenLayers {
 /// bakes? A hidden object other than a layer, a template layer, and a hidden layer or a layer
 /// that does not print when the export leaves those out ([`WrittenLayers`]).
 fn unwritten(n: &Node) -> bool {
+    if n.extras().query_origin.0.is_some() {
+        return !n.visible;
+    }
     PLACING.with(|p| {
         p.borrow().as_ref().is_some_and(|p| match n.kind {
             NodeKind::Layer { template, printable, .. } => template || !(printable || p.layers.non_printing) || !(n.visible || p.layers.hidden),
@@ -203,6 +332,9 @@ fn placed_fits(baked: &Node, spent: u64, dropped: u64) -> Option<u64> {
 /// The names of the symbols of `d` whose art needs baking ([`needs_bake`]), and of those whose art
 /// holds an instance of one of them at any depth, in the art of enabled opacity masks too.
 fn drawn_symbols(d: &Document) -> HashSet<String> {
+    if d.layers.iter().any(|n| n.extras().query_origin.0.is_some()) {
+        return d.symbols.iter().map(|s| s.name.clone()).collect();
+    }
     fn used(n: &Node, names: &mut Vec<String>) {
         if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
             names.push(symbol.clone());
@@ -806,10 +938,11 @@ fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
         .items
         .iter()
         .zip(&m.appearance.items)
-        .map(|(item, carried)| {
+        .enumerate()
+        .map(|(index, (item, carried))| {
             let (ig, mut it) = apply_item(item, carried, &g, &ctx);
             clear_item_effects(&mut it);
-            Arc::new(piece(d, n, ig, rule, it))
+            Arc::new(query_paint(n, index, matches!(item, AppearanceItem::Stroke(_)), piece(d, n, ig, rule, it)))
         })
         .collect();
     m.appearance.items.clear();
@@ -953,10 +1086,10 @@ fn bake_appearance_as(doc: Option<&Document>, n: &Node, outline_strokes: bool) -
         Arc::new(p)
     };
     let mut pieces = vec![];
-    for (item, carried) in n.appearance.items.iter().zip(&m.appearance.items).filter(|(i, _)| paints(i)) {
+    for (index, (item, carried)) in n.appearance.items.iter().zip(&m.appearance.items).enumerate().filter(|(_, (i, _))| paints(i)) {
         let (ig, mut it) = apply_item(item, carried, &g, &ctx);
         clear_item_effects(&mut it);
-        pieces.push(match &it {
+        let made = match &it {
             AppearanceItem::Stroke(st) if outline_strokes && st.brush.is_none() => {
                 let outline = crate::stroke::outline_region(&ig, rule, st);
                 match st.path_gradient() {
@@ -982,6 +1115,11 @@ fn bake_appearance_as(doc: Option<&Document>, n: &Node, outline_strokes: bool) -
                 }
             }
             _ => piece(ig, rule, it),
+        };
+        pieces.push(if n.extras().query_origin.0.is_some() {
+            Arc::new(query_paint(n, index, matches!(item, AppearanceItem::Stroke(_)), Arc::unwrap_or_clone(made)))
+        } else {
+            made
         });
     }
     m.appearance.items.clear();

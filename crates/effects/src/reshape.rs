@@ -562,6 +562,7 @@ pub fn outline_text(n: &Node) -> Option<Node> {
     }
     let mut g = Node::group(n.id, children);
     g.extras_mut().type_outlines = true;
+    crate::bake::carry_query_origin(n, &mut g);
     Some(g)
 }
 
@@ -950,6 +951,7 @@ fn as_art_opts(
 /// `art`, the art made of `n`, with `n`'s name, visibility, transparency, opacity mask and
 /// remaining (raster) effects.
 pub(crate) fn dressed(mut art: Node, n: &Node) -> Node {
+    crate::bake::carry_query_origin(n, &mut art);
     art.name = n.name.clone();
     art.visible = n.visible;
     art.opacity = n.opacity;
@@ -2028,6 +2030,7 @@ fn copy_art(art: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::
     if let Some(children) = art.children_mut() {
         *children = placements;
     }
+    crate::bake::query_copy_group(art);
     made
 }
 
@@ -2069,6 +2072,8 @@ fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling
     placements.reverse();
     let mut g = Node::group(leaf.id, placements);
     g.name = leaf.name.clone();
+    g.extras_mut().query_origin = leaf.extras().query_origin;
+    crate::bake::query_copy_group(&mut g);
     *leaf = g;
     made
 }
@@ -2109,6 +2114,7 @@ fn paint_leaf(
         .collect();
     let mut g = Node::group(leaf.id, children);
     g.name = leaf.name.clone();
+    g.extras_mut().query_origin = leaf.extras().query_origin;
     *leaf = g;
     Some(made)
 }
@@ -2175,7 +2181,9 @@ fn paint_piece(
         set_geometry(&mut one, p.path.clone(), p.rule);
         children.push(Arc::new(one));
     }
+    let origin = leaf.extras().query_origin;
     *leaf = Node::group(leaf.id, children);
+    leaf.extras_mut().query_origin = origin;
     Some(made)
 }
 
@@ -2321,7 +2329,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
                 set_geometry(&mut p, path, rule);
                 group.push(Arc::new(p));
             }
-            let mut p = Node::group(leaf.id, group);
+            let mut p = crate::bake::query_paint(&original, i, matches!(item, AppearanceItem::Stroke(_)), Node::group(leaf.id, group));
             transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(before), true, limit, used, doc);
             pieces.push(Arc::new(p));
             continue;
@@ -2332,7 +2340,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         let mut it = item.clone();
         let rest: Vec<Effect> = kept_before.iter().chain(&fx[at + 1..]).cloned().collect();
         *it.effects_mut() = rest.clone();
-        let mut p = piece(vec![it]);
+        let mut p = crate::bake::query_paint(&original, i, matches!(item, AppearanceItem::Stroke(_)), piece(vec![it]));
         if carry.moves(&p.appearance) {
             carry.apply(&mut p.appearance);
         }
@@ -2587,10 +2595,12 @@ fn transform_piece(
             };
             let (mut out, counts, spent) = split(false).or_else(|| split(true))?;
             *used = spent;
+            let origin = leaf.extras().query_origin;
             *leaf = match out.len() {
                 1 => out.pop().unwrap_or_else(|| leaf.clone()),
                 _ => Node::group(leaf.id, out.into_iter().map(Arc::new).collect()),
             };
+            leaf.extras_mut().query_origin = origin;
             Some(counts)
         };
         let mut next: Vec<bool> = vec![];

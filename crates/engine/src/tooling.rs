@@ -415,6 +415,7 @@ impl Session {
             typed_lists: self.prefs.typed_lists,
             smart_guide_color: rgb(&self.prefs.smart_guide_color, vectorcraft_tools::guides::MAGENTA),
             alignment_guides: self.prefs.alignment_guides,
+            snap_to_stroke_edges: self.prefs.snap_to_stroke_edges,
             anchor_path_labels: self.prefs.anchor_path_labels,
             measurement_labels: self.prefs.measurement_labels,
             transform_tools_guides: self.prefs.transform_tools_guides,

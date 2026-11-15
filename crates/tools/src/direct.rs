@@ -1472,7 +1472,8 @@ impl DirectSelectionTool {
             }
             out.push(Action::Begin("Move".into()));
             self.state = State::MoveAnchors { start, grab, began: true, segment };
-            self.anchor_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
+            self.anchor_snap =
+                Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection).with_stroke_edges(cx, &cx.selection.objects, None)));
             self.line_end = line_end_leave(cx, grab);
             // A segment held by a point along it lands its anchors on the grid (the box round
             // them, an edge on a gridline on each axis), not that point (#3835).
@@ -1513,7 +1514,8 @@ impl DirectSelectionTool {
             // them and the objects selected whole (`path.moveAnchors`), as an anchor drag
             // does, while Alt is up; the other anchors of a partly selected path stay in
             // place. The history names the move or the copy at the end.
-            self.partial_snap = (!cx.selection.anchors.is_empty()).then(|| PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
+            self.partial_snap = (!cx.selection.anchors.is_empty())
+                .then(|| PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection).with_stroke_edges(cx, &cx.selection.objects, None)));
             let grid = self.partial_snap.is_some() && grab.is_none() && (cx.snap_to_grid || cx.snaps_to_pixel(PixelOp::Moving));
             self.partial_grid =
                 grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
@@ -1522,8 +1524,10 @@ impl DirectSelectionTool {
             self.state = State::MoveObject { start, grab, hold, began: true, deselect: None };
             if grab.is_some() {
                 // Alt can go down or up at any time: gather both while nothing has moved.
-                self.anchor_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
-                self.copy_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, &Selection::default())));
+                self.anchor_snap =
+                    Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection).with_stroke_edges(cx, &cx.selection.objects, None)));
+                self.copy_snap =
+                    Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, &Selection::default()).with_stroke_edges(cx, &[], None)));
                 // As a move with the Selection tool does ([`MoveSnap::new`]).
                 let back = cx.smart_guides && !cx.snap_to_grid && cx.snap_to_last_location;
                 self.last_location = back.then(|| (Targets::last_location(cx), selection_bounds(cx)));

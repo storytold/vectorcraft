@@ -1168,3 +1168,127 @@ fn snap_to_point_without_smart_guides_shows_no_guides() {
     assert_eq!(snap.hover(&cx(&d, &s, &p), at, &[], None), Point::new(200.0, 200.0));
     assert_eq!(labels(snap.guides()), ["anchor"]);
 }
+
+/// A reference hover must not bake the whole document again on every move.
+/// The actual root/document/option key refreshes the observable stroke contact.
+#[test]
+fn pick_snap_reuses_contours_until_document_roots_or_option_change() {
+    fn width(mut d: Document, value: f64) -> Document {
+        let layer = Arc::make_mut(&mut d.layers[0]);
+        let node = Arc::make_mut(&mut layer.children_mut().unwrap()[0]);
+        for item in &mut node.appearance.items {
+            if let vectorcraft_doc::AppearanceItem::Stroke(stroke) = item {
+                stroke.width = value;
+            }
+        }
+        d
+    }
+    let (d, id) = doc_with_rect();
+    let d = width(d, 10.0);
+    let empty = Document::new(500.0, 500.0);
+    let s = Selection { objects: vec![id], ..Default::default() };
+    let p = paint();
+    let at = Point::new(207.0, 150.0);
+    let mut snap = PickSnap::default();
+    let c = ToolContext { revision: (1, 1), smart_guides: true, snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&d, &s, &p) };
+    assert_eq!(snap.snap(&c, at).0, Point::new(205.0, 150.0));
+    // As in the existing DrawSnap cache test, a deliberately changed document
+    // behind the SAME authoritative revision proves targets are reused.
+    let c = ToolContext { doc: &empty, ..c };
+    assert_eq!(snap.snap(&c, at).0, Point::new(205.0, 150.0));
+    let c = ToolContext { revision: (1, 2), ..c };
+    assert_eq!(snap.snap(&c, at).0, at);
+    // A changed picked/selected root is a distinct key, even at the same revision.
+    let mut d2 = Document::new(500.0, 500.0);
+    let _padding_id = d2.alloc_id();
+    let id2 = d2.alloc_id();
+    let layer2 = d2.layers[0].id;
+    d2.insert(
+        Some(layer2),
+        0,
+        Node::path(id2, vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), vectorcraft_doc::Appearance::default_art()),
+    )
+    .unwrap();
+    let d2 = width(d2, 20.0);
+    let s2 = Selection { objects: vec![id2], ..Default::default() };
+    let c2 = ToolContext { doc: &d2, selection: &s2, ..c };
+    assert_eq!(snap.snap(&c2, at).0, Point::new(210.0, 150.0));
+    let d3 = width(d2.clone(), 10.0);
+    let off = ToolContext { doc: &d3, snap_to_stroke_edges: false, ..c2 };
+    assert_eq!(snap.snap(&off, at).0, at);
+    let on = ToolContext { snap_to_stroke_edges: true, ..off };
+    assert_eq!(snap.snap(&on, at).0, Point::new(205.0, 150.0));
+}
+
+/// Default-OFF reference picking retains the old selection/hit root order:
+/// equal-distance anchors with equal x keep their stable gather priority.
+#[test]
+fn pick_snap_off_preserves_legacy_root_order_for_equal_distance_points() {
+    let mut d = Document::new(500.0, 500.0);
+    let layer = d.layers[0].id;
+    let mut ids = vec![];
+    for y in [100.0, 104.0] {
+        let mut path = BezPath::new();
+        path.move_to((100.0, y));
+        path.line_to((110.0, y));
+        let id = d.alloc_id();
+        d.insert(Some(layer), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&path), vectorcraft_doc::Appearance::default_art()))
+            .unwrap();
+        ids.push(id);
+    }
+    let p = paint();
+    let at = Point::new(100.0, 102.0);
+    let mut pick = PickSnap::default();
+    for (roots, expected_y) in [(vec![ids[0], ids[1]], 100.0), (vec![ids[1], ids[0]], 104.0)] {
+        let selection = Selection { objects: roots.clone(), ..Default::default() };
+        let c = ToolContext { smart_guides: true, snap_to_stroke_edges: false, snapping_tolerance: 4.0, ..cx(&d, &selection, &p) };
+        let tol = c.snap_tol();
+        let near = Rect::new(at.x - tol, at.y - tol, at.x + tol, at.y + tol);
+        // Neither short line's centre is the probe; all possible hit roots
+        // are already in this selected pair, so an appended hit cannot precede it.
+        let legacy = Targets::points_near(&d, &roots, near).styled(&c).snap_point(at, tol).0;
+        assert_eq!(legacy, Point::new(100.0, expected_y), "the original stable tie must follow selected root order");
+        assert_eq!(pick.snap(&c, at).0, legacy, "stroke edges OFF must not sort legacy roots");
+    }
+}
+
+/// A carried bleed point contacts the continuous stroke channel on the
+/// handle's permitted trajectory, without replacing legacy anchor priority.
+#[test]
+fn stroke_handle_contact_keeps_bleed_offset_constraint_and_legacy_priority() {
+    let mut d = Document::new(500.0, 500.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut appearance = vectorcraft_doc::Appearance::default_art();
+    appearance.set_fill(vectorcraft_color::Paint::None);
+    appearance.stroke_mut().unwrap().width = 10.0;
+    let line = vectorcraft_geom::shapes::line(Point::new(100.0, 100.0), Point::new(200.0, 200.0));
+    d.insert(Some(layer), 0, Node::path(id, line, appearance)).unwrap();
+    let (selection, paint) = (Selection::default(), paint());
+    let c = ToolContext { snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+    let targets = Targets::collect(&d, &[], None).styled(&c).with_stroke_edges(&c, &[], None);
+    let at = Point::new(162.0, 150.0);
+    let along = Some(Vec2::new(1.0, 0.0));
+    // The ordinary handle is nearly 5 pt from the horizontal intersection;
+    // only the bleed point 5 pt to its left is in reach.
+    assert!(targets.snap_stroke_point_with(at, at, &[], along, 4.0).is_none());
+    let offset = Vec2::new(-5.0, 0.0);
+    let (q, ov) = targets.snap_stroke_point_with(at, at, &[offset], along, 4.0).unwrap();
+    let band = 5.0 * std::f64::consts::SQRT_2;
+    assert!((q.x - (155.0 + band)).abs() < 1e-8, "{q:?}");
+    assert_eq!(q.y, at.y);
+    assert!(ov.iter().any(|o| matches!(o, Overlay::Label { p, text, .. } if text == "stroke edge" && p.distance(q + offset) < 1e-8)));
+    // A free corner may move on both axes; a parallel permitted trajectory
+    // cannot replace its missing intersection with a projected free snap.
+    let free = Point::new(159.0, 150.0);
+    let (q, _) = targets.snap_stroke_point_with(free, free, &[], None, 4.0).unwrap();
+    assert!((q.x - q.y - band).abs() < 1e-8);
+    assert!(q.distance(free) <= 4.0);
+    assert!(targets.snap_stroke_point_with(free, free, &[], Some(Vec2::new(1.0, 1.0)), 4.0).is_none());
+    // Legacy priority is checked at the original input, not its constrained
+    // projection. Here that input is the actual line's original anchor.
+    assert!(targets.snap_stroke_point_with(Point::new(100.0, 100.0), at, &[offset], along, 4.0).is_none());
+    let off = ToolContext { snap_to_stroke_edges: false, ..c };
+    let targets = Targets::collect(&d, &[], None).with_stroke_edges(&off, &[], None);
+    assert!(targets.snap_stroke_point_with(at, at, &[offset], along, 4.0).is_none());
+}

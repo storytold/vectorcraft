@@ -4,10 +4,41 @@ use super::live_shape::LiveShape;
 use super::opacity::OpacityMask;
 use super::{Node, PathData};
 
+/// The paint that produced query-only evaluated art. Geometry keeps the
+/// source object distinct from the object whose fill or stroke paints it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueryPaintKind {
+    Geometry,
+    Fill,
+    Stroke,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct QueryPaintOrigin {
+    pub geometry_source: super::NodeId,
+    pub paint_owner: super::NodeId,
+    pub item: usize,
+    pub kind: QueryPaintKind,
+}
+
+/// Transient query metadata, intentionally excluded from semantic equality
+/// and from NodeWire. Ordinary documents leave it empty. ExtrasMut retains
+/// a present origin independently of semantic equality with NO_EXTRAS.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct QueryOrigin(pub Option<QueryPaintOrigin>);
+
+impl PartialEq for QueryOrigin {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
 /// The parts of a [`Node`] that few objects have: kept out of line, so that the nodes without
 /// them stay small ([`Node::extras`]).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NodeExtras {
+    /// Only on detached geometry-query clones; never written to a document.
+    pub query_origin: QueryOrigin,
     /// Opacity mask (Transparency panel). Its art lives here, outside the layer tree.
     pub mask: Option<Box<OpacityMask>>,
     /// Image Trace object: `{preset, params, view?}` it was traced with (the Image Trace panel shows
@@ -87,6 +118,7 @@ pub struct NodeExtras {
 
 /// No extras: what [`Node::extras`] gives for a node without any.
 pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
+    query_origin: QueryOrigin(None),
     mask: None,
     trace: None,
     wrap: None,
@@ -210,9 +242,9 @@ impl std::ops::DerefMut for ExtrasMut<'_> {
 impl Drop for ExtrasMut<'_> {
     fn drop(&mut self) {
         match self.slot.as_deref() {
-            Some(e) if *e == NO_EXTRAS => *self.slot = None,
+            Some(e) if *e == NO_EXTRAS && e.query_origin.0.is_none() => *self.slot = None,
             Some(_) => {}
-            None if self.local != NO_EXTRAS => *self.slot = Some(Box::new(std::mem::take(&mut self.local))),
+            None if self.local != NO_EXTRAS || self.local.query_origin.0.is_some() => *self.slot = Some(Box::new(std::mem::take(&mut self.local))),
             None => {}
         }
     }
