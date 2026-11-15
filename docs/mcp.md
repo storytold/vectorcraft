@@ -3849,9 +3849,12 @@ already walks Image Trace. Short agent entry points:
   when nothing was traced.
   `noise` (Color, Grayscale and Black and White, not Flat Logo) merges areas smaller than that many pixels into a
   neighboring color. Each one joins the color it shares the longest border with, unless that color is 10 or more apart from its own (Oklab
-  × 100). Then it joins the neighboring color nearest the average of its source pixels, among the colors that share at
-  least a tenth of the longest border. A single pixel whose longest border is tied between two or more colors always
-  joins by border. These distances and fractions are VectorCraft's own values. The built-in presets 6 Colors and 16
+  × 100). Then it joins the neighboring color nearest the average of its pixels, among the colors that share at
+  least a tenth of the longest border. The average is taken in the image as prepared for tracing (deblocked, and
+  smoothed for a photo) and leaves out the semi-transparent pixels along a cut-out image's edge that are the color
+  beside them blended with the transparent background. A single pixel whose
+  longest border is tied between two or more colors always joins by border. In Black and White an area has only one
+  neighboring color. These distances and fractions are VectorCraft's own values. The built-in presets 6 Colors and 16
   Colors use Noise 8, and Black and White Logo uses Noise 5.
   `imageTrace.presets.save {name?, newName?, preset?, enhanced?, params?}` saves tracing settings as a preset kept with
   the preferences: `params` over `preset`'s (default: the saved preset `name`, else Default), checked as `imageTrace.make`

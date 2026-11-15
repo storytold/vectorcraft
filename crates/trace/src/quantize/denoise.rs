@@ -4,6 +4,8 @@ use super::rare::RARE_ISLAND;
 /// Merge whole 4-connected regions, smallest first, into their most common neighbouring label.
 /// The merge order does not depend on `min_area`: a higher threshold continues the same sequence
 /// instead of splitting a region already merged at a lower threshold. Transparency is a barrier.
+/// It reads only the labels. A trace also reads the image, and a speck far from the color around
+/// it joins the color beside it nearest its pixels instead.
 pub fn denoise(labels: &mut [u16], w: usize, h: usize, min_area: usize) {
     denoise_keeping(labels, w, h, min_area, &[]);
 }
@@ -27,9 +29,13 @@ pub(crate) const NEAREST_PIXELS: u32 = 2;
 pub(crate) struct Source<'a> {
     /// Each label's color in Oklab × 100 ([`super::palette_labs`]).
     pub labs: &'a [[f64; 3]],
-    /// The image the labels were made from, 4 bytes a pixel.
+    /// The prepared image the labels were made from, 4 bytes a pixel.
     pub rgba: &'a [u8],
-    /// Whether the labels are grays (Grayscale, Black and White): the source pixels are compared as their gray.
+    /// The pixels along a cut edge that [`super::settle_cut_edges`] finds to be the color of an opaque pixel beside
+    /// them blended with the transparent background. They are not read.
+    pub blended: &'a [bool],
+    /// Whether the labels are grays (Grayscale, Black and White): the pixels are compared as their gray
+    /// ([`super::luma`]).
     pub gray: bool,
 }
 
@@ -144,8 +150,8 @@ pub(crate) fn denoise_nearest(labels: &mut [u16], w: usize, h: usize, min_area: 
             && (area >= NEAREST_PIXELS || by_colour.iter().filter(|&&(_, border)| border == longest).count() == 1)
             && let Some(own) = source.labs.get(colour[id as usize] as usize)
             && distance(own, source.labs.get(chosen as usize)) >= NEAREST_APART
+            && let Some(mean) = mean_lab(head[id as usize], &next, source)
         {
-            let mean = mean_lab(head[id as usize], &next, source);
             let to = |c: u16| distance(&mean, source.labs.get(c as usize));
             if let Some(&(nearest, _)) = by_colour
                 .iter()
@@ -198,24 +204,26 @@ fn find(parent: &mut [u32], mut a: u32) -> u32 {
     a
 }
 
-/// The source pixels of the list that starts at `first` (linked through `next`), averaged, in Oklab × 100.
-fn mean_lab(first: u32, next: &[u32], source: &Source) -> [f64; 3] {
-    let (mut sum, mut n) = ([0.0f64; 3], 0.0f64);
+/// The source pixels of the list that starts at `first` (linked through `next`), averaged, in Oklab × 100, read as
+/// `source` says, leaving out the blended cut-edge pixels. `None` when every pixel is one of them.
+fn mean_lab(first: u32, next: &[u32], source: &Source) -> Option<[f64; 3]> {
+    let (mut sum, mut n) = ([0.0f64; 3], 0u32);
     let mut pixel = first;
     while pixel != NONE {
-        if let Some(p) = source.rgba.get(pixel as usize * 4..pixel as usize * 4 + 3) {
-            for (s, &v) in sum.iter_mut().zip(p) {
-                *s += f64::from(v);
+        let blended = source.blended.get(pixel as usize).copied().unwrap_or(false);
+        if !blended && let Some(&[r, g, b, a]) = source.rgba.get(pixel as usize * 4..pixel as usize * 4 + 4) {
+            let p = if source.gray { [f64::from(super::luma([r, g, b, a])); 3] } else { [r, g, b].map(f64::from) };
+            for (s, v) in sum.iter_mut().zip(p) {
+                *s += v;
             }
-            n += 1.0;
+            n += 1;
         }
         pixel = next.get(pixel as usize).copied().unwrap_or(NONE);
     }
-    let mut mean = sum.map(|s| s / n.max(1.0));
-    if source.gray {
-        mean = [0.299 * mean[0] + 0.587 * mean[1] + 0.114 * mean[2]; 3];
+    if n == 0 {
+        return None;
     }
-    super::oklab(mean)
+    Some(super::oklab(sum.map(|s| s / f64::from(n))))
 }
 
 /// The distance between two colors in Oklab × 100; infinite when `q` is missing.
@@ -374,7 +382,7 @@ mod tests {
         let rgba: Vec<u8> =
             labels.iter().flat_map(|&l| GROUND_INK_TONE_BROWN.get(l as usize).copied().unwrap_or([0; 3]).into_iter().chain([255])).collect();
         let mut out = labels.to_vec();
-        denoise_nearest(&mut out, w, h, min_area, &[], Some(&Source { labs: &labs, rgba: &rgba, gray: false }));
+        denoise_nearest(&mut out, w, h, min_area, &[], Some(&Source { labs: &labs, rgba: &rgba, blended: &[], gray: false }));
         out
     }
 
@@ -506,14 +514,42 @@ mod tests {
         let mut blind = labels.clone();
         denoise_keeping(&mut blind, w, h, 15, &[]);
         let labs = crate::quantize::palette_labs(&GROUND_INK_TONE_BROWN[..2]);
-        let rgba = vec![0u8; w * h * 4];
+        // Every pixel ink: read, the speck would join the line.
+        let rgba: Vec<u8> = (0..w * h).flat_map(|_| [30, 25, 20, 255]).collect();
         let mut out = labels.clone();
-        denoise_nearest(&mut out, w, h, 15, &[], Some(&Source { labs: &labs, rgba: &rgba, gray: false }));
+        denoise_nearest(&mut out, w, h, 15, &[], Some(&Source { labs: &labs, rgba: &rgba, blended: &[], gray: false }));
         assert_eq!(out, blind);
         let labs = crate::quantize::palette_labs(&GROUND_INK_TONE_BROWN);
         let mut out = labels.clone();
-        denoise_nearest(&mut out, w, h, 15, &[], Some(&Source { labs: &labs, rgba: &rgba[4..], gray: false }));
+        denoise_nearest(&mut out, w, h, 15, &[], Some(&Source { labs: &labs, rgba: &rgba[4..], blended: &[], gray: false }));
         assert_eq!(out, blind);
+        let mut out = labels.clone();
+        denoise_nearest(&mut out, w, h, 15, &[], Some(&Source { labs: &labs, rgba: &rgba, blended: &[], gray: false }));
+        assert_eq!(out[10 * w + 10], 1, "a source that covers them is read");
+    }
+
+    /// A speck made only of cut-edge pixels that are the color beside them blended with the transparent background
+    /// merges by border alone.
+    #[test]
+    fn a_speck_of_blended_cut_edge_pixels_merges_by_border() {
+        let (labels, w, h) = speck_beside_a_line(3);
+        let labs = crate::quantize::palette_labs(&GROUND_INK_TONE_BROWN);
+        let rgba: Vec<u8> =
+            labels.iter().flat_map(|&l| GROUND_INK_TONE_BROWN.get(l as usize).copied().unwrap_or([0; 3]).into_iter().chain([255])).collect();
+        let mut blended = vec![false; w * h];
+        for (x, y) in SPECK {
+            blended[y * w + x] = true;
+        }
+        let mut out = labels.clone();
+        denoise_nearest(&mut out, w, h, 15, &[], Some(&Source { labs: &labs, rgba: &rgba, blended: &blended, gray: false }));
+        let mut blind = labels.clone();
+        denoise_keeping(&mut blind, w, h, 15, &[]);
+        assert_eq!(out, blind);
+        // One pixel that is not such a blend is enough to read it.
+        blended[10 * w + 10] = false;
+        let mut out = labels.clone();
+        denoise_nearest(&mut out, w, h, 15, &[], Some(&Source { labs: &labs, rgba: &rgba, blended: &blended, gray: false }));
+        assert_eq!(out[10 * w + 10], 1);
     }
 
     /// A minimum so large that regions keep merging into big ones.
