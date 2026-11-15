@@ -266,6 +266,14 @@ pub(crate) struct Scene<'a> {
     images: HashMap<String, Option<usize>>,
     /// The source key and solid paint together identify a colorized encoding.
     colorized_images: HashMap<(String, String), Option<usize>>,
+    /// Image keys whose encoding didn't fit under the page limit → how much its first placement
+    /// adds to the body. The image is encoded again only once the page has room for that.
+    too_large_images: HashMap<String, usize>,
+    /// The same for colorized encodings, by `colorized_images`' keys.
+    too_large_colorized: HashMap<(String, String), usize>,
+    /// How many times an image or a colorized image was encoded.
+    #[cfg(test)]
+    encodes: usize,
     /// Freeform gradients' images by [`ImageCode::content_key`] → their indices in `codes`: a field
     /// encoded the same as one already kept draws from it.
     fields: HashMap<u64, Vec<usize>>,
@@ -297,6 +305,10 @@ impl<'a> Scene<'a> {
             brushes: None,
             images: HashMap::new(),
             colorized_images: HashMap::new(),
+            too_large_images: HashMap::new(),
+            too_large_colorized: HashMap::new(),
+            #[cfg(test)]
+            encodes: 0,
             fields: HashMap::new(),
             codes: vec![],
             placements: vec![],
@@ -311,6 +323,30 @@ impl<'a> Scene<'a> {
     pub fn with_max_body(mut self, max: usize) -> Self {
         self.max_body = max;
         self
+    }
+
+    /// [`Self::run`], with how many placements draw each encoded image the scene kept, and the
+    /// indices in `codes` that its image, colorized-image and field caches name.
+    #[cfg(test)]
+    pub fn run_with_codes(mut self) -> (Page, Vec<usize>, Vec<usize>) {
+        let doc = self.doc;
+        for l in &doc.layers {
+            self.node(l, false);
+        }
+        let uses = self.codes.iter().map(|c| c.uses).collect();
+        let cached = self.images.values().chain(self.colorized_images.values()).flatten().chain(self.fields.values().flatten()).copied().collect();
+        (self.page(), uses, cached)
+    }
+
+    /// [`Self::run`], with how many times the scene encoded an image or a colorized image.
+    #[cfg(test)]
+    pub fn run_counting_encodes(mut self) -> (Page, usize) {
+        let doc = self.doc;
+        for l in &doc.layers {
+            self.node(l, false);
+        }
+        let encodes = self.encodes;
+        (self.page(), encodes)
     }
 
     pub fn run(mut self) -> Page {
@@ -489,8 +525,11 @@ impl<'a> Scene<'a> {
             self.warn(TOO_LARGE);
             return;
         }
+        // Off the region, an object is still written when brush art painted along its brushed
+        // strokes, or those of the objects in it, can reach the region.
+        let off = |b: Rect, reach: f64| !overlaps(b.inflate(1.0 + reach, 1.0 + reach), self.o.region);
         match n.visual_bounds_with(&self.symbols) {
-            Some(b) if !force && !overlaps(b.inflate(1.0, 1.0), self.o.region) => return,
+            Some(b) if !force && off(b, 0.0) && off(b, vectorcraft_brush::reach_within(n)) => return,
             None if !n.is_container() => return,
             _ => {}
         }
@@ -553,7 +592,7 @@ impl<'a> Scene<'a> {
         if self.size() > self.max_body {
             self.body.truncate(was);
             self.unplace(placed);
-            self.forget_fields(codes);
+            self.forget_codes(codes);
             self.warn(TOO_LARGE);
         }
     }
@@ -1436,24 +1475,21 @@ impl<'a> Scene<'a> {
         self.place_image(i, place);
     }
 
-    /// Forget the field images after the first `n` codes that no placement draws any longer, last
-    /// first, up to the first code that is drawn or isn't a field image.
-    fn forget_fields(&mut self, n: usize) {
-        while self.codes.len() > n {
-            let i = self.codes.len() - 1;
-            let Some(code) = self.codes.get(i) else { break };
-            if code.uses > 0 {
-                break;
-            }
-            let key = code.content_key();
-            let Some(bucket) = self.fields.get_mut(&key) else { break };
-            let Some(at) = bucket.iter().position(|&j| j == i) else { break };
-            bucket.swap_remove(at);
-            if bucket.is_empty() {
-                self.fields.remove(&key);
-            }
-            self.codes.pop();
+    /// Forget the encoded images after the first `n` codes that no placement draws any longer, and
+    /// the cache entries that name them: placed images, colorized images and fields. A code that a
+    /// placement still draws keeps itself and every code before it.
+    fn forget_codes(&mut self, n: usize) {
+        let keep = self.codes.iter().rposition(|c| c.uses > 0).map_or(n, |last| n.max(last + 1));
+        if keep >= self.codes.len() {
+            return;
         }
+        self.codes.truncate(keep);
+        self.images.retain(|_, e| e.is_none_or(|i| i < keep));
+        self.colorized_images.retain(|_, e| e.is_none_or(|i| i < keep));
+        self.fields.retain(|_, bucket| {
+            bucket.retain(|&i| i < keep);
+            !bucket.is_empty()
+        });
     }
 
     /// A placed image (`blob`, cached under `key`): its pixel grid of `width` × `height` placed
@@ -1466,7 +1502,28 @@ impl<'a> Scene<'a> {
         let encoded = match self.images.get(key) {
             Some(e) => *e,
             None => {
-                let e = self.decode_image(blob).and_then(|img| self.encode_image(img.as_raw(), img.width(), img.height())).map(|c| self.add_code(c));
+                // An image turned away at the page limit is encoded again only once it fits.
+                if let Some(&len) = self.too_large_images.get(key) {
+                    if self.size().saturating_add(len).saturating_add(64) > self.max_body {
+                        self.warn(TOO_LARGE);
+                        return;
+                    }
+                    self.too_large_images.remove(key);
+                }
+                #[cfg(test)]
+                {
+                    self.encodes += 1;
+                }
+                let code = self.decode_image(blob).and_then(|img| self.encode_image(img.as_raw(), img.width(), img.height()));
+                // An image that can't be placed isn't kept.
+                if let Some(c) = &code
+                    && self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body
+                {
+                    self.too_large_images.insert(key.to_string(), c.inline_len);
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let e = code.map(|c| self.add_code(c));
                 self.images.insert(key.to_string(), e);
                 e
             }
@@ -1498,7 +1555,28 @@ impl<'a> Scene<'a> {
         let encoded = match self.colorized_images.get(&cache) {
             Some(e) => *e,
             None => {
-                let e = self.encode_colorized(blob, paint).map(|c| self.add_code(c));
+                // An image turned away at the page limit is encoded again only once it fits.
+                if let Some(&len) = self.too_large_colorized.get(&cache) {
+                    if self.size().saturating_add(len).saturating_add(64) > self.max_body {
+                        self.warn(TOO_LARGE);
+                        return;
+                    }
+                    self.too_large_colorized.remove(&cache);
+                }
+                #[cfg(test)]
+                {
+                    self.encodes += 1;
+                }
+                let code = self.encode_colorized(blob, paint);
+                // An image that can't be placed isn't kept.
+                if let Some(c) = &code
+                    && self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body
+                {
+                    self.too_large_colorized.insert(cache, c.inline_len);
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let e = code.map(|c| self.add_code(c));
                 self.colorized_images.insert(cache, e);
                 e
             }

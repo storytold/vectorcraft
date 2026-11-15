@@ -47,6 +47,11 @@ pub(crate) struct ArtBox {
     /// Whether the art holds an instance of a symbol with 9-slice guides, or of a symbol whose art
     /// holds one at any depth.
     pub(crate) sliced: bool,
+    /// The box of the regions that the live geometry effects of the clipping paths in the art give
+    /// them ([`crate::hit::set_clip_region`]), and of the instances in the art whose art has such
+    /// regions, each measured by [`Node::reach_bounds_with`]. `None` when nothing in the art has
+    /// one.
+    pub(crate) reshaped: Option<Rect>,
 }
 
 /// The art boxes of a document's symbols, which [`Node::geometric_bounds_with`],
@@ -562,7 +567,18 @@ fn art_box(art: &Arc<Node>, symbols: &SymbolBoxes) -> Option<ArtBox> {
             sliced |= symbols.doc.symbol_nine_slice(symbol).is_some() || symbols.art(symbol).is_some_and(|a| a.sliced);
         }
     });
-    Some(ArtBox { geometric, visual, reach, effects, brush, sliced })
+    let mut reshaped = None;
+    if effects {
+        art.walk(&mut |n| {
+            let b = match &n.kind {
+                NodeKind::SymbolInstance { symbol, .. } if symbols.art(symbol).is_some_and(|a| a.reshaped.is_some()) => n.reach(Some(symbols)),
+                _ if n.clips() => n.children().and_then(|c| c.first()).and_then(|c| crate::hit::reshaped_clip_box(c)),
+                _ => None,
+            };
+            reshaped = vectorcraft_geom::union_opt(reshaped, b.filter(finite));
+        });
+    }
+    Some(ArtBox { geometric, visual, reach, effects, brush, sliced, reshaped })
 }
 
 #[cfg(test)]

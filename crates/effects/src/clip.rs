@@ -12,10 +12,14 @@ use vectorcraft_geom::{BezPath, FillRule, PathData};
 /// fills and strokes: the region is then the union of the paths they give, as an export bakes them.
 /// `None` when there is nothing to clip by (the clipped art is then hidden).
 pub fn clip_outline(clip: &Node) -> Option<(BezPath, FillRule)> {
-    match clip_effects_applied(clip, true, || true) {
-        Some(m) => m.clip_outline(Some(&outline_text), &unite),
-        None => clip.clip_outline(Some(&outline_text), &unite),
-    }
+    reshaped_clip_outline(clip).unwrap_or_else(|| clip.clip_outline(Some(&outline_text), &unite))
+}
+
+/// [`clip_outline`] of a clipping path that a live geometry effect reshapes; `None` when nothing
+/// `clip` clips by has a geometry effect of its own or on a fill or stroke. A hidden member of a
+/// group or layer does not clip, so its effects are not counted.
+pub fn reshaped_clip_outline(clip: &Node) -> Option<Option<(BezPath, FillRule)>> {
+    clip_effects_applied(clip, true, || true).map(|m| m.clip_outline(Some(&outline_text), &unite))
 }
 
 /// `n`, the clipping path of a clip group, with the live geometry effects of everything it clips by
@@ -27,9 +31,10 @@ pub fn clip_outline(clip: &Node) -> Option<(BezPath, FillRule)> {
 /// become a path of their reshaped region. A path or compound path whose fills or strokes have
 /// geometry effects becomes a group of one path per fill and stroke, reshaped by the path's effects
 /// and then by that fill's or stroke's, as an export bakes it; [`clip_outline`] clips by their
-/// union. A clipping path that paints ([`Node::clip_paint`], which a group does not) keeps the
-/// geometry effects of its own fills and strokes live instead. `None` when nothing in it has a
-/// geometry effect. Effects on the clip group or around it then reshape the result, after its own.
+/// union, and the group is marked as such pieces
+/// ([`vectorcraft_doc::NodeExtras::clip_pieces`]), so a clipping path that paints still paints
+/// them ([`Node::clip_paint`]). `None` when nothing in it has a geometry effect. Effects on the
+/// clip group or around it then reshape the result, after its own.
 pub(crate) fn with_clip_effects_applied(n: &Node) -> Option<Node> {
     with_clip_effects_applied_while(n, || true)
 }
@@ -38,18 +43,20 @@ pub(crate) fn with_clip_effects_applied(n: &Node) -> Option<Node> {
 /// or compound path in `n`, at every depth: once `take` returns `false`, that member and the
 /// members after it are not visited. The members of a group or layer that are not visited stay as
 /// they are, with their effects. A compound path with geometry effects of its own still becomes a
-/// path of its reshaped geometry. In a clipping path that does not paint, one whose fills or
-/// strokes have geometry effects still becomes a group of one path per fill and stroke. In both
-/// cases the paths in it that are not visited go
-/// into that geometry as they are, and their own effects are not applied.
+/// path of its reshaped geometry. A path or compound path whose fills or strokes have geometry
+/// effects still becomes a group of one path per fill and stroke. In both cases the paths in it
+/// that are not visited go into that geometry as they are, and their own effects are not applied.
 pub(crate) fn with_clip_effects_applied_while(n: &Node, take: fn() -> bool) -> Option<Node> {
-    let paint = n.clip_paint();
-    clip_effects_applied(n, paint.fill.is_none() && paint.stroke.is_none(), take)
+    let mut m = clip_effects_applied(n, true, take)?;
+    if matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }) && matches!(m.kind, NodeKind::Group { clip: false, .. }) {
+        m.extras_mut().clip_pieces = true;
+    }
+    Some(m)
 }
 
-/// [`with_clip_effects_applied_while`]; with `items` unset (a clipping path that paints, and the
-/// paths of a compound path, which draw with the compound path's fills and strokes), the geometry
-/// effects of `n`'s own fills and strokes are left out.
+/// [`with_clip_effects_applied_while`]; with `items` unset (the paths of a compound path, which
+/// draw with the compound path's fills and strokes), the geometry effects of `n`'s own fills and
+/// strokes are left out.
 fn clip_effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Node> {
     let mut m: Option<Node> = None;
     let members: &[std::sync::Arc<Node>] = match &n.kind {
@@ -84,6 +91,17 @@ fn clip_effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Nod
             .iter()
             .zip(&p.appearance.items)
             .map(|(item, carried)| {
+                // A fill or stroke whose Transform effect scales strokes or moves patterns is drawn
+                // through its art, as an export bakes such a path ([`crate::reshape`]).
+                let mut whole = Node::path(n.id, g.clone(), Appearance { items: vec![carried.clone()], ..Default::default() });
+                if let NodeKind::Path { rule: r, .. } = &mut whole.kind {
+                    *r = rule;
+                }
+                if crate::has_transform_art(&whole)
+                    && let Some(art) = crate::reshape(None, &whole, None)
+                {
+                    return std::sync::Arc::new(art);
+                }
                 let (ig, mut it) = crate::bake::apply_item(item, carried, &g, &ctx);
                 crate::bake::clear_item_effects(&mut it);
                 let mut piece = Node::path(n.id, ig, Appearance { items: vec![it], ..Default::default() });

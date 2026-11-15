@@ -145,6 +145,18 @@
 @msg	`name` must be the name of a script engine	`name` skal være navnet på en scriptmotor
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hovedscriptmotoren er ny ved hver kørsel og bevares aldrig, så den kan ikke fjernes
 @msg	there is no script engine named {name}	der findes ingen scriptmotor med navnet {name}
+@msg	`answers` must be a list of answers	`answers` skal være en liste med svar
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har flere end {MAX_ANSWERS} svar
+@msg	`answers` is larger than 1 MiB	`answers` er større end 1 MiB
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	must be an object with `kind` and `value`	skal være et objekt med `kind` og `value`
+@msg	must have exactly `kind` and `value`	skal have præcis `kind` og `value`
+@msg	is an alert's answer, whose `value` must be "ok"	er svaret på en alert, hvis `value` skal være "ok"
+@msg	is a confirm's answer, whose `value` must be true or false	er svaret på en confirm, hvis `value` skal være true eller false
+@msg	is longer than 16 KiB	er længere end 16 KiB
+@msg	is a prompt's answer, whose `value` must be a string or null	er svaret på en prompt, hvis `value` skal være en streng eller null
+@msg	must have `kind` alert, confirm or prompt	skal have `kind` alert, confirm eller prompt
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` er kun til en kørsel uden nogen at spørge: i appen besvarer personen hver dialog
 @msg	Running a script	Kører et script
 @msg	Data Recovery can't keep copies in {path}: {e}	Datagendannelse kan ikke opbevare kopier i {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kan ikke indlæses fra {path}: {e}
@@ -291,6 +303,7 @@
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en gruppes udfyldning eller streg tegner intet at eksportere
 @msg	The 3D object is too complex to export	3D-objektet er for komplekst til at blive eksporteret
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` skal være et objekt, der kun indeholder `mode` med værdien shaded eller wireframe
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
 @msg	bevel must be none or one of {_1}	bevel skal være none eller en af {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan ikke danne legemer af denne grafik: dens symbolforekomster, blandinger og beskæringsgrupper indeholder for mange objekter
@@ -426,6 +439,7 @@
 @msg	{what} points outside memory	{what} peger uden for hukommelsen
 @msg	`angle` must be a number	`angle` skal være et tal
 @msg	`aspect` must be from 0.01 to 100	`aspect` skal være fra 0,01 til 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` skal være [a, b, c, d], hver fra -1000 til 1000, med a·d - b·c mindst 0,001 fra 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` skal være "butt", "round" eller "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` skal være "nonzero" eller "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` skal være en https://-adresse på højst {MAX_HELP_URL} byte
@@ -478,6 +492,7 @@
 @msg	stops must be in order of `offset`	farvestoppene skal stå i rækkefølge efter `offset`
 @msg	the document has no pattern {pattern}	dokumentet har intet mønster {pattern}
 @msg	the document has no swatch {n}	dokumentet har ingen farveprøve {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` kræver et gradientstop, der er knyttet til en spotfarveprøve
 @msg	the output	outputtet
 @msg	the path has no anchor points	kurven har ingen ankerpunkter
 @msg	too many anchor points (limit {MAX_ANCHORS})	for mange ankerpunkter (grænse {MAX_ANCHORS})
@@ -1004,6 +1019,18 @@
 	Title Case	Stort bogstav i hvert ord
 	Sentence case	Stort begyndelsesbogstav
 	Smart Punctuation…	Smart tegnsætning…
+	Smart Punctuation	Smart tegnsætning
+	ff, fi, ffi Ligatures	Ligaturer ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligaturer ff, fl, ffl
+	Smart Quotes	Smarte anførselstegn
+	Smart Spaces	Smarte mellemrum
+	En, Em Dashes	Korte og lange tankestreger
+	Ellipses	Udeladelsesprikker
+	Expert Fractions	Ekspertbrøker
+	Replace In	Erstat i
+	Selected Text Only	Kun markeret tekst
+	Entire Document	Hele dokumentet
+	Report Results	Rapportér resultater
 	Create Outlines	Opret konturer
 	Optical Margin Alignment	Optisk marginjustering
 	Dynamic Text	Dynamisk tekst
@@ -1083,6 +1110,7 @@
 	Rotate (Classic)…	Rotér (klassisk)…
 	Surface	Overflade
 	Wireframe	Trådmodel
+	Render Settings	Renderingsindstillinger
 	No Shading	Ingen skyggelægning
 	Plastic	Plastik
 	Highlight Intensity	Højlysintensitet
@@ -1516,6 +1544,7 @@
 	Free Transform	Fri transformering
 	Perspective Distort	Perspektivforvrængning
 	Radial Blur…	Radial sløring…
+	Blur Center	Sløringens midtpunkt
 	Smart Blur…	Smart sløring…
 	Sharpen	Skarphed
 	Unsharp Mask…	Uskarp maskering…
@@ -1529,6 +1558,11 @@
 	NTSC Colors	NTSC-farver
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-politik:
+	CMYK Policy:	CMYK-politik:
+	Preserve Embedded Profiles	Bevar indlejrede profiler
+	Convert to Working Space	Konverter til arbejdsfarverum
+	Preserve Numbers	Bevar tal
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Krakelering…
@@ -2028,6 +2062,7 @@ lighting	Light	Lys
 	Align to Artboard	Juster til tegnebræt
 	Align to Glyph Bounds	Juster til glyfafgrænsning
 	Align to Key Object	Juster til nøgleobjekt
+	Align to Key Anchor	Juster til nøgleankerpunkt
 	Align to Selection	Juster til markering
 	Align To:	Juster til:
 	Cancel Key Object	Annullér nøgleobjekt
@@ -2122,6 +2157,8 @@ lighting	Light	Lys
 	Leading	Linjeafstand
 	No Break	Ingen ombrydning
 	Proportional Metrics	Proportionale metrikker
+	H or V Style	Vandret eller lodret stil
+	Roman Italics	Romersk kursiv
 	Insert Aki Left	Indsæt aki til venstre
 	Insert Aki Right	Indsæt aki til højre
 	Tsume	Tsume
@@ -2170,11 +2207,55 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Sammensatte skrifttyper
 	Export Composite Fonts	Eksportér sammensatte skrifttyper
 	Import Composite Fonts	Importér sammensatte skrifttyper
+@msg	each font must be {name, parts}	hver skrifttype skal være {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	ukendt nøgle `{k}`; en skrifttype tager name og parts
+@msg	each font needs a name	hver skrifttype skal have et navn
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan ikke være navnet på en sammensat skrifttype (1 til {COMPOSITE_NAME_MAX} tegn, ingen kontroltegn)
+@msg	`{name}`: parts must be an object	`{name}`: parts skal være et objekt
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: ukendt klasse `{k}`; klasserne er kanji, kana, punctuation, symbols, roman og numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} skal være et objekt
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: ukendt nøgle `{k}` i {_1}
+@msg	`{name}`: give the kanji part	`{name}`: angiv delen kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	et dokument har højst {COMPOSITE_FONTS_MAX} sammensatte skrifttyper
+@msg	two composite fonts are named `{_1}`	to sammensatte skrifttyper hedder `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` er navnet på en installeret skrifttype
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} er sat med `{font}`, en sammensat skrifttype
+@msg	give fonts: [{name, parts}…]	angiv fonts: [{name, parts}…]
+@msg	path is empty	path er tom
+@msg	fonts must be a list of composite fonts	fonts skal være en liste med sammensatte skrifttyper
+@msg	names must be strings	names skal være strenge
+@msg	no composite font named `{n}`	ingen sammensat skrifttype hedder `{n}`
+@msg	names must be a list of names	names skal være en liste med navne
+@msg	no composite fonts to export	ingen sammensatte skrifttyper at eksportere
+@msg	not a composite fonts file: {e}	ikke en fil med sammensatte skrifttyper: {e}
+@msg	not a composite fonts file: no compositeFonts list	ikke en fil med sammensatte skrifttyper: ingen liste compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	filen indeholder mere end {COMPOSITE_FONTS_MAX} sammensatte skrifttyper
+@msg	the file is larger than 4 MB	filen er større end 4 MB
+@msg	dataBase64 is not base64	dataBase64 er ikke base64
+@msg	give one of path, data or dataBase64	angiv én af path, data eller dataBase64
+@msg	the file holds no composite fonts	filen indeholder ingen sammensatte skrifttyper
+@msg	the file holds two composite fonts named `{_1}`	filen indeholder to sammensatte skrifttyper, der hedder `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` kan ikke være navnet på en sammensat skrifttype
+@msg	{k}: give a font	{k}: angiv en skrifttype
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: angiv en skrifttype
+@msg	{k}: size must be {_1} to {_2}%	{k}: size skal være {_1} til {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size skal være {_1} til {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline skal være {_1} til {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline skal være {_1} til {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skaleringen skal være {_1} til {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skaleringen skal være {_1} til {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: kun kana, roman og numerals kan skaleres
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: kun kana, roman og numerals kan skaleres
+@msg	{k}: only kana can be scaled at the center	{k}: kun kana kan skaleres fra midten
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: kun kana kan skaleres fra midten
+@msg	no composite font	ingen sammensat skrifttype
 	Delete Font	Slet skrifttype
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Tal
 	Scale at Center	Skalér fra midten
+	Delete Set	Slet sæt
+	Direct Entry	Direkte indtastning
 	Up/Down:	Op/ned:
 	Left/Right:	Venstre/højre:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko op/ned
@@ -2458,7 +2539,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Tabulære versalcifre
 	Tabular Oldstyle	Tabulære mediævalcifre
 	Titling Alternates	Titelalternativer
-	Every-line Composer	Hverlinjesætter
+	Middle Eastern & South Asian Single-line Composer	Enlinjesætter (Mellemøsten og Sydasien)
+	Middle Eastern & South Asian Every-line Composer	Hverlinjesætter (Mellemøsten og Sydasien)
+	Standard Single-line Composer	Standard-enlinjesætter
+	Standard Every-line Composer	Standard-hverlinjesætter
 	First-line Left Indent	Venstre indrykning af første linje
 	Hyphenation…	Orddeling…
 	Justification…	Justering…
@@ -2490,7 +2574,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Indstillinger for østasiatisk komposition
 	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
-	Single-line Composer	Enlinjesætter
 	Toggle Line Composer	Skift linjesætter
 	Space After Paragraph	Mellemrum efter afsnit
 	Space Before Paragraph	Mellemrum før afsnit
@@ -2534,6 +2617,7 @@ digits	Malayalam	Malayalam
 	Show Swatch Bounds	Vis farveprøvegrænser
 	Show Tile Edge	Vis flisekant
 	Size Tile to Art	Tilpas flise til grafik
+	Move Tile with Art	Flyt flise med grafik
 	Tile Type:	Flisetype:
 	Top in Front	Toppen forrest
 	V Spacing:	Lodret afstand:
@@ -2576,6 +2660,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Brug sortpunktskompensation
 	Working CMYK (don't tag)	Arbejds-CMYK (mærk ikke)
 	Working RGB (don't tag)	Arbejds-RGB (mærk ikke)
+	Don't Color Manage This Document	Farvestyr ikke dette dokument
+	Working RGB: {name}	Arbejds-RGB: {name}
+	Working CMYK: {name}	Arbejds-CMYK: {name}
 	{name} (spot)	{name} (spotfarve)
 	Add to Profiles…	Tilføj til profiler…
 	Align Stroke to Center	Justér kontur til midten
@@ -2695,6 +2782,7 @@ digits	Malayalam	Malayalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	post {i} i paths skal have path og ids (objekt-id'er, som ingen anden post har)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder tager path: der søges efter de andre manglende links i den fils mappe
 	Show Missing	Vis manglende
+	Sort by Size	Sortér efter størrelse
 	Sort by Status	Sortér efter status
 	Clear Overrides	Ryd tilsidesættelser
 	Create New {kind} Style	Opret ny {kind}-typografi
@@ -3034,6 +3122,7 @@ digits	Malayalam	Malayalam
 	e.g. 1-3, 5	f.eks. 1-3, 5
 	First Page	Første side
 	Import PDF	Importér PDF
+	Import PDF pages as links	Importér PDF-sider som links
 	Last Page	Sidste side
 	Next Page	Næste side
 	of {count}	af {count}
@@ -3117,6 +3206,7 @@ digits	Malayalam	Malayalam
 	Transparent Background	Gennemsigtig baggrund
 	Choose…	Vælg…
 	Copy Fonts Used in the Document	Kopiér skrifttyper, der bruges i dokumentet
+	Copy Info	Kopiér info
 	Copy Links	Kopiér links
 	Create Report	Opret rapport
 	Fonts whose licence doesn't allow embedding are not copied.	Skrifttyper, hvis licens ikke tillader indlejring, kopieres ikke.
@@ -3167,6 +3257,8 @@ digits	Malayalam	Malayalam
 	Keep a link to an image file instead of only embedding it	Behold et link til en billedfil i stedet for kun at indlejre den
 	Place onto a new locked, dimmed template layer below the current layer	Placér på et nyt låst, nedtonet skabelonlag under det aktuelle lag
 	Swap the selected object for the file, keeping its place and transform	Udskift det markerede objekt med filen, mens placering og transformering bevares
+	Show Import Options	Vis importindstillinger
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Spørg om importindstillinger for hver PDF-, DXF- eller tekstfil, før den placeres; fra: brug de senest valgte indstillinger
 	On: one locked object showing the document, updated when it changes.	Til: ét låst objekt, der viser dokumentet, og som opdateres, når det ændres.
 	Off: an editable copy of its art, embedded in this document.	Fra: en redigerbar kopi af dens grafik, indlejret i dette dokument.
 	Images: link to the file instead of only embedding it.	Billeder: link til filen i stedet for kun at indlejre den.
@@ -3301,6 +3393,7 @@ digits	Malayalam	Malayalam
 	Limit to Library:	Begræns til bibliotek:
 	Link harmony colors	Sammenkæd harmonifarver
 	Merge colors into one row	Flet farver til én række
+	New Row	Ny række
 	No colors to recolor (preserved colors are left out).	Ingen farver at omfarve (bevarede farver er udeladt).
 	Preserve:	Bevar:
 	Randomly change color order	Ændr farverækkefølgen tilfældigt
@@ -3950,6 +4043,40 @@ theme	Appearance	Udseende
 	Create Graph	Opret graf
 	Graph Data	Grafdata
 	Graph Type	Graftype
+	Graph Options	Grafindstillinger
+	Left Axis	Venstre akse
+	Right Axis	Højre akse
+	Category Axis	Kategoriakse
+	Separate Scales	Separate skalaer
+	Add Drop Shadow	Tilføj slagskygge
+	Add Legend Across Top	Tilføj forklaring øverst
+	First Row in Front	Første række forrest
+	First Column in Front	Første kolonne forrest
+	Legend	Forklaring
+	Column Width	Søjlebredde
+	Bar Width	Bjælkebredde
+	Cluster Width	Gruppebredde
+	Mark Data Points	Markér datapunkter
+	Connect Data Points	Forbind datapunkter
+	Edge-to-Edge Lines	Linjer fra kant til kant
+	Draw Filled Lines	Tegn udfyldte linjer
+	Tick Values	Afmærkningsværdier
+	Override Calculated Values	Tilsidesæt beregnede værdier
+	Divisions	Inddelinger
+	Tick Marks	Afmærkninger
+	Tick Marks per Division	Afmærkninger pr. inddeling
+	Draw Tick Marks Between Labels	Tegn afmærkninger mellem etiketter
+	Add Labels	Tilføj etiketter
+	Maximum must be more than Minimum.	Maksimum skal være større end minimum.
+	Column Graph	Søjlediagram
+	Stacked Column Graph	Stablet søjlediagram
+	Bar Graph	Bjælkediagram
+	Stacked Bar Graph	Stablet bjælkediagram
+	Line Graph	Linjediagram
+	Area Graph	Områdediagram
+	Scatter Graph	Spredningsdiagram
+	Pie Graph	Cirkeldiagram
+	Radar Graph	Radardiagram
 	Vector Halftone	Vektorraster
 	spot	spot
 	Text	Tekst
@@ -4537,6 +4664,7 @@ axis	Both	Begge
 	Replace:	Erstat:
 	Type on a Path Options	Indstillinger for tekst på kurve
 	Highlight Variable	Fremhæv variabel
+	Sort Variables	Sortér variabler
 	New Variable	Ny variabel
 	List Variables	Oplist variabler
 	Bind Variable	Tilknyt variabel
@@ -4899,6 +5027,7 @@ imageTrace	Outline	Kontur
 	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Dette script har tilføjet rigtig mange objekter. Fortsæt, eller stop det og fortryd det, det har gjort?
 @msg	Copied the script report	Kopierede scriptrapporten
+@msg	Copied the link info	Kopierede linkinfo
 @msg	Corners edits the corners of a path	Hjørner redigerer hjørnerne på en kurve
 @msg	Couldn't copy to the system clipboard: {e}	Kunne ikke kopiere til systemets udklipsholder: {e}
 @msg	Couldn't open {name}: {e}	Kunne ikke åbne {name}: {e}
@@ -5291,6 +5420,7 @@ imageTrace	Outline	Kontur
 @msg	plug-in failed: {0}	plug-in fejlede: {0}
 @msg	plug-in manifest: {0}	plug-in-manifest: {0}
 @msg	plug-in output: {0}	plug-in-output: {0}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	plug-in parameters: {0}	plug-in-parametre: {0}
 @msg	plug-in trapped: {0}	plug-in'et blev fanget: {0}
 @msg	print settings are not an object	printindstillingerne er ikke et objekt
@@ -6041,6 +6171,9 @@ mark-style	Japanese	Japansk
 	Softness	Blødhed
 	Ambient Light	Omgivelseslys
 	Light behind the object	Lys bag objektet
+	Move Light to Back	Flyt lys bagud
+	Move Light to Front	Flyt lys frem
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Træk et lys for at flytte det. Piletasterne flytter lyset med fokus; Skift flytter det 15° ad gangen.
 	Shadows	Skygger
 	Distance from Object	Afstand fra objektet
 	Shadow Bounds	Skyggegrænser
@@ -6200,6 +6333,8 @@ mark-style	Japanese	Japansk
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variablen `{name}` kan ikke gemmes i et variabelbibliotek: omdøb den, så den begynder med et bogstav eller `_`, uden mellemrum eller andre symboler end `-`, `_` og `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	datasættet `{name}` indeholder et kontroltegn, som et variabelbibliotek ikke kan indeholde
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	datasættet `{name}` begynder eller slutter med mellemrum, som et variabelbibliotek ikke kan indeholde
+@msg	{k} has control characters	{k} indeholder kontroltegn
+@msg	{k} has control characters or line breaks	{k} indeholder kontroltegn eller linjeskift
 @msg	variables that aren't text were left out: {kinds}	variabler, der ikke er tekst, blev udeladt: {kinds}
 @msg	a new document won't read these variables back with their kind: {names}	et nyt dokument læser ikke disse variabler tilbage med deres type: {names}
 @msg	a new document refuses this file because of these variables: {names}	et nyt dokument afviser denne fil på grund af disse variabler: {names}
@@ -6401,6 +6536,14 @@ swatch	Bright Violet	Kraftig violet
 	Color wheel	Farvehjul
 	First Artboard	Første kunstplade
 	Last Artboard	Sidste kunstplade
+	Status Bar Show	Vis i statuslinjen
+	Artboard Name	Kunstpladens navn
+	Current Tool	Aktuelt værktøj
+	Date and Time	Dato og klokkeslæt
+	Number of Undos	Antal fortrydelser
+	Document Color Profile	Dokumentets farveprofil
+	Undos	Fortrydelser
+	Redos	Gentagelser
 	Next Artboard	Næste kunstplade
 	Previous Artboard	Forrige kunstplade
 	Step up or down	Trinvis op eller ned
@@ -6756,6 +6899,8 @@ axis	Y Axis	Y-akse
 	Create New Set	Opret nyt sæt
 	Stop Global Edit	Stop global redigering
 	Global Edit Options	Indstillinger for global redigering
+	Select Similar Objects	Vælg lignende objekter
+	Select Similar Options	Indstillinger for valg af lignende
 	Leave Out of Global Edit	Udelad fra global redigering
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering virker på stier, sammensatte stier, symbolforekomster og grupper af dem
 	Match	Match
@@ -6867,6 +7012,13 @@ axis	Y Axis	Y-akse
 	Graphite Pencil	Grafitblyant
 	Wax Crayon	Vokskridt
 	Charcoal Dust	Kulstøv
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniske kredsløb
+	Circuit Trace	Kredsløbsbane
+	Bus Lines	Buslinjer
+	Terminal Nodes	Terminalpunkter
+
 	Notched Ribbon	Takket bånd
 	Double Line	Dobbelt linje
 	Wave	Bølge
@@ -7534,3 +7686,4 @@ breakText	Glyphs	Glyffer
 	Nest Shapes…	Pak figurer tæt…
 	Nest Shapes	Pak figurer tæt
 	Roll	Rulle
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
