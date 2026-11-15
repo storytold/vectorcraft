@@ -879,6 +879,7 @@
 	Free Transform	თავისუფალი გარდაქმნა
 	Perspective Distort	პერსპექტიული დეფორმაცია
 	Radial Blur…	რადიალური გაბუნდოვნება…
+	Blur Center	გაბუნდოვნების ცენტრი
 	Smart Blur…	ჭკვიანი გაბუნდოვნება…
 	Sharpen	გამკვეთრება
 	Unsharp Mask…	არამკვეთრი ნიღაბი…
@@ -2438,6 +2439,7 @@ digits	Malayalam	მალაიალამური
 	Transparent Background	გამჭვირვალე ფონი
 	Choose…	არჩევა…
 	Copy Fonts Used in the Document	დოკუმენტში გამოყენებული შრიფტების კოპირება
+	Copy Info	ინფორმაციის კოპირება
 	Copy Links	ბმულების კოპირება
 	Create Report	ანგარიშის შექმნა
 	Fonts whose licence doesn't allow embedding are not copied.	შრიფტები, რომელთა ლიცენზია ჩაშენების უფლებას არ იძლევა, არ კოპირდება.
@@ -5616,6 +5618,7 @@ imageTrace	Outline	კონტური
 @msg	there is no script engine named {name}	სკრიპტის ძრავა სახელით {name} არ არსებობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
+@msg	Copied the link info	კოპირებულია ბმულის ინფორმაცია
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
 	Load EPS into Clipboard	EPS-ის ბუფერში ჩატვირთვა
@@ -5696,6 +5699,7 @@ imageTrace	Outline	კონტური
 @msg	object has no weighted stroke	ობიექტს ცვლადი სისქის კონტური არ აქვს
 @msg	objects can't be nested more than 32 deep	ობიექტების ჩადგმის სიღრმე 32-ს ვერ გადააჭარბებს
 @msg	the SVG's elements are nested more than {0} deep	SVG-ის ელემენტების ჩადგმის სიღრმე {0}-ს აჭარბებს
+@msg	the SVG's style sheets take too long to match	SVG-ის სტილის ფურცლების შედარებას ძალიან დიდი დრო სჭირდება
 @msg	the SVG's styles expand to more than {0} MB	SVG-ის სტილები გაშლისას {0} MB-ს აჭარბებს
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	უცნობი control `{name}`: fillStroke, coloring, drawMode ან screenMode
 @plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	ემთხვევა ნაგულისხმევ მალსახმობებს: {n}|ემთხვევა ნაგულისხმევ მალსახმობებს: {n}
@@ -9710,3 +9714,16 @@ font-script	Japanese	იაპონური
 @msg	there is no artboard {i}	სამუშაო დაფა {i} არ არსებობს
 @msg	tolerance must be 0 or more	tolerance უნდა იყოს 0 ან მეტი
 @msg	{name} is a default SVG filter, and the document holds no copy of it to delete	{name} ნაგულისხმევი SVG ფილტრია და დოკუმენტში მისი წასაშლელი ასლი არ არის
+@msg	`{key}` must be a number from 0 to 1	`{key}` უნდა იყოს რიცხვი 0-დან 1-მდე
+@msg	data set `{name}` holds a graph value for `{var}` with {_1}	მონაცემთა ნაკრები `{name}` ცვლადისთვის `{var}` შეიცავს დიაგრამის მნიშვნელობას, რომელშიც {_1}
+@msg	data set `{name}` holds a graph value for `{var}` without rows or series	მონაცემთა ნაკრები `{name}` ცვლადისთვის `{var}` შეიცავს დიაგრამის მნიშვნელობას სტრიქონებისა და სერიების გარეშე
+@msg	data set `{name}` holds an image value for `{var}` that isn't a file's absolute path	მონაცემთა ნაკრები `{name}` ცვლადისთვის `{var}` შეიცავს გამოსახულების მნიშვნელობას, რომელიც ფაილის აბსოლუტური გზა არ არის
+@msg	data set `{set}` holds a graph value for `{var}` longer than {MAX_GRAPH_CSV} bytes	მონაცემთა ნაკრები `{set}` ცვლადისთვის `{var}` შეიცავს დიაგრამის მნიშვნელობას, რომელიც {MAX_GRAPH_CSV} ბაიტზე გრძელია
+@msg	data set `{set}` holds a graph value for `{var}` with {_1}	მონაცემთა ნაკრები `{set}` ცვლადისთვის `{var}` შეიცავს დიაგრამის მნიშვნელობას, რომელშიც {_1}
+@msg	data set `{set}` holds a value for `{_1}` that isn't {what}	მონაცემთა ნაკრები `{set}` ცვლადისთვის `{_1}` შეიცავს მნიშვნელობას, რომელიც {what} არ არის
+@msg	data set `{set}` holds a value for `{var}` that isn't a graph's `data` element	მონაცემთა ნაკრები `{set}` ცვლადისთვის `{var}` შეიცავს მნიშვნელობას, რომელიც დიაგრამის `data` ელემენტი არ არის
+@msg	match applies only with scope {scopes}	match მხოლოდ scope-ის მნიშვნელობით {scopes} მოქმედებს
+@msg	match must be a paint as the document stores it	match უნდა იყოს საღებავი იმ სახით, როგორც დოკუმენტი ინახავს
+@msg	scope applies to a click: leave out points	scope დაწკაპებას ეხება: points არ მიუთითოთ
+@msg	scope must be "one", "connected" or "samePaint"	scope უნდა იყოს "one", "connected" ან "samePaint"
+@msg	variable `{_1}` starts or ends with white space or holds a control character, which a variable library can't hold	ცვლადი `{_1}` იწყება ან მთავრდება ჰარით ან შეიცავს მმართველ სიმბოლოს, რასაც ცვლადების ბიბლიოთეკა ვერ შეინახავს
