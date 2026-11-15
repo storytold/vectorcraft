@@ -531,6 +531,10 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["angle"], C)?;
     let item = item.of_kind(s, !stroke);
     let ids = item.targets(s, p)?;
+    // Objects were given or selected, even when all of them are graph design art left out below: the stroke mode is then
+    // not one for new art.
+    let selected = !ids.is_empty();
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
     // How the gradient lies on a stroke (the panel's Stroke buttons).
     let mode = match str_param(p, "strokeMode") {
         None => None,
@@ -605,7 +609,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     if let Some(m) = mode
-        && ids.is_empty()
+        && !selected
         && p.get("ids").is_none()
         && let Some(st) = s.new_art_stroke_mut()
     {
@@ -760,6 +764,7 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     if targets.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));
     }
+    let targets = super::appearance::drop_design_art(&s.doc()?.doc, targets);
     let model = super::paint::new_color_model(s, &Value::Null);
     edit_items(s, &targets, item, C, "Gradient", !stroke, |n, index| {
         if index.is_none()

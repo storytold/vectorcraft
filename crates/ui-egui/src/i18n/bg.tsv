@@ -6254,6 +6254,13 @@ axis	Y Axis	Y ос
 	Graphite Pencil	Графитен молив
 	Wax Crayon	Восъчен пастел
 	Charcoal Dust	Въглен прах
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технологични схеми
+	Circuit Trace	Проводяща писта
+	Bus Lines	Шинни линии
+	Terminal Nodes	Крайни възли
+
 	Notched Ribbon	Назъбена лента
 	Double Line	Двойна линия
 	Wave	Вълна
