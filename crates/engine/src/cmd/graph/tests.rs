@@ -8056,6 +8056,63 @@ fn default_fill_and_stroke_on_an_axis_line_that_shows_it_is_kept() {
     assert!(looks.iter().all(|l| (l.2 - 0.5).abs() < 1e-6), "the kind keeps its 50% opacity: {looks:?}");
 }
 
+/// A stroke paint written to an axis line that already shows it is kept for every axis line, in place of the stroke the
+/// kind keeps from another line.
+#[test]
+fn a_stroke_written_to_an_axis_line_that_shows_it_is_kept() {
+    let cases = [("paint.setStroke", json!({"color": "#000000"})), ("addon.color.fillToStroke", json!({}))];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setFill", &json!({"ids": [lines[1].id.0], "color": "#000000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "{cmd}: the other lines show black until the graph is drawn again");
+        let mut p = params.clone();
+        p["ids"] = json!([lines[1].id.0]);
+        s.execute(cmd, &p).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#000000"), "{cmd}: {looks:?}");
+    });
+}
+
+/// A reorder that leaves an axis line's rows as they were keeps what its kind keeps from another line and is no edit.
+#[test]
+fn a_reorder_that_changes_nothing_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+    let stroke = top_row(&s, lines[1].id, false);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("appearance.moveItem", &json!({"ids": [lines[1].id.0], "from": stroke, "to": stroke})).unwrap();
+    s.execute("appearance.moveItem", &json!({"ids": [lines[1].id.0], "indices": [stroke], "to": stroke})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0 == "#ff0000"), "{looks:?}");
+}
+
+/// A Contents row move that leaves a label's stack as it was keeps the rows its kind keeps from another label and is no
+/// edit.
+#[test]
+fn a_reorder_that_changes_nothing_on_a_label_keeps_the_rows_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("appearance.addStroke", &json!({"ids": [v.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [v.0], "index": 0, "color": "#0000ff", "weight": 2})).unwrap();
+    let zero = text_id(&s, id, "Axes", "0");
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("appearance.moveItem", &json!({"ids": [zero.0], "from": "contents", "to": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+    let looks = redrawn_label_rows(&mut s, id);
+    assert_eq!(rows_of(&looks, "0"), (vec![(false, "#0000ff".into(), 1.0, 2.0)], 1.0), "every value axis number: {looks:?}");
+}
+
 #[test]
 fn pie_names_and_wedge_labels_keep_their_style() {
     let mut s = Session::new();

@@ -936,7 +936,9 @@ opacity and blend mode only when it also applies the object's transparency; the 
 and leaves the other kind of row and the object opacity and blend mode the kind keeps. When the graph is drawn again, every label of that kind gets what is stored, with a placed
 gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and `legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
 joins, dashes) and effects applied with `effect.*` are not stored. When labels of one kind are edited together, the
-last one in the order of the targets (`ids` as given, otherwise paint order) sets what the kind keeps.
+last one in the order of the targets (`ids` as given, otherwise paint order) sets what the kind keeps. An
+`appearance.moveItem` that leaves a label's rows and its Contents row where they were stores nothing and records no
+undo step.
 `appearance.copyFrom` onto the whole text of a label also stores the character attributes it applies and, from type,
 the paragraph attributes. `paint.setFill` and `paint.setStroke` store a character fill or stroke when the paint goes to
 the label's characters (the whole label, or all of its text highlighted with the Type tool), and the row when it goes to
@@ -954,7 +956,10 @@ store only the object opacity and blend mode. `appearance.clear`, `appearance.tr
 `graphicStyle.redefine`, and `appearance.copyFrom` with every attribute picked up and applied, store a line's rows even
 when the line already showed them. The other commands, an `appearance.copyFrom` of some attributes
 included, store only what they change on a line's rows; the kind keeps its other attributes, also when the line still
-shows different ones until the graph is drawn again. An `appearance.copyFrom` that does not apply the object's
+shows different ones until the graph is drawn again. `paint.setFill`, `paint.setStroke`, `addon.color.fillToStroke`
+and `addon.color.strokeToFill` also store the paint they write on a line's topmost visible fill or stroke row when the
+line already showed it. An `appearance.moveItem` that leaves a line's rows as they were stores nothing and records no
+undo step. An `appearance.copyFrom` that does not apply the object's
 transparency, and `graphicStyle.apply` with `add`, leave the object opacity and blend mode a kind keeps as they are,
 also when the line still shows other ones. `graphicStyle.apply` with `add` stores only the kinds of row that are
 visible in the style. `appearance.copyFrom` with `append` stores only the kinds of row it adds that are visible in the

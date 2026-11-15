@@ -690,12 +690,14 @@ pub(crate) fn edit_items_then(
                 rows.push(*id);
             }
         }
-        let more = after(&before, d, &edited)?;
         // A graph line keeps only the attributes of its rows that the edit changed: the others stay as its kind keeps
         // them, which the line may not show yet.
         rows.retain(|id| !super::graph::is_graph_line(d, *id));
         let labels = super::graph::capture_label_rows(d, &rows);
         let lines = super::graph::capture_line_changes(&before, d, &edited);
+        // `after` runs last, so what it keeps for a graph line (a paint written to a line that already showed it) is not
+        // replaced by the change of a line behind it.
+        let more = after(&before, d, &edited)?;
         Ok(count_changed(d, &before, &edited) + usize::from(more || labels || lines))
     })?;
     Ok(aimed)
@@ -710,6 +712,13 @@ fn capture_row_edits(before: &vectorcraft_doc::Document, d: &mut vectorcraft_doc
     let labels = super::graph::capture_label_rows(d, &labels);
     let lines = super::graph::capture_line_changes(before, d, ids);
     labels || lines
+}
+
+/// [`capture_row_edits`] for a reorder: only the graph labels and lines among `ids` whose rows it changed keep them, so
+/// a reorder that leaves a label's or line's stack as it was keeps what its kind keeps from another label or line.
+fn capture_reorder_edits(before: &vectorcraft_doc::Document, d: &mut vectorcraft_doc::Document, ids: &[NodeId]) -> bool {
+    let moved: Vec<NodeId> = ids.iter().copied().filter(|id| d.node(*id).map(|n| &n.appearance) != before.node(*id).map(|n| &n.appearance)).collect();
+    capture_row_edits(before, d, &moved)
 }
 
 /// The first of `ids` that [`edit_items`] aimed at `item` with `of` changes, and the item it changes there. Read it
@@ -1457,7 +1466,7 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
-        let labels = capture_row_edits(&before, d, &ids);
+        let labels = capture_reorder_edits(&before, d, &ids);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
     // The moved row stays the active one; the rows it passed shift by one.
@@ -1503,7 +1512,7 @@ fn move_items(s: &mut Session, p: &Value, ids: &[NodeId], to: usize) -> Result<V
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, ids));
-        let labels = capture_row_edits(&before, d, ids);
+        let labels = capture_reorder_edits(&before, d, ids);
         Ok(count_changed(d, &before, ids) + usize::from(kept || painted || labels))
     })?;
     let m = idx.len();
@@ -1537,7 +1546,7 @@ fn move_contents(s: &mut Session, ids: &[NodeId], to: usize) -> Result<Value> {
         }
         slot.ok_or_else(|| bad("appearance.moveItem", "only groups, layers, type and images have a Contents (Characters) row"))?;
         // A graph label's kind keeps where its rows paint relative to the characters.
-        let labels = capture_row_edits(&before, d, ids);
+        let labels = capture_reorder_edits(&before, d, ids);
         Ok(count_changed(d, &before, ids) + usize::from(labels))
     })?;
     Ok(json!({ "contents": slot }))

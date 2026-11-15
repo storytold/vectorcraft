@@ -649,6 +649,8 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         },
         |before, d, changed| {
             let series = super::appearance::capture_series_paint_writes(before, d, changed, &written.borrow());
+            // A graph line keeps the paint written to it, also when it already showed it.
+            let lines = super::graph::capture_line_paint_writes(d, &written.borrow());
             let labels = super::graph::capture_label_styles(d, &characters.borrow(), &|st| {
                 if fill {
                     st.fill = unplaced(&paint);
@@ -659,7 +661,7 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
                     st.stroke = unplaced(&paint);
                 }
             });
-            Ok(series || labels)
+            Ok(series || lines || labels)
         },
     )?;
     // Rejected edits leave the next shape's appearance and active proxy untouched.
