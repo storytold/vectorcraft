@@ -262,6 +262,28 @@ impl Catalog {
         self.templates.iter().find_map(|t| t.captures(s).map(|caps| (t.forms.as_slice(), caps)))
     }
 
+    /// [`Catalog::message_forms`] for a part of a message that starts with `[`, which may be a JSON
+    /// array: an exact `@msg` entry, else only a template that starts with a literal `[` and a
+    /// placeholder whose value is an index of ASCII digits, such as ``[{j}] `{_1}`: {why}``. An
+    /// array such as ``["] `x`: b"]`` fits that template's text, but not its index.
+    pub fn indexed_message_forms<'a>(&self, s: &'a str) -> Option<(&[String], Captures<'_, 'a>)> {
+        if let Some(tr) = self.messages.get(s) {
+            return Some((std::slice::from_ref(tr), Vec::new()));
+        }
+        if s.len() > MAX_MESSAGE_LEN {
+            return None;
+        }
+        self.templates.iter().find_map(|t| {
+            let [Piece::Text(open), Piece::Hole(index), ..] = t.pieces.as_slice() else { return None };
+            if open != "[" {
+                return None;
+            }
+            let caps = t.captures(s)?;
+            let digits = caps.iter().any(|(k, v)| k == index && v.bytes().all(|b| b.is_ascii_digit()));
+            digits.then_some((t.forms.as_slice(), caps))
+        })
+    }
+
     /// The translation of a status or error message that has an exact `@msg` entry, as written in
     /// the catalog (`{{` and `}}` for literal braces); templates are not tried.
     pub fn exact_message(&self, s: &str) -> Option<&str> {

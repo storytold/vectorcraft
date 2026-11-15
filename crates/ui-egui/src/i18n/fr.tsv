@@ -1072,7 +1072,10 @@ font-technology	Variable	Variables
 	Every (minutes)	Toutes les (minutes)
 	Every option is at its default.	Toutes les options ont leur valeur par défaut.
 	Every option matches {base}.	Toutes les options correspondent à {base}.
-	Every-line Composer	Compositeur multiligne
+	Middle Eastern & South Asian Single-line Composer	Compositeur ligne par ligne (Moyen-Orient et Asie du Sud)
+	Middle Eastern & South Asian Every-line Composer	Compositeur multiligne (Moyen-Orient et Asie du Sud)
+	Standard Single-line Composer	Compositeur standard ligne par ligne
+	Standard Every-line Composer	Compositeur standard multiligne
 	Exact dash lengths	Longueurs de tirets exactes
 	Exceptions (comma separated)	Exceptions (séparées par des virgules)
 	Exclude	Exclusion
@@ -3453,7 +3456,6 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Guillemet simple ouvrant
 	Single Quotes:	Guillemets simples :
 	Single Right Quotation Mark	Guillemet simple fermant
-	Single-line Composer	Compositeur ligne par ligne
 	Toggle Line Composer	Basculer le compositeur de lignes
 	Sixth Space	Espace d’un sixième
 	Size	Taille
@@ -5545,6 +5547,8 @@ effect	Soft	Doux
 	Step up or down	Augmenter ou diminuer d’un cran
 	Drag values or labels. Double-click a value to type.	Faites glisser les valeurs ou les libellés. Double-cliquez sur une valeur pour la saisir.
 	Drag rings to rotate. Shift snaps to 15°.	Faites glisser les anneaux pour tourner. Maj contraint par pas de 15°.
+	Track cube	Cube de rotation
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Faites glisser une face, une arête ou l'anneau pour tourner. Maj fait tourner autour d'un axe de l'écran.
 	Drag the light, or its rings. Shift snaps to 15°.	Faites glisser la lumière ou ses anneaux. Maj contraint par pas de 15°.
 	Keep visible surfaces only when expanding	Conserver uniquement les surfaces visibles lors de la décomposition
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Découpe la géométrie masquée lors de la décomposition de l’aspect. L’aperçu conserve toute la surface. Les peintures transparentes et les surfaces dépassant les limites de visibilité conservent toutes les faces.
@@ -8255,7 +8259,7 @@ breakText	Glyphs	Glyphes
 @msg	column: true floats the whole column and takes no onto, above or below	column: true rend flottante toute la colonne et n’accepte ni onto, ni above, ni below
 @msg	command must be a shape.* command	command doit être une commande shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}] : `command` manquant
-@msg	composer must be "singleLine" or "everyLine"	composer doit valoir "singleLine" ou "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer doit être "singleLine", "everyLine", "standardSingleLine" ou "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	les formes composées acceptent les tracés, tracés transparents, groupes, formes composées, textes, dégradés de formes et enveloppes
 @msg	compound {_1} must contain exactly one open path to join	le tracé transparent {_1} doit contenir exactement un tracé ouvert à joindre
 @msg	connect end must be "start" or "end"	l’extrémité de connect doit valoir "start" ou "end"

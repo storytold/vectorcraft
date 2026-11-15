@@ -1100,6 +1100,8 @@ font-technology	Variable	Biến thiên
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Kéo tác phẩm, màu và kiểu chữ vào đây để tái sử dụng trong các tài liệu. Thư viện được lưu trên máy này — không cần tài khoản.
 	Drag onto art to apply this appearance	Kéo lên tác phẩm để áp dụng diện mạo này
 	Drag rings to rotate. Shift snaps to 15°.	Kéo vòng để xoay. Shift khớp ở 15°.
+	Track cube	Khối xoay
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Kéo một mặt, một cạnh hoặc vòng để xoay. Shift xoay quanh một trục màn hình.
 	Drag the art to move it on the paper	Kéo tác phẩm để di chuyển trên trang
 	Drag the light, or its rings. Shift snaps to 15°.	Kéo đèn hoặc vòng của nó. Shift khớp ở 15°.
 	Drag to float as a toolbar	Kéo để thả nổi thanh công cụ
@@ -1257,7 +1259,10 @@ font-technology	Variable	Biến thiên
 	Every (minutes)	Mỗi (phút)
 	Every option is at its default.	Mọi tùy chọn đang ở mặc định.
 	Every option matches {base}.	Mọi tùy chọn khớp với {base}.
-	Every-line Composer	Soạn theo từng dòng
+	Middle Eastern & South Asian Single-line Composer	Soạn thảo một dòng (Trung Đông và Nam Á)
+	Middle Eastern & South Asian Every-line Composer	Soạn theo từng dòng (Trung Đông và Nam Á)
+	Standard Single-line Composer	Soạn thảo một dòng tiêu chuẩn
+	Standard Every-line Composer	Soạn theo từng dòng tiêu chuẩn
 	Exact dash lengths	Độ dài nét đứt chính xác
 	Exceptions (comma separated)	Ngoại lệ (phân cách bằng dấu phẩy)
 	Exclude	Loại trừ
@@ -3858,7 +3863,6 @@ mark-style	Japanese	Kiểu Nhật
 	Single Left Quotation Mark	Dấu nháy đơn mở
 	Single Quotes:	Dấu nháy đơn:
 	Single Right Quotation Mark	Dấu nháy đơn đóng
-	Single-line Composer	Soạn thảo một dòng
 	Toggle Line Composer	Chuyển đổi cách soạn dòng
 	Sixth Space	Dấu cách 1/6
 	Size	Kích thước
@@ -7400,3 +7404,4 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho JPEG (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"

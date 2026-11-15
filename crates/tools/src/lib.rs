@@ -291,6 +291,9 @@ pub trait Tool: Send {
     /// another document became active. The Blend tool drops its first pick and stops adding to the
     /// blend it just made.
     fn history_moved(&mut self) {}
+    /// A press on the canvas went to the view tools (held Space, the middle button) and not to the
+    /// tool. The Live Paint Bucket counts it among the clicks a triple-click compares.
+    fn press_elsewhere(&mut self) {}
     /// Time passes while the pointer button is held (`dt` seconds since the last tick, whether or
     /// not the pointer moved): tools that keep working while the brush holds still (Twirl, Pucker,
     /// Bloat) act on it. The host supplies the time, so tests and agents drive it exactly.

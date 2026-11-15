@@ -1056,7 +1056,8 @@ font-technology	Variable	Variabel
 	Every (minutes)	Alle (Minuten)
 	Every option is at its default.	Alle Optionen haben ihren Standardwert.
 	Every option matches {base}.	Alle Optionen entsprechen {base}.
-	Every-line Composer	Alle-Zeilen-Setzer
+	Middle Eastern & South Asian Every-line Composer	Alle-Zeilen-Setzer (Naher Osten und Südasien)
+	Standard Every-line Composer	Standard-Alle-Zeilen-Setzer
 	Exact dash lengths	Exakte Strichlängen
 	Exceptions (comma separated)	Ausnahmen (durch Kommas getrennt)
 	Exclude	Schnittmenge entfernen
@@ -3429,7 +3430,8 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Einfaches öffnendes Anführungszeichen
 	Single Quotes:	Einfache Anführungszeichen:
 	Single Right Quotation Mark	Einfaches schließendes Anführungszeichen
-	Single-line Composer	Einzeilen-Setzer
+	Middle Eastern & South Asian Single-line Composer	Einzeilen-Setzer (Naher Osten und Südasien)
+	Standard Single-line Composer	Standard-Einzeilen-Setzer
 	Toggle Line Composer	Zeilensetzer umschalten
 	Sixth Space	Sechstelgeviert-Leerzeichen
 	Size	Größe
@@ -5529,6 +5531,8 @@ theme	Appearance	Erscheinungsbild
 # 3D and Materials › Revolve: its options dialog and gizmos.
 	Axis side	Achsenseite
 	Drag rings to rotate. Shift snaps to 15°.	Ziehen Sie die Ringe, um zu drehen. Mit Shift in 15°-Schritten.
+	Track cube	Rotationswürfel
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Ziehen Sie eine Fläche, eine Kante oder den Ring, um zu drehen. Mit Shift um eine Bildschirmachse.
 	Drag the light, or its rings. Shift snaps to 15°.	Ziehen Sie das Licht oder seine Ringe. Mit Shift in 15°-Schritten.
 lighting	Light	Licht
 	Drag values or labels. Double-click a value to type.	Ziehen Sie Werte oder Beschriftungen. Doppelklicken Sie auf einen Wert, um ihn einzugeben.
@@ -8075,7 +8079,7 @@ breakText	Glyphs	Glyphen
 @msg	column: true floats the whole column and takes no onto, above or below	column: true macht die ganze Spalte schwebend und nimmt kein onto, above oder below
 @msg	command must be a shape.* command	command muss ein shape.*-Befehl sein
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` fehlt
-@msg	composer must be "singleLine" or "everyLine"	composer muss „singleLine“ oder „everyLine“ sein
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer muss „singleLine“, „everyLine“, „standardSingleLine“ oder „standardEveryLine“ sein
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	zusammengesetzte Formen nehmen Pfade, zusammengesetzte Pfade, Gruppen, zusammengesetzte Formen, Text, Angleichungen und Verzerrungshüllen
 @msg	compound {_1} must contain exactly one open path to join	zusammengesetzter Pfad {_1} muss genau einen offenen Pfad zum Zusammenfügen enthalten
 @msg	connect end must be "start" or "end"	connect end muss „start“ oder „end“ sein

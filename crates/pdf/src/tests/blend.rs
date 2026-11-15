@@ -151,6 +151,77 @@ fn a_knockout_group_is_written_as_one_pdf_knockout_group() {
     }
 }
 
+/// A knockout group with nothing blending inside is drawn in an isolated group (`/I true`) only
+/// when the group isolates, clipped or not, with opaque or translucent elements, and reads back
+/// knocking out.
+#[test]
+fn a_knockout_group_without_blending_inside_is_isolated_only_when_it_isolates() {
+    for clip in [false, true] {
+        for opacity in [0.5, 1.0] {
+            for isolate in [false, true] {
+                let mut d = knockout_squares(3, false, isolate);
+                let g = d.layers[0].children().unwrap()[1].id;
+                let mut squares: Vec<_> = d.node(g).unwrap().children().unwrap().to_vec();
+                for s in &mut squares {
+                    std::sync::Arc::make_mut(s).opacity = opacity;
+                }
+                if clip {
+                    let c = Node::path(
+                        d.alloc_id(),
+                        shapes::rectangle(Rect::new(10.0, 10.0, 190.0, 190.0)),
+                        Appearance::basic(Paint::None, Paint::None, 0.0),
+                    );
+                    squares.insert(0, std::sync::Arc::new(c));
+                }
+                d.node_mut(g).unwrap().kind = vectorcraft_doc::NodeKind::Group { children: squares, clip };
+                let case = format!("clip {clip}, opacity {opacity}, isolate {isolate}");
+                let t = text(&d);
+                assert_eq!(t.matches("/Ktrue").count(), 1, "{case}");
+                // Each translucent element is an isolated form with its opacity.
+                let elements = if opacity < 1.0 { 3 } else { 0 };
+                assert_eq!(t.matches("/Itrue").count(), elements + usize::from(isolate), "{case}");
+                let back = import(&export(&d, &PdfOptions::default()).unwrap()).unwrap_or_else(|e| panic!("{case}: {e}"));
+                let mut found = vec![];
+                back.walk(|n| {
+                    if n.knockout == vectorcraft_doc::Knockout::On {
+                        found.push(n.isolate);
+                    }
+                });
+                assert_eq!(found, [false], "{case}");
+            }
+        }
+    }
+}
+
+/// An overprinting element of a knockout group that does not isolate is drawn in a `/K` group
+/// without `/I true`, so it overprints the art below the group, and its graphics state still
+/// overprints (`/OP`, `/op`, `/OPM 1`). An isolated group keeps `/I true`.
+#[test]
+fn an_overprinting_element_of_a_knockout_group_that_does_not_isolate_overprints_the_art_below() {
+    for isolate in [false, true] {
+        let mut d = knockout_squares(3, false, isolate);
+        let g = d.layers[0].children().unwrap()[1].id;
+        let squares: Vec<_> = d.node(g).unwrap().children().unwrap().iter().map(|s| s.id).collect();
+        for s in &squares {
+            d.node_mut(*s).unwrap().opacity = 1.0;
+        }
+        d.node_mut(squares[2]).unwrap().appearance.fill_mut().unwrap().overprint = true;
+        let t = text(&d);
+        assert_eq!(t.matches("/Ktrue").count(), 1, "isolate {isolate}");
+        assert_eq!(t.matches("/Itrue").count(), usize::from(isolate), "isolate {isolate}");
+        assert!(t.contains("/OPtrue/optrue/OPM1"), "isolate {isolate}");
+        let back = import(&export(&d, &PdfOptions::default()).unwrap()).unwrap_or_else(|e| panic!("isolate {isolate}: {e}"));
+        let mut overprints = vec![];
+        back.walk(|n| {
+            if let Some(f) = n.appearance.fill() {
+                overprints.push(f.overprint);
+            }
+        });
+        assert_eq!(overprints, [false, false, false, true], "isolate {isolate}");
+        assert_eq!(knockout_groups(&back), [3], "isolate {isolate}");
+    }
+}
+
 /// The knockout group of an isolated group is isolated too (`/I true` beside `/K true`), and the
 /// group reads back as isolated and knocking out. (Each translucent element is a group of its own.)
 #[test]

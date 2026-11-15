@@ -1601,6 +1601,8 @@
 	Reset all Revolve settings to their defaults.	Nulstil alle indstillinger for omdrejning til standardværdierne.
 	Drag values or labels. Double-click a value to type.	Træk i værdier eller etiketter. Dobbeltklik på en værdi for at indtaste.
 	Drag rings to rotate. Shift snaps to 15°.	Træk i ringe for at rotere. Shift fastgør til 15°.
+	Track cube	Rotationsterning
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Træk i en flade, en kant eller ringen for at rotere. Shift roterer om én skærmakse.
 	Drag the light, or its rings. Shift snaps to 15°.	Træk i lyset eller dets ringe. Shift fastgør til 15°.
 lighting	Light	Lys
 	Keep visible surfaces only when expanding	Behold kun synlige flader ved udvidelse
@@ -2534,7 +2536,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Tabulære versalcifre
 	Tabular Oldstyle	Tabulære mediævalcifre
 	Titling Alternates	Titelalternativer
-	Every-line Composer	Hverlinjesætter
+	Middle Eastern & South Asian Single-line Composer	Enlinjesætter (Mellemøsten og Sydasien)
+	Middle Eastern & South Asian Every-line Composer	Hverlinjesætter (Mellemøsten og Sydasien)
+	Standard Single-line Composer	Standard-enlinjesætter
+	Standard Every-line Composer	Standard-hverlinjesætter
 	First-line Left Indent	Venstre indrykning af første linje
 	Hyphenation…	Orddeling…
 	Justification…	Justering…
@@ -2566,7 +2571,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Indstillinger for østasiatisk komposition
 	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
-	Single-line Composer	Enlinjesætter
 	Toggle Line Composer	Skift linjesætter
 	Space After Paragraph	Mellemrum efter afsnit
 	Space Before Paragraph	Mellemrum før afsnit
@@ -5413,6 +5417,7 @@ imageTrace	Outline	Kontur
 @msg	plug-in failed: {0}	plug-in fejlede: {0}
 @msg	plug-in manifest: {0}	plug-in-manifest: {0}
 @msg	plug-in output: {0}	plug-in-output: {0}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	plug-in parameters: {0}	plug-in-parametre: {0}
 @msg	plug-in trapped: {0}	plug-in'et blev fanget: {0}
 @msg	print settings are not an object	printindstillingerne er ikke et objekt
@@ -7678,3 +7683,4 @@ breakText	Glyphs	Glyffer
 	Nest Shapes…	Pak figurer tæt…
 	Nest Shapes	Pak figurer tæt
 	Roll	Rulle
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

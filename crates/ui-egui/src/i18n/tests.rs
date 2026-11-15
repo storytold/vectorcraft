@@ -4089,13 +4089,50 @@ fn bracketed_message_parts_translate_only_as_exact_messages() {
         let point = message(lang, "[x, y] (two numbers)");
         assert_ne!(point, "[x, y] (two numbers)", "{code}");
         assert!(point.contains("[x, y]"), "{code}: {point}");
-        for got in ["[1]", "[1, 2, 3]", r#"{"objects": [1]}"#, r#"[{"a": 1}, "b: c", …"#] {
+        // ``["] `x`: b"]`` fits the text of the effect refusal ``[{j}] `{_1}`: {why}`` but not its index.
+        for got in ["[1]", "[1, 2, 3]", r#"{"objects": [1]}"#, r#"[{"a": 1}, "b: c", …"#, r#"["] `x`: b"]"#] {
             let shown = message(lang, &format!("`center` must be [x, y] (two numbers), not {got}"));
             assert!(shown.contains(&point) && shown.contains(got), "{code}: {shown}");
             let shown = message(lang, &format!("`p` must be an object, not {got}"));
             assert!(shown.contains(got) && !shown.contains("an object"), "{code}: {shown}");
         }
     }
+}
+
+/// An effect refusal inside another message (`plug-in output: …`, and an importer's `can't open …`)
+/// is translated through its template with its reason, keeping the index and the effect id.
+#[test]
+fn nested_effect_refusals_translate_with_their_reason() {
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let refusal = "[0] `fx`: nothing selected";
+        let output = format!("plug-in output: objects[0].effects: {refusal}");
+        for shown in [message(lang, refusal), message(lang, &output), message(lang, &format!("can't open `a.svg`: {output}"))] {
+            assert!(!shown.contains("nothing selected") && shown.contains("[0] `fx`"), "{code}: {shown}");
+        }
+    }
+    let de = de();
+    let refusal = "[0] `fx`: `radius` must be a number";
+    assert_eq!(message(de, refusal), "[0] `fx`: `radius` muss eine Zahl sein");
+    let output = format!("plug-in output: objects[0].effects: {refusal}");
+    assert_eq!(message(de, &output), "Plug-in-Ausgabe: objects[0].effects: [0] `fx`: `radius` muss eine Zahl sein");
+    assert_eq!(
+        message(de, &format!("can't open `a.svg`: {output}")),
+        "`a.svg` kann nicht geöffnet werden: Plug-in-Ausgabe: objects[0].effects: [0] `fx`: `radius` muss eine Zahl sein"
+    );
+    assert_eq!(
+        message(de, "plug-in output: objects[12].effects: [3] `fx`: no row for this reason"),
+        "Plug-in-Ausgabe: objects[12].effects: [3] `fx`: no row for this reason"
+    );
+    let selected = "[1] `fx`: nothing selected";
+    assert_eq!(
+        message(de, &format!("plug-in output: objects[0].effects: {selected}")),
+        "Plug-in-Ausgabe: objects[0].effects: [1] `fx`: nichts ausgewählt"
+    );
+    // Past the depth limit the refusal stays as it is.
+    let deep = format!("plug-in output: plug-in output: plug-in output: plug-in output: objects[0].effects: {selected}");
+    let shown = message(de, &deep);
+    assert!(shown.ends_with(selected), "{shown}");
 }
 
 /// The warning for a PDF/X file that leaves out the document's bleed is translated in every catalog,
