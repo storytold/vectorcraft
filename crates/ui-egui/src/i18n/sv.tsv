@@ -1504,6 +1504,7 @@ font-technology	Variable	Variabla
 	Show smooth color wheel	Visa steglöst färghjul
 	Show segmented color wheel	Visa segmenterat färghjul
 	Show color bars	Visa färgstaplar
+	Find the selected colors in the artwork	Hitta de markerade färgerna i teckningen
 	Harmony Sets	Harmoniuppsättningar
 	Height	Höjd
 	Height:	Höjd:
@@ -2660,6 +2661,8 @@ font-technology	Variable	Variabla
 	Insert Aki Left	Infoga aki till vänster
 	Insert Aki Right	Infoga aki till höger
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Justera vågrät position för diakritiska tecken
+	Adjust Vertical Diacritic Position	Justera lodrät position för diakritiska tecken
 	Character Direction	Teckenriktning
 	Digits	Siffror
 	Arabic	Arabiska
@@ -5456,6 +5459,8 @@ effect	Soft	Mjuk
 	Step up or down	Ett steg upp eller ned
 	Drag values or labels. Double-click a value to type.	Dra i värden eller etiketter. Dubbelklicka på ett värde för att skriva.
 	Drag rings to rotate. Shift snaps to 15°.	Dra i ringarna för att rotera. Shift fäster i steg om 15°.
+	Track cube	Rotationskub
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Dra i en sida, en kant eller ringen för att rotera. Shift roterar runt en skärmaxel.
 	Drag the light, or its rings. Shift snaps to 15°.	Dra i ljuset eller dess ringar. Shift fäster i steg om 15°.
 	Keep visible surfaces only when expanding	Behåll endast synliga ytor vid expandering
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Trimma dold geometri vid Expandera utseende. Live-förhandsgranskningen behåller hela ytan. Transparenta färger och ytor som överskrider synlighetsgränserna behåller alla sidoytor.
@@ -9265,4 +9270,21 @@ digits	Hindi	Hindi
 @msg	{path}: could not be read	{path}: kunde inte läsas
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixlar är för stort för JPEG (högst 65535 pixlar per sida): sänk upplösningen
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixlar är för stort för Targa (högst 65535 pixlar per sida): sänk upplösningen
+	Packaging Tools	Förpackningsverktyg
+	Fold Lines	Falslinjer
+	Make Cut Line	Gör till skärlinje
+	Make Crease Line	Gör till biglinje
+	Make Partial Cut Line	Gör till halvskärlinje
+	Make Perforation Line	Gör till perforeringslinje
+	Make Fold Line	Gör till falslinje
+	Role Swatches…	Färgrutor för linjetyper…
+	Role Swatches	Färgrutor för linjetyper
+	Role	Linjetyp
+	Cut Line	Skärlinje
+	Crease Line	Biglinje
+	Partial Cut Line	Halvskärlinje
+	Perforation Line	Perforeringslinje
+	No objects are selected.	Inga objekt är markerade.
+	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
+	Remove Fold Line Role	Ta bort linjetyp
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen

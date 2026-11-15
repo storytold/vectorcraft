@@ -1493,6 +1493,7 @@ font-technology	Variable	Променливи
 	Show smooth color wheel	Показване на плавно цветово колело
 	Show segmented color wheel	Показване на сегментирано цветово колело
 	Show color bars	Показване на цветни ленти
+	Find the selected colors in the artwork	Намиране на избраните цветове в илюстрацията
 	Harmony Sets	Набори от хармонии
 	Height	Височина
 	Height:	Височина:
@@ -2647,6 +2648,8 @@ font-technology	Variable	Променливи
 	Insert Aki Left	Вмъкване на аки отляво
 	Insert Aki Right	Вмъкване на аки отдясно
 	Tsume	Цуме
+	Adjust Horizontal Diacritic Position	Коригиране на хоризонталната позиция на диакритиците
+	Adjust Vertical Diacritic Position	Коригиране на вертикалната позиция на диакритиците
 	Character Direction	Посока на знаците
 	Digits	Цифри
 	Arabic	Арабски
@@ -5196,6 +5199,8 @@ effect	Soft	Меко
 	Step up or down	Стъпка нагоре или надолу
 	Drag values or labels. Double-click a value to type.	Плъзнете стойности или етикети. Кликнете двукратно върху стойност за въвеждане.
 	Drag rings to rotate. Shift snaps to 15°.	Плъзнете пръстените за завъртане. Shift прилепва към 15°.
+	Track cube	Куб за завъртане
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Плъзнете стена, ръб или пръстена за завъртане. Shift завърта около една ос на екрана.
 	Drag the light, or its rings. Shift snaps to 15°.	Плъзнете светлината или нейните пръстени. Shift прилепва към 15°.
 	Keep visible surfaces only when expanding	Запазване само на видимите повърхности при разширяване
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Изрязване на закритата геометрия при разширяване на оформлението. Живият преглед запазва цялата повърхност. Прозрачните бои и повърхности, надвишаващи границите на видимост, запазват всички лица.
@@ -7000,4 +7005,21 @@ breakText	Glyphs	Глифи
 	Nest Shapes…	Подреждане на форми…
 	Nest Shapes	Подреждане на форми
 	Roll	Ролка
+	Packaging Tools	Инструменти за опаковки
+	Fold Lines	Линии на сгъване
+	Make Cut Line	Направи линия за рязане
+	Make Crease Line	Направи линия за биговане
+	Make Partial Cut Line	Направи линия за частично рязане
+	Make Perforation Line	Направи линия за перфорация
+	Make Fold Line	Направи линия на сгъване
+	Role Swatches…	Образци за видовете линии…
+	Role Swatches	Образци за видовете линии
+	Role	Вид линия
+	Cut Line	Линия за рязане
+	Crease Line	Линия за биговане
+	Partial Cut Line	Линия за частично рязане
+	Perforation Line	Линия за перфорация
+	No objects are selected.	Няма избрани обекти.
+	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
+	Remove Fold Line Role	Премахни вида на линията
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

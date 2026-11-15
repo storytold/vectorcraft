@@ -1496,6 +1496,8 @@
 	Reset all Revolve settings to their defaults.	Stelt alle draai-instellingen opnieuw in op de standaardwaarden.
 	Drag values or labels. Double-click a value to type.	Sleep waarden of labels. Dubbelklik op een waarde om te typen.
 	Drag rings to rotate. Shift snaps to 15°.	Sleep de ringen om te roteren. Shift lijnt uit op 15°.
+	Track cube	Rotatiekubus
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Sleep een vlak, een rand of de ring om te roteren. Shift roteert om één schermas.
 	Drag the light, or its rings. Shift snaps to 15°.	Sleep het licht of de ringen ervan. Shift lijnt uit op 15°.
 lighting	Light	Licht
 	Keep visible surfaces only when expanding	Alleen zichtbare oppervlakken behouden bij het uitbreiden
@@ -2052,6 +2054,8 @@ lighting	Light	Licht
 	Insert Aki Left	Aki links invoegen
 	Insert Aki Right	Aki rechts invoegen
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Horizontale positie van diakritische tekens aanpassen
+	Adjust Vertical Diacritic Position	Verticale positie van diakritische tekens aanpassen
 	Character Direction	Tekenrichting
 	Digits	Cijfers
 	Arabic	Arabisch
@@ -3278,6 +3282,7 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vloeiend kleurenwiel tonen
 	Show segmented color wheel	Gesegmenteerd kleurenwiel tonen
 	Show color bars	Kleurbalken tonen
+	Find the selected colors in the artwork	De geselecteerde kleuren zoeken in de artwork
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
 	Limit to Library:	Beperken tot bibliotheek:
@@ -9629,3 +9634,20 @@ breakText	Glyphs	Glyphs
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor JPEG (maximaal 65535 pixels per zijde): verlaag de resolutie
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor Targa (maximaal 65535 pixels per zijde): verlaag de resolutie
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels is te groot voor PSD (maximaal {MAX_SIDE} pixels per zijde): verlaag de resolutie
+	Packaging Tools	Verpakkingsgereedschap
+	Fold Lines	Vouwlijnen
+	Make Cut Line	Snijlijn maken
+	Make Crease Line	Rillijn maken
+	Make Partial Cut Line	Halve snijlijn maken
+	Make Perforation Line	Perforatielijn maken
+	Make Fold Line	Vouwlijn maken
+	Role Swatches…	Stalen van lijnsoorten…
+	Role Swatches	Stalen van lijnsoorten
+	Role	Lijnsoort
+	Cut Line	Snijlijn
+	Crease Line	Rillijn
+	Partial Cut Line	Halve snijlijn
+	Perforation Line	Perforatielijn
+	No objects are selected.	Er zijn geen objecten geselecteerd.
+	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
+	Remove Fold Line Role	Lijnsoort verwijderen
