@@ -137,7 +137,11 @@ pub(super) fn lost_attributes(t: &TextObject) -> bool {
         || !t.fractional_widths
         || (matches!(t.kind, TextKind::Area { .. }) && t.area != AreaOptions::default())
         || (matches!(t.kind, TextKind::OnPath { .. })
-            && (t.path_effect != PathEffect::default() || t.path_align != PathAlign::default() || t.path_spacing != 0.0 || end_bracket(t)))
+            && (t.path_effect != PathEffect::default()
+                || t.path_align != PathAlign::default()
+                || t.path_spacing != 0.0
+                || end_bracket(t)
+                || t.kind.starts_before_path()))
         || several_paths(&t.kind)
 }
 
