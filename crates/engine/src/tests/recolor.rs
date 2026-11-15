@@ -804,6 +804,21 @@ fn a_null_in_group_colors_removes_that_swatch_and_the_ones_after_it_keep_their_p
     assert_eq!(link(&s, green), ("#00ff00".into(), Some(names[2].clone())), "art linked to a swatch that stays keeps its link");
 }
 
+/// "keep" in `groupColors` leaves the group's swatch at its place as it is, without Global Adjust,
+/// and past the group's swatches it adds none.
+#[test]
+fn keep_in_group_colors_leaves_that_swatch_as_it_is() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Brand", "colors": ["#2878f0", "#ff0000"]}));
+    let p = json!({"map": [], "group": "Brand", "groupColors": ["keep", "#00ff00", "keep"], "globalAdjust": {"brightness": -50}});
+    run(&mut s, "recolor.apply", p);
+    let g = &s.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Brand").unwrap().swatches;
+    let g: Vec<String> = g.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+    assert_eq!(g.len(), 2, "{g:?}");
+    assert_eq!(g[0], "#2878f0", "the kept swatch takes no Global Adjust");
+    assert_ne!(g[1], "#00ff00", "the other new color takes it");
+}
+
 #[test]
 fn recolor_of_everything_does_not_count_locked_art_whose_pattern_the_group_rewrite_recolors() {
     let mut s = session();

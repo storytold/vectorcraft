@@ -600,14 +600,16 @@ fn selection(d: &Dialog) -> Vec<usize> {
 
 /// `recolor.apply` parameters: the rows, method, library and the group with its new name and
 /// colors: the new colors of the rows with current colors, each in its swatch's place (`null`
-/// for a row whose new color was removed, which removes its swatch), then (with art) the group's
-/// colors no row took, then the colors added on the Edit tab.
+/// for a row whose new color was removed, which removes its swatch; `"keep"` for an excluded row,
+/// which leaves its swatch as it is), then (with art) the group's colors no row took, then the
+/// colors added on the Edit tab.
 fn apply_params(d: &Dialog) -> Value {
     let rs = rows(d);
+    let keep = json!("keep");
     let group = d.fields.get("group").and_then(Value::as_str).map(|g| {
         // A row made with New Row that holds no current colors gives the group no color; a color
         // added on the Edit tab (`added`) joins it after the others.
-        let took: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).map(|r| &r["to"]).collect();
+        let took: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).map(|r| if excluded(r) { &keep } else { &r["to"] }).collect();
         let assign = d.fields.get("__assign").and_then(Value::as_array).filter(|_| d.bool("__art"));
         let rest = assign.map_or(&[][..], |a| a.get(took.len()..).unwrap_or_default());
         let added = rs.iter().filter(|r| no_current(r) && is_added(r) && !excluded(r)).map(|r| &r["to"]).filter(|c| !c.is_null());
@@ -2146,6 +2148,37 @@ mod tests {
         rs[3]["exclude"] = json!(true);
         d.fields.insert("rows".into(), json!(rs));
         assert_eq!(apply_params(&d)["groupColors"], json!(["rgb 1 1 1", null, "rgb 3 3 3"]));
+    }
+
+    /// An excluded row with current colors keeps the group's swatch at its place as it is, even
+    /// after its new color was edited or removed, and with Global Adjust on.
+    #[test]
+    fn an_excluded_row_keeps_its_group_swatch() {
+        let mut d = Dialog::new(KIND, json!({"group": "G", "groupName": "G", "__art": true, "__assign": ["rgb 1 1 1", "rgb 2 2 2", "rgb 3 3 3"]}));
+        let rs = json!([
+            {"from": ["rgb 255 0 0"], "to": "rgb 7 7 7", "exclude": true},
+            {"from": ["rgb 0 0 255"], "to": null, "exclude": true},
+            {"from": ["rgb 0 255 0"], "to": "rgb 8 8 8"},
+        ]);
+        d.fields.insert("rows".into(), rs);
+        assert_eq!(apply_params(&d)["groupColors"], json!(["keep", "keep", "rgb 8 8 8"]));
+        // Without art the rows are the group's colors.
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "G", "colors": ["#2878f0", "#ff0000"]})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "G"})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        let mut rs = super::rows(&d);
+        rs[0]["to"] = json!("#00ff00");
+        rs[0]["exclude"] = json!(true);
+        rs[1]["to"] = json!("#0000ff");
+        d.fields.insert("rows".into(), json!(rs));
+        d.fields.insert("globalAdjust".into(), json!({"brightness": -50}));
+        confirm(&mut app, &d).unwrap();
+        let g = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "G").unwrap();
+        let hex: Vec<String> = g.swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+        assert_eq!(hex[0], "#2878f0", "{hex:?}");
+        assert_ne!(hex[1], "#ff0000", "{hex:?}");
     }
 
     #[test]

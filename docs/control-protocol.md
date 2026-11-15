@@ -295,7 +295,7 @@ on either wheel: `add` (the Add Color tool) adds a click as a new color, the hue
 color's brightness (the base color's when none is selected; the patch's color on the segmented wheel), in a new row with no current colors (`from: []`) and
 `added: true` that becomes the selected row; `remove` (the Remove Color tool) removes the color of the marker clicked. The base color can't be removed. A removed color's row is dropped, unless it
 has current colors and art or a group is open: it then keeps them with `to: null`, that art keeps its colors, and the
-group's swatch at that place is removed. A row with no current colors recolors no art; with a group, the new color of
+group's swatch at that place is removed, unless the row is excluded: an excluded row with current colors leaves the group's swatch at its place as it is. A row with no current colors recolors no art; with a group, the new color of
 one with `added: true` that is not excluded is added to the group after the group's other colors, and a row made with New Row adds none.
 The base color is the row with `base: true`, or the first color the Edit tab shows when no row has it; the harmony rules
 build from it, and selecting another color for the sliders leaves it the base. A right-click on a wheel marker or a

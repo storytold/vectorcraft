@@ -4518,7 +4518,10 @@ linked to the global or spot swatch its new color is that share of its tint; `ti
 moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
 step (art linked to its global swatches follows), and `recolor.apply` with `group` recolours the art and rewrites the
 group together. A `null` in `groupColors` removes the group's swatch at that place, and the swatches after it keep
-their colors and names; art linked to a removed global swatch keeps its color and is no longer linked to it. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
+their colors and names; art linked to a removed global swatch keeps its color and is no longer linked to it. A `"keep"`
+in `groupColors` leaves the group's swatch at that place as it is (`globalAdjust`, `limitTo` and `model` do not change
+it) and adds no swatch past the group's last one; the Recolor Artwork dialog sends it for an excluded row with current
+colors. A swatch at that place that is not a color is refused. Art linked to one of the group's global swatches stays linked when the swatch is rewritten with its
 row's new color (the default without `groupColors` when the rows follow the group's order), so a later `swatch.edit` still
 reaches it; the reply's `relinked` counts the other linked paints that took the group's new colors. Art in a row that
 is linked to a swatch rewritten with another color keeps its row's new color, even an unchanged one, and is no longer
