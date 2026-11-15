@@ -10909,7 +10909,7 @@ Object › Graph › Type… (`graph.setType` without params) and a double-click
 `graph.setType {}` returns, under the command's names for them. `legend`, `pieLegend`, `piePosition`, `pieSort`,
 `firstRowInFront`, `firstColumnInFront`, `filledLines` and `lineWidth` are held for every type, so a type picked in the
 dialog shows the options it uses. The Line Width field next to Draw Filled Lines is available only while Draw Filled
-Lines is on. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
+Lines and Connect Data Points are on. `overrideValues` and `rightOverrideValues` are Override Calculated Values of the left (or only)
 value axis and of the right one. While one is on, OK sends `axisMin`, `axisMax` and `ticks` (or `rightAxisMin`,
 `rightAxisMax` and `rightTicks`), and the dialog fills the ones the graph lacks with the values the axis would be
 calculated with for the type, value axis and Separate Scales the dialog shows.

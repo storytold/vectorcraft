@@ -1072,7 +1072,7 @@ mod tests {
     }
 
     /// Line Width next to Draw Filled Lines shows the graph's width, is available only while Draw
-    /// Filled Lines is on, and OK gives the graph the width typed.
+    /// Filled Lines and Connect Data Points are on, and OK gives the graph the width typed.
     #[test]
     fn line_width_goes_with_draw_filled_lines() {
         let mut app = app_with_graph("line");
