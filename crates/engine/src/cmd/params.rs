@@ -382,7 +382,8 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
         return Err(bad(id, format!("`version` must be 0 or {newest}")));
     }
     check_effect_color(id, effect, params)?;
-    check_effect_channel(id, effect, params)
+    check_effect_channel(id, effect, params)?;
+    check_effect_center(id, effect, params)
 }
 
 /// The type of the values in `params` of effect `effect`, as command `id` was given them: a key
@@ -498,6 +499,22 @@ pub(crate) fn check_effect_channel(id: &str, effect: &str, params: &Value) -> Re
         return Ok(());
     }
     Err(bad(id, format!("`{key}` must be one of {}", vectorcraft_render::effects::CHANNELS.join(", "))))
+}
+
+/// The Blur Center (`centerX`, `centerY`) in `params` of Radial Blur (`effect`), as command `id`
+/// was given it: a parameter error unless each is a number from 0 to 1 (a share of the object's
+/// bounds). `effect.apply` and `effect.setParams` run this themselves before they edit, as they
+/// run [`check_effect_channel`].
+pub(crate) fn check_effect_center(id: &str, effect: &str, params: &Value) -> Result<()> {
+    if effect != "blur.radial" {
+        return Ok(());
+    }
+    for key in ["centerX", "centerY"] {
+        if params.get(key).is_some_and(|v| !v.as_f64().is_some_and(|x| (0.0..=1.0).contains(&x))) {
+            return Err(bad(id, format!("`{key}` must be a number from 0 to 1")));
+        }
+    }
+    Ok(())
 }
 
 /// Commands whose params aren't checked yet (#1442): they read keys in ways the audit of the

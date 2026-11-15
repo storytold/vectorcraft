@@ -304,6 +304,20 @@ impl FontFace {
         self.gsub.get_or_init(|| GsubIndex::read(self))
     }
 
+    /// Does the face's `GSUB` table have feature `tag` with at least one lookup? At most
+    /// [`MAX_FEATURES`] feature records are read; false when the face has no `GSUB` table or it
+    /// cannot be read.
+    pub fn has_substitution_feature(&self, tag: [u8; 4]) -> bool {
+        let Some(font) = self.skrifa() else { return false };
+        let Some(features) = font.gsub().ok().and_then(|g| g.feature_list().ok()) else { return false };
+        features
+            .feature_records()
+            .iter()
+            .take(MAX_FEATURES)
+            .filter(|r| r.feature_tag().to_be_bytes() == tag)
+            .any(|r| r.feature(features.offset_data()).is_ok_and(|f| !f.lookup_list_indices().is_empty()))
+    }
+
     /// What the features `aalt`, `salt`, `ss01` to `ss20`, `swsh`, `cv01` to `cv99`, `hist`,
     /// `jalt`, `nalt`, `ornm` and `titl` of the face's `GSUB` table substitute for glyph `gid`, in
     /// that order of features and within a feature in lookup order: the glyph of each single
