@@ -835,11 +835,13 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
 const GLASS: &str = "distort.glass";
 /// Effect › Texture › Texturizer.
 const TEXTURIZER: &str = "texture.texturizer";
+/// Effect › Artistic › Rough Pastels.
+const ROUGH_PASTELS: &str = "artistic.roughPastels";
 
 /// Does effect `id` have Load Texture: a `textureImage` that `effect.apply` reads from an image
-/// file (Glass, Texturizer)?
+/// file (Glass, Texturizer, Rough Pastels)?
 pub(crate) fn texture_load_effect(id: &str) -> bool {
-    id == GLASS || id == TEXTURIZER
+    id == GLASS || id == TEXTURIZER || id == ROUGH_PASTELS
 }
 
 /// Glass's `textureImage` in `params` as Glass stores it: an image file (`{path}`, or `{name?,
