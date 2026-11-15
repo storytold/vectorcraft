@@ -120,6 +120,13 @@ impl StoredArt {
         doc.number_mounted_art();
     }
 
+    /// Sets the art on `doc` as [`Document::mounted_art`] with the ids it is stored with, the id
+    /// counter left as it is: what a save looks through, writing back only the brushes whose art it
+    /// changed ([`Self::write_back`]).
+    pub fn mount_as_stored(&self, doc: &mut Document) {
+        doc.mounted_art = self.entries.iter().flat_map(|e| e.art.iter().cloned()).collect();
+    }
+
     /// Takes [`Document::mounted_art`] off `doc` and writes each brush whose art changed (new ids
     /// included) back into its library entry: the entry at its index when that entry is as it was
     /// read or reads as the brush as it was apart from its name, else the first entry that reads as

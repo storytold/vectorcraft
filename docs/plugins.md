@@ -804,9 +804,10 @@ is a piece drawn by itself, in the order returned, with paints of its own:
   anchors, 256 fills and 256 strokes per piece, 256 stops per gradient), finite numbers in range with nothing clamped
   (color components, tints, offsets, opacities, midpoints 0.13 to 0.87, stops in order of `offset`, stroke
   widths 0 to 1,000 pt, miter limits 1 to 500), and every swatch a solid paint, gradient or stop links to and every
-  pattern named in the document. One fault refuses the whole result: that step of the stack draws its input as it was,
-  the effect record stays, and `plugin.info`'s `lastError` names the plug-in and the field, for example `Test Tone:
-  plug-in output: objects[1].strokes[0].width: …`.
+  pattern named in the document. A gradient stop's `plates` need that stop's own link to a spot swatch of the document;
+  the gradient's `swatch` does not link its stops. One fault refuses the whole result: that step of the stack draws
+  its input as it was, the effect record stays, and `plugin.info`'s `lastError` names the plug-in and the field, for
+  example `Test Tone: plug-in output: objects[1].strokes[0].width: …`.
 - The pieces are never written into the document while it is drawn, measured, previewed, saved or exported. PDF and SVG
   export draw them as the canvas does, from a copy of the document. Object › Expand Appearance writes each piece as an
   ordinary path or compound path with its fills and strokes, as one undo step. Object › Expand of gradient and pattern
