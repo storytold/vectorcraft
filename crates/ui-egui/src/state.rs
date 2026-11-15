@@ -424,10 +424,11 @@ pub struct UiState {
     /// is on screen. Not saved.
     #[serde(skip)]
     pub learn_locate: Option<crate::panels::learn::locate::Locate>,
-    /// The tutorials whose practice samples were opened and the tutorials finished, kept while the
-    /// app runs.
+    /// The tutorials whose practice samples were opened, kept while the app runs.
     #[serde(skip)]
     pub learn_practice: crate::panels::learn::Practice,
+    /// The Learn panel's tutorials finished and steps marked done, saved with the preferences.
+    pub learn_progress: crate::panels::learn::progress::Progress,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -787,6 +788,9 @@ pub struct UiState {
     /// dialog opens on them (#1152).
     #[serde(default)]
     pub offset_path: Value,
+    /// The Smart Punctuation fields confirmed last (null: never used): its dialog opens on them.
+    #[serde(default)]
+    pub smart_punctuation: Value,
     /// The Average & Join fields confirmed last (`to`; null: never used): its dialog opens on them.
     #[serde(default)]
     pub average_join: Value,
@@ -834,6 +838,14 @@ pub struct UiState {
     /// Search All text does.
     #[serde(skip)]
     pub layers_filter: crate::panels::layers::Filter,
+    /// The Swatches, Graphic Styles and Symbols panels' views, chosen in their panel menus
+    /// (`ui.panelView`). They are not saved and last the session.
+    #[serde(skip)]
+    pub swatches_view: crate::panels::swatches::View,
+    #[serde(skip)]
+    pub graphic_styles_view: crate::panels::graphic_styles::View,
+    #[serde(skip)]
+    pub symbols_view: crate::panels::symbols::View,
     /// The Image Trace panel's Advanced section is open (as it was last left).
     #[serde(default = "yes")]
     pub image_trace_advanced: bool,
@@ -1121,6 +1133,7 @@ impl Default for UiState {
             learn: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
+            learn_progress: Default::default(),
             control_bar: false,
             control_bar_bottom: false,
             control_bar_floating: false,
@@ -1224,6 +1237,7 @@ impl Default for UiState {
             dxf_options: Value::Null,
             eps_options: Value::Null,
             offset_path: Value::Null,
+            smart_punctuation: Value::Null,
             average_join: Value::Null,
             recolor_preserve: Value::Null,
             simplify: Value::Null,
@@ -1236,6 +1250,9 @@ impl Default for UiState {
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
             layers_filter: Default::default(),
+            swatches_view: Default::default(),
+            graphic_styles_view: Default::default(),
+            symbols_view: Default::default(),
             image_trace_advanced: true,
             image_trace_preview: true,
             glyphs_preview: 0,

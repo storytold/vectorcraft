@@ -55,12 +55,14 @@ mod pixels;
 pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
 pub mod placed_document;
 pub mod plugin_data;
+pub mod ppi;
 pub mod profiles;
 pub mod puppet;
 pub mod range;
 pub mod rastersettings;
 mod reach;
 pub mod recolor;
+pub mod resample;
 pub mod selection;
 pub mod separated;
 pub mod setup;
@@ -117,6 +119,8 @@ pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOption
 pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
 pub use text::GlyphChoice;
+pub use text::GlyphForm;
+pub use text::PATH_LEAD_MAX;
 pub use text::WarichuAlign;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
@@ -367,6 +371,12 @@ pub struct Document {
     /// saved.
     #[serde(skip)]
     inline_cycles: inline::InlineCycles,
+    /// Art kept elsewhere in the document's data (the art of the stored brushes, which
+    /// `vectorcraft-brush` reads from [`Self::unknown`]) while it is set here, each root with the
+    /// `owner` the Links panel names for it, so the stored-art lookups ([`StoredRoot::Mounted`])
+    /// find its objects too. Empty otherwise; never saved.
+    #[serde(skip)]
+    pub mounted_art: Vec<(Arc<Node>, serde_json::Value)>,
 }
 
 fn ppi72() -> f64 {

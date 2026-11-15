@@ -261,7 +261,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "type.convertListToText",
         "Convert to Text",
         "",
-        "{} Type › Bullets and Numbering › Convert to Text: the bullets and numbers of the selected type's list paragraphs (or of those the Type tool's selection touches) become characters of the text, followed by a tab, and the lists are turned off (text.convertListToText); the Type tool's anchor and caret move past the characters inserted at or before them, into the frame the caret's character moved to in threaded type",
+        "{} Type › Bullets and Numbering › Convert to Text: the bullets and numbers of the selected type's list paragraphs, in every frame of a threaded story (or of those the Type tool's selection touches), become characters of the text, followed by a tab, and the lists are turned off (text.convertListToText); the Type tool's anchor and caret move past the characters inserted at or before them, into the frame the caret's character moved to in threaded type",
     ),
     (
         "align.horizontalLeft",
@@ -667,7 +667,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "learn.list",
         "List Tutorials",
         "",
-        "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
+        "{} the Learn panel's skills in the order its Skills tab lists them, with the progress its rings, counts and check marks show: {skills: [{id, title, done: number of its tutorials finished, total: number of its tutorials, tutorials: [{id, title, steps: number of steps, finished: bool, completedSteps: [zero-based indexes of the steps marked done, every step once finished]}]}]}",
+    ),
+    (
+        "learn.tab",
+        "Show Learn Tab",
+        "",
+        "{tab: forYou|skills} show the Learn panel on its For you or Skills tab, as the tab buttons do; the Skills tab keeps the skill and tutorial it had open; a missing, non-string or unknown tab is an error and changes nothing; returns {tab, skill, tutorial}, with null for no skill or no tutorial open",
     ),
     (
         "learn.skills",
@@ -676,10 +682,22 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} show the Learn panel on its Skills tab with the list of skills, with no skill and no tutorial open, as Back to skills after a skill's last tutorial and the Quick skill guide card do; returns what learn.list returns",
     ),
     (
+        "learn.skill",
+        "Show Skill",
+        "",
+        "{skill: id (see learn.list)} show the Learn panel on its Skills tab with that skill's tutorials, as choosing the skill's row does; a missing, non-string or unknown id is an error and changes nothing; returns the skill as learn.list lists it: {id, title, done, total, tutorials: [{id, title, steps, finished, completedSteps}]}",
+    ),
+    (
         "learn.show",
         "Show Tutorial",
         "",
         "{tutorial: id (see learn.list)} show the Learn panel on its Skills tab with that tutorial's numbered steps, as choosing its skill and then the tutorial does; a missing, non-string or unknown id is an error and changes nothing; returns {skill, tutorial, title, steps: [text]}",
+    ),
+    (
+        "learn.back",
+        "Back One Level",
+        "",
+        "{} show the Learn panel and go up one level on its Skills tab, as its Back button does: from a tutorial's steps to its skill's tutorials, and from a skill's tutorials to the list of skills; on the list of skills or the For you tab the view stays as it is; returns {tab, skill, tutorial}, as learn.tab does",
     ),
     (
         "learn.locateTool",
@@ -694,16 +712,28 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{tutorial: id (see learn.list)} open that tutorial's practice sample as a new untitled document, which becomes the active one, and move the Learn view to the tutorial, as its View more button does; each call opens another copy and open documents stay as they are; a missing, non-string or unknown id is an error and changes nothing; returns {tutorial, index, title} of the new document",
     ),
     (
+        "learn.markStep",
+        "Mark Tutorial Step",
+        "",
+        "{tutorial: id (see learn.list), step: zero-based step number, complete?: bool} mark a step of a tutorial whose sample learn.openSample opened as done (true, omitted or null) or not done (false), as the check box before the step does; marking does not finish the tutorial; a missing, non-string or unknown id, a missing step or one the tutorial does not have, a complete that is not true or false, a tutorial whose sample was not opened, or a finished tutorial is an error and changes nothing; the preferences keep the marks; returns {tutorial, step, complete}",
+    ),
+    (
         "learn.finish",
         "Finish Tutorial",
         "",
-        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, as its Finish tutorial button does; finishing it again keeps one entry; a missing, non-string or unknown id, or a tutorial whose sample was not opened, is an error and changes nothing; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
+        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, with all its steps done, as its Finish tutorial button does; finishing it again keeps one entry, and needs no sample after a restart; a missing, non-string or unknown id, or a tutorial not finished whose sample was not opened, is an error and changes nothing; the preferences keep the tutorials finished; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
     ),
     (
         "learn.next",
         "Next Tutorial",
         "",
         "{tutorial: id (see learn.list)} show the Learn panel on the tutorial after a finished one in the same skill, as its Next Up button does, without opening a sample; a missing, non-string or unknown id, a tutorial not finished, or a skill's last tutorial is an error and changes nothing; returns {skill, tutorial, title} of the next tutorial",
+    ),
+    (
+        "learn.resetProgress",
+        "Reset Learn Progress",
+        "",
+        "{} clear the Learn panel's progress, every tutorial finished and every step marked done, as Reset progress under the list of skills does; open documents, opened practice samples and the Learn view stay as they are; returns what learn.list returns",
     ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (
@@ -771,7 +801,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Cmd+Shift+F6",
         "{} make the open document before the current one in tab order the current one, as a click on its tab does (before the first document it goes to the last, and from the Home screen to the last); each view window.newWindow opened is a step of its own; returns {index}, with `view` for a document with more than one view",
     ),
-    ("tool.select", "Select Tool", "", "{tool: id} (see tools)"),
+    ("tool.select", "Select Tool", "", "{tool: id} (see tools) → {tool}; a tool that cannot be chosen returns the error"),
     (
         "tool.setOption",
         "Tool Option",
@@ -782,7 +812,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::touch::TOGGLE_MODE,
         "Switch Selection and Drawing Modes",
         "",
-        "{} from the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool, choose the drawing tool chosen last in this window (none yet: the Pencil tool); from any other tool, choose the Selection tool, remembering the tool left as the drawing tool unless it is the Hand, Rotate View, Zoom or Print Tiling tool → {tool}. A two-finger tap on the canvas runs it in the Touch workspace (Enable Touch Gestures on)",
+        "{} from the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool, choose the drawing tool chosen last in this window (none yet: the Pencil tool); from any other tool, choose the Selection tool, remembering the tool left as the drawing tool unless it is the Hand, Rotate View, Zoom or Print Tiling tool → {tool}; a tool that cannot be chosen returns the error and leaves the drawing tool as it was. A two-finger tap on the canvas runs it in the Touch workspace (Enable Touch Gestures on)",
     ),
     (
         "effect.dialog",
@@ -801,7 +831,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.cropImage",
         "Crop Image",
         "",
-        "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect}), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box",
+        "{} show a crop box on the selected image (tool `cropImage`): it starts on the part over the image's artboard; drag its handles or inside it, then Enter or the Control bar's Apply crops the image to it (object.cropImage {rect}), Escape or Cancel leaves it as it is, both back to the Selection tool. tool.setOption {key: \"rect\", value: [x, y, width, height]} sets the box. → {tool}; a tool that cannot be chosen returns the error",
     ),
     ("effect.applyLast", "Apply Last Effect", "Cmd+Shift+E", "{}"),
     (
@@ -1059,6 +1089,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{objects?: [paths|shapes|text|images|effects|groups|linkedFiles|guides], layers?: [locked|hidden]} set the Layers panel's Filter (By Object, By Layer): a row stays when it is of a kind in `objects` and in a state in `layers` (its own lock or eye; an empty list takes every row), or when a row inside it stays; Search All narrows the rows further. A key left out keeps its list. The filter lasts the session and does not change the document, its open rows or the selection → {objects, layers}",
     ),
     (
+        "ui.panelView",
+        "Set Panel View",
+        "",
+        "{panel: swatches|graphicStyles|symbols, view?} set a panel's view, as the view items of its panel menu do: for swatches smallThumb|mediumThumb (the default)|largeThumb|smallList|largeList, for graphicStyles and symbols thumbnail (the default)|smallList|largeList; without `view`, answer the current one. The view lasts the session and does not change the document; an unknown panel or view is an error and changes nothing → {panel, view}",
+    ),
+    (
         "ui.tileEdgeColor",
         "Tile Edge Color…",
         "",
@@ -1223,7 +1259,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.svgFilterDialog",
         "Apply SVG Filter…",
         "",
-        "{index?, item?} open Apply SVG Filter for the active document (dialog `svgFilter`, fields `selected`: a filter's name, `code`: the code being edited, `editing`: \"\", \"new\" or the name of the filter being edited; with index, for the applied svg.filter effect at index of item, as effect.dialog opens it): its list shows svgFilter.list's filters; OK runs svgFilter.apply with selected, or effect.setParams on the applied effect; New and Edit open the code, Save runs svgFilter.define, Delete runs svgFilter.delete and Import… svgFilter.import with a picked SVG file",
+        "{index?, item?} open Apply SVG Filter for the active document (dialog `svgFilter`, fields `selected`: a filter's name, `code`: the code being edited, `editing`: \"\", \"new\" or the name of the filter being edited; with index, for the applied svg.filter effect at index of item, as effect.dialog opens it): its list shows svgFilter.list's defaults (the document's filter of a default's name in its place) and then the document's other filters; OK runs svgFilter.apply with selected, and with index and item for the applied effect; New and Edit open the code, Save runs svgFilter.define (replace: the filter edited, a default included), Delete runs svgFilter.delete (off for a default the document holds no copy of) and Import… svgFilter.import with a picked SVG file",
     ),
     (
         "ui.importSvgFilter",
@@ -1425,6 +1461,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Show in Folder",
         "",
         "{id?} show the file of linked image `id` (default: the selected linked image) in the system's file manager → {path}",
+    ),
+    (
+        "links.copyInfo",
+        "Copy Info",
+        "",
+        "{ids?} copy the file names of images and placed documents `ids` (default: the selected ones and the rows picked in the Links panel, in links.list order) to the clipboard, one per line in that order; an embedded image gives the name its Links panel row shows (Links panel menu) → {text, names}",
     ),
     (
         "ui.placementOptionsDialog",
@@ -1696,7 +1738,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::scripts_menu::COMMAND,
         "Run Script",
         "",
-        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (the script is checked again, then script.run runs it by its path, so its #include lines and $.evalFile read beside it), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
+        "{path: a script's path as script.listInstalled gives it} run a script of the Scripts folder, as its File › Scripts item does (script.run with installed reads the file once, checks it again and runs that text, so its #include lines and $.evalFile read in the folder that read found), without the warning Other Script… shows; a file that is no longer a .js or .jsx file in the folder or a subfolder at most 4 levels below it, or that is or lies behind a link or is hidden, is not run, and the menu's listing is read again",
     ),
     (
         "ui.checkScript",

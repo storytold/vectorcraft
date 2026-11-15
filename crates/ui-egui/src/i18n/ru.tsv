@@ -16,6 +16,7 @@
 	Edge Brightness	Яркость края
 	Smoothness	Сглаживание
 	Radial Blur…	Радиальное размытие…
+	Blur Center	Центр размытия
 	Smart Blur…	Умное размытие…
 	Sharpen	Резкость
 	Unsharp Mask…	Нерезкая маска…
@@ -643,6 +644,7 @@ font-technology	Variable	Вариативные
 	Copy All Styles	Копировать все стили
 	Copy Color Value (Hex)	Копировать значение цвета (hex)
 	Copy Fonts Used in the Document	Копировать шрифты, использованные в документе
+	Copy Info	Копировать сведения
 	Copy Links	Копировать связи
 	Copy Selected Style	Копировать выбранный стиль
 	Copy to User Defined	Копировать в «Пользовательский»
@@ -902,6 +904,9 @@ font-technology	Variable	Вариативные
 	The selected character's font is not available.	Шрифт выделенного символа недоступен.
 	No alternates for the selected character.	У выделенного символа нет альтернатив.
 	Double-click to replace	Дважды щёлкните для замены
+	Click to replace	Щёлкните для замены
+	Show all alternates in the Glyphs panel	Показать все альтернативы в панели «Глифы»
+	Show Character Alternates	Показывать альтернативы символа
 	Select one character with the Type tool first.	Сначала выделите один символ инструментом «Текст».
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — глиф шрифта {font}, а не шрифта выделенного текста ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} относится к символу {base} (U+{base_code}) {place}; выделен символ {sel} (U+{code}).
@@ -1348,6 +1353,7 @@ file-filter	Templates	Шаблоны
 	Format	Формат
 	Format Options	Параметры формата
 	Format Settings	Параметры формата
+	Format Settings…	Параметры формата…
 	Format:	Формат:
 	Formats:	Форматы:
 	Fractional Widths	Дробные ширины
@@ -1709,6 +1715,7 @@ file-filter	Templates	Шаблоны
 	Images:	Изображения:
 	Import Keyboard Shortcuts…	Импортировать сочетания клавиш…
 	Import PDF	Импортировать PDF
+	Import PDF pages as links	Импортировать страницы PDF как связи
 	Import PDF Presets	Импортировать наборы PDF
 	Import Perspective Grid Presets	Импортировать наборы сетки перспективы
 	Import Print Presets	Импортировать наборы печати
@@ -2693,6 +2700,8 @@ mark-style	Japanese	Японский
 	Proof Setup	Настройка цветопробы
 	Properties	Свойства
 	Proportional Metrics	Пропорциональные метрики
+	H or V Style	Горизонтальный или вертикальный стиль
+	Roman Italics	Римский курсив
 	Insert Aki Left	Вставить аки слева
 	Insert Aki Right	Вставить аки справа
 	Tsume	Цумэ
@@ -3443,6 +3452,7 @@ digits	Malayalam	Малаялам
 	Sixth Space	Шестая шпация
 	Size	Размер
 	Size Tile to Art	Подогнать плитку по рисунку
+	Move Tile with Art	Перемещать плитку вместе с рисунком
 	Size/Leading	Размер/интерлиньяж
 	Size:	Размер:
 	Ridges per segment:	Гребней на сегмент:
@@ -3473,6 +3483,18 @@ digits	Malayalam	Малаялам
 	Smart Guides (View → Smart Guides)	Умные направляющие (Просмотр → Умные направляющие)
 	Smart Guides (⌘U)	Умные направляющие (⌘U)
 	Smart Punctuation…	Умная пунктуация…
+	Smart Punctuation	Умная пунктуация
+	ff, fi, ffi Ligatures	Лигатуры ff, fi, ffi
+	ff, fl, ffl Ligatures	Лигатуры ff, fl, ffl
+	Smart Quotes	Умные кавычки
+	Smart Spaces	Умные пробелы
+	En, Em Dashes	Средние и длинные тире
+	Ellipses	Многоточия
+	Expert Fractions	Экспертные дроби
+	Replace In	Заменить в
+	Selected Text Only	Только выделенный текст
+	Entire Document	Весь документ
+	Report Results	Отчёт о результатах
 	Smooth	Сгладить
 	Corner	Угол
 	Relative	Относительно
@@ -3503,6 +3525,7 @@ digits	Malayalam	Малаялам
 	Solid	Сплошной
 	Sort by Kind	Сортировать по типу
 	Sort by Name	Сортировать по имени
+	Sort by Size	Сортировать по размеру
 	Sort by Status	Сортировать по состоянию
 	Source code on GitHub	Исходный код на GitHub
 	Source Sans 3	Source Sans 3
@@ -4057,6 +4080,9 @@ digits	Malayalam	Малаялам
 	Working CMYK	Рабочий CMYK
 	Working CMYK (don't tag)	Рабочий CMYK (без пометки)
 	Working RGB (don't tag)	Рабочий RGB (без пометки)
+	Don't Color Manage This Document	Не управлять цветом этого документа
+	Working RGB: {name}	Рабочий RGB: {name}
+	Working CMYK: {name}	Рабочий CMYK: {name}
 	Workspace	Рабочая среда
 	Workspace {i}	Рабочая среда {i}
 	Wrinkle Tool	Инструмент «Морщины»
@@ -4411,6 +4437,7 @@ axis	Both	Оба
 @msg	there is no script engine named {name}	движка скриптов с именем {name} нет
 @msg	Running a script	Выполняется скрипт
 @msg	Copied the script report	Отчёт о сценарии скопирован
+@msg	Copied the link info	Сведения о связи скопированы
 @msg	Corners edits the corners of a path	«Углы» редактирует углы контура
 @msg	Couldn't copy to the system clipboard: {e}	Не удалось скопировать в системный буфер обмена: {e}
 @msg	Couldn't open {name}: {e}	Не удалось открыть {name}: {e}
@@ -4883,6 +4910,8 @@ axis	Both	Оба
 @msg	result would exceed the canvas (coordinates out of range)	результат превысил бы холст (координаты вне диапазона)
 @msg	objects can't be nested more than 32 deep	объекты нельзя вкладывать глубже 32 уровней
 @msg	the SVG's elements are nested more than {0} deep	элементы SVG вложены глубже {0} уровней
+@msg	the SVG's style sheets take too long to match	сопоставление таблиц стилей SVG занимает слишком много времени
+@msg	the SVG's styles expand to more than {0} MB	после развёртывания стили SVG занимают более {0} МБ
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale должен быть числом от {_1} до {_2}, а не {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale должен быть числом от {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	выделите (или укажите как объект) объекты, оформление которых не является основным
@@ -5225,6 +5254,7 @@ axis	Both	Оба
 @msg	every numbered name for {name} is taken in the document's folder	все нумерованные имена для {name} уже заняты в папке документа
 @msg	No linked files to look for	Нет связанных файлов для поиска
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Связь находится внутри символа, дизайна диаграммы, узора или непрозрачной маски и не имеет места на холсте
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	графика дизайна диаграммы в ряду данных диаграммы перерисовывается по дизайну: чтобы изменить её, отредактируйте дизайн
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы
@@ -5272,6 +5302,7 @@ axis	Both	Оба
 @msg	automation filesystem access is not granted: write authority is absent: {path}	у автоматизации нет доступа к файловой системе: нет права на запись: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	путь автоматизации отклонён: вне корневой папки для чтения {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	путь автоматизации отклонён: вне корневых папок для чтения {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	связанный файл JavaScript находится вне корневых папок для чтения
 @msg	automation path rejected: outside the write root {root}: {path}	путь автоматизации отклонён: вне корневой папки для записи {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	путь автоматизации отклонён: вне корневых папок для записи {roots}: {path}
 @msg	automation path rejected: path is empty	путь автоматизации отклонён: путь пуст
@@ -5679,6 +5710,9 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
+	Move Light to Back	Переместить свет назад
+	Move Light to Front	Переместить свет вперёд
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Перетащите источник света, чтобы переместить его. Клавиши со стрелками перемещают выбранный источник; с Shift — шагами по 15°.
 	Shadows	Тени
 	Distance from Object	Расстояние от объекта
 	Shadow Bounds	Границы тени
@@ -6285,7 +6319,7 @@ axis	Y Axis	Ось Y
 @plural	Result: {n}|Results: {n}	Результат: {n}|Результаты: {n}|Результаты: {n}
 @msg	select one object	выберите один объект
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальное редактирование работает с контурами, составными контурами, экземплярами символов и их группами
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	похожие объекты не найдены (повёрнутые или отражённые копии не учитываются); измените параметры глобального редактирования и повторите попытку
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	похожие объекты не найдены (отражённые копии не учитываются); измените параметры глобального редактирования и повторите попытку
 @msg	Global Edit is off	Глобальное редактирование выключено
 @msg	only an object of the Global Edit other than the one it started from can be left out	исключить из глобального редактирования можно только объект, отличный от того, с которого оно началось
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all или диапазон, например 1, 3-5, а не {v}
@@ -6399,6 +6433,13 @@ axis	Y Axis	Ось Y
 	Graphite Pencil	Графитный карандаш
 	Wax Crayon	Восковой мелок
 	Charcoal Dust	Угольная пыль
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технические схемы
+	Circuit Trace	Дорожка схемы
+	Bus Lines	Линии шины
+	Terminal Nodes	Контактные узлы
+
 	Notched Ribbon	Лента с насечками
 	Double Line	Двойная линия
 	Wave	Волна
@@ -7556,11 +7597,20 @@ shape	Open	Открытый
 	Open Tutorial Sample	Открыть пример урока
 	Finish Tutorial	Завершить урок
 	Next Tutorial	Следующий урок
+	Show Learn Tab	Показать вкладку панели «Обучение»
+	Show Skill	Показать навык
+	Back One Level	На уровень назад
 	Back to Skills	Назад к навыкам
 @msg	tutorial `{id}` has no practice sample	у урока `{id}` нет учебного примера
 @msg	open the practice sample of `{id}` first (see learn.openSample)	сначала откройте учебный пример урока `{id}` (см. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	сначала завершите `{id}` (см. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` является последним уроком своего навыка
+	Reset progress	Сбросить прогресс
+	Mark Tutorial Step	Отметить шаг урока
+	Reset Learn Progress	Сбросить прогресс обучения
+@msg	missing `step` (see learn.show)	отсутствует `step` (см. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` должен быть номером шага от 0 до {last}
+@msg	`{id}` is finished (see learn.resetProgress)	урок `{id}` завершён (см. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновить отложенные эффекты
@@ -7590,6 +7640,9 @@ shape	Open	Открытый
 	Grommets	Люверсы
 	Grommet Inset	Отступ люверсов от края
 	Diameter	Диаметр
+	Nest Shapes…	Раскладка фигур…
+	Nest Shapes	Раскладка фигур
+	Roll	Рулон
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-эффектам нужны конечные координаты в пределах 100 миллионов пунктов

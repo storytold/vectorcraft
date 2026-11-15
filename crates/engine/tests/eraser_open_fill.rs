@@ -2,7 +2,7 @@
 // Integration tests may unwrap and panic on failure (AGENTS.md).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::{FillRule, PathData, Point};
@@ -30,8 +30,18 @@ fn paths(s: &Session) -> Vec<PathData> {
     paths
 }
 
-#[test]
-fn eraser_preserves_the_fill_of_an_open_rectangle() {
+// The varied setting necessarily selects erase_varied, while a circular nib keeps the
+// same deterministic swept area as the fixed tip. No random input or device is involved.
+fn erase(s: &mut Session, mut params: Value, varied: bool) -> Value {
+    if varied {
+        params["angleMode"] = json!("pressure");
+        params["angleVariation"] = json!(30);
+        params["roundness"] = json!(100);
+    }
+    s.execute("path.eraseRegion", &params).unwrap()
+}
+
+fn eraser_preserves_the_fill_of_an_open_rectangle_case(varied: bool) {
     let samples = [(110.0, 125.0), (190.0, 125.0), (110.0, 175.0), (190.0, 175.0)];
     let render = |s: &Session| {
         vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default())
@@ -59,7 +69,7 @@ fn eraser_preserves_the_fill_of_an_open_rectangle() {
         }
 
         // The explicit command fixes the tip at 10 pt; its round ends are outside the rectangle.
-        s.execute("path.eraseRegion", &json!({"points": [[50, 150], [250, 150]], "size": 10})).unwrap();
+        erase(&mut s, json!({"points": [[50, 150], [250, 150]], "size": 10}), varied);
         let remaining: Vec<PathData> = paths(&s);
         let filled =
             |x, y| remaining.iter().any(|path| vectorcraft_geom::hit::fill_contains(&path.to_bezpath(), FillRule::NonZero, Point::new(x, y)));
@@ -76,7 +86,16 @@ fn eraser_preserves_the_fill_of_an_open_rectangle() {
 }
 
 #[test]
-fn eraser_keeps_open_compound_holes_with_both_fill_rules() {
+fn eraser_preserves_the_fill_of_an_open_rectangle() {
+    eraser_preserves_the_fill_of_an_open_rectangle_case(false);
+}
+
+#[test]
+fn eraser_preserves_the_fill_of_an_open_rectangle_varied_tip() {
+    eraser_preserves_the_fill_of_an_open_rectangle_case(true);
+}
+
+fn eraser_keeps_open_compound_holes_with_both_fill_rules_case(varied: bool) {
     for rule in ["nonZero", "evenOdd"] {
         let mut s = session();
         let outer = NodeId(
@@ -120,12 +139,12 @@ fn eraser_keeps_open_compound_holes_with_both_fill_rules() {
         assert_eq!(before.pixel(200, 200)[3], 0, "{rule}: the compound hole is empty before Eraser");
         let before_miss = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
         let miss_history = s.doc().unwrap().history.undo.len();
-        let miss = s.execute("path.eraseRegion", &json!({"points": [[200, 200]], "size": 10})).unwrap();
+        let miss = erase(&mut s, json!({"points": [[200, 200]], "size": 10}), varied);
         assert_eq!(miss["ids"], json!([]), "{rule}: a stroke wholly inside the hole misses");
         assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before_miss);
         assert_eq!(s.doc().unwrap().history.undo.len(), miss_history, "{rule}: the hole miss adds no history");
 
-        s.execute("path.eraseRegion", &json!({"points": [[80, 120], [320, 120]], "size": 10})).unwrap();
+        erase(&mut s, json!({"points": [[80, 120], [320, 120]], "size": 10}), varied);
         let after =
             vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default());
         assert_eq!(after.pixel(120, 120)[3], 0, "{rule}: swept band is empty");
@@ -135,7 +154,16 @@ fn eraser_keeps_open_compound_holes_with_both_fill_rules() {
 }
 
 #[test]
-fn eraser_removes_only_the_swept_strip_from_a_zero_signed_area_open_bowtie() {
+fn eraser_keeps_open_compound_holes_with_both_fill_rules() {
+    eraser_keeps_open_compound_holes_with_both_fill_rules_case(false);
+}
+
+#[test]
+fn eraser_keeps_open_compound_holes_with_both_fill_rules_varied_tip() {
+    eraser_keeps_open_compound_holes_with_both_fill_rules_case(true);
+}
+
+fn eraser_removes_only_the_swept_strip_from_a_zero_signed_area_open_bowtie_case(varied: bool) {
     let mut s = session();
     let id = NodeId(
         s.execute(
@@ -163,7 +191,7 @@ fn eraser_removes_only_the_swept_strip_from_a_zero_signed_area_open_bowtie() {
         assert!(before.pixel(150, y)[3] > 240, "original lobe pixel y={y}");
     }
 
-    s.execute("path.eraseRegion", &json!({"points": [[50, 125], [250, 125]], "size": 10})).unwrap();
+    erase(&mut s, json!({"points": [[50, 125], [250, 125]], "size": 10}), varied);
     let after = render(&s);
     let after_area: f64 = after.pixels.as_chunks::<4>().0.iter().map(|rgba| f64::from(rgba[3]) / 255.0).sum();
     assert!((after_area - 4500.0).abs() < 2.0, "only the 500 px² sweep strip is removed: {after_area}");
@@ -173,4 +201,58 @@ fn eraser_removes_only_the_swept_strip_from_a_zero_signed_area_open_bowtie() {
     assert_eq!(after.pixel(150, 125)[3], 0, "the swept strip is empty");
     let area: f64 = paths(&s).iter().map(|path| vectorcraft_pathops::area(path, FillRule::NonZero)).sum();
     assert!((area - 4500.0).abs() < 1.0, "retained bowtie area {area}");
+}
+
+#[test]
+fn eraser_removes_only_the_swept_strip_from_a_zero_signed_area_open_bowtie() {
+    eraser_removes_only_the_swept_strip_from_a_zero_signed_area_open_bowtie_case(false);
+}
+
+#[test]
+fn eraser_removes_only_the_swept_strip_from_a_zero_signed_area_open_bowtie_varied_tip() {
+    eraser_removes_only_the_swept_strip_from_a_zero_signed_area_open_bowtie_case(true);
+}
+
+#[test]
+fn eraser_keeps_painted_stroke_open_paths_on_the_outline_route() {
+    for varied in [false, true] {
+        let mut s = session();
+        let id = NodeId(
+            s.execute(
+                "path.create",
+                &json!({"anchors": [
+                    {"x": 100, "y": 100}, {"x": 200, "y": 100},
+                    {"x": 200, "y": 200}, {"x": 100, "y": 200}
+                ]}),
+            )
+            .unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#000000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#000000"})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [id.0], "weight": 4})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        assert!(!path(&s, id).is_closed());
+        let appearance = &s.doc().unwrap().doc.node(id).unwrap().appearance;
+        assert_eq!(appearance.stroke_width(), 4.0);
+        assert!(!appearance.stroke_paint().is_none());
+        let before = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+        let history = s.doc().unwrap().history.undo.len();
+        let selection = s.doc().unwrap().selection.clone();
+        let before_image =
+            vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default());
+        assert_eq!(before_image.pixel(150, 150), [0, 0, 0, 255], "the interior really has visible fill");
+        assert!(before_image.pixel(150, 100)[3] > 240, "the open path has painted visible stroke");
+        // This sweep lies inside the fill, at least 30 pt from any painted outline.
+        // Fill-only scope must not extend to this painted-stroke path or wrap it.
+        let miss = erase(&mut s, json!({"points": [[130, 150], [170, 150]], "size": 10}), varied);
+        assert_eq!(miss["ids"], json!([]), "varied={varied}: the existing outline route misses");
+        assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before, "varied={varied}: no replacement or wrapper");
+        assert_eq!(s.doc().unwrap().history.undo.len(), history);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        let after_image =
+            vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default());
+        assert_eq!(after_image.pixels, before_image.pixels);
+    }
 }

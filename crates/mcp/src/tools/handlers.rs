@@ -1,5 +1,6 @@
 use super::dispatch::trace_views;
 use super::{Backend, Map, ToolResult, Value, json};
+use vectorcraft_doc::resample::{Resample, fitted};
 
 // ---------- implementation ----------
 
@@ -521,7 +522,7 @@ fn fit_capture(png: Vec<u8>, max: Option<u32>, info: &mut Value) -> Result<Vec<u
         info["height"] = json!(img.height());
         return Ok(png);
     }
-    let img = img.thumbnail(max, max);
+    let img = fitted(img, max, max, Resample::Average);
     info["width"] = json!(img.width());
     info["height"] = json!(img.height());
     let mut out = std::io::Cursor::new(Vec::new());

@@ -205,7 +205,7 @@ pub fn tool_definitions() -> Vec<Value> {
                         "type": "array",
                         "minItems": 1,
                         "items": obj(json!({
-                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick"]},
+                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick", "tripleclick"]},
                             "x": num("Document x (pt)"),
                             "y": num("Document y (pt)"),
                             "mods": mods_schema(),
@@ -465,7 +465,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "transform",
             "Transform",
-            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. `origin` [x,y] defaults to the selection centre; `copy` transforms a copy.",
+            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. Scale and reflect act along the selection's bounding box, turned with rotated objects until Reset Bounding Box. `origin` [x,y] defaults to the selection centre; `copy` transforms a copy.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
@@ -507,7 +507,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "text_wrap",
             "Text wrap",
-            "Make the selected (or `ids`) objects wrap objects: area type below them in the same layer flows around them (offset in pt, invert = flow inside). `release: true` removes the wrap.",
+            "Make the selected (or `ids`) objects wrap objects: area type below them in the same layer flows around them (offset in pt, invert = flow inside). `release: true` removes the wrap. An offset outside -1000 to 1000 or not a number, or an invert or release that is not true or false, is an error and changes nothing.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
