@@ -2,7 +2,7 @@ use vectorcraft_doc::graph::graph_art_without_type as art_bounds;
 
 use super::axis::{MAX_TICK_MARKS, count_given, one_line};
 use super::data::apply_data;
-use super::generate::{children_bounds, generate};
+use super::generate::{calculated_axes, children_bounds, generate};
 use super::series::{picked_series, reselect_series};
 use super::{
     Affine, Document, EngineError, GraphKind, GraphSpec, Node, NodeId, Rect, Result, Session, TickLength, Value, ValueAxisSide, bad, f64_req, json,
@@ -167,6 +167,28 @@ pub(super) fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
 
 pub(super) fn spec_of(s: &Session, id: NodeId) -> Result<GraphSpec> {
     s.doc()?.doc.node(id).and_then(|n| n.extras().graph.as_deref().cloned()).ok_or(EngineError::NoNode(id))
+}
+
+/// What `graph.setType` without `id` or `seriesIndexes` acts on, for the Graph Type dialog.
+pub struct GraphTypeSubject {
+    /// The selected graph, or the graph that holds the selection.
+    pub id: NodeId,
+    /// The series picked in it with Group Selection, in order; empty when the type goes to the whole graph.
+    pub series: Vec<usize>,
+    /// The least value, the greatest and the number of divisions each value axis is drawn with while its tick values
+    /// are calculated: the left (or only) axis, then the right axis' own scale (the left one's without Separate Scales).
+    pub calculated: [(f64, f64, usize); 2],
+}
+
+/// The graph and series that `graph.setType {}` reads its options from, as [`GraphTypeSubject`]. An error without a
+/// selected graph, as the command gives.
+pub fn graph_type_subject(s: &Session) -> Result<GraphTypeSubject> {
+    const C: &str = "graph.setType";
+    let p = json!({});
+    let id = target(s, &p, C)?;
+    let spec = spec_of(s, id)?;
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
+    Ok(GraphTypeSubject { id, series: picked_series(s, &p, id, count, C)?, calculated: calculated_axes(&spec) })
 }
 
 fn query_type_options(spec: &GraphSpec, count: usize, picked: &[usize]) -> Value {

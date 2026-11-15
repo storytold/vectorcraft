@@ -1353,6 +1353,40 @@ font-technology	Variable	Değişken
 	Graph	Grafik
 	Graph Data	Grafik Verileri
 	Graph Type	Grafik Türü
+	Graph Options	Grafik Seçenekleri
+	Left Axis	Sol Eksen
+	Right Axis	Sağ Eksen
+	Category Axis	Kategori Ekseni
+	Separate Scales	Ayrı Ölçekler
+	Add Drop Shadow	Alt Gölge Ekle
+	Add Legend Across Top	Göstergeyi Üste Ekle
+	First Row in Front	İlk Satır Önde
+	First Column in Front	İlk Sütun Önde
+	Legend	Gösterge
+	Column Width	Sütun Genişliği
+	Bar Width	Çubuk Genişliği
+	Cluster Width	Küme Genişliği
+	Mark Data Points	Veri Noktalarını İşaretle
+	Connect Data Points	Veri Noktalarını Bağla
+	Edge-to-Edge Lines	Kenardan Kenara Çizgiler
+	Draw Filled Lines	Dolgulu Çizgiler Çiz
+	Tick Values	Onay İşareti Değerleri
+	Override Calculated Values	Hesaplanan Değerleri Geçersiz Kıl
+	Divisions	Bölümler
+	Tick Marks	Ölçek İşaretleri
+	Tick Marks per Division	Bölüm Başına Ölçek İşareti
+	Draw Tick Marks Between Labels	Etiketler Arasına Ölçek İşaretleri Çiz
+	Add Labels	Etiket Ekle
+	Maximum must be more than Minimum.	En çok, en azdan büyük olmalıdır.
+	Column Graph	Sütun Grafik
+	Stacked Column Graph	Yığılmış Sütun Grafik
+	Bar Graph	Çubuk Grafik
+	Stacked Bar Graph	Yığılmış Çubuk Grafik
+	Line Graph	Çizgi Grafik
+	Area Graph	Alan Grafik
+	Scatter Graph	Dağılım Grafik
+	Pie Graph	Pasta Grafik
+	Radar Graph	Radar Grafik
 	Graph Design	Grafik Tasarımı
 	Graph Marker	Grafik İşaretleyici
 	New Design	Yeni Tasarım
@@ -1462,6 +1496,7 @@ font-technology	Variable	Değişken
 	Highlight anchors on mouse over	Fareyle üzerine gelindiğinde bağlantı noktalarını vurgulayın
 	Highlight Rows	Satırları Vurgula
 	Highlight Variable	Değişkeni Vurgula
+	Sort Variables	Değişkenleri Sırala
 	Highlight Substituted Fonts	Değiştirilen Yazı Tiplerini Vurgula
 	Highlight Substituted Glyphs	Değiştirilen Glifleri Vurgula
 	History	Geçmiş
@@ -1849,6 +1884,7 @@ font-technology	Variable	Değişken
 	Menu Dialog	Menü İletişim Kutusu
 	Merge	Birleştir
 	Merge colors into one row	Renkleri tek satırda birleştirme
+	New Row	Yeni satır
 	Merge Graphic Styles	Grafik Stillerini Birleştir
 	Merge Graphic Styles…	Grafik Stillerini Birleştir…
 	Merge Layers	Katmanları Birleştir

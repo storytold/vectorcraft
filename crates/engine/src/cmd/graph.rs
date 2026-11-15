@@ -40,7 +40,9 @@ pub use commands::specs;
 pub(crate) use data::{apply_csv, parse_csv};
 #[cfg(test)]
 use data::{fmt_value, to_csv};
+pub use edit::{GraphTypeSubject, graph_type_subject};
 pub(crate) use edit::{graphs_holding, keep_placed};
+pub use generate::calculated_axes;
 #[cfg(test)]
 use generate::generate;
 #[cfg(test)]

@@ -1441,6 +1441,40 @@ file-filter	Templates	Modelli
 	Graph	Grafico
 	Graph Data	Dati grafico
 	Graph Type	Tipo di grafico
+	Graph Options	Opzioni grafico
+	Left Axis	Asse sinistro
+	Right Axis	Asse destro
+	Category Axis	Asse delle categorie
+	Separate Scales	Scale separate
+	Add Drop Shadow	Aggiungi ombra esterna
+	Add Legend Across Top	Aggiungi legenda in alto
+	First Row in Front	Prima riga in primo piano
+	First Column in Front	Prima colonna in primo piano
+	Legend	Legenda
+	Column Width	Larghezza colonne
+	Bar Width	Larghezza barre
+	Cluster Width	Larghezza gruppi
+	Mark Data Points	Contrassegna punti dati
+	Connect Data Points	Collega punti dati
+	Edge-to-Edge Lines	Linee da bordo a bordo
+	Draw Filled Lines	Disegna linee piene
+	Tick Values	Valori delle tacche
+	Override Calculated Values	Sostituisci valori calcolati
+	Divisions	Divisioni
+	Tick Marks	Tacche
+	Tick Marks per Division	Tacche per divisione
+	Draw Tick Marks Between Labels	Disegna tacche tra le etichette
+	Add Labels	Aggiungi etichette
+	Maximum must be more than Minimum.	Il massimo deve essere maggiore del minimo.
+	Column Graph	Grafico a colonne
+	Stacked Column Graph	Grafico a colonne in pila
+	Bar Graph	Grafico a barre
+	Stacked Bar Graph	Grafico a barre in pila
+	Line Graph	Grafico a linee
+	Area Graph	Grafico ad area
+	Scatter Graph	Grafico a dispersione
+	Pie Graph	Grafico a torta
+	Radar Graph	Grafico radar
 	Graph Design	Design del grafico
 	Graph Marker	Indicatore del grafico
 	New Design	Nuovo design
@@ -1561,6 +1595,7 @@ file-filter	Templates	Modelli
 	Highlight anchors on mouse over	Evidenzia ancoraggi al passaggio del mouse
 	Highlight Rows	Evidenzia righe
 	Highlight Variable	Evidenzia variabile
+	Sort Variables	Ordina variabili
 	Highlight Substituted Fonts	Evidenzia font sostituiti
 	Highlight Substituted Glyphs	Evidenzia glifi sostituiti
 	History	Cronologia
@@ -2055,6 +2090,7 @@ file-filter	Templates	Modelli
 	Menu Dialog	Finestra di dialogo menu
 	Merge	Fondi
 	Merge colors into one row	Unisci colori in una riga
+	New Row	Nuova riga
 	Merge Graphic Styles	Unisci stili grafici
 	Merge Graphic Styles…	Unisci stili grafici…
 	Merge Layers	Unisci livelli
