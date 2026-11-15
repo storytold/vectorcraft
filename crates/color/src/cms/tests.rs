@@ -495,3 +495,25 @@ fn convert_into_keeps_the_appearance() {
         assert_eq!(wide.convert_into(&working, &c, Intent::RelativeColorimetric), c);
     }
 }
+
+/// With black-point compensation on, Generic CMYK displays its press black as black, so dark inks
+/// converted out of it keep that appearance: into Device CMYK, and into another document whose
+/// CMYK space is also Generic CMYK.
+#[test]
+fn convert_into_keeps_compensated_dark_inks() {
+    let generic = cms();
+    let device = Cms::new(&ColorSettings { cmyk: DEVICE_CMYK.into(), ..Default::default() }).unwrap();
+    let other_generic = Cms::new(&ColorSettings { rgb: WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    for ink in [
+        Color::Cmyk { c: 0.6, m: 0.5, y: 0.5, k: 0.9 },
+        Color::Cmyk { c: 0.0, m: 0.0, y: 0.0, k: 1.0 },
+        Color::Cmyk { c: 0.3, m: 0.2, y: 0.2, k: 0.75 },
+    ] {
+        for dest in [&device, &other_generic] {
+            let moved = generic.convert_into(dest, &ink, Intent::RelativeColorimetric);
+            assert!(matches!(moved, Color::Cmyk { .. }), "{ink:?} → {moved:?}");
+            let d = delta_e2000(generic.lab(&ink), dest.lab(&moved));
+            assert!(d < 2.0, "{ink:?} → {moved:?}: ΔE {d}");
+        }
+    }
+}

@@ -592,8 +592,9 @@ impl Cms {
     /// space that looks the same, converted with `intent` (Edit → Color Settings › Convert to
     /// Working Space). RGB converts directly from profile to profile, with this context's
     /// black-point compensation. CMYK converts between two loaded profiles through ProPhoto RGB
-    /// ([`IccProfile::to_same_model_of`]), and through Lab when either space is built in. Grey and
-    /// Lab colours stay as they are.
+    /// ([`IccProfile::to_same_model_of`]), and through the Lab it displays as
+    /// ([`Self::cmyk_display_lab`]) when either space is built in. Grey and Lab colours stay as they
+    /// are.
     pub fn convert_into(&self, dest: &Cms, c: &Color, intent: Intent) -> Color {
         match *c {
             Color::Rgb { r, g, b } => {
@@ -615,7 +616,7 @@ impl Cms {
                 };
                 let [c, m, y, k] = match direct.as_deref() {
                     Some(&[c, m, y, k]) => [c, m, y, k],
-                    _ => dest.lab_to_cmyk(self.cmyk_to_lab(inks), intent),
+                    _ => dest.lab_to_cmyk(self.cmyk_display_lab(inks), intent),
                 };
                 Color::Cmyk { c, m, y, k }
             }

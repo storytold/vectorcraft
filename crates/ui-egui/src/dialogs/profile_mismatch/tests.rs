@@ -27,10 +27,40 @@ fn rgb_profile(app: &VectorcraftApp) -> Option<String> {
     vectorcraft_engine::cmd::colormgmt::doc_profiles(&app.session.doc().unwrap().doc).0
 }
 
+/// An open asked under automation roots finishes under them, though OK is pressed outside them: its
+/// linked files are read, and the document is installed, with the roots of the open. `tagged` asks
+/// with the settings in force.
+fn open_asked_under_roots(app: &mut VectorcraftApp, tagged: &[u8]) {
+    use vectorcraft_engine::file_access;
+    let dir = crate::tests_folder::Folder::new("profile-mismatch-scope");
+    let roots = file_access::AutomationRoots::new(&[dir.as_path()], &[]).unwrap();
+    let r = file_access::confine(roots.as_ref(), || crate::io::open_bytes(app, "tagged.vectorcraft", tagged, None)).unwrap();
+    assert_eq!(r, json!({ "dialog": OPEN_KIND }));
+    assert!(file_access::current().is_none(), "OK is pressed outside the roots");
+    super::super::confirm(app).unwrap();
+    assert!(app.session.doc().unwrap().opened_by.is_some(), "installed under the roots of the open");
+}
+
+/// Another document becomes the active one while the paste question is open: OK pastes nothing, into
+/// neither document, and the document the paste was asked in is active again afterward. `count`
+/// counts the active document's objects.
+fn paste_asked_before_another_document_is_active(app: &mut VectorcraftApp, count: impl Fn(&VectorcraftApp) -> usize) {
+    let (asked_in, before) = (app.session.active_index().unwrap(), count(app));
+    assert_eq!(app.run("edit.paste", json!({})).unwrap(), json!({ "dialog": PASTE_KIND }));
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let other = count(app);
+    super::super::confirm(app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(count(app), other, "nothing pasted into the document now active");
+    app.run("document.activate", json!({ "index": asked_in })).unwrap();
+    assert_eq!(count(app), before, "nor into the one it was asked in");
+}
+
 /// With Color Settings' Ask boxes on, File › Open asks about a document whose profile is not the
 /// working space, or that has none, and opens it as chosen; Cancel doesn't open it, and a refused
 /// choice keeps the dialog. Paste asks about colors from another profile and pastes as chosen. With
-/// the boxes off, nothing asks.
+/// the boxes off, nothing asks. An open asked under automation roots finishes under them, and a
+/// paste asked in one document pastes nothing once another is active.
 #[test]
 fn opening_and_pasting_ask_about_profiles() {
     const CHILD: &str = "VECTORCRAFT_TEST_PROFILE_PROMPTS";
@@ -88,6 +118,8 @@ fn opening_and_pasting_ask_about_profiles() {
     assert_eq!(app.session.documents().len(), docs + 1);
     assert_eq!(rgb_profile(&app).as_deref(), Some(cms::WIDE_GAMUT_RGB), "kept, though the policy converts");
 
+    open_asked_under_roots(&mut app, &tagged);
+
     // Missing Profiles: Ask When Opening, and a choice the file refuses.
     app.run("edit.colorSettings", json!({"askMismatchOpen": false, "askMissingOpen": true, "rgbPolicy": "preserveEmbedded"})).unwrap();
     crate::io::open_bytes(&mut app, "plain.vectorcraft", &plain, None).unwrap();
@@ -127,6 +159,7 @@ fn opening_and_pasting_ask_about_profiles() {
     app.run("edit.paste", json!({})).unwrap();
     super::super::cancel(&mut app);
     assert_eq!(count(&app), before);
+    paste_asked_before_another_document_is_active(&mut app, count);
     app.run("edit.colorSettings", json!({"askMismatchPaste": false})).unwrap();
     let r = app.run("edit.paste", json!({})).unwrap();
     assert_eq!(r["profileMismatch"][0]["choice"], "preserveNumbers");
