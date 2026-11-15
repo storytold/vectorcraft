@@ -1,7 +1,8 @@
 //! Opening PSD and PSB files with their layers as layers (`document.open`'s `layers` and
 //! `hiddenLayers`): names, visibility, opacity, blend modes, groups, layer masks, clipped layers
 //! and blend modes VectorCraft lacks merged, 16-bit and PSB files, VectorCraft's own PSD export
-//! read back, and damaged files read without a panic.
+//! read back, and damaged files read without a panic. Placing them with their layers as objects
+//! (`file.place`'s `layers` and `hiddenLayers`), and `document.psdInfo`.
 
 use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
@@ -967,10 +968,12 @@ fn damaged_layers_never_panic() {
                 let mut f = good.clone();
                 f[i] = v;
                 let _ = psdlayers::import(&f, true, 1 << 30, cms);
+                let _ = psdlayers::info(&f);
             }
         }
         for n in 0..good.len() {
             let _ = psdlayers::import(&good[..n], true, 1 << 30, cms);
+            let _ = psdlayers::info(&good[..n]);
         }
         // A layer past the memory allowed is refused, not read.
         assert!(psdlayers::import(&good, true, 64, cms).unwrap_err().contains("too large"));
@@ -1014,4 +1017,187 @@ fn merges_keep_pass_through_groups_blending_with_what_is_below() {
         let px = image_of(&s, &d.layers[0]).1.get_pixel(1, 1).0;
         assert!(px.iter().zip([75, 150, 38, 255]).all(|(&a, b)| a.abs_diff(b) <= 1), "{px:?}");
     }
+}
+
+/// `file.place` of `f` with `p` into a new 100 × 100 pt document, centred on (50, 50).
+fn place(f: &[u8], p: Value) -> (Session, crate::cmd::Result<Value>) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let r = s.execute("file.place", &merge(json!({"name": "layers.psd", "dataBase64": vectorcraft_format::base64_encode(f), "at": [50, 50]}), p));
+    (s, r)
+}
+
+/// The one object `file.place` placed.
+fn placed(s: &Session, r: &Value) -> Node {
+    let id = vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap());
+    s.doc().unwrap().doc.node(id).unwrap().clone()
+}
+
+#[test]
+fn placing_with_layers_embeds_the_layers_as_one_group() {
+    let f = file(8, 8, &stack(), 8, false, false);
+    let (mut s, r) = place(&f, json!({"layers": true}));
+    let r = r.unwrap();
+    assert_eq!((&r["format"], &r["linked"], &r["warnings"]), (&json!("psd"), &json!(false), &json!([HIDDEN_1])), "{r}");
+    let g = placed(&s, &r);
+    assert!(matches!(g.kind, NodeKind::Group { clip: false, .. }), "one group, unclipped: its layers lie on the canvas");
+    assert_eq!(name(&g), "layers.psd");
+    let kids = g.children().unwrap();
+    assert_eq!(kids.iter().map(|c| name(c)).collect::<Vec<_>>(), ["Bottom", "Folder", "Screens", "Faded"], "bottom first");
+    // A layer is its image, where the merged image would put it: the 8 pt canvas centred on (50, 50).
+    let ((x, y), px) = pixels_of(&s, &kids[0]);
+    assert_eq!(((x, y), px.dimensions(), px.get_pixel(3, 3).0), ((46.0, 46.0), (8, 8), [255, 0, 0, 255]));
+    // A group is a group of its layers; a pass-through group isn't isolated, another mode's is.
+    let folder = &kids[1];
+    assert!(matches!(folder.kind, NodeKind::Group { .. }) && !folder.isolate && folder.blend == BlendMode::Normal);
+    let inner = folder.children().unwrap();
+    assert_eq!(inner.iter().map(|c| name(c)).collect::<Vec<_>>(), ["Inner A"], "the hidden layer is left out");
+    assert!(matches!(inner[0].kind, NodeKind::Image(_)) && inner[0].blend == BlendMode::Multiply && (inner[0].opacity - 128.0 / 255.0).abs() < 1e-6);
+    let screens = &kids[2];
+    assert!(screens.isolate && screens.blend == BlendMode::Screen);
+    let ((x, y), px) = pixels_of(&s, &screens.children().unwrap()[0]);
+    assert_eq!(((x, y), px.get_pixel(0, 0).0), ((48.0, 48.0), [10, 20, 30, 128]));
+    assert!((kids[3].opacity - 102.0 / 255.0).abs() < 1e-6, "fill opacity: {}", kids[3].opacity);
+    // One undo step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.layers.iter().all(|l| l.children().is_none_or(Vec::is_empty)));
+    // Hidden layers come in hidden when asked for.
+    let (s, r) = place(&f, json!({"layers": true, "hiddenLayers": true}));
+    let r = r.unwrap();
+    assert_eq!(r["warnings"], json!([]), "{r}");
+    let g = placed(&s, &r);
+    let inner: Vec<(&str, bool)> = g.children().unwrap()[1].children().unwrap().iter().map(|c| (name(c), c.visible)).collect();
+    assert_eq!(inner, [("Inner A", true), ("Inner B", false)]);
+    // Without `layers`, the merged image, in the same box.
+    let (s, r) = place(&f, json!({}));
+    let r = r.unwrap();
+    let flat = placed(&s, &r);
+    let ((x, y), px) = pixels_of(&s, &flat);
+    assert_eq!(((x, y), px.dimensions(), px.get_pixel(0, 0).0), ((46.0, 46.0), (8, 8), [128, 128, 128, 255]), "{r}");
+}
+
+#[test]
+fn placed_layers_keep_their_masks_and_are_clipped_to_the_canvas() {
+    let mut masked = layer("Masked", [0, 0, 8, 8], [255, 255, 255, 255]);
+    masked.mask = Some(([2, 2, 4, 4], 0, 0, vec![255, 128, 0, 255]));
+    let (s, r) = place(&file(8, 8, &[masked], 8, false, false), json!({"layers": true}));
+    let g = placed(&s, &r.unwrap());
+    let kids = g.children().unwrap();
+    assert!(matches!(kids[0].kind, NodeKind::Image(_)), "the layer is its image");
+    let m = kids[0].extras().mask.as_deref().expect("the layer mask as the image's opacity mask");
+    let ((x, y), px) = pixels_of(&s, &m.art);
+    assert_eq!(((x, y), px.dimensions(), m.clip), ((48.0, 48.0), (2, 2), true), "the mask moves with its layer");
+    // A layer that reaches past the canvas: the group is clipped to the canvas, as the merged
+    // image shows only the canvas.
+    let over = layer("Over", [-2, -2, 6, 6], [0, 255, 0, 255]);
+    let (s, r) = place(&file(8, 8, &[layer("Bottom", [0, 0, 8, 8], [255, 0, 0, 255]), over], 8, false, false), json!({"layers": true}));
+    let r = r.unwrap();
+    let g = placed(&s, &r);
+    assert!(matches!(g.kind, NodeKind::Group { clip: true, .. }), "{r}");
+    let kids = g.children().unwrap();
+    let b = kids[0].geometric_bounds_with(&s.doc().unwrap().doc.symbol_boxes()).unwrap();
+    assert!(matches!(kids[0].kind, NodeKind::Path { clipping: true, .. }));
+    assert_eq!((b.x0, b.y0, b.x1, b.y1), (46.0, 46.0, 54.0, 54.0), "the clipping path is the canvas");
+    assert_eq!(kids[1..].iter().map(|c| name(c)).collect::<Vec<_>>(), ["Bottom", "Over"]);
+    assert_eq!(pixels_of(&s, &kids[2]).0, (44.0, 44.0));
+    // A hidden layer that reaches past the canvas clips the group too, so showing it later draws
+    // only the canvas. Left out, it doesn't.
+    let mut hidden = layer("Hidden", [-2, -2, 6, 6], [0, 255, 0, 255]);
+    hidden.hidden = true;
+    let f = file(8, 8, &[layer("Bottom", [0, 0, 8, 8], [255, 0, 0, 255]), hidden], 8, false, false);
+    let (s, r) = place(&f, json!({"layers": true, "hiddenLayers": true}));
+    let r = r.unwrap();
+    let g = placed(&s, &r);
+    assert!(matches!(g.kind, NodeKind::Group { clip: true, .. }), "{r}");
+    assert_eq!(g.children().unwrap()[1..].iter().map(|c| (name(c), c.visible)).collect::<Vec<_>>(), [("Bottom", true), ("Hidden", false)]);
+    let (s, r) = place(&f, json!({"layers": true}));
+    assert!(matches!(placed(&s, &r.unwrap()).kind, NodeKind::Group { clip: false, .. }));
+}
+
+#[test]
+fn placing_with_layers_never_links_and_refuses_values_it_cant_use() {
+    let f = file(8, 8, &stack(), 8, false, false);
+    let dir = std::env::temp_dir().join(format!("vc-psd-place-layers-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("layers.psd");
+    std::fs::write(&path, &f).unwrap();
+    let from_path = |p: Value| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let r = s.execute("file.place", &merge(json!({"path": path.to_str().unwrap()}), p));
+        (s, r)
+    };
+    // From a path, `layers` embeds: `link` is then false unless given, and `link: true` is refused.
+    let (s, r) = from_path(json!({"layers": true}));
+    let r = r.unwrap();
+    assert_eq!(r["linked"], json!(false), "{r}");
+    assert!(matches!(placed(&s, &r).kind, NodeKind::Group { .. }));
+    let (s, r) = from_path(json!({"layers": true, "link": true}));
+    assert!(r.unwrap_err().to_string().contains("a linked PSD file is placed as its flat image"));
+    assert!(s.doc().unwrap().doc.layers.iter().all(|l| l.children().is_none_or(Vec::is_empty)), "nothing is placed");
+    // Without `layers` the file is linked as before.
+    let (s, r) = from_path(json!({}));
+    let r = r.unwrap();
+    assert_eq!(r["linked"], json!(true), "{r}");
+    assert!(matches!(placed(&s, &r).kind, NodeKind::Image(_)));
+    // A file without layers is embedded as its merged image, without a warning.
+    let flat = {
+        let mut f = file(2, 2, &[layer("x", [0, 0, 2, 2], [9, 9, 9, 255])], 8, false, false);
+        let at = 26 + 8;
+        let len = u32::from_be_bytes(f[at..at + 4].try_into().unwrap()) as usize;
+        f.splice(at..at + 4 + len, 0u32.to_be_bytes());
+        f
+    };
+    std::fs::write(&path, &flat).unwrap();
+    let (s, r) = from_path(json!({"layers": true}));
+    let r = r.unwrap();
+    assert_eq!((&r["linked"], &r["warnings"]), (&json!(false), &json!([])), "{r}");
+    assert!(matches!(placed(&s, &r).kind, NodeKind::Image(_)));
+    // Layers that are all left out: the merged image, with the importer's warnings.
+    let mut gone = layer("Gone", [0, 0, 2, 2], [9, 9, 9, 255]);
+    gone.hidden = true;
+    let (s, r) = place(&file(2, 2, &[gone], 8, false, false), json!({"layers": true}));
+    let r = r.unwrap();
+    assert_eq!((&r["linked"], r["warnings"].as_array().map(Vec::len)), (&json!(false), Some(1)), "{r}");
+    assert!(matches!(placed(&s, &r).kind, NodeKind::Image(_)));
+    // Layers that can't be read: the merged image, with a warning.
+    let mut cut = file(4, 4, &[layer("x", [0, 0, 4, 4], [9, 9, 9, 255])], 8, false, false);
+    let at = cut.windows(4).position(|w| w == [0, 0, 0, 18]).unwrap();
+    cut[at..at + 4].copy_from_slice(&1000u32.to_be_bytes());
+    let (s, r) = place(&cut, json!({"layers": true}));
+    let r = r.unwrap();
+    assert!(r["warnings"][0].as_str().unwrap().starts_with("the layers can't be read"), "{r}");
+    assert!(matches!(placed(&s, &r).kind, NodeKind::Image(_)));
+    // Values the command can't use are errors, and nothing is placed.
+    for (p, why) in [
+        (json!({"hiddenLayers": true}), "hiddenLayers applies to a PSD file placed with layers: true"),
+        (json!({"layers": true, "link": true}), "a linked PSD file is placed as its flat image"),
+        (json!({"layers": "yes"}), "layers must be true or false"),
+        (json!({"layers": true, "hiddenLayers": 1}), "hiddenLayers must be true or false"),
+    ] {
+        let (s, r) = place(&f, p.clone());
+        assert!(r.unwrap_err().to_string().contains(why), "{p}");
+        assert!(s.doc().unwrap().doc.layers.iter().all(|l| l.children().is_none_or(Vec::is_empty)), "{p}");
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let q = s.execute("file.place.queue", &json!({"paths": [path.to_str().unwrap()], "layers": "yes"}));
+    assert!(q.unwrap_err().to_string().contains("`layers` must be true or false"));
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn psd_info_counts_the_layers_without_opening_the_file() {
+    let mut s = Session::new();
+    let info = |s: &mut Session, f: &[u8]| s.execute("document.psdInfo", &json!({"dataBase64": vectorcraft_format::base64_encode(f)}));
+    let r = info(&mut s, &file(8, 8, &stack(), 8, false, false)).unwrap();
+    assert_eq!(r, json!({"format": "psd", "width": 8, "height": 8, "layers": 5, "hiddenLayers": 1, "groups": 2, "slices": 0}));
+    let r = info(&mut s, &file(4, 2, &[layer("x", [0, 0, 2, 2], [9, 9, 9, 255])], 16, true, true)).unwrap();
+    assert_eq!((&r["format"], &r["width"], &r["height"], &r["layers"]), (&json!("psb"), &json!(4), &json!(2), &json!(1)), "{r}");
+    // Layer records that can't be read count as no layers: the file opens as its merged image.
+    let mut cut = file(4, 4, &[layer("x", [0, 0, 4, 4], [9, 9, 9, 255])], 8, false, false);
+    let at = cut.windows(4).position(|w| w == [0, 0, 0, 18]).unwrap();
+    cut[at..at + 4].copy_from_slice(&1000u32.to_be_bytes());
+    assert_eq!(info(&mut s, &cut).unwrap()["layers"], json!(0));
+    assert!(info(&mut s, b"not a psd").unwrap_err().to_string().contains("not a PSD file"));
 }
