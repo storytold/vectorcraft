@@ -3202,6 +3202,26 @@ mod tests {
         assert_eq!(sent, saved, "OK renames the group with its saved colors");
     }
 
+    /// Without art, Save Changes with a Global Adjust gives the group the rows' new colors with the
+    /// adjustment, and OK gives it the same colors again: the adjustment applies to the rows' new
+    /// colors, not to the saved group.
+    #[test]
+    fn saving_a_group_without_art_with_a_global_adjust_applies_it_once() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "Plain", "colors": ["#ff0000", "#0000ff"], "keepModel": true})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "Plain"})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("globalAdjust".into(), json!({"brightness": -50.0}));
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        act(&mut app, &ctx, 0.1, "save").unwrap();
+        let saved = group_hex(&app, "Plain").unwrap();
+        assert!(!saved.contains(&"#ff0000".to_string()), "the save darkened the group: {saved:?}");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(group_hex(&app, "Plain").unwrap(), saved, "OK does not darken the group again");
+    }
+
     /// With art: a group picked in the list reduces the art to a row per color of the group, which
     /// become the rows' new colors, and the art previews them; the list draws beside the tabs and
     /// hides with `groupStorage`.
