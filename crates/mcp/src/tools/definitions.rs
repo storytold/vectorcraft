@@ -205,7 +205,7 @@ pub fn tool_definitions() -> Vec<Value> {
                         "type": "array",
                         "minItems": 1,
                         "items": obj(json!({
-                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick"]},
+                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick", "tripleclick"]},
                             "x": num("Document x (pt)"),
                             "y": num("Document y (pt)"),
                             "mods": mods_schema(),
@@ -465,7 +465,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "transform",
             "Transform",
-            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. `origin` [x,y] defaults to the selection centre; `copy` transforms a copy.",
+            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. Scale and reflect act along the selection's bounding box, turned with rotated objects until Reset Bounding Box. `origin` [x,y] defaults to the selection centre; `copy` transforms a copy.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
