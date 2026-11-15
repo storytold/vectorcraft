@@ -9054,6 +9054,11 @@ Appearance panel's Characters row, not the characters' formatting) go on paths o
 below the Characters row on one path under the glyph paths, the others on one path over them, in their order and with
 their opacity, blend mode, effects and stroke settings. Their gradients that are not placed are fixed to the type's
 layout box, as the canvas paints them, so one gradient spans every glyph. The group itself has no fills or strokes.
+It takes the type object's name, opacity, blend mode, Isolate Blending, Opacity & Mask Define Knockout Shape, opacity
+mask and effects. The effects (the object's own, which apply to the type as a whole) keep their order, settings and
+hidden state and stay live on the group; none of them is copied onto the glyph paths. Geometry effects on the group
+(Warp, Free Distort, Transform) move its placed gradients with the whole outline, as they do on the type, not with each
+glyph.
 `object.expand` outlines type with this command, so Fill and Stroke expand those paths' gradients, patterns and strokes.
 
 `type.createOutlines` (Type › Create Outlines) and `effect.expandAppearance` (when it outlines type, as Expand
