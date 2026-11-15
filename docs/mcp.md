@@ -9696,6 +9696,30 @@ A digit the font lacks comes from a fallback font. Default and saved only when s
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"digits":"hindi"}}}
 ```
 
+## Adjust Diacritic Position
+
+`text.setFormat {diacriticHorizontal?, diacriticVertical?}` (the selected type, or `ids`) and
+`text.setRangeStyle {id, start, end, diacriticHorizontal?, diacriticVertical?}` (a range) move the characters' diacritical
+marks relative to their letters, as the Character panel's Adjust Horizontal and Adjust Vertical Diacritic Position do
+([the reference, page 549](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=549)).
+The units, range and direction are VectorCraft's own rules: each value is in thousandths of an em of the characters' size,
+from -1000 to 1000; a positive horizontal value moves the marks right and a positive vertical value moves them up. Only
+glyphs the font classes as marks (GDEF class 3) move; the letters keep their places and advances, and a font without
+mark classes moves nothing. An Arabic harakat or a Hebrew point styled apart from its letter takes its own values;
+other marks take the values of their letter. Setting one value leaves the other as it is. Both are 0 by default and
+saved only when not 0, and character styles carry them (`charStyle.new`, `charStyle.setAttrs` and `charStyle.edit`
+refuse a value outside the range). A value that is not a number is refused with `` `diacriticHorizontal` must be a
+number ``, and one outside the range with `` `diacriticHorizontal` must be from -1000 to 1000 ``, naming the key. One
+undo step, and a `text.setFormat` call that gives the values the characters already have records none. With Show Middle Eastern
+Options on, the Character panel shows both fields, blank where the selected characters differ, with -200, -100, -50,
+0, 50, 100 and 200 in their menus, and a value typed past either end sets that end; Reset Panel sets both to 0.
+Character Style Options shows both fields in Advanced Character Formats. The canvas, PDF export and outlines draw the
+moved marks; SVG export writes type with a moved mark as outlines.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":2,"end":4,"diacriticVertical":150}}}
+```
+
 ## Font height reference
 
 `text.setFormat {fontHeightReference: "emBox"|"capHeight"|"xHeight"|"icfBox"}` (the selected type, or `ids`) and
@@ -10017,7 +10041,7 @@ attribute map in one undo step. `to` is trimmed and must be unique. The command 
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`
 dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`, `tracking`, `case`,
 `position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `tcyUpDown`,
-`tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `tsume`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
+`tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `tsume`, `diacriticHorizontal`, `diacriticVertical`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
@@ -10026,7 +10050,9 @@ Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
 -1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180), Insert Aki Left and Right `akiLeft` and `akiRight` (thousandths of
 an em, with the Character panel's 0, 250, 500 and 1000 in their menus; a value typed below 0 or past 1000 sets 0 or
 1000), Tsume `tsume` (percent, with the Character panel's 0, 25, 50, 75 and 100 in its menu; a value typed below 0 or
-past 100 sets 0 or 100; an explicit 0 stays distinct from unset) and `language` (a name or tag from Document
+past 100 sets 0 or 100; an explicit 0 stays distinct from unset), Adjust Horizontal and Vertical Diacritic Position
+`diacriticHorizontal` and `diacriticVertical` (thousandths of an em, with the Character panel's -200, -100, -50, 0, 50,
+100 and 200 in their menus; a value typed below -1000 or past 1000 sets -1000 or 1000) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.

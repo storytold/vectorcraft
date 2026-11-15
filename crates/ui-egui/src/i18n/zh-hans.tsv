@@ -2572,6 +2572,8 @@ font-script	Japanese	汉字
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在后方插入空白
 	Tsume	比例间距
+	Adjust Horizontal Diacritic Position	调整变音符号水平位置
+	Adjust Vertical Diacritic Position	调整变音符号垂直位置
 	Character Direction	字符方向
 	Digits	数字
 	Arabic	阿拉伯数字

@@ -49,6 +49,8 @@ font-technology	Variable	가변
 	Insert Aki Left	앞 아키 삽입
 	Insert Aki Right	뒤 아키 삽입
 	Tsume	츠메
+	Adjust Horizontal Diacritic Position	발음 구별 기호 가로 위치 조정
+	Adjust Vertical Diacritic Position	발음 구별 기호 세로 위치 조정
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어

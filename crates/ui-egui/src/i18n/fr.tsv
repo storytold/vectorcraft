@@ -2668,6 +2668,8 @@ font-technology	Variable	Variables
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajuster la position horizontale des signes diacritiques
+	Adjust Vertical Diacritic Position	Ajuster la position verticale des signes diacritiques
 	Character Direction	Direction des caractères
 	Digits	Chiffres
 	Arabic	Arabes

@@ -55,6 +55,8 @@ font-technology	Variable	バリアブル
 	Insert Aki Left	前にアキを挿入
 	Insert Aki Right	後ろにアキを挿入
 	Tsume	文字ツメ
+	Adjust Horizontal Diacritic Position	発音区別符号の水平位置を調整
+	Adjust Vertical Diacritic Position	発音区別符号の垂直位置を調整
 	Character Direction	文字の方向
 	Digits	数字
 	Arabic	アラビア数字

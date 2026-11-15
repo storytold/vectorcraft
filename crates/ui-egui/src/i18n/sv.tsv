@@ -2613,6 +2613,8 @@ font-technology	Variable	Variabla
 	Insert Aki Left	Infoga aki till vänster
 	Insert Aki Right	Infoga aki till höger
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Justera vågrät position för diakritiska tecken
+	Adjust Vertical Diacritic Position	Justera lodrät position för diakritiska tecken
 	Character Direction	Teckenriktning
 	Digits	Siffror
 	Arabic	Arabiska
