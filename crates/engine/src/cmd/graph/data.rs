@@ -245,6 +245,11 @@ pub(super) fn apply_data(g: &mut GraphSpec, p: &Value, cmd: &str) -> Result<bool
     if let Some(csv) = csv {
         let (s, c, r) = parse_csv(csv);
         g.series = s;
+        // Series labels up to the last one given, as Graph Data's sheet keeps them
+        // ([`graph_data_from_grid`]): `to_csv` writes a blank label for each series without one.
+        while g.series.last().is_some_and(String::is_empty) {
+            g.series.pop();
+        }
         g.categories = c;
         g.set_cells(r);
         changed = true;

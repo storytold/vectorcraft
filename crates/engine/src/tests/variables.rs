@@ -2178,6 +2178,34 @@ fn datasets_csv_reads_graph_data_files_in_percent_columns() {
     assert!(matches!(&value, Some(vectorcraft_doc::DataValue::Graph(c)) if c.contains("North") && c.contains("Feb")), "{value:?}");
 }
 
+/// A graph data file whose rows hold more values than its first row has series labels gives the
+/// bound graph the series labels that Graph Data's Import Data and Apply give it: up to the last one
+/// given, with no blank label for the series after it.
+#[test]
+fn datasets_csv_graph_data_file_keeps_the_given_series_labels() {
+    let dir = Folder::new("vars-csv-graph-wide");
+    let wide: &[u8] = b"\tA\t\nX\t1\t2\n";
+    write(&dir.file("wide.txt"), wide);
+    let path = dir.file("data.csv");
+    write(&path, b"Name,%Chart\na,wide.txt\n");
+
+    let mut s = session();
+    let p = json!({"type": "column", "x": 10, "y": 10, "width": 100, "height": 80, "csv": ",B\nY,1"});
+    let g = NodeId(s.execute("graph.create", &p).unwrap()["id"].as_u64().unwrap());
+    s.execute("dataset.import", &json!({"path": path})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Chart", "ids": [g.0]})).unwrap();
+    s.execute("dataset.select", &json!({"name": "Data Set 1"})).unwrap();
+
+    let data = crate::cmd::graph_data_from_grid(&crate::cmd::graph_grid_from_text(&crate::cmd::graph_data_text(wide)));
+    let mut probe = session();
+    let id = NodeId(probe.execute("graph.create", &p).unwrap()["id"].as_u64().unwrap());
+    let mut set = data.clone();
+    set["id"] = json!(id.0);
+    probe.execute("graph.setData", &set).unwrap();
+    assert_eq!(graph_data(&mut s, g), graph_data(&mut probe, id));
+    assert_eq!(graph_data(&mut s, g), json!({"series": ["A"], "categories": ["X"], "rows": [[1.0, 2.0]]}));
+}
+
 /// A `%` column's file that is missing, a folder, larger than 1 MB, or gives a graph value longer
 /// than 256 KB, a relative path with no
 /// folder to take it from, a `base` that isn't a folder path, and a `%` header whose name is a
