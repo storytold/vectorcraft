@@ -5575,6 +5575,8 @@ axis	Both	Обидві
 	Step up or down	Крок угору або вниз
 	Drag values or labels. Double-click a value to type.	Перетягуйте значення або підписи. Двічі клацніть значення, щоб увести його.
 	Drag rings to rotate. Shift snaps to 15°.	Перетягуйте кільця для обертання. Shift задає крок 15°.
+	Track cube	Куб обертання
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Перетягніть грань, ребро або кільце для обертання. Shift обертає навколо однієї осі екрана.
 	Drag the light, or its rings. Shift snaps to 15°.	Перетягуйте джерело світла або його кільця. Shift задає крок 15°.
 	Keep visible surfaces only when expanding	Під час розгортання зберігати лише видимі поверхні
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Обрізає приховану геометрію під час розгортання оформлення. Попередній перегляд зберігає всю поверхню. Прозорі заливки та поверхні, що перевищують обмеження видимості, зберігають усі грані.

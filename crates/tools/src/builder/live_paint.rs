@@ -1,14 +1,15 @@
 use super::cache::RegionCache;
 use super::lookup::{
-    connected_edges, edges, faces, flood_faces, is_live_paint, leaf_shapes, live_paint_at, live_paint_at_where, lp_stroke_paint, node_outline,
-    visible_edge_near, visible_face_at,
+    connected_edges, connected_edges_through, edges, face_at, faces, flood_faces, is_live_paint, leaf_shapes, live_paint_at, live_paint_at_where,
+    lp_stroke_paint, node_outline, visible_edge_near, visible_face_at,
 };
-use super::map::{HIGHLIGHT_RED, sorted_roots};
+use super::map::{BuilderMap, HIGHLIGHT_RED, sorted_roots};
 use super::{
     Action, Arc, BezPath, CLICK_TOL_PX, Cursor, Document, EDGE_NAME, FACE_NAME, FillRule, Mods, Node, NodeId, Overlay, Point, PointerEvent,
     PointerKind, Rect, Tool, ToolContext, ToolKey, Value, color_swatches, json, json_ids, path_contains, pick_swatch, plain, swatch_chips,
 };
 use vectorcraft_color::Paint;
+use vectorcraft_pathops as po;
 
 // ---------- Live Paint Bucket ----------
 
@@ -178,10 +179,12 @@ enum LpPaint {
 ///
 /// A double-click on a face fills it and the faces reached from it across edges that draw no
 /// stroke (`scope: "connected"`); on an edge it paints the edges joined to it that have its stroke.
-/// A triple-click on a face fills every face of the group with the face's fill, and on an edge it
-/// paints every edge of the group with the edge's stroke (`scope: "samePaint"`). Each click of a
-/// double-click or triple-click paints as it arrives, as its own undo step, and the paint compared
-/// is the one the face or edge had before the first of its clicks that painted it. A first click
+/// A triple-click on a face fills every face of the group that has the face's fill, and on an edge
+/// it paints every edge of the group that draws with the edge's stroke paint (`scope:
+/// "samePaint"`); each of them takes the bucket's paint. Each click of a double-click or
+/// triple-click paints as it arrives, as its own undo step when it changes a paint, and the paint
+/// compared is the one the face or edge had before the first of its clicks that painted it,
+/// including a click whose drag or release crossed it. A first click
 /// that made the Live Paint group counts when the face it filled is the clicked face. Shift and the
 /// options choose a face or an edge as for a click; with Alt or Cmd/Ctrl held a double-click or
 /// triple-click paints nothing. With Space held for the view tools, a click, double-click or triple-click paints
@@ -201,6 +204,8 @@ pub struct LivePaintBucketTool {
     at: Option<(Point, Mods)>,
     /// The fill command and polyline previewed from the press's snapshot.
     fill_drag: Option<(Value, Vec<Vec<Point>>)>,
+    /// What a fill drag paints, as it was at its press.
+    drag_from: LpDragFrom,
     /// The last [`LP_PRESSES`] presses, oldest first: the face or edge each one painted, with its
     /// paint before that press, or None for a press that painted no face or edge.
     presses: Vec<Option<LpPress>>,
@@ -229,22 +234,128 @@ struct LpPress {
     /// The other faces or edges the double-click that followed the press reached, each with its
     /// fill or drawn stroke paint before the double-click.
     also: Vec<(NodeId, Paint)>,
+    /// The other faces the press's drag crossed, its release included, each with its fill before
+    /// the press.
+    dragged: Vec<(NodeId, Paint)>,
+    /// For a press that makes the Live Paint group: what the group is made from, with the path
+    /// chunks of the press's drag, its release included.
+    dragged_made: Option<Arc<(LpMade, Vec<Vec<Point>>)>>,
 }
 
-/// The fill of the face under `p` in the Live Paint group that `roots` make: the fill of the
-/// front-most of their paths whose closed subpaths hold `p`, else none. Open subpaths bound no face.
-fn made_face_fill(doc: &Document, roots: &[NodeId], p: Point) -> Paint {
-    let mut leaves = vec![];
-    for n in roots.iter().filter_map(|id| doc.node(*id)) {
-        leaf_shapes(n, &mut leaves);
+/// What a Live Paint Bucket fill drag paints, as it was at the press.
+#[derive(Default)]
+enum LpDragFrom {
+    #[default]
+    None,
+    /// The faces of an existing Live Paint group.
+    Faces(Vec<Arc<Node>>),
+    /// What the group is made from, for a drag that makes the group.
+    Made(LpMade),
+}
+
+/// The faces among `faces` (a Live Paint group's faces, back to front) that a drag along the path
+/// chunks `chunks` crosses, as `livePaint.fill` finds them, each with its fill.
+fn crossed_faces(faces: &[Arc<Node>], chunks: &[Vec<Point>]) -> Vec<(NodeId, Paint)> {
+    let mut hit = vec![];
+    let mut regions = vec![];
+    // Front first, as visible_face_at looks.
+    for f in faces.iter().rev().filter(|f| f.visible) {
+        if let Some(path) = f.path_data()
+            && let Some(bounds) = path.bounds()
+        {
+            hit.push(f);
+            regions.push((po::Region { path: path.clone(), sources: vec![] }, path.to_bezpath(), bounds));
+        }
     }
+    let map = BuilderMap { regions, ..Default::default() };
+    let mut crossed: Vec<(NodeId, Paint)> = vec![];
+    for chunk in chunks {
+        for f in map.hits_along(chunk, None).regions.iter().filter_map(|i| hit.get(*i)) {
+            if !crossed.iter().any(|(id, _)| *id == f.id) {
+                crossed.push((f.id, f.appearance.fill_paint()));
+            }
+        }
+    }
+    crossed
+}
+
+/// What the Live Paint group a fill press makes from the selection is made from, as it was at the
+/// press, following Live Paint Make and Merge.
+#[derive(Debug, PartialEq)]
+struct LpMade {
+    /// The paint Merge keeps from the faces of the first selected Live Paint group that draw: a
+    /// point inside each face with its fill, given to the made face that holds the point.
+    kept: Vec<(Point, Paint)>,
+    /// The paths the faces are made from, back to front: Merge's group's source paths first, then
+    /// the other objects', a Live Paint group giving its source paths.
+    sources: Vec<Node>,
+}
+
+/// What the Live Paint group the selected `roots` make is made from ([`LpMade`]).
+fn made_leaves(doc: &Document, roots: &[NodeId]) -> LpMade {
+    let nodes: Vec<&Node> = roots.iter().filter_map(|id| doc.node(*id)).collect();
+    let target = nodes.iter().position(|n| is_live_paint(n));
+    let mut kept = vec![];
+    let mut sources = vec![];
+    for i in target.into_iter().chain((0..nodes.len()).filter(|i| Some(*i) != target)) {
+        let Some(n) = nodes.get(i) else { continue };
+        if !is_live_paint(n) {
+            leaf_shapes(n, &mut sources);
+            continue;
+        }
+        for s in super::lookup::sources(n).and_then(|g| g.children()).into_iter().flatten() {
+            leaf_shapes(s, &mut sources);
+        }
+        if Some(i) == target {
+            let draws = |f: &&Arc<Node>| f.visible && f.opacity > 0.0 && (f.appearance.has_drawn_fill() || f.appearance.has_drawn_stroke());
+            // Merge fixes a kept unplaced gradient to its fit on the face it comes from.
+            let kept_fill = |f: &Arc<Node>| {
+                let mut n = (**f).clone();
+                n.pin_gradients();
+                n.appearance.fill_paint()
+            };
+            kept.extend(faces(n).into_iter().filter(draws).filter_map(|f| Some((po::interior_point(f.path_data()?)?, kept_fill(f)))));
+        }
+    }
+    LpMade { kept, sources: sources.into_iter().cloned().collect() }
+}
+
+/// The fill a face made at `p` from the source paths of `made` gets: the topmost fill that draws
+/// of the front-most source path whose closed subpaths hold `p` and that has such a fill, else
+/// none. Open subpaths bound no face.
+fn made_face_fill(made: &LpMade, p: Point) -> Paint {
     let holds = |l: &Node| {
         node_outline(l).is_some_and(|(path, rule)| {
             let closed = vectorcraft_geom::PathData::new(path.subpaths.into_iter().filter(|sp| sp.closed && sp.anchors.len() >= 2).collect());
             !closed.is_empty() && path_contains(&closed, rule, p)
         })
     };
-    leaves.iter().rev().find(|l| holds(l)).map_or(Paint::None, |l| l.appearance.fill_paint())
+    // As Make: the front-most covering source with a fill that draws (shown, with paint and an
+    // opacity above 0, on a source with an opacity above 0) gives the face its topmost such fill,
+    // an unplaced gradient fixed to its fit on the source.
+    made.sources
+        .iter()
+        .rev()
+        .filter(|l| l.opacity > 0.0 && l.appearance.has_drawn_fill() && holds(l))
+        .find_map(|l| {
+            let mut n = l.clone();
+            n.pin_gradients();
+            n.appearance.items.iter().rev().find_map(|i| match i {
+                vectorcraft_doc::AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() && f.opacity > 0.0 => Some(f.paint.clone()),
+                _ => None,
+            })
+        })
+        .unwrap_or(Paint::None)
+}
+
+/// The fill face `face` of Live Paint group `group` was made with from `made`: the kept paint
+/// whose point the face holds (the last one, as Merge applies them in order), else the fill of the
+/// source path at a point inside the face.
+fn made_part_fill(made: &LpMade, group: &Node, face: &Node) -> Paint {
+    if let Some((_, paint)) = made.kept.iter().rev().find(|(p, _)| face_at(group, *p).is_some_and(|f| f.id == face.id)) {
+        return paint.clone();
+    }
+    face.path_data().and_then(po::interior_point).map_or(Paint::None, |p| made_face_fill(made, p))
 }
 
 /// How many presses the Live Paint Bucket keeps: the three of a triple-click.
@@ -260,6 +371,7 @@ impl Default for LivePaintBucketTool {
             hover: LpHover::None,
             at: None,
             fill_drag: None,
+            drag_from: LpDragFrom::None,
             presses: Vec::new(),
             fills: true,
             strokes: false,
@@ -336,7 +448,26 @@ impl LivePaintBucketTool {
     /// Note a press at `at` that paints face or edge (`edge`) `n`.
     fn note_part(&mut self, n: &Node, edge: bool, at: Point) {
         let before = if edge { lp_stroke_paint(n) } else { n.appearance.fill_paint() };
-        self.note_press(Some(LpPress { part: Some(n.id), at, before, also: vec![] }));
+        self.note_press(Some(LpPress { part: Some(n.id), at, before, also: vec![], dragged: vec![], dragged_made: None }));
+    }
+
+    /// End the fill drag, noting on the last press the other faces its drag crossed, with their
+    /// fills before the press (for a press that makes the group, what the group is made from and
+    /// the drag, for [`Self::before`] to look the faces up in the group made). → whether a fill
+    /// drag was on.
+    fn end_fill(&mut self) -> bool {
+        let from = std::mem::take(&mut self.drag_from);
+        let Some((_, chunks)) = self.fill_drag.take() else { return false };
+        let Some(Some(last)) = self.presses.last_mut() else { return true };
+        match from {
+            LpDragFrom::None => {}
+            LpDragFrom::Faces(faces) => {
+                let part = last.part;
+                last.dragged = crossed_faces(&faces, &chunks).into_iter().filter(|(id, _)| part != Some(*id)).collect();
+            }
+            LpDragFrom::Made(made) => last.dragged_made = Some(Arc::new((made, chunks))),
+        }
+        true
     }
 
     /// Note that the double-click after the last press also reaches `parts` of group `group`, with
@@ -356,12 +487,17 @@ impl LivePaintBucketTool {
     /// The paint `part` had before the first press of a click sequence of `clicks` presses that
     /// painted `part`, or before the double-click after a press when that double-click reached it
     /// (the sequence's first press counts when it made the group `part` is in and the face it
-    /// filled there is `part`); `now` when the last press did not paint it.
+    /// filled there is `part`), a press's drag or release crossing `part` included; `now` when the
+    /// last press did not paint it.
     fn before(&self, cx: &ToolContext, part: NodeId, clicks: usize, now: Paint) -> Paint {
         let Some(run) = self.presses.len().checked_sub(clicks).and_then(|from| self.presses.get(from..)) else { return now };
-        let made_part = |q: &LpPress| live_paint_at(cx.doc, q.at).and_then(|g| visible_face_at(cx.doc.node(g)?, q.at)).is_some_and(|f| f.id == part);
-        let on_part = |i: usize, q: &LpPress| q.part == Some(part) || (i == 0 && q.part.is_none() && made_part(q));
-        if !run.last().and_then(Option::as_ref).is_some_and(|q| on_part(run.len() - 1, q)) {
+        let made_part = |at: Point| live_paint_at(cx.doc, at).and_then(|g| visible_face_at(cx.doc.node(g)?, at)).is_some_and(|f| f.id == part);
+        let on_part = |i: usize, q: &LpPress| q.part == Some(part) || (i == 0 && q.part.is_none() && made_part(q.at));
+        let dragged = |q: &LpPress| q.dragged.iter().any(|(id, _)| *id == part);
+        // An earlier press of the sequence that painted `part` counts too: a press on the next edge
+        // released back on `part` paints that edge, and the double-click targets `part`.
+        let painted = run.iter().enumerate().any(|(i, q)| q.as_ref().is_some_and(|q| on_part(i, q)));
+        if !painted && !run.last().and_then(Option::as_ref).is_some_and(dragged) {
             return now;
         }
         for (i, q) in run.iter().enumerate() {
@@ -369,7 +505,17 @@ impl LivePaintBucketTool {
             if on_part(i, q) {
                 return q.before.clone();
             }
-            if let Some((_, paint)) = q.also.iter().find(|(id, _)| *id == part) {
+            // A face of the group the press made (the one under the press) that its drag crossed has
+            // the fill it was made with.
+            if i == 0
+                && let Some(drag) = &q.dragged_made
+                && let Some(group) = live_paint_at(cx.doc, q.at).and_then(|g| cx.doc.node(g))
+                && let Some(face) = faces(group).into_iter().find(|f| f.id == part)
+                && !crossed_faces(std::slice::from_ref(face), &drag.1).is_empty()
+            {
+                return made_part_fill(&drag.0, group, face);
+            }
+            if let Some((_, paint)) = q.dragged.iter().chain(&q.also).find(|(id, _)| *id == part) {
                 return paint.clone();
             }
         }
@@ -395,7 +541,23 @@ impl LivePaintBucketTool {
             if clicks == 2
                 && let Some(group) = cx.doc.node(g)
             {
-                self.note_reached(group, connected_edges(group, e.id, &like), true);
+                // The other edge either click painted joins as the stroke paint it had before.
+                let through: Vec<NodeId> = self
+                    .presses
+                    .len()
+                    .checked_sub(2)
+                    .and_then(|i| self.presses.get(i..))
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .filter(|q| q.before == like)
+                    .filter_map(|q| q.part)
+                    .filter(|id| *id != e.id)
+                    .collect();
+                self.note_reached(group, connected_edges_through(group, e.id, &like, &through), true);
+                if !through.is_empty() {
+                    v["through"] = json_ids(&through);
+                }
             }
             if let Ok(like) = serde_json::to_value(like) {
                 v["match"] = like;
@@ -495,7 +657,7 @@ impl Tool for LivePaintBucketTool {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
         // A second press finishes the preceding click, including callers without a release.
-        if ev.kind == PointerKind::Down && self.fill_drag.take().is_some() {
+        if ev.kind == PointerKind::Down && self.end_fill() {
             let mut acts = vec![Action::Commit];
             acts.extend(self.pointer(cx, ev));
             return acts;
@@ -553,11 +715,15 @@ impl Tool for LivePaintBucketTool {
                         Some(f) => self.note_part(f, false, p),
                         None => self.note_press(None),
                     }
+                    self.drag_from = LpDragFrom::Faces(cx.doc.node(g).map(|n| faces(n).into_iter().cloned().collect()).unwrap_or_default());
                     return self.begin_fill(json!({ "group": g.0, "point": point }), p);
                 }
                 if self.cache.at(cx, p).is_some() {
                     let roots = sorted_roots(cx.doc, &cx.selection.objects);
-                    self.note_press(Some(LpPress { part: None, at: p, before: made_face_fill(cx.doc, &roots, p), also: vec![] }));
+                    let made = made_leaves(cx.doc, &roots);
+                    let before = made_face_fill(&made, p);
+                    self.note_press(Some(LpPress { part: None, at: p, before, also: vec![], dragged: vec![], dragged_made: None }));
+                    self.drag_from = LpDragFrom::Made(made);
                     return self.begin_fill(json!({ "ids": json_ids(&roots), "point": point }), p);
                 }
                 self.note_press(None);
@@ -568,7 +734,7 @@ impl Tool for LivePaintBucketTool {
                 // The swatch preview shows again at the release point.
                 self.at = Some((p, ev.mods));
                 let mut acts = self.drag_fill(p);
-                if self.fill_drag.take().is_some() {
+                if self.end_fill() {
                     acts.push(Action::Commit);
                 }
                 acts
@@ -586,6 +752,7 @@ impl Tool for LivePaintBucketTool {
     /// the active paint, while no drag is on.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape {
+            self.drag_from = LpDragFrom::None;
             return if self.fill_drag.take().is_some() { vec![Action::Cancel] } else { vec![] };
         }
         if !self.claims_key_with(cx, key, mods) {
@@ -621,13 +788,19 @@ impl Tool for LivePaintBucketTool {
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.presses.clear();
-        if self.fill_drag.take().is_some() { vec![Action::Commit] } else { vec![] }
+        if self.end_fill() { vec![Action::Commit] } else { vec![] }
     }
 
     /// The pointer hovers nothing for the tool: its highlight and its swatch preview go.
     fn hover_ended(&mut self, _cx: &ToolContext) {
         self.hover = LpHover::None;
         self.at = None;
+    }
+
+    /// A press the view tools took counts as a press that paints no face or edge, for the clicks
+    /// a double-click or triple-click compares.
+    fn press_elsewhere(&mut self) {
+        self.note_press(None);
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
