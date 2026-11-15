@@ -5729,6 +5729,27 @@ digits	Malayalam	Malaiàlam
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un quadre de diàleg no es pot obrir dins d'una crida de retorn d'una funció integrada, un getter, una conversió o un fitxer que executa $.evalFile; crideu-lo des del codi propi de l'script
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la resposta següent d'`answers` és per a {_1}, no per a {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: a `answers` no queden respostes per a aquest quadre de diàleg
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` conté {n} resposta que l'script no ha utilitzat|`answers` conté {n} respostes que l'script no ha utilitzat
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ha deixat {n} objecte sota el pinzell sense canvis ({_2}): només remodela traçats|{_1} ha deixat {n} objectes sota el pinzell sense canvis ({_2}): només remodela traçats
+liquify-tool	Warp	Deformació
+liquify-tool	Twirl	Remolí
+liquify-tool	Pucker	Arrufament
+liquify-tool	Bloat	Inflament
+liquify-tool	Scallop	Festonat
+liquify-tool	Crystallize	Cristal·lització
+liquify-tool	Wrinkle	Arruga
+liquify-kind	graphs	gràfics
+liquify-kind	type	text
+liquify-kind	symbols	símbols
+liquify-kind	images	imatges
+liquify-kind	meshes	malles
+liquify-kind	envelopes	embolcalls
+liquify-kind	repeats	repeticions
+liquify-kind	placed documents	documents col·locats
+liquify-kind	blends	fusions
+liquify-list-two	{0}, {1}	{0} i {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} i {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} és massa gran per a un script
 @msg	vc.log: the log of this run is full	vc.log: el registre d'aquesta execució és ple
 @msg	this function's script run has ended	l'execució de l'script d'aquesta funció ha acabat
