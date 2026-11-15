@@ -142,19 +142,22 @@ fn source_of<'a>(filter: &Filter, sources: &'a HashMap<String, Source>) -> Optio
 /// XML from `sources` ([`sources`]), in user space mapped to the document by `ts`. `None` when one
 /// isn't there, looks different outside the document, or isn't a filter the effect draws
 /// ([`vectorcraft_effects::svg_filter::check`]), or
-/// when `ts` turns or skews the user space or scales it past what the effect measures (0.001 to
-/// 1000 points to a unit). Where `ts` moves the user space is the effect's `origin`.
+/// when `ts` scales the user space past what the effect measures (0.001 to 1000 points to a unit,
+/// as the square root of its area scale) or stretches its axes past what the effect's `axes` hold.
+/// Where `ts` moves the user space is the effect's `origin`; a user space that `ts` turns, skews
+/// or scales unevenly keeps those directions in the effect's `axes`, so the filter runs in the
+/// element's own user space as SVG 1.1 defines it (<https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion>).
 pub(super) fn kept(filters: &[Arc<Filter>], ts: Affine, sources: &HashMap<String, Source>) -> Option<Vec<Effect>> {
-    let [a, b, c, d, e, f] = ts.as_coeffs();
-    if b != 0.0 || c != 0.0 || !(0.001..=1000.0).contains(&a) || (a - d).abs() > 1e-9 * a.abs().max(1.0) || !e.is_finite() || !f.is_finite() {
-        return None;
-    }
+    let space = vectorcraft_effects::svg_filter::user_space(ts)?;
     filters
         .iter()
         .map(|filter| {
             // A filter styled by the document is left out rather than drawn differently.
             let source = source_of(filter, sources).filter(|s| !s.styled)?;
-            let params = json!({ "name": source.name()?, "xml": source.xml, "scale": a, "origin": [e, f] });
+            let mut params = json!({ "name": source.name()?, "xml": source.xml, "scale": space.scale, "origin": space.origin });
+            if let Some(axes) = space.axes {
+                params["axes"] = json!(axes);
+            }
             Some(Effect { id: vectorcraft_effects::SVG_FILTER.into(), params, visible: true })
         })
         .collect()
