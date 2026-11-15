@@ -57,10 +57,12 @@ pub use catalog::{TOOL_GROUPS, ToolInfo, tool_info};
 mod context;
 mod cursor;
 mod input;
+mod readout;
 
 pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
+pub use readout::Readout;
 
 /// Visual feedback drawn by the UI in screen space (coordinates here are document space).
 #[derive(Clone, Debug, PartialEq)]
@@ -264,6 +266,12 @@ pub trait Tool: Send {
     /// selection changes (the Selection tool while Alt shows Distance Guides).
     fn wants_rehover(&self) -> bool {
         false
+    }
+    /// What the Info panel shows for the tool as it is now: the drag in progress (a move of the
+    /// selection, a gradient vector, a Scale, Rotate, Reflect or Shear tool drag), or the
+    /// Paintbrush's brush. None for a tool with nothing of its own to show.
+    fn readout(&self, _cx: &ToolContext) -> Option<Readout> {
+        None
     }
     /// Called when the user switches away (finish pending work).
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
