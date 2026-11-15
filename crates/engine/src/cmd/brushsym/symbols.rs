@@ -1041,6 +1041,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     let use_pressure = switch_or(p, "usePressure", false, C)?;
     let proportional = switch_or(p, "proportional", true, C)?;
     let affects_density = switch_or(p, "affectsDensity", false, C)?;
+    let shift = switch_or(p, "shift", false, C)?;
     // The Symbol Shifter has no Method.
     let method = if tool == "shift" { method_param(p, C).map(|_| Method::UserDefined)? } else { method_param(p, C)? };
     // Refused while an object of a dynamic instance's art is selected: the instance stays as it is.
@@ -1084,6 +1085,33 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     // for the whole stroke (and for every preview of it).
     let first = pts.first().map_or(Point::ZERO, |(q, _)| *q);
     let share = |id: NodeId| if method == Method::Random { jitter(id.0 as usize, first).0 + 1.0 } else { 1.0 };
+    // Shift with the Symbol Shifter: the instances under the brush come one place forward among
+    // their siblings (with `alt`, go one place backward), once for the whole stroke.
+    if tool == "shift" && shift {
+        let count = crate::cmd::colorcmds::edit_if_changed(s, label, |_, d| {
+            let under: std::collections::HashSet<NodeId> = candidates
+                .iter()
+                .copied()
+                .filter(|id| {
+                    d.node(*id).and_then(instance_center).is_some_and(|c| {
+                        pts.iter().any(|(q, pressure)| (if use_pressure { *pressure } else { intensity }) > 0.0 && c.distance(*q) < radius)
+                    })
+                })
+                .collect();
+            let moved = restack(d, &under, alt)?;
+            Ok((moved, moved > 0))
+        })?;
+        return Ok(json!({ "count": count }));
+    }
+    // Shift with the Symbol Stainer or the Symbol Styler: the paint an instance's stain or style
+    // moves toward, and the share of the brush's strength it moves by. Shift with the Symbol Sizer
+    // keeps the instances where they are, Resizing Affects Density included.
+    let recolor = match tool.as_str() {
+        "stain" if shift => Some((Paint::solid(color), 0.15)),
+        "style" if shift => Some((style_paint.clone().unwrap_or(Paint::solid(color)), 1.0)),
+        _ => None,
+    };
+    let spread = affects_density && !shift;
     // No undo step when no instance changes (none under the brush, or Average with each at the mean).
     let count = crate::cmd::colorcmds::edit_if_changed(s, label, |_, d| {
         let mut touched = std::collections::BTreeSet::new();
@@ -1110,6 +1138,15 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                     continue;
                 }
                 let Some(cur) = d.node(*id).and_then(|n| look(d, n)) else { continue };
+                // Shift with the Symbol Stainer or the Symbol Styler: the instance keeps the amount
+                // of its stain or style, and its paint moves toward the color or the style. An
+                // instance without one is left as it is.
+                if let Some((to, step)) = &recolor {
+                    if recolor_keeping_amount(d, *id, cur.fill, to, step * w) {
+                        touched.insert(*id);
+                    }
+                    continue;
+                }
                 // Average leaves an instance that already has the mean as it is.
                 let at_mean = target.as_ref().is_some_and(|t| match tool.as_str() {
                     "scrunch" => {
@@ -1161,8 +1198,9 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                         };
                         n.transform(about(Affine::scale_non_uniform(kx, ky)), false);
                         // Resizing Affects Density: instances move away from the brush's center as
-                        // they grow and toward it as they shrink.
-                        if affects_density {
+                        // they grow and toward it as they shrink. Shift keeps the instances where
+                        // they are, so the set's density stays as it was.
+                        if spread {
                             n.transform(Affine::translate((c - *q) * ((kx * ky).sqrt() - 1.0)), false);
                         }
                     }
@@ -1220,4 +1258,61 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
         Ok((touched.len(), !touched.is_empty()))
     })?;
     Ok(json!({ "count": count }))
+}
+
+/// Move the paint of instance `id`'s stain or style (`fill`, with its amount) toward `to` by `t`,
+/// keeping the amount. An instance without a stain or style, or one whose paint does not change, is
+/// left as it is. Returns whether it changed.
+fn recolor_keeping_amount(d: &mut Document, id: NodeId, fill: Option<(Paint, f64)>, to: &Paint, t: f64) -> bool {
+    let Some((own, amount)) = fill.filter(|(_, o)| *o > 0.0) else { return false };
+    let paint = vectorcraft_doc::blend::lerp_paint(&own, to, t.clamp(0.0, 1.0) as f32);
+    if paint == own {
+        return false;
+    }
+    let Some(n) = d.node_mut(id) else { return false };
+    n.appearance.items.retain(|i| !matches!(i, AppearanceItem::Fill(_)));
+    let mut f = FillLayer::new(paint);
+    f.opacity = (amount as f32).min(1.0);
+    n.appearance.items.insert(0, AppearanceItem::Fill(f));
+    true
+}
+
+/// Bring each of `ids` one place forward among its siblings past a sibling that is not one of them
+/// (`back`: one place backward). Ones already in front of (behind) every other sibling stay, and
+/// so do the clipping path of a clip group and the ruler guides above a layer's art. Returns how
+/// many moved.
+fn restack(d: &mut Document, ids: &std::collections::HashSet<NodeId>, back: bool) -> Result<usize> {
+    let mut parents: Vec<Option<NodeId>> = vec![];
+    for id in ids {
+        let par = d.parent_of(*id);
+        if !parents.contains(&par) {
+            parents.push(par);
+        }
+    }
+    let mut moved = 0;
+    for par in parents {
+        let floor = usize::from(par.and_then(|p| d.node(p)).is_some_and(Node::clips));
+        let ch = d.children_mut(par)?;
+        let len = Node::guide_run_start(ch);
+        if len <= floor + 1 {
+            continue;
+        }
+        let picked = |n: &Arc<Node>| ids.contains(&n.id);
+        if back {
+            for i in floor + 1..len {
+                if picked(&ch[i]) && !picked(&ch[i - 1]) {
+                    ch.swap(i - 1, i);
+                    moved += 1;
+                }
+            }
+        } else {
+            for i in (floor..len - 1).rev() {
+                if picked(&ch[i]) && !picked(&ch[i + 1]) {
+                    ch.swap(i, i + 1);
+                    moved += 1;
+                }
+            }
+        }
+    }
+    Ok(moved)
 }

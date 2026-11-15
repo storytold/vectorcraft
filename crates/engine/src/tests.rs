@@ -194,6 +194,7 @@ mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbolism_options;
+mod symbolism_shift;
 mod symbollib;
 mod targeting;
 mod textcombos;
