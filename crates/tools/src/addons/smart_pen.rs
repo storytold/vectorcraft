@@ -527,6 +527,7 @@ impl Tool for SmartPenTool {
                 }
                 _ => vec![],
             },
+            PointerKind::TripleClick => vec![],
         }
     }
 

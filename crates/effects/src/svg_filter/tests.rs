@@ -10,7 +10,15 @@ use crate::{PixelFx, RasterFx, raster_effects};
 /// resolution whose pixels are `line` points wide.
 fn space(w: usize, h: usize, px: f64, line: f64) -> PixelSpace {
     let (wd, hd) = (w as f64 * px, h as f64 * px);
-    PixelSpace { to_doc: Affine::scale(px), px, center: Point::new(wd / 2.0, hd / 2.0), channels: Channels::Rgb, line, extent: 0.5 * wd.hypot(hd) }
+    PixelSpace {
+        to_doc: Affine::scale(px),
+        px,
+        center: Point::new(wd / 2.0, hd / 2.0),
+        size: vectorcraft_geom::Vec2::new(wd, hd),
+        channels: Channels::Rgb,
+        line,
+        extent: 0.5 * wd.hypot(hd),
+    }
 }
 
 /// `w` × `h` premultiplied pixels: `f(x, y)` each.

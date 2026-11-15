@@ -911,6 +911,33 @@ fn svg_images_whose_styles_expand_past_the_limit_refuse_the_svg() {
     assert!(!art(&d).is_empty());
 }
 
+/// The SVG images share the element limit with the SVG showing them: each image's `<use>` chain
+/// makes 655,356 elements, so one imports and two together are refused before usvg makes the
+/// second.
+#[test]
+fn svg_images_share_the_element_limit() {
+    let chain = use_chain(16, "");
+    let unshown = chain.replacen(r##"<use href="#g16"/>"##, "", 1);
+    assert_ne!(chain, unshown);
+    let image = image_of("image/svg+xml", &unshown);
+    let rect = r#"<rect width="1" height="1"/>"#;
+    assert!(import_with(&svg(&format!("{rect}{image}")), &ImportOptions::default()).is_ok());
+    let err = import_with(&svg(&format!("{rect}{}", image.repeat(2))), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::TooLarge(n) if n == vectorcraft_svg::MAX_NODES.min(999_999)), "{err:?}");
+}
+
+/// A `:not()` rule, which only the import's own style cascade reads, counts toward the style limit
+/// the SVG images share: each image's rule gives 400 groups the long style (about 40 MB), so one
+/// imports and two together are refused.
+#[test]
+fn svg_images_share_the_style_limit_with_not_rules() {
+    let groups = svg(&format!(r#"<style>g:not(.x){{{}}}</style>{}<rect width="1" height="1"/>"#, long_style(), "<g/>".repeat(400)));
+    let image = image_of("image/svg+xml", &groups);
+    assert!(import_with(&svg(&image), &ImportOptions::default()).is_ok());
+    let err = import_with(&svg(&image.repeat(2)), &ImportOptions::default()).unwrap_err();
+    assert!(matches!(err, SvgError::StylesTooLarge(64)), "{err:?}");
+}
+
 /// Nested SVG images exceeding `MAX_NESTED_SVG_IMAGES` are left out with a warning note (#3564).
 #[test]
 fn nested_svg_images_past_count_cap_are_left_out() {

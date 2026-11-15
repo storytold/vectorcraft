@@ -1850,6 +1850,7 @@ fn rasterize_compose_leaves_the_raster_alone_when_the_sizes_do_not_fit() {
         to_doc: Affine::IDENTITY,
         px: 1.0,
         center: Point::new(1.0, 1.0),
+        size: vectorcraft_geom::Vec2::new(2.0, 2.0),
         channels: pixel::Channels::Rgb,
         line: 1.0,
         extent: std::f64::consts::SQRT_2,
