@@ -1193,6 +1193,8 @@ fn expanded_node(
     if !expandable(&n) {
         return None;
     }
+    // What `out` held before `n`: an object left by the raster budget lists nothing.
+    let listed_before = out.len();
     // Colour adjustments: the colours inside become the adjusted ones (an embedded image a
     // recoloured copy), then the rest of the appearance expands.
     let mut changed = false;
@@ -1205,6 +1207,10 @@ fn expanded_node(
         }
         _ => None,
     };
+    // The embedded images before the adjustment, when the raster budget may yet leave `n` as it
+    // is: the recolored copies the adjustment adds then go again.
+    let images_before = (effects::has_adjustment(&n) && !rasterfx::raster_fx(&n).is_empty())
+        .then(|| d.images.keys().cloned().collect::<std::collections::HashSet<_>>());
     if effects::has_adjustment(&n)
         && let Some(m) = effects::adjust_in_document(d, &n, symbol_art)
     {
@@ -1251,8 +1257,14 @@ fn expanded_node(
         return Some(m);
     }
     // Raster effects whose image would go past the budget stay: so does the object, with what is
-    // inside it (a color adjustment already made stays made).
-    let Ok(image) = raster_image(d, &n, raster) else { return changed.then_some(n) };
+    // inside it and its color adjustments (a symbol instance stays an instance of its symbol).
+    let Ok(image) = raster_image(d, &n, raster) else {
+        out.truncate(listed_before);
+        if let Some(keys) = images_before {
+            d.images.retain(|k, _| keys.contains(k));
+        }
+        return None;
+    };
     let mut v = n.clone();
     rasterfx::strip_raster(&mut v, false);
     let mut stroke_art =

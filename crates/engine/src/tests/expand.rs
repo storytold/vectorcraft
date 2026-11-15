@@ -748,6 +748,72 @@ fn nested_instance_raster_effects_stop_at_the_image_limit() {
     });
 }
 
+/// Gives `id` a color adjustment and a blur, puts it in a group above 1,024 blurred squares, which
+/// take every image one Expand Appearance makes, and expands the group. Returns `id` as it was
+/// before expanding.
+fn adjusted_and_left_by_the_image_limit(s: &mut Session, id: NodeId) -> Node {
+    // Images of a pixel or two each.
+    run(s, "document.rasterEffectsSettings", json!({"resolution": 1}));
+    run(s, "effect.apply", json!({"ids": [id.0], "item": null, "effect": "adjust.hueSaturation", "params": {"hue": 120}}));
+    run(s, "effect.apply", json!({"ids": [id.0], "item": null, "effect": "blur.gaussian", "params": {"radius": 3}}));
+    let sq = NodeId(run(s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+    run(s, "effect.apply", json!({"ids": [sq.0], "item": null, "effect": "blur.gaussian", "params": {"radius": 3}}));
+    let before = node(s, id);
+    let group = {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let blurred = d.node(sq).unwrap().clone();
+        d.remove(sq).unwrap();
+        let mut members: Vec<_> = (0..1_024)
+            .map(|_| {
+                let mut copy = blurred.clone();
+                copy.id = d.alloc_id();
+                std::sync::Arc::new(copy)
+            })
+            .collect();
+        members.push(std::sync::Arc::new(before.clone()));
+        let group = d.alloc_id();
+        *d.node_mut(id).unwrap() = Node::group(group, members);
+        group
+    };
+
+    let r = run(s, "effect.expandAppearance", json!({"ids": [group.0]}));
+    assert_eq!(r["rasterLeft"], 1, "{r}");
+    before
+}
+
+/// A symbol instance with a color adjustment and a blur, left by the image limit, stays an instance
+/// of its symbol, with both effects.
+#[test]
+fn a_color_adjusted_instance_left_by_the_image_limit_stays_an_instance() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Adjusted Square"}))["id"].as_u64().unwrap());
+    let before = adjusted_and_left_by_the_image_limit(&mut s, id);
+    assert!(matches!(before.kind, NodeKind::SymbolInstance { .. }));
+    assert_eq!(node(&s, id), before, "the instance stays as it is, with its adjustment and blur");
+}
+
+/// An embedded image with a color adjustment and a blur, left by the image limit, stays as it is,
+/// and the document keeps no recolored copy of its pixels.
+#[test]
+fn a_color_adjusted_image_left_by_the_image_limit_adds_no_pixels() {
+    let mut s = session();
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let r = run(&mut s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [100, 100]}));
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let images: Vec<String> = s.doc().unwrap().doc.images.keys().cloned().collect();
+    let before = adjusted_and_left_by_the_image_limit(&mut s, id);
+    assert!(matches!(before.kind, NodeKind::Image(_)));
+    assert_eq!(node(&s, id), before, "the image stays as it is, with its adjustment and blur");
+    // Besides the squares' images, the document holds the image's pixels alone.
+    let after: Vec<String> = s.doc().unwrap().doc.images.keys().filter(|k| !k.starts_with("raster-effect-")).cloned().collect();
+    assert_eq!(after, images, "no recolored copy stays in the document");
+}
+
 /// Export draws a symbol instance's fill shadow on the filled shapes of its art: baking leaves the
 /// shadow on the art's fill, not its stroke, and PDF export makes an image of it.
 #[test]
