@@ -170,6 +170,197 @@ fn a_plot_reads_back_as_its_art() {
     assert!((board.height() - (30.0 + pen)).abs() < 0.1, "{board:?}");
 }
 
+/// A plot of the art's bounds is measured on the art it plots: art on a non-printing layer, on a
+/// layer at 0% opacity or at 0% opacity in a group, a placed image and a path that paints nothing
+/// don't move its origin, a clipping layer is measured as clipped, and a document whose only
+/// visible art is such art is refused.
+#[test]
+fn a_plot_of_the_arts_bounds_leaves_out_the_layers_it_does_not_plot() {
+    let mut s = two_boards();
+    let plot = |s: &mut Session| s.execute("document.export", &json!({"format": "hpgl", "useArtboards": false})).map(|v| bytes(&v));
+    let alone = plot(&mut s).unwrap();
+    let printing = s.doc().unwrap().doc.layers[0].id;
+    for props in [json!({"printable": false}), json!({})] {
+        let layer = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+        if props.as_object().unwrap().is_empty() {
+            s.execute("transparency.set", &json!({"ids": [layer], "opacity": 0})).unwrap();
+        } else {
+            let mut p = props.clone();
+            p["id"] = layer.clone();
+            s.execute("layer.setProps", &p).unwrap();
+        }
+        s.execute("shape.rectangle", &json!({"x": -300, "y": 500, "width": 20, "height": 20})).unwrap();
+        assert_eq!(plot(&mut s).unwrap(), alone, "{props}");
+    }
+    // An object at 0% opacity in a group, on a layer that plots.
+    s.execute("layer.new", &json!({})).unwrap();
+    let far = s.execute("shape.rectangle", &json!({"x": -500, "y": 700, "width": 20, "height": 20})).unwrap()["id"].clone();
+    s.execute("object.group", &json!({"ids": [far]})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [far], "opacity": 0})).unwrap();
+    assert_eq!(plot(&mut s).unwrap(), alone, "0% opacity in a group");
+    // A placed image and a path whose fill and stroke paint nothing.
+    let mut png = vec![];
+    image::DynamicImage::new_rgb8(4, 4).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.execute("file.place", &json!({"name": "far.png", "dataBase64": b64(&png), "at": [-600, 800]})).unwrap();
+    assert_eq!(plot(&mut s).unwrap(), alone, "a placed image");
+    let bare = s.execute("shape.rectangle", &json!({"x": 500, "y": -400, "width": 20, "height": 20})).unwrap()["id"].clone();
+    s.execute("paint.setStroke", &json!({"ids": [bare], "none": true})).unwrap();
+    assert_eq!(plot(&mut s).unwrap(), alone, "a path that paints nothing");
+
+    // A clipping layer's clipping path, which loses its paint, still clips the art measured: a
+    // large square clipped to the first square draws nothing more.
+    let clipping = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+    s.execute("shape.rectangle", &json!({"x": -300, "y": -300, "width": 800, "height": 800})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    s.execute("layer.clippingMask.toggle", &json!({"id": clipping})).unwrap();
+    assert_eq!(plot(&mut s).unwrap(), alone, "a clipping layer");
+
+    s.execute("layer.setProps", &json!({"id": clipping, "visible": false})).unwrap();
+    s.execute("layer.setProps", &json!({"id": printing, "visible": false})).unwrap();
+    let e = plot(&mut s).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+}
+
+/// A placed image in a symbol's art doesn't move a plot of the art's bounds either, and a
+/// document whose only other visible art is an instance of that symbol is refused.
+#[test]
+fn a_plot_of_the_arts_bounds_leaves_out_images_in_symbol_art() {
+    let mut s = two_boards();
+    let plot = |s: &mut Session| s.execute("document.export", &json!({"format": "hpgl", "useArtboards": false})).map(|v| bytes(&v));
+    let alone = plot(&mut s).unwrap();
+    let printing = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.new", &json!({})).unwrap();
+    let mut png = vec![];
+    image::DynamicImage::new_rgb8(4, 4).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.execute("file.place", &json!({"name": "far.png", "dataBase64": b64(&png), "at": [-600, 800]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Far"})).unwrap();
+    assert!(s.doc().unwrap().doc.symbols.iter().any(|sym| sym.name == "Far"));
+    assert_eq!(plot(&mut s).unwrap(), alone, "an image in symbol art");
+
+    s.execute("layer.setProps", &json!({"id": printing, "visible": false})).unwrap();
+    let e = plot(&mut s).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+
+    // A symbol of a square and an image is measured by its square.
+    let bounds = |s: &Session| super::export_art_bounds(&s.doc().unwrap().doc, "hpgl").unwrap();
+    let square = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap()["id"].clone();
+    let before = bounds(&s);
+    let image = s.execute("file.place", &json!({"name": "near.png", "dataBase64": b64(&png), "at": [400, 600]})).unwrap()["ids"][0].clone();
+    s.execute("symbol.new", &json!({"name": "Both", "ids": [square, image]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.symbols.len(), 2);
+    let after = bounds(&s);
+    for (a, b) in [(before.x0, after.x0), (before.y0, after.y0), (before.x1, after.x1), (before.y1, after.y1)] {
+        assert!((a - b).abs() < 1e-6, "{before:?} {after:?}");
+    }
+}
+
+/// In the art of a dynamic symbol a placed image and a path that paints nothing are left out as
+/// well, until an instance paints the path, and a document whose only other visible art is an
+/// instance of a dynamic symbol of an image is refused.
+#[test]
+fn a_plot_of_the_arts_bounds_leaves_out_images_in_dynamic_symbol_art() {
+    let mut s = two_boards();
+    let plot = |s: &mut Session| s.execute("document.export", &json!({"format": "hpgl", "useArtboards": false})).map(|v| bytes(&v));
+    let bounds = |s: &Session| super::export_art_bounds(&s.doc().unwrap().doc, "hpgl").unwrap();
+    let same = |a: vectorcraft_geom::Rect, b: vectorcraft_geom::Rect| {
+        [(a.x0, b.x0), (a.y0, b.y0), (a.x1, b.x1), (a.y1, b.y1)].iter().all(|(a, b)| (a - b).abs() < 1e-6)
+    };
+    let printing = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.new", &json!({})).unwrap();
+    let mut png = vec![];
+    image::DynamicImage::new_rgb8(4, 4).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let image = s.execute("file.place", &json!({"name": "far.png", "dataBase64": b64(&png), "at": [-600, 800]})).unwrap()["ids"][0].clone();
+    let square = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap()["id"].clone();
+    let bare = s.execute("shape.rectangle", &json!({"x": 500, "y": -400, "width": 20, "height": 20})).unwrap()["id"].clone();
+    s.execute("paint.setStroke", &json!({"ids": [bare], "none": true})).unwrap();
+    let before = bounds(&s);
+    let inst = s.execute("symbol.new", &json!({"name": "Mixed", "ids": [image, square, bare], "type": "dynamic"})).unwrap()["id"].clone();
+    let after = bounds(&s);
+    assert!(same(before, after), "{before:?} {after:?}");
+
+    // A change of the path's blending mode leaves it painting nothing; once the instance paints the
+    // path, the path is measured.
+    let art = s.doc().unwrap().doc.symbols[0].art.clone();
+    let x0 = |c: &std::sync::Arc<vectorcraft_doc::Node>| c.visual_bounds().map_or(f64::MIN, |b| b.x0);
+    let at = (0..art.children().unwrap().len()).max_by(|a, b| x0(&art.children().unwrap()[*a]).total_cmp(&x0(&art.children().unwrap()[*b]))).unwrap();
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst, "path": [at], "blend": "multiply"})).unwrap();
+    let blended = bounds(&s);
+    assert!(same(before, blended), "{before:?} {blended:?}");
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst, "path": [at], "stroke": "#000000"})).unwrap();
+    let painted = bounds(&s);
+    assert!(painted.x1 > 500.0 && painted.y0 < -390.0, "{painted:?}");
+    // A later change to the same object, as a file can hold, takes the paint off again.
+    {
+        let id = vectorcraft_doc::NodeId(inst.as_u64().unwrap());
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let n = d.node_mut(id).unwrap();
+        let mut overrides = n.extras().symbol_overrides.clone();
+        overrides.push(vectorcraft_doc::SymbolOverride { path: vec![at as u32], opacity: Some(0.0), ..Default::default() });
+        n.extras_mut().symbol_overrides = overrides.clone();
+        let taken_off = bounds(&s);
+        assert!(same(before, taken_off), "{before:?} {taken_off:?}");
+        overrides.pop();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        d.node_mut(id).unwrap().extras_mut().symbol_overrides = overrides;
+    }
+    // Another instance, far above, that doesn't paint the path is measured without it, whether or
+    // not the first one paints it.
+    let other = s.execute("symbol.place", &json!({"name": "Mixed", "x": 0, "y": -5000})).unwrap()["id"].clone();
+    let with_paint = bounds(&s);
+    s.execute("symbol.instance.reset", &json!({"ids": [inst]})).unwrap();
+    let without_paint = bounds(&s);
+    assert!((with_paint.y0 - without_paint.y0).abs() < 1e-6, "{with_paint:?} {without_paint:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let undone = bounds(&s);
+    assert!(same(undone, with_paint), "{undone:?} {with_paint:?}");
+    s.execute("select.set", &json!({"ids": [other]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+
+    s.execute("select.set", &json!({"ids": [inst]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.execute("layer.setProps", &json!({"id": printing, "visible": false})).unwrap();
+    let image = s.execute("file.place", &json!({"name": "far.png", "dataBase64": b64(&png), "at": [-600, 800]})).unwrap()["ids"][0].clone();
+    s.execute("symbol.new", &json!({"name": "Image", "ids": [image], "type": "dynamic"})).unwrap();
+    let e = plot(&mut s).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+
+    // An instance that brings a group at 0% opacity back to full opacity still draws nothing when
+    // the group holds only an image.
+    let image = s.execute("file.place", &json!({"name": "far.png", "dataBase64": b64(&png), "at": [-600, 800]})).unwrap()["ids"][0].clone();
+    let group = s.execute("object.group", &json!({"ids": [image]})).unwrap()["id"].clone();
+    s.execute("transparency.set", &json!({"ids": [group], "opacity": 0})).unwrap();
+    let inst = s.execute("symbol.new", &json!({"name": "Clear", "ids": [group], "type": "dynamic"})).unwrap()["id"].clone();
+    let id = vectorcraft_doc::NodeId(inst.as_u64().unwrap());
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    d.node_mut(id).unwrap().extras_mut().symbol_overrides =
+        [vec![], vec![0]].into_iter().map(|path| vectorcraft_doc::SymbolOverride { path, opacity: Some(1.0), ..Default::default() }).collect();
+    let e = plot(&mut s).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+}
+
+/// A placed image with a Vector Halftone effect is measured when the effect makes dots, and left
+/// out when it would take more cells than the effect makes.
+#[test]
+fn a_plot_of_the_arts_bounds_measures_images_by_their_halftone_dots() {
+    let mut s = two_boards();
+    let plot = |s: &mut Session| s.execute("document.export", &json!({"format": "hpgl", "useArtboards": false})).map(|v| bytes(&v));
+    let printing = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.new", &json!({})).unwrap();
+    let mut png = vec![];
+    image::DynamicImage::new_rgb8(100, 100).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.execute("file.place", &json!({"name": "dots.png", "dataBase64": b64(&png), "at": [300, 300]})).unwrap();
+    s.execute("layer.setProps", &json!({"id": printing, "visible": false})).unwrap();
+
+    // At 300 lines per inch a 100 pt image takes more cells than the effect makes.
+    s.execute("effect.apply", &json!({"effect": "addon.color.halftone", "params": {"frequency": 300}})).unwrap();
+    let e = plot(&mut s).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+
+    s.execute("effect.apply", &json!({"effect": "addon.color.halftone", "params": {"frequency": 20}})).unwrap();
+    let out = String::from_utf8(plot(&mut s).unwrap()).unwrap();
+    assert!(out.contains("PD"), "{out}");
+}
+
 #[test]
 fn export_options_are_checked() {
     let mut s = two_boards();

@@ -90,10 +90,54 @@ fn the_panel_lists_the_images_with_link_info_for_the_selected_one() {
     assert!(text.contains("Linked") && text.contains("300 × 200 px") && text.contains("Location"), "{text}");
     // The flyout draws with every item.
     let menu = painted_text(&mut app, super::links::menu);
-    for item in ["Relink to Folder…", "Embed Image(s)", "Placement Options…", "Show Missing", "Sort by Status", "Large Thumbnails", "Show in Folder"]
-    {
+    for item in [
+        "Relink to Folder…",
+        "Embed Image(s)",
+        "Placement Options…",
+        "Show Missing",
+        "Sort by Status",
+        "Sort by Size",
+        "Large Thumbnails",
+        "Show in Folder",
+    ] {
         assert!(menu.contains(item), "{item}: {menu}");
     }
+}
+
+/// Copy Info copies the file names of the selected links, or of `ids` in the order given, one per
+/// line; it is off with nothing selected, and a bad `ids` leaves the clipboard as it was.
+#[test]
+fn copy_info_copies_the_file_names_of_the_links() {
+    let dir = Folder::new("copy-info");
+    let (mut app, linked, embedded) = app(&dir);
+    let menu = painted_text(&mut app, super::links::menu);
+    assert!(menu.contains("Copy Info"), "{menu}");
+    // The selection is the embedded image: its row's name.
+    assert!(crate::menus::enabled(&app, "links.copyInfo"));
+    let r = app.run("links.copyInfo", json!({})).unwrap();
+    assert_eq!(r["names"], json!(["embedded.png"]));
+    assert_eq!(app.clipboard_out.take().as_deref(), Some("embedded.png"));
+    // Both selected: in the order the list gives them (the top image first).
+    app.run("select.set", json!({"ids": [linked, embedded]})).unwrap();
+    assert_eq!(app.run("links.copyInfo", json!({})).unwrap()["text"], "embedded.png\nlinked.png");
+    assert_eq!(app.clipboard_out.take().as_deref(), Some("embedded.png\nlinked.png"));
+    // `ids` in the order given, whatever is selected.
+    app.run("select.none", json!({})).unwrap();
+    let r = app.run("links.copyInfo", json!({"ids": [linked, embedded]})).unwrap();
+    assert_eq!(r["names"], json!(["linked.png", "embedded.png"]));
+    assert_eq!(app.clipboard_out.take().as_deref(), Some("linked.png\nembedded.png"));
+    // Errors copy nothing.
+    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.none", json!({})).unwrap();
+    for bad in
+        [json!({"ids": [linked, rect]}), json!({"ids": [linked, 999_999]}), json!({"ids": "all"}), json!({"ids": [linked, -1]}), json!({"ids": []})]
+    {
+        assert!(app.run("links.copyInfo", bad.clone()).is_err(), "{bad}");
+        assert!(app.clipboard_out.is_none(), "{bad}");
+    }
+    assert!(!crate::menus::enabled(&app, "links.copyInfo"));
+    assert!(app.run("links.copyInfo", json!({})).is_err());
+    assert!(app.clipboard_out.is_none());
 }
 
 /// Shift-click selects the images of the rows from the last row clicked without Shift; Ctrl/Cmd-click
@@ -160,6 +204,11 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     click_row(&mut app, &ctx, "inside.png", egui::Modifiers::NONE, 1.0);
     assert!(selected(&app).is_empty(), "the canvas can't select it");
     assert!(shown(&mut app, 1.5).iter().any(|t| t == "30 × 20 px"), "Link Info of the symbol's image");
+    // Copy Info without ids copies the row picked in the panel.
+    app.ui_ctx = Some(ctx.clone());
+    assert!(crate::menus::enabled(&app, "links.copyInfo"));
+    assert_eq!(app.run("links.copyInfo", json!({})).unwrap()["text"], "inside.png");
+    assert_eq!(app.clipboard_out.take().as_deref(), Some("inside.png"));
     click_row(&mut app, &ctx, "layer.png", egui::Modifiers::COMMAND, 2.0);
     assert_eq!(selected(&app), [layer]);
     // Both rows are selected until the canvas selection changes: then the panel's pick goes too.
@@ -228,6 +277,28 @@ fn a_mask_rows_tooltip_names_its_object_inside_a_symbol() {
     let text: Vec<String> = frame(&mut app, vec![], 4.1).into_iter().map(|(t, _)| t).collect();
     let want = format!("Opacity Mask: {name}");
     assert!(text.iter().any(|t| t.contains(&want)), "{want} in {text:?}");
+}
+
+/// The row of an image in a stored brush's art finds its object for the thumbnail, though that art
+/// is set on the document only while a command uses it.
+#[test]
+fn a_row_in_a_stored_brushs_art_finds_its_object() {
+    let dir = Folder::new("brush-art");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let leaf = dir.file("leaf.png", &png(30, 20));
+    let id = app.run("file.place", json!({"path": leaf, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("brush.new", json!({"type": "scatter", "name": "Leaf", "ids": [id]})).unwrap();
+    app.run("edit.clear", json!({"ids": [id]})).unwrap();
+    let list = app.run("links.list", json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "leaf.png").unwrap_or_else(|| panic!("{list}")).clone();
+    assert_eq!(row["owner"]["kind"], "brush", "{list}");
+    let row = row["id"].as_u64().unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert!(doc.mounted_art.is_empty(), "the brush's art is not set on the document");
+    let found = super::links::stored_objects(doc, [row].into());
+    assert_eq!(found.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [row]);
+    assert!(matches!(found[0].1.kind, vectorcraft_doc::NodeKind::Image(_)), "{:?}", found[0].1.kind);
 }
 
 #[test]
