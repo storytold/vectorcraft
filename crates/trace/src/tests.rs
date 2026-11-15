@@ -893,6 +893,35 @@ fn presets_resolve() {
 }
 
 #[test]
+fn presets_have_their_paths_corners_and_noise() {
+    let expected: &[(&str, f64, f64, u32)] = &[
+        ("Default", 50.0, 75.0, 25),
+        ("High Fidelity Photo", 50.0, 50.0, 5),
+        ("Low Fidelity Photo", 50.0, 50.0, 10),
+        ("3 Colors", 50.0, 50.0, 15),
+        ("6 Colors", 50.0, 50.0, 15),
+        ("16 Colors", 50.0, 50.0, 15),
+        ("Shades of Gray", 50.0, 50.0, 15),
+        ("Black and White Logo", 50.0, 75.0, 25),
+        ("Sketched Art", 50.0, 50.0, 20),
+        ("Silhouettes", 50.0, 50.0, 90),
+        ("Line Art", 50.0, 75.0, 20),
+        ("Technical Drawing", 50.0, 100.0, 1),
+        ("Outline", 50.0, 75.0, 20),
+    ];
+    for &(name, paths, corners, noise) in expected {
+        let p = preset(name).unwrap();
+        assert_eq!((p.paths, p.corners, p.noise), (paths, corners, noise), "{name}");
+    }
+    // The color counts stay as they were.
+    let colors: Vec<u32> = ["High Fidelity Photo", "Low Fidelity Photo", "3 Colors", "6 Colors", "16 Colors", "Shades of Gray"]
+        .iter()
+        .map(|n| preset(n).unwrap().colors)
+        .collect();
+    assert_eq!(colors, [64, 20, 3, 6, 16, 8]);
+}
+
+#[test]
 fn params_json_roundtrip_and_partial() {
     let p = preset("6 Colors").unwrap();
     let v = serde_json::to_value(&p).unwrap();
@@ -2290,6 +2319,65 @@ fn thin_lines_on_flat_art_of_up_to_sixteen_clean_levels_are_traced() {
             // white line above and below it; the second band in four; each other band in two.
             assert_eq!(res.paths.len(), 1 + 2 + 2 + 4 + 2 * (levels as usize - 3), "{levels} {name} bands");
         }
+    }
+}
+
+#[test]
+fn automatic_keeps_every_level_of_clean_flat_art_of_up_to_sixteen_levels() {
+    let tints: [(&str, &[[f64; 3]]); 4] = [("gray", &GRAY_RAMP), ("sepia", &SEPIA), ("blue", &BLUE), ("duotone", &DUOTONE)];
+    let params = TraceParams { mode: Mode::Color, palette: Palette::Automatic, ..TraceParams::default() };
+    for (name, stops) in tints {
+        for levels in [2, 10, 12, 14, 16] {
+            let bands = tinted(&even_gray_bands(levels), stops, 0.0);
+            let res = trace(&bands, &params);
+            assert_eq!(res.palette.len(), levels as usize, "{levels} {name} bands: {:?}", res.palette);
+            for band in 0..levels {
+                let i = ((band * 20 + 10) * 4) as usize;
+                let want = [bands.rgba[i], bands.rgba[i + 1], bands.rgba[i + 2]];
+                assert!(
+                    res.palette.iter().any(|c| (0..3).all(|k| c[k].abs_diff(want[k]) <= 1)),
+                    "{levels} {name} bands: no {want:?} in {:?}",
+                    res.palette
+                );
+            }
+            assert_eq!(res.paths.len(), levels as usize, "{levels} {name} bands");
+        }
+    }
+}
+
+#[test]
+fn automatic_counts_no_anti_aliased_edge_of_clean_levels_as_a_level() {
+    // Four gray bands 10 px wide, `apart` levels apart, each edge blended over `width` px: every
+    // blended column holds 2.5 in 100 of the pixels, more than a color needs to be counted.
+    let params = TraceParams { mode: Mode::Color, palette: Palette::Automatic, ..TraceParams::default() };
+    for apart in [24.0, 40.0, 64.0] {
+        for width in 1..=4u32 {
+            let level = |b: u32| 20.0 + apart * f64::from(b);
+            let img = Raster::from_fn(40, 60, |x, _| {
+                let (b, j) = (x / 10, x % 10);
+                let v = if b > 0 && j < width { level(b - 1) + apart * f64::from(j + 1) / f64::from(width + 1) } else { level(b) };
+                let v = v.round() as u8;
+                [v, v, v, 255]
+            });
+            let res = trace(&img, &params);
+            assert_eq!(res.palette.len(), 4, "levels {apart} apart, edges {width} px: {:?}", res.palette);
+        }
+    }
+}
+
+#[test]
+fn automatic_merges_a_dithered_close_level_as_noise() {
+    // A gray ground with 5 to 20 in 100 of its pixels, scattered, 12 levels lighter: two clean
+    // levels by their histogram, but mixed through each other, so they trace as one color.
+    let params = TraceParams { mode: Mode::Color, palette: Palette::Automatic, ..TraceParams::default() };
+    let hash = |x: u32, y: u32| (x.wrapping_mul(73_856_093) ^ y.wrapping_mul(19_349_663)).wrapping_mul(2_654_435_761);
+    for percent in [5, 10, 20] {
+        let img = Raster::from_fn(120, 120, |x, y| {
+            let v = if hash(x, y) % 100 < percent { 112 } else { 100 };
+            [v, v, v, 255]
+        });
+        let res = trace(&img, &params);
+        assert_eq!(res.palette.len(), 1, "{percent} in 100 dithered: {:?}", res.palette);
     }
 }
 

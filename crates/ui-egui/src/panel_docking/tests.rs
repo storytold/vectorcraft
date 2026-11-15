@@ -468,6 +468,200 @@ fn tab_hides_the_panels_and_the_canvas_keeps_drawing() {
     assert!(h.tab("properties").is_some());
 }
 
+/// Hide the panels with Tab and settle; returns the canvas rect with every panel hidden.
+fn hide_with_tab(h: &mut Harness) -> Rect {
+    h.app.run("window.dock", json!({})).unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_none());
+    h.app.canvas_rect.expect("the canvas draws")
+}
+
+/// Frames with the pointer still, for `secs` of the harness clock.
+fn wait(h: &mut Harness, secs: f64) {
+    let until = h.time + secs;
+    while h.time < until {
+        h.frame(vec![]);
+    }
+}
+
+#[test]
+fn resting_on_the_right_edge_shows_the_hidden_panels_over_the_canvas_until_the_pointer_leaves() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    let edge = pos2(SCREEN.right() - 2.0, 500.0);
+    h.frame(vec![Event::PointerMoved(edge)]);
+    wait(&mut h, peek::DELAY / 2.0);
+    assert!(h.tab("properties").is_none(), "the panels wait for the pointer to rest");
+    wait(&mut h, peek::DELAY);
+    let tab = h.tab("properties").expect("resting on the edge shows the right-hand panels");
+    assert!(h.hit(&Hit::Icon("swatches".into())).is_some(), "the icon column shows with them");
+    assert!(!h.app.ui.dock, "the panels stay hidden for good");
+    assert_eq!(h.app.canvas_rect, Some(wide), "the canvas keeps its size, so the art stays where it is");
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], json!("right"));
+    h.frame(vec![Event::PointerMoved(tab.center())]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_some(), "they stay while the pointer is over them");
+    h.frame(vec![Event::PointerMoved(wide.center())]);
+    wait(&mut h, peek::GRACE / 2.0);
+    assert!(h.tab("properties").is_some(), "a short trip away keeps them");
+    wait(&mut h, peek::GRACE);
+    assert!(h.tab("properties").is_none(), "away from them, they hide again");
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], Value::Null);
+}
+
+#[test]
+fn a_press_on_the_canvas_while_the_panels_show_from_the_edge_does_not_reach_the_art_under_them() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    h.app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    h.frame(vec![]);
+    fn selected(app: &VectorcraftApp) -> bool {
+        !app.session.active().unwrap().selection.is_empty()
+    }
+    assert!(selected(&h.app));
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap(), json!("right"));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let tab = h.tab("properties").expect("the right-hand panels show");
+    assert!(tab.left() < wide.right(), "they cover the canvas's right edge");
+    assert_eq!(h.app.canvas_rect, Some(wide));
+    // A click in the panels, where the canvas lies under them, leaves the selection.
+    h.click(pos2(tab.center().x, wide.bottom() - 40.0));
+    assert!(selected(&h.app), "the canvas under the panels takes no click");
+    // A click on the uncovered canvas away from the art deselects it, as it always does.
+    h.click(pos2(wide.left() + 40.0, wide.bottom() - 40.0));
+    assert!(!selected(&h.app));
+}
+
+#[test]
+fn the_canvas_keeps_the_hidden_panels_size_when_the_window_resizes_or_the_panels_show_at_once() {
+    let mut h = Harness::new();
+    // Shown before any frame has drawn the panels hidden.
+    h.app.run("window.dock", json!({})).unwrap();
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap(), json!("right"));
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_some());
+    let wide = h.app.canvas_rect.unwrap();
+    h.app.run("window.panels.peek", json!({"side": null})).unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.app.canvas_rect, Some(wide), "the canvas had the size it has with every panel hidden");
+    // A narrower window while they show.
+    h.app.run("window.panels.peek", json!({"side": "right"})).unwrap();
+    let narrow = Rect::from_min_max(SCREEN.min, pos2(SCREEN.right() - 200.0, SCREEN.bottom()));
+    for _ in 0..3 {
+        h.time += 0.05;
+        h.run(egui::RawInput { time: Some(h.time), screen_rect: Some(narrow), ..Default::default() });
+    }
+    assert!(h.tab("properties").is_some());
+    let canvas = h.app.canvas_rect.unwrap();
+    assert!((canvas.width() - (wide.width() - 200.0)).abs() < 1.0, "{canvas:?} follows the window, under the panels");
+}
+
+#[test]
+fn panels_held_by_a_press_hide_after_its_release_away_from_them() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.right() - 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    let tab = h.tab("properties").expect("the panels show");
+    let body = pos2(tab.center().x, wide.bottom() - 40.0);
+    h.frame(vec![Event::PointerMoved(body), button(body, true)]);
+    h.frame(vec![Event::PointerMoved(wide.center())]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_some(), "a held button keeps them");
+    h.frame(vec![button(wide.center(), false)]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_none(), "released away from them, they hide");
+}
+
+#[test]
+fn a_drag_to_the_edge_or_a_pointer_on_the_left_edge_shows_nothing() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    // The default layout docks no panel on the left.
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.left() + 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    assert!(h.tab("properties").is_none());
+    // A drag that reaches the right edge holds a button down.
+    h.frame(vec![Event::PointerMoved(wide.center()), button(wide.center(), true)]);
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.right() - 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    assert!(h.tab("properties").is_none(), "a drag never shows them");
+    h.frame(vec![button(pos2(SCREEN.right() - 2.0, 500.0), false)]);
+}
+
+#[test]
+fn tab_while_the_panels_show_from_the_edge_shows_them_for_good() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.right() - 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    assert!(h.tab("properties").is_some());
+    h.app.run("window.dock", json!({})).unwrap();
+    h.frame(vec![Event::PointerMoved(wide.center())]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.app.ui.dock && h.tab("properties").is_some());
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], Value::Null);
+}
+
+#[test]
+fn shift_tab_hidden_panels_show_from_the_edge_too() {
+    let mut h = Harness::new();
+    h.app.run("window.panels", json!({})).unwrap();
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_none());
+    h.frame(vec![Event::PointerMoved(pos2(SCREEN.right() - 2.0, 500.0))]);
+    wait(&mut h, peek::DELAY * 2.0);
+    assert!(h.tab("properties").is_some());
+}
+
+#[test]
+fn window_panels_peek_rejects_what_it_cannot_show_and_changes_nothing() {
+    let mut h = Harness::new();
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap_err(), "the panels are not hidden");
+    hide_with_tab(&mut h);
+    for side in [json!("up"), json!(1), json!(true), json!("Right")] {
+        assert_eq!(h.app.run("window.panels.peek", json!({"side": side})).unwrap_err(), "`side` must be left, right or null", "{side}");
+    }
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "left"})).unwrap_err(), "no panels are docked on the left side");
+    assert_eq!(h.app.run("window.panels.peek", json!({})).unwrap(), Value::Null, "nothing to hide");
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_none() && !h.app.ui.dock);
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap(), json!("right"));
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_some(), "the panels stay while the pointer has not moved");
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": null})).unwrap(), Value::Null);
+    h.frame(vec![]);
+    assert!(h.tab("properties").is_none());
+    h.app.ui.screen_mode = 3;
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap_err(), "panels can't be shown in Presentation Mode");
+    h.app.ui.screen_mode = 0;
+}
+
+#[test]
+fn edge_panels_are_the_docked_panels_on_each_side_of_the_canvas() {
+    let layout = default_from(DockTab::ALL[0], &[], false, None, None);
+    let right = peek::edge_panels(&layout, peek::Edge::Right);
+    assert!(right.contains(&"properties".to_string()) && right.contains(&"swatches".to_string()));
+    assert!(!right.contains(&CANVAS.to_string()));
+    assert!(peek::edge_panels(&layout, peek::Edge::Left).is_empty());
+    let mirrored = Layout {
+        root: Some(Node::Split {
+            axis: craft_ui::layout::SplitAxis::Horizontal,
+            size: craft_ui::layout::SplitSize::FixedFirst(310.0),
+            first: Box::new(Node::Tabs { panels: vec!["layers".to_string()], active: 0 }),
+            second: Box::new(Node::Tabs { panels: vec![CANVAS.to_string()], active: 0 }),
+        }),
+        floating: Vec::new(),
+    };
+    assert_eq!(peek::edge_panels(&mirrored, peek::Edge::Left), ["layers"]);
+    assert!(peek::edge_panels(&mirrored, peek::Edge::Right).is_empty());
+}
+
 #[test]
 fn switching_workspace_during_a_tab_drag_keeps_the_new_workspace_layout() {
     let mut h = Harness::new();
