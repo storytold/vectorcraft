@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and, without `add`, its object opacity and blend mode for every label or line of its kind. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
+            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows (with `add`: of the kinds of row the style shows) and, without `add`, its object opacity and blend mode for every label or line of its kind. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
             has_doc,
             style_apply
         ),
@@ -364,6 +364,9 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             let shows = |kind: bool| g.appearance.items.iter().any(|it| it.is_fill() == kind && it.visible());
             let kinds = (shows(true), shows(false));
             super::appearance::capture_series_writes(&before, d, &ids, kinds, kinds, false, false);
+            // A label or graph line keeps its new rows of those kinds for its kind. The other kind, the object opacity and
+            // the blend mode stay as the kind keeps them.
+            super::graph::capture_label_kind_rows(d, &ids, kinds, false);
         } else {
             d.graphic_style_id(i);
             let g = d.graphic_styles[i].clone();
@@ -373,12 +376,7 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             }
             super::appearance::clear_stood_for(d, &groups);
             super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, true);
-        }
-        // A label or graph line keeps its new rows for its kind. A style added on top leaves the object opacity and blend
-        // mode, so the kind keeps its own.
-        if add {
-            super::graph::capture_label_fill_stroke_rows(d, &ids);
-        } else {
+            // A label or graph line keeps its new rows for its kind.
             super::graph::capture_label_rows(d, &ids);
         }
         Ok(())

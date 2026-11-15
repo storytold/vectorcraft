@@ -129,7 +129,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes using effective character dimensions while preserving target transforms) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's fill and stroke (solid, none, gradient or pattern) for this instance only, as the Eyedropper Options allow, and a source that is not a path, compound path or type, or options that pick up neither color, are refused. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, the graph stores, for every label of its kind, the character attributes the pick gives all of its text, its object opacity and blend mode when transparency is applied, and with `append` its topmost visible fill and stroke rows; on a graph's axis line, tick mark or radar ring, its topmost visible fill and stroke rows, and when transparency is applied its object opacity and blend mode, for every line of its kind (a pick of some attributes without `append`: only what it changes) → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes using effective character dimensions while preserving target transforms) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's fill and stroke (solid, none, gradient or pattern) for this instance only, as the Eyedropper Options allow, and a source that is not a path, compound path or type, or options that pick up neither color, are refused. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, the graph stores, for every label of its kind, the character attributes the pick gives all of its text, its object opacity and blend mode when transparency is applied, and with `append` its topmost visible fill and stroke rows of the kinds it adds; on a graph's axis line, tick mark or radar ring, its topmost visible fill and stroke rows, and when transparency is applied its object opacity and blend mode, for every line of its kind (a pick of some attributes without `append`: only what it changes; with `append`: only the kinds of row it adds) → {ids}",
             has_doc,
             copy_from
         ),
@@ -1473,8 +1473,8 @@ fn move_contents(s: &mut Session, ids: &[NodeId], to: usize) -> Result<Value> {
             slot.get_or_insert(n.appearance.contents_at());
         }
         slot.ok_or_else(|| bad("appearance.moveItem", "only groups, layers, type and images have a Contents (Characters) row"))?;
-        // A graph label's kind keeps where its rows paint relative to the characters.
-        let labels = capture_row_edits(&before, d, ids);
+        // A graph label's kind keeps where its rows paint relative to the characters, from the labels the move changed.
+        let labels = capture_row_edits(&before, d, &shown_rows_edited(&before, d, ids.to_vec(), |_| false));
         Ok(count_changed(d, &before, ids) + usize::from(labels))
     })?;
     Ok(json!({ "contents": slot }))
@@ -1742,12 +1742,13 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         // Graph labels keep their new rows, characters and paragraphs per kind of label.
         // On type, only `append` adds rows and a transparency pick changes the object's opacity and blend mode; the other
         // attributes go to the characters. Without a transparency pick, the object opacity and blend mode a kind keeps stay,
-        // also when the label or line picked onto still shows other ones until the graph is drawn again.
+        // also when the label or line picked onto still shows other ones until the graph is drawn again. `append` keeps
+        // only the kinds of row it added; a row of the other kind stays as the kind keeps it.
         let transparency = attrs.appearance.transparency;
-        let rows = match (append, transparency) {
-            (true, true) => super::graph::capture_label_rows(d, &targets),
-            (true, false) => super::graph::capture_label_fill_stroke_rows(d, &targets),
-            (false, _) => transparency && super::graph::capture_label_object_opacity(d, &targets),
+        let rows = if append {
+            super::graph::capture_label_kind_rows(d, &targets, paints, transparency)
+        } else {
+            transparency && super::graph::capture_label_object_opacity(d, &targets)
         };
         // `append` adds rows and leaves the characters as they were.
         let text = !append && super::graph::capture_label_text(d, &targets, kept_text, kept_para)?;
@@ -1755,6 +1756,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         // changed, and the rest stay as its kind keeps them, which the line may not show yet. Row attributes the graph
         // does not keep (overprint, caps, joins, miter limit, dashes) leave what its kind keeps as it is.
         let lines = match (rows_written, transparency) {
+            _ if append => super::graph::capture_line_kind_rows(d, &targets, paints, transparency),
             (true, true) => super::graph::capture_line_rows(d, &targets),
             (true, false) => super::graph::capture_line_fill_stroke_rows(d, &targets),
             (false, _) => super::graph::capture_line_changes(&before, d, &targets),

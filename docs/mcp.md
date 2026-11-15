@@ -905,11 +905,13 @@ The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, a
 transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
 kind of label: the paint, weight, opacity and blend mode of its topmost visible fill and stroke row, their order and
 their place relative to the Characters row, and the label's object opacity and blend mode. They store them even when the
-label already showed them, but an edit of a hidden row that leaves the topmost visible rows as they were stores nothing. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
+label already showed them, but an edit of a hidden row that leaves the topmost visible rows as they were, and an
+`appearance.moveItem` of the Contents row that leaves them in place, store nothing. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
 an `appearance.copyFrom` (Eyedropper) pick of transparency store only the label's object opacity and blend mode;
-`appearance.copyFrom` with `append` stores the rows, and the object opacity and blend mode only when it also applies
-the object's transparency. `graphicStyle.apply` with `add` stores the rows and leaves the object opacity and blend
-mode the kind keeps. When the graph is drawn again, every label of that kind gets what is stored, with a placed
+`appearance.copyFrom` with `append` stores the rows of the kinds it adds (fill, stroke or both), and the object opacity
+and blend mode only when it also applies the object's transparency. `graphicStyle.apply` with `add` stores the rows of
+the kinds the style shows. Both leave a row of the other kind as the kind keeps it, and `graphicStyle.apply` with `add`
+also leaves the object opacity and blend mode the kind keeps. When the graph is drawn again, every label of that kind gets what is stored, with a placed
 gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and `legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
 joins, dashes) and effects applied with `effect.*` are not stored. When labels of one kind are edited together, the
 last one in the order of the targets (`ids` as given, otherwise paint order) sets what the kind keeps.
@@ -929,7 +931,8 @@ The other commands store them when given the line itself, and the `appearance.*`
 `transparency.set` with an `item` also when given the Axes group, as described above. `transparency.set` without an
 `item` and `object.setProps` store only the object opacity and blend mode. `appearance.clear`, `appearance.transfer`,
 `graphicStyle.apply`, `graphicStyle.redefine`, and `appearance.copyFrom` with every attribute picked up and applied or
-with `append`, store a line's rows even when the line already showed them. The other commands, an `appearance.copyFrom`
+with `append`, store a line's rows even when the line already showed them; `graphicStyle.apply` with `add` and
+`appearance.copyFrom` with `append` store only the kinds of row they add. The other commands, an `appearance.copyFrom`
 of some attributes included, store only what they change on a line's rows; the kind keeps its other attributes, also
 when the line still shows different ones until the graph is drawn again. `paint.setFill`, `paint.setStroke`,
 `addon.color.fillToStroke` and `addon.color.strokeToFill` also store the paint they write on a line's topmost visible

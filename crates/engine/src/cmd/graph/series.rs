@@ -864,6 +864,46 @@ enum Keep {
     Object,
     /// The fill and stroke rows; the object opacity and blend mode stay as the kind keeps them.
     Rows,
+    /// The fill row with `fill`, the stroke row with `stroke`, and the object opacity and blend mode with `object`; the
+    /// others stay as the kind keeps them. Each row keeps its place relative to the characters; a row taken from the
+    /// label or line paints above a kept row on the same side of them, unless the label or line shows it below its own row
+    /// of that kind.
+    Kinds { fill: bool, stroke: bool, object: bool },
+}
+
+/// The kinds (true: fill) of the rows in `rows` from the bottom up, each with whether it paints below the characters.
+fn row_places(rows: &vectorcraft_doc::LabelRows) -> Vec<(bool, bool)> {
+    let order = if rows.stroke_under { [false, true] } else { [true, false] };
+    let has = |fill: bool| if fill { rows.paint.fill.is_some() } else { rows.paint.stroke.is_some() };
+    let below = usize::from(rows.below.unwrap_or(0));
+    order.into_iter().filter(|k| has(*k)).enumerate().map(|(i, k)| (k, i < below)).collect()
+}
+
+/// Where the rows paint when the row of kind `taken` (true: fill) comes from `shown` and the row of the other kind from
+/// `kept`, each keeping its place relative to the characters: `below` and `stroke_under` of [`vectorcraft_doc::LabelRows`].
+fn merged_places(kept: &vectorcraft_doc::LabelRows, shown: &vectorcraft_doc::LabelRows, taken: bool) -> (Option<u8>, bool) {
+    let in_shown = row_places(shown);
+    let t = in_shown.iter().copied().find(|p| p.0 == taken);
+    let o = row_places(kept).into_iter().find(|p| p.0 != taken);
+    let order = match (t, o) {
+        (Some(t), Some(o)) => {
+            // Rows on different sides of the characters: the one below them is lower. On the same side: as the label or
+            // line shows them, else the taken row on top.
+            let at = |kind: bool| in_shown.iter().position(|p| p.0 == kind);
+            let o_first = if t.1 != o.1 {
+                o.1
+            } else {
+                match (at(!taken), at(taken)) {
+                    (Some(o_at), Some(t_at)) => o_at < t_at,
+                    _ => true,
+                }
+            };
+            if o_first { vec![o, t] } else { vec![t, o] }
+        }
+        (t, o) => t.into_iter().chain(o).collect(),
+    };
+    let below = order.iter().filter(|p| p.1).fold(0u8, |k, _| k + 1);
+    ((below > 0).then_some(below), order.len() == 2 && !order[0].0)
 }
 
 /// `shown` with the parts of the rows `kept` keeps that `keep` leaves as they are.
@@ -879,6 +919,27 @@ fn keep_rows(kept: vectorcraft_doc::LabelRows, shown: vectorcraft_doc::LabelRows
             let mut shown = shown;
             (shown.paint.opacity, shown.paint.blend) = (kept.paint.opacity, kept.paint.blend);
             shown
+        }
+        Keep::Kinds { fill, stroke, object } => {
+            let places = match (fill, stroke) {
+                (true, true) => (shown.below, shown.stroke_under),
+                (false, false) => (kept.below, kept.stroke_under),
+                (taken, _) => merged_places(&kept, &shown, taken),
+            };
+            let mut rows = shown;
+            (rows.below, rows.stroke_under) = places;
+            let (r, k) = (&mut rows.paint, kept.paint);
+            if !object {
+                (r.opacity, r.blend) = (k.opacity, k.blend);
+            }
+            if !fill {
+                (r.fill, r.fill_opacity, r.fill_blend, r.fill_unit_box) = (k.fill, k.fill_opacity, k.fill_blend, k.fill_unit_box);
+            }
+            if !stroke {
+                (r.stroke, r.stroke_width, r.stroke_opacity, r.stroke_blend, r.stroke_unit_box) =
+                    (k.stroke, k.stroke_width, k.stroke_opacity, k.stroke_blend, k.stroke_unit_box);
+            }
+            rows
         }
     }
 }
@@ -1038,12 +1099,17 @@ pub(crate) fn capture_label_object_opacity(doc: &mut Document, ids: &[NodeId]) -
     store_label_rows(doc, ids, Keep::Object)
 }
 
-/// Keep the fill and stroke rows of graph labels and graph lines `ids` for every label or line of their kind, as
-/// [`capture_label_rows`] keeps them, for an edit that left their object opacity and blend mode alone: those stay as the
-/// kind keeps them, also when a label or line still shows other ones until the graph is drawn again. Returns whether what
-/// the graph keeps changed.
-pub(crate) fn capture_label_fill_stroke_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
-    store_label_rows(doc, ids, Keep::Rows)
+/// Keep, for every label or line of their kind, the fill row (with `fill`) and the stroke row (with `stroke`) that graph
+/// labels and graph lines `ids` show, and with `object` their object opacity and blend mode, as [`capture_label_rows`]
+/// keeps them, for an edit that wrote only those: a row of the other kind stays as the kind keeps it, also when a label or
+/// line still shows its own one until the graph is drawn again. Returns whether what the graph keeps changed.
+pub(crate) fn capture_label_kind_rows(doc: &mut Document, ids: &[NodeId], (fill, stroke): (bool, bool), object: bool) -> bool {
+    store_label_rows(doc, ids, Keep::Kinds { fill, stroke, object })
+}
+
+/// [`capture_label_kind_rows`] for the graph lines among `ids` alone.
+pub(crate) fn capture_line_kind_rows(doc: &mut Document, ids: &[NodeId], (fill, stroke): (bool, bool), object: bool) -> bool {
+    store_line_rows(doc, ids, Keep::Kinds { fill, stroke, object })
 }
 
 /// Would [`capture_label_object_opacity`] change what a graph keeps for labels `ids`? Reads the document without copying
@@ -1061,7 +1127,7 @@ pub(crate) fn label_object_opacity_differs(doc: &Document, ids: &[NodeId]) -> bo
         })
 }
 
-/// [`capture_label_rows`], [`capture_label_object_opacity`] or [`capture_label_fill_stroke_rows`], as `keep` says.
+/// [`capture_label_rows`], [`capture_label_object_opacity`] or [`capture_label_kind_rows`], as `keep` says.
 fn store_label_rows(doc: &mut Document, ids: &[NodeId], keep: Keep) -> bool {
     let mut changed = store_line_rows(doc, ids, keep);
     for (graph, role, rows) in label_rows_of(doc, ids) {

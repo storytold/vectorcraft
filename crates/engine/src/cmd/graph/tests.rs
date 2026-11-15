@@ -6997,6 +6997,96 @@ fn a_graphic_style_added_to_a_label_or_axis_line_keeps_the_opacity_its_kind_keep
     }
 }
 
+/// A fill-only graphic style added on top of a graph label or axis line, or a fill-only source appended to one with the
+/// Eyedropper, keeps the stroke its kind keeps from another label or line, though the one it is added to still shows its
+/// own.
+#[test]
+fn a_fill_added_to_a_label_or_axis_line_keeps_the_stroke_its_kind_keeps() {
+    let cases = [(false, false), (false, true), (true, false), (true, true)];
+    every_case(cases, |&(label, append)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let (rect, _) = blue_style(&mut s, "Blue", false);
+        let (first, second) = if label {
+            (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"))
+        } else {
+            let lines = line_nodes(&s, id);
+            (lines[0].id, lines[1].id)
+        };
+        if label {
+            s.execute("appearance.addStroke", &json!({"ids": [first.0]})).unwrap();
+            s.execute("appearance.setItem", &json!({"ids": [first.0], "index": top_row(&s, first, false), "color": "#ff0000"})).unwrap();
+        } else {
+            s.execute("paint.setStroke", &json!({"ids": [first.0], "color": "#ff0000"})).unwrap();
+        }
+        if append {
+            let pick = json!({"source": rect.0, "ids": [second.0], "apply": every_row_attribute_without_transparency(), "append": true});
+            s.execute("appearance.copyFrom", &pick).unwrap();
+        } else {
+            s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [second.0], "add": true})).unwrap();
+        }
+        if label {
+            let looks = redrawn_label_rows(&mut s, id);
+            for q in ["Q1", "Q2", "Q3"] {
+                let (rows, _) = rows_of(&looks, q);
+                let shows = |fill: bool, hex: &str| rows.iter().any(|r| r.0 == fill && r.1 == hex);
+                assert!(shows(false, "#ff0000") && shows(true, "#0000ff"), "{q}: {rows:?}");
+            }
+        } else {
+            let looks = redrawn_line_looks(&mut s, id);
+            assert!(looks.iter().all(|l| l.0 == "#ff0000"), "{looks:?}");
+        }
+    });
+}
+
+/// A stroke a label's kind keeps below the characters stays below them when a fill-only graphic style is added on top of
+/// another label of the kind, or a fill-only source appended to it, and the new fill paints above the characters.
+#[test]
+fn a_fill_added_to_a_label_keeps_the_kept_stroke_below_the_characters() {
+    every_case([false, true], |&append| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let (rect, _) = blue_style(&mut s, "Blue", false);
+        let (q1, q2) = (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"));
+        s.execute("appearance.addStroke", &json!({"ids": [q1.0]})).unwrap();
+        s.execute("appearance.moveItem", &json!({"ids": [q1.0], "from": "contents", "to": 1})).unwrap();
+        if append {
+            let pick = json!({"source": rect.0, "ids": [q2.0], "apply": every_row_attribute_without_transparency(), "append": true});
+            s.execute("appearance.copyFrom", &pick).unwrap();
+        } else {
+            s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [q2.0], "add": true})).unwrap();
+        }
+        redrawn_label_rows(&mut s, id);
+        let look = |ap: &vectorcraft_doc::Appearance| (ap.contents_at(), ap.items.iter().map(|it| it.is_fill()).collect::<Vec<_>>());
+        for q in ["Q1", "Q2", "Q3"] {
+            assert_eq!(look(&label_node(&s, id, "Axes", q).appearance), (1, vec![false, true]), "append {append}: {q}");
+        }
+    });
+}
+
+/// A Contents (Characters) row move that leaves a graph label as it was keeps the rows its kind keeps from another label
+/// and is no edit.
+#[test]
+fn a_contents_move_that_changes_nothing_on_a_label_keeps_the_rows_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let (q1, q2) = (text_id(&s, id, "Axes", "Q1"), text_id(&s, id, "Axes", "Q2"));
+    s.execute("appearance.addStroke", &json!({"ids": [q1.0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [q1.0], "index": top_row(&s, q1, false), "color": "#ff0000"})).unwrap();
+    let at = s.doc().unwrap().doc.node(q2).unwrap().appearance.contents_at();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("appearance.moveItem", &json!({"ids": [q2.0], "from": "contents", "to": at})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "nothing changed");
+    let looks = redrawn_label_rows(&mut s, id);
+    for q in ["Q1", "Q2", "Q3"] {
+        let (rows, _) = rows_of(&looks, q);
+        assert!(rows.iter().any(|r| !r.0 && r.1 == "#ff0000"), "{q}: {rows:?}");
+    }
+}
+
 /// An Eyedropper pick with `append` and without the object's transparency on a graph label keeps the object opacity its
 /// kind keeps from another label, though the label it is applied to still shows 100%.
 #[test]
