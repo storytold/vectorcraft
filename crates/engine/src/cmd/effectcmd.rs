@@ -367,7 +367,8 @@ fn edit_effects(
 
 /// [`edit_effects`] for several effects of one list (`indices`): `f` gets each target's list and
 /// the positions of `indices` there, ascending; with `aligned`, a position a target doesn't share
-/// is left out of it, and a target sharing none of them is left out.
+/// is left out of it, and a target sharing none of them is left out. A position no target has is
+/// an error with `none`, and nothing changes.
 #[allow(clippy::too_many_arguments)]
 fn edit_effects_at(
     s: &mut Session,
@@ -396,7 +397,12 @@ fn edit_effects_at(
     // Each target's list and the positions in it, in the order the targets first come up.
     let mut targets: Vec<(NodeId, Option<usize>, Vec<usize>)> = vec![];
     for &index in indices {
-        for (id, at, i) in effect_targets(s, p, item, index, cmd)? {
+        let found = effect_targets(s, p, item, index, cmd)?;
+        // An aligned effect of a design's art that no other object has is refused, as it is given alone.
+        if found.is_empty() {
+            return Err(EngineError::Other(none.into()));
+        }
+        for (id, at, i) in found {
             match targets.iter_mut().find(|t| t.0 == id && t.1 == at) {
                 Some(t) => t.2.push(i),
                 None => targets.push((id, at, vec![i])),
@@ -1030,15 +1036,19 @@ impl RasterBudget {
 /// Expand the pieces of `m`, art evaluated from the object of the same id (its pieces share that
 /// id): those made from its own fills and strokes, or with `all` every member. The other members
 /// that repeat an id ([`repeats_an_id`]) and hold a random Transform effect ([`has_seeded`]) are
-/// expanded as well ([`expand_in_place`]). Then the members get ids of their own. Random in a
-/// Transform effect takes its seed from the id, and the canvas draws the pieces with the ids they
-/// have before that. Returns what each of those other members' expansions lists, by the member's
-/// new id.
+/// expanded as well ([`expand_in_place`]), except the objects `skip` lists. Then the members get ids
+/// of their own. Random in a Transform effect takes its seed from the id, and the canvas draws the
+/// pieces with the ids they have before that. `kept` gets the new id of each object in them that
+/// had an id `skip` lists before. Returns what each of those other members' expansions lists, by
+/// the member's new id.
+#[allow(clippy::too_many_arguments)]
 fn expand_pieces(
     d: &mut Document,
     m: &mut Node,
     all: bool,
     brushes: &[vectorcraft_brush::Brush],
+    skip: &[NodeId],
+    kept: &mut Vec<NodeId>,
     stroke_art: effects::StrokeArt,
     raster: &mut RasterBudget,
 ) -> std::collections::HashMap<NodeId, Vec<Listed>> {
@@ -1055,9 +1065,23 @@ fn expand_pieces(
         if all || c.id == id {
             effects::expand_art(d, c, stroke_art);
         } else if has_seeded(c) && repeats_an_id(c, &seen) {
-            listed = Some(expand_in_place(d, c, brushes, raster));
+            listed = Some(expand_in_place(d, c, brushes, skip, raster));
+        }
+        let mut was = vec![];
+        if !skip.is_empty() {
+            c.walk(&mut |n| was.push(n.id));
         }
         fresh_ids_listed(d, c, &mut seen, listed.as_deref_mut().unwrap_or_default());
+        if !was.is_empty() {
+            // A copy of an object `skip` lists is left as it is too.
+            let mut at = 0;
+            c.walk(&mut |n| {
+                if was.get(at).is_some_and(|old| *old != n.id && skip.contains(old)) {
+                    kept.push(n.id);
+                }
+                at += 1;
+            });
+        }
         if let Some(listed) = listed {
             expanded.insert(c.id, listed);
         }
@@ -1139,9 +1163,9 @@ fn repeats_an_id(n: &Node, seen: &std::collections::HashSet<NodeId>) -> bool {
 type Listed = (NodeId, usize);
 
 /// [`expanded_node`] of `c` in place. Returns what the expansion lists, by places in the walk of `c`.
-fn expand_in_place(d: &mut Document, c: &mut Node, brushes: &[vectorcraft_brush::Brush], raster: &mut RasterBudget) -> Vec<Listed> {
+fn expand_in_place(d: &mut Document, c: &mut Node, brushes: &[vectorcraft_brush::Brush], skip: &[NodeId], raster: &mut RasterBudget) -> Vec<Listed> {
     let mut listed = vec![];
-    if let Some(e) = expanded_node(d, c.clone(), brushes, &mut listed, raster) {
+    if let Some(e) = expanded_node(d, c.clone(), brushes, skip, &mut listed, raster) {
         *c = e;
     }
     listed
@@ -1166,9 +1190,23 @@ fn fresh_ids_listed(d: &mut Document, c: &mut Node, seen: &mut std::collections:
 /// transparency. An object whose raster effects' image would take `raster` past its limits stays
 /// as it is, with what is inside it.
 pub(crate) fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>, raster: &mut RasterBudget) {
+    expand_node_except(d, id, brushes, &[], out, raster);
+}
+
+/// [`expand_node`], leaving the objects `skip` lists, and what they hold, as they are. A geometry
+/// effect of a group or layer around one still reshapes it with the rest of its members, and the
+/// copies of it that such an effect makes are left as they are too.
+fn expand_node_except(
+    d: &mut Document,
+    id: NodeId,
+    brushes: &[vectorcraft_brush::Brush],
+    skip: &[NodeId],
+    out: &mut Vec<NodeId>,
+    raster: &mut RasterBudget,
+) {
     let Some(n) = d.node(id).cloned() else { return };
     let mut listed = vec![];
-    let m = expanded_node(d, n, brushes, &mut listed, raster);
+    let m = expanded_node(d, n, brushes, skip, &mut listed, raster);
     out.extend(listed.into_iter().map(|(id, _)| id));
     if let Some(mut m) = m {
         // Art made from type takes its emoji's pixels into the document.
@@ -1181,16 +1219,17 @@ pub(crate) fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_b
 
 /// [`expand_node`] of `n`, which need not be in `d`: `n` with its appearance expanded, `None` when
 /// it has nothing to expand. `out` gets the objects whose appearance expands, by places in the walk
-/// of the expanded `n`, `n`'s first when its own does.
+/// of the expanded `n`, `n`'s first when its own does. The objects `skip` lists are not expanded.
 fn expanded_node(
     d: &mut Document,
     mut n: Node,
     brushes: &[vectorcraft_brush::Brush],
+    skip: &[NodeId],
     out: &mut Vec<Listed>,
     raster: &mut RasterBudget,
 ) -> Option<Node> {
     let id = n.id;
-    if !expandable(&n) {
+    if skip.contains(&id) || !expandable(&n) {
         return None;
     }
     // What `out` held before `n`: an object left by the raster budget lists nothing.
@@ -1233,7 +1272,7 @@ fn expanded_node(
         for (i, c) in m.children_mut().into_iter().flatten().enumerate() {
             let c = Arc::make_mut(c);
             if i == 0 {
-                expanded = expand_in_place(d, c, brushes, raster);
+                expanded = expand_in_place(d, c, brushes, skip, raster);
                 fresh_ids_listed(d, c, &mut seen, &mut expanded);
             } else {
                 effects::fresh_ids(d, c, &mut seen);
@@ -1271,6 +1310,8 @@ fn expanded_node(
         |d: &mut Document, path: &PathData, rule: FillRule, st: &StrokeLayer| super::pathops::outlined_stroke(d, brushes, path, rule, st);
     // Members of a group or layer that `expand_pieces` expanded, by id, with what their expansion lists.
     let mut members = std::collections::HashMap::new();
+    // New ids of the copies of objects `skip` lists among those members.
+    let mut kept = vec![];
     let expanded = match image {
         // Blur, feather and inner glow change the object itself: it becomes the image (a layer
         // keeps it as its only member).
@@ -1282,7 +1323,7 @@ fn expanded_node(
             } else if container {
                 // A group's or layer's own fills and strokes become art among its members.
                 effects::evaluate_container(Some(&*d), &v).map(|mut m| {
-                    members = expand_pieces(d, &mut m, false, brushes, &mut stroke_art, raster);
+                    members = expand_pieces(d, &mut m, false, brushes, skip, &mut kept, &mut stroke_art, raster);
                     m
                 })
             } else if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
@@ -1308,7 +1349,7 @@ fn expanded_node(
                 outlined.map(|mut m| {
                     let mut budget = vectorcraft_doc::MAX_SYMBOL_NODES;
                     expand_nested_instances(d, &mut m, 1, &mut budget, raster);
-                    expand_pieces(d, &mut m, true, brushes, &mut stroke_art, raster);
+                    expand_pieces(d, &mut m, true, brushes, skip, &mut kept, &mut stroke_art, raster);
                     m
                 })
             };
@@ -1330,6 +1371,7 @@ fn expanded_node(
         }
     }
     if container {
+        let skip = if kept.is_empty() { std::borrow::Cow::Borrowed(skip) } else { std::borrow::Cow::Owned([skip, &kept].concat()) };
         // The place of each member in the walk of `n`: after `n` and the members before it.
         let mut at = 1;
         for c in n.children_mut().into_iter().flatten() {
@@ -1342,7 +1384,7 @@ fn expanded_node(
             match members.remove(&c.id) {
                 Some(listed) => out.extend(listed),
                 None => {
-                    if let Some(e) = expanded_node(d, (**c).clone(), brushes, out, raster) {
+                    if let Some(e) = expanded_node(d, (**c).clone(), brushes, &skip, out, raster) {
                         *c = Arc::new(e);
                         changed = true;
                     }
@@ -1387,9 +1429,20 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     // geometry it hasn't changed.
     if vectorcraft_plugins::safe_mode::active() {
         // A dimension selected with the art it measures is left as it is, and so is the art of a graph design in a
-        // series.
+        // series, unless an effect of a group around it, the selected graph or series group or one inside it, draws it
+        // with that group: an effect of the group's own, or a raster effect of one of its fills or strokes (the group
+        // then becomes an image of all of it).
         let mut d = super::dimension::without_kept(&s.doc()?.doc, &roots);
-        let designs = super::appearance::design_art_in(&d, &roots);
+        let draws_members = |g: &Node| g.appearance.effects.iter().any(|e| e.visible) || !rasterfx::raster_fx(g).is_empty();
+        let designs: Vec<NodeId> = super::appearance::design_art_in(&d, &roots)
+            .into_iter()
+            .filter(|art| {
+                !d.ancestry(*art).is_some_and(|up| {
+                    let from = up.iter().position(|a| roots.contains(a)).unwrap_or(up.len());
+                    up.get(from..up.len().saturating_sub(1)).is_some_and(|around| around.iter().filter_map(|a| d.node(*a)).any(draws_members))
+                })
+            })
+            .collect();
         if !designs.is_empty() {
             let view = d.to_mut();
             for id in designs {
@@ -1421,16 +1474,7 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
         let mut out = vec![];
         let threaded = super::threads::frames(d);
         for id in &roots {
-            expand_node(d, *id, &brushes, &mut out, &mut raster);
-        }
-        for id in &designs {
-            if let (Some(was), Some(slot)) = (before.node(*id), d.node_mut(*id)) {
-                *slot = was.clone();
-            }
-        }
-        if !designs.is_empty() {
-            // A mark that expands into a group stays listed: only what lies in the restored art is left out.
-            out.retain(|id| d.node(*id).is_some() && !d.ancestry(*id).is_some_and(|up| up.iter().any(|a| designs.contains(a))));
+            expand_node_except(d, *id, &brushes, &designs, &mut out, &mut raster);
         }
         super::dimension::put_back(d, lifted);
         // A dimension whose source was replaced stays where it was, no longer linked.

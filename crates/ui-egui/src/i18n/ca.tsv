@@ -772,6 +772,7 @@ antiAlias	Sharp	Nítid
 	Preserve Numbers	Conserva els números
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells
+	Cycle Display Sizes	Alterna les mides de visualització
 	Collapse Panels to Icons	Replega els panells a icones
 	Collapse to Icons	Replega a icones
 	Collate	Intercala
@@ -1910,6 +1911,8 @@ digits	Malayalam	Malaiàlam
 	Graph Design	Disseny del gràfic
 	Graph Marker	Marcador del gràfic
 	Graph Type	Tipus de gràfic
+	Graph Type…	Tipus de gràfic…
+	Graph Data…	Dades del gràfic…
 	Graph Options	Opcions del gràfic
 	Left Axis	Eix esquerre
 	Right Axis	Eix dret
@@ -2025,6 +2028,7 @@ digits	Malayalam	Malaiàlam
 	Show smooth color wheel	Mostra la roda de color contínua
 	Show segmented color wheel	Mostra la roda de color segmentada
 	Show color bars	Mostra les barres de color
+	Find the selected colors in the artwork	Troba els colors seleccionats a l’obra
 	Harmony Sets	Conjunts d’harmonia
 	HDTV 1080p	HDTV 1080p
 	HDTV 720p	HDTV 720p
@@ -2494,6 +2498,7 @@ digits	Malayalam	Malaiàlam
 	Load Variable Library	Carrega la biblioteca de variables
 	Load Variable Library…	Carrega la biblioteca de variables…
 	Save Variable Library…	Desa la biblioteca de variables…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Importa» llegeix un fitxer d’origen de dades amb l’extensió .csv, .tsv, .txt o .xml
 @msg	a variable library holds text variables, and the document has none	una biblioteca de variables conté variables de text, i el document no en té cap
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no es pot desar en una biblioteca de variables: canvieu-li el nom perquè comenci amb una lletra o `_`, sense espais ni símbols que no siguin `-`, `_` i `.`
 @msg	{k} has control characters	{k} conté caràcters de control
@@ -3430,6 +3435,8 @@ digits	Malayalam	Malaiàlam
 	Insert Aki Left	Insereix aki a l'esquerra
 	Insert Aki Right	Insereix aki a la dreta
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajusta la posició horitzontal dels diacrítics
+	Adjust Vertical Diacritic Position	Ajusta la posició vertical dels diacrítics
 	Proportional Lining	Xifres proporcionals alineades
 	Position:	Posició:
 	Default Position	Posició predeterminada
@@ -6545,6 +6552,8 @@ digits	Malayalam	Malaiàlam
 @msg	unknown option `{path}.{k}`	opció desconeguda `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressions desconegudes `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panell desconegut `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` no té mides de visualització per alternar
+@msg	the panels are not shown	els panells no es mostren
 @msg	panels can't be shown in Presentation Mode	els panells no es poden mostrar en el mode de presentació
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paràmetre desconegut `{key}`; volies dir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	paràmetre desconegut `{key}`; l’ordre no admet cap paràmetre
@@ -7561,6 +7570,19 @@ breakText	Glyphs	Glifs
 	Not Aligned to Pixel Grid	No alineat a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
+@msg	side is left or right, not `{v}`	side ha de ser left o right, no `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order ha de ser un nombre enter de 0 a {others}, no `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (el nom d’una barra d’eines) ha de ser una cadena
+@msg	no toolbar named `{name}`	no hi ha cap barra d’eines anomenada `{name}`
+@msg	toolbar name can't be empty	el nom de la barra d’eines no pot ser buit
+@msg	a toolbar name has at most {MAX_NAME} characters	un nom de barra d’eines té com a màxim {MAX_NAME} caràcters
+@msg	there is already a toolbar named `{name}`	ja hi ha una barra d’eines anomenada `{name}`
+@msg	there is already a toolbar named `{to}`	ja hi ha una barra d’eines anomenada `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	un espai de treball conté com a màxim {MAX} barres d’eines
+@msg	name (a toolbar's name) must be a string	name (el nom d’una barra d’eines) ha de ser una cadena
+@msg	name (a toolbar's name) is required	cal name (el nom d’una barra d’eines)
+@msg	to (the new name) is required	cal to (el nom nou)
+@msg	name must be a toolbar's name	name ha de ser el nom d’una barra d’eines
 	Ignore All	Ignora-ho tot
 	Add to Dictionary	Afegeix al diccionari
 	No Suggestions	No hi ha suggeriments
@@ -7773,4 +7795,21 @@ breakText	Glyphs	Glifs
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a JPEG (com a màxim 65535 píxels per costat): reduïu la resolució
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a Targa (com a màxim 65535 píxels per costat): reduïu la resolució
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} píxels és massa gran per a PSD (com a màxim {MAX_SIDE} píxels per costat): reduïu la resolució
+	Packaging Tools	Eines d’embalatge
+	Fold Lines	Línies de plegat
+	Make Cut Line	Converteix en línia de tall
+	Make Crease Line	Converteix en línia d’hendit
+	Make Partial Cut Line	Converteix en línia de tall parcial
+	Make Perforation Line	Converteix en línia de perforació
+	Make Fold Line	Converteix en línia de plegat
+	Role Swatches…	Mostres dels tipus de línia…
+	Role Swatches	Mostres dels tipus de línia
+	Role	Tipus de línia
+	Cut Line	Línia de tall
+	Crease Line	Línia d’hendit
+	Partial Cut Line	Línia de tall parcial
+	Perforation Line	Línia de perforació
+	No objects are selected.	No hi ha cap objecte seleccionat.
+	Open a document to mark its fold lines.	Obre un document per marcar-ne les línies de plegat.
+	Remove Fold Line Role	Elimina el tipus de línia
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

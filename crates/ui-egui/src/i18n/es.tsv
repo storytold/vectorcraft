@@ -1432,6 +1432,8 @@ font-technology	Variable	Variables
 	Graph	Gráfico
 	Graph Data	Datos del gráfico
 	Graph Type	Tipo de gráfico
+	Graph Type…	Tipo de gráfico…
+	Graph Data…	Datos del gráfico…
 	Graph Options	Opciones de gráfico
 	Left Axis	Eje izquierdo
 	Right Axis	Eje derecho
@@ -1547,6 +1549,7 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Mostrar rueda de color continua
 	Show segmented color wheel	Mostrar rueda de color segmentada
 	Show color bars	Mostrar barras de color
+	Find the selected colors in the artwork	Buscar los colores seleccionados en la ilustración
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
 	Height:	Altura:
@@ -2725,6 +2728,8 @@ font-technology	Variable	Variables
 	Insert Aki Left	Insertar aki a la izquierda
 	Insert Aki Right	Insertar aki a la derecha
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajustar posición horizontal de los diacríticos
+	Adjust Vertical Diacritic Position	Ajustar posición vertical de los diacríticos
 	Character Direction	Dirección de caracteres
 	Digits	Dígitos
 	Arabic	Árabes
@@ -5133,6 +5138,8 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panel desconocido `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` no tiene tamaños de visualización que alternar
+@msg	the panels are not shown	los paneles no se muestran
 @msg	panels can't be shown in Presentation Mode	los paneles no se pueden mostrar en el modo de presentación
 @msg	unknown preference `{key}`	preferencia desconocida `{key}`
 @msg	Preferences imported.	Preferencias importadas.
@@ -5508,6 +5515,7 @@ axis	Both	Ambos
 	Change Panel Layout	Cambiar distribución de paneles
 	Close Panel	Cerrar panel
 	Collapse Panel Group	Contraer grupo de paneles
+	Cycle Display Sizes	Alternar tamaños de visualización
 	Move Panel	Mover panel
 	Group with	Agrupar con
 	Resize panels	Cambiar tamaño de los paneles
@@ -6244,6 +6252,7 @@ mark-style	Japanese	Japonesas
 	Export Data Sets…	Exportar conjuntos de datos…
 	Load Variable Library…	Cargar biblioteca de variables…
 	Save Variable Library…	Guardar biblioteca de variables…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Importar» lee un archivo de origen de datos con extensión .csv, .tsv, .txt o .xml
 @msg	a variable library holds text variables, and the document has none	una biblioteca de variables contiene variables de texto y el documento no tiene ninguna
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` no se puede guardar en una biblioteca de variables: cámbiele el nombre para que empiece por una letra o `_`, sin espacios ni símbolos distintos de `-`, `_` y `.`
 @msg	{k} has control characters	{k} contiene caracteres de control
@@ -7638,6 +7647,19 @@ breakText	Glyphs	Glifos
 	Not Aligned to Pixel Grid	No alineado con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`
+@msg	side is left or right, not `{v}`	side es left o right, no `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order es un número entero de 0 a {others}, no `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (el nombre de una barra de herramientas) debe ser una cadena de texto
+@msg	no toolbar named `{name}`	no hay ninguna barra de herramientas llamada `{name}`
+@msg	toolbar name can't be empty	el nombre de la barra de herramientas no puede estar vacío
+@msg	a toolbar name has at most {MAX_NAME} characters	el nombre de una barra de herramientas tiene como máximo {MAX_NAME} caracteres
+@msg	there is already a toolbar named `{name}`	ya hay una barra de herramientas llamada `{name}`
+@msg	there is already a toolbar named `{to}`	ya hay una barra de herramientas llamada `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	un espacio de trabajo guarda como máximo {MAX} barras de herramientas
+@msg	name (a toolbar's name) must be a string	name (el nombre de una barra de herramientas) debe ser una cadena de texto
+@msg	name (a toolbar's name) is required	Se requiere name (el nombre de una barra de herramientas)
+@msg	to (the new name) is required	Se requiere to (el nuevo nombre)
+@msg	name must be a toolbar's name	name debe ser el nombre de una barra de herramientas
 	Ignore All	Omitir todo
 	Add to Dictionary	Añadir al diccionario
 	No Suggestions	No hay sugerencias
@@ -7734,4 +7756,21 @@ breakText	Glyphs	Glifos
 	Nest Shapes…	Anidar formas…
 	Nest Shapes	Anidar formas
 	Roll	Rollo
+	Packaging Tools	Herramientas de embalaje
+	Fold Lines	Líneas de plegado
+	Make Cut Line	Convertir en línea de corte
+	Make Crease Line	Convertir en línea de hendido
+	Make Partial Cut Line	Convertir en línea de corte parcial
+	Make Perforation Line	Convertir en línea de perforación
+	Make Fold Line	Convertir en línea de plegado
+	Role Swatches…	Muestras de los tipos de línea…
+	Role Swatches	Muestras de los tipos de línea
+	Role	Tipo de línea
+	Cut Line	Línea de corte
+	Crease Line	Línea de hendido
+	Partial Cut Line	Línea de corte parcial
+	Perforation Line	Línea de perforación
+	No objects are selected.	No hay objetos seleccionados.
+	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
+	Remove Fold Line Role	Quitar tipo de línea
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

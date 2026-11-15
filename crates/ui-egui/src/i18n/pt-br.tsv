@@ -1042,6 +1042,7 @@ antiAlias	Sharp	Nítido
 	Export Data Sets…	Exportar Conjuntos de Dados…
 	Load Variable Library…	Carregar Biblioteca de Variáveis…
 	Save Variable Library…	Salvar Biblioteca de Variáveis…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	"Importar" lê um arquivo de fonte de dados com extensão .csv, .tsv, .txt ou .xml
 @msg	a variable library holds text variables, and the document has none	uma biblioteca de variáveis contém variáveis de texto, e o documento não tem nenhuma
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a variável `{name}` não pode ser salva em uma biblioteca de variáveis: renomeie-a para começar com uma letra ou `_`, sem espaços nem símbolos além de `-`, `_` e `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	o conjunto de dados `{name}` contém um caractere de controle, que uma biblioteca de variáveis não pode conter
@@ -1334,6 +1335,7 @@ antiAlias	Sharp	Nítido
 	Show smooth color wheel	Mostrar roda de cores contínua
 	Show segmented color wheel	Mostrar roda de cores segmentada
 	Show color bars	Mostrar barras de cores
+	Find the selected colors in the artwork	Localizar as cores selecionadas na arte
 	Harmony Sets	Conjuntos de Harmonia
 	Height	Altura
 	Height:	Altura:
@@ -2252,6 +2254,8 @@ antiAlias	Sharp	Nítido
 	Insert Aki Left	Inserir Aki à Esquerda
 	Insert Aki Right	Inserir Aki à Direita
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajustar Posição Horizontal dos Diacríticos
+	Adjust Vertical Diacritic Position	Ajustar Posição Vertical dos Diacríticos
 	Character Direction	Direção de Caracteres
 	Digits	Dígitos
 	Arabic	Arábicos
@@ -3544,6 +3548,7 @@ imageTrace	Outline	Contorno
 	Change Panel Layout	Alterar Layout dos Painéis
 	Close Panel	Fechar Painel
 	Collapse Panel Group	Recolher Grupo de Painéis
+	Cycle Display Sizes	Alternar Tamanhos de Exibição
 	Move Panel	Mover Painel
 	Group with	Agrupar com
 	Resize panels	Redimensionar painéis
@@ -4493,6 +4498,8 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opção desconhecida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressões desconhecidas `{o}` (preserve, simulate ou discard)
 @msg	unknown panel `{raw}`	painel desconhecido `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` não tem tamanhos de exibição para alternar
+@msg	the panels are not shown	os painéis não estão sendo exibidos
 @msg	panels can't be shown in Presentation Mode	os painéis não podem ser mostrados no Modo de Apresentação
 @msg	unknown preference `{key}`	preferência desconhecida `{key}`
 @msg	Preferences imported.	Preferências importadas.
@@ -4991,6 +4998,8 @@ axis	Both	Ambos
 	Gradient (. or Shift+.)	Gradiente (. ou Shift+.)
 	Graph Data	Dados do Gráfico
 	Graph Type	Tipo de Gráfico
+	Graph Type…	Tipo de Gráfico…
+	Graph Data…	Dados do Gráfico…
 	Graph Options	Opções do Gráfico
 	Left Axis	Eixo Esquerdo
 	Right Axis	Eixo Direito
@@ -9665,3 +9674,20 @@ swatch	Yellow Green	Verde-amarelado
 	Nest Shapes…	Aninhar formas…
 	Nest Shapes	Aninhar formas
 	Roll	Rolo
+	Packaging Tools	Ferramentas de Embalagem
+	Fold Lines	Linhas de Dobra
+	Make Cut Line	Transformar em Linha de Corte
+	Make Crease Line	Transformar em Linha de Vinco
+	Make Partial Cut Line	Transformar em Linha de Meio-Corte
+	Make Perforation Line	Transformar em Linha de Perfuração
+	Make Fold Line	Transformar em Linha de Dobra
+	Role Swatches…	Amostras dos Tipos de Linha…
+	Role Swatches	Amostras dos Tipos de Linha
+	Role	Tipo de Linha
+	Cut Line	Linha de Corte
+	Crease Line	Linha de Vinco
+	Partial Cut Line	Linha de Meio-Corte
+	Perforation Line	Linha de Perfuração
+	No objects are selected.	Nenhum objeto selecionado.
+	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
+	Remove Fold Line Role	Remover Tipo de Linha

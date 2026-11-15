@@ -1442,6 +1442,8 @@ file-filter	Templates	Шаблоны
 	Graph	Диаграмма
 	Graph Data	Данные диаграммы
 	Graph Type	Тип диаграммы
+	Graph Type…	Тип диаграммы…
+	Graph Data…	Данные диаграммы…
 	Graph Options	Параметры диаграммы
 	Left Axis	Левая ось
 	Right Axis	Правая ось
@@ -1557,6 +1559,7 @@ file-filter	Templates	Шаблоны
 	Show smooth color wheel	Показать плавный цветовой круг
 	Show segmented color wheel	Показать сегментированный цветовой круг
 	Show color bars	Показать цветовые полосы
+	Find the selected colors in the artwork	Найти выбранные цвета в рисунке
 	Harmony Sets	Наборы гармонии
 	Height	Высота
 	Height:	Высота:
@@ -2754,6 +2757,8 @@ mark-style	Japanese	Японский
 	Insert Aki Left	Вставить аки слева
 	Insert Aki Right	Вставить аки справа
 	Tsume	Цумэ
+	Adjust Horizontal Diacritic Position	Настроить горизонтальное положение диакритических знаков
+	Adjust Vertical Diacritic Position	Настроить вертикальное положение диакритических знаков
 	Character Direction	Направление символов
 	Digits	Цифры
 	Arabic	Арабские
@@ -5170,6 +5175,8 @@ axis	Both	Оба
 @msg	unknown option `{path}.{k}`	неизвестный параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	неизвестные наложения `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	неизвестная панель `{raw}`
+@msg	`{panel}` has no display sizes to cycle	у панели `{panel}` нет размеров отображения для переключения
+@msg	the panels are not shown	панели не показаны
 @msg	panels can't be shown in Presentation Mode	в режиме презентации панели показать нельзя
 @msg	unknown preference `{key}`	неизвестная настройка `{key}`
 @msg	Preferences imported.	Настройки импортированы.
@@ -5547,6 +5554,7 @@ axis	Both	Оба
 	Change Panel Layout	Изменить расположение панелей
 	Close Panel	Закрыть панель
 	Collapse Panel Group	Свернуть группу панелей
+	Cycle Display Sizes	Переключить размеры отображения
 	Move Panel	Переместить панель
 	Group with	Сгруппировать с
 	Resize panels	Изменить размер панелей
@@ -5906,6 +5914,7 @@ lighting	Light	Свет
 	Export Data Sets…	Экспортировать наборы данных…
 	Load Variable Library…	Загрузить библиотеку переменных…
 	Save Variable Library…	Сохранить библиотеку переменных…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	«Импорт» читает файл источника данных с расширением .csv, .tsv, .txt или .xml
 @msg	a variable library holds text variables, and the document has none	библиотека переменных содержит текстовые переменные, а в документе их нет
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	переменную `{name}` нельзя сохранить в библиотеке переменных: переименуйте её так, чтобы имя начиналось с буквы или `_` и не содержало пробелов и символов, кроме `-`, `_` и `.`
 @msg	{k} has control characters	{k} содержит управляющие символы
@@ -9688,5 +9697,22 @@ shape	Open	Открытый
 @msg	{path}: could not be read	{path}: не удалось прочитать
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для JPEG (не более 65535 пикселей по стороне): уменьшите разрешение
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для Targa (не более 65535 пикселей по стороне): уменьшите разрешение
+	Packaging Tools	Инструменты упаковки
+	Fold Lines	Линии сгиба
+	Make Cut Line	Сделать линией реза
+	Make Crease Line	Сделать линией биговки
+	Make Partial Cut Line	Сделать линией надреза
+	Make Perforation Line	Сделать линией перфорации
+	Make Fold Line	Сделать линией сгиба
+	Role Swatches…	Образцы типов линий…
+	Role Swatches	Образцы типов линий
+	Role	Тип линии
+	Cut Line	Линия реза
+	Crease Line	Линия биговки
+	Partial Cut Line	Линия надреза
+	Perforation Line	Линия перфорации
+	No objects are selected.	Объекты не выделены.
+	Open a document to mark its fold lines.	Откройте документ, чтобы отметить его линии сгиба.
+	Remove Fold Line Role	Убрать тип линии
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

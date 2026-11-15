@@ -1071,6 +1071,61 @@ fn the_place_cursors_files_ask_for_their_import_options_when_show_import_options
     assert_eq!(dialog_kind(&app), None);
 }
 
+/// An encrypted PDF in the place cursor asks for its password when clicked, with Show Import
+/// Options on or off, and the password's OK places it where the click put it.
+#[test]
+fn an_encrypted_pdf_in_the_place_cursor_asks_for_its_password_when_clicked() {
+    let mut app = app();
+    let dir = Folder::new("ui-place-cursor-encrypted-pdf");
+    let a = dir.file("a.png", &png(10, 10, 72.0));
+    let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), PdfPage::new(300.0, 100.0, "1 0 0 rg 0 0 30 30 re f")];
+    let locked = dir.file("locked.pdf", &pdf(&pages, Some("pw")));
+    // The click gives the box of the size the cursor holds it at, a letter page.
+    let click = json!({"path": locked, "link": false, "rect": [10, 10, 612, 792]});
+    let center = vectorcraft_geom::Point::new(316.0, 406.0);
+    let placed = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let b = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+        (b.width().round(), b.center())
+    };
+    for show in [false, true] {
+        app.run("file.place", json!({"paths": [a, locked]})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("showImportOptions".into(), json!(show));
+        d.fields.insert("link".into(), json!(false));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.session.tool_options()["count"], 2, "kept in the cursor");
+        crate::place::place_from_cursor(&mut app, &click);
+        let d = app.ui.dialog.as_mut().expect("the password dialog");
+        assert!(d.bool("__locked"));
+        assert_eq!(d.fields["__place"], json!({"link": false, "at": [316.0, 406.0]}));
+        d.fields.insert("password".into(), json!("pw"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        if show {
+            // Unlocked, it asks for the page.
+            assert_eq!(dialog_kind(&app), Some("importPdf"));
+            crate::dialogs::confirm(&mut app).unwrap();
+        }
+        assert_eq!((dialog_kind(&app), placed(&app)), (None, (100.0, center)), "Show Import Options {show}");
+    }
+    // A cursor loaded by file.place.queue asks too, also with a `page`, which it then places.
+    app.run("file.place.queue", json!({"paths": [a, locked], "link": false, "page": 2})).unwrap();
+    crate::place::place_from_cursor(&mut app, &json!({"path": locked, "link": false, "page": 2, "rect": [10, 10, 612, 792]}));
+    let d = app.ui.dialog.as_mut().expect("the password dialog");
+    assert!(d.bool("__locked"));
+    d.fields.insert("password".into(), json!("pw"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!((dialog_kind(&app), placed(&app).0), (None, 300.0), "page 2");
+    // File › Place of it with a `page` and Show Import Options on asks for the password too.
+    crate::place::run_for_user(&mut app, &json!({"path": locked, "link": false, "page": 1})).unwrap();
+    assert!(app.ui.dialog.as_ref().is_some_and(|d| d.bool("__locked")));
+    app.ui.dialog = None;
+    // An encrypted PDF whose name has no PDF extension is still left out of the cursor.
+    let misnamed = dir.file("locked.dat", &pdf(&pages, Some("pw")));
+    let r = app.run("file.place.queue", json!({"paths": [a, misnamed]})).unwrap();
+    assert_eq!((&r["count"], &r["skipped"][0]["name"]), (&json!(1), &json!("locked.dat")), "{r}");
+}
+
 /// A cursor loaded again after the Place dialog loaded it with Show Import Options on (a queue set
 /// on the Place tool) places its files at once.
 #[test]
