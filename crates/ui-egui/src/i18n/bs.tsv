@@ -6307,6 +6307,13 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tehnički sklopovi
+	Circuit Trace	Vod sklopa
+	Bus Lines	Linije sabirnice
+	Terminal Nodes	Priključni čvorovi
+
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
 	Wave	Talas
