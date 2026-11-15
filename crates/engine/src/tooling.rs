@@ -255,6 +255,9 @@ impl Session {
         }
         // The Selection and Group Selection tools act on the instance whole.
         self.select_whole_instance(id);
+        // The tool lent to does not see the press: it counts as a press elsewhere for the clicks a
+        // double-click or triple-click compares.
+        self.tool.press_elsewhere();
         let lent = self.make_tool(id);
         self.selection_at_lend = self.active().map(|d| (d.uid, d.selection.clone()));
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
@@ -1086,6 +1089,12 @@ impl Session {
         self.with_tool_cx(view, |t, cx| t.hover_ended(cx));
     }
 
+    /// A press on the canvas went to the view tools and not to the active tool
+    /// ([`vectorcraft_tools::Tool::press_elsewhere`]).
+    pub fn tool_press_elsewhere(&mut self) {
+        self.tool.press_elsewhere();
+    }
+
     /// Whether the active tool's hover depends on what lies under a still pointer
     /// ([`vectorcraft_tools::Tool::wants_rehover`]).
     pub fn tool_wants_rehover(&self) -> bool {
@@ -1262,6 +1271,14 @@ impl Session {
     /// is placed under ([`Session::place_queue_roots`]).
     fn note_place_queue_roots(&mut self) {
         self.place_queue_roots = crate::file_access::current();
+        self.place_queue_loads = self.place_queue_loads.wrapping_add(1);
+    }
+
+    /// How many times the place cursor has been loaded (`file.place.queue`, or a `queue` set on
+    /// the Place tool): a frontend that keeps its own state about the loaded cursor compares it to
+    /// tell a newer load.
+    pub fn place_queue_loads(&self) -> u64 {
+        self.place_queue_loads
     }
 
     /// The automation roots the place cursor's files are placed under: those in force when it

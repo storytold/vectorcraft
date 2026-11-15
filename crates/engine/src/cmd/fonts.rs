@@ -10,9 +10,10 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::Rect;
 
+use super::panelcmds::listed_artboards;
 use super::select::on_artboard;
 use super::typecmd::refresh_bounds;
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index, str_param};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -39,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Text by Font",
             [],
             None,
-            "{family, style?, scope?: \"document\" (default) | {artboards: [index, …] (0-based)} | {layers: [id, …] (layers or sublayers)}} select the text objects using the font, the instances of the symbols whose art uses it, the text whose inline graphics draw such a symbol, the objects painted with a pattern whose art uses it (by a visible fill or stroke whose opacity is above 0, a stroke wider than 0) and the objects whose opacity mask uses it (in type that is not hidden or locked in that art), that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard; a pattern swatch that nothing paints, or a layer's mask, selects nothing; with scope, only those on one of the artboards (as All on Active Artboard takes them: their bounds overlap it or their center is on it) or in one of the layers → {count}",
+            "{family, style?, scope?: \"document\" (default) | {artboards: [index, …] (0-based whole numbers)} | {layers: [id, …] (layers or sublayers)}} select the text objects using the font, the instances of the symbols whose art uses it, the text whose inline graphics draw such a symbol, the objects painted with a pattern whose art uses it (by a visible fill or stroke whose opacity is above 0, a stroke wider than 0) and the objects whose opacity mask uses it (in type that is not hidden or locked in that art), that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard; a pattern swatch that nothing paints, or a layer's mask, selects nothing; with scope, only those on one of the artboards (as All on Active Artboard takes them: their bounds overlap it or their center is on it) or in one of the layers → {count}",
             has_doc,
             select_font
         ),
@@ -1080,9 +1081,9 @@ impl FontScope {
                 Some(_) => Err(bad(C, format!("`scope.{key}` must be a non-empty array"))),
             }
         };
-        if let Some(a) = list("artboards")? {
-            let rect = |v: &Value| v.as_u64().and_then(|i| d.artboards.get(index(i))).map(|b| b.rect);
-            return a.iter().map(|v| rect(v).ok_or_else(|| bad(C, format!("no such artboard {v}")))).collect::<Result<_>>().map(Self::Artboards);
+        if let (Some(v), Some(_)) = (scope.get("artboards"), list("artboards")?) {
+            let indices = listed_artboards(d, v, "scope.artboards", C)?;
+            return Ok(Self::Artboards(indices.into_iter().filter_map(|i| d.artboards.get(i)).map(|b| b.rect).collect()));
         }
         if let Some(a) = list("layers")? {
             let layer = |v: &Value| v.as_u64().map(NodeId).filter(|id| d.node(*id).is_some_and(Node::is_layer));
@@ -1290,6 +1291,40 @@ mod tests {
         for bad in [json!({"artboards": [3]}), json!({"artboards": []}), json!({"artboards": ["x"]}), json!({"pages": [0]}), json!("all"), json!(7)] {
             assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": bad})).is_err(), "{bad}");
         }
+    }
+
+    /// Select Text by Font refuses a `scope.artboards` entry that is not a whole number, naming the
+    /// parameter, before it looks at the artboards, and leaves the selection as it was; a whole
+    /// number past the last artboard is `no such artboard`.
+    #[test]
+    fn select_font_refuses_artboards_that_are_not_whole_numbers() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 300, "y": 0, "width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, x: i32| {
+            NodeId(s.execute("text.create", &json!({"x": x, "y": 50, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap())
+        };
+        let first = text(&mut s, 10);
+        let second = text(&mut s, 350);
+        let run =
+            |s: &mut Session, artboards: Value| s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"artboards": artboards}}));
+        let malformed = "invalid parameters for `select.font`: `scope.artboards` must contain whole numbers";
+        for (artboards, want) in [
+            (json!(["1"]), malformed),
+            (json!([-1]), malformed),
+            (json!([1.5]), malformed),
+            (json!([true]), malformed),
+            (json!([null]), malformed),
+            (json!([9, "1"]), malformed),
+            (json!([9]), "no such artboard"),
+            (json!([1, 9]), "no such artboard"),
+        ] {
+            s.execute("select.set", &json!({"ids": [first.0]})).unwrap();
+            assert_eq!(run(&mut s, artboards.clone()).unwrap_err().to_string(), want, "{artboards}");
+            assert_eq!(s.doc().unwrap().selection.objects, [first], "{artboards}");
+        }
+        run(&mut s, json!([1, 1])).unwrap();
+        assert_eq!(s.doc().unwrap().selection.objects, [second]);
     }
 
     /// Select Text by Font with a layer scope takes the text in the layers, their sublayers

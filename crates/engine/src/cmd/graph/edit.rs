@@ -2,7 +2,7 @@ use vectorcraft_doc::graph::graph_art_without_type as art_bounds;
 
 use super::axis::{MAX_TICK_MARKS, count_given, one_line};
 use super::data::apply_data;
-use super::generate::{children_bounds, generate};
+use super::generate::{calculated_axes, children_bounds, generate};
 use super::series::{picked_series, reselect_series};
 use super::{
     Affine, Document, EngineError, GraphKind, GraphSpec, Node, NodeId, Rect, Result, Session, TickLength, Value, ValueAxisSide, bad, f64_req, json,
@@ -88,6 +88,23 @@ pub(crate) fn keep_placed(d: &mut Document, graphs: &[(NodeId, Option<Rect>, Opt
     }
 }
 
+/// Let `edit` change the art of graph node `n` (a copy outside any document) without the next redraw reading the
+/// change as a move or scale: the plot rect first takes any move or scale of the art since it was generated, as a
+/// redraw measures it, and the bounds the graph keeps become those of the changed art (also for a graph that had none,
+/// so a later move is followed).
+pub(crate) fn edit_graph_art(n: &mut Node, edit: impl FnOnce(&mut Node)) {
+    let moved = measured(n).and_then(|(placed, now)| n.extras().graph.as_deref().and_then(|g| carried(g.rect, placed, now)));
+    if let (Some(rect), Some(g)) = (moved, n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) {
+        g.rect = rect;
+    }
+    edit(n);
+    let children = n.children();
+    let (whole, art) = (children.and_then(|c| children_bounds(c)), children.and_then(|c| art_bounds(c)));
+    if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+        (g.placed, g.placed_art) = (whole, art);
+    }
+}
+
 /// Regenerate graph `id` from `spec` (adjusting the plot rect for any move/scale since the last
 /// generation, which is recorded in the spec's `placed_art` bounds, or `placed` in graphs saved without them).
 pub(super) fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> Result<()> {
@@ -167,6 +184,28 @@ pub(super) fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
 
 pub(super) fn spec_of(s: &Session, id: NodeId) -> Result<GraphSpec> {
     s.doc()?.doc.node(id).and_then(|n| n.extras().graph.as_deref().cloned()).ok_or(EngineError::NoNode(id))
+}
+
+/// What `graph.setType` without `id` or `seriesIndexes` acts on, for the Graph Type dialog.
+pub struct GraphTypeSubject {
+    /// The selected graph, or the graph that holds the selection.
+    pub id: NodeId,
+    /// The series picked in it with Group Selection, in order; empty when the type goes to the whole graph.
+    pub series: Vec<usize>,
+    /// The least value, the greatest and the number of divisions each value axis is drawn with while its tick values
+    /// are calculated: the left (or only) axis, then the right axis' own scale (the left one's without Separate Scales).
+    pub calculated: [(f64, f64, usize); 2],
+}
+
+/// The graph and series that `graph.setType {}` reads its options from, as [`GraphTypeSubject`]. An error without a
+/// selected graph, as the command gives.
+pub fn graph_type_subject(s: &Session) -> Result<GraphTypeSubject> {
+    const C: &str = "graph.setType";
+    let p = json!({});
+    let id = target(s, &p, C)?;
+    let spec = spec_of(s, id)?;
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
+    Ok(GraphTypeSubject { id, series: picked_series(s, &p, id, count, C)?, calculated: calculated_axes(&spec) })
 }
 
 fn query_type_options(spec: &GraphSpec, count: usize, picked: &[usize]) -> Value {

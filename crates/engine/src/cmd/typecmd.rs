@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph); the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; the group keeps the object's transparency, opacity mask and effects, once; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -739,11 +739,13 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             if children.is_empty() {
                 continue;
             }
+            // The group takes the object's name, transparency, opacity mask and effects, which
+            // apply to the type as a whole: once, not to each glyph. It is marked as type's
+            // outlines, so geometry effects move its placed gradients with the whole outline, as
+            // they do on the type.
             let gid = d.alloc_id();
-            let mut g = Node::group(gid, children);
-            g.opacity = n.opacity;
-            g.blend = n.blend;
-            g.name = n.name.clone();
+            let mut g = super::flatten::carry(&n, Node::group(gid, children));
+            g.extras_mut().type_outlines = true;
             d.insert(par, idx, g)?;
             out.push(gid);
             if roots.contains(&tid) {
