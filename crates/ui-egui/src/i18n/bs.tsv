@@ -1046,6 +1046,8 @@
 	Step up or down	Korak gore ili dolje
 	Drag values or labels. Double-click a value to type.	Prevucite vrijednosti ili oznake. Dvostruki klik na vrijednost za upis.
 	Drag rings to rotate. Shift snaps to 15°.	Prevucite prstenove za rotaciju. Shift hvata na 15°.
+	Track cube	Kocka za rotaciju
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Prevucite stranu, ivicu ili prsten za rotaciju. Shift rotira oko jedne ose ekrana.
 	Drag the light, or its rings. Shift snaps to 15°.	Prevucite svjetlo ili njegove prstenove. Shift hvata na 15°.
 lighting	Light	Svjetlo
 	Keep visible surfaces only when expanding	Pri proširivanju zadrži samo vidljive površine
