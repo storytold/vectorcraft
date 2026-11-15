@@ -104,7 +104,7 @@ fn map_graphic(s: &mut Session, p: &Value) -> Result<Value> {
         effect_targets(s, p, item, index, C)?
     } else {
         let mut out = vec![];
-        for id in edit_targets(s, p)? {
+        for id in edit_targets(s, p, C)? {
             let (item, index) = d.node(id).and_then(first_three_d).ok_or_else(|| bad(C, format!("object {} needs a 3D effect", id.0)))?;
             out.push((id, item, index));
         }
@@ -214,7 +214,7 @@ fn map_art(s: &mut Session, p: &Value) -> Result<Value> {
         effect_targets(s, p, item, index, C)?
     } else {
         let mut out = vec![];
-        for id in edit_targets(s, p)? {
+        for id in edit_targets(s, p, C)? {
             let found = d.node(id).and_then(first_mapped);
             let (item, index) = found.ok_or_else(|| bad(C, format!("object {}: {}", id.0, effects::MAP_ART_NOT_TAKEN)))?;
             out.push((id, item, index));

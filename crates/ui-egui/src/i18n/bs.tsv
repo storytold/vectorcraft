@@ -513,6 +513,7 @@
 	Rotate (Classic)…	Rotiraj (klasično)…
 	Surface	Površina
 	Wireframe	Žičani model
+	Render Settings	Postavke renderovanja
 	No Shading	Bez sjenčenja
 	Plastic	Plastika
 	Highlight Intensity	Intenzitet odsjaja
@@ -982,6 +983,7 @@
 	Free Transform	Slobodna transformacija
 	Perspective Distort	Izobličenje perspektive
 	Radial Blur…	Radijalno zamućenje…
+	Blur Center	Središte zamućenja
 	Smart Blur…	Pametno zamućenje…
 	Sharpen	Izoštri
 	Unsharp Mask…	Maska izoštravanja…
@@ -995,6 +997,11 @@
 	NTSC Colors	NTSC boje
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB pravilo:
+	CMYK Policy:	CMYK pravilo:
+	Preserve Embedded Profiles	Zadrži ugrađene profile
+	Convert to Working Space	Pretvori u radni prostor
+	Preserve Numbers	Zadrži brojeve
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Krakelura…
@@ -1089,6 +1096,14 @@ lighting	Light	Svjetlo
 	Previous Artboard	Prethodna radna ploča
 	Next Artboard	Sljedeća radna ploča
 	Last Artboard	Posljednja radna ploča
+	Status Bar Show	Prikaz u traci stanja
+	Artboard Name	Naziv radne ploče
+	Current Tool	Trenutni alat
+	Date and Time	Datum i vrijeme
+	Number of Undos	Broj poništavanja
+	Document Color Profile	Profil boja dokumenta
+	Undos	Poništavanja
+	Redos	Ponavljanja
 	Graphic Style Options…	Opcije grafičkog stila…
 	Symbol Options	Opcije simbola
 	Symbol Options…	Opcije simbola…
@@ -1501,6 +1516,7 @@ lighting	Light	Svjetlo
 	Align to Artboard	Poravnaj s radnom pločom
 	Align to Glyph Bounds	Poravnaj s granicama glifa
 	Align to Key Object	Poravnaj s ključnim objektom
+	Align to Key Anchor	Poravnaj s ključnom sidrenom tačkom
 	Align to Selection	Poravnaj prema odabiru
 	Align To:	Poravnaj s:
 	Cancel Key Object	Otkaži ključni objekat
@@ -1594,6 +1610,8 @@ lighting	Light	Svjetlo
 	Leading	Prored
 	No Break	Bez preloma
 	Proportional Metrics	Proporcionalna metrika
+	H or V Style	Horizontalni ili vertikalni stil
+	Roman Italics	Latinični kurziv
 	Insert Aki Left	Umetni aki lijevo
 	Insert Aki Right	Umetni aki desno
 	Tsume	Tsume
@@ -1648,6 +1666,8 @@ digits	Malayalam	Malajalam
 	Kana	Kana
 	Numerals	Brojevi
 	Scale at Center	Skaliraj od centra
+	Delete Set	Izbriši skup
+	Direct Entry	Direktan unos
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko gore/dolje
@@ -2027,7 +2047,10 @@ digits	Malayalam	Malajalam
 	Tabular Lining	Tabelarne brojke
 	Tabular Oldstyle	Tabelarne stare brojke
 	Titling Alternates	Alternative za naslove
-	Every-line Composer	Slagač svih redova
+	Middle Eastern & South Asian Single-line Composer	Slagač jednog reda (Bliski istok i Južna Azija)
+	Middle Eastern & South Asian Every-line Composer	Slagač svih redova (Bliski istok i Južna Azija)
+	Standard Single-line Composer	Standardni slagač jednog reda
+	Standard Every-line Composer	Standardni slagač svih redova
 	First-line Left Indent	Lijeva uvlaka prvog reda
 	Hyphenation…	Rastavljanje riječi…
 	Words Longer Than:	Riječi duže od:
@@ -2067,7 +2090,6 @@ digits	Malayalam	Malajalam
 	East Asian Composition Settings	Postavke istočnoazijske kompozicije
 	Korean Composition Settings	Postavke korejske kompozicije
 	Select a text object to edit its paragraph attributes.	Odaberite tekstualni objekat da uredite njegove atribute pasusa.
-	Single-line Composer	Slagač jednog reda
 	Toggle Line Composer	Uključi/isključi Line Composer
 	Space After Paragraph	Razmak nakon pasusa
 	Space Before Paragraph	Razmak prije pasusa
@@ -2111,6 +2133,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Prikaži granice uzorka boje
 	Show Tile Edge	Prikaži ivicu pločice
 	Size Tile to Art	Prilagodi pločicu crtežu
+	Move Tile with Art	Pomjeri pločicu s crtežom
 	Tile Type:	Vrsta pločice:
 	Top in Front	Vrh naprijed
 	V Spacing:	Okomiti razmak:
@@ -2153,6 +2176,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Koristi kompenzaciju crne tačke
 	Working CMYK (don't tag)	Radni CMYK (bez oznake)
 	Working RGB (don't tag)	Radni RGB (bez oznake)
+	Don't Color Manage This Document	Ne upravljaj bojama ovog dokumenta
+	Working RGB: {name}	Radni RGB: {name}
+	Working CMYK: {name}	Radni CMYK: {name}
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Dodaj u profile…
 	Align Stroke to Center	Poravnaj potez po sredini
@@ -2710,6 +2736,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Prozirna pozadina
 	Choose…	Odaberi…
 	Copy Fonts Used in the Document	Kopiraj fontove korištene u dokumentu
+	Copy Info	Kopiraj informacije
 	Copy Links	Kopiraj veze
 	Create Report	Kreiraj izvještaj
 	Fonts whose licence doesn't allow embedding are not copied.	Fontovi čija licenca ne dozvoljava ugrađivanje ne kopiraju se.
@@ -2760,6 +2787,8 @@ digits	Malayalam	Malajalam
 	Keep a link to an image file instead of only embedding it	Zadrži vezu na slikovnu datoteku umjesto samo ugrađivanja
 	Place onto a new locked, dimmed template layer below the current layer	Postavi na novi zaključani, zatamnjeni sloj predloška ispod trenutnog sloja
 	Swap the selected object for the file, keeping its place and transform	Zamijeni odabrani objekat datotekom, zadržavajući njegovo mjesto i transformaciju
+	Show Import Options	Prikaži opcije uvoza
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pitaj za opcije uvoza svake PDF, DXF ili tekstualne datoteke prije postavljanja; isključeno: koriste se posljednje odabrane opcije
 	On: one locked object showing the document, updated when it changes.	Uključeno: jedan zaključani objekat koji prikazuje dokument, ažuriran kad se on promijeni.
 	Off: an editable copy of its art, embedded in this document.	Isključeno: kopija njegovog crteža koja se može uređivati, ugrađena u ovaj dokument.
 	Images: link to the file instead of only embedding it.	Slike: poveži s datotekom umjesto samo ugrađivanja.
@@ -2893,6 +2922,7 @@ digits	Malayalam	Malajalam
 	Limit to Library:	Ograniči na biblioteku:
 	Link harmony colors	Poveži boje harmonije
 	Merge colors into one row	Spoji boje u jedan red
+	New Row	Novi red
 	No colors to recolor (preserved colors are left out).	Nema boja za ponovno bojenje (sačuvane boje su izostavljene).
 	Preserve:	Očuvaj:
 	Randomly change color order	Nasumično promijeni redoslijed boja
@@ -3575,6 +3605,40 @@ theme	Appearance	Izgled
 	Create Graph	Kreiraj grafikon
 	Graph Data	Podaci grafikona
 	Graph Type	Vrsta grafikona
+	Graph Options	Opcije grafikona
+	Left Axis	Lijeva osa
+	Right Axis	Desna osa
+	Category Axis	Osa kategorija
+	Separate Scales	Odvojene skale
+	Add Drop Shadow	Dodaj sjenu
+	Add Legend Across Top	Dodaj legendu na vrh
+	First Row in Front	Prvi red naprijed
+	First Column in Front	Prva kolona naprijed
+	Legend	Legenda
+	Column Width	Širina stupca
+	Bar Width	Širina trake
+	Cluster Width	Širina grupe
+	Mark Data Points	Označi tačke podataka
+	Connect Data Points	Poveži tačke podataka
+	Edge-to-Edge Lines	Linije od ivice do ivice
+	Draw Filled Lines	Crtaj ispunjene linije
+	Tick Values	Vrijednosti crtica
+	Override Calculated Values	Zamijeni izračunate vrijednosti
+	Divisions	Podioci
+	Tick Marks	Crtice
+	Tick Marks per Division	Crtica po podioku
+	Draw Tick Marks Between Labels	Crtaj crtice između oznaka
+	Add Labels	Dodaj oznake
+	Maximum must be more than Minimum.	Maksimum mora biti veći od minimuma.
+	Column Graph	Stupčasti grafikon
+	Stacked Column Graph	Naslagani stupčasti grafikon
+	Bar Graph	Trakasti grafikon
+	Stacked Bar Graph	Naslagani trakasti grafikon
+	Line Graph	Linijski grafikon
+	Area Graph	Površinski grafikon
+	Scatter Graph	Raspršeni grafikon
+	Pie Graph	Tortni grafikon
+	Radar Graph	Radarski grafikon
 	Vector Halftone	Vektorski polutonovi
 	spot	spot
 	Text	Tekst
@@ -4181,6 +4245,7 @@ axis	Both	Obje
 	Replace:	Zamijeni:
 	Type on a Path Options	Opcije teksta na putanji
 	Highlight Variable	Istakni varijablu
+	Sort Variables	Sortiraj varijable
 	New Variable	Nova varijabla
 	List Variables	Izlistaj varijable
 	Bind Variable	Veži varijablu
@@ -4557,6 +4622,7 @@ imageTrace	Outline	Obris
 	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Ova skripta je dodala veoma mnogo objekata. Nastaviti, ili je zaustaviti i poništiti ono što je uradila?
 @msg	Copied the script report	Izvještaj skripte kopiran
+@msg	Copied the link info	Informacije o vezi kopirane
 @msg	Corners edits the corners of a path	Uglovi uređuje uglove putanje
 @msg	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}
@@ -5803,6 +5869,9 @@ mark-style	Japanese	Japanski
 	Softness	Mekoća
 	Ambient Light	Ambijentalno svjetlo
 	Light behind the object	Svjetlo iza objekta
+	Move Light to Back	Pomjeri svjetlo iza
+	Move Light to Front	Pomjeri svjetlo naprijed
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Prevucite svjetlo da ga pomjerite. Tipke sa strelicama pomjeraju fokusirano svjetlo; Shift ga pomjera za 15°.
 	Shadows	Sjene
 	Distance from Object	Udaljenost od objekta
 	Shadow Bounds	Granice sjene
@@ -6191,6 +6260,8 @@ axis	Y Axis	Y osa
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
+	Select Similar Objects	Odaberi slične objekte
+	Select Similar Options	Opcije odabira sličnih
 	Leave Out of Global Edit	Isključi iz globalnog uređivanja
 	Match	Podudaranje
 	On Artboards	Na radnim pločama
@@ -6313,6 +6384,13 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tehnički sklopovi
+	Circuit Trace	Vod sklopa
+	Bus Lines	Linije sabirnice
+	Terminal Nodes	Priključni čvorovi
+
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
 	Wave	Talas
@@ -6981,3 +7059,4 @@ shape	Open	Otvoren
 	Nest Shapes…	Slaganje oblika…
 	Nest Shapes	Slaganje oblika
 	Roll	Rolna
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"

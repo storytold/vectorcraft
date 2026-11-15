@@ -172,7 +172,7 @@ fn live_curve_fitting_off_shows_the_points_until_the_release_fits_them() {
         let pointer = |kind, (x, y)| vectorcraft_tools::PointerEvent::new(kind, x, y);
         let newest = |app: &VectorcraftApp| {
             let doc = &app.session.doc().unwrap().doc;
-            doc.layers[0].children().unwrap().last().unwrap().path_data().unwrap().subpaths[0].anchors.clone()
+            doc.layers[0].children().unwrap().last().unwrap().path_data().unwrap().subpaths[0].anchors.to_vec()
         };
         crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Down, pts[0]), view);
         for p in &pts[1..] {
@@ -364,6 +364,38 @@ fn the_blob_brush_and_eraser_size_can_follow_the_pen_pressure() {
     app.run("tool.options", json!({"tool": "pencil"})).unwrap();
     let text = painted(&mut app);
     assert!(!text.contains("Variation:") && !text.contains("Fixed"), "{text}");
+}
+
+/// Eraser Tool Options gives Angle, Roundness and Size each a variation menu with a Variation
+/// field; OK sets the modes and Variations. The Blob Brush keeps one menu, on Size.
+#[test]
+fn the_eraser_angle_roundness_and_size_each_have_a_variation_menu() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "eraser"})).unwrap();
+    let text = painted(&mut app);
+    assert_eq!((text.matches("Variation:").count(), text.matches("Fixed").count()), (3, 3), "{text}");
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (k, v) in [
+        ("angleMode", json!("bearing")),
+        ("angleVariation", json!(30)),
+        ("roundnessMode", json!("random")),
+        ("roundnessVariation", json!(20)),
+        ("sizeMode", json!("rotation")),
+        ("sizeVariation", json!(5)),
+    ] {
+        d.fields.insert(k.into(), v);
+    }
+    let text = painted(&mut app);
+    assert!(text.contains("Bearing") && text.contains("Random") && text.contains("Rotation") && !text.contains("Fixed"), "{text}");
+    super::super::confirm(&mut app).unwrap();
+    let o = app.session.tool_options_of("eraser");
+    assert_eq!(
+        [&o["angleMode"], &o["angleVariation"], &o["roundnessMode"], &o["roundnessVariation"], &o["sizeMode"], &o["sizeVariation"]],
+        [&json!("bearing"), &json!(30.0), &json!("random"), &json!(20.0), &json!("rotation"), &json!(5.0)]
+    );
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let text = painted(&mut app);
+    assert_eq!(text.matches("Variation:").count(), 1, "{text}");
 }
 
 #[test]

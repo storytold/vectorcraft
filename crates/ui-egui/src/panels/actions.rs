@@ -312,7 +312,7 @@ pub fn default_sets() -> Vec<ActionSet> {
             Action::new("Center on Artboard", vec![step("object.align", json!({"horizontal": "center", "vertical": "center", "to": "artboard"}))]),
             Action::new("Outline Text", vec![step("type.createOutlines", json!({}))]),
             Action::new("Rotate 90° CW", vec![step("object.rotate", json!({"angle": -90}))]),
-            Action::new("Reflect Horizontal", vec![step("object.reflect", json!({"axis": "vertical"}))]),
+            Action::new("Reflect Horizontal", vec![step("object.reflect", json!({"axis": "vertical", "basis": "box"}))]),
         ],
     )]
 }
@@ -2721,6 +2721,28 @@ mod tests {
         }
     }
 
+    /// The built-in Reflect Horizontal reflects a rotated object across its bounding box's own axis,
+    /// as the Reflect dialog does, so the box keeps its angle; a saved step without a basis, recorded
+    /// before Reflect followed the box, still reflects across the page's axis.
+    #[test]
+    fn the_built_in_reflect_follows_the_turned_box() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = vectorcraft_doc::NodeId(
+            app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap(),
+        );
+        app.run("select.set", json!({"ids": [id.0]})).unwrap();
+        app.run("object.rotate", json!({"angle": 30})).unwrap();
+        let angle = |app: &VectorcraftApp| app.session.active().unwrap().doc.bbox_angle(&[id]);
+        let reflect = default_sets()[0].actions.iter().position(|a| a.name == "Reflect Horizontal").unwrap();
+        app.ui.action_sets = default_sets();
+        play(&mut app, 0, reflect).unwrap();
+        assert!((angle(&app) - 30.0).abs() < 1e-6, "{}", angle(&app));
+        app.ui.action_sets = vec![ActionSet::new("Old", vec![Action::new("Reflect", vec![("object.reflect".into(), json!({"axis": "vertical"}))])])];
+        play(&mut app, 0, 0).unwrap();
+        assert!((angle(&app) + 30.0).abs() < 1e-6, "{}", angle(&app));
+    }
+
     /// An action recorded with a key its command no longer reads still plays, accelerated and one
     /// step at a time, though the same command run by itself is refused.
     #[test]
@@ -4214,6 +4236,125 @@ mod tests {
         assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.group".to_string(), json!({}))]);
         assert_eq!(r["skipped"], json!([{"action": "A", "step": "group"}, {"action": "A", "step": "Ungroup"}]));
         assert_eq!(r["leftOut"], 2);
+    }
+
+    /// A Set Selection step written from scratch, as `/event-N` text: its label (none when empty),
+    /// whether it is on, and its recorded values, each the text inside a `/parameter-N` block.
+    fn set_selection_event(n: usize, label: &str, on: bool, values: &[String]) -> String {
+        let hex = |t: &[u8]| format!("[ {} {} ]", t.len(), t.iter().map(|b| format!("{b:02x}")).collect::<String>());
+        let label = if label.is_empty() { String::new() } else { format!("/localizedName {} ", hex(label.as_bytes())) };
+        let params: String = values.iter().enumerate().map(|(i, v)| format!("/parameter-{} {{ {v} }} ", i + 1)).collect();
+        format!(
+            "/event-{n} {{ /useRulersIn1stQuadrant 0 /internalName (adobe_setSelection) {label}/isOn {} /isOff 0 /parameterCount {} {params}}} ",
+            u8::from(on),
+            values.len()
+        )
+    }
+
+    /// The recorded values of a Set Selection step: the note's bytes, then Whole Word and Case
+    /// Sensitive.
+    fn set_selection_values(note: &[u8], whole_word: u8, case_sensitive: u8) -> Vec<String> {
+        let hex = |t: &[u8]| format!("[ {} {} ]", t.len(), t.iter().map(|b| format!("{b:02x}")).collect::<String>());
+        vec![
+            format!("/key 1952807028 /showInPalette 4294967295 /type (ustring) /value {}", hex(note)),
+            format!("/key 2003792484 /showInPalette 4294967295 /type (boolean) /value {whole_word}"),
+            format!("/key 1667330917 /showInPalette 4294967295 /type (boolean) /value {case_sensitive}"),
+        ]
+    }
+
+    /// Load Actions… reads an `.aia` Set Selection step, found by its internal name whatever its
+    /// label, as a Select Object step with its note (trimmed), Case Sensitive and Whole Word, in any
+    /// order; a step that is off stays excluded. The set saves to VectorCraft's own file and loads
+    /// back the same, and playing it selects the objects with that note.
+    #[test]
+    fn load_actions_reads_set_selection_steps_as_select_object() {
+        let mut reordered = set_selection_values("Größe ✓".as_bytes(), 1, 0);
+        reordered.reverse();
+        let events = [
+            set_selection_event(1, "Set Selection", true, &set_selection_values(b" Badge front ", 0, 1)),
+            set_selection_event(2, "Auswahl festlegen", true, &reordered),
+            set_selection_event(3, "", false, &set_selection_values(b"Off", 1, 1)),
+        ]
+        .concat();
+        let text = format!("/version 3 /name [ 5 4e6f746573 ] /actionCount 1 /action-1 {{ /name [ 1 41 ] /eventCount 3 {events}}}");
+        let mut app = app_with_sets();
+        let r = app.run(LOAD_SET, json!({ "data": text })).unwrap();
+        assert_eq!((r["leftOut"].clone(), r["skipped"].clone()), (json!(0), json!([])));
+        let step = |note: &str, case_sensitive: bool, whole_word: bool| {
+            (SELECT_OBJECT_STEP.to_string(), json!({"note": note, "caseSensitive": case_sensitive, "wholeWord": whole_word}))
+        };
+        let expected = [step("Badge front", true, false), step("Größe ✓", false, true), step("Off", true, true)];
+        assert_eq!(app.ui.action_sets[3].actions[0].steps, expected);
+        assert_eq!(app.ui.action_sets[3].actions[0].excluded_steps, [2].into());
+
+        let saved = files::write_set(&app.ui.action_sets[3]);
+        assert!(saved.contains("\"version\": 4"), "{saved}");
+        app.run(LOAD_SET, json!({ "data": saved })).unwrap();
+        assert_eq!(app.ui.action_sets[4].actions[0].steps, expected);
+        assert_eq!(app.ui.action_sets[4].actions[0].excluded_steps, [2].into());
+
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let mut ids = vec![];
+        for x in [0, 50] {
+            ids.push(app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+        }
+        app.run("attributes.set", json!({"ids": [ids[1]], "note": "Badge front"})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.ui.action_sets[3].actions[0].excluded_steps = [1, 2].into();
+        play(&mut app, 3, 0).unwrap();
+        let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+        assert_eq!(selected, [ids[1]], "the step selected the object with the note");
+    }
+
+    /// A Set Selection step whose recorded values are not exactly the note (UTF-8 text, not empty
+    /// once trimmed, at most 1,024 bytes) and the two options (each 0 or 1), with the right types and
+    /// no other value, is left out, listed by its label (else its internal name) and counted; no step
+    /// comes in with a missing option filled in. A value whose byte count is wrong refuses the file.
+    #[test]
+    fn set_selection_steps_with_bad_values_are_left_out() {
+        let good = || set_selection_values(b"Badge", 0, 0);
+        let with = |i: usize, value: &str| {
+            let mut v = good();
+            v[i] = value.to_string();
+            v
+        };
+        let mut extra = good();
+        extra.push("/key 1 /type (boolean) /value 0".into());
+        let mut duplicate = good();
+        duplicate[0] = good()[2].clone();
+        let bad: Vec<Vec<String>> = vec![
+            good()[1..].to_vec(),
+            vec![good()[0].clone(), good()[1].clone()],
+            extra,
+            duplicate,
+            with(0, "/key 1952807028 /type (ustring) /value [ 2 c328 ]"),
+            with(0, "/key 1952807028 /type (ustring) /value [ 3 202020 ]"),
+            with(0, &format!("/key 1952807028 /type (ustring) /value [ 1025 {} ]", "61".repeat(1025))),
+            with(0, "/key 1952807028 /type (text) /value [ 5 4261646765 ]"),
+            with(0, "/key 1952807028 /type (ustring) /value 5"),
+            with(1, "/key 2003792484 /type (boolean) /value 2"),
+            with(1, "/key 2003792484 /type (integer) /value 1"),
+            with(2, "/key 1667330917 /type (boolean) /value 1.0"),
+            with(2, "/key 1667330917 /type (boolean)"),
+            with(2, "/key 1 /type (boolean) /value 1"),
+        ];
+        let events: String = bad.iter().enumerate().map(|(i, values)| set_selection_event(i + 1, "Set Selection", true, values)).collect();
+        let events = events + &set_selection_event(bad.len() + 1, "", true, &[]);
+        let text = format!("/version 3 /name [ 3 426164 ] /action-1 {{ /name [ 1 41 ] {events}}}");
+        let mut app = app_with_sets();
+        let r = app.run(LOAD_SET, json!({ "data": text })).unwrap();
+        assert!(app.ui.action_sets[3].actions[0].steps.is_empty(), "{:?}", app.ui.action_sets[3].actions[0].steps);
+        assert_eq!(r["leftOut"], bad.len() + 1);
+        let names: Vec<&str> = r["skipped"].as_array().unwrap().iter().map(|s| s["step"].as_str().unwrap()).collect();
+        let mut expected = vec!["Set Selection"; bad.len()];
+        expected.push("adobe_setSelection");
+        assert_eq!(names, expected);
+        assert_eq!(app.ui.status, format!("Loaded “Bad”: {} steps were left out", bad.len() + 1));
+
+        let wrong_count = set_selection_event(1, "Set Selection", true, &with(0, "/key 1952807028 /type (ustring) /value [ 6 4261646765 ]"));
+        let text = format!("/version 3 /action-1 {{ {wrong_count}}}");
+        assert_eq!(app.run(LOAD_SET, json!({ "data": text })).unwrap_err(), "the action set file can't be read in full");
+        assert_eq!(app.ui.action_sets.len(), 4, "no set added");
     }
     /// Load Actions… picks action set files of both kinds, and a set another app saved without a
     /// name takes the file's name, or `Actions` when there is no file; one named like a set in the

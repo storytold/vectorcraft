@@ -2,6 +2,8 @@
 //! params' top level or from an `svg` object (which wins), and the files an SVG export writes
 //! (one per artboard, plus the images it links to).
 
+use std::borrow::Cow;
+
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use vectorcraft_doc::Document;
@@ -153,6 +155,18 @@ fn plan(doc: &Document, p: &Value) -> Result<(ExportOptions, Vec<Option<usize>>,
     let named = boards.pick.resolve(n)?;
     let chosen = named.is_some();
     Ok((opts, named.unwrap_or_else(|| vec![0]).into_iter().map(Some).collect(), chosen))
+}
+
+/// The art the SVG files of `doc` with options `p` draw, as [`encode`] picks it: with chosen
+/// artboards, the art over each one; else all of `doc`. `None` when the options don't read.
+pub(super) fn drawn<'a>(doc: &'a Document, p: &Value) -> Option<Vec<Cow<'a, Document>>> {
+    let (_, boards, chosen) = plan(doc, p).ok()?;
+    if !chosen {
+        return Some(vec![Cow::Borrowed(doc)]);
+    }
+    let mut renderer = vectorcraft_render::Renderer::new();
+    let rects: Vec<_> = boards.iter().flatten().filter_map(|b| doc.artboards.get(*b)).map(|a| a.rect).collect();
+    Some(rects.into_iter().map(|r| Cow::Owned(super::export::art_over(doc, r, &mut renderer))).collect())
 }
 
 /// What a save of `doc` as SVG (format `label`) with options `p` loses of several artboards: the

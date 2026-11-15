@@ -1,8 +1,8 @@
-use vectorcraft_doc::graph::art_bounds;
+use vectorcraft_doc::graph::graph_art_without_type as art_bounds;
 
 use super::axis::{MAX_TICK_MARKS, count_given, one_line};
 use super::data::apply_data;
-use super::generate::{children_bounds, generate};
+use super::generate::{calculated_axes, children_bounds, generate};
 use super::series::{picked_series, reselect_series};
 use super::{
     Affine, Document, EngineError, GraphKind, GraphSpec, Node, NodeId, Rect, Result, Session, TickLength, Value, ValueAxisSide, bad, f64_req, json,
@@ -21,12 +21,16 @@ fn bound_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Option<f64>>> {
 
 /// The bounds a redraw of graph `n` measures a move or scale on, as kept at the last generation and as they are now:
 /// those of its art without type ([`GraphSpec::placed_art`]), or those of all its art when the graph keeps no such
-/// bounds with a width and a height, or has no art without type now.
+/// bounds with a width and a height. `None` when the art measured has no width or no height now, or the graph keeps
+/// bounds of its art without type and has no such art now.
 fn measured(n: &Node) -> Option<(Rect, Rect)> {
     let kept = n.extras().graph.as_deref()?;
     let c = n.children()?;
-    let art = kept.placed_art.filter(|p| p.width() > 1e-9 && p.height() > 1e-9).zip(art_bounds(c));
-    art.or_else(|| kept.placed.zip(children_bounds(c)))
+    let solid = |r: &Rect| r.width() > 1e-9 && r.height() > 1e-9;
+    match kept.placed_art.filter(solid) {
+        Some(placed) => art_bounds(c).filter(solid).map(|now| (placed, now)),
+        None => kept.placed.zip(children_bounds(c).filter(solid)),
+    }
 }
 
 /// `r` carried by the change from bounds `from` to bounds `to`: each edge stays at the same place relative to them.
@@ -39,14 +43,28 @@ fn carried(r: Rect, from: Rect, to: Rect) -> Option<Rect> {
     Some(Rect::new(to.x0 + (r.x0 - from.x0) * sx, to.y0 + (r.y0 - from.y0) * sy, to.x0 + (r.x1 - from.x0) * sx, to.y0 + (r.y1 - from.y0) * sy))
 }
 
-/// The graphs holding objects `ids`, each with the bounds of its art without type and of all its art. Give them to
-/// [`keep_placed`] after an edit that changes a graph's art without moving the graph.
+/// The graphs holding objects `ids`, that are among them or that are inside them, each with the bounds of its art
+/// without type and of all its art. Give them to [`keep_placed`] after an edit that changes a graph's art without
+/// moving the graph.
 pub(crate) fn graphs_holding(d: &Document, ids: &[NodeId]) -> Vec<(NodeId, Option<Rect>, Option<Rect>)> {
-    let mut out: Vec<(NodeId, Option<Rect>, Option<Rect>)> = vec![];
+    let is_graph = |n: &Node| n.extras().graph.is_some();
+    let mut found: Vec<NodeId> = vec![];
     for id in ids {
         let Some(chain) = d.ancestry(*id) else { continue };
-        let holder = chain.iter().rev().skip(1).copied().find(|a| d.node(*a).is_some_and(|n| n.extras().graph.is_some()));
-        let Some(gid) = holder.filter(|g| !out.iter().any(|(o, ..)| o == g)) else { continue };
+        found.extend(chain.iter().rev().copied().find(|a| d.node(*a).is_some_and(is_graph)));
+        if let Some(n) = d.node(*id) {
+            n.walk(&mut |c| {
+                if is_graph(c) {
+                    found.push(c.id);
+                }
+            });
+        }
+    }
+    let mut out: Vec<(NodeId, Option<Rect>, Option<Rect>)> = vec![];
+    for gid in found {
+        if out.iter().any(|(o, ..)| *o == gid) {
+            continue;
+        }
         let children = d.node(gid).and_then(Node::children);
         out.push((gid, children.and_then(|c| art_bounds(c)), children.and_then(|c| children_bounds(c))));
     }
@@ -67,6 +85,23 @@ pub(crate) fn keep_placed(d: &mut Document, graphs: &[(NodeId, Option<Rect>, Opt
         if let (Some(placed), Some(was), Some(now)) = (spec.placed, whole_was, whole_now) {
             spec.placed = carried(now, was, placed).or(spec.placed);
         }
+    }
+}
+
+/// Let `edit` change the art of graph node `n` (a copy outside any document) without the next redraw reading the
+/// change as a move or scale: the plot rect first takes any move or scale of the art since it was generated, as a
+/// redraw measures it, and the bounds the graph keeps become those of the changed art (also for a graph that had none,
+/// so a later move is followed).
+pub(crate) fn edit_graph_art(n: &mut Node, edit: impl FnOnce(&mut Node)) {
+    let moved = measured(n).and_then(|(placed, now)| n.extras().graph.as_deref().and_then(|g| carried(g.rect, placed, now)));
+    if let (Some(rect), Some(g)) = (moved, n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) {
+        g.rect = rect;
+    }
+    edit(n);
+    let children = n.children();
+    let (whole, art) = (children.and_then(|c| children_bounds(c)), children.and_then(|c| art_bounds(c)));
+    if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+        (g.placed, g.placed_art) = (whole, art);
     }
 }
 
@@ -149,6 +184,28 @@ pub(super) fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
 
 pub(super) fn spec_of(s: &Session, id: NodeId) -> Result<GraphSpec> {
     s.doc()?.doc.node(id).and_then(|n| n.extras().graph.as_deref().cloned()).ok_or(EngineError::NoNode(id))
+}
+
+/// What `graph.setType` without `id` or `seriesIndexes` acts on, for the Graph Type dialog.
+pub struct GraphTypeSubject {
+    /// The selected graph, or the graph that holds the selection.
+    pub id: NodeId,
+    /// The series picked in it with Group Selection, in order; empty when the type goes to the whole graph.
+    pub series: Vec<usize>,
+    /// The least value, the greatest and the number of divisions each value axis is drawn with while its tick values
+    /// are calculated: the left (or only) axis, then the right axis' own scale (the left one's without Separate Scales).
+    pub calculated: [(f64, f64, usize); 2],
+}
+
+/// The graph and series that `graph.setType {}` reads its options from, as [`GraphTypeSubject`]. An error without a
+/// selected graph, as the command gives.
+pub fn graph_type_subject(s: &Session) -> Result<GraphTypeSubject> {
+    const C: &str = "graph.setType";
+    let p = json!({});
+    let id = target(s, &p, C)?;
+    let spec = spec_of(s, id)?;
+    let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).min(vectorcraft_doc::MAX_GRAPH_SERIES);
+    Ok(GraphTypeSubject { id, series: picked_series(s, &p, id, count, C)?, calculated: calculated_axes(&spec) })
 }
 
 fn query_type_options(spec: &GraphSpec, count: usize, picked: &[usize]) -> Value {

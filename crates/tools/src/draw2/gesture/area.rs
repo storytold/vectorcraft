@@ -13,6 +13,7 @@
 //! most [`JOIN_PIECES_PER_CALL`] pieces' worth. The grid holds at most [`LISTINGS`] listings.
 
 use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
 
 use vectorcraft_geom::{Affine, BezPath, Line, ParamCurve, PathData, PathEl, PathSeg, Point, SubPath};
 use vectorcraft_pathops as po;
@@ -84,10 +85,22 @@ pub(super) struct AreaWork {
     pub joined: usize,
 }
 
+/// The paths of the outline to show ([`AreaPreview::paths`]).
+pub(super) struct AreaPaths {
+    /// The settled pieces' outlines, joined [`BLOCK_PIECES`] at a time: a block that did not change
+    /// is the same shared path as in the call before.
+    pub settled: Vec<Arc<BezPath>>,
+    /// The growing last piece's outline and the thin line over the points not taken yet, drawn
+    /// over the settled ones.
+    pub live: Vec<BezPath>,
+}
+
 /// The joined outline of up to [`BLOCK_PIECES`] settled pieces.
 #[derive(Default)]
 struct Block {
-    path: BezPath,
+    /// Shared with the paths [`AreaPreview::paths`] returned: a new one only when the block is
+    /// joined again.
+    path: Arc<BezPath>,
     /// A piece in it changed since `path` was joined.
     stale: bool,
 }
@@ -227,8 +240,9 @@ impl AreaPreview {
     /// The paths to show: the settled pieces' outlines, joined [`BLOCK_PIECES`] at a time, the
     /// growing last piece's and a thin line over the points of `pts` not taken yet. The joined
     /// paths with a changed piece are joined again, newest first, at most
-    /// [`JOIN_PIECES_PER_CALL`] pieces a call; the others show the path last joined.
-    pub(super) fn paths(&mut self, pts: &[Point]) -> Vec<BezPath> {
+    /// [`JOIN_PIECES_PER_CALL`] pieces a call; the others show the path last joined, the same
+    /// shared path each call.
+    pub(super) fn paths(&mut self, pts: &[Point]) -> AreaPaths {
         let settled = self.settled_count();
         for b in (0..self.blocks.len()).rev() {
             if self.work.joined >= JOIN_PIECES_PER_CALL {
@@ -243,9 +257,10 @@ impl AreaPreview {
                 joined.extend(p.shown.elements().iter().copied());
             }
             self.work.joined += pieces.len();
-            self.blocks[b] = Block { path: joined, stale: false };
+            self.blocks[b] = Block { path: Arc::new(joined), stale: false };
         }
-        let mut out: Vec<BezPath> = self.blocks.iter().filter(|b| !b.path.elements().is_empty()).map(|b| b.path.clone()).collect();
+        let settled_paths = self.blocks.iter().filter(|b| !b.path.elements().is_empty()).map(|b| Arc::clone(&b.path)).collect();
+        let mut out = vec![];
         if let Some(p) = self.pieces.get(settled).filter(|p| !p.shown.elements().is_empty()) {
             out.push(p.shown.clone());
         }
@@ -261,7 +276,7 @@ impl AreaPreview {
             }
             out.push(guide);
         }
-        out
+        AreaPaths { settled: settled_paths, live: out }
     }
 
     /// How many pieces no longer grow: all of them but a last one with room for more segments.

@@ -604,23 +604,39 @@ impl Writer<'_> {
         let mut inner = n.clone();
         inner.appearance.effects.retain(|e| !vectorcraft_effects::is_raster(&e.id));
         // An SVG filter's user-space coordinates are the document's from the effect's origin: the
-        // object is written in them, in a group that moves it where the rest of the art goes.
+        // object is written in them, in a group that moves it where the rest of the art goes. A
+        // user space that is scaled or turned ([`turned_filter_space`]) is the group's own: the
+        // object is written as it is in a group inside the filter that maps it back
+        // ([`Self::open_filters`]), so its strokes keep their widths.
         let xf = self.xf;
-        let origin = live_svg_filter(&n.appearance.effects).map(|f| Affine::translate(f.origin()));
+        let live = live_svg_filter(&n.appearance.effects);
+        let turned = self.turned_filter_space(live.as_ref());
+        let origin = live.filter(|_| turned.is_none()).map(|f| Affine::translate(f.origin()));
         let moved = origin.is_some_and(|o| xf * o != Affine::IDENTITY);
         if let Some(o) = origin.filter(|_| moved) {
             self.line(&format!("<g transform=\"{}\">", self.matrix(xf * o)));
             self.depth += 1;
             self.xf = o.inverse();
         }
+        if let Some(space) = turned {
+            self.line(&format!("<g transform=\"{}\">", exact_matrix(space)));
+            self.depth += 1;
+        }
         let opened = self.open_filters(n, &n.appearance.effects);
         self.node_body(&inner);
         self.close_filters(opened);
-        if moved {
+        if moved || turned.is_some() {
             self.xf = xf;
             self.depth -= 1;
             self.line("</g>");
         }
+    }
+
+    /// The group transform that holds a live SVG filter `live` ([`live_svg_filter`]) whose user
+    /// space is scaled or turned (not only moved, [`vectorcraft_effects::svg_filter::SvgFilterFx::moves_only`]): the filter's user
+    /// space in the output's. `None` for other filters and in SVG Tiny, which writes no filters.
+    fn turned_filter_space(&self, live: Option<&vectorcraft_effects::svg_filter::SvgFilterFx>) -> Option<Affine> {
+        live.filter(|f| !f.moves_only() && !self.tiny()).map(|f| self.xf * f.to_doc())
     }
 
     /// Open one `<g filter>` per visible raster effect of `effects` (an object's, or one fill or
@@ -644,6 +660,7 @@ impl Writer<'_> {
         let mut opened = 0;
         // An SVG filter that is the object's last effect is written as it is ([`Self::filtered`]).
         let live = if std::ptr::eq(effects, n.appearance.effects.as_slice()) { live_svg_filter(effects) } else { None };
+        let turned = self.turned_filter_space(live.as_ref());
         for (k, f) in fx.iter().enumerate().rev() {
             if let RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(sf)) = f
                 && live.is_some()
@@ -654,12 +671,40 @@ impl Writer<'_> {
                 // against the object alone, which is all it runs on ([`live_svg_filter`]).
                 let mut input = n.clone();
                 input.appearance.effects.clear();
-                let input_bounds = input.visual_bounds_with(&self.doc.symbol_boxes()).unwrap_or_default();
-                if let Some(def) = sf.written_xml(input_bounds).and_then(|xml| vectorcraft_effects::svg_filter::with_id(&xml, &fid)) {
-                    self.def(1, &def);
+                // Its box in the filter's user space: in a turned or skewed one, the box of the
+                // object's geometry turned into it, grown by what its strokes and other paint add
+                // around it in the document: a square that far to each side, as it measures in
+                // user space along each axis (a miter corner reaches that far along both).
+                let symbols = self.doc.symbol_boxes();
+                let visual = input.visual_bounds_with(&symbols).unwrap_or_default();
+                let user_box = if sf.moves_only() {
+                    visual - sf.origin()
+                } else {
+                    let geometric = input.geometric_bounds_with(&symbols).unwrap_or(visual);
+                    let margin = [geometric.x0 - visual.x0, geometric.y0 - visual.y0, visual.x1 - geometric.x1, visual.y1 - geometric.y1]
+                        .into_iter()
+                        .fold(0.0, f64::max);
+                    let to_user = sf.to_doc().inverse();
+                    input.transform(to_user, false);
+                    let [a, b, c, d, _, _] = to_user.as_coeffs();
+                    let turned = input.geometric_bounds_with(&symbols).unwrap_or_default();
+                    turned.inflate(margin * (a.abs() + c.abs()), margin * (b.abs() + d.abs()))
+                };
+                let def = sf.written_xml(user_box).and_then(|xml| vectorcraft_effects::svg_filter::with_id(&xml, &fid));
+                if let Some(def) = &def {
+                    self.def(1, def);
                     self.line(&format!("<g filter=\"url(#{fid})\">"));
                     self.depth += 1;
                     opened += 1;
+                }
+                // Inside the group of a turned user space ([`Self::filtered`]), the object and its
+                // other effects are written as they are, in a group that maps them back to it.
+                if let Some(space) = turned {
+                    self.line(&format!("<g transform=\"{}\">", exact_matrix(space.inverse())));
+                    self.depth += 1;
+                    opened += 1;
+                }
+                if def.is_some() {
                     continue;
                 }
             }
@@ -786,8 +831,18 @@ pub(super) fn pixel_gradient(p: &Paint, fill: bool) -> Option<&GradientPaint> {
     }
 }
 
+/// `a` as an SVG `matrix(…)` with every digit its numbers need to read back the same, whatever
+/// the export's decimals: the transforms around a turned SVG filter ([`Writer::turned_filter_space`])
+/// and their inverses still undo each other when one holds very small numbers.
+fn exact_matrix(a: Affine) -> String {
+    // (Without negative zeros.)
+    let [a, b, c, d, e, f] = a.as_coeffs().map(|v| v + 0.0);
+    format!("matrix({a} {b} {c} {d} {e} {f})")
+}
+
 /// The SVG filter (Effect › SVG Filters) of an object's `effects` that SVG keeps as a `<filter>`:
-/// its last visible effect, measured in points.
+/// its last visible effect, in any user space the effect gives it ([`Writer::turned_filter_space`])
+/// that SVG import can store again.
 fn live_svg_filter(effects: &[vectorcraft_doc::Effect]) -> Option<vectorcraft_effects::svg_filter::SvgFilterFx> {
     if !vectorcraft_effects::svg_filter::writes_live(effects) {
         return None;
@@ -797,7 +852,7 @@ fn live_svg_filter(effects: &[vectorcraft_doc::Effect]) -> Option<vectorcraft_ef
     let alone = fx.len() == 1;
     match fx.pop() {
         Some(vectorcraft_effects::RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(f)))
-            if f.in_points() && (alone || !f.measured()) && f.writes_as_svg11() =>
+            if (alone || !f.measured()) && f.writes_as_svg11() && f.opens_again() =>
         {
             Some(f)
         }
