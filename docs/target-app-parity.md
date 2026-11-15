@@ -2218,6 +2218,13 @@ With `ids`, the text tools act on the type the ids name even when it, or its gro
 rule). Tests: `named_locked_and_hidden_type`, `remove_breaks_named_locked_and_hidden_type` and
 `remove_breaks_named_story_with_a_locked_frame` in `cmd::addons::cleanup::text::tests`.
 
+With `ids`, Simplify Anchors, Deep Ungroup and Rejoin Path Pieces act the same way on the locked and hidden paths and
+groups the ids name, and on those in the groups and layers they name, but not on art on a locked artboard; from the
+selection they still take only art that can be edited (VectorCraft's own rule). Rejoin Path Pieces joins only pieces
+alike in being hidden and in being locked, and the objects of a group Deep Ungroup takes apart keep its hidden or locked
+state. Tests: `simplify_named_locked_and_hidden_paths`, `deep_ungroup_named_locked_and_hidden_groups` and
+`rejoin_named_locked_and_hidden_pieces` in `cmd::addons::cleanup::tests`.
+
 ## Path Precision Tools add-on (2026-10-30)
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Path Precision Tools,
