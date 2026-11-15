@@ -367,6 +367,13 @@ impl ColorOut {
         (rgb || self.pixels().is_some()).then_some(self.intent)
     }
 
+    /// Are gray images that carry an ICC profile converted from it to sRGB grays too
+    /// ([`Self::image_srgb_intent`])? Only with an sRGB destination; in the others, RGB tagged as
+    /// sRGB included, grey pixels are not converted and keep their profile.
+    pub(crate) fn converts_grey_images(&self) -> bool {
+        self.dest.as_ref().is_some_and(|d| d.model == Model::Rgb && d.srgb)
+    }
+
     /// The destination a colour image converted from its ICC profile to sRGB
     /// ([`Self::image_srgb_intent`]) is then converted to when other colour images are not
     /// ([`Self::pixels`]): with Preserve Numbers, an RGB destination other than sRGB, whose

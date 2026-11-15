@@ -335,6 +335,9 @@ pub(crate) struct ToSrgb<'a> {
     /// `convert`): to an RGB destination whose untagged images keep their numbers (Preserve
     /// Numbers). Its table is built when the first such image needs it.
     pub then: Option<&'a crate::output::ColorOut>,
+    /// Gray images are converted too: with an sRGB destination
+    /// ([`crate::output::ColorOut::converts_grey_images`]). In the others they keep their profile.
+    pub grey: bool,
 }
 
 /// The ICC profile image `bytes` carries ([`source_icc`]), when it is a well-formed profile of
@@ -484,8 +487,9 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
 /// they carry when `profiles` allows it (not in PDF/X-1a, which allows no ICC-based color spaces);
 /// with `to_srgb`, pixels in a gray or RGB profile other than sRGB are converted from it to sRGB
 /// instead ([`ToSrgb`]), and colour ones then by `convert`, or without it by the conversion
-/// `to_srgb` gives ([`ToSrgb::then`]); grey ones that either leaves as they are keep their profile. `interpolate` lets viewers smooth it. An image that can't be
-/// decoded is kept as it is, with a warning when its pixels were to be converted to sRGB.
+/// `to_srgb` gives ([`ToSrgb::then`]); grey ones keep their profile unless the destination is
+/// sRGB ([`ToSrgb::grey`]). `interpolate` lets viewers smooth it. An image that can't be decoded
+/// is kept as it is, with a warning when its pixels were to be converted to sRGB.
 pub(crate) fn recode(
     bytes: &[u8],
     size: (f64, f64),
@@ -503,9 +507,9 @@ pub(crate) fn recode(
     use ExtendedColorType as T;
     let grey = matches!(decoder.original_color_type(), T::L1 | T::La1 | T::L2 | T::La2 | T::L4 | T::La4 | T::L8 | T::La8 | T::L16 | T::La16);
     // Pixels in a profile they are converted from are decoded, whatever the Compression settings.
-    // Grey pixels, which `convert` leaves as they are, keep their profile when it converts.
+    // Grey pixels keep their profile unless the destination is sRGB ([`ToSrgb::grey`]).
     let then = to_srgb.and_then(|t| t.then);
-    let to_srgb = to_srgb.filter(|_| !(grey && (convert.is_some() || then.is_some())));
+    let to_srgb = to_srgb.filter(|t| !grey || t.grey);
     // Converted to the destination as sRGB, as before, when the profile can't be read.
     let mut note = None;
     let source = match to_srgb.and_then(|t| Some((source_profile(bytes, if grey { *b"GRAY" } else { *b"RGB " })?, t))) {

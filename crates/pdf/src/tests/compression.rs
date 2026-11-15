@@ -776,7 +776,7 @@ fn convert_to_srgb_converts_tagged_images_from_their_profile() {
         png
     };
     let c: CompressionSettings = serde_json::from_value(json!({})).unwrap();
-    let srgb_out = Some(crate::images::ToSrgb { intent: Intent::RelativeColorimetric, sixteen_bit: true, then: None });
+    let srgb_out = Some(crate::images::ToSrgb { intent: Intent::RelativeColorimetric, sixteen_bit: true, then: None, grey: true });
     for (what, png) in [("RGB", declared(&colour(), &p3)), ("gray", declared(&colour().grayscale(), &gray))] {
         let r = crate::images::recode(&png, (100.0, 100.0), &c, false, None, true, srgb_out);
         assert!(r.image.is_none() && r.warning.is_some_and(|w| w.contains("not converted to sRGB")), "{what}: {:?}", r.warning);
@@ -1069,16 +1069,18 @@ fn preserve_numbers_converts_tagged_images_from_their_profile() {
     let samples = image_samples(&pdf);
     let want = converted_samples(&img, |rgb| from_p3(rgb).to_vec());
     assert!(samples.len() == 1 && samples_close(&samples[0], &want, false, 1), "tagged as sRGB, {}", max_diff(&samples[0], &want));
-    // A gray image keeps its gray profile, in a CMYK and in an RGB destination.
+    // A gray image keeps its gray profile, in a CMYK and in an RGB destination, and in an RGB one
+    // with RGB colours ICC-tagged as sRGB (`all` profiles, PDF/A-2b).
     let gray = gray_profile(&[0x01CD]);
     let gray_doc = doc(tagged(&colour().grayscale(), &gray, ImageFormat::Tiff), "image/tiff");
-    for destination in [GENERIC_CMYK, WIDE_GAMUT_RGB] {
-        let settings = json!({"output": {"conversion": "preserveNumbers", "destination": destination}});
+    for (what, settings) in [
+        (GENERIC_CMYK, json!({"output": {"conversion": "preserveNumbers", "destination": GENERIC_CMYK}})),
+        (WIDE_GAMUT_RGB, json!({"output": {"conversion": "preserveNumbers", "destination": WIDE_GAMUT_RGB}})),
+        ("all profiles", json!({"output": {"conversion": "preserveNumbers", "destination": WIDE_GAMUT_RGB, "profiles": "all"}})),
+        ("PDF/A-2b", json!({"standard": "pdfA2b", "output": {"conversion": "preserveNumbers", "destination": WIDE_GAMUT_RGB}})),
+    ] {
         let (spaces, _) = cms::with_active(active.clone(), || export_images(&gray_doc, settings));
-        assert!(
-            spaces.len() == 1 && spaces[0].space == "ICCBased" && spaces[0].icc.as_deref() == Some(gray.as_slice()),
-            "gray, {destination}: {spaces:?}"
-        );
+        assert!(spaces.len() == 1 && spaces[0].space == "ICCBased" && spaces[0].icc.as_deref() == Some(gray.as_slice()), "gray, {what}: {spaces:?}");
     }
     // In an sRGB destination it is converted to sRGB grays and written without it.
     let settings = json!({"output": {"conversion": "preserveNumbers", "destination": SRGB}});
