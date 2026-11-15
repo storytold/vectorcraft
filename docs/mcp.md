@@ -8453,7 +8453,8 @@ about: in points (USD's layer gives `metersPerUnit`), in meters in glTF. Files t
 Graphics mapped onto a plane or onto Extrude & Bevel's front or back cap (`threeD.mapGraphic`) are exported as a PNG
 texture of that face: the face's color with its graphics drawn over it, flat and unlit, on a mesh of the face's own
 triangles with texture coordinates and a material that shows the texture. A face that is not opaque keeps its opacity
-in the texture's alpha, and the graphics keep their own. glTF embeds the PNG as a data URI
+in the texture's alpha: as on the canvas, the graphics take the opacity of the face's fill or stroke, and the object's
+opacity applies to the face and its graphics together. glTF embeds the PNG as a data URI
 (`TEXCOORD_0`, `baseColorTexture`), USDZ stores it after the layer, USDA reads it through `primvars:st`, a
 `UsdPrimvarReader_float2` and a `UsdUVTexture` connected to the surface's `diffuseColor`, and OBJ gives `vt` coordinates
 and an MTL `map_Kd`; OBJ and USDA write the PNG beside them as `<name>-texture-1.png`, `-texture-2.png` and so on

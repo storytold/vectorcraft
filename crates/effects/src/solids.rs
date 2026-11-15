@@ -2389,7 +2389,9 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
     let mut out = vec![];
     // A solid's parts with and without graphics count together against the limit.
     let mut keep = |out: &mut Vec<SolidMesh>, mesh: Mesh, (paint, opacity): (&Paint, f32), bounds: Rect| {
-        split_graphics(&fx.id, &p, bounds, mesh, (mesh_color(paint, opacity), opacity)).into_iter().try_for_each(|part| keep_mesh(out, total, part, limit))
+        split_graphics(&fx.id, &p, bounds, mesh, (mesh_color(paint, opacity), opacity))
+            .into_iter()
+            .try_for_each(|part| keep_mesh(out, total, part, limit))
     };
     if is_plane(&fx.id) {
         for s in shapes {
