@@ -3761,7 +3761,7 @@ digits	Malayalam	Malayalam
 @msg	two composite fonts are named `{_1}`	deux polices composites s’appellent `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` est le nom d’une police installée
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}` : {_2} utilise `{font}`, une police composite
-@msg	give fonts: [{{name, parts}}…]	indiquez fonts : [{{name, parts}}…]
+@msg	give fonts: [{{name, parts}}…]	indiquez fonts : [{{name, parts}}…]
 @msg	path is empty	path est vide
 @msg	fonts must be a list of composite fonts	fonts doit être une liste de polices composites
 @msg	names must be strings	names doit contenir des chaînes
