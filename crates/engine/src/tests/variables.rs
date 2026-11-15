@@ -1063,6 +1063,110 @@ fn renaming_a_missing_name_onto_a_taken_one_reports_the_missing_name() {
     assert!(e.contains("no dataset named `Nope`"), "{e}");
 }
 
+/// Variable Options changes a variable's kind: the objects that can't hold the new kind are
+/// unbound, the ones that can (locked ones too) stay bound, every value of the old kind goes, and
+/// the change is one undo step.
+#[test]
+fn variable_options_changes_the_kind_and_unbinds_what_cant_hold_it() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let r = rect(&mut s);
+    let other = text(&mut s, "Held");
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [t.0, r.0, other.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [other.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A", "values": {"Show": false, "Title": "Bob"}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "B", "values": {"Show": true}})).unwrap();
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+
+    let v = s.execute("variable.rename", &json!({"name": "Show", "kind": "text"})).unwrap();
+    // The rectangle isn't type, and the other type object already has the text variable Title.
+    assert_eq!(v["unbound"], json!([r.0, other.0]));
+    assert_eq!((v["name"].clone(), v["kind"].clone(), v["droppedValues"].clone()), (json!("Show"), json!("text"), json!(2)));
+    assert_eq!(steps(&s), before + 1, "one undo step");
+    let vars = &s.doc().unwrap().doc.variables;
+    assert_eq!(vars.objects_of("Show"), [t], "the locked type object stays bound");
+    assert_eq!(vars.objects_of("Title"), [other], "the other variable keeps its binding");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!((sets["datasets"][0]["values"].clone(), sets["datasets"][1]["values"].clone()), (json!({"Title": {"text": "Bob"}}), json!({})));
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    let vars = &s.doc().unwrap().doc.variables;
+    assert_eq!(vars.variable("Show").map(|v| v.kind), Some(vectorcraft_doc::VariableKind::Visibility));
+    assert_eq!(vars.objects_of("Show"), [t, r, other]);
+    assert_eq!(vars.dataset("A").and_then(|d| d.values.get("Show")), Some(&vectorcraft_doc::DataValue::Visible(false)));
+
+    // A new name and a new kind together are one undo step, and every visibility binding stays.
+    s.execute("variable.rename", &json!({"name": "Title", "newName": "Heading", "kind": "visibility"})).unwrap();
+    assert_eq!(steps(&s), before + 1, "one step after the undo");
+    let vars = &s.doc().unwrap().doc.variables;
+    assert_eq!(
+        (vars.variable("Heading").map(|v| v.kind), vars.objects_of("Heading")),
+        (Some(vectorcraft_doc::VariableKind::Visibility), vec![other])
+    );
+    // An image variable keeps only image objects.
+    let v = s.execute("variable.rename", &json!({"name": "Show", "kind": "image"})).unwrap();
+    assert_eq!(v["unbound"], json!([t.0, r.0, other.0]));
+}
+
+/// Variable Options with the variable's own name and kind changes nothing and adds no undo step;
+/// a bad kind, a taken name, no change asked for and locked variables are refused.
+#[test]
+fn variable_options_refuses_bad_params_and_skips_a_change_that_changes_nothing() {
+    let mut s = session();
+    let r = rect(&mut s);
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Other", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Show", "ids": [r.0]})).unwrap();
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    for p in [
+        json!({"name": "Show", "newName": "Show"}),
+        json!({"name": "Show", "kind": "visibility"}),
+        json!({"name": "Show", "newName": "Show", "kind": "visible"}),
+    ] {
+        let v = s.execute("variable.rename", &p).unwrap();
+        assert_eq!((v["unbound"].clone(), v["droppedValues"].clone()), (json!([]), json!(0)), "{p}");
+        assert_eq!(steps(&s), before, "{p}: no undo step");
+    }
+    for (p, want) in [
+        (json!({"name": "Show", "kind": "unknown"}), "`kind` must be"),
+        (json!({"name": "Show", "kind": "number"}), "`kind` must be"),
+        (json!({"name": "Show", "kind": 1}), "`kind` must be"),
+        (json!({"name": "Show", "newName": "New", "kind": null}), "`kind` must be"),
+        (json!({"name": "Show", "newName": null, "kind": "text"}), "missing `newName`"),
+        (json!({"name": "Show", "newName": " ", "kind": "text"}), "missing `newName`"),
+        (json!({"name": "Show"}), "missing `newName` or `kind`"),
+        (json!({"name": "Show", "newName": "Other", "kind": "text"}), "already exists"),
+        (json!({"name": "Ghost", "kind": "text"}), "no variable named `Ghost`"),
+    ] {
+        let e = s.execute("variable.rename", &p).unwrap_err().to_string();
+        assert!(e.contains(want), "{p}: {e}");
+    }
+    // A rename alone carries a value that doesn't fit the kind, as a file may hold one.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc)
+        .variables
+        .datasets
+        .push(vectorcraft_doc::DataSet { name: "Odd".into(), values: [("Show".to_string(), vectorcraft_doc::DataValue::Text("x".into()))].into() });
+    s.execute("variable.rename", &json!({"name": "Show", "newName": "Shown"})).unwrap();
+    let odd = s.doc().unwrap().doc.variables.dataset("Odd").and_then(|d| d.values.get("Shown")).cloned();
+    assert_eq!(odd, Some(vectorcraft_doc::DataValue::Text("x".into())));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A kind change drops it, though it fits the new kind: nobody gave it for that kind.
+    let v = s.execute("variable.rename", &json!({"name": "Show", "kind": "text"})).unwrap();
+    assert_eq!(v["droppedValues"], 1);
+    assert!(s.doc().unwrap().doc.variables.dataset("Odd").is_some_and(|d| d.values.is_empty()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("variable.lock", &json!({"locked": true})).unwrap();
+    assert!(s.execute("variable.rename", &json!({"name": "Show", "kind": "text"})).is_err(), "refused while the variables are locked");
+    let vars = &s.doc().unwrap().doc.variables;
+    assert_eq!((vars.variable("Show").map(|v| v.kind), vars.objects_of("Show")), (Some(vectorcraft_doc::VariableKind::Visibility), vec![r]));
+}
+
 /// `dataset.set` is how a value changes after the row exists: replacing it must not need the
 /// dataset to be deleted and rebuilt (which loses its place in the list and the active one).
 #[test]
