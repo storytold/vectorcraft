@@ -196,6 +196,7 @@ mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbollib;
+mod tangent_line;
 mod targeting;
 mod textcombos;
 mod textedit;
