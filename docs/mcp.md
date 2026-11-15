@@ -2861,7 +2861,10 @@ group selected on its own, or, for `symbolInstance`, an object that is not a sym
 leaves the selection empty. A selected object that is hidden or locked, inside a hidden or locked group or layer, on a
 template layer, on a locked artboard while nothing is isolated, or outside the isolated group is passed over. New art,
 such as a symbol instance just placed, is not passed over for being on a locked artboard while it stays selected. When
-the selection holds no other object, they return the error "nothing selected".
+the selection holds no other object, they return the error "nothing selected". `appearanceAttribute {item?}` takes
+the fill or stroke at appearance item `item`, or the Appearance panel's active item when the call gives none or null; a
+value that is not a whole number of 0 or more fails with "`item` must be a whole number" and leaves the selection as it
+was.
 
 `select.similar {by?}` is the Control bar's Select Similar Objects button and the Select Similar Options menu beside it
 ([help](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=165)). It selects the
@@ -3201,7 +3204,9 @@ number. `guide.add {vertical, pos, artboard?}` makes one (the x of a
 vertical guide, the y of a horizontal one, in points) → `{index}`. With `artboard` (an artboard's index) it is an
 artboard guide: it runs across that artboard only, moves with it (`artboard.move`, a pure move in
 `artboard.setProps`, `artboard.rearrange`), scales with it (`artboard.setProps {scaleArt}`), is copied with it (`artboard.duplicate`, `artboard.move {copy}`) and is
-deleted with it (`artboard.delete`); without, a canvas guide runs across the whole canvas. `guide.list` →
+deleted with it (`artboard.delete`); without, or with null, a canvas guide runs across the whole canvas. An `artboard`
+that is not a whole number of 0 or more fails with "`artboard` must be a whole number", and an index past the last
+artboard with `no such artboard`; neither adds a guide. `guide.list` →
 `[{index, id, vertical, pos, selected, artboard?, layer?, hidden, locked, shown, editable}…]` (`artboard` only for
 artboard guides; `id` is the guide's node and `layer` the layer it is on; `hidden` and `locked` are its own state,
 `shown` and `editable` also take its layer into account). `layer.setProps {ids: [id…], visible?, locked?}` hides or
@@ -6135,8 +6140,12 @@ below 3 or above 1000 counts as 3 or 1000, and a fractional or negative `sides` 
 Without `artboard`, or with an index the document doesn't have, it aligns them to the artboard under the center of the
 selection, or to the first artboard when no artboard is under the center. With `to: "selection"` or `"key"`,
 `object.align` does not use `artboard`. `select.allOnArtboard {artboard?}` (Select › All on Active Artboard) selects
-the objects on artboard `artboard`, or on the first artboard when the call gives none; an index the document doesn't
-have is an error.
+the objects on artboard `artboard`, or on the first artboard when the call gives none or null. A value that is not a
+whole number of 0 or more fails with "`artboard` must be a whole number", and an index the document doesn't have with
+`no such artboard`; either leaves the selection as it was. `select.font {family, style?, scope?}` (Select Text
+by Font) takes `scope: {artboards: [index…]}` the same way: an entry that is not a whole number fails with
+"`scope.artboards` must contain whole numbers" before any entry is looked up, and an index the document doesn't have
+fails with `no such artboard`.
 
 `object.distribute {to: "artboard", artboard?}` and `object.distributeSpacing {to: "artboard", artboard?}` (the
 Distribute Objects and Distribute Spacing buttons with Align to Artboard) use the same artboard as `object.align`.
@@ -12170,8 +12179,10 @@ overlapping the artboard or the centre on it), `inside` (the bounds wholly withi
 straddling two touching artboards is inside neither) or `outside` (on none of them). It looks at the objects Select All
 takes, or the isolated container's in isolation mode, so hidden and locked objects, objects on hidden, locked or template
 layers and art held by a locked artboard are left out. Bounds are geometric, a symbol instance's measured by its art. It
-returns the `count` selected. An empty list, an index with no artboard, a value that isn't an index, or another
-relation is an error, and the selection is left as it was.
+returns the `count` selected. An empty list, an index with no artboard (`no such artboard`), a value that isn't a list
+("`artboards` must be a list of artboard indices"), an entry that isn't a whole number of 0 or more ("`artboards` must
+contain whole numbers", checked before any entry is looked up), or another relation is an error, and the selection is
+left as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.select.byArtboards","params":{"artboards":[2,6,11],"relation":"inside"}}}
