@@ -93,6 +93,7 @@ pub(crate) use mesh3d::{TEXTURE_SIZE, TEXTURE_SIZES, image_count, mesh_file_name
 pub use naming::{NameParts as FileNameParts, parse_date as parse_file_date, render as render_file_name};
 pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
+pub(crate) use pdfimport::opened_page_document;
 pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;
