@@ -18,7 +18,16 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| if super::warp_effect::is_warp(&d.str("__effect")) { tl!("Warp Options").to_string() } else { heading_label(d) },
+    heading: |d| {
+        let id = d.str("__effect");
+        if super::warp_effect::is_warp(&id) {
+            tl!("Warp Options").to_string()
+        } else if has_only_pathfinder_options(&id) {
+            tl!("Pathfinder Options").to_string()
+        } else {
+            heading_label(d)
+        }
+    },
     body,
     confirm,
     preview: true,
@@ -125,6 +134,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             fields.insert("__editTarget".into(), edit_target);
             fields.insert("__index".into(), json!(k));
             fields.extend(params_of(e));
+            fill_pathfinder_options(app, id, &mut fields, false);
         }
         None => {
             if let Some(k) = applied.iter().rposition(|e| e.id == id) {
@@ -135,6 +145,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
                 return Ok(json!({ "pending": EXISTS }));
             }
             fields.extend(info.defaults.as_object().cloned().unwrap_or_default());
+            fill_pathfinder_options(app, id, &mut fields, true);
             if super::warp_effect::is_warp(id) {
                 super::warp_effect::merge_remembered(&mut fields, app.last_warp.as_ref());
             }
@@ -153,6 +164,50 @@ fn target_effects(app: &VectorcraftApp, p: &Value) -> (Value, Vec<vectorcraft_do
         params["item"] = item.clone();
     }
     app.session.appearance_effect_target(&params).map(|(target, effects)| (target, effects.to_vec())).unwrap_or_else(|| (json!({}), vec![]))
+}
+
+/// Is `id` a Pathfinder effect whose only options are its Pathfinder Options (every one but Soft
+/// Mix, which also has a Mixing Rate)?
+fn has_only_pathfinder_options(id: &str) -> bool {
+    vectorcraft_effects::takes_pathfinder_options(id)
+        && vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_none_or(Map::is_empty))
+}
+
+/// A Pathfinder effect's Pathfinder Options in `fields`, where they are missing: for a new effect
+/// (`fresh`) the Pathfinder panel's current options, as `effect.apply` takes them; for an applied
+/// one saved without them, the values it evaluates with.
+fn fill_pathfinder_options(app: &VectorcraftApp, id: &str, fields: &mut Map<String, Value>, fresh: bool) {
+    if !vectorcraft_effects::takes_pathfinder_options(id) {
+        return;
+    }
+    let options = if fresh {
+        let mut current = app.session.prefs.pathfinder;
+        if !vectorcraft_effects::PATHFINDER_EFFECT_PRECISION.contains(&current.precision) {
+            current.precision = vectorcraft_engine::PathfinderOptions::default().precision;
+        }
+        json!(current)
+    } else {
+        vectorcraft_effects::PathfinderEffectOptions::default().to_params()
+    };
+    for (key, v) in options.as_object().into_iter().flatten() {
+        fields.entry(key.clone()).or_insert_with(|| v.clone());
+    }
+}
+
+/// A Pathfinder effect's fields: Soft Mix's Mixing Rate as the other effects show their
+/// parameters, then the Pathfinder Options. Returns whether the values changed.
+fn pathfinder_fields(ui: &mut egui::Ui, d: &mut Dialog, id: &str, unit: vectorcraft_doc::Unit) -> bool {
+    let before = d.fields.clone();
+    if !has_only_pathfinder_options(id) {
+        let options: Vec<(String, Value)> =
+            vectorcraft_effects::PATHFINDER_OPTION_KEYS.iter().filter_map(|k| d.fields.remove(*k).map(|v| (k.to_string(), v))).collect();
+        let doc = vectorcraft_effects::effect_info(id).map(|e| e.params).unwrap_or_default();
+        form::param_fields(ui, d, &|_| false, &|k| choices(id, k), &|k| doc_rank(doc, k), unit);
+        d.fields.extend(options);
+        ui.add_space(6.0);
+    }
+    super::pathfinder_options::fields(ui, d);
+    before != d.fields
 }
 
 /// An applied effect's values over its defaults.
@@ -174,6 +229,7 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
         let id = d.str("__effect");
         let defaults = vectorcraft_effects::default_params(&id);
         fields.extend(defaults.and_then(|v| v.as_object().cloned()).unwrap_or_default());
+        fill_pathfinder_options(app, &id, &mut fields, true);
         if super::warp_effect::is_warp(id.as_str()) {
             super::warp_effect::merge_remembered(&mut fields, app.last_warp.as_ref());
         }
@@ -183,6 +239,7 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
         let applied = app.session.appearance_effect_target(&edit_target).map(|(_, effects)| effects.to_vec()).unwrap_or_default();
         let params = applied.get(k).map(params_of).unwrap_or_default();
         fields.extend(params);
+        fill_pathfinder_options(app, &d.str("__effect"), &mut fields, false);
         fields.insert("__item".into(), target);
     }
     fields.insert("preview".into(), json!(true));
@@ -237,6 +294,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             super::raster_effects::effect_fields(app, ui, d);
             values_changed(d)
         }
+        None if vectorcraft_effects::takes_pathfinder_options(&id) => pathfinder_fields(ui, d, &id, app.session.general_unit()),
         None => {
             let doc = vectorcraft_effects::effect_info(&id).map(|e| e.params).unwrap_or_default();
             let unit = app.session.general_unit();
@@ -1501,5 +1559,59 @@ mod tests {
             (RADIAL_BLUR, Some(0.26), Some(1.0)),
             "OK applies it"
         );
+    }
+
+    /// An applied Pathfinder effect opens Pathfinder Options with its own values (the defaults for
+    /// one saved without them); OK keeps a change as one undo step, and OK with nothing changed
+    /// records none. Soft Mix's dialog has Mixing Rate too, and a new one takes the panel's options.
+    #[test]
+    fn a_pathfinder_effect_opens_pathfinder_options_with_its_own_values() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 50, "height": 50})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.apply", json!({"effect": "pathfinder.add", "params": {"precision": 0.5}})).unwrap();
+        let g = app.session.doc().unwrap().selection.objects[0];
+        let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let paint = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()));
+        app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
+        let text = paint(&mut app);
+        for s in ["Pathfinder Options", "Precision:", "Remove Redundant Points", "Divide and Outline Will Remove Unpainted Artwork"] {
+            assert!(text.lines().any(|l| l == s), "{s} in {text}");
+        }
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["precision"], json!(0.5));
+        let before = steps(&app);
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(steps(&app), before, "OK with nothing changed records no step");
+        app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
+        paint(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("removeRedundantPoints".into(), json!(true));
+        paint(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(steps(&app), before + 1, "one step");
+        let params = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(g).unwrap().appearance.effects[0].params.clone();
+        assert_eq!(params(&app)["removeRedundantPoints"], json!(true));
+        // Saved without options, it opens with the values it evaluates with.
+        app.session
+            .edit("t", |d, _| {
+                d.node_mut(g).unwrap().appearance.effects[0].params = json!({});
+                Ok(())
+            })
+            .unwrap();
+        app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
+        let fields = &app.ui.dialog.as_ref().unwrap().fields;
+        assert_eq!(
+            (&fields["precision"], &fields["removeRedundantPoints"], &fields["removeUnpainted"]),
+            (&json!(0.01), &json!(false), &json!(false))
+        );
+        app.ui.dialog = None;
+        let _ = app.session.cancel_interaction();
+        // A new Soft Mix takes the panel's options and shows Mixing Rate beside them.
+        app.run("object.pathfinder.options", json!({"removeUnpainted": true})).unwrap();
+        app.run("effect.dialog", json!({"effect": "pathfinder.softMix"})).unwrap();
+        let text = paint(&mut app);
+        assert!(text.contains("Mixing Rate") && text.lines().any(|l| l == "Remove Redundant Points"), "{text}");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["removeUnpainted"], json!(true));
     }
 }

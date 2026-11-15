@@ -74,8 +74,9 @@ pub use bake::{
 };
 pub use clip::{WarpSeams, clip_outline, knockout_silhouette, reshaped_clip_outline, warp_pieces_translucent};
 pub use group::{
-    OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
-    is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, shape_art,
+    OutlineHook, PATHFINDER_EFFECT_PRECISION, PATHFINDER_EFFECTS, PATHFINDER_OPTION_KEYS, PATHFINDER_OPTIONS_DOC, PathfinderEffectOptions,
+    compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder, is_pathfinder, member_leaves,
+    member_shapes, paints, pathfinder_children, shape_art, takes_pathfinder_options,
 };
 pub use lighting_presets::{LIGHTING_PRESETS, LightingPreset, lighting_preset_params, matching_lighting_preset};
 pub use live::{expand_live, expand_live_deep, expanded_live_group, outline_object, text_outliner};

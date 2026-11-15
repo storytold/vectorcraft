@@ -29,6 +29,14 @@ fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, text: &str) {
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    fields(ui, d);
+    false
+}
+
+/// Precision, Remove Redundant Points and Divide and Outline Will Remove Unpainted Artwork, editing
+/// `precision`, `removeRedundantPoints` and `removeUnpainted` in `d` (this dialog's, and a
+/// Pathfinder effect's in the effect dialog).
+pub(super) fn fields(ui: &mut egui::Ui, d: &mut Dialog) {
     let range = vectorcraft_engine::cmd::PATHFINDER_PRECISION_RANGE;
     grid(ui, |ui| {
         label(ui, tl!("Precision:"));
@@ -41,7 +49,6 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(8.0);
     check(ui, d, "removeRedundantPoints", tl!("Remove Redundant Points"));
     check(ui, d, "removeUnpainted", tl!("Divide and Outline Will Remove Unpainted Artwork"));
-    false
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
