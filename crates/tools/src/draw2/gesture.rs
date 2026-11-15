@@ -192,6 +192,8 @@ pub struct GestureTool {
     bearing: Option<f64>,
     /// `bearing` as it was at each of `poses`, for the outline of the area the Eraser's drag covers.
     bearings: Vec<Option<f64>>,
+    /// The first of `bearings` that the pen gave: the release gives it to the points before it.
+    first_bearing: Option<f64>,
     /// The length of the stroke, in points.
     length: f64,
     /// The outline of the area a Blob Brush or Eraser drag covers, as far as it is built
@@ -874,6 +876,7 @@ impl GestureTool {
             light: false,
             bearing: None,
             bearings: vec![],
+            first_bearing: None,
             length: 0.0,
             area: Cell::new(None),
             area_pending: Cell::new(false),
@@ -942,6 +945,7 @@ impl GestureTool {
             self.bearing = pose.and_then(super::pen_bearing).or(self.bearing);
             self.poses.push(pose);
             self.bearings.push(self.bearing);
+            self.first_bearing = self.first_bearing.or(self.bearing);
         }
     }
 
@@ -965,6 +969,11 @@ impl GestureTool {
         };
         if let Some(b) = self.bearings.last_mut() {
             *b = self.bearing;
+        }
+        // The bearings carry forward, so the last sample gives the first bearing only when the one
+        // before it has none.
+        if self.bearings.len().checked_sub(2).and_then(|i| self.bearings.get(i)).copied().flatten().is_none() {
+            self.first_bearing = self.bearing;
         }
     }
 
@@ -1054,6 +1063,7 @@ impl GestureTool {
         self.light = false;
         self.bearing = None;
         self.bearings.clear();
+        self.first_bearing = None;
         self.length = 0.0;
         self.area.set(None);
         self.area_pending.set(false);
@@ -1149,13 +1159,16 @@ impl GestureTool {
 
     /// The tip at point `i` of the stroke, as `path.eraseRegion` reads the pen there: the pressure
     /// once the pen has pressed less than fully, the tilt and rotation of the point, and the
-    /// bearing of the last point up to it that the pen leaned 1° or more at ([`Self::tip_for`]).
-    /// What the release does not read ([`Self::reads_pressures`], [`Self::reads_poses`]) gives
-    /// the values themselves.
+    /// bearing of the last point up to it that the pen leaned 1° or more at, or before the first
+    /// such point the bearing of that first one ([`Self::tip_for`]). What the release does not
+    /// read ([`Self::reads_pressures`], [`Self::reads_poses`]) gives the values themselves.
     fn tip_of_point(&self, i: usize) -> [f64; 3] {
         let pressure = if self.reads_pressures() { self.pressures.get(i).map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
-        let (pose, bearing) =
-            if self.reads_poses() { (self.poses.get(i).copied().flatten(), self.bearings.get(i).copied().flatten()) } else { (None, None) };
+        let (pose, bearing) = if self.reads_poses() {
+            (self.poses.get(i).copied().flatten(), self.bearings.get(i).copied().flatten().or(self.first_bearing))
+        } else {
+            (None, None)
+        };
         self.tip_for(pressure, pose, bearing)
     }
 
@@ -1722,6 +1735,7 @@ impl Tool for GestureTool {
                 varies: shaped || size_varies,
                 shaped,
                 pressed: self.reads_pressures() && self.tip_modes().contains(&Variation::Pressure),
+                first_bearing: self.first_bearing.filter(|_| self.reads_poses() && self.tip_modes().contains(&Variation::Bearing)),
                 modes: self.tip_modes(),
                 variations: [self.angle_variation, self.roundness_variation, self.size_variation],
             };

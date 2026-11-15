@@ -79,6 +79,9 @@ pub(super) struct AreaKey {
     /// a point pressed fully takes the tip of full pressure instead of that of a stroke without
     /// pressure.
     pub pressed: bool,
+    /// The bearing the tips take at the points before the pen first leaned, when a tip follows the
+    /// bearing: the first lean gives it to the points already outlined.
+    pub first_bearing: Option<f64>,
     /// The modes and Variations of the angle, roundness and size that the tips at the points follow.
     pub modes: [Variation; 3],
     pub variations: [f64; 3],

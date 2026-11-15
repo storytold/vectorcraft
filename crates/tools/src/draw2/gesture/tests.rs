@@ -3104,6 +3104,69 @@ fn the_eraser_drag_area_matches_the_release_when_pressure_or_a_mode_starts_durin
     press(&mut t, upright, 0.5, PointerKind::Up, 150.0);
 }
 
+/// The release gives the points of an Eraser drag before the pen first leans the bearing of that
+/// first lean, so the outline of a drag that starts upright and then leans is the outline of the
+/// same drag leaning that way from the press, the steps already outlined included.
+#[test]
+fn the_eraser_drag_area_gives_the_first_lean_to_the_points_before_it() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let bounds = |t: &GestureTool| {
+        drain_area(t, &cx);
+        let o = t.overlays(&cx);
+        o.iter()
+            .filter_map(|o| match o {
+                Overlay::Path { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(path)),
+                Overlay::SharedPath { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(&**path)),
+                _ => None,
+            })
+            .reduce(|a, b| a.union(b))
+            .unwrap_or_else(|| panic!("{o:?}"))
+    };
+    // A tip 20 by 5 pt lying level, its angle on Bearing by up to 90° and its Roundness on
+    // Rotation by up to 50%, so that each step has its own tip from the press on. The barrel stays
+    // turned 30° all along. `in_place` is a tilt given last, by a drag within a pixel of the last
+    // point.
+    let drag = |poses: [[f32; 2]; 5], in_place: Option<[f32; 2]>| {
+        let mut t = GestureTool::new("eraser");
+        for (k, v) in [
+            ("size", json!(20)),
+            ("roundness", json!(25)),
+            ("angleMode", json!("bearing")),
+            ("angleVariation", json!(90)),
+            ("roundnessMode", json!("rotation")),
+            ("roundnessVariation", json!(50)),
+        ] {
+            t.set_option(k, &v);
+        }
+        let mut shown = vec![];
+        for (i, (tilt, x)) in poses.into_iter().zip([50.0, 100.0, 150.0, 200.0, 250.0]).enumerate() {
+            let kind = if i == 0 { PointerKind::Down } else { PointerKind::Drag };
+            let pen = Some(PenPose { tilt: Some(tilt), rotation: Some(30.0) });
+            t.pointer(&cx, &PointerEvent { pen, pressure: 1.0, ..PointerEvent::new(kind, x, 150.0) });
+            if i > 0 {
+                shown.push(bounds(&t));
+            }
+        }
+        if let Some(tilt) = in_place {
+            let pen = Some(PenPose { tilt: Some(tilt), rotation: Some(30.0) });
+            t.pointer(&cx, &PointerEvent { pen, pressure: 1.0, ..PointerEvent::new(PointerKind::Drag, 250.2, 150.0) });
+            shown.push(bounds(&t));
+        }
+        shown.last().copied().unwrap_or_else(|| panic!("no outline"))
+    };
+    let same = |b: (vectorcraft_geom::Rect, vectorcraft_geom::Rect)| {
+        assert!([b.0.x0 - b.1.x0, b.0.y0 - b.1.y0, b.0.x1 - b.1.x1, b.0.y1 - b.1.y1].iter().all(|e| e.abs() < 0.01), "{b:?}");
+    };
+    let leaning = drag([[0.0, 45.0]; 5], None);
+    // Upright for four points, outlined as they come, then leaning toward the bottom of the page.
+    same((drag([[0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 45.0]], None), leaning));
+    // Upright for all five, then leaning that way in place at the last.
+    same((drag([[0.0, 0.0]; 5], Some([0.0, 45.0])), drag([[0.0, 45.0]; 5], Some([0.0, 45.0]))));
+}
+
 /// The outline of a long Eraser drag whose tip turns and changes shape with the pen is built a
 /// bounded amount per frame, and once finished it shows nothing inside the area: no point of it
 /// lies well inside the area of any step, each step with the tip halfway between those at its
