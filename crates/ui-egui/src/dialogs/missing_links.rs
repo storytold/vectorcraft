@@ -119,10 +119,13 @@ pub(super) fn notes(d: &Dialog) -> Vec<String> {
 
 /// Cancel of the dialog `d`: when it is this dialog, or the Find Linked Files dialog its Find in
 /// Folder… opened, the rest of the questions are not asked and the status bar shows the open's
-/// notes again ([`crate::io::show_opened`]).
+/// notes again ([`crate::io::show_opened`]), after the line about the modified files when Update
+/// Links doesn't ask about them.
 pub(super) fn cancelled(app: &mut VectorcraftApp, d: &Dialog) {
     if d.kind == KIND || (d.kind == super::find_links::KIND && d.bool("back")) {
-        crate::io::show_opened(app, None, notes(d));
+        let modified = d.fields.get("modified").and_then(Value::as_array).map_or(0, Vec::len);
+        let notice = (modified > 0 && app.session.prefs.update_links != "askWhenModified").then(|| changed_on_disk_status(modified));
+        crate::io::show_opened(app, notice, notes(d));
     }
 }
 
@@ -521,7 +524,9 @@ mod tests {
             app.status("Something else");
             super::super::cancel(&mut app);
             assert!(app.ui.dialog.is_none(), "Cancel asks nothing more");
-            assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Cancel, {prefs}");
+            let cancelled =
+                if prefs == "manually" { crate::io::opened_after_notice(&changed_on_disk_status(1), 2, "a note") } else { opened.clone() };
+            assert_eq!((&app.ui.status, &app.ui.status_notes), (&cancelled, &Some((cancelled.clone(), notes.clone()))), "Cancel, {prefs}");
         }
 
         after_open_for(&mut app, &json!({ "missingLinks": [row(1)], "modifiedLinks": [{ "ids": [3] }] }), notes.clone(), false);
@@ -538,6 +543,11 @@ mod tests {
         app.status("Something else");
         super::super::cancel(&mut app);
         assert_eq!(app.ui.status, "Something else");
+        app.session.prefs.update_links = "manually".into();
+        after_open_for(&mut app, &json!({ "missingLinks": [row(1)], "modifiedLinks": [{ "ids": [3] }] }), vec![], false);
+        app.status("Something else");
+        super::super::cancel(&mut app);
+        assert_eq!(app.ui.status, changed_on_disk_status(1), "Cancel keeps the line about the modified files");
     }
 
     /// Replace with a file given by path, with a picked file and with Apply to All: after the last
