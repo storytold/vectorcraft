@@ -3835,6 +3835,17 @@ gradient-kind	Radial	방사형
 	Largest:	최대:
 	Direction:	방향:
 	Symbolism Tools Options	심볼 도구 옵션
+	Tool:	도구:
+	Symbol Set Density	심볼 세트 밀도
+	Symbol Sprayer Options	심볼 분무기 옵션
+	Scrunch:	스크런치:
+	Spin:	회전:
+	Screen:	스크린:
+	Stain:	염색:
+	Symbol Sizer Options	심볼 크기 조절기 옵션
+	Proportional Resizing	비율에 맞게 크기 조정
+	Resizing Affects Density	크기 조정이 밀도에 영향
+	Show Brush Size and Intensity	브러시 크기 및 강도 표시
 	Symbol Set Density:	심볼 세트 밀도:
 	Flattener presets	병합 프리셋
 file-filter	All readable files	읽을 수 있는 모든 파일

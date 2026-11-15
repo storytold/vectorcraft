@@ -1254,6 +1254,17 @@ font-technology	Variable	Променливи
 	Largest:	Най-голям:
 	Direction:	Посока:
 	Symbolism Tools Options	Опции на символогичните инструменти
+	Tool:	Инструмент:
+	Symbol Set Density	Плътност на набор от символи
+	Symbol Sprayer Options	Опции за разпръскване на символи
+	Scrunch:	Свиване:
+	Spin:	Завъртане:
+	Screen:	Филтър:
+	Stain:	Оцветяване:
+	Symbol Sizer Options	Опции за мащабиране на символи
+	Proportional Resizing	Пропорционално мащабиране
+	Resizing Affects Density	Мащабирането влияе на плътността
+	Show Brush Size and Intensity	Показване на размера и интензивността на четката
 	Symbol Set Density:	Плътност на набор от символи:
 	Flat Image	Плоско изображение
 	Flat Logo	Плоско лого

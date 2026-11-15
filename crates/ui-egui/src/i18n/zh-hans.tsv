@@ -1246,6 +1246,17 @@ antiAlias	Sharp	锐利
 	Largest:	最大：
 	Direction:	方向：
 	Symbolism Tools Options	符号工具选项
+	Tool:	工具：
+	Symbol Set Density	符号组密度
+	Symbol Sprayer Options	符号喷枪选项
+	Scrunch:	紧缩：
+	Spin:	旋转：
+	Screen:	透明度：
+	Stain:	着色：
+	Symbol Sizer Options	符号缩放选项
+	Proportional Resizing	等比缩放
+	Resizing Affects Density	缩放影响密度
+	Show Brush Size and Intensity	显示画笔大小和强度
 	Symbol Set Density:	符号组密度：
 	Flat Image	平面图像
 	Flatness:	平滑度：

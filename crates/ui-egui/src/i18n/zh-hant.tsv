@@ -1280,6 +1280,17 @@ font-technology	Variable	可變
 	Largest:	最大：
 	Direction:	方向：
 	Symbolism Tools Options	符號工具選項
+	Tool:	工具：
+	Symbol Set Density	符號組密度
+	Symbol Sprayer Options	符號噴灑器選項
+	Scrunch:	緊縮：
+	Spin:	旋轉：
+	Screen:	濾色：
+	Stain:	染色：
+	Symbol Sizer Options	符號縮放器選項
+	Proportional Resizing	等比例縮放
+	Resizing Affects Density	縮放影響密度
+	Show Brush Size and Intensity	顯示筆刷大小和強度
 	Symbol Set Density:	符號組密度：
 	Flat Image	平面影像
 	Flatness:	平滑度：

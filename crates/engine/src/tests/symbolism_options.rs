@@ -557,3 +557,59 @@ fn set_density_refuses_bad_densities_and_objects_without_a_set() {
     assert!(matches!(&r, Err(EngineError::Other(msg)) if msg == "no symbol set selected"), "{r:?}");
     assert!(state(&s) == before);
 }
+
+/// An instance with no size is shifted and screened as before; only Average, which needs its size,
+/// leaves it as it is.
+#[test]
+fn an_instance_without_a_size_is_changed_by_every_method_but_average() {
+    // A Dot at 200, 150 whose size is 0, and Dots at the other centers.
+    let flat = |others: &[(f64, f64)]| {
+        let mut s = session();
+        let a = dot(&mut s, 200.0, 150.0);
+        for (x, y) in others {
+            dot(&mut s, *x, *y);
+        }
+        s.edit("Flatten", |d, _| {
+            if let Some(NodeKind::SymbolInstance { xf, .. }) = d.node_mut(a).map(|n| &mut n.kind) {
+                *xf = Affine::new([0.0, 0.0, 0.0, 0.0, 200.0, 150.0]);
+            }
+            Ok(())
+        })
+        .unwrap();
+        (s, a)
+    };
+    let (mut s, a) = flat(&[(210.0, 150.0)]);
+    let r = adjust(&mut s, json!({"tool": "shift", "points": [[200, 150], [205, 150]], "radius": 40, "intensity": 10}));
+    assert_eq!(r["count"], 2);
+    assert!(center(&s, a).x > 200.5, "{:?}", center(&s, a));
+    let r = adjust(&mut s, json!({"tool": "screen", "points": [[205, 150]], "radius": 40, "intensity": 10}));
+    assert_eq!(r["count"], 2);
+    assert!(node(&s, a).opacity < 1.0);
+    // Average brings the other two toward their mean and leaves the one without a size as it is.
+    let (mut s, a) = flat(&[(190.0, 150.0), (210.0, 150.0)]);
+    adjust(&mut s, json!({"tool": "screen", "points": [[190, 150]], "radius": 2, "intensity": 10}));
+    let r = adjust(&mut s, json!({"tool": "screen", "points": [[200, 150]], "radius": 40, "intensity": 10, "method": "average"}));
+    assert_eq!(r["count"], 2);
+    assert_eq!(node(&s, a).opacity, 1.0);
+    // With only it under the brush there is no mean, and Average changes nothing.
+    let before = state(&s);
+    let r = adjust(&mut s, json!({"tool": "screen", "points": [[200, 150]], "radius": 5, "intensity": 10, "method": "average"}));
+    assert_eq!(r["count"], 0);
+    assert!(state(&s) == before);
+}
+
+/// A stroke that leaves every instance under the brush as it is (each already at full stain, or
+/// at the least opacity) counts none and adds no undo step.
+#[test]
+fn a_stroke_that_changes_no_instance_adds_no_undo_step() {
+    let mut s = session();
+    dot(&mut s, 200.0, 150.0);
+    let full = json!(vec![[200, 150]; 12]);
+    for tool in ["stain", "screen"] {
+        adjust(&mut s, json!({"tool": tool, "points": full, "radius": 40, "intensity": 10, "color": "#ff0000"}));
+        let before = state(&s);
+        let r = adjust(&mut s, json!({"tool": tool, "points": [[200, 150]], "radius": 40, "intensity": 10, "color": "#ff0000"}));
+        assert_eq!(r["count"], 0, "{tool}");
+        assert!(state(&s) == before, "{tool} changed the document");
+    }
+}

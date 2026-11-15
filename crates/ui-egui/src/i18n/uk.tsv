@@ -1309,6 +1309,17 @@ font-technology	Variable	Варіативні
 	Largest:	Найбільше:
 	Direction:	Напрямок:
 	Symbolism Tools Options	Параметри інструментів символів
+	Tool:	Інструмент:
+	Symbol Set Density	Щільність набору символів
+	Symbol Sprayer Options	Параметри розпилювача символів
+	Scrunch:	Стиск:
+	Spin:	Обертання:
+	Screen:	Прозорість:
+	Stain:	Тонування:
+	Symbol Sizer Options	Параметри розміру символів
+	Proportional Resizing	Пропорційна зміна розміру
+	Resizing Affects Density	Зміна розміру впливає на щільність
+	Show Brush Size and Intensity	Показувати розмір та інтенсивність пензля
 	Symbol Set Density:	Щільність набору символів:
 	Flat Image	Плоске зображення
 	Flat Logo	Плоский логотип

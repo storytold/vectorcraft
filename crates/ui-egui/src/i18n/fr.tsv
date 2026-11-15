@@ -1302,6 +1302,17 @@ font-technology	Variable	Variables
 	Largest:	Le plus grand :
 	Direction:	Direction :
 	Symbolism Tools Options	Options des outils de symbolisme
+	Tool:	Outil :
+	Symbol Set Density	Densité du jeu de symboles
+	Symbol Sprayer Options	Options de pulvérisation de symboles
+	Scrunch:	Espacement :
+	Spin:	Rotation :
+	Screen:	Transparence :
+	Stain:	Coloration :
+	Symbol Sizer Options	Options de redimensionnement de symboles
+	Proportional Resizing	Redimensionnement proportionnel
+	Resizing Affects Density	Le redimensionnement modifie la densité
+	Show Brush Size and Intensity	Afficher la taille et l’intensité du pinceau
 	Symbol Set Density:	Densité du jeu de symboles :
 	Flat Image	Image aplatie
 	Flat Logo	Logo en aplats

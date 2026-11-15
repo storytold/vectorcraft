@@ -1306,6 +1306,17 @@ font-technology	Variable	Вариативные
 	Largest:	Самое большое:
 	Direction:	Направление:
 	Symbolism Tools Options	Параметры инструментов символов
+	Tool:	Инструмент:
+	Symbol Set Density	Плотность набора символов
+	Symbol Sprayer Options	Параметры распылителя символов
+	Scrunch:	Сжатие:
+	Spin:	Вращение:
+	Screen:	Прозрачность:
+	Stain:	Тонирование:
+	Symbol Sizer Options	Параметры размера символов
+	Proportional Resizing	Пропорциональное изменение размера
+	Resizing Affects Density	Изменение размера влияет на плотность
+	Show Brush Size and Intensity	Показывать размер и интенсивность кисти
 	Symbol Set Density:	Плотность набора символов:
 	Flat Image	Плоское изображение
 	Flat Logo	Плоский логотип

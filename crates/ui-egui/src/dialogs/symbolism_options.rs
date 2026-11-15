@@ -65,15 +65,19 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     widgets::label_row(ui, tl!("Diameter:"), LABEL_W, |ui| {
         form::length(ui, d, "diameter", unit, 100.0);
     });
+    // The Symbol Sprayer uses neither Intensity nor pen pressure.
+    let sprayer = tool == "symbolSprayer";
     let pressure = d.bool("usePressure");
     widgets::label_row(ui, tl!("Intensity:"), LABEL_W, |ui| {
-        ui.add_enabled_ui(!pressure, |ui| {
+        ui.add_enabled_ui(!pressure && !sprayer, |ui| {
             if let Some(v) = widgets::range_field(ui, ("symbolism", "intensity"), d.f64("intensity", 5.0), 1.0..=10.0, "", 0, 100.0) {
                 d.fields.insert("intensity".into(), json!(v));
             }
         });
     });
-    widgets::label_row(ui, "", LABEL_W, |ui| form::check(ui, d, "usePressure", tl!("Use Pressure Pen")));
+    widgets::label_row(ui, "", LABEL_W, |ui| {
+        ui.add_enabled_ui(!sprayer, |ui| form::check(ui, d, "usePressure", tl!("Use Pressure Pen")));
+    });
     widgets::label_row(ui, tl!("Symbol Set Density:"), LABEL_W, |ui| {
         if let Some(v) = widgets::range_field(ui, ("symbolism", "density"), d.f64("density", 5.0), 1.0..=10.0, "", 0, 100.0) {
             d.fields.insert("density".into(), json!(v));
@@ -186,6 +190,19 @@ mod tests {
         app.ui.dialog.as_mut().unwrap().fields.insert("tool".into(), json!("symbolSizer"));
         let text = painted(&mut app);
         assert!(text.contains("Proportional Resizing") && !text.contains("Scrunch:"), "{text}");
+    }
+
+    /// The Symbol Sprayer uses neither Intensity nor pen pressure: its Use Pressure Pen is disabled,
+    /// and the other tools' is not.
+    #[test]
+    fn the_sprayer_disables_use_pressure_pen() {
+        let mut app = app();
+        for (tool, off) in [("symbolSprayer", true), ("symbolSizer", false), ("symbolShifter", false)] {
+            app.run("tool.options", json!({"tool": tool})).unwrap();
+            let tree = crate::widgets::accessibility_tests::tree(|ui| super::super::show(&mut app, ui.ctx()));
+            let pen = crate::widgets::accessibility_tests::named(&tree, "Use Pressure Pen");
+            assert_eq!(pen.is_disabled(), off, "{tool}");
+        }
     }
 
     /// OK sets Method, Use Pressure Pen, Show Brush Size and Intensity and the Sprayer's and the

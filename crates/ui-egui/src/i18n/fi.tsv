@@ -3225,6 +3225,17 @@ antiAlias	Sharp	Terävä
 	Swatch Name:	Värimallin nimi:
 	Diameter:	Halkaisija:
 	Symbolism Tools Options	Symbolityökalujen asetukset
+	Tool:	Työkalu:
+	Symbol Set Density	Symbolijoukon tiheys
+	Symbol Sprayer Options	Symbolisuihkuttimen asetukset
+	Scrunch:	Tiivistys:
+	Spin:	Kierto:
+	Screen:	Läpinäkyvyys:
+	Stain:	Värjäys:
+	Symbol Sizer Options	Symbolien koonmuutoksen asetukset
+	Proportional Resizing	Suhteellinen koonmuutos
+	Resizing Affects Density	Koonmuutos vaikuttaa tiheyteen
+	Show Brush Size and Intensity	Näytä siveltimen koko ja voimakkuus
 	Symbol Set Density:	Symbolijoukon tiheys:
 	Intensity:	Voimakkuus:
 	Place PDF	Sijoita PDF

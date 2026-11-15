@@ -3627,6 +3627,17 @@ font-technology	Variable	Variáveis
 	Largest:	Maior:
 	Direction:	Direção:
 	Symbolism Tools Options	Opções das ferramentas de simbolismo
+	Tool:	Ferramenta:
+	Symbol Set Density	Densidade do conjunto de símbolos
+	Symbol Sprayer Options	Opções do Pulverizador de Símbolos
+	Scrunch:	Amontoar:
+	Spin:	Girar:
+	Screen:	Peneira:
+	Stain:	Mancha:
+	Symbol Sizer Options	Opções do Dimensionador de Símbolos
+	Proportional Resizing	Redimensionamento proporcional
+	Resizing Affects Density	Redimensionamento afeta a densidade
+	Show Brush Size and Intensity	Mostrar tamanho e intensidade do pincel
 	Symbol Set Density:	Densidade do conjunto de símbolos:
 	Flatten Artwork	Achatar arte-final
 	Graphics	Gráficos

@@ -3328,8 +3328,11 @@ already walks Image Trace. Short agent entry points:
     `from` passed applies only to a set without one (a group named "Symbol Set" by hand); the sets moved then have
     density `to`. A locked or hidden instance stays where it is. It returns `{ids, count}`: the sets changed and the
     instances moved.
-  - A `method`, an attribute or a density outside these values, a pressure that isn't a number, or no symbol set
-    among the objects of `symbol.setDensity`, is an error and changes nothing.
+  - A `method` or an attribute outside these values, a point's third number that isn't a number (in `symbol.spray`
+    too, which does not use it), a `from` or `to` of `symbol.setDensity` outside 1..10, or no symbol set among its
+    objects, is an error and changes nothing.
+  - Average leaves an instance without a size (a scale of 0) as it is; the other methods change it. A stroke that
+    changes no instance counts none and adds no undo step.
 - Dynamic symbols: an instance of a symbol whose `type` is `dynamic` changes the appearance of objects in the symbol's
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`
   names the object by `path`, child indices in paint order from the art's root down through its groups (`[]` is the
@@ -10834,7 +10837,7 @@ intensity), and the Symbolism tools one brush: `diameter` (80), `intensity` (5),
 `method` (`userDefined`), `showBrush` (true), `sprayScrunch`, `spraySize`, `spraySpin`, `sprayScreen`, `sprayStain`
 and `sprayStyle` (each `average`), `proportional` (true) and `affectsDensity` (false); these starting values are
 VectorCraft's own. With `showBrush` the brush's outline follows the pointer, with a dashed ring inside it at
-`intensity`/10 of its radius (no ring at 10 or with `usePressure`). Interaction state (pins, a reference point) starts afresh. In the
+`intensity`/10 of its radius (no ring at 10, with `usePressure` or for the Symbol Sprayer, which uses neither). Interaction state (pins, a reference point) starts afresh. In the
 desktop app, while the Artboard tool is in use, a change to its `selected` or `active` makes the artboard it then has
 active the active artboard (the navigator's and the Artboards panel's).
 

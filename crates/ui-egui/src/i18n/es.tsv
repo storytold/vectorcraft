@@ -1308,6 +1308,17 @@ font-technology	Variable	Variables
 	Largest:	Más grande:
 	Direction:	Dirección:
 	Symbolism Tools Options	Opciones de las herramientas de símbolos
+	Tool:	Herramienta:
+	Symbol Set Density	Densidad del conjunto de símbolos
+	Symbol Sprayer Options	Opciones del rociador de símbolos
+	Scrunch:	Concentración:
+	Spin:	Giro:
+	Screen:	Transparencia:
+	Stain:	Tinte:
+	Symbol Sizer Options	Opciones de tamaño de símbolos
+	Proportional Resizing	Cambio de tamaño proporcional
+	Resizing Affects Density	El cambio de tamaño afecta a la densidad
+	Show Brush Size and Intensity	Mostrar tamaño e intensidad del pincel
 	Symbol Set Density:	Densidad del conjunto de símbolos:
 	Flat Image	Imagen acoplada
 	Flat Logo	Logotipo plano

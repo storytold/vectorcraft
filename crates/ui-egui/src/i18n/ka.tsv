@@ -4981,6 +4981,17 @@ antiAlias	Sharp	მკვეთრი
 	Swatch Name:	ფერის ნიმუშის სახელი:
 	Diameter:	დიამეტრი:
 	Symbolism Tools Options	სიმბოლოების ხელსაწყოების პარამეტრები
+	Tool:	ხელსაწყო:
+	Symbol Set Density	სიმბოლოების ნაკრების სიმჭიდროვე
+	Symbol Sprayer Options	სიმბოლოების სპრეის პარამეტრები
+	Scrunch:	შეკუმშვა:
+	Spin:	შემობრუნება:
+	Screen:	გამჭვირვალობა:
+	Stain:	შეფერადება:
+	Symbol Sizer Options	სიმბოლოების ზომის შეცვლის პარამეტრები
+	Proportional Resizing	პროპორციული ზომის შეცვლა
+	Resizing Affects Density	ზომის შეცვლა სიმჭიდროვეზე მოქმედებს
+	Show Brush Size and Intensity	ფუნჯის ზომისა და ინტენსივობის ჩვენება
 	Symbol Set Density:	სიმბოლოების ნაკრების სიმჭიდროვე:
 	Intensity:	ინტენსივობა:
 	Place PDF	PDF-ის განთავსება

@@ -4688,6 +4688,17 @@ digits	Malayalam	Malaiàlam
 	Symbol Screener Tool	Eina de filtre de símbols
 	Symbol Scruncher	Compressor de símbols
 	Symbol Scruncher Tool	Eina de compressor de símbols
+	Tool:	Eina:
+	Symbol Set Density	Densitat del conjunt de símbols
+	Symbol Sprayer Options	Opcions del ruixador de símbols
+	Scrunch:	Compressió:
+	Spin:	Gir:
+	Screen:	Filtre:
+	Stain:	Tint:
+	Symbol Sizer Options	Opcions de l’escalador de símbols
+	Proportional Resizing	Canvi de mida proporcional
+	Resizing Affects Density	El canvi de mida afecta la densitat
+	Show Brush Size and Intensity	Mostra la mida i la intensitat del pinzell
 	Symbol Set Density:	Densitat del conjunt de símbols:
 	Symbol Shifter	Desplaçador de símbols
 	Symbol Shifter Tool	Eina de desplaçador de símbols

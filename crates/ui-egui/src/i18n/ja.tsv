@@ -3847,6 +3847,17 @@ gradient-kind	Radial	円形
 	Largest:	最大:
 	Direction:	方向:
 	Symbolism Tools Options	シンボルツールオプション
+	Tool:	ツール:
+	Symbol Set Density	シンボルセットの密度
+	Symbol Sprayer Options	シンボルスプレーのオプション
+	Scrunch:	スクランチ:
+	Spin:	スピン:
+	Screen:	スクリーン:
+	Stain:	ステイン:
+	Symbol Sizer Options	シンボルリサイザーのオプション
+	Proportional Resizing	縦横比を保持してサイズ変更
+	Resizing Affects Density	サイズ変更で密度を変更
+	Show Brush Size and Intensity	ブラシサイズと強度を表示
 	Symbol Set Density:	シンボルセットの密度:
 	Flattener presets	分割・統合プリセット
 file-filter	All readable files	読み込めるすべてのファイル

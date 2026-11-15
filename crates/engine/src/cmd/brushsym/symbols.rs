@@ -1109,9 +1109,17 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 if w <= 0.0 {
                     continue;
                 }
-                let Some(cur) = d.node(*id).and_then(|n| look(d, n)) else { continue };
+                // Average needs the instance's own values, so it leaves an instance without a size
+                // as it is; the other methods change it as before.
+                let avg = match (method, &target, d.node(*id).and_then(|n| look(d, n))) {
+                    (Method::Average, Some(t), Some(cur)) => Some((t, cur)),
+                    // No mean under the brush (every instance there without a size), or none of
+                    // its own.
+                    (Method::Average, ..) => continue,
+                    _ => None,
+                };
                 // Average leaves an instance that already has the mean as it is.
-                let at_mean = target.as_ref().is_some_and(|t| match tool.as_str() {
+                let at_mean = avg.as_ref().is_some_and(|(t, cur)| match tool.as_str() {
                     "scrunch" => {
                         let out = (c - t.middle).hypot();
                         out <= 1e-9 || (t.reach - out).abs() < 1e-9
@@ -1128,15 +1136,16 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                     continue;
                 }
                 let Some(n) = d.node_mut(*id) else { continue };
-                touched.insert(*id);
+                // Counted only when it changes: Random can give an instance no share of the change.
+                let before = n.clone();
                 let about = |m: Affine| Affine::translate(c.to_vec2()) * m * Affine::translate(-c.to_vec2());
                 let share = share(*id);
                 match tool.as_str() {
                     "shift" => n.transform(Affine::translate(delta * w.min(1.0)), false),
                     "scrunch" => {
-                        let v = match &target {
+                        let v = match &avg {
                             // Toward the instances' mean distance from their middle.
-                            Some(t) => {
+                            Some((t, _)) => {
                                 let out = c - t.middle;
                                 if out.hypot() > 1e-9 { out * ((t.reach - out.hypot()) / out.hypot() * w.min(1.0)) } else { Vec2::ZERO }
                             }
@@ -1145,15 +1154,15 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                         n.transform(Affine::translate(v), false);
                     }
                     "size" => {
-                        let k = match &target {
-                            Some(t) => (t.scale / cur.scale).powf(w.min(1.0)),
+                        let k = match &avg {
+                            Some((t, cur)) => (t.scale / cur.scale).powf(w.min(1.0)),
                             None => (1.0 + 0.08 * w).powf(if alt { -share } else { share }),
                         };
                         // Without Proportional Resizing a drag resizes along its own direction: a
                         // level drag the width, an upright one the height. A click resizes both.
                         // The first point of a drag takes the direction to the second.
                         let along = if j > 0 { delta } else { pts.get(1).map_or(Vec2::ZERO, |(next, _)| *next - *q) };
-                        let (kx, ky) = if proportional || target.is_some() || along.hypot() <= 1e-9 {
+                        let (kx, ky) = if proportional || avg.is_some() || along.hypot() <= 1e-9 {
                             (k, k)
                         } else {
                             let level = along.x.abs() / (along.x.abs() + along.y.abs());
@@ -1167,29 +1176,30 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                         }
                     }
                     "spin" => {
-                        let a = match (&target, method) {
-                            (Some(t), _) => wrap_angle(t.angle - cur.angle) * w.min(1.0),
+                        let a = match (&avg, method) {
+                            (Some((t, cur)), _) => wrap_angle(t.angle - cur.angle) * w.min(1.0),
                             // A turn either way, whichever way the drag runs.
                             (None, Method::Random) => 0.1 * w * (share - 1.0),
                             // Turn towards the drag direction; a click spins a little.
                             (None, _) if delta.hypot() > 1e-9 => (c - *q).cross(delta).signum() * 0.1 * w,
                             (None, _) => 0.05 * w,
                         };
-                        n.transform(about(Affine::rotate(if alt && target.is_none() { -a } else { a })), false);
+                        n.transform(about(Affine::rotate(if alt && avg.is_none() { -a } else { a })), false);
                     }
                     "stain" | "style" => {
                         let paint = if tool == "style" { style_paint.clone().unwrap_or(Paint::solid(color)) } else { Paint::solid(color) };
-                        let (paint, o) = match &target {
+                        let (paint, o) = match &avg {
                             // Toward the mean amount, keeping the stain or style the instance has.
-                            Some(t) => {
-                                let (own, cur) = cur.fill.map_or((None, 0.0), |(p, o)| (Some(p), o));
+                            Some((t, look)) => {
+                                let (own, cur) = look.fill.clone().map_or((None, 0.0), |(p, o)| (Some(p), o));
                                 (own.or(t.paint.clone()).unwrap_or(paint), (cur + (t.amount - cur) * w.min(1.0)) as f32)
                             }
+                            // Alt with the Symbol Styler removes the instance's appearance.
+                            None if tool == "style" && alt => {
+                                n.appearance.items.clear();
+                                (paint, 0.0)
+                            }
                             None => {
-                                if tool == "style" && alt {
-                                    n.appearance.items.clear();
-                                    continue;
-                                }
                                 let cur = n.appearance.fill().filter(|f| f.paint == paint).map(|f| f.opacity).unwrap_or(0.0);
                                 let step = match (tool.as_str(), method) {
                                     ("style", Method::Random) => (share / 2.0) as f32,
@@ -1208,12 +1218,15 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     _ => {
                         let step = (0.1 * w * share) as f32;
-                        n.opacity = match &target {
-                            Some(t) => (n.opacity + ((t.opacity - f64::from(n.opacity)) * w.min(1.0)) as f32).clamp(0.05, 1.0),
+                        n.opacity = match &avg {
+                            Some((t, _)) => (n.opacity + ((t.opacity - f64::from(n.opacity)) * w.min(1.0)) as f32).clamp(0.05, 1.0),
                             None if alt => (n.opacity + step).min(1.0),
                             None => (n.opacity - step).max(0.05),
                         };
                     }
+                }
+                if *n != before {
+                    touched.insert(*id);
                 }
             }
         }

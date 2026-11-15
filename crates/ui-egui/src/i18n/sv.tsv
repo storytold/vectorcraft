@@ -1265,6 +1265,17 @@ font-technology	Variable	Variabla
 	Largest:	Störst:
 	Direction:	Riktning:
 	Symbolism Tools Options	Alternativ för symbolverktyg
+	Tool:	Verktyg:
+	Symbol Set Density	Täthet för symboluppsättning
+	Symbol Sprayer Options	Alternativ för symbolspruta
+	Scrunch:	Dra ihop:
+	Spin:	Rotera:
+	Screen:	Opacitet:
+	Stain:	Färga:
+	Symbol Sizer Options	Alternativ för symbolstorlek
+	Proportional Resizing	Proportionell storleksändring
+	Resizing Affects Density	Storleksändring påverkar tätheten
+	Show Brush Size and Intensity	Visa penselstorlek och intensitet
 	Symbol Set Density:	Täthet för symboluppsättning:
 	Flat Image	Platt bild
 	Flat Logo	Platt logotyp

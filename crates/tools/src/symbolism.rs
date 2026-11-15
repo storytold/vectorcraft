@@ -264,8 +264,9 @@ impl Tool for SymbolismTool {
         let ring = |radius: f64, dashed| Overlay::Path { path: kurbo::Circle::new(p, radius).to_path(0.1), color: FEEDBACK, width: 1.0, dashed };
         let mut v = vec![ring(self.diameter / 2.0, false)];
         // The intensity: a dashed ring that fills the brush at 10. A pen's pressure sets it instead
-        // with Use Pressure Pen, so no ring is drawn then.
-        if !self.use_pressure && self.intensity < 10.0 {
+        // with Use Pressure Pen, so no ring is drawn then. The Symbol Sprayer uses neither, so it
+        // draws no ring.
+        if self.id != "symbolSprayer" && !self.use_pressure && self.intensity < 10.0 {
             v.push(ring(self.diameter / 2.0 * self.intensity / 10.0, true));
         }
         v
@@ -567,7 +568,8 @@ mod tests {
     }
 
     /// Show Brush Size and Intensity: the brush's outline with a dashed ring for the intensity
-    /// inside it; no ring with Use Pressure Pen or at intensity 10, and nothing with it off.
+    /// inside it; no ring with Use Pressure Pen, at intensity 10 or for the Symbol Sprayer, and
+    /// nothing with it off.
     #[test]
     fn show_brush_size_and_intensity_draws_the_brush() {
         let (d, _) = doc_with_rect();
@@ -593,6 +595,10 @@ mod tests {
         assert_eq!(rings(&t), [(80.0, false)]);
         t.set_option("showBrush", &json!(false));
         assert!(t.overlays(&cx).is_empty());
+        // The Symbol Sprayer uses neither Intensity nor pen pressure: the outline only.
+        let mut t = SymbolismTool::new("symbolSprayer");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 50.0, 50.0));
+        assert_eq!(rings(&t), [(80.0, false)]);
     }
 
     #[test]

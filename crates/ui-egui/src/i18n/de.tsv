@@ -1285,6 +1285,17 @@ font-technology	Variable	Variabel
 	Largest:	Größter:
 	Direction:	Richtung:
 	Symbolism Tools Options	Optionen für die Symbol-Werkzeuge
+	Tool:	Werkzeug:
+	Symbol Set Density	Dichte des Symbolsatzes
+	Symbol Sprayer Options	Optionen für „Symbol aufsprühen“
+	Scrunch:	Stauchen:
+	Spin:	Drehen:
+	Screen:	Transparenz:
+	Stain:	Färben:
+	Symbol Sizer Options	Optionen für „Symbol skalieren“
+	Proportional Resizing	Proportional skalieren
+	Resizing Affects Density	Skalieren beeinflusst die Dichte
+	Show Brush Size and Intensity	Pinselgröße und Intensität anzeigen
 	Symbol Set Density:	Dichte des Symbolsatzes:
 	Flat Image	Reduziertes Bild
 	Flat Logo	Flaches Logo

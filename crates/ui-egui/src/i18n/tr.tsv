@@ -1261,6 +1261,17 @@ font-technology	Variable	Değişken
 	Largest:	En büyük:
 	Direction:	Yön:
 	Symbolism Tools Options	Sembolizm Araçları Seçenekleri
+	Tool:	Araç:
+	Symbol Set Density	Sembol Seti Yoğunluğu
+	Symbol Sprayer Options	Sembol Püskürtücü Seçenekleri
+	Scrunch:	Sıkıştırma:
+	Spin:	Döndürme:
+	Screen:	Saydamlaştırma:
+	Stain:	Renklendirme:
+	Symbol Sizer Options	Sembol Boyutlandırıcı Seçenekleri
+	Proportional Resizing	Orantılı Yeniden Boyutlandırma
+	Resizing Affects Density	Yeniden Boyutlandırma Yoğunluğu Etkiler
+	Show Brush Size and Intensity	Fırça Boyutunu ve Yoğunluğunu Göster
 	Symbol Set Density:	Sembol Seti Yoğunluğu:
 	Flat Image	Düz Resim
 	Flat Logo	Düz Logo
