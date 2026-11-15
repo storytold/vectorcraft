@@ -555,13 +555,13 @@ antiAlias	Sharp	शार्प
 	Complementary Coral	कोरल, पूरक
 	Split Complementary Coral	कोरल, विभाजित पूरक
 	Analogous Coral	कोरल, अनुरूप
-	Triad Coral	कोरल, त्रिदाद
+	Triad Coral	कोरल, त्रिक
 	Tetrad Coral	कोरल, चतुष्क
 	Pentagram Coral	कोरल, पेंटाग्राम
 	Complementary Teal	टील, पूरक
 	Split Complementary Teal	टील, विभाजित पूरक
 	Analogous Teal	टील, अनुरूप
-	Triad Teal	टील, त्रिदाद
+	Triad Teal	टील, त्रिक
 	Tetrad Teal	टील, चतुष्क
 	Pentagram Teal	टील, पेंटाग्राम
 	Soft Spectrum	सॉफ़्ट स्पेक्ट्रम
@@ -700,6 +700,12 @@ antiAlias	Sharp	शार्प
 	Overlay Glaze	ओवरले ग्लेज़
 	Screen Light	स्क्रीन रोशनी
 	Soft Light Wash	सॉफ़्ट लाइट वॉश
+	Cyan Neon	सियान नियॉन
+	Magenta Laser	मैजेंटा लेज़र
+	Amber Tube	एम्बर ट्यूब
+	Electric Lime	इलेक्ट्रिक लाइम
+	Pulse Violet	पल्स वायलेट
+	Cobalt Phosphor	कोबाल्ट फ़ॉस्फ़र
 	Burst	विस्फोट
 	Rounded Square	गोल कोनों वाला वर्ग
 	Sun	सूरज

@@ -8869,7 +8869,6 @@ axis	Y Axis	Y ღერძი
 	Checkpoint	საკონტროლო წერტილი
 	Inventory Icons	ინვენტარის ხატულები
 	Skill Icons	უნარების ხატულები
-	Weather Icons	ამინდის ხატულები
 	Attack	შეტევა
 	Defend	თავდაცვა
 	Heal	განკურნება
@@ -9178,8 +9177,6 @@ axis	Y Axis	Y ღერძი
 	Pinched Stripes	შევიწროებული ზოლები
 	Chevron Pulse	შევრონების პულსი
 	Radiating Lenses	მანათობელი ლინზები
-	Soft Shadow	რბილი ჩრდილი
-	Hard Shadow	მკვეთრი ჩრდილი
 	Lifted Card	აწეული ბარათი
 	Neon Tube	ნეონის მილი
 	Inner Light	შიდა სინათლე
@@ -9223,6 +9220,12 @@ axis	Y Axis	Y ღერძი
 	Overlay Glaze	გადაფარვის ჭიქური
 	Screen Light	ეკრანის სინათლე
 	Soft Light Wash	რბილი სინათლის რეცხვა
+	Cyan Neon	ციანის ნეონი
+	Magenta Laser	მაჯენტას ლაზერი
+	Amber Tube	ქარვისფერი მილი
+	Electric Lime	ელექტრული ლაიმი
+	Pulse Violet	მფეთქავი იისფერი
+	Cobalt Phosphor	კობალტის ფოსფორი
 	Burst	აფეთქება
 	Rounded Square	მომრგვალებული კვადრატი
 	Sun	მზე
