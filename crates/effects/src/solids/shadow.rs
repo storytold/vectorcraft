@@ -51,11 +51,16 @@ pub(crate) struct Ink {
 }
 
 impl Ink {
-    /// Whether art in this ink casts part of a shadow: its opacity is a finite number above zero.
-    /// Art at zero, negative, NaN or infinite opacity casts nothing.
+    /// Whether art in this ink casts part of a shadow ([`casts`]).
     pub(crate) fn casts(self) -> bool {
-        self.opacity.is_finite() && self.opacity > 0.0
+        casts(self.opacity)
     }
+}
+
+/// Whether art at `opacity` casts part of a shadow: its opacity is a finite number above zero.
+/// Art at zero, negative, NaN or infinite opacity casts nothing.
+pub(crate) fn casts(opacity: f32) -> bool {
+    opacity.is_finite() && opacity > 0.0
 }
 
 /// The shadow of the faces in `caster` as a path of object `id`, cast by art in `ink`: filled
