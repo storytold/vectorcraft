@@ -1071,6 +1071,101 @@ fn the_place_cursors_files_ask_for_their_import_options_when_show_import_options
     assert_eq!(dialog_kind(&app), None);
 }
 
+/// A cursor loaded again after the Place dialog loaded it with Show Import Options on (a queue set
+/// on the Place tool) places its files at once.
+#[test]
+fn a_place_cursor_loaded_again_no_longer_asks_for_import_options() {
+    let mut app = app();
+    let dir = Folder::new("ui-place-cursor-reloaded");
+    let a = dir.file("a.png", &png(10, 10, 72.0));
+    let notes = dir.file("notes.txt", NOTES);
+    app.run("file.place", json!({"paths": [a, notes]})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    let entries: Vec<Value> = [(&a, "a.png"), (&notes, "notes.txt")]
+        .iter()
+        .map(|(path, name)| json!({"params": {"path": path}, "name": name, "width": 190, "height": 90}))
+        .collect();
+    assert_eq!(app.session.tool_id(), "place");
+    app.run("tool.setOption", json!({"values": {"queue": {"entries": entries}}})).unwrap();
+    crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 190, 90]}));
+    assert_eq!(dialog_kind(&app), None);
+    assert!(selected_text(&app).contains("three"));
+}
+
+/// The import options a click of a cursor loaded within automation roots asks for place within
+/// those roots when OK is pressed, by the person at the keyboard too: a file outside them is not
+/// read. One inside them is placed.
+#[test]
+fn the_import_options_a_place_cursor_asks_for_place_within_its_roots() {
+    use vectorcraft_engine::file_access::{AutomationRoots, confine, unconfined};
+    let mut app = app();
+    let dir = Folder::new("ui-place-cursor-ask-roots");
+    std::fs::create_dir_all(dir.join("in")).unwrap();
+    let a = dir.file("in/a.png", &png(10, 10, 72.0));
+    let notes = dir.file("in/notes.txt", NOTES);
+    let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), PdfPage::new(300.0, 100.0, "1 0 0 rg 0 0 30 30 re f")];
+    let two = dir.file("in/two.pdf", &pdf(&pages, None));
+    let outside_notes = dir.file("outside.txt", NOTES);
+    let outside_pdf = dir.file("outside.pdf", &pdf(&pages, None));
+    let roots = AutomationRoots::new(&[&dir.join("in")], &[]).unwrap();
+    confine(roots.as_ref(), || {
+        app.run("file.place", json!({"paths": [a, notes, two]})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("link".into(), json!(false));
+        crate::dialogs::confirm(&mut app).unwrap();
+    });
+    assert_eq!(app.session.tool_options()["count"], 3);
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = undo(&app);
+    // The text file's OK, its params naming a file outside the roots: nothing is placed.
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    app.ui.dialog.as_mut().unwrap().fields.get_mut("__params").unwrap()["path"] = json!(outside_notes);
+    let _ = unconfined(|| crate::dialogs::confirm(&mut app));
+    assert_eq!(undo(&app), before, "the text file outside the roots");
+    // The PDF's OK, its file outside the roots: nothing is placed.
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": two, "link": false, "rect": [10, 10, 100, 100]})));
+    assert_eq!(dialog_kind(&app), Some("importPdf"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("path".into(), json!(outside_pdf));
+    let _ = unconfined(|| crate::dialogs::confirm(&mut app));
+    assert_eq!(undo(&app), before, "the PDF outside the roots");
+    app.ui.dialog = None;
+    // A caller with roots of its own confirms within those: the file in the cursor's roots but
+    // outside the caller's is not placed.
+    std::fs::create_dir_all(dir.join("b")).unwrap();
+    let narrower = AutomationRoots::new(&[&dir.join("b")], &[]).unwrap();
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    let _ = confine(narrower.as_ref(), || crate::dialogs::confirm(&mut app));
+    assert_eq!(undo(&app), before, "outside the caller's roots");
+    // The text file inside the roots is placed.
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    unconfined(|| crate::dialogs::confirm(&mut app)).unwrap();
+    assert!(selected_text(&app).contains("three"));
+    // Once the cursor is loaded again, the earlier click's import options place nothing.
+    let after = undo(&app);
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    app.run("file.place.queue", json!({"paths": [a]})).unwrap();
+    assert!(unconfined(|| crate::dialogs::confirm(&mut app)).is_err());
+    assert_eq!(undo(&app), after);
+    // So do those of a click before a queue set on the Place tool.
+    confine(roots.as_ref(), || {
+        app.run("file.place", json!({"paths": [a, notes]})).unwrap();
+        crate::dialogs::confirm(&mut app).unwrap();
+    });
+    unconfined(|| crate::place::place_from_cursor(&mut app, &json!({"path": notes, "rect": [10, 10, 200, 100]})));
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    let entry = json!({"params": {"path": a}, "name": "a.png", "width": 10, "height": 10});
+    app.run("tool.setOption", json!({"values": {"queue": {"entries": [entry]}}})).unwrap();
+    let saved = app.ui.dialog.clone();
+    assert!(unconfined(|| crate::dialogs::confirm(&mut app)).is_err());
+    assert_eq!(undo(&app), after);
+    // Also when confirmed by a caller with roots that hold the file.
+    app.ui.dialog = saved;
+    assert!(confine(roots.as_ref(), || crate::dialogs::confirm(&mut app)).is_err());
+    assert_eq!(undo(&app), after);
+}
+
 #[test]
 fn a_file_placed_while_idle_follows_its_changes() {
     let mut app = app();
