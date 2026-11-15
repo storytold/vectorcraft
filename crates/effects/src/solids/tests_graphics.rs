@@ -504,7 +504,8 @@ fn graphics_are_checked() {
         assert!(check(EXTRUDE, bad.clone()).is_err(), "{bad}");
     }
     assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "back"}])).is_err());
-    assert!(check(INFLATE, json!([{"symbol": "Mark"}])).is_err());
+    // Inflate takes graphics on its front and its puffed back.
+    assert!(check(INFLATE, json!([{"symbol": "Mark"}, {"symbol": "Mark", "face": "back"}])).is_ok());
     // Revolve takes graphics on its side, named the front; Revolve (Classic) takes none.
     assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_ok());
     assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "back"}]})).is_err());
@@ -923,4 +924,86 @@ fn only_an_opaque_part_on_revolve_takes_a_seam_stroke() {
     assert!(!takes_seam(&piece(Paint::solid(red()), 1.0, BlendMode::Multiply)));
     // A pattern's tile may hold transparent art, which the overlap would show.
     assert!(!takes_seam(&piece(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, 1.0, BlendMode::Normal)));
+}
+
+/// The paths in `art` filled in a shade of red: the parts of the "Mark" graphic.
+fn red_parts(art: &Node) -> Vec<PathData> {
+    let mut out = vec![];
+    art.walk(&mut |n| {
+        let Some(path) = n.path_data() else { return };
+        let red = n.appearance.items.iter().any(|i| match i {
+            AppearanceItem::Fill(f) => f.paint.color().is_some_and(|c| c.to_rgb()[0] > 0.3 && c.to_rgb()[1] < 0.1 && c.to_rgb()[2] < 0.1),
+            AppearanceItem::Stroke(_) => false,
+        });
+        if red {
+            out.push(path.clone());
+        }
+    });
+    out
+}
+
+fn reach(parts: &[PathData]) -> Rect {
+    parts.iter().filter_map(PathData::bounds).reduce(|a, b| a.union(b)).unwrap()
+}
+
+#[test]
+fn an_inflate_graphic_lies_on_its_puffed_front_where_the_art_is() {
+    let d = document();
+    let n = object(INFLATE, json!({"graphics": [{"symbol": "Mark", "x": 20.0, "y": -10.0, "scale": 200.0}]}));
+    let art = solid_art_in(Some(&d), &n).unwrap();
+    // Straight on, the puff rises toward the viewer and the graphic is carried straight out onto it:
+    // a 20 × 20 square centered 20 right of and 10 above (50, 50).
+    let parts = red_parts(&art);
+    assert!(!parts.is_empty());
+    assert!(close(reach(&parts), Rect::new(60.0, 30.0, 80.0, 50.0)), "{:?}", reach(&parts));
+    // Turned, the graphic moves and foreshortens with the puff under it.
+    let n = object(INFLATE, json!({"rotationY": 40.0, "graphics": [{"symbol": "Mark", "scale": 200.0}]}));
+    let turned = reach(&red_parts(&solid_art_in(Some(&d), &n).unwrap()));
+    assert!(turned.width() < 20.0 - 0.5 && (turned.height() - 20.0).abs() < 2.0, "{turned:?}");
+    // Without the document nothing is drawn.
+    assert!(red_parts(&solid_art_in(None, &n).unwrap()).is_empty());
+}
+
+#[test]
+fn an_inflate_back_takes_its_graphic_with_both_sides_and_twist_carries_it() {
+    let d = document();
+    let back = |extra: Value| {
+        let mut p = json!({"rotationY": 180.0, "graphics": [{"symbol": "Mark", "face": "back", "x": 20.0, "scale": 200.0}]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        red_parts(&solid_art_in(Some(&d), &object(INFLATE, p)).unwrap())
+    };
+    // Without Both sides the back is flat and open, with no puffed face to carry the graphic.
+    assert!(back(json!({})).is_empty());
+    // Seen from behind, the back reads left to right: 20 to the right as seen from behind is 20 to
+    // the left of the art's center, which turned half a turn lies 20 right on the page.
+    let plain = back(json!({"bothSides": true}));
+    assert!(!plain.is_empty());
+    let r = reach(&plain);
+    assert!((r.center().x - 70.0).abs() < 0.5 && (r.center().y - 50.0).abs() < 0.5 && (r.width() - 20.0).abs() < 0.5, "{r:?}");
+    // Twist turns the back, and the graphic turns with it.
+    let twisted = reach(&back(json!({"bothSides": true, "twist": 45.0})));
+    assert!(twisted.width() > r.width() + 3.0, "{twisted:?} {r:?}");
+}
+
+#[test]
+fn an_inflate_frame_puts_the_handle_on_the_puff_and_reads_it_back() {
+    let d = document();
+    let n = object(INFLATE, json!({"bothSides": true}));
+    let frame = graphic_frame(Some(&d), &n, None).unwrap();
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "x": 20.0, "y": -10.0})).unwrap();
+    let (page, shown) = frame.handle(&g).unwrap();
+    assert!(shown && (page.x - 70.0).abs() < 1e-6 && (page.y - 40.0).abs() < 1e-6, "{page:?}");
+    let (x, y) = frame.offset_at(PlanarFace::Front, page).unwrap();
+    assert!((x - 20.0).abs() < 1e-6 && (y + 10.0).abs() < 1e-6, "{x} {y}");
+    // From the front the back is out of sight: it has no handle and no offset.
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "back"})).unwrap();
+    assert!(frame.handle(&g).is_none());
+    assert!(frame.offset_at(PlanarFace::Back, Point::new(50.0, 50.0)).is_none());
+    // Turned half a turn, the back's handle reads back its offset, as seen from behind.
+    let n = object(INFLATE, json!({"bothSides": true, "rotationY": 180.0}));
+    let frame = graphic_frame(Some(&d), &n, None).unwrap();
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "back", "x": 15.0, "y": 5.0})).unwrap();
+    let (page, _) = frame.handle(&g).unwrap();
+    let (x, y) = frame.offset_at(PlanarFace::Back, page).unwrap();
+    assert!((x - 15.0).abs() < 1e-6 && (y - 5.0).abs() < 1e-6, "{x} {y}");
 }

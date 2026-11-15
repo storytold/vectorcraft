@@ -1,7 +1,7 @@
 use super::build::{Builder, Built, Camera, Keep, Order, Turn, check_bounds, cuts, fit, newell, outward};
 use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, crossings, filled, material};
 use super::rings::{MAX_SOLID_POINTS, TOO_COMPLEX_SURFACE, curve_pieces, signed_area, solid_rings};
-use super::{Facet, FillRule, Inflate, MAX_FACES, MAX_SOLID_FACES, PathData, Point, Rect, V3, Vec2, View};
+use super::{Facet, FillRule, Inflate, MAX_FACES, MAX_SOLID_FACES, PathData, PlanarFace, Point, Rect, V3, Vec2, View};
 
 /// The slices the sides are cut into: more to follow a twist or taper.
 fn slices(o: &Inflate) -> usize {
@@ -198,6 +198,22 @@ thread_local! {
     pub(super) static GRID_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// Marks the facet the builder `b` added after it held `before` facets, if it added one, as a piece
+/// of `face` (Inflate's front or puffed back) whose corners lie at the art points `points`, as
+/// offsets from `center` ([`Facet::surface`]). `outward` is the triangle's normal pointing out of
+/// the solid: the piece shows the outside of the surface when it was neither turned around to show
+/// its inside (on a shell open behind) nor kept turned away.
+fn mark_surface(b: &mut Builder<'_>, before: usize, points: [Point; 3], center: Point, outward: V3, face: PlanarFace) {
+    if b.facets.len() <= before {
+        return;
+    }
+    let Some(f) = b.facets.last_mut() else { return };
+    let Some(page) = f.contours.first().filter(|c| c.len() == 3).cloned() else { return };
+    let shows = !f.away && f.normal[0] * outward.0 + f.normal[1] * outward.1 + f.normal[2] * outward.2 > 0.0;
+    f.surface = Some(crate::SurfaceCell { page, uv: points.iter().map(|q| Point::new(q.x - center.x, q.y - center.y)).collect(), outward: shows });
+    f.membrane = Some(face);
+}
+
 /// The facets of one inflated shape, for a camera that allows for a puff `reach` high (or the
 /// shape's own, if higher): `reach` is the highest puff of the shapes drawn together. Its faces
 /// before projection instead, or both, as `keep` asks.
@@ -241,6 +257,8 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
     };
     let smooth = view.shade && view.has_colored_lights();
     let camera = Camera::new(view, bounds, o.depth + 2.0 * height.max(reach));
+    // A graphic's offsets are from the center of the bounds the solid is built with.
+    let center = bounds.center();
     // Without its back cap the object is a shell open behind, its inside showing.
     let mut b = Builder::new(&camera, o.cap, false, keep);
     let half = o.depth / 2.0;
@@ -410,22 +428,47 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                             out
                         })
                         .collect();
-                    if height > 0.0
-                        && smooth
+                    // Smooth shading draws the pieces as triangles, and so do graphics mapped onto
+                    // the front or back: each triangle then carries where its corners lie in the
+                    // art's plane.
+                    let smoothed = height > 0.0 && smooth;
+                    if (smoothed || o.map_surface)
                         && let Some(triangles) = cell_triangles(&pieces)
                     {
+                        let order = if flat { Order::Last } else { Order::Depth };
                         for points in triangles {
                             let front = points.map(|q| camera.place(q, half + lift(q)));
-                            b.smooth_triangle(front, points.map(|q| camera.rotate(normal(q))), false)?;
+                            let before = b.facets.len();
+                            let outward = newell(&[front.to_vec()]);
+                            if smoothed {
+                                b.smooth_triangle(front, points.map(|q| camera.rotate(normal(q))), false)?;
+                            } else {
+                                b.face(vec![front.to_vec()], outward, order)?;
+                            }
+                            if o.map_surface {
+                                mark_surface(&mut b, before, points, center, outward, PlanarFace::Front);
+                            }
                             if o.both_sides && o.cap {
                                 let back = points.map(|q| camera.place(back_turn.apply(q), -half - lift(q) * back_turn.scale));
-                                let normals = points.map(|q| {
-                                    let n = normal(q);
-                                    // A uniform taper scales all three coordinates equally;
-                                    // twist turns the back normal about the shape's z-axis.
-                                    camera.rotate(V3(back_turn.cos * n.0 - back_turn.sin * n.1, back_turn.sin * n.0 + back_turn.cos * n.1, -n.2))
-                                });
-                                b.smooth_triangle(back, normals, true)?;
+                                let before = b.facets.len();
+                                let n = newell(&[back.to_vec()]);
+                                // The back winds the same way round as the front, so its outward
+                                // normal is reversed.
+                                let outward = V3(-n.0, -n.1, -n.2);
+                                if smoothed {
+                                    let normals = points.map(|q| {
+                                        let n = normal(q);
+                                        // A uniform taper scales all three coordinates equally;
+                                        // twist turns the back normal about the shape's z-axis.
+                                        camera.rotate(V3(back_turn.cos * n.0 - back_turn.sin * n.1, back_turn.sin * n.0 + back_turn.cos * n.1, -n.2))
+                                    });
+                                    b.smooth_triangle(back, normals, true)?;
+                                } else {
+                                    b.face(vec![back.to_vec()], outward, order)?;
+                                }
+                                if o.map_surface {
+                                    mark_surface(&mut b, before, points, center, outward, PlanarFace::Back);
+                                }
                             }
                         }
                         continue;

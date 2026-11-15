@@ -173,6 +173,7 @@ pub fn inflate_options(p: &Value) -> Inflate {
         twist: num(p, "twist", 0.0),
         taper: num(p, "taper", 100.0) / 100.0,
         cap: flag(p, "cap", true),
+        map_surface: false,
     }
 }
 
@@ -324,6 +325,7 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
         check_profiles(id, p, &shapes, b)?;
         check_solids(id, p, &shapes)?;
+        check_membrane_graphics(doc, n, id, p, &shapes)?;
         return cast_shadow(id, p, &shapes).map(|_| ());
     }
     let (path, rule) = object_profile(n, label)?;
@@ -342,7 +344,31 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
     let shapes = [Profile { path, rule, items, opacity: 1.0, scopes: vec![] }];
     check_profiles(id, p, &shapes, b)?;
     check_solids(id, p, &shapes)?;
+    check_membrane_graphics(doc, n, id, p, &shapes)?;
     cast_shadow(id, p, &shapes).map(|_| ())
+}
+
+/// An error when the graphics of Inflate `id` with parameters `p`, with the symbols of `doc`, are
+/// past their limits on the front and puffed back of the solids of `shapes`: their art, or the
+/// parts they draw on its pieces ([`graphics::surface_parts`]), or when the solids can't be built
+/// with their pieces carrying the graphics. They are built as the art builds them
+/// ([`surfaces_with`]). Without `doc` nothing is drawn, and nothing is checked.
+fn check_membrane_graphics(doc: Option<&Document>, n: &Node, id: &str, p: &Value, shapes: &[Profile]) -> Result<(), String> {
+    let Some(doc) = doc else { return Ok(()) };
+    if id != INFLATE || mapped_graphics(p).is_empty() {
+        return Ok(());
+    }
+    for face in PlanarFace::ALL {
+        graphics::validate_surface_symbols(doc, p, face)?;
+    }
+    let fx = Effect { id: id.into(), params: p.clone(), visible: true };
+    let mut dropped = false;
+    // Art that can't be built with the graphics draws without them.
+    let built = surfaces_with(Some(doc), n, &fx, shapes, false, true, &mut dropped);
+    if dropped || built.is_none() {
+        return Err("The graphics are too complex: simplify the symbols' art".into());
+    }
+    Ok(())
 }
 
 /// Do the solids 3D effect `id` with parameters `p` builds from the profiles of `shapes` about `b`
@@ -632,6 +658,55 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
     group
 }
 
+/// The parts of `graphics` that fall on each of `facets`, the facets of one of Inflate's solids in
+/// drawing order, built with their front and puffed back carrying the graphics
+/// ([`vectorcraft_three_d::Inflate::map_surface`]): for each facet, the parts of the graphics on
+/// its face to draw right after it ([`graphics::surface_parts`]), shaded as a solid color is on
+/// that facet. `copies` counts the bytes of the paint copies of the object's graphics. `None` past
+/// the graphics' limits.
+fn membrane_parts(
+    doc: Option<&Document>,
+    id: NodeId,
+    graphics: &[MappedGraphic],
+    facets: &[Facet],
+    copies: &mut usize,
+) -> Option<Vec<Vec<Arc<Node>>>> {
+    let shade = |f: &graphics::OnFace<'_>, c: vectorcraft_doc::color::Color| Paint::solid(crate::lighting::shade(c, f.facet.illumination));
+    let mut out: Vec<Vec<Arc<Node>>> = vec![vec![]; facets.len()];
+    for face in PlanarFace::ALL.into_iter().filter(|face| graphics.iter().any(|g| g.face == *face)) {
+        let on: Vec<graphics::OnFace<'_>> = facets.iter().map(|facet| graphics::OnFace { facet, face }).collect();
+        let parts = graphics::surface_parts(doc, id, (graphics, face), &on, &shade, copies)?;
+        for (slot, extra) in out.iter_mut().zip(parts) {
+            slot.extend(extra);
+        }
+    }
+    Some(out)
+}
+
+/// `surface`, a plain group of one face for each facet ([`surface`]), with each face followed by
+/// the parts of the graphics that `parts` holds for its facet ([`membrane_parts`]): a face with
+/// parts becomes a group of the face and its parts, so nearer faces drawn after it cover them too.
+/// `surface` is returned as it is when no facet has a part or it is not such a group.
+fn with_surface_parts(id: NodeId, mut surface: Node, parts: Vec<Vec<Arc<Node>>>) -> Node {
+    if parts.iter().all(Vec::is_empty) {
+        return surface;
+    }
+    let NodeKind::Group { children, clip: false } = &mut surface.kind else { return surface };
+    if children.len() != parts.len() {
+        return surface;
+    }
+    for (child, extra) in children.iter_mut().zip(parts) {
+        if extra.is_empty() {
+            continue;
+        }
+        let mut list = Vec::with_capacity(extra.len() + 1);
+        list.push(child.clone());
+        list.extend(extra);
+        *child = Arc::new(Node::group(id, list));
+    }
+    surface
+}
+
 /// The width of the stroke of a facet's own paint that closes the seams between `face` and its
 /// neighbors. No wider than the facet is thick: seen at a grazing angle a facet can be thinner than
 /// the stroke, and its stroke would then paint over its neighbors.
@@ -740,7 +815,7 @@ fn built_solids<'a>(
     bounds: Rect,
     limit: usize,
 ) -> impl Iterator<Item = Result<Option<Vec<Facet>>, String>> + 'a {
-    built_solids_cast(id, p, parts, bounds, limit, false).map(|r| r.map(|s| s.map(|(f, _)| f)))
+    built_solids_cast(id, p, parts, bounds, limit, false, false).map(|r| r.map(|s| s.map(|(f, _)| f)))
 }
 
 /// One solid's facets and, when its shadow is cast, the faces it is cast from.
@@ -751,7 +826,9 @@ type CastingSolid = (Vec<Facet>, Option<SolidFaces>);
 type SurfacesAndFaces = (Vec<Arc<Node>>, Vec<Option<SolidFaces>>);
 
 /// [`built_solids`], and with `cast` for Extrude & Bevel or Inflate each solid's faces its shadow
-/// is cast from, from the same build ([`SolidFaces`]).
+/// is cast from, from the same build ([`SolidFaces`]). With `membrane`, Inflate's solids are built
+/// with the pieces of their front and puffed back carrying where they lie in the art's plane, for
+/// the graphics drawn on them ([`vectorcraft_three_d::Inflate::map_surface`]).
 fn built_solids_cast<'a>(
     id: &'a str,
     p: &'a Value,
@@ -759,11 +836,12 @@ fn built_solids_cast<'a>(
     bounds: Rect,
     limit: usize,
     cast: bool,
+    membrane: bool,
 ) -> impl Iterator<Item = Result<Option<CastingSolid>, String>> + 'a {
     // Inflate's eye is placed for every puff together, as far away as the highest needs.
     let mut inflated = (id == INFLATE).then(|| -> Box<dyn Iterator<Item = Result<CastingSolid, String>>> {
         let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
-        let (o, view) = (inflate_options(p), view_options(p));
+        let (o, view) = (Inflate { map_surface: membrane, ..inflate_options(p) }, view_options(p));
         if cast {
             Box::new(vectorcraft_three_d::inflate_shadowed(&shapes, bounds, o, view).map(|r| r.map(|(f, faces)| (f, Some(faces)))))
         } else {
@@ -1720,8 +1798,32 @@ fn seen_ends(f: &[Facet]) -> impl Iterator<Item = &Facet> {
 /// [`art_for`] without the shadow: the solids' surfaces, with the graphics mapped onto their planar
 /// faces drawn right after the last of the solids' surfaces that holds that face. With `cast`, each
 /// solid built also keeps the faces its shadow is cast from, from the same build, in the order the
-/// solids are built ([`cast_built`]); `None` for a stroke's solid left out of the art.
+/// solids are built ([`cast_built`]); `None` for a stroke's solid left out of the art. Inflate's
+/// graphics are drawn on the pieces of its front and puffed back; when its solids can't be built
+/// with those pieces, or the graphics are past their limits on them, the solids draw without them.
 fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile], cast: bool) -> Option<SurfacesAndFaces> {
+    let p = crate::merged_params(&fx.id, &fx.params);
+    if fx.id == INFLATE && doc.is_some() && !mapped_graphics(&p).is_empty() {
+        let mut dropped = false;
+        if let Some(built) = surfaces_with(doc, n, fx, shapes, cast, true, &mut dropped).filter(|_| !dropped) {
+            return Some(built);
+        }
+    }
+    surfaces_with(doc, n, fx, shapes, cast, false, &mut false)
+}
+
+/// [`surfaces_for`], with `membrane` building Inflate's solids with their front and puffed back
+/// carrying the graphics ([`built_solids_cast`]), and setting `dropped` when those graphics are past
+/// their limits on the pieces drawn and the solids draw without them.
+fn surfaces_with(
+    doc: Option<&Document>,
+    n: &Node,
+    fx: &Effect,
+    shapes: &[Profile],
+    cast: bool,
+    membrane: bool,
+    dropped: &mut bool,
+) -> Option<SurfacesAndFaces> {
     let b = union_bounds(shapes)?;
     let p = crate::merged_params(&fx.id, &fx.params);
     let classic = fx.id == CLASSIC_EXTRUDE || fx.id == CLASSIC_ROTATE;
@@ -1766,7 +1868,8 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
     let (parts, bounds) = solid_parts(shapes, b);
     let mut solids = vec![];
     let mut built = vec![];
-    for ((item, opacity, _, _, scopes, member), f) in parts.iter().zip(built_solids_cast(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES, cast)) {
+    let made = built_solids_cast(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES, cast, membrane);
+    for ((item, opacity, _, _, scopes, member), f) in parts.iter().zip(made) {
         let item: &AppearanceItem = item;
         match f {
             Ok(Some((f, _))) if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, paint_ref(item), colored), paint_ref(item)) => {
@@ -1776,8 +1879,12 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
                 solids.push((item, *opacity, *scopes, f, *member));
                 built.push(faces);
             }
-            // A stroke's outline past the limits is left out; the fill's solid still draws.
-            Ok(None) => built.push(None),
+            // A stroke's outline past the limits is left out; the fill's solid still draws. Built
+            // with the graphics' pieces, a stroke past the limits draws without the graphics.
+            Ok(None) => {
+                built.push(None);
+                *dropped |= membrane;
+            }
             // A loaded file or a shape edited past the limits (its own, or those of the object's
             // solids together) keeps drawing its source path instead of failing the frame;
             // commands validate the same evaluator and report its errors.
@@ -1861,6 +1968,9 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
     // ([`in_one_order`], [`underlaid_surface`]).
     let seals: Vec<bool> = solids.iter().map(|(.., f, _)| underlaid(f, colored)).collect();
     let seal = |range: std::ops::Range<usize>| seals.get(range).is_some_and(|s| s.iter().any(|s| *s));
+    let membrane_graphics = if membrane && graphics_on { mapped_graphics(&p) } else { vec![] };
+    // The paint copies of Inflate's graphics, apart from those of the surfaces, as on Revolve.
+    let mut graphic_copies = 0usize;
     let surfaces: Vec<BuiltSurface> = solids
         .into_iter()
         .map(|(item, member, scopes, f, shape)| {
@@ -1868,10 +1978,21 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
             let depths: Vec<Placed> = f.iter().map(|f| Placed::of(f, shape, paints)).collect();
             let ends = f.iter().map(|f| f.end.filter(|_| !f.away)).collect();
             let (paint, opacity, blend) = paint_of(item, member);
+            // The pieces of Inflate's front and back draw the parts of the graphics that fall on
+            // them; past the graphics' limits the solid draws without them.
+            let parts = if membrane_graphics.is_empty() || !f.iter().any(|f| f.surface.is_some()) {
+                vec![]
+            } else {
+                let parts = membrane_parts(doc, n.id, &membrane_graphics, &f, &mut graphic_copies);
+                *dropped |= parts.is_none();
+                parts.unwrap_or_default()
+            };
+            let drawn = parts.iter().any(|p| !p.is_empty());
             let art = if classic {
                 classic::surface(n, f, &paint, opacity, blend, &p)
             } else {
-                surface(n, f, &paint, opacity, blend, colored, split && shared.get(shape).copied().unwrap_or(false))
+                let faces = drawn || (split && shared.get(shape).copied().unwrap_or(false));
+                with_surface_parts(n.id, surface(n, f, &paint, opacity, blend, colored, faces), parts)
             };
             (depths, art, scopes, ends)
         })
@@ -2157,14 +2278,15 @@ fn group_solid_art(doc: Option<&Document>, n: &Node) -> Option<Node> {
 
 /// Where the graphics of the 3D effect of `n` (on the object itself with `item` `None`, else on its
 /// fill or stroke `item`) are drawn: the bounds its solids are built with and the maps of their
-/// planar faces ([`graphics::GraphicFrame`]). `None` when `n` has no visible Extrude & Bevel or
-/// Rotate there, or its art can't be built.
+/// planar faces, or Inflate's puffed faces ([`graphics::GraphicFrame`]). `None` when `n` has no
+/// visible Extrude & Bevel, Inflate or Rotate there, or its art can't be built.
 pub fn graphic_frame(doc: Option<&Document>, n: &Node, item: Option<usize>) -> Option<graphics::GraphicFrame> {
     frame_of(doc, n, item, &solid)
 }
 
 /// [`graphic_frame`] of the 3D effect at `index` in that list, which must be a visible Extrude &
-/// Bevel, Rotate or Revolve. Revolve's frame is its unrolled side seen from the front, centered on
+/// Bevel, Rotate, Revolve or Inflate. Inflate's frame places handles on the pieces of its puffed
+/// front and back the viewer sees. Revolve's frame is its unrolled side seen from the front, centered on
 /// the origin, with no face maps: it sizes a new graphic and places no handles.
 pub fn graphic_frame_at(doc: Option<&Document>, n: &Node, item: Option<usize>, index: usize) -> Option<graphics::GraphicFrame> {
     frame_of(doc, n, item, &|fx: &[Effect]| fx.get(index).filter(|e| e.visible && is_three_d(&e.id)).map(|e| (index, e)))
@@ -2231,7 +2353,16 @@ fn frame_of(doc: Option<&Document>, n: &Node, item: Option<usize>, pick: &Pick<'
         let plane = vectorcraft_three_d::plane_face_map(b, view);
         return Some(graphics::GraphicFrame::new(b, plane, None));
     }
-    let (_, bounds) = solid_parts(&shapes, b);
+    let (parts, bounds) = solid_parts(&shapes, b);
+    if fx.id == INFLATE {
+        // Inflate's graphics lie on its puffed front and back: the pieces the viewer sees place
+        // their handles. Solids that can't be built place none.
+        let built: Vec<Facet> = built_solids_cast(INFLATE, &p, &parts, bounds, MAX_OBJECT_FACES, false, true)
+            .filter_map(|r| r.ok().flatten())
+            .flat_map(|(f, _)| f)
+            .collect();
+        return Some(graphics::GraphicFrame::inflated(bounds, graphics::MembraneFrame::of(&built)));
+    }
     let options = extrude_options(&p);
     let map = |face| vectorcraft_three_d::extrude_face_map(bounds, options, view, face);
     Some(graphics::GraphicFrame::new(bounds, map(PlanarFace::Front), map(PlanarFace::Back)))

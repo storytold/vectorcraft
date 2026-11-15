@@ -241,11 +241,15 @@ pub struct Inflate {
     pub taper: f64,
     /// A closed back (a solid) or none, so the inflated front is a shell open behind.
     pub cap: bool,
+    /// Graphics are mapped onto the front or the puffed back: the pieces of those faces are drawn
+    /// as triangles, each carrying where its corners lie in the art's plane ([`Facet::surface`]).
+    /// Off by default, which leaves the facets without one.
+    pub map_surface: bool,
 }
 
 impl Default for Inflate {
     fn default() -> Self {
-        Self { depth: 0.0, volume: 50.0, both_sides: false, twist: 0.0, taper: 1.0, cap: true }
+        Self { depth: 0.0, volume: 50.0, both_sides: false, twist: 0.0, taper: 1.0, cap: true, map_surface: false }
     }
 }
 
@@ -296,6 +300,14 @@ pub struct Facet {
     /// The planar end of the solid the facet is: Extrude & Bevel's front or back cap, or a plane
     /// (its front). `None` for every other facet.
     pub end: Option<PlanarFace>,
+    /// For a piece of Inflate's front or puffed back built for graphics ([`Inflate::map_surface`]):
+    /// where its corners lie in the art's plane, as offsets from the center of the bounds the solid
+    /// was built with ([`crate::SurfaceCell`]). The back's corners are where they were in the art
+    /// before the twist and taper turned and scaled it.
+    pub surface: Option<crate::SurfaceCell>,
+    /// The face of Inflate's solid that a facet with a [`Facet::surface`] is a piece of: its front
+    /// or its puffed back.
+    pub membrane: Option<PlanarFace>,
     /// The face's plane in view space and the projection it was drawn with, for its depth at a
     /// point of the drawing ([`Facet::depth_at`]). `None` for a face whose corners lie more than
     /// 0.001 pt off one plane (a piece of a twisted wall) or reach the eye.
@@ -384,6 +396,8 @@ impl Facet {
             // A revolved cap is not one of the planar faces graphics map onto.
             end: None,
             away: false,
+            surface: None,
+            membrane: None,
             plane: face.plane,
             #[cfg(test)]
             view: vec![],

@@ -424,6 +424,47 @@ fn inflate_leaves_holes_open() {
 }
 
 #[test]
+fn inflate_marks_where_each_piece_lies_in_the_art_for_graphics() {
+    let (p, r) = shape(&square(0.0, 0.0, 100.0));
+    let on = |o: Inflate, view: View| inflate(&p, FillRule::EvenOdd, r, Inflate { map_surface: true, ..o }, view).unwrap();
+    // Without the request no piece carries a surface point.
+    assert!(inflate(&p, FillRule::EvenOdd, r, Inflate::default(), front()).unwrap().iter().all(|f| f.surface.is_none() && f.membrane.is_none()));
+    // Straight on, every piece is a front triangle whose corners lie where the art does, as
+    // offsets from the center of the bounds, and together they cover the shape.
+    let f = on(Inflate::default(), front());
+    let marked: Vec<&Facet> = f.iter().filter(|f| f.surface.is_some()).collect();
+    assert!(marked.len() > 20, "{}", marked.len());
+    assert!(close(marked.iter().map(|f| signed_area(&f.contours[0]).abs()).sum::<f64>(), 100.0 * 100.0, 1e-3));
+    for f in &marked {
+        let s = f.surface.as_ref().unwrap();
+        assert_eq!(f.membrane, Some(PlanarFace::Front));
+        assert!(s.outward);
+        for (page, uv) in s.page.iter().zip(&s.uv) {
+            assert!(close(page.x, uv.x + 50.0, 1e-6) && close(page.y, uv.y + 50.0, 1e-6), "{page:?} {uv:?}");
+        }
+    }
+    // Both sides puffs a back: seen from behind its pieces show their outside, and under Twist
+    // they keep the untwisted art points while the pieces turn on the page.
+    let behind = View { rotation_y: 180.0, ..front() };
+    let back = |o: Inflate| {
+        on(o, behind)
+            .into_iter()
+            .filter(|f| f.membrane == Some(PlanarFace::Back) && f.surface.as_ref().is_some_and(|s| s.outward))
+            .collect::<Vec<_>>()
+    };
+    let plain = back(Inflate { both_sides: true, ..Inflate::default() });
+    assert!(!plain.is_empty());
+    let twisted = back(Inflate { both_sides: true, twist: 30.0, ..Inflate::default() });
+    assert!(!twisted.is_empty());
+    let uv_extent =
+        |f: &[Facet]| f.iter().flat_map(|f| f.surface.as_ref().unwrap().uv.clone()).fold(Rect::new(0.0, 0.0, 0.0, 0.0), |r, q| r.union_pt(q));
+    assert!(close(uv_extent(&twisted).width(), 100.0, 1e-6) && close(uv_extent(&twisted).height(), 100.0, 1e-6));
+    assert!(extent(&twisted).width() > extent(&plain).width() + 10.0, "{:?} {:?}", extent(&twisted), extent(&plain));
+    // Without Both sides there is no back to mark.
+    assert!(on(Inflate::default(), behind).iter().all(|f| f.membrane != Some(PlanarFace::Back)));
+}
+
+#[test]
 fn malformed_and_degenerate_input_is_bounded() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
     for r in [Rect::new(f64::NAN, 0.0, 1.0, 1.0), Rect::new(0.0, 0.0, 1e9, 1.0)] {
@@ -446,7 +487,7 @@ fn malformed_and_degenerate_input_is_bounded() {
             &p,
             FillRule::EvenOdd,
             b,
-            Inflate { depth: -5.0, volume: f64::NAN, both_sides: true, twist: f64::INFINITY, taper: f64::NAN, cap: true },
+            Inflate { depth: -5.0, volume: f64::NAN, both_sides: true, twist: f64::INFINITY, taper: f64::NAN, cap: true, map_surface: false },
             front()
         )
         .is_ok()

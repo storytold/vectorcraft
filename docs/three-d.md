@@ -364,8 +364,8 @@ The public [Map artworks on 3D object](https://helpx.adobe.com/illustrator/deskt
 page describes graphics: art kept with the document and placed on single surfaces of a 3D object, and the
 [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
 page lists Graphics and Add Materials and Graphics on the Materials tab. VectorCraft maps graphics onto
-Extrude & Bevel's front and back caps, the plane of the Plane type (Rotate), and the swept side of Revolve, which the
-public page's example of a label on a bottle describes.
+Extrude & Bevel's front and back caps, the plane of the Plane type (Rotate), the swept side of Revolve, which the
+public page's example of a label on a bottle describes, and Inflate's puffed front and back.
 
 - The panel's **Materials** tab shows the document's graphics as thumbnails. A graphic is a document symbol, as
   the public page allows existing symbols to be used. **Add as Single Graphic** keeps the selected art as a new
@@ -374,7 +374,7 @@ public page's example of a label on a bottle describes.
 - Clicking a thumbnail maps that graphic onto the front of the 3D effect of each selected object
   (`threeD.mapGraphic`), in one undo step. A graphic larger than the object starts scaled down to fit inside it.
 - Below the thumbnails the tab lists the graphics mapped onto the first selected object. The selected one shows
-  its Face (Front or Back; Plane and Revolve show no Face, as a plane has only a front and Revolve's graphics go
+  its Face (Front or Back, on Inflate its puffed front or back; Plane and Revolve show no Face, as a plane has only a front and Revolve's graphics go
   on its side), X and Y (the offset of its center from the center of the
   object's bounds, in the face's plane), Scale (a percentage of the symbol's size) and Rotation
   (counterclockwise), and **Remove Graphic** takes it off. Each change is one undo step.
@@ -397,6 +397,17 @@ These rules are VectorCraft's own:
   their own. A graphic on a face turned away from the viewer is not drawn.
 - On the back cap, X runs to the right as the back is seen from behind, so the graphic reads the right way round
   there.
+- On Inflate a graphic is placed in the art's plane, X and Y measured from the center of the object's bounds as on
+  a cap, and carried straight out onto the puffed face above each point, so it follows the puff. The back takes
+  graphics only with Both sides and Cap on (`threeD.mapGraphic` refuses one otherwise, and one already there is
+  not drawn); it reads the right way round from behind, and Twist and Taper turn and shrink its graphics with it.
+  The membrane is cut into triangles, and each one draws the part of the graphic that falls on it, shaded as
+  that triangle is shaded and drawn only where the surface's outside faces the viewer; nearer triangles drawn
+  after it cover it. A cell of the membrane that cannot be cut into triangles takes no graphic. Every solid of
+  the object (a fill's, and a stroke's outline) carries the graphics. The handle sits on the point of the puffed
+  face above the graphic's center, and only where the viewer sees that face. The cutting into straight pieces,
+  the seam strokes and the limits below are those of Revolve; when the triangles take more faces than a 3D
+  effect draws, the object draws without its graphics and commands refuse them.
 - On Revolve a graphic lies on the swept side, which has one face (Front), unrolled flat. X runs around the axis:
   the angle from the middle of the side times the profile's distance from the axis at that point, so a graphic
   keeps its size at every distance and wraps farther around the axis where the profile comes nearer to it. Y runs
@@ -431,9 +442,9 @@ These rules are VectorCraft's own:
   past either limit. A loaded file
   draws the object without a graphic past the first limit, and without all of its graphics past the second.
 - A hollow Extrude & Bevel has no caps, so its graphics are not drawn until Cap is turned on again, and
-  `threeD.mapGraphic` refuses to map a new one onto it. Changing the type to Inflate drops the graphics, and
-  changing between Extrude, Plane and Revolve keeps them, except that Plane and Revolve drop the graphics on the
-  back cap; on Revolve the front's graphics go on its side.
+  `threeD.mapGraphic` refuses to map a new one onto it. Changing between Extrude, Plane, Revolve and Inflate keeps
+  the graphics, except that Plane and Revolve drop the graphics on the back cap; on Revolve the front's graphics go
+  on its side, and on Inflate they go on the puffed faces.
 - `effect.apply` and `effect.setParams` refuse a graphic that names a symbol the document does not have, unless
   the effect already holds a graphic of that symbol. A graphic whose symbol is deleted is no longer drawn. Renaming a symbol renames it in the graphics that use it,
   in the layers, in the art of symbols, patterns, graph designs, brushes and opacity masks, and in graphic
@@ -447,7 +458,7 @@ These rules are VectorCraft's own:
 uses: `rotationX`, `rotationY`, `rotationZ`, `perspectiveAngle` (degrees), `shade`, `lightColor` (`#rrggbb`, default `#ffffff`), `lightIntensity` (%), `lightRotation`,
 `lightHeight` (degrees), `lightSoftness` (%), `ambient` (%, to 200), `lightBehind`. Lengths are points and scale with the object (Scale Strokes & Effects).
 Commands validate the shape and the parameters before the document changes. All four also take `lights`: null (the default, use the earlier single-light fields), or an array of one to ten objects. Each object takes `color` (opaque `#rrggbb`, white), `intensity` (0..100%, 80), `rotation` (-180..180 degrees, 125.26), `height` (0..90 degrees, 30), `softness` (0..100%, 0), and `behind` (boolean, false). Omitted settings use those defaults. An explicit list replaces the earlier single light; `ambient` and `shade` remain shared. Set `lights` to null to return to the single-light fields. Invalid lists, counts, keys and values are rejected before editing; malformed loaded lists fall back to the earlier light safely. All four take `shadow` (boolean, false), `shadowPosition` (`behind` or `below`), `shadowDistance` (0..100%, 0) and `shadowBounds` (10..400%, 100) ([Shadows](#shadows)); values out of range are rejected before editing.
-`threeD.extrude`, `threeD.rotate` and `threeD.revolve` take `graphics` ([Graphics](#graphics)): an array of up to 64 objects, each
+`threeD.extrude`, `threeD.rotate`, `threeD.revolve` and `threeD.inflate` take `graphics` ([Graphics](#graphics)): an array of up to 64 objects, each
 with `symbol` (the name of a document symbol), `face` (`front` or `back`, default `front`; `threeD.rotate` and
 `threeD.revolve` take `front` only), `x` and `y` (points, default 0), `scale` (1..10000%, default 100) and `rotation` (-360..360 degrees,
 default 0). Other keys, values out of range and graphics on the other 3D effects are rejected before editing.
@@ -459,10 +470,10 @@ and [Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effe
 pages, and the archived Extrude & Bevel option list (depth 0–2,000, cap on/off, bevel height, bevel extent in or
 out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 
-- **Materials** (base and Adobe Substance), graphics on Inflate and on Extrude & Bevel's walls and bevels, soft
+- **Materials** (base and Adobe Substance), graphics on Extrude & Bevel's walls and bevels, soft
   shadows, shadows of lights after the first, and **ray-traced rendering** are not built: shading uses directional
   lights, in the paint of the fill or stroke the solid is built for ([Fills and strokes](#fills-and-strokes)), and
-  the shadow is hard-edged ([Shadows](#shadows)). Graphics map onto planar faces and Revolve's side only
+  the shadow is hard-edged ([Shadows](#shadows)). Graphics map onto planar faces, Revolve's side and Inflate's puffed faces only
   ([Graphics](#graphics)).
 - The bevel shapes and their names are our own; custom bevel paths are not supported.
 - Visibility is a painter's algorithm: faces of a closed solid turned away are left out, and the rest are drawn

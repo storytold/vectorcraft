@@ -438,12 +438,16 @@ fn the_materials_tab_lists_the_graphics_and_maps_one_in_one_undo_step() {
     let nodes = controls(&mut app, &ctx);
     named(&nodes, "Remove Graphic");
     named(&nodes, "Scale");
-    // Inflate takes no graphics.
+    // Inflate keeps the graphic and lists it with its face and settings.
     set_type(&mut app, "inflate").unwrap();
+    assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
+    let nodes = controls(&mut app, &ctx);
+    named(&nodes, "Remove Graphic");
+    named(&nodes, "Scale");
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
     out.textures_delta.clear();
     let text = crate::tests_labels::shapes_text(&out);
-    assert!(text.contains("Graphics map onto the Plane, Extrude and Revolve object types"), "{text}");
+    assert!(text.contains("Face") && !text.contains("Graphics map onto"), "{text}");
 }
 
 #[test]

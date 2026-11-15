@@ -211,6 +211,8 @@ impl<'a> Builder<'a> {
             side: false,
             away: behind,
             end: None,
+            surface: None,
+            membrane: None,
             plane,
             #[cfg(test)]
             view,

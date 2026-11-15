@@ -1,6 +1,6 @@
 //! The 3D and Materials panel's Materials tab: the document's Graphics (its symbols) as thumbnails,
-//! Add as Single Graphic, and the graphics mapped onto the selected 3D object (its planar faces, or
-//! Revolve's side) with their face, position, size and turn. Picking a thumbnail maps that graphic
+//! Add as Single Graphic, and the graphics mapped onto the selected 3D object (its planar faces,
+//! Revolve's side, or Inflate's puffed faces) with their face, position, size and turn. Picking a thumbnail maps that graphic
 //! onto the selected objects (`threeD.mapGraphic`); art dropped on the thumbnails becomes a graphic
 //! (`threeD.addGraphic`). Editing a mapped graphic changes the effect's `graphics` parameter, which
 //! the panel sends as it sends every other setting.
@@ -96,7 +96,7 @@ pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     }
     ui.add_space(10.0);
     if !takes {
-        dim_label(ui, tl!("Graphics map onto the Plane, Extrude and Revolve object types."));
+        dim_label(ui, tl!("Graphics map onto the Plane, Extrude, Revolve and Inflate object types."));
         return;
     }
     let raw = d.fields.get(GRAPHICS).cloned().unwrap_or(Value::Null);
