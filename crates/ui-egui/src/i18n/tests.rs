@@ -2479,7 +2479,11 @@ fn messages_with_joined_values_translate_whole() {
         ),
         ("Sent “Poster” to the default printer".to_string(), vec!["“Poster”"], vec!["Sent", "default"]),
         ("Sent “Poster” to Office Laser".to_string(), vec!["“Poster”", "Office Laser"], vec!["Sent"]),
-        ("Sent “Poster” to Office Laser (job 12)".to_string(), vec!["“Poster”", "Office Laser", "(job 12)"], vec!["Sent"]),
+        (
+            "Sent “Poster” to Office Laser. The spooler replied: job 12".to_string(),
+            vec!["“Poster”", "Office Laser", "job 12"],
+            vec!["Sent", "spooler", "replied"],
+        ),
         (
             "raster effects on object 7 (Logo): requested 300.0 ppi, achieved 72.0 ppi due to the 64 million pixel cap".to_string(),
             vec!["7", "Logo", "300.0", "72.0"],
