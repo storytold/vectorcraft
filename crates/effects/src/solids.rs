@@ -625,7 +625,9 @@ pub fn validate_three_d_params(id: &str, p: &Value) -> Result<(), String> {
 /// blend mode (so overlapping facets don't add up their transparency). Under colored lights a solid
 /// color with smooth facets is one composite of all its facets ([`composites_facets`]) unless
 /// `faces`: then each facet is a face of its own, as in a gradient, so the faces can go in one order
-/// with the faces of other solids.
+/// with the faces of other solids. Under colored lights a gradient with transparent stops is drawn
+/// opaque under one mask of its transparency, placed once on all the facets when it has no
+/// placement of its own ([`crate::lighting::opaque_surface_paint`]).
 fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: BlendMode, colored: bool, faces: bool) -> Node {
     if !faces && composites_facets(&facets, paint, colored) {
         let mut group = crate::lighting::solid_surface(n.id, &facets, paint);
@@ -634,7 +636,7 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         return group;
     }
     // Preserve existing white-light paints and alpha composition exactly.
-    let (opaque, mask) = if colored { crate::lighting::opaque_paint(paint) } else { (paint.clone(), None) };
+    let (opaque, mask) = if colored { crate::lighting::opaque_surface_paint(paint, || facets_bounds(&facets)) } else { (paint.clone(), None) };
     let paint = &opaque;
     let children = facets
         .into_iter()
@@ -669,6 +671,11 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         group.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(coverage, true)));
     }
     group
+}
+
+/// The bounds of every facet of `facets` together (`Rect::ZERO` when none has any).
+pub(crate) fn facets_bounds(facets: &[Facet]) -> Rect {
+    facets.iter().filter_map(|f| f.path().bounds()).reduce(|a, c| a.union(c)).unwrap_or(Rect::ZERO)
 }
 
 /// The width of the stroke of a facet's own paint that closes the seams between `face` and its

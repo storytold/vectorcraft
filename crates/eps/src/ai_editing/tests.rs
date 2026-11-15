@@ -10810,6 +10810,129 @@ fn unreachable_envelope() -> ! {
     panic!("not an envelope")
 }
 
+/// `doc` with its first artboard 20,000.5 points wide: it is written on a large canvas, at 1/10.
+fn on_large_canvas(mut doc: Document) -> Document {
+    doc.artboards[0].rect = Rect::new(0.0, 0.0, 20_000.5, 100.0);
+    doc
+}
+
+/// A route an envelope was read back by: its name, the envelope and the reader's notes.
+type EnvelopeRoute = (&'static str, Node, Vec<String>);
+
+/// The envelope `doc` holds alone on its first layer, read back from the editing data alone and
+/// beside a page that draws as `doc` does ([`read_with_page`]); and the writer's warnings.
+fn envelope_both_routes(doc: &Document) -> (Vec<EnvelopeRoute>, Vec<String>) {
+    let (alone, warnings, notes) = envelope_back(doc);
+    let (paged, _, page_notes) = read_with_page(doc);
+    assert_eq!(paged.len(), 1, "{paged:#?} {page_notes:?}");
+    (vec![("alone", alone, notes), ("beside its page", (*paged[0]).clone(), page_notes)], warnings)
+}
+
+/// On a large canvas, a warp, a mesh and a top object envelope, with Edit Contents off and on, are
+/// written live at 1/10 and open as the same envelope at their size, from the editing data alone
+/// and beside the page: contents, Fidelity, Edit Contents, Envelope Options, shape and name as
+/// saved. Saved again as they opened, they open as the same envelope again.
+#[test]
+fn large_canvas_envelope_kinds_round_trip_on_both_ai_routes() {
+    // GUARDS: an envelope on a large canvas was written as its drawn art, with a warning.
+    use vectorcraft_doc::live::EnvelopeOptions;
+    for (name, kind) in live_envelope_kinds() {
+        for editing in [false, true] {
+            let what = format!("{name}, editing {editing}");
+            let doc = on_large_canvas(envelope_doc(kind.clone(), 50.0, editing, EnvelopeOptions::NEW));
+            let text = program(&doc);
+            assert!(text.contains("%AI24_LargeCanvasScale: 10\n") && text.contains("AIDeformOptionsKey"), "{what}");
+            let (routes, warnings) = envelope_both_routes(&doc);
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}: {warnings:?}");
+            for (route, back, notes) in routes {
+                let what = format!("{what}, {route}");
+                assert!(!notes.iter().any(|w| w == crate::import::ENVELOPE_DRAWN), "{what}: {notes:?}");
+                let NodeKind::Envelope { content, kind: got, fidelity, editing: e, options, frame } = &back.kind else {
+                    panic!("{what}: {back:#?} {notes:?}")
+                };
+                assert_eq!((*fidelity, *e, *options, **frame), (50.0, editing, EnvelopeOptions::NEW, Affine::IDENTITY), "{what}");
+                assert!(same_envelope_kind(&kind, got), "{what}: {got:?}");
+                assert_eq!(back.name.as_deref(), Some("Bent"), "{what}");
+                let colors: Vec<Option<Color>> = content.iter().map(|c| c.appearance.fill_paint().color()).collect();
+                assert_eq!(colors, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{what}");
+                let b = content.iter().filter_map(|c| c.visual_bounds()).reduce(|a, b| a.union(b)).unwrap();
+                let want = Rect::new(40.0, 20.0, 160.0, 80.0);
+                assert!([b.x0 - want.x0, b.y0 - want.y0, b.x1 - want.x1, b.y1 - want.y1].iter().all(|d| d.abs() < 1e-2), "{what}: {b:?}");
+            }
+            let (back, _, _) = envelope_back(&doc);
+            let mut again = on_large_canvas(Document::new(200.0, 100.0));
+            let layer = again.layers[0].id;
+            again.insert(Some(layer), usize::MAX, back).unwrap();
+            let (twice, warnings, notes) = envelope_back(&again);
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}, saved again: {warnings:?}");
+            let NodeKind::Envelope { kind: twice, .. } = &twice.kind else { panic!("{what}, saved again: {twice:#?} {notes:?}") };
+            assert!(same_envelope_kind(&kind, twice), "{what}, saved again: {twice:?}");
+        }
+    }
+}
+
+/// On a large canvas, envelopes with Distort Appearance whose stroked contents (at fractional places)
+/// map from their bounds with their strokes keep that margin, the contents' 8-point strokes and the
+/// Distort Linear Gradients and Distort Pattern Fills switches, from the editing data alone and
+/// beside the page.
+#[test]
+fn large_canvas_envelope_stroke_margin_round_trips_on_both_ai_routes() {
+    // GUARDS: read from the editing data alone, the saved size was compared at 1/10 with contents at
+    // their size, and the contents' strokes came back at 1/10: the margin was lost.
+    use vectorcraft_doc::live::{EnvelopeOptions, envelope_content_boxes, envelope_stroke_margin};
+    for (name, kind) in live_envelope_kinds() {
+        for editing in [false, true] {
+            let what = format!("{name}, editing {editing}");
+            let mut doc = Document::new(200.0, 100.0);
+            let switches = EnvelopeOptions { distort_linear_gradients: editing, distort_pattern_fills: !editing, ..EnvelopeOptions::NEW };
+            let mut envelope = envelope_node(&mut doc, kind.clone(), 50.0, editing, switches);
+            let NodeKind::Envelope { content, options, .. } = &mut envelope.kind else { unreachable_envelope() };
+            for c in content.iter_mut() {
+                let c = Arc::make_mut(c);
+                c.transform(Affine::translate((0.25, 0.375)), true);
+                let fill = c.appearance.fill_paint();
+                c.appearance = Appearance::basic(fill, solid(Color::BLACK), 8.0).into();
+            }
+            let (stroked, plain) = envelope_content_boxes(content, Affine::IDENTITY).unwrap();
+            options.bounds_margin = envelope_stroke_margin(stroked, plain).unwrap();
+            let want = *options;
+            assert!(want.bounds_margin.iter().all(|m| *m > 0.0), "{what}: {want:?}");
+            let layer = doc.layers[0].id;
+            doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+            let (routes, warnings) = envelope_both_routes(&on_large_canvas(doc));
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}: {warnings:?}");
+            for (route, back, notes) in routes {
+                let what = format!("{what}, {route}");
+                let NodeKind::Envelope { content, options, .. } = &back.kind else { panic!("{what}: {back:#?} {notes:?}") };
+                let margin = options.bounds_margin;
+                assert!(margin.iter().zip(want.bounds_margin).all(|(a, b)| (a - b).abs() < 1e-4), "{what}: {margin:?} {want:?}");
+                assert_eq!(EnvelopeOptions { bounds_margin: want.bounds_margin, ..*options }, want, "{what}");
+                let widths: Vec<f64> = content.iter().filter_map(|c| c.appearance.stroke().map(|s| s.width)).collect();
+                assert!(widths.len() == 2 && widths.iter().all(|w| (w - 8.0).abs() < 1e-4), "{what}: {widths:?}");
+            }
+        }
+    }
+}
+
+/// On a large canvas a path's stroke weight and dashes, written at 1/10, come back at their size
+/// from the editing data alone.
+#[test]
+fn a_large_canvas_path_keeps_its_stroke_weight_and_dashes_read_alone() {
+    // GUARDS: read from the editing data alone, the stroke's weight, dashes and dash offset came
+    // back at 1/10 while the path came back at its size.
+    let mut doc = on_large_canvas(Document::new(200.0, 100.0));
+    let mut n =
+        Node::path(doc.alloc_id(), shapes::line((20.0, 50.0).into(), (180.0, 50.0).into()), Appearance::basic(Paint::None, solid(Color::BLACK), 6.0));
+    n.appearance.stroke_mut().unwrap().dash = Some(Dash { pattern: vec![12.0, 4.5], offset: 3.0, align_corners: false });
+    put(&mut doc, n);
+    let back = read_back(&doc);
+    let st = back.layers[0].children().unwrap()[0].appearance.stroke().cloned().unwrap();
+    assert!((st.width - 6.0).abs() < 1e-6, "{st:?}");
+    let dash = st.dash.unwrap();
+    assert!(dash.pattern.len() == 2 && (dash.pattern[0] - 12.0).abs() < 1e-6 && (dash.pattern[1] - 4.5).abs() < 1e-6, "{dash:?}");
+    assert!((dash.offset - 3.0).abs() < 1e-6, "{dash:?}");
+}
+
 /// The record is written in the order the reader reads it: on `%_` lines the group holding the
 /// grid, its dictionary with the options, the contents' block and the kind, then the distorted art
 /// on plain lines and the plugin's `XP`. While the contents are edited, the group holds them and
@@ -10923,7 +11046,10 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
         ("fractional fidelity", fractional),
         ("margin kept", margin_kept),
     ];
-    for (what, doc) in cases {
+    // On a large canvas too.
+    let large: Vec<(String, Document)> =
+        cases.iter().map(|(what, doc)| (format!("{what}, on a large canvas"), on_large_canvas(doc.clone()))).collect();
+    for (what, doc) in cases.into_iter().map(|(what, doc)| (what.to_string(), doc)).chain(large) {
         let text = program(&doc);
         assert!(!text.contains("AIDeformOptionsKey"), "{what}: {text}");
         let (back, warnings, _) = envelope_back(&doc);

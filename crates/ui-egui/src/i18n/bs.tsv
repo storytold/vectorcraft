@@ -1025,6 +1025,7 @@
 	Change Panel Layout	Promijeni raspored panela
 	Close Panel	Zatvori panel
 	Collapse Panel Group	Skupi grupu panela
+	Cycle Display Sizes	Mijenjaj veličine prikaza
 	Move Panel	Pomakni panel
 	Group with	Grupiši sa
 	Resize panels	Promijeni veličinu panela
@@ -1616,6 +1617,8 @@ lighting	Light	Svjetlo
 	Insert Aki Left	Umetni aki lijevo
 	Insert Aki Right	Umetni aki desno
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Podesi vodoravni položaj dijakritika
+	Adjust Vertical Diacritic Position	Podesi okomiti položaj dijakritika
 	Character Direction	Smjer znakova
 	Digits	Cifre
 	Arabic	Arapski
@@ -2918,6 +2921,7 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Prikaži glatki kotač boja
 	Show segmented color wheel	Prikaži segmentirani kotač boja
 	Show color bars	Prikaži trake boja
+	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
 	Limit to Library:	Ograniči na biblioteku:
@@ -3606,6 +3610,8 @@ theme	Appearance	Izgled
 	Create Graph	Kreiraj grafikon
 	Graph Data	Podaci grafikona
 	Graph Type	Vrsta grafikona
+	Graph Type…	Vrsta grafikona…
+	Graph Data…	Podaci grafikona…
 	Graph Options	Opcije grafikona
 	Left Axis	Lijeva osa
 	Right Axis	Desna osa
@@ -7060,4 +7066,21 @@ shape	Open	Otvoren
 	Nest Shapes…	Slaganje oblika…
 	Nest Shapes	Slaganje oblika
 	Roll	Rolna
+	Packaging Tools	Alati za ambalažu
+	Fold Lines	Linije savijanja
+	Make Cut Line	Napravi liniju rezanja
+	Make Crease Line	Napravi liniju bigovanja
+	Make Partial Cut Line	Napravi liniju djelimičnog rezanja
+	Make Perforation Line	Napravi liniju perforacije
+	Make Fold Line	Napravi liniju savijanja
+	Role Swatches…	Uzorci boja za vrste linija…
+	Role Swatches	Uzorci boja za vrste linija
+	Role	Vrsta linije
+	Cut Line	Linija rezanja
+	Crease Line	Linija bigovanja
+	Partial Cut Line	Linija djelimičnog rezanja
+	Perforation Line	Linija perforacije
+	No objects are selected.	Nijedan objekat nije odabran.
+	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
+	Remove Fold Line Role	Ukloni vrstu linije
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
