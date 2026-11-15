@@ -3534,6 +3534,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Byt plats på fyllning och kontur (Shift+X)
 	Swap start and end arrowheads	Byt plats på start- och slutpilspets
 	Swap the selected object for the file, keeping its place and transform	Ersätt det markerade objektet med filen och behåll dess placering och transformering
+	Show Import Options	Visa importalternativ
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Fråga efter importalternativ för varje PDF-, DXF- eller textfil innan den placeras; av: använd de senast valda alternativen
 	Stylistic Alternates	Stilistiska alternativ
 	Swash	Swash
 	Swatch Conflict	Färgrutekonflikt

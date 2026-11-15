@@ -7007,6 +7007,23 @@ with `pointer_gesture` (a click places at 100% with the top-left corner there, a
 `file.place.info` refuse, of the keys each one takes, a `link`, `replace` or `template` that is not true or false and a `thumbnail` that is not a
 number, naming the key, and place nothing; null is the same as leaving the key out.
 
+In the app, `file.place` asks for a file's import options before placing it: a text file without `text` (Text Import
+Options), a DXF drawing without `dxf` (DXF Import Options), and a PDF, `.ai` or `.ait` file with several pages or a
+password and no `page` (Place PDF). `showImportOptions: false` places such a file without asking, with the options
+last confirmed in its dialog: the text options, and the DXF fit, lineweight, centering and layer choices with the
+drawing at 1:1 in its own unit. A PDF is placed on page 1 (or `page`) and its crop box, and an encrypted PDF given no
+`password` still asks for the password. A `showImportOptions` that is not true or false is refused, and nothing is placed. The
+Place dialog (File › Place, or `file.place {paths}`) has a Show Import Options checkbox after Link, Template and
+Replace ([Place multiple files in a document](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/place-multiple-files-in-a-document.html)).
+It is on by default and saved with the preferences. On, each file that has import options asks for them before it is
+placed, also each file of the place cursor when it is clicked or dragged (Cancel leaves that file unplaced). A click on
+a PDF or DXF file places it as its options place it with `at` at the center of the box the click gave (a PDF's page at
+its own size, a DXF drawing at its scale, or on the artboard there when fitted or not centered), and a drag to any other
+size fits it into the dragged box (a drag to exactly the file's queued size gives the place tool the same box as a click and
+is placed as one). Off, each
+file is placed with the options last confirmed for its format. The default, and the options a file is placed with
+when the checkbox is off, are VectorCraft's own choices.
+
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/photo.jpg","at":[300,200]}}}
 {"name":"run_command","arguments":{"command":"file.place","params":{"name":"logo.svg","dataBase64":"PHN2Zy…","rect":[0,0,100,100]}}}

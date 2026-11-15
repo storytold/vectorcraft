@@ -2574,6 +2574,8 @@ digits	Malayalam	Malayalam
 	Keep a link to an image file instead of only embedding it	Pertahankan tautan ke file gambar alih-alih hanya menyematkannya
 	Place onto a new locked, dimmed template layer below the current layer	Tempatkan pada lapisan templat baru yang terkunci dan diredupkan di bawah lapisan saat ini
 	Swap the selected object for the file, keeping its place and transform	Tukar objek terpilih dengan file, mempertahankan tempat dan transformasinya
+	Show Import Options	Tampilkan Opsi Impor
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Tanyakan opsi impor setiap file PDF, DXF, atau teks sebelum menempatkannya; nonaktif: gunakan opsi yang terakhir dipilih
 	On: one locked object showing the document, updated when it changes.	Aktif: satu objek terkunci yang menampilkan dokumen, diperbarui saat dokumen berubah.
 	Off: an editable copy of its art, embedded in this document.	Nonaktif: salinan karya seninya yang dapat diedit, tersemat dalam dokumen ini.
 	Images: link to the file instead of only embedding it.	Gambar: tautkan ke file alih-alih hanya menyematkannya.

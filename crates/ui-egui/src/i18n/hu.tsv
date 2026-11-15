@@ -4300,6 +4300,8 @@ mark-style	Japanese	Japán
 	Swap Fill and Stroke (Shift+X)	Kitöltés és körvonal cseréje (Shift+X)
 	Swap start and end arrowheads	Kezdő és záró nyílhegy cseréje
 	Swap the selected object for the file, keeping its place and transform	A kijelölt objektum cseréje a fájlra, a helye és az átalakítása megtartásával
+	Show Import Options	Importálási beállítások megjelenítése
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Elhelyezés előtt rákérdez minden PDF-, DXF- vagy szövegfájl importálási beállításaira; kikapcsolva a legutóbb választott beállításokat használja
 	Stylistic Alternates	Stilisztikai változatok
 	Swash	Cifra változatok
 	Swatch Conflict	Színminta-ütközés
