@@ -1302,15 +1302,16 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     if vectorcraft_plugins::safe_mode::active() {
         // A dimension selected with the art it measures is left as it is, and so is the art of a graph design in a
         // series, unless an effect of a group around it, the selected graph or series group or one inside it, draws it
-        // with that group.
+        // with that group: an effect of the group's own, or a raster effect of one of its fills or strokes (the group
+        // then becomes an image of all of it).
         let mut d = super::dimension::without_kept(&s.doc()?.doc, &roots);
+        let draws_members = |g: &Node| g.appearance.effects.iter().any(|e| e.visible) || !rasterfx::raster_fx(g).is_empty();
         let designs: Vec<NodeId> = super::appearance::design_art_in(&d, &roots)
             .into_iter()
             .filter(|art| {
                 !d.ancestry(*art).is_some_and(|up| {
                     let from = up.iter().position(|a| roots.contains(a)).unwrap_or(up.len());
-                    up.get(from..up.len().saturating_sub(1))
-                        .is_some_and(|around| around.iter().filter_map(|a| d.node(*a)).any(|g| g.appearance.effects.iter().any(|e| e.visible)))
+                    up.get(from..up.len().saturating_sub(1)).is_some_and(|around| around.iter().filter_map(|a| d.node(*a)).any(draws_members))
                 })
             })
             .collect();

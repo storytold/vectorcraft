@@ -507,6 +507,23 @@ fn expand_appearance_in_safe_mode_checks_design_art_its_series_group_draws() {
     let err = s.execute("effect.expandAppearance", &json!({})).unwrap_err().to_string();
     safe_mode::set_active(None);
     assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
+    // With a Gaussian Blur on a fill of the art's series group instead, expanding the group makes an image of it, art included.
+    let blurred_fill = {
+        let t = s.execute("shape.rectangle", &json!({"x": 700, "y": 40, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [t], "item": 0, "params": {"radius": 2}})).unwrap();
+        s.doc().unwrap().doc.node(vectorcraft_engine::doc::NodeId(t)).unwrap().appearance.items[0].clone()
+    };
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let g = d.node_mut(art_series).unwrap();
+        g.appearance.effects.clear();
+        g.appearance.items.push(blurred_fill);
+    }
+    s.execute("select.set", &json!({"ids": [graph]})).unwrap();
+    safe_mode::set_active(Some(safe_mode::Source::Flag));
+    let err = s.execute("effect.expandAppearance", &json!({})).unwrap_err().to_string();
+    safe_mode::set_active(None);
+    assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
 }
 
 /// In Safe Mode, a plug-in effect on a dimension selected with the art it measures does not stop
