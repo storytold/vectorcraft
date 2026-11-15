@@ -166,6 +166,30 @@ impl PointSnap {
         }
     }
 
+    /// A Scale-tool pointer: evaluate continuous contacts at the actual solver-placed grab.
+    /// Geometry stays lazy so OFF, pixels, grid and absent targets keep their existing route.
+    pub(crate) fn snap_scale_pointer(
+        &self,
+        cx: &ToolContext,
+        p: Point,
+        along: impl FnOnce() -> Option<Vec2>,
+        place: impl Fn(Point) -> Point,
+    ) -> (Point, Vec<Overlay>) {
+        if !cx.snap_to_stroke_edges || !cx.smart_guides || cx.snaps_to_pixel(PixelOp::Scaling) || cx.snap_to_grid {
+            return self.snap(cx, p);
+        }
+        let Some((targets, tol)) = &self.targets else { return self.snap(cx, p) };
+        let actual = place(p);
+        targets.snap_scaled_point(p, actual, along(), cx.tol(*tol), |contact| {
+            let placed = place(contact);
+            contact.x.is_finite()
+                && contact.y.is_finite()
+                && placed.x.is_finite()
+                && placed.y.is_finite()
+                && placed.distance_squared(contact) <= 1e-14
+        })
+    }
+
     /// Snap a bounding-box resize ([`Targets::snap_scale`]) as [`Self::snap`] snaps a point. With
     /// Snap to Pixel on for scaling, the corner or side the handle moves lines up with whole
     /// pixels, and with Snap to Grid on it lines up with the nearest gridline, however far that

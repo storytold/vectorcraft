@@ -692,10 +692,35 @@ impl Targets {
     /// that way into line with the nearest target; else, before lining up, it lands on a
     /// construction guide through it, where a target's line crosses the guide if one does nearby.
     pub fn snap_from(&self, p: Point, from: Option<&Leave>, tol: f64) -> (Point, Vec<Overlay>) {
+        self.snap_from_inner(p, from, tol, true)
+    }
+
+    /// Preserve legacy point/segment priority, then contact only a solver-placed Scale grab.
+    pub(crate) fn snap_scaled_point(
+        &self,
+        raw: Point,
+        actual: Point,
+        along: Option<Vec2>,
+        tol: f64,
+        valid_contact: impl Fn(Point) -> bool,
+    ) -> (Point, Vec<Overlay>) {
+        if self.nearest_point(raw, tol).is_some() || self.crossing(raw, tol).is_some() || self.on_segment(raw, tol).is_some() {
+            return self.snap_from_inner(raw, None, tol, false);
+        }
+        if let Some((contact, guides)) = self.snap_stroke_point_with(raw, actual, &[], along, tol)
+            && valid_contact(contact)
+        {
+            return (contact, guides);
+        }
+        // A missed or infeasible constrained contact must not fall back to a free stroke snap.
+        self.snap_from_inner(raw, None, tol, false)
+    }
+
+    fn snap_from_inner(&self, p: Point, from: Option<&Leave>, tol: f64, stroke_edges: bool) -> (Point, Vec<Overlay>) {
         if let Some(f) = from
             && let Some(q) = f.constrained(p)
         {
-            if let Some((q, kind)) = self.stroke_line(f.at, q - f.at, q, tol, true) {
+            if stroke_edges && let Some((q, kind)) = self.stroke_line(f.at, q - f.at, q, tol, true) {
                 return (q, self.label(q, kind.label()).into_iter().collect());
             }
             return match self.slide(f.at, q - f.at, q, tol, true) {
@@ -717,7 +742,8 @@ impl Targets {
         if let Some(q) = self.on_segment(p, tol) {
             return (q, self.label(q, Kind::Edge.label()).into_iter().collect());
         }
-        if self.stroke_points
+        if stroke_edges
+            && self.stroke_points
             && let Some(q) = self.stroke_contours.nearest(p, tol)
         {
             return (q, self.label(q, "stroke edge").into_iter().collect());
@@ -730,7 +756,7 @@ impl Targets {
             .or_else(|| self.on_angled(p, tol))
         {
             let construction = |q: Point| Overlay::Line { a: at, b: q, color: self.style.color, dashed: false };
-            if let Some((q, kind)) = self.stroke_line(at, dir, q, tol, false) {
+            if stroke_edges && let Some((q, kind)) = self.stroke_line(at, dir, q, tol, false) {
                 return (q, std::iter::once(construction(q)).chain(self.label(q, kind.label())).collect());
             }
             return match self.slide(at, dir, q, tol, false) {

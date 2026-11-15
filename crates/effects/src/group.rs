@@ -359,6 +359,7 @@ pub fn compound_shape_art(doc: Option<&Document>, n: &Node, hook: Option<Outline
 fn compound_shape_art_in(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNodes) -> Option<Node> {
     let area = compound_shape_area_in(doc, n, hook, nodes)?;
     let mut art = Node::path(n.id, area, Appearance { items: n.appearance.items.clone(), ..Default::default() });
+    crate::bake::carry_query_origin(n, &mut art);
     (art.opacity, art.blend) = (n.opacity, n.blend);
     Some(art)
 }

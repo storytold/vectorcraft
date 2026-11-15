@@ -1292,3 +1292,53 @@ fn stroke_handle_contact_keeps_bleed_offset_constraint_and_legacy_priority() {
     let targets = Targets::collect(&d, &[], None).with_stroke_edges(&off, &[], None);
     assert!(targets.snap_stroke_point_with(at, at, &[offset], along, 4.0).is_none());
 }
+
+/// A compound SHAPE keeps its own stroke targets when an unpainted parent
+/// materializes it as a Pathfinder member; ordinary rendered art stays the same.
+#[test]
+fn stroke_review_nested_compound_origin() {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, Effect};
+
+    let probe = Point::new(207.0, 140.0);
+    for add_enabled in [false, true] {
+        let mut d = Document::new(500.0, 500.0);
+        let layer = d.layers[0].id;
+        let (back, front, inner, outer) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let rectangle = |id, rect| Arc::new(Node::path(id, vectorcraft_geom::shapes::rectangle(rect), Appearance::default()));
+        let mut compound =
+            Node::group(inner, vec![rectangle(back, Rect::new(100.0, 100.0, 175.0, 200.0)), rectangle(front, Rect::new(150.0, 100.0, 200.0, 200.0))]);
+        compound.extras_mut().compound_shape = true;
+        compound.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 10.0).into();
+        let mut parent = Node::group(outer, vec![Arc::new(compound)]);
+        parent.appearance.effects.push(Effect { id: "pathfinder.add".into(), params: serde_json::json!({}), visible: add_enabled });
+        d.insert(Some(layer), 0, parent).unwrap();
+        assert!(d.node(inner).unwrap().is_compound_shape(), "use the compound-shape materializer, not a compound path");
+        assert!(d.node(outer).unwrap().appearance.items.is_empty(), "the parent must not replace the child's own paint");
+        assert_eq!(vectorcraft_effects::has_pathfinder(d.node(outer).unwrap()), add_enabled);
+        let original = d.clone();
+        if add_enabled {
+            // The ordinary Pathfinder result is already painted before the fix;
+            // missing query metadata must not be mistaken for missing artwork.
+            let art = vectorcraft_effects::pathfinder_children(Some(&d), d.node(outer).unwrap(), None).unwrap();
+            assert_eq!(art.len(), 1);
+            assert_eq!(art[0].geometric_bounds(), Some(Rect::new(100.0, 100.0, 200.0, 200.0)));
+            assert_eq!(art[0].appearance.stroke().unwrap().width, 10.0);
+            assert!(art[0].extras().query_origin.0.is_none(), "ordinary evaluation does not invent a query origin");
+        }
+        let (selection, paint) = (Selection::default(), paint());
+        let off = ToolContext { snap_to_stroke_edges: false, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+        let off_targets = Targets::collect(&d, &[], None).with_stroke_edges(&off, &[], None);
+        assert_eq!(off_targets.snap_point(probe, 4.0).0, probe, "legacy anchors/alignment do not explain the stroke contact");
+        let on = ToolContext { snap_to_stroke_edges: true, snapping_tolerance: 4.0, ..cx(&d, &selection, &paint) };
+        let excluded = Targets::collect(&d, &[inner], None).with_stroke_edges(&on, &[inner], None);
+        assert_eq!(excluded.snap_point(probe, 4.0).0, probe, "excluding the inner paint owner must remove its outer stroke edge");
+        let targets = Targets::collect(&d, &[], None).with_stroke_edges(&on, &[], None);
+        let snapped = targets.snap_point(probe, 4.0).0;
+        assert_eq!(d, original, "query evaluation must leave the actual source document intact");
+        for layer in &d.layers {
+            layer.walk(&mut |n| assert!(n.extras().query_origin.0.is_none(), "source nodes keep no transient query metadata"));
+        }
+        assert_eq!(snapped, Point::new(205.0, 140.0), "outer Pathfinder Add enabled={add_enabled}");
+    }
+}

@@ -263,6 +263,34 @@ impl TransformTool {
         }
     }
 
+    /// Keep new Scale contacts on the path its solver can actually place the grabbed point on.
+    fn snap_pointer(&self, cx: &ToolContext, d: Drag, ev: &PointerEvent) -> (Point, Vec<Overlay>) {
+        let Some(snap) = &self.snap else { return (ev.pos, vec![]) };
+        if self.kind != TransformKind::Scale {
+            return snap.snap(cx, ev.pos);
+        }
+        let angle = d.angle_for(ev.mods.alt, ev.backquote);
+        snap.snap_scale_pointer(
+            cx,
+            ev.pos,
+            || {
+                let direction = d.pick - d.origin;
+                if ev.mods.shift {
+                    return Some(direction);
+                }
+                let frame = OrientedBox { angle, rect: Rect::ZERO }.to_doc();
+                let local = frame.inverse() * direction.to_point();
+                match (local.x.abs() <= 1e-6, local.y.abs() <= 1e-6) {
+                    (true, true) => Some(Vec2::ZERO),
+                    (true, false) => Some((frame * Point::new(0.0, 1.0)).to_vec2()),
+                    (false, true) => Some((frame * Point::new(1.0, 0.0)).to_vec2()),
+                    (false, false) => None,
+                }
+            },
+            |p| self.solve(angle, d.origin, d.pick, p, ev.mods.shift, d.bounds).0 * d.pick,
+        )
+    }
+
     /// Ends the drag, its snapping and readouts with it.
     fn end_drag(&mut self) -> Option<Drag> {
         self.measure = None;
@@ -332,7 +360,7 @@ impl Tool for TransformTool {
                         Some(if self.kind == TransformKind::Scale { PointSnap::scaling(cx, targets) } else { PointSnap::moving(cx, targets) });
                     out.push(Action::Begin(self.kind.label().into()));
                 }
-                let (p, guides) = self.snap.as_ref().map_or((p, vec![]), |s| s.snap(cx, p));
+                let (p, guides) = self.snap_pointer(cx, d, ev);
                 self.hover = guides;
                 let (m, a, b) = self.solve(d.angle_for(ev.mods.alt, ev.backquote), d.origin, d.pick, p, ev.mods.shift, d.bounds);
                 (d.last, d.pointer, d.shift) = (m, p, ev.mods.shift);
@@ -779,5 +807,242 @@ mod tests {
         assert!(t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0)).is_empty());
         assert!(t.pointer(&cx, &ev(PointerKind::Drag, 250.0, 150.0)).is_empty());
         assert_eq!(t.cursor(&cx, Point::ZERO, Mods::default()), Cursor::NotAllowed);
+    }
+    /// A free stroke snap must not turn into false feedback after uniform-scale projection.
+    #[test]
+    fn stroke_review_scale_constraint_contact() {
+        use vectorcraft_doc::{Appearance, Node};
+
+        let (mut d, selected) = doc_with_rect();
+        let layer = d.layers[0].id;
+        let target = d.alloc_id();
+        let mut appearance = Appearance::default_art();
+        appearance.set_fill(vectorcraft_color::Paint::None);
+        appearance.stroke_mut().unwrap().width = 10.0;
+        // Endpoints and center stay outside the 4 pt reach of every probe, so legacy
+        // point/alignment targets cannot stand in for the visible vertical edge at x=205.
+        d.insert(Some(layer), 1, Node::path(target, vectorcraft_geom::shapes::line(Point::new(210.0, 80.0), Point::new(210.0, 340.0)), appearance))
+            .unwrap();
+        assert_eq!(d.node(target).unwrap().appearance.stroke_width(), 10.0);
+        assert!(!d.node(target).unwrap().appearance.stroke_paint().is_none());
+        let mut selection = Selection::default();
+        selection.add(selected);
+        let paint = paint();
+        let document_before = d.clone();
+        let selection_before = selection.clone();
+        let origin = Point::new(0.0, 0.0);
+        let grab = Point::new(100.0, 100.0);
+        // Legitimate controls first, then the two ON+Shift cases. Collect all real
+        // gestures before assertions, so a failing first ON case cannot hide the second.
+        let cases = [
+            (false, true, Point::new(202.0, 198.0), Point::new(200.0, 200.0), None),
+            (true, false, Point::new(202.0, 198.0), Point::new(205.0, 198.0), Some(Point::new(205.0, 198.0))),
+            // Uniform pointer is (200,200); contour contact (205,205) is >4 pt away.
+            (true, true, Point::new(202.0, 198.0), Point::new(200.0, 200.0), None),
+            // Uniform pointer is (203.5,203.5); (205,205) is within 4 pt along its path.
+            (true, true, Point::new(205.0, 202.0), Point::new(205.0, 205.0), Some(Point::new(205.0, 205.0))),
+        ];
+        let mut observed = Vec::new();
+        for (on, shift, raw, _, _) in cases {
+            let mut c = cx(&d, &selection, &paint);
+            c.snap_to_stroke_edges = on;
+            c.snapping_tolerance = 4.0;
+            c.smart_guides = true;
+            c.snap_to_point = false;
+            c.snap_to_grid = false;
+            c.snap_to_pixel = false;
+            c.snap_to_glyph = false;
+            c.snap_tangent = false;
+            c.snap_perpendicular = false;
+            c.guides = false;
+            c.alignment_guides = false;
+            c.construction_angles = &[];
+            c.anchor_path_labels = true;
+            c.measurement_labels = false;
+            c.transform_tools_guides = false;
+            let mut tool = TransformTool::new(TransformKind::Scale);
+            assert!(tool.pointer(&c, &ev(PointerKind::Down, origin.x, origin.y)).is_empty());
+            assert!(tool.pointer(&c, &ev(PointerKind::Up, origin.x, origin.y)).is_empty());
+            assert_eq!(tool.reference_point(&c), Some(origin), "set the real reference point by clicking");
+            assert!(tool.pointer(&c, &ev(PointerKind::Down, grab.x, grab.y)).is_empty());
+            assert_eq!(tool.drag.unwrap().pick, grab, "the actual pressed selection corner is the scale grab");
+            let mods = Mods { shift, ..Mods::default() };
+            let drag = tool.pointer(&c, &ev(PointerKind::Drag, raw.x, raw.y).with_mods(mods));
+            assert!(
+                matches!(drag.as_slice(), [Action::Begin(label), Action::Preview(command, _)] if label == "Scale" && command == "object.transform"),
+                "{drag:?}"
+            );
+            let m = matrix(&drag[1]);
+            let labels: Vec<Point> = tool
+                .overlays(&c)
+                .iter()
+                .filter_map(|overlay| match overlay {
+                    Overlay::Label { p, text, .. } if text == "stroke edge" => Some(*p),
+                    _ => None,
+                })
+                .collect();
+            let up = tool.pointer(&c, &ev(PointerKind::Up, raw.x, raw.y).with_mods(mods));
+            assert!(matches!(up.as_slice(), [Action::Preview(_, _), Action::Commit]), "{up:?}");
+            assert_eq!(matrix(&up[0]), m, "release retains the actual constrained preview");
+            assert!(!tool.busy());
+            assert!(!tool.overlays(&c).iter().any(|overlay| matches!(overlay, Overlay::Label { text, .. } if text == "stroke edge")));
+            observed.push((m, m * grab, labels));
+        }
+        assert_eq!(d, document_before, "the tool's preview must not edit the source document");
+        assert_eq!(selection, selection_before);
+        for ((on, shift, raw, expected, label), (m, actual, labels)) in cases.into_iter().zip(observed) {
+            assert!(
+                actual.distance(expected) < 1e-9,
+                "on={on}, shift={shift}, raw={raw:?}: actual grabbed corner {actual:?}, expected {expected:?}; stroke feedback {labels:?}"
+            );
+            assert!((m * origin).distance(origin) < 1e-9);
+            let coefficients = m.as_coeffs();
+            if shift {
+                assert!((coefficients[0] - coefficients[3]).abs() < 1e-9, "the real preview must remain uniform: {m:?}");
+            }
+            match label {
+                Some(contact) => {
+                    assert_eq!(labels.len(), 1, "on={on}, shift={shift}: {labels:?}");
+                    assert!(
+                        labels[0].distance(contact) < 1e-9 && labels[0].distance(actual) < 1e-9,
+                        "feedback must be at the final solver's actual contact: actual={actual:?}, labels={labels:?}"
+                    );
+                }
+                None => assert!(labels.is_empty(), "no false stroke-edge contact after constraint: {labels:?}"),
+            }
+        }
+    }
+
+    /// Locked Scale axes and the minimum-scale clamp must describe the final grab, not a free snap.
+    #[test]
+    fn stroke_review_scale_axis_and_clamp_contact() {
+        use vectorcraft_doc::{Appearance, Node};
+
+        let cases = [
+            (
+                "locked axis misses",
+                Point::new(100.0, 0.0),
+                Point::new(115.0, 80.0),
+                Point::new(115.0, 340.0),
+                Point::new(107.0, 198.0),
+                false,
+                Point::new(100.0, 198.0),
+                None,
+            ),
+            (
+                "locked axis contacts",
+                Point::new(100.0, 0.0),
+                Point::new(20.0, 210.0),
+                Point::new(400.0, 210.0),
+                Point::new(107.0, 202.0),
+                false,
+                Point::new(100.0, 205.0),
+                Some(Point::new(100.0, 205.0)),
+            ),
+            (
+                "clamp rejects unreachable edge",
+                Point::ORIGIN,
+                Point::new(5.005, -100.0),
+                Point::new(5.005, 400.0),
+                Point::new(0.001, 0.001),
+                true,
+                Point::new(0.01, 0.01),
+                None,
+            ),
+            (
+                "clamp keeps reachable edge",
+                Point::ORIGIN,
+                Point::new(5.01, -100.0),
+                Point::new(5.01, 400.0),
+                Point::new(0.001, 0.001),
+                true,
+                Point::new(0.01, 0.01),
+                Some(Point::new(0.01, 0.01)),
+            ),
+        ];
+        let grab = Point::new(100.0, 100.0);
+        let mut observed = Vec::new();
+        for (_, origin, from, to, raw, shift, _, _) in cases {
+            let (mut d, selected) = doc_with_rect();
+            // Keep the ordinary artboard's corners, edges and center away from clamp probes.
+            d.artboards[0].rect = Rect::new(-500.0, -300.0, 700.0, 600.0);
+            let layer = d.layers[0].id;
+            let target = d.alloc_id();
+            let mut appearance = Appearance::default_art();
+            appearance.set_fill(vectorcraft_color::Paint::None);
+            appearance.stroke_mut().unwrap().width = 10.0;
+            d.insert(Some(layer), 1, Node::path(target, vectorcraft_geom::shapes::line(from, to), appearance)).unwrap();
+            assert_eq!(d.node(target).unwrap().appearance.stroke_width(), 10.0);
+            let mut selection = Selection::default();
+            selection.add(selected);
+            let paint = paint();
+            let before = d.clone();
+            let mut c = cx(&d, &selection, &paint);
+            c.snap_to_stroke_edges = true;
+            c.snapping_tolerance = 4.0;
+            c.smart_guides = false;
+            c.snap_to_point = false;
+            c.snap_to_grid = false;
+            c.snap_to_pixel = false;
+            c.snap_to_glyph = false;
+            c.snap_tangent = false;
+            c.snap_perpendicular = false;
+            c.guides = false;
+            c.alignment_guides = false;
+            c.construction_angles = &[];
+            c.anchor_path_labels = true;
+            c.measurement_labels = false;
+            c.transform_tools_guides = false;
+            let mut tool = TransformTool::new(TransformKind::Scale);
+            // A normal pre-gesture Smart Guides toggle permits an exact reference click beside
+            // the clamp scene's stroke; every observed drag still has the new option and guides ON.
+            assert!(tool.pointer(&c, &ev(PointerKind::Down, origin.x, origin.y)).is_empty());
+            assert!(tool.pointer(&c, &ev(PointerKind::Up, origin.x, origin.y)).is_empty());
+            c.smart_guides = true;
+            assert_eq!(tool.reference_point(&c), Some(origin));
+            assert!(tool.pointer(&c, &ev(PointerKind::Down, grab.x, grab.y)).is_empty());
+            assert_eq!(tool.drag.unwrap().pick, grab);
+            let mods = Mods { shift, ..Mods::default() };
+            let drag = tool.pointer(&c, &ev(PointerKind::Drag, raw.x, raw.y).with_mods(mods));
+            assert!(
+                matches!(drag.as_slice(), [Action::Begin(label), Action::Preview(command, _)] if label == "Scale" && command == "object.transform"),
+                "{drag:?}"
+            );
+            let m = matrix(&drag[1]);
+            let labels: Vec<Point> = tool
+                .overlays(&c)
+                .iter()
+                .filter_map(|overlay| match overlay {
+                    Overlay::Label { p, text, .. } if text == "stroke edge" => Some(*p),
+                    _ => None,
+                })
+                .collect();
+            let up = tool.pointer(&c, &ev(PointerKind::Up, raw.x, raw.y).with_mods(mods));
+            assert!(matches!(up.as_slice(), [Action::Preview(_, _), Action::Commit]), "{up:?}");
+            assert_eq!(matrix(&up[0]), m);
+            assert!(!tool.busy());
+            assert_eq!(d, before);
+            observed.push((m, m * grab, labels));
+        }
+        for ((name, origin, _, _, _, shift, expected, label), (m, actual, labels)) in cases.into_iter().zip(observed) {
+            assert!(actual.distance(expected) < 1e-9, "{name}: actual={actual:?}, expected={expected:?}, feedback={labels:?}");
+            assert!((m * origin).distance(origin) < 1e-9, "{name}");
+            let coefficients = m.as_coeffs();
+            if shift {
+                assert!((coefficients[0] - 1e-4).abs() < 1e-12 && (coefficients[3] - 1e-4).abs() < 1e-12, "{name}: {m:?}");
+            } else {
+                assert!((coefficients[0] - 1.0).abs() < 1e-12, "the local x axis stays locked: {name}: {m:?}");
+            }
+            match label {
+                Some(contact) => {
+                    assert_eq!(labels.len(), 1, "{name}: {labels:?}");
+                    assert!(
+                        labels[0].distance(contact) < 1e-8 && labels[0].distance(actual) < 1e-8,
+                        "{name}: feedback must describe the actual final grabbed point: actual={actual:?}, labels={labels:?}"
+                    );
+                }
+                None => assert!(labels.is_empty(), "{name}: infeasible contact must have no stroke-edge feedback: {labels:?}"),
+            }
+        }
     }
 }
