@@ -155,6 +155,11 @@ How a facet carries its seam depends on the lights and the paint:
   and from places where the light changes sharply, a pixel drawn at 1:1 is opaque where the 3x art is opaque, and
   otherwise its alpha is within 3 levels. Inflate seen straight on with an opaque fill also has each color channel
   within 3 levels (VectorCraft's own measure).
+  In the composite, a facet that is one closed polygon whose edges do not cross is drawn over the underlay as one
+  filled path, the facet and the outline of its round seam together, so a pixel at its edge is covered once and not
+  by a fill and then by a stroke of the same color. Other facets keep a fill and a seam stroke. Turned to X 50°,
+  Y 35° in an opaque fill, at most one color channel sample is more than 3 levels off the 3x art, and by at most 4
+  (VectorCraft's own measure).
 - Extrude & Bevel (Classic), Rotate (Classic) and Revolve (Classic): a path and a seam for every face; gradient and
   pattern faces seam only the base paint, and the shading and highlight layers cover the face alone. The Wireframe
   surface draws edges only, with no seam.

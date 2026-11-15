@@ -579,6 +579,29 @@ fn colored_light_surfaces_match_supersampling_at_internal_facet_edges() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
+/// Inflate turned so its facets narrow to slivers at the edges, in an opaque solid fill under two
+/// colored lights, against 3x averaged down ([`seams_against_supersampled`]): each facet and its
+/// seam cover an edge pixel once together, so at most one RGB channel is more than 3 levels off, by
+/// no more than 4, and no alpha is off.
+#[test]
+fn turned_colored_inflate_facets_and_seams_cover_their_edges_once() {
+    let lights = json!([
+        {"color":"#ff0000","rotation":135,"height":35,"intensity":70},
+        {"color":"#0000ff","rotation":-35,"height":25,"intensity":65}
+    ]);
+    let (mut s, _) = setup("threeD.inflate");
+    let change = json!({"index":0,"item":null,"params":{"ambient":10,"lights":lights,"rotationX":50,"rotationY":35}});
+    s.execute("effect.setParams", &change).unwrap();
+    s.execute("paint.setFill", &json!({"color":"#ffcc66"})).unwrap();
+    let image = render(doc(&s));
+    let (measured, color, max, holes, worst) = seams_against_supersampled(doc(&s), &image);
+    assert!(measured > 2_000, "{measured} pixels inside");
+    assert!(
+        holes == 0 && color <= 1 && max <= 4,
+        "of {measured} pixels, {color} channels off by more than 3 (at most {max}), {holes} alphas off: {worst:?}"
+    );
+}
+
 /// The closed facet edges of colored-light surfaces survive SVG and PDF, read back and drawn at
 /// 1:1, and Expand Appearance: inside the art, every pixel stays opaque and within 6 levels of the
 /// live art.
