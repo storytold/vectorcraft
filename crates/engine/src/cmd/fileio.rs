@@ -127,9 +127,10 @@ mod commands;
 mod export_names;
 mod formats;
 
+pub(crate) use access::check_images_in;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::list_dir;
-pub use access::{check_linked_scripts, write_file_with, write_save_file, write_save_file_with};
+pub use access::{check_linked_images, check_linked_scripts, write_file_with, write_save_file, write_save_file_with};
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests_readonly;

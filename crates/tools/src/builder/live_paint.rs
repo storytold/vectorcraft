@@ -1,7 +1,7 @@
 use super::cache::RegionCache;
 use super::lookup::{
-    connected_edges, flood_faces, is_live_paint, leaf_shapes, live_paint_at, live_paint_at_where, lp_stroke_paint, node_outline, visible_edge_near,
-    visible_face_at,
+    connected_edges, edges, faces, flood_faces, is_live_paint, leaf_shapes, live_paint_at, live_paint_at_where, lp_stroke_paint, node_outline,
+    visible_edge_near, visible_face_at,
 };
 use super::map::{HIGHLIGHT_RED, sorted_roots};
 use super::{
@@ -711,8 +711,14 @@ pub const LP_SELECT_WIDTH_RANGE: (f64, f64) = (1.0, 20.0);
 /// with Shift held at the press, each of them leaves the selection if it is selected and joins it
 /// otherwise. A double-click on a face selects it and the faces of its group that are not parted
 /// from it by a stroked edge; on an edge, it selects the edge and the edges joined to it end to end
-/// that have its stroke paint ([`LivePaintSelectionTool::reach_at`]). With Shift held, each of them
-/// leaves the selection if it is selected and joins it otherwise.
+/// that have its stroke paint ([`LivePaintSelectionTool::reach_at`]). A triple-click on a face
+/// selects every face of its group with that face's fill; on an edge, every edge of its group with
+/// that edge's stroke paint ([`LivePaintSelectionTool::same_paint_at`]). With Shift held, each part a
+/// double-click reaches leaves the selection if it is selected and joins it otherwise, and after a
+/// Shift-triple-click each part with the clicked part's paint is toggled from the selection there
+/// was before the three clicks. Clicks of the three made without Shift select as they do alone, so
+/// when Shift is first held at a later click, the parts are toggled from the selection there was
+/// before that click.
 /// A click and a marquee change the selection on release, so Escape between the press
 /// and the release (which removes the marquee) leaves the selection as it was. The tool does not
 /// highlight or select the faces and edges of a Live Paint group that is locked, on a locked layer
@@ -733,6 +739,33 @@ pub struct LivePaintSelectionTool {
     width: f64,
     /// The drag in progress, from the press to the release.
     drag: Option<LpDrag>,
+    /// The part each of the last two clicks toggled with Shift held, the latest last (None for a
+    /// click that toggled nothing). A click or marquee without Shift clears both.
+    recent: [Option<NodeId>; 2],
+    /// The parts the last double-click, the two clicks before it and the Shift-clicks after it
+    /// toggled, each listed once when toggled an odd number of times. A Shift-triple-click toggles
+    /// them back as it toggles the parts with the clicked part's paint, so the selection ends as it
+    /// was before the clicks with those parts toggled.
+    toggled: Vec<NodeId>,
+}
+
+/// `a` (which lists each id once) with each id of `b` toggled in turn: an id `b` lists an odd number
+/// of times is removed when `a` holds it and added at the end otherwise, in `b`'s order.
+fn toggle_ids(a: &mut Vec<NodeId>, b: &[NodeId]) {
+    use std::collections::HashSet;
+    let mut odd = HashSet::new();
+    for id in b {
+        if !odd.insert(*id) {
+            odd.remove(id);
+        }
+    }
+    let held: HashSet<NodeId> = a.iter().copied().collect();
+    a.retain(|x| !odd.contains(x));
+    for id in b {
+        if !held.contains(id) && odd.remove(id) {
+            a.push(*id);
+        }
+    }
 }
 
 /// A press and drag of the Live Paint Selection tool.
@@ -770,6 +803,8 @@ impl Default for LivePaintSelectionTool {
             color: HIGHLIGHT_RED,
             width: LP_SELECT_WIDTH,
             drag: None,
+            recent: [None; 2],
+            toggled: vec![],
         }
     }
 }
@@ -811,6 +846,25 @@ impl LivePaintSelectionTool {
         let Some((gid, Some(part))) = lp_part_at(cx.doc, p, cx.tol(4.0), edge, &|id| lp_selectable(cx, id)) else { return vec![] };
         let Some(group) = cx.doc.node(gid) else { return vec![] };
         if edge { connected_edges(group, part.id, &lp_stroke_paint(part)) } else { flood_faces(group, part.id) }
+    }
+
+    /// What a triple-click at `p` selects, Alt held or not: on the face a click there picks
+    /// ([`LivePaintSelectionTool::picks_edge`]), that face and every other face of its group that is
+    /// not hidden and has its fill; on the edge a click picks, that edge and every other edge of its
+    /// group that is not hidden and draws with the stroke paint it draws with ([`lp_stroke_paint`]).
+    /// The part under the pointer comes first. Empty where a click selects no face or edge.
+    fn same_paint_at(&self, cx: &ToolContext, p: Point, alt: bool) -> Vec<NodeId> {
+        let Some(edge) = self.picks_edge(alt) else { return vec![] };
+        let Some((gid, Some(part))) = lp_part_at(cx.doc, p, cx.tol(4.0), edge, &|id| lp_selectable(cx, id)) else { return vec![] };
+        let Some(group) = cx.doc.node(gid) else { return vec![] };
+        let others: Vec<NodeId> = if edge {
+            let like = lp_stroke_paint(part);
+            edges(group).into_iter().filter(|e| e.visible && e.id != part.id && lp_stroke_paint(e) == like).map(|e| e.id).collect()
+        } else {
+            let like = part.appearance.fill_paint();
+            faces(group).into_iter().filter(|f| f.visible && f.id != part.id && f.appearance.fill_paint() == like).map(|f| f.id).collect()
+        };
+        std::iter::once(part.id).chain(others).collect()
     }
 }
 
@@ -918,6 +972,17 @@ impl Tool for LivePaintSelectionTool {
                 let d = LpDrag { cur: p, ..d };
                 let Some(r) = d.marquee(cx) else {
                     // A click selects what the press picked.
+                    // A click without Shift replaces the selection, so what earlier clicks toggled
+                    // no longer counts.
+                    if d.shift {
+                        self.recent = [self.recent[1], d.hit];
+                        if let Some(id) = d.hit {
+                            toggle_ids(&mut self.toggled, &[id]);
+                        }
+                    } else {
+                        self.recent = [None; 2];
+                        self.toggled.clear();
+                    }
                     return match (d.hit, d.shift) {
                         (Some(id), true) => vec![Action::Exec("select.toggle".into(), json!({ "id": id.0 }))],
                         (Some(id), false) => vec![Action::Exec("select.set".into(), json!({ "ids": [id.0] }))],
@@ -925,6 +990,8 @@ impl Tool for LivePaintSelectionTool {
                         (None, false) => vec![Action::Exec("select.none".into(), json!({}))],
                     };
                 };
+                self.recent = [None; 2];
+                self.toggled.clear();
                 let ids = lp_parts_in(cx, r, self.fills, self.strokes);
                 match (ids.is_empty(), d.shift) {
                     (true, true) => vec![],
@@ -937,15 +1004,36 @@ impl Tool for LivePaintSelectionTool {
                 // The two clicks before it already selected the part under the pointer (or, with
                 // Shift, toggled it twice); the double-click selects the part with what it reaches.
                 let ids = self.reach_at(cx, p, ev.mods.alt);
+                self.toggled.clear();
+                if ev.mods.shift {
+                    let clicks: Vec<NodeId> = self.recent.iter().flatten().copied().collect();
+                    toggle_ids(&mut self.toggled, &clicks);
+                    toggle_ids(&mut self.toggled, &ids);
+                }
                 match (ids.is_empty(), ev.mods.shift) {
                     (true, _) => vec![],
                     (false, true) => vec![Action::Exec("select.toggle".into(), json!({ "ids": json_ids(&ids) }))],
                     (false, false) => vec![Action::Exec("select.set".into(), json!({ "ids": json_ids(&ids) }))],
                 }
             }
-            // The tool takes no action on a triple-click; its third press and release select as a
-            // click does.
-            PointerKind::TripleClick => vec![],
+            PointerKind::TripleClick => {
+                // The clicks before it already selected the part under the pointer; the
+                // triple-click selects the part with every part of its group that has its paint.
+                // With Shift held, the double-click and the third click toggled parts too, and the
+                // triple-click toggles those back.
+                let ids = self.same_paint_at(cx, p, ev.mods.alt);
+                let toggled = std::mem::take(&mut self.toggled);
+                self.recent = [None; 2];
+                if ids.is_empty() {
+                    return vec![];
+                }
+                if !ev.mods.shift {
+                    return vec![Action::Exec("select.set".into(), json!({ "ids": json_ids(&ids) }))];
+                }
+                let mut flip = ids;
+                toggle_ids(&mut flip, &toggled);
+                if flip.is_empty() { vec![] } else { vec![Action::Exec("select.toggle".into(), json!({ "ids": json_ids(&flip) }))] }
+            }
         }
     }
 
@@ -963,6 +1051,8 @@ impl Tool for LivePaintSelectionTool {
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.drag = None;
+        self.recent = [None; 2];
+        self.toggled.clear();
         vec![]
     }
 
