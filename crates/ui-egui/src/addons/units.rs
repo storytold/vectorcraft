@@ -141,6 +141,10 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ui: &Ui, st: &Converter) -> Result
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut st: Converter = pstate(ui.ctx(), STATE);
     st.follow(document_now(app));
+    // A number typed without a unit is in its row's unit, so 2 in the Picas row is 2 picas, also
+    // with Preferences › Units › Numbers Without Units Are Points on; other panels' fields keep it.
+    let bare_points = widgets::typed_unit(ui.ctx(), Unit::Picas) == Unit::Points;
+    widgets::set_bare_numbers_are_points(ui.ctx(), false);
     for unit in Unit::EAST_ASIAN {
         widgets::label_row(ui, unit.label(), LABEL_W, |ui| {
             // A length too large to show in one of the units (near the largest number, in Q and
@@ -160,6 +164,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
+    widgets::set_bare_numbers_are_points(ui.ctx(), bare_points);
     if widgets::check(ui, "Copy with Units", st.with_units, true) {
         st.with_units = !st.with_units;
     }

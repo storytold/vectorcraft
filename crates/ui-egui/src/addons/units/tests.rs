@@ -101,6 +101,34 @@ fn typing_in_a_field_updates_the_others_and_text_that_does_not_read_leaves_them(
 }
 
 #[test]
+fn a_number_typed_without_a_unit_in_the_picas_row_is_in_picas() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // Numbers Without Units Are Points is on (its default), and stays on for other fields.
+    crate::widgets::set_bare_numbers_are_points(&ctx, true);
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        time += 0.05;
+        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 800.0)));
+        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), screen_rect, focused: true, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        pstate::<Converter>(&ctx, STATE)
+    };
+    let tab = Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![]);
+    // Tab reaches the Points field, then the Picas field (the copy buttons are off with no length).
+    for _ in 0..2 {
+        frame(&mut app, vec![tab.clone()]);
+        frame(&mut app, vec![]);
+    }
+    let st = frame(&mut app, vec![Event::Text("2".into())]);
+    assert!(st.points.is_some_and(|pt| near(pt, 24.0)), "{st:?}");
+    assert_eq!(crate::widgets::typed_unit(&ctx, Unit::Picas), Unit::Points, "other fields still read points");
+}
+
+#[test]
 fn picking_a_side_shows_that_side_of_the_size_read() {
     let mut st = Converter { size: Some((72.0, 36.0)), ..Converter::default() };
     st.pick(Side::Height);
