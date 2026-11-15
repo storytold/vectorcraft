@@ -1368,7 +1368,10 @@ font-technology	Variable	Változó
 	Every (minutes)	Gyakoriság (perc)
 	Every option is at its default.	Minden beállítás az alapértéken áll.
 	Every option matches {base}.	Minden beállítás egyezik: {base}.
-	Every-line Composer	Többsoros tördelő
+	Middle Eastern & South Asian Single-line Composer	Egysoros tördelő (Közel-Kelet és Dél-Ázsia)
+	Middle Eastern & South Asian Every-line Composer	Többsoros tördelő (Közel-Kelet és Dél-Ázsia)
+	Standard Single-line Composer	Normál egysoros tördelő
+	Standard Every-line Composer	Normál többsoros tördelő
 	Exact	Pontos
 	Exact dash lengths	Pontos vonalhosszak
 	Exceptions (comma separated)	Kivételek (vesszővel elválasztva)
@@ -1744,6 +1747,14 @@ file-filter	Templates	Sablonok
 	Previous Artboard	Előző rajztábla
 	Next Artboard	Következő rajztábla
 	Last Artboard	Utolsó rajztábla
+	Status Bar Show	Megjelenítés az állapotsorban
+	Artboard Name	Rajztábla neve
+	Current Tool	Aktuális eszköz
+	Date and Time	Dátum és idő
+	Number of Undos	Visszavonások száma
+	Document Color Profile	Dokumentum színprofilja
+	Undos	Visszavonások
+	Redos	Újra
 	Go to Conflict	Ugrás az ütközésre
 	Go To Link	Ugrás a csatoláshoz
 	Good	Jó
@@ -4107,7 +4118,6 @@ mark-style	Japanese	Japán
 	Single Left Quotation Mark	Bal oldali szimpla idézőjel
 	Single Quotes:	Szimpla idézőjelek:
 	Single Right Quotation Mark	Jobb oldali szimpla idézőjel
-	Single-line Composer	Egysoros tördelő
 	Toggle Line Composer	Sortördelő váltása
 	Sixth Space	Hatodkvirt-szóköz
 	Size	Méret
@@ -8277,7 +8287,7 @@ breakText	Glyphs	Glifák
 @msg	column: true floats the whole column and takes no onto, above or below	column: true az egész oszlopot lebegővé teszi, és nem adható meg mellette onto, above vagy below
 @msg	command must be a shape.* command	command: shape.* parancs kell
 @msg	commands[{i}]: missing `command`	commands[{i}]: hiányzik: `command`
-@msg	composer must be "singleLine" or "everyLine"	composer: "singleLine" vagy "everyLine" kell
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer értéke "singleLine", "everyLine", "standardSingleLine" vagy "standardEveryLine" lehet
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	összetett alakzatba útvonalak, összetett útvonalak, csoportok, összetett alakzatok, szöveg, összemosások és burkolók kerülhetnek
 @msg	compound {_1} must contain exactly one open path to join	az összetett objektumnak ({_1}) pontosan egy összekapcsolható nyitott útvonalat kell tartalmaznia
 @msg	connect needs a path other than the one extended	connect: a meghosszabbított útvonaltól különböző útvonal kell

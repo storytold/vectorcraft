@@ -1088,6 +1088,14 @@ lighting	Light	Valo
 	Previous Artboard	Edellinen piirtoalusta
 	Next Artboard	Seuraava piirtoalusta
 	Last Artboard	Viimeinen piirtoalusta
+	Status Bar Show	Näytä tilarivillä
+	Artboard Name	Piirtoalustan nimi
+	Current Tool	Nykyinen työkalu
+	Date and Time	Päivämäärä ja aika
+	Number of Undos	Kumousten määrä
+	Document Color Profile	Asiakirjan väriprofiili
+	Undos	Kumoukset
+	Redos	Uudelleentekot
 	Graphic Style Options…	Grafiikkatyylin asetukset…
 	Symbol Options	Symbolin asetukset
 	Symbol Options…	Symbolin asetukset…
@@ -2062,7 +2070,10 @@ digits	Malayalam	Malajalam
 	Tabular Lining	Taulukkonumerot
 	Tabular Oldstyle	Vanhanaikaiset taulukkonumerot
 	Titling Alternates	Otsikkovaihtoehdot
-	Every-line Composer	Kaikkien rivien asettelu
+	Middle Eastern & South Asian Single-line Composer	Yhden rivin asettelu (Lähi-itä ja Etelä-Aasia)
+	Middle Eastern & South Asian Every-line Composer	Kaikkien rivien asettelu (Lähi-itä ja Etelä-Aasia)
+	Standard Single-line Composer	Tavallinen yhden rivin asettelu
+	Standard Every-line Composer	Tavallinen kaikkien rivien asettelu
 	First-line Left Indent	Ensimmäisen rivin vasen sisennys
 	Hyphenation…	Tavutus…
 	Words Longer Than:	Sanat, jotka ovat pidempiä kuin:
@@ -2102,7 +2113,6 @@ digits	Malayalam	Malajalam
 	East Asian Composition Settings	Itäaasialaisen ladonnan asetukset
 	Korean Composition Settings	Korean ladonnan asetukset
 	Select a text object to edit its paragraph attributes.	Valitse tekstiobjekti, jonka kappalemääritteitä haluat muokata.
-	Single-line Composer	Yhden rivin asettelu
 	Toggle Line Composer	Vaihda rivien asettelu
 	Space After Paragraph	Väli kappaleen jälkeen
 	Space Before Paragraph	Väli ennen kappaletta
@@ -7838,3 +7848,4 @@ breakText	Glyphs	Merkit
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseliä on liian suuri JPEG-kuvalle (enintään 65535 pikseliä sivua kohti): pienennä tarkkuutta
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseliä on liian suuri Targa-kuvalle (enintään 65535 pikseliä sivua kohti): pienennä tarkkuutta
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pikseliä on liian suuri PSD-kuvalle (enintään {MAX_SIDE} pikseliä sivua kohti): pienennä tarkkuutta
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"

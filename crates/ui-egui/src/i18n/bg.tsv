@@ -1054,7 +1054,10 @@ font-technology	Variable	Променливи
 	Every (minutes)	На всеки (минути)
 	Every option is at its default.	Всички опции са в състояние по подразбиране.
 	Every option matches {base}.	Всички опции съответстват на {base}.
-	Every-line Composer	Композитор за всеки ред
+	Middle Eastern & South Asian Single-line Composer	Ред по ред композитор (Близък изток и Южна Азия)
+	Middle Eastern & South Asian Every-line Composer	Композитор за всеки ред (Близък изток и Южна Азия)
+	Standard Single-line Composer	Стандартен ред по ред композитор
+	Standard Every-line Composer	Стандартен композитор за всеки ред
 	Exact dash lengths	Точни дължини на тиретата
 	Exceptions (comma separated)	Изключения (разделени със запетаи)
 	Exclude	Изключване
@@ -1348,6 +1351,14 @@ font-technology	Variable	Променливи
 	Previous Artboard	Предишна работна област
 	Next Artboard	Следваща работна област
 	Last Artboard	Последна работна област
+	Status Bar Show	Показване в лентата на състоянието
+	Artboard Name	Име на работната област
+	Current Tool	Текущ инструмент
+	Date and Time	Дата и час
+	Number of Undos	Брой отмени
+	Document Color Profile	Цветови профил на документа
+	Undos	Отмени
+	Redos	Повторения
 	Go To Link	Към връзката
 	GPL palettes keep solid colours only, as RGB.	Палитрите GPL запазват само плътни цветове като RGB.
 	GPU Performance	Производителност на графичния процесор
@@ -3360,7 +3371,6 @@ digits	Malayalam	Малаялам
 	Single Left Quotation Mark	Лява единична кавичка
 	Single Quotes:	Единични кавички:
 	Single Right Quotation Mark	Дясна единична кавичка
-	Single-line Composer	Ред по ред композитор
 	Toggle Line Composer	Превключване на композитора на редове
 	Sixth Space	Шесто разстояние
 	Size	Размер
@@ -6985,3 +6995,4 @@ breakText	Glyphs	Глифи
 	Nest Shapes…	Подреждане на форми…
 	Nest Shapes	Подреждане на форми
 	Roll	Ролка
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

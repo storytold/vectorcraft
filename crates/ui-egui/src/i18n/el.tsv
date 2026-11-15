@@ -1021,7 +1021,10 @@ font-technology	Variable	Μεταβλητές
 	Every (minutes)	Κάθε (λεπτά)
 	Every option is at its default.	Όλες οι επιλογές έχουν τις προεπιλεγμένες τιμές τους.
 	Every option matches {base}.	Όλες οι επιλογές ταιριάζουν με το {base}.
-	Every-line Composer	Σύνθεση όλων των γραμμών
+	Middle Eastern & South Asian Single-line Composer	Σύνθεση μονής γραμμής (Μέση Ανατολή και Νότια Ασία)
+	Middle Eastern & South Asian Every-line Composer	Σύνθεση όλων των γραμμών (Μέση Ανατολή και Νότια Ασία)
+	Standard Single-line Composer	Τυπική σύνθεση μονής γραμμής
+	Standard Every-line Composer	Τυπική σύνθεση όλων των γραμμών
 	Exact dash lengths	Ακριβή μήκη παυλών
 	Exceptions (comma separated)	Εξαιρέσεις (χωρισμένες με κόμμα)
 	Exclude	Εξαίρεση
@@ -1323,6 +1326,14 @@ font-technology	Variable	Μεταβλητές
 	Previous Artboard	Προηγούμενος πίνακας σχεδίασης
 	Next Artboard	Επόμενος πίνακας σχεδίασης
 	Last Artboard	Τελευταίος πίνακας σχεδίασης
+	Status Bar Show	Εμφάνιση στη γραμμή κατάστασης
+	Artboard Name	Όνομα πίνακα σχεδίασης
+	Current Tool	Τρέχον εργαλείο
+	Date and Time	Ημερομηνία και ώρα
+	Number of Undos	Αριθμός αναιρέσεων
+	Document Color Profile	Χρωματικό προφίλ εγγράφου
+	Undos	Αναιρέσεις
+	Redos	Επαναλήψεις
 	Go To Link	Μετάβαση στη σύνδεση
 	GPL palettes keep solid colours only, as RGB.	Οι παλέτες GPL διατηρούν μόνο συμπαγή χρώματα σε RGB.
 	GPU Performance	Απόδοση GPU
@@ -4039,7 +4050,6 @@ digits	Malayalam	Μαλαγιάλαμ
 	Single Left Quotation Mark	Μονό αριστερό εισαγωγικό
 	Single Quotes:	Μονά εισαγωγικά:
 	Single Right Quotation Mark	Μονό δεξί εισαγωγικό
-	Single-line Composer	Σύνθεση μονής γραμμής
 	Toggle Line Composer	Εναλλαγή σύνθεσης γραμμών
 	Sixth Space	Διάστημα ενός έκτου
 	Size Tile to Art	Προσαρμογή μεγέθους πλακιδίου στο σχέδιο
@@ -7755,3 +7765,4 @@ breakText	Glyphs	Γλύφοι
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για JPEG (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για Targa (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	τα {w} × {h} εικονοστοιχεία είναι υπερβολικό μέγεθος για PSD (το πολύ {MAX_SIDE} εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"

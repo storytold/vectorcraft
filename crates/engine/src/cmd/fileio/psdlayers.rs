@@ -43,6 +43,7 @@ use std::cell::Cell;
 use std::sync::Arc;
 
 use image::RgbaImage;
+use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
 use vectorcraft_color::blend::{blend_rgb, composite};
 use vectorcraft_color::cms::{Lab, lab::lab_to_srgb};
@@ -51,6 +52,7 @@ use vectorcraft_geom::Affine;
 
 use super::load::{RasterImage, as_png};
 use super::psdread::{Header, Reader, byte, header, layer_channel, layer_info, long_key, row_bytes, sample, to_rgb};
+use crate::cmd::Session;
 use crate::cmd::place::text::mac_roman;
 
 /// Most layer groups inside one another.
@@ -1526,4 +1528,66 @@ pub(super) fn import(
     let mut warnings = notes.warnings();
     doc.limit_depth_noting(&mut warnings);
     Ok(Some((doc, warnings)))
+}
+
+/// [`import`] within the memory allowed for one image, CMYK converted with the active color
+/// settings: what `document.open` and `file.place` read a PSD or PSB file's layers with.
+pub(crate) fn import_active(bytes: &[u8], hidden: bool) -> Result<Option<(Document, Vec<String>)>, String> {
+    let cms = vectorcraft_color::cms::active();
+    import(bytes, hidden, super::MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false))
+}
+
+/// What a PSD or PSB file holds (`document.psdInfo`, the PSD Import Options dialog).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PsdInfo {
+    /// The large document format.
+    pub psb: bool,
+    /// The canvas, in pixels.
+    pub width: u32,
+    pub height: u32,
+    /// The layers, group markers left out.
+    pub layers: usize,
+    /// The layers among them that are hidden.
+    pub hidden: usize,
+    /// The layer groups.
+    pub groups: usize,
+    /// The slices that come in with `importSlices` (those generated automatically, and those
+    /// outside the canvas, left out).
+    pub slices: usize,
+}
+
+/// What PSD or PSB file `bytes` holds, read from its header, its slices and its layer records
+/// without decoding any pixels. A file without layer records, or whose layer records can't be read, has no layers: it
+/// opens and places as its merged image.
+pub fn info(bytes: &[u8]) -> Result<PsdInfo, String> {
+    let mut r = Reader::new(bytes);
+    let h = header(&mut r)?;
+    let records = layer_info(h.layers, h.psb).filter(|info| info.len() > 2).and_then(|info| records(info, h.psb).ok()).unwrap_or_default();
+    let layers = records.iter().filter(|r| r.divider == 0);
+    Ok(PsdInfo {
+        psb: h.psb,
+        width: h.width,
+        height: h.height,
+        layers: layers.clone().count(),
+        hidden: layers.filter(|r| r.hidden).count(),
+        groups: records.iter().filter(|r| matches!(r.divider, 1 | 2)).count(),
+        slices: super::psdslices::count(bytes),
+    })
+}
+
+const INFO: &str = "document.psdInfo";
+
+/// `document.psdInfo`.
+pub(super) fn psd_info(_: &mut Session, p: &Value) -> crate::cmd::Result<Value> {
+    let bytes = super::source(p, INFO)?.bytes;
+    let i = info(&bytes).map_err(super::load::err)?;
+    Ok(json!({
+        "format": if i.psb { "psb" } else { "psd" },
+        "width": i.width,
+        "height": i.height,
+        "layers": i.layers,
+        "hiddenLayers": i.hidden,
+        "groups": i.groups,
+        "slices": i.slices,
+    }))
 }

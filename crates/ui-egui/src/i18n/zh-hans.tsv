@@ -1019,7 +1019,8 @@ antiAlias	Sharp	锐利
 	Every (minutes)	每隔 (分钟)
 	Every option is at its default.	所有选项皆为默认值。
 	Every option matches {base}.	所有选项皆与{base}相同。
-	Every-line Composer	逐行排版器
+	Middle Eastern & South Asian Every-line Composer	逐行排版器（中东和南亚）
+	Standard Every-line Composer	标准逐行排版器
 	Exact dash lengths	精确虚线长度
 	Exceptions (comma separated)	例外词 (逗号分隔)
 	Exclude	差集
@@ -1352,6 +1353,14 @@ file-filter	Templates	模板
 	Previous Artboard	上一个画板
 	Next Artboard	下一个画板
 	Last Artboard	最后一个画板
+	Status Bar Show	状态栏显示
+	Artboard Name	画板名称
+	Current Tool	当前工具
+	Date and Time	日期和时间
+	Number of Undos	撤销次数
+	Document Color Profile	文档颜色配置文件
+	Undos	撤销
+	Redos	重做
 	Go To Link	转到链接
 	GPL palettes keep solid colours only, as RGB.	GPL 调板仅保留为 RGB 的纯色。
 	GPU Performance	GPU 性能
@@ -3312,7 +3321,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Single Left Quotation Mark	左单引号
 	Single Quotes:	单引号：
 	Single Right Quotation Mark	右单引号
-	Single-line Composer	单行排版器
+	Middle Eastern & South Asian Single-line Composer	单行排版器（中东和南亚）
+	Standard Single-line Composer	标准单行排版器
 	Toggle Line Composer	切换行排版器
 	Sixth Space	六分之一空格
 	Size	大小
@@ -8364,7 +8374,7 @@ breakText	Glyphs	字形
 @msg	column: true floats the whole column and takes no onto, above or below	column: true 会使整列浮动，不能再给出 onto、above 或 below
 @msg	command must be a shape.* command	command 必须是 shape.* 命令
 @msg	commands[{i}]: missing `command`	commands[{i}]：缺少 `command`
-@msg	composer must be "singleLine" or "everyLine"	composer 必须是 "singleLine" 或 "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer 必须是 "singleLine"、"everyLine"、"standardSingleLine" 或 "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	复合形状接受路径、复合路径、编组、复合形状、文字、混合和封套
 @msg	compound {_1} must contain exactly one open path to join	复合对象 {_1} 必须恰好包含一条要连接的开放路径
 @msg	connect needs a path other than the one extended	connect 需要一条不同于被延伸路径的路径

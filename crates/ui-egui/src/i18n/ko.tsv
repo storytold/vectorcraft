@@ -1678,7 +1678,10 @@ antiAlias	Sharp	날카롭게
 	Every (minutes)	간격 (분)
 	Every option is at its default.	모든 옵션이 기본값입니다.
 	Every option matches {base}.	모든 옵션이 {base}와(과) 같습니다.
-	Every-line Composer	전체 줄 컴포저
+	Middle Eastern & South Asian Single-line Composer	한 줄 조판 (중동·남아시아)
+	Middle Eastern & South Asian Every-line Composer	전체 줄 컴포저 (중동·남아시아)
+	Standard Single-line Composer	표준 한 줄 조판
+	Standard Every-line Composer	표준 전체 줄 컴포저
 	Exact dash lengths	정확한 대시 길이
 	Exceptions (comma separated)	예외 (쉼표로 구분)
 	Exclusion	제외
@@ -1875,6 +1878,14 @@ antiAlias	Sharp	날카롭게
 	Previous Artboard	이전 아트보드
 	Next Artboard	다음 아트보드
 	Last Artboard	마지막 아트보드
+	Status Bar Show	상태 표시줄 표시
+	Artboard Name	아트보드 이름
+	Current Tool	현재 도구
+	Date and Time	날짜 및 시간
+	Number of Undos	실행 취소 횟수
+	Document Color Profile	문서 색상 프로파일
+	Undos	실행 취소
+	Redos	다시 실행
 	Gradient Fill: click to apply, drag onto art	그레이디언트 칠: 클릭하여 적용, 아트웍에 끌어 놓기
 	Gradient Mesh	그레이디언트 메시
 	Gradient Tool	그레이디언트 도구
@@ -3271,7 +3282,6 @@ mark-style	Japanese	일본식
 	Simulate Colored Paper	색 용지 시뮬레이션
 	Simulate Paper	용지 시뮬레이션
 	Single Quotes:	작은따옴표:
-	Single-line Composer	한 줄 조판
 	Toggle Line Composer	줄 조판 방식 전환
 	Size Tile to Art	타일을 아트웍 크기에 맞춤
 	Move Tile with Art	아트웍과 함께 타일 이동
@@ -8002,7 +8012,7 @@ breakText	Glyphs	글리프
 @msg	column: true floats the whole column and takes no onto, above or below	column: true는 열 전체를 띄우며 onto, above, below와 함께 쓸 수 없습니다
 @msg	command must be a shape.* command	command는 shape.* 명령이어야 합니다
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command`가 없습니다
-@msg	composer must be "singleLine" or "everyLine"	composer는 "singleLine" 또는 "everyLine"이어야 합니다
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer는 "singleLine", "everyLine", "standardSingleLine" 또는 "standardEveryLine"이어야 합니다
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	컴파운드 모양에는 패스, 컴파운드 패스, 그룹, 컴파운드 모양, 문자, 블렌드, 엔벨로프를 넣을 수 있습니다
 @msg	compound {_1} must contain exactly one open path to join	컴파운드 {_1}에는 연결할 열린 패스가 정확히 하나 있어야 합니다
 @msg	connect needs a path other than the one extended	connect에는 연장한 패스가 아닌 다른 패스가 필요합니다

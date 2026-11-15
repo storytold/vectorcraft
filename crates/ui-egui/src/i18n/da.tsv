@@ -2554,7 +2554,10 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Tabulære versalcifre
 	Tabular Oldstyle	Tabulære mediævalcifre
 	Titling Alternates	Titelalternativer
-	Every-line Composer	Hverlinjesætter
+	Middle Eastern & South Asian Single-line Composer	Enlinjesætter (Mellemøsten og Sydasien)
+	Middle Eastern & South Asian Every-line Composer	Hverlinjesætter (Mellemøsten og Sydasien)
+	Standard Single-line Composer	Standard-enlinjesætter
+	Standard Every-line Composer	Standard-hverlinjesætter
 	First-line Left Indent	Venstre indrykning af første linje
 	Hyphenation…	Orddeling…
 	Justification…	Justering…
@@ -2586,7 +2589,6 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Indstillinger for østasiatisk komposition
 	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
-	Single-line Composer	Enlinjesætter
 	Toggle Line Composer	Skift linjesætter
 	Space After Paragraph	Mellemrum efter afsnit
 	Space Before Paragraph	Mellemrum før afsnit
@@ -5433,6 +5435,7 @@ imageTrace	Outline	Kontur
 @msg	plug-in failed: {0}	plug-in fejlede: {0}
 @msg	plug-in manifest: {0}	plug-in-manifest: {0}
 @msg	plug-in output: {0}	plug-in-output: {0}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	plug-in parameters: {0}	plug-in-parametre: {0}
 @msg	plug-in trapped: {0}	plug-in'et blev fanget: {0}
 @msg	print settings are not an object	printindstillingerne er ikke et objekt
@@ -6548,6 +6551,14 @@ swatch	Bright Violet	Kraftig violet
 	Color wheel	Farvehjul
 	First Artboard	Første kunstplade
 	Last Artboard	Sidste kunstplade
+	Status Bar Show	Vis i statuslinjen
+	Artboard Name	Kunstpladens navn
+	Current Tool	Aktuelt værktøj
+	Date and Time	Dato og klokkeslæt
+	Number of Undos	Antal fortrydelser
+	Document Color Profile	Dokumentets farveprofil
+	Undos	Fortrydelser
+	Redos	Gentagelser
 	Next Artboard	Næste kunstplade
 	Previous Artboard	Forrige kunstplade
 	Step up or down	Trinvis op eller ned
@@ -7690,3 +7701,4 @@ breakText	Glyphs	Glyffer
 	Nest Shapes…	Pak figurer tæt…
 	Nest Shapes	Pak figurer tæt
 	Roll	Rulle
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

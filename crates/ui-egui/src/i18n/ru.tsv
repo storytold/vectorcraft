@@ -1075,7 +1075,10 @@ font-technology	Variable	Вариативные
 	Every (minutes)	Каждые (минут)
 	Every option is at its default.	Все параметры имеют значения по умолчанию.
 	Every option matches {base}.	Все параметры совпадают с {base}.
-	Every-line Composer	Компоновщик всех строк
+	Middle Eastern & South Asian Single-line Composer	Однострочный компоновщик (Ближний Восток и Южная Азия)
+	Middle Eastern & South Asian Every-line Composer	Компоновщик всех строк (Ближний Восток и Южная Азия)
+	Standard Single-line Composer	Стандартный однострочный компоновщик
+	Standard Every-line Composer	Стандартный компоновщик всех строк
 	Exact dash lengths	Точная длина штрихов
 	Exceptions (comma separated)	Исключения (через запятую)
 	Exclude	Исключить
@@ -1412,6 +1415,14 @@ file-filter	Templates	Шаблоны
 	Previous Artboard	Предыдущая монтажная область
 	Next Artboard	Следующая монтажная область
 	Last Artboard	Последняя монтажная область
+	Status Bar Show	Показ в строке состояния
+	Artboard Name	Имя монтажной области
+	Current Tool	Текущий инструмент
+	Date and Time	Дата и время
+	Number of Undos	Число отмен
+	Document Color Profile	Цветовой профиль документа
+	Undos	Отмены
+	Redos	Повторы
 	Go To Link	Перейти по ссылке
 	GPL palettes keep solid colours only, as RGB.	Палитры GPL сохраняют только сплошные цвета в RGB.
 	GPU Performance	Производительность GPU
@@ -3485,7 +3496,6 @@ digits	Malayalam	Малаялам
 	Single Left Quotation Mark	Одинарная открывающая кавычка
 	Single Quotes:	Одинарные кавычки:
 	Single Right Quotation Mark	Одинарная закрывающая кавычка
-	Single-line Composer	Однострочный компоновщик
 	Toggle Line Composer	Переключить компоновщик строк
 	Sixth Space	Шестая шпация
 	Size	Размер
@@ -7861,9 +7871,6 @@ shape	Open	Открытый
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` должно содержать индексы опорных точек (0, 1, 2…), а не {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` должно содержать индексы опорных точек (0, 1, 2…), а не {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` для этого диалогового окна {kind} должно быть одним из: {_1}
-@msg	`answers` has more than {MAX_ANSWERS} answers	в `answers` больше {MAX_ANSWERS} ответов
-@msg	`answers` is larger than 1 MiB	`answers` больше 1 MiB
-@msg	`answers` must be a list of answers	`answers` должно быть списком ответов
 @msg	`artboard` must be the index of an artboard of the document	`artboard` должно быть индексом монтажной области документа
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` должно быть [x, y]
 @msg	`artboards` must be a list of artboard indices	`artboards` должно быть списком индексов монтажных областей
@@ -8607,10 +8614,6 @@ shape	Open	Открытый
 @msg	invalid t	недопустимое t
 @msg	invalid time value	недопустимое значение времени
 @msg	invalid tolerance	недопустимый допуск
-@msg	is a confirm's answer, whose `value` must be true or false	является ответом для confirm, `value` которого должно быть true или false
-@msg	is a prompt's answer, whose `value` must be a string or null	является ответом для prompt, `value` которого должно быть строкой или null
-@msg	is an alert's answer, whose `value` must be "ok"	является ответом для alert, `value` которого должно быть "ok"
-@msg	is longer than 16 KiB	длиннее 16 KiB
 @msg	it draws its image through a clipping path	он рисует своё изображение через контур обрезки
 @msg	it draws no image	он не рисует изображения
 @msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	он больше {MAX_DICTIONARY_FILE_BYTES} байт
@@ -8738,9 +8741,6 @@ shape	Open	Открытый
 @msg	more than {MAX_FILES} images	больше {MAX_FILES} изображений
 @msg	more than {MAX_IMPORT} presets	больше {MAX_IMPORT} наборов
 @msg	moved must be [[x,y]…]	moved должно быть [[x,y]…]
-@msg	must be an object with `kind` and `value`	должен быть объектом с `kind` и `value`
-@msg	must have `kind` alert, confirm or prompt	должен иметь `kind` alert, confirm или prompt
-@msg	must have exactly `kind` and `value`	должен содержать только `kind` и `value`
 # Messages that begin with a lowercase word, n to s.
 @msg	name (a toolbar's name) is required	требуется name (имя панели инструментов)
 @msg	name (a toolbar's name) must be a string	name (имя панели инструментов) должно быть строкой
@@ -9707,3 +9707,4 @@ shape	Open	Открытый
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для JPEG (не более 65535 пикселей по стороне): уменьшите разрешение
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для Targa (не более 65535 пикселей по стороне): уменьшите разрешение
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
