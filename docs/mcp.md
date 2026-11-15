@@ -3498,6 +3498,11 @@ already walks Image Trace. Short agent entry points:
   image value that isn't a file's absolute path, and past `variable.loadLibrary`'s caps (256 variables, 1,000 data
   sets, 8 MiB). Without `path` the reply is `{xml, variables, datasets}`; with it, the file is written and the reply
   is `{path, variables, datasets}`.
+- Import a data source: `variable.import {path}` (the Variables panel menu's Import…) reads a data source file by its
+  extension, in any case: a `.csv`, `.tsv` or `.txt` file as `dataset.import {path}` reads it, and an `.xml` file as
+  `variable.loadLibrary {path}` reads it, with that command's refusals, undo step and reply, plus `format` (`csv` or
+  `xml`). A path with any other extension, or none, is refused before the file is read. The panel menu's Import Data
+  Sets… and Load Variable Library… stay.
 - Batch: `action.batch {commands, source?: folder|datasets, folder?, destination?: none|saveAndClose|folder,
   destinationFolder?, overrideOpen?, overrideSave?, overrideExport?, includeSubdirs?, stopOnError?}` plays an
   action on every file in a folder or every data set (the Actions panel menu's Batch…). Override Save and Override
