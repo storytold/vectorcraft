@@ -165,6 +165,23 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Vertical Align Bottom", "object.align", json!({"vertical": "bottom"})),
                     ],
                 ),
+                // The Align panel's Distribute Objects and Distribute Spacing buttons: each item runs
+                // what a click on its button runs (`crate::panels::align::run_button`).
+                sub(
+                    "Distribute",
+                    vec![
+                        c("Horizontal Distribute Left", "align.distributeHorizontalLeft"),
+                        c("Horizontal Distribute Center", "align.distributeHorizontalCenter"),
+                        c("Horizontal Distribute Right", "align.distributeHorizontalRight"),
+                        Sep,
+                        c("Vertical Distribute Top", "align.distributeVerticalTop"),
+                        c("Vertical Distribute Center", "align.distributeVerticalCenter"),
+                        c("Vertical Distribute Bottom", "align.distributeVerticalBottom"),
+                        Sep,
+                        c("Horizontal Distribute Space", "align.distributeHorizontalSpace"),
+                        c("Vertical Distribute Space", "align.distributeVerticalSpace"),
+                    ],
+                ),
                 Sep,
                 c("Group", "object.group"),
                 c("Ungroup", "object.ungroup"),

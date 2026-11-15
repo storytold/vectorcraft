@@ -52,6 +52,8 @@ pub(super) struct Writer<'a> {
     last_image: Option<(ImageBlob, Option<Arc<image::DynamicImage>>)>,
     /// The images written whole so far, by the address of their data (which each entry keeps).
     whole_images: std::collections::HashMap<usize, Arc<Vec<u8>>>,
+    /// Writing a graph's art with its records: a graph inside it is written as its art.
+    in_graph: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -78,6 +80,7 @@ impl<'a> Writer<'a> {
             clips: vec![],
             last_image: None,
             whole_images: std::collections::HashMap::new(),
+            in_graph: false,
         }
     }
 
@@ -264,7 +267,12 @@ impl<'a> Writer<'a> {
         if n.name.as_deref().is_some_and(|s| !s.is_empty()) && !n.is_layer() {
             self.warn(NAMES);
         }
-        if n.extras().graph.is_some() {
+        // A graph on the layers keeps its data and settings when its records read back whole.
+        let graph = match n.extras().graph.is_some() {
+            true if self.nest == 0 && !self.in_graph => crate::ai_graph::records(n, self.to_art),
+            _ => None,
+        };
+        if n.extras().graph.is_some() && graph.is_none() {
             self.warn(GRAPHS);
         }
         let locked = locked || n.locked;
@@ -273,7 +281,10 @@ impl<'a> Writer<'a> {
                 self.warn(SUBLAYERS);
                 self.group(children, *clip, locked);
             }
-            NodeKind::Group { children, clip } => self.group(children, *clip, locked),
+            NodeKind::Group { children, clip } => match &graph {
+                Some(records) => self.graph(children, locked, records),
+                None => self.group(children, *clip, locked),
+            },
             NodeKind::Path { path, rule, guide, .. } => {
                 self.lock(locked);
                 if *guide {
@@ -350,6 +361,25 @@ impl<'a> Writer<'a> {
             self.lock(locked);
             self.line("U");
         }
+    }
+
+    /// A graph's group (`u` … `U`) between its records (§17): `%_Gs` and its functional records
+    /// before it, `%_GS` after it, and each series' group followed by its `Go` tag.
+    fn graph(&mut self, children: &[Arc<Node>], locked: bool, records: &crate::ai_graph::Records) {
+        self.lock(locked);
+        self.body.push_str(&records.head);
+        self.line("u");
+        self.in_graph = true;
+        for c in children {
+            self.node(c, locked);
+            if let Some(tag) = records.tags.get(&c.id) {
+                self.line(tag);
+            }
+        }
+        self.in_graph = false;
+        self.lock(locked);
+        self.line("U");
+        self.line(crate::ai_graph::END);
     }
 
     /// A clipping group: its first member's outline clips the others (`h W n`). That member's fills
