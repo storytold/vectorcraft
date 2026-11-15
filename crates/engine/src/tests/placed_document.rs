@@ -667,6 +667,26 @@ fn linked_pages_share_one_copy_of_the_file_and_open_in_the_pages_color_mode() {
 }
 
 #[test]
+fn linked_pages_read_the_file_once_and_a_blank_page_keeps_its_crop_box() {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let dir = Folder::new("open-pdf-link-pages-blank");
+    let src = dir.file("blank.pdf");
+    let art = || PdfPage::new(100.0, 50.0, "1 0 0 rg 10 10 20 20 re f");
+    write(&src, &pdf(&[art(), PdfPage::new(80.0, 40.0, ""), art()], None));
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": src, "linkPages": true, "cropTo": "bounding"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let boards: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
+    assert_eq!(boards.len(), 3, "{boards:?}");
+    assert_eq!((boards[0].width(), boards[0].height()), (20.0, 20.0), "the art's bounds");
+    assert_eq!((boards[1].width(), boards[1].height()), (80.0, 40.0), "the blank page's crop box");
+    // The pages are read from the one copy every page's blob keeps: a page that read the file
+    // again would count here.
+    let blob = d.images.values().next().map(|b| b.bytes.clone()).unwrap();
+    assert_eq!(vectorcraft_pdf::reads_of(&blob), 0, "the pages are read from the file read once");
+}
+
+#[test]
 fn link_pages_is_refused_without_a_path_for_other_files_and_with_a_password_or_outlines() {
     let dir = Folder::new("open-pdf-link-pages-refused");
     let src = dir.file("flyer.pdf");
