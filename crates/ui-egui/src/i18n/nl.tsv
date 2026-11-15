@@ -145,6 +145,7 @@
 @msg	`name` must be the name of a script engine	`name` moet de naam van een scriptengine zijn
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	de hoofdscriptengine is bij elke uitvoering nieuw en wordt nooit bewaard, dus kan hij niet worden verwijderd
 @msg	there is no script engine named {name}	er is geen scriptengine met de naam {name}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` is alleen voor een uitvoering zonder iemand om te vragen: in de app beantwoordt de persoon elk dialoogvenster
 @msg	Running a script	Er wordt een script uitgevoerd
 @msg	Data Recovery can't keep copies in {path}: {e}	Gegevensherstel kan geen kopieën bewaren in {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kunnen niet worden geladen uit {path}: {e}

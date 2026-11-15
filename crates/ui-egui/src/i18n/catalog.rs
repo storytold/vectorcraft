@@ -219,8 +219,13 @@ impl Catalog {
         }
         // Templates that start with text before those that start with a placeholder, so
         // `plug-in manifest: {0}` wins over `{_1} is {_2} bytes (limit {_3})` for a message it
-        // wraps; then most literal text first, so `Couldn't open {name}: {e}` wins over `{path}: {e}`.
-        c.templates.sort_by_key(|t| (matches!(t.pieces.first(), Some(Piece::Hole(_))), std::cmp::Reverse(t.literal)));
+        // wraps; then the longest text before the first placeholder, so `` `answers[{i}]` {e} `` wins
+        // over `` `{key}` must be true or false `` for a message it wraps; then most literal text
+        // first, so `Couldn't open {name}: {e}` wins over `{path}: {e}`.
+        c.templates.sort_by_key(|t| {
+            let lead = if let Some(Piece::Text(text)) = t.pieces.first() { text.len() } else { 0 };
+            (matches!(t.pieces.first(), Some(Piece::Hole(_))), std::cmp::Reverse(lead), std::cmp::Reverse(t.literal))
+        });
         c
     }
 
