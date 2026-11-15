@@ -308,7 +308,7 @@ const PSD_LAYERS: FormatOption = FormatOption {
     name: "layers",
     ty: "boolean",
     default: "true",
-    description: "write layers: each top-level layer a pixel layer with its opacity and blend mode (a background colour is a Background layer); false: one flat image, on white where transparent",
+    description: "write layers: each top-level layer a pixel layer with its opacity and blend mode (a background colour is a Background layer); false: one flat image, on white where transparent. The user and object slices are written either way",
 };
 
 const MAX_EDITABILITY: FormatOption = FormatOption {

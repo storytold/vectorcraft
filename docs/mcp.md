@@ -8683,6 +8683,18 @@ appearance of their own or knockout stay one pixel layer. Hidden layers and obje
 `hiddenLayers: true` writes them as hidden layers. `layers: false` writes one flat image, on white where nothing is
 drawn. Files are at most 30000 pixels a side.
 
+With or without layers, the file keeps the document's slices in image resource 1050, in version 6 of the slices
+resource format of the [Photoshop File Formats Specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/).
+`importSlices` reads that form, so the slices of an opened PSD file come back when the export is opened. The rest are
+VectorCraft's own rules:
+
+- The user and object slices that reach into the exported artboard are written, each clipped to it, in its pixels,
+  at least one pixel each way. Auto slices aren't written; the document that opens the file lays them out again.
+- An object slice is written as a user slice over its object's bounds. Each slice keeps its name, its type (Image
+  or No Image), its link, target, message, alternative text, cell text and background color. An HTML Text slice is
+  written as No Image with its type's text as HTML. Text alignment is written as the default.
+- More than 10000 slices, a slice text longer than 65536 characters, or a slice without finite bounds is an error.
+
 PSD files (`.psd`, and `.psb`, the large document format) place as their merged image, the
 flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, RGB, CMYK
 (converted with the colour settings' CMYK) and Lab, at 1, 8, 16 and 32 bits per channel, sized by their resolution.
