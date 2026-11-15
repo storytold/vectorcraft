@@ -55,6 +55,8 @@ font-technology	Variable	バリアブル
 	Insert Aki Left	前にアキを挿入
 	Insert Aki Right	後ろにアキを挿入
 	Tsume	文字ツメ
+	Adjust Horizontal Diacritic Position	発音区別符号の水平位置を調整
+	Adjust Vertical Diacritic Position	発音区別符号の垂直位置を調整
 	Character Direction	文字の方向
 	Digits	数字
 	Arabic	アラビア数字
@@ -1939,6 +1941,7 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
 	Help › Search Commands…	ヘルプ › コマンドを検索…
@@ -9293,3 +9296,20 @@ breakText	Glyphs	字形
 @msg	turn on at least one side	少なくとも 1 つの辺をオンにしてください
 @msg	with no hem and no grommets there is nothing to mark	折り返しもハトメもないため、マークを付けるものがありません
 @msg	{saving} failed: {e}	{saving} に失敗しました: {e}
+	Packaging Tools	パッケージツール
+	Fold Lines	折り線
+	Make Cut Line	カット線にする
+	Make Crease Line	筋入れ線にする
+	Make Partial Cut Line	半抜き線にする
+	Make Perforation Line	ミシン目線にする
+	Make Fold Line	折り線にする
+	Role Swatches…	線種のスウォッチ…
+	Role Swatches	線種のスウォッチ
+	Role	線種
+	Cut Line	カット線
+	Crease Line	筋入れ線
+	Partial Cut Line	半抜き線
+	Perforation Line	ミシン目線
+	No objects are selected.	オブジェクトが選択されていません。
+	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
+	Remove Fold Line Role	線種を解除

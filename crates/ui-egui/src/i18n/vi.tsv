@@ -1800,6 +1800,7 @@ file-filter	Templates	Mẫu
 	Show smooth color wheel	Hiện bánh xe màu liền mạch
 	Show segmented color wheel	Hiện bánh xe màu phân đoạn
 	Show color bars	Hiện các thanh màu
+	Find the selected colors in the artwork	Tìm các màu đã chọn trong tác phẩm
 	Harmony Sets	Bộ hài hòa màu
 	Height	Chiều cao
 	Height:	Chiều cao:
@@ -3078,6 +3079,8 @@ mark-style	Japanese	Kiểu Nhật
 	Insert Aki Left	Chèn aki bên trái
 	Insert Aki Right	Chèn aki bên phải
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Điều chỉnh vị trí ngang của dấu phụ
+	Adjust Vertical Diacritic Position	Điều chỉnh vị trí dọc của dấu phụ
 	Proportional Lining	Số tỷ lệ đứng
 	Position:	Vị trí:
 	Default Position	Vị trí mặc định
@@ -7287,6 +7290,23 @@ breakText	Glyphs	Glyph
 	Nest Shapes…	Xếp hình tiết kiệm vật liệu…
 	Nest Shapes	Xếp hình tiết kiệm vật liệu
 	Roll	Cuộn
+	Packaging Tools	Công cụ bao bì
+	Fold Lines	Đường gấp
+	Make Cut Line	Đặt làm đường cắt
+	Make Crease Line	Đặt làm đường cấn
+	Make Partial Cut Line	Đặt làm đường cắt một phần
+	Make Perforation Line	Đặt làm đường đục lỗ
+	Make Fold Line	Đặt làm đường gấp
+	Role Swatches…	Mẫu màu của các loại đường…
+	Role Swatches	Mẫu màu của các loại đường
+	Role	Loại đường
+	Cut Line	Đường cắt
+	Crease Line	Đường cấn
+	Partial Cut Line	Đường cắt một phần
+	Perforation Line	Đường đục lỗ
+	No objects are selected.	Không có đối tượng nào được chọn.
+	Open a document to mark its fold lines.	Mở tài liệu để đánh dấu các đường gấp của nó.
+	Remove Fold Line Role	Bỏ loại đường
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Hiệu ứng 3D yêu cầu tọa độ hữu hạn trong phạm vi 100 triệu điểm

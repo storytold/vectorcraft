@@ -1342,3 +1342,129 @@ fn stroke_review_nested_compound_origin() {
         assert_eq!(snapped, Point::new(205.0, 140.0), "outer Pathfinder Add enabled={add_enabled}");
     }
 }
+
+/// Incoming non-similarity type outlines materialize character strokes as
+/// filled paths. Their real painted bands remain stroke targets, unlike glyph fills.
+#[test]
+fn stroke_review_nonuniform_type_stroke_origin() {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{CharStyle, QueryPaintKind, TextObject};
+    use vectorcraft_geom::{FillRule, PathData};
+
+    fn nearest(path: &BezPath, p: Point) -> Point {
+        path.segments()
+            .map(|s| s.eval(s.nearest(p, 1e-6).t))
+            .min_by(|a, b| a.distance_squared(p).total_cmp(&b.distance_squared(p)))
+            .expect("the real glyph or stroke band must have an outline")
+    }
+    // Select one ordinary straight part of this fixed glyph's actual outline,
+    // away from its corners and every legacy target. This is not a font corpus.
+    fn witness(path: &BezPath, legacy: &Targets, avoid: Option<&BezPath>, tol: f64) -> (Point, Point) {
+        for segment in path.segments() {
+            let PathSeg::Line(line) = segment else { continue };
+            let tangent = line.p1 - line.p0;
+            let length = tangent.hypot();
+            if length <= 12.0 {
+                continue;
+            }
+            let at = line.p0.midpoint(line.p1);
+            let probe = at + Vec2::new(-tangent.y, tangent.x) * (0.75 / length);
+            let on = nearest(path, probe);
+            if on.distance(at) < 1e-6
+                && on.distance(probe) > 0.25
+                && on.distance(probe) <= tol
+                && legacy.snap_point(probe, tol).0 == probe
+                && avoid.is_none_or(|p| nearest(p, on).distance(on) > tol)
+            {
+                return (probe, on);
+            }
+        }
+        panic!("the fixed Source Sans 3 H must provide an isolated outline contact");
+    }
+    fn document(style: CharStyle, xf: Affine) -> (Document, NodeId, TextObject) {
+        let mut d = Document::new(800.0, 600.0);
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut text = TextObject::point(Point::ZERO, "H", style);
+        text.xf = xf;
+        d.insert(Some(layer), 0, Node::new(id, NodeKind::Text(Box::new(text.clone())))).unwrap();
+        (d, id, text)
+    }
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let style = CharStyle {
+        font_family: "Source Sans 3".into(),
+        size: 160.0,
+        fill: Paint::solid(Color::BLACK),
+        stroke: red.clone(),
+        stroke_width: 8.0,
+        ..CharStyle::default()
+    };
+    let tol = 1.5;
+    // Similarity first is a real passing control for the existing live-stroke
+    // route; the second transform requires the new filled-stroke materializer.
+    for (filled, xf) in [(false, Affine::new([1.5, 0.0, 0.0, 1.5, 150.0, 300.0])), (true, Affine::new([2.0, 0.0, 0.35, 1.0, 150.0, 300.0]))] {
+        let (d, id, text) = document(style.clone(), xf);
+        let original = d.clone();
+        let layout = layout_text(FontDb::global(), &text);
+        assert_eq!(layout.glyphs.len(), 1, "the original fixture is one actual H glyph");
+        let glyph = &layout.glyphs[0].outline;
+        assert!(!glyph.elements().is_empty(), "the pinned document font must supply real outlines");
+        let ink = xf * glyph.clone();
+        // Independent geometry oracle: stroke the laid-out glyph in text space,
+        // then transform the resulting band, matching the canvas's operation order.
+        let band = vectorcraft_effects::stroke::outline_region(&PathData::from_bezpath(glyph), FillRule::NonZero, &style.stroke_layer())
+            .transformed(xf)
+            .to_bezpath();
+        let (selection, paint) = (Selection::default(), paint());
+        let off = ToolContext { snap_to_stroke_edges: false, snapping_tolerance: tol, ..cx(&d, &selection, &paint) };
+        let legacy = Targets::collect(&d, &[], None).with_stroke_edges(&off, &[], None);
+        let (probe, expected) = witness(&band, &legacy, Some(&ink), tol);
+        assert_eq!(legacy.snap_point(probe, tol).0, probe);
+        let ordinary = vectorcraft_effects::outline_text(d.node(id).unwrap()).unwrap();
+        ordinary.walk(&mut |n| assert!(n.extras().query_origin.0.is_none(), "ordinary outlines remain untagged"));
+        if filled {
+            let painted_band = ordinary.children().unwrap().iter().find(|n| n.appearance.fill_paint() == red).expect("actual filled red stroke");
+            assert!(painted_band.appearance.stroke().is_none());
+            let actual_band = painted_band.path_data().unwrap().to_bezpath();
+            assert!(nearest(&actual_band, probe).distance(expected) < 1e-6, "ordinary materialization keeps the independently outlined band");
+        } else {
+            assert!(ordinary.children().unwrap().iter().any(|n| n.appearance.stroke().is_some()), "similarity retains the live character stroke");
+        }
+        // A real fill-only H must not become a stroke target, even near an ink
+        // contour that the old anchors/centres/alignment cannot explain.
+        let (fill_doc, _, _) = document(CharStyle { stroke: Paint::None, ..style.clone() }, xf);
+        let fill_original = fill_doc.clone();
+        let fill_legacy = Targets::collect(&fill_doc, &[], None);
+        let (fill_probe, _) = witness(&ink, &fill_legacy, None, tol);
+        let fill_cx = ToolContext { snap_to_stroke_edges: true, snapping_tolerance: tol, ..cx(&fill_doc, &selection, &paint) };
+        let fill_targets = Targets::collect(&fill_doc, &[], None).with_stroke_edges(&fill_cx, &[], None);
+        assert_eq!(fill_targets.snap_point(fill_probe, tol).0, fill_probe, "original glyph fill is not a stroke edge");
+        assert_eq!(fill_doc, fill_original);
+        let on = ToolContext { snap_to_stroke_edges: true, snapping_tolerance: tol, ..cx(&d, &selection, &paint) };
+        let targets = Targets::collect(&d, &[], None).with_stroke_edges(&on, &[], None);
+        let snapped = targets.snap_point(probe, tol).0;
+        assert!(
+            snapped.distance(expected) < 1e-6 && snapped.distance(probe) > 0.25,
+            "filled={filled}: {probe:?} -> {snapped:?}, expected {expected:?}"
+        );
+        if filled {
+            let view = vectorcraft_effects::stroke_paint_view(&d);
+            let query_outline = vectorcraft_effects::outline_text(view.node(id).unwrap()).expect("the real tagged text's outlines");
+            let (mut geometry_fill, mut stroke_fill) = (false, false);
+            query_outline.walk(&mut |n| {
+                if n.path_data().is_some() && n.appearance.stroke().is_none() && !n.appearance.fill_paint().is_none() {
+                    match n.extras().query_origin.0.map(|o| o.kind) {
+                        Some(QueryPaintKind::Geometry) => geometry_fill = true,
+                        Some(QueryPaintKind::Stroke) => stroke_fill = true,
+                        _ => {}
+                    }
+                }
+            });
+            assert!(geometry_fill && stroke_fill, "real query view keeps original glyph fill and materialized stroke distinct");
+        }
+        assert_eq!(d, original, "actual text and paints stay unchanged");
+        for layer in d.layers.iter().chain(&fill_doc.layers) {
+            layer.walk(&mut |n| assert!(n.extras().query_origin.0.is_none(), "original documents retain no transient origin"));
+        }
+    }
+}

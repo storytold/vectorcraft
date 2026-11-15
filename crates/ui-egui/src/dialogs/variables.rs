@@ -140,11 +140,18 @@ pub fn open(app: &mut VectorcraftApp, id: &str, preselect: Option<&str>) -> bool
 
 /// Variable Options' Name and Kind fields for the variable `name`: its name, and its kind as
 /// `variable.rename` takes it (empty for a variable of unknown kind, which OK leaves as it is).
-/// [`FILLED`] records which variable they were filled for.
+/// [`FILLED`] records which variable they were filled for. Once they were, only a field that is
+/// still unset (null, as setting the Variable field leaves it) is filled.
 fn fill_variable_options(vars: &Variables, name: &str, fields: &mut serde_json::Map<String, Value>) {
-    let kind = vars.variable(name).map(|v| v.kind).filter(|k| *k != VariableKind::Unknown).map(VariableKind::label).unwrap_or_default();
-    fields.insert("newName".into(), json!(name));
-    fields.insert("kind".into(), json!(kind));
+    let refill = fields.get(FILLED).and_then(Value::as_str) != Some(name);
+    let unset = |fields: &serde_json::Map<String, Value>, key: &str| matches!(fields.get(key), None | Some(Value::Null));
+    if refill || unset(fields, "newName") {
+        fields.insert("newName".into(), json!(name));
+    }
+    if refill || unset(fields, "kind") {
+        let kind = vars.variable(name).map(|v| v.kind).filter(|k| *k != VariableKind::Unknown).map(VariableKind::label).unwrap_or_default();
+        fields.insert("kind".into(), json!(kind));
+    }
     fields.insert(FILLED.into(), json!(name));
 }
 
@@ -212,9 +219,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 label(ui, tl!("Variable"));
                 dropdown(ui, d, "variable", &variable_names, 220.0);
                 let picked = d.str("variable");
-                if picked != d.str(FILLED) {
-                    fill_variable_options(vars, &picked, &mut d.fields);
-                }
+                fill_variable_options(vars, &picked, &mut d.fields);
                 ui.end_row();
                 label(ui, tl!("Name"));
                 text(ui, d, "newName", 220.0);
@@ -305,7 +310,8 @@ fn set_text(d: &mut Dialog, key: &str, s: String) {
 ///
 /// In Variable Options, setting the Variable field clears Name and Kind, which OK reads as the
 /// variable's own name and kind, until a frame fills them from it; setting Name or Kind ties them
-/// to the variable already named, so no frame fills them over.
+/// to the variable already named, so no frame fills them over, and a frame fills only the one
+/// still cleared.
 pub(super) fn note_set(d: &mut Dialog, field: &str) {
     d.fields.remove(&empty_marker(field));
     if d.str("__command") == "variable.rename" {
@@ -668,5 +674,47 @@ mod tests {
         out.textures_delta.clear();
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.str("newName"), d.str("kind")), ("Flag".to_string(), "visibility".to_string()));
+    }
+
+    #[test]
+    fn variable_options_fills_the_field_left_unset_after_the_variable_changes() {
+        let mut app = app_with_variables();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let frame = |app: &mut VectorcraftApp| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+        };
+
+        // Kind alone: Name shows the newly picked variable's name.
+        open(&mut app, "variable.rename", Some("Title"));
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            crate::dialogs::set_field(d, "variable".into(), json!("Badge"));
+            crate::dialogs::set_field(d, "kind".into(), json!("text"));
+        }
+        frame(&mut app);
+        {
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.str("newName"), d.str("kind")), ("Badge".to_string(), "text".to_string()));
+        }
+
+        // Name alone: Kind shows the newly picked variable's kind.
+        open(&mut app, "variable.rename", Some("Title"));
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            crate::dialogs::set_field(d, "variable".into(), json!("Badge"));
+            crate::dialogs::set_field(d, "newName".into(), json!("Flag"));
+        }
+        frame(&mut app);
+        {
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.str("newName"), d.str("kind")), ("Flag".to_string(), "visibility".to_string()));
+        }
+
+        // OK still renames Badge and keeps its kind.
+        crate::dialogs::confirm(&mut app).unwrap();
+        let kind_of = |name: &str| app.session.active().and_then(|st| st.doc.variables.variable(name).map(|v| v.kind));
+        assert_eq!((kind_of("Flag"), kind_of("Badge")), (Some(VariableKind::Visibility), None));
     }
 }
