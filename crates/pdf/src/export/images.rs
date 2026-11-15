@@ -139,7 +139,8 @@ impl Exporter<'_> {
         let doc = self.doc;
         let out = self.out.clone();
         let profiles = !out.standard.cmyk_only();
-        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit });
+        let then = out.converts_tagged_pixels().then_some(&*out);
+        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit, then });
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
             if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk {
