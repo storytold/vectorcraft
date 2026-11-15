@@ -5831,8 +5831,12 @@ fn show_hidden_characters_lays_out_only_type_that_changed() {
     let same = |a: &std::sync::Arc<HiddenMarks>, b: &std::sync::Arc<HiddenMarks>| std::sync::Arc::ptr_eq(a, b);
     let (before, after) = frames(&mut app, &|_| {});
     assert!(before.iter().zip(&after).all(|(a, b)| same(a, b)), "a frame lays out no type");
+    // Each attempt sets different text: text the object already has is no edit, and a second
+    // attempt with the same text would leave the object as it was.
+    let edits = std::cell::Cell::new(0);
     let (before, after) = frames(&mut app, &|app| {
-        app.session.execute("text.setText", &json!({"id": ids[1].0, "text": "a b c"})).unwrap();
+        edits.set(edits.get() + 1);
+        app.session.execute("text.setText", &json!({"id": ids[1].0, "text": format!("a b c {}", edits.get())})).unwrap();
     });
     assert!(!same(&before[1], &after[1]), "the edited object is laid out again");
     assert!(same(&before[0], &after[0]) && same(&before[2], &after[2]), "the others are not");
