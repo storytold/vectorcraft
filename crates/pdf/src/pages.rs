@@ -297,6 +297,17 @@ impl Opened {
             bleed,
         }
     }
+
+    /// How far page `index`'s (0-based) bleed box reaches past its trim box, `[top, bottom, left,
+    /// right]` in points, as the page shows (rotated); `None` past the last page, and when the bleed
+    /// box doesn't hold the trim box.
+    pub fn page_bleed(&self, index: usize) -> Option<[f64; 4]> {
+        let page = self.pdf.pages().get(index)?;
+        let init = Affine::new(page.initial_transform(true).as_coeffs());
+        let (trim, bleed) = (init.transform_rect_bbox(page_box(page, CropTo::Trim)), init.transform_rect_bbox(page_box(page, CropTo::Bleed)));
+        let sides = [trim.y0 - bleed.y0, bleed.y1 - trim.y1, trim.x0 - bleed.x0, bleed.x1 - trim.x1];
+        sides.iter().all(|b| b.is_finite() && *b >= 0.0).then_some(sides)
+    }
 }
 
 /// A PDF's pages as an import on their trim boxes sizes them ([`Opened::trim_pages`]).
