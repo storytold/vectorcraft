@@ -23,7 +23,8 @@ mod tests_read_only_save;
 
 pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, export_pdf, hide_exports, reveal, save_command_output};
 pub(crate) use export::{
-    export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
+    EXPORT_SELECTION, export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
+    selection_path,
 };
 pub(crate) use open::report_installed;
 pub(crate) use open::{EXPORT_PRESETS, import_presets, open_notes, open_with_on, opened, opened_after_notice, show_opened};
@@ -436,11 +437,38 @@ mod tests {
         app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
         app.services.pick_save = Some(Box::new(|_: &FilePick| Some("/tmp/sel.svg".into())));
-        assert_eq!(app.run("document.exportSelection", json!({})).unwrap()["path"], "/tmp/sel.svg");
+        app.run("document.exportSelection", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("svgOptions"), "the picked format's options follow");
+        assert_eq!(crate::dialogs::confirm(&mut app).unwrap()["path"], "/tmp/sel.svg");
         app.run("document.exportSelection", json!({"path": "/tmp/sel.png"})).unwrap();
         let w = written.borrow();
         assert!(String::from_utf8_lossy(&w[0].1).contains("<svg"), "SVG from the picked name");
         assert_eq!(&w[1].1[1..4], b"PNG", "PNG from the given path");
+    }
+
+    /// An option skips the options dialog, but without `path` the save panel still picks the file.
+    #[test]
+    fn export_selection_with_an_option_and_no_path_asks_for_the_file_only() {
+        let (mut app, written) = app();
+        app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
+        let asked = Rc::new(RefCell::new(0));
+        let count = asked.clone();
+        app.services.pick_save = Some(Box::new(move |_: &FilePick| {
+            *count.borrow_mut() += 1;
+            Some("/tmp/sel.png".into())
+        }));
+        let r = app.run("document.exportSelection", json!({"scale": 2})).unwrap();
+        assert_eq!(*asked.borrow(), 1, "the save panel picks the file");
+        assert!(app.ui.dialog.is_none(), "no options dialog follows");
+        assert_eq!(r["path"], "/tmp/sel.png");
+        assert_eq!(&written.borrow()[0].1[1..4], b"PNG");
+        app.run("document.exportSelection", json!({"path": "/tmp/sel2.png", "scale": 2})).unwrap();
+        assert_eq!(*asked.borrow(), 1, "a path writes without the save panel");
+        let w = written.borrow();
+        assert_eq!(w.len(), 2);
+        assert_eq!(w[0].0, "/tmp/sel.png", "the picked file");
+        assert_eq!(w[1].0, "/tmp/sel2.png", "the given path");
     }
 
     #[test]

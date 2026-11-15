@@ -1809,6 +1809,44 @@ fn an_eps_without_layers_keeps_its_symbols() {
     assert_eq!(symbol_names(&r.document), ["Bar", "Masked", "Dot"], "{:?}", r.warnings);
 }
 
+/// The box of the art of `d`'s first symbol (Bar, 12 × 2 about the origin in the editing data).
+fn bar_bounds(d: &Document) -> Option<vectorcraft_geom::Rect> {
+    d.symbols.first().and_then(|s| s.art.geometric_bounds())
+}
+
+/// A symbol library without layers whose editing data is drawn larger than its units comes in with
+/// its symbols' art as large as a document read from its layers has it: an EPS of a Large Canvas
+/// copy at its declared scale, and a `.ai` whose artboard is its PDF part's page at that scale or
+/// in the units of its `UserUnit`. One whose artboard is the page in points keeps its art's size.
+#[test]
+fn a_symbol_library_in_larger_units_comes_in_at_the_pages_size() {
+    let board = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let library = |setup: &str| symbol_library().replace("%%BeginSetup\n", &format!("%%BeginSetup\n{setup}"));
+    let ten = Some(vectorcraft_geom::Rect::new(-60.0, -10.0, 60.0, 10.0));
+    let r = import(&eps(&page_square(50, 50), &library("%AI24_LargeCanvasScale: 10\n"))).unwrap();
+    assert_eq!(bar_bounds(&r.document), ten, "{:?}", r.warnings);
+    let large = format!("%AI24_LargeCanvasScale: 10\n{board}");
+    let (d, warnings, read) = crate::layered_ai(&private(&library(&large)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    assert_eq!(bar_bounds(&d), ten, "{warnings:?}");
+    let (d, warnings, _) = crate::layered_ai(&private(&library(board)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 10.0);
+    assert_eq!(bar_bounds(&d), ten, "{warnings:?}");
+    let points = board.replace("0 100 /Real", "0 1000 /Real").replace("100 0 /Real", "1000 0 /Real");
+    let (d, warnings, _) = crate::layered_ai(&private(&library(&points)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 10.0);
+    assert_eq!(bar_bounds(&d), Some(vectorcraft_geom::Rect::new(-6.0, -1.0, 6.0, 1.0)), "{warnings:?}");
+    // A library VectorCraft wrote (its `%%Creator`) has its symbols at their own size, whatever its
+    // scale.
+    let own =
+        |setup: &str| library(setup).replacen("%!PS-Adobe-3.0 \n", &format!("%!PS-Adobe-3.0 \n%%Creator: {}\n", crate::ai_editing::CREATOR_TEXT), 1);
+    let own_size = Some(vectorcraft_geom::Rect::new(-6.0, -1.0, 6.0, 1.0));
+    let r = import(&eps(&page_square(50, 50), &own("%AI24_LargeCanvasScale: 10\n"))).unwrap();
+    assert_eq!(bar_bounds(&r.document), own_size, "{:?}", r.warnings);
+    let (d, warnings, _) = crate::layered_ai(&private(&own(&large)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 1.0);
+    assert_eq!(bar_bounds(&d), own_size, "{warnings:?}");
+}
+
 /// A `.ai` that comes in as its PDF part, and an EPS that comes in as its page, because their
 /// layers can't be used (their editing data is for another page) get the symbols defined before
 /// their layers.
@@ -2157,6 +2195,34 @@ fn an_ai_file_gets_its_layers_and_the_art_outside_its_artboard() {
     let above = d.layers[1].children().unwrap()[0].visual_bounds().unwrap();
     assert!(above.y1 <= 0.0 + 1e-6, "the art above the artboard is kept, outside it: {above:?}");
     assert!(!d.layers[2].visible);
+}
+
+/// A `.ai` of versions 10 to 13, whose symbol instances are placed by a `TransformMatrix` on the
+/// canvas, opens from its layers: the art outside its artboard, an instance among it, comes in,
+/// rather than the PDF part alone, which has none of it.
+#[test]
+fn an_older_ai_files_symbols_keep_its_layers_and_the_art_outside_its_artboard() {
+    // The template box's center is (50.5, 50.5): art space's origin is at canvas (8141, 8242). The
+    // instance puts Box at (150, 50) in art space, right of the artboard (x 0 to 100).
+    let instance = "/SymbolInstance :\n(Box) /SymbolRef ,\n1 0 0 1 8291 8192 /TransformMatrix\n;\n9 () XW";
+    let layers = format!(
+        "{}{}{}",
+        stroked_box_symbol(),
+        layer("Jig", true, &square(10, 10)),
+        layer("Parts", true, &format!("{}\n{instance}", square(30, 110)))
+    );
+    let art = native(&layers).replacen("%AI5_NumLayers", "%AI3_TemplateBox: 50.5 50.5 50.5 50.5\n%AI5_NumLayers", 1);
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert!(read, "{warnings:?}");
+    assert_eq!(names(&d), ["Jig", "Parts"], "{warnings:?}");
+    let parts = d.layers[1].children().unwrap();
+    let above = parts[0].visual_bounds().unwrap();
+    assert!(above.y1 <= 1e-6, "the square above the artboard is kept, outside it: {above:?}");
+    let NodeKind::SymbolInstance { symbol, .. } = &parts[1].kind else { panic!("an instance: {:?} {warnings:?}", parts[1].kind) };
+    assert_eq!(symbol, "Box");
+    let b = parts[1].visual_bounds_with(&d.symbol_boxes()).unwrap();
+    let near = [b.x0 - 149.0, b.y0 - 49.5, b.x1 - 151.0, b.y1 - 50.5].iter().all(|v| v.abs() < 0.3);
+    assert!(near, "the instance right of the artboard: {b:?}");
 }
 
 /// A `.ai` whose PDF part was read in points from a page of 10 points a unit (its `UserUnit`), and
@@ -2769,6 +2835,94 @@ fn a_large_canvas_eps_keeps_its_graphic_styles_at_the_pages_size() {
     assert_eq!((object.appearance.stroke_width(), object.extras().graphic_style), (2.0, Some(1)), "{object:#?}");
 }
 
+/// The definition of the symbol Box: a rectangle 2 × 1 about the origin, stroked 0.4 wide.
+fn stroked_box_symbol() -> String {
+    let art = "0 0 0 1 K\n0.4 w\n-1 -0.5 m\n-1 0.5 L\n1 0.5 L\n1 -0.5 L\n-1 -0.5 L\nS\n";
+    format!("%AI5_Begin_NonPrinting\n{}%AI5_End_NonPrinting--\n", symbol_def("Box", art, 5))
+}
+
+/// The art of `d`'s symbol Box ([`stroked_box_symbol`]) is ten times as large, its stroke 4 wide,
+/// and its instance on `d`'s second layer, placed in the file at twice its size about (`x`, `y`),
+/// keeps that scale and draws a box of 40 × 20 about `center`.
+fn box_symbol_at_ten_times(d: &Document, center: (f64, f64), notes: &[String]) {
+    let art = &d.symbols.iter().find(|s| s.name == "Box").unwrap_or_else(|| panic!("{notes:?}")).art;
+    let b = art.geometric_bounds().unwrap();
+    let close = |r: vectorcraft_geom::Rect, e: [f64; 4]| [r.x0, r.y0, r.x1, r.y1].iter().zip(e).all(|(a, b)| (a - b).abs() < 1e-6);
+    assert!(close(b, [-10.0, -5.0, 10.0, 5.0]), "the art at the page's size: {b:?} {notes:?}");
+    let mut widths = vec![];
+    art.walk(&mut |n| {
+        if matches!(n.kind, NodeKind::Path { .. }) {
+            widths.push(n.appearance.stroke_width());
+        }
+    });
+    assert_eq!(widths, [4.0], "{notes:?}");
+    let instance = d.layers[1].children().unwrap().first().unwrap_or_else(|| panic!("{:#?} {notes:?}", d.layers));
+    let NodeKind::SymbolInstance { xf, .. } = &instance.kind else { panic!("an instance: {:?}", instance.kind) };
+    let [a, b0, c, d0, ..] = xf.as_coeffs();
+    assert!((a.hypot(b0) - 2.0).abs() < 1e-9 && (c.hypot(d0) - 2.0).abs() < 1e-9, "the instance's own scale: {xf:?}");
+    let (x, y) = center;
+    assert!(close(xf.transform_rect_bbox(b), [x - 20.0, y - 10.0, x + 20.0, y + 10.0]), "{:?}", xf.transform_rect_bbox(b));
+}
+
+/// The symbols of a Large Canvas editing copy come in at the page's size, as its art does: their
+/// art and its strokes ten times as large, and each instance with the scale the file gives it,
+/// drawn where and as large as before.
+#[test]
+fn a_large_canvas_eps_keeps_its_symbols_at_the_pages_size() {
+    let instance = "/SymbolInstance :\n(Box) /SymbolRef ,\n2 0 0 -2 5 5 /RTransformMatrix\n;\n9 () XW";
+    let square = "0 0 1 0 k\n5 5 m\n5.4 5 L\n5.4 5.4 L\n5 5.4 L\nf";
+    let art = native_large_canvas(10.0, 10.0, &format!("{}{}{}", stroked_box_symbol(), layer("Art", true, square), layer("Box", false, instance)));
+    let r = import(&eps(&page_square(50, 50), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Box"], "{:?}", r.warnings);
+    box_symbol_at_ten_times(&r.document, (50.0, 50.0), &r.warnings);
+}
+
+/// A large canvas `.ai` 100 units square at a scale of 10, with the symbol Box
+/// ([`stroked_box_symbol`]) and an instance of it at twice its size about (50, 50), its header
+/// carrying `creator` when given, read with its PDF part, on a page whose PDF part can't be read,
+/// and without a page.
+fn large_canvas_ai_box_reads(creator: Option<&str>) -> Vec<(&'static str, Document, Vec<String>)> {
+    let instance = "/SymbolInstance :\n(Box) /SymbolRef ,\n2 0 0 -2 50 50 /RTransformMatrix\n;\n9 () XW";
+    let layers = format!("{}{}{}", stroked_box_symbol(), layer("Art", true, &square(10, 10)), layer("Box", false, instance));
+    let mut art = native_large_canvas(100.0, 10.0, &layers);
+    if let Some(creator) = creator {
+        art = art.replacen("%!PS-Adobe-3.0 \n", &format!("%!PS-Adobe-3.0 \n%%Creator: {creator}\n"), 1);
+    }
+    let data = private(&art);
+    let (d, notes, read) = crate::layered_ai(&data, in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    let on_page = crate::ai_alone_on_page(&data, (1000.0, 1000.0), 10.0, Default::default()).unwrap();
+    let no_page = crate::ai_alone(&data).unwrap();
+    vec![("PDF part", d, notes), ("on a page", on_page.0, on_page.1), ("no page", no_page.0, no_page.1)]
+}
+
+/// A `.ai` whose editing data is read at its declared large canvas scale has its symbols scaled
+/// with the art, as an EPS has, however the file opens.
+#[test]
+fn a_large_canvas_ai_keeps_its_symbols_at_the_pages_size() {
+    for (how, d, notes) in large_canvas_ai_box_reads(None) {
+        let notes: Vec<String> = notes.into_iter().chain([how.to_string()]).collect();
+        box_symbol_at_ten_times(&d, (500.0, 500.0), &notes);
+    }
+}
+
+/// A large canvas `.ai` that VectorCraft wrote (its `%%Creator`) has its symbols defined at their
+/// own size, as its `.ai` save writes them: their art keeps that size, and the instance, scaled with
+/// the layers, draws the same box, however the file opens.
+#[test]
+fn a_large_canvas_ai_vectorcraft_wrote_keeps_its_symbols_at_their_own_size() {
+    for (how, d, notes) in large_canvas_ai_box_reads(Some(crate::ai_editing::CREATOR_TEXT)) {
+        let art = &d.symbols.iter().find(|s| s.name == "Box").unwrap_or_else(|| panic!("{how}: {notes:?}")).art;
+        let b = art.geometric_bounds().unwrap();
+        assert_eq!(b, vectorcraft_geom::Rect::new(-1.0, -0.5, 1.0, 0.5), "{how}: {notes:?}");
+        let instance = d.layers[1].children().unwrap().first().unwrap_or_else(|| panic!("{how}: {:#?} {notes:?}", d.layers));
+        let NodeKind::SymbolInstance { xf, .. } = &instance.kind else { panic!("{how}: an instance: {:?}", instance.kind) };
+        let drawn = xf.transform_rect_bbox(b);
+        let close = [drawn.x0 - 480.0, drawn.y0 - 490.0, drawn.x1 - 520.0, drawn.y1 - 510.0].iter().all(|v| v.abs() < 1e-6);
+        assert!(close, "{how}: {drawn:?}");
+    }
+}
+
 #[test]
 fn type_with_a_listed_art_style_is_linked_to_its_graphic_style() {
     let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
@@ -3043,6 +3197,29 @@ fn text_document(stories: &[Story<'_>]) -> String {
     )
 }
 
+/// [`text_document`] with its keys written by name, as files saved for version 11 write them: a
+/// typed node's kind under `/StreamTag`, the strikes' kinds by their long names.
+fn named_text_document(stories: &[Story<'_>]) -> String {
+    let story = |(text, align, anchor, _t, start): &Story<'_>| {
+        let n = text.chars().count();
+        format!(
+            "<< /Model << /Text ({text}) /ParagraphRun << /RunArray [ << /RunData << /ParagraphSheet << /Name () /Features << /Justification {align} >> /Parent 0 >> >> /Length {n} >> ] >> \
+             /StyleRun << /RunArray [ << /RunData << /StyleSheet << /Name () /Parent 0 /Features << /Font 0 /FontSize 14.0 /FillColor << /StreamTag /CAITextPaint /Color << /Type 2 /Values [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /Length {n} >> ] >> >> \
+             /View << /Frames [ << /Resource 0 >> ] /Strikes [ << /StreamTag /PathSelectGroupCharacter /Children [ << /StreamTag /FrameStrike /Transform << /Origin [ {} {} ] >> \
+             /Children [ << /StreamTag /RowColStrike /Children [ << /StreamTag /RowColStrike /Children [ << /StreamTag /LineStrike /Children [ \
+             << /StreamTag /Segment /Transform << /Origin [ {start} 0.0 ] >> /Mapping << /CharacterCount {n} >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>",
+            anchor.0, anchor.1
+        )
+    };
+    let frame = |(_, _, _, t, _): &Story<'_>| format!("<< /Resource << /Point [ 0 0 ] /Data << /FrameMatrix [ 1 0 0 1 {} {} ] >> >> >>", t.0, t.1);
+    format!(
+        "/DocumentResources << /FontSet << /Resources [ << /Resource << /StreamTag /CoolTypeFont /Identifier << /Name (Helvetica) >> >> >> ] >> \
+         /TextFrameSet << /Resources [ {} ] >> >>\n/DocumentObjects << /TextObjects [ {} ] /OriginalNormalStyleFeatures << /FontSize 12.0 >> >>\n",
+        stories.iter().map(frame).collect::<Vec<_>>().join(" "),
+        stories.iter().map(story).collect::<Vec<_>>().join(" ")
+    )
+}
+
 /// The editing copy of a 100 × 100 file with `layers` and the text `document`; its template box is
 /// centred at (50, 50).
 fn native_with_text(layers: &str, document: &str) -> String {
@@ -3193,6 +3370,8 @@ fn type_from_the_text_document_takes_the_version_its_font_record_keeps() {
     // A record whose name differs from the copies' in punctuation alone still picks its version.
     assert_eq!(version("/0 (Vertest-Ink-Regular) /5 (1.1)"), "1.1");
     assert_eq!(version("/0 (Vertest-Ink-Regular)"), "1.0");
+    // Files saved for versions older than the key write it by name among the numbered ones.
+    assert_eq!(version("/0 (VertestInk-Regular) /VersionString (1.1)"), "1.1");
 }
 
 /// A story with no runs, and a run or paragraph that names no style, is set in `[Normal Character
@@ -3600,6 +3779,81 @@ fn shown_type_keeps_the_pages_and_type_off_the_page_comes_from_the_text_document
     assert!(all.contains(&"Hi there".to_string()) && all.contains(&"Away".to_string()), "{all:?}");
     assert_eq!(texts.len(), 2, "the page's type is in the layer as it is, not in a group");
     assert!(!r.warnings.iter().any(|w| w.contains("order the page paints")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_text_document_with_named_keys_gives_type_off_the_page_too() {
+    // Files saved for version 11 write the text document's keys by name. Story 1 is off the page:
+    // only the text document has it, and story 0 stays in its own text object.
+    let stories = [("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Away\r", 0, (8300.0, 8180.0), (0.0, 0.0), 0.0)];
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &named_text_document(&stories));
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let texts = text_of(&r.document.layers[0]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi there", "Away"], "{:?}", r.warnings);
+    let x = |t: &vectorcraft_doc::TextObject| t.xf.as_coeffs()[4];
+    assert!((x(texts[0]) - 58.5).abs() < 1e-6 && (x(texts[1]) - 158.5).abs() < 1e-6, "{:?} {:?}", texts[0].xf, texts[1].xf);
+}
+
+#[test]
+fn a_text_document_with_named_keys_reads_as_the_same_one_with_numbers() {
+    // Type on a hidden layer comes only from the text document: its styles, paints, frames and
+    // layout read the same whichever way its keys are written.
+    let stories = [("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Mid\r", 2, (8191.5, 8191.5), (0.0, 0.0), -10.0)];
+    let spare = |doc: &str| {
+        let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &(text_object(0) + &text_object(1)))), doc);
+        let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+        let texts: Vec<vectorcraft_doc::TextObject> = text_of(&r.document.layers[1]).into_iter().cloned().collect();
+        (texts, r.warnings)
+    };
+    let (numbered, _) = spare(&text_document(&stories));
+    let (named, warnings) = spare(&named_text_document(&stories));
+    assert_eq!(numbered.len(), 2);
+    assert_eq!(named, numbered, "{warnings:?}");
+    assert_eq!(named[1].para.justify, vectorcraft_doc::Justify::Center);
+    let magenta = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 1.0, 0.0, 0.0));
+    assert_eq!(named[0].runs[0].style.fill, magenta);
+}
+
+#[test]
+fn a_text_document_with_named_keys_takes_a_runs_style_by_its_number() {
+    // Files saved for version 11 name a run's paragraph and character styles by their numbers in the
+    // document's style sets, and give point type a curve of four equal points. Styles 1 center the
+    // paragraph and paint the type magenta; paragraph style 2 sets its direction right to left.
+    let magenta = "<< /StreamTag /CAITextPaint /Color << /Type 2 /Values [ 1.0 0.0 1.0 0.0 0.0 ] >> >>";
+    let story = |text: &str, para: u8, chars: u8, x: f64| {
+        let n = text.chars().count();
+        format!(
+            "<< /Model << /Text ({text}) /ParagraphRun << /RunArray [ << /RunData << /ParagraphSheet {para} >> /Length {n} >> ] >> \
+             /StyleRun << /RunArray [ << /RunData << /StyleSheet {chars} >> /Length {n} >> ] >> >> \
+             /View << /Frames [ << /Resource 0 >> ] /Strikes [ << /StreamTag /PathSelectGroupCharacter /Children [ << /StreamTag /FrameStrike \
+             /Transform << /Origin [ {x} 8180.0 ] >> /Children [ << /StreamTag /RowColStrike /Children [ << /StreamTag /RowColStrike /Children [ \
+             << /StreamTag /LineStrike /Children [ << /StreamTag /Segment /Transform << /Origin [ 0.0 0.0 ] >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>"
+        )
+    };
+    let doc = format!(
+        "/DocumentResources << /FontSet << /Resources [ << /Resource << /StreamTag /CoolTypeFont /Identifier << /Name (Helvetica) >> >> >> ] >> \
+         /StyleSheetSet << /Resources [ << /Resource << /Name (Normal) /Features << /Font 0 /FontSize 14.0 >> >> >> \
+         << /Resource << /Name (Magenta) /Parent 0 /Features << /FillColor {magenta} >> >> >> ] >> \
+         /ParagraphSheetSet << /Resources [ << /Resource << /Name (Normal) /Features << /Justification 0 >> >> >> \
+         << /Resource << /Name (Centered) /Parent 0 /Features << /Justification 2 >> >> >> \
+         << /Resource << /Name (Leftward) /Parent 0 /Features << /ParagraphDirection 1 >> >> >> ] >> \
+         /TextFrameSet << /Resources [ << /Resource << /Bezier << /Points [ 8191.5 8191.5 8191.5 8191.5 8191.5 8191.5 8191.5 8191.5 ] >> \
+         /Data << /Type 0 /FrameMatrix [ 1 0 0 1 0 0 ] >> >> >> ] >> >>\n\
+         /DocumentObjects << /TextObjects [ {} {} ] /OriginalNormalStyleFeatures << /FontSize 12.0 >> >>\n",
+        story("Mid\r", 1, 1, 8200.0),
+        story("Back\r", 2, 0, 8300.0)
+    );
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &(text_object(0) + &text_object(1)))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Mid", "Back"], "{:?}", r.warnings);
+    assert_eq!(texts[0].para.justify, vectorcraft_doc::Justify::Center);
+    let magenta = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 1.0, 0.0, 0.0));
+    assert_eq!(texts[0].runs[0].style.fill, magenta);
+    assert_eq!(texts[1].para.direction, Some(vectorcraft_doc::ParaDirection::RightToLeft));
+    assert_eq!(texts[1].para.justify, vectorcraft_doc::Justify::Right);
+    assert_ne!(texts[1].runs[0].style.fill, magenta);
 }
 
 #[test]

@@ -105,6 +105,22 @@ fn apply_to_all_answers_the_rest_and_cancel_pastes_nothing() {
 }
 
 #[test]
+fn ok_pastes_nothing_after_another_document_became_active() {
+    let mut app = conflicting();
+    run(&mut app, "edit.paste", json!({}));
+    set(&mut app, "applyToAll", json!(true));
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let before = objects(&app);
+    let undo = app.session.active().unwrap().history.undo.len();
+    dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "it closes as Cancel does");
+    assert_eq!(objects(&app), before, "the document made active pastes nothing");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    assert!(objects(&app).is_empty(), "the document it asked in pastes nothing");
+}
+
+#[test]
 fn paste_goes_to_the_centre_of_the_view() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     run(&mut app, "file.new", json!({"width": 400, "height": 300}));

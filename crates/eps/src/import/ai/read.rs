@@ -102,8 +102,10 @@
 //!   in the Symbols panel's order. An instance: `/SymbolInstance : (name) /SymbolRef , a b c d tx
 //!   ty /RTransformMatrix ;`, the matrix taking the symbol's art to art space; in a symbol's art,
 //!   it takes it to art space about the canvas point of art space's origin, as a pattern's
-//!   gradients are. Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after
-//!   it.
+//!   gradients are. Files of versions 10 to 13 write `a b c d tx ty /TransformMatrix` instead,
+//!   the matrix taking the symbol's art to the canvas (y down, art space's origin at the canvas
+//!   point the template box gives); in a symbol's art, it takes the art to that symbol's space.
+//!   Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after it.
 //!
 //! Sections the reader doesn't need (styles, filters) are skipped; type, instances of symbols it
 //! can't read, fills with a pattern it can't read, placed files without a preview and operators
@@ -215,6 +217,9 @@ pub struct Structure {
     pub text_patterns: HashMap<String, Paint>,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
+    /// The data's symbols are at their own size, whatever its scale: VectorCraft wrote it (its
+    /// `%%Creator` is [`crate::ai_editing::CREATOR_TEXT`]).
+    pub symbols_own_size: bool,
     /// The objects by their XML id (`AI10_ArtUID`), a text object by its slot's id: `None` for an
     /// id two objects have.
     pub xml_ids: HashMap<String, Option<NodeId>>,
@@ -599,6 +604,10 @@ struct Reader<'a> {
     compound_groups: HashSet<NodeId>,
     /// Groups of a text object and its look (see [`Self::style_marker`]), which aren't a look.
     text_looks: HashSet<NodeId>,
+    /// Objects followed by samples of the pen (`(…) Xt n XD`), which aren't read: such an object
+    /// whose style has a Calligraphic brush that varies with the pen keeps its drawn look (see
+    /// [`Self::style_marker`]).
+    pen_samples: HashSet<NodeId>,
     /// The gradient mesh being read (`/Mesh X!` … `/End X!`), and whether it started on a `%_` line.
     mesh: Option<(super::mesh::MeshReader, bool)>,
     /// The art styles (`%AI9_BeginArtStyles`), by name.
@@ -644,6 +653,8 @@ struct Reader<'a> {
     page_art: bool,
     /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
     canvas_scale: f64,
+    /// [`Structure::symbols_own_size`], from the header's `%%Creator`.
+    symbols_own_size: bool,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
@@ -791,6 +802,7 @@ impl<'a> Reader<'a> {
             ruler_guides: HashMap::new(),
             compound_groups: HashSet::new(),
             text_looks: HashSet::new(),
+            pen_samples: HashSet::new(),
             group_ended: false,
             mesh_ended: false,
             layer_state: None,
@@ -818,6 +830,7 @@ impl<'a> Reader<'a> {
             large_canvas: None,
             page_art: false,
             canvas_scale: 1.0,
+            symbols_own_size: false,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),
