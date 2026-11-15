@@ -2095,6 +2095,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Näytä värimallin rajat
 	Show Tile Edge	Näytä ruudun reuna
 	Size Tile to Art	Sovita ruudun koko kuvitukseen
+	Move Tile with Art	Siirrä ruutua kuvituksen mukana
 	Tile Type:	Ruudun tyyppi:
 	Top in Front	Ylin edessä
 	V Spacing:	Pystyväli:
@@ -2137,6 +2138,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Käytä mustan pisteen kompensointia
 	Working CMYK (don't tag)	Työ-CMYK (ei tunnistetta)
 	Working RGB (don't tag)	Työ-RGB (ei tunnistetta)
+	Don't Color Manage This Document	Älä hallitse tämän asiakirjan värejä
+	Working RGB: {name}	Työ-RGB: {name}
+	Working CMYK: {name}	Työ-CMYK: {name}
 	{name} (spot)	{name} (spottiväri)
 	Add to Profiles…	Lisää profiileihin…
 	Align Stroke to Center	Tasaa viiva keskelle
@@ -2732,6 +2736,8 @@ digits	Malayalam	Malajalam
 	Keep a link to an image file instead of only embedding it	Säilytä linkki kuvatiedostoon sen sijaan, että kuva vain upotetaan
 	Place onto a new locked, dimmed template layer below the current layer	Sijoita uudelle lukitulle, himmennetylle mallitasolle nykyisen tason alapuolelle
 	Swap the selected object for the file, keeping its place and transform	Korvaa valittu objekti tiedostolla säilyttäen sen paikan ja muunnoksen
+	Show Import Options	Näytä tuontiasetukset
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Kysy kunkin PDF-, DXF- tai tekstitiedoston tuontiasetukset ennen sijoittamista; pois: käytä viimeksi valittuja asetuksia
 	On: one locked object showing the document, updated when it changes.	Päällä: yksi lukittu objekti, joka näyttää asiakirjan ja päivittyy sen muuttuessa.
 	Off: an editable copy of its art, embedded in this document.	Pois: muokattava kopio sen kuvituksesta upotettuna tähän asiakirjaan.
 	Images: link to the file instead of only embedding it.	Kuvat: linkitä tiedostoon sen sijaan, että se vain upotetaan.
@@ -5421,6 +5427,7 @@ imageTrace	Outline	Ääriviiva
 @msg	every numbered name for {name} is taken in the document's folder	kaikki kohteen {name} numeroidut nimet ovat jo käytössä asiakirjan kansiossa
 @msg	No linked files to look for	Ei etsittäviä linkitettyjä tiedostoja
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Linkki on symbolin, kaaviomallin, kuvion tai peittävyysmaskin sisällä, eikä sillä ole paikkaa piirtoalueella
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	kaavion sarjassa olevan kaaviomallin piirros piirretään uudelleen mallista: muokkaa mallia muuttaaksesi sitä
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` on vaiheviittaus {r}, jonka vain `run` ja `command_batch` ratkaisevat
 @msg	`ids` must be an array of object ids, not {v}	`ids` on oltava objektitunnusten taulukko, ei {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` on oltava värien taulukko, ei {v}
@@ -5440,6 +5447,9 @@ imageTrace	Outline	Ääriviiva
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automaation tiedostojärjestelmäkäyttöä ei ole myönnetty: kirjoitusoikeus puuttuu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automaation polku hylättiin: lukujuuren {root} ulkopuolella: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	automaation polku hylättiin: lukujuurten {roots} ulkopuolella: {path}
+@msg	a linked JavaScript file is outside the read roots	linkitetty JavaScript-tiedosto on lukujuurten ulkopuolella
+@msg	the library's file is outside the read roots	kirjaston tiedosto on lukujuurten ulkopuolella
+@msg	{file} names more than one linked JavaScript file	{file} vastaa useampaa kuin yhtä linkitettyä JavaScript-tiedostoa
 @msg	automation path rejected: outside the write root {root}: {path}	automaation polku hylättiin: kirjoitusjuuren {root} ulkopuolella: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	automaation polku hylättiin: kirjoitusjuurten {roots} ulkopuolella: {path}
 @msg	automation path rejected: path is empty	automaation polku hylättiin: polku on tyhjä
@@ -5981,6 +5991,9 @@ mark-style	Japanese	Japanilainen
 	Softness	Pehmeys
 	Ambient Light	Ympäristövalo
 	Light behind the object	Valo objektin takana
+	Move Light to Back	Siirrä valo taakse
+	Move Light to Front	Siirrä valo eteen
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Siirrä valoa vetämällä. Nuolinäppäimet siirtävät kohdistettua valoa; Vaihto siirtää 15° kerrallaan.
 	Shadows	Varjot
 	Distance from Object	Etäisyys objektista
 	Shadow Bounds	Varjon rajat
@@ -6721,6 +6734,8 @@ axis	Y Axis	Y-akseli
 	Create New Set	Luo uusi sarja
 	Stop Global Edit	Lopeta yleismuokkaus
 	Global Edit Options	Yleismuokkauksen asetukset
+	Select Similar Objects	Valitse samankaltaiset objektit
+	Select Similar Options	Samankaltaisten valinnan asetukset
 	Leave Out of Global Edit	Jätä pois yleismuokkauksesta
 	Match	Vastaavuus
 	On Artboards	Piirtoalustoilla
@@ -6843,6 +6858,13 @@ axis	Y Axis	Y-akseli
 	Graphite Pencil	Grafiittikynä
 	Wax Crayon	Vahaliitu
 	Charcoal Dust	Hiilipöly
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniset virtapiirit
+	Circuit Trace	Piirijohdin
+	Bus Lines	Väylälinjat
+	Terminal Nodes	Liitäntäpisteet
+
 	Notched Ribbon	Lovettu nauha
 	Double Line	Kaksoisviiva
 	Wave	Aalto

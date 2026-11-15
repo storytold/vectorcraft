@@ -153,19 +153,20 @@ pub(crate) fn is_drawing_tool(id: &str) -> bool {
 
 /// [`TOGGLE_MODE`]: from a tool of selection mode, choose the drawing tool chosen last (none yet:
 /// [`FIRST_DRAWING_TOOL`]); from any other tool, keep it as the drawing tool and choose the
-/// Selection tool. → `{tool}`, the tool now active.
-pub(crate) fn toggle_mode(app: &mut crate::VectorcraftApp) -> serde_json::Value {
+/// Selection tool. → `{tool}`, the tool now active. A switch that fails returns its error and
+/// leaves the drawing tool to return to as it was.
+pub(crate) fn toggle_mode(app: &mut crate::VectorcraftApp) -> Result<serde_json::Value, String> {
     let now = app.session.tool_id().to_string();
-    let next = if selects(&now) {
-        app.ui.touch_drawing_tool.clone().unwrap_or_else(|| FIRST_DRAWING_TOOL.to_string())
+    let (next, outgoing) = if selects(&now) {
+        (app.ui.touch_drawing_tool.clone().unwrap_or_else(|| FIRST_DRAWING_TOOL.to_string()), None)
     } else {
-        if is_drawing_tool(&now) {
-            app.ui.touch_drawing_tool = Some(now);
-        }
-        "selection".to_string()
+        ("selection".to_string(), is_drawing_tool(&now).then_some(now))
     };
-    app.select_tool(&next);
-    serde_json::json!({"tool": app.session.tool_id()})
+    app.try_select_tool(&next)?;
+    if let Some(tool) = outgoing {
+        app.ui.touch_drawing_tool = Some(tool);
+    }
+    Ok(serde_json::json!({"tool": app.session.tool_id()}))
 }
 
 #[cfg(test)]

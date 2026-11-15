@@ -4607,6 +4607,10 @@ proptest! {
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
         survive("mutated .ai symbols", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         survive("mutated .ai symbols, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+        // The same symbols as files of versions 10 to 13 place them, by a `TransformMatrix`.
+        let older = mutate_text(&older_symbols_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&older)].concat();
+        survive("mutated older .ai symbols", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         // A symbol library: the same symbols and list, no layers.
         let library = mutate_text(&symbol_library_text(), cut, &edits);
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&library)].concat();
@@ -4859,6 +4863,53 @@ fn the_symbols_fuzz_data_opens_live() {
     let mut instances = 0;
     doc.walk(|n| instances += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })));
     assert_eq!(instances, 3);
+}
+
+/// [`symbols_text`] with its instances placed by a `TransformMatrix`, as files of versions 10 to
+/// 13 write them. Art space's origin is at canvas (8091, 8242), from the template box: on the page
+/// the matrix takes the symbol's art to the canvas (y down), and in S2's art to S2's space.
+fn older_symbols_text() -> String {
+    let mut text = symbols_text();
+    for (newer, older) in [
+        ("1 0 0 -1 -8081 8237 /RTransformMatrix", "1 0 0 1 10 5 /TransformMatrix"),
+        ("1 0 0 -1 20 50 /RTransformMatrix", "1 0 0 1 8111 8192 /TransformMatrix"),
+        ("2 0 0 -2 100 50 /RTransformMatrix", "2 0 0 2 8191 8192 /TransformMatrix"),
+        ("1 0 0 -1 20 20 /RTransformMatrix", "1 0 0 1 8111 8222 /TransformMatrix"),
+    ] {
+        assert!(text.contains(newer), "{newer}");
+        text = text.replace(newer, older);
+    }
+    text
+}
+
+/// The older data [`ai_symbols_never_panic`] damages, as it is, opens with its instances live and
+/// placed as [`symbols_text`] places them, on the page and in S2's art.
+#[test]
+fn the_older_symbols_fuzz_data_opens_live() {
+    use vectorcraft_doc::{Node, NodeKind};
+    fn xfs(n: &Node, out: &mut Vec<[f64; 6]>) {
+        match &n.kind {
+            NodeKind::SymbolInstance { xf, .. } => out.push(xf.as_coeffs()),
+            _ => n.children().into_iter().flatten().for_each(|c| xfs(c, out)),
+        }
+    }
+    let open = |text: &str| {
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+        let (doc, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
+        assert!(layered, "{warnings:?}");
+        let (mut page, mut nested) = (vec![], vec![]);
+        doc.layers.iter().for_each(|l| xfs(l, &mut page));
+        let s2 = doc.symbols.iter().find(|s| s.name == "S2").expect("S2");
+        xfs(&s2.art, &mut nested);
+        (page, nested)
+    };
+    let text = older_symbols_text();
+    assert!(!text.contains("/RTransformMatrix"));
+    let (older, newer) = (open(&text), open(&symbols_text()));
+    assert_eq!((older.0.len(), older.1.len()), (3, 1));
+    let same = |a: &[[f64; 6]], b: &[[f64; 6]]| a.len() == b.len() && a.iter().flatten().zip(b.iter().flatten()).all(|(x, y)| (x - y).abs() < 1e-9);
+    assert!(same(&older.0, &newer.0), "{older:?} {newer:?}");
+    assert!(same(&older.1, &newer.1), "{older:?} {newer:?}");
 }
 
 /// Symbols the reader must stop at: sections that don't end, references and matrices it can't
