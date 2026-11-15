@@ -260,7 +260,8 @@ fn copy_paint(s: &mut Session, p: &Value, to_stroke: bool) -> Result<Value> {
             let series = super::super::appearance::capture_series_paint_writes(&before, d, &ids, &written);
             let labels = super::super::graph::capture_label_styles(d, &ids, &copy_run);
             let painted: Vec<NodeId> = written.iter().map(|(id, _)| *id).collect();
-            let lines = super::super::graph::capture_line_changes(&before, d, &painted);
+            // A line keeps the paint written to it, also when it already showed it, and the rest stays as its kind keeps it.
+            let lines = super::super::graph::capture_line_changes(&before, d, &painted) | super::super::graph::capture_line_paint_writes(d, &written);
             Ok(objects + usize::from(series || labels || lines))
         })?;
     }

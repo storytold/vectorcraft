@@ -931,7 +931,9 @@ The other commands store them when given the line itself, and the `appearance.*`
 `graphicStyle.apply`, `graphicStyle.redefine`, and `appearance.copyFrom` with every attribute picked up and applied or
 with `append`, store a line's rows even when the line already showed them. The other commands, an `appearance.copyFrom`
 of some attributes included, store only what they change on a line's rows; the kind keeps its other attributes, also
-when the line still shows different ones until the graph is drawn again. An `appearance.copyFrom` that does not apply
+when the line still shows different ones until the graph is drawn again. `paint.setFill`, `paint.setStroke`,
+`addon.color.fillToStroke` and `addon.color.strokeToFill` also store the paint they write on a line's topmost visible
+fill or stroke row when the line already showed it. An `appearance.copyFrom` that does not apply
 the object's transparency, and `graphicStyle.apply` with `add`, leave the object opacity and blend mode a kind keeps as
 they are, also when the line still shows other ones. `paint.default` stores the default fill and stroke rows for a
 line's kind even when the line already showed them, and leaves the object opacity and blend mode the kind keeps. Rows

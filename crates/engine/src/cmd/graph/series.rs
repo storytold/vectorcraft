@@ -946,6 +946,39 @@ pub(crate) fn capture_line_changes(before: &Document, doc: &mut Document, ids: &
     changed
 }
 
+/// Keep, for every line of their kind, the paint an edit wrote to row `at` of graph line `id` for each `(id, at)` in
+/// `written` when that row is the line's topmost visible fill or stroke, also when the line already showed that paint:
+/// the paint replaces the one its kind keeps from another line. The other attributes stay as the kind keeps them. Lines
+/// of a kind take the frontmost one's paint. Called inside the same edit, so they undo together. Returns whether kept
+/// rows changed.
+pub(crate) fn capture_line_paint_writes(doc: &mut Document, written: &[(NodeId, usize)]) -> bool {
+    let ids: Vec<NodeId> = written.iter().map(|(id, _)| *id).collect();
+    let mut changed = false;
+    for (id, graph, line) in lines_of(doc, &ids) {
+        let Some(n) = doc.node(id) else { continue };
+        let items = &n.appearance.items;
+        let wrote = |fill: bool| items.iter().rposition(|it| it.is_fill() == fill && it.visible()).is_some_and(|at| written.contains(&(id, at)));
+        let (fill, stroke) = (wrote(true), wrote(false));
+        if !fill && !stroke {
+            continue;
+        }
+        let shown = label_rows(n).unwrap_or_default().paint;
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        let slot = line_slot(&mut spec.label_styles, line);
+        let mut rows = slot.clone().unwrap_or_else(|| line.default_rows());
+        if fill {
+            rows.paint.fill = shown.fill;
+        }
+        if stroke {
+            rows.paint.stroke = shown.stroke;
+        }
+        let kept = (rows != line.default_rows()).then_some(rows);
+        changed |= *slot != kept;
+        *slot = kept;
+    }
+    changed
+}
+
 /// Is `id` a graph line: a path directly in a graph's Axes group?
 pub(crate) fn is_graph_line(doc: &Document, id: NodeId) -> bool {
     graph_line(doc, id).is_some()

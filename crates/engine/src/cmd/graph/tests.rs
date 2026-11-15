@@ -7350,6 +7350,27 @@ fn default_fill_and_stroke_on_an_axis_line_that_shows_it_is_kept() {
     assert!(looks.iter().all(|l| (l.2 - 0.5).abs() < 1e-6), "the kind keeps its 50% opacity: {looks:?}");
 }
 
+/// A stroke paint written to an axis line that already shows it is kept for every axis line, in place of the stroke the
+/// kind keeps from another line.
+#[test]
+fn a_stroke_written_to_an_axis_line_that_shows_it_is_kept() {
+    let cases = [("paint.setStroke", json!({"color": "#000000"})), ("addon.color.fillToStroke", json!({}))];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setFill", &json!({"ids": [lines[1].id.0], "color": "#000000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "{cmd}: the other lines show black until the graph is drawn again");
+        let mut p = params.clone();
+        p["ids"] = json!([lines[1].id.0]);
+        s.execute(cmd, &p).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#000000"), "{cmd}: {looks:?}");
+    });
+}
+
 #[test]
 fn pie_names_and_wedge_labels_keep_their_style() {
     let mut s = Session::new();
