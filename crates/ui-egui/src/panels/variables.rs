@@ -633,8 +633,10 @@ mod tests {
         let text = crate::tests_labels::painted_text(&mut app, show);
         assert!(text.contains("Spring"), "{text}");
         let rows = d.open_data_set_list(&mut app);
-        let marked: Vec<(Option<&str>, bool)> = rows.iter().map(|n| (n.label(), n.toggled() == Some(egui::accesskit::Toggled::True))).collect();
-        assert_eq!(marked, [(Some("Spring"), true), (Some("Data Set 2"), false)]);
+        // The accessibility update lists nodes in hash-map order, so the rows are compared by name.
+        let mut marked: Vec<(Option<&str>, bool)> = rows.iter().map(|n| (n.label(), n.toggled() == Some(egui::accesskit::Toggled::True))).collect();
+        marked.sort();
+        assert_eq!(marked, [(Some("Data Set 2"), false), (Some("Spring"), true)]);
         let other = rows.iter().find(|n| n.label() == Some("Data Set 2")).expect("the Data Set 2 row").clone();
         d.click(&mut app, &other);
         assert_eq!(app.session.active().unwrap().doc.variables.active_dataset.as_deref(), Some("Data Set 2"));
