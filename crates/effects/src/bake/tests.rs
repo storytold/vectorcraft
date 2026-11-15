@@ -1328,7 +1328,7 @@ fn placing_symbols_keeps_the_instances_stain() {
 }
 
 /// Every layer written, as DXF writes them (template layers are never written).
-const ALL: WrittenLayers = WrittenLayers { hidden: true, non_printing: true };
+const ALL: WrittenLayers = WrittenLayers { hidden: true, non_printing: true, hidden_objects: false };
 
 fn is_instance(d: &Document, id: u64) -> bool {
     d.node(NodeId(id)).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))
@@ -1455,9 +1455,19 @@ fn placing_symbols_skips_instances_the_export_leaves_out() {
     }
     // An export that writes the layers that do not print, or the hidden layers, places that
     // layer's instance first; the template layer's instance is never placed.
-    for (layers, first) in [(WrittenLayers { non_printing: true, hidden: false }, 921), (WrittenLayers { non_printing: false, hidden: true }, 931)] {
+    for (layers, first) in
+        [(WrittenLayers { non_printing: true, ..WrittenLayers::default() }, 921), (WrittenLayers { hidden: true, ..WrittenLayers::default() }, 931)]
+    {
         let out = bake(&d, Some((true, each, layers))).unwrap();
         assert!(!is_instance(&out, first) && is_instance(&out, 900) && is_instance(&out, 911), "{layers:?}");
+    }
+    // An export that writes hidden objects (SVG keeping hidden layers) places the hidden instance
+    // first, and the instance in the hidden group would come next; the hidden layer's instance
+    // stays, since that layer is still left out.
+    let out = bake(&d, Some((true, each, WrittenLayers { hidden_objects: true, ..WrittenLayers::default() }))).unwrap();
+    assert!(!is_instance(&out, 901), "the hidden instance is placed");
+    for id in [900, 903, 911, 921, 931] {
+        assert!(is_instance(&out, id), "{id} stays as it is");
     }
 }
 
