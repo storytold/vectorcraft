@@ -22,6 +22,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
         let choices = |k: &str| rasterize_color_models(&command, k, cmyk).or_else(|| choices(&command, k));
         form::param_fields(ui, d, &|k| lengths.contains(&k), &choices, &rank, app.session.general_unit());
+        if command == crate::addons::packaging::SET_ROLE_SWATCH {
+            crate::addons::packaging::follow_role(app, d);
+        }
         if linked
             && d.fields.get("rowGutter") == d.fields.get("__rowGutterLinked")
             && let Some(g) = d.fields.get("gutter").cloned()
@@ -159,6 +162,7 @@ fn order(command: &str) -> &'static [&'static str] {
             &["background", "colors", "contiguous", "match", "tolerance", "softness"]
         }
         crate::addons::cutting::BRIDGES => &["width", "count", "direction", "keepOriginal"],
+        crate::addons::packaging::SET_ROLE_SWATCH => &["role", "swatch"],
         _ => &[],
     }
 }
@@ -168,6 +172,7 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
     match (command, key) {
         ("type.pathOptions", "effect") => Some(crate::menus::PATH_EFFECTS),
         ("type.pathOptions", "alignToPath") => Some(PATH_ALIGN),
+        (crate::addons::packaging::SET_ROLE_SWATCH, "role") => Some(crate::addons::packaging::ROLES),
         (crate::addons::typetools::RELEASE, "mode") => Some(crate::addons::typetools::RELEASE_MODES),
         (crate::addons::cutting::BRIDGES, "direction") => Some(crate::addons::cutting::BRIDGE_DIRECTIONS),
         ("text.areaOptions", "fit") => Some(AREA_FIT),

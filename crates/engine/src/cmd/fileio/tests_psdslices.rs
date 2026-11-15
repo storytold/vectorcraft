@@ -372,6 +372,29 @@ fn slices_that_cant_be_read_warn_and_the_file_still_opens() {
 }
 
 #[test]
+fn a_slices_resource_cut_short_warns_and_the_file_still_opens() {
+    let good = v6(&[user("a", [0, 0, 5, 5])], &[]);
+    // Image resource `id`, the last of the image resources, declares 10 bytes more than they hold.
+    let cut = |layers: bool, id: u16, data: &[u8]| {
+        let mut f = with_resource(&psd(layers), id, data);
+        let sig = [&b"8BIM"[..], &id.to_be_bytes()].concat();
+        let at = f.windows(6).rposition(|w| w == sig.as_slice()).unwrap() + 8;
+        f[at..at + 4].copy_from_slice(&(data.len() as u32 + 10).to_be_bytes());
+        f
+    };
+    for layers in [true, false] {
+        let (s, r) = open(&cut(layers, 1050, &good), json!({}));
+        let w = warnings(&r);
+        assert!(w.iter().any(|w| w.starts_with("the slices can't be read (") && w.contains("cut short")), "{w:?}");
+        assert!(slices(&s).is_empty());
+        assert!(s.doc().unwrap().doc.art_bounds().is_some());
+        // Another resource cut short says nothing about slices.
+        let (s, r) = open(&cut(layers, 1051, &[0, 1]), json!({}));
+        assert!(warnings(&r).is_empty() && slices(&s).is_empty(), "{r}");
+    }
+}
+
+#[test]
 fn slices_are_clipped_to_the_canvas_and_those_outside_it_are_left_out() {
     let data = v6(&[user("over", [-5, -5, 5, 30]), user("out", [25, 0, 30, 5]), user("empty", [4, 4, 4, 9]), user("in", [1, 1, 2, 2])], &[]);
     let (s, r) = open(&with_resource(&psd(false), 1050, &data), json!({}));

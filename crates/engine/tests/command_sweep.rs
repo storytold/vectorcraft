@@ -993,6 +993,13 @@ fn structured_junk() {
         ("addon.document.symbolsFromLayers", json!({"layers": "x", "replace": 3})),
         ("addon.document.symbolsFromLayers", json!({"layers": [1e308, -1, null, u64::MAX], "replace": true})),
         ("addon.document.symbolsFromLayers", json!({"layers": [], "replace": true})),
+        // Packaging Tools add-on.
+        ("addon.packaging.setRole", json!({"role": "cut", "ids": [u64::MAX], "overprint": "no"})),
+        ("addon.packaging.setRole", json!({"role": ["crease"], "ids": "all"})),
+        ("addon.packaging.setRole", json!({"role": "none", "overprint": null})),
+        ("addon.packaging.roles", json!({"ids": [-1, 1e300]})),
+        ("addon.packaging.setRoleSwatch", json!({"role": "perforation", "swatch": "[Registration]"})),
+        ("addon.packaging.setRoleSwatch", json!({"role": "cut", "swatch": 5})),
         // Smart Pen add-on.
         ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
         ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),

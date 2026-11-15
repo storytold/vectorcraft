@@ -2775,6 +2775,58 @@ fn live_paint_selection_triple_click_series_ends_with_the_same_paint_parts() {
     assert_eq!(sel, vec![c.0]);
 }
 
+/// A Shift-triple-click on a face whose double-click already reaches a joined face of the same
+/// fill selects every face with that fill: the joined face the double-click toggled on is not
+/// toggled off again.
+#[test]
+fn live_paint_selection_shift_triple_click_keeps_joined_faces_of_the_same_fill() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], _) = live_strip(&mut d);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    // A and B are joined across the unstroked edge AB; C is parted from them by the stroked edge BC.
+    for id in [a, b, c] {
+        d.node_mut(id).unwrap().appearance.set_fill(red.clone());
+    }
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintSelectionTool::default();
+    let mut sel: Vec<u64> = vec![];
+    for kind in [
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::DoubleClick,
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::TripleClick,
+    ] {
+        for act in t.pointer(&cx, &ev(kind, 25.0, 25.0).with_mods(shift)) {
+            let Action::Exec(cmd, args) = act else { panic!("{act:?}") };
+            assert_eq!(cmd, "select.toggle");
+            let ids: Vec<u64> = match (args.get("ids"), args.get("id")) {
+                (Some(v), _) => v.as_array().unwrap().iter().map(|i| i.as_u64().unwrap()).collect(),
+                (None, Some(i)) => vec![i.as_u64().unwrap()],
+                (None, None) => vec![],
+            };
+            for i in ids {
+                match sel.iter().position(|x| *x == i) {
+                    Some(k) => {
+                        sel.remove(k);
+                    }
+                    None => sel.push(i),
+                }
+            }
+        }
+    }
+    sel.sort_unstable();
+    let mut want = vec![a.0, b.0, c.0];
+    want.sort_unstable();
+    assert_eq!(sel, want);
+}
+
 #[test]
 fn live_paint_selection_double_click_skips_locked_groups_and_art_outside_isolation() {
     let mut d = Document::new(500.0, 500.0);
