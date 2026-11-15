@@ -477,6 +477,71 @@ fn a_tabbed_line_ends_at_the_latest_break_that_fits_as_drawn() {
     assert_eq!(ended, (8, false));
 }
 
+/// A tabbed line measured as drawn hangs a burasagari full stop that overflows only when the stop
+/// is drawn at the line's right end and the line before it fits as drawn with no line-end trim on
+/// its last glyph; otherwise it ends at the latest legal break that fits as drawn.
+#[test]
+fn a_tabbed_burasagari_mark_hangs_only_at_the_drawn_end_of_a_fitting_line() {
+    let text = "a \t\u{05D0} 漢。";
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 10.0, ch)).collect();
+    let mut glyphs = synthetic_glyphs(&specs);
+    glyphs[3].level = unicode_bidi::Level::rtl();
+    // The text without its tab is 60 pt wide at 。 (glyph 6), past 55 pt; kinsoku keeps 。 off a line
+    // start, so the latest legal break before it ends the line before 漢 (glyph 5).
+    let end = |glyphs: &[SGlyph], line_end: &[f64], fits: Option<&dyn Fn(usize, bool) -> bool>| {
+        break_line(
+            text,
+            glyphs,
+            0,
+            55.0,
+            &[],
+            0.0,
+            None,
+            Burasagari::Standard,
+            Kinsoku::Hard,
+            KinsokuShoriType::PushOutOnly,
+            false,
+            false,
+            line_end,
+            fits,
+        )
+    };
+    let all_fit = |_end: usize, _hyphenated: bool| true;
+    assert_eq!(end(&glyphs, &[], Some(&all_fit)), (7, false), "drawn at the right end of a line that fits: 。 hangs");
+    let body_too_wide = |end: usize, _hyphenated: bool| end <= 5;
+    assert_eq!(end(&glyphs, &[], Some(&body_too_wide)), (5, false), "the line before 。 is too wide as drawn");
+    let mut trimmed = vec![0.0; glyphs.len()];
+    trimmed[5] = 2.0;
+    assert_eq!(end(&glyphs, &trimmed, Some(&all_fit)), (5, false), "the line before 。 fits only with 漢 trimmed");
+    glyphs[6].level = unicode_bidi::Level::rtl();
+    assert_eq!(end(&glyphs, &[], Some(&all_fit)), (5, false), "。 set right to left is drawn inside the line");
+}
+
+/// A line with a tab and right-to-left text pushes a closing bracket out with every Kinsoku Shori
+/// Type, where the same widths without them push it in.
+#[test]
+fn push_in_leaves_a_tabbed_right_to_left_line_to_push_out() {
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let tabbed = "\u{05D0}\t一二三四五」六";
+    let mut glyphs = full_width(tabbed);
+    glyphs[0].level = unicode_bidi::Level::rtl();
+    glyphs[1].adv = 2.0;
+    let tabs = [TabStop { position: 12.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+    let all_fit = |_end: usize, _hyphenated: bool| true;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&all_fit);
+    // 」 (glyph 7) ends 72 pt along, 5 pt past the measure: five gaps close by 1 pt each.
+    let end = |ty| break_line(tabbed, &glyphs, 0, 67.0, &tabs, 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, &[], fits);
+    for ty in [KinsokuShoriType::PushInFirst, KinsokuShoriType::PushOutFirst, KinsokuShoriType::PushOutOnly] {
+        assert_eq!(end(ty), (6, false), "{ty:?}: 五 is pushed out with 」");
+    }
+    let plain = "ax一二三四五」六";
+    let mut glyphs = full_width(plain);
+    glyphs[1].adv = 2.0;
+    let pushed =
+        break_line(plain, &glyphs, 0, 67.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushInFirst, false, false, &[], None);
+    assert_eq!(pushed, (8, false), "without the tab and right-to-left text, 」 is pushed in");
+}
+
 /// Past the breaks a tabbed line measures one by one, it ends at the latest break without a hyphen
 /// that fits as drawn, whatever the breaks with a hyphen between them measure.
 #[test]

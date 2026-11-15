@@ -416,7 +416,8 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
 /// line holds a glyph with a negative advance and has been wider than `width` in the order of its
 /// text, it reads at most [`MAX_DRAWN_CHECKS_STEPPING_BACK`] legal breaks further, and a forced
 /// line break right after the last of them, and ends at the latest of the breaks read that fits as
-/// drawn.
+/// drawn. Such a line with a tab hangs a burasagari mark only when the mark is drawn at its right
+/// end and the line before the mark fits as drawn.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -543,8 +544,22 @@ pub(super) fn break_line(
         let measured = if tabbed && fits.is_some() { (ink + cluster_ink).max(stops_reached) } else { x + cluster_width };
         overflowed |= tabbed && fits.is_some() && j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS;
         if j > first && !gl.is_space() && measured - end_credit > width + EPS {
-            // It ends the line with the spaces after it.
-            if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1, kinsoku) {
+            // It ends the line with the spaces after it. Once the line holds a tab and is measured as
+            // drawn, the mark hangs only where it is drawn at the line's right end (it and the rest of
+            // its cluster are set left to right at the paragraph's level) and the line before it fits
+            // as drawn with no line-end trim on its last glyph; otherwise the line ends at a legal
+            // break that fits as drawn.
+            let hangs_as_drawn = || match fits.filter(|_| tabbed) {
+                None => true,
+                Some(fits) => {
+                    let mut body = j;
+                    while body > i && g[body - 1].is_space() {
+                        body -= 1;
+                    }
+                    g[j..cluster_end].iter().all(|h| h.level.number() == 0) && line_end_credit(g, line_end, body) == 0.0 && fits(j, false)
+                }
+            };
+            if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1, kinsoku) && hangs_as_drawn() {
                 let mut end = cluster_end;
                 while g.get(end).is_some_and(SGlyph::is_space) {
                     end += 1;
