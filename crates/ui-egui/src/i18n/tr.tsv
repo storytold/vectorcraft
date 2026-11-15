@@ -2456,6 +2456,8 @@ shape	Open	Açık
 	Proof Setup	Prova Kurulumu
 	Properties	Özellikler
 	Proportional Metrics	Orantılı Metrikler
+	H or V Style	Yatay veya Dikey Stil
+	Roman Italics	Roma İtalik
 	Insert Aki Left	Sola Aki Ekle
 	Insert Aki Right	Sağa Aki Ekle
 	Tsume	Tsume
@@ -7121,7 +7123,7 @@ axis	Y Axis	Y ekseni
 @msg	toString is not a function	toString bir işlev değil
 @msg	too many arguments	çok fazla bağımsız değişken
 @msg	too many quantifiers	çok fazla niceleyici
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	bilinmeyen OpenType özelliği `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; kapatmak için başına - koyun; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom ve aalt bir alternatifin numarasını `tag=N` biçiminde alır, N 0 ile {_1} arasındadır, örneğin `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	bilinmeyen OpenType özelliği `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; kapatmak için başına - koyun; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom ve aalt bir alternatifin numarasını `tag=N` biçiminde alır, N 0 ile {_1} arasındadır, örneğin `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	bilinmeyen renk taklidi `{d}` (diffusion, pattern, noise veya none)
 @msg	unknown panel `{panel}`	bilinmeyen panel `{panel}`
 @msg	unknown parameter `{key}`	bilinmeyen parametre `{key}`
