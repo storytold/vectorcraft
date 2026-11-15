@@ -9865,17 +9865,6 @@ font-script	Japanese	იაპონური
 	Margin	ზღვარი
 	Box	ჩარჩო
 	Swatch	ფერის ნიმუში
-@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` უნდა იყოს 0-ზე მეტი და არაუმეტეს {MAX_DISTANCE} pt
-@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` უნდა იყოს 0-დან {MAX_DISTANCE} pt-მდე
-@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` უნდა იყოს 0,01-დან 1000 pt-მდე
-@msg	select the banner, or mark every artboard	აირჩიეთ ბანერი ან მონიშნეთ ყველა სამუშაო დაფა
-@msg	the banner has no width or height	ბანერს არ აქვს სიგანე ან სიმაღლე
-@msg	the grommet inset is too large for the banner	ლუვერების დაშორება კიდიდან ზედმეტად დიდია ბანერისთვის
-@msg	the hem is too deep for the banner	ნაკეცი ზედმეტად ღრმაა ბანერისთვის
-@msg	the spacing makes more than {MAX_GROMMETS} grommets	ამ ინტერვალით {MAX_GROMMETS}-ზე მეტი ლუვერი გამოდის
-@msg	there is no banner to mark	მოსანიშნი ბანერი არ არის
-@msg	turn on at least one side	ჩართეთ ერთი მხარე მაინც
-@msg	with no hem and no grommets there is nothing to mark	ნაკეცისა და ლუვერების გარეშე მოსანიშნი არაფერია
 @msg	{saving} failed: {e}	{saving} ვერ შესრულდა: {e}
 	Banner Hems and Grommets…	ბანერის ნაკეცები და ლუვერები…
 	Banner Hems and Grommets	ბანერის ნაკეცები და ლუვერები
