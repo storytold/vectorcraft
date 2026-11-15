@@ -1421,6 +1421,8 @@ file-filter	Templates	Vorlagen
 	Graph	Diagramm
 	Graph Data	Diagrammdaten
 	Graph Type	Diagrammtyp
+	Graph Type…	Diagrammtyp…
+	Graph Data…	Diagrammdaten…
 	Graph Options	Diagrammoptionen
 	Left Axis	Linke Achse
 	Right Axis	Rechte Achse
@@ -1536,6 +1538,7 @@ file-filter	Templates	Vorlagen
 	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
 	Show segmented color wheel	Segmentierten Farbkreis anzeigen
 	Show color bars	Farbbalken anzeigen
+	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
 	Height:	Höhe:
@@ -2688,6 +2691,8 @@ mark-style	Japanese	Japanisch
 	Insert Aki Left	Aki links einfügen
 	Insert Aki Right	Aki rechts einfügen
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Horizontale Position diakritischer Zeichen anpassen
+	Adjust Vertical Diacritic Position	Vertikale Position diakritischer Zeichen anpassen
 	Character Direction	Zeichenrichtung
 	Digits	Ziffern
 	Arabic	Arabisch
@@ -5042,6 +5047,8 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
 @msg	unknown panel `{raw}`	unbekanntes Bedienfeld `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` hat keine Anzeigegrößen zum Durchlaufen
+@msg	the panels are not shown	die Bedienfelder werden nicht angezeigt
 @msg	panels can't be shown in Presentation Mode	im Präsentationsmodus können keine Bedienfelder angezeigt werden
 @msg	unknown preference `{key}`	unbekannte Voreinstellung `{key}`
 @msg	Preferences imported.	Voreinstellungen importiert.
@@ -5501,6 +5508,7 @@ theme	Appearance	Erscheinungsbild
 	Change Panel Layout	Bedienfeldanordnung ändern
 	Close Panel	Bedienfeld schließen
 	Collapse Panel Group	Bedienfeldgruppe minimieren
+	Cycle Display Sizes	Anzeigegrößen durchlaufen
 	Move Panel	Bedienfeld verschieben
 	Group with	Gruppieren mit
 	Resize panel window	Bedienfeldfenster skalieren
@@ -5871,6 +5879,7 @@ effect	Soft	Weich
 	Export Data Sets…	Datensätze exportieren…
 	Load Variable Library…	Variablenbibliothek laden…
 	Save Variable Library…	Variablenbibliothek speichern…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„Importieren“ liest eine Datenquelldatei mit der Endung .csv, .tsv, .txt oder .xml
 @msg	a variable library holds text variables, and the document has none	eine Variablenbibliothek enthält Textvariablen, und das Dokument hat keine
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	die Variable `{name}` kann nicht in einer Variablenbibliothek gespeichert werden: Benennen Sie sie so um, dass sie mit einem Buchstaben oder `_` beginnt, ohne Leerzeichen oder andere Symbole als `-`, `_` und `.`
 @msg	data set `{name}` holds a control character, which a variable library can't hold	der Datensatz `{name}` enthält ein Steuerzeichen, das eine Variablenbibliothek nicht enthalten kann
@@ -9192,3 +9201,20 @@ breakText	Glyphs	Glyphen
 	Nest Shapes…	Formen verschachteln…
 	Nest Shapes	Formen verschachteln
 	Roll	Rolle
+	Packaging Tools	Verpackungswerkzeuge
+	Fold Lines	Faltlinien
+	Make Cut Line	Als Schnittlinie festlegen
+	Make Crease Line	Als Rilllinie festlegen
+	Make Partial Cut Line	Als Teilschnittlinie festlegen
+	Make Perforation Line	Als Perforationslinie festlegen
+	Make Fold Line	Als Faltlinie festlegen
+	Role Swatches…	Farbfelder der Linienarten…
+	Role Swatches	Farbfelder der Linienarten
+	Role	Linienart
+	Cut Line	Schnittlinie
+	Crease Line	Rilllinie
+	Partial Cut Line	Teilschnittlinie
+	Perforation Line	Perforationslinie
+	No objects are selected.	Es sind keine Objekte ausgewählt.
+	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
+	Remove Fold Line Role	Linienart entfernen
