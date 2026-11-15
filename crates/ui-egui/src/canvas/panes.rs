@@ -12,7 +12,7 @@ use super::outline::{c32, node_outline, stroke_path, too_many_anchors};
 use super::view::fit_zoom;
 use super::{
     Affine, CacheKey, Point, Rect, RulerScale, Sense, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, Xf, artboard_edges, backdrop, cache_key,
-    dim_on_canvas, frame_options, frame_view, grid, guides_of, json, paint_paper, pixel_region, placed_key, plugin_key, pos2, rulers,
+    dim_on_canvas, frame_options, frame_ppp, frame_view, grid, guides_of, json, paint_paper, pixel_region, placed_key, plugin_key, pos2, rulers,
     shows_artboards, textured_quad, vec2, view_rects,
 };
 use crate::doc_windows::Win;
@@ -339,10 +339,13 @@ fn draw_pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> boo
     if let Some(look) = grid_look.filter(|_| grids_in_back) {
         grid(&painter, &xf, st.doc.grid.spacing, st.doc.grid.subdivisions, look);
     }
+    // View › Pixel Preview, as the canvas draws it.
+    let max_side = ui.ctx().input(|i| i.max_texture_side);
+    let pixel = (app.ui.view.pixel_preview && xf.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf, max_side)).flatten();
+    // The pane's frame fits the largest texture side the display supports, as the canvas's does.
+    let ppp = frame_ppp(rect.size(), ppp, max_side);
     let size = |l: f32| ((l * ppp).round().max(1.0) as u32).min(u32::from(u16::MAX));
     let (pw, ph) = (size(rect.width()), size(rect.height()));
-    // View › Pixel Preview, as the canvas draws it.
-    let pixel = (app.ui.view.pixel_preview && xf.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
     let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
     let placed = placed_key(&mut app.canvas.placed_keys, &app.session, st);

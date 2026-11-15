@@ -2892,6 +2892,7 @@ digits	Malayalam	Malaiala
 	Sixth Space	Espaço de Sexto
 	Size	Tamanho
 	Size Tile to Art	Dimensionar Bloco para a Arte
+	Move Tile with Art	Mover Bloco com a Arte
 	Size/Leading	Tamanho/Entrelinhamento
 	Size:	Tamanho:
 	Size: {size}  Tracking: {tracking}	Tamanho: {size}  Rastreamento: {tracking}
@@ -4668,6 +4669,7 @@ axis	Both	Ambos
 @msg	automation filesystem access is not granted: write authority is absent: {path}	o acesso da automação ao sistema de arquivos não foi concedido: falta autorização de gravação: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	caminho da automação rejeitado: fora da raiz de leitura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	caminho da automação rejeitado: fora das raízes de leitura {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	um arquivo JavaScript vinculado está fora das raízes de leitura
 @msg	automation path rejected: outside the write root {root}: {path}	caminho da automação rejeitado: fora da raiz de gravação {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	caminho da automação rejeitado: fora das raízes de gravação {roots}: {path}
 @msg	automation path rejected: path is empty	caminho da automação rejeitado: o caminho está vazio
@@ -4801,6 +4803,9 @@ axis	Both	Ambos
 	Softness	Suavidade
 	Ambient Light	Luz ambiente
 	Light behind the object	Luz atrás do objeto
+	Move Light to Back	Mover luz para trás
+	Move Light to Front	Mover luz para a frente
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Arraste uma luz para movê-la. As teclas de seta movem a luz em foco; Shift a move de 15° em 15°.
 	Shadows	Sombras
 	Distance from Object	Distância do objeto
 	Shadow Bounds	Limites da sombra
@@ -5237,6 +5242,8 @@ axis	Both	Ambos
 	Summary	Resumo
 	Superscript	Sobrescrito
 	Swap the selected object for the file, keeping its place and transform	Troca o objeto selecionado pelo arquivo, mantendo sua posição e transformação
+	Show Import Options	Mostrar Opções de Importação
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pergunta as opções de importação de cada arquivo PDF, DXF ou de texto antes de colocá-lo; desligado: usa as últimas opções escolhidas
 	Swatch Libraries Menu	Menu de Bibliotecas de Amostras
 	Create New Library…	Criar Nova Biblioteca…
 	Rename Library…	Renomear Biblioteca…
@@ -5317,6 +5324,9 @@ axis	Both	Ambos
 	Windows	Windows
 	Working CMYK (don't tag)	CMYK de Trabalho (não marcar)
 	Working RGB (don't tag)	RGB de Trabalho (não marcar)
+	Don't Color Manage This Document	Não gerenciar as cores deste documento
+	Working RGB: {name}	RGB de Trabalho: {name}
+	Working CMYK: {name}	CMYK de Trabalho: {name}
 	Workspace {i}	Espaço de Trabalho {i}
 	Yellow	Amarelo
 	[Normal Character Style]	[Estilo de Caractere Normal]
@@ -5448,6 +5458,7 @@ axis	Both	Ambos
 @msg	every numbered name for {name} is taken in the document's folder	todos os nomes numerados para {name} já existem na pasta do documento
 @msg	No linked files to look for	Nenhum arquivo vinculado para procurar
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	O link está dentro de um símbolo, projeto de gráfico, padrão ou máscara de opacidade e não tem lugar na tela
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	a arte de um projeto de gráfico em uma série do gráfico é desenhada de novo a partir do projeto: edite o projeto para alterá-la
 	De-Interlace	Desentrelaçar
 	Eliminate	Eliminar
 	Create New Fields by	Criar Novos Campos por
@@ -6604,6 +6615,8 @@ axis	Y Axis	Eixo Y
 	Create New Set	Criar Novo Conjunto
 	Stop Global Edit	Parar Edição Global
 	Global Edit Options	Opções de Edição Global
+	Select Similar Objects	Selecionar Objetos Semelhantes
+	Select Similar Options	Opções de Seleção de Semelhantes
 	Leave Out of Global Edit	Deixar Fora da Edição Global
 	Match	Corresponder
 	On Artboards	Nas Mesas de Trabalho
