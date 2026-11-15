@@ -21,4 +21,9 @@ fn uses_of_a_text_on_a_path_read_the_path_once() {
     // A path with no usable data is not read again either.
     let (texts, reads, _) = prepared(&format!(r##"<defs><text id="t"><textPath href="#none">Path</textPath></text></defs>{uses}"##));
     assert_eq!((texts, reads), (51, 1));
+    // The path's pathLength is read with it.
+    let (texts, reads, _) = prepared(&format!(
+        r##"<defs><path id="p" d="M0 20L150 20" pathLength="10"/><text id="t"><textPath href="#p" startOffset="5">Path</textPath></text></defs>{uses}"##
+    ));
+    assert_eq!((texts, reads), (51, 1));
 }
