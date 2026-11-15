@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: places the rings along the path anew, keeping their count and sizes)} → {id}",
             has_doc,
             flare
         ),
@@ -429,6 +429,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         "direction",
         "pathLength",
         "seed",
+        "ringSeed",
     ];
     check_numbers(p, &numbers, "shape.flare")?;
     let pct = |k: &str, d: f64| (f64_or(p, k, d) / 100.0).clamp(0.0, 10.0);
@@ -450,14 +451,28 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
             c + vectorcraft_geom::Vec2::new(a.cos(), -a.sin()) * f64_or(p, "pathLength", 300.0)
         }
     };
-    // Deterministic pseudo-random sizes (same parameters → same flare).
-    let mut seed = p.get("seed").and_then(Value::as_u64).unwrap_or(0x2545_f491_4f6c_dd1d) | 1;
-    let mut rnd = move || {
-        seed ^= seed << 13;
-        seed ^= seed >> 7;
-        seed ^= seed << 17;
-        (seed >> 11) as f64 / (1u64 << 53) as f64
+    // Deterministic pseudo-random sizes (same parameters → same flare). `ringSeed` places the rings
+    // along the path from a sequence of its own; their count and sizes and the other parts stay.
+    let seed_of = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(Some).ok_or_else(|| bad("shape.flare", format!("`{key}` must be a whole number of at least 0, not {v}"))),
     };
+    // The generator's state is odd (never 0).
+    let random = |mut state: u64| {
+        move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        }
+    };
+    let mut rnd = random(seed_of("seed")?.unwrap_or(0x2545_f491_4f6c_dd1d) | 1);
+    // Each `ringSeed` below 2^53 (what a JSON number holds exactly) gets a state of its own.
+    let ring_seed = match seed_of("ringSeed")? {
+        Some(r) if r >= 1 << 53 => return Err(bad("shape.flare", format!("`ringSeed` must be below 2^53, not {r}"))),
+        r => r,
+    };
+    let mut ring_at = ring_seed.map(|r| random((r << 1) | 1));
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
         let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
@@ -495,6 +510,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     // Rings along the path to the end point (Largest = % of the average ring size).
     for _ in 0..rings {
         let t = rnd();
+        let t = ring_at.as_mut().map_or(t, |next| next());
         let at = c + (end - c) * t;
         let rr = (r * largest * (0.25 + rnd() * 0.75)).max(0.5);
         let solid = rnd() < 0.5;

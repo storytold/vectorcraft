@@ -298,7 +298,10 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   between any two placeholders, since the catalog cannot tell where `{a}{b}` splits: make the message with the
   side-by-side values joined into one (`unknown parameter `{key}``, where `key` is `marks.ofset`). The catalog
   leaves out a row whose template has two placeholders in a row or no text; `i18n::tests` fails on such a row
-  and on such a message, and the untranslated report counts it as missing. A literal brace in a
+  and on such a message, and the untranslated report counts it as missing. A value that starts with
+  `{` is translated only when it has an exact row, so a JSON object stays as it is; a value that starts with `[` is
+  also matched against a template that starts with `[` and an index of digits, such as an effect's refusal
+  ``[{j}] `{_1}`: {why}``, so its reason is translated while a JSON array stays as it is. A literal brace in a
   row is written `{{` or `}}`, in the English and in the translation: a message made with `format!` keeps the
   doubled braces of its format string, and a plain string literal has each of its braces doubled, so the row for
   `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch and Danish

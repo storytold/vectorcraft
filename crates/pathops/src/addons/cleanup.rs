@@ -104,7 +104,7 @@ pub fn merge_duplicate_anchors(sp: &mut SubPath, distance: f64) -> usize {
     {
         *f = Anchor::with_handles(f.p, moved(f.p, last.p, last.h_in), f.h_out);
     }
-    sp.anchors = out;
+    sp.anchors = out.into();
     before - sp.anchors.len()
 }
 

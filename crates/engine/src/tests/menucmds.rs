@@ -2234,6 +2234,10 @@ fn type_menu_and_find_commands_refuse_a_param_of_the_wrong_type() {
         ("type.smartPunctuation", json!({"dashes": "false"}), switch("dashes")),
         ("type.smartPunctuation", json!({"ellipsis": 0}), switch("ellipsis")),
         ("type.smartPunctuation", json!({"quotes": "no"}), switch("quotes")),
+        ("type.smartPunctuation", json!({"fiLigatures": 1}), switch("fiLigatures")),
+        ("type.smartPunctuation", json!({"flLigatures": "true"}), switch("flLigatures")),
+        ("type.smartPunctuation", json!({"spaces": "on"}), switch("spaces")),
+        ("type.smartPunctuation", json!({"fractions": [true]}), switch("fractions")),
         ("type.smartPunctuation", json!({"scope": 5}), scope.clone()),
         ("type.smartPunctuation", json!({"scope": "page"}), scope),
         ("type.changeCase", json!({"case": 5}), string("case")),
@@ -2785,6 +2789,73 @@ fn select_same_fill_keeps_live_paint_faces_to_their_group() {
     }
 }
 
+/// Select Similar Objects (`select.similar`) runs the Select > Same command of the attribute it is
+/// given and keeps that attribute for its next run without one; `all`, the attribute until one is
+/// given, matches the fill and stroke colours, the stroke weight, the opacity and the blending mode
+/// together. An unknown attribute is an error that keeps the selection and the kept attribute.
+#[test]
+fn select_similar_selects_by_the_kept_attribute() {
+    let mut s = session();
+    let [a, b, faded, heavy, multiplied, blue] = [0.0, 20.0, 40.0, 60.0, 80.0, 100.0].map(|x| rect(&mut s, x, 0.0, 10.0, 10.0));
+    for id in [a, b, faded, heavy, multiplied] {
+        fill(&mut s, id, "#ff0000");
+    }
+    fill(&mut s, blue, "#0000ff");
+    s.execute("transparency.set", &json!({"ids": [faded.0], "opacity": 50, "item": null})).unwrap();
+    s.execute("transparency.set", &json!({"ids": [multiplied.0], "blend": "multiply", "item": null})).unwrap();
+    sel(&mut s, &[heavy]);
+    s.execute("stroke.set", &json!({"weight": 3})).unwrap();
+    let similar = |s: &mut Session, p: Value| {
+        sel(s, &[a]);
+        let r = s.execute("select.similar", &p).unwrap();
+        let mut v = selected(s);
+        v.sort();
+        assert_eq!(r["count"], v.len(), "{p}");
+        (r["by"].as_str().unwrap().to_string(), v)
+    };
+    assert_eq!(s.select_similar, "all");
+    assert_eq!(similar(&mut s, json!({})), ("all".into(), vec![a, b]));
+    assert_eq!(similar(&mut s, json!({"by": "fillColor"})), ("fillColor".into(), vec![a, b, faded, heavy, multiplied]));
+    assert_eq!(similar(&mut s, json!({})), ("fillColor".into(), vec![a, b, faded, heavy, multiplied]));
+    // The journal, and an action recorded around it, keep the attribute used.
+    let last = s.journal.last().unwrap();
+    assert_eq!((last.0.as_str(), &last.1), ("select.similar", &json!({"by": "fillColor"})));
+    assert_eq!(similar(&mut s, json!({"by": "opacity"})), ("opacity".into(), vec![a, b, heavy, multiplied, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "blendingMode"})), ("blendingMode".into(), vec![a, b, faded, heavy, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "strokeWeight"})), ("strokeWeight".into(), vec![a, b, faded, multiplied, blue]));
+    assert_eq!(similar(&mut s, json!({"by": "all"})).1, vec![a, b]);
+    // Select > Reselect repeats `all`, whichever attribute is kept by then.
+    s.select_similar = "fillColor";
+    s.execute("select.reselect", &json!({})).unwrap();
+    assert_eq!(selected(&s), vec![a, b]);
+    // Every attribute names a command that runs. A path with no graphic style has none to match,
+    // which is an error that keeps the attribute as it was.
+    for (by, _) in crate::cmd::SIMILAR {
+        sel(&mut s, &[a]);
+        let was = s.select_similar;
+        let r = s.execute("select.similar", &json!({ "by": by }));
+        if by == "graphicStyle" {
+            assert!(r.is_err(), "{r:?}");
+            assert_eq!(s.select_similar, was);
+        } else {
+            r.unwrap_or_else(|e| panic!("{by}: {e:?}"));
+            assert_eq!(s.select_similar, by);
+        }
+    }
+    // An unknown or malformed attribute changes nothing.
+    s.select_similar = "opacity";
+    for bad in [json!("color"), json!(""), json!("FillColor"), json!(3), json!(true), json!(["all"])] {
+        sel(&mut s, &[a]);
+        let r = s.execute("select.similar", &json!({ "by": bad }));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })), "{bad}: {r:?}");
+        assert_eq!((selected(&s), s.select_similar), (vec![a], "opacity"), "{bad}");
+    }
+    // With nothing selected it does not run, and keeps the attribute.
+    sel(&mut s, &[]);
+    assert!(s.execute("select.similar", &json!({"by": "fillColor"})).is_err());
+    assert_eq!(s.select_similar, "opacity");
+}
+
 /// Select by Color needs no object to start from: it matches fills and strokes as
 /// `document.inspect` reports them, `#rrggbb`.
 #[test]
@@ -3228,6 +3299,32 @@ fn select_all_on_artboard_refuses_an_artboard_past_u32() {
     assert!(selected(&s).is_empty());
 }
 
+/// All on Active Artboard refuses an `artboard` that is not a whole number, naming the parameter,
+/// and leaves the selection as it was; a whole number past the last artboard is `no such
+/// artboard`. Left out or null, it takes the first artboard.
+#[test]
+fn select_all_on_artboard_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 2, "artboardLayout": {"layout": "row", "spacing": 0}})).unwrap();
+    let (first, second) = (rect(&mut s, 10.0, 10.0, 20.0, 20.0), rect(&mut s, 110.0, 10.0, 20.0, 20.0));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        s.execute("select.none", &json!({})).unwrap();
+        let err = s.execute("select.allOnArtboard", &json!({"artboard": bad})).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `select.allOnArtboard`: `artboard` must be a whole number", "{bad}");
+        assert!(selected(&s).is_empty(), "{bad}");
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.allOnArtboard", &json!({"artboard": 9})).unwrap_err().to_string(), "no such artboard");
+    assert!(selected(&s).is_empty());
+    for p in [json!({}), json!({"artboard": null}), json!({"artboard": 0})] {
+        s.execute("select.none", &json!({})).unwrap();
+        s.execute("select.allOnArtboard", &p).unwrap();
+        assert_eq!(selected(&s), vec![first], "{p}");
+    }
+    s.execute("select.allOnArtboard", &json!({"artboard": 1})).unwrap();
+    assert_eq!(selected(&s), vec![second]);
+}
+
 #[test]
 fn save_and_recall_selection() {
     let mut s = session();
@@ -3563,10 +3660,152 @@ fn smart_punctuation_with_nothing_to_change_records_no_undo_step() {
     for id in [t, r] {
         select_with_a_step_to_redo(&mut s, &[id]);
         let before = history(&s);
-        assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap(), json!({"changed": 0}), "{id:?}");
+        let r = s.execute("type.smartPunctuation", &json!({})).unwrap();
+        assert_eq!(r["changed"], 0, "{id:?}");
+        assert!(r["replaced"].as_object().unwrap().values().all(|n| n == 0), "{id:?}: {r}");
         assert_eq!(history(&s), before, "{id:?}");
     }
     assert_eq!(plain(&s, t), "“Hi” it’s 1–2 and 3—4…");
+}
+
+/// Does the face text `font` draws with have a glyph for every character of `chars`?
+fn font_covers(font: &str, chars: &str) -> bool {
+    let face = vectorcraft_text::FontDb::global().face(font, "Regular");
+    face.is_some_and(|f| chars.chars().all(|c| f.covers(c)))
+}
+
+/// Every option on: the ligatures, Smart Spaces and Expert Fractions, each counted on its own, in
+/// one undo step. Fractions next to a digit, a slash or a decimal part are left as they are.
+#[test]
+fn smart_punctuation_ligatures_spaces_and_fractions_are_counted() {
+    let mut s = session();
+    assert!(font_covers("Source Sans 3", "\u{FB00}\u{FB01}\u{FB02}\u{FB03}\u{FB04}½¾"), "Source Sans 3 draws the ligatures and fractions");
+    let words = "An office's fluffy flow.  Then 1/2 and 3/4, not 1/25, 1/2/26 or 1/2.5.";
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let undo = history(&s).0;
+    let all = json!({"fiLigatures": true, "flLigatures": true, "quotes": true, "spaces": true, "dashes": true, "ellipsis": true, "fractions": true});
+    let r = s.execute("type.smartPunctuation", &all).unwrap();
+    assert_eq!(plain(&s, t), "An o\u{FB03}ce’s \u{FB02}u\u{FB00}y \u{FB02}ow. Then ½ and ¾, not 1/25, 1/2/26 or 1/2.5.");
+    let replaced = json!({"fiLigatures": 2, "flLigatures": 2, "quotes": 1, "spaces": 1, "dashes": 0, "ellipses": 0, "fractions": 2});
+    assert_eq!(r, json!({"changed": 1, "replaced": replaced}));
+    assert_eq!(history(&s).0, undo + 1);
+}
+
+/// The ff, fl, ffl option alone leaves fi and ffi as letters (ffi keeps its ff ligature, counted
+/// with this option), and the other options are off unless asked for.
+#[test]
+fn smart_punctuation_fl_ligatures_alone() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "office fit baffle.  1/2", "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"flLigatures": true})).unwrap();
+    assert_eq!(plain(&s, t), "o\u{FB00}ice fit ba\u{FB04}e.  1/2");
+    assert_eq!(r["replaced"], json!({"fiLigatures": 0, "flLigatures": 2, "quotes": 0, "spaces": 0, "dashes": 0, "ellipses": 0, "fractions": 0}));
+}
+
+/// A ligature or a fraction the run's font has no glyph for stays as its letters, while the run's
+/// other replacements still happen.
+#[test]
+fn smart_punctuation_skips_ligatures_and_fractions_the_font_lacks() {
+    let mut s = session();
+    let mono = "JetBrains Mono";
+    assert!(!font_covers(mono, "\u{FB01}") && !font_covers(mono, "⅐"), "{mono} has no fi ligature or one-seventh");
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "fit 1/7 a--b", "font": mono})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fiLigatures": true, "fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "fit 1/7 a–b");
+    let counts = (&r["replaced"]["fiLigatures"], &r["replaced"]["fractions"], &r["replaced"]["dashes"]);
+    assert_eq!(counts, (&json!(0), &json!(0), &json!(1)));
+}
+
+/// A fraction at the end of a run is checked against the start of the next run: 1/25 and 1/2.5
+/// split after their 1/2 stay as they are, and a 1/2 the next run's space ends is replaced.
+#[test]
+fn expert_fractions_look_past_the_end_of_a_run() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "1/25 1/2.5 1/2 x", "font": "Source Sans 3"})).unwrap());
+    for (start, end) in [(0, 3), (5, 8), (11, 14)] {
+        s.execute("text.setRangeStyle", &json!({"id": t.0, "start": start, "end": end, "size": 30})).unwrap();
+    }
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "1/25 1/2.5 ½ x");
+    assert_eq!(r["replaced"]["fractions"], 1);
+}
+
+/// An inline graphic separates the text on either side of it: the space after it is not a second
+/// space after the period before it, and the digit before it does not stop a fraction after it.
+#[test]
+fn an_inline_graphic_separates_smart_spaces_and_fractions() {
+    let mut s = session();
+    let r = rect(&mut s, 600.0, 500.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "A.  B 71/2", "font": "Source Sans 3"})).unwrap());
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 7, "symbol": "Mark"})).unwrap();
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 3, "symbol": "Mark"})).unwrap();
+    let texts = |s: &Session| match node(s, t).kind {
+        NodeKind::Text(o) => o.runs.iter().map(|r| if r.inline.is_some() { "[g]".to_string() } else { r.text.clone() }).collect::<String>(),
+        _ => String::new(),
+    };
+    assert_eq!(texts(&s), "A. [g] B 7[g]1/2");
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "fractions": true})).unwrap();
+    assert_eq!(texts(&s), "A. [g] B 7[g]½");
+    assert_eq!((&r["replaced"]["spaces"], &r["replaced"]["fractions"]), (&json!(0), &json!(1)));
+}
+
+/// Smart Spaces keeps one space after each period, also when the spaces start in the next run,
+/// and leaves single spaces and spaces after other characters alone.
+#[test]
+fn smart_spaces_keeps_one_space_after_a_period() {
+    let mut s = session();
+    let t = text(&mut s, "A.   B. C.  D  E");
+    // "C." is in a run of its own, and the spaces after it start the next one.
+    s.execute("text.setRangeStyle", &json!({"id": t.0, "start": 8, "end": 10, "size": 30})).unwrap();
+    assert!(matches!(node(&s, t).kind, NodeKind::Text(ref o) if o.runs.len() > 1));
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "quotes": false, "dashes": false, "ellipsis": false})).unwrap();
+    assert_eq!(plain(&s, t), "A. B. C. D  E");
+    assert_eq!(r["replaced"]["spaces"], 2);
+}
+
+/// Ruby stays on the characters it was set on when Smart Punctuation makes the text before them
+/// longer (curly quotes) or shorter (Smart Spaces), and no replacement takes in characters on both
+/// sides of a ruby span's end: the fi with ruby on its i stays as letters, and a second space after
+/// a period with ruby of its own stays.
+#[test]
+fn smart_punctuation_keeps_ruby_on_its_characters() {
+    let mut s = session();
+    let spans = |s: &Session, t| match node(s, t).kind {
+        NodeKind::Text(o) => o.ruby.iter().map(|r| (r.start, r.end)).collect::<Vec<_>>(),
+        _ => vec![],
+    };
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "'A'.  base fit X.  Y", "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    for (start, end) in [(1, 2), (6, 10), (12, 13), (18, 19)] {
+        s.execute("type.ruby", &json!({"text": "r", "start": start, "end": end})).unwrap();
+    }
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "fiLigatures": true})).unwrap();
+    assert_eq!(plain(&s, t), "‘A’. base fit X.  Y");
+    assert_eq!((&r["replaced"]["spaces"], &r["replaced"]["fiLigatures"]), (&json!(1), &json!(0)));
+    let text = plain(&s, t);
+    let on: Vec<&str> = spans(&s, t).into_iter().map(|(a, b)| &text[a..b]).collect();
+    assert_eq!(on, ["A", "base", "i", " "]);
+}
+
+/// Expert Fractions leaves a fraction next to a digit of another script as it is.
+#[test]
+fn expert_fractions_skip_fractions_next_to_digits_of_any_script() {
+    let mut s = session();
+    let words = "\u{662}1/2 1/2\u{662} 1/2.\u{662} 1/2";
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "\u{662}1/2 1/2\u{662} 1/2.\u{662} ½");
+    assert_eq!(r["replaced"]["fractions"], 1);
 }
 
 #[test]
@@ -4390,6 +4629,27 @@ fn artboard_guides_go_with_their_artboard() {
     // Cut, too.
     s.execute("artboard.cut", &json!({"index": 0})).unwrap();
     assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
+}
+
+/// `guide.add` refuses an `artboard` that is not a whole number, naming the parameter, and adds no
+/// guide; a whole number past the last artboard is `no such artboard`. Null makes a canvas guide,
+/// and a whole number an artboard guide.
+#[test]
+fn guide_add_refuses_an_artboard_that_is_not_a_whole_number() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 900, "y": 0, "width": 400, "height": 300})).unwrap();
+    let add = |s: &mut Session, artboard: Value| s.execute("guide.add", &json!({"vertical": true, "pos": 10, "artboard": artboard}));
+    for bad in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1]), json!({})] {
+        let err = add(&mut s, bad.clone()).unwrap_err().to_string();
+        assert_eq!(err, "invalid parameters for `guide.add`: `artboard` must be a whole number", "{bad}");
+    }
+    assert_eq!(add(&mut s, json!(9)).unwrap_err().to_string(), "no such artboard");
+    assert!(s.doc().unwrap().doc.ruler_guides().is_empty());
+    add(&mut s, Value::Null).unwrap();
+    add(&mut s, json!(1)).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let boards: Vec<_> = d.ruler_guides().iter().map(|g| g.artboard).collect();
+    assert_eq!(boards, [None, Some(d.artboards[1].id)]);
 }
 
 /// #451: a guide dragged out of a ruler snaps (to the art's corners, side midpoints and anchors,

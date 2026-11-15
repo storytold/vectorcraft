@@ -601,7 +601,7 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
     let dresp = dresp.on_hover_text(tl!("Gradient swatches"));
     egui::Popup::menu(&dresp).show(|ui| {
         widgets::menu_scroll(ui, |ui| {
-            ui.set_min_width(200.0);
+            widgets::menu_min_width(ui, 200.0);
             let mut chosen = None;
             let swatches = gradient_swatches(app);
             if swatches.is_empty() {
