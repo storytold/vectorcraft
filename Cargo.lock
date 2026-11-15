@@ -7034,6 +7034,7 @@ name = "vectorcraft-trace"
 version = "0.24.1"
 dependencies = [
  "craft-image-codecs",
+ "image",
  "kurbo 0.13.1",
  "serde",
  "serde_json",

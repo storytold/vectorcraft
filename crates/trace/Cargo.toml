@@ -17,3 +17,5 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
+# Test fixtures only: the JPEG-block test needs the block artifacts of the encoder it was tuned on.
+image = { workspace = true }
