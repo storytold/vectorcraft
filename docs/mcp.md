@@ -5734,7 +5734,7 @@ drag without that reading, such as a mouse drag, erases at the value itself. One
 Tilt, Bearing and Rotation run, and the value itself without a reading are VectorCraft's own rules.
 The command refuses another mode, and a variation below 0 or past its range, and erases nothing. In the desktop app
 the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases, and the
-outline of the area a drag covers takes, at each step, the tip halfway between those the pen gave at its ends. A Random
+outline of the area a drag covers takes, at each step, the tip the pen's readings give halfway along it. A Random
 value shows as the value itself there, since the release draws it.
 `tool.setOption {tool: "eraser"}` takes the same keys.
 
