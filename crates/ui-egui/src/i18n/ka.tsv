@@ -1806,8 +1806,6 @@
 @msg	unknown panel	უცნობი პანელი
 @msg	unknown panel `{panel}`	უცნობი პანელი `{panel}`
 @msg	unknown parameter `{key}`	უცნობი პარამეტრი `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	უცნობი პარამეტრი `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	უცნობი პარამეტრი `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	უცნობი pieLegend `{v}` (none, standard ან wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	უცნობი piePosition `{v}` (even, ratio ან stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	უცნობი pieSort `{v}` (none, all ან first)
@@ -1940,7 +1938,6 @@
 @msg	{name} is not a CMYK profile	{name} CMYK პროფილი არ არის
 @msg	{name} is not an RGB profile	{name} RGB პროფილი არ არის
 @msg	{name} must be a number	{name} რიცხვი უნდა იყოს
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} უნდა იყოს {lo}–{hi}{unit} (მიღებულია {v})
 @msg	{name}: CRC or size mismatch	{name}: CRC ან ზომა არ ემთხვევა
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: Affinity-ის ამ ფაილიდან მხოლოდ ჩაშენებული წინასწარი ხედის წაკითხვა მოხერხდა; გაფრთხილებასთან ერთად მის სანახავად გამოიყენეთ ფაილი › გახსნა, ან განთავსებამდე Affinity-დან გააკეთეთ SVG-ის ან PDF-ის ექსპორტი
 @msg	{name}: {e}	{name}: {e}

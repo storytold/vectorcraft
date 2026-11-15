@@ -9433,8 +9433,6 @@ shape	Open	Открытый
 @msg	unknown panel	неизвестная панель
 @msg	unknown panel `{panel}`	неизвестная панель `{panel}`
 @msg	unknown parameter `{key}`	неизвестный параметр `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	неизвестный параметр `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	неизвестный параметр `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	неизвестное значение pieLegend `{v}` (none, standard или wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	неизвестное значение piePosition `{v}` (even, ratio или stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	неизвестное значение pieSort `{v}` (none, all или first)
@@ -9564,7 +9562,6 @@ shape	Open	Открытый
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} встроен, его нельзя удалить
 @msg	{name} must be a number	{name} должно быть числом
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} должно быть {lo}–{hi}{unit} (получено {v})
 @msg	{name}: CRC or size mismatch	{name}: несовпадение CRC или размера
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: удалось прочитать только встроенный предпросмотр этого файла Affinity; используйте «Файл › Открыть», чтобы увидеть его с предупреждением, или перед помещением экспортируйте SVG или PDF из Affinity
 @msg	{name}: {e}	{name}: {e}
