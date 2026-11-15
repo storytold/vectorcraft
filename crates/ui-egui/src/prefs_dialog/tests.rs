@@ -335,6 +335,74 @@ fn reset_preferences(app: &mut VectorcraftApp) {
     crate::dialogs::confirm(app).unwrap();
 }
 
+/// The Preferences dialog drawn in `lang` with the open dialog available: the label and screen
+/// rectangle of each control, from the accessibility tree, and the dialog's content rectangle
+/// (inside its 20 pt margin and frame stroke).
+fn dialog_controls(lang: crate::i18n::Lang) -> (Vec<(String, egui::Rect)>, egui::Rect) {
+    crate::i18n::set_current(lang);
+    let mut a = app();
+    a.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
+    open(&mut a, Some("General"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let mut v = vec![];
+    for time in [0.0, 0.25, 0.5] {
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+        let raw = egui::RawInput { screen_rect, time: Some(time), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        v = nodes
+            .iter()
+            .filter_map(|(_, n)| {
+                let b = n.bounds()?;
+                Some((n.label()?.to_string(), egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32))))
+            })
+            .collect();
+    }
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let window = ctx.memory(|m| m.area_rect(egui::Id::unique("dialog-preferences"))).expect("the dialog window is shown");
+    let content = window.shrink(20.0 + ctx.global_style().visuals.window_stroke.width);
+    (v, content)
+}
+
+/// Export Preferences…, Import Preferences… and Reset Preferences share one row above OK and
+/// Cancel.
+#[test]
+fn export_import_and_reset_share_one_row() {
+    let (controls, _) = dialog_controls(crate::i18n::Lang::EN);
+    let top = |label: &str| controls.iter().find(|(t, _)| t == label).map(|(_, r)| r.top()).unwrap_or_else(|| panic!("no `{label}` in {controls:?}"));
+    let row = top("Export Preferences…");
+    assert!((top("Import Preferences…") - row).abs() < 0.5, "Import is on Export's row");
+    assert!((top("Reset Preferences") - row).abs() < 0.5, "Reset is on Export's row");
+    assert!(top("OK") > row + 20.0, "OK is on the row below");
+}
+
+/// In every language the dialog keeps its 760 pt content width, and the three buttons above OK
+/// lie inside it and above the row of OK and Cancel.
+#[test]
+fn export_import_and_reset_fit_in_every_language() {
+    for lang in crate::i18n::Lang::all() {
+        let (controls, content) = dialog_controls(lang);
+        assert!(content.width() <= 760.5, "{}: the dialog's content grew to {content:?}", lang.code());
+        let find = |label: &str| {
+            let label = crate::i18n::tr(lang, label);
+            controls.iter().find(|(t, _)| t == label).map(|(_, r)| *r).unwrap_or_else(|| panic!("{}: no `{label}` in {controls:?}", lang.code()))
+        };
+        let ok = find("OK");
+        for label in ["Export Preferences…", "Import Preferences…", "Reset Preferences"] {
+            let r = find(label);
+            assert!(
+                r.right() <= content.right() + 0.5 && r.left() >= content.left() - 0.5,
+                "{}: `{label}` at {r:?} is outside the dialog's content {content:?}",
+                lang.code()
+            );
+            assert!(r.bottom() <= ok.top(), "{}: `{label}` at {r:?} reaches the OK row at {ok:?}", lang.code());
+        }
+    }
+}
+
 /// Reset Preferences then OK resets the preferences, General included, and leaves the open
 /// document's units, with no undo step in the document.
 #[test]
