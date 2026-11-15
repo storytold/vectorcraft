@@ -579,12 +579,14 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let new_default = apply_gradient_edit_in_model(&default_paint, &with_stored_stops(&for_default, &default_paint, &stored), None, &|_| true, model)
         .map_err(|e| bad(C, e))?;
+    let of = super::appearance::reference_of(s, p, item, C)?;
     // Only design art was given or selected: nothing changes, the defaults and the remembered paint included.
     if selected && ids.is_empty() {
+        // An aligned `item` of the art alone is still checked: a row the art lacks, or that no other object has, is an error.
+        edit_items(s, &ids, item, of, C, "Gradient", !stroke, |_, _| Ok(()))?;
         return Ok(json!({"ids": []}));
     }
     let freeform = str_param(p, "kind").and_then(GradientKind::parse) == Some(GradientKind::Freeform);
-    let of = super::appearance::reference_of(s, p, item, C)?;
     let shown_at = super::appearance::first_edited(s, item, of, &ids);
     // The objects returned: with a design's art, those with a row equal to the art's.
     let edited = edit_items(s, &ids, item, of, C, "Gradient", !stroke, |n, index| {
