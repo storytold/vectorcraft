@@ -19,6 +19,7 @@
 	Edge Brightness	Luminosité du bord
 	Smoothness	Lissage
 	Radial Blur…	Flou radial…
+	Blur Center	Centre du flou
 	Smart Blur…	Flou optimisé…
 	Sharpen	Renforcement
 	Unsharp Mask…	Accentuation…
@@ -646,6 +647,7 @@ font-technology	Variable	Variables
 	Copy All Styles	Copier tous les styles
 	Copy Color Value (Hex)	Copier la valeur de couleur (hex)
 	Copy Fonts Used in the Document	Copier les polices utilisées dans le document
+	Copy Info	Copier les informations
 	Copy Links	Copier les liens
 	Copy Selected Style	Copier le style sélectionné
 	Copy to User Defined	Copier dans Défini par l’utilisateur
@@ -1335,6 +1337,7 @@ font-technology	Variable	Variables
 	Format	Format
 	Format Options	Options de format
 	Format Settings	Paramètres de format
+	Format Settings…	Paramètres de format…
 	Format:	Format :
 	Formats:	Formats :
 	Fractional Widths	Largeurs fractionnaires
@@ -1682,6 +1685,7 @@ font-technology	Variable	Variables
 	Images:	Images :
 	Import Keyboard Shortcuts…	Importer des raccourcis clavier…
 	Import PDF	Importer un PDF
+	Import PDF pages as links	Importer les pages PDF comme liens
 	Import PDF Presets	Importer des paramètres prédéfinis PDF
 	Import Perspective Grid Presets	Importer des paramètres prédéfinis de grille de perspective
 	Import Print Presets	Importer des paramètres prédéfinis d’impression
@@ -2659,6 +2663,8 @@ font-technology	Variable	Variables
 	Proof Setup	Format d’épreuve
 	Properties	Propriétés
 	Proportional Metrics	Métrique proportionnelle
+	H or V Style	Style horizontal ou vertical
+	Roman Italics	Italique des caractères romains
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
 	Tsume	Tsume
@@ -3436,6 +3442,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Repères commentés (Affichage → Repères commentés)
 	Smart Guides (⌘U)	Repères commentés (⌘U)
 	Smart Punctuation…	Ponctuation typographique…
+	Smart Punctuation	Ponctuation typographique
+	ff, fi, ffi Ligatures	Ligatures ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatures ff, fl, ffl
+	Smart Quotes	Guillemets typographiques
+	Smart Spaces	Espaces typographiques
+	En, Em Dashes	Tirets demi-cadratin et cadratin
+	Ellipses	Points de suspension
+	Expert Fractions	Fractions expertes
+	Replace In	Remplacer dans
+	Selected Text Only	Texte sélectionné uniquement
+	Entire Document	Document entier
+	Report Results	Afficher les résultats
 	Smooth	Lisser
 	Corner	Angle
 	Relative	Relatif
@@ -3466,6 +3484,7 @@ digits	Malayalam	Malayalam
 	Solid	Plein
 	Sort by Kind	Trier par type
 	Sort by Name	Trier par nom
+	Sort by Size	Trier par taille
 	Sort by Status	Trier par état
 	Source code on GitHub	Code source sur GitHub
 	Source Sans 3	Source Sans 3
@@ -4366,6 +4385,7 @@ axis	Both	Les deux
 @msg	there is no script engine named {name}	il n'y a aucun moteur de script nommé {name}
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
+@msg	Copied the link info	Informations sur le lien copiées
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
 @msg	Couldn't copy to the system clipboard: {e}	Impossible de copier dans le presse-papiers du système : {e}
 @msg	Couldn't open {name}: {e}	Impossible d’ouvrir {name} : {e}
@@ -8878,6 +8898,8 @@ breakText	Glyphs	Glyphes
 @msg	the RTF file is too large to place as type (at most {_1} MB)	le fichier RTF est trop volumineux pour être importé comme texte (au plus {_1} Mo)
 @msg	the SVG expands to more than {0} nested SVG images	le SVG se développe en plus de {0} images SVG imbriquées
 @msg	the SVG expands to more than {0} objects	le SVG se développe en plus de {0} objets
+@msg	the SVG's style sheets take too long to match	la mise en correspondance des feuilles de style du SVG prend trop de temps
+@msg	the SVG's styles expand to more than {0} MB	les styles du SVG se développent en plus de {0} Mo
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	le fichier SVG dépasse {MAX_IMPORT_BYTES} octets
 @msg	the SVG has no drawable objects	le SVG n’a aucun objet dessinable
 @msg	the SVGZ file unpacks to more than {_1} MB	le fichier SVGZ se décompresse en plus de {_1} Mo
@@ -9096,7 +9118,7 @@ breakText	Glyphs	Glyphes
 @msg	unexpected resources	ressources inattendues
 @msg	unknown CMYK profile `{name}`	profil CMJN inconnu `{name}`
 @msg	unknown File Info field `{k}`	champ Informations sur le fichier inconnu `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	fonctionnalité OpenType inconnue `{t}` dans featureChanges (les balises qu’accepte `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	paramètre prédéfini PDF inconnu `{name}` (paramètres prédéfinis : {_1})
 @msg	unknown Warp style	style de déformation inconnu
@@ -9312,6 +9334,9 @@ breakText	Glyphs	Glyphes
 	Grommets	Œillets
 	Grommet Inset	Distance des œillets au bord
 	Diameter	Diamètre
+	Nest Shapes…	Imbriquer les formes…
+	Nest Shapes	Imbriquer les formes
+	Roll	Rouleau
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Les effets 3D exigent des coordonnées finies comprises dans 100 millions de points

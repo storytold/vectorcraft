@@ -608,6 +608,7 @@ font-technology	Variable	可變
 	Copy All Styles	複製所有樣式
 	Copy Color Value (Hex)	複製顏色值 (Hex)
 	Copy Fonts Used in the Document	複製文件中使用的字體
+	Copy Info	複製資訊
 	Copy Links	複製連結
 	Copy Selected Style	複製所選樣式
 	Copy to User Defined	複製到使用者定義
@@ -1327,6 +1328,7 @@ file-filter	Templates	範本
 	Format	格式
 	Format Options	格式選項
 	Format Settings	格式設定
+	Format Settings…	格式設定…
 	Format:	格式：
 	Formats:	格式：
 	Fractional Widths	小數字寬
@@ -1689,6 +1691,7 @@ file-filter	Templates	範本
 	Images:	影像：
 	Import Keyboard Shortcuts…	匯入鍵盤快速鍵…
 	Import PDF	匯入 PDF
+	Import PDF pages as links	將 PDF 頁面匯入為連結
 	Import PDF Presets	匯入 PDF 預設集
 	Import Perspective Grid Presets	匯入透視格點預設集
 	Import Print Presets	匯入列印預設集
@@ -2588,6 +2591,7 @@ file-filter	Templates	範本
 @msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
+@msg	Copied the link info	已複製連結資訊
 @msg	Exported {path}	已匯出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	沒有可複製的 CSS：請選取有自己 CSS 的物件
 @msg	unknown highlight `{h}`	未知的反白顯示 `{h}`
@@ -3783,6 +3787,8 @@ font-script	Japanese	漢字
 	Proof Setup	校樣設定
 	Properties	內容
 	Proportional Metrics	比例度量
+	H or V Style	橫排或直排樣式
+	Roman Italics	羅馬字斜體
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在後方插入空白
 	Tsume	比例間距
@@ -4562,6 +4568,18 @@ digits	Malayalam	馬來亞拉姆數字
 	Smart Guides (View → Smart Guides)	智慧型參考線 (檢視 → 智慧型參考線)
 	Smart Guides (⌘U)	智慧型參考線 (⌘U)
 	Smart Punctuation…	智慧型標點…
+	Smart Punctuation	智慧型標點
+	ff, fi, ffi Ligatures	ff、fi、ffi 連字
+	ff, fl, ffl Ligatures	ff、fl、ffl 連字
+	Smart Quotes	智慧型引號
+	Smart Spaces	智慧型空格
+	En, Em Dashes	短破折號和長破折號
+	Ellipses	刪節號
+	Expert Fractions	專家分數
+	Replace In	取代範圍
+	Selected Text Only	僅限選取的文字
+	Entire Document	整份文件
+	Report Results	報告結果
 	Smooth	平滑
 	Corner	角點
 	Relative	相對
@@ -4592,6 +4610,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Solid	實心
 	Sort by Kind	依類型排序
 	Sort by Name	依名稱排序
+	Sort by Size	依大小排序
 	Sort by Status	依狀態排序
 	Source code on GitHub	GitHub 上的原始碼
 	Source Sans 3	Source Sans 3
@@ -5395,6 +5414,7 @@ axis	Both	兩者
 
 # Photoshop-style raster effects (Effect menu, their dialogs).
 	Radial Blur…	放射狀模糊…
+	Blur Center	模糊中心
 	Smart Blur…	智慧型模糊…
 	Sharpen	銳利化
 	Unsharp Mask…	反銳利化遮罩…
@@ -7160,6 +7180,9 @@ breakText	Glyphs	字符
 	Grommets	扣眼
 	Grommet Inset	扣眼邊距
 	Diameter	直徑
+	Nest Shapes…	形狀排料…
+	Nest Shapes	形狀排料
+	Roll	捲材
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D 效果需要位於 1 億點以內的有限座標
@@ -7655,7 +7678,7 @@ breakText	Glyphs	字符
 @msg	too many arguments	引數過多
 @msg	too many quantifiers	量詞過多
 @msg	turn on at least one side	請至少開啟一側
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 功能 `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt；加上前置的 - 可關閉；swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom 和 aalt 可用 `tag=N` 指定替代字的編號，N 為 0 到 {_1}，例如 `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 功能 `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital；加上前置的 - 可關閉；swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom 和 aalt 可用 `tag=N` 指定替代字的編號，N 為 0 到 {_1}，例如 `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的參數 `{key}`
@@ -8779,6 +8802,8 @@ breakText	Glyphs	字符
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 檔案過大，無法置入為文字 (最多 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG 展開後超過 {0} 個巢狀 SVG 影像
 @msg	the SVG expands to more than {0} objects	SVG 展開後超過 {0} 個物件
+@msg	the SVG's style sheets take too long to match	比對 SVG 的樣式表耗時過長
+@msg	the SVG's styles expand to more than {0} MB	SVG 的樣式展開後超過 {0} MB
 @msg	the SVG has no drawable objects	SVG 中沒有可繪製的物件
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 檔案解壓縮後超過 {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文件的屬性超過 {MAX_PAGES} 頁，數量過多而無法置入
