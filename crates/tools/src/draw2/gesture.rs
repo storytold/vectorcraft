@@ -941,6 +941,26 @@ impl GestureTool {
         }
     }
 
+    /// Give the Eraser's last stroke sample the pen's tilt and rotation of the event `ev`, a drag
+    /// within a pixel of that sample that adds none: a pen turned or tilted in place turns its tip
+    /// there, in the outline and in what the release erases. The sample keeps its pressure, which
+    /// the area outline of the drag was built with, and its pose when `ev` reads none.
+    fn refresh_last_pose(&mut self, ev: &PointerEvent) {
+        if self.id != "eraser" || self.poses.len() != self.points.len() || ev.pen.is_none() {
+            return;
+        }
+        let pose = ev.pen.map(PenPose::sanitized);
+        let Some(last) = self.poses.last_mut() else { return };
+        let had_bearing = last.and_then(super::pen_bearing).is_some();
+        *last = pose;
+        // The bearing is that of the last sample the pen leaned at, as `push` keeps it.
+        self.bearing = match pose.and_then(super::pen_bearing) {
+            Some(b) => Some(b),
+            None if had_bearing => self.poses.iter().rev().find_map(|q| q.and_then(super::pen_bearing)),
+            None => self.bearing,
+        };
+    }
+
     /// Would a press with `m` held draw a straight Pencil line? Shift or Alt held, unless Alt lends
     /// the Smooth tool: the rule `PointerKind::Down` sets `straight` by.
     fn straight_at_press(&self, m: Mods) -> bool {
@@ -1133,7 +1153,8 @@ impl GestureTool {
                 Variation::Rotation => controls[3],
                 Variation::Fixed | Variation::Random => continue,
             };
-            *v = Calligraphic::moved(i, *v, variations[i] * (2.0 * c - 1.0));
+            // The size goes past a nib's 1296 pt, as `path.eraseRegion` sweeps it.
+            *v = if i == 2 { super::pressure_size(*v, variations[i], c) } else { Calligraphic::moved(i, *v, variations[i] * (2.0 * c - 1.0)) };
         }
         let [angle, roundness, size] = out;
         [angle, roundness.clamp(1.0, 100.0), size.max(super::MIN_BRUSH_SIZE)]
@@ -1461,6 +1482,9 @@ impl Tool for GestureTool {
                     let release_end = kept.unwrap_or(end);
                     self.near_start = self.release_closes_near_start(cx, release_end);
                     self.connects = self.connects_at(cx, release_end).is_some();
+                    if self.points.last().is_some_and(|l| l.distance(p) < cx.tol(1.0)) {
+                        self.refresh_last_pose(ev);
+                    }
                     return vec![];
                 }
                 self.push(p, ev);
@@ -1514,13 +1538,17 @@ impl Tool for GestureTool {
                     }
                 } else if self.points.last().is_some_and(|l| l.distance(p) >= cx.tol(1.0)) {
                     self.push(end, ev);
-                } else if self.grid_snaps(cx)
-                    && !self.smoothing
-                    && self.points.len() > 1
-                    && let Some(last) = self.points.last_mut()
-                {
-                    // The last step was where the button went up: it moves where that snaps.
-                    *last = end;
+                } else {
+                    // A release within a pixel of the last step gives it the pen's pose there.
+                    self.refresh_last_pose(ev);
+                    if self.grid_snaps(cx)
+                        && !self.smoothing
+                        && self.points.len() > 1
+                        && let Some(last) = self.points.last_mut()
+                    {
+                        // The last step was where the button went up: it moves where that snaps.
+                        *last = end;
+                    }
                 }
                 let out = if cancel { vec![Action::Cancel] } else { self.finish(cx, ev.mods) };
                 self.active = false;
