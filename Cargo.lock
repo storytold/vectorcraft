@@ -1262,7 +1262,7 @@ dependencies = [
 [[package]]
 name = "craft-xml"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=9a9b89e9e#9a9b89e9e8f057705e56398069c6f288a254b077"
+source = "git+https://github.com/storytold/craft-libs?rev=99007f191#99007f1915d8b3495effffdfb8550a94a4d0bf87"
 dependencies = [
  "quick-xml 0.41.0",
  "serde",
@@ -6663,7 +6663,7 @@ dependencies = [
  "chrono",
  "craft-docpath",
  "craft-proof",
- "craft-xml 0.1.0 (git+https://github.com/storytold/craft-libs?rev=9a9b89e9e)",
+ "craft-xml 0.1.0 (git+https://github.com/storytold/craft-libs?rev=99007f191)",
  "crc32fast",
  "flate2",
  "hayro-jpeg2000",
@@ -6851,7 +6851,7 @@ dependencies = [
  "aes",
  "chrono",
  "craft-pdf",
- "craft-xml 0.1.0 (git+https://github.com/storytold/craft-libs?rev=9a9b89e9e)",
+ "craft-xml 0.1.0 (git+https://github.com/storytold/craft-libs?rev=99007f191)",
  "flate2",
  "getrandom 0.4.3",
  "image",
