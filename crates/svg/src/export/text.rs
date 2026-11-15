@@ -439,7 +439,8 @@ impl Writer<'_> {
             // reader would draw elsewhere, the next segment is placed.
             place = seg.brk || (!fewer && !base.anchored && positioned);
             if (st.h_scale - st.v_scale).abs() > 1e-9 || seg.scale != 1.0 {
-                attrs.push_str(&format!(" textLength=\"{}\" lengthAdjust=\"spacingAndGlyphs\"", self.num(seg.advance * seg.scale)));
+                let length = seg.advance * seg.scale + seg.repeat_widen;
+                attrs.push_str(&format!(" textLength=\"{}\" lengthAdjust=\"spacingAndGlyphs\"", self.num(length)));
             }
             if st.rotation != 0.0 {
                 attrs.push_str(&format!(" rotate=\"{}\"", self.num(-st.rotation)));
@@ -716,6 +717,9 @@ struct Segment {
     /// Glyph Scaling of the segment's one glyph (Justification…), which a reader stretches it to
     /// (`textLength`); 1 for other segments.
     scale: f64,
+    /// How much wider than the repeat mark the canvas draws the character the mark is drawn as
+    /// (Kurikaeshi Moji Shori), which a reader stretches it to (`textLength`); 0 for other segments.
+    repeat_widen: f64,
     /// A list marker's characters and tab, written in
     /// [`vectorcraft_doc::text::ParaList::marker_style`] of the run's style.
     marker: bool,
@@ -734,6 +738,30 @@ fn shown_repeat(lay: &vectorcraft_text::TextLayout, i: usize, g: &vectorcraft_te
     // The marks are in text order, one per line.
     let at = lay.repeat_marks.binary_search_by_key(&g.byte, |&(byte, _)| byte).ok()?;
     lay.repeat_marks.get(at).map(|&(_, c)| c)
+}
+
+/// Kurikaeshi Moji Shori: how much wider than repeat mark `cluster` the canvas draws glyph `g`, the
+/// character the mark is drawn as in the mark's place (text space), or 0 when the face or the
+/// mark's glyph is not found.
+fn repeat_widen(g: &vectorcraft_text::PositionedGlyph, cluster: &str) -> f64 {
+    let Some(face) = FontDb::global().face_by_id(g.font_id) else { return 0.0 };
+    // ゝ or ヽ with a combining voicing mark is drawn as one glyph, the voiced mark's.
+    let mark = match cluster {
+        "ゝ\u{3099}" => 'ゞ',
+        "ヽ\u{3099}" => 'ヾ',
+        _ => match cluster.chars().next() {
+            Some(c) => c,
+            None => return 0.0,
+        },
+    };
+    let mark_gid = face.glyph_for(mark);
+    if mark_gid == 0 {
+        return 0.0;
+    }
+    // Font units along the baseline → text space (size, Horizontal Scale and Glyph Scaling).
+    let [a, b, ..] = g.xf.as_coeffs();
+    let widen = (face.advance(g.gid) - face.advance(mark_gid)) * a.hypot(b);
+    if widen.is_finite() { widen } else { 0.0 }
 }
 
 /// The laid-out lines of `t` as segments: a new segment at every style change, after tabs and,
@@ -829,6 +857,7 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                 Some(c) => c.to_string(),
                 None => source(line.glyph_start + k, g).chars().filter(|c| *c != '\u{ad}').map(|c| run.style.digits.map(c)).collect(),
             };
+            let widen = if repeat.is_some() { repeat_widen(g, source(line.glyph_start + k, g)) } else { 0.0 };
             let piece = if run.style.all_caps { src.to_uppercase() } else { src };
             // The character a repeat mark is drawn as takes the mark's width on the canvas, which a
             // reader does not know: the text after it is placed anew.
@@ -846,7 +875,8 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
             let marker = lay.marker_of(line.glyph_start + k).is_some();
             let tab_apart = piece == "\t" && (run.style.h_scale - run.style.v_scale).abs() > 1e-9;
             match segs.last_mut() {
-                Some(last) if last.run == g.run && !last.brk && !fresh && !moved && last.marker == marker && !tab_apart => {
+                // The character a repeat mark is drawn as is a segment of its own, stretched to its width.
+                Some(last) if last.run == g.run && !last.brk && !fresh && !moved && last.marker == marker && !tab_apart && repeat.is_none() => {
                     last.text.push_str(&piece);
                     last.advance += advance;
                     last.brk = brk;
@@ -856,7 +886,7 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                         last.brk |= moved || last.marker != marker;
                         end_segment(last, tail, t, lay, &mut unkerned);
                     }
-                    segs.push(Segment { run: g.run, x, y: g.origin.y, text: piece, advance, brk, scale, marker });
+                    segs.push(Segment { run: g.run, x, y: g.origin.y, text: piece, advance, brk, scale, repeat_widen: widen, marker });
                 }
             }
             tail = set.map(|_| (g.byte, advance));

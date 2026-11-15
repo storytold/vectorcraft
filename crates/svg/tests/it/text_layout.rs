@@ -942,6 +942,36 @@ fn a_repeat_mark_at_a_line_start_is_written_as_the_character_it_draws() {
     }
 }
 
+/// Kurikaeshi Moji Shori in horizontally scaled type: the character a repeat mark is drawn as is
+/// stretched (`textLength`) to the width the canvas draws that character at, not to the mark's
+/// advance, so a reader does not distort it when the two characters' widths differ.
+#[test]
+fn a_drawn_repeat_mark_in_scaled_type_keeps_the_width_of_its_character() {
+    use vectorcraft_text::test_fonts::{RARE_REPEAT_MARK_FAMILY, rare_repeat_mark_font};
+    vectorcraft_text::FontDb::global().add_font(rare_repeat_mark_font().unwrap());
+    // The test font draws 龘 and 々 with glyphs of different widths.
+    let st = CharStyle { font_family: RARE_REPEAT_MARK_FAMILY.into(), h_scale: 50.0, ..style(12.0) };
+    let mut t = TextObject::point(Point::new(20.0, 40.0), "龘\u{2028}々", st);
+    t.para.kurikaeshi_moji_shori = true;
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let svg = export(&d, &ExportOptions::default());
+    // The textLength of each `<tspan>` that holds 龘 alone: the one on the first line and the one
+    // the mark is drawn as on the second.
+    let lengths: Vec<&str> = svg
+        .match_indices(">龘<")
+        .map(|(at, _)| {
+            let tag = &svg[svg[..at].rfind('<').unwrap_or(0)..at];
+            let from = tag.find("textLength=\"").unwrap_or_else(|| panic!("{tag}: {svg}")) + "textLength=\"".len();
+            &tag[from..from + tag[from..].find('"').unwrap_or(0)]
+        })
+        .collect();
+    assert_eq!(lengths.len(), 2, "{svg}");
+    assert_eq!(lengths[0], lengths[1], "{svg}");
+}
+
 /// Kurikaeshi Moji Shori: a `<textPath>` cannot draw a character in another character's width, so
 /// type on a path whose threaded frame starts with a repeat mark drawn as the character it repeats
 /// is outlined, with a warning; with the setting off it stays live text.
