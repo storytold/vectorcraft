@@ -981,7 +981,7 @@ dependencies = [
 [[package]]
 name = "craft-codepage"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=6d620e971e820b517b11a99cad040ebac670e1e2#6d620e971e820b517b11a99cad040ebac670e1e2"
+source = "git+https://github.com/storytold/craft-libs?rev=5e48b508ff45a53cedd57365073e8e1c0f54d73c#5e48b508ff45a53cedd57365073e8e1c0f54d73c"
 
 [[package]]
 name = "craft-docpath"
@@ -991,7 +991,7 @@ source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7
 [[package]]
 name = "craft-dxf"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=6d620e971e820b517b11a99cad040ebac670e1e2#6d620e971e820b517b11a99cad040ebac670e1e2"
+source = "git+https://github.com/storytold/craft-libs?rev=5e48b508ff45a53cedd57365073e8e1c0f54d73c#5e48b508ff45a53cedd57365073e8e1c0f54d73c"
 dependencies = [
  "craft-codepage",
  "encoding_rs",
