@@ -681,15 +681,17 @@ fn own_labels(n: &Node, g: &GraphSpec) -> Vec<(NodeId, Role)> {
     out
 }
 
-/// Set the labels of graph node `n` (a copy outside any document) as a new graph's labels are set: the character and
-/// paragraph formats the graph keeps for them are dropped, and each label takes its kind's default character style,
-/// unscaled (keeping its rotation), and default paragraph attributes, keeping its alignment and where it starts. A pie's legend label on a dark
-/// wedge is white, as a redraw sets it. Every other object in the graph goes to `other`. The rest of the graph's art,
-/// and what its labels say, stay as they are.
+/// Set the labels of graph node `n` (a copy outside any document) in a new graph's label formats: the character and
+/// paragraph formats the graph keeps for them are dropped, with the mark that its legend labels' fill is their own, and
+/// each label takes its kind's default character style, unscaled (keeping its rotation), and default paragraph
+/// attributes, keeping its alignment and where it starts. A pie's legend label on a dark wedge is white, as a redraw
+/// sets it. Every other object in the graph goes to `other`. The rest of the graph's art, and what its labels say, stay
+/// as they are.
 pub(crate) fn plain_labels(n: &mut Node, other: &dyn Fn(&mut Node)) {
     fn plain(l: &mut vectorcraft_doc::LabelStyles) {
         (l.values, l.categories, l.legend) = (None, None, None);
         (l.values_para, l.categories_para, l.legend_para) = (None, None, None);
+        l.legend_fill_set = false;
     }
     // Which legend labels a redraw sets on a dark wedge, read while the labels are as the graph drew them.
     let on_dark = match n.extras().graph.as_deref() {
@@ -940,10 +942,10 @@ fn redrawn_on_dark(n: &Node, g: &GraphSpec) -> Option<HashMap<NodeId, bool>> {
     for w in &wedges {
         by_series.entry(w.series).or_default().push(w);
     }
-    // A redraw puts the middle of a label's lines (its series name split at `|`, at the default leading) 0.35 of the
-    // label size below a point inside its wedge, at the label's origin across. The label is on the nearest wedge of its
-    // series to that point, the one holding it. When the wedges of the series are all dark or all light, the place does
-    // not matter.
+    // A redraw puts the middle of a label's lines (its series name split at `|` and line breaks, at the default leading)
+    // 0.35 of the label size below a point inside its wedge, at the label's origin across. The label is on the nearest
+    // wedge of its series to that point, the one holding it. When the wedges of the series are all dark or all light, the
+    // place does not matter.
     let uniform: HashMap<u32, Option<bool>> =
         by_series.iter().map(|(s, ws)| (*s, ws.first().map(|w| w.dark).filter(|d| ws.iter().all(|w| w.dark == *d)))).collect();
     let ls = label_size(&g.label_styles, Role::Legend);
@@ -956,7 +958,7 @@ fn redrawn_on_dark(n: &Node, g: &GraphSpec) -> Option<HashMap<NodeId, bool>> {
             continue;
         }
         let NodeKind::Text(text) = &r.kind else { return None };
-        let middle = name.split('|').count().saturating_sub(1) as f64 * ls * 1.2 / 2.0;
+        let middle = name.split(['|', '\n']).count().saturating_sub(1) as f64 * ls * 1.2 / 2.0;
         let point = text.xf * vectorcraft_geom::Point::new(0.0, middle - ls * 0.35);
         let named = by_series.get(&s)?;
         if budget < named.len() {
@@ -999,11 +1001,11 @@ fn legend_on_dark(n: &Node, g: &GraphSpec) -> HashMap<NodeId, bool> {
 
 /// The point a redraw centers legend label `text` of series `name` on, in a pie of spec `g` whose legend labels are
 /// `ls` points: 0.35 of the label size above where a redraw (`label` in `labels.rs`) puts the middle of the label's
-/// lines, at the label's origin across. The lines are those of the series name, split at `|`, at the default leading;
-/// with kept paragraph attributes, a redraw puts the middle of the first and last baselines there instead, when each of
-/// those lines that holds characters has one baseline and the first and last hold characters.
+/// lines, at the label's origin across. The lines are those of the series name, split at `|` and line breaks, at the
+/// default leading; with kept paragraph attributes, a redraw puts the middle of the first and last baselines there
+/// instead, when each of those lines that holds characters has one baseline and the first and last hold characters.
 fn label_anchor(text: &vectorcraft_doc::TextObject, name: &str, g: &GraphSpec, ls: f64) -> vectorcraft_geom::Point {
-    let lines: Vec<&str> = name.split('|').collect();
+    let lines: Vec<&str> = name.split(['|', '\n']).collect();
     let ys: Vec<f64> = text.baselines().map(|(a, _)| a.y).collect();
     let set = lines.iter().filter(|l| !l.is_empty()).count();
     let ends_set = lines.first().is_some_and(|l| !l.is_empty()) && lines.last().is_some_and(|l| !l.is_empty());
@@ -1094,106 +1096,6 @@ fn wedge_contrast(legend: &[&Node], wedges: &[Wedge], g: &GraphSpec) -> HashMap<
         out.insert(id, best.1);
     }
     out
-}
-
-/// Does `n` hold, or is it, a pie that colors its legend labels by their wedge ([`picks_legend_fill`])?
-fn holds_wedge_labels(n: &Node) -> bool {
-    let mut found = false;
-    n.walk(&mut |m| found |= m.extras().graph.as_deref().is_some_and(picks_legend_fill));
-    found
-}
-
-/// Recolor the legend labels of every pie in or at `after` that colors them by their wedge ([`picks_legend_fill`]) when
-/// its wedges changed color from `before` (the same art before it took the document's swatches): a label white on a
-/// dark wedge, or black on a light one, takes the contrast its wedge shows now, as a redraw sets it. The wedge of a label
-/// is any wedge of the series it names that showed the label's contrast before, or the nearest of them when those
-/// wedges changed apart; a label naming no series, and a label whose characters are not all white or all black, keep
-/// their colors. Paste calls it
-/// after the pasted art takes the document's swatches.
-pub(crate) fn wedge_label_contrast(before: &Node, after: &mut Node) {
-    if !holds_wedge_labels(after) {
-        return;
-    }
-    recolor_legend(before, after);
-    let Some(was) = before.children() else { return };
-    for (b, a) in was.iter().zip(after.children_mut().into_iter().flatten()) {
-        if holds_wedge_labels(a) {
-            wedge_label_contrast(b, Arc::make_mut(a));
-        }
-    }
-}
-
-/// [`wedge_label_contrast`] for graph `after` alone, not the graphs inside it.
-fn recolor_legend(before: &Node, after: &mut Node) {
-    let Some(g) = after.extras().graph.as_deref().filter(|g| picks_legend_fill(g)) else { return };
-    let (was, now) = (pie_wedges(before), pie_wedges(after));
-    if was.len() != now.len() || was.iter().zip(&now).all(|(b, a)| b.dark == a.dark) {
-        return;
-    }
-    // For each series, the contrast its wedges show now, by the contrast they showed before (`None`: they differ).
-    let mut shift: HashMap<(u32, bool), Option<bool>> = HashMap::new();
-    for (b, a) in was.iter().zip(&now) {
-        shift.entry((a.series, b.dark)).and_modify(|d| *d = d.filter(|d| *d == a.dark)).or_insert(Some(a.dark));
-    }
-    let names = series_by_label(g);
-    let (white, black) = (Paint::solid(Color::WHITE), Paint::solid(Color::BLACK));
-    let mut on_dark = HashMap::new();
-    use vectorcraft_geom::kurbo::ParamCurveNearest;
-    // How far point `at` lies from a wedge: 0 inside it.
-    let away = |w: &Wedge, at: vectorcraft_geom::Point| {
-        if w.path.contains(at) { 0.0 } else { w.path.segments().map(|s| s.nearest(at, 1e-3).distance_sq).fold(f64::INFINITY, f64::min) }
-    };
-    // Wedge visits left for labels whose series' wedges changed apart, so a huge pie stays bounded.
-    let mut budget: usize = 1 << 20;
-    // For each label text, the first series name that shows it, as `wedge_contrast` reads it.
-    let mut series_names: HashMap<String, &str> = HashMap::new();
-    for name in &g.series {
-        series_names.entry(name.replace('|', "\n")).or_insert(name.as_str());
-    }
-    let ls = label_size(&g.label_styles, Role::Legend);
-    // The positions of each series' wedges in `was` and `now`.
-    let mut by_series: HashMap<u32, Vec<usize>> = HashMap::new();
-    for (i, a) in now.iter().enumerate() {
-        by_series.entry(a.series).or_default().push(i);
-    }
-    for t in legend_labels(after) {
-        let NodeKind::Text(text) = &t.kind else { continue };
-        let was_dark = if text.runs.iter().all(|r| r.style.fill == white) {
-            true
-        } else if text.runs.iter().all(|r| r.style.fill == black) {
-            false
-        } else {
-            continue;
-        };
-        let series: &[u32] = names.get(&text.plain_text()).map_or(&[], |s| s.as_slice());
-        let mut shown = series.iter().filter_map(|s| shift.get(&(*s, was_dark)));
-        let Some(first) = shown.next().copied() else { continue };
-        if let Some(dark) = first.filter(|d| shown.all(|e| *e == Some(*d))) {
-            on_dark.insert(t.id, dark);
-            continue;
-        }
-        // The wedges of the series it names changed apart: the label follows the one nearest to the point a redraw
-        // centers it on among those that showed its contrast before.
-        let words = text.plain_text();
-        let name = series_names.get(&words).map_or_else(|| words.replace('\n', "|"), |s| (*s).to_owned());
-        let at = label_anchor(text, &name, g, ls);
-        let candidates: Vec<(&Wedge, &Wedge)> = series
-            .iter()
-            .filter_map(|s| by_series.get(s))
-            .flatten()
-            .filter_map(|i| was.get(*i).zip(now.get(*i)))
-            .filter(|(b, _)| b.dark == was_dark)
-            .collect();
-        if budget < candidates.len() {
-            continue;
-        }
-        budget -= candidates.len();
-        let nearest = candidates.iter().map(|(b, a)| (away(b, at), a.dark)).min_by(|x, y| x.0.total_cmp(&y.0));
-        if let Some((_, dark)) = nearest {
-            on_dark.insert(t.id, dark);
-        }
-    }
-    set_legend_fills(after, &on_dark);
 }
 
 /// Keep the anti-aliasing method `method` given to graph labels `ids` for every label of their kind, as

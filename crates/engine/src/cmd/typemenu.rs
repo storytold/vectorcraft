@@ -1768,7 +1768,7 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
         refresh_bounds(t);
     }
     // A graph keeps its labels' character and paragraph formats for each redraw: they go with the
-    // labels' own formatting, and the labels are set as a new graph's are. The graph's generated
+    // labels' own formatting, and the labels are set in a new graph's label formats. The graph's generated
     // bounds follow its changed labels, so the next redraw does not read them as a move.
     if n.extras().graph.is_some() {
         super::graph::edit_graph_art(n, |n| super::graph::plain_labels(n, &strip_formatting));

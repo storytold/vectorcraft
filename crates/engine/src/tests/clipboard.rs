@@ -733,6 +733,41 @@ fn pie_labels_in_wedges_pasted_without_formatting_stay_readable() {
     assert_eq!(fills(&s, p), drawn);
 }
 
+/// A pie whose legend labels were given a black fill of their own loses that mark when pasted without formatting, so a
+/// later change to a legend label's size does not bring the black fill back on the dark wedge.
+#[test]
+fn a_legend_fill_of_its_own_stays_behind_when_pasted_without_formatting() {
+    let mut s = session();
+    let csv = ",North,South\nP,1,1";
+    let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
+    s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
+    /// The legend label of graph `id` that says `name`.
+    fn label(s: &Session, id: NodeId, name: &str) -> (NodeId, Paint) {
+        let mut out = None;
+        node(s, id).walk(&mut |n| {
+            if let NodeKind::Text(t) = &n.kind
+                && t.plain_text() == name
+            {
+                out = Some((n.id, t.first_style().fill.clone()));
+            }
+        });
+        out.unwrap()
+    }
+    let (north, fill) = label(&s, g, "North");
+    assert_eq!(fill, Paint::solid(Color::WHITE), "white on the black wedge");
+    s.execute("text.setStyle", &json!({"ids": [north.0], "fill": "#000000"})).unwrap();
+    assert!(node(&s, g).extras().graph.as_deref().unwrap().label_styles.legend_fill_set);
+    copy(&mut s, &[g]);
+    new_doc(&mut s);
+    let p = ids_of(&s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap())[0];
+    assert!(!node(&s, p).extras().graph.as_deref().unwrap().label_styles.legend_fill_set);
+    assert_eq!(label(&s, p, "North").1, Paint::solid(Color::WHITE), "pasted as a redraw sets it");
+    let (north, _) = label(&s, p, "North");
+    s.execute("text.setStyle", &json!({"ids": [north.0], "size": 11})).unwrap();
+    s.execute("graph.setData", &json!({"id": p.0, "csv": csv})).unwrap();
+    assert_eq!(label(&s, p, "North").1, Paint::solid(Color::WHITE), "still white when the pie is drawn again");
+}
+
 /// A two-line legend label in a narrow dark wedge, whose text sits off the wedge's middle line, stays white when its graph
 /// is pasted without formatting.
 #[test]
@@ -793,193 +828,6 @@ fn a_legend_label_in_a_narrow_wedge_pasted_without_formatting_stays_readable() {
     assert_eq!(xs(&s, p), drawn);
 }
 
-/// A pie wedge whose dark global swatch merges into the document's light swatch of that name gets a black legend label,
-/// as a redraw gives it, with Paste and with Paste without Formatting.
-#[test]
-fn wedge_labels_follow_a_merged_swatch_when_pasted() {
-    let mut s = session();
-    s.execute("swatch.new", &json!({"name": "Ink", "color": "#000000", "global": true})).unwrap();
-    let csv = ",North,South\nP,1,1";
-    let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
-    s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
-    let north = node(&s, g).children().unwrap().iter().find(|c| c.extras().series_index == Some(0)).unwrap().id;
-    s.execute("paint.setFill", &json!({"ids": [north.0], "swatch": "Ink"})).unwrap();
-    fn north_fill(s: &Session, id: NodeId) -> Paint {
-        let mut out = None;
-        node(s, id).walk(&mut |n| {
-            if let NodeKind::Text(t) = &n.kind
-                && t.plain_text() == "North"
-            {
-                out = Some(t.first_style().fill.clone());
-            }
-        });
-        out.unwrap()
-    }
-    assert_eq!(north_fill(&s, g), Paint::solid(Color::WHITE));
-    copy(&mut s, &[g]);
-    new_doc(&mut s);
-    s.execute("swatch.new", &json!({"name": "Ink", "color": "#ffffff", "global": true})).unwrap();
-    for cmd in ["edit.pasteWithoutFormatting", "edit.paste"] {
-        let p = ids_of(&s.execute(cmd, &json!({"swatchConflict": "merge"})).unwrap())[0];
-        assert_eq!(north_fill(&s, p), Paint::solid(Color::BLACK), "{cmd}");
-        s.execute("graph.setData", &json!({"id": p.0, "csv": csv})).unwrap();
-        assert_eq!(north_fill(&s, p), Paint::solid(Color::BLACK), "{cmd} redrawn");
-    }
-    // Add keeps the copied color under a new name, and the label stays white.
-    let p = ids_of(&s.execute("edit.pasteWithoutFormatting", &json!({"swatchConflict": "add"})).unwrap())[0];
-    assert_eq!(north_fill(&s, p), Paint::solid(Color::WHITE));
-    // Pasted back into its own document after the swatch was changed there, the pie takes the swatch as it is now, and
-    // so does the label.
-    new_doc(&mut s);
-    s.execute("swatch.new", &json!({"name": "Ink", "color": "#000000", "global": true})).unwrap();
-    let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
-    s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
-    let north = node(&s, g).children().unwrap().iter().find(|c| c.extras().series_index == Some(0)).unwrap().id;
-    s.execute("paint.setFill", &json!({"ids": [north.0], "swatch": "Ink"})).unwrap();
-    assert_eq!(north_fill(&s, g), Paint::solid(Color::WHITE));
-    copy(&mut s, &[g]);
-    s.execute("swatch.edit", &json!({"name": "Ink", "color": "#ffffff"})).unwrap();
-    for cmd in ["edit.pasteWithoutFormatting", "edit.paste"] {
-        let p = ids_of(&s.execute(cmd, &json!({})).unwrap())[0];
-        assert_eq!(north_fill(&s, p), Paint::solid(Color::BLACK), "{cmd} into its own document");
-    }
-}
-
-/// A wedge label with some characters given another color keeps them when a merged swatch is pasted with its pie.
-#[test]
-fn a_partly_colored_wedge_label_keeps_its_colors_when_a_swatch_merges() {
-    let mut s = session();
-    let r = swatched_rect(&mut s, "Ink", "#000000");
-    let csv = ",North,South\nP,1,1";
-    let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
-    s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
-    let mut north = None;
-    node(&s, g).walk(&mut |n| {
-        if let NodeKind::Text(t) = &n.kind
-            && t.plain_text() == "North"
-        {
-            north = Some(n.id);
-        }
-    });
-    s.execute("text.setStyle", &json!({"id": north.unwrap().0, "fill": "#ff0000", "start": 0, "end": 2})).unwrap();
-    fn fills(s: &Session, id: NodeId) -> Vec<Paint> {
-        let mut out = vec![];
-        node(s, id).walk(&mut |n| {
-            if let NodeKind::Text(t) = &n.kind
-                && t.plain_text() == "North"
-            {
-                out = t.runs.iter().map(|r| r.style.fill.clone()).collect();
-            }
-        });
-        out
-    }
-    let drawn = fills(&s, g);
-    assert!(drawn.contains(&Paint::solid(hex("#ff0000"))) && drawn.len() > 1, "{drawn:?}");
-    copy(&mut s, &[r, g]);
-    new_doc(&mut s);
-    s.execute("swatch.new", &json!({"name": "Ink", "color": "#ffffff", "global": true})).unwrap();
-    let ids = ids_of(&s.execute("edit.paste", &json!({"swatchConflict": "merge"})).unwrap());
-    let p = ids.into_iter().find(|id| node(&s, *id).extras().graph.is_some()).unwrap();
-    assert_eq!(fills(&s, p), drawn);
-}
-
-/// When a merged swatch changes only one of the wedges of a series, only that wedge's legend label changes color, also
-/// for a long label set left so that most of it lies over the other pie.
-#[test]
-fn a_merged_swatch_recolors_only_the_label_of_the_wedge_it_changes() {
-    merged_swatch_recolors_one_label("North", false);
-    merged_swatch_recolors_one_label("North and its neighbors, with every station reporting a total for the year, counted again by hand", true);
-}
-
-/// The paths of the first series' wedges of graph `g`, in paint order.
-fn first_series_wedges(s: &Session, g: NodeId) -> Vec<NodeId> {
-    let mut wedges = vec![];
-    for c in node(s, g).children().unwrap().iter() {
-        if c.extras().series_index == Some(0) {
-            c.walk(&mut |m| {
-                if matches!(m.kind, NodeKind::Path { .. }) {
-                    wedges.push(m.id);
-                }
-            });
-        }
-    }
-    wedges
-}
-
-/// [`a_merged_swatch_recolors_only_the_label_of_the_wedge_it_changes`] for a first series called `name`, its legend
-/// labels set left when `left`.
-fn merged_swatch_recolors_one_label(name: &str, left: bool) {
-    let mut s = session();
-    s.execute("swatch.new", &json!({"name": "Ink", "color": "#000000", "global": true})).unwrap();
-    s.execute("swatch.new", &json!({"name": "Coal", "color": "#000000", "global": true})).unwrap();
-    let csv = format!(",\"{name}\",South\nP,1,1\nQ,1,1");
-    let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 400, "height": 200, "csv": csv})).unwrap());
-    s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges", "piePosition": "even"})).unwrap();
-    // The two wedges of the first series, painted with the two swatches.
-    let wedges = first_series_wedges(&s, g);
-    assert_eq!(wedges.len(), 2);
-    s.execute("paint.setFill", &json!({"ids": [wedges[0].0], "swatch": "Ink"})).unwrap();
-    s.execute("paint.setFill", &json!({"ids": [wedges[1].0], "swatch": "Coal"})).unwrap();
-    /// The bounds of object `id` in graph `g`.
-    fn bounds(s: &Session, g: NodeId, id: NodeId) -> Rect {
-        let mut out = None;
-        node(s, g).walk(&mut |n| {
-            if n.id == id {
-                out = n.geometric_bounds();
-            }
-        });
-        out.unwrap()
-    }
-    /// Each label of the first series with its fill, and whether it starts nearer the Ink wedge than the Coal one
-    /// (`wedges`), with the bounds of the Ink label.
-    fn labels(s: &Session, g: NodeId, name: &str, wedges: &[NodeId]) -> (Vec<(bool, Paint)>, Option<Rect>) {
-        let (ink, coal) = (bounds(s, g, wedges[0]).center(), bounds(s, g, wedges[1]).center());
-        let (mut out, mut on_ink) = (vec![], None);
-        node(s, g).walk(&mut |n| {
-            if let NodeKind::Text(t) = &n.kind
-                && t.plain_text() == name
-            {
-                let at = t.xf.translation().to_point();
-                let nearer = at.distance(ink) < at.distance(coal);
-                if nearer {
-                    on_ink = n.geometric_bounds();
-                }
-                out.push((nearer, t.first_style().fill.clone()));
-            }
-        });
-        out.sort_by_key(|(nearer, _)| *nearer);
-        (out, on_ink)
-    }
-    if left {
-        let mut ids = vec![];
-        node(&s, g).walk(&mut |n| {
-            if matches!(&n.kind, NodeKind::Text(t) if t.plain_text() == name) {
-                ids.push(n.id);
-            }
-        });
-        for id in ids {
-            s.execute("text.setStyle", &json!({"id": id.0, "justify": "left"})).unwrap();
-        }
-    }
-    let white = Paint::solid(Color::WHITE);
-    let (drawn, on_ink) = labels(&s, g, name, &wedges);
-    assert_eq!(drawn, vec![(false, white.clone()), (true, white.clone())]);
-    if left {
-        // The Ink label's middle lies in the Coal wedge, so its middle does not tell its wedge.
-        let coal = bounds(&s, g, wedges[1]);
-        assert!(coal.contains(on_ink.unwrap().center()), "{on_ink:?} against {coal:?}");
-    }
-    copy(&mut s, &[g]);
-    new_doc(&mut s);
-    s.execute("swatch.new", &json!({"name": "Ink", "color": "#ffffff", "global": true})).unwrap();
-    for cmd in ["edit.pasteWithoutFormatting", "edit.paste"] {
-        let p = ids_of(&s.execute(cmd, &json!({"swatchConflict": "merge"})).unwrap())[0];
-        // The pasted graph's wedges are in the copy's order.
-        let pasted = first_series_wedges(&s, p);
-        assert_eq!(labels(&s, p, name, &pasted).0, vec![(false, white.clone()), (true, Paint::solid(Color::BLACK))], "{cmd} {name}");
-    }
-}
-
 /// Two-line legend labels of a light and a dark series with one name keep a redraw's colors when pasted without
 /// formatting, though the narrow light wedge's label reaches into the dark wedge after it.
 #[test]
@@ -1006,18 +854,21 @@ fn shared_name_labels_in_a_narrow_wedge_pasted_without_formatting_keep_their_col
     new_doc(&mut s);
     let p = ids_of(&s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap())[0];
     assert_eq!(qs(&s, p), drawn);
-    // Names that hold a line break of their own (a redraw sets them as one line at the point) keep them too.
-    new_doc(&mut s);
-    let named = json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "series": ["A", "B", "Q\nQ", "Q\nQ"], "categories": ["P"], "rows": [[9, 0, 0.02, 26.98]]});
-    let g = id_of(&s.execute("graph.create", &named).unwrap());
-    s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
-    let broken = qs(&s, g);
-    assert_eq!(broken.len(), 2);
-    assert_ne!(broken[0], broken[1], "names with line breaks");
-    copy(&mut s, &[g]);
-    new_doc(&mut s);
-    let p = ids_of(&s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap())[0];
-    assert_eq!(qs(&s, p), broken, "names with line breaks");
+    // Names that hold a line break of their own (a redraw sets them on lines centered on the point, as it sets `|`) keep
+    // them too.
+    for name in ["Q\nQ", "Q\nQ\nQ\nQ\nQ\nQ\nQ\nQ\nQ"] {
+        new_doc(&mut s);
+        let named = json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "series": ["A", "B", name, name], "categories": ["P"], "rows": [[9, 0, 0.02, 26.98]]});
+        let g = id_of(&s.execute("graph.create", &named).unwrap());
+        s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
+        let broken = qs(&s, g);
+        assert_eq!(broken.len(), 2);
+        assert_ne!(broken[0], broken[1], "names with line breaks");
+        copy(&mut s, &[g]);
+        new_doc(&mut s);
+        let p = ids_of(&s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap())[0];
+        assert_eq!(qs(&s, p), broken, "names with {} line breaks", name.matches('\n').count());
+    }
     // So do labels whose names show the same text, one with a line break of its own and one with `|`.
     new_doc(&mut s);
     let named = json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "series": ["Q\n", "B", "Q|", "Q|"], "categories": ["P"], "rows": [[9, 0, 0.02, 26.98]]});
@@ -1080,9 +931,8 @@ fn shared_name_labels_in_a_narrow_wedge_pasted_without_formatting_keep_their_col
     new_doc(&mut s);
     let p = ids_of(&s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap())[0];
     assert_eq!(placed(&s, p), large, "large labels drawn again");
-    // A scaled and rotated pie pasted with a swatch that merges keeps them too.
+    // A scaled and rotated pie keeps them too.
     new_doc(&mut s);
-    let r = swatched_rect(&mut s, "Ink", "#000000");
     let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
     s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
     sel(&mut s, &[g]);
@@ -1090,11 +940,9 @@ fn shared_name_labels_in_a_narrow_wedge_pasted_without_formatting_keep_their_col
     s.execute("object.rotate", &json!({"angle": 30})).unwrap();
     let drawn = qs(&s, g);
     assert_ne!(drawn[0], drawn[1]);
-    copy(&mut s, &[r, g]);
+    copy(&mut s, &[g]);
     new_doc(&mut s);
-    s.execute("swatch.new", &json!({"name": "Ink", "color": "#ffffff", "global": true})).unwrap();
-    let ids = ids_of(&s.execute("edit.paste", &json!({"swatchConflict": "merge"})).unwrap());
-    let p = ids.into_iter().find(|id| node(&s, *id).extras().graph.is_some()).unwrap();
+    let p = ids_of(&s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap())[0];
     assert_eq!(qs(&s, p), drawn);
 }
 
@@ -1211,6 +1059,21 @@ fn wedges_of_one_series_painted_apart_keep_their_label_colors_when_pasted_withou
         }
         assert_eq!(pasted[0], pasted[1], "{csv}");
     }
+    // A series name of nine lines, from line breaks a quoted CSV cell keeps, on two stacked pies: each label is centered
+    // on its own ring, as a redraw centers it.
+    fn tall(s: &Session, id: NodeId) -> Vec<Paint> {
+        let mut out = vec![];
+        node(s, id).walk(&mut |n| {
+            if let NodeKind::Text(t) = &n.kind
+                && t.plain_text() == ["N"; 9].join("\n")
+            {
+                out.push(t.first_style().fill.clone());
+            }
+        });
+        out
+    }
+    let csv = format!(",\"{}\"\nP,1\nQ,3", ["N"; 9].join("\n"));
+    paste_painted_apart(&mut s, &csv, "stacked", false, tall);
 }
 
 /// Paste without Formatting a pie graph made from `csv` with pies at `position` and Legends in Wedges, after its first
@@ -1288,8 +1151,7 @@ fn a_hidden_wedge_fill_does_not_color_its_label() {
     let csv = ",North,South\nP,1,1";
     let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
     s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
-    let before = node(&s, g).clone();
-    let mut n = before.clone();
+    let mut n = node(&s, g).clone();
     // A hidden black fill above the light South wedge's fill.
     for c in n.children_mut().unwrap().iter_mut().filter(|c| c.extras().series_index == Some(1)) {
         for w in std::sync::Arc::make_mut(c).children_mut().unwrap().iter_mut() {
@@ -1300,7 +1162,7 @@ fn a_hidden_wedge_fill_does_not_color_its_label() {
             }
         }
     }
-    crate::cmd::graph::wedge_label_contrast(&before, &mut n);
+    crate::cmd::graph::plain_labels(&mut n, &|_| {});
     let mut south = None;
     n.walk(&mut |m| {
         if let NodeKind::Text(t) = &m.kind
@@ -1369,6 +1231,26 @@ fn a_graph_without_generated_bounds_pasted_without_formatting_follows_the_offset
     let r = node(&s, p).extras().graph.as_deref().unwrap().rect;
     let off = [r.x0 - plot.x0 - 30.0, r.y0 - plot.y0 + 5.0, r.x1 - plot.x1 - 30.0, r.y1 - plot.y1 + 5.0];
     assert!(off.iter().all(|d| d.abs() < 1e-6), "{plot:?} → {r:?}");
+
+    // A graph saved with the bounds of all its art but not those of its art without type, drawn with 30 pt labels: the
+    // labels set at 9 pt do not read as a move or scale when it is drawn again.
+    let g = id_of(&s.execute("graph.create", &json!({"type": "bar", "x": 300, "y": 60, "width": 100, "height": 80, "csv": csv})).unwrap());
+    sel(&mut s, &[g]);
+    s.execute("text.setStyle", &json!({"size": 30})).unwrap();
+    s.execute("graph.setData", &json!({"id": g.0, "csv": csv})).unwrap();
+    let plot = {
+        let mut extras = doc_mut(&mut s).node_mut(g).unwrap().extras_mut();
+        let spec = extras.graph.as_mut().unwrap();
+        spec.placed_art = None;
+        spec.rect
+    };
+    copy(&mut s, &[g]);
+    let v = s.execute("edit.pasteWithoutFormatting", &json!({"dx": 30, "dy": -5})).unwrap();
+    let p = ids_of(&v)[0];
+    s.execute("graph.setData", &json!({"id": p.0, "csv": csv})).unwrap();
+    let r = node(&s, p).extras().graph.as_deref().unwrap().rect;
+    let off = [r.x0 - plot.x0 - 30.0, r.y0 - plot.y0 + 5.0, r.x1 - plot.x1 - 30.0, r.y1 - plot.y1 + 5.0];
+    assert!(off.iter().all(|d| d.abs() < 1e-6), "without the bounds of the art without type: {plot:?} → {r:?}");
 }
 
 #[test]
