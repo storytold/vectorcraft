@@ -9466,8 +9466,8 @@ from one frame into the next; ゝ and ヽ draw it without its voicing marks, and
 plain kana when it has none. A mark is drawn as it is when nothing before it in the paragraph fits, when the font has no glyph for the character, at the start of a
 paragraph, inside tate-chu-yoko or warichu, and on type on a path. Off by default. It is saved with the paragraph
 (`kurikaeshi_moji_shori` in `para`) only when on, paragraph styles carry it (`kurikaeshi_moji_shori` in a paragraph
-style's attributes), and Reset Panel turns it off. A value that is not true or false is refused, and a call that gives
-the value the paragraphs already have records no undo step. One undo step. `.ai` editing data does not hold it, and a
+style's attributes), and Reset Panel turns it off. A value that is not true, false or null is refused, `null` leaves the
+setting as it is, and a call that gives the value the paragraphs already have records no undo step. One undo step. `.ai` editing data does not hold it, and a
 save reports a paragraph with it on as left out. The help page:
 https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html
 
