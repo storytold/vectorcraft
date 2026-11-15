@@ -2070,6 +2070,8 @@ antiAlias	Sharp	शार्प
 	Global Adjust	वैश्विक समायोजन
 	Global Brush Dimensions	ग्लोबल ब्रश आयाम
 	Global Edit Options	ग्लोबल एडिट ऑप्शन्स
+	Select Similar Objects	समान ऑब्जेक्ट चुनें
+	Select Similar Options	समान चयन विकल्प
 	Global Process Color	ग्लोबल प्रोसेस कलर
 	Global Process Color, CMYK	ग्लोबल प्रोसेस कलर, CMYK
 	Glow Amount	ग्लो मात्रा
@@ -4983,6 +4985,8 @@ antiAlias	Sharp	शार्प
 	Swap Objects and Sizes	स्वैप ऑब्जेक्ट्स और साइज
 	Swap start and end arrowheads	स्वैप शुरू और अंत तीरहेड्स
 	Swap the selected object for the file, keeping its place and transform	फ़ाइल के लिए सिलेक्टेड ऑब्जेक्ट को स्वैप करें, अपनी जगह को बनाए रखें और परिवर्तित करें
+	Show Import Options	आयात विकल्प दिखाएँ
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	रखने से पहले हर PDF, DXF या टेक्स्ट फ़ाइल के आयात विकल्प पूछें; बंद होने पर पिछली बार चुने गए विकल्प इस्तेमाल करें
 	Swash	स्वॉश
 	Swatch Conflict	स्वॉच विरोध
 	Swatch Conflicts	स्वॉच विरोध

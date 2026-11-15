@@ -3612,6 +3612,8 @@ digits	Malayalam	Malayálam
 	Swap Fill and Stroke (Shift+X)	Intercambiar relleno y trazo (Shift+X)
 	Swap start and end arrowheads	Intercambiar puntas de flecha inicial y final
 	Swap the selected object for the file, keeping its place and transform	Sustituir el objeto seleccionado por el archivo, conservando su posición y transformación
+	Show Import Options	Mostrar opciones de importación
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Preguntar las opciones de importación de cada archivo PDF, DXF o de texto antes de colocarlo; desactivado: usar las últimas opciones elegidas
 	Stylistic Alternates	Alternativas estilísticas
 	Swash	Decorativa
 	Swatch Conflict	Conflicto de muestras
@@ -6664,6 +6666,8 @@ axis	Y Axis	Eje Y
 	Create New Set	Crear nuevo conjunto
 	Stop Global Edit	Detener edición global
 	Global Edit Options	Opciones de edición global
+	Select Similar Objects	Seleccionar objetos similares
+	Select Similar Options	Opciones de selección de similares
 	Leave Out of Global Edit	Excluir de la edición global
 	Match	Coincidir
 	On Artboards	En mesas de trabajo

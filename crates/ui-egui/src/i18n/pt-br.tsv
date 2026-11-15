@@ -5242,6 +5242,8 @@ axis	Both	Ambos
 	Summary	Resumo
 	Superscript	Sobrescrito
 	Swap the selected object for the file, keeping its place and transform	Troca o objeto selecionado pelo arquivo, mantendo sua posição e transformação
+	Show Import Options	Mostrar Opções de Importação
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pergunta as opções de importação de cada arquivo PDF, DXF ou de texto antes de colocá-lo; desligado: usa as últimas opções escolhidas
 	Swatch Libraries Menu	Menu de Bibliotecas de Amostras
 	Create New Library…	Criar Nova Biblioteca…
 	Rename Library…	Renomear Biblioteca…
@@ -6634,6 +6636,8 @@ axis	Y Axis	Eixo Y
 	Create New Set	Criar Novo Conjunto
 	Stop Global Edit	Parar Edição Global
 	Global Edit Options	Opções de Edição Global
+	Select Similar Objects	Selecionar Objetos Semelhantes
+	Select Similar Options	Opções de Seleção de Semelhantes
 	Leave Out of Global Edit	Deixar Fora da Edição Global
 	Match	Corresponder
 	On Artboards	Nas Mesas de Trabalho
