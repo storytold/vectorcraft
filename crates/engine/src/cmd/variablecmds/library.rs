@@ -432,8 +432,7 @@ fn graph_value(el: &craft_xml::El, set: &str, cmd: &str) -> Result<Option<DataVa
     // Labels keep their white space; numbers are read without it.
     let series: Vec<String> =
         data.child(named("propertyRow")).map(|r| r.children(named("value")).skip(1).map(craft_xml::El::deep_text).collect()).unwrap_or_default();
-    let rows: Vec<&craft_xml::El> =
-        data.children(named("values")).flat_map(|v| v.children(named("row"))).take(MAX_GRAPH_CATEGORIES + 1).collect();
+    let rows: Vec<&craft_xml::El> = data.children(named("values")).flat_map(|v| v.children(named("row"))).take(MAX_GRAPH_CATEGORIES + 1).collect();
     if rows.is_empty() && series.is_empty() {
         return Ok(None);
     }
