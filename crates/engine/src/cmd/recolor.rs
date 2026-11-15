@@ -965,8 +965,8 @@ struct Used {
 }
 
 /// The unique colours of the objects `ids` and the objects inside them, most used first (ties by
-/// key): fills, strokes, gradient stops, text, mesh points and the tiles of the patterns used as
-/// fills or strokes. With `only`, an object not in it is left out with everything it holds.
+/// key): fills, strokes, gradient stops, text, mesh points, the tiles of the patterns used as
+/// fills or strokes, and the tiles of the patterns those tiles use. With `only`, an object not in it is left out with everything it holds.
 fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) -> Vec<Used> {
     fn read<'a>(n: &'a Node, only: Option<&BTreeSet<NodeId>>, out: &mut Vec<&'a Node>) {
         if only.is_some_and(|o| !o.contains(&n.id)) {
@@ -999,7 +999,8 @@ fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) ->
             }
         }
     };
-    // The patterns used as fills or strokes: their tiles count once each.
+    // The patterns used as fills or strokes, and the patterns their tiles use: each tile counts
+    // once, and a pattern whose tile uses itself, directly or through other patterns, counts once.
     let mut patterns: Vec<&str> = vec![];
     let mut nodes = vec![];
     for n in ids.iter().filter_map(|id| d.node(*id)) {
@@ -1008,8 +1009,12 @@ fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) ->
     for m in nodes {
         paints(m, &mut count_tint, &mut patterns);
     }
-    for def in patterns.iter().filter_map(|p| d.pattern(p)) {
-        def.art.iter().for_each(|n| n.walk(&mut |m| paints(m, &mut count_tint, &mut vec![])));
+    let mut next = 0;
+    while let Some(&name) = patterns.get(next) {
+        next += 1;
+        for a in d.pattern(name).map(|def| def.art.as_slice()).unwrap_or_default() {
+            a.walk(&mut |m| paints(m, &mut count_tint, &mut patterns));
+        }
     }
     used.sort_by(|a, b| b.1.count.cmp(&a.1.count).then(a.0.cmp(&b.0)));
     used.into_iter().map(|(_, u)| u).collect()

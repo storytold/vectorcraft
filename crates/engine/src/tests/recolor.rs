@@ -205,6 +205,32 @@ fn used_colors_name_the_swatch_and_tint_a_color_is_linked_to() {
 }
 
 #[test]
+fn used_colors_read_the_tiles_of_patterns_used_inside_pattern_tiles() {
+    let mut s = session();
+    let red = rect(&mut s, json!("#ff0000"));
+    run(&mut s, "select.set", json!({"ids": [red.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Inner", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let middle = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [middle.0], "swatch": "Inner"}));
+    run(&mut s, "select.set", json!({"ids": [middle.0]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Outer", "width": 20, "height": 20}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let square = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [square.0], "swatch": "Outer"}));
+    // The inner tile's square is stroked with the outer pattern, so the two patterns use each other.
+    let outer = s.doc().unwrap().doc.node(square).unwrap().appearance.fill_paint().clone();
+    let st = s.doc_mut().unwrap();
+    let doc = std::sync::Arc::make_mut(&mut st.doc);
+    let tile = doc.pattern_mut("Inner").unwrap().art.first_mut().unwrap();
+    std::sync::Arc::make_mut(tile).appearance.set_stroke(outer);
+    run(&mut s, "select.set", json!({"ids": [square.0]}));
+    let r = run(&mut s, "color.used", json!({}));
+    let colors = r["colors"].as_array().unwrap();
+    assert_eq!(colors.iter().map(|c| (c["hex"].as_str(), c["count"].as_u64())).collect::<Vec<_>>(), [(Some("#ff0000"), Some(1))], "{r}");
+}
+
+#[test]
 fn used_colors_give_no_swatch_for_a_stop_that_mixes_its_ink_with_process_inks() {
     use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop, Paint};
     let mut s = session();
