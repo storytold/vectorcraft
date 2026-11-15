@@ -35,10 +35,11 @@ pub(super) const PAGE: &str = "__page";
 
 const COMMAND: &str = "graph.setType";
 
-/// The graph the dialog opened on, the series picked with Group Selection, the graph's own type and
+/// The document and the graph the dialog opened on, the series picked with Group Selection, the graph's own type and
 /// value axis side, each series' own type, the series on the right axis, the tick values each value axis is calculated with for the
-/// options the dialog shows and the options they were calculated for, and the parameters OK would
+/// options the dialog shows and the options and document revision they were calculated for, and the parameters OK would
 /// have sent as the dialog opened.
+const DOC: &str = "__doc";
 const GRAPH_ID: &str = "__graphId";
 const SERIES: &str = "__series";
 const GRAPH: &str = "__graph";
@@ -168,6 +169,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let queried = app.session.execute(COMMAND, &json!({})).map_err(|e| e.to_string())?;
     let subject = vectorcraft_engine::graph_type_subject(&app.session).map_err(|e| e.to_string())?;
     let st = app.session.active().ok_or("no document open")?;
+    let uid = st.uid;
     let spec = st.doc.node(subject.id).and_then(|n| n.extras().graph.as_deref()).ok_or("select a graph")?;
     let mut fields = queried.as_object().cloned().unwrap_or_default();
     // The options the query leaves out for the graph's types: the dialog shows each one once the
@@ -201,6 +203,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         fields.insert(axis.overridden.into(), overridden.clone());
         fields.insert(axis.opened_overridden.into(), overridden);
     }
+    fields.insert(DOC.into(), json!(uid));
     fields.insert(GRAPH_ID.into(), json!(subject.id.0));
     fields.insert(SERIES.into(), json!(subject.series));
     fields.insert(GRAPH.into(), json!(spec.kind.id()));
@@ -210,7 +213,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields.insert(CALCULATED.into(), json!(calculated));
     fields.insert(PAGE.into(), json!("options"));
     let mut d = Dialog { kind: KIND.into(), fields };
-    let key = pending(&d);
+    let key = calculated_for(app, &d);
     d.fields.insert(CALCULATED_FOR.into(), key);
     settle(&mut d);
     let opened = params(&d);
@@ -349,11 +352,26 @@ fn pending(d: &Dialog) -> Value {
     json!([graph_kind(d).id(), kinds, graph_axis(d), d.bool("separateScales"), side])
 }
 
-/// Calculate the tick values again when the options they depend on changed since they were last
-/// calculated: the graph with the type, the value axis side and Separate Scales the dialog shows, and
-/// the picked series on the type and side picked for them.
+/// Whether the active document is the one the dialog opened on.
+fn on_its_document(app: &VectorcraftApp, d: &Dialog) -> bool {
+    app.session.active().is_some_and(|st| d.fields.get(DOC).and_then(Value::as_u64) == Some(st.uid))
+}
+
+/// What the calculated tick values were calculated for: the options they depend on and the
+/// revision of the active document, which an edit of the graph's data changes.
+fn calculated_for(app: &VectorcraftApp, d: &Dialog) -> Value {
+    json!([pending(d), app.session.active().map(|st| st.revision)])
+}
+
+/// Calculate the tick values again when the options they depend on or the document changed since
+/// they were last calculated: the graph with the type, the value axis side and Separate Scales the
+/// dialog shows, and the picked series on the type and side picked for them. Nothing while another
+/// document is active.
 fn recalculate(app: &VectorcraftApp, d: &mut Dialog) {
-    let key = pending(d);
+    if !on_its_document(app, d) {
+        return;
+    }
+    let key = calculated_for(app, d);
     if d.fields.get(CALCULATED_FOR) == Some(&key) {
         return;
     }
@@ -374,14 +392,23 @@ fn recalculate(app: &VectorcraftApp, d: &mut Dialog) {
         vectorcraft_engine::graph_calculated_axes(&spec).iter().map(|(lo, hi, divisions)| json!([lo, hi, divisions])).collect();
     let before = d.fields.insert(CALCULATED.into(), json!(calculated));
     d.fields.insert(CALCULATED_FOR.into(), key);
-    // An overridden axis that still holds the values calculated before takes the new ones.
+    // Each tick value of an overridden axis that still holds the value calculated before takes the
+    // new one, unless it is the value the graph had when the dialog opened.
     for axis in [&LEFT, &RIGHT] {
+        if !d.bool(axis.overridden) {
+            continue;
+        }
         let was = |i: usize| before.as_ref()?.get(axis.index)?.get(i)?.as_f64();
-        let keys = [axis.min, axis.max, axis.ticks];
-        if d.bool(axis.overridden) && keys.iter().enumerate().all(|(i, key)| number(d, key).is_some_and(|v| Some(v) == was(i))) {
-            for key in keys {
-                d.fields.remove(key);
-            }
+        let saved = |key: &str| d.fields.get(OPENED)?.get(key)?.as_f64().filter(|_| d.bool(axis.opened_overridden));
+        let (lo, hi, divisions) = self::calculated(d, axis);
+        let replaced: Vec<(&str, Value)> = [(axis.min, json!(lo)), (axis.max, json!(hi)), (axis.ticks, json!(divisions))]
+            .into_iter()
+            .enumerate()
+            .filter(|(i, (key, _))| number(d, key).is_some_and(|v| Some(v) == was(*i) && Some(v) != saved(key)))
+            .map(|(_, field)| field)
+            .collect();
+        for (key, value) in replaced {
+            d.fields.insert(key.into(), value);
         }
     }
 }
@@ -479,6 +506,11 @@ fn same(a: &Value, b: &Value) -> bool {
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    // Another document is active: its graphs have ids of their own, so OK closes without a change.
+    if !on_its_document(app, d) {
+        app.ui.dialog = None;
+        return Ok(Value::Null);
+    }
     let mut d = d.clone();
     recalculate(app, &mut d);
     if let Some(why) = problem(&d) {
@@ -658,7 +690,8 @@ fn value_page(ui: &mut egui::Ui, d: &mut Dialog, right: bool) {
     // Without Separate Scales the right axis shows the left axis' tick values, and with it a side
     // without series shows the other side's.
     let own_scale = scale_used(d, right);
-    // A side without a scale of its own shows the tick values of the scale drawn on it.
+    // A side without a scale of its own shows the tick values of the scale drawn on it, and with
+    // Override Calculated Values off a scale shows the values it is calculated with.
     let drawn = if own_scale {
         scale
     } else if right {
@@ -668,7 +701,7 @@ fn value_page(ui: &mut egui::Ui, d: &mut Dialog, right: bool) {
     };
     check(ui, d, drawn.overridden, tl!("Override Calculated Values"), own_scale);
     ui.add_enabled_ui(own_scale && d.bool(scale.overridden), |ui| {
-        let ((lo, hi), count) = if own_scale || d.bool(drawn.overridden) {
+        let ((lo, hi), count) = if d.bool(drawn.overridden) {
             (bounds(d, drawn), divisions(d, drawn))
         } else {
             let (lo, hi, count) = calculated(d, drawn);
@@ -1258,6 +1291,7 @@ mod tests {
         {
             assert!(crate::dialogs::protected_field(d, field), "{field}");
         }
+        assert!(crate::dialogs::protected_field(d, DOC));
     }
 
     /// A value axis side without a scale of its own shows the tick values of the scale drawn on it,
@@ -1364,5 +1398,111 @@ mod tests {
         assert_eq!((q["columnWidth"].as_f64(), q["clusterWidth"].as_f64()), (Some(*WIDTHS.end()), Some(*WIDTHS.start())));
         assert_eq!(q["prefix"].as_str().map(str::len), Some(AFFIX_CHARS));
         assert_eq!(q["ticks"].as_f64(), Some(*DIVISIONS.end()));
+    }
+
+    /// With Override Calculated Values turned off, the dimmed fields show the calculated tick
+    /// values OK gives the axis, not values typed while it was on.
+    #[test]
+    fn the_dimmed_fields_show_the_calculated_tick_values() {
+        let mut app = app_with_graph("column");
+        open(&mut app).unwrap();
+        set(&mut app, PAGE, json!("valueAxis"));
+        set(&mut app, "overrideValues", json!(true));
+        set(&mut app, "axisMax", json!(50.0));
+        set(&mut app, "ticks", json!(10));
+        set(&mut app, "overrideValues", json!(false));
+        let h = harness(app);
+        let shown = |name: &str| {
+            let node = h.get_by_role_and_label(Role::TextInput, name);
+            node.accesskit_node().value().as_deref().and_then(|v| v.trim().parse::<f64>().ok())
+        };
+        assert_eq!((shown("Minimum:"), shown("Maximum:"), shown("Divisions:")), (Some(0.0), Some(4.0), Some(4.0)));
+    }
+
+    /// The tick values are calculated again when the graph's data changes while the dialog is open.
+    #[test]
+    fn a_data_change_calculates_the_tick_values_again() {
+        let mut app = app_with_graph("column");
+        open(&mut app).unwrap();
+        assert_eq!(calculated(app.ui.dialog.as_ref().unwrap(), &LEFT).1, 4.0);
+        app.session.execute("graph.setData", &json!({"csv": ",a,b\nQ1,1,2\nQ2,3,40"})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        recalculate(&app, &mut d);
+        assert!(calculated(&d, &LEFT).1 >= 40.0, "{:?}", calculated(&d, &LEFT));
+        // Turned on now, Override Calculated Values starts from the new values.
+        d.fields.insert("overrideValues".into(), json!(true));
+        app.ui.dialog = Some(d);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(query(&mut app)["axisMax"].as_f64().is_some_and(|max| max >= 40.0));
+        // Tick values the graph has keep, even when they are the calculated ones.
+        let mut app = app_with_graph("column");
+        app.run(COMMAND, json!({"axisMin": 0, "axisMax": 4, "ticks": 4})).unwrap();
+        open(&mut app).unwrap();
+        app.session.execute("graph.setData", &json!({"csv": ",a,b\nQ1,1,2\nQ2,3,40"})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        recalculate(&app, &mut d);
+        settle(&mut d);
+        app.ui.dialog = Some(d);
+        let before = steps(&app);
+        assert_eq!(crate::dialogs::confirm(&mut app), Ok(Value::Null));
+        assert_eq!((steps(&app), query(&mut app)["axisMax"].as_f64()), (before, Some(4.0)));
+        // A value typed in stays, and the values filled beside it are calculated again.
+        let mut app = app_with_graph("column");
+        open(&mut app).unwrap();
+        set(&mut app, "overrideValues", json!(true));
+        settle(app.ui.dialog.as_mut().unwrap());
+        set(&mut app, "axisMax", json!(50.0));
+        app.session.execute("graph.setData", &json!({"csv": ",a,b\nQ1,-30,2\nQ2,3,4"})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        recalculate(&app, &mut d);
+        let (lo, _, divisions) = calculated(&d, &LEFT);
+        assert!(lo < 0.0, "{lo}");
+        app.ui.dialog = Some(d);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let q = query(&mut app);
+        assert_eq!((q["axisMin"].as_f64(), q["axisMax"].as_f64(), q["ticks"].as_u64()), (Some(lo), Some(50.0), Some(divisions as u64)));
+        // With both bounds typed in, the divisions filled are calculated again, not the count an
+        // axis without one is drawn in.
+        let mut app = app_with_graph("column");
+        open(&mut app).unwrap();
+        set(&mut app, "overrideValues", json!(true));
+        settle(app.ui.dialog.as_mut().unwrap());
+        set(&mut app, "axisMin", json!(-100.0));
+        set(&mut app, "axisMax", json!(100.0));
+        app.session.execute("graph.setData", &json!({"csv": ",a,b\nQ1,-30,2\nQ2,3,4"})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        recalculate(&app, &mut d);
+        settle(&mut d);
+        assert_eq!(number(&d, "ticks"), Some(calculated(&d, &LEFT).2 as f64));
+        // Each value the graph had keeps, beside one typed in.
+        let mut app = app_with_graph("column");
+        app.run(COMMAND, json!({"axisMin": 0, "axisMax": 4, "ticks": 4})).unwrap();
+        open(&mut app).unwrap();
+        set(&mut app, "axisMax", json!(50.0));
+        app.session.execute("graph.setData", &json!({"csv": ",a,b\nQ1,-30,2\nQ2,3,4"})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        recalculate(&app, &mut d);
+        app.ui.dialog = Some(d);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let q = query(&mut app);
+        assert_eq!((q["axisMin"].as_f64(), q["axisMax"].as_f64(), q["ticks"].as_u64()), (Some(0.0), Some(50.0), Some(4)));
+    }
+
+    /// OK changes nothing while another document is active, even one with a graph of the same id.
+    #[test]
+    fn ok_changes_nothing_in_another_document() {
+        let mut app = app_with_graph("column");
+        let first = app.session.active().unwrap().selection.objects[0];
+        open(&mut app).unwrap();
+        set(&mut app, "type", json!("line"));
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150, "csv": ",a,b\nQ1,1,2\nQ2,3,4"})).unwrap();
+        let second = app.session.active().unwrap().selection.objects[0];
+        assert_eq!(first, second, "the same id in both documents");
+        let before = steps(&app);
+        assert_eq!(crate::dialogs::confirm(&mut app), Ok(Value::Null));
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(steps(&app), before);
+        assert_eq!(app.session.execute(COMMAND, &json!({"id": second.0})).unwrap()["type"], "column");
     }
 }
