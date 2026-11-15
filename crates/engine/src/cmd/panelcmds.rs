@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Composer, JustificationOptions, NodeKind, Scaling, SingleWordJustify, TextRun};
 use vectorcraft_geom::{Rect, Vec2};
 
-use super::{Affine, CommandSpec, NodeId, Result, Session, bad, bool_or, check_switches, cmd, has_doc, index, ok, point_indices, switch_or};
+use super::{Affine, CommandSpec, NodeId, Result, Session, bad, bool_or, check_switches, cmd, has_doc, index, ok, switch_or};
 use crate::{Clipboard, EngineError};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -67,7 +67,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright), underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), antiAlias?: \"none\"|\"sharp\"|\"crisp\"|\"strong\" (Character panel › Anti-aliasing Method, how the type's edges are drawn as pixels; it sets each targeted type object, with or without a range; each frame of a thread keeps its own method; graph labels keep it for every label of their kind when the graph is drawn again; new type: \"sharp\"), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), list?: \"none\"|\"bullet\"|\"number\", bullet?: \"none\"|\"dot\"|\"dash\"|\"circle\"|\"square\", number?: \"none\"|\"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\", listAlign?: \"left\"|\"right\", listLevel?: 1..9 (Paragraph panel › Bullets and Numbered List: each paragraph of a list starts with its marker, drawn in the font, size and color of the paragraph's first character, and its text starts at the next tab stop after the marker, the left indent counting as a stop; a bulleted list's marker is its bullet, and a numbered list's is the paragraph's number and a period: 1, 2, 3; A to Z, then AA, BB; a to z, then aa, bb; I, II, III; i, ii, iii; 01 to 99, then 100; 001 to 999, then 1000; letters and roman numerals past 3999 in Arabic digits; the numbers count the story's numbered paragraphs, its threaded frames included, from 1 after a paragraph in no list, and an empty or bulleted paragraph is not counted; list \"bullet\" keeps a list's bullet, else a dot, and list \"number\" keeps a numbered list's style, else arabic; without list, a number style makes a numbered list and a bullet makes a bulleted one; \"none\" in any of the three turns the list off; a paragraph that joins a list with left and first-line indents of 0 gets 18 and -18 unless the call sets an indent; a horizontal right-to-left list paragraph has its indents mirrored, measured from the right; listAlign \"right\" (Bullets and Numbering…'s Alignment) puts the marker against the text, and \"left\" (the default) puts it at the first line's start, the text starting at the same place with either; it sets the paragraphs that are in a list or that the call puts in one, and a list keeps it when it changes between bullets and numbers; listLevel (Tab and Shift+Tab at the start of a list paragraph, Bullets and Numbering…'s Level) is a whole number from 1 to 9 that sets the paragraphs in a list or that the call puts in one, a list keeping it when it changes between bullets and numbers, and a list turned on without listLevel starting at level 1; each level past the first sets the paragraph 18 pt further in than its left indent, and each level counts its own numbers: a list paragraph with text sets the counts of the levels deeper than its own back to 0, so a deeper numbered paragraph after it counts from 1, and a paragraph back at a shallower level goes on with that level's count), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), wordSpacing?: % 0..1000 (80, 100, 133), letterSpacing?: % of a word space -100..500 (0, 0, 0), glyphScaling?: % 50..200 (100, 100, 100): each [min, desired, max] or {min?, desired?, max?} (Paragraph panel menu › Justification…: Desired applies to every line, Minimum and Maximum bound what justified lines may use; values are clamped to their range, and Minimum ≤ Desired ≤ Maximum must hold afterwards or nothing changes), autoLeading?: % of the size 0..500 (120; the leading of characters whose leading is Auto), singleWordJustification?: \"fullJustify\"|\"alignLeft\"|\"alignCenter\"|\"alignRight\" (a justified line holding one word), mojikumi?: \"none\"|\"yakumonoHankaku\"|\"gyomatsuYakumonoHankaku\"|\"gyomatsuYakumonoZenkaku\"|\"yakumonoZenkaku\"|\"lineEndHalf\" (Mojikumi Set: Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), kinsokuType?: \"pushInFirst\"|\"pushOutFirst\"|\"pushOutOnly\" (Paragraph panel menu › Kinsoku Shori Type: how area type keeps those characters off a line's ends; pushInFirst sets them on the line when its gaps next to CJK characters can close up enough, by at most a tenth of an em each, pushOutFirst does so only when moving the character before them to the next line would leave the line more than an em short, and pushOutOnly, the default, moves it unless Burasagari hangs an overflowing comma or full stop; no effect with kinsoku \"none\"), bunriKinshi?: bool (Paragraph panel menu › Bunri-Kinshi: a line never breaks inside an inseparable pair, two em dashes, two horizontal ellipses, two two-dot leaders or the two halves of a vertical kana repeat mark, and justification adds no space inside one; kept but without effect with kinsoku \"none\"; off by default), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings, as text.setRangeStyle: a tate-chu-yoko block moves up or down, right or left, and on a vertical path toward or away from the path's start, to its left or right), akiLeft?, akiRight?: 1/1000 em 0..1000 (Character panel › Insert Aki Left and Right, with Show East Asian Options, as text.setRangeStyle: space before and after each character in reading order), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, as text.setRangeStyle), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference, as text.setRangeStyle: the height of the font that the size measures), language?: name|tag (Character panel › Language, as text.setRangeStyle), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), romanHangingPunctuation?: bool (Paragraph panel menu › Roman Hanging Punctuation: quotation marks, hyphens, full stops and commas starting or ending a line hang outside the margin, asterisks, tildes, ellipses, dashes, colons and semicolons by half; off by default), koreanLineBreakAnywhere?: bool (Paragraph panel menu › Korean Line Break Anywhere: a line may break between any two Hangul syllables; off, a word with Hangul in it breaks only at its spaces and punctuation, or where it is wider than the line; new type: false, paragraphs saved before the option: true), kashida?: \"none\"|\"short\"|\"medium\"|\"long\"|\"stylistic\" (Paragraph panel › Insert Kashidas: justified lines of horizontal area type lengthen each Arabic word with a kashida between its last pair of joined letters, at most a quarter, half or whole em long, or whole tatweels up to an em for stylistic, before they widen their word spaces; none by default), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text, and graph labels keep the character and paragraph attributes for every label of their kind when the graph is drawn again, the graph still setting each label's alignment; a number or switch given as another type fails the call, and a null value leaves its attribute as it is, so a call with only null values fails with nothing to change; a call that gives the values the text already has records no undo step). Or {paragraphIndents: [{id, start: byte where the paragraph starts, leftIndent?, firstLineIndent?: pt -1296..1296}…]} alone (Tabs panel indent markers over paragraphs with indents of their own): each entry sets one paragraph of a type object, at least one indent each, at most 100000 entries; every entry is checked before anything changes, and an unknown key, a value out of range, an object that is not type, a byte where no paragraph starts or two entries for one paragraph with other values fail the call; all of it is one edit, a threaded story flowing again once, and when no paragraph's indents change nothing is recorded → {ids}",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright), underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), antiAlias?: \"none\"|\"sharp\"|\"crisp\"|\"strong\" (Character panel › Anti-aliasing Method, how the type's edges are drawn as pixels; it sets each targeted type object, with or without a range; each frame of a thread keeps its own method; graph labels keep it for every label of their kind when the graph is drawn again; new type: \"sharp\"), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), list?: \"none\"|\"bullet\"|\"number\", bullet?: \"none\"|\"dot\"|\"dash\"|\"circle\"|\"square\", number?: \"none\"|\"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\", listAlign?: \"left\"|\"right\", listLevel?: 1..9 (Paragraph panel › Bullets and Numbered List: each paragraph of a list starts with its marker, drawn in the font, size and color of the paragraph's first character, and its text starts at the next tab stop after the marker, the left indent counting as a stop; a bulleted list's marker is its bullet, and a numbered list's is the paragraph's number and a period: 1, 2, 3; A to Z, then AA, BB; a to z, then aa, bb; I, II, III; i, ii, iii; 01 to 99, then 100; 001 to 999, then 1000; letters and roman numerals past 3999 in Arabic digits; the numbers count the story's numbered paragraphs, its threaded frames included, from 1 after a paragraph in no list, and an empty or bulleted paragraph is not counted; list \"bullet\" keeps a list's bullet, else a dot, and list \"number\" keeps a numbered list's style, else arabic; without list, a number style makes a numbered list and a bullet makes a bulleted one; \"none\" in any of the three turns the list off; a paragraph that joins a list with left and first-line indents of 0 gets 18 and -18 unless the call sets an indent; a horizontal right-to-left list paragraph has its indents mirrored, measured from the right; listAlign \"right\" (Bullets and Numbering…'s Alignment) puts the marker against the text, and \"left\" (the default) puts it at the first line's start, the text starting at the same place with either; it sets the paragraphs that are in a list or that the call puts in one, and a list keeps it when it changes between bullets and numbers; listLevel (Tab and Shift+Tab at the start of a list paragraph, Bullets and Numbering…'s Level) is a whole number from 1 to 9 that sets the paragraphs in a list or that the call puts in one, a list keeping it when it changes between bullets and numbers, and a list turned on without listLevel starting at level 1; each level past the first sets the paragraph 18 pt further in than its left indent, and each level counts its own numbers: a list paragraph with text sets the counts of the levels deeper than its own back to 0, so a deeper numbered paragraph after it counts from 1, and a paragraph back at a shallower level goes on with that level's count), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), wordSpacing?: % 0..1000 (80, 100, 133), letterSpacing?: % of a word space -100..500 (0, 0, 0), glyphScaling?: % 50..200 (100, 100, 100): each [min, desired, max] or {min?, desired?, max?} (Paragraph panel menu › Justification…: Desired applies to every line, Minimum and Maximum bound what justified lines may use; values are clamped to their range, and Minimum ≤ Desired ≤ Maximum must hold afterwards or nothing changes), autoLeading?: % of the size 0..500 (120; the leading of characters whose leading is Auto), singleWordJustification?: \"fullJustify\"|\"alignLeft\"|\"alignCenter\"|\"alignRight\" (a justified line holding one word), mojikumi?: \"none\"|\"yakumonoHankaku\"|\"gyomatsuYakumonoHankaku\"|\"gyomatsuYakumonoZenkaku\"|\"yakumonoZenkaku\"|\"lineEndHalf\" (Mojikumi Set: Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), kinsokuType?: \"pushInFirst\"|\"pushOutFirst\"|\"pushOutOnly\" (Paragraph panel menu › Kinsoku Shori Type: how area type keeps those characters off a line's ends; pushInFirst sets them on the line when its gaps next to CJK characters can close up enough, by at most a tenth of an em each, pushOutFirst does so only when moving the character before them to the next line would leave the line more than an em short, and pushOutOnly, the default, moves it unless Burasagari hangs an overflowing comma or full stop; no effect with kinsoku \"none\"), bunriKinshi?: bool (Paragraph panel menu › Bunri-Kinshi: a line never breaks inside an inseparable pair, two em dashes, two horizontal ellipses, two two-dot leaders or the two halves of a vertical kana repeat mark, and justification adds no space inside one; kept but without effect with kinsoku \"none\"; off by default), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings, as text.setRangeStyle: a tate-chu-yoko block moves up or down, right or left, and on a vertical path toward or away from the path's start, to its left or right), warichu?: bool, warichuLines?: 1..6, warichuGap?: pt 0..100, warichuScale?: % 10..100, warichuAlign?: \"auto\"|\"left\"|\"center\"|\"right\"|\"justifyLeft\"|\"justifyCenter\"|\"justifyRight\"|\"justifyAll\" (Character panel menu › Warichu and Warichu Settings, as text.setRangeStyle: the characters set smaller and stacked on lines inside their line), akiLeft?, akiRight?: 1/1000 em 0..1000 (Character panel › Insert Aki Left and Right, with Show East Asian Options, as text.setRangeStyle: space before and after each character in reading order), tsume?: % 0..100 (Character panel › Tsume, with Show East Asian Options, as text.setRangeStyle: the share of the blank space beside each character's ink taken away in horizontal type), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, as text.setRangeStyle), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), glyphForm?: \"traditional\"|\"expert\"|\"jis04\"|\"jis90\"|\"jis78\"|\"jis83\"|\"fullWidth\"|\"halfWidth\"|\"thirdWidth\"|\"quarterWidth\"|\"default\" (Glyphs panel menu, with Show East Asian Options, as text.setRangeStyle: the characters drawn in one OpenType form of the font, or its default glyphs), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference, as text.setRangeStyle: the height of the font that the size measures), language?: name|tag (Character panel › Language, as text.setRangeStyle), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), romanHangingPunctuation?: bool (Paragraph panel menu › Roman Hanging Punctuation: quotation marks, hyphens, full stops and commas starting or ending a line hang outside the margin, asterisks, tildes, ellipses, dashes, colons and semicolons by half; off by default), koreanLineBreakAnywhere?: bool (Paragraph panel menu › Korean Line Break Anywhere: a line may break between any two Hangul syllables; off, a word with Hangul in it breaks only at its spaces and punctuation, or where it is wider than the line; new type: false, paragraphs saved before the option: true), kashida?: \"none\"|\"short\"|\"medium\"|\"long\"|\"stylistic\" (Paragraph panel › Insert Kashidas: justified lines of horizontal area type lengthen each Arabic word with a kashida between its last pair of joined letters, at most a quarter, half or whole em long, or whole tatweels up to an em for stylistic, before they widen their word spaces; none by default), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text, and graph labels keep the character and paragraph attributes for every label of their kind when the graph is drawn again, the graph still setting each label's alignment; a number or switch given as another type fails the call, and a null value leaves its attribute as it is, so a call with only null values fails with nothing to change; a call that gives the values the text already has records no undo step). Or {paragraphIndents: [{id, start: byte where the paragraph starts, leftIndent?, firstLineIndent?: pt -1296..1296}…]} alone (Tabs panel indent markers over paragraphs with indents of their own): each entry sets one paragraph of a type object, at least one indent each, at most 100000 entries; every entry is checked before anything changes, and an unknown key, a value out of range, an object that is not type, a byte where no paragraph starts or two entries for one paragraph with other values fail the call; all of it is one edit, a threaded story flowing again once, and when no paragraph's indents change nothing is recorded → {ids}",
             has_doc,
             set_format
         ),
@@ -76,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert to Text",
             [],
             None,
-            "{ids?|id?, start?: byte, end?: byte} (Type › Bullets and Numbering › Convert to Text: the paragraphs of the selected type, or of `ids`, or those a start/end range touches; after Select All in a frame of threaded text, without `ids`, `id` or a range, every paragraph of the story's frames that are neither locked nor hidden; while the story is selected, its locked and hidden frames are not converted even when named, nor a paragraph whose text starts in one) the marker of each list paragraph becomes characters of its text: the bullet, or the number and its period as the paragraph showed it, then a tab, at the start of the paragraph in the marker's font, size and color; the list is turned off. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, which keeps the text after the tab where it started; when it went to a tab stop and a stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker and that place, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in place of any stop there and of those right, center and decimal stops before it (past the left indent only in a paragraph with no tab of its own). In threaded type the numbers are those counted through the story's frames, and a paragraph that continues into a later frame is converted where its text starts. An empty list paragraph has no marker and only leaves the list. A paragraph with no direction set gets the direction it ran in when the characters would change it (a letter or roman numeral before right-to-left text). With the Every-line Composer, a paragraph with a tab is broken line by line, so a converted paragraph can break its lines at other places. While the Type tool edits, its typing ends first and its anchor and caret move past the characters inserted at or before them (a whole story that Select All selected stays selected when the call converts all of it); in threaded type, when the caret's character moved to another frame, the tool edits that frame, which becomes the selection when it was not selected. One undo step → {ids, converted: paragraphs, inserted: [{id, at: byte before the change, length: bytes}]}",
+            "{ids?|id?, start?: byte, end?: byte} (Type › Bullets and Numbering › Convert to Text: the paragraphs of the selected type, or of `ids`, or those a start/end range touches; after Select All in a frame of threaded text, without `ids`, `id` or a range, every paragraph of every frame of the story, locked and hidden frames included) the marker of each list paragraph becomes characters of its text: the bullet, or the number and its period as the paragraph showed it, then a tab, at the start of the paragraph in the marker's font, size and color; the list is turned off. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, which keeps the text after the tab where it started; when it went to a tab stop and a stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker and that place, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in place of any stop there and of those right, center and decimal stops before it (past the left indent only in a paragraph with no tab of its own). In threaded type the numbers are those counted through the story's frames, and a paragraph that continues into a later frame is converted where its text starts. An empty list paragraph has no marker and only leaves the list. A paragraph with no direction set gets the direction it ran in when the characters would change it (a letter or roman numeral before right-to-left text). With the Every-line Composer, a paragraph with a tab is broken line by line, so a converted paragraph can break its lines at other places. While the Type tool edits, its typing ends first and its anchor and caret move past the characters inserted at or before them (a whole story that Select All selected stays selected when the call converts all of it); in threaded type, when the caret's character moved to another frame, the tool edits that frame, which becomes the selection when it was not selected. One undo step → {ids, converted: paragraphs, inserted: [{id, at: byte before the change, length: bytes}]}",
             has_doc,
             convert_list_to_text
         ),
@@ -88,7 +88,7 @@ pub fn specs() -> Vec<CommandSpec> {
 fn artboard_reorder(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "artboard.reorder";
     let i = artboard_index(&s.doc()?.doc, p, C)?;
-    let to = p.get("to").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing to"))?;
+    let to = super::index_opt(p, "to", C)?.ok_or_else(|| bad(C, "missing to"))?;
     s.edit("Reorder Artboards", |d, _| {
         if i >= d.artboards.len() {
             return Err(EngineError::Other("no such artboard".into()));
@@ -137,19 +137,16 @@ pub(crate) fn named_or_selected(s: &Session, p: &Value, cmd: &str) -> Result<Vec
         return artboard_indices(d, p, cmd);
     }
     if let Some(recorded) = p.get("selectedArtboards") {
-        return artboard_indices(d, &json!({ "indices": recorded }), cmd);
+        return listed_artboards(d, recorded, "selectedArtboards", cmd);
     }
-    let mut picked: Vec<u64> = t["selected"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_u64)
-        .filter(|i| usize::try_from(*i).is_ok_and(|i| i < d.artboards.len()))
-        .collect();
+    let mut picked: Vec<usize> =
+        t["selected"].as_array().into_iter().flatten().filter_map(Value::as_u64).map(index).filter(|i| *i < d.artboards.len()).collect();
     if picked.is_empty() {
-        picked.push(t["active"].as_u64().unwrap_or(0));
+        picked.push(on_board(d, t["active"].as_u64().map_or(0, index))?);
     }
-    artboard_indices(d, &json!({ "indices": picked }), cmd)
+    picked.sort_unstable();
+    picked.dedup();
+    Ok(picked)
 }
 
 /// Rename Artboards: one artboard takes the name, and several take it numbered in artboard order, in
@@ -221,23 +218,51 @@ fn artboard_switch_orientation(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "switched": switched }))
 }
 
-/// The one artboard `cmd` acts on: `index`, an artboard of `d`, with the errors of
-/// [`artboard_indices`] (`missing index`, `no such artboard`).
+/// The one artboard `cmd` acts on: `index`, an artboard of `d`. Left out or null, it is
+/// `missing index`; a value that is not a whole number is "`index` must be a whole number"; a
+/// whole number past the last artboard is `no such artboard`.
 pub(crate) fn artboard_index(d: &vectorcraft_doc::Document, p: &Value, cmd: &str) -> Result<usize> {
-    let i = p.get("index").ok_or_else(|| bad(cmd, "missing index"))?;
-    artboard_indices(d, &json!({ "index": i }), cmd)?.into_iter().next().ok_or_else(|| EngineError::Other("no such artboard".into()))
+    artboard_at(d, p, "index", cmd)?.ok_or_else(|| bad(cmd, "missing index"))
+}
+
+/// The artboard of `d` that `key` of `p` names, or `None` when `p` leaves it out or gives null. A
+/// value that is not a whole number is "`{key}` must be a whole number", and a whole number past the
+/// last artboard is `no such artboard`.
+pub(crate) fn artboard_at(d: &vectorcraft_doc::Document, p: &Value, key: &str, cmd: &str) -> Result<Option<usize>> {
+    super::index_opt(p, key, cmd)?.map(|i| on_board(d, i)).transpose()
+}
+
+/// `i` when it is an artboard of `d`, else `no such artboard`.
+pub(crate) fn on_board(d: &vectorcraft_doc::Document, i: usize) -> Result<usize> {
+    match i < d.artboards.len() {
+        true => Ok(i),
+        false => Err(EngineError::Other("no such artboard".into())),
+    }
 }
 
 /// The artboards `cmd` acts on: `indices` (several), else `index` (one), each an artboard of `d`,
-/// in order and once each.
+/// in order and once each. `indices` is read as [`listed_artboards`] reads it, and `index` as
+/// [`artboard_index`] reads it.
 pub(crate) fn artboard_indices(d: &vectorcraft_doc::Document, p: &Value, cmd: &str) -> Result<Vec<usize>> {
-    let listed = match (p.get("indices"), p.get("index")) {
-        (Some(v), _) => point_indices(v),
-        (None, Some(i)) => point_indices(&json!([i])),
-        (None, None) => return Err(bad(cmd, "missing index")),
-    };
-    let mut indices =
-        listed.filter(|v| !v.is_empty() && v.iter().all(|i| *i < d.artboards.len())).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    match p.get("indices") {
+        Some(v) => listed_artboards(d, v, "indices", cmd),
+        None => Ok(vec![artboard_index(d, p, cmd)?]),
+    }
+}
+
+/// `v`, the value of `key`, as artboards of `d`, in order and once each. A value that is not a list
+/// is "`{key}` must be a list of artboard indices", an empty list is "`{key}` must be a non-empty
+/// list of artboard indices", and a list with an entry that is not a whole number is "`{key}` must
+/// contain whole numbers"; a whole number past the last artboard is `no such artboard`. Every entry
+/// is checked for its form before any is checked against the artboards.
+fn listed_artboards(d: &vectorcraft_doc::Document, v: &Value, key: &str, cmd: &str) -> Result<Vec<usize>> {
+    let entries = v.as_array().ok_or_else(|| bad(cmd, format!("`{key}` must be a list of artboard indices")))?;
+    if entries.is_empty() {
+        return Err(bad(cmd, format!("`{key}` must be a non-empty list of artboard indices")));
+    }
+    let listed = entries.iter().map(Value::as_u64).collect::<Option<Vec<u64>>>();
+    let listed = listed.ok_or_else(|| bad(cmd, format!("`{key}` must contain whole numbers")))?;
+    let mut indices = listed.into_iter().map(|i| on_board(d, index(i))).collect::<Result<Vec<usize>>>()?;
     indices.sort_unstable();
     indices.dedup();
     Ok(indices)
@@ -345,15 +370,7 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
     let copied = clip.nodes.len();
     if cut {
         s.edit("Cut Artboard", |d, sel| {
-            if indices.iter().any(|i| *i >= d.artboards.len()) {
-                return Err(EngineError::Other("no such artboard".into()));
-            }
-            // The last first, so the others keep their places; their guides go with them.
-            for &i in indices.iter().rev() {
-                let gone = d.artboards.remove(i).id;
-                d.retire_artboard_id(gone);
-                d.retain_guides(sel, |g| g.artboard != Some(gone));
-            }
+            super::layer::remove_artboards(d, sel, &indices)?;
             d.remove_many(&art)?;
             sel.prune(d);
             Ok(())
@@ -465,6 +482,23 @@ fn list_level_param(p: &Value, cmd: &str) -> Result<Option<u8>> {
     }
 }
 
+/// Set the Warichu and Warichu Settings of `st` that are given: Warichu on or off, Lines, Line Gap
+/// (in the type's own units), Scale and Alignment.
+fn set_warichu(
+    st: &mut vectorcraft_doc::CharStyle,
+    on: Option<bool>,
+    lines: Option<u8>,
+    gap: Option<f64>,
+    scale: Option<f64>,
+    align: Option<vectorcraft_doc::WarichuAlign>,
+) {
+    st.warichu = on.unwrap_or(st.warichu);
+    st.warichu_lines = lines.unwrap_or(st.warichu_lines);
+    st.warichu_gap = gap.unwrap_or(st.warichu_gap);
+    st.warichu_scale = scale.unwrap_or(st.warichu_scale);
+    st.warichu_align = align.unwrap_or(st.warichu_align);
+}
+
 fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setFormat";
     if p.get("paragraphIndents").is_some() {
@@ -479,6 +513,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             "allCaps",
             "proportionalMetrics",
             "tateChuYoko",
+            "warichu",
             "standardVerticalRoman",
             "noBreak",
             "kashidas",
@@ -571,11 +606,18 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "tateChuYoko",
         "tcyUpDown",
         "tcyLeftRight",
+        "warichu",
+        "warichuLines",
+        "warichuGap",
+        "warichuScale",
+        "warichuAlign",
         "akiLeft",
         "akiRight",
+        "tsume",
         "standardVerticalRoman",
         "noBreak",
         "digits",
+        "glyphForm",
         "fontHeightReference",
         "language",
         "fontAxes",
@@ -610,6 +652,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     let char_align = super::textedit::char_align_param(p, C)?;
     let char_direction = super::textedit::char_direction_param(p, C)?;
     let digits = super::textedit::digits_param(p, C)?;
+    let glyph_form = super::textedit::glyph_form_param(p, C)?;
     let language = super::textedit::language_param(p, C)?;
     let font_axes = super::textedit::font_axes_param(p, C)?;
     let font_height_reference = super::textedit::font_height_reference_param(p, C)?;
@@ -617,6 +660,11 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     let tcy_left_right = super::textedit::tcy_offset_param(p, "tcyLeftRight", C)?;
     let aki_left = super::textedit::aki_param(p, "akiLeft", C)?;
     let aki_right = super::textedit::aki_param(p, "akiRight", C)?;
+    let tsume = super::textedit::tsume_param(p, C)?;
+    let warichu_lines = super::textedit::warichu_lines_param(p, C)?;
+    let warichu_gap = super::textedit::warichu_number_param(p, "warichuGap", C)?;
+    let warichu_scale = super::textedit::warichu_number_param(p, "warichuScale", C)?;
+    let warichu_align = super::textedit::warichu_align_param(p, C)?;
     let mojikumi = match p.get("mojikumi") {
         None | Some(Value::Null) => None,
         Some(v) => Some(match v.as_str() {
@@ -726,9 +774,13 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     // A paragraph whose Minimum, Desired and Maximum would no longer be in order.
     let mut out_of_order: Option<&str> = None;
     let range = super::typecmd::TextRange::parse(p, C)?;
-    // The character attributes, given the baseline shift, horizontal scale and Tate-chu-yoko
-    // offsets in the type's own units.
-    let chars = |st: &mut vectorcraft_doc::CharStyle, baseline_shift: Option<f64>, h_scale: Option<f64>, tcy: (Option<f64>, Option<f64>)| {
+    // The character attributes, given the baseline shift, horizontal scale, Tate-chu-yoko offsets
+    // and warichu Line Gap in the type's own units.
+    let chars = |st: &mut vectorcraft_doc::CharStyle,
+                 baseline_shift: Option<f64>,
+                 h_scale: Option<f64>,
+                 tcy: (Option<f64>, Option<f64>),
+                 gap: Option<f64>| {
         if let Some(k) = kerning {
             st.kerning = k;
         }
@@ -771,6 +823,9 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(v) = digits {
             st.digits = v;
         }
+        if let Some(v) = glyph_form {
+            st.glyph_form = v;
+        }
         if let Some(v) = &language {
             st.language.clone_from(v);
         }
@@ -786,11 +841,15 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(v) = tcy.1 {
             st.tcy_left_right = v;
         }
+        set_warichu(st, flag("warichu"), warichu_lines, gap, warichu_scale, warichu_align);
         if let Some(v) = aki_left {
             st.aki_left = v;
         }
         if let Some(v) = aki_right {
             st.aki_right = v;
+        }
+        if let Some(v) = tsume {
+            st.tsume = v;
         }
         if let Some(v) = flag("standardVerticalRoman") {
             st.standard_vertical_roman = v;
@@ -851,7 +910,9 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             let h_scale = num("hScale").map(|v| super::typecmd::local_type_value(t, v, (1.0, 10000.0), true, C)).transpose()?;
             let local = |v: Option<f64>| v.map(|v| super::typecmd::local_type_value(t, v, (-1296.0, 1296.0), false, C)).transpose();
             let tcy = (local(tcy_up_down)?, local(tcy_left_right)?);
-            super::typecmd::style_chars(t, range, |st| chars(st, baseline_shift, h_scale, tcy));
+            let gap =
+                warichu_gap.map(|v| super::typecmd::local_type_value(t, v, (0.0, vectorcraft_doc::text::MAX_WARICHU_GAP), false, C)).transpose()?;
+            super::typecmd::style_chars(t, range, |st| chars(st, baseline_shift, h_scale, tcy, gap));
             let span = super::typecmd::para_span(range, t);
             let paras = |para: &mut vectorcraft_doc::ParaStyle, out_of_order: &mut Option<&'static str>| {
                 if let Some(v) = num("leftIndent") {
@@ -960,7 +1021,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         if range.is_none() {
             let shift = num("baselineShift").map(|v| v.clamp(-1296.0, 1296.0));
             let scale = num("hScale").map(|v| v.clamp(1.0, 10000.0));
-            changed |= super::graph::capture_label_styles(d, &ids, &|st| chars(st, shift, scale, (tcy_up_down, tcy_left_right)));
+            changed |= super::graph::capture_label_styles(d, &ids, &|st| chars(st, shift, scale, (tcy_up_down, tcy_left_right), warichu_gap));
             if let Some(paras) = para_change {
                 // The kept attributes are checked too: they may differ from the labels'.
                 changed |= super::graph::capture_label_paragraphs(d, &ids, &|para| {
@@ -1279,19 +1340,11 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
     use vectorcraft_doc::text::ParaList;
     let range = super::typecmd::TextRange::parse(p, C)?;
     // After Select All in a frame of threaded text, a call that names no type and no range takes
-    // every paragraph of the story's editable frames; its locked and hidden frames stay as they are
-    // whichever way they are named.
-    let full = super::textedit::editing_story(s);
-    let story: Vec<NodeId> = full.iter().copied().filter(|f| s.doc().is_ok_and(|st| st.doc.is_editable(*f))).collect();
+    // every paragraph of every frame of the story, its locked and hidden frames included: the story
+    // is one text.
+    let story = super::textedit::editing_story(s);
     let named = ["ids", "id"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
-    let ids = if !story.is_empty() && !named && range.is_none() {
-        story.clone()
-    } else {
-        super::typecmd::text_targets(s, p, C)?.into_iter().filter(|id| !full.contains(id) || story.contains(id)).collect()
-    };
-    // The selected story's locked and hidden frames: no paragraph whose text starts in one is
-    // converted, and none of their paragraphs is restyled.
-    let held: Vec<NodeId> = full.iter().copied().filter(|f| !story.contains(f)).collect();
+    let ids = if !story.is_empty() && !named && range.is_none() { story.clone() } else { super::typecmd::text_targets(s, p, C)? };
     // Converting the whole story leaves it selected.
     let whole_story = !story.is_empty() && range.is_none() && story.iter().all(|f| ids.contains(f));
     let editing = match super::textedit::editing_range(s)? {
@@ -1325,7 +1378,6 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
     let mut converted = 0;
     for story in &stories {
         let frames: Vec<&vectorcraft_doc::TextObject> = story.iter().filter_map(|id| text(*id)).collect();
-        let is_held = |f: usize| story.get(f).is_some_and(|id| held.contains(id));
         let mut paras: Vec<StoryParagraph> = vec![];
         let mut named_parts = vec![];
         let plains: Vec<String> = frames.iter().map(|t| t.plain_text()).collect();
@@ -1351,7 +1403,7 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
         }
         for (i, named) in named_parts {
             if let Some(para) = paras.get_mut(i) {
-                let listed = para.main_part().is_some_and(|p| p.list.is_some() && !is_held(p.frame));
+                let listed = para.main_part().is_some_and(|p| p.list.is_some());
                 para.converts |= named && listed;
             }
         }
@@ -1441,7 +1493,7 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
                 let tab = vectorcraft_doc::TabStop { position: x, align: vectorcraft_doc::TabAlign::Left, leader: String::new(), align_on: '.' };
                 style.tabs.insert(i, tab);
             }
-            for part in story_para.parts.iter().filter(|q| (std::ptr::eq(*q, para) || q.bytes.is_empty()) && !is_held(q.frame)) {
+            for part in story_para.parts.iter().filter(|q| std::ptr::eq(*q, para) || q.bytes.is_empty()) {
                 if let Some((stops, _)) = frame_edits.get_mut(part.frame) {
                     stops.push((part.index, style.clone()));
                 }

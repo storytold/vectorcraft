@@ -55,6 +55,29 @@ fn start_lists_from_typed_markers_is_a_saved_type_preference() {
     }
 }
 
+/// Type › Show Character Alternates is a checkbox in the Type panel, on by default; turning it
+/// off is saved, and every bundled language translates its label and the row's two tooltips.
+#[test]
+fn show_character_alternates_is_a_saved_type_preference() {
+    const LABEL: &str = "Show Character Alternates";
+    let mut a = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    assert!(a.session.prefs.show_character_alternates);
+    open(&mut a, Some("Type"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains(LABEL), "{text}");
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields.get("showCharacterAlternates"), Some(&json!(true)));
+    a.ui.dialog.as_mut().unwrap().fields.insert("showCharacterAlternates".into(), json!(false));
+    confirm(&mut a).unwrap();
+    assert!(!a.session.prefs.show_character_alternates);
+    let saved: Prefs = serde_json::from_value(a.ui.engine_prefs.clone()).unwrap();
+    assert!(!saved.show_character_alternates);
+    for lang in crate::i18n::Lang::all().filter(|l| l.code() != crate::i18n::Lang::EN.code()) {
+        for source in [LABEL, "Click to replace", "Show all alternates in the Glyphs panel"] {
+            assert!(crate::i18n::has(lang, source), "{}: {source}", lang.code());
+        }
+    }
+}
+
 /// A resting checkbox must have a visible outline in both states and every brightness.
 #[test]
 fn preference_checkboxes_draw_outlines_without_hover() {
@@ -310,6 +333,74 @@ fn reset_preferences(app: &mut VectorcraftApp) {
     click_button(app, "Reset Preferences");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::confirm::RESET_PREFS));
     crate::dialogs::confirm(app).unwrap();
+}
+
+/// The Preferences dialog drawn in `lang` with the open dialog available: the label and screen
+/// rectangle of each control, from the accessibility tree, and the dialog's content rectangle
+/// (inside its 20 pt margin and frame stroke).
+fn dialog_controls(lang: crate::i18n::Lang) -> (Vec<(String, egui::Rect)>, egui::Rect) {
+    crate::i18n::set_current(lang);
+    let mut a = app();
+    a.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
+    open(&mut a, Some("General"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let mut v = vec![];
+    for time in [0.0, 0.25, 0.5] {
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+        let raw = egui::RawInput { screen_rect, time: Some(time), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        v = nodes
+            .iter()
+            .filter_map(|(_, n)| {
+                let b = n.bounds()?;
+                Some((n.label()?.to_string(), egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32))))
+            })
+            .collect();
+    }
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let window = ctx.memory(|m| m.area_rect(egui::Id::unique("dialog-preferences"))).expect("the dialog window is shown");
+    let content = window.shrink(20.0 + ctx.global_style().visuals.window_stroke.width);
+    (v, content)
+}
+
+/// Export Preferences…, Import Preferences… and Reset Preferences share one row above OK and
+/// Cancel.
+#[test]
+fn export_import_and_reset_share_one_row() {
+    let (controls, _) = dialog_controls(crate::i18n::Lang::EN);
+    let top = |label: &str| controls.iter().find(|(t, _)| t == label).map(|(_, r)| r.top()).unwrap_or_else(|| panic!("no `{label}` in {controls:?}"));
+    let row = top("Export Preferences…");
+    assert!((top("Import Preferences…") - row).abs() < 0.5, "Import is on Export's row");
+    assert!((top("Reset Preferences") - row).abs() < 0.5, "Reset is on Export's row");
+    assert!(top("OK") > row + 20.0, "OK is on the row below");
+}
+
+/// In every language the dialog keeps its 760 pt content width, and the three buttons above OK
+/// lie inside it and above the row of OK and Cancel.
+#[test]
+fn export_import_and_reset_fit_in_every_language() {
+    for lang in crate::i18n::Lang::all() {
+        let (controls, content) = dialog_controls(lang);
+        assert!(content.width() <= 760.5, "{}: the dialog's content grew to {content:?}", lang.code());
+        let find = |label: &str| {
+            let label = crate::i18n::tr(lang, label);
+            controls.iter().find(|(t, _)| t == label).map(|(_, r)| *r).unwrap_or_else(|| panic!("{}: no `{label}` in {controls:?}", lang.code()))
+        };
+        let ok = find("OK");
+        for label in ["Export Preferences…", "Import Preferences…", "Reset Preferences"] {
+            let r = find(label);
+            assert!(
+                r.right() <= content.right() + 0.5 && r.left() >= content.left() - 0.5,
+                "{}: `{label}` at {r:?} is outside the dialog's content {content:?}",
+                lang.code()
+            );
+            assert!(r.bottom() <= ok.top(), "{}: `{label}` at {r:?} reaches the OK row at {ok:?}", lang.code());
+        }
+    }
 }
 
 /// Reset Preferences then OK resets the preferences, General included, and leaves the open
@@ -577,6 +668,46 @@ fn system_title_bar_is_dimmed_while_the_environment_variable_chooses_the_frame()
                 out.textures_delta.clear();
             }
             assert_eq!(a.ui.dialog.as_ref().unwrap().bool("systemTitleBar"), !from_env, "clicked with the variable {from_env}");
+        }
+    }
+}
+
+/// Where the desktop draws the frame with System Title Bar on or off (KDE, Sway, X11, a window
+/// opened through XWayland), a note under System Title Bar says so while VectorCraft Title Bar on
+/// Every Desktop is off and VECTORCRAFT_TITLEBAR is unset. Linux and the BSDs only.
+#[test]
+fn system_title_bar_says_when_the_desktop_keeps_the_frame() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let note = "This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.";
+    let supported = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
+    for keeps in [false, true] {
+        for from_env in [false, true] {
+            for (app_title_bar, system) in [(false, false), (false, true), (true, false), (true, true)] {
+                let mut a = app();
+                a.desktop_keeps_frame = keeps;
+                a.titlebar_from_env = from_env;
+                open(&mut a, Some("User Interface"));
+                let fields = &mut a.ui.dialog.as_mut().unwrap().fields;
+                fields.insert("appTitleBar".into(), json!(app_title_bar));
+                fields.insert("systemTitleBar".into(), json!(system));
+                let ctx = egui::Context::default();
+                crate::theme::install_fonts(&ctx);
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+                let mut shown = vec![];
+                out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+                let expected = supported && keeps && !from_env && !app_title_bar;
+                let label = format!("keeps {keeps}, variable {from_env}, app title bar {app_title_bar}, system {system}: {shown:?}");
+                assert_eq!(shown.iter().any(|t| t == note), expected, "{label}");
+            }
         }
     }
 }

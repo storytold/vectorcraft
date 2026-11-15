@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use egui::accesskit::Node;
-use serde_json::json;
+use egui::accesskit::{Node, Role, Toggled};
+use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::{ID, Tab, View, catalog, show};
+use super::{ID, Practice, Tab, View, catalog, samples, show};
 use crate::VectorcraftApp;
 use crate::tests_labels::painted_text;
 
@@ -225,7 +225,260 @@ fn learn_show_opens_a_tutorial_and_learn_list_lists_them() {
     assert_eq!(skills.len(), catalog::SKILLS.len());
     let count: usize = skills.iter().map(|s| s["tutorials"].as_array().map_or(0, Vec::len)).sum();
     assert_eq!(count, catalog::SKILLS.iter().map(|s| s.tutorials.len()).sum::<usize>());
-    assert_eq!(skills[2]["tutorials"][1], json!({"id": "gradient", "title": "Add a gradient", "steps": 3}));
+    assert_eq!(skills[2]["tutorials"][1], json!({"id": "gradient", "title": "Add a gradient", "steps": 3, "finished": false, "completedSteps": []}));
+    assert_eq!((skills[2]["done"].clone(), skills[2]["total"].clone()), (json!(0), json!(3)));
+}
+
+/// Every tutorial has one sample of its own, in the catalog's order, each one small and read
+/// without warnings into art of its own.
+#[test]
+fn every_tutorial_has_its_own_readable_sample() {
+    let ids: Vec<&str> = catalog::SKILLS.iter().flat_map(|s| s.tutorials.iter().map(|t| t.id)).collect();
+    let sampled: Vec<&str> = samples::SAMPLES.iter().map(|(id, _)| *id).collect();
+    assert_eq!(sampled, ids, "one sample for each tutorial, in the catalog's order");
+    let mut texts = HashSet::new();
+    for (id, svg) in samples::SAMPLES {
+        assert!(svg.len() <= samples::MAX_SAMPLE_BYTES, "{id}: {} bytes", svg.len());
+        assert!(texts.insert(*svg), "{id} reuses another tutorial's sample");
+        let loaded = vectorcraft_engine::cmd::fileio::load(&format!("{id}.svg"), svg.as_bytes()).unwrap_or_else(|e| panic!("{id}: {e}"));
+        assert!(loaded.warnings.is_empty(), "{id}: {:?}", loaded.warnings);
+        let mut art = 0;
+        loaded.doc.walk(|n| art += usize::from(!n.is_layer()));
+        assert!(art > 0, "{id} has no art");
+    }
+}
+
+/// Next Up stays in the tutorial's skill: a skill's last tutorial, the catalog's last one
+/// included, has no next tutorial.
+#[test]
+fn the_next_tutorial_is_the_next_one_in_the_same_skill() {
+    for skill in catalog::SKILLS {
+        for pair in skill.tutorials.windows(2) {
+            assert_eq!(catalog::next(pair[0].id).map(|t| t.id), Some(pair[1].id));
+        }
+        let last = skill.tutorials.last().unwrap();
+        assert!(catalog::next(last.id).is_none(), "{} is the last of {}", last.id, skill.id);
+    }
+    assert!(catalog::next("nope").is_none());
+}
+
+/// View more opens the tutorial's sample as a new untitled document beside a modified one, which
+/// stays as it was; another tutorial opens another sample, and View more again opens another copy.
+#[test]
+fn view_more_opens_the_tutorial_s_sample_as_a_new_untitled_document() {
+    let mut app = app();
+    let ctx = context();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    let work = app.session.documents()[0].doc.node_count();
+    let (skill, tutorial) = catalog::tutorial("pen-paths").unwrap();
+    app.ui.learn = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) };
+    click(&mut app, &ctx, "View more", show);
+    let docs = app.session.documents();
+    assert_eq!(docs.len(), 2, "{}", app.ui.status);
+    assert_eq!(app.session.active_index(), Some(1));
+    assert_eq!(docs[0].doc.node_count(), work, "the open document stays as it was");
+    assert!(docs[1].path.is_none() && docs[1].title().starts_with("Untitled-"), "{}", docs[1].title());
+    let pen = docs[1].doc.node_count();
+    assert_eq!(app.ui.learn_practice, Practice { opened: vec!["pen-paths"] });
+    assert!(app.ui.learn_progress.is_empty(), "opening a sample marks nothing");
+
+    let r = app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
+    assert_eq!(r["tutorial"], "gradient");
+    assert_eq!(r["index"], 2);
+    assert_eq!(r["title"], json!(app.session.documents()[2].title()));
+    assert_ne!(app.session.documents()[2].doc.node_count(), pen, "another tutorial, another sample");
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("color"), tutorial: Some("gradient") });
+    app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
+    assert_eq!(app.session.documents().len(), 4, "View more again opens another copy");
+    assert_eq!(app.ui.learn_practice.opened, ["pen-paths", "gradient"]);
+}
+
+/// Finish tutorial shows once the sample is open; finishing shows Next Up with the next
+/// tutorial's title, and Next Up shows that tutorial without opening its sample.
+#[test]
+fn finishing_a_tutorial_offers_next_up_in_its_skill() {
+    let mut app = app();
+    let ctx = context();
+    let (skill, tutorial) = catalog::tutorial("pen-paths").unwrap();
+    app.ui.learn = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) };
+    let text = painted_text(&mut app, show);
+    assert!(text.contains("View more") && !text.contains("Finish tutorial") && !text.contains("Next Up"), "{text}");
+    click(&mut app, &ctx, "View more", show);
+    let text = painted_text(&mut app, show);
+    assert!(text.contains("Finish tutorial") && !text.contains("Next Up"), "{text}");
+    click(&mut app, &ctx, "Finish tutorial", show);
+    assert_eq!(app.ui.learn_progress.finished, ["pen-paths"]);
+    let text = painted_text(&mut app, show);
+    assert!(text.contains("Next Up") && text.contains("Draw smooth curves") && !text.contains("Finish tutorial"), "{text}");
+    let docs = app.session.documents().len();
+    click(&mut app, &ctx, "Next Up", show);
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("draw"), tutorial: Some("smooth-curves") });
+    assert_eq!(app.session.documents().len(), docs, "Next Up opens no sample");
+    let text = painted_text(&mut app, show);
+    assert!(text.contains("View more") && !text.contains("Finish tutorial") && !text.contains("Next Up"), "{text}");
+}
+
+/// One press and release of `key` in what `draw` draws.
+fn key(app: &mut VectorcraftApp, ctx: &egui::Context, key: egui::Key, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) {
+    let event = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    frame(app, ctx, vec![event(true)], draw);
+    frame(app, ctx, vec![event(false)], draw);
+}
+
+/// Press Tab until the control labeled `name` has the keyboard focus.
+fn tab_to(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) {
+    for _ in 0..32 {
+        key(app, ctx, egui::Key::Tab, draw);
+        let at = center(&frame(app, ctx, vec![], draw), name).unwrap_or_else(|| panic!("{name} is drawn"));
+        if ctx.memory(|m| m.focused()).and_then(|id| ctx.read_response(id)).is_some_and(|r| r.rect.contains(at)) {
+            return;
+        }
+    }
+    panic!("Tab did not reach {name}");
+}
+
+/// View more, Finish tutorial and Next Up are reached with Tab and pressed with Enter.
+#[test]
+fn the_practice_controls_work_from_the_keyboard() {
+    let mut app = app();
+    let ctx = context();
+    let (skill, tutorial) = catalog::tutorial("pen-paths").unwrap();
+    app.ui.learn = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) };
+    frame(&mut app, &ctx, vec![], show);
+    tab_to(&mut app, &ctx, "View more", show);
+    key(&mut app, &ctx, egui::Key::Enter, show);
+    assert_eq!(app.session.documents().len(), 1, "{}", app.ui.status);
+    assert_eq!(app.ui.learn_practice.opened, ["pen-paths"]);
+    tab_to(&mut app, &ctx, "Finish tutorial", show);
+    key(&mut app, &ctx, egui::Key::Enter, show);
+    assert_eq!(app.ui.learn_progress.finished, ["pen-paths"]);
+    tab_to(&mut app, &ctx, "Next Up", show);
+    key(&mut app, &ctx, egui::Key::Enter, show);
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("draw"), tutorial: Some("smooth-curves") });
+    assert_eq!(app.session.documents().len(), 1, "Next Up opens no sample");
+}
+
+/// The panel 150 points wide.
+fn narrow(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    ui.allocate_ui(egui::vec2(150.0, 800.0), |ui| {
+        ui.set_max_width(150.0);
+        show(app, ui);
+    });
+}
+
+/// In a narrow panel the practice controls wrap inside it.
+#[test]
+fn the_practice_controls_fit_a_narrow_panel() {
+    let mut app = app();
+    let ctx = context();
+    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
+    frame(&mut app, &ctx, vec![], narrow);
+    let nodes = frame(&mut app, &ctx, vec![], narrow);
+    for name in ["View more", "Finish tutorial"] {
+        let node = nodes.iter().find(|n| n.label() == Some(name)).unwrap_or_else(|| panic!("{name} is drawn"));
+        let b = node.bounds().unwrap();
+        assert!(b.x1 <= 151.0, "{name} ends at {}", b.x1);
+    }
+}
+
+/// A skill's last tutorial, finished, says so and offers Back to skills instead of Next Up, even
+/// when another skill follows; `learn.next` there is an error.
+#[test]
+fn the_last_tutorial_of_a_skill_offers_back_to_skills() {
+    let mut app = app();
+    let ctx = context();
+    for id in ["add-headline", "outline-type"] {
+        app.run("learn.openSample", json!({"tutorial": id})).unwrap();
+        assert_eq!(app.run("learn.finish", json!({"tutorial": id})).unwrap(), json!({"tutorial": id, "finished": true, "next": null}));
+        let text = painted_text(&mut app, show);
+        assert!(text.contains("You finished the last tutorial in this skill.") && !text.contains("Next Up"), "{text}");
+        let before = app.ui.learn.clone();
+        assert_eq!(app.run("learn.next", json!({"tutorial": id})).unwrap_err(), format!("`{id}` is the last tutorial in its skill"));
+        assert_eq!(app.ui.learn, before);
+        click(&mut app, &ctx, "Back to skills", show);
+        assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: None, tutorial: None });
+    }
+}
+
+/// `learn.finish` needs the sample opened, and finishing again keeps one entry; `learn.next` needs
+/// the tutorial finished and answers the next tutorial.
+#[test]
+fn learn_finish_and_learn_next_follow_the_practice() {
+    let mut app = app();
+    let open = "open the practice sample of `gradient` first (see learn.openSample)";
+    assert_eq!(app.run("learn.finish", json!({"tutorial": "gradient"})).unwrap_err(), open);
+    assert_eq!(app.run("learn.next", json!({"tutorial": "gradient"})).unwrap_err(), "finish `gradient` first (see learn.finish)");
+    assert_eq!(app.ui.learn_practice, Practice::default());
+    assert!(app.ui.learn_progress.is_empty());
+    app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
+    assert_eq!(app.run("learn.next", json!({"tutorial": "gradient"})).unwrap_err(), "finish `gradient` first (see learn.finish)");
+    for _ in 0..2 {
+        let r = app.run("learn.finish", json!({"tutorial": "gradient"})).unwrap();
+        assert_eq!(r, json!({"tutorial": "gradient", "finished": true, "next": "copy-colors"}));
+    }
+    assert_eq!(app.ui.learn_progress.finished, ["gradient"], "finishing again keeps one entry");
+    let r = app.run("learn.next", json!({"tutorial": "gradient"})).unwrap();
+    assert_eq!(r, json!({"skill": "color", "tutorial": "copy-colors", "title": "Copy colors from other art"}));
+    assert!(shown(&app));
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("color"), tutorial: Some("copy-colors") });
+}
+
+/// `learn.skills` shows the panel on the Skills tab with the list of skills and answers what
+/// `learn.list` answers. Back to skills and the Quick skill guide card run it: each one also shows
+/// a panel that was hidden, as the command does.
+#[test]
+fn learn_skills_shows_the_list_of_skills() {
+    let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
+    assert!(crate::menus::UI_COMMANDS.iter().any(|c| c.0 == "learn.skills"), "learn.skills is in the UI command catalog");
+    let mut app = app();
+    app.run("learn.show", json!({"tutorial": "gradient"})).unwrap();
+    app.run("window.learn", json!({"show": false})).unwrap();
+    assert!(!shown(&app));
+    let list = app.run("learn.list", json!({})).unwrap();
+    assert_eq!(app.run("learn.skills", json!({})).unwrap(), list);
+    assert_eq!(app.ui.learn, skills);
+    assert!(shown(&app));
+
+    // Back to skills, after a skill's last tutorial.
+    let mut app = self::app();
+    let ctx = context();
+    app.run("learn.openSample", json!({"tutorial": "outline-type"})).unwrap();
+    app.run("learn.finish", json!({"tutorial": "outline-type"})).unwrap();
+    assert!(!shown(&app));
+    click(&mut app, &ctx, "Back to skills", show);
+    assert_eq!(app.ui.learn, skills);
+    assert!(shown(&app), "Back to skills runs learn.skills");
+
+    // The Quick skill guide card on the For you tab.
+    let mut app = self::app();
+    let ctx = context();
+    assert!(!shown(&app));
+    click(&mut app, &ctx, "Quick skill guide", show);
+    assert_eq!(app.ui.learn, skills);
+    assert!(shown(&app), "the Quick skill guide card runs learn.skills");
+}
+
+/// The practice commands reject a missing, mistyped or unknown tutorial id and change nothing.
+#[test]
+fn the_practice_commands_reject_a_missing_or_unknown_tutorial() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    for cmd in ["learn.openSample", "learn.finish", "learn.next"] {
+        for (params, error) in [
+            (json!({}), "missing `tutorial` (see learn.list)"),
+            (json!({"tutorial": null}), "missing `tutorial` (see learn.list)"),
+            (json!({"tutorial": 3}), "`tutorial` must be a string"),
+            (json!({"tutorial": "nope"}), "unknown tutorial `nope` (see learn.list)"),
+        ] {
+            assert_eq!(app.run(cmd, params).unwrap_err(), error, "{cmd}");
+            assert_eq!(app.ui.learn, View::default());
+            assert_eq!(app.ui.learn_practice, Practice::default());
+            assert!(app.ui.learn_progress.is_empty());
+            assert_eq!(app.session.documents().len(), 1);
+            assert!(!shown(&app));
+        }
+    }
 }
 
 /// A missing, mistyped or unknown tutorial id is an error and leaves the panel as it was.
@@ -239,6 +492,90 @@ fn learn_show_rejects_a_missing_or_unknown_tutorial() {
         (json!({"tutorial": "nope"}), "unknown tutorial `nope` (see learn.list)"),
     ] {
         assert_eq!(app.run("learn.show", params).unwrap_err(), error);
+        assert_eq!(app.ui.learn, before);
+        assert!(!shown(&app));
+    }
+}
+
+/// The tab buttons, a skill's row, a tutorial's row and Back run `learn.tab`, `learn.skill`,
+/// `learn.show` and `learn.back`: each one also shows a panel that was hidden, as the command does.
+#[test]
+fn the_tabs_rows_and_back_run_their_commands() {
+    for cmd in ["learn.tab", "learn.skill", "learn.back"] {
+        assert!(crate::menus::UI_COMMANDS.iter().any(|c| c.0 == cmd), "{cmd} is in the UI command catalog");
+    }
+    let mut app = app();
+    let ctx = context();
+    let (skill, tutorial) = catalog::tutorial("gradient").unwrap();
+    let press = |app: &mut VectorcraftApp, name: &str, view: View| {
+        app.run("window.learn", json!({"show": false})).unwrap();
+        assert!(!shown(app));
+        click(app, &ctx, name, show);
+        assert_eq!(app.ui.learn, view, "{name}");
+        assert!(shown(app), "{name} runs its command: {}", app.ui.status);
+    };
+    press(&mut app, "Skills", View { tab: Tab::Skills, skill: None, tutorial: None });
+    press(&mut app, skill.title, View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None });
+    press(&mut app, tutorial.title, View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) });
+    press(&mut app, "For you", View { tab: Tab::ForYou, skill: Some(skill.id), tutorial: Some(tutorial.id) });
+    press(&mut app, "Skills", View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) });
+    press(&mut app, "Back", View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None });
+    press(&mut app, "Back", View { tab: Tab::Skills, skill: None, tutorial: None });
+}
+
+/// A click on the tab the panel already shows runs no command.
+#[test]
+fn a_click_on_the_shown_tab_runs_no_command() {
+    let mut app = app();
+    let ctx = context();
+    for name in ["Skills", "For you"] {
+        click(&mut app, &ctx, name, show);
+        let commands = app.run_count;
+        click(&mut app, &ctx, name, show);
+        assert_eq!(app.run_count, commands, "{name}");
+    }
+}
+
+/// `learn.tab` switches tabs and keeps what the Skills tab had open; `learn.skill` opens a skill's
+/// tutorials and answers the skill as `learn.list` lists it; `learn.back` goes up one level and
+/// keeps the view on the list of skills and on the For you tab.
+#[test]
+fn learn_tab_skill_and_back_move_the_view() {
+    let mut app = app();
+    let list = app.run("learn.list", json!({})).unwrap();
+    assert_eq!(app.run("learn.skill", json!({"skill": "color"})).unwrap(), list["skills"][2]);
+    assert!(shown(&app));
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("color"), tutorial: None });
+    app.run("learn.show", json!({"tutorial": "gradient"})).unwrap();
+    let view = json!({"tab": "forYou", "skill": "color", "tutorial": "gradient"});
+    assert_eq!(app.run("learn.tab", json!({"tab": "forYou"})).unwrap(), view);
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), view, "Back on the For you tab keeps the view");
+    assert_eq!(app.run("learn.tab", json!({"tab": "skills"})).unwrap(), json!({"tab": "skills", "skill": "color", "tutorial": "gradient"}));
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), json!({"tab": "skills", "skill": "color", "tutorial": null}));
+    let skills = json!({"tab": "skills", "skill": null, "tutorial": null});
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), skills);
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), skills, "Back on the list of skills keeps the view");
+    app.run("window.learn", json!({"show": false})).unwrap();
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), skills);
+    assert!(shown(&app), "learn.back shows the panel");
+}
+
+/// `learn.tab` and `learn.skill` reject a missing, mistyped or unknown value and change nothing.
+#[test]
+fn learn_tab_and_learn_skill_reject_a_missing_or_unknown_value() {
+    let mut app = app();
+    let before = app.ui.learn.clone();
+    let skills = catalog::SKILLS.iter().map(|s| s.id).collect::<Vec<_>>().join(", ");
+    for (cmd, params, error) in [
+        ("learn.tab", json!({}), "missing `tab`".to_string()),
+        ("learn.tab", json!({"tab": null}), "missing `tab`".to_string()),
+        ("learn.tab", json!({"tab": 1}), "`tab` must be a string".to_string()),
+        ("learn.tab", json!({"tab": "Skills"}), "`tab` must be one of forYou, skills".to_string()),
+        ("learn.skill", json!({}), "missing `skill`".to_string()),
+        ("learn.skill", json!({"skill": ["draw"]}), "`skill` must be a string".to_string()),
+        ("learn.skill", json!({"skill": "nope"}), format!("`skill` must be one of {skills}")),
+    ] {
+        assert_eq!(app.run(cmd, params.clone()).unwrap_err(), error, "{cmd} {params}");
         assert_eq!(app.ui.learn, before);
         assert!(!shown(&app));
     }
@@ -331,4 +668,275 @@ fn learn_locate_tool_is_unavailable_while_the_toolbars_are_hidden() {
     let reply = app.run("learn.locateTool", json!({"tool": "pen"})).unwrap();
     assert_eq!(reply["location"], "unavailable", "{reply}");
     assert!(app.ui.learn_locate.is_none() && !app.ui.toolbar && app.ui.tab_hid.is_some(), "Tab's state stays");
+}
+
+/// The screen-reader name of step `i` of the Pen tutorial's check box.
+fn pen_step(i: usize) -> String {
+    let (_, tutorial) = catalog::tutorial("pen-paths").unwrap();
+    format!("{}. {}", i + 1, tutorial.steps[i].plain())
+}
+
+/// The check boxes of what `draw` draws, from the top, as (enabled, checked).
+fn check_boxes(app: &mut VectorcraftApp, ctx: &egui::Context, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<(bool, bool)> {
+    let nodes = frame(app, ctx, vec![], draw);
+    let mut boxes: Vec<&Node> = nodes.iter().filter(|n| n.role() == Role::CheckBox).collect();
+    boxes.sort_by(|a, b| a.bounds().map_or(0.0, |r| r.y0).total_cmp(&b.bounds().map_or(0.0, |r| r.y0)));
+    boxes.iter().map(|n| (!n.is_disabled(), n.toggled() == Some(Toggled::True))).collect()
+}
+
+/// Each step has a check box, off until the tutorial's sample is open. A click marks only its own
+/// step and a second click clears it; marking every step does not finish the tutorial. A finished
+/// tutorial shows every step done, and its check boxes and `learn.markStep` no longer change them.
+#[test]
+fn a_step_s_check_box_marks_only_that_step() {
+    let mut app = app();
+    let ctx = context();
+    assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(false, false); 3], "off before View more");
+    click(&mut app, &ctx, &pen_step(1), pen_paths);
+    assert!(app.ui.learn_progress.is_empty(), "a check box that is off changes nothing");
+    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
+    click(&mut app, &ctx, &pen_step(1), pen_paths);
+    assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(true, false), (true, true), (true, false)], "{}", app.ui.status);
+    let list = app.run("learn.list", json!({})).unwrap();
+    assert_eq!(list["skills"][1]["tutorials"][0]["completedSteps"], json!([1]));
+    assert_eq!(list["skills"][1]["tutorials"][1]["completedSteps"], json!([]), "other tutorials stay as they are");
+    click(&mut app, &ctx, &pen_step(1), pen_paths);
+    assert!(app.ui.learn_progress.is_empty(), "a second click clears the mark");
+    for i in 0..3 {
+        click(&mut app, &ctx, &pen_step(i), pen_paths);
+    }
+    assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(true, true); 3]);
+    assert!(!app.ui.learn_progress.is_finished("pen-paths"), "marking every step does not finish the tutorial");
+    assert!(painted_text(&mut app, pen_paths).contains("Finish tutorial"));
+    click(&mut app, &ctx, &pen_step(0), pen_paths);
+    click(&mut app, &ctx, "Finish tutorial", pen_paths);
+    assert_eq!(app.ui.learn_progress.finished, ["pen-paths"]);
+    assert!(app.ui.learn_progress.steps.is_empty(), "a finished tutorial keeps no marks of its own");
+    assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(false, true); 3], "Finish marks every step");
+    let before = app.ui.learn_progress.clone();
+    click(&mut app, &ctx, &pen_step(2), pen_paths);
+    let error = app.run("learn.markStep", json!({"tutorial": "pen-paths", "step": 2, "complete": false})).unwrap_err();
+    assert_eq!(error, "`pen-paths` is finished (see learn.resetProgress)");
+    assert_eq!(app.ui.learn_progress, before);
+}
+
+/// The check boxes are reached with Tab and changed with Space.
+#[test]
+fn a_step_s_check_box_works_from_the_keyboard() {
+    let mut app = app();
+    let ctx = context();
+    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
+    frame(&mut app, &ctx, vec![], pen_paths);
+    tab_to(&mut app, &ctx, &pen_step(2), pen_paths);
+    key(&mut app, &ctx, egui::Key::Space, pen_paths);
+    assert_eq!(app.ui.learn_progress.steps.get("pen-paths"), Some(&vec![2]), "{}", app.ui.status);
+}
+
+/// Finishing tutorials fills only their own skill's ring and count, once each however often they
+/// are finished; the skill's tutorial rows show which are finished; `learn.list` answers the same.
+#[test]
+fn finishing_tutorials_fills_their_skill_s_ring_and_count() {
+    let mut app = app();
+    let ctx = context();
+    for id in ["pen-paths", "smooth-curves"] {
+        app.run("learn.openSample", json!({"tutorial": id})).unwrap();
+        for _ in 0..2 {
+            app.run("learn.finish", json!({"tutorial": id})).unwrap();
+        }
+    }
+    let values = |app: &mut VectorcraftApp, view: View| {
+        app.ui.learn = view;
+        let nodes = frame(app, &ctx, vec![], show);
+        nodes
+            .iter()
+            .filter(|n| n.role() == Role::Button)
+            .map(|n| (n.label().unwrap_or_default().to_string(), n.value().map(str::to_string)))
+            .collect::<Vec<_>>()
+    };
+    let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
+    let rows = values(&mut app, skills.clone());
+    for skill in catalog::SKILLS {
+        let count = if skill.id == "draw" { "2/3".to_string() } else { format!("0/{}", skill.tutorials.len()) };
+        assert!(rows.contains(&(skill.title.to_string(), Some(count.clone()))), "{} {count} in {rows:?}", skill.id);
+    }
+    assert!(painted_text(&mut app, show).contains("2/3"));
+    let list = app.run("learn.list", json!({})).unwrap();
+    let draw = &list["skills"][1];
+    assert_eq!((draw["done"].clone(), draw["total"].clone()), (json!(2), json!(3)));
+    assert_eq!(draw["tutorials"][1]["finished"], json!(true));
+    assert_eq!(draw["tutorials"][1]["completedSteps"], json!([0, 1, 2]));
+    assert_eq!(list["skills"][2]["done"], json!(0), "other skills stay at 0");
+
+    let rows = values(&mut app, View { tab: Tab::Skills, skill: Some("draw"), tutorial: None });
+    assert!(rows.contains(&("Draw paths with the Pen".to_string(), Some("Finished".to_string()))), "{rows:?}");
+    assert!(rows.contains(&("Draw smooth curves".to_string(), Some("Finished".to_string()))), "{rows:?}");
+    assert!(rows.contains(&("Sketch with the Pencil".to_string(), None)), "{rows:?}");
+
+    app.run("learn.openSample", json!({"tutorial": "pencil-sketch"})).unwrap();
+    app.run("learn.finish", json!({"tutorial": "pencil-sketch"})).unwrap();
+    let rows = values(&mut app, skills);
+    assert!(rows.contains(&("Draw and build".to_string(), Some("3/3".to_string()))), "every tutorial finished: {rows:?}");
+}
+
+/// A skill row with no tutorials, which the catalog does not have today, shows an empty ring and
+/// 0/0.
+fn empty_skill(_: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    super::row(ui, "Empty skill", super::Mark::Ring { done: 0, total: 0 });
+}
+
+#[test]
+fn a_skill_with_no_tutorials_shows_0_of_0() {
+    let mut app = app();
+    let text = painted_text(&mut app, empty_skill);
+    assert!(text.contains("Empty skill") && text.contains("0/0"), "{text}");
+}
+
+/// `learn.markStep` marks a step done by default and with `complete: true`, clears it with `false`,
+/// and answers what it did; a bad param is an error and changes nothing.
+#[test]
+fn learn_mark_step_checks_its_params() {
+    let mut app = app();
+    let open = "open the practice sample of `gradient` first (see learn.openSample)";
+    assert_eq!(app.run("learn.markStep", json!({"tutorial": "gradient", "step": 0})).unwrap_err(), open);
+    assert!(app.ui.learn_progress.is_empty());
+    app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
+    assert_eq!(
+        app.run("learn.markStep", json!({"tutorial": "gradient", "step": 0})).unwrap(),
+        json!({"tutorial": "gradient", "step": 0, "complete": true})
+    );
+    let before = app.ui.learn_progress.clone();
+    let missing = "missing `step` (see learn.show)";
+    let range = "`step` must be a step number from 0 to 2";
+    for (params, error) in [
+        (json!({"tutorial": "gradient"}), missing),
+        (json!({"tutorial": "gradient", "step": null}), missing),
+        (json!({"tutorial": "gradient", "step": 3}), range),
+        (json!({"tutorial": "gradient", "step": -1}), range),
+        (json!({"tutorial": "gradient", "step": 1.5}), range),
+        (json!({"tutorial": "gradient", "step": "1"}), range),
+        (json!({"tutorial": "gradient", "step": u64::MAX}), range),
+        (json!({"tutorial": "gradient", "step": 1, "complete": "yes"}), "`complete` must be true or false"),
+        (json!({"tutorial": "nope", "step": 1}), "unknown tutorial `nope` (see learn.list)"),
+        (json!({"step": 1}), "missing `tutorial` (see learn.list)"),
+    ] {
+        assert_eq!(app.run("learn.markStep", params.clone()).unwrap_err(), error, "{params}");
+        assert_eq!(app.ui.learn_progress, before, "{params}");
+    }
+    let r = app.run("learn.markStep", json!({"tutorial": "gradient", "step": 2, "complete": null})).unwrap();
+    assert_eq!(r, json!({"tutorial": "gradient", "step": 2, "complete": true}));
+    let r = app.run("learn.markStep", json!({"tutorial": "gradient", "step": 0, "complete": false})).unwrap();
+    assert_eq!(r, json!({"tutorial": "gradient", "step": 0, "complete": false}));
+    let r = app.run("learn.markStep", json!({"tutorial": "gradient", "step": 0, "complete": false})).unwrap();
+    assert_eq!(r["complete"], json!(false), "clearing a step that is not marked is no error");
+    assert_eq!(app.ui.learn_progress.steps.get("gradient"), Some(&vec![2]));
+    assert!(app.ui.learn_progress.finished.is_empty());
+}
+
+/// `learn.resetProgress` and Reset progress clear every tutorial finished and every step marked;
+/// documents, opened samples and the Learn view stay. Reset progress shows only when there is
+/// progress.
+#[test]
+fn reset_progress_clears_only_the_progress() {
+    let mut app = app();
+    let ctx = context();
+    let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
+    app.ui.learn = skills.clone();
+    assert!(!painted_text(&mut app, show).contains("Reset progress"));
+    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
+    app.run("learn.finish", json!({"tutorial": "pen-paths"})).unwrap();
+    app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
+    app.run("learn.markStep", json!({"tutorial": "gradient", "step": 1})).unwrap();
+    let view = app.ui.learn.clone();
+    let docs = app.session.documents().len();
+    let reply = app.run("learn.resetProgress", json!({})).unwrap();
+    assert!(app.ui.learn_progress.is_empty());
+    assert_eq!(reply, app.run("learn.list", json!({})).unwrap());
+    assert_eq!(reply["skills"][1]["done"], json!(0));
+    assert_eq!((app.ui.learn.clone(), app.session.documents().len()), (view, docs));
+    assert_eq!(app.ui.learn_practice.opened, ["pen-paths", "gradient"], "opened samples stay open for practice");
+
+    app.run("learn.finish", json!({"tutorial": "gradient"})).unwrap();
+    app.ui.learn = skills.clone();
+    assert!(painted_text(&mut app, show).contains("Reset progress"));
+    click(&mut app, &ctx, "Reset progress", show);
+    assert!(app.ui.learn_progress.is_empty(), "{}", app.ui.status);
+    assert_eq!(app.ui.learn, skills);
+    assert!(!painted_text(&mut app, show).contains("Reset progress"));
+}
+
+/// The UI state after its preferences are saved and read again, as at the next start.
+fn restarted(app: &VectorcraftApp) -> crate::state::UiState {
+    let bytes = serde_json::to_vec(&app.ui).unwrap();
+    crate::state::UiState::read_preferences(&bytes).expect("the preferences read").ui.sanitized()
+}
+
+/// The preferences keep the tutorials finished and the steps marked; the opened samples, the
+/// Learn view and a tool's mark last only while the app runs, so a step can be marked again only
+/// after View more.
+#[test]
+fn the_preferences_keep_the_progress() {
+    let mut app = app();
+    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
+    app.run("learn.finish", json!({"tutorial": "pen-paths"})).unwrap();
+    app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
+    for step in [2, 0] {
+        app.run("learn.markStep", json!({"tutorial": "gradient", "step": step})).unwrap();
+    }
+    let list = app.run("learn.list", json!({})).unwrap();
+    let ui = restarted(&app);
+    assert_eq!(ui.learn_progress, app.ui.learn_progress);
+    assert_eq!(ui.learn_progress.steps.get("gradient"), Some(&vec![0, 2]));
+    assert_eq!((ui.learn_practice.clone(), ui.learn.clone(), ui.learn_locate.is_none()), (Practice::default(), View::default(), true));
+
+    let mut next = self::app();
+    next.ui = ui;
+    assert_eq!(next.run("learn.list", json!({})).unwrap(), list);
+    assert_eq!(next.run("learn.next", json!({"tutorial": "pen-paths"})).unwrap()["tutorial"], "smooth-curves");
+    let again = next.run("learn.finish", json!({"tutorial": "pen-paths"})).unwrap();
+    assert_eq!(again, json!({"tutorial": "pen-paths", "finished": true, "next": "smooth-curves"}), "finishing again needs no sample");
+    assert_eq!(next.ui.learn_progress.finished, ["pen-paths"]);
+    let open = "open the practice sample of `gradient` first (see learn.openSample)";
+    assert_eq!(next.run("learn.markStep", json!({"tutorial": "gradient", "step": 1})).unwrap_err(), open);
+}
+
+/// Saved preferences with `learn_progress` set to `progress` (left out for None), and
+/// `control_bar` on, read as at a start.
+fn read_progress(progress: Option<Value>) -> crate::state::UiState {
+    let mut saved = serde_json::to_value(crate::state::UiState::default()).unwrap();
+    let fields = saved.as_object_mut().unwrap();
+    fields.insert("control_bar".into(), json!(true));
+    match progress {
+        Some(p) => fields.insert("learn_progress".into(), p),
+        None => fields.remove("learn_progress"),
+    };
+    let ui = crate::state::UiState::read_preferences(&serde_json::to_vec(&saved).unwrap()).expect("the preferences read").ui;
+    assert!(ui.control_bar, "the other preferences read as usual");
+    ui
+}
+
+/// Preferences saved before the progress was kept read with none. Saved progress keeps only the
+/// catalog's tutorials and steps, each once, and a value of the wrong kind, or a huge list, does not
+/// stop the rest of the preferences from reading.
+#[test]
+fn saved_progress_is_read_leniently() {
+    assert!(read_progress(None).learn_progress.is_empty());
+    for bad in [json!("garbage"), json!(3), json!(null), json!([1, 2]), json!({"finished": "pen-paths", "steps": [0]})] {
+        assert!(read_progress(Some(bad.clone())).learn_progress.is_empty(), "{bad}");
+    }
+    let ui = read_progress(Some(json!({
+        "finished": ["pen-paths", "nope", 3, "pen-paths", "gradient"],
+        "steps": {
+            "gradient": [0],
+            "smooth-curves": [2, 0, 2, 99, -1, "1", 1.5],
+            "nope": [0],
+            "copy-colors": "x",
+            "add-headline": [],
+        },
+    })));
+    assert_eq!(ui.learn_progress.finished, ["pen-paths", "gradient"]);
+    let steps: Vec<(&str, Vec<usize>)> = ui.learn_progress.steps.iter().map(|(id, s)| (*id, s.clone())).collect();
+    assert_eq!(steps, [("smooth-curves", vec![0, 2])], "a finished tutorial keeps no marks");
+    let ui = read_progress(Some(json!({"finished": vec!["pen-paths"; 100_000], "steps": {"smooth-curves": vec![1; 100_000]}})));
+    assert_eq!(ui.learn_progress.finished, ["pen-paths"]);
+    assert_eq!(ui.learn_progress.steps.get("smooth-curves"), Some(&vec![1]));
 }

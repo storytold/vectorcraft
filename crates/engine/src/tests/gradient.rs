@@ -511,7 +511,7 @@ fn an_outlined_stroke_leaves_dither_behind() {
 
 /// The Gradient panel's Method (Illustrator 30): `method` set and cleared through the gradient
 /// commands, on fills and strokes, kept by the params, swatches and a native save and load;
-/// anything but classic or perceptual is refused without editing.
+/// anything but the four method names is refused without editing.
 #[test]
 fn method_is_a_gradient_option_that_saves_and_loads() {
     use vectorcraft_color::GradientMethod;
@@ -548,7 +548,7 @@ fn method_is_a_gradient_option_that_saves_and_loads() {
     let before = node(&s, id).appearance.clone();
     for bad in [json!("smooth"), json!(1), json!(true)] {
         let e = s.execute("paint.editGradient", &json!({"method": bad})).unwrap_err().to_string();
-        assert!(e.contains("`method` must be classic or perceptual"), "{e}");
+        assert!(e.contains("`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise"), "{e}");
         assert!(s.execute("paint.setFill", &json!({"gradient": {"method": bad}})).is_err());
     }
     assert_eq!(node(&s, id).appearance, before);
@@ -564,6 +564,76 @@ fn method_is_a_gradient_option_that_saves_and_loads() {
     s.execute("paint.setFill", &json!({"gradient": p})).unwrap();
     let back = fill_gradient(&s, id);
     assert!(back.gradient.dither && back.gradient.method == GradientMethod::Perceptual);
+}
+
+/// The hue methods: `method` hue-clockwise and hue-counterclockwise set through the gradient
+/// commands on fills and strokes, as one undo step, kept by the params, a swatch, a saved preset
+/// and a native save and load, and written with or without the hyphen.
+#[test]
+fn the_hue_methods_are_set_saved_and_loaded() {
+    use vectorcraft_color::GradientMethod;
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    s.execute("paint.setFill", &json!({"gradient": {"stops": stops}})).unwrap();
+    for (name, method, middle) in
+        [("hue-clockwise", GradientMethod::HueClockwise, "#ff00ff"), ("hue-counterclockwise", GradientMethod::HueCounterclockwise, "#00ff00")]
+    {
+        let undo = s.doc().unwrap().history.undo.len();
+        s.execute("paint.editGradient", &json!({"method": name})).unwrap();
+        let g = fill_gradient(&s, id);
+        assert_eq!(g.gradient.method, method);
+        assert_eq!(g.gradient.stops.len(), 2, "{name}: the stops stay as they were");
+        assert_eq!(g.gradient.sample(0.5).0.to_hex(), middle, "{name}: halfway around the wheel");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{name}: one undo step");
+        // The params carry it, so a swatch, a preset and a copied paint keep it.
+        let p = vectorcraft_tools::params::gradient_params(&g);
+        assert_eq!(p["method"], json!(name));
+        let mut q = gradient_param(&g);
+        q["name"] = json!(format!("Wheel {name}"));
+        s.execute("swatch.new", &q).unwrap();
+        let Some(Paint::Gradient(sw)) = s.doc().unwrap().doc.swatch(&format!("Wheel {name}")).map(|w| w.paint.clone()) else {
+            panic!("a gradient swatch")
+        };
+        assert_eq!(sw.gradient.method, method, "{name}: the swatch");
+        s.execute("gradient.presets.save", &json!({"name": format!("Preset {name}")})).unwrap();
+        s.execute("paint.editGradient", &json!({"method": "classic"})).unwrap();
+        s.execute("gradient.presets.apply", &json!({"name": format!("Preset {name}")})).unwrap();
+        assert_eq!(fill_gradient(&s, id).gradient.method, method, "{name}: the preset");
+        // Saved and opened again.
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        let Paint::Gradient(saved) = back.node(id).unwrap().appearance.fill_paint() else { panic!("a gradient fill") };
+        assert_eq!(saved.gradient.method, method, "{name}: the native file keeps the method");
+    }
+    // Strokes take it too, and the name reads without the hyphen and in any case.
+    for (name, method) in [("hue-clockwise", GradientMethod::HueClockwise), ("hue-counterclockwise", GradientMethod::HueCounterclockwise)] {
+        for written in [name.replace('-', " "), name.replace('-', "").to_uppercase()] {
+            s.execute("paint.setStroke", &json!({"gradient": {"method": "classic"}})).unwrap();
+            s.execute("paint.editGradient", &json!({"method": written, "stroke": true})).unwrap();
+            let Paint::Gradient(st) = node(&s, id).appearance.stroke_paint() else { panic!("a gradient stroke") };
+            assert_eq!(st.gradient.method, method, "{written}");
+        }
+    }
+    // Reverse gives the same ramp the other way round: the hue method turns with the stops, so
+    // the middle keeps its color, unless the edit names a method too.
+    s.execute("paint.editGradient", &json!({"method": "hue-clockwise", "stroke": false})).unwrap();
+    let before = fill_gradient(&s, id).gradient;
+    s.execute("paint.editGradient", &json!({"reverse": true, "stroke": false})).unwrap();
+    let after = fill_gradient(&s, id).gradient;
+    assert_eq!(after.method, GradientMethod::HueCounterclockwise);
+    assert_eq!((after.stops[0].color.to_hex(), after.stops[1].color.to_hex()), ("#0000ff".to_string(), "#ff0000".to_string()));
+    for t in [0.25, 0.5, 0.75] {
+        assert_eq!(after.sample(t).0.to_hex(), before.sample(1.0 - t).0.to_hex(), "reversed at {t}");
+    }
+    s.execute("paint.editGradient", &json!({"reverse": true, "method": "hue-counterclockwise", "stroke": false})).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient.method, GradientMethod::HueCounterclockwise, "a method in the edit wins");
+    // Half a name is refused, nothing changed.
+    let before = node(&s, id).appearance.clone();
+    for bad in ["hue", "clockwise", "hue-clock"] {
+        let e = s.execute("paint.editGradient", &json!({"method": bad})).unwrap_err().to_string();
+        assert!(e.contains("`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise"), "{bad}: {e}");
+    }
+    assert_eq!(node(&s, id).appearance, before);
 }
 
 /// A conic gradient through `paint.setFill`, the Gradient panel's edits, transforms, the params

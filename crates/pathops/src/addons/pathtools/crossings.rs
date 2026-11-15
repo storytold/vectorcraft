@@ -1,9 +1,10 @@
 //! Where paths cross: [`crossings`] finds the places, [`insert_at`] puts anchors there (which
-//! Split / Add Points at Crossings then keeps or cuts at).
+//! Split / Add Points at Crossings then keeps or cuts at), and [`crossings_on`] finds the places on
+//! one path (which Trim at Crossings removes stretches between).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use kurbo::{CubicBez, ParamCurve, ParamCurveNearest, Point, Rect};
+use kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, ParamCurveNearest, Point, Rect};
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
 /// Most segments [`crossings`] compares at once.
@@ -85,16 +86,82 @@ fn segment_crossings(a: &CubicBez, b: &CubicBez, budget: &mut usize) -> Option<V
     Some(found)
 }
 
-/// Do segments `i` and `j` of `sp` meet at an anchor they share?
-fn adjacent(sp: &SubPath, i: usize, j: usize) -> bool {
-    let n = sp.segment_count();
-    i.abs_diff(j) == 1 || (sp.closed && n > 1 && i.abs_diff(j) == n - 1)
+/// Where segment `c` crosses itself, as its two parameters in order: a cubic loops over itself at
+/// most once. `None` when it doesn't, or only at a cusp or an end.
+fn self_crossing(c: &CubicBez) -> Option<(f64, f64)> {
+    // In powers of t, c(t) = a t³ + b t² + k t + p0. Two parameters s and t meet where
+    // a (s² + st + t²) + b (s + t) + k = 0: with u = s + t and v = st, crossing that with `a` gives u,
+    // and dotting it with `a` gives v; s and t are the roots of z² - u z + v.
+    let (p0, p1, p2, p3) = (c.p0.to_vec2(), c.p1.to_vec2(), c.p2.to_vec2(), c.p3.to_vec2());
+    let a = p3 - p2 * 3.0 + p1 * 3.0 - p0;
+    let b = (p2 - p1 * 2.0 + p0) * 3.0;
+    let k = (p1 - p0) * 3.0;
+    let (ab, aa) = (a.cross(b), a.dot(a));
+    // A curve with no loop can leave these near zero, however long and thin a loop is: the checks
+    // at the end drop what that gives.
+    if ab == 0.0 || aa == 0.0 {
+        return None;
+    }
+    let u = -a.cross(k) / ab;
+    let v = u * u + (b * u + k).dot(a) / aa;
+    let disc = u * u - 4.0 * v;
+    if !disc.is_finite() || disc <= 1e-12 {
+        return None;
+    }
+    let (s, t) = ((u - disc.sqrt()) / 2.0, (u + disc.sqrt()) / 2.0);
+    let inside = |x: f64| END < x && x < 1.0 - END;
+    // The two places are one point, and the curve passes it in two directions (a straight curve
+    // that doubles back on itself meets itself along its length, not at a crossing).
+    let (ds, dt) = (c.deriv().eval(s).to_vec2(), c.deriv().eval(t).to_vec2());
+    let across = ds.cross(dt).abs() > 1e-15 * ds.hypot() * dt.hypot();
+    (inside(s) && inside(t) && across && c.eval(s).distance(c.eval(t)) < SAME).then_some((s, t))
 }
 
-/// Where `paths` cross one another (and, with `self_crossings`, where each crosses itself): for
-/// each path, the places on it, in order. Segments that meet at an anchor they share don't count as
-/// crossing there. `None` past [`MAX_CROSSING_SEGMENTS`] segments or when the curves are too tangled
-/// to sort out, or when a coordinate isn't finite.
+/// For each segment of `sp`, and one past the last, the first segment at or after it that has a
+/// length (the segment count when none has): segments with none lie at one point, between anchors
+/// that coincide.
+fn with_length_from(sp: &SubPath) -> Vec<usize> {
+    let n = sp.segment_count();
+    let mut out = vec![n; n + 1];
+    for i in (0..n).rev() {
+        let c = sp.segment(i);
+        let next = if control_box(&c).size().to_vec2().hypot() < SAME { out.get(i + 1).copied().unwrap_or(n) } else { i };
+        if let Some(o) = out.get_mut(i) {
+            *o = next;
+        }
+    }
+    out
+}
+
+/// The anchors segments `i` and `j` of `sp` share (`with_length` from [`with_length_from`]): none,
+/// one, or both ends for the two segments of a closed subpath of two. Segments with no length between
+/// them leave them meeting at that point.
+fn shared_anchors(sp: &SubPath, with_length: &[usize], i: usize, j: usize) -> Vec<Point> {
+    let (n, lo, hi) = (sp.segment_count(), i.min(j), i.max(j));
+    let from = |k: usize| with_length.get(k).copied().unwrap_or(n);
+    let mut out = vec![];
+    if hi > lo && from(lo + 1) >= hi {
+        out.extend([sp.segment(lo).p3, sp.segment(hi).p0]);
+    }
+    // Round the first anchor of a closed subpath.
+    if sp.closed && n > 1 && hi > lo && from(hi + 1) >= n && from(0) >= lo {
+        out.extend([sp.segment(hi).p3, sp.segment(lo).p0]);
+    }
+    out
+}
+
+/// Where segments `a` and `b` cross, without the places at the anchors in `shared`: two segments that
+/// meet at an anchor don't cross there, but they can cross again elsewhere.
+fn crossings_apart(a: &CubicBez, b: &CubicBez, shared: &[Point], budget: &mut usize) -> Option<Vec<(f64, f64)>> {
+    let mut found = segment_crossings(a, b, budget)?;
+    found.retain(|(ta, _)| !shared.iter().any(|p| a.eval(*ta).distance(*p) < SAME));
+    Some(found)
+}
+
+/// Where `paths` cross one another (and, with `self_crossings`, where each crosses itself, a segment
+/// that loops over itself included): for each path, the places on it, in order. Segments that meet
+/// at an anchor they share don't count as crossing there. `None` past [`MAX_CROSSING_SEGMENTS`]
+/// segments or when the curves are too tangled to sort out, or when a coordinate isn't finite.
 pub fn crossings(paths: &[&PathData], self_crossings: bool) -> Option<Vec<Vec<Place>>> {
     let mut segs: Vec<(usize, usize, usize, CubicBez, Rect)> = vec![];
     for (k, path) in paths.iter().enumerate() {
@@ -111,19 +178,22 @@ pub fn crossings(paths: &[&PathData], self_crossings: bool) -> Option<Vec<Vec<Pl
             }
         }
     }
+    let with_length: Vec<Vec<Vec<usize>>> = paths.iter().map(|p| p.subpaths.iter().map(with_length_from).collect()).collect();
     let mut out: Vec<Vec<Place>> = vec![vec![]; paths.len()];
     let mut budget = MAX_STEPS;
     for (i, (ka, sa, ia, ca, ra)) in segs.iter().enumerate() {
+        if self_crossings && let Some((s, t)) = self_crossing(ca) {
+            out.get_mut(*ka)?.extend([(*sa, *ia, s), (*sa, *ia, t)]);
+        }
         for (kb, sb, ib, cb, rb) in segs.iter().skip(i + 1) {
-            if ka == kb
-                && (!self_crossings || (sa == sb && paths.get(*ka).and_then(|p| p.subpaths.get(*sa)).is_some_and(|sp| adjacent(sp, *ia, *ib))))
-            {
+            if (ka == kb && !self_crossings) || !ra.inflate(SAME, SAME).overlaps(*rb) {
                 continue;
             }
-            if !ra.inflate(SAME, SAME).overlaps(*rb) {
-                continue;
-            }
-            for (ta, tb) in segment_crossings(ca, cb, &mut budget)? {
+            let shared = match (paths.get(*ka).and_then(|p| p.subpaths.get(*sa)), with_length.get(*ka).and_then(|w| w.get(*sa))) {
+                (Some(sp), Some(w)) if ka == kb && sa == sb => shared_anchors(sp, w, *ia, *ib),
+                _ => vec![],
+            };
+            for (ta, tb) in crossings_apart(ca, cb, &shared, &mut budget)? {
                 out.get_mut(*ka)?.push((*sa, *ia, ta));
                 out.get_mut(*kb)?.push((*sb, *ib, tb));
             }
@@ -133,6 +203,101 @@ pub fn crossings(paths: &[&PathData], self_crossings: bool) -> Option<Vec<Vec<Pl
         places.sort_by(|x, y| (x.0, x.1).cmp(&(y.0, y.1)).then(x.2.total_cmp(&y.2)));
         places.dedup_by(|x, y| (x.0, x.1) == (y.0, y.1) && (x.2 - y.2).abs() < END);
     }
+    Some(out)
+}
+
+/// Most segments of other paths [`crossings_on`] compares one path with.
+pub const MAX_CROSSED_BY_SEGMENTS: usize = 200_000;
+/// Most pairs of segments [`crossings_on`] looks at.
+const MAX_PAIRS: usize = 60_000_000;
+
+/// The work [`crossings_on_within`] may still do: pairs of segments to look at and subdivision steps.
+/// One value shared by several calls bounds them all together.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Work {
+    pairs: usize,
+    steps: usize,
+}
+
+impl Default for Work {
+    /// The work one [`crossings_on`] call may do.
+    fn default() -> Self {
+        Self { pairs: MAX_PAIRS, steps: MAX_STEPS }
+    }
+}
+
+/// Where `others` cross `path`, and where `path` crosses itself (a segment that loops over itself
+/// included): the places on `path`, in order, within the work of [`Work::default`].
+pub fn crossings_on(path: &PathData, others: &[&PathData]) -> Option<Vec<Place>> {
+    crossings_on_within(path, others, &mut Work::default())
+}
+
+/// [`crossings_on`], drawing on `work`. Only the segments of `others` whose control boxes meet the
+/// box of `path` are compared with it, so the paths far from it cost one box test per segment.
+/// Segments of `path` that meet at an anchor they share don't count as crossing there, and a
+/// segment of `others` with a coordinate that isn't finite is left out. `None` when `path` has more
+/// than [`MAX_CROSSING_SEGMENTS`] segments or a coordinate that isn't finite, when more than
+/// [`MAX_CROSSED_BY_SEGMENTS`] segments of `others` lie in its box, when the pairs of segments to
+/// look at are more than `work` has left, or when the curves are too tangled to sort out in the
+/// steps it has left.
+pub fn crossings_on_within(path: &PathData, others: &[&PathData], work: &mut Work) -> Option<Vec<Place>> {
+    let mut own: Vec<(usize, usize, CubicBez, Rect)> = vec![];
+    for (si, sp) in path.subpaths.iter().enumerate() {
+        for s in 0..sp.segment_count() {
+            let c = sp.segment(s);
+            if ![c.p0, c.p1, c.p2, c.p3].iter().all(|p| p.x.is_finite() && p.y.is_finite()) {
+                return None;
+            }
+            own.push((si, s, c, control_box(&c)));
+            if own.len() > MAX_CROSSING_SEGMENTS {
+                return None;
+            }
+        }
+    }
+    let Some(reach) = own.iter().map(|o| o.3).reduce(|a, b| a.union(b)).map(|r| r.inflate(SAME, SAME)) else { return Some(vec![]) };
+    let mut near: Vec<(CubicBez, Rect)> = vec![];
+    for sp in others.iter().flat_map(|p| &p.subpaths) {
+        for s in 0..sp.segment_count() {
+            let c = sp.segment(s);
+            let r = control_box(&c);
+            if [c.p0, c.p1, c.p2, c.p3].iter().all(|p| p.x.is_finite() && p.y.is_finite()) && reach.overlaps(r) {
+                near.push((c, r));
+                if near.len() > MAX_CROSSED_BY_SEGMENTS {
+                    return None;
+                }
+            }
+        }
+    }
+    work.pairs = work.pairs.checked_sub(own.len().saturating_mul(near.len() + own.len() / 2))?;
+    let with_length: Vec<Vec<usize>> = path.subpaths.iter().map(with_length_from).collect();
+    let mut out: Vec<Place> = vec![];
+    let budget = &mut work.steps;
+    for (i, (sa, ia, ca, ra)) in own.iter().enumerate() {
+        let ra = ra.inflate(SAME, SAME);
+        if let Some((s, t)) = self_crossing(ca) {
+            out.extend([(*sa, *ia, s), (*sa, *ia, t)]);
+        }
+        for (cb, rb) in &near {
+            if ra.overlaps(*rb) {
+                out.extend(segment_crossings(ca, cb, budget)?.into_iter().map(|(ta, _)| (*sa, *ia, ta)));
+            }
+        }
+        for (sb, ib, cb, rb) in own.iter().skip(i + 1) {
+            if !ra.overlaps(*rb) {
+                continue;
+            }
+            let shared = match (path.subpaths.get(*sa), with_length.get(*sa)) {
+                (Some(sp), Some(w)) if sa == sb => shared_anchors(sp, w, *ia, *ib),
+                _ => vec![],
+            };
+            for (ta, tb) in crossings_apart(ca, cb, &shared, budget)? {
+                out.push((*sa, *ia, ta));
+                out.push((*sb, *ib, tb));
+            }
+        }
+    }
+    out.sort_by(|x, y| (x.0, x.1).cmp(&(y.0, y.1)).then(x.2.total_cmp(&y.2)));
+    out.dedup_by(|x, y| (x.0, x.1) == (y.0, y.1) && (x.2 - y.2).abs() < END);
     Some(out)
 }
 

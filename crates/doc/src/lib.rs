@@ -33,8 +33,8 @@ pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
 pub use symbol_nine_slice::{
-    EditedNineSlice, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE, SymbolNineSlice,
-    charge_symbol_art,
+    EditedNineSlice, MAX_GUIDE_FRACTION, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE,
+    SymbolNineSlice, charge_symbol_art,
 };
 pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
@@ -55,12 +55,14 @@ mod pixels;
 pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
 pub mod placed_document;
 pub mod plugin_data;
+pub mod ppi;
 pub mod profiles;
 pub mod puppet;
 pub mod range;
 pub mod rastersettings;
 mod reach;
 pub mod recolor;
+pub mod resample;
 pub mod selection;
 pub mod separated;
 pub mod setup;
@@ -92,8 +94,8 @@ pub use compound_shape::ShapeMode;
 pub use corners::LiveCorners;
 pub use depth::{MAX_DEPTH, MAX_SYMBOL_NODES};
 pub use graph::{
-    ColumnDesign, ColumnType, Fractions, GraphDesign, GraphKind, GraphSpec, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, PiePosition,
-    PieSort, SeriesPaint, TickLength, ValueAxisSide,
+    ColumnDesign, ColumnType, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES,
+    PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
 };
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
@@ -117,6 +119,8 @@ pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOption
 pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
 pub use text::GlyphChoice;
+pub use text::GlyphForm;
+pub use text::WarichuAlign;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
     JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign,
@@ -142,6 +146,7 @@ mod graphic_style;
 mod guides;
 mod limits;
 mod records;
+mod stored_art;
 mod units;
 
 pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
@@ -154,6 +159,7 @@ pub use guides::{GridPrefs, Guide, RulerMode};
 use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
+pub use stored_art::{StoredPlace, StoredRoot};
 pub use units::{ColorMode, Unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -360,6 +366,16 @@ pub struct Document {
     /// The ruler guides as [`Document::ruler_guides`] lists them: a cache, never saved.
     #[serde(skip)]
     guide_cache: document_guides::GuideCache,
+    /// The symbols that show themselves inline ([`Document::inline_art_bounds`]): a cache, never
+    /// saved.
+    #[serde(skip)]
+    inline_cycles: inline::InlineCycles,
+    /// Art kept elsewhere in the document's data (the art of the stored brushes, which
+    /// `vectorcraft-brush` reads from [`Self::unknown`]) while it is set here, each root with the
+    /// `owner` the Links panel names for it, so the stored-art lookups ([`StoredRoot::Mounted`])
+    /// find its objects too. Empty otherwise; never saved.
+    #[serde(skip)]
+    pub mounted_art: Vec<(Arc<Node>, serde_json::Value)>,
 }
 
 fn ppi72() -> f64 {

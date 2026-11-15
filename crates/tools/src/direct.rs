@@ -28,7 +28,7 @@
 //! Direct Selection also edits a blend's spine: drag its points (Shift-click picks several, which
 //! drag together; a key object on a point moves with it) and, once a point is clicked, its
 //! handles; and the points of selected gradient meshes
-//! and mesh envelopes and their handles ([`MeshEdit`]): Shift-clicks and the marquee pick several,
+//! and of mesh and warp envelopes and their handles ([`MeshEdit`]): Shift-clicks and the marquee pick several,
 //! a click on a gradient mesh's line picks its two ends and one inside a patch the four points
 //! around it, a drag of picked points moves them all, the arrow keys nudge them, and a solid fill
 //! colour or the Transparency panel's opacity goes to a gradient mesh's picked points. Dragging a
@@ -55,7 +55,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at, symbol_part_at, symbol_part_outline};
+use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at, symbol_part_at, symbol_part_outline_in_view};
 use vectorcraft_doc::{AnchorRef, Node, NodeId, NodeKind, Selection, symbol_overrides};
 use vectorcraft_geom::{Anchor, PathData, PathSeg, Point, Rect, Vec2};
 
@@ -66,7 +66,7 @@ use crate::meshedit::{MeshEdit, grid_of};
 use crate::pathtype::{self, BracketDrag, near_bracket};
 use crate::rulerguide::GuideEdit;
 use crate::select::{MoveSnap, hit_center, hold_point, is_area_type, is_path_type, matrix_json, release_guide_at, selection_bounds};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Debug)]
 enum State {
@@ -1029,7 +1029,7 @@ impl Tool for DirectSelectionTool {
                 out.extend(self.mesh.overlays(cx, &|id| cx.selection.contains(id)));
                 if !self.group {
                     if let Some(sp) = &cx.selection.symbol_part
-                        && let Some(path) = cx.doc.node(sp.instance).and_then(|n| symbol_part_outline(cx.doc, n, &sp.path))
+                        && let Some(path) = cx.doc.node(sp.instance).and_then(|n| symbol_part_outline_in_view(cx.doc, n, &sp.path, cx.hit_options()))
                     {
                         out.push(Overlay::Path { path, color: cx.doc.layer_color(sp.instance), width: 1.0, dashed: false });
                     }
@@ -1465,11 +1465,11 @@ impl DirectSelectionTool {
             }
             out.push(Action::Begin("Move".into()));
             self.state = State::MoveAnchors { start, grab, began: true, segment };
-            self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
+            self.anchor_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
             self.line_end = line_end_leave(cx, grab);
             // A segment held by a point along it lands its anchors on the grid (the box round
             // them, an edge on a gridline on each axis), not that point (#3835).
-            let grid = segment && (cx.snap_to_grid || cx.snap_to_pixel);
+            let grid = segment && (cx.snap_to_grid || cx.snaps_to_pixel(PixelOp::Moving));
             self.partial_grid =
                 grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
         }
@@ -1505,8 +1505,8 @@ impl DirectSelectionTool {
             // them and the objects selected whole (`path.moveAnchors`), as an anchor drag
             // does, while Alt is up; the other anchors of a partly selected path stay in
             // place. The history names the move or the copy at the end.
-            self.partial_snap = (!cx.selection.anchors.is_empty()).then(|| PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
-            let grid = self.partial_snap.is_some() && grab.is_none() && (cx.snap_to_grid || cx.snap_to_pixel);
+            self.partial_snap = (!cx.selection.anchors.is_empty()).then(|| PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
+            let grid = self.partial_snap.is_some() && grab.is_none() && (cx.snap_to_grid || cx.snaps_to_pixel(PixelOp::Moving));
             self.partial_grid =
                 grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
             let copy = ev.mods.alt && self.partial_snap.is_none();
@@ -1514,8 +1514,8 @@ impl DirectSelectionTool {
             self.state = State::MoveObject { start, grab, hold, began: true, deselect: None };
             if grab.is_some() {
                 // Alt can go down or up at any time: gather both while nothing has moved.
-                self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
-                self.copy_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, &Selection::default())));
+                self.anchor_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
+                self.copy_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, &Selection::default())));
                 // As a move with the Selection tool does ([`MoveSnap::new`]).
                 let back = cx.smart_guides && !cx.snap_to_grid && cx.snap_to_last_location;
                 self.last_location = back.then(|| (Targets::last_location(cx), selection_bounds(cx)));
@@ -1608,7 +1608,7 @@ impl DirectSelectionTool {
         // (members of groups too), each whole, as a click selects one; with an Alt-marquee, every
         // object it touches, each whole.
         if enclosed || whole {
-            let mut touched = vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true);
+            let mut touched = vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline);
             let editable = cx.doc.editable();
             touched.retain(|id| editable(*id));
             let picked = if enclosed { crate::select::inside(cx, r, touched) } else { touched };
@@ -1680,7 +1680,7 @@ impl DirectSelectionTool {
         }
         // Objects without anchors to pick (type, images, symbols…) are selected whole when
         // the marquee touches them, as with the Selection tool (#927).
-        for id in vectorcraft_doc::hit::marquee(cx.doc, r, cx.isolation, true) {
+        for id in vectorcraft_doc::hit::marquee_in_view(cx.doc, r, cx.isolation, true, cx.outline) {
             let whole = cx.doc.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }));
             if whole && !sel.iter().any(|(s, _)| *s == id) && !framed.iter().any(|(f, _)| *f == id) && !meshed.contains(&id) {
                 sel.push((id, vec![]));

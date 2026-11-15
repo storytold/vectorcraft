@@ -145,6 +145,8 @@ pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.ui.toolbar_pos.is_none() && (app.ui.tools_beside_canvas || app.ui.toolbar_right) {
         show(app, ui);
     }
+    // The lane where toolbars made with New Toolbar dock on the left, right of Tools.
+    crate::custom_toolbars::lane_beside_canvas(app, ui);
 }
 
 /// Is the Tools panel docked on the right, between the canvas and the panels?
@@ -528,7 +530,7 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
         }
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 /// Crop Image's box: its centre (X, Y) and size (W, H) in the general unit, set through the tool's
@@ -564,7 +566,7 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
             crate::canvas::apply_requests(app, r);
         }
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes, screen mode and Edit Toolbar, as
@@ -1155,7 +1157,7 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::flat_button(ui, "Select All Pins", 104.0).clicked() {
         app.run("tool.setOption", json!({ "key": "selectAllPins", "value": true })).ok();
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
 }
 
 #[cfg(test)]

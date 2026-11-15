@@ -291,3 +291,94 @@ fn a_warp_on_a_group_bends_the_image_in_it() {
     s.execute("effect.apply", &json!({"effect": "warp.arc", "params": {"bend": 50}})).unwrap();
     assert_eq!(wrong(&drawn(&s), &|u, v| arced(50.0, u, v)), vec![]);
 }
+
+/// A selected embedded 40×40 px red image at half alpha filling [`FRAME`], with Effect › Warp ›
+/// Arc at 50 %.
+fn half_clear_arc(s: &mut Session) {
+    clear_arc(s, |_| 128);
+}
+
+/// [`half_clear_arc`] with each column `x` of pixels at alpha `alpha(x)`.
+fn clear_arc(s: &mut Session, alpha: impl Fn(u32) -> u8) {
+    let img = image::RgbaImage::from_fn(40, 40, |x, _| image::Rgba([255, 0, 0, alpha(x)]));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    s.edit("Place", |d, sel| {
+        d.images.insert("half".into(), vectorcraft_doc::ImageBlob::png(png));
+        let id = d.alloc_id();
+        let xf = Affine::translate((FRAME.x0, FRAME.y0)) * Affine::scale(2.0);
+        let im =
+            vectorcraft_doc::ImageObject { key: "half".into(), width: 40, height: 40, xf, link: None, placement: Default::default(), pixels: None };
+        d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
+        sel.set([id]);
+        Ok(id)
+    })
+    .unwrap();
+    s.execute("effect.apply", &json!({"effect": "warp.arc", "params": {"bend": 50}})).unwrap();
+}
+
+/// The points of a 50 × 50 grid over the bent image of [`half_clear_arc`], away from its outer
+/// edges, where the document drawn on white at 8 px a point is not half red (its green is not in
+/// `green`; half red over white is (255, 128, 128)): the first few.
+fn not_half_red(s: &Session, green: std::ops::RangeInclusive<u8>) -> Vec<(f64, f64, [u8; 4])> {
+    let img = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 300.0, 300.0), 8.0, true);
+    let mut out = vec![];
+    for i in 0..50 {
+        for j in 0..50 {
+            let (u, v) = (0.03 + 0.94 * f64::from(i) / 49.0, 0.03 + 0.94 * f64::from(j) / 49.0);
+            let p = arced(50.0, u, v);
+            let px = img.pixel((p.x * 8.0).floor() as u32, (p.y * 8.0).floor() as u32);
+            if !green.contains(&px[1]) && out.len() < 8 {
+                out.push((u, v, px));
+            }
+        }
+    }
+    out
+}
+
+/// The pieces a warp cuts a half transparent image into overlap: the image stays half
+/// transparent there, on the canvas and in a PDF opened again.
+#[test]
+fn a_half_transparent_warped_image_has_no_darker_seams() {
+    let mut s = session();
+    half_clear_arc(&mut s);
+    assert_eq!(not_half_red(&s, 120..=136), vec![], "canvas");
+    // Opened again, each piece is drawn through masks of the pieces above it, and pixels on a
+    // triangle's antialiased edge come out a little lighter. Pieces whose alphas add up where they
+    // overlap draw a green of about 64 there.
+    let pdf = s.execute("document.export", &json!({"format": "pdf", "preserveEditing": false})).unwrap();
+    let mut back = session();
+    back.execute("document.open", &json!({"name": "half.pdf", "dataBase64": pdf["dataBase64"]})).unwrap();
+    assert_eq!(not_half_red(&back, 120..=152), vec![], "pdf");
+}
+
+/// An image whose left half is opaque and whose right half is at half alpha keeps its opaque
+/// pixels opaque where the pieces of a warp overlap, away from the partly transparent pixels, on
+/// the canvas and in a PDF opened again.
+#[test]
+fn opaque_pixels_of_a_partly_transparent_warped_image_have_no_lighter_seams() {
+    let mut s = session();
+    clear_arc(&mut s, |x| if x < 20 { 255 } else { 128 });
+    // The points of a fine grid over the left 30 % of the bent image, away from its outer edges,
+    // where the document drawn on white at 8 px a point is not red: the first few.
+    let not_red = |s: &Session| {
+        let img = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 300.0, 300.0), 8.0, true);
+        let mut out = vec![];
+        for i in 0..300 {
+            for j in 0..800 {
+                let (u, v) = (0.03 + 0.27 * f64::from(i) / 299.0, 0.03 + 0.94 * f64::from(j) / 799.0);
+                let p = arced(50.0, u, v);
+                let px = img.pixel((p.x * 8.0).floor() as u32, (p.y * 8.0).floor() as u32);
+                if px[1] > 6 && out.len() < 8 {
+                    out.push((u, v, px));
+                }
+            }
+        }
+        out
+    };
+    assert_eq!(not_red(&s), vec![], "canvas");
+    let pdf = s.execute("document.export", &json!({"format": "pdf", "preserveEditing": false})).unwrap();
+    let mut back = session();
+    back.execute("document.open", &json!({"name": "mixed.pdf", "dataBase64": pdf["dataBase64"]})).unwrap();
+    assert_eq!(not_red(&back), vec![], "pdf");
+}

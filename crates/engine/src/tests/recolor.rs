@@ -1348,3 +1348,159 @@ fn theme_picker_refuses_bad_params() {
         assert!(e.contains(msg), "{p}: {e}");
     }
 }
+
+const RED: &str = "rgb 255 0 0";
+const PURPLE: &str = "rgb 128 0 204";
+const BLUE: &str = "rgb 0 0 255";
+
+/// Two red rectangles, a purple one and a blue one, selected.
+fn prominent_art(s: &mut Session) -> [NodeId; 4] {
+    let ids = [rect(s, json!("#ff0000")), rect(s, json!("#ff0000")), rect(s, json!("#8000cc")), rect(s, json!("#0000ff"))];
+    select_all(s);
+    ids
+}
+
+#[test]
+fn weigh_gives_each_rows_share_of_the_uses() {
+    let mut s = session();
+    prominent_art(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#00ff00"}, {"from": BLUE, "to": null, "tint": 50}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map}));
+    assert_eq!(r["shares"], json!([75.0, 25.0]));
+    assert_eq!(
+        r["map"],
+        json!([{"from": [RED, PURPLE], "to": "#00ff00"}, {"from": [BLUE], "to": null, "tint": 50}]),
+        "rows as given, from as a list"
+    );
+    // An excluded row has no share, and the others share the uses.
+    let excl = json!([{"from": [RED, PURPLE], "to": null}, {"from": [BLUE], "to": null, "exclude": true}]);
+    assert_eq!(run(&mut s, "recolor.weigh", json!({"map": excl}))["shares"], json!([100.0, 0.0]));
+    // An excluded row before another that lists the same colour doesn't take its uses.
+    let first = json!([{"from": [RED], "exclude": true}, {"from": [RED]}, {"from": [BLUE, PURPLE]}]);
+    assert_eq!(run(&mut s, "recolor.weigh", json!({"map": first}))["shares"], json!([0.0, 50.0, 50.0]));
+    // A current colour that no art uses counts nothing, and a use counts for the first row only.
+    let twice = json!({"map": [{"from": [RED, "#123456"]}, {"from": [RED, PURPLE, BLUE]}]});
+    assert_eq!(run(&mut s, "recolor.weigh", twice)["shares"], json!([50.0, 50.0]));
+    // As recolor.apply matches them: an exact colour before a hex one, a row with a new colour first.
+    let exact = json!({"map": [{"from": ["#ff0000", PURPLE], "to": "#00ff00"}, {"from": [RED, BLUE], "to": "#ffff00"}]});
+    assert_eq!(run(&mut s, "recolor.weigh", exact)["shares"], json!([25.0, 75.0]));
+    let recolored = json!({"map": [{"from": [RED, PURPLE]}, {"from": [RED, BLUE], "to": "#ffff00"}]});
+    assert_eq!(run(&mut s, "recolor.weigh", recolored)["shares"], json!([25.0, 75.0]));
+}
+
+#[test]
+fn weigh_moves_colors_to_the_rows_weights_and_changes_nothing() {
+    let mut s = session();
+    let [_, _, purple, blue] = prominent_art(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#00ff00"}, {"from": [BLUE], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [1, 1]}));
+    assert_eq!(r["map"], json!([{"from": [RED], "to": "#00ff00"}, {"from": [BLUE, PURPLE], "to": "#ffff00"}]));
+    assert_eq!(r["shares"], json!([50.0, 50.0]));
+    assert_eq!(fill(&s, purple).to_hex(), "#8000cc", "a query leaves the art alone");
+    // Recoloring with the weighed rows gives the moved colour its new row's colour.
+    select_all(&mut s);
+    run(&mut s, "recolor.apply", json!({"map": r["map"]}));
+    assert_eq!(fill(&s, purple).to_hex(), "#ffff00");
+    assert_eq!(fill(&s, blue).to_hex(), "#ffff00");
+    // A row's first colour stays, however small its weight.
+    let mut s = session();
+    prominent_art(&mut s);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [0, 1]}));
+    assert_eq!(r["map"][0]["from"], json!([RED]));
+    assert_eq!(r["shares"], json!([50.0, 50.0]));
+    // Excluded rows keep their colours and take none; their weights are ignored.
+    let three =
+        json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE], "to": "#000000", "exclude": true}, {"from": ["#00ff00"], "to": "#000000"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": three, "weights": [1, 50, 1]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!(["#00ff00", PURPLE]));
+    // A row without a new colour recolors nothing, so it neither gives nor takes colours.
+    let keep = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE]}, {"from": ["#00ff00"], "to": "#000000"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": keep, "weights": [0, 1, 1]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!(["#00ff00", PURPLE]));
+}
+
+/// A colour that two rows list moves only where recolor.apply recolors it with the row it moved
+/// to, so the shares describe the recolor.
+#[test]
+fn weigh_keeps_a_moved_color_from_rows_that_also_list_it() {
+    const GREEN: &str = "rgb 0 255 0";
+    let mut s = session();
+    let [_, _, purple, _] = prominent_art(&mut s);
+    rect(&mut s, json!("#00ff00"));
+    select_all(&mut s);
+    // The purple moves from the first row to the third; the second row's entry for it goes.
+    let map = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE, PURPLE], "to": "#ffffff"}, {"from": [GREEN], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [2, 1, 2]}));
+    assert_eq!(r["map"][0]["from"], json!([RED]));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!([GREEN, PURPLE]));
+    assert_eq!(r["shares"], json!([40.0, 20.0, 40.0]));
+    run(&mut s, "recolor.apply", json!({"map": r["map"], "method": "exact"}));
+    assert_eq!(fill(&s, purple).to_hex(), "#ffff00", "the purple takes the row it moved to");
+    // A colour that another row lists first stays: that row would take it back.
+    let mut s = session();
+    let [_, _, purple, _] = prominent_art(&mut s);
+    rect(&mut s, json!("#00ff00"));
+    select_all(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [PURPLE, BLUE], "to": "#ffffff"}, {"from": [GREEN], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [2, 1, 2]}));
+    assert_eq!(r["map"][0]["from"], json!([RED, PURPLE]));
+    assert_eq!(r["map"][1]["from"], json!([PURPLE, BLUE]));
+    assert_eq!(r["shares"], json!([60.0, 20.0, 20.0]));
+    run(&mut s, "recolor.apply", json!({"map": r["map"], "method": "exact"}));
+    assert_eq!(fill(&s, purple).to_hex(), "#000000", "the purple keeps the first row's colour");
+}
+
+#[test]
+fn weigh_moves_the_tints_of_a_global_swatch_together() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": {"c": 0, "m": 80, "y": 90, "k": 0}, "global": true}));
+    rect(&mut s, json!("#ff0000"));
+    let full = rect(&mut s, json!("#00ff00"));
+    let tint = rect(&mut s, json!("#00ff00"));
+    rect(&mut s, json!("#0000ff"));
+    run(&mut s, "paint.setFill", json!({"ids": [full.0], "swatch": "Brand"}));
+    run(&mut s, "paint.setFill", json!({"ids": [tint.0], "swatch": "Brand", "tint": 50}));
+    select_all(&mut s);
+    let brand: Vec<Value> = run(&mut s, "recolor.colors", json!({}))["colors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["swatch"] == "Brand")
+        .map(|c| c["key"].clone())
+        .collect();
+    assert_eq!(brand.len(), 2);
+    let map = json!([{"from": [RED, brand[0], brand[1]], "to": "#000000"}, {"from": [BLUE], "to": "#ffffff"}]);
+    // Even weights would take one tint alone, which would split the swatch: nothing moves.
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [1, 1]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    // The swatch's two colours move to the blue row as one.
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [1, 3]}));
+    assert_eq!(r["map"][1]["from"], json!([BLUE, brand[0], brand[1]]));
+    assert_eq!(r["shares"], json!([25.0, 75.0]));
+    // Colours that stay keep their order, a swatch's colours with another between them included.
+    let split = json!([{"from": [brand[0], RED, brand[1]], "to": "#000000"}, {"from": [BLUE], "to": "#ffffff"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": split, "weights": [3, 1]}));
+    assert_eq!(r["map"][0]["from"], json!([brand[0], RED, brand[1]]));
+}
+
+#[test]
+fn weigh_refuses_bad_weights() {
+    let mut s = session();
+    prominent_art(&mut s);
+    let map = json!([{"from": [RED]}, {"from": [BLUE], "exclude": true}]);
+    for (p, msg) in [
+        (json!({"map": map, "weights": [1]}), "`weights` must be a list of 2 numbers, one per row"),
+        (json!({"map": map, "weights": "1, 1"}), "`weights` must be a list of 2 numbers"),
+        (json!({"map": map, "weights": [1, -1]}), "each weight must be a number of 0 or more (got -1)"),
+        (json!({"map": map, "weights": [1, "2"]}), "each weight must be a number of 0 or more"),
+        (json!({"map": map, "weights": [0, 5]}), "at least one row that isn't excluded needs a weight above 0"),
+        (json!({"weights": [1, 1]}), "missing `map`"),
+        (json!({"map": [{"to": "#ff0000"}]}), "each row needs `from`"),
+    ] {
+        let e = s.execute("recolor.weigh", &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{p}: {e}");
+    }
+}

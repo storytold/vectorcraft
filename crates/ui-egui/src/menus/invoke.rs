@@ -83,6 +83,8 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         "artboard.rename" => (crate::dialogs::rename_artboards::KIND, crate::dialogs::rename_artboards::open_fields(app)),
+        // Smart Punctuation opens on the fields it was last confirmed with.
+        "type.smartPunctuation" => (crate::dialogs::smart_punctuation::KIND, crate::dialogs::smart_punctuation::fields(app)),
         _ => return None,
     })
 }
@@ -178,10 +180,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // Object → Align aligns to what the align buttons align to, unless the call names `to`. With
     // anchors selected (Direct Selection) it sends its params unchanged, and the points align to
     // their own bounds.
-    let follows_align_to = id == "object.align"
-        && p.as_object().is_some_and(|o| !o.contains_key("to"))
-        && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
-    let p = if follows_align_to { crate::panels::align::with_align_to(app, p) } else { p };
+    let p = if id == "object.align" { crate::panels::align::menu_align_params(app, p) } else { p };
     // Image Trace traces off the UI thread, with its progress (#3098).
     if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
         if let Err(e) = crate::trace_runs::start(app, id, p, false) {
@@ -206,7 +205,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     }
 }
 
-/// The dialogs the Envelope, Variables, Pathfinder, Repeat, type, graph and View commands open when called without
+/// The dialogs the Envelope, Variables, Pathfinder, Pixel Snapping, Repeat, type, graph and View commands open when called without
 /// params; whether `id` was one of them.
 fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Envelope Distort: Warp Options, Envelope Mesh and Envelope Options, from the selection.
@@ -224,6 +223,11 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Pathfinder Options: a dialog with the current options.
     if id == "object.pathfinder.options" && p.as_object().is_none_or(|o| o.is_empty()) {
         crate::dialogs::pathfinder_options::open(app);
+        return true;
+    }
+    // Pixel Snapping Options: a dialog with the current options.
+    if id == "view.snapToPixel.options" && p.as_object().is_none_or(|o| o.is_empty()) {
+        crate::dialogs::pixel_snap_options::open(app);
         return true;
     }
     // Repeat Options: a dialog with the selected repeat's current values.

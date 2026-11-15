@@ -95,6 +95,28 @@ fn fit_to_artwork_bounds_fits_each_selected_artboard_to_its_own_art() {
     assert_eq!(boards(&app), [rect(10.0, 10.0, 30.0, 40.0), was[1], rect(250.0, 10.0, 270.0, 50.0)]);
 }
 
+/// A batch the app runs (as the Actions panel plays an action) with a Fit to Artwork Bounds step
+/// fits artboards 1 and 3, selected with the Artboard tool, and leaves artboard 2, the active one,
+/// as it was.
+#[test]
+fn a_batchs_fit_to_artwork_bounds_step_fits_each_selected_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
+    for (x, h) in [(10, 30), (130, 20), (250, 40)] {
+        app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": h})).unwrap();
+    }
+    app.session.execute("select.all", &json!({})).unwrap();
+    app.session.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let was = boards(&app);
+    app.select_tool("artboard");
+    select(&mut app, 1);
+    app.session.set_tool_option("selected", &json!([0, 2]));
+    app.run("command.batch", json!({"commands": [{"command": "artboard.fitToArt", "params": {}}]})).unwrap();
+    let rect = vectorcraft_geom::Rect::new;
+    assert_eq!(boards(&app), [rect(10.0, 10.0, 30.0, 40.0), was[1], rect(250.0, 10.0, 270.0, 50.0)]);
+}
+
 /// With the Artboard tool, Shift-click on a row selects the artboards from the last row clicked
 /// without Shift to it and makes it the active one, Ctrl/Cmd-click adds its artboard to the
 /// tool's selection or takes it out (#1139), a plain click selects it alone, and every selected

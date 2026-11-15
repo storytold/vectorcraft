@@ -534,8 +534,16 @@ pub(super) fn wheel(
 /// finger drops the press the first one began (its tool interaction rolled back; the rest of the
 /// gesture presses nothing), and a tap of two fingers undoes, one of three redoes. In the Touch
 /// workspace a tap of two fingers switches between selection and drawing modes instead.
-pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vectorcraft_engine::ViewInfo) {
+///
+/// While a modal dialog is open (`modal`) the canvas takes no finger contacts: no tap runs a command and no gesture
+/// begins. The fingers already down are forgotten, so lifting them, during the dialog or after it closes, runs nothing.
+pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vectorcraft_engine::ViewInfo, modal: bool) {
     if !app.session.prefs.touch_gestures {
+        return;
+    }
+    let key = egui::Id::unique("canvas-touch");
+    if modal {
+        ui.data_mut(|d| d.remove::<crate::touch::Taps>(key));
         return;
     }
     let (touches, now): (Vec<_>, f64) = ui.input(|i| {
@@ -548,7 +556,6 @@ pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect
     if touches.is_empty() {
         return;
     }
-    let key = egui::Id::unique("canvas-touch");
     let mut taps: crate::touch::Taps = ui.data(|d| d.get_temp(key)).unwrap_or_default();
     let mut tap = None;
     for (id, phase, pos) in touches {

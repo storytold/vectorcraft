@@ -456,3 +456,116 @@ fn first_text(s: &Session) -> NodeId {
     });
     found.unwrap()
 }
+
+/// Whether command `id` is enabled for `s`'s selection, with the reason when it is not.
+fn enabled(s: &Session, id: &str) -> std::result::Result<(), String> {
+    command_specs().iter().find(|c| c.id == id).map_or_else(|| Err(format!("no command {id}")), |c| (c.enabled)(s))
+}
+
+/// What `f` returned, and how many times it went through the document's text threads to tell
+/// which objects are frames of one.
+fn scans<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    let before = crate::cmd::threads::thread_scans();
+    let out = f();
+    (out, crate::cmd::threads::thread_scans() - before)
+}
+
+/// Threads `a` with a new 100 pt square frame at (`x`, `y`); the thread's frames.
+fn thread_with_frame(s: &mut Session, a: NodeId, x: f64, y: f64) -> Vec<u64> {
+    let frame = s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, frame]})).unwrap();
+    let r = s.execute("text.thread.create", &json!({})).unwrap();
+    r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect()
+}
+
+/// `ids` as a type command's refusal lists them.
+fn listed(ids: &[u64]) -> String {
+    ids.iter().map(u64::to_string).collect::<Vec<_>>().join(", ")
+}
+
+/// Dynamic Text, its presets, Center on Top and Bottom and Area Type Options look up the threads
+/// once for a whole selection, not once for each object, and refuse the same frames in the same
+/// order.
+#[test]
+fn type_commands_look_up_threads_once_for_the_whole_selection() {
+    const N: usize = 24;
+    let mut s = session();
+    let area = |s: &mut Session, i: usize| {
+        let x = 10.0 + 30.0 * i as f64;
+        let r = s.execute("text.create", &json!({"x": x, "y": 10, "text": format!("Area {i}"), "area": {"width": 25, "height": 40}})).unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    // Area type: every other one is the first frame of a thread of two.
+    let (mut areas, mut threaded) = (vec![], vec![]);
+    for i in 0..N {
+        let a = area(&mut s, i);
+        areas.push(a.0);
+        if i % 2 == 0 {
+            let frames = thread_with_frame(&mut s, a, 10.0 + 30.0 * i as f64, 500.0);
+            assert_eq!(frames.len(), 2, "{frames:?}");
+            areas.push(frames[1]);
+            threaded.extend(frames);
+        }
+    }
+    // The refusal lists the threaded frames in the order the objects are given.
+    areas.reverse();
+    let refused: Vec<u64> = areas.iter().copied().filter(|id| threaded.contains(id)).collect();
+    let before = undo_len(&s);
+    s.execute("select.set", &json!({ "ids": areas })).unwrap();
+    let why = format!("area type in a thread cannot use Dynamic Text: {}", listed(&refused));
+    let (e, n) = scans(|| enabled(&s, "type.dynamicText"));
+    assert_eq!((e, n), (Err(why.clone()), 1));
+    let (e, n) = scans(|| err(s.execute("type.dynamicText", &json!({"on": true, "ids": areas}))));
+    assert!(e.ends_with(&why) && n == 1, "{n}: {e}");
+    let (e, n) = scans(|| err(s.execute("text.areaOptions", &json!({"fit": "block", "ids": areas}))));
+    assert!(e.ends_with(&why) && n == 1, "{n}: {e}");
+    assert_eq!(undo_len(&s), before);
+
+    // Type on a path in a thread comes first, before the area type.
+    let path = on_line(&mut s, "Threaded path");
+    let path_frames = thread_with_frame(&mut s, path, 700.0, 500.0);
+    let mut mixed = areas.clone();
+    mixed.push(path.0);
+    s.execute("select.set", &json!({ "ids": mixed })).unwrap();
+    let why = format!("type on a path in a thread cannot use Dynamic Text: {}", path.0);
+    let (e, n) = scans(|| enabled(&s, "type.dynamicText"));
+    assert_eq!((e, n), (Err(why.clone()), 1));
+    let (e, n) = scans(|| err(s.execute("type.dynamicText", &json!({"on": true, "ids": mixed}))));
+    assert!(e.ends_with(&why) && n == 1, "{n}: {e}");
+
+    // Presets: point type beside type on a path in a thread.
+    let mut points: Vec<u64> = (0..N)
+        .map(|i| s.execute("text.create", &json!({"x": 10.0 + 30.0 * i as f64, "y": 300, "text": "P"})).unwrap()["id"].as_u64().unwrap())
+        .collect();
+    points.insert(N / 2, path.0);
+    s.execute("select.set", &json!({ "ids": points })).unwrap();
+    let (e, n) = scans(|| enabled(&s, "type.dynamicTextPreset"));
+    assert_eq!((e, n), (Err(why.clone()), 1));
+    let (e, n) = scans(|| err(s.execute("type.dynamicTextPreset", &json!({"preset": "arch", "ids": points}))));
+    assert!(e.ends_with(&why) && n == 1, "{n}: {e}");
+
+    // Center on Top and Bottom: type on closed paths, some of it in threads.
+    let mut circles = vec![];
+    let mut in_threads = vec![];
+    for i in 0..N {
+        let (x, y) = (60.0 + 30.0 * i as f64, 200.0);
+        let d = format!("M{} {y} A12 12 0 1 1 {} {y} A12 12 0 1 1 {} {y} Z", x - 12.0, x + 12.0, x - 12.0);
+        let pid = s.execute("path.create", &json!({ "d": d })).unwrap()["id"].as_u64().unwrap();
+        let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "O", "size": 6, "at": [x - 12.0, y]})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        if i % 3 == 0 {
+            thread_with_frame(&mut s, id, x, 650.0);
+            in_threads.push(id.0);
+        }
+        circles.push(id.0);
+    }
+    s.execute("select.set", &json!({ "ids": circles })).unwrap();
+    let why = format!("type on a path in a thread cannot be centered on its top or bottom: {}", listed(&in_threads));
+    for c in ["type.pathCenter.top", "type.pathCenter.bottom"] {
+        let (e, n) = scans(|| enabled(&s, c));
+        assert_eq!((e, n), (Err(why.clone()), 1), "{c}");
+        let (e, n) = scans(|| err(s.execute(c, &json!({ "ids": circles }))));
+        assert!(e.ends_with(&why) && n == 1, "{c} {n}: {e}");
+    }
+    assert_eq!(path_frames.len(), 2);
+}

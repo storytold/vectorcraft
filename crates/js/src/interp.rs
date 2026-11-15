@@ -232,6 +232,8 @@ pub(crate) struct Interp {
     pub(crate) evaluated: u32,
     /// The tag of the source the last run's error was raised in.
     pub(crate) error_tag: u32,
+    /// Where `$.line` and `$.stack` find the file and line of a compiled line.
+    pub(crate) locator: Option<crate::realm::SourceLocator>,
     /// The mark of the host error ([`crate::HostError::Marked`]) whose exception or limit is
     /// propagating.
     pub(crate) thrown_mark: Option<u32>,
@@ -469,6 +471,7 @@ impl Interp {
             source_tag: crate::realm::UNKNOWN_SOURCE,
             evaluated: 0,
             error_tag: crate::realm::UNKNOWN_SOURCE,
+            locator: None,
             thrown_mark: None,
             finally_marks: Vec::new(),
             finally_sites: Vec::new(),
@@ -1776,8 +1779,7 @@ impl Interp {
             return self.replace(2, v);
         }
         self.check_coercible(&base, &[])?;
-        let name = self.to_key(&k)?;
-        let v = self.get_value(&base, &name)?;
+        let v = self.with_key(&k, |i, name| i.get_value(&base, &name))?;
         self.replace(2, v)?;
         if with_this { self.push(base) } else { Ok(()) }
     }
@@ -1849,8 +1851,7 @@ impl Interp {
             return self.replace(2, Value::Number(if prefix { new } else { old }));
         }
         self.check_coercible(&base, &[])?;
-        let name = self.to_key(&k)?;
-        let r = self.inc_property(&base, name, prefix, dec)?;
+        let r = self.with_key(&k, |i, name| i.inc_property(&base, name, prefix, dec))?;
         self.replace(2, r)
     }
 
@@ -2665,6 +2666,18 @@ impl Interp {
                 self.flat_reserved(&s)
             }
         }
+    }
+
+    /// Runs `f` with the property name [`Self::to_key`] makes from `v`. A name converted from a
+    /// value that is not a string is kept reachable while `f` runs, so a collection that a getter
+    /// or setter starts still counts its units.
+    pub(crate) fn with_key<T>(&mut self, v: &Value, f: impl FnOnce(&mut Self, Key) -> JsResult<T>) -> JsResult<T> {
+        let name = self.to_key(v)?;
+        if matches!(v, Value::String(_)) {
+            return f(self, name);
+        }
+        let root = Value::String(Str::from_rc(name.clone()));
+        self.rooted(&[root], |i| f(i, name))
     }
 
     /// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that

@@ -264,7 +264,19 @@ capability model proposed for PhotoCraft plug-ins
   hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
   module that lists no permissions under that id, so the earlier bytes need a new approval. When `plugin.remove` can't
   remove the grant from `grants.json`, it returns an error, the plug-in stays installed, and a second `plugin.remove`
-  tries again. A refused install leaves the grant as it is. When an install of a module that lists no permissions can't
+  tries again. A refused install leaves the grant, the plug-in installed with the id, the `Plug-ins` folder and the
+  list of disabled plug-ins as they are. When another session installs a plug-in with the id or changes its grant
+  while `plugin.install` checks a module, the install is refused, before anything is written to the `Plug-ins` folder,
+  if the other plug-in would need `replace: true` or the changed grant no longer approves the module. A
+  `plugin.remove` in another session waits until the install has written the `Plug-ins` folder, and then removes the
+  module and its grant. Loading the `Plug-ins` folder or a plug-ins folder in another session waits for it too.
+  Another process using the same `Plug-ins` folder, for example `vectorcraft-cli` beside the app, waits as well: each
+  window or process locks `disabled.lock` in the folder while it reads and changes the stored modules, `grants.json`,
+  `disabled.json` and the plug-ins' settings and caches. An install therefore keeps a module with its own grant, and a
+  grant or setting written in one process does not undo one written in another. When `disabled.lock` can't be
+  locked, `plugin.install` and `plugin.remove` fail and change nothing, `plugin.setEnabled` keeps its change in the
+  process until a later change can be saved, and loading the folder writes nothing to it. When
+  an install of a module that lists no permissions can't
   write the module to the `Plug-ins` folder, or can't remove the grant from `grants.json`, the folder keeps the module
   it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
   removed and the module already stored can't be read back or written back, the new module stays in the folder, and
@@ -611,7 +623,7 @@ An **importer** gets the bytes of the file being opened, as they are (not JSON),
   `paint`, `width` in points, `join` (`"miter"`, `"round"` or `"bevel"`), `cap` (`"butt"`, `"round"` or `"square"`)
   and `miterLimit`. Paints use the native file format's form: `{"type": "solid", "color", "swatch"?, "tint"?}`,
   `{"type": "gradient", "gradient": {"kind": "Linear"|"Radial"|"Freeform", "stops": [{offset, color, opacity,
-  midpoint}], "dither"?, "method"?: "Perceptual"}, "geom"?, "angle", "freeform"?}`, `{"type": "pattern", "pattern",
+  midpoint, swatch?, tint?, plates?}], "dither"?, "method"?: "Perceptual"|"HueClockwise"|"HueCounterclockwise"}, "geom"?, "angle", "freeform"?}`, `{"type": "pattern", "pattern",
   "xf"?}`. Colours are `{"model": "rgb", r, g, b}`, `{"model": "cmyk", c, m, y, k}`, `{"model": "gray", k}` (ink: 0
   white, 1 black) or `{"model": "lab", l, a, b}`; components 0–1 except Lab's.
 - `effects` (filters): the object's own effects in order, as its effect records: `id` (as `effect.list` lists it, or
@@ -736,7 +748,7 @@ most 100,000 objects and 4,000,000 anchors, 256 fills, strokes or gradient stops
 clamped into range, stroke weights to 0–1,000 pt and miter limits to 1–500; a pattern must exist in the document. A
 gradient stop's four process `plates` are clamped to 0–1 as well: a value that is not a number becomes 0, and an
 infinite one becomes 0 or 1 by its sign. A paint returned unchanged keeps its swatch link; any other paint is
-unlinked. One refused effect record refuses the whole output.
+unlinked, and each of its gradient stops then has no swatch, a tint of 1 and no `plates`. One refused effect record refuses the whole output.
 
 A filter's output may also hold `documentData`: any JSON of at most 1 MiB, which replaces what the plug-in keeps with
 the document (`null` removes it), in the same undo step as its objects. Settings that belong to the whole document
@@ -773,6 +785,11 @@ is a piece drawn by itself, in the order returned, with paints of its own:
   starts at 1 pt, miter join, butt cap, miter limit 10.
 - An effect on a fill (`_context.item` `{"fill": i}`) returns only `fills`, which replace that fill on each piece; an
   effect on a stroke returns only `strokes`. The object's other fills and strokes stay where they are.
+- Each fill or stroke such an effect returns keeps the effects after it in that fill's or stroke's stack. A later
+  live effect, and a later geometry effect on strokes, runs once on each of them in paint order: it is given the
+  piece's `fills` and `strokes` with `_context.item` naming that one (`{"fill": 1}` for the second fill on the
+  piece), and its result replaces only that fill or stroke. A run that fails, is refused, is deferred or would pass
+  the budget leaves its own fill or stroke as it was, and the others still run.
 - The effects after it in the stack apply to the pieces together, the reference box being the bounds of all of them.
   Bounds, raster effects, Pathfinder effects, compound shapes and Envelope Options › Distort Appearance use the pieces
   as they are drawn. Outside outline mode, an image is also hit where the pieces of its own fills and strokes paint; a

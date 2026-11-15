@@ -328,6 +328,31 @@ fn the_method_menu_makes_the_gradient_perceptual() {
     assert_eq!(fill(&app).gradient.method, GradientMethod::Classic);
 }
 
+/// The Method menu lists the two hue methods after Classic and Perceptual; choosing one mixes
+/// the gradient around the hue wheel that way, as one undo step, and the menu then shows it.
+#[test]
+fn the_method_menu_mixes_the_gradient_around_the_hue_wheel() {
+    for (label, method) in [("Hue Clockwise", GradientMethod::HueClockwise), ("Hue Counterclockwise", GradientMethod::HueCounterclockwise)] {
+        let mut app = app(json!({"gradient": {}}));
+        let mut p = Panel::new();
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        let shown = texts.iter().find(|(t, _)| t == "Classic").expect("Classic shown").1;
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let texts = p.click(&mut app, shown);
+        for listed in ["Classic", "Perceptual", "Hue Clockwise", "Hue Counterclockwise"] {
+            assert!(texts.iter().any(|(t, _)| t == listed), "the menu lists {listed}: {texts:?}");
+        }
+        let option = texts.iter().find(|(t, _)| t == label).expect("the menu lists the method").1;
+        p.click(&mut app, option);
+        assert_eq!(fill(&app).gradient.method, method, "{label}");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{label}: one undo step");
+        let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+        assert!(texts.iter().any(|(t, _)| t == label), "the menu shows the method: {texts:?}");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(fill(&app).gradient.method, GradientMethod::Classic);
+    }
+}
+
 /// The Spread menu makes the gradient repeat (one undo step), and the Repeats field, dimmed while
 /// it pads, then sets the count.
 #[test]

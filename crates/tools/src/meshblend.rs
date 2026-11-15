@@ -21,7 +21,7 @@ use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::Point;
 
 use crate::blendwidget::{self, BlendWidgetDrag};
-use crate::meshedit::{MeshEdit, grid_of};
+use crate::meshedit::{MeshEdit, grid_of, may_have_grid};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
@@ -246,13 +246,13 @@ pub struct MeshTool {
 }
 
 impl MeshTool {
-    /// Meshes (gradient meshes and mesh envelopes) to consider for point hits: selected ones
-    /// first, then any in the document.
+    /// Meshes (gradient meshes, and mesh and warp envelopes) to consider for point hits: selected
+    /// ones first, then any in the document.
     fn meshes(cx: &ToolContext) -> Vec<NodeId> {
-        let mut v: Vec<NodeId> = cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).and_then(grid_of).is_some()).collect();
+        let mut v: Vec<NodeId> = cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).is_some_and(may_have_grid)).collect();
         let mut rest = vec![];
         cx.doc.walk(|n| {
-            if grid_of(n).is_some() {
+            if may_have_grid(n) {
                 rest.push(n.id);
             }
         });

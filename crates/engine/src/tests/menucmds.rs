@@ -1979,9 +1979,10 @@ fn fit_to_artwork_bounds_fits_each_artboard_to_its_own_art() {
     assert_eq!(boards(&s), [Rect::new(100.0, 100.0, 1050.0, 280.0), was[1], was[2]], "the first artboard by default");
 }
 
-/// Artboard Options and Fit to Selected Art fail with `no such artboard` on an `index` that names
-/// no artboard (past the last, negative, fractional, a string or null), and the artboards stay as
-/// they were. Artboard Options needs an `index`; Fit to Selected Art without one fits the first
+/// Artboard Options and Fit to Selected Art fail with `no such artboard` on a whole-number `index`
+/// past the last artboard, with "`index` must be a whole number" on one that is negative,
+/// fractional or a string, and with `missing index` on a null one, and the artboards stay as they
+/// were. Artboard Options needs an `index`; Fit to Selected Art without one fits the first
 /// artboard.
 #[test]
 fn artboard_options_and_fit_to_selected_art_refuse_an_index_that_names_no_artboard() {
@@ -1992,9 +1993,16 @@ fn artboard_options_and_fit_to_selected_art_refuse_an_index_that_names_no_artboa
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
     let (was, n) = (boards(&s), undo_len(&s));
-    for index in [json!(99), json!(-1), json!(1.5), json!("1"), Value::Null] {
+    for (index, error) in [
+        (json!(99), None),
+        (json!(-1), Some("`index` must be a whole number")),
+        (json!(1.5), Some("`index` must be a whole number")),
+        (json!("1"), Some("`index` must be a whole number")),
+        (Value::Null, Some("missing index")),
+    ] {
         for (cmd, p) in [("artboard.setProps", json!({"index": index, "width": 300})), ("artboard.fitToSelection", json!({"index": index}))] {
-            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), "no such artboard", "{cmd} {p}");
+            let want = error.map_or_else(|| "no such artboard".to_string(), |e| format!("invalid parameters for `{cmd}`: {e}"));
+            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), want, "{cmd} {p}");
         }
     }
     let e = s.execute("artboard.setProps", &json!({"width": 300})).unwrap_err().to_string();
@@ -2226,6 +2234,10 @@ fn type_menu_and_find_commands_refuse_a_param_of_the_wrong_type() {
         ("type.smartPunctuation", json!({"dashes": "false"}), switch("dashes")),
         ("type.smartPunctuation", json!({"ellipsis": 0}), switch("ellipsis")),
         ("type.smartPunctuation", json!({"quotes": "no"}), switch("quotes")),
+        ("type.smartPunctuation", json!({"fiLigatures": 1}), switch("fiLigatures")),
+        ("type.smartPunctuation", json!({"flLigatures": "true"}), switch("flLigatures")),
+        ("type.smartPunctuation", json!({"spaces": "on"}), switch("spaces")),
+        ("type.smartPunctuation", json!({"fractions": [true]}), switch("fractions")),
         ("type.smartPunctuation", json!({"scope": 5}), scope.clone()),
         ("type.smartPunctuation", json!({"scope": "page"}), scope),
         ("type.changeCase", json!({"case": 5}), string("case")),
@@ -3555,10 +3567,152 @@ fn smart_punctuation_with_nothing_to_change_records_no_undo_step() {
     for id in [t, r] {
         select_with_a_step_to_redo(&mut s, &[id]);
         let before = history(&s);
-        assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap(), json!({"changed": 0}), "{id:?}");
+        let r = s.execute("type.smartPunctuation", &json!({})).unwrap();
+        assert_eq!(r["changed"], 0, "{id:?}");
+        assert!(r["replaced"].as_object().unwrap().values().all(|n| n == 0), "{id:?}: {r}");
         assert_eq!(history(&s), before, "{id:?}");
     }
     assert_eq!(plain(&s, t), "“Hi” it’s 1–2 and 3—4…");
+}
+
+/// Does the face text `font` draws with have a glyph for every character of `chars`?
+fn font_covers(font: &str, chars: &str) -> bool {
+    let face = vectorcraft_text::FontDb::global().face(font, "Regular");
+    face.is_some_and(|f| chars.chars().all(|c| f.covers(c)))
+}
+
+/// Every option on: the ligatures, Smart Spaces and Expert Fractions, each counted on its own, in
+/// one undo step. Fractions next to a digit, a slash or a decimal part are left as they are.
+#[test]
+fn smart_punctuation_ligatures_spaces_and_fractions_are_counted() {
+    let mut s = session();
+    assert!(font_covers("Source Sans 3", "\u{FB00}\u{FB01}\u{FB02}\u{FB03}\u{FB04}½¾"), "Source Sans 3 draws the ligatures and fractions");
+    let words = "An office's fluffy flow.  Then 1/2 and 3/4, not 1/25, 1/2/26 or 1/2.5.";
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let undo = history(&s).0;
+    let all = json!({"fiLigatures": true, "flLigatures": true, "quotes": true, "spaces": true, "dashes": true, "ellipsis": true, "fractions": true});
+    let r = s.execute("type.smartPunctuation", &all).unwrap();
+    assert_eq!(plain(&s, t), "An o\u{FB03}ce’s \u{FB02}u\u{FB00}y \u{FB02}ow. Then ½ and ¾, not 1/25, 1/2/26 or 1/2.5.");
+    let replaced = json!({"fiLigatures": 2, "flLigatures": 2, "quotes": 1, "spaces": 1, "dashes": 0, "ellipses": 0, "fractions": 2});
+    assert_eq!(r, json!({"changed": 1, "replaced": replaced}));
+    assert_eq!(history(&s).0, undo + 1);
+}
+
+/// The ff, fl, ffl option alone leaves fi and ffi as letters (ffi keeps its ff ligature, counted
+/// with this option), and the other options are off unless asked for.
+#[test]
+fn smart_punctuation_fl_ligatures_alone() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "office fit baffle.  1/2", "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"flLigatures": true})).unwrap();
+    assert_eq!(plain(&s, t), "o\u{FB00}ice fit ba\u{FB04}e.  1/2");
+    assert_eq!(r["replaced"], json!({"fiLigatures": 0, "flLigatures": 2, "quotes": 0, "spaces": 0, "dashes": 0, "ellipses": 0, "fractions": 0}));
+}
+
+/// A ligature or a fraction the run's font has no glyph for stays as its letters, while the run's
+/// other replacements still happen.
+#[test]
+fn smart_punctuation_skips_ligatures_and_fractions_the_font_lacks() {
+    let mut s = session();
+    let mono = "JetBrains Mono";
+    assert!(!font_covers(mono, "\u{FB01}") && !font_covers(mono, "⅐"), "{mono} has no fi ligature or one-seventh");
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "fit 1/7 a--b", "font": mono})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fiLigatures": true, "fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "fit 1/7 a–b");
+    let counts = (&r["replaced"]["fiLigatures"], &r["replaced"]["fractions"], &r["replaced"]["dashes"]);
+    assert_eq!(counts, (&json!(0), &json!(0), &json!(1)));
+}
+
+/// A fraction at the end of a run is checked against the start of the next run: 1/25 and 1/2.5
+/// split after their 1/2 stay as they are, and a 1/2 the next run's space ends is replaced.
+#[test]
+fn expert_fractions_look_past_the_end_of_a_run() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "1/25 1/2.5 1/2 x", "font": "Source Sans 3"})).unwrap());
+    for (start, end) in [(0, 3), (5, 8), (11, 14)] {
+        s.execute("text.setRangeStyle", &json!({"id": t.0, "start": start, "end": end, "size": 30})).unwrap();
+    }
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "1/25 1/2.5 ½ x");
+    assert_eq!(r["replaced"]["fractions"], 1);
+}
+
+/// An inline graphic separates the text on either side of it: the space after it is not a second
+/// space after the period before it, and the digit before it does not stop a fraction after it.
+#[test]
+fn an_inline_graphic_separates_smart_spaces_and_fractions() {
+    let mut s = session();
+    let r = rect(&mut s, 600.0, 500.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "A.  B 71/2", "font": "Source Sans 3"})).unwrap());
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 7, "symbol": "Mark"})).unwrap();
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 3, "symbol": "Mark"})).unwrap();
+    let texts = |s: &Session| match node(s, t).kind {
+        NodeKind::Text(o) => o.runs.iter().map(|r| if r.inline.is_some() { "[g]".to_string() } else { r.text.clone() }).collect::<String>(),
+        _ => String::new(),
+    };
+    assert_eq!(texts(&s), "A. [g] B 7[g]1/2");
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "fractions": true})).unwrap();
+    assert_eq!(texts(&s), "A. [g] B 7[g]½");
+    assert_eq!((&r["replaced"]["spaces"], &r["replaced"]["fractions"]), (&json!(0), &json!(1)));
+}
+
+/// Smart Spaces keeps one space after each period, also when the spaces start in the next run,
+/// and leaves single spaces and spaces after other characters alone.
+#[test]
+fn smart_spaces_keeps_one_space_after_a_period() {
+    let mut s = session();
+    let t = text(&mut s, "A.   B. C.  D  E");
+    // "C." is in a run of its own, and the spaces after it start the next one.
+    s.execute("text.setRangeStyle", &json!({"id": t.0, "start": 8, "end": 10, "size": 30})).unwrap();
+    assert!(matches!(node(&s, t).kind, NodeKind::Text(ref o) if o.runs.len() > 1));
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "quotes": false, "dashes": false, "ellipsis": false})).unwrap();
+    assert_eq!(plain(&s, t), "A. B. C. D  E");
+    assert_eq!(r["replaced"]["spaces"], 2);
+}
+
+/// Ruby stays on the characters it was set on when Smart Punctuation makes the text before them
+/// longer (curly quotes) or shorter (Smart Spaces), and no replacement takes in characters on both
+/// sides of a ruby span's end: the fi with ruby on its i stays as letters, and a second space after
+/// a period with ruby of its own stays.
+#[test]
+fn smart_punctuation_keeps_ruby_on_its_characters() {
+    let mut s = session();
+    let spans = |s: &Session, t| match node(s, t).kind {
+        NodeKind::Text(o) => o.ruby.iter().map(|r| (r.start, r.end)).collect::<Vec<_>>(),
+        _ => vec![],
+    };
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "'A'.  base fit X.  Y", "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    for (start, end) in [(1, 2), (6, 10), (12, 13), (18, 19)] {
+        s.execute("type.ruby", &json!({"text": "r", "start": start, "end": end})).unwrap();
+    }
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "fiLigatures": true})).unwrap();
+    assert_eq!(plain(&s, t), "‘A’. base fit X.  Y");
+    assert_eq!((&r["replaced"]["spaces"], &r["replaced"]["fiLigatures"]), (&json!(1), &json!(0)));
+    let text = plain(&s, t);
+    let on: Vec<&str> = spans(&s, t).into_iter().map(|(a, b)| &text[a..b]).collect();
+    assert_eq!(on, ["A", "base", "i", " "]);
+}
+
+/// Expert Fractions leaves a fraction next to a digit of another script as it is.
+#[test]
+fn expert_fractions_skip_fractions_next_to_digits_of_any_script() {
+    let mut s = session();
+    let words = "\u{662}1/2 1/2\u{662} 1/2.\u{662} 1/2";
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "\u{662}1/2 1/2\u{662} 1/2.\u{662} ½");
+    assert_eq!(r["replaced"]["fractions"], 1);
 }
 
 #[test]
@@ -4040,9 +4194,11 @@ fn ruler_guides_select_move_and_delete() {
     assert!(selected(&s).is_empty());
     assert_eq!(s.execute("guide.select", &json!({"indexes": [1], "toggle": true})).unwrap()["selected"], json!([0, 1]));
     let layer = s.doc().unwrap().current_layer().unwrap().0;
+    let id = s.doc().unwrap().doc.ruler_guides()[1].id.unwrap().0;
     assert_eq!(
         s.execute("guide.list", &json!({})).unwrap()[1],
-        json!({"index": 1, "vertical": false, "pos": 50.0, "selected": true, "layer": layer, "shown": true, "editable": true})
+        json!({"index": 1, "id": id, "vertical": false, "pos": 50.0, "selected": true, "layer": layer,
+               "hidden": false, "locked": false, "shown": true, "editable": true})
     );
     assert!(s.execute("guide.select", &json!({"indexes": [7]})).is_err());
     // A move takes each selected guide along its own axis, in one undo step.
@@ -4323,11 +4479,14 @@ fn artboard_guides_go_with_their_artboard() {
     s.execute("guide.add", &json!({"vertical": false, "pos": 100})).unwrap();
     let list = |s: &mut Session| s.execute("guide.list", &json!({})).unwrap();
     let layer = s.doc().unwrap().current_layer().unwrap().0;
+    let ids: Vec<u64> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.id.unwrap().0).collect();
     assert_eq!(
         list(&mut s),
         json!([
-            {"index": 0, "vertical": true, "pos": 1000.0, "selected": false, "artboard": 1, "layer": layer, "shown": true, "editable": true},
-            {"index": 1, "vertical": false, "pos": 100.0, "selected": false, "layer": layer, "shown": true, "editable": true},
+            {"index": 0, "id": ids[0], "vertical": true, "pos": 1000.0, "selected": false, "artboard": 1, "layer": layer,
+             "hidden": false, "locked": false, "shown": true, "editable": true},
+            {"index": 1, "id": ids[1], "vertical": false, "pos": 100.0, "selected": false, "layer": layer,
+             "hidden": false, "locked": false, "shown": true, "editable": true},
         ])
     );
     let spans = |s: &Session| {
@@ -4368,7 +4527,8 @@ fn artboard_guides_go_with_their_artboard() {
     assert_eq!((guides(&s).len(), selected_guides(&s)), (3, vec![0, 1]));
     assert_eq!(
         list(&mut s)[0],
-        json!({"index": 0, "vertical": false, "pos": 100.0, "selected": true, "layer": layer, "shown": true, "editable": true})
+        json!({"index": 0, "id": ids[1], "vertical": false, "pos": 100.0, "selected": true, "layer": layer,
+               "hidden": false, "locked": false, "shown": true, "editable": true})
     );
     assert_eq!(undo_len(&s), n + 1);
     s.execute("edit.undo", &json!({})).unwrap();
@@ -4412,9 +4572,11 @@ fn guides_dragged_out_of_a_ruler_snap_and_take_the_artboard_tool_s_artboard() {
     s.ruler_guide(false, &ev(PointerKind::Drag, 1000.0, 50.0), true, v).unwrap();
     s.ruler_guide(false, &ev(PointerKind::Up, 1000.0, 50.0), true, v).unwrap();
     let layer = s.doc().unwrap().current_layer().unwrap().0;
+    let id = s.doc().unwrap().doc.ruler_guides()[1].id.unwrap().0;
     assert_eq!(
         s.execute("guide.list", &json!({})).unwrap()[1],
-        json!({"index": 1, "vertical": false, "pos": 50.0, "selected": false, "artboard": 1, "layer": layer, "shown": true, "editable": true})
+        json!({"index": 1, "id": id, "vertical": false, "pos": 50.0, "selected": false, "artboard": 1, "layer": layer,
+               "hidden": false, "locked": false, "shown": true, "editable": true})
     );
 }
 
@@ -4569,6 +4731,12 @@ fn ruler_guides_live_on_layers() {
     assert!(s.doc().unwrap().doc.ruler_guides().iter().all(|g| g.layer == Some(first)));
     s.execute("guide.setLayer", &json!({"indexes": [1], "layer": second.0})).unwrap();
     assert!(s.execute("guide.setLayer", &json!({"indexes": [7], "layer": first.0})).is_err());
+    // `indexes` that is not a list, or given with `index`, is an error; an index given twice counts once.
+    assert!(s.execute("guide.setLayer", &json!({"indexes": 0, "layer": first.0})).is_err());
+    assert!(s.execute("guide.setLayer", &json!({"index": 0, "indexes": [1], "layer": first.0})).is_err());
+    assert!(s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.layer).eq([Some(first), Some(second)]));
+    assert_eq!(s.execute("guide.setLayer", &json!({"indexes": [1, 1], "layer": first.0})).unwrap()["count"], 1);
+    s.execute("guide.setLayer", &json!({"indexes": [1], "layer": second.0})).unwrap();
     // Deleting a layer deletes its guides; undo brings them back.
     s.execute("layer.delete", &json!({"ids": [second.0]})).unwrap();
     assert_eq!(guides(&s), [(true, 200.0)]);
@@ -4603,6 +4771,122 @@ fn guides_on_hidden_or_locked_layers_are_left_alone() {
     // The current layer locked: the new guide goes on the top shown, unlocked layer.
     s.execute("guide.add", &json!({"vertical": true, "pos": 20})).unwrap();
     assert_eq!(s.doc().unwrap().doc.ruler_guides()[2].layer, Some(first));
+    assert_eq!(guides(&s).len(), 3);
+}
+
+/// A guide hidden or locked on its own can't be moved, deleted or moved to another layer, and the
+/// error names the guide, not its layer; a guide on a hidden or locked layer names the layer.
+#[test]
+fn a_guide_hidden_or_locked_on_its_own_is_named_in_the_error() {
+    let mut s = session();
+    let first = s.doc().unwrap().current_layer().unwrap();
+    for pos in [100.0, 200.0] {
+        s.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+    }
+    let second = id_of(&s.execute("layer.new", &json!({})).unwrap());
+    let ids: Vec<u64> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.id.unwrap().0).collect();
+    s.execute("layer.setProps", &json!({"ids": [ids[0]], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [ids[1]], "visible": false})).unwrap();
+    let own = "the guide is hidden or locked";
+    for i in [0, 1] {
+        assert_eq!(s.execute("guide.move", &json!({"index": i, "pos": 50})).unwrap_err().to_string(), own, "{i}");
+        assert_eq!(s.execute("guide.remove", &json!({"index": i})).unwrap_err().to_string(), own, "{i}");
+        assert_eq!(s.execute("guide.remove", &json!({"indexes": [i]})).unwrap_err().to_string(), own, "{i}");
+        let p = json!({"index": i, "layer": second.0});
+        assert_eq!(s.execute("guide.setLayer", &p).unwrap_err().to_string(), own, "{i}");
+    }
+    // Shown and unlocked, but on a locked layer: the error names the layer.
+    s.execute("layer.setProps", &json!({"ids": [ids[0]], "locked": false})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [first.0], "locked": true})).unwrap();
+    let e = s.execute("guide.move", &json!({"index": 0, "pos": 50})).unwrap_err().to_string();
+    assert_eq!(e, "the guide is on a hidden or locked layer");
+}
+
+/// Object › Lock › Selection and Hide › Selection lock and hide a selected ruler guide on its own,
+/// with the selected art, in one undo step; Unlock All and Show All unlock and show it again and
+/// select it as a guide. While Lock Guides is on nothing selects it, and in isolation mode Lock
+/// leaves it alone.
+#[test]
+fn lock_hide_unlock_and_show_all_reach_ruler_guides() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    for pos in [100.0, 200.0] {
+        s.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+    }
+    let flags = |s: &Session| s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.hidden, g.locked)).collect::<Vec<_>>();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let clear = (false, false);
+    // A guide selected on its own: Lock locks it alone and deselects it.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let n = undo(&s);
+    s.execute("object.lock", &json!({})).unwrap();
+    assert_eq!((flags(&s), undo(&s)), (vec![(false, true), clear], n + 1));
+    assert!(selected_guides(&s).is_empty());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((flags(&s), selected_guides(&s)), (vec![clear, clear], vec![0]));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(flags(&s)[0], (false, true));
+    // A guide and art selected together: Hide hides both, in one step.
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [1], "toggle": true})).unwrap();
+    let n = undo(&s);
+    s.execute("object.hide", &json!({})).unwrap();
+    assert_eq!((flags(&s), undo(&s)), (vec![(false, true), (true, false)], n + 1));
+    assert!(!s.doc().unwrap().doc.node(a).unwrap().visible);
+    // Unlock All and Show All reach the guides and select them as guides.
+    assert_eq!(s.execute("object.unlockAll", &json!({})).unwrap()["count"], 1);
+    assert_eq!((flags(&s)[0], selected_guides(&s), selected(&s)), (clear, vec![0], vec![]));
+    assert_eq!(s.execute("object.showAll", &json!({})).unwrap()["count"], 2);
+    assert_eq!((flags(&s), selected_guides(&s), selected(&s)), (vec![clear, clear], vec![1], vec![a]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(flags(&s)[1], (true, false), "Show All is one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    // With Lock Guides on, Unlock All unlocks a guide but leaves it unselected.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    assert_eq!((flags(&s)[0], selected_guides(&s)), (clear, vec![]));
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    // In isolation mode Lock takes only the objects inside the isolated group.
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    sel(&mut s, &[a]);
+    let _ = s.execute("guide.select", &json!({"indexes": [0], "toggle": true}));
+    s.execute("object.lock", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).unwrap().locked);
+    assert_eq!(flags(&s)[0], clear);
+}
+
+/// `guide.remove` with `indexes` deletes those guides in one undo step, an index given twice
+/// once; a locked guide among them, or an unknown index, deletes nothing.
+#[test]
+fn guide_remove_takes_several_indexes() {
+    let mut s = session();
+    for pos in [100.0, 200.0, 300.0] {
+        s.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+    }
+    let id = s.doc().unwrap().doc.ruler_guides()[2].id.unwrap();
+    s.execute("layer.setProps", &json!({"ids": [id.0], "locked": true})).unwrap();
+    assert!(s.execute("guide.remove", &json!({"indexes": [0, 2]})).is_err());
+    assert!(s.execute("guide.remove", &json!({"indexes": [0, 7]})).is_err());
+    assert!(s.execute("guide.remove", &json!({"indexes": 0})).is_err());
+    assert!(s.execute("guide.remove", &json!({"index": 0, "indexes": [1]})).is_err());
+    // A list longer than 10,000 entries is refused by every guide command that takes one.
+    let long = json!(vec![0; 10_001]);
+    assert!(s.execute("guide.remove", &json!({"indexes": long})).is_err());
+    assert!(s.execute("guide.select", &json!({"indexes": long})).is_err());
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    assert!(s.execute("guide.setLayer", &json!({"indexes": long, "layer": layer.0})).is_err());
+    assert_eq!(s.execute("guide.select", &json!({"indexes": vec![0; 10_000]})).unwrap()["selected"], json!([0]));
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(guides(&s).len(), 3);
+    let n = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("guide.remove", &json!({"indexes": [1, 0, 1]})).unwrap()["count"], 2);
+    assert_eq!((guides(&s), s.doc().unwrap().history.undo.len()), (vec![(true, 300.0)], n + 1));
+    s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(guides(&s).len(), 3);
 }
 

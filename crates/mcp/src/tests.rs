@@ -16,6 +16,7 @@ mod gradient;
 mod limits;
 mod links;
 mod liquify;
+mod livepaint;
 mod pen;
 mod persp;
 mod place;
@@ -45,10 +46,62 @@ fn text_of(result: &Value) -> String {
     result["content"].as_array().unwrap().iter().filter(|c| c["type"] == "text").map(|c| c["text"].as_str().unwrap().to_string()).collect()
 }
 
-fn tmp(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("vectorcraft-mcp-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir.join(name)
+/// A test's own folder under the temp dir, `vectorcraft-mcp-<tag>-<pid>`, made empty when created
+/// and removed with everything in it when dropped, also when the test panics. A removal that fails
+/// (a file still open) is ignored.
+struct TempFolder(std::path::PathBuf);
+
+impl TempFolder {
+    fn new(tag: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("vectorcraft-mcp-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Self(dir)
+    }
+
+    /// The path of `name` in the folder.
+    fn file(&self, name: &str) -> std::path::PathBuf {
+        self.0.join(name)
+    }
+}
+
+impl std::ops::Deref for TempFolder {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for TempFolder {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A `TempFolder` starts empty, and dropping it removes it with the files and folders in it, also
+/// when the test that holds it panics.
+#[test]
+fn temp_folders_start_empty_and_are_removed_when_dropped() {
+    let leftover = std::env::temp_dir().join(format!("vectorcraft-mcp-drop-check-{}", std::process::id()));
+    std::fs::create_dir_all(&leftover).unwrap();
+    std::fs::write(leftover.join("old.txt"), b"old").unwrap();
+    let dir = TempFolder::new("drop-check");
+    assert_eq!(std::fs::read_dir(&*dir).unwrap().count(), 0, "a leftover folder is emptied");
+    std::fs::write(dir.file("a.txt"), b"a").unwrap();
+    std::fs::create_dir(dir.file("sub")).unwrap();
+    std::fs::write(dir.file("sub").join("b.txt"), b"b").unwrap();
+    let path = dir.to_path_buf();
+    drop(dir);
+    assert!(!path.exists(), "{} is removed", path.display());
+
+    let panicked = std::panic::catch_unwind(|| {
+        let dir = TempFolder::new("panic-check");
+        std::fs::write(dir.file("a.txt"), b"a").unwrap();
+        panic!("the test fails with {} in use", dir.display());
+    });
+    assert!(panicked.is_err());
+    let path = std::env::temp_dir().join(format!("vectorcraft-mcp-panic-check-{}", std::process::id()));
+    assert!(!path.exists(), "{} is removed after a panic", path.display());
 }
 
 // ---------- framing ----------
@@ -286,6 +339,7 @@ fn headless_command_list_includes_ui_commands() {
 
 #[test]
 fn headless_end_to_end() {
+    let dir = TempFolder::new("headless-end-to-end");
     let mut s = server();
     rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
     s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
@@ -334,7 +388,7 @@ fn headless_end_to_end() {
     assert_eq!(call(&mut s, 44, "doc_inspect", json!({"ids": [999_999]}))["isError"], true);
 
     // Screenshot returns image content (base64 PNG) and text.
-    let shot_path = tmp("shot.png");
+    let shot_path = dir.file("shot.png");
     let r = call(&mut s, 5, "screenshot", json!({"path": shot_path.to_str().unwrap()}));
     assert_eq!(r["isError"], false, "{r}");
     let img = r["content"].as_array().unwrap().iter().find(|c| c["type"] == "image").expect("image content");
@@ -344,14 +398,14 @@ fn headless_end_to_end() {
     assert_eq!(std::fs::read(&shot_path).unwrap(), png);
 
     // Export SVG.
-    let svg_path = tmp("out.svg");
+    let svg_path = dir.file("out.svg");
     let r = call(&mut s, 6, "export", json!({"path": svg_path.to_str().unwrap()}));
     assert_eq!(r["isError"], false, "{r}");
     let svg = std::fs::read_to_string(&svg_path).unwrap();
     assert!(svg.contains("<svg") && (svg.contains("<rect") || svg.contains("<path")), "{svg}");
 
     // Save native, open it back.
-    let dc = tmp("out.vectorcraft");
+    let dc = dir.file("out.vectorcraft");
     assert_eq!(call(&mut s, 7, "save_file", json!({"path": dc.to_str().unwrap()}))["isError"], false);
     let r = call(&mut s, 8, "open_file", json!({"path": dc.to_str().unwrap()}));
     assert_eq!(r["isError"], false, "{r}");
@@ -359,9 +413,9 @@ fn headless_end_to_end() {
     assert_eq!(r["isError"], false, "{r}");
 
     // PDF and PDF-compatible .ai open headless too.
-    let pdf_path = tmp("out.pdf");
+    let pdf_path = dir.file("out.pdf");
     assert_eq!(call(&mut s, 20, "export", json!({"path": pdf_path.to_str().unwrap()}))["isError"], false);
-    let ai_path = tmp("out.ai");
+    let ai_path = dir.file("out.ai");
     std::fs::copy(&pdf_path, &ai_path).unwrap();
     for (id, p) in [(21, &pdf_path), (22, &ai_path)] {
         let r = call(&mut s, id, "open_file", json!({"path": p.to_str().unwrap()}));
@@ -386,9 +440,10 @@ fn headless_end_to_end() {
 /// succeeds, the expanded trace holds no image, and its paths keep the image's colors.
 #[test]
 fn trace_and_style_prompt_steps_run_in_order() {
+    let dir = TempFolder::new("trace-and-style");
     let mut s = server();
     // 60 × 40 pixels: a red and a blue block on white.
-    let png = tmp("trace-and-style.png");
+    let png = dir.file("trace-and-style.png");
     image::RgbImage::from_fn(60, 40, |x, y| match (x, y) {
         (5..25, 5..35) => image::Rgb([220, 30, 30]),
         (35..55, 5..35) => image::Rgb([30, 60, 200]),
@@ -436,13 +491,51 @@ fn trace_and_style_prompt_steps_run_in_order() {
     assert!(fills.len() > 1 && fills.contains("#00aa00") && !fills.contains(&from), "{fills:?}");
 }
 
+/// A window capture and an artboard preview scaled down keep the color of opaque pixels beside
+/// clear ones: the clear black beside them does not darken them.
+#[test]
+fn scaled_down_pictures_keep_the_color_beside_clear_pixels() {
+    struct Striped;
+    impl Backend for Striped {
+        fn call(&mut self, method: &str, _: Value) -> Result<Value, String> {
+            let mut png = std::io::Cursor::new(Vec::new());
+            image::RgbaImage::from_fn(64, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+                .write_to(&mut png, image::ImageFormat::Png)
+                .unwrap();
+            let png = vectorcraft_format::base64_encode(png.get_ref());
+            Ok(match method {
+                "document.inspect" => json!({"artboards": [{"width": 64, "height": 4}]}),
+                _ => json!({"pngBase64": png, "width": 64, "height": 4}),
+            })
+        }
+        fn has_ui(&self) -> bool {
+            true
+        }
+        fn describe(&self) -> String {
+            "test".into()
+        }
+    }
+
+    let mut s = Server::new(Box::new(Striped));
+    let shots = [("screenshot", json!({"window": true, "max_side": 16})), ("render_preview", json!({"max_side": 16}))];
+    for (id, (tool, args)) in (1..).zip(shots) {
+        let r = call(&mut s, id, tool, args);
+        let data =
+            r["content"].as_array().unwrap().iter().find(|c| c["type"] == "image").unwrap_or_else(|| panic!("{tool}: {r}"))["data"].as_str().unwrap();
+        let img = image::load_from_memory(&vectorcraft_format::base64_decode(data).unwrap()).unwrap().into_rgba8();
+        assert_eq!(img.dimensions(), (16, 1), "{tool}");
+        assert!(img.pixels().all(|p| p.0 == [200, 30, 30, 128]), "{tool}: {:?}", img.get_pixel(0, 0));
+    }
+}
+
 /// `screenshot` and `render_preview` with `traceViews: true` draw an Image Trace object in the
 /// view set with imageTrace.setView, as the app's window does; without it they draw the tracing
 /// result, as exports do. The image is a dark disc (r = 30 px) on blue, traced with Ignore White.
 #[test]
 fn screenshot_and_render_preview_draw_the_trace_view_with_trace_views() {
+    let dir = TempFolder::new("trace-views");
     let mut s = server();
-    let png = tmp("trace-views.png");
+    let png = dir.file("trace-views.png");
     image::RgbImage::from_fn(100, 100, |x, y| {
         let (dx, dy) = (f64::from(x) + 0.5 - 50.0, f64::from(y) + 0.5 - 50.0);
         if dx * dx + dy * dy <= 900.0 { image::Rgb([0, 0, 0]) } else { image::Rgb([170, 210, 255]) }
@@ -490,6 +583,7 @@ fn screenshot_and_render_preview_draw_the_trace_view_with_trace_views() {
 
 #[test]
 fn headless_path_gesture_undo() {
+    let dir = TempFolder::new("path-gesture-undo");
     let mut s = server();
     let count = |s: &mut Server| -> u64 {
         let r = call(s, 90, "inspect_document", json!({}));
@@ -543,9 +637,9 @@ fn headless_path_gesture_undo() {
     assert_eq!(r["isError"], false, "{r}");
     let r = call(&mut s, 11, "select_tool", json!({"tool": "pen"}));
     assert_eq!(r["isError"], false, "{r}");
-    let r = call(&mut s, 12, "export", json!({"path": tmp("x.png").to_str().unwrap(), "scale": 0.5}));
+    let r = call(&mut s, 12, "export", json!({"path": dir.file("x.png").to_str().unwrap(), "scale": 0.5}));
     assert_eq!(r["isError"], false, "{r}");
-    assert_eq!(&std::fs::read(tmp("x.png")).unwrap()[..4], b"\x89PNG");
+    assert_eq!(&std::fs::read(dir.file("x.png")).unwrap()[..4], b"\x89PNG");
 }
 
 /// A hover's reply comes once the tool's highlight is ready, also when the tool finds it on another
@@ -1074,8 +1168,9 @@ fn relative_to_cwd(p: &std::path::Path) -> Option<std::path::PathBuf> {
 
 #[test]
 fn headless_file_tools_take_relative_paths() {
+    let dir = TempFolder::new("relative-paths");
     let mut s = server();
-    let file = tmp("relative.vectorcraft");
+    let file = dir.file("relative.vectorcraft");
     let Some(rel) = relative_to_cwd(&file) else { return };
     let rel = rel.to_str().unwrap();
     assert!(std::path::Path::new(rel).is_relative());
@@ -1540,6 +1635,27 @@ fn text_effect_pathfinder_transform_graph_and_wrap_tools() {
     let ds = d.to_string();
     // The wrap object carries the options and the area type resolved its shape.
     assert!(ds.contains("\"wrap\":{\"invert\":false,\"offset\":8.0}") && ds.contains("\"wrap\":[{\"invert\":false,\"offset\":8.0"), "{area}");
+    // An offset outside -1000 to 1000 pt, an invert or a release that is not true or false is an
+    // error, with release too, and the wrap and the selection stay as they were.
+    let r = call(&mut s, 20, "run_command", json!({"command": "select.set", "params": {"ids": [g]}}));
+    assert_eq!(r["isError"], false, "{r}");
+    for (id, args) in [
+        (21, json!({"ids": [c], "offset": 5000})),
+        (22, json!({"ids": [c], "offset": "8"})),
+        (23, json!({"ids": [c], "invert": "true"})),
+        (24, json!({"ids": [c], "release": "true"})),
+        (25, json!({"ids": [c], "release": true, "offset": -5000})),
+    ] {
+        let r = call(&mut s, id, "text_wrap", args.clone());
+        assert_eq!(r["isError"], true, "{args}: {r}");
+        assert!(doc_json(&mut s).to_string().contains("\"wrap\":{\"invert\":false,\"offset\":8.0}"), "{args}");
+    }
+    // The graph is still the selection: a wrap made without ids goes on it, not on the circle.
+    let r = call(&mut s, 26, "text_wrap", json!({"offset": 9}));
+    assert_eq!(r["isError"], false, "{r}");
+    let made: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(made["ids"], json!([g]), "{r}");
+    call(&mut s, 27, "text_wrap", json!({"release": true}));
     call(&mut s, 15, "text_wrap", json!({"ids": [c], "release": true}));
     assert!(!doc_json(&mut s).to_string().contains("\"offset\":8.0"));
 }
@@ -1547,13 +1663,14 @@ fn text_effect_pathfinder_transform_graph_and_wrap_tools() {
 #[test]
 fn oversized_screenshot_and_png_export_are_errors() {
     // 16383 pt at the maximum scale (16) is 262 128 px a side: an error result, not a crashed server.
+    let dir = TempFolder::new("oversized-export");
     let mut s = server();
     let r = call(&mut s, 1, "run_command", json!({"command": "file.new", "params": {"width": 16383, "height": 16383}}));
     assert_eq!(r["isError"], false, "{r}");
     let r = call(&mut s, 2, "screenshot", json!({"scale": 16}));
     assert_eq!(r["isError"], true, "{r}");
     assert!(text_of(&r).contains("pixels"), "{r}");
-    let path = tmp("huge.png");
+    let path = dir.file("huge.png");
     let r = call(&mut s, 3, "export", json!({"path": path.to_str().unwrap(), "scale": 16}));
     assert_eq!(r["isError"], true, "{r}");
     assert!(!path.exists());

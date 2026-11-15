@@ -631,6 +631,37 @@ fn brush_options_rename_duplicate_and_delete_update_strokes() {
     assert!(s.execute("brush.delete", &json!({"name": "5 pt. Round"})).is_err());
 }
 
+/// A document whose brushes repeat a name opens with the later brush numbered: strokes of the name
+/// keep the first brush, and renaming or deleting one brush leaves the other and its strokes alone.
+#[test]
+fn a_repeated_brush_name_is_numbered_when_the_document_opens() {
+    use vectorcraft_brush::{Brush, BrushKind, Calligraphic};
+    let nib = |size: f64| Brush { name: "Nib".into(), kind: BrushKind::Calligraphic(Calligraphic { size, ..Default::default() }) };
+    let mut s = session();
+    vectorcraft_brush::store(std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc), &[nib(1.0), nib(2.0)]);
+    let a = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    s.execute("brush.apply", &json!({"name": "Nib", "ids": [a.0]})).unwrap();
+    let saved = s.execute("document.serialize", &json!({})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "a.vectorcraft", "dataBase64": saved})).unwrap();
+    let names = |o: &mut Session| -> Vec<String> {
+        let list = o.execute("brush.list", &json!({})).unwrap();
+        list["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(names(&mut o), ["Nib", "Nib 2"]);
+    assert_eq!(brush_of(&o, a).as_deref(), Some("Nib"));
+    assert_eq!(o.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(1.0));
+    assert_eq!(o.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(2.0));
+    let b = rect(&mut o, 80.0, 10.0, 50.0, 50.0);
+    o.execute("brush.apply", &json!({"name": "Nib 2", "ids": [b.0]})).unwrap();
+    o.execute("brush.options", &json!({"name": "Nib", "newName": "Pen"})).unwrap();
+    assert_eq!(names(&mut o), ["Pen", "Nib 2"]);
+    assert_eq!((brush_of(&o, a).as_deref(), brush_of(&o, b).as_deref()), (Some("Pen"), Some("Nib 2")));
+    o.execute("brush.delete", &json!({"name": "Nib 2"})).unwrap();
+    assert_eq!(names(&mut o), ["Pen"]);
+    assert_eq!((brush_of(&o, a).as_deref(), brush_of(&o, b)), (Some("Pen"), None));
+}
+
 /// `brush.move`, which the Brushes panel runs when a brush is dragged, reorders brushes among those of
 /// their type in one undo step and refuses to move one into another type.
 #[test]
@@ -930,6 +961,69 @@ fn brush_freehand_paints_with_a_brush_in_one_step() {
     assert_eq!(s.doc().unwrap().history.undo.len(), n + 1);
     let id = s.doc().unwrap().selection.objects[0];
     assert_eq!(brush_of(&s, id).as_deref(), Some("Charcoal"));
+}
+
+/// `brush.freehand` refuses a `brush` that is not a string or names no brush in the document,
+/// and a `style` other than "pencil" or "brush", before it draws: the document, the selection
+/// and the undo history stay as they were. A `brush` left out or null draws the plain path.
+#[test]
+fn brush_freehand_refuses_a_brush_or_style_it_cannot_use() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let points = json!([[10, 10], [60, 40], [120, 10]]);
+    for (extra, words) in [
+        (json!({"brush": "Nope"}), "no brush named `Nope`"),
+        (json!({"brush": ""}), "no brush named ``"),
+        (json!({"brush": 5}), "`brush` must be a string"),
+        (json!({"brush": {"name": "Charcoal"}}), "`brush` must be a string"),
+        (json!({"brush": true}), "`brush` must be a string"),
+        (json!({"brush": "Charcoal", "style": "marker"}), "`style` must be \"pencil\" or \"brush\", not \"marker\""),
+        (json!({"brush": "Charcoal", "style": 1}), "`style` must be \"pencil\" or \"brush\", not 1"),
+    ] {
+        let mut p = extra.clone();
+        p["points"] = points.clone();
+        let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        let e = s.execute("brush.freehand", &p).expect_err(&format!("{extra} is refused"));
+        assert!(e.to_string().contains(words), "{extra}: {e}");
+        assert!(*s.doc().unwrap().doc == *before, "{extra} leaves the document");
+        assert_eq!(s.doc().unwrap().selection.objects, [a], "{extra} leaves the selection");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{extra} records no undo step");
+    }
+    for extra in [json!({}), json!({"brush": null, "style": null})] {
+        let mut p = extra.clone();
+        p["points"] = points.clone();
+        let id = NodeId(s.execute("brush.freehand", &p).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(brush_of(&s, id), None, "{extra} draws the plain path");
+    }
+    for style in ["pencil", "brush"] {
+        let r = s.execute("brush.freehand", &json!({"points": points, "style": style, "brush": "Charcoal"})).unwrap();
+        assert!(r["id"].is_u64(), "{style}: {r}");
+    }
+}
+
+/// The Paintbrush skips a brush deleted after it was chosen: a deleted tool brush gives way to
+/// the document's current brush, and with neither the stroke is drawn without a brush.
+#[test]
+fn paintbrush_tool_skips_a_deleted_brush() {
+    let mut s = session();
+    s.execute("brush.setCurrent", &json!({"name": "Arrow"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("paintbrush", v).unwrap();
+    s.set_tool_option("brush", &json!("Dots"));
+    s.execute("brush.delete", &json!({"name": "Dots"})).unwrap();
+    let stroke = |s: &mut Session, y: f64| {
+        for (k, x) in [(PointerKind::Down, 10.0), (PointerKind::Drag, 50.0), (PointerKind::Drag, 90.0), (PointerKind::Up, 130.0)] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        s.doc().unwrap().selection.objects[0]
+    };
+    let id = stroke(&mut s, 10.0);
+    assert_eq!(brush_of(&s, id).as_deref(), Some("Arrow"));
+    s.execute("brush.delete", &json!({"name": "Arrow"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.unknown.get("currentBrush"), None);
+    let id = stroke(&mut s, 110.0);
+    assert_eq!(brush_of(&s, id), None);
 }
 
 #[test]

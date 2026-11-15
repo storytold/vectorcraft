@@ -859,7 +859,7 @@ fn type_outside_its_frame_is_drawn() {
 fn a_pan_draws_the_type_from_the_kept_pixels() {
     let _fonts = crate::tests_fontchange::fonts_steady();
     let opts = RenderOptions::default();
-    let fonts = || vectorcraft_text::FontDb::global().generation();
+    let fonts = vectorcraft_text::layout_inputs;
     // How many type objects a renderer drew offscreen for `b` in `second` after drawing `a` in
     // `first`. The second frame's pixels are a new renderer's, each channel within `near`. The
     // frames are drawn again while the fonts change between them (other tests load fonts, and the

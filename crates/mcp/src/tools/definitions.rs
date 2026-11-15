@@ -205,7 +205,7 @@ pub fn tool_definitions() -> Vec<Value> {
                         "type": "array",
                         "minItems": 1,
                         "items": obj(json!({
-                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick"]},
+                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick", "tripleclick"]},
                             "x": num("Document x (pt)"),
                             "y": num("Document y (pt)"),
                             "mods": mods_schema(),
@@ -507,11 +507,11 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "text_wrap",
             "Text wrap",
-            "Make the selected (or `ids`) objects wrap objects: area type below them in the same layer flows around them (offset in pt, invert = flow inside). `release: true` removes the wrap.",
+            "Make the selected (or `ids`) objects wrap objects: area type below them in the same layer flows around them (offset in pt, invert = flow inside). `release: true` removes the wrap. An offset outside -1000 to 1000 or not a number, or an invert or release that is not true or false, is an error and changes nothing.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
-                    "offset": num("Gap between text and object (default 6 pt)"),
+                    "offset": num("Gap between text and object in pt, -1000 to 1000 (default 6 pt); a negative gap lets text that far into the object"),
                     "invert": {"type": "boolean"},
                     "release": {"type": "boolean"},
                 }),

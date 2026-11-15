@@ -321,7 +321,8 @@ impl Files {
         std::env::var("JSINCLUDE").map(|v| v.split(';').map(str::trim).filter(|p| !p.is_empty()).map(PathBuf::from).collect()).unwrap_or_default()
     }
 
-    /// The file being run now, as `$.fileName` gives it (empty for a script given as text).
+    /// The file being run now: the script, or the file `$.evalFile` is running (empty for a script
+    /// given as text). `$.fileName` gives it to code that `eval` or `Function` compiled.
     pub(crate) fn file_name(&self) -> String {
         self.frames.last().map(|f| f.shown.to_string()).unwrap_or_default()
     }

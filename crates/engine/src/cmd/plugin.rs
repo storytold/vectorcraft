@@ -51,6 +51,7 @@ use vectorcraft_doc::{Effect, Node};
 use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects, registry, safe_mode};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
+use crate::store::StoreTurn;
 
 use vectorcraft_plugins::permissions::{self, Grant, GrantToken, Permission};
 
@@ -672,13 +673,58 @@ fn takes_over(s: &Session, plugin: &Plugin) -> bool {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: runs once in the next `plugin.install` on this thread after its checks and before it
+    /// installs, as another session changing the plug-ins in between would.
+    pub(crate) static BEFORE_INSTALL: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once in the next `plugin.install` on this thread right after it reads the grant
+    /// held for the id.
+    pub(crate) static AFTER_GRANT_READ: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once in the next `plugin.install` on this thread after it installs and before it
+    /// writes the store.
+    pub(crate) static BEFORE_STORE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once on this thread when [`keep_installed`] has written the module to the store
+    /// and before it writes the grant.
+    pub(crate) static BEFORE_GRANT_STORED: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once on this thread when [`hold_plugin_changes`] finds the lock held and waits.
+    pub(crate) static WHILE_WAITING: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Held by `plugin.install` from its first read of the grant until the store holds what it
+/// installed, and throughout by `plugin.remove`, by loads of the stored plug-ins
+/// ([`Session::load_stored_plugins`]) and by loads of a plug-ins folder: these run one after the
+/// other across sessions.
+static PLUGIN_CHANGES: Mutex<()> = Mutex::new(());
+
+/// Takes [`PLUGIN_CHANGES`], waiting while another session holds it.
+pub(crate) fn hold_plugin_changes() -> std::sync::MutexGuard<'static, ()> {
+    match PLUGIN_CHANGES.try_lock() {
+        Ok(held) => held,
+        Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => {
+            #[cfg(test)]
+            if let Some(waiting) = WHILE_WAITING.take() {
+                waiting();
+            }
+            PLUGIN_CHANGES.lock().unwrap_or_else(|e| e.into_inner())
+        }
+    }
+}
+
 /// `plugin.install`: loads and checks the module, refuses `grant` and `allowHeavy` that neither an
 /// [`InstallApproval`] for this module nor the session allows, one that asks for a heavy budget
 /// unless `allowHeavy` says a person agreed, one that lists permissions no person has granted this
 /// very module unless `grant` lists them all, one that would take another module's place
-/// ([`takes_over`]) unless `replace` is true, and one whose SHA-256 isn't the `hash` given; records
-/// the grant with the module's hash, keeps it for the next start and installs it → its
-/// `plugin.list` entry. A module that lists no permissions ends any grant held for its id.
+/// ([`takes_over`]) unless `replace` is true, and one whose SHA-256 isn't the `hash` given. It then
+/// checks the plug-in installed under the id and its grant again while it records the grant with
+/// the module's hash and installs it ([`registry::install_checked`]), and only then keeps both for
+/// the next start → its `plugin.list` entry. A refused install changes neither the plug-in store
+/// nor the plug-ins and grants of the process. A module that lists no permissions ends any grant
+/// held for its id. A `plugin.remove` in another session waits until the install has written the
+/// store. With a plug-in store, all of it happens in a turn on the store ([`StoreTurn`]), so another
+/// process using the same folder changes it before or after; when the store can't be locked, nothing
+/// is installed.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
     // One use: spent whatever this install does.
@@ -696,21 +742,39 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(bad(C, "the module doesn't have the SHA-256 `hash` gives: nothing was installed"));
     }
-    if replace == Some(false) && registry::get(plugin.id()).is_some() {
-        return Err(bad(C, format!("a plug-in with id {:?} is already installed", plugin.id())));
+    // A removal in another session waits until the store holds what this install wrote, and so
+    // does a change of the store by another process.
+    let _held = hold_plugin_changes();
+    let turn =
+        s.plugin_store_turn().map_err(|e| EngineError::Other(format!("{C}: {}: {e}: nothing was installed", crate::store::STORE_NOT_LOCKED)))?;
+    // The grant the checks below count on, the approval included. The install checks it again,
+    // with the plug-in installed under the id, before anything is stored: another session may
+    // change either in between.
+    let seen_grant = registry::granted(plugin.id());
+    #[cfg(test)]
+    if let Some(between) = AFTER_GRANT_READ.take() {
+        between();
     }
-    // Another module under the id gets the settings and cache kept for it: whoever installs it asks
-    // the user first.
-    if replace != Some(true) && takes_over(s, &plugin) {
+    let installed_already = || bad(C, format!("a plug-in with id {:?} is already installed", plugin.id()));
+    let taken_over = || {
         let name = permissions::display_text(&plugin.manifest().name, permissions::MAX_SHOWN_NAME);
-        return Err(bad(
+        bad(
             C,
             format!(
                 "“{name}” is another module than the plug-in with id {:?} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees",
                 plugin.id()
             ),
-        ));
+        )
+    };
+    if replace == Some(false) && registry::get(plugin.id()).is_some() {
+        return Err(installed_already());
     }
+    // Another module under the id gets the settings and cache kept for it: whoever installs it asks
+    // the user first.
+    if replace != Some(true) && takes_over(s, &plugin) {
+        return Err(taken_over());
+    }
+    let (installed_already, taken_over) = (installed_already(), taken_over());
     // `grant` and `allowHeavy` say that a person agreed, and a request alone can't say that.
     let approval = approval.filter(|a| a.covers(&plugin));
     if !s.plugin_grants_from_requests && ((grant.is_some() && approval.is_none()) || (allow_heavy && !approval.is_some_and(|a| a.heavy))) {
@@ -744,72 +808,124 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     // this very module already covers all of them.
     let m = plugin.manifest();
     let wanted = m.permissions();
-    if !s.plugin_approved(&plugin) && !grant.as_ref().is_some_and(|g| wanted.iter().all(|w| g.contains(w))) {
+    let needs_approval = || {
         let name = permissions::display_text(&m.name, permissions::MAX_SHOWN_NAME);
         let asked = permissions::names(&wanted).join(", ");
-        return Err(bad(
+        bad(
             C,
             format!(
                 "“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants"
             ),
-        ));
+        )
+    };
+    let granted_here = grant.as_ref().is_some_and(|g| wanted.iter().all(|w| g.contains(w)));
+    // Without a plug-in store, the grant read above approves the module or doesn't.
+    let approved = match s.plugin_dir {
+        None => !m.asks_permissions() || seen_grant.as_ref().is_some_and(|g| g.covers(&m.id, plugin.hash(), &wanted)),
+        Some(_) => s.plugin_approved(&plugin),
+    };
+    if !approved && !granted_here {
+        return Err(needs_approval());
     }
-    // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
-    // grant only once it is there; when the grant can't be written, the store gets the module it
-    // held back. A failed write of that module is only logged: the store then holds the new module,
-    // which the grant doesn't cover. A write that reports a failure may still have put the old
-    // module back, so the store is read again to tell which module it holds. A stored module that
-    // can't be read back isn't replaced by one that needs a grant.
-    let previous = s.stored_plugin_bytes(plugin.id());
-    let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
-    let holds_new = |s: &Session| s.stored_plugin_bytes(plugin.id()).is_ok_and(|held| held.as_deref() == Some(&bytes[..]));
-    if m.asks_permissions() {
-        let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
-        registry::grant(GrantToken::after_engine_approval(g.clone()));
-        if stored && !s.store_grant(&m.id, Some(g)) {
-            stored = !s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref()) && holds_new(s);
-        }
-    } else {
-        // This module takes the id over, so nothing the user approved for the id applies any more.
-        registry::revoke(&m.id);
-        // When the write failed, the old stored module stays in the folder and needs its grant at
-        // the next launch. A grant that can't be removed still approves the old bytes, so the store
-        // gets the module it held back. When that module can't be read or written back, or there
-        // was none, no module goes with the grant, and the grant stops counting for every session in
-        // the process attached to the folder. A grants file that is too large or doesn't hold a list
-        // approves nothing, and the new module stays; one that can't be opened or read may approve
-        // the old bytes once it reads again.
-        let writes = s.grant_writes();
-        if stored && !s.store_grant(&m.id, None) && s.holds_plugin_grant(&m.id) {
-            let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(plugin.id(), held.as_deref()));
-            stored = !back && holds_new(s);
-            if !back || matches!(previous, Ok(None)) {
-                s.ignore_stored_grant(&m.id, writes);
+    let needs_approval = needs_approval();
+    let (id, hash, asks) = (m.id.clone(), plugin.hash().to_string(), m.asks_permissions());
+    let g = Grant { id: id.clone(), hash: hash.clone(), permissions: wanted };
+    let update = if asks { registry::GrantUpdate::Record(GrantToken::after_engine_approval(g.clone())) } else { registry::GrantUpdate::Revoke };
+    // Another module installed under the id since the checks above takes the place they found free,
+    // or held by these bytes. A grant that changed since no longer approves what they approved,
+    // unless `grant` approves this module by itself or the new grant covers it.
+    let check = |installed: Option<&Plugin>, held: Option<&Grant>| {
+        if let Some(installed) = installed {
+            match replace {
+                Some(false) => return Err(installed_already),
+                None if installed.hash() != hash => return Err(taken_over),
+                _ => {}
             }
         }
+        if asks && !granted_here && held != seen_grant.as_ref() && !held.is_some_and(|h| h.covers(&id, &hash, &g.permissions)) {
+            return Err(needs_approval);
+        }
+        Ok(())
+    };
+    #[cfg(test)]
+    if let Some(between) = BEFORE_INSTALL.take() {
+        between();
     }
-    // It gets the settings and cache kept for its id.
-    s.attach_plugin_storage(plugin.id());
+    // The plug-in gets the settings and cache kept for its id. A module without permissions takes
+    // the id over, so nothing the user approved for the id applies any more.
+    let installed = registry::install_checked(plugin, update, check, || s.attach_plugin_storage(&turn, &id), err)?;
+    #[cfg(test)]
+    if let Some(between) = BEFORE_STORE.take() {
+        between();
+    }
+    let stored = keep_installed(s, &turn, &id, &bytes, asks.then_some(g));
     // Installing a disabled plug-in again (an updated version) turns it on for the next launch too,
     // also when it is disabled by its stored file alone (it stopped a launch while loading). When
     // the new version could not replace the stored file, the old one stays disabled.
-    let file = s.stored_plugin_file(plugin.id());
+    let file = s.stored_plugin_file(&id);
     let mut changed = false;
     if file.is_none() || stored {
-        changed = safe_mode::set_enabled(&safe_mode::Item::of(&plugin), true);
+        changed = safe_mode::set_enabled(&safe_mode::Item::of(&installed), true);
         if let Some(file) = file {
             changed |= safe_mode::set_enabled(&safe_mode::Item::file(file), true);
         }
     }
     if changed {
-        s.store_disabled_plugins();
+        s.store_disabled_plugins_in(&turn);
     }
-    let installed = registry::install(plugin).map_err(err)?;
+    drop(turn);
     let mut v = describe_installed(&installed);
     if !unknown.is_empty() {
         v["unknownCommands"] = json!(unknown);
     }
     Ok(v)
+}
+
+/// Keeps the plug-in `id` that `plugin.install` installed, its module `bytes`, in the plug-in store,
+/// in `turn`, with `grant` when its module lists permissions (`None`: it lists none, and the grant
+/// held for the id is removed) → whether the store now holds the new module (`false` without a
+/// store).
+///
+/// Installed plug-ins stay installed after a restart (#2541). The module is written first and its
+/// grant only once it is there; when the grant can't be written, the store gets the module it held
+/// back. A failed write of that module is only logged: the store then holds the new module, which
+/// the grant doesn't cover. A write that reports a failure may still have put the old module back,
+/// so the store is read again to tell which module it holds. A stored module that can't be read back
+/// isn't replaced by one that needs a grant.
+pub(crate) fn keep_installed(s: &Session, turn: &StoreTurn, id: &str, bytes: &[u8], grant: Option<Grant>) -> bool {
+    let asks = grant.is_some();
+    let previous = s.stored_plugin_bytes(id);
+    let mut stored = (previous.is_ok() || !asks) && s.store_plugin(turn, id, bytes);
+    #[cfg(test)]
+    if let Some(between) = BEFORE_GRANT_STORED.take() {
+        between();
+    }
+    let holds_new = |s: &Session| s.stored_plugin_bytes(id).is_ok_and(|held| held.as_deref() == Some(bytes));
+    match grant {
+        Some(g) => {
+            if stored && !s.store_grant_in(turn, id, Some(g)) {
+                stored = !s.put_back_plugin(turn, id, previous.ok().flatten().as_deref()) && holds_new(s);
+            }
+        }
+        None => {
+            // When the write failed, the old stored module stays in the folder and needs its grant
+            // at the next launch. A grant that can't be removed still approves the old bytes, so the
+            // store gets the module it held back. When that module can't be read or written back, or
+            // there was none, no module goes with the grant, and the grant stops counting for every
+            // session in the process attached to the folder. A grants file that is too large or
+            // doesn't hold a list approves nothing, and the new module stays; one that can't be
+            // opened or read may approve the old bytes once it reads again.
+            let writes = s.grant_writes();
+            if stored && !s.store_grant_in(turn, id, None) && s.holds_plugin_grant(id) {
+                let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(turn, id, held.as_deref()));
+                stored = !back && holds_new(s);
+                if !back || matches!(previous, Ok(None)) {
+                    s.ignore_stored_grant(id, writes);
+                }
+            }
+        }
+    }
+    stored
 }
 
 /// `plugin.inspect`: what installing the module would install, without installing it, whether that
@@ -904,13 +1020,17 @@ fn load_folder(s: &Session, folder: &str) -> Value {
         None if crate::file_access::current().is_none() => Ok(()),
         None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
     };
+    // A `plugin.install` in another session or process finishes writing the store first. When the
+    // store can't be locked, the folder still loads, and the store isn't written.
+    let _held = hold_plugin_changes();
+    let turn = s.plugin_store_turn().unwrap_or_else(|_| StoreTurn::unheld());
     match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_folder_approver()) {
         Ok(r) => {
             for id in &r.loaded {
-                s.attach_plugin_storage(id);
+                s.attach_plugin_storage(&turn, id);
             }
             if r.disabled_changed {
-                s.store_disabled_plugins();
+                s.store_disabled_plugins_in(&turn);
             }
             json!({"folder": folder, "loaded": r.loaded, "failed": r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>()})
         }
@@ -1050,6 +1170,9 @@ fn set_enabled(s: &mut Session, p: &Value) -> Result<Value> {
         (None, None) => return Err(bad(C, "give `id` or `file` (see plugin.safeMode)")),
     };
     let items: Vec<&safe_mode::Item> = std::iter::once(&item).chain(stored.as_ref()).collect();
+    // The list is changed and saved in one turn on the plug-in store, so that an install in another
+    // process doesn't change the store in between.
+    let turn = s.plugin_store_turn().ok();
     if enabled && !safe_mode::disabled().iter().any(|i| items.iter().any(|item| i.same(item))) {
         return Err(bad(C, "that plug-in isn't disabled (see plugin.safeMode)"));
     }
@@ -1059,7 +1182,7 @@ fn set_enabled(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Without a plug-in folder (a session confined to automation roots), or when the list there
     // can't take the change, the change stays in this process and goes with the next change that saves.
-    let saved = !changed || s.store_disabled_plugins();
+    let saved = !changed || turn.as_ref().is_some_and(|turn| s.store_disabled_plugins_in(turn));
     Ok(json!({"changed": changed, "saved": saved, "disabled": safe_mode::disabled().iter().map(shown_item).collect::<Vec<_>>()}))
 }
 
@@ -1074,29 +1197,35 @@ fn info(_: &mut Session, p: &Value) -> Result<Value> {
 
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let id = str_param(p, "id").ok_or_else(|| bad("plugin.remove", "missing `id`"))?;
+    // An install in another session or process finishes its store writes first. When the store
+    // can't be locked, nothing is removed.
+    let _held = hold_plugin_changes();
+    let turn = s
+        .plugin_store_turn()
+        .map_err(|e| EngineError::Other(format!("plugin.remove: {}: {e}: nothing was removed", crate::store::STORE_NOT_LOCKED)))?;
     let installed = registry::get(id).is_some();
     // Settings and cache the store keeps for an id that isn't installed are deleted too.
     let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
     // Installed again, it asks again. A grant that can't be removed still approves the module, and
     // so may a grants file that can't be opened or read. One that is too large or doesn't hold a
     // list approves nothing and doesn't stop the removal.
-    let forget = || s.store_grant(id, None) || !s.holds_plugin_grant(id);
+    let forget = || s.store_grant_in(&turn, id, None) || !s.holds_plugin_grant(id);
     // Its settings and cache are moved aside and its grant removed before anything is deleted: when
     // either can't be done, the plug-in stays installed, as it was, and a second `plugin.remove`
     // tries again.
     let failed = if installed || stored {
-        s.remove_plugin_storage(id, forget).err().map(|e| e.to_string())
+        s.remove_plugin_storage(&turn, id, forget).err().map(|e| e.to_string())
     } else {
         (!forget()).then(|| crate::store::GRANT_NOT_REMOVED.to_string())
     };
     if let Some(e) = failed {
         if installed {
-            s.attach_plugin_storage(id);
+            s.attach_plugin_storage(&turn, id);
         }
         return Err(EngineError::Other(e));
     }
     registry::revoke(id);
-    s.unstore_plugin(id);
+    s.unstore_plugin(&turn, id);
     if !stored && (!installed || !registry::remove(id)) {
         return Err(err(vectorcraft_plugins::Error::NotFound(id.into())));
     }
@@ -1156,7 +1285,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
+            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session (with a plug-in store, the install waits while another window or process changes the store and writes the module and its grant before that window or process changes it again; when the store's disabled.lock can't be locked, nothing is installed) (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
             always,
             install
         ),
@@ -1174,7 +1303,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it; it waits while another window or process changes the plug-in store, and when the store's disabled.lock can't be locked, the command fails and nothing is removed → {removed}",
             always,
             remove
         ),

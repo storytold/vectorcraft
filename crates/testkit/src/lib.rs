@@ -85,6 +85,41 @@ pub fn temp_dir(tag: &str) -> std::path::PathBuf {
     dir
 }
 
+/// A test's own temporary directory, removed with everything in it when dropped, also when the
+/// test panics. [`temp_dir`] makes it, with the same checks, under a tag no other `TempDir` in this
+/// process uses, so tests running alongside never share one. A removal that fails (a file still
+/// held open) is ignored; the next process with the same id empties the directory before use.
+pub struct TempDir(std::path::PathBuf);
+
+impl TempDir {
+    /// A new empty directory `vectorcraft-testkit-<tag>-<n>-<process id>` in the system temporary
+    /// folder, where `n` counts the `TempDir`s made in this process.
+    pub fn new(tag: &str) -> Self {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self(temp_dir(&format!("{tag}-{n}")))
+    }
+}
+
+impl std::ops::Deref for TempDir {
+    type Target = std::path::PathBuf;
+    fn deref(&self) -> &std::path::PathBuf {
+        &self.0
+    }
+}
+
+impl AsRef<std::path::Path> for TempDir {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 /// How many shapes an SVG draws: its `<path>` elements and the basic shapes SVG export writes
 /// simple shapes as (`<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`).
 pub fn svg_shapes(svg: &str) -> usize {
@@ -133,5 +168,41 @@ mod tests {
         std::fs::write(dir.join("mine.txt"), b"this process").unwrap();
         assert!(super::temp_dir(tag).join("mine.txt").is_file(), "a later call keeps this process's files");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_test_dir_is_removed_with_its_contents_when_dropped() {
+        let dir = super::TempDir::new("dropped");
+        let path = dir.to_path_buf();
+        std::fs::create_dir_all(path.join("nested")).unwrap();
+        std::fs::write(path.join("nested").join("a.txt"), b"a").unwrap();
+        drop(dir);
+        assert!(!path.exists(), "{} is left", path.display());
+    }
+
+    #[test]
+    fn a_test_dir_is_removed_when_its_test_panics() {
+        let mut path = None;
+        let r = super::catch_quiet::<()>(|| {
+            let dir = super::TempDir::new("panicked");
+            std::fs::write(dir.join("a.txt"), b"a").unwrap();
+            path = Some(dir.to_path_buf());
+            panic!("the test fails");
+        });
+        assert_eq!(r.err().as_deref(), Some("the test fails"));
+        let path = path.unwrap();
+        assert!(!path.exists(), "{} is left", path.display());
+    }
+
+    #[test]
+    fn test_dirs_with_one_tag_are_separate_and_private() {
+        let (a, b) = (super::TempDir::new("shared-tag"), super::TempDir::new("shared-tag"));
+        assert_ne!(*a, *b);
+        std::fs::write(a.join("a.txt"), b"a").unwrap();
+        assert_eq!(std::fs::read_dir(&*b).unwrap().count(), 0, "one test's files are not in another's directory");
+        #[cfg(unix)]
+        assert_eq!(std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(&*a).unwrap().permissions()) & 0o777, 0o700);
+        drop(a);
+        assert!(b.is_dir(), "dropping one leaves the other");
     }
 }

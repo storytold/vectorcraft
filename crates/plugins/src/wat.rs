@@ -127,11 +127,31 @@ const NEEDLE_AT: usize = 0x8000;
 /// its input unchanged otherwise. A live effect made from it draws one shape or the other, so a
 /// test sees from the geometry whether the host handed the plug-in something.
 pub fn when_given(manifest: &str, given: Given, needle: &str, output: &str) -> String {
+    given_or(manifest, given, needle, output, None)
+}
+
+/// A plug-in that returns `output` when what it is given (`given`) holds the text `needle`, and
+/// `otherwise` when it does not.
+pub fn when_given_else(manifest: &str, given: Given, needle: &str, output: &str, otherwise: &str) -> String {
+    given_or(manifest, given, needle, output, Some(otherwise))
+}
+
+/// [`when_given`], returning `otherwise` in place of the input when it is given.
+fn given_or(manifest: &str, given: Given, needle: &str, output: &str, otherwise: Option<&str>) -> String {
     let (src, len) = match given {
         Given::Input => ("$in", "$il"),
         Given::Params => ("$pp", "$pl"),
     };
     let n = needle.len();
+    // `otherwise` sits right after `output`.
+    let other_at = OUTPUT_AT + output.len();
+    let (none, other) = match otherwise {
+        Some(o) => (
+            format!("(i64.or (i64.shl (i64.const {}) (i64.const 32)) (i64.const {other_at}))", o.len()),
+            format!(r#" (data (i32.const {other_at}) "{}")"#, string(o)),
+        ),
+        None => (ECHO.to_string(), String::new()),
+    };
     // For each place `$i` the needle fits, compare it byte by byte (`$j`).
     let run = format!(
         r#"(local $i i32) (local $j i32)
@@ -149,12 +169,13 @@ pub fn when_given(manifest: &str, given: Given, needle: &str, output: &str) -> S
               (br $cmp)))
           (local.set $i (i32.add (local.get $i) (i32.const 1)))
           (br $at)))
-      (return {ECHO}))
+      (return {none}))
     (i64.or (i64.shl (i64.const {out}) (i64.const 32)) (i64.const {OUTPUT_AT}))"#,
         out = output.len(),
     );
-    let extra = format!(r#"(data (i32.const {NEEDLE_AT}) "{}") (data (i32.const {OUTPUT_AT}) "{}")"#, string(needle), string(output));
-    module(manifest, &run, &extra, (OUTPUT_AT + output.len()).div_ceil(0x1_0000) as u32 + 1)
+    let extra = format!(r#"(data (i32.const {NEEDLE_AT}) "{}") (data (i32.const {OUTPUT_AT}) "{}"){other}"#, string(needle), string(output));
+    let end = other_at + otherwise.map_or(0, str::len);
+    module(manifest, &run, &extra, end.div_ceil(0x1_0000) as u32 + 1)
 }
 
 /// The manifest of a test plug-in `id` of `kind` with `params` (a JSON object of specs).

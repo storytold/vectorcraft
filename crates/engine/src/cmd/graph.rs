@@ -37,16 +37,19 @@ use axis::{nice_axis, tick_values};
 #[cfg(test)]
 use columns::{fill_totals, total_text};
 pub use commands::specs;
-pub(crate) use data::apply_csv;
+pub(crate) use data::{apply_csv, parse_csv};
 #[cfg(test)]
-use data::{fmt_value, parse_csv, to_csv};
+use data::{fmt_value, to_csv};
+pub(crate) use edit::{graphs_holding, keep_placed};
 #[cfg(test)]
 use generate::generate;
 #[cfg(test)]
 use series::default_series_color;
 pub(crate) use series::{
-    capture_label_anti_alias, capture_label_paragraphs, capture_label_styles, capture_series_object_opacity, capture_series_opacity,
-    capture_series_paints, capture_series_top_paints, paint_targets, series_object_opacity_differs, shown_paint,
+    LabelTextChange, capture_label_anti_alias, capture_label_changes, capture_label_object_opacity, capture_label_paragraphs, capture_label_rows,
+    capture_label_styles, capture_label_text, capture_series_object_opacity, capture_series_opacity, capture_series_top_paints, is_design_art,
+    label_object_opacity_differs, labels_in, paint_targets, series_group_marks, series_group_marks_where, series_groups_among, series_marks_in,
+    series_object_opacity_differs, shown_paint,
 };
 
 #[cfg(test)]

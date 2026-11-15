@@ -7,6 +7,7 @@
 //! each new node, name, reference or output unit is charged to the heap before it is made.
 
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 use std::rc::Rc;
 
 use crate::LimitKind;
@@ -18,7 +19,7 @@ use crate::heap::{
     XmlListData, XmlName, XmlNode, XmlNs, key, string_bytes,
 };
 use crate::interp::{Abrupt, ErrorType, HeldBytes, Interp, JsResult};
-use crate::string_builtins::{UNITS_PER_FUEL, flat_charged};
+use crate::string_builtins::{UNITS_PER_FUEL, flat_charged, push_held, reserve_units};
 use crate::value::{Str, Value, index_key};
 
 fn parser_units(s: &str) -> Vec<u16> {
@@ -295,26 +296,40 @@ fn name_bytes(n: &XmlName) -> usize {
     string_bytes(n.local.len()) + n.uri.as_ref().map_or(0, |u| string_bytes(u.len())) + n.prefix.as_ref().map_or(0, |p| string_bytes(p.len()))
 }
 
-/// The namespace `stack` declares for `uri`, nearest first, skipping prefixes redeclared nearer.
-/// `prefer` picks that prefix when several match; `need_prefix` rejects the default namespace.
-fn ns_lookup(stack: &[XmlNs], uri: &Key, prefer: Option<&Key>, need_prefix: bool) -> Option<XmlNs> {
-    let mut seen: HashSet<&[u16]> = HashSet::new();
-    let mut best = None;
-    for ns in stack.iter().rev() {
-        let Some(p) = &ns.prefix else { continue };
-        if !seen.insert(p) {
-            continue;
-        }
-        if ns.uri == *uri && !(need_prefix && p.is_empty()) {
-            if prefer == Some(p) {
-                return Some(ns.clone());
-            }
-            if best.is_none() {
-                best = Some(ns.clone());
-            }
-        }
+/// Inserts `item` into `set`, first holding an upper estimate of the bytes of the set's new table
+/// when it must grow. Returns whether `item` was new.
+fn insert_held<T: Eq + Hash>(interp: &mut Interp, held: &mut HeldBytes, set: &mut HashSet<T>, item: T) -> JsResult<bool> {
+    if set.len() == set.capacity() && !set.contains(&item) {
+        let more = set.capacity().max(4);
+        held.add(interp, more.saturating_mul(size_of::<T>() + 1).saturating_mul(16) / 7)?;
+        set.reserve(more);
     }
-    best
+    Ok(set.insert(item))
+}
+
+/// Makes room in `list` for `more` items, first holding the bytes of its new capacity when it must
+/// grow. The capacity at least doubles, as a push's would.
+fn reserve_held<T>(interp: &mut Interp, held: &mut HeldBytes, list: &mut Vec<T>, more: usize) -> JsResult<()> {
+    if list.capacity() - list.len() < more {
+        let cap = list.len().saturating_add(more).max(list.capacity().saturating_mul(2));
+        held.add(interp, (cap - list.capacity()).saturating_mul(size_of::<T>()))?;
+        list.reserve_exact(cap - list.len());
+    }
+    Ok(())
+}
+
+/// The number `n` of a prefix written `ns<n>` in decimal without leading zeros, as
+/// [`Interp::fresh_prefix`] makes them.
+fn prefix_number(prefix: &[u16]) -> Option<usize> {
+    let digits = prefix.strip_prefix(&[u16::from(b'n'), u16::from(b's')])?;
+    let (&first, _) = digits.split_first()?;
+    if digits.len() > 9 || (first == u16::from(b'0') && digits.len() > 1) {
+        return None;
+    }
+    digits.iter().try_fold(0usize, |n, &c| {
+        let d = c.checked_sub(u16::from(b'0')).filter(|d| *d < 10)?;
+        Some(n * 10 + usize::from(d))
+    })
 }
 
 fn prefix_in_scope<'a>(stack: &'a [XmlNs], prefix: &[u16]) -> Option<&'a XmlNs> {
@@ -343,18 +358,6 @@ pub(crate) fn xml_name_writable(name: &XmlName, attribute: bool) -> bool {
 
 fn units_are(units: &[u16], text: &str) -> bool {
     units.iter().copied().eq(text.encode_utf16())
-}
-
-/// A prefix no entry of `stack` uses.
-fn fresh_prefix(stack: &[XmlNs]) -> Key {
-    let mut n = 0u32;
-    loop {
-        let candidate = key(&format!("ns{n}"));
-        if prefix_in_scope(stack, &candidate).is_none() {
-            return candidate;
-        }
-        n += 1;
-    }
 }
 
 /// One open element while serializing.
@@ -579,13 +582,16 @@ impl Interp {
 
     // ---- names ----
 
-    fn name_from_string(&mut self, s: &[u16]) -> JsResult<NameRef> {
+    /// The name `s` gives: an attribute name after `@`, which is copied after its units are
+    /// reserved, and otherwise an element name that shares `s`.
+    fn name_from_string(&mut self, s: &Key) -> JsResult<NameRef> {
         if let Some((&0x40, rest)) = s.split_first() {
             let uri = if rest == STAR { None } else { Some(Rc::from(Vec::new())) };
+            reserve_units(self, rest.len())?;
             return Ok(NameRef { uri, local: Rc::from(rest), attribute: true });
         }
-        let uri = if s == STAR { None } else { Some(self.xml_default_uri()?) };
-        Ok(NameRef { uri, local: Rc::from(s), attribute: false })
+        let uri = if **s == *STAR { None } else { Some(self.xml_default_uri()?) };
+        Ok(NameRef { uri, local: s.clone(), attribute: false })
     }
 
     /// ToXMLName, with a canonical array index read as a position (ECMA-357 section 10.6).
@@ -593,7 +599,7 @@ impl Interp {
         match k {
             Value::Number(n) if *n >= 0.0 && n.fract() == 0.0 && *n < 4_294_967_295.0 => Ok(Access::Index(*n as u32)),
             Value::String(s) => {
-                let flat = s.flat();
+                let flat = flat_charged(self, s)?;
                 if let Some(i) = canonical_index(&flat) {
                     return Ok(Access::Index(i));
                 }
@@ -603,7 +609,8 @@ impl Interp {
                 if let Some(Class::QName { name, attribute, .. }) = self.heap.object(*o).map(|ob| &ob.class) {
                     return Ok(Access::Name(NameRef { uri: name.uri.clone(), local: name.local.clone(), attribute: *attribute }));
                 }
-                let s = self.to_str(k)?.flat();
+                let s = self.to_str(k)?;
+                let s = flat_charged(self, &s)?;
                 if let Some(i) = canonical_index(&s) {
                     return Ok(Access::Index(i));
                 }
@@ -787,31 +794,33 @@ impl Interp {
         if n.attribute {
             let count = self.xml_node(x)?.attrs.len();
             self.xml_take_fuel(count)?;
-            let attrs = std::mem::take(&mut self.xml_node_mut(x)?.attrs);
-            let mut kept = Vec::with_capacity(attrs.len());
-            for a in attrs {
+            let mut kept = 0;
+            for k in 0..count {
+                let Some(a) = self.xml_node(x)?.attrs.get(k).copied() else { break };
                 let hit = self.xml_node(a)?.name.as_ref().is_some_and(|q| n.matches(q));
                 if hit {
                     self.xml_node_mut(a)?.parent = None;
                 } else {
-                    kept.push(a);
+                    self.xml_node_mut(x)?.attrs.swap(kept, k);
+                    kept += 1;
                 }
             }
-            self.xml_node_mut(x)?.attrs = kept;
+            self.xml_node_mut(x)?.attrs.truncate(kept);
             return Ok(());
         }
         let count = self.children_len(x)?;
         self.xml_take_fuel(count)?;
-        let children = std::mem::take(&mut self.xml_node_mut(x)?.children);
-        let mut kept = Vec::with_capacity(children.len());
-        for c in children {
+        let mut kept = 0;
+        for k in 0..count {
+            let Some(c) = self.child_at(x, k)? else { break };
             if n.matches_child(self.xml_node(c)?) {
                 self.xml_node_mut(c)?.parent = None;
             } else {
-                kept.push(c);
+                self.xml_node_mut(x)?.children.swap(kept, k);
+                kept += 1;
             }
         }
-        self.xml_node_mut(x)?.children = kept;
+        self.xml_node_mut(x)?.children.truncate(kept);
         Ok(())
     }
 
@@ -939,7 +948,7 @@ impl Interp {
             self.use_fuel()?;
             cur = self.xml_node(a)?.parent;
         }
-        let height = self.node_height(v)?;
+        let height = self.rooted(&[Value::Object(x), Value::Object(v)], |i| i.node_height(v))?;
         if depth.saturating_add(height) > self.options.max_depth {
             return Err(Abrupt::Limit(LimitKind::Heap));
         }
@@ -971,7 +980,9 @@ impl Interp {
 
     /// The levels of the tree at `root`, counting it.
     fn node_height(&mut self, root: ObjId) -> JsResult<usize> {
-        let mut stack = vec![(root, 0usize)];
+        let mut held = HeldBytes::new(self);
+        let mut stack = Vec::new();
+        push_held(self, &mut held, &mut stack, (root, 0usize))?;
         let mut height = 1;
         while let Some(&(node, next)) = stack.last() {
             self.use_fuel()?;
@@ -980,7 +991,7 @@ impl Interp {
                     if let Some(top) = stack.last_mut() {
                         top.1 += 1;
                     }
-                    stack.push((c, 0));
+                    push_held(self, &mut held, &mut stack, (c, 0))?;
                     height = height.max(stack.len());
                 }
                 None => {
@@ -1049,19 +1060,22 @@ impl Interp {
     }
 
     /// Takes the fuel and heap to put every item of `l` under `x` and returns the nodes to place,
-    /// from [`Self::child_for_item`]. The tree does not change here, so a limit leaves it as it
-    /// was.
-    fn reserve_list_insert(&mut self, x: ObjId, l: ObjId) -> JsResult<Vec<ObjId>> {
+    /// from [`Self::child_for_item`], with the hold on the list of them, which the caller keeps
+    /// until they are placed. The tree does not change here, so a limit leaves it as it was.
+    fn reserve_list_insert(&mut self, x: ObjId, l: ObjId) -> JsResult<(Vec<ObjId>, HeldBytes)> {
+        let count = self.list_len(l)?;
+        let roots = [Value::Object(x), Value::Object(l)];
+        let mut held = HeldBytes::new(self);
+        self.rooted(&roots, |i| held.add(i, size_of::<ObjId>().saturating_mul(count)))?;
         let mut items = self.xml_list(l)?.items.clone();
         let bytes = XML_REF_BYTES.saturating_mul(items.len());
-        let roots = [Value::Object(x), Value::Object(l)];
         self.rooted(&roots, |i| i.xml_charge(bytes))?;
         let len = self.children_len(x)?;
         for (j, item) in items.iter_mut().enumerate() {
             *item = self.child_for_item(*item, &roots)?;
             self.place_fuel(len + j, *item)?;
         }
-        Ok(items)
+        Ok((items, held))
     }
 
     /// Puts `items` at `at` in order, after [`Self::reserve_list_insert`].
@@ -1100,7 +1114,7 @@ impl Interp {
                 self.insert_node(x, at, *v)?;
             }
             Content::List(l) => {
-                let items = self.reserve_list_insert(x, *l)?;
+                let (items, _held) = self.reserve_list_insert(x, *l)?;
                 self.place_children(x, at, &items)?;
             }
         }
@@ -1152,7 +1166,7 @@ impl Interp {
             }
             Content::List(l) => {
                 self.check_attach(x, c)?;
-                let items = self.reserve_list_insert(x, *l)?;
+                let (items, _held) = self.reserve_list_insert(x, *l)?;
                 let len = self.children_len(x)?;
                 self.xml_text_fuel(len)?;
                 if at < len {
@@ -1229,7 +1243,8 @@ impl Interp {
                     s.push_units(self, &[SPACE])?;
                 }
                 let Some(item) = self.list_at(*l, i)? else { break };
-                let text = self.node_to_str(item)?.flat();
+                let text = self.node_to_str(item)?;
+                let text = flat_charged(self, &text)?;
                 s.push_units(self, &text)?;
             }
             let Value::String(s) = s.finish(self) else { return Err(Abrupt::Internal("not a string".into())) };
@@ -1240,9 +1255,9 @@ impl Interp {
         let mut found = None;
         let count = self.xml_node(x)?.attrs.len();
         self.xml_take_fuel(count)?;
-        let attrs = std::mem::take(&mut self.xml_node_mut(x)?.attrs);
-        let mut kept = Vec::with_capacity(attrs.len());
-        for a in attrs {
+        let mut kept = 0;
+        for k in 0..count {
+            let Some(a) = self.xml_node(x)?.attrs.get(k).copied() else { break };
             let hit = self.xml_node(a)?.name.as_ref().is_some_and(|q| n.matches(q));
             if hit && found.is_some() {
                 self.xml_node_mut(a)?.parent = None;
@@ -1250,10 +1265,11 @@ impl Interp {
                 if hit {
                     found = Some(a);
                 }
-                kept.push(a);
+                self.xml_node_mut(x)?.attrs.swap(kept, k);
+                kept += 1;
             }
         }
-        self.xml_node_mut(x)?.attrs = kept;
+        self.xml_node_mut(x)?.attrs.truncate(kept);
         if let Some(a) = found {
             self.xml_node_mut(a)?.value = value;
             return Ok(());
@@ -1280,11 +1296,13 @@ impl Interp {
         }
         let len = self.children_len(x)?;
         self.xml_take_fuel(len)?;
+        self.xml_keep(x);
+        let mut held = HeldBytes::new(self);
         let mut matches = Vec::new();
         for k in 0..len {
             let Some(child) = self.child_at(x, k)? else { break };
             if n.matches_child(self.xml_node(child)?) {
-                matches.push(child);
+                push_held(self, &mut held, &mut matches, child)?;
             }
         }
         match c {
@@ -1378,6 +1396,8 @@ impl Interp {
 
     /// The steps of [`Self::resolve_value`], setting `created` to the first element they add.
     fn resolve_value_adding(&mut self, x: ObjId, created: &mut Option<ObjId>) -> JsResult<Option<ObjId>> {
+        self.xml_keep(x);
+        let mut held = HeldBytes::new(self);
         let mut chain = Vec::new();
         let mut cur = x;
         let base = loop {
@@ -1391,7 +1411,7 @@ impl Interp {
             if *name.local == *STAR {
                 return Ok(None);
             }
-            chain.push(l);
+            push_held(self, &mut held, &mut chain, l)?;
             cur = target;
         };
         let mut base = base;
@@ -1615,6 +1635,9 @@ impl Interp {
                     Some(parent) => self.index_in_parent(parent, item)?.map(|q| (parent, q)),
                     None => None,
                 };
+                let count = self.list_len(c)?;
+                let mut held = HeldBytes::new(self);
+                self.rooted(&[Value::Object(x), Value::Object(c)], |i| held.add(i, size_of::<ObjId>().saturating_mul(count)))?;
                 let mut items = self.xml_list(c)?.items.clone();
                 if place.is_some() {
                     let roots = [Value::Object(x), Value::Object(c)];
@@ -1682,6 +1705,8 @@ impl Interp {
     // ---- copies ----
 
     fn copy_shallow(&mut self, src: ObjId, parent: Option<ObjId>) -> JsResult<ObjId> {
+        let declared = self.xml_node(src)?.ns.len();
+        self.xml_charge(XML_NS_BYTES.saturating_mul(declared))?;
         let node = self.xml_node(src)?;
         let copy = XmlNode {
             kind: node.kind,
@@ -1692,11 +1717,11 @@ impl Interp {
             children: Vec::new(),
             ns: node.ns.clone(),
         };
-        let attrs = node.attrs.clone();
-        self.xml_charge(XML_NS_BYTES.saturating_mul(copy.ns.len()))?;
         let c = self.new_xml_node(copy)?;
         self.xml_keep(c);
-        for a in attrs {
+        let mut k = 0;
+        while let Some(a) = self.xml_node(src)?.attrs.get(k).copied() {
+            k += 1;
             self.use_fuel()?;
             let n = self.xml_node(a)?;
             let attr = XmlNode {
@@ -1721,7 +1746,9 @@ impl Interp {
             let top = i.copy_shallow(root, None)?;
             i.xml_keep(top);
             let mark = i.temp_roots.len();
-            let mut stack = vec![(root, top, 0usize)];
+            let mut held = HeldBytes::new(i);
+            let mut stack = Vec::new();
+            push_held(i, &mut held, &mut stack, (root, top, 0usize))?;
             while let Some(&(src, dst, next)) = stack.last() {
                 i.use_fuel()?;
                 i.temp_roots.truncate(mark);
@@ -1733,7 +1760,7 @@ impl Interp {
                         let c = i.copy_shallow(child, Some(dst))?;
                         i.xml_charge_link(c)?;
                         i.xml_node_mut(dst)?.children.push(c);
-                        stack.push((child, c, 0));
+                        push_held(i, &mut held, &mut stack, (child, c, 0))?;
                     }
                     None => {
                         stack.pop();
@@ -1778,9 +1805,18 @@ impl Interp {
 
     // ---- comparison ----
 
+    /// The namespace, local name and value of the attribute `id`, flattening a value that is a
+    /// rope with [`flat_charged`].
+    fn attr_key(&mut self, id: ObjId) -> JsResult<(Option<Key>, Key, Key)> {
+        let n = self.xml_node(id)?;
+        let name = n.name.as_ref().ok_or_else(|| Abrupt::Internal("attribute without a name".into()))?;
+        let (uri, local, value) = (name.uri.clone(), name.local.clone(), n.value.clone());
+        Ok((uri, local, flat_charged(self, &value)?))
+    }
+
     fn same_shallow(&mut self, a: ObjId, b: ObjId) -> JsResult<bool> {
         let (x, y) = (self.xml_node(a)?, self.xml_node(b)?);
-        if x.kind != y.kind || x.attrs.len() != y.attrs.len() || x.children.len() != y.children.len() || x.value.flat() != y.value.flat() {
+        if x.kind != y.kind || x.attrs.len() != y.attrs.len() || x.children.len() != y.children.len() || x.value.len() != y.value.len() {
             return Ok(false);
         }
         match (&x.name, &y.name) {
@@ -1788,26 +1824,25 @@ impl Interp {
             (Some(p), Some(q)) if p.local == q.local && p.uri == q.uri => {}
             _ => return Ok(false),
         }
-        if x.attrs.is_empty() {
+        let (xv, yv) = (x.value.clone(), y.value.clone());
+        if flat_charged(self, &xv)? != flat_charged(self, &yv)? {
+            return Ok(false);
+        }
+        let count = self.xml_node(a)?.attrs.len();
+        if count == 0 {
             return Ok(true);
         }
-        let count = x.attrs.len();
         self.xml_take_fuel(count)?;
         let mut held = HeldBytes::new(self);
         held.add(self, ATTR_COUNT_BYTES.saturating_mul(count))?;
-        let (x, y) = (self.xml_node(a)?, self.xml_node(b)?);
-        let (xa, ya) = (x.attrs.clone(), y.attrs.clone());
         let mut counts: HashMap<(Option<Key>, Key, Key), usize> = HashMap::new();
-        let attr_key = |i: &Self, id: ObjId| -> JsResult<(Option<Key>, Key, Key)> {
-            let n = i.xml_node(id)?;
-            let name = n.name.as_ref().ok_or_else(|| Abrupt::Internal("attribute without a name".into()))?;
-            Ok((name.uri.clone(), name.local.clone(), n.value.flat()))
-        };
-        for a in xa {
-            *counts.entry(attr_key(self, a)?).or_default() += 1;
+        for k in 0..count {
+            let Some(id) = self.xml_node(a)?.attrs.get(k).copied() else { break };
+            *counts.entry(self.attr_key(id)?).or_default() += 1;
         }
-        for b in ya {
-            match counts.get_mut(&attr_key(self, b)?) {
+        for k in 0..count {
+            let Some(id) = self.xml_node(b)?.attrs.get(k).copied() else { break };
+            match counts.get_mut(&self.attr_key(id)?) {
                 Some(n) if *n > 0 => *n -= 1,
                 _ => return Ok(false),
             }
@@ -1884,7 +1919,8 @@ impl Interp {
             let (xk, yk) = (self.xml_kind(x)?, self.xml_kind(y)?);
             let textual = |k| matches!(k, XmlKind::Text | XmlKind::Attribute);
             if (textual(xk) && self.node_simple(y)?) || (textual(yk) && self.node_simple(x)?) {
-                return Ok(Some(self.node_to_str(x)?.flat() == self.node_to_str(y)?.flat()));
+                let (s, other) = (self.node_to_str(x)?, self.node_to_str(y)?);
+                return Ok(Some(flat_charged(self, &s)? == flat_charged(self, &other)?));
             }
             return self.node_equals(x, y).map(Some);
         }
@@ -1900,9 +1936,9 @@ impl Interp {
             if let Xv::Node(n) = self.classify(x)
                 && self.node_simple(n)?
             {
-                let s = self.node_to_str(n)?.flat();
-                let other = self.to_str(y)?.flat();
-                return Ok(Some(s == other));
+                let s = self.node_to_str(n)?;
+                let other = self.to_str(y)?;
+                return Ok(Some(flat_charged(self, &s)? == flat_charged(self, &other)?));
             }
         }
         Ok(None)
@@ -1951,7 +1987,9 @@ impl Interp {
 
     /// The nodes under `x` matching `n`, in document order ([[Descendants]], section 9.1.1.8).
     pub(crate) fn node_descendants(&mut self, x: ObjId, n: &NameRef, out: ObjId) -> JsResult<()> {
-        let mut stack = vec![(x, 0usize)];
+        let mut held = HeldBytes::new(self);
+        let mut stack = Vec::new();
+        push_held(self, &mut held, &mut stack, (x, 0usize))?;
         if n.attribute {
             self.collect_matching(x, n, out)?;
         }
@@ -1969,14 +2007,16 @@ impl Interp {
             } else if n.matches_child(self.xml_node(child)?) {
                 self.list_push(out, child)?;
             }
-            stack.push((child, 0));
+            push_held(self, &mut held, &mut stack, (child, 0))?;
         }
         Ok(())
     }
 
     /// Merges adjacent text and removes empty text under `root` (ECMA-357 section 13.4.4.26).
     pub(crate) fn node_normalize(&mut self, root: ObjId) -> JsResult<()> {
-        let mut stack = vec![(root, 0usize)];
+        let mut held = HeldBytes::new(self);
+        let mut stack = Vec::new();
+        push_held(self, &mut held, &mut stack, (root, 0usize))?;
         while let Some(&(x, mut i)) = stack.last() {
             self.use_fuel()?;
             let Some(child) = self.child_at(x, i)? else {
@@ -2010,7 +2050,7 @@ impl Interp {
                 frame.1 = i + 1;
             }
             if kind == XmlKind::Element {
-                stack.push((child, 0));
+                push_held(self, &mut held, &mut stack, (child, 0))?;
             }
         }
         Ok(())
@@ -2032,7 +2072,8 @@ impl Interp {
             let Some(c) = self.child_at(x, i)? else { break };
             let node = self.xml_node(c)?;
             if !matches!(node.kind, XmlKind::Comment | XmlKind::Pi) {
-                let text = node.value.flat();
+                let text = node.value.clone();
+                let text = flat_charged(self, &text)?;
                 out.push_units(self, &text)?;
             }
         }
@@ -2069,7 +2110,8 @@ impl Interp {
             self.use_fuel()?;
             let Some(item) = self.list_at(l, i)? else { break };
             if !matches!(self.xml_kind(item)?, XmlKind::Comment | XmlKind::Pi) {
-                let text = self.node_to_str(item)?.flat();
+                let text = self.node_to_str(item)?;
+                let text = flat_charged(self, &text)?;
                 out.push_units(self, &text)?;
             }
         }
@@ -2107,6 +2149,46 @@ impl Interp {
         out.push_units(self, text.get(from..).unwrap_or_default())
     }
 
+    /// The namespace `stack` declares for `uri`, nearest first, skipping prefixes redeclared nearer.
+    /// `prefer` picks that prefix when several match; `need_prefix` rejects the default namespace.
+    /// The set of prefixes it has passed is held against the heap limit.
+    fn ns_lookup(&mut self, stack: &[XmlNs], uri: &Key, prefer: Option<&Key>, need_prefix: bool) -> JsResult<Option<XmlNs>> {
+        let mut held = HeldBytes::new(self);
+        let mut seen: HashSet<&[u16]> = HashSet::new();
+        let mut best = None;
+        for ns in stack.iter().rev() {
+            let Some(p) = &ns.prefix else { continue };
+            if !insert_held(self, &mut held, &mut seen, &p[..])? {
+                continue;
+            }
+            if ns.uri == *uri && !(need_prefix && p.is_empty()) {
+                if prefer == Some(p) {
+                    return Ok(Some(ns.clone()));
+                }
+                if best.is_none() {
+                    best = Some(ns.clone());
+                }
+            }
+        }
+        Ok(best)
+    }
+
+    /// The first of `ns0`, `ns1`, ... that no entry of `stack` uses. One of the first
+    /// `stack.len() + 1` is free, so one pass over `stack` marks the used ones.
+    fn fresh_prefix(&mut self, stack: &[XmlNs]) -> JsResult<Key> {
+        self.xml_take_fuel(stack.len() + 1)?;
+        let mut held = HeldBytes::new(self);
+        held.add(self, stack.len() + 1)?;
+        let mut used = vec![false; stack.len() + 1];
+        for ns in stack {
+            if let Some(slot) = ns.prefix.as_deref().and_then(prefix_number).and_then(|n| used.get_mut(n)) {
+                *slot = true;
+            }
+        }
+        let n = used.iter().position(|u| !u).unwrap_or(stack.len());
+        Ok(key(&format!("ns{n}")))
+    }
+
     /// Picks the prefix of a name in `scope`, adding a declaration to `scope` when none is there.
     fn out_prefix(&mut self, name: &XmlName, scope: &mut Vec<XmlNs>, attribute: bool) -> JsResult<Key> {
         self.xml_take_fuel(scope.len() + 1)?;
@@ -2122,13 +2204,13 @@ impl Interp {
         if *uri == *key(XML_URI) {
             return Ok(key("xml"));
         }
-        if let Some(ns) = ns_lookup(scope, &uri, name.prefix.as_ref(), attribute) {
+        if let Some(ns) = self.ns_lookup(scope, &uri, name.prefix.as_ref(), attribute)? {
             return Ok(ns.prefix.unwrap_or(empty));
         }
         let prefix = match &name.prefix {
             Some(p) if !(attribute && p.is_empty()) && prefix_in_scope(scope, p).is_none() => p.clone(),
             _ if !attribute && prefix_in_scope(scope, &empty).is_none() => empty,
-            _ => fresh_prefix(scope),
+            _ => self.fresh_prefix(scope)?,
         };
         self.xml_charge(XML_NS_BYTES)?;
         scope.push(XmlNs { prefix: Some(prefix.clone()), uri });
@@ -2143,8 +2225,7 @@ impl Interp {
         out.push_units(self, local)
     }
 
-    /// Writes `x`; an element with children is left open on `stack`.
-    #[allow(clippy::too_many_arguments)]
+    /// Writes `x`, and returns the frame of an element with children, which is left open.
     fn write_enter(
         &mut self,
         out: &mut Builder,
@@ -2153,11 +2234,11 @@ impl Interp {
         settings: &Settings,
         pretty: bool,
         scope: &mut Vec<XmlNs>,
-        stack: &mut Vec<OutFrame>,
-    ) -> JsResult<()> {
+    ) -> JsResult<Option<OutFrame>> {
         self.use_fuel()?;
         let node = self.xml_node(x)?;
-        let (kind, value) = (node.kind, node.value.flat());
+        let (kind, value) = (node.kind, node.value.clone());
+        let value = flat_charged(self, &value)?;
         self.xml_text_fuel(value.len())?;
         if pretty {
             out.push_repeated(self, &[SPACE], indent)?;
@@ -2165,13 +2246,18 @@ impl Interp {
         match kind {
             XmlKind::Text => {
                 let trimmed: &[u16] = if pretty { trim_xml_space(&value) } else { &value };
-                return self.write_escaped(out, trimmed, false);
+                self.write_escaped(out, trimmed, false)?;
+                return Ok(None);
             }
-            XmlKind::Attribute => return self.write_escaped(out, &value, true),
+            XmlKind::Attribute => {
+                self.write_escaped(out, &value, true)?;
+                return Ok(None);
+            }
             XmlKind::Comment => {
                 out.push_str(self, "<!--")?;
                 out.push_units(self, &value)?;
-                return out.push_str(self, "-->");
+                out.push_str(self, "-->")?;
+                return Ok(None);
             }
             XmlKind::Pi => {
                 let target = self.xml_node(x)?.name.as_ref().map(|n| n.local.clone()).unwrap_or_else(|| Rc::from(Vec::new()));
@@ -2179,47 +2265,46 @@ impl Interp {
                 out.push_units(self, &target)?;
                 out.push_units(self, &[SPACE])?;
                 out.push_units(self, &value)?;
-                return out.push_str(self, "?>");
+                out.push_str(self, "?>")?;
+                return Ok(None);
             }
             XmlKind::Element => {}
         }
         let ns_mark = scope.len();
         let node = self.xml_node(x)?;
-        let declared = node.ns.clone();
-        let attrs = node.attrs.clone();
+        let declared = node.ns.len();
         let name = node.name.clone().ok_or_else(|| Abrupt::Internal("element without a name".into()))?;
-        self.xml_take_fuel(declared.len().saturating_mul(scope.len() + 1))?;
-        let mut unnamed = Vec::new();
-        for ns in declared {
-            if ns.prefix.is_none() {
-                unnamed.push(ns);
-            } else if !scope.iter().any(|a| a.uri == ns.uri && a.prefix == ns.prefix) {
-                self.xml_charge(XML_NS_BYTES)?;
-                scope.push(ns);
-            }
-        }
-        for ns in unnamed {
-            if !scope.iter().any(|a| a.uri == ns.uri) {
-                let prefix = fresh_prefix(scope);
-                self.xml_charge(XML_NS_BYTES)?;
-                scope.push(XmlNs { prefix: Some(prefix), uri: ns.uri });
+        self.xml_take_fuel(declared.saturating_mul(scope.len() + 1))?;
+        for unnamed in [false, true] {
+            let mut k = 0;
+            while let Some(ns) = self.xml_node(x)?.ns.get(k).cloned() {
+                k += 1;
+                if ns.prefix.is_none() != unnamed {
+                    continue;
+                }
+                if !unnamed && !scope.iter().any(|a| a.uri == ns.uri && a.prefix == ns.prefix) {
+                    self.xml_charge(XML_NS_BYTES)?;
+                    scope.push(ns);
+                } else if unnamed && !scope.iter().any(|a| a.uri == ns.uri) {
+                    let prefix = self.fresh_prefix(scope)?;
+                    self.xml_charge(XML_NS_BYTES)?;
+                    scope.push(XmlNs { prefix: Some(prefix), uri: ns.uri });
+                }
             }
         }
         let prefix = self.out_prefix(&name, scope, false)?;
-        let mut attr_prefixes = Vec::new();
-        for &a in &attrs {
-            self.use_fuel()?;
-            let an = self.xml_node(a)?.name.clone().ok_or_else(|| Abrupt::Internal("attribute without a name".into()))?;
-            attr_prefixes.push(self.out_prefix(&an, scope, true)?);
-        }
         out.push_units(self, &[LT])?;
         self.write_name(out, &prefix, &name.local)?;
-        for (&a, attr_prefix) in attrs.iter().zip(&attr_prefixes) {
-            let an = self.xml_node(a)?;
-            let local = an.name.as_ref().map(|q| q.local.clone()).unwrap_or_else(|| Rc::from(Vec::new()));
-            let value = an.value.flat();
+        let mut k = 0;
+        while let Some(a) = self.xml_node(x)?.attrs.get(k).copied() {
+            k += 1;
+            self.use_fuel()?;
+            let an = self.xml_node(a)?.name.clone().ok_or_else(|| Abrupt::Internal("attribute without a name".into()))?;
+            let attr_prefix = self.out_prefix(&an, scope, true)?;
+            let value = self.xml_node(a)?.value.clone();
+            let value = flat_charged(self, &value)?;
             out.push_units(self, &[SPACE])?;
-            self.write_name(out, attr_prefix, &local)?;
+            self.write_name(out, &attr_prefix, &an.local)?;
             out.push_units(self, &[EQ, DQUOTE])?;
             self.write_escaped(out, &value, true)?;
             out.push_units(self, &[DQUOTE])?;
@@ -2239,7 +2324,8 @@ impl Interp {
         let count = self.children_len(x)?;
         if count == 0 {
             scope.truncate(ns_mark);
-            return out.push_str(self, "/>");
+            out.push_str(self, "/>")?;
+            return Ok(None);
         }
         out.push_units(self, &[GT])?;
         let first_is_text = match self.child_at(x, 0)? {
@@ -2248,14 +2334,17 @@ impl Interp {
         };
         let pretty_children = pretty && (count > 1 || !first_is_text);
         let child_indent = if pretty_children { indent.saturating_add(u64::from(settings.indent)) } else { 0 };
-        stack.push(OutFrame { node: x, next: 0, indent, child_indent, pretty_children, ns_mark, prefix, local: name.local });
-        Ok(())
+        Ok(Some(OutFrame { node: x, next: 0, indent, child_indent, pretty_children, ns_mark, prefix, local: name.local }))
     }
 
+    /// Writes the tree at `root`. Its open elements are held against the heap limit.
     fn write_node(&mut self, out: &mut Builder, root: ObjId, indent: u64, settings: &Settings, pretty: bool) -> JsResult<()> {
         let mut scope: Vec<XmlNs> = Vec::new();
+        let mut held = HeldBytes::new(self);
         let mut stack: Vec<OutFrame> = Vec::new();
-        self.write_enter(out, root, indent, settings, pretty, &mut scope, &mut stack)?;
+        if let Some(frame) = self.write_enter(out, root, indent, settings, pretty, &mut scope)? {
+            push_held(self, &mut held, &mut stack, frame)?;
+        }
         while let Some(frame) = stack.last_mut() {
             let (node, next, child_indent, pretty_children) = (frame.node, frame.next, frame.child_indent, frame.pretty_children);
             frame.next += 1;
@@ -2264,7 +2353,9 @@ impl Interp {
                     if pretty_children {
                         out.push_units(self, &[LF])?;
                     }
-                    self.write_enter(out, child, child_indent, settings, pretty && pretty_children, &mut scope, &mut stack)?;
+                    if let Some(frame) = self.write_enter(out, child, child_indent, settings, pretty && pretty_children, &mut scope)? {
+                        push_held(self, &mut held, &mut stack, frame)?;
+                    }
                 }
                 None => {
                     let Some(frame) = stack.pop() else { break };
@@ -2311,8 +2402,11 @@ impl Interp {
         self.throw(ErrorType::Syntax, message)
     }
 
-    fn decode_into(&mut self, src: &[u16], from: usize, to: usize, out: &mut Vec<u16>, attribute: bool) -> JsResult<()> {
+    /// Decodes `src[from..to]` onto `out`, holding the room it takes in `out` with `held` first. The
+    /// decoded text is never longer than the source.
+    fn decode_into(&mut self, src: &[u16], from: usize, to: usize, out: &mut Vec<u16>, attribute: bool, held: &mut HeldBytes) -> JsResult<()> {
         self.xml_text_fuel(to.saturating_sub(from))?;
+        reserve_held(self, held, out, to.saturating_sub(from))?;
         let mut pos = from;
         while pos < to {
             let Some(&c) = src.get(pos) else { break };
@@ -2427,7 +2521,16 @@ impl Interp {
         Ok(())
     }
 
-    fn flush_text(&mut self, text: &mut Vec<u16>, ignore_whitespace: bool, open: &[ObjId], roots: &mut Vec<ObjId>) -> JsResult<()> {
+    /// Makes a text node of `text`, unless it is empty or ignored white space. Taking the buffer
+    /// releases `text_held`, its hold.
+    fn flush_text(
+        &mut self,
+        text: &mut Vec<u16>,
+        text_held: &mut HeldBytes,
+        ignore_whitespace: bool,
+        open: &[ObjId],
+        roots: &mut Vec<ObjId>,
+    ) -> JsResult<()> {
         if text.is_empty() {
             return Ok(());
         }
@@ -2435,16 +2538,22 @@ impl Interp {
             text.clear();
             return Ok(());
         }
-        let t = self.new_text_node(Str::from_units(std::mem::take(text)), None)?;
+        let value = Str::from_units(std::mem::take(text));
+        *text_held = HeldBytes::new(self);
+        let t = self.new_text_node(value, None)?;
         self.place_parsed(t, open, roots)
     }
 
+    /// Parses the open tag at `src[pos]` and returns the offset after it. An element left open is
+    /// pushed onto `open` and its name onto `names`, both held with `stack_held`. The attributes,
+    /// sets and copies it works with are held until it returns.
     fn parse_open_tag(
         &mut self,
         src: &[u16],
         pos: usize,
         open: &mut Vec<ObjId>,
         names: &mut Vec<(usize, usize)>,
+        stack_held: &mut HeldBytes,
         roots: &mut Vec<ObjId>,
     ) -> JsResult<usize> {
         if open.len() >= self.options.max_depth {
@@ -2455,6 +2564,7 @@ impl Interp {
         let raw_name = src.get(name_start..name_end).unwrap_or_default();
         let (elem_prefix, elem_local) = self.split_name(raw_name)?;
         let mut at = name_end;
+        let mut held = HeldBytes::new(self);
         let mut raw_attrs: Vec<(usize, usize, Vec<u16>)> = Vec::new();
         let closes = loop {
             let before = at;
@@ -2492,27 +2602,31 @@ impl Interp {
                         return Err(self.syntax("'<' cannot appear in an attribute value"));
                     }
                     let mut value = Vec::new();
-                    self.decode_into(src, value_start, value_end, &mut value, true)?;
-                    raw_attrs.push((at, end, value));
+                    self.decode_into(src, value_start, value_end, &mut value, true, &mut held)?;
+                    push_held(self, &mut held, &mut raw_attrs, (at, end, value))?;
                     at = value_end + 1;
                 }
             }
         };
         self.xml_charge(XML_NS_BYTES.saturating_mul(raw_attrs.len()))?;
-        let mut ns: Vec<XmlNs> = Vec::new();
-        let mut seen_decl: HashSet<Vec<u16>> = HashSet::new();
+        let xmlns = key("xmlns");
+        let declares = |raw: &[u16]| raw == &xmlns[..] || raw.strip_prefix(&xmlns[..]).is_some_and(|rest| rest.first() == Some(&COLON));
+        let decls = raw_attrs.iter().filter(|(start, end, _)| declares(src.get(*start..*end).unwrap_or_default())).count();
+        let mut ns: Vec<XmlNs> = Vec::with_capacity(decls);
+        let mut seen_decl: HashSet<&[u16]> = HashSet::new();
         for (start, end, value) in &raw_attrs {
             let raw = src.get(*start..*end).unwrap_or_default();
-            if raw == key("xmlns").as_ref() {
+            if raw == &xmlns[..] {
                 if !ns_binding_allowed(&[], value) {
                     return Err(self.syntax(RESERVED_NS_BINDING));
                 }
-                if !seen_decl.insert(Vec::new()) {
+                if !insert_held(self, &mut held, &mut seen_decl, &[] as &[u16])? {
                     return Err(self.syntax("a namespace is declared twice"));
                 }
+                self.xml_charge(string_bytes(0).saturating_add(string_bytes(value.len())))?;
                 ns.push(XmlNs { prefix: Some(Rc::from(Vec::new())), uri: Rc::from(value.as_slice()) });
             } else if let (Some(p), local) = self.split_name(raw)?
-                && p == key("xmlns").as_ref()
+                && p == &xmlns[..]
             {
                 if value.is_empty() {
                     return Err(self.syntax("a namespace prefix cannot be declared with an empty URI"));
@@ -2520,9 +2634,10 @@ impl Interp {
                 if !ns_binding_allowed(local, value) {
                     return Err(self.syntax(RESERVED_NS_BINDING));
                 }
-                if !seen_decl.insert(local.to_vec()) {
+                if !insert_held(self, &mut held, &mut seen_decl, local)? {
                     return Err(self.syntax("a namespace is declared twice"));
                 }
+                self.xml_charge(string_bytes(local.len()).saturating_add(string_bytes(value.len())))?;
                 ns.push(XmlNs { prefix: Some(Rc::from(local)), uri: Rc::from(value.as_slice()) });
             }
         }
@@ -2547,7 +2662,8 @@ impl Interp {
             ns,
         })?;
         self.place_parsed(element, open, roots)?;
-        let mut unique: HashSet<(Key, Vec<u16>)> = HashSet::new();
+        let mut unique: HashSet<(Key, &[u16])> = HashSet::new();
+        let mut own: Option<Vec<XmlNs>> = None;
         for (start, end, value) in raw_attrs {
             self.use_fuel()?;
             let raw = src.get(start..end).unwrap_or_default();
@@ -2557,15 +2673,19 @@ impl Interp {
             }
             let (auri, stored_prefix): (Key, Key) = match prefix {
                 Some(p) => {
-                    let own = self.xml_node(element)?.ns.clone();
-                    match self.resolve_prefix(p, &own, open)? {
+                    if own.is_none() {
+                        let count = self.xml_node(element)?.ns.len();
+                        held.add(self, size_of::<XmlNs>().saturating_mul(count))?;
+                        own = Some(self.xml_node(element)?.ns.clone());
+                    }
+                    match self.resolve_prefix(p, own.as_deref().unwrap_or_default(), open)? {
                         Some(u) => (u, Rc::from(p)),
                         None => return Err(self.syntax("an XML name uses an undeclared namespace prefix")),
                     }
                 }
                 None => (Rc::from(Vec::new()), Rc::from(Vec::new())),
             };
-            if !unique.insert((auri.clone(), local.to_vec())) {
+            if !insert_held(self, &mut held, &mut unique, (auri.clone(), local))? {
                 return Err(self.type_error("an XML element has two attributes with the same name"));
             }
             let a = self.new_xml_node(XmlNode {
@@ -2581,8 +2701,8 @@ impl Interp {
             self.xml_node_mut(element)?.attrs.push(a);
         }
         if !closes {
-            open.push(element);
-            names.push((name_start, name_end));
+            push_held(self, stack_held, open, element)?;
+            push_held(self, stack_held, names, (name_start, name_end))?;
         }
         Ok(at)
     }
@@ -2605,10 +2725,14 @@ impl Interp {
     }
 
     /// Parses XML text into nodes, kept reachable through the temporary roots until the caller's
-    /// scope ends.
+    /// scope ends. The open elements and their names, the text being gathered and each tag's
+    /// attributes are held as they grow. The allowance held from the source's length covers the
+    /// copy a value's units take as it becomes a string, before the node that holds it is charged.
     pub(crate) fn xml_parse(&mut self, source: &[u16]) -> JsResult<Vec<ObjId>> {
         let mut held = HeldBytes::new(self);
         held.add(self, string_bytes(source.len()).saturating_mul(2))?;
+        let mut stack_held = HeldBytes::new(self);
+        let mut text_held = HeldBytes::new(self);
         let settings = self.xml_settings()?;
         let mut src = source;
         let offset_start = skip_xml_space(src, 0);
@@ -2638,7 +2762,7 @@ impl Interp {
                     self.xml_text_fuel(end - pos)?;
                     return Err(self.syntax("']]>' cannot appear in XML text"));
                 }
-                self.decode_into(src, pos, end, &mut text, false)?;
+                self.decode_into(src, pos, end, &mut text, false, &mut text_held)?;
                 pos = end;
                 continue;
             }
@@ -2650,11 +2774,13 @@ impl Interp {
                 };
                 self.xml_text_fuel(end - pos)?;
                 self.check_units(src, pos + 9, end)?;
-                text.extend_from_slice(src.get(pos + 9..end).unwrap_or_default());
+                let section = src.get(pos + 9..end).unwrap_or_default();
+                reserve_held(self, &mut text_held, &mut text, section.len())?;
+                text.extend_from_slice(section);
                 pos = end + 3;
                 continue;
             }
-            self.flush_text(&mut text, settings.ignore_whitespace, &open, &mut roots)?;
+            self.flush_text(&mut text, &mut text_held, settings.ignore_whitespace, &open, &mut roots)?;
             if rest.starts_with(&parser_units("<!--")) {
                 let Some(end) = Self::find_from(src, pos + 4, &parser_units("--")) else {
                     self.xml_text_fuel(src.len() - pos)?;
@@ -2666,7 +2792,7 @@ impl Interp {
                 }
                 self.check_units(src, pos + 4, end)?;
                 if !settings.ignore_comments {
-                    let value = Str::from_units(src.get(pos + 4..end).unwrap_or_default().to_vec());
+                    let value = Str::from_rc(Rc::from(src.get(pos + 4..end).unwrap_or_default()));
                     let n = self.new_xml_node(XmlNode {
                         kind: XmlKind::Comment,
                         name: None,
@@ -2698,7 +2824,7 @@ impl Interp {
                     while from < end && src.get(from).copied().is_some_and(is_xml_space) {
                         from += 1;
                     }
-                    let value = Str::from_units(src.get(from..end).unwrap_or_default().to_vec());
+                    let value = Str::from_rc(Rc::from(src.get(from..end).unwrap_or_default()));
                     let name = XmlName { uri: Some(Rc::from(Vec::new())), local: Rc::from(target), prefix: None };
                     let n = self.new_xml_node(XmlNode {
                         kind: XmlKind::Pi,
@@ -2715,13 +2841,13 @@ impl Interp {
             } else if rest.get(1) == Some(&SLASH) {
                 pos = self.parse_close_tag(src, pos, &mut open, &mut names)?;
             } else {
-                pos = self.parse_open_tag(src, pos, &mut open, &mut names, &mut roots)?;
+                pos = self.parse_open_tag(src, pos, &mut open, &mut names, &mut stack_held, &mut roots)?;
             }
         }
         if !open.is_empty() {
             return Err(self.syntax("an XML element is not closed"));
         }
-        self.flush_text(&mut text, settings.ignore_whitespace, &open, &mut roots)?;
+        self.flush_text(&mut text, &mut text_held, settings.ignore_whitespace, &open, &mut roots)?;
         Ok(roots)
     }
 
@@ -2752,7 +2878,8 @@ impl Interp {
                 (name.uri.clone(), name.local.clone())
             }
             v => {
-                let local = self.to_str(v)?.flat();
+                let local = self.to_str(v)?;
+                let local = flat_charged(self, &local)?;
                 let uri = if *local == *STAR {
                     None
                 } else if attribute {
@@ -2770,9 +2897,15 @@ impl Interp {
                 Value::Object(o) => match self.heap.object(*o).map(|ob| &ob.class) {
                     Some(Class::Namespace(ns)) => Some(ns.uri.clone()),
                     Some(Class::QName { name, .. }) => name.uri.clone(),
-                    _ => Some(self.to_str(&q)?.flat()),
+                    _ => {
+                        let s = self.to_str(&q)?;
+                        Some(flat_charged(self, &s)?)
+                    }
                 },
-                _ => Some(self.to_str(&q)?.flat()),
+                _ => {
+                    let s = self.to_str(&q)?;
+                    Some(flat_charged(self, &s)?)
+                }
             };
         }
         let id = self.new_reference_name(XmlName { uri, local, prefix: None }, attribute)?;
@@ -2816,7 +2949,8 @@ impl Interp {
         let result = match kind {
             0 if self.is_xml(&v) => self.xml_string_of(&v, Some(false))?,
             0 | 1 => {
-                let text = self.to_str(&v)?.flat();
+                let text = self.to_str(&v)?;
+                let text = flat_charged(self, &text)?;
                 let mut out = Builder::new();
                 self.write_escaped(&mut out, &text, kind == 1)?;
                 let Value::String(s) = out.finish(self) else { return Err(Abrupt::Internal("not a string".into())) };
@@ -2991,7 +3125,8 @@ impl Interp {
                 _ => {}
             }
         }
-        Ok(self.to_str(v)?.flat())
+        let s = self.to_str(v)?;
+        flat_charged(self, &s)
     }
 
     pub(crate) fn op_set_default_namespace(&mut self) -> JsResult<()> {

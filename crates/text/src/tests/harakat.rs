@@ -381,6 +381,44 @@ fn check_spaced_harakat(db: &FontDb, family: &str) {
     assert!((length(&b) - length(&a) - 12.0).abs() < 1e-6, "{family}: {} → {}", length(&a), length(&b));
 }
 
+/// Right to left, with harakat coloured apart, Optical kerning keeps the Tsume of each letter's
+/// cluster as it does in "HOH": the glyphs move as far with Optical kerning as without it.
+#[test]
+fn optical_kerning_keeps_the_tsume_of_a_letter_with_coloured_harakat() {
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(crate::test_fonts::lam_alef_font(b"rlig").unwrap()), 1);
+    check_optical_tsume(&db, crate::test_fonts::lam_alef_family(b"rlig"));
+    if let Some(face) = arabic_face("optical_kerning_keeps_the_tsume_of_a_letter_with_coloured_harakat") {
+        check_optical_tsume(FontDb::global(), &face.family);
+    }
+}
+
+fn check_optical_tsume(db: &FontDb, family: &str) {
+    const WORD: &str = "بَبَ"; // ب 0, fatha 2, ب 4, fatha 6
+    let set = |optical: bool, letter: Option<usize>| {
+        let mut t = text_with_harakat(WORD, family, Some(red()));
+        crate::edit::style_range(&mut t.runs, 0, WORD.len(), |st| st.optical_kerning = optical);
+        if let Some(at) = letter {
+            crate::edit::style_range(&mut t.runs, at, at + 2, |st| st.tsume = 100.0);
+        }
+        t
+    };
+    // Each glyph's place and advance: where a mark's ink leaves no blank space on the left, the
+    // Tsume of the line's first cluster only narrows its advance and moves no glyph.
+    let xs = |t: &TextObject| layout(db, t).glyphs.iter().flat_map(|g| [g.xf.as_coeffs()[4], g.advance]).collect::<Vec<_>>();
+    assert!(xs(&set(true, None)).iter().zip(xs(&set(false, None))).any(|(a, b)| (a - b).abs() > 1e-6), "{family}: Optical moves the pair");
+    // Each letter in turn: the first one's cluster ends the pair, the second one's starts it.
+    for letter in [0, 4] {
+        let moved = |optical: bool| xs(&set(optical, Some(letter))).iter().zip(xs(&set(optical, None))).map(|(a, b)| a - b).collect::<Vec<_>>();
+        let (without, with_optical) = (moved(false), moved(true));
+        assert!(without.iter().any(|m| m.abs() > 1e-3), "{family} {letter}: Tsume moves or narrows the glyphs: {without:?}");
+        assert!(
+            without.len() == with_optical.len() && without.iter().zip(&with_optical).all(|(a, b)| (a - b).abs() < 1e-6),
+            "{family} {letter}: {without:?} {with_optical:?}"
+        );
+    }
+}
+
 #[test]
 fn own_chars_need_the_same_setting_and_each_character_in_its_cluster() {
     // بَبَب right to left: final beh (cluster 8), fatha and medial beh (cluster 4), fatha and
@@ -609,6 +647,8 @@ fn duplicate_authored_glyphs_keep_occurrence_order() {
         carets: Vec::new(),
         width: 0.0,
         width_start: 0.0,
+        warichu: None,
+        warichu_line: 0.0,
     };
     let before = TextLayout { glyphs: vec![glyph(0), glyph(1)], ..TextLayout::default() };
     assert_eq!(assert_kashida_ownership(&text, &before, &before, &red(), "duplicate glyphs", false), 0);

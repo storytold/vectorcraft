@@ -76,7 +76,7 @@ pub fn gradient_params(g: &GradientPaint) -> Value {
         v["dither"] = json!(true);
     }
     if !g.gradient.method.is_classic() {
-        v["method"] = json!(g.gradient.method.label().to_lowercase());
+        v["method"] = json!(g.gradient.method.id());
     }
     // A freeform gradient has no ends to spread past (`paint.setFill` refuses a spread for one).
     if g.gradient.is_spread() {

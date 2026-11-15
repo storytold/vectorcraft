@@ -72,7 +72,7 @@ fn lines_across(length: f64, count: Option<usize>, spacing: Option<f64>) -> Resu
 /// Where the Weeding group goes: `parent`, or, when `parent` is inside a clip group or clipping
 /// sublayer (a group edited in isolation), the container around the outermost of them. A clipping
 /// path would hide the lines and the box, which lie outside the art.
-fn outside_clips(d: &Document, parent: Option<NodeId>) -> Option<NodeId> {
+pub(super) fn outside_clips(d: &Document, parent: Option<NodeId>) -> Option<NodeId> {
     let clips = |id: NodeId| d.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. }));
     let (mut at, mut out) = (parent, parent);
     while let Some(p) = at {

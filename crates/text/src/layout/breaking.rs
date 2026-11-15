@@ -20,20 +20,25 @@ pub(super) struct Metrics {
 
 impl Metrics {
     pub(super) fn of(g: &SGlyph) -> Self {
-        let em = g.face.units_per_em() * g.sy;
+        // A warichu glyph's em is the em of the line its block sits in.
+        let em = super::vertical::glyph_em(g);
         Self { asc: g.ascent, desc: g.descent, lead: g.leading, cap: g.cap, xh: g.xh, top: (g.face.ideographic_centre() + 0.5) * em }
     }
     pub(super) fn max(g: &[SGlyph]) -> Option<Self> {
         let mut it = g.iter();
         let first = Self::of(it.next()?);
-        Some(it.fold(first, |m, g| Self {
-            asc: m.asc.max(g.ascent),
-            desc: m.desc.max(g.descent),
-            lead: m.lead.max(g.leading),
-            cap: m.cap.max(g.cap),
-            xh: m.xh.max(g.xh),
-            top: m.top.max(Self::of(g).top),
-        }))
+        Some(it.fold(first, |m, g| m.union(Self::of(g))))
+    }
+    /// The larger of each of the metrics of `self` and `o`: those of a line holding both.
+    pub(super) fn union(self, o: Self) -> Self {
+        Self {
+            asc: self.asc.max(o.asc),
+            desc: self.desc.max(o.desc),
+            lead: self.lead.max(o.lead),
+            cap: self.cap.max(o.cap),
+            xh: self.xh.max(o.xh),
+            top: self.top.max(o.top),
+        }
     }
     /// Distance from the frame top to the first baseline.
     pub(super) fn first_baseline(&self, fb: FirstBaseline, min: f64) -> f64 {
@@ -48,6 +53,15 @@ impl Metrics {
     }
 }
 
+/// What a line band was placed below: the baseline of the line above it and the em box top that
+/// line left for the next one (both `None` for a cell's first band), and the space pending between.
+#[derive(Clone, Copy, Default)]
+pub(super) struct Above {
+    pub(super) prev: Option<f64>,
+    pub(super) next_top: Option<f64>,
+    pub(super) pending: f64,
+}
+
 /// Where the next line goes: the region being filled and the previous baseline in it.
 #[derive(Clone)]
 pub(super) struct Pen<'r> {
@@ -59,6 +73,8 @@ pub(super) struct Pen<'r> {
     pub(super) fb_min: f64,
     /// Further spans at the current baseline (text wrapping on both sides of an object).
     pub(super) queued: Vec<(f64, f64, f64)>,
+    /// What the line band at the current baseline was placed below (see [`Above`]).
+    pub(super) above: Above,
     /// Leading measured from em box top to em box top: where the next line's em box top goes.
     pub(super) model: LeadingModel,
     pub(super) next_top: Option<f64>,
@@ -67,6 +83,9 @@ pub(super) struct Pen<'r> {
     /// Baseline steps still allowed over all the frame's cells and placements (shared by this pen's
     /// copies): see [`MAX_TOTAL_STEPS`].
     pub(super) steps_left: std::rc::Rc<std::cell::Cell<usize>>,
+    /// What is left of the every-line composer's search over the frame's paragraphs (shared by
+    /// this pen's copies): see [`super::shaped::Budget`].
+    pub(super) search: std::rc::Rc<super::shaped::Budget>,
 }
 
 /// The largest number of steps layout takes to move a line down a frame cell to find room for it:
@@ -100,20 +119,37 @@ impl Pen<'_> {
     /// [`Pen::place`], skipping lines of a non-rectangular frame narrower than `min`.
     fn place_at_least(&mut self, est: Metrics, ind_l: f64, ind_r: f64, min: f64) -> Option<(f64, f64, f64, bool)> {
         let Some(regions) = self.regions else {
-            let b = self.prev.map_or(0.0, |b| self.next_baseline(b, est));
+            let b = self.prev.map_or(0.0, |b| self.next_baseline(b, self.next_top, self.pending, est));
             return Some((b, f64::NEG_INFINITY, f64::INFINITY, false));
         };
-        if !self.queued.is_empty() {
+        // A further span was measured across the height of the line set before it on its baseline.
+        // This line gets the part of it that is free across its own height: a taller line can
+        // reach a wrap object the line before it stayed clear of. A span with no such part is
+        // left empty, and so is a part the line's height made narrower than `min`. A span on a
+        // baseline nearer the line above the band than this line's own leading sets it is left
+        // empty too: a taller line would reach into that line.
+        while !self.queued.is_empty() {
             let (b, x0, x1) = self.queued.remove(0);
-            return Some((b, x0, x1, true));
+            let Some(r) = regions.get(self.ri) else { return Some((b, x0, x1, true)) };
+            if b + EPS < self.band_baseline(r, est) {
+                continue;
+            }
+            let mut free = r.spans(b - est.asc, b + est.desc).into_iter().filter_map(|(s, e)| {
+                let (s, e) = (s.max(x0), e.min(x1));
+                let room = e - s - ind_l - ind_r;
+                let narrowed = s > x0 + EPS || e < x1 - EPS;
+                (room > est.asc.max(1.0) && (!narrowed || room + EPS >= min)).then_some((s, e))
+            });
+            let Some((s, e)) = free.next() else { continue };
+            // An object inside the span splits it: the parts after the first stay queued.
+            let rest: Vec<_> = free.map(|(s, e)| (b, s, e)).collect();
+            self.queued.splice(0..0, rest);
+            return Some((b, s, e, true));
         }
         loop {
             let r = regions.get(self.ri)?;
-            let mut baseline = match self.prev {
-                None if self.model == LeadingModel::EmBoxTop => r.top() + r.shift + est.top.max(self.fb_min),
-                None => r.top() + r.shift + est.first_baseline(self.fb, self.fb_min),
-                Some(b) => self.next_baseline(b, est) + r.gap,
-            };
+            self.above = Above { prev: self.prev, next_top: self.next_top, pending: self.pending };
+            let mut baseline = self.band_baseline(r, est);
             // The baseline moves down the cell a lead at a time, or a `MAX_STEPS`th of the cell's
             // height when that is more, in at most `MAX_STEPS` steps.
             let step = est.lead.max(1.0).max(r.cell.height() / MAX_STEPS as f64);
@@ -165,12 +201,29 @@ impl Pen<'_> {
     pub(super) fn bottom(&self) -> f64 {
         self.regions.and_then(|r| r.get(self.ri)).map_or(f64::INFINITY, |r| r.bottom())
     }
-    /// The baseline of the line after the one at `prev`, for a line of metrics `est`.
-    fn next_baseline(&self, prev: f64, est: Metrics) -> f64 {
-        match (self.model, self.next_top) {
-            (LeadingModel::EmBoxTop, Some(top)) => top + est.top + self.pending,
-            _ => prev + est.lead + self.pending,
+    /// The baseline of the line after the one at `prev`, which left the next em box top at
+    /// `next_top`, for a line of metrics `est` with `pending` space between them.
+    fn next_baseline(&self, prev: f64, next_top: Option<f64>, pending: f64, est: Metrics) -> f64 {
+        match (self.model, next_top) {
+            (LeadingModel::EmBoxTop, Some(top)) => top + est.top + pending,
+            _ => prev + est.lead + pending,
         }
+    }
+    /// The highest baseline in cell `r` for a line of metrics `est` in the current line band: as
+    /// far below the line above the band ([`Pen::above`]) as its own leading sets it, or at the
+    /// cell's first baseline.
+    fn band_baseline(&self, r: &Region, est: Metrics) -> f64 {
+        let Above { prev, next_top, pending } = self.above;
+        match prev {
+            None if self.model == LeadingModel::EmBoxTop => r.top() + r.shift + est.top.max(self.fb_min),
+            None => r.top() + r.shift + est.first_baseline(self.fb, self.fb_min),
+            Some(b) => self.next_baseline(b, next_top, pending, est) + r.gap,
+        }
+    }
+    /// A line of metrics `m` set in a further span at baseline `b` is no nearer the line above
+    /// the band than its own leading sets it.
+    pub(super) fn clears_above(&self, b: f64, m: Metrics) -> bool {
+        self.regions.and_then(|r| r.get(self.ri)).is_none_or(|r| b + EPS >= self.band_baseline(r, m))
     }
     /// A line was set at `baseline` with metrics `m`: where the next one goes from.
     pub(super) fn settled(&mut self, baseline: f64, m: Metrics) {
@@ -181,22 +234,40 @@ impl Pen<'_> {
 
 /// Advance of a tab at pen position `x`: up to the next stop after it (explicit stops first, then
 /// every ½ inch), and the leader of that stop (default stops have none). Right, centre and decimal
-/// stops align the text that follows (`rest`, up to the next tab) on the stop.
-pub(super) fn tab_advance<'t>(tabs: &'t [vectorcraft_doc::TabStop], origin: f64, x: f64, rest: &[SGlyph]) -> (f64, &'t str) {
+/// stops align the text drawn after the tab (`rest`, in drawing order, up to the next tab) on the
+/// stop.
+pub(super) fn tab_advance<'t, 'g>(
+    tabs: &'t [vectorcraft_doc::TabStop],
+    origin: f64,
+    x: f64,
+    rest: impl IntoIterator<Item = &'g SGlyph>,
+) -> (f64, &'t str) {
     use vectorcraft_doc::TabAlign;
     let rel = x - origin;
-    let seg: Vec<&SGlyph> = rest.iter().take_while(|g| g.ch != '\t' && g.ch != '\u{2028}').collect();
-    let width: f64 = seg.iter().map(|g| g.adv).sum();
-    let target = |pos: f64, align: TabAlign, on: char| match align {
-        TabAlign::Left => pos,
-        TabAlign::Right => pos - width,
-        TabAlign::Center => pos - width / 2.0,
-        TabAlign::Decimal => pos - seg.iter().take_while(|g| g.ch != on).map(|g| g.adv).sum::<f64>(),
-    };
-    let explicit = tabs.iter().find_map(|t| {
-        let at = target(t.position, t.align, t.align_on);
-        (at > rel + 1e-6).then_some((at, t.leader.as_str()))
-    });
+    // The text after the tab is read only when a right, center or decimal stop is reached, since
+    // only those align it. A tab to a default or left stop reads none of it.
+    let mut rest = Some(rest);
+    let mut seg: Vec<&SGlyph> = Vec::new();
+    let mut width = 0.0;
+    let mut explicit = None;
+    for t in tabs {
+        if t.align != TabAlign::Left
+            && let Some(r) = rest.take()
+        {
+            seg = r.into_iter().take_while(|g| g.ch != '\t' && g.ch != '\u{2028}').collect();
+            width = seg.iter().map(|g| g.adv).sum();
+        }
+        let at = match t.align {
+            TabAlign::Left => t.position,
+            TabAlign::Right => t.position - width,
+            TabAlign::Center => t.position - width / 2.0,
+            TabAlign::Decimal => t.position - seg.iter().take_while(|g| g.ch != t.align_on).map(|g| g.adv).sum::<f64>(),
+        };
+        if at > rel + 1e-6 {
+            explicit = Some((at, t.leader.as_str()));
+            break;
+        }
+    }
     let (at, leader) = explicit.unwrap_or_else(|| {
         let last = tabs.iter().map(|t| t.position).fold(0.0, f64::max).max(0.0);
         let base = rel.max(last);
@@ -205,16 +276,38 @@ pub(super) fn tab_advance<'t>(tabs: &'t [vectorcraft_doc::TabStop], origin: f64,
     ((at - rel).max(0.0), leader)
 }
 
-/// The width of glyphs `from..to` of `sg` set on a line whose content starts `x_start` from the
-/// tab origin: tabs of the text take what [`tab_advance`] gives them, not the width of their
-/// glyph. The tab of a list marker (length 0) keeps its own width.
-pub(super) fn set_width(sg: &[SGlyph], from: usize, to: usize, tabs: &[vectorcraft_doc::TabStop], x_start: f64) -> f64 {
+/// The glyphs of `sg` drawn after position `k` of `drawn` (indices into `sg`, in drawing order).
+pub(super) fn drawn_after_tab<'g>(sg: &'g [SGlyph], drawn: &'g [usize], k: usize) -> impl Iterator<Item = &'g SGlyph> {
+    drawn.iter().skip(k + 1).filter_map(move |&j| sg.get(j))
+}
+
+/// The width of the glyphs of `sg` at `drawn` (indices into `sg`, in the order the line draws
+/// them) set on a line whose content starts `x_start` from the tab origin: tabs of the text take
+/// what [`tab_advance`] gives them from where the glyphs drawn before them end, aligning the glyphs
+/// drawn after them, not the width of their glyph. The tab of a list marker (length 0) keeps its
+/// own width. With `end_trim` (a glyph index and an amount), that glyph is set that much narrower
+/// where it is drawn (a line's end trim), before the tabs drawn after it take their stops.
+pub(super) fn drawn_width(sg: &[SGlyph], drawn: &[usize], tabs: &[vectorcraft_doc::TabStop], x_start: f64, end_trim: Option<(usize, f64)>) -> f64 {
     let mut x = x_start;
-    for (j, g) in sg.iter().enumerate().take(to).skip(from) {
-        x += if g.ch == '\t' && g.len > 0 { tab_advance(tabs, 0.0, x, sg.get(j + 1..to).unwrap_or_default()).0 } else { g.adv };
+    for (k, j, g) in drawn.iter().enumerate().filter_map(|(k, &j)| sg.get(j).map(|g| (k, j, g))) {
+        x += if g.ch == '\t' && g.len > 0 {
+            tab_advance(tabs, 0.0, x, drawn_after_tab(sg, drawn, k)).0
+        } else {
+            g.adv - end_trim.filter(|&(at, _)| at == j).map_or(0.0, |(_, trim)| trim)
+        };
     }
     x - x_start
 }
+
+/// Most breaks, or hyphenation points, [`break_line`] measures as drawn one by one from the latest
+/// back before bisecting the earlier ones.
+const MAX_DRAWN_CHECKS: usize = 256;
+
+/// Most breaks, or hyphenation points, [`break_line`] measures as drawn one by one when a glyph of
+/// the line has a negative advance: a later break can then be drawn narrower than an earlier one,
+/// and bisecting can miss the latest break that fits. It is also the most legal breaks such a line
+/// reads past where it first overflows in the order of its text.
+const MAX_DRAWN_CHECKS_STEPPING_BACK: usize = 1024;
 
 /// Most copies of a leader drawn in one tab: a tiny type size and a far stop must not make
 /// millions of outlines.
@@ -313,6 +406,17 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
 /// Margin Alignment or Roman Hanging Punctuation is on, and `vertical` in vertical type.
 /// `line_end[k]` is how much narrower a line ending with glyph `k` is set (Mojikumi); a cluster
 /// that fits only that narrower stays on the line when the line may end after it (empty: none).
+/// `fits`, for a line drawn in another order than its text's (right to left), is whether the line
+/// from `i` ending before glyph `end` (with a hyphen when `hyphenated`) fits `width` as it is drawn:
+/// once the line holds a tab, whose width depends on what is drawn before it, the line reads on
+/// while the least it can be drawn at fits `width`, then ends at the latest legal break where it
+/// fits as drawn (past [`MAX_DRAWN_CHECKS`] breaks back from the latest, or
+/// [`MAX_DRAWN_CHECKS_STEPPING_BACK`] when a glyph of the line has a negative advance, the earlier
+/// ones without a hyphen are bisected); hyphenation points are measured the same way. Once such a
+/// line holds a glyph with a negative advance and has been wider than `width` in the order of its
+/// text, it reads at most [`MAX_DRAWN_CHECKS_STEPPING_BACK`] legal breaks further, and a forced
+/// line break right after the last of them, and ends at the latest of the breaks read that fits as
+/// drawn.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -328,7 +432,31 @@ pub(super) fn break_line(
     hanging: bool,
     vertical: bool,
     line_end: &[f64],
+    fits: Option<&dyn Fn(usize, bool) -> bool>,
 ) -> (usize, bool) {
+    // The line ending at `chosen`, once it holds a tab, when it fits as drawn; otherwise the latest
+    // of the legal `breaks` before it that fits as drawn, measuring at most `checks` of them from
+    // the latest back and bisecting the earlier ones without a hyphen; the first of them when none
+    // of those measured fits.
+    let settle = |tabbed: bool, checks: usize, chosen: (usize, bool), breaks: &[(usize, bool)]| -> (usize, bool) {
+        let Some(fits) = fits.filter(|_| tabbed) else { return chosen };
+        if fits(chosen.0, chosen.1) {
+            return chosen;
+        }
+        let earlier = breaks.get(breaks.partition_point(|b| b.0 <= i)..breaks.partition_point(|b| b.0 < chosen.0)).unwrap_or_default();
+        if let Some(&b) = earlier.iter().rev().take(checks).find(|b| fits(b.0, b.1)) {
+            return b;
+        }
+        // Without a hyphen, a line that ends later is drawn no narrower, so those breaks bisect.
+        let rest = earlier.get(..earlier.len().saturating_sub(checks)).unwrap_or_default();
+        let plain: Vec<&(usize, bool)> = rest.iter().filter(|b| !b.1).collect();
+        let fitting = plain.partition_point(|b| fits(b.0, b.1));
+        fitting.checked_sub(1).and_then(|k| plain.get(k).copied()).or(earlier.first()).copied().unwrap_or(chosen)
+    };
+    // How many breaks a line measures as drawn one by one.
+    let checks = |back: f64| if back > 0.0 { MAX_DRAWN_CHECKS_STEPPING_BACK } else { MAX_DRAWN_CHECKS };
+    let mut breaks: Vec<(usize, bool)> = Vec::new();
+    let mut tabbed = false;
     if !width.is_finite() {
         if let Some(pos) = g[i..].iter().position(|gl| gl.ch == '\u{2028}') {
             return (i + pos + 1, false);
@@ -336,7 +464,33 @@ pub(super) fn break_line(
         return (g.len(), false);
     }
     let mut x = 0.0;
+    // The width of the line's glyphs other than its tabs, how far those with a negative advance step
+    // back in all, and how many tabs it holds.
+    let mut ink = 0.0;
+    let mut back = 0.0;
+    let mut tabs_read = 0usize;
+    // The `n`th of the stops a tab can go to, in order: the explicit stops, then every default
+    // stop after the last of them (0 when `n` is 0).
+    let mut explicit: Vec<f64> = if fits.is_some() { tabs.iter().map(|t| t.position).filter(|p| p.is_finite()).collect() } else { Vec::new() };
+    explicit.sort_by(f64::total_cmp);
+    explicit.dedup();
+    let last_explicit = tabs.iter().map(|t| t.position).fold(0.0, f64::max).max(0.0);
+    let nth_stop = |n: usize| -> f64 {
+        use vectorcraft_doc::text::DEFAULT_TAB_INTERVAL;
+        match n.checked_sub(1) {
+            None => 0.0,
+            Some(k) => explicit
+                .get(k)
+                .copied()
+                .unwrap_or_else(|| ((last_explicit / DEFAULT_TAB_INTERVAL).floor() + (n - explicit.len()) as f64) * DEFAULT_TAB_INTERVAL),
+        }
+    };
     let mut last_break: Option<(usize, bool)> = None;
+    // Whether the line, once it holds a tab and is measured as drawn, has been wider in the order of
+    // its text than `width`, and how many legal breaks it has read since then with a glyph stepping
+    // back: past MAX_DRAWN_CHECKS_STEPPING_BACK of them the line stops reading.
+    let mut overflowed = false;
+    let mut breaks_past_overflow = 0usize;
     // A list marker (length 0) is a cluster of its own; the line holds it and at least the first
     // cluster after it.
     let first = i + g.get(i..).unwrap_or_default().iter().take_while(|h| h.len == 0).count();
@@ -362,19 +516,33 @@ pub(super) fn break_line(
             }
         }
         // A list marker's glyphs, its tab included, keep their own widths.
-        let cluster_width: f64 = if gl.ch == '\t' && gl.len > 0 {
+        let is_tab = gl.ch == '\t' && gl.len > 0;
+        let cluster_width: f64 = if is_tab {
+            tabbed = true;
+            tabs_read += 1;
             tab_advance(tabs, 0.0, x_start + x, g.get(cluster_end..).unwrap_or_default()).0
         } else {
             g[j..cluster_end].iter().map(|glyph| glyph.adv).sum()
         };
+        let cluster_ink = if is_tab { 0.0 } else { cluster_width };
+        let cluster_back: f64 = if is_tab { 0.0 } else { g[j..cluster_end].iter().map(|glyph| (-glyph.adv).max(0.0)).sum() };
         if gl.ch == '\u{2028}' {
-            return (cluster_end, false);
+            return settle(tabbed, checks(back), (cluster_end, false), &breaks);
         }
         // Measured as the line is set when it ends with this cluster: only the cluster's last glyph
         // is narrowed, and only where the line may end.
         let end_credit =
             Some(line_end_credit(g, line_end, cluster_end)).filter(|&c| c > 0.0 && may_end_after(g, cluster_end, kinsoku)).unwrap_or(0.0);
-        if j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS {
+        // Once the line holds a tab and is measured as drawn, it reads on while the least it can be
+        // drawn at fits, and where it ends is settled then. That least is its glyphs other than the
+        // tabs and, while no glyph steps back, the stop its tabs reach: each tab then goes to a later
+        // stop than the one before and the text aligned on it ends at or past that stop, so the
+        // line's tabs, all before this cluster, reach at least the stop as many places along as
+        // there are tabs.
+        let stops_reached = if back + cluster_back > 0.0 { f64::NEG_INFINITY } else { nth_stop(tabs_read) - x_start };
+        let measured = if tabbed && fits.is_some() { (ink + cluster_ink).max(stops_reached) } else { x + cluster_width };
+        overflowed |= tabbed && fits.is_some() && j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS;
+        if j > first && !gl.is_space() && measured - end_credit > width + EPS {
             // It ends the line with the spaces after it.
             if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1, kinsoku) {
                 let mut end = cluster_end;
@@ -391,20 +559,32 @@ pub(super) fn break_line(
             break;
         }
         x += cluster_width;
+        ink += cluster_ink;
+        back += cluster_back;
         let last = &g[cluster_end - 1];
         if last.break_after() && last.len > 0 && kinsoku_allows(g, cluster_end - 1, kinsoku) && !splits_no_break(g, cluster_end) {
-            if last.is_soft_hyphen() {
-                if x + hyphen_glyph(last).adv <= width + EPS {
-                    last_break = Some((cluster_end, true));
+            // Once the line holds a tab, whether a break fits as drawn is settled when the line ends.
+            let hyphenated = last.is_soft_hyphen();
+            if !hyphenated || (tabbed && fits.is_some()) || x + hyphen_glyph(last).adv <= width + EPS {
+                last_break = Some((cluster_end, hyphenated));
+                if fits.is_some() {
+                    breaks.push((cluster_end, hyphenated));
                 }
-            } else {
-                last_break = Some((cluster_end, false));
+                // A line with a glyph stepping back stops reading MAX_DRAWN_CHECKS_STEPPING_BACK
+                // breaks past where it first overflowed in the order of its text, and ends at the
+                // latest break read that fits as drawn: each of those breaks is measured one by one.
+                // A soft hyphen ending the text draws no hyphen there, as at the end of the text below.
+                // A break right before a forced line break reads on to it: the line ends there.
+                breaks_past_overflow += usize::from(overflowed && back > 0.0);
+                if breaks_past_overflow >= MAX_DRAWN_CHECKS_STEPPING_BACK && g.get(cluster_end).is_none_or(|n| n.ch != '\u{2028}') {
+                    return settle(tabbed, checks(back), (cluster_end, hyphenated && cluster_end < g.len()), &breaks);
+                }
             }
         }
         j = cluster_end;
     }
     if j >= g.len() {
-        return (g.len(), false);
+        return settle(tabbed, checks(back), (g.len(), false), &breaks);
     }
     // Hyphenate the word that overflows. A list marker starting the line is not part of a word.
     let word_start = last_break.map_or(first, |b| b.0);
@@ -428,29 +608,40 @@ pub(super) fn break_line(
             .into_iter()
             .filter(|&k| k > 0 && kinsoku_allows(g, k - 1, kinsoku) && !splits_no_break(g, k))
             .collect();
-        for &k in pts.iter().rev() {
-            if k <= j && k > i {
-                let w = x_ws + g[word_start..k].iter().map(|g| g.adv).sum::<f64>() + hyphen_glyph(&g[k - 1]).adv;
-                if w <= width + EPS {
-                    return (k, true);
-                }
+        // The points the line may end at, the latest first. Measured as drawn, at most
+        // `checks(back)` of them are measured one by one, and the earlier ones are bisected:
+        // each ends with a hyphen, so a later one is drawn no narrower.
+        let points: Vec<usize> = pts.iter().rev().copied().filter(|&k| k <= j && k > i).collect();
+        let drawn = fits.filter(|_| tabbed);
+        let one_by_one = checks(back);
+        for &k in points.iter().take(if drawn.is_some() { one_by_one } else { usize::MAX }) {
+            let w = x_ws + g[word_start..k].iter().map(|g| g.adv).sum::<f64>() + hyphen_glyph(&g[k - 1]).adv;
+            if drawn.map_or(w <= width + EPS, |fits| fits(k, true)) {
+                return (k, true);
+            }
+        }
+        if let Some(fits) = drawn {
+            let earlier: Vec<usize> = points.iter().skip(one_by_one).rev().copied().collect();
+            let fitting = earlier.partition_point(|&k| fits(k, true));
+            if let Some(&k) = fitting.checked_sub(1).and_then(|n| earlier.get(n)) {
+                return (k, true);
             }
         }
     }
     // Break candidates and greedy overflow are cluster boundaries; hyphenation also returns only
     // cluster starts, so the resulting end always keeps each source cluster together.
-    let (end, hy) = match last_break {
-        Some(b) if b.0 > i => b,
+    match last_break {
+        Some(b) if b.0 > i => settle(tabbed, checks(back), b, &breaks),
         _ => (j, false),
-    };
-    (end, hy)
+    }
 }
 
 /// Can glyph `g` hang outside the line (burasagari)? An East Asian comma or full stop, full width
 /// (、。，．) or half width (､｡); not a closing bracket, nor Latin punctuation (Latin text keeps
-/// its line breaks and composer). Never an inline graphic (U+FFFC).
+/// its line breaks and composer). Never an inline graphic (U+FFFC), nor a character of a
+/// tate-chu-yoko or warichu block.
 pub(super) fn hangs(g: &SGlyph) -> bool {
-    g.inline.is_none() && matches!(g.ch, '、' | '。' | '，' | '．' | '､' | '｡') && g.tcy.is_none()
+    g.inline.is_none() && matches!(g.ch, '、' | '。' | '，' | '．' | '､' | '｡') && g.tcy.is_none() && g.wari.is_none()
 }
 
 /// Optical Margin Alignment: the share of glyph `g`'s advance that hangs outside the margin when
@@ -458,9 +649,10 @@ pub(super) fn hangs(g: &SGlyph) -> bool {
 /// asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half (the amounts
 /// published for Roman Hanging Punctuation). A, V, W, Y, v, w and y hang by a tenth of their
 /// advance, VectorCraft's own amount for their slanted sides. Other characters, East Asian
-/// punctuation (which burasagari hangs) and inline graphics don't hang.
+/// punctuation (which burasagari hangs), inline graphics and the characters of a warichu block
+/// don't hang.
 pub(super) fn optical_share(g: &SGlyph) -> f64 {
-    if g.inline.is_some() || g.tcy.is_some() {
+    if g.inline.is_some() || g.tcy.is_some() || g.wari.is_some() {
         return 0.0;
     }
     match g.ch {
@@ -688,7 +880,7 @@ fn push_in(
 }
 
 /// May a push-in close the gap after glyph `a`? A gap between two characters, at least one of them
-/// CJK, outside a tate-chu-yoko block, a list marker and a shaped cluster, and not next to a space,
+/// CJK, outside a tate-chu-yoko or warichu block, a list marker and a shaped cluster, and not next to a space,
 /// a tab or an inline graphic before it, nor inside an inseparable pair that Bunri-Kinshi keeps
 /// together. Zero-width format controls take no gap: the gap is the one between the visible
 /// characters on either side, before `end`, as the layout justifies it.
@@ -702,7 +894,7 @@ fn closes(g: &[SGlyph], a: usize, end: usize) -> bool {
         && !p.is_space()
         && !n.is_space()
         && p.ch != '\t'
-        && !n.continues_tcy()
+        && !n.continues_block()
         && (is_cjk(p.ch) || is_cjk(n.ch))
 }
 
@@ -837,10 +1029,12 @@ fn a_pen_out_of_baseline_steps_finds_no_room() {
         fb: FirstBaseline::Ascent,
         fb_min: 0.0,
         queued: vec![],
+        above: Default::default(),
         model: LeadingModel::default(),
         next_top: None,
         no_room_for: f64::INFINITY,
         steps_left: std::rc::Rc::new(std::cell::Cell::new(steps)),
+        search: Default::default(),
     };
     assert!(pen(MAX_TOTAL_STEPS).place(est, 0.0, 0.0, 0.0).is_some());
     assert!(pen(0).place(est, 0.0, 0.0, 0.0).is_none());

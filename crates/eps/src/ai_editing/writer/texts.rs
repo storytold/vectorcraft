@@ -20,6 +20,7 @@ use std::fmt::Write;
 
 use kurbo::{ParamCurveArclen, PathSeg};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::text::MAX_AKI;
 use vectorcraft_doc::{
     AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, LineCap, LineJoin, Mojikumi, Node, NodeId, NodeKind, ParaDirection,
     ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
@@ -29,7 +30,7 @@ use vectorcraft_geom::{Affine, PathData, Point};
 use crate::ps;
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, Insert Aki, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -204,10 +205,13 @@ pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
             shape(t).as_ref().and_then(segments).is_some_and(|s| !(open && closed(&s)))
         }
     };
-    // Area type that flows around wrap objects: the data doesn't hold their wrap settings.
+    // Area type with wrap shapes: the text document doesn't hold them. The reader works them out
+    // again from the art above the type, which can wrap it differently (a live object written as
+    // its drawn pieces) or not at all.
     shape_ok
         && t.wrap.is_empty()
         && t.ruby.is_empty()
+        && !t.stacks_warichu()
         && t.runs.iter().any(|r| r.text.chars().any(|c| !c.is_whitespace()))
         && runs_held(t)
         && plain(n)
@@ -323,6 +327,12 @@ fn end_read_as_none(t: &TextObject) -> bool {
     !closed(&segs) && end < 1.0 - 1e-9 && place_on(&segs, end) >= segs.len() as f64 - 0.02
 }
 
+/// Insert Aki Left or Right `v` as the text document holds it: 0 to [`MAX_AKI`] in 1/1000 em, and 0
+/// for a value that is not a number.
+fn held_aki(v: f64) -> f64 {
+    if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) }
+}
+
 /// Has type `t` attributes the text document leaves out ([`TYPE_ATTRIBUTES`])?
 pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
     // Small capitals are read back at Document Setup's default size.
@@ -357,6 +367,8 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             tate_chu_yoko: s.tate_chu_yoko,
             // Key 35 holds one of the two: a Tate-chu-yoko run is read back without the other.
             standard_vertical_roman: s.standard_vertical_roman && !s.tate_chu_yoko,
+            aki_left: held_aki(s.aki_left),
+            aki_right: held_aki(s.aki_right),
             ..CharStyle::default()
         }
     };
@@ -674,6 +686,14 @@ impl TextDoc {
         };
         d.push((12, V::Int(caps)));
         d.push((35, V::Int(baseline_direction(st))));
+        // Insert Aki Left and Right in 1/1000 em, as the reader reads keys 49 and 50. No key is no
+        // space added: neither the stories' character attributes nor `[Normal Character Style]` set one.
+        for (key, v) in [(49, st.aki_left), (50, st.aki_right)] {
+            let v = held_aki(v);
+            if v > 0.0 {
+                d.push((key, real(v)));
+            }
+        }
         let fill = solid(&st.fill).flatten();
         // A stroke of no width keeps its paint.
         let stroke = solid(&st.stroke).flatten();
@@ -961,9 +981,11 @@ impl TextDoc {
                     matches!(t.kind, TextKind::Area { .. })
                         && t.vertical == vertical
                         && writable(n.id)
+                        // The text document doesn't hold wrap shapes (see `holds`).
                         && t.wrap.is_empty()
                         && plain(n)
                         && t.ruby.is_empty()
+                        && !t.stacks_warichu()
                         && runs_held(t)
                         && (story_scale(t) / scale - 1.0).abs() <= 1e-9
                         && within_reader(t, scale)

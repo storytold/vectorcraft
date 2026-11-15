@@ -1,6 +1,6 @@
 use super::super::object::choice;
 use super::common::{fix_ids, ids_json, is_envelope, roots_param, selected_of, wrap};
-use super::mesh::{handle_param, index_param, whole};
+use super::mesh::{envelope_edit_grid, handle_param, index_param, mesh_envelope, warp_point_stays, whole};
 use super::{
     Affine, Appearance, Arc, Beside, Color, Document, EngineError, EnvelopeKind, EnvelopeMap, EnvelopeOptions, Node, NodeId, NodeKind, Paint,
     PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, f64_or, f64_req, json, live, object_param, ok, switch_or, text_param,
@@ -79,8 +79,7 @@ fn mesh_kind(map: &EnvelopeMap, maintain: bool, rows: u32, cols: u32) -> Envelop
         return EnvelopeKind::Mesh { rows, cols, points: map.grid(rows, cols), handles: vec![] };
     }
     // The surface's points with handles along it: the grid lines keep the current shape.
-    let m = map.surface_mesh(rows, cols, Color::BLACK);
-    EnvelopeKind::Mesh { rows, cols, points: m.points.iter().map(|q| q.p).collect(), handles: m.points.iter().map(|q| q.handles).collect() }
+    mesh_envelope(&map.surface_mesh(rows, cols, Color::BLACK))
 }
 
 pub(super) fn env_make_mesh(s: &mut Session, p: &Value) -> Result<Value> {
@@ -428,7 +427,20 @@ pub(super) fn env_set_mesh_point(s: &mut Session, p: &Value) -> Result<Value> {
     let index = index_param(p, "index", C)?;
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let handle = handle_param(p, C)?;
+    // A warp whose point or handle stays where it is stays a warp.
+    if warp_point_stays(&s.doc()?.doc, id, index, handle, q, C)? {
+        return ok();
+    }
     s.edit("Move Envelope Point", |d, _| {
+        // A warp's first edited point makes it a mesh envelope on its grid, in the same step.
+        if let Some(n) = d.node(id)
+            && matches!(&n.kind, NodeKind::Envelope { kind, .. } if matches!(**kind, EnvelopeKind::Warp { .. }))
+        {
+            let grid = envelope_edit_grid(n, C).ok_or_else(|| bad(C, "not a mesh envelope point"))??;
+            if let Some(NodeKind::Envelope { kind, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+                **kind = mesh_envelope(&grid);
+            }
+        }
         let Some(NodeKind::Envelope { kind, .. }) = d.node_mut(id).map(|n| &mut n.kind) else {
             return Err(bad(C, "not a mesh envelope point"));
         };

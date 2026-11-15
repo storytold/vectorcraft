@@ -11,7 +11,7 @@ use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_doc::overprint::{OverprintBlack, is_white};
 use vectorcraft_doc::{ColorMode, Node, NodeKind};
 
-use super::super::super::colorcmds::{Recolor, Scope};
+use super::super::super::colorcmds::{Recolor, Scope, keeping_series_paint};
 use super::super::super::overprint::edit_counted;
 use super::super::super::{bad, checked_ids_or_selection, number_or, switch_or, text_param};
 use crate::{Result, Session};
@@ -149,7 +149,7 @@ pub(super) fn run(s: &mut Session, p: &Value) -> Result<Value> {
                 true
             };
             let scope = Scope { fill: fixes.fill, stroke: fixes.stroke, images: false, patterns: false };
-            ink = Recolor::with_links(scope, &|c| fixes.limit(c), &links).run(d, &ids);
+            ink = keeping_series_paint(d, &ids, |d| Ok(Recolor::with_links(scope, &|c| fixes.limit(c), &links).run(d, &ids)))?;
         }
         if !fixes.remove_white_overprint && fixes.overprint_black <= 0.0 {
             return Ok(ink);

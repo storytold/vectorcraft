@@ -100,7 +100,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, options: bool, 
     }
     if transform {
         super::transform::link(app, ui);
-        ui.separator();
+        crate::chrome::group_separator(ui);
     }
     if options {
         art_option_boxes(app, ui, ui.available_width() < ART_OPTIONS_WIDTH);

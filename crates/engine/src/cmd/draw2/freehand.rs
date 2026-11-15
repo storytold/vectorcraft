@@ -11,7 +11,9 @@ use super::{
 // ---------- Pencil / Paintbrush ----------
 
 /// Fit a freehand polyline: drop jitter, build a spline through the samples (sharp turns stay
-/// corners) and simplify it to `tol`.
+/// corners) and simplify it to `tol`. A closed stroke is fitted as the open one is and closed by a
+/// straight segment from its end back to its start: fitting round the gap would curve that segment
+/// on from both ends, past them and back.
 fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
     let min = (tol * 0.3).max(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE * 0.3);
     let (Some(&p0), Some(&pn)) = (pts.first(), pts.last()) else { return SubPath::new(vec![], closed) };
@@ -41,15 +43,26 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
             (kept[i], corner)
         })
         .collect();
-    let sp = vectorcraft_tools::draw2::catmull_rom(&marked, closed);
+    let sp = vectorcraft_tools::draw2::catmull_rom(&marked, false);
     if sp.anchors.len() < 3 {
-        return sp;
+        // Two anchors closed would run back over the line itself.
+        return SubPath::new(sp.anchors, closed && n > 2);
     }
     let fitted = po::simplify_with(
         &PathData::single(sp.clone()),
         &SimplifyOptions { tolerance: tol, corner_angle_deg: 60.0, straight_lines: false, ..Default::default() },
     );
-    fitted.subpaths.into_iter().next().filter(|s| s.anchors.len() >= 2).unwrap_or(sp)
+    let mut anchors = fitted.subpaths.into_iter().next().filter(|s| s.anchors.len() >= 2).unwrap_or(sp).anchors;
+    if closed {
+        // No handle on either side of the closing segment.
+        if let Some(l) = anchors.last_mut() {
+            l.h_out = l.p;
+        }
+        if let Some(f) = anchors.first_mut() {
+            f.h_in = f.p;
+        }
+    }
+    SubPath::new(anchors, closed)
 }
 
 /// The path of a freehand stroke: fitted at `tol` ([`fit_freehand`]), or with no `tol` the points
@@ -151,7 +164,11 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let pen = PenRecord::of_samples(&samples);
     let mut pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
-    let tol = number_or(p, "fidelity", 1.5, C)?.clamp(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, 100.0);
+    let tol = number_or(p, "fidelity", 1.5, C)?;
+    let (lo, hi) = (vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, vectorcraft_tools::draw2::MAX_FIT_TOLERANCE);
+    if !(lo..=hi).contains(&tol) {
+        return Err(bad(C, format!("`fidelity` must be from {lo} to {hi} pt")));
+    }
     // The tolerance the stroke is fitted at; with `fit: false` it is not fitted.
     let fit_tol = switch_or(p, "fit", true, C)?.then_some(tol);
     let closed = switch_or(p, "closed", false, C)?;
@@ -200,9 +217,18 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             }
             None => None,
         };
-        let close_tol = (tol * 4.0).max(6.0);
-        let closing = connect.is_none() && sp.anchors.len() >= 2 && pts.last().is_some_and(|p| p.distance(first) <= close_tol);
-        if closing && let Some(l) = pts.last_mut() {
+        // `closed`, when given, says whether the stroke closes the path: the Pencil and the
+        // Paintbrush send it, by their Close Paths When Ends Are Within and Alt at the release.
+        // Left out, an extending stroke that ends within four Fidelities of the path's other end
+        // closes it: at least 6 pt and at most 400 pt, whatever the Fidelity it is fitted at.
+        let close_tol = (tol * 4.0).clamp(6.0, 400.0);
+        let near_first = pts.last().is_some_and(|p| p.distance(first) <= close_tol);
+        let wants_close = if p.get("closed").is_some_and(|v| !v.is_null()) { closed } else { near_first };
+        let closing = connect.is_none() && sp.anchors.len() >= 2 && wants_close;
+        // A stroke ending near the other end ends on it; one ending farther away closes with a
+        // straight segment back to it.
+        let ends_on_first = closing && near_first;
+        if ends_on_first && let Some(l) = pts.last_mut() {
             *l = first;
         }
         if let Some((_, _, y, _)) = &connect
@@ -219,13 +245,23 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             add.remove(0);
         }
         sp.anchors.extend(add);
-        if closing
+        if ends_on_first
             && sp.anchors.len() > 2
             && let Some(l) = sp.anchors.pop()
             && let Some(a0) = sp.anchors.first_mut()
         {
             a0.h_in = l.h_in;
             sp.closed = true;
+        } else if closing && !ends_on_first && sp.anchors.len() > 2 {
+            // Closed from away from the other end: a straight segment back to it, whatever
+            // handles the open ends carried.
+            sp.closed = true;
+            if let Some(l) = sp.anchors.last_mut() {
+                l.h_out = l.p;
+            }
+            if let Some(f) = sp.anchors.first_mut() {
+                f.h_in = f.p;
+            }
         }
         for a in &mut sp.anchors {
             *a = Anchor::with_handles(a.p, a.h_in, a.h_out);

@@ -255,7 +255,7 @@ fn bar_of(app: &VectorcraftApp) -> Option<(bool, Bar)> {
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let Some((editing, bar)) = bar_of(app) else { return };
     let mut run: Option<(&str, Value)> = None;
-    ui.separator();
+    crate::chrome::group_separator(ui);
     for (contents, icon, tip) in [(false, "dc-mesh", tl!("Edit Envelope")), (true, "shapes", tl!("Edit Contents"))] {
         if widgets::icon_button(ui, icon, tip, editing == contents, 24.0).clicked() && editing != contents {
             run = Some(("object.envelope.editContents", json!({ "editing": contents })));
@@ -495,6 +495,21 @@ mod tests {
         // A mesh envelope shows its rows and columns instead.
         app.run(RESET_MESH, json!({"rows": 3, "cols": 2})).unwrap();
         assert_eq!(bar_of(&app).map(|b| b.1), Some(Bar::Mesh { rows: 3, cols: 2 }));
+        bar_frame(&mut app, &ctx, vec![]);
+    }
+
+    #[test]
+    fn the_control_bar_shows_mesh_rows_and_columns_after_a_warp_point_is_moved() {
+        let (mut app, _) = app_with_rect();
+        app.run(MAKE_WARP, json!({"style": "arc", "bend": 50})).unwrap();
+        assert!(bar_of(&app).is_some_and(|(_, bar)| matches!(bar, Bar::Warp { ref style, .. } if style == "arc")));
+        let (id, warp) = envelope(&app);
+        let grid = vectorcraft_doc::live::warp_grid(&warp).unwrap();
+        let p = grid.points[6].p;
+        app.run("object.mesh.movePoint", json!({"id": id.0, "index": 6, "x": p.x + 10.0, "y": p.y + 10.0})).unwrap();
+        assert_eq!(bar_of(&app), Some((false, Bar::Mesh { rows: grid.rows, cols: grid.cols })));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
         bar_frame(&mut app, &ctx, vec![]);
     }
 }

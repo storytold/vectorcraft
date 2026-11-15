@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use vectorcraft_doc::links::hash_bytes;
 use vectorcraft_doc::placed_document::{PREVIEW_MAX, PREVIEW_PX_PER_PT, key_for};
-use vectorcraft_doc::{Document, ImageBlob, LinkInfo, Node, NodeKind, PageBox, PlacedDocument, PlacementOptions};
+use vectorcraft_doc::{ColorMode, Document, ImageBlob, LinkInfo, Node, NodeKind, PageBox, PlacedDocument, PlacementOptions};
 use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_pdf::CropTo;
 
@@ -221,22 +221,57 @@ pub(crate) struct Source {
     /// What is shown, in the file's coordinates: the artboard, the page's box or the art's bounds.
     pub frame: Rect,
     pub warnings: Vec<String>,
+    /// The colour mode the file's art was read in (a PDF page painted mostly in CMYK reads in CMYK).
+    pub color_mode: ColorMode,
 }
 
 /// The VectorCraft document `name` (`bytes`, from `path` when there is one) read for showing
 /// artboard `page`, or the PDF or `.ai` file for showing page `page` clipped to its box
 /// `page_box` (its art's bounds when `bounding`).
 pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bounding: bool, page_box: PageBox, cmd: &str) -> Result<Source> {
+    read_source(name, bytes, None, path, (page, bounding, page_box), cmd)
+}
+
+/// [`source`] of the file whose bytes `bytes` holds, kept by the blob without a copy of its own:
+/// several pages of one file read this way share one copy of it.
+pub(crate) fn shared_source(
+    name: &str,
+    bytes: &Arc<Vec<u8>>,
+    path: Option<&str>,
+    page: u32,
+    bounding: bool,
+    page_box: PageBox,
+    cmd: &str,
+) -> Result<Source> {
+    read_source(name, bytes, Some(bytes), path, (page, bounding, page_box), cmd)
+}
+
+/// [`source`], the blob keeping `shared` when given (else a copy of `bytes`); `shown` is the page
+/// (or artboard), whether the art's bounds are shown, and the page's box.
+fn read_source(
+    name: &str,
+    bytes: &[u8],
+    shared: Option<&Arc<Vec<u8>>>,
+    path: Option<&str>,
+    shown: (u32, bool, PageBox),
+    cmd: &str,
+) -> Result<Source> {
+    let (page, bounding, page_box) = shown;
     // The same document placed the same way is read once (placing it again is free).
     let key = key_for(&hash_bytes(bytes), page, bounding, page_box);
     // Resolving its links depends on where the file is and on what the caller may read, so a hit
     // needs the same path, and nothing is shared with or from a confined (automation) caller.
     let confined = crate::file_access::current().is_some();
-    if !confined && let Some((_, s)) = lock_memo().iter().find(|(at, s)| s.key == key && at.as_deref() == path).cloned() {
+    if !confined && let Some((_, mut s)) = lock_memo().iter().find(|(at, s)| s.key == key && at.as_deref() == path).cloned() {
+        // The same bytes: the copy given is kept instead, so the pages that share it go on sharing.
+        if let Some(b) = shared {
+            s.blob.bytes = b.clone();
+        }
         return Ok(s);
     }
     let a = document_art(name, bytes, path, page, bounding, page_box, cmd)?;
-    let mut blob = ImageBlob::new(mime(name, bytes), bytes.to_vec());
+    let bytes = shared.cloned().unwrap_or_else(|| Arc::new(bytes.to_vec()));
+    let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None };
     let shown = PlacedDocument {
         link: LinkInfo { page: Some(page), ..LinkInfo::new(path.unwrap_or(name)) },
         key: key.clone(),
@@ -249,9 +284,10 @@ pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bo
     };
     let art = group(a.nodes, a.clip);
     blob.proxy = preview(&a.doc, &art, a.frame).map(Arc::new);
+    let color_mode = a.doc.color_mode;
     // Drawing it needn't read it again.
     vectorcraft_doc::placed_document::prime(&shown, blob.bytes.clone(), (a.doc, art, a.frame));
-    let s = Source { blob, key, page_box, frame: a.frame, warnings: a.warnings };
+    let s = Source { blob, key, page_box, frame: a.frame, warnings: a.warnings, color_mode };
     if !confined {
         let mut m = lock_memo();
         if m.len() >= MEMO_SIZE {
@@ -330,7 +366,8 @@ pub(crate) fn node(d: &mut Document, s: &Source, link: LinkInfo, bounding: bool)
 }
 
 /// `d` for output: linked images and placed documents that keep only their previews get their
-/// files back, else output as their previews, with a warning.
+/// files back, else output as their previews, with a warning. The art of the stored brushes counts
+/// too.
 pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
     let (d, mut warnings) = super::super::links::full_linked_images(d, Default::default());
     let doc = match &d {
@@ -339,7 +376,7 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
     };
     let mut need: Vec<PlacedDocument> = vec![];
     let mut seen = std::collections::HashSet::new();
-    doc.visit_placed(|_, p| {
+    super::super::links::with_brush_art(doc).visit_placed(|_, p| {
         if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && seen.insert(p.key.clone()) {
             need.push(p.clone());
         }
@@ -370,7 +407,7 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
                 "{n} placed documents output as their previews: their files can't be found, or changed since they were read (relink or update them)"
             ),
         });
-        out.placed_as_previews(&previews);
+        super::super::links::editing_brush_art(&mut out, |out| out.placed_as_previews(&previews));
     }
     (Cow::Owned(out), warnings)
 }
@@ -378,8 +415,10 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
 /// Placed document `id` of `d` replaced by an editable copy of its art, as placing its file
 /// without Link gives (its resources joining `d`, renamed where `d` uses a name for something
 /// else), keeping the object's id, place, name and transparency: Break Link and Object › Expand.
+/// A placed document in opacity-mask art or in the art of a symbol, graph design or pattern is
+/// replaced where it is stored.
 pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
-    let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let n = d.stored_node(id).map(|(n, _)| Node::clone(n)).ok_or(EngineError::NoNode(id))?;
     let NodeKind::PlacedDocument(p) = &n.kind else { return Err(bad(cmd, format!("object {} is not a placed document", id.0))) };
     let blob = d.images.get(&p.key).ok_or_else(|| bad(cmd, format!("object {} has lost its file's contents: relink it", id.0)))?;
     let bytes = vectorcraft_doc::placed_document::full_bytes(p, blob)
@@ -395,6 +434,10 @@ pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
     let art = super::transformed(Node::new(d.alloc_id(), NodeKind::Group { children, clip: a.clip.is_some() }), m);
     let mut out = n.clone();
     out.kind = art.kind;
+    if d.node(id).is_none() {
+        *d.stored_node_mut(id).ok_or(EngineError::NoNode(id))? = out;
+        return Ok(());
+    }
     let (par, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
     d.remove(id)?;
     d.insert(par, index, out)?;

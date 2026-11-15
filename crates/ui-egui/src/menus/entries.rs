@@ -150,20 +150,65 @@ const NOT_INSERTED_MENUS: [&str; 4] = ["VectorCraft", "File", "Window", "Help"];
 /// Options panel.
 const MENU_ONLY_COMMANDS: [&str; 4] = ["imageTrace.make", "imageTrace.makeAndExpand", "object.pattern.make", "object.pattern.edit"];
 
+/// The View menu commands that the app runs itself, not the engine, and that can be steps of an
+/// action ([`plays_in_app`]): Outline, Pixel Preview, Trim View, Presentation Mode and Screen Mode,
+/// the zoom, fit and rotate view items, and the items that show or hide or turn snapping on or off.
+/// The saved-view slots are not among them.
+const UI_STEP_COMMANDS: [&str; 30] = [
+    "view.outline",
+    "view.pixelPreview",
+    "view.trimView",
+    "view.presentation",
+    "view.screenMode",
+    "view.zoomIn",
+    "view.zoomOut",
+    "view.fitArtboard",
+    "view.fitAll",
+    "view.actualSize",
+    "view.rotate",
+    "view.rotateToSelection",
+    "view.rotateReset",
+    "view.edges",
+    "view.artboards",
+    "view.template",
+    "view.rulers",
+    "view.videoRulers",
+    "view.boundingBox",
+    "view.textThreads",
+    "view.gradientAnnotator",
+    "view.cornerWidget",
+    "view.livePaintGaps",
+    "view.guides",
+    "view.smartGuides",
+    "view.grid",
+    "view.snapToGrid",
+    "view.snapToPixel",
+    "view.snapToPoint",
+    "view.snapToGlyph",
+];
+
+/// Whether a step that runs command `id` is a View menu command that the app runs itself
+/// ([`UI_STEP_COMMANDS`]). Action playback runs such a step on its own, as its menu item runs it,
+/// and not inside `command.batch`.
+pub fn plays_in_app(id: &str) -> bool {
+    UI_STEP_COMMANDS.contains(&id)
+}
+
 /// Whether the item labeled `label` in menu `title`, which runs command `id` with `p`, can be a step
 /// of an action. It can when it runs an engine command, which action playback runs as the menu
-/// does; its label does not end with "…", the mark of an item that asks for values first; it is not
-/// in a menu of [`NOT_INSERTED_MENUS`]; and it is not Undo, Redo, a Paste, an item that stands for a
-/// saved selection, a saved view or a recent font, a plug-in's item or an action's own command. Nor
-/// is it Object › Align, whose menu items add the Align To choice and the selection's key to their
-/// params when clicked ([`crate::panels::align::with_align_to`]), which playback does not, or another
-/// item of [`MENU_ONLY_COMMANDS`].
+/// does, or is a View menu item that the app runs itself ([`plays_in_app`]); its label does not end
+/// with "…", the mark of an item that asks for values first; it is not in a menu of
+/// [`NOT_INSERTED_MENUS`]; and it is not Undo, Redo, a Paste, an item that stands for a saved
+/// selection, a saved view or a recent font, a plug-in's item, an action's own command or another
+/// item of [`MENU_ONLY_COMMANDS`]. An Object › Align item can be a step: inserting it adds the Align
+/// To choice of that moment to its params, as clicking it does
+/// ([`crate::panels::align::with_align_to`]).
 pub fn insertable(title: &str, label: &str, id: &str, p: &Value) -> bool {
     use super::slots::{RECENT_FONT_IDS, SAVED_SELECTION_IDS, SAVED_VIEW_IDS};
-    vectorcraft_engine::find_command(id).is_some()
+    (vectorcraft_engine::find_command(id).is_some() || (title == "View" && plays_in_app(id)))
         && !label.ends_with('…')
         && !NOT_INSERTED_MENUS.contains(&title)
-        && !matches!(id, "edit.undo" | "edit.redo" | "command.batch" | "object.align")
+        && !matches!(id, "edit.undo" | "edit.redo" | "command.batch")
         && !MENU_ONLY_COMMANDS.contains(&id)
         && !id.starts_with("edit.paste")
         && !id.starts_with("prefs.")

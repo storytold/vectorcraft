@@ -144,6 +144,25 @@ impl Selection {
             self.key = None;
         }
     }
+    /// [`Self::remove`] for each of `ids`, going through the selected objects once.
+    pub fn remove_all(&mut self, ids: impl IntoIterator<Item = NodeId>) {
+        let ids: HashSet<NodeId> = ids.into_iter().collect();
+        if ids.is_empty() {
+            return;
+        }
+        self.target = None;
+        self.slices.clear();
+        self.symbol_part = None;
+        self.on_path_member = None;
+        self.objects.retain(|x| !ids.contains(x));
+        for id in &ids {
+            self.anchors.remove(id);
+            self.segments.remove(id);
+        }
+        if self.key.is_some_and(|k| ids.contains(&k)) {
+            self.key = None;
+        }
+    }
     /// Select slices `ids` (see [`Selection::slices`]) and nothing else.
     pub fn set_slices(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.clear();

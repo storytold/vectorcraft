@@ -22,13 +22,37 @@ pub struct SimplifyOptions {
     /// How far (points, the spread of a Gaussian along the path) the path is smoothed before it is
     /// refitted, so that bumps and jags come out as one curve ([`smooth_level`]); 0 for none.
     pub smooth: f64,
+    /// With [`smooth`](Self::smooth), refit each stretch fitted as one piece (between corners) within
+    /// twice the farthest the smoothing moved any of its points when that is less than `tolerance`, and
+    /// never within less than a tenth of `tolerance`. A stretch that smoothing barely moves anywhere
+    /// keeps its shape. The limit is the same along the whole stretch, so where smoothing moves some of
+    /// its points far, all of it is refitted within up to `tolerance`, as without this option.
+    pub smooth_moved_only: bool,
+    /// With [`smooth`](Self::smooth), the curve at an open subpath's first anchor leaves it along the
+    /// direction of the smoothed path over the 3 spreads next to it rather than along its first
+    /// segment. The anchor stays where it is. A closed subpath has no such end, and [`simplify_part`]
+    /// ignores this.
+    pub free_start: bool,
+    /// [`free_start`](Self::free_start) for an open subpath's last anchor.
+    pub free_end: bool,
 }
 
 impl Default for SimplifyOptions {
     fn default() -> Self {
-        Self { tolerance: 0.5, corner_angle_deg: 30.0, straight_lines: false, smooth: 0.0 }
+        Self {
+            tolerance: 0.5,
+            corner_angle_deg: 30.0,
+            straight_lines: false,
+            smooth: 0.0,
+            smooth_moved_only: false,
+            free_start: false,
+            free_end: false,
+        }
     }
 }
+
+/// The least share of the tolerance that [`SimplifyOptions::smooth_moved_only`] refits within.
+const SMOOTH_MOVED_FLOOR: f64 = 0.1;
 
 /// Simplify with the default corner threshold (30°).
 pub fn simplify(path: &PathData, tolerance: f64) -> PathData {
@@ -98,6 +122,8 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     if n == 0 || sp.closed && n < 2 {
         return Some(sp.clone());
     }
+    let closed_opts = SimplifyOptions { free_start: false, free_end: false, ..*opts };
+    let opts = if sp.closed { &closed_opts } else { opts };
     if sp.closed {
         // Start the loop at its first corner, so no fit runs across one.
         let k = (0..n).find(|&i| turn_deg(&segs[(i + n - 1) % n], &segs[i]) > opts.corner_angle_deg).unwrap_or(0);
@@ -273,6 +299,12 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
     cuts.insert(0, 0);
     cuts.push(run.len());
     let mut result: Vec<Seg> = Vec::new();
+    // Whether `part` starts where `run` does and whether it ends where `run` does, for the free ends.
+    let free = |part: &[(&Seg, usize)]| {
+        let starts = part.first().zip(run.first()).is_some_and(|((s, _), r)| std::ptr::eq(*s, r));
+        let ends = part.last().zip(run.last()).is_some_and(|((s, _), r)| std::ptr::eq(*s, r));
+        [opts.free_start && starts, opts.free_end && ends]
+    };
     for w in cuts.windows(2) {
         let piece = &run[w[0]..w[1]];
         let mut part: Vec<(&Seg, usize)> = Vec::new();
@@ -281,7 +313,7 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
             let steps = sample_steps(&s.c, tol);
             if steps <= budget.min(MAX_SEGMENT_SAMPLES) && result.len() < MAX_RUN_RESULT {
                 if part_samples + steps > MAX_FIT_SAMPLES {
-                    refit_part(&part, opts, tol, None, &mut result);
+                    refit_part(&part, opts, tol, None, free(&part), &mut result);
                     part.clear();
                     part_samples = 0;
                 }
@@ -290,7 +322,7 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
                 part.push((s, steps));
             } else {
                 part_samples = 0;
-                refit_part(&part, opts, tol, None, &mut result);
+                refit_part(&part, opts, tol, None, free(&part), &mut result);
                 part.clear();
                 if opts.straight_lines {
                     let room = MAX_RUN_RESULT.saturating_sub(result.len());
@@ -304,22 +336,49 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
                 }
             }
         }
-        refit_part(&part, opts, tol, ends.filter(|_| part.len() == run.len()), &mut result);
+        refit_part(&part, opts, tol, ends.filter(|_| part.len() == run.len()), free(&part), &mut result);
     }
     result
 }
 
 /// Adds the refit of `part`, consecutive segments with no corner between them and the steps to
-/// sample each one with, to `result`. `ends` is the direction it leaves and arrives along, when not
-/// those of its first and last segments.
-fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, ends: Option<Vec2>, result: &mut Vec<Seg>) {
+/// sample each one with, to `result`. `ends`, given only when `part` is a whole closed loop, is the
+/// direction it leaves and arrives along; when the loop is smoothed, the smoothing runs across its
+/// start and the direction comes from the smoothed samples there. `free` says whether the start and
+/// the end of `part` are free ends of an open subpath: when it is smoothed, the refit leaves such a
+/// start and arrives at such an end along [`free_end_direction`], or along its first or last segment
+/// when that gives none or turns from the segment by 90° or more.
+fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, mut ends: Option<Vec2>, free: [bool; 2], result: &mut Vec<Seg>) {
     let (Some((first, _)), Some((last, _))) = (part.first(), part.last()) else { return };
     let mut pts = Vec::new();
     for (k, (s, steps)) in part.iter().enumerate() {
         sample(&s.c, *steps, &mut pts, k == 0);
     }
+    let mut tol = tol;
+    let (mut t0, mut t1) = (start_tangent(&first.c), end_tangent(&last.c));
     if opts.smooth > 0.0 {
-        pts = smooth_points(&pts, opts.smooth);
+        let smoothed = if ends.is_some() { smooth_loop_points(&pts, opts.smooth) } else { smooth_points(&pts, opts.smooth) };
+        if ends.is_some()
+            && let (Some(&next), Some(&prev)) = (smoothed.get(1), smoothed.len().checked_sub(2).and_then(|i| smoothed.get(i)))
+        {
+            ends = unit(next - prev).or(ends);
+        }
+        if ends.is_none() {
+            if free[0]
+                && let Some(d) = free_end_direction(&smoothed, opts.smooth, false).filter(|d| d.dot(t0) > 0.0)
+            {
+                t0 = d;
+            }
+            if free[1]
+                && let Some(d) = free_end_direction(&smoothed, opts.smooth, true).filter(|d| d.dot(t1) > 0.0)
+            {
+                t1 = d;
+            }
+        }
+        if opts.smooth_moved_only {
+            tol = tol.min((2.0 * smoothing_moved(&pts, &smoothed)).max(tol * SMOOTH_MOVED_FLOOR));
+        }
+        pts = smoothed;
     }
     if opts.straight_lines {
         let keep = rdp(&pts, tol * (1.0 - SAMPLE_GAP));
@@ -328,12 +387,37 @@ fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, ends: Op
     }
     // The fit may be `tol * 0.98` from the lines between the samples, those lines may be
     // `SAMPLE_GAP` of `tol` from the path, and the curve the test below turns into a line moves by up
-    // to 1.5% of `tol`: 3/4 of how far its handles may be from the line.
-    let (t0, t1) = ends.map_or((start_tangent(&first.c), end_tangent(&last.c)), |d| (d, d));
-    for c in fit_cubics(&pts, t0, t1, tol * 0.98) {
-        let line = is_straight(&c, tol * 0.02);
+    // to 1.5% of `tol`: 3/4 of how far its handles may be from the line. The fitted curves join
+    // smoothly, so a curve becomes a line only when the line keeps both of its joins smooth. The last
+    // curve of a loop fitted across its start leaves along the loop's first segment.
+    let (t0, t1) = ends.map_or((t0, t1), |d| (d, d));
+    let fitted = fit_cubics(&pts, t0, t1, tol * 0.98);
+    let from = result.len();
+    let mut arrive = t0;
+    for (k, &c) in fitted.iter().enumerate() {
+        let leave = match fitted.get(k + 1) {
+            Some(next) => start_tangent(next),
+            None if ends.is_some() => result.get(from).map_or(t1, |s| start_tangent(&s.c)),
+            None => t1,
+        };
+        let line = is_straight(&c, tol * 0.02) && line_keeps_joins(&c, arrive, leave);
+        arrive = if line { unit(c.p3 - c.p0).unwrap_or(arrive) } else { end_tangent(&c) };
         result.push(if line { Seg::line(c.p0, c.p3) } else { Seg { c, line } });
     }
+}
+
+/// Most degrees between the line from a refitted curve's start to its end and the directions the
+/// path arrives and leaves along, for the curve to become that line: so every join next to such a
+/// line turns by at most this much. VectorCraft's own value.
+const LINE_JOIN_DEG: f64 = 0.5;
+
+/// Whether the line from `c.p0` to `c.p3` is within [`LINE_JOIN_DEG`] of `arrive`, the direction the
+/// path arrives at `c.p0` along, and of `leave`, the direction it leaves `c.p3` along. A curve whose
+/// ends are at one point, or a direction of no length, gives `false`.
+fn line_keeps_joins(c: &CubicBez, arrive: Vec2, leave: Vec2) -> bool {
+    let (Some(dir), Some(arrive), Some(leave)) = (unit(c.p3 - c.p0), unit(arrive), unit(leave)) else { return false };
+    let min = LINE_JOIN_DEG.to_radians().cos();
+    dir.dot(arrive) >= min && dir.dot(leave) >= min
 }
 
 /// `pts` (a run's samples, in order) smoothed along the path: each point becomes the Gaussian-weighted
@@ -344,6 +428,126 @@ fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, ends: Op
 /// densely the path is sampled.
 fn smooth_points(pts: &[Point], sigma: f64) -> Vec<Point> {
     smooth_points_counted(pts, sigma, &mut 0)
+}
+
+/// [`smooth_points`] for the samples `pts` of a whole closed loop, whose last sample is its first:
+/// the samples at its start are smoothed like the others, and the first and last ones move together.
+/// The loop is smoothed twice as an open run of the same samples, once from its start and once from
+/// the sample nearest halfway round by length, where [`smooth_points`] keeps each run's ends in place.
+/// Each sample takes a blend of the two that runs smoothly round the loop, with weights
+/// `(1 ± cos θ) / 2`: `θ` goes from 0 at the start to π at the halfway sample and on to 2π at the end,
+/// in proportion to length, so the start takes only the second run and the halfway sample only the
+/// first, and no sample takes any of a run's fixed ends.
+fn smooth_loop_points(pts: &[Point], sigma: f64) -> Vec<Point> {
+    let Some(m) = pts.len().checked_sub(1).filter(|&m| m >= 3) else { return smooth_points(pts, sigma) };
+    let mut along = Vec::with_capacity(pts.len());
+    let mut total = 0.0;
+    for (i, p) in pts.iter().enumerate() {
+        if let Some(prev) = i.checked_sub(1).and_then(|j| pts.get(j)) {
+            total += prev.distance(*p);
+        }
+        along.push(total);
+    }
+    if !(total.is_finite() && total > 0.0) {
+        return smooth_points(pts, sigma);
+    }
+    let half = (1..m).min_by(|&a, &b| (along[a] - total / 2.0).abs().total_cmp(&(along[b] - total / 2.0).abs())).unwrap_or(m / 2);
+    let mid = along[half];
+    if !(mid > 0.0 && mid < total) {
+        return smooth_points(pts, sigma);
+    }
+    let ring = &pts[..m];
+    let turned: Vec<Point> = ring[half..].iter().chain(&ring[..=half]).copied().collect();
+    let from_half = smooth_points(&turned, sigma);
+    let mut out = smooth_points(pts, sigma);
+    for (i, (p, &s)) in out.iter_mut().zip(&along).enumerate() {
+        // Sample `i` of the loop is sample `i - half` of `turned`, round the loop.
+        let Some(&q) = from_half.get((i + m - half) % m) else { continue };
+        let theta = if s <= mid { s / mid } else { 1.0 + (s - mid) / (total - mid) } * std::f64::consts::PI;
+        let w = 0.5 * (1.0 + theta.cos());
+        *p = p.lerp(q, w);
+    }
+    if let Some(&start) = out.first()
+        && let Some(end) = out.last_mut()
+    {
+        *end = start;
+    }
+    out
+}
+
+/// How far [`smooth_points`] moved the samples `pts` to `smoothed` (the same number of points, in
+/// order) across the path: the largest distance from a smoothed point to the lines between the
+/// samples up to two on either side of the one it came from.
+fn smoothing_moved(pts: &[Point], smoothed: &[Point]) -> f64 {
+    smoothed
+        .iter()
+        .enumerate()
+        .map(|(i, &q)| {
+            let own = pts.get(i).map_or(f64::INFINITY, |p| p.distance(q));
+            let (lo, hi) = (i.saturating_sub(2), (i + 2).min(pts.len().saturating_sub(1)));
+            (lo..hi).filter_map(|j| Some(Line::new(*pts.get(j)?, *pts.get(j + 1)?).nearest(q, 1e-9).distance_sq.sqrt())).fold(own, f64::min)
+        })
+        .fold(0.0, f64::max)
+}
+
+/// How far along the path, in spreads of the smoothing, [`free_end_direction`] looks from the end:
+/// as far as the Gaussian reaches. VectorCraft's own value.
+const FREE_END_SPREADS: f64 = 3.0;
+
+/// [`free_end_direction`] gives no direction when the path near the end spreads out from it more
+/// evenly than this: the ratio of the least to the most squared distance from a line through the end,
+/// over all such lines. VectorCraft's own value.
+const FREE_END_MAX_SPREAD: f64 = 1.0 / 3.0;
+
+/// The direction the samples `pts` of an open run leave their first point along, or with `at_end`
+/// arrive at their last point along: the direction of the line through that point that the path
+/// within [`FREE_END_SPREADS`] spreads `sigma` of it along its length, and at most half its length,
+/// lies closest to by the least sum of squared distances, pointing along the path. `None` when the
+/// path there has no length or is not finite, when its mean point is within a tenth of its length
+/// there of that point (it doubles back), or when it spreads from that point more evenly than
+/// [`FREE_END_MAX_SPREAD`].
+fn free_end_direction(pts: &[Point], sigma: f64, at_end: bool) -> Option<Vec2> {
+    let n = pts.len();
+    let total: f64 = pts.windows(2).map(|w| w[0].distance(w[1])).sum();
+    let reach = (FREE_END_SPREADS * sigma).min(total / 2.0);
+    if !(reach.is_finite() && reach > 0.0) {
+        return None;
+    }
+    let at = |i: usize| pts.get(if at_end { n - 1 - i } else { i }).copied();
+    let origin = at(0)?;
+    // The integrals along the path of v vᵀ and of v, for v from the end to each point.
+    let (mut sxx, mut sxy, mut syy, mut sum, mut along) = (0.0, 0.0, 0.0, Vec2::ZERO, 0.0);
+    let mut a = Vec2::ZERO;
+    for i in 1..n {
+        let Some(p) = at(i) else { break };
+        let mut b = p - origin;
+        let mut len = (b - a).hypot();
+        if along + len > reach {
+            b = a.lerp(b, (reach - along) / len);
+            len = reach - along;
+        }
+        sxx += len * (a.x * a.x + a.x * b.x + b.x * b.x) / 3.0;
+        syy += len * (a.y * a.y + a.y * b.y + b.y * b.y) / 3.0;
+        sxy += len * (2.0 * a.x * a.y + a.x * b.y + b.x * a.y + 2.0 * b.x * b.y) / 6.0;
+        sum += (a + b) * (len / 2.0);
+        along += len;
+        a = b;
+        if along >= reach {
+            break;
+        }
+    }
+    let (trace, apart) = (sxx + syy, (sxx - syy).hypot(2.0 * sxy));
+    // The two principal values are (trace ± apart) / 2.
+    if !(trace.is_finite() && apart.is_finite() && trace > 0.0) || trace - apart > FREE_END_MAX_SPREAD * (trace + apart) {
+        return None;
+    }
+    let mean = sum / along;
+    if !mean.hypot().is_finite() || mean.hypot() < 0.1 * along {
+        return None;
+    }
+    let d = Vec2::from_angle(0.5 * (2.0 * sxy).atan2(sxx - syy));
+    let d = if d.dot(mean) >= 0.0 { d } else { -d };
+    unit(if at_end { -d } else { d })
 }
 
 /// How many groups of samples a spread holds at most in [`smooth_points`]. Weighing them in groups
@@ -492,6 +696,7 @@ pub struct SimplifiedPart {
 /// `segments` is simplified whole, as [`simplify_with`] does. A run whose refit would have more
 /// segments than it had is left as it is (except with Convert to Straight Lines).
 pub fn simplify_part(path: &PathData, segments: &BTreeSet<(usize, usize)>, opts: &SimplifyOptions) -> SimplifiedPart {
+    let opts = &SimplifyOptions { free_start: false, free_end: false, ..*opts };
     let (mut runs, mut anchors) = (BTreeSet::new(), BTreeMap::new());
     let mut subpaths = Vec::with_capacity(path.subpaths.len());
     for (si, sp) in path.subpaths.iter().enumerate() {
@@ -678,6 +883,9 @@ pub fn smooth_options(path: &PathData, level: f64) -> SimplifyOptions {
         corner_angle_deg: SMOOTH_CORNER_DEG,
         straight_lines: false,
         smooth: size * 0.05 * level / 100.0,
+        smooth_moved_only: false,
+        free_start: false,
+        free_end: false,
     }
 }
 
@@ -860,27 +1068,10 @@ pub fn remove_anchor(sp: &mut SubPath, index: usize) -> bool {
         return false;
     }
     if (sp.closed || (index > 0 && index + 1 < n)) && n >= 3 {
-        let (pi, ni) = ((index + n - 1) % n, (index + 1) % n);
-        if !(sp.segment_is_line(pi) && sp.segment_is_line(index)) {
-            let (left, right) = (sp.segment(pi), sp.segment(index));
-            const N: usize = 16;
-            let mut pts = Vec::with_capacity(2 * N + 1);
-            sample(&left, N, &mut pts, true);
-            sample(&right, N, &mut pts, false);
-            let (t0, t1) = (start_tangent(&left), end_tangent(&right));
-            // The new curve passes the removed point at some parameter k: the left samples sit
-            // at k·i/N, the right ones at k + (1 − k)·i/N. Search k for the closest fit.
-            let fit = |k: f64| {
-                let u = (0..=N).map(|i| k * i as f64 / N as f64).chain((1..=N).map(|i| k + (1.0 - k) * i as f64 / N as f64)).collect();
-                fit_single_from(&pts, u, t0, t1)
-            };
-            let (c, _, _) = golden_min(fit, 0.0, 1.0);
-            if c.p1.is_finite() && c.p2.is_finite() {
-                sp.anchors[pi].h_out = c.p1;
-                sp.anchors[ni].h_in = c.p2;
-            }
-        }
+        refit_across(&mut sp.anchors, (index + n - 1) % n, index, (index + 1) % n);
     }
+    #[cfg(test)]
+    tests::count_moves(n - index - 1);
     sp.anchors.remove(index);
     if !sp.closed {
         // A new end has nothing beyond it.
@@ -895,6 +1086,101 @@ pub fn remove_anchor(sp: &mut SubPath, index: usize) -> bool {
         sp.closed = sp.closed && sp.anchors.len() == 2 && sp.anchors.iter().any(|a| a.has_in() || a.has_out());
     }
     true
+}
+
+/// Refit the facing handles of anchors `pi` and `ni` so one cubic follows the two segments that
+/// meet at anchor `index` between them ([`remove_anchor`]). Two straight segments are left as
+/// they are, and so are the handles when the fit is not finite.
+fn refit_across(anchors: &mut [Anchor], pi: usize, index: usize, ni: usize) {
+    let (Some(&a), Some(&b), Some(&c)) = (anchors.get(pi), anchors.get(index), anchors.get(ni)) else { return };
+    let line = |a: &Anchor, b: &Anchor| !a.has_out() && !b.has_in();
+    if line(&a, &b) && line(&b, &c) {
+        return;
+    }
+    let (left, right) = (CubicBez::new(a.p, a.h_out, b.h_in, b.p), CubicBez::new(b.p, b.h_out, c.h_in, c.p));
+    const N: usize = 16;
+    let mut pts = Vec::with_capacity(2 * N + 1);
+    sample(&left, N, &mut pts, true);
+    sample(&right, N, &mut pts, false);
+    let (t0, t1) = (start_tangent(&left), end_tangent(&right));
+    // The new curve passes the removed point at some parameter k: the left samples sit at k·i/N,
+    // the right ones at k + (1 − k)·i/N. Search k for the closest fit.
+    let fit = |k: f64| {
+        let u = (0..=N).map(|i| k * i as f64 / N as f64).chain((1..=N).map(|i| k + (1.0 - k) * i as f64 / N as f64)).collect();
+        fit_single_from(&pts, u, t0, t1)
+    };
+    let (curve, _, _) = golden_min(fit, 0.0, 1.0);
+    if curve.p1.is_finite() && curve.p2.is_finite() {
+        anchors[pi].h_out = curve.p1;
+        anchors[ni].h_in = curve.p2;
+    }
+}
+
+/// [`remove_anchor`] for each of `indexes`, the last first, with the same result, moving each
+/// anchor that stays at most once: removing many anchors from a long subpath one at a time shifts
+/// the rest of it each time. Indexes out of range and repeats are skipped. Returns how many
+/// anchors were removed.
+pub fn remove_anchors(sp: &mut SubPath, indexes: &[usize]) -> usize {
+    let total = sp.anchors.len();
+    let mut targets: Vec<usize> = indexes.iter().copied().filter(|&i| i < total).collect();
+    targets.sort_unstable_by(|a, b| b.cmp(a));
+    targets.dedup();
+    if targets.is_empty() {
+        return 0;
+    }
+    // Every anchor below the one being removed is still there, so it keeps its index, the one
+    // before it is `index - 1` and the first one left is anchor 0 until anchor 0 itself goes.
+    let mut gone = vec![false; total];
+    let mut len = total;
+    let mut last = total - 1;
+    // The lowest anchor removed so far and the first one left after it.
+    let (mut lowest, mut after_lowest) = (total, None);
+    for &index in &targets {
+        let next = if index + 1 < lowest { Some(index + 1) } else { after_lowest };
+        if (sp.closed || (index > 0 && next.is_some())) && len >= 3 {
+            let pi = if index > 0 { index - 1 } else { last };
+            refit_across(&mut sp.anchors, pi, index, next.unwrap_or(0));
+        }
+        gone[index] = true;
+        len -= 1;
+        (lowest, after_lowest) = (index, next);
+        if next.is_none() {
+            last = index.saturating_sub(1);
+        }
+        if len == 0 {
+            continue;
+        }
+        let first = if index > 0 { 0 } else { next.unwrap_or(0) };
+        if !sp.closed {
+            // A new end has nothing beyond it.
+            if let Some(a) = sp.anchors.get_mut(first) {
+                a.h_in = a.p;
+            }
+            if let Some(a) = sp.anchors.get_mut(last) {
+                a.h_out = a.p;
+            }
+        }
+        if len < 3 {
+            let ends = [first, last].map(|i| sp.anchors.get(i).is_some_and(|a| a.has_in() || a.has_out()));
+            sp.closed = sp.closed && len == 2 && (ends[0] || ends[1]);
+        }
+    }
+    if len == 0 {
+        sp.closed = false;
+    }
+    let mut kept = 0;
+    for (i, &g) in gone.iter().enumerate() {
+        if !g {
+            if kept != i {
+                sp.anchors[kept] = sp.anchors[i];
+                #[cfg(test)]
+                tests::count_moves(1);
+            }
+            kept += 1;
+        }
+    }
+    sp.anchors.truncate(kept);
+    targets.len()
 }
 
 /// The fit `f` (curve, error, worst point) with the least error for an argument in `[a, b]`, by a
@@ -1107,6 +1393,129 @@ fn end_point(sp: &SubPath, last: bool) -> Option<Point> {
 mod tests {
     use super::*;
 
+    std::thread_local! {
+        /// Anchors moved within a subpath's anchor list by [`remove_anchor`] and [`remove_anchors`].
+        static MOVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    pub(super) fn count_moves(n: usize) {
+        MOVES.set(MOVES.get() + n);
+    }
+
+    /// A subpath of `n` anchors from `seed`: corners, smooth points and points with one handle.
+    fn random_subpath(seed: &mut u64, n: usize, closed: bool) -> SubPath {
+        let mut rnd = || {
+            *seed ^= *seed << 13;
+            *seed ^= *seed >> 7;
+            *seed ^= *seed << 17;
+            *seed
+        };
+        let anchors = (0..n)
+            .map(|i| {
+                let p = Point::new(i as f64 * 20.0 + (rnd() % 100) as f64 / 10.0, (rnd() % 400) as f64 / 4.0);
+                let off = Vec2::new((rnd() % 300) as f64 / 10.0 - 15.0, (rnd() % 300) as f64 / 10.0 - 15.0);
+                match rnd() % 4 {
+                    0 => Anchor::corner(p),
+                    1 => Anchor::smooth(p, p + off),
+                    2 => Anchor::with_handles(p, p, p + off),
+                    _ => Anchor::with_handles(p, p - off, p),
+                }
+            })
+            .collect();
+        SubPath::new(anchors, closed)
+    }
+
+    /// `sp` with [`remove_anchor`] run for each of `indexes`, the last first.
+    fn one_at_a_time(sp: &SubPath, indexes: &[usize]) -> SubPath {
+        let mut order = indexes.to_vec();
+        order.sort_unstable_by(|a, b| b.cmp(a));
+        order.dedup();
+        let mut out = sp.clone();
+        for i in order {
+            remove_anchor(&mut out, i);
+        }
+        out
+    }
+
+    fn assert_same_bits(got: &SubPath, want: &SubPath, what: &str) {
+        let bits = |sp: &SubPath| -> Vec<[u64; 6]> {
+            sp.anchors.iter().map(|a| [a.p.x, a.p.y, a.h_in.x, a.h_in.y, a.h_out.x, a.h_out.y].map(f64::to_bits)).collect()
+        };
+        assert_eq!(got.closed, want.closed, "closed: {what}");
+        assert_eq!(bits(got), bits(want), "{what}");
+        assert_eq!(got.anchors.iter().map(|a| a.kind).collect::<Vec<_>>(), want.anchors.iter().map(|a| a.kind).collect::<Vec<_>>(), "{what}");
+    }
+
+    #[test]
+    fn removing_anchors_together_gives_what_removing_them_one_at_a_time_gives() {
+        let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
+        for case in 0..600 {
+            let n = case % 40 + 1;
+            let closed = case % 2 == 0;
+            let sp = random_subpath(&mut seed, n, closed);
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            // Up to n + 2 picks over 0..n + 2: runs of neighbors, both ends, everything, repeats
+            // and indexes past the end.
+            let picks = (seed % (n as u64 + 3)) as usize;
+            let mut indexes: Vec<usize> = (0..picks).map(|k| ((seed >> (k % 48)) as usize).wrapping_add(k * 7) % (n + 2)).collect();
+            if case % 5 == 0 {
+                indexes = (0..n).collect();
+            }
+            let mut got = sp.clone();
+            let removed = remove_anchors(&mut got, &indexes);
+            let want = one_at_a_time(&sp, &indexes);
+            let what = format!("case {case}: {n} anchors, closed {closed}, removing {indexes:?}");
+            assert_same_bits(&got, &want, &what);
+            assert_eq!(removed, sp.anchors.len() - want.anchors.len(), "{what}");
+        }
+    }
+
+    #[test]
+    fn removing_anchors_together_keeps_each_step_of_one_at_a_time() {
+        let curve = |p: Point, d: f64| Anchor::smooth(p, p + Vec2::new(d, 25.0));
+        let pts = [Point::new(0.0, 0.0), Point::new(50.0, 40.0), Point::new(100.0, 0.0), Point::new(150.0, 40.0), Point::new(200.0, 0.0)];
+        let cases: Vec<(SubPath, Vec<usize>)> = vec![
+            // A refit at one removal makes the next segment curved, which the next removal refits.
+            (
+                SubPath::new(
+                    vec![Anchor::corner(pts[0]), Anchor::corner(pts[1]), curve(pts[2], 20.0), Anchor::corner(pts[3]), Anchor::corner(pts[4])],
+                    false,
+                ),
+                vec![1, 2, 3],
+            ),
+            // The last anchor of an open path goes, then the one before it becomes the end.
+            (SubPath::new(pts.iter().map(|&p| curve(p, 15.0)).collect(), false), vec![2, 3, 4]),
+            // The first anchor of a closed path refits across the wrap.
+            (SubPath::new(pts.iter().map(|&p| curve(p, -10.0)).collect(), true), vec![0, 4]),
+            // A closed path down to two anchors stays closed with a handle, and opens without one.
+            (SubPath::new(pts.iter().map(|&p| curve(p, 10.0)).collect(), true), vec![1, 2, 3]),
+            (SubPath::polyline(&pts, true), vec![1, 2, 3]),
+            (SubPath::polyline(&pts, true), vec![0, 1, 2, 3]),
+            (SubPath::polyline(&pts[..1], false), vec![0]),
+            (SubPath::new(vec![], true), vec![0]),
+        ];
+        for (sp, indexes) in cases {
+            let mut got = sp.clone();
+            remove_anchors(&mut got, &indexes);
+            assert_same_bits(&got, &one_at_a_time(&sp, &indexes), &format!("{sp:?} removing {indexes:?}"));
+        }
+    }
+
+    #[test]
+    fn removing_anchors_together_moves_each_anchor_left_at_most_once() {
+        let n = 2001;
+        let pts: Vec<Point> = (0..n).map(|i| Point::new(i as f64, (i % 2) as f64)).collect();
+        let mut sp = SubPath::polyline(&pts, false);
+        let every_other: Vec<usize> = (1..n).step_by(2).collect();
+        MOVES.set(0);
+        assert_eq!(remove_anchors(&mut sp, &every_other), n / 2);
+        assert_eq!(sp.anchors.len(), n - n / 2);
+        let moves = MOVES.get();
+        assert!(moves < n, "{moves} anchors moved to remove {} of {n}", n / 2);
+    }
+
     /// The samples Object › Path › Smooth at `level` smooths for `sp`, a subpath with no corner,
     /// and the spread it smooths them with.
     fn smooth_samples(sp: &SubPath, level: f64) -> (Vec<Point>, f64) {
@@ -1180,6 +1589,31 @@ mod tests {
         let mut work = 0;
         smooth_points_counted(&pts, 1000.0, &mut work);
         assert!(work <= 400 * pts.len(), "{work} steps for {} samples", pts.len());
+    }
+
+    /// A spike on a closed loop whose samples are ten times denser on one half than on the other is
+    /// smoothed out wherever it is, including at the sample halfway through the list, which is only
+    /// about a quarter of the way round by length.
+    #[test]
+    fn loop_smoothing_smooths_a_spike_on_unevenly_sampled_loops() {
+        let c = Point::new(300.0, 300.0);
+        let on = |a: f64, r: f64| c + r * Vec2::from_angle(a);
+        let mut pts: Vec<Point> = (0..300).map(|i| on(f64::from(i) / 300.0 * std::f64::consts::PI, 100.0)).collect();
+        pts.extend((0..30).map(|i| on(std::f64::consts::PI * (1.0 + f64::from(i) / 30.0), 100.0)));
+        let m = pts.len();
+        pts.push(pts[0]);
+        for spike in [m / 2, 0, 100] {
+            let mut p = pts.clone();
+            p[spike] = on(std::f64::consts::PI * spike as f64 / 300.0, 105.0);
+            if spike == 0 {
+                p[m] = p[0];
+            }
+            let out = smooth_loop_points(&p, 10.0);
+            assert_eq!(out.len(), p.len());
+            assert_eq!(out[0], out[m], "spike at {spike}: the loop stays closed");
+            let left = out[spike].distance(c) - 100.0;
+            assert!(left < 1.0, "spike at {spike}: {left} pt of 5 pt left");
+        }
     }
 
     #[test]

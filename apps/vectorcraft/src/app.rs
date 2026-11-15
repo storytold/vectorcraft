@@ -108,6 +108,10 @@ impl eframe::App for App {
         self.app.start_pending_update();
         #[cfg(target_os = "macos")]
         super::mac_cursor::release();
+        // Dropping the app can wait for the clipboard handles to let go: the windows leave the
+        // screen first (`quit_windows`).
+        #[cfg(not(any(target_os = "macos", windows)))]
+        super::quit_windows::before_teardown(self.winit_window.as_deref());
         end_before_teardown(self.frames);
     }
 }
@@ -191,6 +195,9 @@ impl App {
         {
             self.app.services.dock_monitors = window::dock_monitors(w, zoom);
             self.monitors_listed = Some((now, zoom));
+        }
+        if let Some(w) = &self.winit_window {
+            self.display_profile.tick(w, now, self.app.session.prefs.monitor_profile_display, &self.app.display_profile, ctx);
         }
         self.app.tick(ctx);
         if self.pending_maximize {

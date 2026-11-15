@@ -33,6 +33,9 @@ pub type PlaceInbox = Arc<Mutex<Vec<PlaceArrival>>>;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DropAt {
     pub doc: u64,
+    /// The document's [`vectorcraft_engine::DocState::reverts`] at the drop: files that arrive
+    /// after File → Revert threw that content away are not placed.
+    pub reverts: u64,
     pub at: Point,
     pub embed: bool,
 }
@@ -455,7 +458,7 @@ impl VectorcraftApp {
             None if is_document(name) => return DropTarget::Open,
             None => v.center,
         };
-        DropTarget::Place(DropAt { doc: st.uid, at, embed: shift })
+        DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift })
     }
 }
 
@@ -473,7 +476,7 @@ pub type DropFile = (String, Option<String>, Vec<u8>);
 /// Files dropped on the window, each placed on a canvas or opened (and added to Open Recent
 /// Files) as its target says: the placed ones first, so the last document opened is the one
 /// shown. A file for a canvas goes to the document it was dropped on, which becomes active again;
-/// it isn't placed when that document has closed since.
+/// it isn't placed when that document has closed or been reverted since.
 pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile)>) {
     files.sort_by_key(|(target, _)| *target == DropTarget::Open);
     for (target, (name, path, bytes)) in files {
@@ -482,6 +485,10 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
                 app.status(format!("Couldn't place {name}: the document it was dropped on was closed"));
                 continue;
             };
+            if app.session.documents().get(i).is_some_and(|st| st.reverts != d.reverts) {
+                app.status(format!("Couldn't place {name}: the document it was dropped on was reverted"));
+                continue;
+            }
             app.session.set_active(i);
         }
         let r = match target {
@@ -604,7 +611,7 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
             crate::menus::invoke(app, cmd, json!({}));
         }
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
     true
 }
 

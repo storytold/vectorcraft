@@ -438,12 +438,35 @@ fn the_materials_tab_lists_the_graphics_and_maps_one_in_one_undo_step() {
     let nodes = controls(&mut app, &ctx);
     named(&nodes, "Remove Graphic");
     named(&nodes, "Scale");
-    // Inflate has no planar faces to map onto.
+    // Inflate takes no graphics.
     set_type(&mut app, "inflate").unwrap();
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
     out.textures_delta.clear();
     let text = crate::tests_labels::shapes_text(&out);
-    assert!(text.contains("Graphics map onto planar faces"), "{text}");
+    assert!(text.contains("Graphics map onto the Plane, Extrude and Revolve object types"), "{text}");
+}
+
+#[test]
+fn on_revolve_the_materials_tab_maps_onto_the_side_without_a_face_choice() {
+    let (mut app, ctx) = materials_app();
+    ctx.enable_accesskit();
+    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    let drawn = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        crate::tests_labels::shapes_text(&out)
+    };
+    assert!(drawn(&mut app).contains("Face"));
+    // Revolve keeps the graphic on its side and lists it without Face; a pick maps another.
+    set_type(&mut app, "revolve").unwrap();
+    assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
+    let history = undo_len(&app);
+    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    assert_eq!(graphics(&app).as_array().map(Vec::len), Some(2));
+    assert_eq!(undo_len(&app), history + 1);
+    named(&controls(&mut app, &ctx), "Scale");
+    let text = drawn(&mut app);
+    assert!(text.contains("Mapped graphics") && !text.contains("Face"), "{text}");
 }
 
 #[test]

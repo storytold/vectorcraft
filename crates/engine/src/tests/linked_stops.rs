@@ -214,6 +214,24 @@ fn spot_stops_with_process_plates_export_both_in_device_n_shadings() {
 }
 
 #[test]
+fn deleting_a_spot_swatch_takes_the_process_plates_of_the_stops_it_unlinks() {
+    let (mut s, id) = setup();
+    let plated = json!({"stops": [{"offset": 0, "color": "#ffffff"}, {"offset": 1, "swatch": "Ink", "tint": 50, "plates": [0.3, 0, 0, 0]}]});
+    run(&mut s, "paint.editGradient", plated.clone());
+    run(&mut s, "swatch.new", json!({"name": "Glow", "gradient": plated}));
+    let linked = gradient(&s, id).gradient.stops[1].clone();
+    assert_eq!((linked.swatch.as_deref(), linked.plates), (Some("Ink"), Some([0.3, 0.0, 0.0, 0.0])));
+    run(&mut s, "swatch.delete", json!({"name": "Ink"}));
+    // The art's stop and the gradient swatch's stop keep the color they show, unlinked and without plates.
+    let Paint::Gradient(sw) = doc(&s).swatch("Glow").unwrap().paint.clone() else { panic!("a gradient swatch") };
+    for st in [&gradient(&s, id).gradient.stops[1], &sw.gradient.stops[1]] {
+        assert_eq!((st.color, st.swatch.as_deref(), st.tint, st.plates), (linked.color, None, 1.0, None), "{st:?}");
+    }
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(gradient(&s, id).gradient.stops[1], linked, "undo brings back the link and the plates");
+}
+
+#[test]
 fn radial_spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
     let (mut s, _) = setup();
     run(
@@ -414,6 +432,34 @@ fn spot_gradients_drawn_as_images_warn() {
     let (pdf, warnings) = pdf_of(&s);
     assert!(pdf.contains("/Subtype/Image") && !pdf.contains("/Separation"), "a process Perceptual gradient");
     assert!(!spot_warning(&warnings), "{warnings:?}");
+}
+
+/// A spot gradient mixed around the hue wheel is an image in process colors with the warning,
+/// where the same stops mixed by Perceptual are a Separation or DeviceN shading: the colors
+/// between its stops are not tints or mixes of the stops' inks.
+#[test]
+fn hue_wheel_spot_gradients_export_as_images_and_warn() {
+    let (mut s, _) = setup();
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": {"c": 1, "m": 0, "y": 1, "k": 0}, "spot": true}));
+    let spot_warning = |w: &[String]| w.iter().any(|w| w.contains("spot colors in gradients exported as images"));
+    let ink_to_leaf = json!({"stops": [{"offset": 0, "swatch": "Ink"}, {"offset": 1, "swatch": "Leaf"}]});
+    for method in ["hue-clockwise", "hue-counterclockwise"] {
+        for (what, stops) in [("Ink → paper", ink_to_white(80.0)), ("Ink → Leaf", ink_to_leaf.clone())] {
+            for kind in ["linear", "radial", "conic", "diamond"] {
+                run(&mut s, "paint.editGradient", with(stops.clone(), json!({"method": method, "kind": kind})));
+                let (pdf, warnings) = pdf_of(&s);
+                assert!(pdf.contains("/Subtype/Image"), "{method} {kind} {what}: an image");
+                assert!(!pdf.contains("/Separation") && !pdf.contains("/DeviceN"), "{method} {kind} {what}: no spot ink shading");
+                assert!(spot_warning(&warnings), "{method} {kind} {what}: {warnings:?}");
+            }
+        }
+        // Without spot inks: an image, without the warning.
+        let red_blue = json!({"stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}], "kind": "linear"});
+        run(&mut s, "paint.editGradient", with(red_blue, json!({"method": method})));
+        let (pdf, warnings) = pdf_of(&s);
+        assert!(pdf.contains("/Subtype/Image"), "{method}: a process gradient is an image");
+        assert!(!spot_warning(&warnings), "{method}: {warnings:?}");
+    }
 }
 
 #[test]

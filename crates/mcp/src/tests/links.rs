@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 
+use super::TempFolder;
 use crate::{Headless, call_tool};
 
 fn run(h: &mut Headless, command: &str, params: Value) -> Value {
@@ -13,9 +14,8 @@ fn run(h: &mut Headless, command: &str, params: Value) -> Value {
 
 #[test]
 fn headless_links_report_missing_files_and_relink() {
-    let dir = std::env::temp_dir().join(format!("vectorcraft-mcp-links-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let file = |n: &str| dir.join(n).to_string_lossy().into_owned();
+    let dir = TempFolder::new("links");
+    let file = |n: &str| dir.file(n).to_string_lossy().into_owned();
     let mut h = Headless::new();
     run(&mut h, "file.new", json!({"width": 300, "height": 200}));
     let png = run(&mut h, "document.serialize", json!({"format": "png"}));
@@ -30,5 +30,4 @@ fn headless_links_report_missing_files_and_relink() {
     let r = run(&mut h, "links.relink", json!({"ids": [id], "path": file("b.png")}));
     assert_eq!(r["relinked"], json!([id]));
     assert_eq!(run(&mut h, "links.check", json!({}))["links"][0]["status"], "ok");
-    let _ = std::fs::remove_dir_all(dir);
 }

@@ -183,10 +183,18 @@ fn offset_region(
     } else {
         BezPath::new()
     };
-    let arr = Arrangement::new_budgeted(
-        vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)],
-        MAX_OFFSET_SEGMENT_PAIRS,
-    )?;
+    let parts = vec![fill, ring, open_bp];
+    match crate::sweep_axis::turned_outlines(&parts) {
+        Some(turned) => offset_faces(turned, delta, |p, r| within(crate::sweep_axis::unturn_point(p), r)).map(crate::sweep_axis::unturn),
+        None => offset_faces(parts, delta, within),
+    }
+}
+
+/// The faces of the offset by `delta` from `parts` (the closed fill, the ring stroked around it and
+/// the stroke of the open subpaths, in that order), less the spurious ones that `within` finds.
+fn offset_faces(parts: Vec<BezPath>, delta: f64, within: impl Fn(kurbo::Point, f64) -> bool) -> Result<PathData, PathOpsError> {
+    let d = delta.abs();
+    let arr = Arrangement::new_budgeted(parts.into_iter().map(|p| (p, FillRule::NonZero)).collect(), MAX_OFFSET_SEGMENT_PAIRS)?;
     let c = if delta >= 0.0 { arr.contours_covering(|c| !c.is_empty()) } else { arr.contours_covering(|c| c.contains(&0) && !c.contains(&1)) };
     // When `d` exceeds a curvature radius the stroker's inner offset inverts and its loops cancel
     // winding, leaving faces uncovered that are really within `d` of the path. Every face of the

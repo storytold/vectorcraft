@@ -361,7 +361,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     if widgets::flat_button(ui, tl!("Expand"), 64.0).clicked() {
         app.run("imageTrace.expand", json!({})).ok();
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
     true
 }
 

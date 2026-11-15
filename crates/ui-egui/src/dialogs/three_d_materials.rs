@@ -1,13 +1,13 @@
 //! The 3D and Materials panel's Materials tab: the document's Graphics (its symbols) as thumbnails,
-//! Add as Single Graphic, and the graphics mapped onto the selected 3D object's planar faces with
-//! their face, position, size and turn. Picking a thumbnail maps that graphic onto the selected
-//! objects (`threeD.mapGraphic`); art dropped on the thumbnails becomes a graphic
+//! Add as Single Graphic, and the graphics mapped onto the selected 3D object (its planar faces, or
+//! Revolve's side) with their face, position, size and turn. Picking a thumbnail maps that graphic
+//! onto the selected objects (`threeD.mapGraphic`); art dropped on the thumbnails becomes a graphic
 //! (`threeD.addGraphic`). Editing a mapped graphic changes the effect's `graphics` parameter, which
 //! the panel sends as it sends every other setting.
 
 use egui::{Sense, Stroke, StrokeKind, vec2};
 use serde_json::{Value, json};
-use vectorcraft_effects::{GRAPHICS, MappedGraphic, PlanarFace, ROTATE};
+use vectorcraft_effects::{GRAPHICS, MappedGraphic, PlanarFace, REVOLVE, ROTATE};
 
 use super::revolve::{heading, label, number};
 use crate::VectorcraftApp;
@@ -96,7 +96,7 @@ pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     }
     ui.add_space(10.0);
     if !takes {
-        dim_label(ui, tl!("Graphics map onto planar faces: pick the Plane or Extrude object type."));
+        dim_label(ui, tl!("Graphics map onto the Plane, Extrude and Revolve object types."));
         return;
     }
     let raw = d.fields.get(GRAPHICS).cloned().unwrap_or(Value::Null);
@@ -121,7 +121,8 @@ pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     ui.add_space(6.0);
     let Some(g) = list.get(index).cloned() else { return };
     let mut edited = g.clone();
-    if effect != ROTATE {
+    // A plane has one face, and Revolve's graphics go on its side.
+    if effect != ROTATE && effect != REVOLVE {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             label(ui, tl!("Face"));

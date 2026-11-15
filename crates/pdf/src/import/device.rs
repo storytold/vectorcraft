@@ -33,6 +33,7 @@ impl<'a> Device<'a> for Builder<'_> {
 
     fn draw_path(&mut self, path: &BezPath, transform: Affine, paint: &craft_pdf::interpret::Paint<'a>, draw_mode: &PathDrawMode) {
         self.flush_glyphs();
+        self.flush_type3();
         let walked = self.walked(false);
         if self.hold_glyph_stroke(path, transform, paint, draw_mode, walked) {
             return;
@@ -174,7 +175,7 @@ impl<'a> Device<'a> for Builder<'_> {
             GlyphDrawMode::Invisible => {
                 let typed = match glyph {
                     Glyph::Outline(o) => self.type_glyph(o, transform * glyph_transform, mean_scale(transform), None, None, false),
-                    Glyph::Type3(_) => false,
+                    Glyph::Type3(t3) => self.type_type3_glyph(t3, transform * glyph_transform, mean_scale(transform), None, None, false),
                 };
                 if !typed {
                     self.warn(INVISIBLE_TEXT_NOTE);
@@ -186,6 +187,7 @@ impl<'a> Device<'a> for Builder<'_> {
         };
         match glyph {
             Glyph::Outline(o) => {
+                self.flush_type3();
                 let scale = mean_scale(transform);
                 let overprint = self.glyph_overprint(stroke.is_some());
                 if self.type_glyph(o, transform * glyph_transform, scale, Some(paint), stroke.as_ref(), overprint) {
@@ -216,16 +218,26 @@ impl<'a> Device<'a> for Builder<'_> {
                 if self.nested >= MAX_NESTED {
                     return;
                 }
-                self.flush();
-                self.nested += 1;
-                t3.interpret(self, transform, glyph_transform, paint);
-                self.nested -= 1;
+                let scale = mean_scale(transform);
+                let overprint = self.glyph_overprint(stroke.is_some());
+                if self.type_type3_glyph(t3, transform * glyph_transform, scale, Some(paint), stroke.as_ref(), overprint) {
+                    return;
+                }
+                self.flush_glyphs();
+                self.flush_text();
+                let art = self.nested(self.page, self.blend, |b| {
+                    t3.interpret(b, transform, glyph_transform, paint);
+                });
+                if let Some(nodes) = art {
+                    self.push_type3_nodes(nodes);
+                }
             }
         }
     }
 
     fn draw_image(&mut self, image: Image<'a, '_>, transform: Affine) {
         self.flush_glyphs();
+        self.flush_type3();
         self.flush_text();
         match image {
             Image::Raster(r) => {

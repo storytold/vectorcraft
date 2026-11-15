@@ -8,7 +8,9 @@
 //! (`…settings as file.new`), or, naming none, any key (the options of the format an export picks). Objects inside a value aren't
 //! described key by key, so only the top level is checked, except in the options of an export, a
 //! save or Export for Screens: those are checked against the options of the formats the command
-//! can write, in `marks`, `bleed` and the other objects too ([`check_export_options`]).
+//! can write, in `marks`, `bleed` and the other objects too ([`check_export_options`]); and in the
+//! objects of an array whose keys `MEMBER_KEYS` lists, such as the `items` of
+//! `object.setLiveShape` and `addon.pathtools.cornerSet`.
 //!
 //! [`Session::execute`] answers a key the description doesn't name with a parameter error
 //! ([`check_params`]), for every caller (the app, the control channel, MCP, the CLI) and for the
@@ -172,9 +174,16 @@ fn accepted(doc: &'static str, depth: usize) -> Option<Vec<&'static str>> {
     Some(keys)
 }
 
+/// Every key the description `doc` takes, those of the commands its `…` entries name included, or
+/// `None` when that isn't known: it doesn't parse, a `…` entry names no command, or one names a
+/// command in [`UNCHECKED`].
+pub(crate) fn accepted_keys(doc: &'static str) -> Option<Vec<&'static str>> {
+    accepted(doc, 0)
+}
+
 /// Does the description `doc` name `key` as a parameter (its own keys, and those of the commands
 /// its `…` entries name)?
-pub(crate) fn takes_key(doc: &'static str, key: &str) -> bool {
+pub fn takes_key(doc: &'static str, key: &str) -> bool {
     doc_keys(doc).is_ok_and(|parsed| parsed.keys.contains(&key)) || accepted(doc, 0).is_some_and(|keys| keys.contains(&key))
 }
 
@@ -247,6 +256,22 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
     }
 }
 
+/// Parameters a command takes instead of one another: (command, key, other key). Giving both,
+/// neither null, is a parameter error ([`check_exclusive_keys`]).
+const EXCLUSIVE_KEYS: &[(&str, &str, &str)] = &[("addon.pathtools.cornerSet", "items", "ids"), ("addon.pathtools.cornerRemove", "items", "ids")];
+
+/// `params` of command `id` give at most one of each pair in [`EXCLUSIVE_KEYS`], or the parameter
+/// error naming the pair.
+fn check_exclusive_keys(id: &str, params: &Value) -> Result<()> {
+    let given = |key: &str| params.get(key).filter(|v| !v.is_null());
+    for (_, key, other) in EXCLUSIVE_KEYS.iter().filter(|(c, ..)| *c == id) {
+        if given(key).is_some() && given(other).is_some() {
+            return Err(bad(id, format!("give `{key}` or `{other}`, not both")));
+        }
+    }
+    Ok(())
+}
+
 /// The parameter error of command `id` for `key`, which isn't one of `keys`: with the nearest of
 /// them, or all of them.
 pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
@@ -260,6 +285,45 @@ pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError 
             None => format!("unknown parameter `{key}`; the command takes: {}", keys.join(", ")),
         },
     )
+}
+
+/// Commands whose params hold an array of objects with keys of their own: the command, the key of
+/// the array and the keys each of its objects takes.
+const MEMBER_KEYS: &[(&str, &str, &[&str])] = &[
+    ("object.setLiveShape", "items", &["id", "corners"]),
+    ("addon.pathtools.cornerSet", "items", &["id", "anchors"]),
+    ("addon.pathtools.cornerRemove", "items", &["id", "anchors"]),
+];
+
+/// Each object in the arrays [`MEMBER_KEYS`] names for command `id` has only the keys it lists, or
+/// the parameter error naming the first other one with its place (`items[0].corner`), and the
+/// nearest accepted key or the accepted ones. A member that isn't an object is the command's to
+/// report.
+fn check_member_keys(id: &str, params: &Value) -> Result<()> {
+    for (_, list, keys) in MEMBER_KEYS.iter().filter(|(c, ..)| *c == id) {
+        let Some(members) = params.get(*list).and_then(Value::as_array) else { continue };
+        for (i, member) in members.iter().enumerate() {
+            let Value::Object(given) = member else { continue };
+            let Some(key) = given.keys().find(|k| !keys.contains(&k.as_str())) else { continue };
+            let at = |k: &str| format!("{list}[{i}].{k}");
+            let near = nearest(key, keys);
+            let key = at(&shown_key(key));
+            return Err(bad(
+                id,
+                match near {
+                    Some(near) => {
+                        let near = at(near);
+                        format!("unknown parameter `{key}`; did you mean `{near}`?")
+                    }
+                    None => {
+                        let keys = keys.iter().map(|k| at(k)).collect::<Vec<_>>().join(", ");
+                        format!("unknown parameter `{key}`; the command takes: {keys}")
+                    }
+                },
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// `params` of built-in effect `effect`, as command `id` was given them (#1592): only keys the
@@ -318,7 +382,8 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
         return Err(bad(id, format!("`version` must be 0 or {newest}")));
     }
     check_effect_color(id, effect, params)?;
-    check_effect_channel(id, effect, params)
+    check_effect_channel(id, effect, params)?;
+    check_effect_center(id, effect, params)
 }
 
 /// The type of the values in `params` of effect `effect`, as command `id` was given them: a key
@@ -436,6 +501,22 @@ pub(crate) fn check_effect_channel(id: &str, effect: &str, params: &Value) -> Re
     Err(bad(id, format!("`{key}` must be one of {}", vectorcraft_render::effects::CHANNELS.join(", "))))
 }
 
+/// The Blur Center (`centerX`, `centerY`) in `params` of Radial Blur (`effect`), as command `id`
+/// was given it: a parameter error unless each is a number from 0 to 1 (a share of the object's
+/// bounds). `effect.apply` and `effect.setParams` run this themselves before they edit, as they
+/// run [`check_effect_channel`].
+pub(crate) fn check_effect_center(id: &str, effect: &str, params: &Value) -> Result<()> {
+    if effect != "blur.radial" {
+        return Ok(());
+    }
+    for key in ["centerX", "centerY"] {
+        if params.get(key).is_some_and(|v| !v.as_f64().is_some_and(|x| (0.0..=1.0).contains(&x))) {
+            return Err(bad(id, format!("`{key}` must be a number from 0 to 1")));
+        }
+    }
+    Ok(())
+}
+
 /// Commands whose params aren't checked yet (#1442): they read keys in ways the audit of the
 /// descriptions couldn't follow (a list of keys in a loop, a whole object read as settings), so
 /// their descriptions aren't proven to name every key they take. Sorted; take a command out once
@@ -519,7 +600,6 @@ pub const UNCHECKED: &[&str] = &[
     "object.rasterize",
     "object.repeat.options",
     "object.setBounds",
-    "object.setLiveShape",
     "object.setOverprint",
     "object.setProps",
     "object.slice.divide",
@@ -773,9 +853,7 @@ fn check_export_options(id: &str, params: &Value) -> Result<()> {
             NO_SAVE_FORMAT
         }
         "document.export" | "document.exportSelection" | "document.serialize" => {
-            // `richBlack` is Appearance of Black's setting for a raster export, and `params` an
-            // exporter plug-in's own.
-            keys.extend(["includeArtboardFill", "selectedOnly", "richBlack", "params"]);
+            keys.extend(super::fileio::EXPORT_PARAMS);
             keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
             NO_FORMAT
         }
@@ -807,9 +885,9 @@ fn check_export_options(id: &str, params: &Value) -> Result<()> {
     check_option_keys(id, "", given, &keys, why_not, &trees)
 }
 
-/// [`check_keys`] for an engine command, the steps of a `command.batch` or an `action.batch` included,
-/// [`check_effect_params`] for the effect `effect.apply` adds and [`check_export_options`] for an
-/// export. A command the engine doesn't have passes: running it reports that.
+/// [`check_keys`], [`check_exclusive_keys`] and [`check_member_keys`] for an engine command, the steps of a `command.batch` or an
+/// `action.batch` included, [`check_effect_params`] for the effect `effect.apply` adds and
+/// [`check_export_options`] for an export. A command the engine doesn't have passes: running it reports that.
 pub fn check_params(id: &str, params: &Value) -> Result<()> {
     check_params_in(id, params, false)
 }
@@ -828,6 +906,8 @@ fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
         return Ok(());
     }
     check_keys(id, spec.params, params)?;
+    check_exclusive_keys(id, params)?;
+    check_member_keys(id, params)?;
     if in_batch {
         crate::schemas::check(spec, params, false)?;
     }

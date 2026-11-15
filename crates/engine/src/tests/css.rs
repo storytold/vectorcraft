@@ -57,6 +57,28 @@ fn type_gives_font_properties_and_gradients_css_gradients() {
     assert!(text.contains("background-image: linear-gradient(90deg, "), "{text}");
 }
 
+/// CSS gradients mix linearly: a gradient mixed around the hue wheel is written through the stops
+/// on its way around the wheel, so red to blue lists green one way and magenta the other.
+#[test]
+fn gradients_mixed_around_the_hue_wheel_give_css_the_stops_on_their_way() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 0, "y": 100, "width": 100, "height": 50}));
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    let gradient = |s: &mut Session, method: &str| {
+        run(s, "paint.setFill", json!({"gradient": {"kind": "linear", "method": method, "stops": stops}}));
+        let text = css(&run(s, "css.selection", json!({}))).to_string();
+        text.lines().find(|l| l.contains("linear-gradient(")).unwrap_or_else(|| panic!("a gradient in {text}")).to_string()
+    };
+    let classic = gradient(&mut s, "classic");
+    assert_eq!(classic.matches('%').count(), 2, "{classic}");
+    for (method, middle, other) in [("hue-counterclockwise", "#00ff00 50%", "#ff00ff"), ("hue-clockwise", "#ff00ff 50%", "#00ff00")] {
+        let line = gradient(&mut s, method);
+        assert!(line.matches('%').count() > 2, "{method}: {line}");
+        assert!(line.contains("#ff0000 0%") && line.contains("#0000ff 100%"), "{method}: {line}");
+        assert!(line.contains(middle) && !line.contains(other), "{method}: {line}");
+    }
+}
+
 #[test]
 fn generate_covers_the_document_and_an_empty_selection_has_none() {
     let mut s = session();

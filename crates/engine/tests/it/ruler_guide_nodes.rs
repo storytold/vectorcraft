@@ -103,10 +103,12 @@ fn ruler_guides_are_not_art_to_select_paint_or_inspect() {
     let layer_row = s.execute("document.inspect", &json!({"ids": [layer.0]})).unwrap();
     let listed = layer_row.to_string();
     assert!(guides.iter().all(|g| !listed.contains(&format!("\"id\":{}", g.0))), "{listed}");
-    // Unlock All does not reach a locked guide.
+    // Unlock All unlocks a guide locked on its own and selects it as a guide, not as art.
     Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(guides[0]).unwrap().locked = true;
     s.execute("object.unlockAll", &json!({})).unwrap();
-    assert!(s.doc().unwrap().doc.node(guides[0]).unwrap().locked);
+    let st = s.doc().unwrap();
+    assert!(!st.doc.node(guides[0]).unwrap().locked);
+    assert_eq!((st.selection.guides.clone(), st.selection.objects.clone()), (vec![guides[0]], vec![]));
 }
 
 #[test]

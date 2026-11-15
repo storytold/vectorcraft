@@ -60,6 +60,13 @@ pub fn with_align_to(app: &VectorcraftApp, base: Value) -> Value {
     align_params(base, align_to(app), objects_aligned(app))
 }
 
+/// The params that an Object → Align menu item with params `p` sends: [`with_align_to`] unless `p`
+/// names `to` or anchor points are selected (Direct Selection), when `p` goes unchanged and the
+/// points align to their own bounds. Insert Menu Item stores the same params as the item's step.
+pub fn menu_align_params(app: &VectorcraftApp, p: Value) -> Value {
+    if p.as_object().is_some_and(|o| !o.contains_key("to")) && !has_anchors(app) { with_align_to(app, p) } else { p }
+}
+
 /// The selected objects that Align aligns as objects: none while anchor points are selected
 /// (Direct Selection), since the points align and a single path's points must not go to the
 /// artboard as a single object does (#1636).

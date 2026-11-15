@@ -33,6 +33,9 @@ pub struct Job {
     /// The worker may keep the frame for its next frame to copy from
     /// ([`crate::canvas::render_job`]). Off: the worker holds no frame after this one.
     pub may_keep: bool,
+    /// The display profile the finished frame is converted into ([`crate::display_profile`]).
+    /// The frame the worker keeps stays sRGB.
+    pub display: Option<Arc<vectorcraft_color::cms::display::DisplayTransform>>,
 }
 
 pub struct Done {

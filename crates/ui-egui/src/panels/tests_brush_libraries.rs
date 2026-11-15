@@ -103,7 +103,7 @@ fn clicking_a_library_brush_adds_it_to_the_documents_brushes_in_one_step() {
     assert!(has(&app, "Teardrop") && has(&app, "Double Line"));
     // Find filters by name; list rows give the type.
     let lib = BrushLibraries::get(&app, "art-ribbons").unwrap().1;
-    let rows = BrushLibraries::rows(&lib, "tear");
+    let rows = BrushLibraries::rows(&lib, "art-ribbons", "tear");
     assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Teardrop"]);
     assert_eq!(BrushLibraries::describe(rows[0].item.unwrap()), "Art");
     // Dragging a brush out of the panel carries it.
@@ -127,7 +127,7 @@ fn the_ink_and_wash_library_opens_and_a_click_adds_and_applies_its_brush() {
     let r = app.run("window.brushLibrary", json!({"library": "ink-and-wash"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("ink-and-wash"), Some(4)));
     let lib = BrushLibraries::get(&app, "ink-and-wash").unwrap().1;
-    let rows = BrushLibraries::rows(&lib, "");
+    let rows = BrushLibraries::rows(&lib, "ink-and-wash", "");
     assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Tapered Ink", "Brush Pen", "Soft Wash", "Pooling Wash"]);
     let path = app.run("shape.line", json!({"x1": 10, "y1": 10, "x2": 150, "y2": 60})).unwrap()["id"].as_u64().unwrap();
     let (undo, brushes) = (undo_len(&app), count(&app));
@@ -138,6 +138,48 @@ fn the_ink_and_wash_library_opens_and_a_click_adds_and_applies_its_brush() {
     click(&mut app, &ctx, "Brush Pen", Modifiers::NONE, 2.0);
     assert!(has(&app, "Brush Pen"));
     assert_eq!(app.run("brush.list", json!({})).unwrap()["current"], "Brush Pen");
+}
+
+/// A built-in library lists its brushes in the UI language, and Find matches the name shown and
+/// the brush's own name. The brush keeps its own name for its tile, a click and the document's
+/// Brushes. A library loaded from a document lists its brushes as they are named.
+#[test]
+fn built_in_library_brushes_are_listed_in_the_ui_language() {
+    let dir = std::env::temp_dir().join(format!("vc-brush-names-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut app = app();
+    let ctx = context();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
+    let list = |app: &mut VectorcraftApp, t: f64| {
+        let panel = last_open(&app.ui).map(LibraryPanel::panel).unwrap_or_default();
+        app.run("ui.libraryPanel", json!({"panel": panel, "view": "smallList"})).unwrap();
+        frame(&ctx, vec![], t, |ui| library_panel::show_window(app, ui.ctx()));
+        frame(&ctx, vec![], t + 0.25, |ui| library_panel::show_window(app, ui.ctx()))
+    };
+    app.run("window.brushLibrary", json!({"library": "ink-and-wash"})).unwrap();
+    let texts = list(&mut app, 0.0);
+    assert!(texts.iter().any(|t| t == "Encre effilée"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Tapered Ink"), "{texts:?}");
+    let lib = BrushLibraries::get(&app, "ink-and-wash").unwrap().1;
+    for query in ["effil", "tapered"] {
+        let rows = BrushLibraries::rows(&lib, "ink-and-wash", query);
+        assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Tapered Ink"], "{query}");
+    }
+    assert!(BrushLibraries::rows(&lib, "loaded/1", "effil").is_empty(), "another library's brush is matched by its own name only");
+    click(&mut app, &ctx, "Tapered Ink", Modifiers::NONE, 1.0);
+    assert!(has(&app, "Tapered Ink"));
+    assert_eq!(app.run("brush.list", json!({})).unwrap()["current"], "Tapered Ink");
+    // The document's brushes, opened as a library, keep their names.
+    let doc = dir.join("Inks.vectorcraft");
+    let b64 = app.run("document.serialize", json!({})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    std::fs::write(&doc, vectorcraft_format::base64_decode(&b64).unwrap()).unwrap();
+    app.run("window.brushLibrary.other", json!({"path": doc.to_string_lossy()})).unwrap();
+    let texts = list(&mut app, 2.0);
+    assert!(texts.iter().any(|t| t == "Tapered Ink"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Encre effilée"), "{texts:?}");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]

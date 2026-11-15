@@ -10,7 +10,7 @@ use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject};
 
-use super::{first_selected, pstate, set_pstate};
+use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
@@ -330,12 +330,14 @@ fn current(app: &VectorcraftApp) -> Option<(Node, Vec<TabStop>, f64)> {
 
 /// As [`current`], with all the attributes of the paragraph whose stops the panel shows, its left
 /// indent as laid out ([`ParaStyle::laid_out_left_indent`]: its list level's indent added), where
-/// the ruler shows it.
+/// the ruler shows it. Without the Type tool editing text, the panel shows the first paragraph of
+/// the first selected text object, also when that text is in a selected group or follows a
+/// selected object that is not text.
 fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
     let editing = super::character::text_editing(app);
     let n = match editing {
         Some((id, _, _)) => app.session.active()?.doc.node(id)?.clone(),
-        None => first_selected(app)?,
+        None => super::character::first_selected_text_node(app)?.clone(),
     };
     let NodeKind::Text(t) = &n.kind else { return None };
     let para = editing.map_or(0, |(_, a, _)| t.paragraphs_in(a, a).start);
@@ -417,7 +419,9 @@ fn stops_json(stops: &[TabStop]) -> Value {
     )
 }
 
-/// Run `text.tabs.set` with `stops` on the text the panel acts on. Returns false when it fails.
+/// Run `text.tabs.set` with `stops` on the text the panel acts on: with the Selection tool, every
+/// frame of the selected stories ([`super::character::selected_stories`]). Returns false when it
+/// fails.
 fn apply(app: &mut VectorcraftApp, stops: &[TabStop]) -> bool {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
@@ -428,7 +432,9 @@ fn apply(app: &mut VectorcraftApp, stops: &[TabStop]) -> bool {
         };
         app.run("text.tabs.set", p).is_ok()
     } else {
-        app.run("text.tabs.set", json!({"stops": stops_json(stops)})).is_ok()
+        let mut p = json!({"stops": stops_json(stops)});
+        super::character::target_selected_stories(app, &mut p);
+        app.run("text.tabs.set", p).is_ok()
     }
 }
 
@@ -725,6 +731,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     resp.on_hover_text(tl!("Click to add a tab stop, drag to move it, drag it off the ruler to delete it"));
 }
 
+/// Whether a paragraph of the whole story Clear All Tabs acts on has tab stops: after Select All in
+/// threaded text, every frame of the edited story; with the Selection tool, every frame of the
+/// selected stories ([`super::character::selected_stories`]).
+fn story_has_tabs(app: &VectorcraftApp) -> bool {
+    let has_tabs = |t: &TextObject| (0..t.paragraph_count()).any(|i| !t.para_at(i).tabs.is_empty());
+    match (super::character::text_editing(app), super::character::text_story(app), app.session.active()) {
+        (Some(_), Some(story), Some(st)) => {
+            story.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Text(t)) if has_tabs(t)))
+        }
+        (Some(_), _, _) => false,
+        (None, _, _) => super::character::selected_story_texts(app).into_iter().any(has_tabs),
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((_, para, _)) = current_para(app) else {
         ui.add_enabled(false, egui::Button::new(tl!("Select text")).frame(false));
@@ -740,7 +760,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if sel >= stops.len() {
         sel = stops.len().saturating_sub(1);
     }
-    if menu_item(ui, tl!("Clear All Tabs"), !stops.is_empty(), false)
+    if menu_item(ui, tl!("Clear All Tabs"), !stops.is_empty() || story_has_tabs(app), false)
         && let Err(e) = super::paragraph::run_on_paragraphs(app, "text.tabs.clear", json!({}))
     {
         app.status(e);

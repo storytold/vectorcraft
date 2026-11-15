@@ -1,21 +1,20 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Instant;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::findfiles::Rules;
 
 use super::*;
+use crate::tests_folder::Folder;
 
 fn frame(app: &mut VectorcraftApp) -> String {
     crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
 }
 
-/// A fresh temporary folder (canonical, as a search reports it).
-fn folder(tag: &str) -> PathBuf {
+/// A fresh temporary folder (canonical, as a search reports it), removed when dropped.
+fn folder(tag: &str) -> Folder {
     let dir = vectorcraft_testkit::temp_dir(&format!("missing-fonts-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    vectorcraft_engine::cmd::findfiles::plain(std::fs::canonicalize(&dir).unwrap())
+    Folder::adopt(vectorcraft_engine::cmd::findfiles::plain(std::fs::canonicalize(&dir).unwrap()))
 }
 
 /// An app that reads files and whose searches may go anywhere in `root`, on two threads.
@@ -191,7 +190,7 @@ fn closing_the_dialog_stops_its_search() {
     app.session.search_threads = Some(1);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Gone", "font": "No Such Font Family"})).unwrap();
-    app.run("ui.missingFontsDialog", json!({"folder": root})).unwrap();
+    app.run("ui.missingFontsDialog", json!({"folder": root.as_path()})).unwrap();
     let id = app.ui.dialog_search.expect("the dialog's search");
     super::super::cancel(&mut app);
     assert!(app.ui.dialog.is_none() && app.ui.dialog_search.is_none());
@@ -275,7 +274,8 @@ fn the_question_comes_back_after_a_dialog_that_took_its_place() {
 /// opens without the question.
 #[test]
 fn generic_families_are_not_asked_about() {
-    let mut app = app_for(&folder("generic"));
+    let root = folder("generic");
+    let mut app = app_for(&root);
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><text x="10" y="40" font-family="sans-serif">A</text></svg>"#;
     crate::io::open_bytes(&mut app, "generic.svg", svg.as_bytes(), None).unwrap();
     let listed = app.session.execute("text.fonts", &json!({})).unwrap();

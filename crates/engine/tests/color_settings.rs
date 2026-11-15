@@ -149,6 +149,34 @@ fn loading_an_assigned_profile_again_keeps_it_in_use() {
     assert_eq!(cms::working_settings(), working);
 }
 
+/// A document behind the front one draws through its own assigned profile: loading that profile's
+/// file again or removing it redraws the document, and the front document stays as it was.
+#[test]
+fn loading_or_removing_a_back_documents_profile_redraws_it() {
+    const NAME: &str = "Back RGB P";
+    let _g = settings();
+    let dir = fresh_dir("back-assigned");
+    let _reset = ColorSettingsReset { profile: Some(NAME), paths: vec![dir.clone()] };
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("back.icc");
+    std::fs::write(&path, icc_named(NAME)).unwrap();
+    let mut s = session();
+    let load = |s: &mut Session| assert_eq!(exec(s, "color.loadProfile", json!({"path": path.to_str().unwrap()}))["name"], NAME);
+    load(&mut s);
+    exec(&mut s, "edit.assignProfile", json!({"rgb": NAME}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let revisions = |s: &Session| s.documents().iter().map(|d| d.revision).collect::<Vec<_>>();
+    let before = revisions(&s);
+    load(&mut s);
+    let loaded = revisions(&s);
+    assert!(loaded[0] > before[0], "the back document assigned the profile redraws after a load");
+    assert_eq!(loaded[1], before[1], "the front document does not use it");
+    exec(&mut s, "color.removeProfile", json!({"name": NAME}));
+    let removed = revisions(&s);
+    assert!(removed[0] > loaded[0], "the back document assigned the profile redraws after a removal");
+    assert_eq!(removed[1], loaded[1], "the front document does not use it");
+}
+
 /// A batch that assigns a profile and then changes the color mode, as Document Setup's OK does,
 /// converts the colors through the profile it assigns.
 #[test]
@@ -178,6 +206,106 @@ fn a_batch_converts_through_the_profile_it_assigns() {
     exec(&mut device, "edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK}));
     exec(&mut device, "file.documentColorMode", json!({"mode": "cmyk"}));
     assert_eq!(converted, fill(&device, b));
+}
+
+/// The profiles a document is assigned are in use while it is in front: a new or opened document
+/// assigned none draws through the working spaces, switching back to the assigned document puts its
+/// profile in use again, and closing a document puts the profiles of the document left in front, or
+/// with none open the working spaces, in use.
+#[test]
+fn assigned_profiles_follow_the_front_document() {
+    let _g = settings();
+    let dir = fresh_dir("front-profiles");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    std::fs::create_dir_all(&dir).unwrap();
+    let tagged = dir.join("tagged.vectorcraft");
+    let mut s = session();
+    let working = cms::working_settings();
+    assert_ne!(working.cmyk, cms::DEVICE_CMYK);
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK}));
+    exec(&mut s, "file.saveAs", json!({"path": tagged.to_str().unwrap()}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    assert_eq!(cms::active_settings(), working, "a new document draws through the working spaces");
+    exec(&mut s, "document.activate", json!({"index": 0}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "back in front, the document draws through its profile");
+    assert!(s.set_active(1));
+    assert_eq!(cms::active_settings(), working, "a tab switch to the untagged document");
+    exec(&mut s, "file.close", json!({}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "the document left in front draws through its profile");
+    exec(&mut s, "file.close", json!({}));
+    assert_eq!(cms::active_settings(), working, "no document open: the working spaces");
+    exec(&mut s, "document.open", json!({"path": tagged.to_str().unwrap()}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "an opened document draws through its saved profile");
+}
+
+/// Undo and Redo of Assign Profile, and File › Revert to a file assigned no profile, put the
+/// profiles the document has then in use.
+#[test]
+fn undo_redo_and_revert_put_the_document_profiles_in_use() {
+    let _g = settings();
+    let dir = fresh_dir("undo-profiles");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    std::fs::create_dir_all(&dir).unwrap();
+    let untagged = dir.join("untagged.vectorcraft");
+    let mut s = session();
+    let working = cms::working_settings();
+    exec(&mut s, "file.saveAs", json!({"path": untagged.to_str().unwrap()}));
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK);
+    exec(&mut s, "edit.undo", json!({}));
+    assert_eq!(doc_profiles(&s.doc().unwrap().doc), (None, None));
+    assert_eq!(cms::active_settings(), working, "undone: the working spaces");
+    exec(&mut s, "edit.redo", json!({}));
+    assert_eq!(doc_profiles(&s.doc().unwrap().doc), (None, Some(cms::DEVICE_CMYK.to_string())));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "redone: the assigned profile");
+    exec(&mut s, "file.revert", json!({}));
+    assert_eq!(doc_profiles(&s.doc().unwrap().doc), (None, None));
+    assert_eq!(cms::active_settings(), working, "reverted: the working spaces");
+}
+
+/// A batch that assigns a profile and then fails puts the document back without it, and the
+/// working spaces back in use.
+#[test]
+fn a_failed_batch_puts_the_profiles_in_use_back() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let working = cms::working_settings();
+    let steps = json!([
+        {"command": "edit.assignProfile", "params": {"cmyk": cms::DEVICE_CMYK}},
+        {"command": "document.activate", "params": {"index": 99}},
+    ]);
+    assert!(s.execute("command.batch", &json!({"commands": steps})).is_err());
+    assert_eq!(doc_profiles(&s.doc().unwrap().doc), (None, None));
+    assert_eq!(cms::active_settings(), working);
+}
+
+/// A batch step that switches documents makes the next step convert through the profiles of the
+/// document it switched to, not those of the document the batch began in.
+#[test]
+fn a_batch_converts_the_document_it_switches_to_through_its_profiles() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let blue = |s: &mut Session| {
+        let id = rect(s, 10.0, 10.0, 50.0, 50.0);
+        exec(s, "paint.setFill", json!({"ids": [id.0], "color": "#3366cc"}));
+        id
+    };
+    let fill = |s: &Session, id| s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint().color();
+    let mut working = session();
+    let w = blue(&mut working);
+    exec(&mut working, "file.documentColorMode", json!({"mode": "cmyk"}));
+    let mut s = session();
+    let b = blue(&mut s);
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK}));
+    let steps = json!([
+        {"command": "document.activate", "params": {"index": 0}},
+        {"command": "file.documentColorMode", "params": {"mode": "cmyk"}},
+    ]);
+    exec(&mut s, "command.batch", json!({"commands": steps}));
+    assert_eq!(s.active_index(), Some(0));
+    assert_eq!(fill(&s, b), fill(&working, w), "converted through the working CMYK space");
 }
 
 /// View › Proof Setup › Working CMYK simulates the working CMYK space of Color Settings in a
@@ -553,7 +681,7 @@ fn loading_the_working_rgb_profile_again_takes_effect_at_once() {
         bytes
     };
     let name = "Reload RGB";
-    let dir = vectorcraft_testkit::temp_dir("reload-working-rgb");
+    let dir = vectorcraft_testkit::TempDir::new("reload-working-rgb");
     let load = |s: &mut Session, builtin: &str| {
         let path = dir.join(format!("{}.icc", builtin.len()));
         std::fs::write(&path, renamed(builtin, name)).unwrap();
@@ -634,11 +762,9 @@ impl Drop for ProofReset {
     }
 }
 
-/// A folder of its own for the test `tag`, empty.
-fn fresh_dir(tag: &str) -> std::path::PathBuf {
-    let dir = vectorcraft_testkit::temp_dir(&format!("color-settings-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+/// A folder of its own for the test `tag`, empty, removed when dropped.
+fn fresh_dir(tag: &str) -> vectorcraft_testkit::TempDir {
+    vectorcraft_testkit::TempDir::new(&format!("color-settings-{tag}"))
 }
 
 /// An ICC file of an RGB profile named `name` (a built-in one with its description replaced by a
@@ -685,7 +811,8 @@ fn color_settings_come_back_in_the_next_session() {
     let root = fresh_dir("color-settings");
     let (profiles, file) = (root.join("Color Profiles"), root.join("Color Settings.json"));
     let loaded = "StoreRGB-6";
-    let icc = vectorcraft_testkit::temp_dir("store-color-settings").join("loaded.icc");
+    let icc_dir = vectorcraft_testkit::TempDir::new("store-color-settings");
+    let icc = icc_dir.join("loaded.icc");
     let _reset = ColorSettingsReset { profile: Some(loaded), paths: vec![root.clone(), icc.clone()] };
     std::fs::write(&icc, icc_named(loaded)).unwrap();
 

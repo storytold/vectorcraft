@@ -1435,8 +1435,9 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
 
     fn limits(&self, id: &String) -> craft_ui::docking::PanelLimits {
-        let min =
-            if id == CANVAS { egui::vec2(200.0 + crate::toolbar::docked_width(&self.app.ui), 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
+        // The canvas keeps room for Tools and the lane of toolbars docked beside it.
+        let beside = crate::toolbar::docked_width(&self.app.ui) + crate::custom_toolbars::beside_canvas_reserve(&self.app.ui);
+        let min = if id == CANVAS { egui::vec2(200.0 + beside, 120.0) } else { egui::vec2(PANEL_MIN_WIDTH, 80.0) };
         craft_ui::docking::PanelLimits { min, ..Default::default() }
     }
 

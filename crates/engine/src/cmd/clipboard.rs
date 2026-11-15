@@ -143,17 +143,13 @@ pub(crate) fn subpath_selected_segments(
     let has_explicit_segs = seg_refs.is_some_and(|segments| !segments.is_empty());
     if has_explicit_segs {
         if let Some(segments) = seg_refs {
-            for &(s, seg) in segments {
-                if s == si && seg < seg_count {
-                    selected_segs.insert(seg);
-                }
-            }
+            selected_segs.extend(super::path::subpath_refs(segments, si).filter(|&seg| seg < seg_count));
         }
         return selected_segs;
     }
 
     if let Some(anchors) = anchor_refs {
-        let sub_anchors: BTreeSet<usize> = anchors.iter().filter_map(|&(s, a)| (s == si && a < n).then_some(a)).collect();
+        let sub_anchors: BTreeSet<usize> = super::path::subpath_refs(anchors, si).filter(|&a| a < n).collect();
         if !sub_anchors.is_empty() {
             for i in 0..seg_count {
                 let next = (i + 1) % n;
