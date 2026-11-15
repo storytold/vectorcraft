@@ -270,6 +270,8 @@ presets, drawn at the current X, Y and Z rotation inside a ring
 - Dragging an edge turns it about the object axis that edge runs along. The edge under the pointer shows its axis's
   color: red for X, green for Y, blue for Z.
 - Dragging in the ring turns it in the plane of the screen.
+- The front face is blue, the top and bottom are light gray, the sides are mid gray and the back is dark gray, as
+  the help page above describes, along with the red, green and blue axis edges.
 - Escape during a drag puts the angles back. With the keyboard focus, the arrow keys turn it about the screen's
   horizontal and vertical axes, and Page Up and Page Down turn it in the screen plane, 1° a press or 15° with Shift.
 
@@ -277,8 +279,8 @@ The drag changes the effect's `rotationX`, `rotationY` and `rotationZ` and previ
 presets follow it (**Custom** off a preset). OK keeps the change as one undo step. The angles stay between -180°
 and 180°: of the two sets of angles that give the same turn, the cube writes the one nearest the current values.
 In the 3D and Materials panel, a drag is one undo step when the pointer is released, and the cube is off while the
-selected effects hold different rotations. The cube's colors, its 0.5° per point of drag and its keyboard steps are
-VectorCraft's own.
+selected effects hold different rotations. The cube's 0.5° per point of drag, Escape during a drag and its keyboard
+steps are VectorCraft's own.
 
 ## Perspective
 
