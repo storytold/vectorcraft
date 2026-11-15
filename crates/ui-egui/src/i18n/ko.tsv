@@ -5858,6 +5858,8 @@ lighting	Light	광원
 	Save Variable Library…	변수 라이브러리 저장…
 @msg	a variable library holds text variables, and the document has none	변수 라이브러리에는 텍스트 변수가 들어가는데 문서에 텍스트 변수가 없습니다
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	변수 `{name}`은(는) 변수 라이브러리에 저장할 수 없습니다: 문자나 `_`로 시작하고 공백이나 `-`, `_`, `.` 이외의 기호가 없도록 이름을 바꾸세요
+@msg	{k} has control characters	{k}에 제어 문자가 있습니다
+@msg	{k} has control characters or line breaks	{k}에 제어 문자 또는 줄 바꿈이 있습니다
 @msg	data set `{name}` holds a control character, which a variable library can't hold	데이터 세트 `{name}`에 변수 라이브러리에 담을 수 없는 제어 문자가 있습니다
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	데이터 세트 `{name}`의 앞이나 뒤에 변수 라이브러리에 담을 수 없는 공백이 있습니다
 	Make Graph Dynamic	그래프를 동적으로 만들기
@@ -6189,6 +6191,7 @@ axis	Y Axis	Y축
 @msg	stops must be in order of `offset`	정지점은 `offset` 순서여야 합니다
 @msg	the document has no pattern {pattern}	문서에 패턴 {pattern}이(가) 없습니다
 @msg	the document has no swatch {n}	문서에 견본 {n}이(가) 없습니다
+@msg	`plates` requires a stop linked to a spot swatch	`plates`에는 별색 견본에 연결된 정지점이 필요합니다
 @msg	the output	출력
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})

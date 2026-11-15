@@ -3576,9 +3576,9 @@ fn live_paint_bucket_scopes_follow_the_stroke_an_edge_draws() {
     assert_eq!(r["count"], json!(clear.len() + top.len() + hidden.len()));
 }
 
-/// `livePaint.strokeEdge` paints an edge's topmost stroke that is shown, so the edge then draws
-/// with the paint; an edge whose strokes are all hidden takes a new stroke above them. Painting
-/// again changes nothing.
+/// `livePaint.strokeEdge` leaves an edge one stroke, shown, with the paint, so the edge then draws
+/// with it, whether its topmost shown stroke sat under a hidden one or every stroke was hidden.
+/// Painting again changes nothing.
 #[test]
 fn live_paint_stroke_edge_paints_the_shown_stroke() {
     let mut s = session();
@@ -3613,8 +3613,107 @@ fn live_paint_stroke_edge_paints_the_shown_stroke() {
         paint(&mut s, at);
         assert_eq!(history_state(&s).0, depth, "painting {id} again");
     }
-    assert_eq!(node(&s, m).appearance.items.len(), 2, "the hidden stroke stays as it was");
-    assert_eq!(node(&s, l).appearance.items.len(), 2, "a new stroke above the hidden one");
+    assert_eq!(node(&s, m).appearance.items.len(), 1, "one stroke in place of the hidden and the shown one");
+    assert_eq!(node(&s, l).appearance.items.len(), 1, "one shown stroke in place of the hidden one");
+}
+
+/// A face with two fills that draw, under a hidden top fill: the Bucket replaces every fill with
+/// one shown, fully opaque fill of the paint, keeps the face's strokes, opacity and their order,
+/// and a click with the paint the face then has records nothing. A fill of none leaves no fill
+/// that draws. The route that makes the objects into a group first paints the same way.
+#[test]
+fn live_paint_bucket_replaces_every_fill_row() {
+    use vectorcraft_doc::appearance::{FillLayer, StrokeLayer};
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0]);
+    let [f] = faces_at(&s, g, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let stroke = StrokeLayer::new(blue.clone(), 3.0);
+    s.edit("t", |d, _| {
+        let n = d.node_mut(f).unwrap();
+        n.opacity = 0.5;
+        let mut half = FillLayer::new(blue.clone());
+        half.opacity = 0.5;
+        let mut hidden = FillLayer::new(green.clone());
+        hidden.visible = false;
+        n.appearance.items = vec![
+            AppearanceItem::Fill(FillLayer::new(red.clone())),
+            AppearanceItem::Stroke(stroke.clone()),
+            AppearanceItem::Fill(half),
+            AppearanceItem::Fill(hidden),
+        ];
+        Ok(())
+    })
+    .unwrap();
+    let depth = history_state(&s).0;
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 25], "color": "#00ff00"})).unwrap();
+    assert_eq!(history_state(&s).0, depth + 1, "a hidden top fill with the paint does not stop the fill");
+    let n = node(&s, f);
+    assert_eq!(n.appearance.items, vec![AppearanceItem::Stroke(stroke.clone()), AppearanceItem::Fill(FillLayer::new(green.clone()))]);
+    assert_eq!(n.opacity, 0.5, "the face keeps its own opacity");
+    s.recent_colors.clear();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 25], "color": "#00ff00"})).unwrap();
+    assert_eq!((history_state(&s).0, s.recent_colors.len()), (depth + 1, 0), "painting again records nothing");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 25], "none": true})).unwrap();
+    let n = node(&s, f);
+    assert!(!n.appearance.has_drawn_fill(), "no fill draws after a fill of none");
+    assert_eq!(n.appearance.items, vec![AppearanceItem::Stroke(stroke), AppearanceItem::Fill(FillLayer::new(Paint::None))]);
+
+    // Objects made into a Live Paint group by the click: each object's two fills become one.
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    s.edit("t", |d, _| {
+        d.node_mut(id).unwrap().appearance.items.insert(0, AppearanceItem::Fill(FillLayer::new(red.clone())));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let r = s.execute("livePaint.fill", &json!({"point": [25, 25], "color": "#00ff00"})).unwrap();
+    let face = NodeId(r["face"].as_u64().unwrap());
+    let fills: Vec<Paint> = node(&s, face).appearance.items.iter().filter(|i| i.is_fill()).map(|i| i.paint().clone()).collect();
+    assert_eq!(fills, vec![green]);
+}
+
+/// An edge with two strokes that draw: `livePaint.strokeEdge` replaces them with one stroke of the
+/// paint and width, keeping the topmost one's dashes; a stroke of none leaves no stroke that
+/// draws, and `livePaint.info` then lists that one row.
+#[test]
+fn live_paint_stroke_edge_replaces_every_stroke_row() {
+    use vectorcraft_doc::appearance::{Dash, StrokeLayer};
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0]);
+    let middle = edges_in(&s, g, Rect::new(50.0, 0.0, 50.0, 50.0));
+    let [m] = middle[..] else { panic!("one middle edge") };
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let dash = Dash { pattern: vec![4.0, 2.0], offset: 0.0, align_corners: false };
+    s.edit("t", |d, _| {
+        let mut top = StrokeLayer::new(green.clone(), 2.0);
+        top.opacity = 0.5;
+        top.dash = Some(dash.clone());
+        d.node_mut(m).unwrap().appearance.items = vec![AppearanceItem::Stroke(StrokeLayer::new(red.clone(), 6.0)), AppearanceItem::Stroke(top)];
+        Ok(())
+    })
+    .unwrap();
+    let depth = history_state(&s).0;
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [50, 25], "color": "#00ff00", "width": 2})).unwrap();
+    assert_eq!(history_state(&s).0, depth + 1, "a half-transparent top stroke with the paint does not stop the stroke");
+    let mut want = StrokeLayer::new(green.clone(), 2.0);
+    want.dash = Some(dash);
+    assert_eq!(node(&s, m).appearance.items, vec![AppearanceItem::Stroke(want)]);
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [50, 25], "color": "#00ff00", "width": 2})).unwrap();
+    assert_eq!(history_state(&s).0, depth + 1, "painting again records nothing");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [50, 25], "none": true, "width": 2})).unwrap();
+    assert!(!node(&s, m).appearance.has_drawn_stroke(), "no stroke draws after a stroke of none");
+    let info = s.execute("livePaint.info", &json!({"group": g.0})).unwrap();
+    let edge = info["edges"].as_array().unwrap().iter().find(|e| e["id"] == json!(m.0)).unwrap().clone();
+    let rows = edge["appearance"].as_array().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!((&rows[0]["kind"], &rows[0]["drawn"], &edge["stroke"]), (&json!("stroke"), &json!(false), &json!(Paint::None.label())));
 }
 
 /// With Cmd held, the Live Paint Bucket's presses go to the selection tool Cmd lends, and the

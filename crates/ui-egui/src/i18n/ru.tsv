@@ -5884,6 +5884,8 @@ lighting	Light	Свет
 	Save Variable Library…	Сохранить библиотеку переменных…
 @msg	a variable library holds text variables, and the document has none	библиотека переменных содержит текстовые переменные, а в документе их нет
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	переменную `{name}` нельзя сохранить в библиотеке переменных: переименуйте её так, чтобы имя начиналось с буквы или `_` и не содержало пробелов и символов, кроме `-`, `_` и `.`
+@msg	{k} has control characters	{k} содержит управляющие символы
+@msg	{k} has control characters or line breaks	{k} содержит управляющие символы или разрывы строк
 @msg	data set `{name}` holds a control character, which a variable library can't hold	набор данных `{name}` содержит управляющий символ, который не может храниться в библиотеке переменных
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	набор данных `{name}` начинается или заканчивается пробелом, который не может храниться в библиотеке переменных
 	Make Graph Dynamic	Сделать диаграмму динамической
@@ -6215,6 +6217,7 @@ axis	Y Axis	Ось Y
 @msg	stops must be in order of `offset`	точки перехода должны идти в порядке `offset`
 @msg	the document has no pattern {pattern}	в документе нет узора {pattern}
 @msg	the document has no swatch {n}	в документе нет образца {n}
+@msg	`plates` requires a stop linked to a spot swatch	для `plates` нужна точка перехода, связанная с образцом плашечного цвета
 @msg	the output	вывод
 @msg	the path has no anchor points	у контура нет опорных точек
 @msg	too many anchor points (limit {MAX_ANCHORS})	слишком много опорных точек (предел {MAX_ANCHORS})

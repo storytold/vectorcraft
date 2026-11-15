@@ -496,13 +496,15 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 
 /// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps, Puppet
 /// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
-/// [`crate::panels::artboards::control_bar`].
-pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if crate::addons::shapes::control_bar(app, ui) {
+/// [`crate::panels::artboards::control_bar`]. Each label with its field or menu, and each button,
+/// shows only while the row has room for it and `reserve` after it, and the controls after one left
+/// out are left out too ([`crate::chrome::Fit`]).
+pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
+    if crate::addons::shapes::control_bar(app, ui, reserve) {
         return;
     }
     if app.session.tool_id() == "dimension" {
-        return crate::dialogs::dimension::controls(app, ui);
+        return crate::dialogs::dimension::controls(app, ui, Some(reserve));
     }
     /// (value, label) of each choice.
     type Choices = &'static [(&'static str, &'static str)];
@@ -511,31 +513,40 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         ("keep", "Keep:", &[("left", "Left"), ("right", "Right"), ("top", "Top"), ("bottom", "Bottom")]),
     ];
     if app.session.tool_id() == "puppetWarp" {
-        return puppet_warp_options(app, ui);
+        return puppet_warp_options(app, ui, reserve);
     }
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
-        return crop_options(app, ui);
+        return crop_options(app, ui, reserve);
     }
     if app.session.tool_id() != "mirrorCut" {
         return;
     }
     let t = Tokens::get(ui.ctx());
     let opts = app.session.tool_options();
+    let mut fit = crate::chrome::Fit::new(reserve);
     for (key, label, choices) in MIRROR {
-        ui.label(egui::RichText::new(tl!(label)).size(12.0).color(t.text));
+        let text = egui::RichText::new(tl!(label)).size(12.0).color(t.text);
+        if !fit.room(ui, &[widgets::text_width(ui, text.clone()), MIRROR_DROPDOWN_WIDTH]) {
+            break;
+        }
+        ui.label(text);
         let cur = opts[key].as_str().unwrap_or_default();
         let shown = choices.iter().find(|(v, _)| *v == cur).map_or(cur, |(_, l)| *l);
         let labels: Vec<&str> = choices.iter().map(|(_, l)| *l).collect();
-        if let Some((value, _)) = widgets::dropdown(ui, ("cb-tool", key), shown, &labels, 96.0).and_then(|i| choices.get(i)) {
+        if let Some((value, _)) = widgets::dropdown(ui, ("cb-tool", key), shown, &labels, MIRROR_DROPDOWN_WIDTH).and_then(|i| choices.get(i)) {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
         }
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
+/// The width of Mirror & Cut's Axis and Keep menus in the Control bar.
+const MIRROR_DROPDOWN_WIDTH: f32 = 96.0;
+
 /// Crop Image's box: its centre (X, Y) and size (W, H) in the general unit, set through the tool's
-/// `rect` option, then Apply (Enter) and Cancel (Escape).
-fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// `rect` option, then Apply (Enter) and Cancel (Escape), each while the row has room for it and
+/// `reserve` after it.
+fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     let set = app.session.tool_options()["rect"].as_array().and_then(|v| match v.iter().filter_map(Value::as_f64).collect::<Vec<_>>()[..] {
         [x, y, w, h] => Some(vectorcraft_geom::Rect::new(x, y, x + w, y + h)),
         _ => None,
@@ -544,8 +555,13 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let units = app.session.general_unit();
     let c = r.center();
+    let mut fit = crate::chrome::Fit::new(reserve);
     for (k, lbl, v) in [("x", "X:", c.x), ("y", "Y:", c.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
-        widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
+        let text = egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim);
+        if !fit.room(ui, &[widgets::text_width(ui, text.clone()), 80.0]) {
+            break;
+        }
+        widgets::field_label(ui, text);
         if let Some(nv) = widgets::num_field(ui, ("cb-crop", k), Some(v), units, 80.0) {
             let (mut c, mut w, mut h) = (c, r.width(), r.height());
             match k {
@@ -558,15 +574,15 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("tool.setOption", json!({ "key": "rect", "value": rect })).ok();
         }
     }
-    ui.separator();
+    fit.separator(ui);
     for (label, key) in [(tl!("Apply"), ToolKey::Enter), (tl!("Cancel"), ToolKey::Escape)] {
-        if widgets::flat_button(ui, label, 64.0).clicked() {
+        if fit.room(ui, &[widgets::flat_button_fit_width(ui, label, 64.0)]) && widgets::flat_button_fit(ui, label, 64.0).clicked() {
             let view = app.view_info();
             let r = app.session.tool_key(key, Mods::default(), view);
             crate::canvas::apply_requests(app, r);
         }
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes, screen mode and Edit Toolbar, as
@@ -1141,23 +1157,29 @@ fn floating_strips(app: &mut VectorcraftApp, ctx: &egui::Context, toolbar: Optio
 }
 
 /// The Puppet Warp tool's Control bar: Expand (how far the mesh reaches past the art), Show Mesh
-/// and Select All Pins.
-fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// and Select All Pins, each while the row has room for it and `reserve` after it.
+fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     let t = Tokens::get(ui.ctx());
     let opts = app.session.tool_options();
-    ui.label(egui::RichText::new(tl!("Expand:")).size(12.0).color(t.text));
-    let unit = app.session.general_unit();
-    if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
-        app.run("tool.setOption", json!({ "key": "expand", "value": v })).ok();
+    let mut fit = crate::chrome::Fit::new(reserve);
+    let text = egui::RichText::new(tl!("Expand:")).size(12.0).color(t.text);
+    if fit.room(ui, &[widgets::text_width(ui, text.clone()), 64.0]) {
+        ui.label(text);
+        let unit = app.session.general_unit();
+        if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
+            app.run("tool.setOption", json!({ "key": "expand", "value": v })).ok();
+        }
     }
     let show = opts["showMesh"].as_bool().unwrap_or(true);
-    if widgets::check(ui, "Show Mesh", show, true) {
+    if fit.room(ui, &[widgets::choice_width(ui, "Show Mesh")]) && widgets::check(ui, "Show Mesh", show, true) {
         app.run("tool.setOption", json!({ "key": "showMesh", "value": !show })).ok();
     }
-    if widgets::flat_button(ui, "Select All Pins", 104.0).clicked() {
+    if fit.room(ui, &[widgets::flat_button_fit_width(ui, "Select All Pins", 104.0)])
+        && widgets::flat_button_fit(ui, "Select All Pins", 104.0).clicked()
+    {
         app.run("tool.setOption", json!({ "key": "selectAllPins", "value": true })).ok();
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
 #[cfg(test)]

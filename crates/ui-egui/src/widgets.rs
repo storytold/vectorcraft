@@ -45,7 +45,7 @@ pub use buttons::{
     SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
     primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
-pub(crate) use buttons::{button_width, icon_button_info, primary_button_width, secondary_button_width};
+pub(crate) use buttons::{button_width, flat_button_fit_width, icon_button_info, primary_button_width, secondary_button_width};
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
@@ -68,7 +68,7 @@ pub use dropdowns::{
 #[cfg(test)]
 pub(crate) use dropdowns::{menu_floor, menu_room_either};
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
-pub(crate) use labels::{label_field, take_previous_label, text_width};
+pub(crate) use labels::{dim_label_width, label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
     SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_refusing, num_field_within,
@@ -88,6 +88,7 @@ pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
     text_presets_named,
 };
+pub(crate) use toggles::choice_width;
 pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
 #[cfg(test)]
 pub(crate) use wheel_stream::WHEEL_STREAM_GAP;
