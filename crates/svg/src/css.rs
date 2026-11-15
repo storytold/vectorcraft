@@ -194,6 +194,10 @@ pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
     if st.proportional_metrics {
         v.push("\"palt\" 1".into());
     }
+    // The East Asian glyph form: its one feature.
+    if let Some(tag) = st.glyph_form.feature().and_then(|t| std::str::from_utf8(t).ok()) {
+        v.push(format!("\"{tag}\" 1"));
+    }
     if !v.is_empty() {
         p.push(("font-feature-settings", v.join(", ")));
     }

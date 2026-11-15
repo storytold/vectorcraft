@@ -26,7 +26,7 @@ use super::{MAX_NEST, Writer, Xy, hide};
 use crate::import::{DEFORM_PLUGIN, EnvelopeGridPoint as GridPoint, envelope_outline, envelope_upright, warp_number};
 use crate::ps;
 
-pub(in crate::ai_editing) const ENVELOPES: &str = "envelopes of type, envelopes without contents, envelopes in opacity masks, pattern tiles, art cut to a clipping object or other envelopes' contents, envelopes on the layers of a large canvas or in a turned or mirrored frame, warps drawn without their style's net, meshes and top objects that the data would open in another shape, envelopes with a Fidelity that isn't a whole number, envelopes that map from a box other than their contents' bounds with or without strokes or keep bounds margins with Distort Appearance off, envelopes after the first 256, and envelopes nested more than 8 deep are written as their art in the editing data for other apps";
+pub(in crate::ai_editing) const ENVELOPES: &str = "envelopes of type, envelopes without contents, envelopes in opacity masks, pattern tiles, art cut to a clipping object or other envelopes' contents, envelopes on the layers of a large canvas or in a turned or mirrored frame, warps drawn without their style's net, meshes and top objects that the data would open in another shape, envelopes with a Fidelity that isn't a whole number, envelopes that map from a box other than their contents' bounds with or without strokes or keep bounds margins with Distort Appearance off, envelopes after the first 256 envelopes and images with a Warp, and envelopes nested more than 8 deep are written as their art in the editing data for other apps";
 
 /// The most rows or columns of an envelope's grid written (Make with Mesh's own limit, and the
 /// reader's).
@@ -287,7 +287,7 @@ impl Writer<'_> {
     /// another shape, or some of it is left out for the object limit ([`Self::take_objects`]).
     pub(super) fn envelope(&mut self, n: &Node, xy: Xy) -> bool {
         let NodeKind::Envelope { content, kind, fidelity, editing, options, frame } = &n.kind else { return false };
-        if self.hidden > 0 || self.clip.is_some() || self.nest >= MAX_NEST || !self.symbols_live || self.envelopes_left == 0 {
+        if self.hidden > 0 || self.clip.is_some() || self.nest >= MAX_NEST || !self.symbols_live || self.checks_left == 0 {
             return false;
         }
         let Some(record) = record(n, content, kind, *fidelity, *editing, options, **frame) else { return false };
@@ -339,7 +339,7 @@ impl Writer<'_> {
             return false;
         }
         self.deform = true;
-        self.envelopes_left -= 1;
+        self.checks_left -= 1;
         true
     }
 

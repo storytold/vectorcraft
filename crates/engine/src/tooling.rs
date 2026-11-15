@@ -429,6 +429,7 @@ impl Session {
             },
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
+            plane_targets: self.prefs.perspective_widget.targets(),
             precise_cursors: self.precise_cursors(),
             global_edit: st.global_edit.as_ref().map_or(&[], |g| g.members.as_slice()),
         };
@@ -650,7 +651,7 @@ impl Session {
         match ev.kind {
             PointerKind::Down | PointerKind::Drag => self.pointer_held = true,
             PointerKind::Up | PointerKind::Move => self.pointer_held = false,
-            PointerKind::DoubleClick => {}
+            PointerKind::DoubleClick | PointerKind::TripleClick => {}
         }
         match ev.kind {
             PointerKind::Down => {
@@ -1543,7 +1544,7 @@ impl Session {
             if !std::sync::Arc::ptr_eq(&it.doc, &st.doc) {
                 return None;
             }
-            let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone());
+            let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone(), it.plane_placed);
             (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
         };
         let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
@@ -1565,6 +1566,7 @@ impl Session {
                 it.preview = interaction_fields.0;
                 it.copies = interaction_fields.1;
                 it.perspective_again = interaction_fields.2;
+                it.plane_placed = interaction_fields.3;
             }
         }
         self.pending_paint = paint;
