@@ -5765,7 +5765,9 @@ the drag takes what the pen read there (the points' pressure, tilt and rotation,
 drag without that reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way
 Tilt, Bearing and Rotation run, and the value itself without a reading are VectorCraft's own rules.
 The command refuses another mode, and a variation below 0 or past its range, and erases nothing. In the desktop app
-the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases.
+the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases, and the
+outline of the area a drag covers takes, at each step, the tip the pen's readings give halfway along it. A Random
+value shows as the value itself there, since the release draws it.
 `tool.setOption {tool: "eraser"}` takes the same keys.
 
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
