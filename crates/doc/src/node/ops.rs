@@ -369,7 +369,7 @@ impl Node {
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // A clipping path that paints (see `clip_paint`) strokes over the clip edge.
                 let clip = children.first()?;
-                if matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) {
+                if matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)) || clip.extras().clip_pieces {
                     clip.visual(symbols)
                 } else {
                     clip.geometric(symbols)
