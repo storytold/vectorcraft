@@ -1452,6 +1452,76 @@ fn objects_at_edit_contents_uses_general_order() {
     assert_eq!(objects_at(&d, p, opt, None), vec![b, a]);
 }
 
+/// Select Behind keeps one limit of symbol art to walk when it falls back to the general
+/// traversal, for an envelope in Edit Contents and for a root that is not a layer: the fallback
+/// walks no more art than what the first pass left, and keeps what the first pass found.
+#[test]
+fn select_behind_keeps_one_art_limit_when_it_falls_back() {
+    // 60 instances of `Clipped` with the rectangle hidden, which a click at (150, 50) walks the art
+    // of and misses: each walk takes 3 objects of the 100.
+    let stack = |d: &mut Document, count: usize| {
+        let l = d.layers[0].id;
+        for _ in 0..count {
+            let inst = instance_of(d, "Clipped");
+            d.insert(Some(l), usize::MAX, Arc::unwrap_or_clone(inst)).unwrap();
+        }
+    };
+    // An envelope in Edit Contents at the bottom of the layer, its contents under (150, 50).
+    let envelope = |d: &mut Document| {
+        let inner = |id| Arc::new(Node::path(id, shapes::rectangle(Rect::new(120.0, 20.0, 180.0, 80.0)), Appearance::default_art()));
+        let (a, b) = (d.alloc_id(), d.alloc_id());
+        let e = Node::new(
+            d.alloc_id(),
+            NodeKind::Envelope {
+                content: vec![inner(a), inner(b)],
+                kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 }),
+                fidelity: 100.0,
+                editing: true,
+                options: Default::default(),
+                frame: Box::new(vectorcraft_geom::Affine::IDENTITY),
+            },
+        );
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, e).unwrap();
+        (a, b)
+    };
+    let p = Point::new(150.0, 50.0);
+    let mut d = Document::new(600.0, 400.0);
+    clipped_symbol(&mut d, false);
+    let (a, b) = envelope(&mut d);
+    stack(&mut d, 60);
+    let (behind, _, arts) = with_art_limit(100, || objects_at(&d, p, HitOptions::default(), None));
+    assert_eq!(behind, vec![b, a]);
+    assert!(arts <= 34, "envelope in Edit Contents: {arts} instances' art walked");
+    // An instance that the first pass hits by its art, the limit then used up, stays in the list:
+    // `Shown` is `Clipped` with its rectangle shown, below 32 instances of `Clipped`.
+    let mut d = Document::new(600.0, 400.0);
+    clipped_symbol(&mut d, false);
+    let (a, b) = envelope(&mut d);
+    let (mut mask, art) = half_clipped(&mut d);
+    mask.appearance.effects.push(test_move());
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    group_symbol(&mut d, "Shown", vec![Arc::new(clip)]);
+    let hit = instance_of(&mut d, "Shown");
+    let hit_id = hit.id;
+    let l = d.layers[0].id;
+    d.insert(Some(l), usize::MAX, Arc::unwrap_or_clone(hit)).unwrap();
+    stack(&mut d, 32);
+    let (behind, _, arts) = with_art_limit(100, || objects_at(&d, p, HitOptions::default(), None));
+    assert_eq!(behind, vec![hit_id, b, a], "hit before the fallback");
+    assert!(arts <= 34, "hit before the fallback: {arts} instances' art walked");
+    // A root that is not a layer, below the layer.
+    let mut d = Document::new(600.0, 400.0);
+    clipped_symbol(&mut d, false);
+    stack(&mut d, 60);
+    let root = Arc::new(Node::group(d.alloc_id(), vec![]));
+    d.layers.insert(0, root);
+    let (behind, _, arts) = with_art_limit(100, || objects_at(&d, p, HitOptions::default(), None));
+    assert!(behind.is_empty());
+    assert!(arts <= 34, "root that is not a layer: {arts} instances' art walked");
+}
+
 #[test]
 fn locked_and_hidden_skip() {
     let mut d = Document::new(200.0, 200.0);
@@ -1959,6 +2029,216 @@ fn a_symbol_instance_is_hit_on_the_stroke_of_its_art_past_its_box() {
     assert_eq!(at(50.0, HitOptions::default()), Some(inst), "in the box");
     assert_eq!(at(116.0, HitOptions::default()), None, "past the stroke");
     assert_eq!(at(108.0, HitOptions { outline: true, ..HitOptions::default() }), None, "Outline view");
+}
+
+/// Outside a symbol instance's box, an instance nested in its art counts where its own art is, not
+/// anywhere in its box: a click or a marquee on empty space in the nested box, where a moved
+/// clipping path shows the art past the outer box, selects nothing, and on art drawn there it
+/// selects the outer instance.
+#[test]
+fn a_nested_symbol_instances_box_past_the_outer_box_is_not_a_hit() {
+    set_clip_region(moved_clip_region);
+    // `Two` draws squares at the corners of 0..200 × 0..100, and with `middle` one at 140..160 ×
+    // 40..60. The outer symbol clips an instance of it to 0..100 × 0..100, which `test.move` moves
+    // to 100..200: the outer box is 0..100, the nested box 0..200.
+    let build = |middle: bool| {
+        let mut d = Document::new(600.0, 400.0);
+        let l = d.layers[0].id;
+        let square = |d: &mut Document, r: Rect| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::default_art()));
+        let mut squares = vec![square(&mut d, Rect::new(0.0, 0.0, 10.0, 10.0)), square(&mut d, Rect::new(190.0, 90.0, 200.0, 100.0))];
+        if middle {
+            squares.push(square(&mut d, Rect::new(140.0, 40.0, 160.0, 60.0)));
+        }
+        group_symbol(&mut d, "Two", squares);
+        let (mut mask, _) = half_clipped(&mut d);
+        mask.appearance.effects.push(test_move());
+        let nested = instance_of(&mut d, "Two");
+        let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), nested]);
+        clip.set_clips(true);
+        group_symbol(&mut d, "Outer", vec![Arc::new(clip)]);
+        let inst = d.alloc_id();
+        d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Outer".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+        (d, inst)
+    };
+    let at = |d: &Document, x: f64, y: f64| hit_test(d, Point::new(x, y), HitOptions::default()).map(|h| h.leaf);
+    let inside = Rect::new(145.0, 45.0, 155.0, 55.0);
+    let (d, inst) = build(false);
+    assert_eq!(at(&d, 150.0, 50.0), None, "empty space in the nested box");
+    assert!(marquee(&d, inside, None, false).is_empty(), "marquee on empty space in the nested box");
+    assert_eq!(at(&d, 195.0, 95.0), Some(inst), "on the nested art past the outer box");
+    assert_eq!(at(&d, 50.0, 50.0), Some(inst), "in the outer box");
+    let (d, inst) = build(true);
+    assert_eq!(at(&d, 150.0, 50.0), Some(inst), "on the nested art");
+    // Across the middle square's left edge.
+    assert_eq!(marquee(&d, Rect::new(135.0, 45.0, 145.0, 55.0), None, false), [inst], "marquee on the nested art");
+}
+
+/// Adds the symbol `Clipped`: a clip group whose clipping path's region `test.move` moves to
+/// 100..200 × 0..100, past the 0..100 box, over a 0..200 × 0..100 rectangle shown when `shown`.
+/// A click at (150, 50) hits an instance of it on the rectangle, or, with the rectangle hidden,
+/// walks its art and finds nothing.
+fn clipped_symbol(d: &mut Document, shown: bool) {
+    set_clip_region(moved_clip_region);
+    let (mut mask, mut art) = half_clipped(d);
+    mask.appearance.effects.push(test_move());
+    art.visible = shown;
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    let root = Node::group(d.alloc_id(), vec![Arc::new(clip)]);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Clipped".into(), art: Arc::new(root) });
+}
+
+/// A symbol named `name` whose art is a group of `members`.
+fn group_symbol(d: &mut Document, name: &str, members: Vec<Arc<Node>>) {
+    let root = Node::group(d.alloc_id(), members);
+    d.symbols.push(crate::Symbol { dynamic: false, name: name.into(), art: Arc::new(root) });
+}
+
+/// An instance of the symbol named `symbol`, not moved.
+fn instance_of(d: &mut Document, symbol: &str) -> Arc<Node> {
+    Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY }))
+}
+
+/// 30 small squares at the origin, which a click at (150, 50) passes by.
+fn far_squares(d: &mut Document) -> Vec<Arc<Node>> {
+    (0..30).map(|_| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art()))).collect()
+}
+
+/// Runs `f` with [`ArtWalk`] allowing `limit` objects, and returns its result with how many
+/// leaves [`hit_leaf`] tested and how many instances' art was walked meanwhile.
+fn with_art_limit<R>(limit: u64, f: impl FnOnce() -> R) -> (R, usize, usize) {
+    ART_WALK_LIMIT.with(|c| c.set(Some(limit)));
+    LEAVES_TESTED.with(|c| c.set(0));
+    ARTS_WALKED.with(|c| c.set(0));
+    let r = f();
+    ART_WALK_LIMIT.with(|c| c.set(None));
+    (r, LEAVES_TESTED.with(std::cell::Cell::get), ARTS_WALKED.with(std::cell::Cell::get))
+}
+
+/// One click visits at most the art walk's limit of objects in a chain of nested symbol
+/// instances, though each level's art alone is well within it. A click on the art of an
+/// instance nested in another is still found.
+#[test]
+fn a_click_walks_a_chain_of_nested_symbol_instances_within_one_limit() {
+    // Level 0 is `Clipped`; each level above holds an instance of the level below and 30 squares:
+    // 32 objects to visit at each level.
+    let chain = |shown: bool| {
+        let mut d = Document::new(600.0, 400.0);
+        let l = d.layers[0].id;
+        clipped_symbol(&mut d, shown);
+        for level in 1..12 {
+            let below = if level == 1 { "Clipped".to_string() } else { format!("Level {}", level - 1) };
+            let mut members = vec![instance_of(&mut d, &below)];
+            members.extend(far_squares(&mut d));
+            group_symbol(&mut d, &format!("Level {level}"), members);
+        }
+        let inst = instance_of(&mut d, "Level 11");
+        let id = inst.id;
+        d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+        (d, id)
+    };
+    let at = |d: &Document, x: f64| hit_test(d, Point::new(x, 50.0), HitOptions::default()).map(|h| h.leaf);
+    // Without one limit for the click, the miss walks the art of all 12 levels.
+    let (d, inst) = chain(false);
+    let (hit, _, arts) = with_art_limit(100, || at(&d, 150.0));
+    assert_eq!(hit, None);
+    assert!(arts <= 4, "{arts} levels walked");
+    assert_eq!(with_art_limit(100, || at(&d, 50.0)).0, Some(inst), "in the box");
+    // Past the limit, a click that the art would take finds only the box.
+    let (d, inst) = chain(true);
+    assert_eq!(with_art_limit(100, || at(&d, 150.0)).0, None, "past the limit");
+    assert_eq!(at(&d, 150.0), Some(inst), "within the limit");
+    // Two levels: a click on the inner instance's art is found within the limit.
+    let mut d = Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    clipped_symbol(&mut d, true);
+    let inner = instance_of(&mut d, "Clipped");
+    group_symbol(&mut d, "Outer", vec![inner]);
+    let inst = instance_of(&mut d, "Outer");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    assert_eq!(with_art_limit(100, || at(&d, 150.0)).0, Some(id), "nested");
+}
+
+/// One click, and one marquee, visit at most the art walk's limit of objects in art that repeats
+/// one nested instance many times, though the art of each instance alone is well within it. A
+/// click on one of the nested instances' art is still found.
+#[test]
+fn a_click_and_a_marquee_walk_repeated_nested_symbol_instances_within_one_limit() {
+    // 50 instances of `Clipped` in one symbol's art, its rectangle shown when `shown`.
+    let repeated = |shown: bool| {
+        let mut d = Document::new(600.0, 400.0);
+        let l = d.layers[0].id;
+        clipped_symbol(&mut d, shown);
+        let members = (0..50).map(|_| instance_of(&mut d, "Clipped")).collect();
+        group_symbol(&mut d, "Repeated", members);
+        let inst = instance_of(&mut d, "Repeated");
+        let id = inst.id;
+        d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+        (d, id)
+    };
+    let (d, inst) = repeated(false);
+    // Without one limit for the click, the miss walks the art of all 51 instances. The outer art
+    // takes 1 object of the 100, and each nested instance with its art 4.
+    let (hit, _, arts) = with_art_limit(100, || hit_test(&d, Point::new(150.0, 50.0), HitOptions::default()).map(|h| h.leaf));
+    assert_eq!(hit, None);
+    assert!(arts <= 26, "{arts} instances' art walked");
+    // Select Behind over 60 instances of `Clipped` on the layer shares one limit too: each walk
+    // takes 3 objects of the 100.
+    let mut stack = Document::new(600.0, 400.0);
+    let l = stack.layers[0].id;
+    clipped_symbol(&mut stack, false);
+    for _ in 0..60 {
+        let inst = instance_of(&mut stack, "Clipped");
+        stack.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    }
+    let (behind, _, arts) = with_art_limit(100, || objects_at(&stack, Point::new(150.0, 50.0), HitOptions::default(), None));
+    assert!(behind.is_empty());
+    assert!(arts <= 34, "Select Behind: {arts} instances' art walked");
+    // Without one limit for the marquee, it places the art of all 51 instances, inside the moved
+    // region (within each instance's reach and outside its box). Placing the outer art takes 51
+    // objects of the 100, and each nested art 4.
+    let inside = Rect::new(140.0, 40.0, 160.0, 60.0);
+    let (touched, _, arts) = with_art_limit(100, || marquee(&d, inside, None, false));
+    assert!(touched.is_empty());
+    assert!(arts <= 14, "{arts} instances' art placed");
+    assert_eq!(with_art_limit(100, || marquee(&d, Rect::new(40.0, 40.0, 60.0, 60.0), None, false)).0, [inst], "in the box");
+    // A click and a marquee on the nested instances' art are found within the limit.
+    let (d, inst) = repeated(true);
+    assert_eq!(with_art_limit(100, || hit_test(&d, Point::new(150.0, 50.0), HitOptions::default()).map(|h| h.leaf)).0, Some(inst), "click");
+    let edge = Rect::new(140.0, -5.0, 160.0, 5.0);
+    assert_eq!(with_art_limit(100, || marquee(&d, edge, None, false)).0, [inst], "marquee across the art's edge");
+}
+
+/// The members of an Intertwine group in symbol art count toward the art walk's limit of objects
+/// for a click, as the members of a plain group do. A click on a member's path past the instance's
+/// box is still found within the limit.
+#[test]
+fn a_click_counts_the_members_of_an_intertwine_group_in_symbol_art_toward_one_limit() {
+    set_clip_region(moved_clip_region);
+    // A clip group whose clipping region `test.move` moves to 100..200 × 0..100, past the 0..100
+    // box, over an Intertwine group of 200 squares at 140..160 × 40..60.
+    let mut d = Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let (mut mask, _) = half_clipped(&mut d);
+    mask.appearance.effects.push(test_move());
+    let squares = (0..200)
+        .map(|_| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(140.0, 40.0, 160.0, 60.0)), Appearance::default_art())))
+        .collect();
+    let woven = Arc::new(Node::new(d.alloc_id(), NodeKind::Intertwine { children: squares }));
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), woven]);
+    clip.set_clips(true);
+    group_symbol(&mut d, "Woven", vec![Arc::new(clip)]);
+    let inst = instance_of(&mut d, "Woven");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    let opt = HitOptions { path_only: true, ..HitOptions::default() };
+    let at = |x: f64| hit_test(&d, Point::new(x, 50.0), opt).map(|h| h.leaf);
+    // Inside the squares and away from their paths, every member is tested and none is hit.
+    let (hit, leaves, _) = with_art_limit(100, || at(150.0));
+    assert_eq!(hit, None);
+    assert!(leaves <= 100, "{leaves} leaves tested");
+    assert_eq!(with_art_limit(100, || at(140.0)).0, Some(id), "on the squares' paths");
 }
 
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than

@@ -1082,7 +1082,8 @@ fn geometry_builds(check: impl FnOnce() -> Result<(), String>) -> (usize, Result
 
 /// The check builds each solid the effect draws once, about the bounds it draws it about: one for
 /// a fill and one for each stroke, on an object, on a group's members and on an appearance item,
-/// with the shadow on or off.
+/// with the shadow on or off. With the shadow on, the shadow is cast from the faces those builds
+/// kept, so no solid is built again for it.
 #[test]
 fn the_check_builds_each_drawn_solid_once() {
     for id in [EXTRUDE, CLASSIC_EXTRUDE, INFLATE] {
@@ -1098,6 +1099,11 @@ fn the_check_builds_each_drawn_solid_once() {
         assert_eq!(geometry_builds(|| validate_three_d_at(&n, id, &json!({}), (Some(0), 0))), (1, Ok(())), "{id}: on the fill");
         let shadow = json!({"shadow": true});
         assert_eq!(geometry_builds(|| validate_solid(&n, id, &shadow)), (2, Ok(())), "{id}: with the shadow on");
+        let mut other = square_node();
+        other.id = NodeId(2);
+        let g = Node::group(NodeId(9999), vec![Arc::new(square_node()), Arc::new(other)]);
+        assert_eq!(geometry_builds(|| validate_solid(&g, id, &shadow)), (4, Ok(())), "{id}: a group with the shadow on");
+        assert_eq!(geometry_builds(|| validate_three_d_at(&n, id, &shadow, (Some(0), 0))), (1, Ok(())), "{id}: the fill with the shadow on");
     }
 }
 
@@ -1951,6 +1957,57 @@ fn classic_shading_keeps_a_gradients_transparency() {
             }
         });
         assert!(opaque, "{end}: the faces are drawn opaque");
+    }
+}
+
+/// A gradient without a placement and with a transparent stop, under colored lights or classic
+/// shading, is placed once for the whole surface: every face's color and the surface's opacity mask
+/// share one placement, so the color and transparency ramps line up across the faces. A gradient
+/// placed in the document keeps its placement.
+#[test]
+fn a_transparent_unplaced_gradient_has_one_placement_for_color_and_mask() {
+    use vectorcraft_doc::color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    // The source's stops carry an unusual midpoint, so its color and mask copies can be told from
+    // the light ramps.
+    const MARK: f32 = 0.37;
+    let mut first = GradientStop::new(0.0, RED);
+    first.midpoint = MARK;
+    let mut end = GradientStop::new(1.0, Color::BLACK);
+    end.opacity = 0.25;
+    let unplaced = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![first, end]));
+    let placed = GradientGeom { start: Point::new(90.0, 100.0), end: Point::new(230.0, 140.0), aspect: 1.0, focal: None };
+    // The placement of each copy of the source gradient: its own, else its fit on the path it fills.
+    fn placements(n: &Node, out: &mut Vec<GradientGeom>) {
+        n.walk(&mut |c| {
+            if let Some(mask) = &c.extras().mask {
+                placements(&mask.art, out);
+            }
+            let bounds = c.path_data().and_then(|p| p.bounds()).unwrap_or(Rect::ZERO);
+            for item in &c.appearance.items {
+                if let Paint::Gradient(g) = paint_ref(item)
+                    && g.gradient.stops.first().is_some_and(|s| s.midpoint == MARK)
+                {
+                    out.push(g.resolve(bounds));
+                }
+            }
+        });
+    }
+    let lit = json!({"lights": [{"color": "#ff8080"}]});
+    for (id, params) in [(EXTRUDE, lit.clone()), (INFLATE, lit.clone()), (ROTATE, lit), (CLASSIC_EXTRUDE, json!({}))] {
+        for geom in [None, Some(placed)] {
+            let mut n = square_node();
+            n.appearance.items = vec![AppearanceItem::Fill(FillLayer::new(Paint::Gradient(Box::new(GradientPaint { geom, ..unplaced.clone() }))))];
+            n.appearance.effects.push(fx(id, params.clone()));
+            let art = solid_art(&n).unwrap_or_else(|| panic!("{id}"));
+            let mut masks = 0;
+            art.walk(&mut |c| masks += usize::from(c.extras().mask.is_some()));
+            assert!(masks > 0, "{id}: the surface carries the gradient's transparency as a mask");
+            let mut found = vec![];
+            placements(&art, &mut found);
+            assert!(found.len() > 2, "{id}: the faces' colors and the mask");
+            let expected = geom.unwrap_or(found[0]);
+            assert!(found.iter().all(|g| *g == expected), "{id} {geom:?}: {found:?}");
+        }
     }
 }
 

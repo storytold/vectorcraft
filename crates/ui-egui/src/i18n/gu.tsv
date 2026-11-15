@@ -611,6 +611,7 @@
 	Closing bracket with no opening one	ખુલતા કૌંસ વગરનો બંધ થતો કૌંસ
 	Coincidence:	સંયોગ:
 	Collapse Panel Group	પેનલ ગ્રૂપ સંકોચો
+	Cycle Display Sizes	પ્રદર્શન કદ બદલો
 	Collapse Panels to Icons	પેનલ્સને આઇકનમાં સંકોચો
 	Collapse to Icons	આઇકનમાં સંકોચો
 	Collate	ક્રમમાં ગોઠવો
@@ -1067,6 +1068,8 @@
 	Drag art or swatches here, or use + to add the selection's colors and text styles.	અહીં આર્ટ અથવા સ્વેચ ખેંચો, અથવા પસંદગીના રંગો અને ટેક્સ્ટ સ્ટાઇલ ઉમેરવા + વાપરો.
 	Drag onto art to apply this appearance	આ દેખાવ લાગુ કરવા આર્ટ પર ખેંચો
 	Drag rings to rotate. Shift snaps to 15°.	ફેરવવા રિંગ્સ ખેંચો. Shift 15° પર સ્નેપ કરે છે.
+	Track cube	ફેરવવાનો ઘન
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	ફેરવવા ફલક, ધાર અથવા રિંગ ખેંચો. Shift સ્ક્રીનની એક અક્ષની આસપાસ ફેરવે છે.
 	Drag the art to move it on the paper	કાગળ પર ખસેડવા આર્ટ ખેંચો
 	Drag the light, or its rings. Shift snaps to 15°.	લાઇટ અથવા તેની રિંગ્સ ખેંચો. Shift 15° પર સ્નેપ કરે છે.
 	Drag to float as a toolbar	ટૂલબાર તરીકે ફ્લોટ કરવા ખેંચો
@@ -1241,7 +1244,6 @@
 	Every (minutes)	દર (મિનિટ)
 	Every option is at its default.	દરેક વિકલ્પ ડિફૉલ્ટ પર છે.
 	Every option matches {base}.	દરેક વિકલ્પ {base} સાથે મેળ ખાય છે.
-	Every-line Composer	એવરી-લાઇન કમ્પોઝર
 	Exact dash lengths	ચોક્કસ ડેશ લંબાઈ
 	Exceptions (comma separated)	અપવાદો (અલ્પવિરામથી અલગ)
 	Exclude	બાકાત રાખો
@@ -1547,6 +1549,8 @@
 	Graph Design	ગ્રાફ ડિઝાઇન
 	Graph Marker	ગ્રાફ માર્કર
 	Graph Type	ગ્રાફ પ્રકાર
+	Graph Type…	ગ્રાફ પ્રકાર…
+	Graph Data…	ગ્રાફ ડેટા…
 	Graph Options	ગ્રાફ વિકલ્પો
 	Left Axis	ડાબી અક્ષ
 	Right Axis	જમણી અક્ષ
@@ -1908,6 +1912,14 @@
 	Lasso Tool	લાસો ટૂલ
 	Last	છેલ્લું
 	Last Artboard	છેલ્લું આર્ટબોર્ડ
+	Status Bar Show	સ્ટેટસ બારમાં બતાવો
+	Artboard Name	આર્ટબોર્ડનું નામ
+	Current Tool	વર્તમાન ટૂલ
+	Date and Time	તારીખ અને સમય
+	Number of Undos	પૂર્વવત્ કરવાની સંખ્યા
+	Document Color Profile	દસ્તાવેજની રંગ પ્રોફાઇલ
+	Undos	પૂર્વવત્
+	Redos	ફરીથી કરો
 	Last Effect: {name}	છેલ્લી ઇફેક્ટ: {name}
 	Last Effect…	છેલ્લી ઇફેક્ટ…
 	Last Page	છેલ્લું પેજ
@@ -3554,6 +3566,7 @@
 	Show all plates	બધી પ્લેટ બતાવો
 	Show axis	અક્ષ બતાવો
 	Show color bars	રંગ બાર બતાવો
+	Find the selected colors in the artwork	પસંદ કરેલા રંગો આર્ટવર્કમાં શોધો
 	Show handles when multiple anchors are selected	બહુવિધ એન્કર પસંદ હોય ત્યારે હૅન્ડલ બતાવો
 	Show in Folder	ફોલ્ડરમાં બતાવો
 	Show its progress, see Cancel and write log lines	તેની પ્રગતિ બતાવવી, રદ કરવાની વિનંતી જોવી અને લૉગ લાઇનો લખવી
@@ -3582,7 +3595,6 @@
 	Single Quotes:	એકલ અવતરણ ચિહ્નો:
 	Single Right Quotation Mark	જમણું એકલ અવતરણ ચિહ્ન
 	Single Word Justification:	એક શબ્દ જસ્ટિફિકેશન:
-	Single-line Composer	સિંગલ-લાઇન કમ્પોઝર
 	Sixth Space	છઠ્ઠી જગ્યા
 	Size	કદ
 	Size Tile to Art	ટાઇલનું કદ આર્ટ પ્રમાણે કરો
@@ -4435,6 +4447,8 @@ antiAlias	Sharp	શાર્પ
 	Preview:	પ્રીવ્યૂ:
 	Insert Aki Left	ડાબે અકી ઉમેરો
 	Insert Aki Right	જમણે અકી ઉમેરો
+	Adjust Horizontal Diacritic Position	ડાયાક્રિટિકની આડી સ્થિતિ ગોઠવો
+	Adjust Vertical Diacritic Position	ડાયાક્રિટિકની ઊભી સ્થિતિ ગોઠવો
 	Conic Gradient	કોનિક ગ્રેડિયન્ટ
 	Diamond Gradient	ડાયમંડ ગ્રેડિયન્ટ
 	Include Placed Images	પ્લેસ કરેલી ઇમેજો સામેલ કરો
@@ -4765,3 +4779,25 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Repeat Objects	પુનરાવર્તિત ઑબ્જેક્ટ્સ
 @msg	`{path}` must be one of {_1}, not {got}	`{path}` એ {_1}માંથી એક હોવું જોઈએ, {got} નહીં
 	Path Length	પાથની લંબાઈ
+	Packaging Tools	પેકેજિંગ ટૂલ્સ
+	Fold Lines	ફોલ્ડ લાઇન્સ
+	Make Cut Line	કટ લાઇન બનાવો
+	Make Crease Line	ક્રીઝ લાઇન બનાવો
+	Make Partial Cut Line	આંશિક કટ લાઇન બનાવો
+	Make Perforation Line	પર્ફોરેશન લાઇન બનાવો
+	Make Fold Line	ફોલ્ડ લાઇન બનાવો
+	Role Swatches…	લાઇન પ્રકારના સ્વેચ…
+	Role Swatches	લાઇન પ્રકારના સ્વેચ
+	Role	લાઇન પ્રકાર
+	Cut Line	કટ લાઇન
+	Crease Line	ક્રીઝ લાઇન
+	Partial Cut Line	આંશિક કટ લાઇન
+	Perforation Line	પર્ફોરેશન લાઇન
+	No objects are selected.	કોઈ ઑબ્જેક્ટ પસંદ કરેલ નથી.
+	Open a document to mark its fold lines.	તેની ફોલ્ડ લાઇન્સ ચિહ્નિત કરવા દસ્તાવેજ ખોલો.
+	Remove Fold Line Role	લાઇન પ્રકાર દૂર કરો
+	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
+	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
+	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"

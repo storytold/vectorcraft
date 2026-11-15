@@ -266,6 +266,7 @@ pub fn hit_test_visible_skipping(doc: &Document, p: Point, opt: HitOptions, skip
 /// (`opt.scope`) or on a locked artboard. On a layer whose Preview is off it counts by its
 /// outline, as a click there hits it.
 pub fn selected_hidden_at(doc: &Document, p: Point, opt: HitOptions, selected: &[NodeId]) -> Option<NodeId> {
+    let _walk = ArtWalk::open();
     let symbols = doc.symbol_boxes();
     let locks = doc.locked_artboards();
     selected.iter().rev().copied().find(|&id| {
@@ -322,30 +323,31 @@ fn path_options(nodes: &[&Node], chain: &[NodeId], opt: HitOptions) -> Option<Hi
 /// The objects under `p` that [`Hit::top_object`] picks in `scope` (isolation mode), topmost
 /// first: what clicks there select, one below the other (Cmd/Ctrl-click selects behind).
 pub fn objects_at(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>) -> Vec<NodeId> {
+    let _walk = ArtWalk::open();
     let opt = HitOptions { scope: scope.or(opt.scope), ..opt };
     // Normally one hit test per *object* suffices: layers and sublayers aren't selectable,
     // while a group (including a clipping group) is selected as one object. Repeatedly
     // searching the full tree for each hit made a stack of n overlapping paths O(n^2).
     // Isolation and Edit Contents change where selection groups begin; keep the original
     // traversal for those cases rather than change their Select Behind semantics.
-    if opt.scope.is_some() {
+    // Malformed files may contain non-layer roots; let the general traversal handle them.
+    if opt.scope.is_some() || doc.layers.iter().any(|l| !l.is_layer()) {
         return objects_at_repeated(doc, p, opt, scope);
     }
     let mut tops = Vec::new();
     let mut seen = HashSet::new();
     let symbols = doc.symbol_boxes();
     for layer in doc.layers.iter().rev() {
-        // Malformed files may contain non-layer roots; let the general traversal handle them.
-        if !layer.is_layer() {
-            return objects_at_repeated(doc, p, opt, scope);
-        }
         if !layer.visible || layer.locked || layer.is_template() || doc.pattern_edit.as_ref().is_some_and(|e| e.layer != layer.id) {
             continue;
         }
         if !objects_at_layer(layer, p, opt, &symbols, &mut tops, &mut seen) {
             // An envelope in Edit Contents may expose objects *within* a top-level group.
-            // The repeated traversal handles that mixed hierarchy precisely.
-            return objects_at_repeated(doc, p, opt, scope);
+            // The repeated traversal handles that mixed hierarchy precisely. The objects found
+            // so far lie above the envelope and stay first; the repeated traversal finds the
+            // rest with what is left of the limit of symbol art to walk.
+            tops = objects_at_repeated_after(doc, p, opt, scope, tops);
+            break;
         }
     }
     // The objects on a locked artboard can't be selected, as `hit_test_skipping` passes over them.
@@ -409,7 +411,11 @@ fn objects_at_layer(layer: &Node, p: Point, opt: HitOptions, symbols: &SymbolBox
 
 /// The general selection order also handles isolation and nested Edit Contents.
 fn objects_at_repeated(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>) -> Vec<NodeId> {
-    let mut tops: Vec<NodeId> = vec![];
+    objects_at_repeated_after(doc, p, opt, scope, vec![])
+}
+
+/// [`objects_at_repeated`] after `tops`, the topmost objects under `p` already found.
+fn objects_at_repeated_after(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>, mut tops: Vec<NodeId>) -> Vec<NodeId> {
     // Each round leaves out the objects found so far (and everything inside them).
     while let Some(top) = hit_test_skipping(doc, p, opt, &|id| tops.contains(&id), true).map(|h| h.top_object(scope)) {
         if tops.contains(&top) {
@@ -429,6 +435,7 @@ pub const MAX_LOCKED_AT: usize = 20;
 /// out. While a pattern is edited only its tile layer is searched, and in isolation mode
 /// (`opt.scope`) only what is inside the isolated group or object.
 pub fn locked_objects_at(doc: &Document, p: Point, opt: HitOptions) -> Vec<NodeId> {
+    let _walk = ArtWalk::open();
     let symbols = doc.symbol_boxes();
     let mut out = Vec::new();
     if let Some(scope) = opt.scope
@@ -506,6 +513,7 @@ fn object_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, editab
 /// an isolated group on one ([`crate::LockedArtboards::holds`]). Symbol instances are measured by their art
 /// ([`Node::geometric_bounds_with`]), and are also hit outside that box where their art paints.
 fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool, editable_only: bool) -> Option<Hit> {
+    let _walk = ArtWalk::open();
     let finish = |mut h: Hit| {
         h.contents_of = h.ancestry.iter().rev().copied().find(|a| doc.node(*a).is_some_and(edits_contents));
         h.layers = h.ancestry.iter().take_while(|a| doc.node(**a).is_some_and(Node::is_layer)).count();
@@ -1059,9 +1067,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
         }
         // A symbol instance is hit within its bounds, and outside them where its art paints
-        // ([`instance_art_hit`]).
+        // ([`instance_art_hit`]). In the art of another instance walked outside that instance's
+        // bounds, it is hit only where its own art paints ([`ArtOnly`]).
         NodeKind::SymbolInstance { .. } => {
-            if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+            if !ArtOnly::on() && n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
                 return Some(HitKind::Bounds);
             }
             instance_art_hit(n, p, opt, symbols)
@@ -1113,10 +1122,12 @@ fn on_type_path(n: &Node, t: &crate::TextObject, p: Point, tol: f64) -> bool {
     stroke_contains(&path.to_bezpath(), 0.0, tol, p)
 }
 
-/// Hit anywhere in an evaluated subtree (groups recurse; leaves use [`hit_leaf`]).
+/// Hit anywhere in an evaluated subtree (groups recurse; leaves use [`hit_leaf`]). In symbol art
+/// placed by [`FindPart`], each object visited takes one object of the [`ArtWalk`] limit, and
+/// nothing more is tested once the limit is used up.
 fn hit_any(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
     // Hidden art does not hit.
-    if !n.visible {
+    if !n.visible || ArtWalk::charged() && !ArtWalk::take(1) {
         return None;
     }
     // Nor art whose reach does not hold `p`, as in [`may_hit`]: a blend's steps far from `p` are
@@ -1172,6 +1183,15 @@ impl<'a> InstanceArt<'a> {
         whole.or_else(|| self.map.as_ref()?.one_cell_with(n, &self.boxes))
     }
 
+    /// How many objects placing the whole art makes: the objects of the art with their opacity
+    /// masks' art ([`Node::count_with_masks`]), or, through the guides, the most that
+    /// [`crate::NineSliceMap::most_placed_with`] counts.
+    fn size(&self) -> u64 {
+        self.map
+            .as_ref()
+            .map_or_else(|| u64::try_from(self.art.count_with_masks()).unwrap_or(u64::MAX), |m| m.most_placed_with(&self.art, &self.boxes))
+    }
+
     /// Object `n` of the art placed on the canvas as it is drawn, clip groups included: moved by
     /// `whole` when an object around it is moved as one piece ([`Self::whole`]). `None` when
     /// placing it through the guides could make more than [`crate::MAX_SYMBOL_NODES`] objects, as
@@ -1219,6 +1239,7 @@ fn moved(n: &Node, xf: vectorcraft_geom::Affine) -> Node {
 /// layer, is tested in outline ([`HitOptions::outline`]), as the canvas draws it. `None` when `inst` is not a symbol instance or
 /// no editable object of its art is under `p`.
 pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) -> Option<Vec<u32>> {
+    let _walk = ArtWalk::open();
     let art = InstanceArt::of(doc, inst)?;
     let symbols = doc.symbol_boxes();
     let mut path = vec![];
@@ -1239,8 +1260,12 @@ struct FindPart<'a> {
 }
 
 impl FindPart<'_> {
+    /// What a click at `p` hits on object `n` of the art, placed. [`hit_any`] takes `n` and each
+    /// object it visits inside `n` from the [`ArtWalk`] limit.
     fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>, opt: HitOptions) -> Option<HitKind> {
-        self.art.place(n, whole).and_then(|n| hit_any(&n, self.p, opt, self.symbols))
+        let placed = self.art.place(n, whole)?;
+        let _charged = ArtWalk::charge();
+        hit_any(&placed, self.p, opt, self.symbols)
     }
 
     fn skips_guide(&self, n: &Node) -> bool {
@@ -1250,7 +1275,7 @@ impl FindPart<'_> {
     /// What a click at `p` hits on object `n` of the art, with `path` the child indices that lead
     /// to what it hits. `outline`: the view is in Outline, or a layer around `n` has Preview off.
     fn find(&self, n: &Node, path: &mut Vec<u32>, whole: Option<vectorcraft_geom::Affine>, outline: bool) -> Option<HitKind> {
-        if !n.visible || !self.whole_instance && (n.locked || n.is_template()) || self.skips_guide(n) {
+        if !n.visible || !self.whole_instance && (n.locked || n.is_template()) || self.skips_guide(n) || ArtWalk::used_up() {
             return None;
         }
         let outline = outline || previews_off(n);
@@ -1258,6 +1283,9 @@ impl FindPart<'_> {
         let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole, opt) };
         if path.len() >= crate::symbol_overrides::MAX_PATH_DEPTH {
             return self.hit(n, whole, opt);
+        }
+        if !ArtWalk::take(1) {
+            return None;
         }
         let whole = self.art.whole(n, whole);
         if n.clips()
@@ -1298,15 +1326,144 @@ impl FindPart<'_> {
 /// Outline, [`HitOptions::outline`]): its strokes, and the art that the live geometry effects of a
 /// clipping path in it show past the art's box. `None` for an instance of a missing symbol, of a
 /// symbol that holds an instance of itself or nests too deep ([`SymbolBoxes::art`]), and of art past
-/// the 9-slice object limit ([`InstanceArt::of`]).
+/// the 9-slice object limit ([`InstanceArt::of`]), when `p` is outside the instance's reach
+/// ([`Node::reach_bounds_with`]), and once the click has visited as many objects of symbol art as
+/// [`ArtWalk`] allows.
 fn instance_art_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
     let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return None };
-    if opt.outline || symbols.art(symbol).is_none() {
+    if opt.outline || symbols.art(symbol).is_none() || !n.reach_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+        return None;
+    }
+    let _walk = ArtWalk::open();
+    if ArtWalk::used_up() {
         return None;
     }
     let art = InstanceArt::of(symbols.document(), n)?;
+    #[cfg(test)]
+    ARTS_WALKED.with(|c| c.set(c.get() + 1));
     let opt = HitOptions { clip_outlines: false, ..opt };
+    let _art_only = ArtOnly::set();
     FindPart { art: &art, p, opt, symbols, whole_instance: true }.find(&art.art, &mut vec![], None, false)
+}
+
+thread_local! {
+    /// Whether a symbol instance's art is being walked outside the instance's box ([`ArtOnly`]).
+    static ART_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// While a guard lives, a symbol instance is hit ([`hit_leaf`]) and touched by a marquee
+/// ([`marquee_with`]) only where its own art is, by the same rule at every level, and not anywhere
+/// in its box. [`instance_art_hit`] and the marquee's walk of an instance's art hold one: they walk
+/// the art outside the instance's box, where the box of an instance nested in the art can reach
+/// past it over empty space.
+struct ArtOnly {
+    was: bool,
+}
+
+impl ArtOnly {
+    fn set() -> Self {
+        Self { was: ART_ONLY.replace(true) }
+    }
+
+    fn on() -> bool {
+        ART_ONLY.get()
+    }
+}
+
+impl Drop for ArtOnly {
+    fn drop(&mut self) {
+        ART_ONLY.set(self.was);
+    }
+}
+
+thread_local! {
+    /// How many more objects of symbol art the click or marquee under way may visit ([`ArtWalk`]),
+    /// `None` outside one.
+    static ART_WALK_LEFT: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+    /// Whether [`hit_any`] is testing symbol art that [`FindPart`] placed ([`ArtWalk::charge`]).
+    static ART_WALK_CHARGED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The number of objects [`ArtWalk::open`] allows on this thread in place of
+    /// [`crate::MAX_SYMBOL_NODES`].
+    static ART_WALK_LIMIT: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+    /// How many symbol instances' art clicks and marquees walked on this thread.
+    static ARTS_WALKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The objects of symbol art that one click or one marquee may visit: [`crate::MAX_SYMBOL_NODES`]
+/// in all, the art of the instances nested in that art included, at every level. The first
+/// [`ArtWalk::open`] of a click or a marquee sets the limit, and the walks opened while its guard
+/// lives share it. Once the limit is used up, an instance is no longer hit or touched outside its
+/// box; inside its box it still is.
+struct ArtWalk {
+    outermost: bool,
+}
+
+impl ArtWalk {
+    fn open() -> Self {
+        let walk = Self { outermost: ART_WALK_LEFT.get().is_none() };
+        walk.restart();
+        walk
+    }
+
+    /// For the outermost guard, sets what is left back to the whole limit.
+    fn restart(&self) {
+        if self.outermost {
+            #[cfg(test)]
+            let limit = ART_WALK_LIMIT.get().unwrap_or(crate::MAX_SYMBOL_NODES);
+            #[cfg(not(test))]
+            let limit = crate::MAX_SYMBOL_NODES;
+            ART_WALK_LEFT.set(Some(limit));
+        }
+    }
+
+    /// Is nothing left?
+    fn used_up() -> bool {
+        ART_WALK_LEFT.get() == Some(0)
+    }
+
+    /// Takes `n` objects from what is left. `false` when fewer are left, and nothing is left after.
+    fn take(n: u64) -> bool {
+        let Some(left) = ART_WALK_LEFT.get() else { return true };
+        let rest = left.checked_sub(n);
+        ART_WALK_LEFT.set(Some(rest.unwrap_or(0)));
+        rest.is_some()
+    }
+
+    /// While the guard lives, each object [`hit_any`] visits takes one object from what is left:
+    /// [`FindPart`] holds one while it tests a placed object of symbol art, so that the members of an
+    /// Intertwine group, and the objects of groups nested deeper than
+    /// [`crate::symbol_overrides::MAX_PATH_DEPTH`], count toward the limit.
+    fn charge() -> ArtWalkCharge {
+        ArtWalkCharge { was: ART_WALK_CHARGED.replace(true) }
+    }
+
+    /// Does [`hit_any`] take the objects it visits from what is left ([`Self::charge`])?
+    fn charged() -> bool {
+        ART_WALK_CHARGED.get()
+    }
+}
+
+impl Drop for ArtWalk {
+    fn drop(&mut self) {
+        if self.outermost {
+            ART_WALK_LEFT.set(None);
+        }
+    }
+}
+
+/// The guard of [`ArtWalk::charge`].
+struct ArtWalkCharge {
+    was: bool,
+}
+
+impl Drop for ArtWalkCharge {
+    fn drop(&mut self) {
+        ART_WALK_CHARGED.set(self.was);
+    }
 }
 
 /// Is `n` below a layer whose Preview is off, so that the canvas draws it in outline? As for clicks
@@ -1502,6 +1659,7 @@ fn previews_off(n: &Node) -> bool {
 }
 
 fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, whole_compounds: bool, outline: bool) -> Vec<NodeId> {
+    let _walk = ArtWalk::open();
     let mut out = Vec::new();
     // The objects the marquee may touch ([`Top`]).
     let tops: Vec<Top> = match scope.and_then(|s| doc.node(s)) {
@@ -1613,8 +1771,9 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds, outline)),
             NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds, outline)),
             // A symbol instance is touched by its box, and outside it where the live geometry
-            // effects of a clipping path in its art show the art.
-            NodeKind::SymbolInstance { .. } => box_touches(n, s, r) || !outline && instance_art_touches(n, s, r, whole_compounds),
+            // effects of a clipping path in its art show the art. In the art of another instance
+            // walked outside that instance's box, it is touched only by its own art ([`ArtOnly`]).
+            NodeKind::SymbolInstance { .. } => !ArtOnly::on() && box_touches(n, s, r) || !outline && instance_art_touches(n, s, r, whole_compounds),
             _ => box_touches(n, s, r),
         }
     }
@@ -1628,15 +1787,26 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     }
     /// Does the marquee `r` touch the art of symbol instance `n` placed as the canvas draws it, as
     /// it touches a group of that art? Only for art whose clipping paths have live geometry effects
-    /// ([`SymbolBoxes::art`]), and only when `r` meets the instance's reach
-    /// ([`Node::reach_bounds_with`]): elsewhere the art lies within the instance's box.
+    /// ([`SymbolBoxes::art`]), or for any art while [`ArtOnly`] is on, and only when `r` meets the
+    /// instance's reach ([`Node::reach_bounds_with`]): elsewhere the art lies within the instance's
+    /// box. Not once the marquee has placed as many objects of symbol art as [`ArtWalk`] allows.
     fn instance_art_touches(n: &Node, s: &SymbolBoxes, r: Rect, whole_compounds: bool) -> bool {
         let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return false };
         let meets = |b: Rect| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1;
-        if s.art(symbol).is_none_or(|a| a.reshaped.is_none()) || !n.reach_bounds_with(s).is_some_and(meets) {
+        if s.art(symbol).is_none_or(|a| a.reshaped.is_none() && !ArtOnly::on()) || !n.reach_bounds_with(s).is_some_and(meets) {
+            return false;
+        }
+        let _walk = ArtWalk::open();
+        if ArtWalk::used_up() {
             return false;
         }
         let Some(art) = InstanceArt::of(s.document(), n) else { return false };
+        if !ArtWalk::take(art.size()) {
+            return false;
+        }
+        #[cfg(test)]
+        ARTS_WALKED.with(|c| c.set(c.get() + 1));
+        let _art_only = ArtOnly::set();
         art.place(&art.art, None).is_some_and(|placed| placed.visible && touches(&placed, s, r, None, whole_compounds, false))
     }
     fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool, out: &mut Vec<NodeId>) {

@@ -890,7 +890,7 @@ fn curvature_rubber_band_is_the_path_the_click_makes() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 450.0, 400.0), v).unwrap();
     let made = path(&s, id).subpaths[0].clone();
     assert_eq!(made.anchors.len(), 4);
-    let tail = vectorcraft_geom::SubPath::new(made.anchors[1..].to_vec(), false);
+    let tail = vectorcraft_geom::SubPath::new(made.anchors.to_vec()[1..].to_vec(), false);
     assert_eq!(preview, bez(&tail));
 }
 
@@ -1218,7 +1218,7 @@ fn scissors_cut_ellipse_end_drags_alone() {
             s.pointer(&PointerEvent::new(PointerKind::Up, cut.x + 8.0, cut.y + 8.0).with_mods(m), v).unwrap();
             assert_eq!(undo_steps(&s), undo + 1);
             let after = path(&s, id);
-            let (old, new) = (&sp.anchors, &after.subpaths[0].anchors);
+            let (old, new) = (&sp.anchors.to_vec(), &after.subpaths[0].anchors.to_vec());
             assert_eq!(new.len(), old.len());
             assert_eq!(new[1..], old[1..], "only the dragged end moves (at anchor: {at_anchor}, {m:?})");
             let d = Point::new(cut.x + 8.0, cut.y + 8.0) - cut;
@@ -1572,7 +1572,7 @@ fn a_short_smooth_drag_leaves_the_rest_of_long_segments_alone() {
     drag(&mut s, "smooth", &[(195.0, 194.0), (205.0, 194.0)], Mods::default());
     let p = path(&s, id);
     assert_ne!(p, before, "the bump is smoothed");
-    let a = &p.subpaths[0].anchors;
+    let a = &p.subpaths[0].anchors.to_vec();
     let (first, second, last) = (a[0], a[1], a[a.len() - 1]);
     assert!(first.p == Point::new(50.0, 200.0) && !first.has_out() && !second.has_in(), "the left side is a line still: {first:?} {second:?}");
     assert!(last.p == Point::new(350.0, 200.0) && !last.has_in() && !a[a.len() - 2].has_out(), "and the right one: {last:?}");
@@ -1783,7 +1783,7 @@ fn smoothing_over_a_closed_paths_first_anchor_keeps_its_start() {
     assert_ne!(after, before, "the bump is smoothed");
     assert_starts_nearest(&after, old, 12.0);
     let kept = &after.subpaths[0].anchors;
-    for a in &before.subpaths[0].anchors[2..=10] {
+    for a in &before.subpaths[0].anchors.to_vec()[2..=10] {
         assert!(kept.iter().any(|k| k.p == a.p), "{:?} is out of reach and stays: {kept:?}", a.p);
     }
     s.execute("edit.undo", &json!({})).unwrap();
@@ -2324,6 +2324,39 @@ fn smoothing_keeps_a_corner_between_curves() {
         let at = smooth_turn_at(&path(&s, id).subpaths[0], v);
         assert!(at.is_some_and(|t| (t - turn).abs() < 0.01), "the corner turning {turn}° is kept: {at:?}");
     }
+}
+
+/// A Smooth drag over a corner of a path cut into very many short segments keeps it, however many
+/// segments twice the reach spans: an open path's 90° corner with legs of 2,000 segments 0.05 pt
+/// long at the default reach, and a corner of a 200 pt square cut into 0.25 pt segments with a 40 pt
+/// reach.
+#[test]
+fn smoothing_keeps_corners_on_a_path_of_many_short_segments() {
+    let mut s = session();
+    let (id, v, drag) = smooth_corner_path(&mut s, 90.0, 2000);
+    smooth_pass(&mut s, &drag);
+    let at = smooth_turn_at(&path(&s, id).subpaths[0], v);
+    assert!(at.is_some_and(|t| (t - 90.0).abs() < 0.01), "the open path's corner is kept: {at:?}");
+
+    let mut s = session();
+    let ends = [Point::new(200.0, 200.0), Point::new(400.0, 200.0), Point::new(400.0, 400.0), Point::new(200.0, 400.0)];
+    let mut anchors = vec![];
+    for k in 0..4 {
+        let (a, b) = (ends[k], ends[(k + 1) % 4]);
+        anchors.extend((0..800).map(|j| {
+            let p = a.lerp(b, f64::from(j) / 800.0);
+            json!({"x": p.x, "y": p.y})
+        }));
+    }
+    let id = smooth_test_path(&mut s, &anchors, true);
+    let v = ends[1];
+    let mut drag: Vec<Point> = (0..8).map(|k| v - kurbo::Vec2::new(40.0 - 5.0 * f64::from(k), 0.0)).collect();
+    drag.extend((0..=8).map(|k| v + kurbo::Vec2::new(0.0, 5.0 * f64::from(k))));
+    let pts: Vec<_> = drag.iter().map(|p| json!([p.x, p.y])).collect();
+    s.execute("path.smoothRegion", &json!({"points": pts, "radius": 40, "fidelity": 2.5})).unwrap();
+    let sp = &path(&s, id).subpaths[0];
+    let at = smooth_turn_at(sp, v);
+    assert!(sp.closed && at.is_some_and(|t| (t - 90.0).abs() < 0.01), "the square's corner is kept: {at:?}");
 }
 
 /// A corner at the first anchor of the stretch a drag smooths, just out of its reach, keeps its
@@ -3885,7 +3918,7 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     assert!(left.is_empty());
     assert!(s.doc().unwrap().selection.objects.is_empty());
     assert_eq!(s.clipboard.nodes.len(), 1);
-    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors[1..3]);
+    assert_eq!(s.clipboard.nodes[0].path_data().unwrap().subpaths[0].anchors, original.subpaths[0].anchors.to_vec()[1..3]);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(paths(&s), vec![(id, original.clone())]);
     assert_eq!(s.doc().unwrap().selection, picked);

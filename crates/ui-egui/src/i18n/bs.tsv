@@ -1015,6 +1015,7 @@
 	Change Panel Layout	Promijeni raspored panela
 	Close Panel	Zatvori panel
 	Collapse Panel Group	Skupi grupu panela
+	Cycle Display Sizes	Mijenjaj veličine prikaza
 	Move Panel	Pomakni panel
 	Group with	Grupiši sa
 	Resize panels	Promijeni veličinu panela
@@ -1035,6 +1036,8 @@
 	Step up or down	Korak gore ili dolje
 	Drag values or labels. Double-click a value to type.	Prevucite vrijednosti ili oznake. Dvostruki klik na vrijednost za upis.
 	Drag rings to rotate. Shift snaps to 15°.	Prevucite prstenove za rotaciju. Shift hvata na 15°.
+	Track cube	Kocka za rotaciju
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Prevucite stranu, ivicu ili prsten za rotaciju. Shift rotira oko jedne ose ekrana.
 	Drag the light, or its rings. Shift snaps to 15°.	Prevucite svjetlo ili njegove prstenove. Shift hvata na 15°.
 lighting	Light	Svjetlo
 	Keep visible surfaces only when expanding	Pri proširivanju zadrži samo vidljive površine
@@ -1085,6 +1088,14 @@ lighting	Light	Svjetlo
 	Previous Artboard	Prethodna radna ploča
 	Next Artboard	Sljedeća radna ploča
 	Last Artboard	Posljednja radna ploča
+	Status Bar Show	Prikaz u traci stanja
+	Artboard Name	Naziv radne ploče
+	Current Tool	Trenutni alat
+	Date and Time	Datum i vrijeme
+	Number of Undos	Broj poništavanja
+	Document Color Profile	Profil boja dokumenta
+	Undos	Poništavanja
+	Redos	Ponavljanja
 	Graphic Style Options…	Opcije grafičkog stila…
 	Symbol Options	Opcije simbola
 	Symbol Options…	Opcije simbola…
@@ -1596,6 +1607,8 @@ lighting	Light	Svjetlo
 	Insert Aki Left	Umetni aki lijevo
 	Insert Aki Right	Umetni aki desno
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Podesi vodoravni položaj dijakritika
+	Adjust Vertical Diacritic Position	Podesi okomiti položaj dijakritika
 	Character Direction	Smjer znakova
 	Digits	Cifre
 	Arabic	Arapski
@@ -2028,7 +2041,10 @@ digits	Malayalam	Malajalam
 	Tabular Lining	Tabelarne brojke
 	Tabular Oldstyle	Tabelarne stare brojke
 	Titling Alternates	Alternative za naslove
-	Every-line Composer	Slagač svih redova
+	Middle Eastern & South Asian Single-line Composer	Slagač jednog reda (Bliski istok i Južna Azija)
+	Middle Eastern & South Asian Every-line Composer	Slagač svih redova (Bliski istok i Južna Azija)
+	Standard Single-line Composer	Standardni slagač jednog reda
+	Standard Every-line Composer	Standardni slagač svih redova
 	First-line Left Indent	Lijeva uvlaka prvog reda
 	Hyphenation…	Rastavljanje riječi…
 	Words Longer Than:	Riječi duže od:
@@ -2068,7 +2084,6 @@ digits	Malayalam	Malajalam
 	East Asian Composition Settings	Postavke istočnoazijske kompozicije
 	Korean Composition Settings	Postavke korejske kompozicije
 	Select a text object to edit its paragraph attributes.	Odaberite tekstualni objekat da uredite njegove atribute pasusa.
-	Single-line Composer	Slagač jednog reda
 	Toggle Line Composer	Uključi/isključi Line Composer
 	Space After Paragraph	Razmak nakon pasusa
 	Space Before Paragraph	Razmak prije pasusa
@@ -2896,6 +2911,7 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Prikaži glatki kotač boja
 	Show segmented color wheel	Prikaži segmentirani kotač boja
 	Show color bars	Prikaži trake boja
+	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
 	Limit to Library:	Ograniči na biblioteku:
@@ -3584,6 +3600,8 @@ theme	Appearance	Izgled
 	Create Graph	Kreiraj grafikon
 	Graph Data	Podaci grafikona
 	Graph Type	Vrsta grafikona
+	Graph Type…	Vrsta grafikona…
+	Graph Data…	Podaci grafikona…
 	Graph Options	Opcije grafikona
 	Left Axis	Lijeva osa
 	Right Axis	Desna osa
@@ -7038,3 +7056,21 @@ shape	Open	Otvoren
 	Nest Shapes…	Slaganje oblika…
 	Nest Shapes	Slaganje oblika
 	Roll	Rolna
+	Packaging Tools	Alati za ambalažu
+	Fold Lines	Linije savijanja
+	Make Cut Line	Napravi liniju rezanja
+	Make Crease Line	Napravi liniju bigovanja
+	Make Partial Cut Line	Napravi liniju djelimičnog rezanja
+	Make Perforation Line	Napravi liniju perforacije
+	Make Fold Line	Napravi liniju savijanja
+	Role Swatches…	Uzorci boja za vrste linija…
+	Role Swatches	Uzorci boja za vrste linija
+	Role	Vrsta linije
+	Cut Line	Linija rezanja
+	Crease Line	Linija bigovanja
+	Partial Cut Line	Linija djelimičnog rezanja
+	Perforation Line	Linija perforacije
+	No objects are selected.	Nijedan objekat nije odabran.
+	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
+	Remove Fold Line Role	Ukloni vrstu linije
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
