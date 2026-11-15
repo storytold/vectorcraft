@@ -541,8 +541,8 @@ font-technology	Variable	Варіативні
 	Color Guide Options	Параметри колірного гіда
 	Color Guide Options…	Параметри колірного гіда…
 	Color images	Кольорові зображення
-	Color Library	Бібліотека квітів
-	Color Library…	Бібліотека квітів…
+	Color Library	Бібліотека кольорів
+	Color Library…	Бібліотека кольорів…
 	Color Management	Керування кольором
 	Color Mixer (Shift-click the chip)	Змішувач кольорів (Shift+клацання на зразку)
 	Color Mode	Колірний режим
@@ -2705,6 +2705,8 @@ mark-style	Japanese	Японський
 	Proof Setup	Налаштування кольоропроби
 	Properties	Властивості
 	Proportional Metrics	Пропорційні метрики
+	H or V Style	Горизонтальний або вертикальний стиль
+	Roman Italics	Римський курсив
 	Insert Aki Left	Вставити акі ліворуч
 	Insert Aki Right	Вставити акі праворуч
 	Tsume	Цуме
@@ -8850,7 +8852,7 @@ breakText	Glyphs	Гліфи
 @msg	unexpected resources	неочікувані ресурси
 @msg	unknown CMYK profile `{name}`	невідомий профіль CMYK `{name}`
 @msg	unknown File Info field `{k}`	невідоме поле відомостей про файл `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	невідома функція OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; префікс - вимикає функцію; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom і aalt приймають номер альтернативи у вигляді `tag=N`, де N від 0 до {_1}, наприклад `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	невідома функція OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; префікс - вимикає функцію; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom і aalt приймають номер альтернативи у вигляді `tag=N`, де N від 0 до {_1}, наприклад `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	невідома функція OpenType `{t}` у featureChanges (допустимі теги, які приймає `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	невідомий набір PDF `{name}` (набори: {_1})
 @msg	unknown Warp style	невідомий стиль деформації
