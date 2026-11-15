@@ -6,7 +6,7 @@ use super::cache::CatalogFace;
 use super::cache::{CanonicalNames, Catalog, GlyphCache, PostScriptNames};
 #[cfg(not(target_arch = "wasm32"))]
 use super::dirs::confined_font_dirs;
-use super::face::{BUNDLED, FontBytes, FontFace, Instances};
+use super::face::{BUNDLED, FontFace, Instances};
 #[cfg(not(target_arch = "wasm32"))]
 use super::names::SysFallback;
 use super::names::name;
@@ -45,7 +45,7 @@ impl FontDb {
         let craft = crate::craft_fonts::document_fonts().into_iter().map(|f| f.bytes);
         for data in BUNDLED.iter().copied().chain(craft) {
             for (i, spec) in enumerate_faces(data) {
-                if let Some(f) = make_face(FontBytes::Static(data), i, spec, None) {
+                if let Some(f) = make_face(craft_font_catalog::FaceData::from_static(data, i), spec, None) {
                     faces.push(Arc::new(f));
                 }
             }
@@ -300,7 +300,7 @@ impl FontDb {
                 if self.read_faces().iter().any(|f| present(f)) || made.iter().any(present) {
                     continue;
                 }
-                if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, spec, path.clone()) {
+                if let Some(f) = make_face(craft_font_catalog::FaceData::from_owned(data.clone(), i), spec, path.clone()) {
                     made.push(f);
                 }
             }

@@ -1,7 +1,8 @@
-use super::face::{FontBytes, FontFace, Variation};
+use super::face::{FontFace, Variation};
 use super::names::{name, norm};
 use super::traits::FaceStyle;
 use super::{HashMap, Location, MetadataProvider, NEXT_ID, Ordering, Size, StringId, Tag};
+use craft_font_catalog::FaceData;
 
 /// `face` at the axis settings `variations` (user units), as face `id`: its names, kind, italic
 /// and file, and its weight the `wght` setting when there is one.
@@ -17,24 +18,20 @@ pub(super) fn instanced(face: &FontFace, variations: Vec<Variation>, id: u32) ->
         italic: face.italic,
         traits: face.traits,
     };
-    let mut f = make_face(face.bytes.clone(), face.index, spec, face.path.clone())?;
+    let mut f = make_face(face.data.clone(), spec, face.path.clone())?;
     f.id = id;
     Some(f)
 }
 
-pub(super) fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::path::PathBuf>) -> Option<FontFace> {
-    let data: &[u8] = match &bytes {
-        FontBytes::Static(b) => b,
-        FontBytes::Owned(v) => v.as_slice(),
-    };
-    let f = skrifa::FontRef::from_index(data, index).ok()?;
+pub(super) fn make_face(data: FaceData, spec: FaceStyle, path: Option<std::path::PathBuf>) -> Option<FontFace> {
+    let f = data.skrifa()?;
     let FaceStyle { family, native_family, style, keys, variations, weight, italic, traits } = spec;
     let version = name(&f, &[StringId::VERSION_STRING]).unwrap_or_default();
     // A named instance: outlines, metrics and advances at its axis settings.
     let location = if variations.is_empty() { Location::default() } else { f.axes().location(variations.iter().map(|(t, v)| (Tag::new(t), *v))) };
     let m = f.metrics(Size::unscaled(), &location);
     let a = f.attributes();
-    let hb = harfrust::FontRef::from_index(data, index).ok()?;
+    let hb = data.harfrust()?;
     let shaper = harfrust::ShaperData::new(&hb);
     let instance =
         (!variations.is_empty()).then(|| harfrust::ShaperInstance::from_variations(&hb, variations.iter().map(|(t, v)| (harfrust::Tag::new(t), *v))));
@@ -69,8 +66,7 @@ pub(super) fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Opt
         underline,
         strikeout,
         shaper,
-        bytes,
-        index,
+        data,
         path,
         plans: craft_font_catalog::ShapePlanCache::default(),
         ideographic_centre: std::sync::OnceLock::new(),
