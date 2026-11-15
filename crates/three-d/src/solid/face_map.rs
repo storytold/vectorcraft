@@ -178,10 +178,12 @@ pub fn plane_face_map(bounds: Rect, view: View) -> Option<FaceMap> {
 /// before projection, in the mesh's coordinates (y up), and the face's outward normal there.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MeshFace {
-    /// An art point `p` lies at `x · p.x + y · p.y + c`.
+    /// An art point `p` lies at `x · (p.x - centre.x) + y · (p.y - centre.y) + at`, with the art's
+    /// center at `at`.
     x: V3,
     y: V3,
-    c: V3,
+    centre: Point,
+    at: V3,
     normal: V3,
     /// A plane's mesh turns its normal toward the viewer, so its triangles face either way.
     either_side: bool,
@@ -193,10 +195,11 @@ fn mesh_space(v: V3) -> V3 {
 }
 
 impl MeshFace {
-    fn new(camera: &Camera, placing: &Placing, side: f64, either_side: bool) -> Self {
-        let (x, y, c) = placing.frame();
+    fn new(camera: &Camera, placing: &Placing, centre: Point, side: f64, either_side: bool) -> Self {
+        let (x, y, _) = placing.frame();
+        let at = mesh_space(placing.place(centre));
         let normal = mesh_space(camera.rotate(V3(0.0, 0.0, side))).unit();
-        Self { x: mesh_space(x), y: mesh_space(y), c: mesh_space(c), normal, either_side }
+        Self { x: mesh_space(x), y: mesh_space(y), centre, at, normal, either_side }
     }
 
     /// The art point that mesh point `m` shows, when `m` lies on the face's plane and a triangle
@@ -210,7 +213,9 @@ impl MeshFace {
         if !faces {
             return None;
         }
-        let d = V3(m[0], m[1], m[2]).sub(self.c);
+        // Measured from the art's center, so the tolerance follows the solid's size and not where
+        // the art lies on the page.
+        let d = V3(m[0], m[1], m[2]).sub(self.at);
         let (xx, xy, yy) = (self.x.dot(self.x), self.x.dot(self.y), self.y.dot(self.y));
         let det = xx * yy - xy * xy;
         let spans = xx > 1e-24 && yy > 1e-24 && det >= 1e-12 * xx * yy;
@@ -218,10 +223,11 @@ impl MeshFace {
             return None;
         }
         let (bx, by) = (self.x.dot(d), self.y.dot(d));
-        let p = Point::new((bx * yy - by * xy) / det, (xx * by - xy * bx) / det);
-        let on = V3(self.x.0 * p.x + self.y.0 * p.y, self.x.1 * p.x + self.y.1 * p.y, self.x.2 * p.x + self.y.2 * p.y);
+        let (px, py) = ((bx * yy - by * xy) / det, (xx * by - xy * bx) / det);
+        let on = V3(self.x.0 * px + self.y.0 * py, self.x.1 * px + self.y.1 * py, self.x.2 * px + self.y.2 * py);
         let off = d.sub(on);
-        let size = 1.0 + d.dot(d).sqrt() + self.c.dot(self.c).sqrt();
+        let size = 1.0 + d.dot(d).sqrt();
+        let p = Point::new(self.centre.x + px, self.centre.y + py);
         (p.x.is_finite() && p.y.is_finite() && off.dot(off).sqrt() <= 1e-6 * size).then_some(p)
     }
 }
@@ -245,7 +251,7 @@ pub fn extrude_mesh_face(bounds: Rect, options: Extrude, view: View, face: Plana
         PlanarFace::Back => (1.0, -1.0),
     };
     let placing = Placing::new(&camera, bounds.center(), Turn::new(bounds, o.twist, o.taper, t), o.depth / 2.0 - o.depth * t);
-    Some(MeshFace::new(&camera, &placing, side, false))
+    Some(MeshFace::new(&camera, &placing, bounds.center(), side, false))
 }
 
 /// The plane [`super::plane`] turns art with `bounds` into, with `view`, in its mesh
@@ -254,7 +260,7 @@ pub fn plane_mesh_face(bounds: Rect, view: View) -> Option<MeshFace> {
     check_bounds(bounds).ok()?;
     let camera = Camera::new(view, bounds, 0.0);
     let placing = Placing::new(&camera, bounds.center(), Turn::new(bounds, 0.0, 1.0, 0.0), 0.0);
-    Some(MeshFace::new(&camera, &placing, 1.0, true))
+    Some(MeshFace::new(&camera, &placing, bounds.center(), 1.0, true))
 }
 
 #[cfg(test)]

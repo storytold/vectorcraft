@@ -187,6 +187,27 @@ fn a_caps_mesh_corners_go_back_to_the_art_they_were_made_from() {
 }
 
 #[test]
+fn a_cap_far_from_the_page_origin_takes_none_of_a_step_bevels_treads() {
+    let (path, bounds) = square();
+    let far = vectorcraft_geom::kurbo::Affine::translate((1e7, 1e7));
+    let path = PathData::from_bezpath(&(far * path.to_bezpath()));
+    let bounds = far.transform_rect_bbox(bounds);
+    let bevel = crate::Bevel { width: 4.0, height: 4.0, shape: crate::BevelShape::Step, ..Default::default() };
+    let options = Extrude { bevel: Some(bevel), ..Extrude::default() };
+    let view = turned(0.0);
+    let mesh = crate::extrude_mesh(&path, FillRule::NonZero, bounds, options, view).unwrap();
+    let mesh_face = extrude_mesh_face(bounds, options, view, PlanarFace::Front).unwrap();
+    let (points, taken) = mesh_art(&mesh, &mesh_face);
+    // The treads face the same way as the cap, a few points behind it: only the cap's two
+    // triangles are taken, wherever the art lies on the page.
+    assert_eq!(taken, 2);
+    for p in points {
+        let near = corners(bounds).iter().map(|c| c.distance(p)).fold(f64::INFINITY, f64::min);
+        assert!(near < 1e-6, "{p:?} is {near} from the cap's corners");
+    }
+}
+
+#[test]
 fn the_mapped_part_of_a_rectangle_stops_before_the_eye() {
     let (_, bounds) = square();
     let view = View { rotation_x: -89.0, perspective: 160.0, ..turned(0.0) };
