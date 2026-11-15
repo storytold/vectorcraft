@@ -1136,7 +1136,7 @@ impl GestureTool {
     /// The Eraser's angle, roundness and size where its tip outline shows: while it erases, each
     /// value on a mode that follows the pen goes from the value less its Variation to the value
     /// plus it as the pen reads now (the pressure once the pen has pressed less than fully, the
-    /// tilt and rotation of the last point, and the bearing of the last point the pen leaned 1° or
+    /// tilt, rotation and wheel of the last point, and the bearing of the last point the pen leaned 1° or
     /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed and a
     /// pen that gives no reading, the values themselves. The Blob Brush's are its own values.
     fn tip_now(&self) -> [f64; 3] {

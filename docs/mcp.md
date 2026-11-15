@@ -5589,13 +5589,14 @@ Eraser Tool Options set them ([Erase paths using the Eraser
 tool](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/erase-paths-using-eraser-tool.html)):
 `angleMode` with `angleVariation` (degrees, 0 to 180), `roundnessMode` with `roundnessVariation` (percent, 0 to 100)
 and `sizeMode` with `sizeVariation` (points, 0 or more), each `"fixed"` (the default), `"random"`, `"pressure"`,
-`"tilt"`, `"bearing"` or `"rotation"`. A value that varies takes up to its variation either way. Random draws one
-value for the drag. Pressure goes from the value less the variation where the pen presses lightest to the value plus
-it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright. Bearing and
-Rotation go from less at −180° to more at 180° of the way the pen leans or its barrel turns. The tip at each point of
-the drag takes what the pen read there (the points' pressure, tilt and rotation, as `path.freehand` takes them); a
-drag without that reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way
-Tilt, Bearing and Rotation run, and the value itself without a reading are VectorCraft's own rules.
+`"tilt"`, `"bearing"`, `"rotation"` or `"stylusWheel"`. A value that varies takes up to its variation either way.
+Random draws one value for the drag. Pressure goes from the value less the variation where the pen presses lightest to
+the value plus it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright.
+Bearing and Rotation go from less at −180° to more at 180° of the way the pen leans or its barrel turns. Stylus Wheel
+goes from less at 0 to more at 1 of an airbrush pen's finger wheel. The tip at each point of the drag takes what the
+pen read there (the points' pressure, tilt, rotation and wheel, as `path.freehand` takes them); a drag without that
+reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way Tilt, Bearing,
+Rotation and Stylus Wheel run, and the value itself without a reading are VectorCraft's own rules.
 The command refuses another mode, and a variation below 0 or past its range, and erases nothing. In the desktop app
 the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases.
 `tool.setOption {tool: "eraser"}` takes the same keys.

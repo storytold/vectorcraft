@@ -2875,6 +2875,43 @@ fn the_eraser_tip_follows_its_variation_modes() {
     assert_eq!(b.options()["sizeMode"], json!("pressure"));
 }
 
+/// An Eraser value on Stylus Wheel follows the wheel the pen recorded, in the tip outline while it
+/// erases and in the points the release sends; a pen that gives no wheel reads half way, the value
+/// itself.
+#[test]
+fn the_eraser_tip_follows_the_stylus_wheel() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let tip = |t: &GestureTool| match &t.overlays(&cx)[..] {
+        [.., Overlay::Path { path, color: [0, 0, 0], width: 1.0, .. }] => vectorcraft_geom::Shape::bounding_box(path),
+        o => panic!("{o:?}"),
+    };
+    let near = |b: vectorcraft_geom::Rect, want: (f64, f64, f64, f64)| {
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(20)), ("roundness", json!(25)), ("angleMode", json!("stylusWheel")), ("angleVariation", json!(90))] {
+        t.set_option(k, &v);
+    }
+    assert_eq!(t.options()["angleMode"], json!("stylusWheel"));
+    // The wheel at the far end of its travel turns the 20 by 5 pt tip upright.
+    let wheel = |w: Option<f32>| Some(PenPose { tilt: None, rotation: None, wheel: w });
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (197.5, 40.0, 202.5, 60.0));
+    let acts = t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    let Some(Action::Exec(c, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!((c.as_str(), &v["angleMode"]), ("path.eraseRegion", &json!("stylusWheel")));
+    assert_eq!(v["points"], json!([[100.0, 50.0, null, null, null, null, 1.0], [200.0, 50.0, null, null, null, null, 1.0]]));
+    // A pen without a wheel keeps the tip lying level.
+    t.pointer(&cx, &PointerEvent { pen: wheel(None), ..PointerEvent::new(PointerKind::Down, 100.0, 50.0) });
+    t.pointer(&cx, &PointerEvent { pen: wheel(None), ..PointerEvent::new(PointerKind::Drag, 200.0, 50.0) });
+    near(tip(&t), (190.0, 47.5, 210.0, 52.5));
+    t.pointer(&cx, &PointerEvent { pen: wheel(None), ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+}
+
 /// The Eraser's tip outline follows a pen turned in place, which adds no stroke point, and the
 /// release erases with that reading; and its size passes 1296 pt as `path.eraseRegion` sweeps it.
 #[test]

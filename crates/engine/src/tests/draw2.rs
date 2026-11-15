@@ -612,14 +612,14 @@ fn eraser_size_follows_the_pen_pressure() {
     assert!(err.to_string().contains("sizeMode"), "{err}");
 }
 
-/// Eraser Tool Options' Angle, Roundness and Size variation menus: a value on Rotation, Bearing,
-/// Tilt or Pressure takes what the pen read along the drag, Random stays within its Variation, a
+/// Eraser Tool Options' Angle, Roundness and Size variation menus: a value on Stylus Wheel, Rotation,
+/// Bearing, Tilt or Pressure takes what the pen read along the drag, Random stays within its Variation, a
 /// drag without the reading erases at the value itself, an open path is cut where the varied tip
 /// covers it, and an unknown mode or a variation out of its range is refused with nothing erased.
 #[test]
 fn the_eraser_tip_varies_with_its_modes() {
     // Which of `probes` a level drag through the middle of a 400 by 200 rectangle erases, each of
-    // its points `[x, 100]` followed by `pen` ([pressure, tiltX, tiltY, rotation]).
+    // its points `[x, 100]` followed by `pen` ([pressure, tiltX, tiltY, rotation, wheel]).
     let erased = |tip: serde_json::Value, pen: serde_json::Value, probes: &[(f64, f64)]| -> Vec<bool> {
         let mut s = session();
         rect(&mut s, 0.0, 0.0, 400.0, 200.0);
@@ -646,6 +646,10 @@ fn the_eraser_tip_varies_with_its_modes() {
     // The barrel turned half way round reads the most, which turns the tip upright.
     assert_eq!(erased(on_rotation.clone(), json!([none, none, none, 180]), &probes), [true, true], "Rotation");
     assert_eq!(erased(on_rotation.clone(), json!([]), &probes), [true, false], "Rotation without a reading");
+    // The finger wheel at the far end of its travel reads the most; without a wheel the tip lies level.
+    let on_wheel = with(&level, json!({"angleMode": "stylusWheel", "angleVariation": 90}));
+    assert_eq!(erased(on_wheel.clone(), json!([none, none, none, none, 1.0]), &probes), [true, true], "Stylus Wheel");
+    assert_eq!(erased(on_wheel, json!([none, none, none, none, none]), &probes), [true, false], "Stylus Wheel without a reading");
     // Leaning to the left (a bearing of 180°) reads the most too.
     let on_bearing = with(&level, json!({"angleMode": "bearing", "angleVariation": 90}));
     assert_eq!(erased(on_bearing.clone(), json!([none, -45, 0, none]), &probes), [true, true], "Bearing");
@@ -692,11 +696,11 @@ fn the_eraser_tip_varies_with_its_modes() {
     let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
     s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
     let stroke = json!({"points": [[-10, 50], [110, 50]]});
-    let modes = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\" or \"rotation\"";
+    let modes = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\", \"rotation\" or \"stylusWheel\"";
     for (extra, want) in [
         (json!({"angleMode": "wheel"}), format!("angleMode is one of {modes}, not `wheel`")),
         (json!({"roundnessMode": 3}), format!("roundnessMode is one of {modes}, not 3")),
-        (json!({"sizeMode": "stylusWheel"}), format!("sizeMode is one of {modes}, not `stylusWheel`")),
+        (json!({"sizeMode": "Pressure"}), format!("sizeMode is one of {modes}, not `Pressure`")),
         (json!({"angleVariation": 181}), "angleVariation must be at most 180".to_string()),
         (json!({"roundnessVariation": 101}), "roundnessVariation must be at most 100".to_string()),
         (json!({"roundnessVariation": -1}), "roundnessVariation must be 0 or more".to_string()),
