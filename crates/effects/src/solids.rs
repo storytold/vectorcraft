@@ -1584,8 +1584,8 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
     let view = view_options(p);
     let mut caster = vectorcraft_three_d::ShadowCaster::new();
     // The faces each solid of visible art added, with its member's scopes and its ink (opacity
-    // and blending mode), in order. A fully transparent fill or stroke (or member) casts nothing
-    // and does not place the plane.
+    // and blending mode), in order. A fill or stroke (or member) that is fully transparent, or whose
+    // opacity is not a finite number, casts nothing and does not place the plane ([`shadow::Ink::casts`]).
     let mut cast: Vec<shadow::Cast> = vec![];
     let ink = |item: &AppearanceItem, member: f32| {
         let (_, opacity, blend) = paint_of(item, member);
@@ -1593,7 +1593,7 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
     };
     if id == ROTATE {
         for s in shapes {
-            for item in s.items.iter().filter(|i| ink(i, s.opacity).opacity > 0.0) {
+            for item in s.items.iter().filter(|i| ink(i, s.opacity).casts()) {
                 let (area, rule) = region(&s.path, s.rule, item);
                 #[cfg(test)]
                 SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
@@ -1607,7 +1607,7 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
         // Inflate's eye is placed for every shape together, as the solids are.
         let added: Vec<Result<std::ops::Range<usize>, String>> = if id == INFLATE {
             let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
-            let casts: Vec<bool> = inks.iter().map(|i| i.opacity > 0.0).collect();
+            let casts: Vec<bool> = inks.iter().map(|i| i.casts()).collect();
             #[cfg(test)]
             SOLIDS_BUILT.with(|n| n.set(n.get() + shapes.len()));
             caster.inflate(&shapes, &casts, bounds, inflate_options(p), view)
@@ -1615,13 +1615,13 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
             let mut added = vec![];
             for ((_, _, area, rule, _, _), ink) in parts.iter().zip(&inks) {
                 #[cfg(test)]
-                SOLIDS_BUILT.with(|n| n.set(n.get() + usize::from(ink.opacity > 0.0)));
-                added.push(if ink.opacity > 0.0 { caster.extrude(area, *rule, bounds, extrude_options(p), view) } else { Ok(0..0) });
+                SOLIDS_BUILT.with(|n| n.set(n.get() + usize::from(ink.casts())));
+                added.push(if ink.casts() { caster.extrude(area, *rule, bounds, extrude_options(p), view) } else { Ok(0..0) });
             }
             added
         };
         for (((item, _, _, _, scopes, _), ink), faces) in parts.iter().zip(inks).zip(added) {
-            if ink.opacity <= 0.0 {
+            if !ink.casts() {
                 continue;
             }
             // A stroke whose own solid is past the limits is left out; past the shadow's limit for
@@ -1662,7 +1662,7 @@ fn cast_built<'a>(id: &str, p: &Value, shapes: &'a [Profile], built: Vec<Option<
         }
         for ((s, item), kept) in items.into_iter().zip(built) {
             let ink = ink(item, s.opacity);
-            if ink.opacity <= 0.0 {
+            if !ink.casts() {
                 continue;
             }
             let faces = match kept {
@@ -1680,11 +1680,11 @@ fn cast_built<'a>(id: &str, p: &Value, shapes: &'a [Profile], built: Vec<Option<
     }
     let (parts, bounds) = solid_parts(shapes, b);
     let inks: Vec<shadow::Ink> = parts.iter().map(|(item, member, ..)| ink(item, *member)).collect();
-    if parts.len() != built.len() || (id == INFLATE && inks.iter().zip(&built).any(|(ink, kept)| ink.opacity > 0.0 && kept.is_none())) {
+    if parts.len() != built.len() || (id == INFLATE && inks.iter().zip(&built).any(|(ink, kept)| ink.casts() && kept.is_none())) {
         return cast_shadow(id, p, shapes);
     }
     for (((item, _, area, rule, scopes, _), ink), kept) in parts.iter().zip(inks).zip(built) {
-        if ink.opacity <= 0.0 {
+        if !ink.casts() {
             continue;
         }
         let faces = match kept {
