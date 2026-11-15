@@ -56,7 +56,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Italian | `it` | 8,924 rows, 3,560 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 54 missing messages for it, which open #7116, #7211, #7378 and #7405 translate | full |
 | Dutch | `nl` | 3,447 `@msg` and 48 `@msgplural` rows (counted 2026-11-13): in `COMPLETE_MESSAGES`, and the untranslated report lists 41 missing messages for it; one/other plurals | full |
 | Danish | `da` | 7,422 rows, 1,636 of them `@msg` and 48 `@msgplural` (counted 2026-11-14 on `main` at `edb228ac3`): in `COMPLETE_MESSAGES`, and the untranslated report lists the same missing messages for it as for Greek, Spanish and Finnish; one/other plurals | full |
-| Russian | `ru` | 4,009 / 4,020 | full |
+| Russian | `ru` | 9,259 rows, 3,444 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): in `COMPLETE_MESSAGES`; the untranslated report lists 46 menu strings, 21 `tl!` literals and 11 undo labels as missing | full |
 | Ukrainian | `uk` | 8,802 rows, 3,439 of them `@msg` and 48 `@msgplural` (counted 2026-11-13); one/few/many plurals | full |
 | Hungarian | `hu` | 9,166 rows, 3,444 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it, and lists 47 menu strings, 25 `tl!` strings, 11 undo labels and 45 swatch names without a row; one plural form | full |
 | Polish | `pl` | 9,044 rows, 3,439 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 46 missing messages for it, and 47 menu strings, 26 `tl!` literals, 11 undo labels and 45 swatch names; one/few/many plurals | full; native review pending |
