@@ -546,6 +546,58 @@ fn painted_clipping_type_survives_enclosing_geometry_effect() {
     }
 }
 
+/// The group in `n` that holds a clip group and then the green stroke art of its clipping type,
+/// with that clip group.
+fn stroke_wrapper(n: &Node) -> Option<(&Node, &Node)> {
+    let ch = n.children()?;
+    if let [inner, stroke, ..] = ch.as_slice()
+        && matches!(inner.kind, NodeKind::Group { clip: true, .. })
+        && !n.clips()
+        && paints(stroke, false)
+    {
+        return Some((n, inner));
+    }
+    ch.iter().find_map(|c| stroke_wrapper(c))
+}
+
+#[test]
+fn clipping_type_strokes_paint_over_a_knockout_clip_group() {
+    // A clip group set to Knockout Group On, Off or neutral, clipped by type that strokes: its
+    // clipped art knocks out as the clip group says, and the type's stroke paints over it without
+    // knocking it out, as the canvas draws the live clip group. The type is reshaped by a group's
+    // Transform around it, or by its own Offset Path.
+    use vectorcraft_doc::Knockout;
+    for (knockout, around) in [(Knockout::On, Knockout::Off), (Knockout::Off, Knockout::Off), (Knockout::Neutral, Knockout::Neutral)] {
+        for own in [false, true] {
+            let mut ty = painted_type(3, true, true);
+            if own {
+                ty.appearance.effects.push(fx("path.offsetPath", json!({"offset": 1})));
+            }
+            let mut clipped = clip_group(2, ty);
+            clipped.knockout = knockout;
+            let mut outer = Node::group(NodeId(1), vec![Arc::new(clipped)]);
+            if !own {
+                outer.appearance.effects.push(fx("distort.transform", json!({"moveV": 10})));
+            }
+            let mut d = Document::new(400.0, 400.0);
+            let layer = d.layers[0].id;
+            d.insert(Some(layer), 0, outer.clone()).unwrap();
+            let baked = bake_document(&d).unwrap();
+            let canvas = if own { None } else { crate::evaluate_container(None, &outer) };
+            let exported = baked.layers.iter().find_map(|l| stroke_wrapper(l));
+            for (what, found) in [("canvas", canvas.as_ref().and_then(stroke_wrapper)), ("export", exported)] {
+                if own && what == "canvas" {
+                    continue;
+                }
+                let case = format!("{what}, own effect {own}, knockout {knockout:?}");
+                let (wrapper, inner) = found.unwrap_or_else(|| panic!("{case}: no group around the clip"));
+                assert_eq!(inner.knockout, knockout, "{case}: the clipped art knocks out as before");
+                assert_eq!(wrapper.knockout, around, "{case}: the stroke does not knock out the clipped art");
+            }
+        }
+    }
+}
+
 #[test]
 fn a_clip_groups_own_fill_stays_in_the_clip_when_its_clipping_type_strokes() {
     // A clip group with a yellow fill of its own and an Offset Path effect, clipped by type that

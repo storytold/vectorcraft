@@ -773,7 +773,8 @@ pub(crate) fn painted_type_clip(doc: Option<&Document>, n: &Node) -> Option<Node
     }
     let Some(stroke) = stroke else { return Some(m) };
     let guides = ch.split_off(Node::guide_run_start(ch));
-    let inner = Node::new(n.id, NodeKind::Group { children: std::mem::take(ch), clip: true });
+    let mut inner = Node::new(n.id, NodeKind::Group { children: std::mem::take(ch), clip: true });
+    knockout_inside(&mut m, &mut inner);
     match &mut m.kind {
         NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } => {
             *children = [Arc::new(inner), Arc::new(stroke)].into_iter().chain(guides).collect();
@@ -782,6 +783,17 @@ pub(crate) fn painted_type_clip(doc: Option<&Document>, n: &Node) -> Option<Node
         _ => return None,
     }
     Some(m)
+}
+
+/// Knockout Group for clip group `m` turned into a group around `inner`, a clip group of its
+/// members, and its clipping path's strokes: `inner` takes `m`'s setting, so the clipped art knocks
+/// out as before, and `m` is set Off so the strokes paint over it, as the renderer draws them. A
+/// neutral `m` stays neutral, so both take the setting of the groups around them.
+pub(crate) fn knockout_inside(m: &mut Node, inner: &mut Node) {
+    inner.knockout = m.knockout;
+    if m.knockout != vectorcraft_doc::Knockout::Neutral {
+        m.knockout = vectorcraft_doc::Knockout::Off;
+    }
 }
 
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look

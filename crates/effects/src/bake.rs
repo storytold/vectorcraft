@@ -28,7 +28,7 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Vec2};
 use crate::distort::{transform_move, transform_offsets};
 use crate::group::{has_own_paint, paints};
 use crate::reshape::{
-    as_art, clipping_text_outline, dressed, geometry_effects, glyph_outlines, outline_nested_text, painted_type_clip, reshape_leaves,
+    as_art, clipping_text_outline, dressed, geometry_effects, glyph_outlines, knockout_inside, outline_nested_text, painted_type_clip, reshape_leaves,
 };
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
@@ -502,7 +502,8 @@ fn clip_group_with_type_clip(d: &mut Document, n: &Node) -> Option<Node> {
         return Some(m);
     };
     // `n` keeps its id, name and transparency, and holds the clip group and the strokes over it.
-    let inner = Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true });
+    let mut inner = Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true });
+    knockout_inside(&mut m, &mut inner);
     match &mut m.kind {
         NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } => {
             *children = vec![Arc::new(inner), stroke];
