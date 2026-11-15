@@ -190,7 +190,9 @@ The rest is our reading:
   curved surfaces follow this only as closely as their flat facets do. A solid painted with a gradient that has
   transparent stops under a light that is not white is drawn with an opacity mask: its faces keep their places in
   this order, in runs that each carry the mask, and a graphic drawn after one of its faces carries the mask too
-  ([Graphics](#graphics)). A member of a 3D group with its own opacity
+  ([Graphics](#graphics)). Such a gradient, and a gradient with transparent stops under the classic effects'
+  shading, is placed once on the whole solid when it has no placement of its own, so its colors and its
+  transparency line up across the faces. A member of a 3D group with its own opacity
   mask or blending mode draws its fill's and strokes' faces in this order inside that mask or blending mode when
   they are opaque with Normal blending. Otherwise each solid is drawn on its own with its opacity and blending, the
   lower item's first. With a light that is not white, a puffed, shaded Inflate surface in a solid color takes its
