@@ -12,10 +12,14 @@ use vectorcraft_geom::{BezPath, FillRule, PathData};
 /// fills and strokes: the region is then the union of the paths they give, as an export bakes them.
 /// `None` when there is nothing to clip by (the clipped art is then hidden).
 pub fn clip_outline(clip: &Node) -> Option<(BezPath, FillRule)> {
-    match clip_effects_applied(clip, true, || true) {
-        Some(m) => m.clip_outline(Some(&outline_text), &unite),
-        None => clip.clip_outline(Some(&outline_text), &unite),
-    }
+    reshaped_clip_outline(clip).unwrap_or_else(|| clip.clip_outline(Some(&outline_text), &unite))
+}
+
+/// [`clip_outline`] of a clipping path that a live geometry effect reshapes; `None` when nothing
+/// `clip` clips by has a geometry effect of its own or on a fill or stroke. A hidden member of a
+/// group or layer does not clip, so its effects are not counted.
+pub fn reshaped_clip_outline(clip: &Node) -> Option<Option<(BezPath, FillRule)>> {
+    clip_effects_applied(clip, true, || true).map(|m| m.clip_outline(Some(&outline_text), &unite))
 }
 
 /// `n`, the clipping path of a clip group, with the live geometry effects of everything it clips by

@@ -86,6 +86,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         no_break,
         language,
         glyph_alternate,
+        glyph_form: _,
         fill,
         stroke,
         stroke_width,

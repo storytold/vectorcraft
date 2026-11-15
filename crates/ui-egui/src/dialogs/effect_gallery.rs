@@ -271,6 +271,7 @@ fn preview_space(w: usize, h: usize) -> PixelSpace {
         to_doc: Affine::IDENTITY,
         px: 1.0,
         center: Point::new(wf / 2.0, hf / 2.0),
+        size: vectorcraft_geom::Vec2::new(wf, hf),
         channels: vectorcraft_effects::pixel::Channels::Rgb,
         line: 1.0,
         extent: 0.5 * wf.hypot(hf),

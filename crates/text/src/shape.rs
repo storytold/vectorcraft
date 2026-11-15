@@ -49,6 +49,12 @@ pub(crate) struct SGlyph {
     /// The Insert Aki Left and Right `adv` holds, in points: on the last glyph of its cluster, 0
     /// on the others. Justification does not stretch or narrow it.
     pub aki: f64,
+    /// The space Tsume ([`tighten`]) took before the cluster's ink, in points, on every glyph of
+    /// its cluster: `dx` is that much smaller.
+    pub tsume_shift: f64,
+    /// The space Tsume took out of `adv`, in points: on the last glyph of its cluster, 0 on the
+    /// others.
+    pub tsume: f64,
     /// Outline scale (font units -> points).
     pub sx: f64,
     pub sy: f64,
@@ -232,6 +238,8 @@ pub(crate) fn hyphen_glyph(g: &SGlyph) -> SGlyph {
     h.kern_shift = 0.0;
     h.aki_shift = 0.0;
     h.aki = 0.0;
+    h.tsume_shift = 0.0;
+    h.tsume = 0.0;
     h.byte = g.byte + g.len;
     h.len = 0;
     h.ch = '-';
@@ -838,8 +846,8 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
     let mut cache = HashMap::new();
     let mut corrections: HashMap<[u64; 15], Option<f64>> = HashMap::new();
     let mut references: HashMap<u32, Option<f64>> = HashMap::new();
-    // The Insert Aki a cluster's last glyph holds does not make a mark its base.
-    let shaped_advances: Vec<f64> = glyphs.iter().map(|g| g.adv - g.aki).collect();
+    // The Insert Aki and Tsume a cluster's last glyph holds do not make a mark its base.
+    let shaped_advances: Vec<f64> = glyphs.iter().map(|g| g.adv - g.aki + g.tsume).collect();
     for i in 0..glyphs.len().saturating_sub(1) {
         let Some((a, b)) = glyphs.get(i).zip(glyphs.get(i + 1)) else { continue };
         if a.level != b.level {
@@ -897,10 +905,10 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
             continue;
         }
         // Neither glyph is rotated, so a right-to-left manual kerning shift adds to the offset.
-        // Insert Aki is measured as no space: the pair is spaced as it would be without it, and
-        // the Aki stays on top of that.
-        let left_x = left.dx + left.kern_shift - left.aki_shift;
-        let right_x = right.dx + right.kern_shift - right.aki_shift;
+        // Insert Aki is measured as no space, and Tsume as taking none: the pair is spaced as it
+        // would be without them, and they stay on top of that.
+        let left_x = left.dx + left.kern_shift - left.aki_shift + left.tsume_shift;
+        let right_x = right.dx + right.kern_shift - right.aki_shift + right.tsume_shift;
         let left_y = left.dy - left.bshift;
         let right_y = right.dy - right.bshift;
         let Some(left_style) = runs.get(left.run).map(|(_, s)| *s) else { continue };
@@ -909,7 +917,7 @@ fn optical_pairs(db: &FontDb, text: &str, glyphs: &mut [SGlyph], runs: &[(Range<
         let tracking = left_style.tracking / 1000.0 * em * spacing_scale(left_style, false);
         // A manual kerning value on the left glyph is part of its advance and, right to left, of
         // its offset too (it spaces the left glyph from its left neighbor): it is not taken off.
-        let advance = glyphs[cluster_start..=cluster_end].iter().map(|g| g.adv - g.aki).sum::<f64>() - tracking;
+        let advance = glyphs[cluster_start..=cluster_end].iter().map(|g| g.adv - g.aki + g.tsume).sum::<f64>() - tracking;
         let key = [
             u64::from(left.face.id()),
             u64::from(left.gid),
@@ -1028,6 +1036,8 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         no_break,
         language,
         glyph_alternate,
+        // An OpenType feature over its own characters, like `features`.
+        glyph_form: _,
     } = a;
     // Keep PartialEq's non-reflexive behavior for ignored numeric fields, without cloning styles.
     let offsets = (standard_vertical_roman, tcy_up_down, tcy_left_right);
@@ -1096,7 +1106,7 @@ pub(crate) fn warichu_alike(a: &CharStyle, b: &CharStyle) -> bool {
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
 /// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
 /// run's, see [`shape_segment`]), the space before a line's first character ([`space_before`]),
-/// Insert Aki ([`aki`]), Tsume ([`tighten`]), the OpenType features (each run's apply to its own characters, as features
+/// Insert Aki ([`aki`]), Tsume ([`tighten`]), the OpenType features and the East Asian glyph form (each run's apply to its own characters, as features
 /// over a range of the one buffer) and the tracking, as long as the tracking keeps or drops
 /// standard ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
@@ -1159,6 +1169,8 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         no_break,
         language,
         glyph_alternate,
+        // Applied as a feature over its run's own characters, with `features`.
+        glyph_form: _,
     } = a;
     *font_family == b.font_family
         && warichu_alike(a, b)
@@ -1276,6 +1288,8 @@ fn inline_glyph(
         kern_shift: if level.is_rtl() && !vertical { manual_kern } else { before } + aki_shift,
         aki_shift,
         aki: if adv.is_finite() { aki_left + aki_right } else { 0.0 },
+        tsume_shift: 0.0,
+        tsume: 0.0,
         // Not used to draw (the art has its own transform), but they make the glyph's em box
         // its run's em: Character Alignment and Top-to-Top leading treat an inline graphic as a
         // character of its run's size, whatever its scale (see `layout::glyph_em`).
@@ -1442,8 +1456,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let mut ranged = Vec::new();
         for (r, run_style) in runs.get(source_runs.clone()).unwrap_or_default() {
             let (a, b) = (r.start.max(range.start), r.end.min(range.end));
-            if run_style.features != base_style.features && a < b {
-                let own = variant(&CharStyle { features: run_style.features.clone(), ..base_style.clone() });
+            if (run_style.features != base_style.features || run_style.glyph_form != base_style.glyph_form) && a < b {
+                let own = variant(&CharStyle { features: run_style.features.clone(), glyph_form: run_style.glyph_form, ..base_style.clone() });
                 ranged_features(base, &own, a..b, &mut ranged);
             }
         }
@@ -1784,6 +1798,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             kern_shift,
             aki_shift,
             aki: aki_in_adv,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: k * hs,
             sy: k * vs,
             bshift: gst.baseline_shift + pos_shift,
@@ -1822,8 +1838,9 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
 /// drawn along the line, the last one with `own` as its width before the tracking, kerning and
 /// Insert Aki its advance holds. `tsume` percent of the blank space between the cluster's own width
 /// and its ink, on each side, comes out of the cluster's advance, and its glyphs are drawn the
-/// left side's share earlier. A cluster without ink, such as a space, or with a width that is not
-/// positive, keeps its place and width.
+/// left side's share earlier ([`SGlyph::tsume`] and [`SGlyph::tsume_shift`] hold both, for Optical
+/// kerning to measure the pair without them). A cluster without ink, such as a space, or with a
+/// width that is not positive, keeps its place and width.
 fn tighten(glyphs: &mut [SGlyph], own: f64, tsume: f64) {
     let Some(last) = glyphs.len().checked_sub(1) else { return };
     let share = if tsume.is_nan() { 0.0 } else { tsume.clamp(0.0, MAX_TSUME) / 100.0 };
@@ -1844,9 +1861,11 @@ fn tighten(glyphs: &mut [SGlyph], own: f64, tsume: f64) {
     let right = (pen - hi).clamp(0.0, pen) * share;
     for g in glyphs.iter_mut() {
         g.dx -= left;
+        g.tsume_shift = left;
     }
     if let Some(g) = glyphs.get_mut(last) {
         g.adv -= left + right;
+        g.tsume = left + right;
     }
 }
 

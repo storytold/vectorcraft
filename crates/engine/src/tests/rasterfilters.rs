@@ -143,19 +143,22 @@ fn listed_applied_edited_and_undone() {
         }
     }
     // Numbers far out of range are stored as given and read clamped; the canvas still draws.
+    // Radial Blur's Blur Center is refused outside 0 to 1 instead.
+    let center = |id: &str, k: &str| id == "blur.radial" && matches!(k, "centerX" | "centerY");
     for (id, _) in EFFECTS {
         let defaults = vectorcraft_render::effects::default_params(id).unwrap();
         let junk: serde_json::Map<String, Value> = defaults
             .as_object()
             .unwrap()
             .iter()
-            .filter(|(_, v)| v.is_number())
+            .filter(|(k, v)| v.is_number() && !center(id, k))
             .enumerate()
             .map(|(i, (k, _))| (k.clone(), json!(if i % 2 == 0 { 1e308 } else { -1e308 })))
             .collect();
         assert!(!junk.is_empty(), "{id}");
         s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": junk})).unwrap();
     }
+    assert!(s.execute("effect.apply", &json!({"effect": "blur.radial", "ids": [g], "params": {"centerX": 1e308}})).is_err());
     let _ = render(&s);
     let n = s.doc().unwrap().doc.node(NodeId(g)).unwrap().clone();
     assert_eq!(n.appearance.effects.len(), 3);

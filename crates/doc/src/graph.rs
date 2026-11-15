@@ -379,6 +379,22 @@ pub struct SeriesPaint {
     /// Object blend mode of each path directly in the series group, as [`Self::opacity`]. Absent: Normal.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blend: Option<vectorcraft_color::BlendMode>,
+    /// Object opacity (0..1) of the series group itself, taken from the transparency set on the group. Absent: fully opaque.
+    /// Graph labels keep none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_opacity: Option<f32>,
+    /// Object blend mode of the series group itself, as [`Self::group_opacity`]. Absent: Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_blend: Option<vectorcraft_color::BlendMode>,
+    /// Isolate Blending of the series group itself, as [`Self::group_opacity`]. Absent: off.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub group_isolate: bool,
+    /// Knockout Group state of the series group itself, as [`Self::group_opacity`]. Absent: neutral.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_knockout: Option<crate::Knockout>,
+    /// Knockout Shape of the series group itself, as [`Self::group_opacity`]. Absent: off.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub group_knockout_shape: bool,
     /// A gradient in [`Self::fill`] is placed relative to the unit box (0, 0)–(1, 1), and each mark takes it on its own
     /// geometric bounds. False: the gradient is in document coordinates, and every mark takes it unchanged.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -527,7 +543,7 @@ pub struct GraphSpec {
     /// Bounds of the art when it was last generated (detects moves/scales of the graph group).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placed: Option<Rect>,
-    /// Bounds of the art other than type when it was last generated ([`art_bounds`]). Moves and scales of the graph
+    /// Bounds of the art other than type when it was last generated ([`graph_art_without_type`]). Moves and scales of the graph
     /// group are measured on these when present; graphs saved without them are measured on [`Self::placed`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placed_art: Option<Rect>,
@@ -544,6 +560,43 @@ fn is_zero(n: &usize) -> bool {
 /// Edge-to-Edge Lines for a graph saved before the option existed: on, as it was drawn then.
 fn edge_to_edge_before_the_option() -> bool {
     true
+}
+
+/// The geometric bounds of a graph's art `children` leaving out their type: the plot, axes, tick marks and legend
+/// swatches without the labels. None when there is nothing else. [`GraphSpec::placed_art`] keeps these.
+pub fn graph_art_without_type(children: &[std::sync::Arc<crate::Node>]) -> Option<Rect> {
+    children.iter().filter_map(|c| without_type(c).0).reduce(|a, b| a.union(b))
+}
+
+/// The geometric bounds of `n` leaving out the type in it, and whether its own geometric bounds depend on that type. A
+/// group without such type gives its own bounds, and a clipping group whose clip does not depend on type gives the
+/// bounds of its clip. Objects other than groups, layers and compound paths, blends, envelopes and repeats among them,
+/// give their own bounds.
+fn without_type(n: &crate::Node) -> (Option<Rect>, bool) {
+    use crate::NodeKind::{Compound, Group, Layer, Text};
+    if matches!(n.kind, Text(_)) {
+        return (None, true);
+    }
+    let children: &[std::sync::Arc<crate::Node>] = match &n.kind {
+        Group { clip: true, children } | Layer { clip: true, children, .. } => children,
+        Group { .. } | Layer { .. } | Compound { .. } => n.editing_children(),
+        _ => return (n.geometric_bounds(), false),
+    };
+    let mut bounds: Option<Rect> = None;
+    let mut had_type = false;
+    let mut clip_has_type = false;
+    let hidden_layer_member = |c: &crate::Node| !c.visible && matches!(n.kind, Layer { clip: false, .. });
+    for (i, c) in children.iter().enumerate().filter(|(_, c)| !hidden_layer_member(c)) {
+        let (b, t) = without_type(c);
+        had_type |= t;
+        clip_has_type |= i == 0 && t;
+        bounds = match (bounds, b) {
+            (Some(a), Some(b)) => Some(a.union(b)),
+            (a, b) => a.or(b),
+        };
+    }
+    let clip = matches!(n.kind, Group { clip: true, .. } | Layer { clip: true, .. });
+    if had_type && (!clip || clip_has_type) { (bounds, true) } else { (n.geometric_bounds(), false) }
 }
 
 impl GraphSpec {
@@ -612,32 +665,6 @@ impl GraphSpec {
         }
         out
     }
-}
-
-/// The geometric bounds of a graph's art `children` leaving out their type: the plot, axes, tick marks and legend
-/// swatches without the labels. None when there is nothing else. [`GraphSpec::placed_art`] keeps these.
-pub fn art_bounds(children: &[std::sync::Arc<crate::Node>]) -> Option<Rect> {
-    children.iter().filter_map(|c| art_bounds_of(c).0).reduce(|a, b| a.union(b))
-}
-
-/// The geometric bounds of `n` leaving out the type in it, and whether there was type to leave out. A group without type
-/// gives its own bounds, so a clipping group gives the bounds of its clip.
-fn art_bounds_of(n: &crate::Node) -> (Option<Rect>, bool) {
-    if matches!(n.kind, crate::NodeKind::Text(_)) {
-        return (None, true);
-    }
-    let Some(children) = n.children() else { return (n.geometric_bounds(), false) };
-    let mut bounds: Option<Rect> = None;
-    let mut had_type = false;
-    for c in children {
-        let (b, t) = art_bounds_of(c);
-        had_type |= t;
-        bounds = match (bounds, b) {
-            (Some(a), Some(b)) => Some(a.union(b)),
-            (a, b) => a.or(b),
-        };
-    }
-    if had_type { (bounds, true) } else { (n.geometric_bounds(), false) }
 }
 
 impl Default for GraphSpec {
