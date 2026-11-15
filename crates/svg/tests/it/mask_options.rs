@@ -55,6 +55,27 @@ fn an_inverted_unclipped_mask_round_trips() {
     }
 }
 
+/// Mask art that reaches past the masked object comes back whole: the mask's region covers the art
+/// as well as the object, so import does not clip the art to the region.
+#[test]
+fn mask_art_larger_than_its_object_round_trips_unclipped() {
+    let mut d = Document::new(200.0, 200.0);
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let white = Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0);
+    let mut n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(50.0, 50.0, 100.0, 100.0)), red);
+    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 20.0, 180.0, 170.0)), white);
+    n.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let s = export(&d, &ExportOptions::default());
+    let (back, warnings) = import_with_report(&s).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let [m] = &masks(&back)[..] else { panic!("one masked object: {s}") };
+    assert!(m.art.path_data().is_some(), "the art alone, not clipped by the region: {:?}\n{s}", m.art.kind);
+    let b = m.art.geometric_bounds().unwrap();
+    assert!((b.x0 - 10.0).abs() < 1e-6 && (b.y0 - 20.0).abs() < 1e-6 && (b.x1 - 180.0).abs() < 1e-6 && (b.y1 - 170.0).abs() < 1e-6, "{b:?}");
+}
+
 #[test]
 fn foreign_masks_keep_their_art() {
     // Without the attribute a white backdrop is part of the mask art (another app's file).

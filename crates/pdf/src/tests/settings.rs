@@ -73,7 +73,7 @@ fn checks_refuse_what_the_writer_cant_honour() {
 }
 
 #[test]
-fn options_not_applied_yet_come_back_as_warnings() {
+fn options_not_applied_yet_come_back_as_setting_notes() {
     assert!(PdfSettings::default().warnings().is_empty());
     for (v, word) in [
         (json!({"createLayers": true, "compatibility": "1.4"}), "PDF 1.5"),
@@ -110,7 +110,8 @@ fn options_not_applied_yet_come_back_as_warnings() {
     let r =
         export_with_report(&doc(), &PdfOptions { settings: settings(json!({"thumbnails": true, "marks": {"trim": true}})), ..Default::default() })
             .unwrap();
-    // The writer embeds the thumbnails it is given: without them, the one warning says so.
-    assert!(r.warnings.len() == 1 && r.warnings[0].contains("thumbnails need the pages drawn"), "{:?}", r.warnings);
+    // The writer embeds the thumbnails it is given: without them, the one note on the options says so.
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(r.setting_notes.len() == 1 && r.setting_notes[0].contains("thumbnails need the pages drawn"), "{:?}", r.setting_notes);
     assert!(r.bytes.starts_with(b"%PDF-1.7"));
 }

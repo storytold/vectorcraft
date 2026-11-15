@@ -51,6 +51,14 @@ pub(super) fn recent_slot<'a>(app: &'a VectorcraftApp, id: &str) -> Option<&'a S
     io::recent_files(app).get(n.checked_sub(1)?)
 }
 
+/// May the request being served read recent file `path`? Under an automation read root (a control
+/// client's request), a recent file outside the root is left out of `ui.menu.list` and
+/// `file.recentFiles`, and its `file.openRecentN` slot answers as an empty one, as a listed script
+/// outside the root is left out ([`crate::scripts_menu::readable`]).
+pub(super) fn recent_readable(path: &str) -> bool {
+    vectorcraft_engine::file_access::check_read(path).is_ok()
+}
+
 /// View → Perspective Grid → One/Two/Three Point Perspective: the saved-preset slots of each type.
 pub(super) const PERSPECTIVE_SLOTS: [[&str; crate::dialogs::perspective_presets::SLOTS]; 3] = [
     [

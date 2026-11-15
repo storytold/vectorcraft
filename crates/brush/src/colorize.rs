@@ -13,15 +13,26 @@ fn luminance(c: &Color) -> f32 {
 }
 
 fn map_color(c: &Color, mode: Colorization, key: &Color) -> Color {
-    let lum = luminance(c);
+    // Black ink alone is its own tint: its amount is the tint, not how light it displays (100% K
+    // displays lighter than black).
+    let light = match *c {
+        Color::Cmyk { c, m, y, k } if c == 0.0 && m == 0.0 && y == 0.0 => 1.0 - k,
+        _ => luminance(c),
+    };
+    // A process or gray stroke color's tints and shades stay in its model.
+    let (white, black) = match key {
+        Color::Cmyk { .. } => (Color::cmyk(0.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0)),
+        Color::Gray { .. } => (Color::gray(0.0), Color::gray(1.0)),
+        _ => (Color::WHITE, Color::BLACK),
+    };
     match mode {
         Colorization::None => *c,
-        Colorization::Tints => key.lerp(&Color::WHITE, lum),
+        Colorization::Tints => key.lerp_keep_model(&white, light),
         Colorization::TintsAndShades => {
-            if lum < 0.5 {
-                Color::BLACK.lerp(key, lum * 2.0)
+            if light < 0.5 {
+                key.lerp_keep_model(&black, 1.0 - light * 2.0)
             } else {
-                key.lerp(&Color::WHITE, (lum - 0.5) * 2.0)
+                key.lerp_keep_model(&white, (light - 0.5) * 2.0)
             }
         }
         Colorization::HueShift { key: art_key } => {
@@ -103,49 +114,9 @@ fn strip_brushes(n: &mut Node) {
     }
 }
 
-/// Mix every solid paint under `n` towards `color` by `amount` (0..1) — the Symbol Stainer.
-pub fn tint_node(n: &mut Node, color: &Color, amount: f32) {
-    let amount = amount.clamp(0.0, 1.0);
-    for it in &mut n.appearance.items {
-        let p = match it {
-            AppearanceItem::Fill(f) => &mut f.paint,
-            AppearanceItem::Stroke(s) => &mut s.paint,
-        };
-        if let Paint::Solid { color: c, .. } = p {
-            *p = Paint::solid(c.lerp(color, amount));
-        }
-    }
-    if let vectorcraft_doc::NodeKind::Text(t) = &mut n.kind {
-        for r in &mut t.runs {
-            for p in [&mut r.style.fill, &mut r.style.stroke] {
-                if let Paint::Solid { color: c, .. } = p {
-                    *p = Paint::solid(c.lerp(color, amount));
-                }
-            }
-        }
-    }
-    if let Some(ch) = n.children_mut() {
-        for c in ch.iter_mut() {
-            tint_node(Arc::make_mut(c), color, amount);
-        }
-    }
-}
-
-/// The stain instance `inst` puts on its symbol's art: its visible fill colour and that fill's
-/// opacity (how far the art mixes towards it). `None` for an unstained instance.
-pub fn stain(inst: &Node) -> Option<(Color, f32)> {
-    let f = inst.appearance.fill().filter(|f| f.visible)?;
-    Some((f.paint.color()?, f.opacity))
-}
-
-/// A symbol's art for instance `inst`, stained by the instance's fill ([`stain`]).
-pub fn instance_art(art: &Node, inst: &Node) -> Node {
-    let mut a = art.clone();
-    if let Some((c, amount)) = stain(inst) {
-        tint_node(&mut a, &c, amount);
-    }
-    a
-}
+/// The Symbol Stainer's mix, an instance's stain and its stained art, from
+/// [`vectorcraft_doc::symbol_overrides`], which the effects that reshape an instance also read.
+pub use vectorcraft_doc::symbol_overrides::{instance_art, stain, tint_node};
 
 /// The solid colours of the fills and strokes under `nodes`, most used first (then in the order
 /// they first appear): the colours Brush Options offers as Hue Shift's key colour, the first being

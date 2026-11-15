@@ -16,7 +16,7 @@ use super::edit::{duplicate_in, outermost, selected_roots, selected_roots_to_tra
 use super::opacitymask::percent;
 use super::{
     CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, f64_or, f64_req, has_doc, has_multi, has_selection,
-    has_selection_or_guides, id_param, ids_param, matrix_param, ok, point_param, str_param, targets,
+    has_selection_or_guides, ids_param, matrix_param, object_param, ok, point_param, str_param, targets,
 };
 use crate::{EngineError, LastTransform};
 
@@ -25,6 +25,7 @@ mod arrange;
 mod bounds;
 mod commands;
 mod compound;
+mod pixelgrid;
 mod props;
 mod shape;
 mod spans;
@@ -32,7 +33,12 @@ mod transform;
 
 pub(crate) use align::choice;
 pub(crate) use arrange::group_nodes;
-pub(crate) use bounds::bounds_rewrite;
+pub(crate) use bounds::{bounds_rewrite, object_bounds_transform};
 pub use commands::specs;
 pub(super) use compound::{as_clipping_path, make_clipping_path, release_clip};
+pub(crate) use pixelgrid::{
+    align_new_object, can_align, keep_aligned_in, keep_compound_aligned, keep_pixel_aligned, refresh as refresh_pixel_aligned, resnap,
+    snap_if_aligned,
+};
+pub(super) use shape::recut;
 pub(crate) use transform::{apply_transform, preview_copies, scaling, transform_node, transform_patterns, transforms_objects};

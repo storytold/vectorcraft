@@ -13,7 +13,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_color::Color;
 use vectorcraft_doc::LAYER_COLORS;
 
-use super::tile_edge_color::resolve;
+use super::tile_edge_color::{checked, resolve};
 use super::{DialogSpec, form, run_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
@@ -118,8 +118,11 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// OK: set the Shape Builder's options.
+/// OK: set the Shape Builder's options, or an error for a `highlightColor` that is not a color.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.fields.contains_key("highlightColor") {
+        checked(&d.str("highlightColor"))?;
+    }
     let values: Map<String, Value> = KEYS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
     run_and_close(app, "tool.setOption", json!({ "tool": "shapeBuilder", "values": values }))
 }
@@ -249,6 +252,25 @@ mod tests {
             doc.layers[0].children().unwrap().iter().filter_map(|n| doc.bounds_of(&[n.id], false)).map(|b| [b.x0, b.y0, b.x1, b.y1]).collect();
         bounds.sort_by(|a, b| a[3].total_cmp(&b[3]));
         assert_eq!(bounds, vec![[100.0, 100.0, 300.0, 100.0], [100.0, 100.0, 300.0, 200.0]]);
+    }
+
+    /// A highlight color with an alpha part is refused and leaves the tool's options as they were;
+    /// `#rrggbb` still sets them.
+    #[test]
+    fn a_highlight_color_with_an_alpha_part_is_refused() {
+        let mut app = app();
+        app.run("tool.options", json!({"tool": "shapeBuilder"})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("highlightColor".into(), json!("#ff000080"));
+        d.fields.insert("highlightFill".into(), json!(false));
+        let err = super::super::confirm(&mut app).unwrap_err();
+        assert_eq!(err, "`#ff000080` is not a colour (#rrggbb or a preset name)");
+        assert!(app.ui.dialog.is_some(), "the dialog stays open");
+        let o = app.session.tool_options_of("shapeBuilder");
+        assert_eq!((o["highlightColor"].as_str(), o["highlightFill"].as_bool()), (Some("#ff4f4f"), Some(true)), "nothing changes");
+        app.ui.dialog.as_mut().unwrap().fields.insert("highlightColor".into(), json!("#00ff00"));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.tool_options_of("shapeBuilder")["highlightColor"], json!("#00ff00"));
     }
 
     #[test]

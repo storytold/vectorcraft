@@ -184,6 +184,41 @@ showpage
     assert!(e.contains("junk.eps"), "{e}");
 }
 
+/// `legacyNameEncoding` picks the code page of a legacy `.ai`'s layer names that aren't UTF-8; by
+/// default they come in as Windows-1252, with a warning naming them. An encoding it doesn't know is
+/// refused.
+#[test]
+fn legacy_ai_layer_names_open_in_the_encoding_picked() {
+    let mut s = Session::new();
+    // A layer named 레이어 1 in Windows code page 949.
+    let ai = b"%!PS-Adobe-3.0\n%%BoundingBox: 0 0 100 100\n%%DocumentNeededResources: procset Adobe_IllustratorA_AI3 1.0 0\n%AI3_TemplateBox: 50 50 50 50\n%%EndComments\n\
+               %%BeginProlog\n%%IncludeResource: procset Adobe_IllustratorA_AI3 1.0 0\n%%EndProlog\n%%BeginSetup\nAdobe_IllustratorA_AI3 /initialize get exec\n%%EndSetup\n\
+               %AI5_BeginLayer\n1 1 1 1 0 0 2 0 0 0 Lb\n(\\267\\271\\300\\314\\276\\356 1) Ln\n0 0 0 1 K\n0 i 1 w\n10 10 m\n90 90 L\nS\nLB\n%AI5_EndLayer--\n%%PageTrailer\n%%Trailer\n%%EOF\n";
+    let open_as = |s: &mut Session, encoding: Option<&str>| {
+        let mut p = json!({"name": "korean.ai", "dataBase64": vectorcraft_format::base64_encode(ai)});
+        if let Some(e) = encoding {
+            p["legacyNameEncoding"] = json!(e);
+        }
+        s.execute("document.open", &p)
+    };
+    let r = open_as(&mut s, None).unwrap();
+    assert_eq!(s.doc().unwrap().doc.layers[0].name.as_deref(), Some("·¹ÀÌ¾î 1"));
+    assert_eq!(
+        r["warnings"],
+        json!(["the name `·¹ÀÌ¾î 1` isn't UTF-8 and was read as windows-1252: if it looks wrong, open the file with another legacyNameEncoding"])
+    );
+    for encoding in ["windows-949", "EUC-KR"] {
+        let r = open_as(&mut s, Some(encoding)).unwrap();
+        assert_eq!(s.doc().unwrap().doc.layers[0].name.as_deref(), Some("레이어 1"), "{encoding}");
+        assert!(r["warnings"][0].as_str().is_some_and(|w| w.contains("`레이어 1`") && w.contains("windows-949")), "{r}");
+    }
+    let e = open_as(&mut s, Some("utf-16")).unwrap_err();
+    assert!(
+        matches!(&e, EngineError::BadParams { msg, .. } if msg == "legacyNameEncoding must be one of windows-1252, macintosh, windows-949, shift_jis, gbk, big5"),
+        "{e}"
+    );
+}
+
 #[test]
 fn eps_files_place_as_one_group_clipped_to_their_bounding_box() {
     let mut s = rich();
@@ -241,4 +276,18 @@ fn ps_and_epsf_files_open_and_place() {
     // Exports write no .ps: Print to PostScript does.
     let e = writable_format(None, Some("out.ps")).unwrap_err();
     assert_eq!(e, "PostScript files can be opened but not written (see document.formats)");
+}
+
+/// A program in the legacy `.ai` format with a template box and no art size (version 3) opens as a
+/// `.ai` or `.ait` on a US Letter artboard around the box's center, and as an EPS on its bounding
+/// box.
+#[test]
+fn a_legacy_ai_program_opens_on_its_artboard_and_an_eps_on_its_page() {
+    let program = b"%!PS-Adobe-2.0 EPSF-1.2\n%%Creator: a script\n%%BoundingBox: 10 10 30 30\n%AI3_TemplateBox: 100 100 100 100\n\
+        %%EndComments\n%%BeginProlog\n/m {moveto} def /L {lineto} def /f {closepath fill} def /k {setcmykcolor} def\n\
+        %%EndProlog\n%%BeginSetup\n%%EndSetup\n0 0 0 1 k\n10 10 m\n30 10 L\n30 30 L\n10 30 L\nf\n%%PageTrailer\nshowpage\n%%Trailer\n%%EOF\n";
+    for (name, size) in [("old.ai", (612.0, 792.0)), ("old.ait", (612.0, 792.0)), ("old.eps", (20.0, 20.0))] {
+        let r = load(name, program).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(r.doc.artboards[0].rect.size(), vectorcraft_geom::Size::new(size.0, size.1), "{name}: {:?}", r.warnings);
+    }
 }

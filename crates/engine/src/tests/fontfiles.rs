@@ -14,12 +14,12 @@ use crate::cmd::findfiles::{self, Limits, Rules, Visitor};
 use crate::cmd::fontfiles::{self, FontSearch, MAX_FONT_FILE, Sought, copy_into};
 use crate::{EngineError, Session};
 
-/// A fresh temporary folder (canonical, as a search reports it).
-fn folder(tag: &str) -> PathBuf {
-    let dir = vectorcraft_testkit::temp_dir(&format!("fontfiles-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    findfiles::plain(std::fs::canonicalize(&dir).unwrap())
+/// A fresh temporary folder, removed when the first part is dropped, and its path (canonical, as a
+/// search reports it).
+fn folder(tag: &str) -> (vectorcraft_testkit::TempDir, PathBuf) {
+    let dir = vectorcraft_testkit::TempDir::new(&format!("fontfiles-{tag}"));
+    let path = findfiles::plain(std::fs::canonicalize(&*dir).unwrap());
+    (dir, path)
 }
 
 /// A session whose folder searches may go anywhere in `root`, on two threads.
@@ -30,9 +30,14 @@ fn session_for(root: &Path) -> Session {
     s
 }
 
-/// `text.findFontFiles {}` once the search ended (10 seconds at most).
+/// How long a test waits for a search to end or to read a file. The wait only ends a test whose
+/// search never ends. A machine busy with other builds can hold a walker for seconds. It is shorter than a
+/// search's default `maxSeconds` of 60, which would end a search that does not end by itself.
+const WAIT: Duration = Duration::from_secs(30);
+
+/// `text.findFontFiles {}` once the search ended ([`WAIT`] at most).
 fn finished(s: &mut Session) -> Value {
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     loop {
         let r = s.execute("text.findFontFiles", &json!({})).unwrap();
         if r["state"] != "searching" || Instant::now() > until {
@@ -89,7 +94,7 @@ fn missing_fonts_are_listed_symbols_included() {
     assert_eq!((r["count"].as_u64(), r["fonts"][1]["resolved"]["family"].as_str()), (Some(3), Some("Source Sans 3")));
     assert!(r.get("fontsNextToDocument").is_none(), "an unsaved document has no folder");
     let listed = s.execute("text.fonts", &json!({})).unwrap();
-    assert!(!listed.as_array().unwrap().iter().any(|f| f["family"] == "Symbol Only Family"), "Find Font lists the layers' type only");
+    assert!(listed.as_array().unwrap().iter().any(|f| f["family"] == "Symbol Only Family" && f["status"] == "missing"), "{listed}");
     assert!(listed.as_array().unwrap().iter().any(|f| f["family"] == "sans-serif" && f["status"] == "missing"), "{listed}");
     assert!(matches!(Session::new().execute("text.missingFonts", &json!({})), Err(EngineError::Disabled(..))));
 }
@@ -98,7 +103,7 @@ fn missing_fonts_are_listed_symbols_included() {
 /// listed finds the other fonts' files.
 #[test]
 fn an_overlong_font_name_leaves_the_other_fonts_searchable() {
-    let root = folder("long-name");
+    let (_dir, root) = folder("long-name");
     std::fs::write(root.join("Findme.otf"), vectorcraft_testkit::fonts::renamed("Findme Sans 3")).unwrap();
     let mut s = session_for(&root);
     s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
@@ -115,7 +120,7 @@ fn an_overlong_font_name_leaves_the_other_fonts_searchable() {
 /// apps' folders, such as the attachments a mail app keeps in the home folder's Library.
 #[test]
 fn the_fonts_folder_next_to_a_document_in_another_apps_folder_isnt_offered() {
-    let root = folder("next-to");
+    let (_dir, root) = folder("next-to");
     let home = root.join("Users/me");
     let mut s = Session::new();
     s.search_rules = Some(Rules { home: Some(home.clone()), ..Rules::default() });
@@ -135,7 +140,7 @@ fn the_fonts_folder_next_to_a_document_in_another_apps_folder_isnt_offered() {
 #[cfg(unix)]
 #[test]
 fn the_fonts_folder_next_to_a_document_is_an_absolute_path() {
-    let root = folder("relative");
+    let (_dir, root) = folder("relative");
     std::fs::create_dir_all(root.join("pkg/Fonts")).unwrap();
     let cwd = std::env::current_dir().unwrap();
     let up = "../".repeat(cwd.components().count().saturating_sub(1));
@@ -155,7 +160,7 @@ fn the_fonts_folder_next_to_a_document_is_an_absolute_path() {
 
 #[test]
 fn a_search_finds_a_missing_fonts_file_by_its_names() {
-    let root = folder("find");
+    let (_dir, root) = folder("find");
     std::fs::create_dir_all(root.join("x/y")).unwrap();
     std::fs::write(root.join("x/y/Findme.otf"), vectorcraft_testkit::fonts::renamed("Findme Sans 3")).unwrap();
     std::fs::write(root.join("other.ttf"), bundled("SourceSerif4-Regular.ttf")).unwrap();
@@ -189,9 +194,45 @@ fn a_search_finds_a_missing_fonts_file_by_its_names() {
     assert!(matches!(r["state"].as_str(), Some("stopped" | "done")), "{r}");
 }
 
+/// A caller confined by read roots sees, in the replies to a search another caller started, only
+/// the files found inside its read roots, and the folder searched and a failed search's path only
+/// when they are inside them.
+#[test]
+fn a_search_shows_a_confined_caller_only_paths_inside_its_read_roots() {
+    let (_dir, root) = folder("read-roots");
+    let font = vectorcraft_testkit::fonts::renamed("Findme Sans 3");
+    let (home, wide) = (root.join("home"), root.join("lrf-wide"));
+    for dir in [&home, &wide] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("Findme.otf"), &font).unwrap();
+    }
+    let mut s = session_for(&root);
+    let roots = |read: &[&Path]| crate::file_access::AutomationRoots::new(read, &[]).unwrap().unwrap();
+    let (narrow, broad) = (roots(&[&home]), roots(&[&root]));
+    let ask = |s: &mut Session, r: &Arc<crate::file_access::AutomationRoots>, p: Value| {
+        crate::file_access::confine(Some(r), || s.execute("text.findFontFiles", &p).unwrap())
+    };
+    // A font no file has keeps the search going through every folder.
+    let fonts = json!([{"family": "Findme Sans 3"}, {"family": "No Such Sans"}]);
+    ask(&mut s, &broad, json!({"folder": root, "fonts": fonts}));
+    finished(&mut s);
+    let all = ask(&mut s, &broad, json!({}));
+    assert_eq!((&all["fonts"][0]["files"], &all["folder"]), (&json!([home.join("Findme.otf"), wide.join("Findme.otf")]), &json!(root)), "{all}");
+    for r in [ask(&mut s, &narrow, json!({})), ask(&mut s, &narrow, json!({"stop": true}))] {
+        assert!(!r.to_string().contains("lrf-wide") && r.get("folder").is_none(), "{r}");
+        assert_eq!((&r["fonts"][0]["files"], &r["fonts"][0]["family"]), (&json!([home.join("Findme.otf")]), &json!("Findme Sans 3")), "{r}");
+        assert_eq!((&r["state"], &r["searched"], &r["id"]), (&all["state"], &all["searched"], &all["id"]), "{r}");
+    }
+    // A search that failed: the reason shows without the path to a caller outside its folder.
+    ask(&mut s, &broad, json!({"folder": wide.join("gone"), "fonts": fonts}));
+    assert!(finished(&mut s)["error"].as_str().is_some_and(|e| e.contains("lrf-wide")));
+    let r = ask(&mut s, &narrow, json!({}));
+    assert_eq!((r["state"].as_str(), r["error"].as_str(), r.get("folder")), (Some("failed"), Some("the folder can't be read"), None), "{r}");
+}
+
 #[test]
 fn junk_search_params_never_fail_internally() {
-    let root = folder("junk");
+    let (_dir, root) = folder("junk");
     let mut s = session_for(&root);
     s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
     text(&mut s, 20.0, "No Such Font Family", "Regular");
@@ -255,14 +296,14 @@ impl Visitor for Blocked {
 
 #[test]
 fn stop_ends_only_the_search_it_names() {
-    let root = folder("stop");
+    let (_dir, root) = folder("stop");
     std::fs::write(root.join("a.ttf"), b"font").unwrap();
     let mut s = session_for(&root);
     let (tx, rx) = mpsc::channel();
     let search = findfiles::start(root.clone(), s.search_rules.clone(), Limits::default(), 1, 1, Arc::new(Blocked(Mutex::new(rx)))).unwrap();
     let fonts = vec![Sought { family: "A".into(), style: "Regular".into(), status: FontMatch::Missing }];
     s.font_search = Some(FontSearch { id: 7, folder: root.to_string_lossy().into_owned(), fonts, search });
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while s.execute("text.findFontFiles", &json!({})).unwrap()["searched"]["fontFiles"] != 1 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
     }
@@ -288,7 +329,7 @@ fn adding_fonts_needs_vectorcraft_s_fonts_folder() {
 
 #[test]
 fn copying_never_replaces_a_file() {
-    let root = folder("copy");
+    let (_dir, root) = folder("copy");
     let (src, dest) = (root.join("src"), root.join("dest"));
     std::fs::create_dir_all(&src).unwrap();
     std::fs::create_dir_all(&dest).unwrap();
@@ -334,12 +375,11 @@ fn copying_never_replaces_a_file() {
     assert_eq!(reasons[..2], ["larger than 256 MB", "not a file"]);
     assert!(r.copied.is_empty() && reasons.len() == 3, "{r:?}");
     assert!(!dest.join("huge.otf").exists() && !dest.join("folder.otf").exists());
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
 fn only_font_files_are_copied() {
-    let root = folder("allowed");
+    let (_dir, root) = folder("allowed");
     let (src, dest) = (root.join("src"), root.join("dest"));
     std::fs::create_dir_all(&src).unwrap();
     std::fs::create_dir_all(&dest).unwrap();
@@ -353,13 +393,12 @@ fn only_font_files_are_copied() {
     let not_a_font = |n: &str| (src.join(n), "not a font file".to_string());
     assert_eq!(r.skipped, [not_a_font("notes.txt"), not_a_font("Script")]);
     assert!(!dest.join("notes.txt").exists() && !dest.join("Script").exists());
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A search reads no font file larger than Add Fonts copies, and finds a smaller copy of the font.
 #[test]
 fn a_search_skips_font_files_too_large_to_add() {
-    let root = folder("too-large");
+    let (_dir, root) = folder("too-large");
     let (big, small) = (root.join("big").join("Sizeme.otf"), root.join("small").join("Sizeme.otf"));
     let font = vectorcraft_testkit::fonts::renamed("Sizeme Sans 3");
     for path in [&big, &small] {
@@ -373,7 +412,6 @@ fn a_search_skips_font_files_too_large_to_add() {
     s.execute("text.findFontFiles", &json!({"folder": root, "fonts": [{"family": "Sizeme Sans 3"}, {"family": "No Such Sans"}]})).unwrap();
     let r = finished(&mut s);
     assert_eq!(r["fonts"][0]["files"], json!([small]), "{r}");
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A suitcase font: a file without an extension or with `.suit`, empty but for the fonts in its
@@ -382,7 +420,7 @@ fn a_search_skips_font_files_too_large_to_add() {
 #[test]
 fn suitcase_fonts_are_found_and_copied_with_their_fork() {
     use vectorcraft_testkit::fonts::{renamed, suitcase_fork};
-    let root = folder("suitcase");
+    let (_dir, root) = folder("suitcase");
     let (src, dest) = (root.join("src"), root.join("dest"));
     std::fs::create_dir_all(src.join("sub")).unwrap();
     std::fs::create_dir_all(&dest).unwrap();
@@ -425,5 +463,4 @@ fn suitcase_fonts_are_found_and_copied_with_their_fork() {
     // The font scan reads the copies.
     let db = vectorcraft_text::FontDb::with_font_dirs(vec![dest.clone()]);
     assert_eq!((db.styles("Suitme Sans 3"), db.styles("Other Sans 33")), (vec!["Regular".to_string()], vec!["Regular".to_string()]));
-    let _ = std::fs::remove_dir_all(&root);
 }

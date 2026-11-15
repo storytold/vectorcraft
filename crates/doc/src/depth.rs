@@ -107,15 +107,21 @@ fn nested_deeper(now: &[Arc<Node>], depth: usize) -> bool {
 /// an opacity mask too deep are left out); what it held stays hidden or locked as it was. Returns
 /// whether anything changed. Recurses no deeper than the cap.
 fn limit(nodes: &mut Vec<Arc<Node>>, depth: usize) -> bool {
-    let mut changed = false;
-    let mut i = 0;
-    while let Some(n) = nodes.get_mut(i) {
-        if !nested_deeper(std::slice::from_ref(n), depth) {
-            i += 1;
+    if !nested_deeper(nodes, depth) {
+        return false;
+    }
+    // The list is rebuilt in order rather than spliced in place: replacing one container of many
+    // by what it holds would move all the siblings after it each time.
+    let mut out = Vec::with_capacity(nodes.len());
+    // What is left to look at, the next one last.
+    let mut left: Vec<Arc<Node>> = std::mem::take(nodes);
+    left.reverse();
+    while let Some(mut a) = left.pop() {
+        if !nested_deeper(std::slice::from_ref(&a), depth) {
+            out.push(a);
             continue;
         }
-        changed = true;
-        let n = Arc::make_mut(n);
+        let n = Arc::make_mut(&mut a);
         if n.extras().mask.as_ref().is_some_and(|m| nested_deeper(std::slice::from_ref(&m.art), depth + 1)) {
             n.extras_mut().mask = None;
         }
@@ -123,10 +129,10 @@ fn limit(nodes: &mut Vec<Arc<Node>>, depth: usize) -> bool {
             if let Some(ch) = n.children_mut() {
                 limit(ch, depth + 1);
             }
-            i += 1;
+            out.push(a);
             continue;
         }
-        let clip = matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. });
+        let clip = n.clips();
         let (visible, locked) = (n.visible, n.locked);
         let mut held = n.children_mut().map(std::mem::take).unwrap_or_default();
         if clip && !held.is_empty() {
@@ -140,9 +146,17 @@ fn limit(nodes: &mut Vec<Arc<Node>>, depth: usize) -> bool {
             }
         }
         // What it held takes its place, and is looked at in its turn.
-        nodes.splice(i..=i, held);
+        left.extend(held.into_iter().rev());
     }
-    changed
+    // The ruler guides of a sublayer merged into its parent layer go above the parent's art, with
+    // the parent's own.
+    if out.iter().any(|c| c.is_ruler_guide()) {
+        let (guides, art): (Vec<_>, Vec<_>) = out.into_iter().partition(|c| c.is_ruler_guide());
+        out = art;
+        out.extend(guides);
+    }
+    *nodes = out;
+    true
 }
 
 /// A symbol (`false`) or a pattern (`true`) of the document, by name: what art draws by name, an
@@ -235,6 +249,45 @@ fn heights(doc: &Document) -> Heights<'_> {
 /// Can't `used`, by an object `depth` deep, be drawn there?
 fn undrawable(heights: &Heights, used: Def, depth: usize) -> bool {
     heights.get(&used).is_some_and(|h| h.is_none_or(|h| depth + h > MAX_DRAWN_DEPTH))
+}
+
+/// How deep the art of a document's symbols and patterns draws, to measure objects that use them
+/// outside the document's layers ([`Self::deepest`]).
+#[derive(Clone, Debug, Default)]
+pub struct DrawnHeights {
+    symbols: HashMap<String, usize>,
+    patterns: HashMap<String, usize>,
+}
+
+impl DrawnHeights {
+    /// The heights of `doc`'s symbols and patterns, as [`Document::too_deep`] counts them: the art
+    /// is 1 deep, and what it uses is counted under it. A symbol or pattern that uses itself, or
+    /// draws deeper than [`MAX_DRAWN_DEPTH`], has none.
+    pub fn of(doc: &Document) -> Self {
+        let mut out = Self::default();
+        for ((pattern, name), h) in heights(doc) {
+            if let Some(h) = h {
+                let map = if pattern { &mut out.patterns } else { &mut out.symbols };
+                map.insert(name.to_string(), h);
+            }
+        }
+        out
+    }
+
+    /// The deepest `n`, placed `depth` deep, draws: its own objects and the art of their opacity
+    /// masks, and under the objects the art of the symbols and patterns they use. A use of a
+    /// symbol or pattern without a height ([`Self::of`]) counts as the object alone. `n`'s own
+    /// nesting may pass [`MAX_DEPTH`]. Without recursion.
+    pub fn deepest(&self, n: &Node, depth: usize) -> usize {
+        let mut out = depth;
+        let mut stack = vec![(n, depth)];
+        while let Some((n, d)) = stack.pop() {
+            let used = uses(n).filter_map(|(pattern, name)| if pattern { self.patterns.get(name) } else { self.symbols.get(name) }).max();
+            out = out.max(d + used.copied().unwrap_or(0));
+            stack.extend(n.children().into_iter().flatten().chain(n.extras().mask.as_ref().map(|m| &m.art)).map(|c| (&**c, d + 1)));
+        }
+        out
+    }
 }
 
 /// Take out of `nodes` (each `depth` deep) the uses `bad` picks (given the depth of the object):
@@ -440,6 +493,24 @@ mod tests {
     }
 
     #[test]
+    fn many_containers_at_the_cap_are_merged_in_order() {
+        // A group just above the cap holding many groups of two paths each: every group is
+        // replaced by its two paths, in order (in time linear in their number).
+        const PAIRS: u64 = 50_000;
+        let path = |id| Arc::new(Node::path(NodeId(id), Default::default(), Default::default()));
+        let pairs = (0..PAIRS).map(|i| Arc::new(Node::group(NodeId(1_000_000 + i), vec![path(2 * i + 1), path(2 * i + 2)]))).collect();
+        let mut art = Arc::new(Node::group(NodeId(500_000), pairs));
+        for i in 0..MAX_DEPTH - 3 {
+            art = Arc::new(Node::group(NodeId(600_000 + i as u64), vec![art]));
+        }
+        let mut d = doc(art);
+        assert!(d.limit_depth());
+        assert!(!d.too_deep(None));
+        let holder = d.node(NodeId(500_000)).and_then(Node::children).map(|c| c.iter().map(|c| c.id.0).collect::<Vec<_>>());
+        assert_eq!(holder, Some((1..=2 * PAIRS).collect()));
+    }
+
+    #[test]
     fn a_clipping_path_and_a_mask_too_deep_are_left_out_and_hidden_art_stays_hidden() {
         let mut inner = Node::new(NodeId(9000), NodeKind::Group { children: vec![nested(0), nested(0)], clip: true });
         inner.visible = false;
@@ -485,7 +556,7 @@ mod tests {
     #[test]
     fn symbols_and_patterns_are_limited_too() {
         let mut d = Document::new(10.0, 10.0);
-        d.symbols.push(crate::Symbol { name: "s".into(), art: nested(MAX_DEPTH + 3) });
+        d.symbols.push(crate::Symbol { dynamic: false, name: "s".into(), art: nested(MAX_DEPTH + 3) });
         assert!(d.too_deep(None));
         assert!(d.limit_depth());
         assert!(!d.too_deep(None));
@@ -504,7 +575,7 @@ mod tests {
             for _ in 0..levels {
                 art = Arc::new(Node::group(NodeId(3), vec![art]));
             }
-            d.symbols.push(crate::Symbol { name: format!("s{i}"), art });
+            d.symbols.push(crate::Symbol { dynamic: false, name: format!("s{i}"), art });
         }
         d
     }
@@ -573,7 +644,7 @@ mod tests {
         };
         let through_a_symbol = |d: &mut Document| {
             d.patterns.push(crate::PatternDef::new("p", vec![instance(2, "s")]));
-            d.symbols.push(crate::Symbol { name: "s".into(), art: painted(3, "p") });
+            d.symbols.push(crate::Symbol { dynamic: false, name: "s".into(), art: painted(3, "p") });
         };
         for make in [&itself as &dyn Fn(&mut Document), &each_other, &through_a_symbol] {
             let mut d = doc(painted(1, "p"));
@@ -590,5 +661,24 @@ mod tests {
         d.patterns.push(crate::PatternDef::new("p", vec![painted(2, "q")]));
         d.patterns.push(crate::PatternDef::new("q", vec![painted(3, "none")]));
         assert!(!d.too_deep(None) && !d.limit_depth());
+    }
+
+    #[test]
+    fn drawn_heights_measure_objects_outside_the_layers() {
+        // s0 holds s1 two groups deep, which holds s2, which holds an instance of nothing known:
+        // s2 draws 3 deep, s1 6 and s0 9.
+        let d = symbols(3, 2, "none");
+        let heights = DrawnHeights::of(&d);
+        let on_layer = instance(1, "s0");
+        assert_eq!(heights.deepest(&on_layer, 2), 2 + 9);
+        // An object's own nesting and its mask's art count past MAX_DEPTH.
+        let mut deep = Node::group(NodeId(5), vec![nested(MAX_DEPTH + 10)]);
+        deep.extras_mut().mask = Some(Box::new(OpacityMask::new((*instance(6, "s2")).clone(), true)));
+        assert_eq!(heights.deepest(&deep, 1), 1 + 1 + MAX_DEPTH + 10);
+        let shallow = Node::group(NodeId(5), vec![instance(7, "s1")]);
+        assert_eq!(heights.deepest(&shallow, 100), 101 + 6);
+        // A symbol that holds itself has no height, so its instance counts alone.
+        let looped = DrawnHeights::of(&symbols(2, 1, "s0"));
+        assert_eq!(looped.deepest(&instance(1, "s0"), 2), 2);
     }
 }

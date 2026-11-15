@@ -1,7 +1,7 @@
 //! Brush Options (double-click a brush in the Brushes panel, or the panel menu's Brush Options…).
-//! Calligraphic Brush Options: Name, then Angle, Roundness and Size, each Fixed, Random or
-//! Pressure with its Variation, over live previews of the nib and of a stroke (light, heavy, light
-//! pressure). Bristle Brush Options: Name (typing stops at [`Bristle::MAX_NAME_CHARS`]
+//! Calligraphic Brush Options: Name, then Angle, Roundness and Size, each Fixed, Random, Pressure,
+//! Tilt, Bearing or Rotation with its Variation, over live previews of the nib and of a stroke
+//! (light, heavy, light pressure). Bristle Brush Options: Name (typing stops at [`Bristle::MAX_NAME_CHARS`]
 //! characters), Shape and the bristle sliders. Scatter, Art and Pattern Brush Options: see
 //! [`super::brush_art_options`]. OK runs `brush.options` (strokes painted with the brush update);
 //! a name another brush has, or a new bristle brush name that is too long, keeps the dialog open.
@@ -9,7 +9,8 @@
 //! Fields: `__brush` (the brush's name), `__type` (`calligraphic` | `bristle` | `scatter` | `art` |
 //! `pattern`), `name`.
 //! Calligraphic: `angle` (−180..180°), `roundness` (0..100 %), `size` (0..1296 pt), and per value
-//! `angleMode`, `roundnessMode`, `sizeMode` (`fixed` | `random` | `pressure`) and
+//! `angleMode`, `roundnessMode`, `sizeMode` (`fixed` | `random` | `pressure` | `tilt` | `bearing` |
+//! `rotation`) and
 //! `angleVariation`, `roundnessVariation`, `sizeVariation`. Bristle: `shape` (`roundPoint`…),
 //! `size` (pt), `length` (25..300 %), `density`, `thickness`, `opacity`, `stiffness` (1..100 %).
 //!
@@ -97,6 +98,10 @@ pub fn open(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, Strin
     let b: Brush = serde_json::from_value(def.clone()).map_err(|e| e.to_string())?;
     let mut f = fields(&b, def)?;
     f.insert("__brush".into(), json!(b.name));
+    if let Some(st) = app.session.active() {
+        f.insert("__patterns".into(), serde_json::to_value(&st.doc.patterns).unwrap_or_default());
+    }
+    brush_art_options::reconcile_pattern_choices(&mut f);
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields: f });
     Ok(Value::Null)
 }
@@ -149,6 +154,7 @@ fn target(app: &VectorcraftApp) -> Option<String> {
 /// opens.
 pub(super) fn open_new(app: &mut VectorcraftApp, ty: &str, ids: Option<Value>) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
+    let patterns = serde_json::to_value(&st.doc.patterns).unwrap_or_default();
     let title: String = ty.chars().take(1).flat_map(char::to_uppercase).chain(ty.chars().skip(1)).collect();
     let name = vectorcraft_brush::unique_name(&vectorcraft_brush::library(&st.doc), &format!("New {title} Brush"));
     let mut def = json!({ "name": name, "type": ty });
@@ -169,6 +175,8 @@ pub(super) fn open_new(app: &mut VectorcraftApp, ty: &str, ids: Option<Value>) -
     b.sanitize();
     let def = serde_json::to_value(&b).map_err(|e| e.to_string())?;
     let mut f = fields(&b, def)?;
+    f.insert("__patterns".into(), patterns);
+    brush_art_options::reconcile_pattern_choices(&mut f);
     f.insert(CREATE.into(), json!(true));
     if let Some(ids) = ids {
         f.insert(IDS.into(), ids);
@@ -183,9 +191,38 @@ pub(super) fn open_new(app: &mut VectorcraftApp, ty: &str, ids: Option<Value>) -
 /// dialog closes once the brush is made.
 fn create(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut brush_params = params(d);
+    if d.str("__type") == "pattern" {
+        if d.str("sideTile") == "none" {
+            return Err("You must choose a side pattern.".into());
+        }
+        let preview = brush_art_options::edited_def(d);
+        for key in [
+            "side",
+            "side_frame",
+            "side_swatch",
+            "outer_corner",
+            "outer_corner_frame",
+            "outer_corner_swatch",
+            "outer_source",
+            "inner_corner",
+            "inner_corner_frame",
+            "inner_corner_swatch",
+            "inner_source",
+            "start",
+            "start_frame",
+            "start_swatch",
+            "end",
+            "end_frame",
+            "end_swatch",
+        ] {
+            if let Some(value) = preview.get(key) {
+                brush_params[key] = value.clone();
+            }
+        }
+    }
     if let Some(def) = d.fields.get("__def") {
         for key in ["art", "side"] {
-            if let Some(art) = def.get(key).filter(|v| !v.is_null()) {
+            if let Some(art) = def.get(key).filter(|v| !v.is_null() && brush_params.get(key).is_none_or(Value::is_null)) {
                 brush_params[key] = art.clone();
             }
         }
@@ -331,9 +368,9 @@ fn nib_preview(ui: &mut egui::Ui, c: &Calligraphic, size: egui::Vec2) {
     let at = |sign: f64| -> [f64; 3] {
         let mut v = values;
         for (i, (x, mode)) in v.iter_mut().zip(c.modes()).enumerate() {
-            let (Some(&var), Some(&(lo, hi))) = (c.variation.get(i), Calligraphic::RANGES.get(i)) else { continue };
+            let Some(&var) = c.variation.get(i) else { continue };
             if mode != Variation::Fixed {
-                *x = (*x + sign * var).clamp(lo, hi);
+                *x = Calligraphic::moved(i, *x, sign * var);
             }
         }
         v

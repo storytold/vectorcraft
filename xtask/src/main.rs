@@ -14,6 +14,8 @@ mod pdf_deps;
 mod pngsuite;
 mod sha256;
 mod stats;
+mod test262;
+mod ui_commands;
 mod version;
 mod web_fonts;
 
@@ -29,11 +31,12 @@ commands:
   cursors         warn about Cursor values with no entry in crates/tools/src/cursors.toml (never fails)
   i18n-report     list the strings each language's catalog lacks, shown in English (fails only on a
                   broken scan; ci runs it too)
+  ui-commands     regenerate crates/mcp/src/ui_catalog.rs from desktop UI_COMMANDS; --check fails on drift
   pdf-deps        verify immutable shared PDF writer and patched Krilla sources
   layers          enforce the crate dependency layering (plan/architecture.md §3)
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates and the web app
   test            the workspace tests (cargo nextest when installed, else cargo test), then the doctests
-  ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), layers, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), ui-commands --check, layers, wasm (stops at first failure)
   corpus [--download] [--affinity]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite,
                   --affinity the pinned public Affinity documents into corpus/affinity
@@ -41,6 +44,11 @@ commands:
   ico <out.ico> <png>...
                   pack PNGs into a Windows .ico (used by packaging/icons.sh)
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
+  test262         fetch the pinned ECMAScript conformance suite into corpus/test262 (sha256
+                  verified), parse its ES5 subset with vectorcraft-js and run the ES5 language
+                  and built-in tests its interpreter supports and the String, Number, RegExp
+                  and Date built-ins tests, printing the counts; then fetch json2.js into
+                  corpus/json2 (sha256 verified) and run it
   web-fonts       copy the craft-fonts faces in crates/text/web-fonts.txt into the web site (the Trunk
                   post_build hook; a no-op without CRAFT_FONTS_DIR)
 ";
@@ -53,6 +61,7 @@ fn main() -> ExitCode {
         Some("brands") => brands::run(&root()),
         Some("cursors") => cursors::run(&root()),
         Some("i18n-report") => cmd_i18n_report(),
+        Some("ui-commands") => ui_commands::run(&root(), rest.contains(&"--check")),
         Some("layers") => cmd_layers(),
         Some("pdf-deps") => pdf_deps::run(&root()),
         Some("wasm") => cmd_wasm(),
@@ -64,6 +73,7 @@ fn main() -> ExitCode {
         Some("ico") => ico::run(&rest),
         Some("version") => version::run(&root(), &rest),
         Some("stats") => stats::run(&root(), rest.contains(&"--exact")),
+        Some("test262") => test262::run_suite(),
         Some("web-fonts") => web_fonts::run(&root()),
         Some("-h" | "--help" | "help") | None => {
             print!("{USAGE}");
@@ -194,18 +204,25 @@ fn cmd_layers() -> Result<(), String> {
 }
 
 /// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
-/// shell, and the web app (its wasm-only code is compiled by nothing else).
-fn wasm_set() -> Result<Vec<String>, String> {
-    let crates = layers::from_metadata(&metadata()?)?;
-    Ok(crates
+/// shell, and the web app (its wasm-only code is compiled by nothing else). Each comes with its
+/// package id, which `-p` takes where the name would be ambiguous: craft-libs builds against this
+/// repo's geom and pathops by git, so the graph can hold a second, older copy of a workspace crate.
+fn wasm_set() -> Result<Vec<(String, String)>, String> {
+    let meta = metadata()?;
+    let ids: std::collections::HashMap<&str, &str> =
+        meta["packages"].as_array().into_iter().flatten().filter_map(|p| Some((p["name"].as_str()?, p["id"].as_str()?))).collect();
+    layers::from_metadata(&meta)?
         .into_iter()
         .filter(|c| match layers::classify(&c.name) {
             Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
             Some(layers::Class::Standalone) => true,
             _ => layers::short_name(&c.name) == "web",
         })
-        .map(|c| c.name)
-        .collect())
+        .map(|c| {
+            let id = ids.get(c.name.as_str()).ok_or_else(|| format!("cargo metadata: no package id for {}", c.name))?.to_string();
+            Ok((c.name, id))
+        })
+        .collect()
 }
 
 /// One `cargo check` over the whole wasm set: the crates share one build, and `--keep-going`
@@ -214,10 +231,11 @@ fn cmd_wasm() -> Result<(), String> {
     let set = wasm_set()?;
     let mut c = cargo();
     c.args(["check", "--target", "wasm32-unknown-unknown", "--keep-going"]);
-    for pkg in &set {
-        c.args(["-p", pkg]);
+    for (_, id) in &set {
+        c.args(["-p", id]);
     }
-    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), set.join(", ")))
+    let names: Vec<&str> = set.iter().map(|(name, _)| name.as_str()).collect();
+    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), names.join(", ")))
 }
 
 /// Whether `cargo nextest` is installed.
@@ -294,7 +312,8 @@ fn cmd_ci() -> Result<(), String> {
         ("assets", Box::new(|| assets::run(&root()))),
         ("brands", Box::new(|| brands::run(&root()))),
         ("cursors", Box::new(|| cursors::run(&root()))),
-        ("i18n-report", Box::new(cmd_i18n_report)),
+        ("i18n-report", Box::new(cmd_ci_i18n_report)),
+        ("ui-commands", Box::new(|| ui_commands::run(&root(), true))),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
     ];
@@ -333,6 +352,11 @@ Tests that use a corpus skip cleanly when it is absent.
   corpus/raw/        raw.pixls.us samples, CC0 (optional)
   corpus/affinity/   public Affinity documents (CC0/MIT/Apache-2.0) at pinned commits, sha256
                      verified: oracles for the Affinity reader. Fetch: cargo xtask corpus --affinity
+  corpus/test262/    the ECMAScript conformance suite (BSD-3-Clause) at a pinned commit, sha256
+                     verified: the JavaScript parser's and interpreter's ES5 subsets. Fetch and run:
+                     cargo xtask test262
+  corpus/json2/      json2.js, the public-domain JSON polyfill, at a pinned commit, sha256 verified:
+                     compared with vectorcraft-js's JSON. Fetch and run: cargo xtask test262
 ",
         corpus.display()
     );
@@ -348,4 +372,14 @@ fn cmd_i18n_report() -> Result<(), String> {
     let mut c = cargo();
     c.args(["test", "-p", "vectorcraft-ui-egui", "--lib", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
     run(c, "cargo test -p vectorcraft-ui-egui --lib -- i18n::tests::untranslated_report --exact --nocapture")
+}
+
+/// [`cmd_i18n_report`] in `ci`, selecting the packages and targets the test stage did so it
+/// reuses that build: with `-p vectorcraft-ui-egui --lib` alone cargo resolves features
+/// differently and recompiled for about 3.5 minutes. Every other test binary runs with no test
+/// matching the filter.
+fn cmd_ci_i18n_report() -> Result<(), String> {
+    let mut c = cargo();
+    c.args(["test", "--workspace", "--lib", "--bins", "--tests", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
+    run(c, "cargo test --workspace --lib --bins --tests -- i18n::tests::untranslated_report --exact --nocapture")
 }

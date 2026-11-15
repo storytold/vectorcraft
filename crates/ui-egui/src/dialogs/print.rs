@@ -427,22 +427,32 @@ fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv:
     }
     let coeffs: Vec<f64> = sheet["transform"].as_array().map(|a| a.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
     let clip = ui.painter().with_clip_rect(page);
+    // With copies per sheet, `copies` holds each copy's artboard on the page, and `moves` holds
+    // each copy's move on screen from the first.
+    let copies: Vec<DRect> = sheet["copies"].as_array().map(|a| a.iter().filter_map(rect_of).collect()).unwrap_or_default();
+    let moves: Vec<egui::Vec2> = match copies.first() {
+        Some(first) => copies.iter().map(|r| egui::vec2((r.x0 - first.x0) as f32, (r.y0 - first.y0) as f32) * fit).collect(),
+        None => vec![egui::Vec2::ZERO],
+    };
     if let ([a, b, c, dd, e, f], Some(area)) = (coeffs.as_slice(), rect_of(&sheet["area"])) {
         let px = (f64::from(page.width().max(page.height()) * ui.ctx().pixels_per_point())).min(1024.0);
         let layers = choice::<PrintLayers>(d, "printLayers").unwrap_or(PrintLayers::VisiblePrintable);
         if let Some(tex) = art_texture(app, ui.ctx(), layers, area, px) {
             let at = |x: f64, y: f64| to_screen(a * x + c * y + e, b * x + dd * y + f) + offset;
             let mut mesh = egui::Mesh::with_texture(tex.id());
-            for (p, uv) in [
-                ((area.x0, area.y0), (0.0, 0.0)),
-                ((area.x1, area.y0), (1.0, 0.0)),
-                ((area.x1, area.y1), (1.0, 1.0)),
-                ((area.x0, area.y1), (0.0, 1.0)),
-            ] {
-                mesh.vertices.push(egui::epaint::Vertex { pos: at(p.0, p.1), uv: egui::pos2(uv.0, uv.1), color: egui::Color32::WHITE });
+            for m in &moves {
+                let first = mesh.vertices.len() as u32;
+                for (p, uv) in [
+                    ((area.x0, area.y0), (0.0, 0.0)),
+                    ((area.x1, area.y0), (1.0, 0.0)),
+                    ((area.x1, area.y1), (1.0, 1.0)),
+                    ((area.x0, area.y1), (0.0, 1.0)),
+                ] {
+                    mesh.vertices.push(egui::epaint::Vertex { pos: at(p.0, p.1) + *m, uv: egui::pos2(uv.0, uv.1), color: egui::Color32::WHITE });
+                }
+                mesh.add_triangle(first, first + 1, first + 2);
+                mesh.add_triangle(first, first + 2, first + 3);
             }
-            mesh.add_triangle(0, 1, 2);
-            mesh.add_triangle(0, 2, 3);
             clip.add(mesh);
         }
     }
@@ -460,7 +470,9 @@ fn page_preview(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, pv:
         let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
         clip.extend(egui::Shape::dashed_line(&corners, stroke, 3.0, 2.0));
     }
-    if let Some(trim) = rect_of(&sheet["trim"]) {
+    // The preview strokes each copy's artboard edge, or the trim box without copies per sheet.
+    let trims = if copies.is_empty() { rect_of(&sheet["trim"]).into_iter().collect() } else { copies };
+    for trim in trims {
         let r = egui::Rect::from_min_max(to_screen(trim.x0, trim.y0), to_screen(trim.x1, trim.y1)).translate(offset);
         clip.rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.accent), egui::StrokeKind::Middle);
     }
@@ -545,7 +557,8 @@ fn art_texture(app: &mut VectorcraftApp, ctx: &egui::Context, layers: PrintLayer
     {
         return Some(tex);
     }
-    let mut doc = (*st.doc).clone();
+    // The artboards' background colors print behind the art.
+    let mut doc = st.doc.with_artboard_fills(0..st.doc.artboards.len()).unwrap_or_else(|| (*st.doc).clone());
     vectorcraft_pdf::keep_layers(&mut doc.layers, layers);
     let tex = widgets::region_texture(ctx, &mut app.canvas.renderer, "print-preview-art", &doc, area, px);
     ctx.data_mut(|m| m.insert_temp(key, (stamp, tex.clone())));
@@ -582,7 +595,7 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         }
         let mut range = get(d, "range").as_str().unwrap_or_default().to_string();
-        let edit = egui::TextEdit::singleline(&mut range).desired_width(140.0).hint_text("1-3, 5");
+        let edit = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(140.0).hint_text("1-3, 5");
         if ui.add_enabled(artboards == PrintArtboards::Range, edit).changed() {
             set(d, "range", json!(range));
         }
@@ -627,7 +640,7 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.add_enabled_ui(!tiles && !placed, |ui| {
             let origin = choice::<Origin>(d, "placement.origin").unwrap_or_default();
             let current = Origin::ALL.iter().position(|o| *o == origin).unwrap_or(4);
-            if let Some(o) = widgets::reference_point(ui, current).and_then(|i| Origin::ALL.get(i)) {
+            if let Some(o) = widgets::reference_point_named(ui, current, tl!("Placement:")).and_then(|i| Origin::ALL.get(i)) {
                 set(d, "placement.origin", json!(o.id()));
             }
             ui.label("X:");
@@ -659,6 +672,9 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     if tiles {
         note(ui, tl!("Tiles are numbered across, then down; leave the range empty for every tile."));
     }
+    flag(ui, d, "copiesPerSheet", tl!("Copies per Sheet (as many as fit, in a grid)"), !tiles);
+    let per_sheet = get(d, "copiesPerSheet").as_bool() == Some(true);
+    row(ui, tl!("Gutter:"), |ui| length(ui, d, "gutter", unit, !tiles && per_sheet));
 }
 
 fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
@@ -850,7 +866,7 @@ fn summary(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>, has_do
         Err(_) if !has_doc => {}
         Err(e) => {
             heading(ui, tl!("Error"));
-            ui.label(egui::RichText::new(format!("⚠ {e}")).color(t.text));
+            ui.label(egui::RichText::new(super::save_pdf::warning_line(crate::i18n::current(), e)).color(t.text));
         }
     }
     heading(ui, tl!("Options"));

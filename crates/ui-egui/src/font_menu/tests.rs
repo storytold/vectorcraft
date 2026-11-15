@@ -21,45 +21,175 @@ fn the_thai_filter_lists_fonts_with_thai() {
 /// stay clear of it.
 #[test]
 fn the_scroll_bar_leaves_the_stars_clear() {
-    // Every family starred, so each row draws its star.
-    let all = vectorcraft_text::FontDb::global().families();
-    let families = all.len();
+    // A database of the bundled fonts alone, each family starred, so each row draws its star:
+    // fonts that tests running alongside add to the process-wide database stay out of the rows.
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let favorites: Vec<String> = ["Source Sans 3", "Source Serif 4", "Inter", "JetBrains Mono"].map(str::to_string).into();
     let ctx = egui::Context::default();
+    // Under the search field and the filters, room for fewer rows than the four families.
     let area = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(300.0, 160.0));
-    let mut st = super::MenuState::default();
-    let look = super::MenuLook { samples: false, favorites: &all, ..Default::default() };
-    let mut stars = vec![];
-    for _ in 0..3 {
+    let mut st = super::MenuState { favorites_only: true, ..Default::default() };
+    let look = super::MenuLook { samples: false, favorites: &favorites, ..Default::default() };
+    let (mut list, mut stars) = (None, vec![]);
+    // Frames enough for the scroll bar to finish appearing.
+    for _ in 0..30 {
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(area), ..Default::default() }, |ui| {
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
-            super::list(&mut child, egui::Id::unique("fonts"), &mut st, "", None, look);
+            let shown = super::list_of(&mut child, &db, egui::Id::unique("fonts"), &mut st, "Inter", None, look);
+            list = Some((shown.inner_rect, shown.content_size));
         });
         out.textures_delta.clear();
         stars = out
             .shapes
             .iter()
             .filter_map(|c| match &c.shape {
-                // The rows' stars, not the ★ filter button at the top left.
-                egui::Shape::Text(t) if t.galley.text() == "★" && t.pos.x > area.center().x => Some(t.visual_bounding_rect().right()),
+                egui::Shape::Text(t) if t.galley.text() == "★" => Some(t.visual_bounding_rect()),
                 _ => None,
             })
             .collect();
     }
-    assert!(!stars.is_empty() || families == 0, "{families} families, no row stars drawn");
-    // The rows don't fill the list without enough families to scroll, and then there is no bar.
-    if families as f32 * look.row > area.height() {
-        let bar = super::widgets::list_scroll_style();
-        let column = bar.bar_width + bar.bar_inner_margin + bar.bar_outer_margin;
-        for right in stars {
-            assert!(right <= area.right() - column + 0.5, "a star at {right} runs under the scroll bar");
-        }
+    let Some((inner, content)) = list else { panic!("the list was not drawn") };
+    let families: Vec<&str> = st.rows.iter().filter_map(super::Row::family).collect();
+    assert_eq!(families.len(), favorites.len(), "the starred families are listed: {families:?}");
+    assert!(content.y > inner.height() + 0.5, "the rows, {} high, fill a list {} high", content.y, inner.height());
+    // The rows' stars in the list, not the ★ filter above it.
+    let stars: Vec<_> = stars.into_iter().filter(|s| inner.contains(s.center())).collect();
+    assert!(!stars.is_empty(), "no row star drawn in the list at {inner:?}");
+    let bar = super::widgets::list_scroll_style();
+    let column = bar.bar_width + bar.bar_inner_margin + bar.bar_outer_margin;
+    for star in stars {
+        assert!(star.right() <= area.right() - column + 0.5, "a star at {} runs under the scroll bar", star.right());
     }
+}
+
+/// In a wide row the sample starts after the widest name and a gap, not halfway along, even for a
+/// name wider than the menu widens itself for; the sample keeps its room, and a row too narrow for
+/// both gives the name half of it. Without samples the name runs to the star.
+#[test]
+fn the_sample_starts_after_the_widest_name() {
+    use super::{DISCLOSURE, NAME_GAP, NAME_MAX, SAMPLE_W, STAR, name_column};
+    assert_eq!(name_column(500.0, 100.0, true), DISCLOSURE + 100.0 + NAME_GAP);
+    assert_eq!(name_column(600.0, NAME_MAX + 80.0, true), DISCLOSURE + NAME_MAX + 80.0 + NAME_GAP);
+    assert_eq!(name_column(600.0, 1000.0, true), 600.0 - STAR - 2.0 - SAMPLE_W);
+    assert_eq!(name_column(200.0, 100.0, true), 100.0);
+    assert_eq!(name_column(500.0, 100.0, false), 500.0 - STAR);
+}
+
+/// The widest label is the widest one laid out, though it has fewer characters than others, or
+/// characters that are narrow on their own.
+#[test]
+fn the_widest_label_is_the_widest_laid_out() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut labels: Vec<String> = ["WWWWWWWW", "Mm", "", "ffi ffl fi fl", "Source Serif 4 Display Semibold"].map(str::to_string).into();
+    labels.push("i".repeat(40));
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let font = egui::FontId::proportional(super::NAME_SIZE);
+        let laid_out = |l: &String| ui.painter().layout_no_wrap(l.clone(), font.clone(), egui::Color32::WHITE).size().x;
+        let widest = labels.iter().map(laid_out).fold(0.0, f32::max);
+        assert_eq!(super::widest_label(ui, labels.clone()), widest);
+        for l in &labels {
+            assert_eq!(super::widest_label(ui, vec![l.clone()]), laid_out(l), "{l}");
+        }
+        assert_eq!(super::widest_label(ui, vec![]), 0.0);
+    });
+    out.textures_delta.clear();
+}
+
+/// The widest family name is measured again when the interface's fonts change, as they do when
+/// faces for another script are added to it, not only when the font list does.
+#[test]
+fn the_widest_name_is_measured_again_when_the_interface_fonts_change() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |f: &mut dyn FnMut(&mut egui::Ui)| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| f(ui));
+        out.textures_delta.clear();
+    };
+    // A width no name has, kept as if measured for the fonts as they are.
+    frame(&mut |ui| {
+        let key = super::family_name_key(ui, vectorcraft_text::FontDb::global(), true);
+        ui.data_mut(|d| d.insert_temp(super::family_name_id(), (key, -1.0_f32)));
+    });
+    frame(&mut |ui| {
+        let data = ui.ctx().fonts(|f| f.definitions().font_data.values().next().cloned()).expect("an interface font");
+        ui.ctx().add_font(egui::epaint::text::FontInsert { name: "font-menu-test-face".into(), data: (*data).clone(), families: vec![] });
+    });
+    frame(&mut |ui| assert!(super::family_name_width(ui, vectorcraft_text::FontDb::global(), true) >= 0.0, "measured again"));
+}
+
+/// The widest family name measured for one font database is not taken for another one at the same
+/// generation.
+#[test]
+fn each_font_database_has_its_own_widest_name() {
+    use vectorcraft_doc::CompositeFont;
+    let short = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let long = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    assert!(short.set_composite_font(&CompositeFont::new("C", "Inter", "Regular")));
+    assert!(long.set_composite_font(&CompositeFont::new("A composite font with a name longer than any family", "Inter", "Regular")));
+    assert_eq!(short.generation(), long.generation());
+    let ctx = egui::Context::default();
+    let mut widths = (0.0, 0.0);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        widths = (super::family_name_width(ui, &short, true), super::family_name_width(ui, &long, true));
+    });
+    out.textures_delta.clear();
+    assert!(widths.1 > widths.0 + 1.0, "the long name's database measured {} and the other {}", widths.1, widths.0);
+}
+
+/// Without a row of filters drawn yet, the menu still makes room for the widest name, its sample,
+/// the star and the scroll bar; without samples it is the sample's room narrower.
+#[test]
+fn the_menu_makes_room_for_the_widest_name_and_its_sample() {
+    use super::{DISCLOSURE, NAME_GAP, NAME_MAX, SAMPLE_W, STAR};
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0))), ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        let st = super::MenuState::default();
+        let look = super::MenuLook::default();
+        let names = super::name_width(ui, vectorcraft_text::FontDb::global(), look.english_names, &st.rows).min(NAME_MAX);
+        assert!(names > 0.0, "a family is listed");
+        let width = super::menu_width(ui, &st, look);
+        assert!(width >= DISCLOSURE + names + NAME_GAP + SAMPLE_W + STAR, "the menu is {width} wide for a name {names} wide");
+        let plain = super::menu_width(ui, &st, super::MenuLook { samples: false, ..look });
+        assert!((width - plain - SAMPLE_W).abs() < 0.01, "{width} with samples, {plain} without");
+    });
+    out.textures_delta.clear();
+}
+
+/// The style names of the families expanded in the listed rows count toward the names' width;
+/// those of a family expanded earlier but not listed now do not.
+#[test]
+fn only_listed_style_names_widen_the_names() {
+    use super::{Row, STYLE_INDENT};
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let long = format!("SemiCondensed ExtraLight Italic {}", "W".repeat(80));
+    let db = vectorcraft_text::FontDb::global();
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let families = super::name_width(ui, db, true, &[]);
+        let font = egui::FontId::proportional(super::NAME_SIZE);
+        let style = STYLE_INDENT + ui.painter().layout_no_wrap(long.clone(), font, egui::Color32::WHITE).size().x;
+        assert!(style > families, "the style name is wider than every family name");
+        let listed = [Row::Family("A".into()), Row::Style("A".into(), long.clone())];
+        assert_eq!(super::name_width(ui, db, true, &listed), style);
+        assert!(super::name_width(ui, db, true, &listed[..1]) < style, "a style not listed is not measured");
+    });
+    out.textures_delta.clear();
 }
 
 use super::{Row, remap_highlight};
 
 fn family(name: &str) -> Row {
     Row::Family(name.to_string())
+}
+
+/// The families the font menu lists that stay listed, in its order: the menu's list without the
+/// composite fonts at its top, which tests running alongside define and remove in the process-wide
+/// database.
+fn lasting_families() -> Vec<String> {
+    vectorcraft_text::FontDb::global().family_list().iter().filter(|f| !f.starts_with('.')).cloned().collect()
 }
 
 #[test]
@@ -86,7 +216,7 @@ fn recent_fonts_are_first_available_unique_and_expandable() {
 
 #[test]
 fn recent_section_rebuilds_and_arrows_skip_its_headings() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     if names.len() < 3 {
         return;
     }
@@ -135,7 +265,7 @@ fn recent_section_rebuilds_and_arrows_skip_its_headings() {
 
 #[test]
 fn recent_fonts_obey_search_and_favorite_filters() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     if names.len() < 3 {
         return;
     }
@@ -176,7 +306,7 @@ fn recent_fonts_obey_search_and_favorite_filters() {
 
 #[test]
 fn opening_on_another_font_keeps_the_recent_section_visible() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     let Some(current) = names.last() else { return };
     let recent = vec![names[0].clone()];
     let ctx = egui::Context::default();
@@ -223,6 +353,567 @@ fn expanded_style_rows_do_not_retarget_the_highlight() {
     let after = [family("Alpha"), Row::Style("Alpha".into(), "Bold".into()), family("Bravo")];
     assert_eq!(remap_highlight(&before, Some(1), &after), Some(2));
     assert_eq!(remap_highlight(&after, Some(1), &before), None);
+}
+
+/// #5253: each wheel notch over the closed field steps one family, down the menu or up it, and the
+/// steps stop at its first and last family without going round.
+#[test]
+fn the_wheel_steps_one_family_per_notch_and_stops_at_the_ends() {
+    let order: Vec<String> = ["Alpha", "Bravo", "Charlie", "Delta"].map(str::to_string).into();
+    let steps = |current, notches| super::wheel_steps(&order, current, notches);
+    assert_eq!(steps("Bravo", 1), ["Charlie"]);
+    assert_eq!(steps("bravo", -1), ["Alpha"], "any case");
+    assert_eq!(steps("Alpha", 2), ["Bravo", "Charlie"], "a step for each notch");
+    assert_eq!(steps("Bravo", 5), ["Charlie", "Delta"], "stops at the last family");
+    assert_eq!(steps("Charlie", -5), ["Bravo", "Alpha"], "stops at the first family");
+    assert!(steps("Delta", 1).is_empty() && steps("Alpha", -1).is_empty(), "no wrapping");
+    assert!(steps("Missing", 1).is_empty() && steps("Bravo", 0).is_empty());
+}
+
+/// #5253: the wheel follows the open menu's order and filters: the recent families first, then the
+/// others in the database's order, under the favourites (and other) filters.
+#[test]
+fn the_wheel_follows_the_menus_order_and_filters() {
+    let names = lasting_families();
+    if names.len() < 3 {
+        return;
+    }
+    let recent = vec![names[2].clone()];
+    let look = super::MenuLook { samples: false, recent: &recent, ..Default::default() };
+    let order = super::wheel_order(&super::MenuState::default(), look);
+    assert_eq!(order.first(), Some(&names[2]), "the recent family first");
+    // Other tests add fonts to the process-wide database meanwhile: compare places, not neighbours.
+    let at = |f: &String| order.iter().position(|x| x == f);
+    assert!(matches!((at(&names[0]), at(&names[1])), (Some(a), Some(b)) if 0 < a && a < b), "then the others in the menu's order");
+    assert_eq!(order.iter().filter(|f| **f == names[2]).count(), 1, "once each");
+    let favorites = vec![names[0].clone(), names[1].clone()];
+    let st = super::MenuState { favorites_only: true, ..Default::default() };
+    let order = super::wheel_order(&st, super::MenuLook { favorites: &favorites, ..look });
+    assert_eq!(order, favorites, "the favourites filter");
+}
+
+/// A field removed by a later layout pass must not intercept the next wheel event.
+#[test]
+fn a_family_field_omitted_from_the_last_pass_leaves_the_wheel_to_its_owner() {
+    let ctx = egui::Context::default();
+    let mut point = egui::Pos2::ZERO;
+    for _ in 0..3 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let resp = ui.button("Family");
+            point = resp.rect.center();
+            super::remember_wheel_field(ui, &resp, true);
+        });
+        out.textures_delta.clear();
+    }
+    let mut pass = 0;
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        if pass == 0 {
+            let resp = ui.button("Family");
+            point = resp.rect.center();
+            super::remember_wheel_field(ui, &resp, true);
+            ui.ctx().request_discard("the next pass removes the field");
+        }
+        pass += 1;
+    });
+    out.textures_delta.clear();
+    assert!(pass > 1);
+    let mut raw = egui::RawInput {
+        events: vec![
+            egui::Event::PointerMoved(point),
+            egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Line,
+                delta: egui::vec2(0.0, -1.0),
+                phase: egui::TouchPhase::Move,
+                modifiers: Default::default(),
+                source: egui::MouseWheelSource::Unknown,
+            },
+        ],
+        ..Default::default()
+    };
+    super::take_raw_wheel(&ctx, &mut raw);
+    assert!(raw.events.iter().any(|e| matches!(e, egui::Event::MouseWheel { .. })));
+}
+
+/// Activation leaves later wheel input to the popup; an earlier turn still belongs to the field.
+#[test]
+fn activating_the_family_popup_leaves_its_wheel_input_available() {
+    let activations = [None, Some((egui::Key::Enter, egui::Modifiers::NONE)), Some((egui::Key::Space, egui::Modifiers::SHIFT))];
+    for activation in activations {
+        let ctx = egui::Context::default();
+        let frame = |events| {
+            let mut raw = egui::RawInput { events, ..Default::default() };
+            super::take_raw_wheel(&ctx, &mut raw);
+            let mut point = egui::Pos2::ZERO;
+            let mut out = ctx.run_ui(raw, |ui| {
+                let resp = ui.button("Family");
+                point = resp.rect.center();
+                if activation.is_some() {
+                    resp.request_focus();
+                }
+                super::remember_wheel_field(ui, &resp, true);
+            });
+            out.textures_delta.clear();
+            point
+        };
+        let mut point = egui::Pos2::ZERO;
+        for _ in 0..3 {
+            point = frame(vec![]);
+        }
+        let button =
+            |pressed| egui::Event::PointerButton { pos: point, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        let opener = if let Some((key, modifiers)) = activation {
+            egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
+        } else {
+            frame(vec![egui::Event::PointerMoved(point), button(true)]);
+            button(false)
+        };
+        let turn = || egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, -1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        };
+        let mut events = vec![egui::Event::PointerMoved(point)];
+        if activation.is_some() {
+            events.push(turn());
+        }
+        events.extend([opener, turn()]);
+        let mut raw = egui::RawInput { events, ..Default::default() };
+        super::take_raw_wheel(&ctx, &mut raw);
+        assert_eq!(raw.events.iter().filter(|e| matches!(e, egui::Event::MouseWheel { .. })).count(), 1);
+    }
+}
+
+/// A family field at `top`, the input's clock at `time`. Returns the wheel events left in the
+/// input, the notches the field took and the point in the middle of the field.
+fn stream_frame(ctx: &egui::Context, top: Option<f32>, time: f64, events: Vec<egui::Event>) -> (usize, i32, egui::Pos2) {
+    covered_stream_frame(ctx, top, false, time, events)
+}
+
+/// [`stream_frame`], with an overlay over the whole field when `covered` is set.
+fn covered_stream_frame(ctx: &egui::Context, top: Option<f32>, covered: bool, time: f64, events: Vec<egui::Event>) -> (usize, i32, egui::Pos2) {
+    let mut raw = egui::RawInput { time: Some(time), events, ..Default::default() };
+    super::take_raw_wheel(ctx, &mut raw);
+    let left = raw.events.iter().filter(|e| matches!(e, egui::Event::MouseWheel { .. })).count();
+    let mut notches = 0;
+    let mut point = egui::Pos2::ZERO;
+    let mut out = ctx.run_ui(raw, |ui| {
+        let Some(top) = top else { return };
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, top), egui::vec2(120.0, 24.0));
+        let resp = ui.put(rect, egui::Button::new("Family"));
+        point = resp.rect.center();
+        for turn in super::remember_wheel_field(ui, &resp, true) {
+            if let super::WheelInput::Notches(n) = turn {
+                notches += n;
+            }
+        }
+        if covered {
+            let cover = rect.expand(5.0);
+            egui::Area::new(egui::Id::unique("stream overlay")).order(egui::Order::Foreground).fixed_pos(cover.min).show(ui.ctx(), |ui| {
+                ui.allocate_exact_size(cover.size(), egui::Sense::click());
+            });
+        }
+    });
+    out.textures_delta.clear();
+    (left, notches, point)
+}
+
+fn stream_turn(phase: egui::TouchPhase, source: egui::MouseWheelSource, dy: f32) -> egui::Event {
+    egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: egui::vec2(0.0, dy), phase, modifiers: Default::default(), source }
+}
+
+fn plain_turn() -> egui::Event {
+    stream_turn(egui::TouchPhase::Move, egui::MouseWheelSource::Unknown, -1.0)
+}
+
+/// A context with a family field drawn at `top` for three frames, from clock time 100.
+fn stream_context(top: f32) -> (egui::Context, egui::Pos2) {
+    let ctx = egui::Context::default();
+    let mut point = egui::Pos2::ZERO;
+    for i in 0..3 {
+        point = stream_frame(&ctx, Some(top), 100.0 + f64::from(i), vec![]).2;
+    }
+    (ctx, point)
+}
+
+/// A wheel stream the family field took stays its own when the pointer moves onto a number field
+/// beside it: the number field steps only after the wheel pauses for the stream gap.
+#[test]
+fn a_stream_the_family_field_took_leaves_a_number_field_beside_it() {
+    let ctx = egui::Context::default();
+    let value = std::cell::Cell::new(10.0);
+    let (family, number) = (std::cell::Cell::new(egui::Pos2::ZERO), std::cell::Cell::new(egui::Pos2::ZERO));
+    let frame = |time: f64, events: Vec<egui::Event>| {
+        let mut raw = egui::RawInput { time: Some(time), events, ..Default::default() };
+        super::take_raw_wheel(&ctx, &mut raw);
+        let mut notches = 0;
+        let mut out = ctx.run_ui(raw, |ui| {
+            let resp = ui.put(egui::Rect::from_min_size(egui::pos2(10.0, 40.0), egui::vec2(120.0, 24.0)), egui::Button::new("Family"));
+            family.set(resp.rect.center());
+            for turn in super::remember_wheel_field(ui, &resp, true) {
+                if let super::WheelInput::Notches(n) = turn {
+                    notches += n;
+                }
+            }
+            ui.add_space(40.0);
+            let top = ui.cursor().top();
+            if let Some(v) = crate::widgets::plain_field(ui, "size", value.get(), "", 0, 80.0) {
+                value.set(v);
+            }
+            number.set(egui::pos2(ui.min_rect().left() + 20.0, (top + ui.min_rect().bottom()) / 2.0));
+        });
+        out.textures_delta.clear();
+        notches
+    };
+    for i in 0..3 {
+        frame(100.0 + f64::from(i), vec![]);
+    }
+    assert_eq!(frame(110.0, vec![egui::Event::PointerMoved(family.get()), plain_turn()]), 1, "the family field took the turn");
+    frame(110.1, vec![egui::Event::PointerMoved(number.get()), plain_turn()]);
+    assert_eq!(value.get(), 10.0, "the stream began on the family field");
+    frame(110.1 + crate::widgets::WHEEL_STREAM_GAP + 0.1, vec![plain_turn()]);
+    assert_eq!(value.get(), 9.0, "a new stream");
+}
+
+/// A field that moved under a pointer that stayed put leaves the wheel, including a reported
+/// pointer position that did not change, until the pointer really moves.
+#[test]
+fn a_field_that_slides_under_a_still_pointer_leaves_the_wheel() {
+    let (ctx, point) = stream_context(40.0);
+    let below = egui::pos2(point.x, point.y + 200.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(below)]);
+    stream_frame(&ctx, Some(40.0 + 200.0), 111.0, vec![]);
+    let (left, notches, moved) = stream_frame(&ctx, Some(240.0), 120.0, vec![plain_turn()]);
+    assert_eq!(moved, below);
+    assert_eq!((left, notches), (1, 0), "the pointer did not move");
+    let (left, notches, _) = stream_frame(&ctx, Some(240.0), 130.0, vec![egui::Event::PointerMoved(below), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "a report of the same position is not a move");
+    let nudged = below + egui::vec2(2.0, 0.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(240.0), 140.0, vec![egui::Event::PointerMoved(nudged), plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "the pointer moved onto the field");
+}
+
+/// A field the pointer was moved onto loses that when the field moves, even back to the same
+/// place, or when it is missing from a pass.
+#[test]
+fn a_field_that_moves_away_and_back_needs_the_pointer_moved_again() {
+    let (ctx, point) = stream_context(40.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point)]);
+    stream_frame(&ctx, Some(44.0), 111.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 112.0, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the field moved after the pointer did");
+
+    let (ctx, point) = stream_context(40.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point)]);
+    stream_frame(&ctx, None, 111.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 112.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 113.0, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the field was gone for a pass");
+
+    let (ctx, point) = stream_context(40.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), egui::Event::PointerGone]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the pointer left the window");
+}
+
+/// An overlay that comes and goes over a still pointer, with no input while it is up, leaves the
+/// field needing the pointer moved again; a stream the field held leaves it.
+#[test]
+fn a_field_covered_by_an_overlay_needs_the_pointer_moved_again() {
+    let (ctx, point) = stream_context(40.0);
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point)]);
+    covered_stream_frame(&ctx, Some(40.0), true, 111.0, vec![]);
+    covered_stream_frame(&ctx, Some(40.0), true, 112.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 113.0, vec![]);
+    stream_frame(&ctx, Some(40.0), 114.0, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 120.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the overlay covered the field");
+    let nudged = point + egui::vec2(2.0, 0.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 130.0, vec![egui::Event::PointerMoved(nudged), plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "the pointer moved onto the field again");
+
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    covered_stream_frame(&ctx, Some(40.0), true, 110.1, vec![]);
+    covered_stream_frame(&ctx, Some(40.0), true, 110.2, vec![]);
+    stream_frame(&ctx, Some(40.0), 110.3, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.4, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the overlay covered the field during the stream");
+}
+
+/// A field missing from a pass loses the pointer's placement while another font field keeps
+/// drawing in that pass, as when a panel collapses and the Control bar's field stays.
+#[test]
+fn a_field_gone_for_a_pass_beside_another_field_needs_the_pointer_moved_again() {
+    let ctx = egui::Context::default();
+    let field_at = |ui: &mut egui::Ui, top: f32| {
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, top), egui::vec2(120.0, 24.0));
+        let resp = ui.put(rect, egui::Button::new("Family"));
+        super::remember_wheel_field(ui, &resp, true);
+    };
+    let frame = |time: f64, family: bool, events: Vec<egui::Event>| {
+        let mut raw = egui::RawInput { time: Some(time), events, ..Default::default() };
+        super::take_raw_wheel(&ctx, &mut raw);
+        let left = raw.events.iter().filter(|e| matches!(e, egui::Event::MouseWheel { .. })).count();
+        let mut out = ctx.run_ui(raw, |ui| {
+            field_at(ui, 200.0);
+            if family {
+                field_at(ui, 40.0);
+            }
+        });
+        out.textures_delta.clear();
+        left
+    };
+    for i in 0..3 {
+        frame(100.0 + f64::from(i), true, vec![]);
+    }
+    let point = egui::pos2(70.0, 52.0);
+    assert_eq!(frame(110.0, true, vec![egui::Event::PointerMoved(point), plain_turn()]), 0, "the pointer moved onto the field");
+    frame(120.0, false, vec![]);
+    frame(121.0, true, vec![]);
+    frame(122.0, true, vec![]);
+    assert_eq!(frame(130.0, true, vec![plain_turn()]), 1, "the field was gone for a pass");
+}
+
+/// A pointer at rest on a field that stayed put keeps stepping it, stream after stream.
+#[test]
+fn a_pointer_resting_on_its_field_keeps_the_wheel_across_streams() {
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0 + crate::widgets::WHEEL_STREAM_GAP / 2.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "the same stream");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 200.0, vec![plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "a new stream, with the pointer still on the field");
+}
+
+/// A stream that began elsewhere stays there when the pointer moves onto a field, until a gap
+/// with no wheel input ends it.
+#[test]
+fn a_wheel_stream_that_began_elsewhere_stays_there_until_a_gap() {
+    let (ctx, point) = stream_context(40.0);
+    let away = point + egui::vec2(0.0, 200.0);
+    let step = crate::widgets::WHEEL_STREAM_GAP * 0.8;
+    let (left, _, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(away), plain_turn()]);
+    assert_eq!(left, 1, "the stream began off the field");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0 + step, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "a nudge onto the field does not take a running stream");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0 + 2.0 * step, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "each event renews the stream");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0 + 2.0 * step + crate::widgets::WHEEL_STREAM_GAP, vec![plain_turn()]);
+    assert_eq!((left, notches), (0, 1), "the stream ended, and the pointer was moved onto the field");
+}
+
+/// A stream that leaves its field goes to what is under the pointer and does not come back.
+#[test]
+fn a_wheel_stream_that_leaves_its_field_does_not_return() {
+    let (ctx, point) = stream_context(40.0);
+    let away = point + egui::vec2(0.0, 200.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.1, vec![egui::Event::PointerMoved(away), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the pointer left the field");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.2, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the stream stays off the field");
+}
+
+/// A stream loses its field when the pointer leaves without a wheel turn or when the field moves.
+#[test]
+fn a_wheel_stream_loses_its_field_when_the_pointer_leaves_or_the_field_moves() {
+    let (ctx, point) = stream_context(40.0);
+    let away = point + egui::vec2(0.0, 200.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    stream_frame(&ctx, Some(40.0), 110.1, vec![egui::Event::PointerMoved(away)]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.2, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the pointer left the field during the stream");
+
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    stream_frame(&ctx, Some(44.0), 110.1, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(44.0), 110.2, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the field moved during the stream");
+
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    stream_frame(&ctx, Some(40.0), 110.1, vec![egui::Event::PointerGone]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.2, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the pointer left the window during the stream");
+}
+
+/// Trackpad momentum and zero-delta phase events keep their stream going, and momentum alone does
+/// not start a stream on a field.
+#[test]
+fn trackpad_momentum_stays_with_its_stream() {
+    use egui::{MouseWheelSource::Momentum, MouseWheelSource::Trackpad, TouchPhase};
+    let (ctx, point) = stream_context(40.0);
+    let away = point + egui::vec2(0.0, 200.0);
+    let step = crate::widgets::WHEEL_STREAM_GAP * 0.8;
+    stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(away), stream_turn(TouchPhase::Move, Trackpad, -1.0)]);
+    // The fingers lift with no delta, the pointer moves onto the field, and momentum follows.
+    stream_frame(&ctx, Some(40.0), 110.0 + step, vec![stream_turn(TouchPhase::End, Trackpad, 0.0)]);
+    let (left, notches, _) =
+        stream_frame(&ctx, Some(40.0), 110.0 + 2.0 * step, vec![egui::Event::PointerMoved(point), stream_turn(TouchPhase::Start, Momentum, -1.0)]);
+    assert_eq!((left, notches), (1, 0), "momentum continues the stream that began off the field");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 200.0, vec![stream_turn(TouchPhase::Move, Momentum, -1.0)]);
+    assert_eq!((left, notches), (1, 0), "momentum does not start a stream on the field");
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 300.0, vec![stream_turn(TouchPhase::Move, Trackpad, -1.0)]);
+    assert_eq!((left, notches), (0, 1), "fingers on the trackpad do");
+}
+
+/// A stream that began as a sideways scroll stays off the field when it turns vertical.
+#[test]
+fn a_sideways_turn_that_starts_a_stream_keeps_it_off_the_field() {
+    let (ctx, point) = stream_context(40.0);
+    let sideways = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(-1.0, 0.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), sideways]);
+    assert_eq!((left, notches), (1, 0));
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.1, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the stream began as a sideways scroll");
+}
+
+/// A stream loses its field when a layout pass is skipped, even though the field comes back in the
+/// same place before the stream ends.
+#[test]
+fn a_wheel_stream_loses_its_field_when_a_pass_is_skipped() {
+    let (ctx, point) = stream_context(40.0);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), plain_turn()]);
+    assert_eq!((left, notches), (0, 1));
+    stream_frame(&ctx, None, 110.1, vec![]);
+    stream_frame(&ctx, Some(40.0), 110.2, vec![]);
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.3, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the field missed a pass during the stream");
+}
+
+/// A modified turn is left in the input and keeps the stream away from the field.
+#[test]
+fn a_modified_turn_that_starts_a_stream_keeps_it_off_the_field() {
+    let (ctx, point) = stream_context(40.0);
+    let zoom = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::vec2(0.0, -1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: egui::Modifiers::COMMAND,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.0, vec![egui::Event::PointerMoved(point), zoom]);
+    assert_eq!((left, notches), (1, 0));
+    let (left, notches, _) = stream_frame(&ctx, Some(40.0), 110.1, vec![plain_turn()]);
+    assert_eq!((left, notches), (1, 0), "the stream began as a modified turn");
+}
+
+/// The font menus of two panels (other ids, other scopes) share their filters: a filter chosen in
+/// one menu is on when the other opens, and it lists its rows by it.
+#[test]
+fn a_filter_chosen_in_one_panels_menu_is_on_in_the_others() {
+    use vectorcraft_text::FontClass;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let fields = [("character", "character-font", 10.0), ("control-bar", "control-font", 60.0)];
+    let field = |top: f32| egui::Rect::from_min_size(egui::pos2(10.0, top), egui::vec2(200.0, 30.0));
+    // Draws both fields (and the open menu), and returns the texts drawn with their centers and
+    // each menu's state.
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 900.0))), ..Default::default() };
+        let mut ids = [egui::Id::NULL; 2];
+        let mut out = ctx.run_ui(input, |ui| {
+            for (i, (scope, id, top)) in fields.into_iter().enumerate() {
+                ui.push_id(scope, |ui| {
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(field(top)), |ui| {
+                        ids[i] = ui.scope_id().with(id).with("font-menu");
+                        super::font_menu(ui, id, "Inter", 200.0, None, super::MenuLook { samples: false, ..Default::default() });
+                    });
+                });
+            }
+        });
+        out.textures_delta.clear();
+        let texts: Vec<(String, egui::Pos2)> = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                _ => None,
+            })
+            .collect();
+        let states = ids.map(|id| ctx.data(|d| d.get_temp::<super::MenuState>(id)).unwrap_or_default());
+        (texts, states)
+    };
+    let press = |at: egui::Pos2| {
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(vec![egui::Event::PointerMoved(at), button(true)]);
+        frame(vec![button(false)]);
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+    };
+    let open = |i: usize| press(field(fields[i].2).min + egui::vec2(10.0, 10.0));
+    let close = || {
+        let escape = [true, false].map(|pressed| egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Default::default(),
+        });
+        frame(escape.to_vec());
+        for _ in 0..3 {
+            frame(vec![]);
+        }
+    };
+    // The topmost text `label`: a filter chip, above the rows.
+    let chip = |label: &str| {
+        let (texts, _) = frame(vec![]);
+        texts
+            .into_iter()
+            .filter(|(t, _)| t == label)
+            .map(|(_, at)| at)
+            .min_by(|a, b| a.y.total_cmp(&b.y))
+            .unwrap_or_else(|| panic!("{label} is drawn"))
+    };
+    let families = |st: &super::MenuState| st.rows.iter().filter(|r| matches!(r, Row::Family(_))).count();
+    let filters = |st: &super::MenuState| (st.script, st.class, st.variable_only, st.favorites_only);
+    frame(vec![]);
+    // Favorites only, chosen in the first panel's menu, with no favorites: the second lists nothing.
+    open(0);
+    press(chip("★"));
+    close();
+    let (_, [first, second]) = frame(vec![]);
+    assert!(first.favorites_only && second.favorites_only, "the second menu has the filter before it opens");
+    open(1);
+    let (_, [_, second]) = frame(vec![]);
+    assert!(second.favorites_only);
+    assert_eq!(families(&second), 0, "no favorites, so the second menu lists no family");
+    // A script, a kind and Variable chosen in the second panel's menu are on in the first.
+    press(chip(super::script_label(3)));
+    press(chip(super::class_label(FontClass::Monospaced)));
+    press(chip(super::variable_label()));
+    close();
+    open(0);
+    let (_, [first, _]) = frame(vec![]);
+    assert_eq!(filters(&first), (3, Some(FontClass::Monospaced), true, true));
+    // Every filter, turned off in the first menu, is off in the second, which lists families again.
+    press(chip("★"));
+    press(chip(super::script_label(0)));
+    press(chip(super::class_label(FontClass::Monospaced)));
+    press(chip(super::variable_label()));
+    close();
+    open(1);
+    let (_, [_, second]) = frame(vec![]);
+    assert_eq!(filters(&second), (0, None, false, false));
+    assert!(families(&second) > 0, "every family is listed again");
 }
 
 /// The Font Technology filter's Variable is the font adjective, not the Variables panel's noun.
@@ -311,8 +1002,56 @@ fn the_variable_filter_lists_only_variable_families() {
     assert_eq!(frame(&mut st, vec![], &favorites).0, [TWO_AXIS_FAMILY]);
     st.favorites_only = false;
     // Off again: every family is listed.
+    let lasting = lasting_families();
     let again = click(&mut st, &favorites);
     assert!(!st.variable_only);
-    assert_eq!(again, frame(&mut st, vec![], &[]).0);
+    assert!(lasting.iter().all(|f| has(&again, f)), "{again:?}");
     assert!(has(&again, TWO_AXIS_FAMILY) && has(&again, "Source Sans 3") && has(&again, "JetBrains Mono"), "{again:?}");
+}
+
+/// A Type › Font menu item's sample follows Show samples on white: dark type on a white slot,
+/// or the interface's dimmed text color with nothing behind it. The slot is white while the
+/// sample is still rendering too.
+#[test]
+fn a_menu_items_sample_follows_show_samples_on_white() {
+    use crate::theme::{Brightness, Tokens};
+    let dark = Tokens::for_brightness(Brightness::Light).text;
+    for b in Brightness::ALL {
+        let t = Tokens::for_brightness(b);
+        for on_white in [false, true] {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
+            let slot = egui::Rect::from_min_size(egui::pos2(40.0, 20.0), super::MENU_SAMPLE_SIZE);
+            let frame = || {
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::menu_item_sample(ui, slot, "Inter", on_white));
+                out.textures_delta.clear();
+                out.shapes
+            };
+            frame();
+            super::wait_for_samples(&ctx);
+            let shapes = frame();
+            let tints: Vec<_> = shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => m.vertices.first().map(|v| v.color),
+                    _ => None,
+                })
+                .collect();
+            let papers =
+                shapes.iter().filter(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == super::SAMPLE_PAPER && r.rect == slot)).count();
+            assert_eq!(tints, [if on_white { dark } else { t.text_dim }], "{}, on white {on_white}", b.id());
+            assert_eq!(papers, usize::from(on_white), "{}, on white {on_white}", b.id());
+        }
+    }
+    // While a family's sample is still rendering, its slot is already white.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let slot = egui::Rect::from_min_size(egui::pos2(40.0, 20.0), super::MENU_SAMPLE_SIZE);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::menu_item_sample(ui, slot, "JetBrains Mono", true));
+    out.textures_delta.clear();
+    let shapes = out.shapes;
+    super::wait_for_samples(&ctx);
+    assert!(!shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default())), "no sample");
+    assert!(shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == super::SAMPLE_PAPER && r.rect == slot)), "the slot is white");
 }

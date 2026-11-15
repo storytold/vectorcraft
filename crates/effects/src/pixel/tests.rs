@@ -12,6 +12,7 @@ fn space(w: usize, h: usize) -> PixelSpace {
         to_doc: Affine::IDENTITY,
         px: 1.0,
         center: Point::new(w / 2.0, h / 2.0),
+        size: vectorcraft_geom::Vec2::new(w, h),
         channels: Channels::Rgb,
         line: 1.0,
         extent: 0.5 * w.hypot(h),
@@ -80,7 +81,7 @@ fn film_grain_parameters_are_bounded_and_neutral_settings_preserve_the_art() {
     neutral.apply(&mut out, w, h, &space(w, h));
     assert_eq!(out, src);
     assert_eq!(neutral.outset(Rect::new(0.0, 0.0, w as f64, h as f64)), 0.0);
-    assert_eq!(neutral.reach(), Some(0.0));
+    assert_eq!(neutral.reach(1.0), Some(0.0));
 }
 
 #[test]
@@ -479,12 +480,16 @@ fn film_grain_leaves_invalid_coordinate_spaces_alone() {
 
 #[test]
 fn params_take_defaults_and_stay_in_range() {
-    assert_eq!(fx("blur.radial", json!({})), PixelFx::RadialBlur { amount: 10.0, zoom: false, passes: 6 });
+    assert_eq!(fx("blur.radial", json!({})), PixelFx::RadialBlur { amount: 10.0, zoom: false, passes: 6, center: [0.5, 0.5] });
     assert_eq!(
-        fx("blur.radial", json!({"amount": 1e308, "method": "ZOOM", "quality": "best"})),
-        PixelFx::RadialBlur { amount: 100.0, zoom: true, passes: 8 }
+        fx("blur.radial", json!({"amount": 1e308, "method": "ZOOM", "quality": "best", "centerX": 0.25, "centerY": 1})),
+        PixelFx::RadialBlur { amount: 100.0, zoom: true, passes: 8, center: [0.25, 1.0] }
     );
-    assert_eq!(fx("blur.radial", json!({"amount": -5, "quality": "nonsense"})), PixelFx::RadialBlur { amount: 1.0, zoom: false, passes: 6 });
+    // A saved center outside the bounds (the commands refuse one) draws at the nearest edge.
+    assert_eq!(
+        fx("blur.radial", json!({"amount": -5, "quality": "nonsense", "centerX": -3, "centerY": 7})),
+        PixelFx::RadialBlur { amount: 1.0, zoom: false, passes: 6, center: [0.0, 1.0] }
+    );
     assert_eq!(fx("blur.smart", json!({})), PixelFx::SmartBlur { radius: 3.0, threshold: 25.0, samples: 7, mode: SmartBlurMode::Normal });
     assert_eq!(
         fx("blur.smart", json!({"radius": "1e999", "threshold": -1, "quality": "low", "blurMode": "EDGEONLY"})),
@@ -519,13 +524,18 @@ fn outsets_follow_the_object() {
     let far = 0.5 * 100f64.hypot(50.0);
     assert!((spin.outset(b) - (far - 25.0)).abs() < 1e-9);
     assert!(fx("blur.radial", json!({"method": "zoom", "amount": 100})).outset(b) > 0.4 * far);
+    // About a corner the spin reaches the circle through the opposite corner, the whole diagonal out.
+    let corner = fx("blur.radial", json!({"centerX": 0, "centerY": 0}));
+    assert!((corner.outset(b) - 100f64.hypot(50.0)).abs() < 1e-9, "{}", corner.outset(b));
+    let zoom = |center: f64| fx("blur.radial", json!({"method": "zoom", "amount": 100, "centerX": center, "centerY": center})).outset(b);
+    assert!((zoom(1.0) - 2.0 * zoom(0.5)).abs() < 1e-9, "a zoom about a corner reaches twice as far");
     assert_eq!(fx("blur.smart", json!({"radius": 4})).outset(b), 4.0);
-    assert_eq!(fx("blur.smart", json!({"radius": 4})).reach(), Some(4.0));
+    assert_eq!(fx("blur.smart", json!({"radius": 4})).reach(1.0), Some(4.0));
     // The edge modes also read the copy blurred over a wide radius's samples.
-    assert_eq!(fx("blur.smart", json!({"radius": 4, "quality": "low", "blurMode": "edgeOnly"})).reach(), Some(5.0));
+    assert_eq!(fx("blur.smart", json!({"radius": 4, "quality": "low", "blurMode": "edgeOnly"})).reach(1.0), Some(5.0));
     assert_eq!(fx("sharpen.unsharpMask", json!({})).outset(b), 0.0);
-    assert_eq!(spin.reach(), None);
-    assert_eq!(fx("sharpen.unsharpMask", json!({"radius": 2})).reach(), Some(6.0));
+    assert_eq!(spin.reach(1.0), None);
+    assert_eq!(fx("sharpen.unsharpMask", json!({"radius": 2})).reach(1.0), Some(6.0));
 }
 
 #[test]
@@ -631,6 +641,40 @@ fn spin_blur_smears_along_arcs_and_keeps_the_centre() {
     fx("blur.radial", json!({"amount": 60, "method": "zoom", "quality": "best"})).apply(&mut z, w, h, &space(w, h));
     assert!(at(&z, w, 35, 20)[3] > 0 && at(&z, w, 29, 20)[3] > 0, "the dot streaks along the ray");
     assert_eq!(at(&z, w, 32, 16)[3], 0, "not across it");
+}
+
+/// The Blur Center moves the point the blur turns about: a dot on it stays sharp, a dot on the
+/// object's centre then spreads, and the center follows the object when it moves or is scaled.
+#[test]
+fn radial_blur_turns_about_its_blur_center() {
+    let (w, h) = (41, 41);
+    // A dot on pixel (10, 30), whose centre (10.5, 30.5) is the Blur Center below, and one on the
+    // object's centre.
+    let src = image(w, h, |x, y| if (x == 10 && y == 30) || (x == 20 && y == 20) { grey(255) } else { [0, 0, 0, 0] });
+    let blur = |p: serde_json::Value, s: &PixelSpace, src: &[u8]| {
+        let mut d = src.to_vec();
+        fx("blur.radial", p).apply(&mut d, w, h, s);
+        d
+    };
+    let off = json!({"amount": 60, "quality": "best", "centerX": 10.5 / 41.0, "centerY": 30.5 / 41.0});
+    let d = blur(off.clone(), &space(w, h), &src);
+    assert!(at(&d, w, 10, 30)[3] > 100, "the dot on the Blur Center barely moves: {:?}", at(&d, w, 10, 30));
+    assert!(at(&d, w, 20, 20)[3] < 100, "the dot on the object's centre spreads: {:?}", at(&d, w, 20, 20));
+    // The default center is the object's centre, the same as no center at all.
+    assert_eq!(blur(json!({"amount": 60, "centerX": 0.5, "centerY": 0.5}), &space(w, h), &src), blur(json!({"amount": 60}), &space(w, h), &src));
+    // Moved 7 pt right and 3 pt down, the object draws the same pixels.
+    let moved =
+        PixelSpace { to_doc: Affine::translate((7.0, 3.0)), center: space(w, h).center + vectorcraft_geom::Vec2::new(7.0, 3.0), ..space(w, h) };
+    assert_eq!(blur(off.clone(), &moved, &src), d, "the center moves with the object");
+    // Drawn at twice the size (two points a pixel), the center lies on the same pixels.
+    let big = PixelSpace {
+        to_doc: Affine::scale(2.0),
+        px: 2.0,
+        center: Point::new(41.0, 41.0),
+        size: vectorcraft_geom::Vec2::new(82.0, 82.0),
+        ..space(w, h)
+    };
+    assert_eq!(blur(off, &big, &src), d, "the center scales with the object");
 }
 
 #[test]
@@ -862,6 +906,7 @@ fn lengths_are_document_units() {
             to_doc: Affine::scale(1.0 / scale as f64),
             px: 1.0 / scale as f64,
             center: Point::ZERO,
+            size: vectorcraft_geom::Vec2::ZERO,
             channels: Channels::Rgb,
             line: 1.0,
             extent: 0.0,
@@ -887,6 +932,28 @@ fn gaussian_and_plane_blurs_keep_their_mass() {
     assert!((plane.iter().sum::<f32>() - 100.0).abs() < 0.5 && plane[15 * w + 13] > 0.0 && plane[13 * w + 15] > 0.0);
 }
 
+/// Blurred in linear light, black beside white meets at about 188/255 (half the light, encoded),
+/// where the plain blur meets at about 128; flat areas and alpha stay as they are (#5877).
+#[test]
+fn linear_light_blur_mixes_light_not_values() {
+    // Large enough that the transparency past the edges doesn't reach the middle.
+    let (w, h) = (120, 60);
+    let src = image(w, h, |x, _| if x < 60 { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
+    let (mut plain, mut linear) = (src.clone(), src.clone());
+    gaussian_rgba(&mut plain, w, h, 3.0);
+    gaussian_rgba_linear(&mut linear, w, h, 3.0);
+    let mid = |d: &[u8]| (f32::from(at(d, w, 59, 30)[0]) + f32::from(at(d, w, 60, 30)[0])) / 2.0;
+    assert!((mid(&plain) - 128.0).abs() < 6.0, "{}", mid(&plain));
+    assert!((mid(&linear) - 188.0).abs() < 6.0, "{}", mid(&linear));
+    assert_eq!((at(&linear, w, 30, 30), at(&linear, w, 90, 30)), ([0, 0, 0, 255], [255, 255, 255, 255]));
+    // Premultiplied input: a half-transparent white square blurs to white at any alpha.
+    let mut soft = image(30, 30, |x, y| if (10..20).contains(&x) && (10..20).contains(&y) { [128, 128, 128, 128] } else { [0, 0, 0, 0] });
+    gaussian_rgba_linear(&mut soft, 30, 30, 2.0);
+    for p in soft.as_chunks::<4>().0 {
+        assert!(p[0] <= p[3] && p[3] <= 128 && (p[3] < 8 || p[0] + 2 >= p[3]), "{p:?}");
+    }
+}
+
 /// Timings on a 2000 × 2000 raster (`cargo test -p vectorcraft-effects --release -- --ignored
 /// --nocapture pixel_timings`).
 #[test]
@@ -894,7 +961,15 @@ fn gaussian_and_plane_blurs_keep_their_mass() {
 fn pixel_timings() {
     let (w, h) = (2000, 2000);
     let src = image(w, h, |x, y| [(x % 256) as u8, (y % 256) as u8, ((x ^ y) % 256) as u8, 255]);
-    let s = PixelSpace { to_doc: Affine::IDENTITY, px: 1.0, center: Point::new(1000.0, 1000.0), channels: Channels::Rgb, line: 1.0, extent: 0.0 };
+    let s = PixelSpace {
+        to_doc: Affine::IDENTITY,
+        px: 1.0,
+        center: Point::new(1000.0, 1000.0),
+        size: vectorcraft_geom::Vec2::new(2000.0, 2000.0),
+        channels: Channels::Rgb,
+        line: 1.0,
+        extent: 0.0,
+    };
     let cases = [
         ("blur.radial", json!({"quality": "draft"})),
         ("blur.radial", json!({"quality": "good"})),
@@ -962,7 +1037,7 @@ fn pixelate_params_take_defaults_and_stay_in_range() {
     assert_eq!(fx("pixelate.crystallize", json!({"cellSize": 20})).outset(b), 30.0);
     assert_eq!(fx("pixelate.pointillize", json!({"cellSize": 20})).outset(b), 30.0);
     assert_eq!(fx("pixelate.colorHalftone", json!({})).outset(b), 0.0);
-    assert_eq!(fx("pixelate.mezzotint", json!({})).reach(), Some(0.0));
+    assert_eq!(fx("pixelate.mezzotint", json!({})).reach(1.0), Some(0.0));
 }
 
 /// Fraction of `d`'s pixels for which `f` holds.
@@ -1000,6 +1075,25 @@ fn color_halftone_screens_midtones_into_dots_and_keeps_white_and_black() {
     halftone.apply(&mut ramp, w, h, &space(w, h));
     let lit = |x0: usize| (0..h).flat_map(|y| (x0..x0 + 16).map(move |x| (x, y))).filter(|(x, y)| at(&ramp, w, *x, *y)[0] > 127).count();
     assert!(lit(8) < lit(40), "{} < {}", lit(8), lit(40));
+}
+
+#[test]
+fn color_halftone_sizes_its_dots_in_pixels_of_the_raster_effects_resolution() {
+    // Max Radius counts the document's raster grid pixels (#3260): 16 px at 144 ppi (lines half a
+    // point apart) are the 8 px of 72 ppi, and draw the same dots.
+    let (w, h) = (64, 64);
+    let src = image(w, h, |x, y| [(x * 4) as u8, (y * 4) as u8, 128, 255]);
+    let run = |radius: f64, line: f64| {
+        let mut d = src.clone();
+        fx("pixelate.colorHalftone", json!({"maxRadius": radius})).apply(&mut d, w, h, &PixelSpace { line, ..space(w, h) });
+        d
+    };
+    assert_eq!(run(16.0, 0.5), run(8.0, 1.0));
+    assert_ne!(run(8.0, 0.5), run(8.0, 1.0), "the same radius at a finer resolution draws finer dots");
+    // It looks as far around a pixel as its cells reach, in document units.
+    let halftone = fx("pixelate.colorHalftone", json!({"maxRadius": 8}));
+    assert_eq!(halftone.reach(0.5), Some(3.0 * std::f64::consts::SQRT_2 * 4.0));
+    assert_eq!(halftone.reach(f64::NAN), Some(0.0), "no grid, no dots");
 }
 
 #[test]
@@ -1241,8 +1335,8 @@ fn texture_params_take_defaults_and_stay_in_range() {
     for id in ["texture.craquelure", "texture.grain", "texture.mosaicTiles", "texture.texturizer"] {
         assert_eq!(fx(id, json!({})).outset(b), 0.0, "{id}");
     }
-    assert_eq!(fx("texture.grain", json!({})).reach(), Some(0.0));
-    assert_eq!(fx("texture.craquelure", json!({"crackSpacing": 12})).reach(), Some(6.0));
+    assert_eq!(fx("texture.grain", json!({})).reach(1.0), Some(0.0));
+    assert_eq!(fx("texture.craquelure", json!({"crackSpacing": 12})).reach(1.0), Some(6.0));
 }
 
 /// The pixels of `d` (`w` wide) in the square `lo..hi` on both axes.
@@ -1453,6 +1547,42 @@ fn texturizer_draws_a_loaded_texture_as_relief() {
     assert_eq!(fx("texture.texturizer", json!({"texture": "LOADED", "textureImage": "not a texture"})), fx("texture.texturizer", json!({})));
 }
 
+/// Rough Pastels draws a loaded texture as its surface, and Scaling, Relief, Light Direction and
+/// Invert act on it as on the built-in ones.
+#[test]
+fn rough_pastels_draws_a_loaded_texture_as_its_surface() {
+    let w = 64;
+    let mid = grey(150);
+    let rings = stored(12, 10, |x, y| {
+        let v = ((x as f64 - 5.5).hypot(y as f64 - 4.5) * 0.9).sin().abs();
+        let g = (v * 255.0).round() as u8;
+        [g, g, g, 255]
+    });
+    let run = |mut p: serde_json::Value| {
+        p["strokeLength"] = json!(0);
+        let mut d = flat(w, mid);
+        fx("artistic.roughPastels", p).apply(&mut d, w, w, &space(w, w));
+        d
+    };
+    let relief = run(json!({"texture": "loaded", "textureImage": rings, "relief": 20}));
+    assert_ne!(relief, flat(w, mid));
+    for (_, builtin) in TEXTURES {
+        assert_ne!(relief, run(json!({"texture": builtin, "relief": 20})), "{builtin}");
+    }
+    for (key, value) in [("invert", json!(true)), ("scaling", json!(200)), ("lightDirection", json!("bottomRight")), ("relief", json!(5))] {
+        let mut p = json!({"texture": "loaded", "textureImage": rings, "relief": 20});
+        p[key] = value;
+        assert_ne!(run(p), relief, "{key}");
+    }
+    assert_eq!(run(json!({"texture": "loaded", "textureImage": rings, "relief": 0})), flat(w, mid));
+    let parsed = fx("artistic.roughPastels", json!({"texture": "Loaded", "textureImage": rings}));
+    assert!(matches!(parsed, PixelFx::RoughPastels { texture: Texture::Loaded(_), .. }), "{parsed:?}");
+    // Without a stored texture, or with one that isn't, Loaded draws Canvas.
+    for p in [json!({"texture": "loaded"}), json!({"texture": "loaded", "textureImage": "not a texture"})] {
+        assert_eq!(fx("artistic.roughPastels", p), fx("artistic.roughPastels", json!({})));
+    }
+}
+
 /// The Texture filters' patterns lie in document space around the object's centre: the same at
 /// twice the resolution, and moving with the object.
 #[test]
@@ -1509,9 +1639,9 @@ fn distort_params_take_defaults_and_stay_in_range() {
     // Shifted content reaches past the bounds by the longest shift, and comes from as far.
     let b = Rect::new(0.0, 0.0, 100.0, 50.0);
     let glass = fx("distort.glass", json!({"distortion": 20}));
-    assert_eq!((glass.outset(b), glass.reach()), (10.0, Some(10.0)));
+    assert_eq!((glass.outset(b), glass.reach(1.0)), (10.0, Some(10.0)));
     let ripple = fx("distort.oceanRipple", json!({}));
-    assert!((ripple.outset(b) - 0.03 * 9.0 * 11.0).abs() < 1e-9 && ripple.reach() == Some(ripple.outset(b)));
+    assert!((ripple.outset(b) - 0.03 * 9.0 * 11.0).abs() < 1e-9 && ripple.reach(1.0) == Some(ripple.outset(b)));
     assert_eq!(fx("distort.diffuseGlow", json!({})).outset(b), 0.0);
 }
 
@@ -1621,7 +1751,7 @@ fn ocean_ripple_moves_content_no_farther_than_its_magnitude() {
     fx("distort.oceanRipple", json!({"rippleMagnitude": 0})).apply(&mut d, w, h, &space(w, h));
     assert_eq!(d, src, "no magnitude, no ripples");
     let f = fx("distort.oceanRipple", json!({"rippleSize": 6, "rippleMagnitude": 20}));
-    let most = f.reach().unwrap();
+    let most = f.reach(1.0).unwrap();
     let mut d = src.clone();
     f.apply(&mut d, w, h, &space(w, h));
     assert_ne!(d, src);
@@ -1765,19 +1895,19 @@ fn brush_strokes_outsets() {
     let reach = brushstrokes::stroke_reach;
     assert!((reach(20.0) - (0.75 * 20.0 + 1.5 / 15.0 * 20.0 + 1.0)).abs() < 1e-9);
     assert_eq!(fx("brushStrokes.accentedEdges", json!({})).outset(b), 0.0);
-    assert_eq!(fx("brushStrokes.accentedEdges", json!({})).reach(), Some(3.0 * (0.35 * 2.0 + 0.5) + 1.0));
+    assert_eq!(fx("brushStrokes.accentedEdges", json!({})).reach(1.0), Some(3.0 * (0.35 * 2.0 + 0.5) + 1.0));
     assert_eq!(fx("brushStrokes.angledStrokes", json!({})).outset(b), reach(15.0));
     assert_eq!(fx("brushStrokes.crosshatch", json!({})).outset(b), reach(9.0) + 0.9);
     assert_eq!(fx("brushStrokes.darkStrokes", json!({})).outset(b), reach(9.0));
     assert_eq!(fx("brushStrokes.inkOutlines", json!({"strokeLength": 50})).outset(b), reach(50.0));
     let spatter = fx("brushStrokes.spatter", json!({}));
-    assert_eq!((spatter.outset(b), spatter.reach()), (4.0, Some(4.0)));
+    assert_eq!((spatter.outset(b), spatter.reach(1.0)), (4.0, Some(4.0)));
     assert_eq!(fx("brushStrokes.spatter", json!({"sprayRadius": 0})).outset(b), 0.0);
     assert_eq!(fx("brushStrokes.sprayedStrokes", json!({})).outset(b), reach(12.0) + 0.3 * 7.0);
     assert_eq!(fx("brushStrokes.sumiE", json!({})).outset(b), 0.0);
     for id in brush_strokes() {
         let f = fx(id, json!({}));
-        assert!(f.reach().is_some_and(|r| r >= f.outset(b)), "{id}");
+        assert!(f.reach(1.0).is_some_and(|r| r >= f.outset(b)), "{id}");
     }
 }
 
@@ -1961,7 +2091,7 @@ fn spatter_scatters_content_no_farther_than_its_radius() {
     let src = image(w, h, |x, _| if x < 32 { grey(255) } else { [0; 4] });
     assert_eq!(run_fx(&src, w, h, "brushStrokes.spatter", json!({"sprayRadius": 0})), src, "no radius, no spatter");
     let f = fx("brushStrokes.spatter", json!({"sprayRadius": 15}));
-    let most = f.reach().unwrap();
+    let most = f.reach(1.0).unwrap();
     let d = run_fx(&src, w, h, "brushStrokes.spatter", json!({"sprayRadius": 15}));
     assert_ne!(d, src);
     let inside = |v: usize, n: usize| (v as f64 + 0.5).min(n as f64 - v as f64 - 0.5) > most + 1.0;
@@ -1990,7 +2120,7 @@ fn brush_strokes_look_no_farther_than_their_reach() {
         ("brushStrokes.sumiE", json!({"strokeWidth": 15})),
     ]);
     for (id, p) in cases {
-        let reach = fx(id, p.clone()).reach().unwrap();
+        let reach = fx(id, p.clone()).reach(1.0).unwrap();
         // Everything from `cut` on differs; the pixels left of 20 can't tell.
         let cut = 20 + reach.ceil() as usize + 1;
         assert!(cut < w, "{id}");
@@ -2047,7 +2177,7 @@ fn chalk_charcoal_params_take_defaults_and_stay_in_range() {
     assert!(doc.contains("chalkArea") && doc.contains("charcoalArea") && doc.contains("strokePressure"), "{doc}");
     let f = fx("sketch.chalkCharcoal", json!({"strokePressure": 5}));
     assert_eq!(f.outset(Rect::new(0.0, 0.0, 100.0, 50.0)), 0.0);
-    assert!(f.reach().unwrap() > 0.0);
+    assert!(f.reach(1.0).unwrap() > 0.0);
 }
 
 #[test]
@@ -2108,7 +2238,7 @@ fn graphic_pen_params_take_defaults_and_stay_in_range() {
     assert!(STROKE_DIRECTIONS.iter().all(|(_, v)| doc.contains(&format!("\"{v}\""))), "{doc}");
     let f = fx("sketch.graphicPen", json!({"strokeLength": 15}));
     assert_eq!(f.outset(Rect::new(0.0, 0.0, 100.0, 50.0)), brushstrokes::stroke_reach(15.0));
-    assert_eq!(f.reach(), Some(brushstrokes::stroke_reach(15.0).max(brushstrokes::TONE_REACH)));
+    assert_eq!(f.reach(1.0), Some(brushstrokes::stroke_reach(15.0).max(brushstrokes::TONE_REACH)));
     assert_eq!(
         fx("sketch.graphicPen", json!({"strokeLength": 99})),
         PixelFx::GraphicPen { length: 15.0, balance: 50.0, direction: StrokeDirection::RightDiagonal }
@@ -2148,7 +2278,7 @@ fn halftone_pattern_params_take_defaults_and_stay_in_range() {
     assert!(HALFTONE_TYPES.iter().all(|(_, v)| doc.contains(&format!("\"{v}\""))), "{doc}");
     let f = fx("sketch.halftonePattern", json!({"size": 12}));
     assert_eq!(f.outset(Rect::new(0.0, 0.0, 100.0, 50.0)), 0.0);
-    assert_eq!(f.reach(), Some(0.0));
+    assert_eq!(f.reach(1.0), Some(0.0));
 }
 
 #[test]
@@ -2162,7 +2292,7 @@ fn note_paper_params_take_defaults_and_stay_in_range() {
     assert!(doc.contains("imageBalance") && doc.contains("graininess") && doc.contains("relief"), "{doc}");
     let f = fx("sketch.notePaper", json!({"relief": 12}));
     assert_eq!(f.outset(Rect::new(0.0, 0.0, 100.0, 50.0)), 0.0);
-    assert_eq!(f.reach(), Some(0.0));
+    assert_eq!(f.reach(1.0), Some(0.0));
 }
 
 /// Note Paper embosses a horizontal gradient and graininess adds fibre.
@@ -2198,7 +2328,7 @@ fn water_paper_params_take_defaults_and_stay_in_range() {
     );
     let f = fx("sketch.waterPaper", json!({"fiberLength": 40}));
     assert!(f.outset(Rect::new(0.0, 0.0, 100.0, 50.0)) > 0.0);
-    assert!(f.reach().unwrap_or(0.0) > 0.0);
+    assert!(f.reach(1.0).unwrap_or(0.0) > 0.0);
     let doc = crate::effect_info("sketch.waterPaper").unwrap().params;
     assert!(doc.contains("unverified"), "{doc}");
 }
@@ -2281,7 +2411,7 @@ fn plaster_params_take_defaults_and_stay_in_range() {
     let doc = crate::effect_info("sketch.plaster").unwrap().params;
     assert!(doc.contains("\"bottomRight\""), "{doc}");
     let f = fx("sketch.plaster", json!({"smoothness": 24}));
-    assert_eq!(f.reach(), Some(super::sketch::plaster_reach(15.0)));
+    assert_eq!(f.reach(1.0), Some(super::sketch::plaster_reach(15.0)));
 }
 
 /// Plaster changes the image and different light directions give different results.
@@ -2356,8 +2486,8 @@ fn chrome_params_take_defaults_and_stay_in_range() {
     assert!(doc.contains("detail") && doc.contains("smoothness"), "{doc}");
     let f = fx("sketch.chrome", json!({}));
     assert_eq!(f.outset(Rect::new(0.0, 0.0, 100.0, 50.0)), 0.0);
-    assert_eq!(f.reach(), Some(sketch::chrome_reach(4.0)));
-    assert_eq!(fx("sketch.chrome", json!({"smoothness": 10})).reach(), Some(sketch::chrome_reach(10.0)));
+    assert_eq!(f.reach(1.0), Some(sketch::chrome_reach(4.0)));
+    assert_eq!(fx("sketch.chrome", json!({"smoothness": 10})).reach(1.0), Some(sketch::chrome_reach(10.0)));
 }
 
 /// Chrome redraws in greyscale, keeps coverage, and more detail changes the pattern.
@@ -2389,7 +2519,7 @@ fn reticulation_params_take_defaults_and_stay_in_range() {
     );
     let f = fx("sketch.reticulation", json!({}));
     assert_eq!(f.outset(Rect::new(0.0, 0.0, 100.0, 50.0)), 0.0);
-    assert_eq!(f.reach(), Some(0.0));
+    assert_eq!(f.reach(1.0), Some(0.0));
 }
 
 #[test]
@@ -2431,7 +2561,7 @@ fn torn_edges_params_take_defaults_and_stay_in_range() {
     for junk in [json!({"imageBalance": "x"}), json!({"smoothness": null})] {
         assert_eq!(fx("sketch.tornEdges", junk), fx("sketch.tornEdges", json!({})));
     }
-    assert_eq!(fx("sketch.tornEdges", json!({})).reach(), None);
+    assert_eq!(fx("sketch.tornEdges", json!({})).reach(1.0), None);
 }
 
 #[test]
@@ -2496,7 +2626,7 @@ fn artistic_params_take_defaults_and_stay_in_range() {
         fx("artistic.coloredPencil", json!({"pencilWidth": 0, "strokePressure": 200, "paperBrightness": -5})),
         PixelFx::ColoredPencil { width: 1.0, pressure: 15.0, paper: 0.0 }
     );
-    assert_eq!(fx("artistic.coloredPencil", json!({})).reach(), Some(artistic::colored_pencil_reach(5.0)));
+    assert_eq!(fx("artistic.coloredPencil", json!({})).reach(1.0), Some(artistic::colored_pencil_reach(5.0)));
     assert_eq!(fx("artistic.cutout", json!({})), PixelFx::Cutout { levels: 4.0, simplicity: 4.0, fidelity: 2.0 });
     assert_eq!(
         fx("artistic.cutout", json!({"levels": 1e308, "edgeSimplicity": -5, "edgeFidelity": "NaN"})),
@@ -2860,7 +2990,7 @@ fn dry_brush_repaints_and_preserves_coverage() {
     let before = clear.clone();
     fx("artistic.dryBrush", json!({})).apply(&mut clear, w, h, &space(w, h));
     assert_eq!(clear, before);
-    let reach = fx("artistic.dryBrush", json!({"brushSize": 10, "brushDetail": 1})).reach();
+    let reach = fx("artistic.dryBrush", json!({"brushSize": 10, "brushDetail": 1})).reach(1.0);
     assert!(reach.is_some_and(|r| r > 0.0));
 }
 

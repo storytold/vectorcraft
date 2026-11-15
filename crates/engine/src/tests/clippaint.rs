@@ -69,7 +69,7 @@ fn a_clipping_paths_fill_and_stroke_show_in_render_svg_and_pdf() {
     assert_eq!(rgb(&doc, 120), [255, 255, 255]);
     assert_eq!(rgb(&doc, 45), [255, 255, 255]);
     let svg = vectorcraft_svg::export(&doc, &Default::default());
-    assert_eq!(svg.matches("<path").count(), 2, "the clip region and the red art: {svg}");
+    assert_eq!(vectorcraft_testkit::svg_shapes(&svg), 2, "the clip region and the red art: {svg}");
 }
 
 #[test]
@@ -81,6 +81,63 @@ fn release_and_ungroup_keep_the_clipping_paths_paint() {
         let n = s.doc().unwrap().doc.node(clip).unwrap().clone();
         assert_eq!(n.appearance.fill_paint(), vectorcraft_color::Paint::solid(vectorcraft_color::Color::from_hex("#0000ff").unwrap()), "{cmd}");
         assert_eq!(n.appearance.stroke().map(|st| st.width), Some(10.0), "{cmd}");
+    }
+}
+
+/// Pixels of `doc` rendered on white that are mostly blue and mostly green.
+fn blue_and_green(doc: &Document) -> (usize, usize) {
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let r = Renderer::new().render(doc, 200, 200, Affine::IDENTITY, &opts);
+    let (mut blue, mut green) = (0, 0);
+    for y in 0..200 {
+        for x in 0..200 {
+            let p = r.pixel(x, y);
+            blue += usize::from(p[2] > 200 && p[0] < 60 && p[1] < 60);
+            green += usize::from(p[1] > 200 && p[0] < 60 && p[2] < 60);
+        }
+    }
+    (blue, green)
+}
+
+#[test]
+fn painted_type_clipping_inside_a_group_with_geometry_effects_keeps_its_paint() {
+    // The canvas and the SVG and PDF output paint the type's fill and stroke as they did before
+    // the effect. Type that stays type beside the clip group takes the second Transform case
+    // through baking that keeps type.
+    let cases =
+        [("distort.transform", json!({"moveH": 5}), false), ("distort.transform", json!({"moveH": 5}), true), ("distort.roughen", json!({}), false)];
+    for (effect, params, other_type) in cases {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        rect(&mut s, 0.0, 30.0, "#ff0000");
+        let t = NodeId(s.execute("text.create", &json!({"x": 10, "y": 120, "text": "Clip", "size": 72})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.all", &json!({})).unwrap();
+        let clip = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [t.0]})).unwrap();
+        s.execute("paint.setStroke", &json!({"color": "#00ff00", "ids": [t.0]})).unwrap();
+        s.execute("stroke.set", &json!({"weight": 2, "ids": [t.0]})).unwrap();
+        let before = blue_and_green(&s.doc().unwrap().doc);
+        let mut ids = vec![clip.0];
+        if other_type {
+            ids.push(s.execute("text.create", &json!({"x": 10, "y": 190, "text": "x", "size": 10})).unwrap()["id"].as_u64().unwrap());
+        }
+        let group = NodeId(s.execute("object.group", &json!({"ids": ids})).unwrap()["id"].as_u64().unwrap());
+        s.execute("effect.apply", &json!({"effect": effect, "params": params, "ids": [group.0], "item": null})).unwrap();
+        let doc = s.doc().unwrap().doc.clone();
+        let (blue, green) = blue_and_green(&doc);
+        assert!(
+            blue * 2 > before.0 && green * 2 > before.1,
+            "{effect} {other_type}: the canvas paints the type's fill and stroke: {blue} {green}, {before:?} before"
+        );
+        let svg = vectorcraft_svg::export(&doc, &Default::default());
+        let pdf = vectorcraft_pdf::export(&doc, &Default::default()).unwrap();
+        for (what, out) in [("SVG", vectorcraft_svg::import(&svg).unwrap()), ("PDF", vectorcraft_pdf::import(&pdf).unwrap())] {
+            let (b, g) = blue_and_green(&out);
+            assert!(
+                b.abs_diff(blue) * 10 < blue && g.abs_diff(green) * 5 < green,
+                "{effect} {other_type}, {what}: {b} {g} against the canvas's {blue} {green}"
+            );
+        }
     }
 }
 

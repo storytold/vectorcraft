@@ -77,7 +77,7 @@ fn area_options_set_and_report_the_fit() {
     let n = undo_len(&s);
     let again = s.execute("text.areaOptions", &q).unwrap();
     assert_eq!(again, q);
-    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(undo_len(&s), n, "options that change nothing add no undo step");
     // Undo back to no fit.
     while text(&s, id).area.fit != AreaFit::None {
         s.execute("edit.undo", &json!({})).unwrap();
@@ -485,7 +485,7 @@ fn making_and_restyling_type_reports_its_overflow() {
 }
 
 /// The formats whose exports draw type.
-const DRAWING_FORMATS: [&str; 8] = ["pdf", "eps", "svg", "png", "jpg", "tiff", "emf", "wmf"];
+const DRAWING_FORMATS: [&str; 9] = ["pdf", "eps", "svg", "png", "jpg", "tiff", "emf", "wmf", "hpgl"];
 
 /// The warnings of `document.export {format, …options}` about type that doesn't fit its frame.
 fn export_overflow(s: &mut Session, format: &str, options: Value) -> Vec<String> {

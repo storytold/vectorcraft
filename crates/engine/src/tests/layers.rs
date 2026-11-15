@@ -375,6 +375,32 @@ fn layer_options_validate_and_template_locks_and_dims() {
     assert_eq!((summary["preview"].clone(), summary["dimImages"].clone()), (json!(false), json!(30)));
 }
 
+/// A layer color with an alpha part (`#rrggbbaa` or `#rgba`) is refused by Layer Options, New
+/// Layer and New Sublayer and changes nothing; `#rrggbb` and a preset name still set it.
+#[test]
+fn a_layer_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let (layer, ..) = tree(&mut s);
+    let color = |s: &Session| match node(s, layer).kind {
+        NodeKind::Layer { color, .. } => color,
+        _ => panic!("not a layer"),
+    };
+    let before = (color(&s), undos(&s));
+    for bad in ["#ff000080", "ff000080", " #FF000080 ", "#f008"] {
+        let err = s.execute("layer.setProps", &json!({"id": layer.0, "color": bad})).unwrap_err().to_string();
+        assert!(err.contains(&format!("`{bad}` is not a colour (#rrggbb or a preset name)")), "{bad}: {err}");
+        assert!(s.execute("layer.new", &json!({"color": bad})).is_err(), "{bad}");
+        assert!(s.execute("layer.newSublayer", &json!({"parent": layer.0, "color": bad})).is_err(), "{bad}");
+    }
+    assert_eq!((color(&s), undos(&s)), before);
+    run(&mut s, "layer.setProps", json!({"id": layer.0, "color": "#ff0000"}));
+    assert_eq!(color(&s), LayerColor::Custom([0xff, 0, 0]));
+    run(&mut s, "layer.setProps", json!({"id": layer.0, "color": "Green"}));
+    assert_eq!(color(&s), LayerColor::Preset(2));
+    let new = id(&run(&mut s, "layer.new", json!({"color": "#00ff00"})));
+    assert!(matches!(node(&s, new).kind, NodeKind::Layer { color: LayerColor::Custom([0, 0xff, 0]), .. }));
+}
+
 #[test]
 fn new_layers_go_above_the_current_one_at_its_level() {
     let mut s = session();

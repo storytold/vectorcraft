@@ -42,10 +42,60 @@ pub fn returning(manifest: &str, output: &str) -> String {
 /// A plug-in whose `vc_run` runs `first` (instructions, with the locals it declares first), then
 /// returns `output`.
 fn then_returning(manifest: &str, first: &str, output: &str) -> String {
+    with_imports(manifest, "", first, output)
+}
+
+/// A plug-in with the module fields `imports` before the others, whose `vc_run` runs `first`, then
+/// returns `output`.
+pub fn with_imports(manifest: &str, imports: &str, first: &str, output: &str) -> String {
     let run = format!("{first} (i64.or (i64.shl (i64.const {}) (i64.const 32)) (i64.const {OUTPUT_AT}))", output.len());
-    let extra = format!(r#"(data (i32.const {OUTPUT_AT}) "{}")"#, string(output));
+    let extra = format!(r#"{imports} (data (i32.const {OUTPUT_AT}) "{}")"#, string(output));
     module(manifest, &run, &extra, (OUTPUT_AT + output.len()).div_ceil(0x1_0000) as u32 + 1)
 }
+
+/// The host imports of plug-in API level 2 ([`crate::host::IMPORTS`]), as `$vc_progress`,
+/// `$vc_cancelled` and `$vc_log`.
+pub const HOST_IMPORTS: &str = r#"(import "env" "vc_progress" (func $vc_progress (param i64 i64)))
+  (import "env" "vc_cancelled" (func $vc_cancelled (result i32)))
+  (import "env" "vc_log" (func $vc_log (param i32 i32 i32) (result i32)))"#;
+
+/// The storage imports of plug-in API level 2 ([`crate::host::IMPORTS`]), as `$vc_settings_get`,
+/// `$vc_settings_set`, `$vc_settings_delete`, `$vc_cache_read`, `$vc_cache_write` and
+/// `$vc_cache_clear`; a manifest that uses them lists `settings` and `cache`.
+pub const STORAGE_IMPORTS: &str = r#"(import "env" "vc_settings_get" (func $vc_settings_get (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_settings_set" (func $vc_settings_set (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_settings_delete" (func $vc_settings_delete (param i32 i32) (result i32)))
+  (import "env" "vc_cache_read" (func $vc_cache_read (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_cache_write" (func $vc_cache_write (param i32 i32 i32 i32) (result i32)))
+  (import "env" "vc_cache_clear" (func $vc_cache_clear (param i32 i32) (result i32)))"#;
+
+/// A plug-in of API level 2 (its manifest gives `api` 2 and lists `progress`) that imports the
+/// host functions ([`HOST_IMPORTS`]) and whose `vc_run` runs `first`, which may call them, then
+/// returns `output`.
+pub fn reporting(manifest: &str, first: &str, output: &str) -> String {
+    with_imports(manifest, HOST_IMPORTS, first, output)
+}
+
+/// A plug-in of API level 2 that counts `steps` down, reporting each step's progress and checking
+/// `vc_cancelled` before it: when that says the run was cancelled it returns `stopped`, else
+/// `output` once the steps are done.
+pub fn cooperating(manifest: &str, steps: u64, stopped: &str, output: &str) -> String {
+    let first = format!(
+        r#"(local $n i64) (local.set $n (i64.const {steps}))
+    (block $done (loop $step
+      (br_if $done (i64.le_s (local.get $n) (i64.const 0)))
+      (call $vc_progress (i64.sub (i64.const {steps}) (local.get $n)) (i64.const {steps}))
+      (if (call $vc_cancelled) (then (return (i64.or (i64.shl (i64.const {len}) (i64.const 32)) (i64.const {STOPPED_AT})))))
+      (local.set $n (i64.sub (local.get $n) (i64.const 1)))
+      (br $step)))"#,
+        len = stopped.len(),
+    );
+    let imports = format!(r#"{HOST_IMPORTS} (data (i32.const {STOPPED_AT}) "{}")"#, string(stopped));
+    with_imports(manifest, &imports, &first, output)
+}
+
+/// Where [`cooperating`] keeps what it returns when it is cancelled.
+const STOPPED_AT: usize = 0x8000;
 
 /// A plug-in that counts `steps` down before it returns `output`. Each step costs a few
 /// instructions, so a test picks work that a light budget can't finish and a heavy one can, or
@@ -77,11 +127,31 @@ const NEEDLE_AT: usize = 0x8000;
 /// its input unchanged otherwise. A live effect made from it draws one shape or the other, so a
 /// test sees from the geometry whether the host handed the plug-in something.
 pub fn when_given(manifest: &str, given: Given, needle: &str, output: &str) -> String {
+    given_or(manifest, given, needle, output, None)
+}
+
+/// A plug-in that returns `output` when what it is given (`given`) holds the text `needle`, and
+/// `otherwise` when it does not.
+pub fn when_given_else(manifest: &str, given: Given, needle: &str, output: &str, otherwise: &str) -> String {
+    given_or(manifest, given, needle, output, Some(otherwise))
+}
+
+/// [`when_given`], returning `otherwise` in place of the input when it is given.
+fn given_or(manifest: &str, given: Given, needle: &str, output: &str, otherwise: Option<&str>) -> String {
     let (src, len) = match given {
         Given::Input => ("$in", "$il"),
         Given::Params => ("$pp", "$pl"),
     };
     let n = needle.len();
+    // `otherwise` sits right after `output`.
+    let other_at = OUTPUT_AT + output.len();
+    let (none, other) = match otherwise {
+        Some(o) => (
+            format!("(i64.or (i64.shl (i64.const {}) (i64.const 32)) (i64.const {other_at}))", o.len()),
+            format!(r#" (data (i32.const {other_at}) "{}")"#, string(o)),
+        ),
+        None => (ECHO.to_string(), String::new()),
+    };
     // For each place `$i` the needle fits, compare it byte by byte (`$j`).
     let run = format!(
         r#"(local $i i32) (local $j i32)
@@ -99,12 +169,13 @@ pub fn when_given(manifest: &str, given: Given, needle: &str, output: &str) -> S
               (br $cmp)))
           (local.set $i (i32.add (local.get $i) (i32.const 1)))
           (br $at)))
-      (return {ECHO}))
+      (return {none}))
     (i64.or (i64.shl (i64.const {out}) (i64.const 32)) (i64.const {OUTPUT_AT}))"#,
         out = output.len(),
     );
-    let extra = format!(r#"(data (i32.const {NEEDLE_AT}) "{}") (data (i32.const {OUTPUT_AT}) "{}")"#, string(needle), string(output));
-    module(manifest, &run, &extra, (OUTPUT_AT + output.len()).div_ceil(0x1_0000) as u32 + 1)
+    let extra = format!(r#"(data (i32.const {NEEDLE_AT}) "{}") (data (i32.const {OUTPUT_AT}) "{}"){other}"#, string(needle), string(output));
+    let end = other_at + otherwise.map_or(0, str::len);
+    module(manifest, &run, &extra, end.div_ceil(0x1_0000) as u32 + 1)
 }
 
 /// The manifest of a test plug-in `id` of `kind` with `params` (a JSON object of specs).
@@ -115,6 +186,11 @@ pub fn manifest(id: &str, kind: &str, params: &str) -> String {
 /// The manifest of a test exporter `id` writing `extensions` (a JSON list) with `params`.
 pub fn exporter(id: &str, extensions: &str, params: &str) -> String {
     format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"exporter","extensions":{extensions},"params":{params}}}"#)
+}
+
+/// The manifest of a test importer `id` reading `extensions` (a JSON list) with `params`.
+pub fn importer(id: &str, extensions: &str, params: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"importer","extensions":{extensions},"params":{params}}}"#)
 }
 
 /// What [`echo_exporter`] writes as its file.

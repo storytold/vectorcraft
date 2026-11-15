@@ -1,0 +1,36 @@
+//! VectorCraft's built-in add-ons: extra tools beyond the standard menus, each a module of its own
+//! with commands under `addon.<name>.*` (see `docs/mcp.md`).
+
+mod arrange;
+mod cleanup;
+mod color;
+mod contour;
+mod cutting;
+mod document;
+mod image;
+mod pathtools;
+mod pen;
+mod select;
+mod shapes;
+mod typetools;
+
+pub(crate) use image::{DecodedImages, refresh_color_masks};
+
+use super::CommandSpec;
+
+/// The commands of every built-in add-on.
+pub fn specs() -> Vec<CommandSpec> {
+    let mut v = arrange::specs();
+    v.extend(cleanup::specs());
+    v.extend(color::specs());
+    v.extend(contour::specs());
+    v.extend(cutting::specs());
+    v.extend(document::specs());
+    v.extend(image::specs());
+    v.extend(pathtools::specs());
+    v.extend(pen::specs());
+    v.extend(select::specs());
+    v.extend(shapes::specs());
+    v.extend(typetools::specs());
+    v
+}

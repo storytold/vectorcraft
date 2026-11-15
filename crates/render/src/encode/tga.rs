@@ -34,7 +34,8 @@ pub fn encode(rgba: &[u8], width: u32, height: u32, o: &TgaOptions) -> Result<Ve
         return Err(format!("{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution"));
     };
     let (w, h) = (usize::from(w16), usize::from(h16));
-    if w == 0 || h == 0 || (w * h).checked_mul(4) != Some(rgba.len()) {
+    // Checked: on 32-bit targets 65535 × 65535 wraps.
+    if w == 0 || h == 0 || w.checked_mul(h).and_then(|n| n.checked_mul(4)) != Some(rgba.len()) {
         return Err("Targa encoding failed: the pixel buffer doesn't match the image size".into());
     }
     let px = rgba.as_chunks::<4>().0;

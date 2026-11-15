@@ -4,7 +4,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::{Affine, PathData, Rect};
+use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
 use crate::*;
 
@@ -92,7 +92,50 @@ fn start_global_edit_takes_the_objects_of_the_same_shape_at_any_place_and_size()
     assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2);
     let r = s.execute("select.globalEdit", &json!({})).unwrap();
     assert_eq!(r["active"], false, "the second run is Stop Global Edit");
-    assert!(s.doc().unwrap().global_edit.is_none() && crate::cmd::globaledit::highlights(&s).is_empty());
+    assert!(s.doc().unwrap().global_edit.is_none());
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2, "with the square still selected, the objects it would take are highlighted again");
+}
+
+#[test]
+fn selecting_one_object_highlights_the_similar_objects_before_global_edit_starts() {
+    use crate::cmd::globaledit::highlights;
+    let mut s = session();
+    let [a, b, _, wide, _] = squares(&mut s);
+    assert!(highlights(&s).is_empty(), "nothing selected");
+    sel(&mut s, &[a]);
+    assert_eq!(members(&s), None, "Global Edit has not started");
+    assert_eq!(highlights(&s).len(), 2, "the copy and the smaller square");
+    s.execute("select.globalEditOptions", &json!({"size": true})).unwrap();
+    assert_eq!(highlights(&s).len(), 1, "the options narrow them: the copy only");
+    s.execute("select.globalEditOptions", &json!({"size": false})).unwrap();
+    assert_eq!(highlights(&s).len(), 2);
+    sel(&mut s, &[b]);
+    s.execute("edit.clear", &json!({})).unwrap();
+    sel(&mut s, &[a]);
+    assert_eq!(highlights(&s).len(), 1, "a deleted copy is no longer highlighted");
+    sel(&mut s, &[wide]);
+    assert!(highlights(&s).is_empty(), "the rectangle has no similar object");
+    sel(&mut s, &[a, wide]);
+    assert!(highlights(&s).is_empty(), "two objects selected");
+}
+
+#[test]
+fn the_canvas_highlights_similar_objects_before_the_start_with_the_selection_tool_only() {
+    let mut s = session();
+    let [a, b, ..] = squares(&mut s);
+    let outline = node(&s, b).stroke_path().unwrap();
+    let shown = |s: &mut Session| {
+        s.overlays(ViewInfo::default())
+            .iter()
+            .any(|o| matches!(o, vectorcraft_tools::Overlay::Path { path, width, .. } if *path == outline && *width == 1.0))
+    };
+    sel(&mut s, &[a]);
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    assert!(shown(&mut s), "the copy is highlighted with the Selection tool");
+    s.select_tool("directSelection", ViewInfo::default()).unwrap();
+    assert!(!shown(&mut s), "not with another tool before Global Edit starts");
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    assert!(shown(&mut s), "while Global Edit is on, with any tool");
 }
 
 #[test]
@@ -277,26 +320,113 @@ fn global_edit_needs_one_supported_object() {
     let t = NodeId(s.execute("text.create", &json!({"x": 50, "y": 500, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
     sel(&mut s, &[t]);
     assert!(matches!(s.execute("select.globalEdit", &json!({})), Err(EngineError::Disabled(..))), "type");
-    let lone = rect(&mut s, 0.0, 500.0, 30.0, 70.0);
-    // A copy turned a quarter turn (70 × 30) is not taken: rotated copies are not matched, and the
-    // message says so.
-    let turned = rect(&mut s, 200.0, 500.0, 30.0, 70.0);
-    sel(&mut s, &[turned]);
-    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    // A reflected copy is not taken, and the message says so.
+    let lone = kite(&mut s, 0.0, 500.0, 1.0);
+    let mirrored = kite(&mut s, 200.0, 500.0, 1.0);
+    sel(&mut s, &[mirrored]);
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
     sel(&mut s, &[lone]);
     let e = s.execute("select.globalEdit", &json!({})).unwrap_err().to_string();
-    assert!(e.contains("no similar objects") && e.contains("rotated"), "{e}");
+    assert!(e.contains("no similar objects") && e.contains("reflected copies are not matched") && !e.contains("rotated"), "{e}");
     assert!(s.doc().unwrap().global_edit.is_none());
-    // A group of two squares is refused, though another such group exists.
+    assert!(crate::cmd::globaledit::highlights(&s).is_empty(), "and it is not highlighted");
+    // A group holding type is not offered, though another such group exists.
     let group = |s: &mut Session, x: f64| {
-        let (p, q) = (rect(s, x, 100.0, 10.0, 10.0), rect(s, x + 20.0, 100.0, 10.0, 10.0));
-        sel(s, &[p, q]);
-        NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+        let p = rect(s, x, 100.0, 10.0, 10.0);
+        let t = NodeId(s.execute("text.create", &json!({"x": x, "y": 150, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+        group_of(s, &[p, t])
     };
     let (g, _) = (group(&mut s, 600.0), group(&mut s, 700.0));
+    assert_not_offered(&mut s, g, "a group holding type");
+}
+
+fn enabled(s: &Session, id: &str) -> bool {
+    command_specs().iter().find(|c| c.id == id).is_some_and(|c| (c.enabled)(s).is_ok())
+}
+
+/// With `id` selected, Start Global Edit is disabled, and running it changes nothing.
+fn assert_not_offered(s: &mut Session, id: NodeId, what: &str) {
+    sel(s, &[id]);
+    assert!(!enabled(s, "select.globalEdit"), "{what}");
+    let r = s.execute("select.globalEdit", &json!({}));
+    assert!(matches!(&r, Err(EngineError::Disabled(_, why)) if why.contains("symbol instances and groups of them")), "{what}: {r:?}");
+    assert!(s.doc().unwrap().global_edit.is_none(), "{what}");
+}
+
+/// An embedded 4 × 4 image at `x`, in `parent` (the default layer when `None`) → its id. The
+/// selection stays as it is.
+fn image(s: &mut Session, x: f64, parent: Option<NodeId>) -> NodeId {
+    s.edit("Place", |d, _| {
+        let id = d.alloc_id();
+        let im = vectorcraft_doc::ImageObject {
+            key: "pic".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::translate((x, 0.0)) * Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        d.insert(parent.or(d.default_layer()), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
+        Ok(id)
+    })
+    .unwrap()
+}
+
+#[test]
+fn the_enabled_check_follows_edits_to_the_selected_group() {
+    let mut s = session();
+    let (g, _) = card(&mut s, 0.0, 1.0);
+    card(&mut s, 300.0, 1.0);
     sel(&mut s, &[g]);
-    let e = s.execute("select.globalEdit", &json!({})).unwrap_err();
-    assert!(matches!(e, EngineError::Disabled(..)) && e.to_string().contains("paths, compound paths and symbol instances"), "{e}");
+    assert!(enabled(&s, "select.globalEdit"));
+    // The answer is kept between frames, and an edit of the selected group changes it.
+    assert!(enabled(&s, "select.globalEdit"));
+    image(&mut s, 0.0, Some(g));
+    assert_eq!(s.doc().unwrap().selection.objects, [g]);
+    assert!(!enabled(&s, "select.globalEdit"), "an image put into the selected group");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, [g]);
+    assert!(enabled(&s, "select.globalEdit"), "after Undo");
+}
+
+#[test]
+fn start_global_edit_is_offered_only_for_a_group_of_supported_objects() {
+    let mut s = session();
+    // Groups holding an image, groups holding a group that holds type, and empty groups; two of
+    // each, so that each would have a group like it.
+    for x in [0.0, 300.0] {
+        let p = rect(&mut s, x, 100.0, 10.0, 10.0);
+        let i = image(&mut s, x, None);
+        let g = group_of(&mut s, &[p, i]);
+        assert_not_offered(&mut s, g, "a group holding an image");
+        let (p, q) = (rect(&mut s, x, 200.0, 10.0, 10.0), rect(&mut s, x + 20.0, 200.0, 10.0, 10.0));
+        let t = NodeId(s.execute("text.create", &json!({"x": x, "y": 250, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+        let inner = group_of(&mut s, &[q, t]);
+        let g = group_of(&mut s, &[p, inner]);
+        assert_not_offered(&mut s, g, "a group holding a group that holds type");
+        let empty = s
+            .edit("Group", |d, _| {
+                let id = d.alloc_id();
+                d.insert(d.default_layer(), 0, Node::group(id, vec![]))?;
+                Ok(id)
+            })
+            .unwrap();
+        assert_not_offered(&mut s, empty, "an empty group");
+    }
+    // A group of supported objects is offered and starts; while on, Stop is offered whatever is
+    // selected.
+    let p = rect(&mut s, 600.0, 400.0, 10.0, 10.0);
+    let t = NodeId(s.execute("text.create", &json!({"x": 600, "y": 450, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let typed = group_of(&mut s, &[p, t]);
+    let (g, _) = card(&mut s, 0.0, 1.0);
+    let (copy, _) = card(&mut s, 300.0, 1.0);
+    sel(&mut s, &[g]);
+    assert!(enabled(&s, "select.globalEdit"));
+    assert_eq!(start(&mut s, g, json!({})), [g, copy]);
+    sel(&mut s, &[typed]);
+    assert!(enabled(&s, "select.globalEdit"), "Stop");
+    assert_eq!(s.execute("select.globalEdit", &json!({})).unwrap()["active"], false);
 }
 
 #[test]
@@ -389,6 +519,139 @@ fn undo_and_redo_drop_the_members_the_document_lacks() {
     assert_eq!(members(&s), None);
 }
 
+#[test]
+fn an_object_left_out_keeps_its_own_shape_while_the_others_follow() {
+    let mut s = session();
+    let [a, b, c, ..] = squares(&mut s);
+    assert_eq!(start(&mut s, a, json!({})), [a, b, c]);
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = s.execute("select.globalEditExclude", &json!({"id": b.0})).unwrap();
+    assert_eq!(r, json!({"active": true, "count": 2, "ids": [a.0, c.0]}));
+    assert_eq!(members(&s), Some(vec![a, c]));
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 1, "the copy is no longer highlighted");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "not an undo step");
+    assert_eq!(s.doc().unwrap().selection.objects, [a], "the selection stays");
+    let b_was = node(&s, b);
+    s.execute("object.setBounds", &json!({"height": 50, "reference": 0})).unwrap();
+    assert!(close(bounds(&s, c), Rect::new(500.0, 0.0, 520.0, 10.0)), "{:?}", bounds(&s, c));
+    assert_eq!(node(&s, b), b_was, "the copy left out keeps its shape");
+}
+
+/// A Shift-drag with the Selection tool from `from` to `to`.
+fn shift_drag(s: &mut Session, from: (f64, f64), to: (f64, f64)) {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let steps = if from == to {
+        vec![(PointerKind::Down, from), (PointerKind::Up, to)]
+    } else {
+        vec![(PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)]
+    };
+    for (kind, (x, y)) in steps {
+        s.pointer(&PointerEvent::new(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() }), v).unwrap();
+    }
+}
+
+/// A Shift-click with the Selection tool at (`x`, `y`).
+fn shift_click(s: &mut Session, x: f64, y: f64) {
+    shift_drag(s, (x, y), (x, y));
+}
+
+#[test]
+fn a_shift_click_on_a_highlighted_object_leaves_it_out() {
+    let mut s = session();
+    let [a, b, c, ..] = squares(&mut s);
+    start(&mut s, a, json!({}));
+    // A Shift-drag that starts on the copy selects it and moves it with the selection, and leaves
+    // the copy in.
+    shift_drag(&mut s, (350.0, 50.0), (390.0, 50.0));
+    assert_eq!(members(&s), Some(vec![a, b, c]), "a drag leaves nothing out");
+    assert_eq!(s.doc().unwrap().selection.objects, [a, b]);
+    assert!(bounds(&s, a).x0 > 0.0, "the selection moved: {:?}", bounds(&s, a));
+    assert!(bounds(&s, b).x0 > 300.0, "the copy moved with it: {:?}", bounds(&s, b));
+    s.execute("edit.undo", &json!({})).unwrap();
+    sel(&mut s, &[a]);
+    shift_click(&mut s, 350.0, 50.0);
+    assert_eq!(members(&s), Some(vec![a, c]), "the copy is left out");
+    assert_eq!(s.doc().unwrap().selection.objects, [a], "and not selected");
+    // A Shift-click on the object the edit started from deselects it, as before.
+    shift_click(&mut s, 50.0, 50.0);
+    assert_eq!(members(&s), Some(vec![a, c]));
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    shift_click(&mut s, 510.0, 10.0);
+    assert_eq!(members(&s), None, "one object left: Global Edit ends");
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    // With Global Edit off, a Shift-click selects, as before.
+    shift_click(&mut s, 350.0, 50.0);
+    assert_eq!(s.doc().unwrap().selection.objects, [b]);
+}
+
+#[test]
+fn a_shift_click_inside_a_matched_group_leaves_the_whole_group_out() {
+    let mut s = session();
+    let (g, _) = card(&mut s, 0.0, 1.0);
+    let (copy, _) = card(&mut s, 300.0, 1.0);
+    let (small, _) = card(&mut s, 500.0, 0.5);
+    assert_eq!(start(&mut s, g, json!({})), [g, copy, small]);
+    // On the circle in the copy.
+    shift_click(&mut s, 370.0, 20.0);
+    assert_eq!(members(&s), Some(vec![g, small]));
+    assert_eq!(s.doc().unwrap().selection.objects, [g]);
+    // An object inside a member that is selected: a Shift-click deselects it, as before.
+    let inner = kids(&s, small)[0];
+    sel(&mut s, &[inner]);
+    shift_click(&mut s, 505.0, 5.0);
+    assert_eq!(members(&s), Some(vec![g, small]));
+}
+
+#[test]
+fn a_shift_click_on_a_member_inside_a_selected_group_deselects_the_group() {
+    let mut s = session();
+    let [a, b, c, wide, _] = squares(&mut s);
+    let pair = group_of(&mut s, &[b, wide]);
+    let all = start(&mut s, a, json!({}));
+    assert_eq!(all, [a, c, b], "the copy in the group comes after the small square");
+    sel(&mut s, &[pair]);
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2, "the copy inside the selected group is not highlighted");
+    shift_click(&mut s, 350.0, 50.0);
+    assert_eq!(members(&s), Some(all), "nothing is left out");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the group is deselected");
+}
+
+#[test]
+fn leaving_out_all_but_one_ends_global_edit_and_the_first_object_stays() {
+    let mut s = session();
+    let [a, b, c, wide, _] = squares(&mut s);
+    let e = s.execute("select.globalEditExclude", &json!({"id": b.0})).unwrap_err().to_string();
+    assert!(e.contains("Global Edit is off"), "{e}");
+    start(&mut s, a, json!({}));
+    for id in [a, wide] {
+        let e = s.execute("select.globalEditExclude", &json!({"id": id.0})).unwrap_err().to_string();
+        assert!(e.contains("other than the one it started from"), "{id}: {e}");
+    }
+    assert_eq!(members(&s), Some(vec![a, b, c]), "nothing left out");
+    s.execute("select.globalEditExclude", &json!({"id": c.0})).unwrap();
+    let r = s.execute("select.globalEditExclude", &json!({"id": b.0})).unwrap();
+    assert_eq!(r, json!({"active": false, "count": 0, "ids": []}));
+    assert_eq!(members(&s), None, "one object left: Global Edit ends");
+    sel(&mut s, &[wide]);
+    assert!(crate::cmd::globaledit::highlights(&s).is_empty());
+}
+
+#[test]
+fn a_group_left_out_keeps_its_objects_while_the_others_follow() {
+    let mut s = session();
+    let (g, [_, dot, _]) = card(&mut s, 0.0, 1.0);
+    let (copy, [_, cdot, _]) = card(&mut s, 300.0, 1.0);
+    let (small, [_, sdot, _]) = card(&mut s, 500.0, 0.5);
+    assert_eq!(start(&mut s, g, json!({})), [g, copy, small]);
+    s.execute("select.globalEditExclude", &json!({"id": copy.0})).unwrap();
+    let was = fill(&s, cdot);
+    sel(&mut s, &[dot]);
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    assert_eq!((fill(&s, sdot), fill(&s, cdot)), ("#12ab34".to_string(), was));
+}
+
 /// Two 100 pt squares and a 20 pt one made after `begin`, all three in a Global Edit; `put_back`
 /// takes the document back to before the small one. The small square leaves the Global Edit, and
 /// a square made under its freed id is not edited with the others.
@@ -442,4 +705,305 @@ fn an_edit_that_takes_a_member_past_the_canvas_is_refused_whole() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps);
     s.execute("object.move", &json!({"dx": 3000, "dy": 0})).unwrap();
     assert!(close(bounds(&s, big), Rect::new(3.0e6, 0.0, 3.0e6 + 2000.0, 2000.0)), "{:?}", bounds(&s, big));
+}
+
+fn group_of(s: &mut Session, objects: &[NodeId]) -> NodeId {
+    sel(s, objects);
+    NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+}
+
+/// A group of a square, a circle and a bar, `k` times the size, at `x` → the group and its objects.
+fn card(s: &mut Session, x: f64, k: f64) -> (NodeId, [NodeId; 3]) {
+    let sq = rect(s, x, 0.0, 40.0 * k, 40.0 * k);
+    let dot = NodeId(
+        s.execute("shape.ellipse", &json!({"x": x + 50.0 * k, "y": 0, "width": 40.0 * k, "height": 40.0 * k})).unwrap()["id"].as_u64().unwrap(),
+    );
+    let bar = rect(s, x, 50.0 * k, 90.0 * k, 20.0 * k);
+    (group_of(s, &[sq, dot, bar]), [sq, dot, bar])
+}
+
+fn kids(s: &Session, g: NodeId) -> Vec<NodeId> {
+    node(s, g).children().unwrap().iter().map(|c| c.id).collect()
+}
+
+#[test]
+fn start_global_edit_on_a_group_takes_the_groups_like_it() {
+    let mut s = session();
+    let (g, [sq, ..]) = card(&mut s, 0.0, 1.0);
+    let (copy, _) = card(&mut s, 300.0, 1.0);
+    let (small, _) = card(&mut s, 500.0, 0.5);
+    // Two of the three objects; the same three with the bar moved; a lone square like the first.
+    let (p, q) = (rect(&mut s, 0.0, 300.0, 40.0, 40.0), rect(&mut s, 0.0, 400.0, 90.0, 20.0));
+    let pair = group_of(&mut s, &[p, q]);
+    let (moved, [.., bar]) = card(&mut s, 300.0, 1.0);
+    sel(&mut s, &[bar]);
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    rect(&mut s, 600.0, 300.0, 40.0, 40.0);
+    assert_eq!(start(&mut s, g, json!({})), [g, copy, small], "not the pair {pair} nor the group with the bar moved {moved}");
+    // A group alone among groups of other contents: nothing to edit with it.
+    sel(&mut s, &[pair]);
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    let e = s.execute("select.globalEdit", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("no similar objects"), "{e}");
+    // Size leaves out the smaller group; Appearance looks at each object in the groups.
+    assert_eq!(start(&mut s, g, json!({"size": true})), [g, copy]);
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    sel(&mut s, &[sq]);
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    sel(&mut s, &[g]);
+    let e = s.execute("select.globalEdit", &json!({"appearance": true})).unwrap_err().to_string();
+    assert!(e.contains("no similar objects"), "the square in the first group has another fill now: {e}");
+}
+
+#[test]
+fn an_edit_inside_one_group_reaches_the_same_object_in_the_others_as_one_undo_step() {
+    let mut s = session();
+    let (g, [sq, dot, bar]) = card(&mut s, 0.0, 1.0);
+    let (copy, [csq, cdot, cbar]) = card(&mut s, 300.0, 1.0);
+    let (_, [ssq, sdot, _]) = card(&mut s, 500.0, 0.5);
+    start(&mut s, g, json!({}));
+    let before = (*s.doc().unwrap().doc).clone();
+    let steps = s.doc().unwrap().history.undo.len();
+    let (sq_fill, bar_fill) = (fill(&s, csq), fill(&s, cbar));
+    // The circle inside the first group, selected on its own.
+    sel(&mut s, &[dot]);
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2, "the other groups are highlighted, not the one being edited");
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    assert_eq!((fill(&s, cdot), fill(&s, sdot)), ("#12ab34".to_string(), "#12ab34".to_string()));
+    assert_eq!((fill(&s, csq), fill(&s, cbar)), (sq_fill, bar_fill), "the other objects keep theirs");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    // The square's height halved from the top: each copy's in proportion.
+    sel(&mut s, &[sq]);
+    s.execute("object.setBounds", &json!({"height": 20, "reference": 0})).unwrap();
+    assert!(close(bounds(&s, csq), Rect::new(300.0, 0.0, 340.0, 20.0)), "{:?}", bounds(&s, csq));
+    assert!(close(bounds(&s, ssq), Rect::new(500.0, 0.0, 520.0, 10.0)), "{:?}", bounds(&s, ssq));
+    assert!(placed(&s, bar, cbar, Affine::translate((300.0, 0.0))), "the bar is left alone");
+    assert_eq!(kids(&s, copy), [csq, cdot, cbar], "each object keeps its id");
+    s.execute("edit.undo", &json!({})).unwrap();
+    crate::tests_large_edits::undo_gives_back(&mut s, &before);
+}
+
+#[test]
+fn an_object_added_to_the_group_is_added_to_the_others() {
+    let mut s = session();
+    let (g, [sq, ..]) = card(&mut s, 0.0, 1.0);
+    let (copy, [csq, ..]) = card(&mut s, 300.0, 1.0);
+    let (small, _) = card(&mut s, 500.0, 0.5);
+    start(&mut s, g, json!({}));
+    sel(&mut s, &[sq]);
+    let added = s
+        .edit("add", |d, _| {
+            let id = d.alloc_id();
+            let path = vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 80.0, 10.0, 90.0));
+            d.insert(Some(g), usize::MAX, Node::path(id, path, vectorcraft_doc::Appearance::default_art()))
+                .map_err(|e| EngineError::Other(e.to_string()))
+        })
+        .unwrap();
+    let (theirs, smalls) = (kids(&s, copy), kids(&s, small));
+    assert_eq!((theirs.len(), smalls.len()), (4, 4));
+    assert_eq!(theirs.first(), Some(&csq), "the member keeps its own ids in order");
+    assert!(placed(&s, added, theirs[3], Affine::translate((300.0, 0.0))));
+    assert!(placed(&s, added, smalls[3], Affine::translate((500.0, 0.0)) * Affine::scale(0.5)));
+}
+
+#[test]
+fn global_edit_takes_at_most_max_members() {
+    use crate::cmd::globaledit::MAX_MEMBERS;
+    let mut s = session();
+    let first = s
+        .edit("many", |d, _| {
+            let layer = d.default_layer();
+            let mut first = None;
+            for i in 0..MAX_MEMBERS + 5 {
+                let (x, y) = ((i % 70) as f64 * 10.0, (i / 70 % 50) as f64 * 10.0);
+                let id = d.alloc_id();
+                let path = vectorcraft_geom::shapes::rectangle(Rect::new(x, y, x + 8.0, y + 8.0));
+                d.insert(layer, usize::MAX, Node::path(id, path, vectorcraft_doc::Appearance::default_art()))
+                    .map_err(|e| EngineError::Other(e.to_string()))?;
+                first.get_or_insert(id);
+            }
+            first.ok_or_else(|| EngineError::Other("none".into()))
+        })
+        .unwrap();
+    assert_eq!(start(&mut s, first, json!({})).len(), MAX_MEMBERS);
+}
+
+#[test]
+fn groups_nested_as_deep_as_a_document_allows_are_edited_together() {
+    let mut s = session();
+    let nest = |s: &mut Session, x: f64| {
+        let inner = rect(s, x, 0.0, 10.0, 10.0);
+        let side = rect(s, x + 20.0, 0.0, 10.0, 10.0);
+        let mut top = group_of(s, &[inner, side]);
+        // Group until the document refuses to go deeper.
+        for _ in 0..2 * vectorcraft_doc::MAX_DEPTH {
+            sel(s, &[top]);
+            match s.execute("object.group", &json!({})) {
+                Ok(r) => top = NodeId(r["id"].as_u64().unwrap()),
+                Err(_) => break,
+            }
+        }
+        (top, inner)
+    };
+    let ((g, inner), (other, other_inner)) = (nest(&mut s, 0.0), nest(&mut s, 300.0));
+    assert_eq!(start(&mut s, g, json!({})), [g, other]);
+    sel(&mut s, &[inner]);
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    assert_eq!(fill(&s, other_inner), "#12ab34");
+}
+
+/// A four-sided path with no symmetry, `k` times the size, its box's top left near (`x`, `y`): a
+/// 30 × 70 rectangle whose first anchor is moved.
+fn kite(s: &mut Session, x: f64, y: f64, k: f64) -> NodeId {
+    let id = rect(s, x, y, 30.0 * k, 70.0 * k);
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0]]})).unwrap();
+    s.execute("path.moveAnchors", &json!({"dx": 10.0 * k, "dy": -20.0 * k})).unwrap();
+    id
+}
+
+/// Rotate `id` by `deg` (counter-clockwise) about the centre of its box → that rotation.
+fn rotate(s: &mut Session, id: NodeId, deg: f64) -> Affine {
+    let c = bounds(s, id).center();
+    sel(s, &[id]);
+    s.execute("object.rotate", &json!({"angle": deg})).unwrap();
+    Affine::rotate_about(-deg.to_radians(), c)
+}
+
+/// A kite at the origin side of the page, a copy of it turned a quarter turn, and a copy at half
+/// the size turned by 30° → the three and the transforms that lay the first on the other two.
+fn turned_kites(s: &mut Session) -> ([NodeId; 3], [Affine; 2]) {
+    let a = kite(s, 0.0, 100.0, 1.0);
+    let (b, c) = (kite(s, 200.0, 100.0, 1.0), kite(s, 400.0, 100.0, 0.5));
+    let quarter = rotate(s, b, 90.0) * Affine::translate((200.0, 0.0));
+    let small = rotate(s, c, 30.0) * Affine::translate((400.0, 100.0)) * Affine::scale(0.5) * Affine::translate((0.0, -100.0));
+    assert!(placed(s, a, b, quarter) && placed(s, a, c, small), "the copies as made");
+    ([a, b, c], [quarter, small])
+}
+
+#[test]
+fn start_global_edit_takes_rotated_copies_and_an_edit_reaches_each_turned_by_its_angle() {
+    let mut s = session();
+    let ([a, b, c], [quarter, small]) = turned_kites(&mut s);
+    sel(&mut s, &[a]);
+    assert_eq!(crate::cmd::globaledit::highlights(&s).len(), 2, "both are highlighted before the start");
+    assert_eq!(s.execute("select.globalEditOptions", &json!({})).unwrap()["count"], 3);
+    assert_eq!(start(&mut s, a, json!({})), [a, b, c]);
+    let before = (*s.doc().unwrap().doc).clone();
+    let steps = s.doc().unwrap().history.undo.len();
+    // An anchor moved on the selected kite moves on each copy along the copy's own directions.
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]]})).unwrap();
+    s.execute("path.moveAnchors", &json!({"dx": 12, "dy": 5})).unwrap();
+    assert!(placed(&s, a, b, quarter), "the quarter-turned copy");
+    assert!(placed(&s, a, c, small), "the smaller copy turned by 30°");
+    assert!(!placed(&s, a, b, Affine::translate((200.0, 0.0))), "the copy is still turned");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    crate::tests_large_edits::undo_gives_back(&mut s, &before);
+    // A move of the whole kite to the right moves the quarter-turned copy up (counter-clockwise).
+    sel(&mut s, &[a]);
+    let was = bounds(&s, b);
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    let now = bounds(&s, b);
+    assert!((now.x0 - was.x0).abs() < 1e-6 && (now.y0 - (was.y0 - 10.0)).abs() < 1e-6, "{was:?} → {now:?}");
+    assert!(placed(&s, a, b, quarter) && placed(&s, a, c, small), "each copy lies on the kite as before");
+}
+
+#[test]
+fn a_rotated_copy_leads_an_edit_as_any_other_member_does() {
+    let mut s = session();
+    let ([a, b, c], [quarter, small]) = turned_kites(&mut s);
+    // Started on the turned copy, and edited from the smaller one.
+    assert_eq!(start(&mut s, b, json!({})), [b, a, c]);
+    s.execute("select.anchors", &json!({"id": c.0, "anchors": [[0, 2]]})).unwrap();
+    s.execute("path.moveAnchors", &json!({"dx": 3, "dy": -4})).unwrap();
+    assert!(placed(&s, a, b, quarter) && placed(&s, a, c, small));
+    // A fill reaches the turned copies as it is.
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    assert_eq!((fill(&s, a), fill(&s, b)), ("#12ab34".to_string(), "#12ab34".to_string()));
+}
+
+#[test]
+fn size_takes_a_rotated_copy_of_the_same_size_and_other_shapes_stay_out() {
+    let mut s = session();
+    let ([a, b, c], _) = turned_kites(&mut s);
+    // A quarter-turned copy is 70 × 30 by its box: it has the size of the 30 × 70 kite all the same.
+    assert_eq!(start(&mut s, a, json!({"size": true})), [a, b], "not the half-size copy {c}");
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    // A copy turned and then stretched, and one whose anchor was moved, are other shapes.
+    let stretched = kite(&mut s, 0.0, 300.0, 1.0);
+    rotate(&mut s, stretched, 30.0);
+    s.execute("object.scale", &json!({"sx": 150, "sy": 100})).unwrap();
+    let bent = kite(&mut s, 200.0, 300.0, 1.0);
+    rotate(&mut s, bent, 45.0);
+    s.execute("select.anchors", &json!({"id": bent.0, "anchors": [[0, 2]]})).unwrap();
+    s.execute("path.moveAnchors", &json!({"dx": 1, "dy": 0})).unwrap();
+    // A copy turned by half a turn and by a full turn in two steps.
+    let half = kite(&mut s, 400.0, 300.0, 1.0);
+    rotate(&mut s, half, 180.0);
+    let full = kite(&mut s, 600.0, 300.0, 1.0);
+    rotate(&mut s, full, 135.0);
+    rotate(&mut s, full, 225.0);
+    assert_eq!(start(&mut s, a, json!({})), [a, b, c, half, full], "not the stretched {stretched} nor the bent {bent}");
+}
+
+#[test]
+fn a_square_whose_anchors_were_turned_is_a_rotated_copy() {
+    let mut s = session();
+    let [a, b, ..] = squares(&mut s);
+    let turn = rotate(&mut s, b, 90.0) * Affine::translate((300.0, 0.0));
+    assert_eq!(start(&mut s, a, json!({})).len(), 3, "the turned square is still taken, with the small one");
+    // The first anchor of the turned square lies at another corner, and that is the one that moves.
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]]})).unwrap();
+    s.execute("path.moveAnchors", &json!({"dx": 10, "dy": 30})).unwrap();
+    assert!(placed(&s, a, b, turn));
+    assert!(!placed(&s, a, b, Affine::translate((300.0, 0.0))));
+}
+
+#[test]
+fn rotated_groups_are_like_the_group_and_an_edit_inside_one_reaches_the_others_turned() {
+    let mut s = session();
+    let (g, [sq, dot, _]) = card(&mut s, 0.0, 1.0);
+    let (copy, [csq, cdot, cbar]) = card(&mut s, 300.0, 1.0);
+    let turn = rotate(&mut s, copy, 90.0) * Affine::translate((300.0, 0.0));
+    // The same three objects, each turned in place: not the group turned as a whole.
+    let (apart, objects) = card(&mut s, 500.0, 1.0);
+    for id in objects {
+        rotate(&mut s, id, 90.0);
+    }
+    assert_eq!(start(&mut s, g, json!({})), [g, copy], "not the group {apart} whose objects were turned one by one");
+    sel(&mut s, &[dot]);
+    s.execute("paint.setFill", &json!({"color": "#12ab34"})).unwrap();
+    assert_eq!(fill(&s, cdot), "#12ab34");
+    sel(&mut s, &[sq]);
+    s.execute("object.setBounds", &json!({"height": 20, "reference": 0})).unwrap();
+    assert!(placed(&s, sq, csq, turn), "the square in the turned group is halved along the group's own direction");
+    assert_eq!(kids(&s, copy), [csq, cdot, cbar], "each object keeps its id");
+    s.execute("select.globalEdit", &json!({})).unwrap();
+    // An object inside one group takes the object at its place in the turned group, as the
+    // objects of rotated copies of a group are edited together.
+    assert_eq!(start(&mut s, sq, json!({})), [sq, csq]);
+}
+
+#[test]
+fn a_rotated_symbol_instance_is_taken_and_a_reflected_one_is_not() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 40.0, 40.0);
+    let first = NodeId(s.execute("symbol.new", &json!({"ids": [r.0], "name": "Tile"})).unwrap()["id"].as_u64().unwrap());
+    let place =
+        |s: &mut Session, x: f64| NodeId(s.execute("symbol.place", &json!({"name": "Tile", "x": x, "y": 300})).unwrap()["id"].as_u64().unwrap());
+    let (turned, mirrored) = (place(&mut s, 200.0), place(&mut s, 400.0));
+    sel(&mut s, &[turned]);
+    s.execute("object.rotate", &json!({"angle": 30, "origin": [220, 320]})).unwrap();
+    sel(&mut s, &[mirrored]);
+    s.execute("object.reflect", &json!({"axis": "vertical", "origin": [420, 320]})).unwrap();
+    assert_eq!(start(&mut s, first, json!({})), [first, turned], "not the reflected instance {mirrored}");
+    let xf = |s: &Session, id: NodeId| match node(s, id).kind {
+        NodeKind::SymbolInstance { xf, .. } => xf,
+        _ => panic!("not an instance"),
+    };
+    let was = xf(&s, turned);
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    // The instance turned by 30° counter-clockwise moves along its own direction.
+    let moved = Affine::rotate((-30f64).to_radians()) * Point::new(10.0, 0.0);
+    let (now, want) = (xf(&s, turned).as_coeffs(), (Affine::translate(moved.to_vec2()) * was).as_coeffs());
+    assert!(now.iter().zip(want).all(|(p, q)| (p - q).abs() < 1e-6), "{now:?} vs {want:?}");
 }

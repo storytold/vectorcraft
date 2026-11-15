@@ -1,10 +1,11 @@
 //! Blend modes and opacity masks in SVG export look as on the canvas: every mode follows the
 //! reference formulas when resvg draws the file, and masks take luminance the canvas's way.
 
+use usvg::roxmltree;
 use vectorcraft_color::blend::blend_rgb;
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, OpacityMask};
-use vectorcraft_geom::{Rect, shapes};
+use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeKind, OpacityMask, TextObject};
+use vectorcraft_geom::{Point, Rect, shapes};
 use vectorcraft_svg::{ExportOptions, export};
 use vectorcraft_testkit::raster::{Image, render_artboard};
 
@@ -137,4 +138,423 @@ fn a_knockout_group_with_a_brushed_stroke_keeps_its_masks() {
     add(&mut d, group);
     let svg = export(&d, &ExportOptions::default());
     assert!(svg.contains("<mask"), "{svg}");
+}
+
+/// The `x`, `y`, `width` and `height` of each `<mask>` and `<filter>` element in `svg`.
+fn regions(svg: &str) -> Vec<[f64; 4]> {
+    let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }).unwrap();
+    xml.descendants()
+        .filter(|n| matches!(n.tag_name().name(), "mask" | "filter"))
+        .map(|n| ["x", "y", "width", "height"].map(|a| n.attribute(a).and_then(|v| v.parse().ok()).unwrap_or(f64::NAN)))
+        .collect()
+}
+
+/// Mask and filter regions cover the art they apply to and no more: readers draw a mask into an
+/// image of its region's size, and one drawn at 200,000 units square runs out of memory.
+#[test]
+fn mask_and_filter_regions_cover_their_art() {
+    let knockout = {
+        let mut d = Document::new(40.0, 20.0);
+        let below = rect(&mut d, Rect::new(0.0, 0.0, 40.0, 20.0), [200, 0, 0]);
+        let mut top = rect(&mut d, Rect::new(5.0, 5.0, 15.0, 15.0), [0, 0, 200]);
+        top.opacity = 0.5;
+        let mut group = Node::group(d.alloc_id(), vec![below.into(), top.into()]);
+        group.knockout = vectorcraft_doc::Knockout::On;
+        add(&mut d, group);
+        d
+    };
+    for (what, d) in [("clip", masked(true, false)), ("no clip, inverted", masked(false, true)), ("knockout", knockout)] {
+        let svg = export(&d, &ExportOptions::default());
+        let found = regions(&svg);
+        assert!(!found.is_empty(), "{what}: {svg}");
+        for [x, y, w, h] in found {
+            // The art is 40 × 20, with 2 to spare on each side.
+            assert!(x >= -2.5 && y >= -2.5 && w <= 45.0 && h <= 25.0 && w >= 40.0 && h >= 20.0, "{what}: {x} {y} {w} {h} in {svg}");
+        }
+    }
+}
+
+/// A mask's region reaches as far as the masked art paints: a drop shadow of the object, or of an
+/// object in the masked group, shows past the object as on the canvas.
+#[test]
+fn a_mask_region_keeps_the_shadows_of_the_masked_art() {
+    let shadow = vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: serde_json::json!({"x": 15, "y": 15, "blur": 0, "opacity": 100}),
+        visible: true,
+    };
+    for in_group in [false, true] {
+        let mut d = Document::new(60.0, 60.0);
+        let mut red = rect(&mut d, Rect::new(10.0, 10.0, 30.0, 30.0), [255, 0, 0]);
+        red.appearance.effects.push(shadow.clone());
+        let mut masked = if in_group { Node::group(d.alloc_id(), vec![red.into()]) } else { red };
+        // An unclipped mask lets the art show outside the mask art: all of the shadow shows.
+        let art = rect(&mut d, Rect::new(10.0, 10.0, 20.0, 30.0), [255, 255, 255]);
+        masked.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+        add(&mut d, masked);
+        let svg = export(&d, &ExportOptions::default());
+        let (canvas, written) = (render_artboard(&d), resvg_render(&svg, 60, 60));
+        for (x, y) in [(15, 15), (40, 40), (35, 28)] {
+            let (c, w) = (canvas.over_white(x, y), written.over_white(x, y));
+            assert!(within(c, w, 3), "in a group {in_group}, at {x},{y}: canvas {c:?}, svg {w:?}\n{svg}");
+        }
+        assert!(canvas.over_white(40, 40)[0] < 100, "the shadow shows on the canvas: {:?}", canvas.over_white(40, 40));
+    }
+}
+
+fn drop_shadow() -> vectorcraft_doc::Effect {
+    vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: serde_json::json!({"x": 15, "y": 15, "blur": 0, "opacity": 100}),
+        visible: true,
+    }
+}
+
+/// Whether every `<g mask>` in `svg` starts with a hidden, unpainted rectangle over its mask's region,
+/// and whether any does.
+fn spanning_rects(svg: &str) -> (bool, bool) {
+    let spans = masked_group_spans(svg);
+    (spans.iter().all(|s| *s), spans.iter().any(|s| *s))
+}
+
+/// For each `<g mask>` in `svg`, in document order, whether it starts with a hidden, unpainted
+/// rectangle over its mask's region.
+fn masked_group_spans(svg: &str) -> Vec<bool> {
+    let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }).unwrap();
+    let spans: Vec<bool> = xml
+        .descendants()
+        .filter(|n| n.has_tag_name("g") && n.has_attribute("mask"))
+        .map(|group| {
+            let id = group.attribute("mask").unwrap().trim_start_matches("url(#").trim_end_matches(')');
+            let mask = xml.descendants().find(|n| n.has_tag_name("mask") && n.attribute("id") == Some(id)).unwrap();
+            let first = group.children().find(|n| n.is_element()).unwrap();
+            first.has_tag_name("rect")
+                && first.attribute("fill") == Some("none")
+                && first.attribute("visibility") == Some("hidden")
+                && ["x", "y", "width", "height"].iter().all(|a| first.attribute(*a).is_some() && first.attribute(*a) == mask.attribute(*a))
+        })
+        .collect();
+    assert!(!spans.is_empty(), "no masked group in {svg}");
+    spans
+}
+
+/// The number of paths `svg` imports as.
+fn imported_paths(svg: &str) -> usize {
+    let (back, warnings) = vectorcraft_svg::import_with_report(svg).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let mut paths = 0;
+    back.walk(|n| paths += usize::from(n.path_data().is_some()));
+    paths
+}
+
+/// A masked group whose content holds a raster effect (a drop shadow, blur, glow or feather, which
+/// paint past the shapes) starts with a hidden, unpainted rectangle over the mask's region, so that
+/// a reader that draws a masked group only inside the box of its shapes still draws it. Art without
+/// one gets none, brushed strokes (written as shapes) included, nor does an object whose own shadow
+/// is drawn outside the mask. Import leaves the rectangle out.
+#[test]
+fn a_masked_group_spans_its_region_when_its_art_paints_past_its_shapes() {
+    // How the red square sits under the mask.
+    #[derive(Debug, Clone, Copy)]
+    enum Case {
+        Alone,
+        InGroup,
+        InNestedGroup,
+        FillEffect,
+        HiddenFill,
+        UnpaintedStroke,
+        HiddenInGroup,
+        Brushed,
+        InSymbol,
+        OverriddenSymbol,
+        InBlend,
+    }
+    use Case::*;
+    for (case, shadowed, want) in [
+        (InGroup, true, true),
+        (InGroup, false, false),
+        (Alone, true, false),
+        (Alone, false, false),
+        (InNestedGroup, true, true),
+        (FillEffect, true, true),
+        (FillEffect, false, false),
+        // A fill or stroke that isn't written doesn't count.
+        (HiddenFill, true, false),
+        (UnpaintedStroke, true, false),
+        (HiddenInGroup, true, false),
+        (Brushed, false, false),
+        (Brushed, true, true),
+        (InSymbol, true, true),
+        (InSymbol, false, false),
+        // An unpainted fill in a dynamic symbol's art that the instance paints counts.
+        (OverriddenSymbol, true, true),
+        (OverriddenSymbol, false, false),
+        (InBlend, true, true),
+        (InBlend, false, false),
+    ] {
+        let mut d = Document::new(100.0, 60.0);
+        let mut red = rect(&mut d, Rect::new(10.0, 10.0, 30.0, 30.0), [255, 0, 0]);
+        if matches!(case, Brushed) {
+            let mut stroke = vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::rgb8(0, 0, 200)), 8.0);
+            stroke.brush = Some("Bristle Round".into());
+            red.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(stroke));
+        }
+        if matches!(case, UnpaintedStroke) {
+            red.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::None, 8.0)));
+        }
+        if shadowed {
+            match case {
+                FillEffect | HiddenFill | OverriddenSymbol => red.appearance.items[0].effects_mut().push(drop_shadow()),
+                UnpaintedStroke => red.appearance.items.last_mut().unwrap().effects_mut().push(drop_shadow()),
+                _ => red.appearance.effects.push(drop_shadow()),
+            }
+        }
+        if matches!(case, HiddenFill)
+            && let vectorcraft_doc::AppearanceItem::Fill(f) = &mut red.appearance.items[0]
+        {
+            f.visible = false;
+        }
+        if matches!(case, OverriddenSymbol) {
+            red.appearance.set_fill(Paint::None);
+        }
+        let group = |d: &mut Document, n: Node| Node::group(d.alloc_id(), vec![n.into()]);
+        let mut masked = match case {
+            Alone | FillEffect => red,
+            HiddenFill | UnpaintedStroke => group(&mut d, red),
+            InGroup | Brushed => group(&mut d, red),
+            InNestedGroup => {
+                let inner = group(&mut d, red);
+                group(&mut d, inner)
+            }
+            HiddenInGroup => {
+                red.visible = false;
+                group(&mut d, red)
+            }
+            InSymbol => {
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Square".into(), art: std::sync::Arc::new(red) });
+                let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Square".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+                group(&mut d, instance)
+            }
+            OverriddenSymbol => {
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: true, name: "Square".into(), art: std::sync::Arc::new(red) });
+                let mut instance =
+                    Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Square".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+                let fill = Some(Paint::solid(Color::rgb8(255, 0, 0)));
+                instance.extras_mut().symbol_overrides.push(vectorcraft_doc::symbol_overrides::SymbolOverride { fill, ..Default::default() });
+                group(&mut d, instance)
+            }
+            InBlend => {
+                let mut blue = rect(&mut d, Rect::new(60.0, 10.0, 80.0, 30.0), [0, 0, 255]);
+                blue.appearance.effects = red.appearance.effects.clone();
+                let blend = Node::new(d.alloc_id(), NodeKind::Blend { children: vec![red.into(), blue.into()], spec: Default::default() });
+                group(&mut d, blend)
+            }
+        };
+        let art = rect(&mut d, Rect::new(10.0, 10.0, 20.0, 30.0), [255, 255, 255]);
+        masked.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+        add(&mut d, masked);
+        let svg = export(&d, &ExportOptions::default());
+        assert_eq!(spanning_rects(&svg).0, want, "{case:?}, shadowed {shadowed}:\n{svg}");
+        if matches!(case, Alone | InGroup | InNestedGroup | FillEffect) {
+            // The red square alone: no rectangle of the region's size comes back.
+            assert_eq!(imported_paths(&svg), 1, "{case:?}, shadowed {shadowed}:\n{svg}");
+        }
+    }
+    // Type can't be measured, so its mask's region covers any artwork: a group of type gets the
+    // rectangle only when it holds a raster effect, on the type or on a path beside it.
+    for (shadowed, path_shadowed) in [(false, false), (true, false), (false, true)] {
+        let mut d = Document::new(80.0, 40.0);
+        let style = CharStyle { size: 24.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+        let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 30.0), "Wide", style))));
+        if shadowed {
+            t.appearance.effects.push(drop_shadow());
+        }
+        let mut red = rect(&mut d, Rect::new(50.0, 5.0, 60.0, 15.0), [255, 0, 0]);
+        if path_shadowed {
+            red.appearance.effects.push(drop_shadow());
+        }
+        let mut group = Node::group(d.alloc_id(), vec![t.into(), red.into()]);
+        let art = rect(&mut d, Rect::new(0.0, 0.0, 40.0, 40.0), [255, 255, 255]);
+        group.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+        add(&mut d, group);
+        let svg = export(&d, &ExportOptions::default());
+        let want = shadowed || path_shadowed;
+        assert_eq!(svg.contains("visibility=\"hidden\""), want, "type {shadowed}, path {path_shadowed}:\n{svg}");
+    }
+}
+
+/// In a knockout group, each element is drawn inside one mask of the elements above it. When the
+/// element inside a mask's group has a drop shadow, that group starts with the same hidden,
+/// unpainted rectangle over the region, the other groups don't, and import leaves it out.
+#[test]
+fn a_knockout_group_spans_its_masks_when_an_element_paints_past_its_shapes() {
+    for shadowed in [false, true] {
+        let mut d = Document::new(60.0, 60.0);
+        let mut below = rect(&mut d, Rect::new(5.0, 5.0, 25.0, 25.0), [200, 0, 0]);
+        if shadowed {
+            below.appearance.effects.push(drop_shadow());
+        }
+        let mut middle = rect(&mut d, Rect::new(15.0, 15.0, 35.0, 35.0), [0, 200, 0]);
+        middle.opacity = 0.5;
+        let mut top = rect(&mut d, Rect::new(20.0, 5.0, 30.0, 40.0), [0, 0, 200]);
+        top.opacity = 0.5;
+        let mut group = Node::group(d.alloc_id(), vec![below.into(), middle.into(), top.into()]);
+        group.knockout = vectorcraft_doc::Knockout::On;
+        add(&mut d, group);
+        let svg = export(&d, &ExportOptions::default());
+        // The bottom and middle elements are masked, in paint order; the top one isn't.
+        assert_eq!(masked_group_spans(&svg), [shadowed, false], "shadowed {shadowed}:\n{svg}");
+        assert_eq!(imported_paths(&svg), 3, "shadowed {shadowed}:\n{svg}");
+    }
+}
+
+/// Type is measured by its layout or its path, and a reader sets live type in its own font, so a
+/// mask or knockout over type keeps the region that covers any artwork.
+#[test]
+fn mask_and_filter_regions_over_type_cover_any_artwork() {
+    let style = CharStyle { size: 24.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    let text = |d: &mut Document| Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 30.0), "Wide", style.clone()))));
+    let masked = {
+        let mut d = Document::new(80.0, 40.0);
+        let mut t = text(&mut d);
+        let art = rect(&mut d, Rect::new(0.0, 0.0, 40.0, 40.0), [255, 255, 255]);
+        t.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+        add(&mut d, t);
+        d
+    };
+    let knockout = {
+        let mut d = Document::new(80.0, 40.0);
+        let below = rect(&mut d, Rect::new(0.0, 0.0, 80.0, 40.0), [200, 0, 0]);
+        let mut top = text(&mut d);
+        top.opacity = 0.5;
+        let mut group = Node::group(d.alloc_id(), vec![below.into(), top.into()]);
+        group.knockout = vectorcraft_doc::Knockout::On;
+        add(&mut d, group);
+        d
+    };
+    for (what, d) in [("masked type", masked), ("type in a knockout group", knockout)] {
+        let svg = export(&d, &ExportOptions::default());
+        let found = regions(&svg);
+        assert!(!found.is_empty(), "{what}: {svg}");
+        for [x, y, w, h] in found {
+            assert!(x <= -100000.0 && y <= -100000.0 && w >= 200000.0 && h >= 200000.0, "{what}: {x} {y} {w} {h} in {svg}");
+        }
+    }
+}
+
+/// A live object under a mask is measured as it is written, expanded: the mask's region covers
+/// the drop shadows of a blend's steps.
+#[test]
+fn a_mask_region_covers_a_blend_as_written() {
+    let shadow = vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: serde_json::json!({"x": 15, "y": 15, "blur": 0, "opacity": 100}),
+        visible: true,
+    };
+    let mut d = Document::new(100.0, 50.0);
+    let mut a = rect(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), [255, 0, 0]);
+    let mut b = rect(&mut d, Rect::new(70.0, 10.0, 80.0, 20.0), [0, 0, 255]);
+    a.appearance.effects.push(shadow.clone());
+    b.appearance.effects.push(shadow);
+    let mut blend = Node::new(d.alloc_id(), NodeKind::Blend { children: vec![a.into(), b.into()], spec: Default::default() });
+    let art = rect(&mut d, Rect::new(0.0, 0.0, 5.0, 5.0), [255, 255, 255]);
+    blend.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    add(&mut d, blend);
+    let svg = export(&d, &ExportOptions::default());
+    // The steps' drop shadows are filters with regions of their own; the mask's covers them all:
+    // the steps run from 10 to 80 across, and their shadows 15 further.
+    let xml = roxmltree::Document::parse_with_options(&svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }).unwrap();
+    let mask = xml.descendants().find(|n| n.has_tag_name("mask")).unwrap();
+    let [x, y, w, h] = ["x", "y", "width", "height"].map(|a| mask.attribute(a).and_then(|v| v.parse::<f64>().ok()).unwrap_or(f64::NAN));
+    assert!(x <= 0.0 && y <= 0.0 && x + w >= 95.0 && y + h >= 35.0 && w < 200.0 && h < 200.0, "{x} {y} {w} {h} in {svg}");
+}
+
+/// A knockout group of `n` red, green and blue squares at 50% opacity that all overlap, over an
+/// opaque backdrop. `knockout_shape`: their opacity defines their knockout shape.
+fn knockout_squares(n: usize, knockout_shape: bool) -> Document {
+    let mut d = Document::new(200.0, 200.0);
+    let backdrop = rect(&mut d, Rect::new(0.0, 0.0, 200.0, 200.0), [230, 200, 50]);
+    add(&mut d, backdrop);
+    let colors = [[255, 0, 0], [0, 200, 0], [0, 0, 255]];
+    let squares = (0..n)
+        .map(|i| {
+            let x = (i % 20) as f64 * 2.0;
+            let mut s = rect(&mut d, Rect::new(20.0 + x, 50.0, 120.0 + x, 150.0), colors[i % 3]);
+            (s.opacity, s.knockout_shape) = (0.5, knockout_shape);
+            std::sync::Arc::new(s)
+        })
+        .collect();
+    let mut group = Node::group(d.alloc_id(), squares);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    d
+}
+
+/// The deepest an element of `svg` nests, counting the root element as 1.
+fn element_depth(svg: &str) -> usize {
+    let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }).unwrap();
+    xml.descendants().filter(|n| n.is_element()).map(|n| n.ancestors().filter(|a| a.is_element()).count()).max().unwrap_or(0)
+}
+
+/// The elements of a knockout group are siblings, each in one mask of the overlapping elements
+/// above it, however many there are: 200 translucent elements stay well within the nesting the
+/// web build reads (34 levels), and the file reads back with nothing merged. Where the elements'
+/// shapes are the area they paint, the file draws as the canvas does.
+#[test]
+fn a_knockout_group_of_many_translucent_elements_stays_shallow() {
+    for knockout_shape in [false, true] {
+        let d = knockout_squares(200, knockout_shape);
+        let (svg, warnings) = vectorcraft_svg::export_with_report(&d, &ExportOptions::default());
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(svg.matches("<mask").count(), 199);
+        // Each shape is written once.
+        assert_eq!(svg.matches("<use ").count(), 200 * 199 / 2);
+        let depth = element_depth(&svg);
+        assert!(depth < 12, "{depth}");
+        let (back, notes) = vectorcraft_svg::import_with_report(&svg).unwrap();
+        assert!(!notes.contains(&vectorcraft_doc::depth::merged_note()), "{notes:?}");
+        assert!(back.layers[0].children().is_some_and(|c| !c.is_empty()));
+        if !knockout_shape {
+            let (file, canvas) = (resvg_render(&svg, 200, 200), render_artboard(&d));
+            for (x, y) in [(30, 100), (100, 100), (150, 100), (10, 10)] {
+                assert!(
+                    within(file.over_white(x, y), canvas.over_white(x, y), 3),
+                    "{x},{y}: {:?} {:?}",
+                    file.over_white(x, y),
+                    canvas.over_white(x, y)
+                );
+            }
+        }
+    }
+}
+
+/// When the masks of a knockout group would use more than 65,536 shapes, the group is written as
+/// a plain group, with a warning.
+#[test]
+fn a_knockout_group_too_large_to_mask_is_a_plain_group_with_a_warning() {
+    // 400 elements that all overlap: 79,800 shapes in their masks.
+    let d = knockout_squares(400, false);
+    let (svg, warnings) = vectorcraft_svg::export_with_report(&d, &ExportOptions::default());
+    assert!(warnings.iter().any(|w| w.contains("too many overlapping elements")), "{warnings:?}");
+    assert!(!svg.contains("<mask"));
+    assert!(element_depth(&svg) < 12);
+}
+
+/// Elements that don't overlap need no masks of each other.
+#[test]
+fn knockout_masks_hold_only_the_elements_that_overlap() {
+    let mut d = Document::new(200.0, 100.0);
+    let squares = (0..3)
+        .map(|i| {
+            let x = f64::from(i) * 60.0;
+            let mut s = rect(&mut d, Rect::new(x, 0.0, x + 40.0, 40.0), [0, 0, 255]);
+            s.opacity = 0.5;
+            std::sync::Arc::new(s)
+        })
+        .collect();
+    let mut group = Node::group(d.alloc_id(), squares);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(!svg.contains("<mask"), "{svg}");
 }

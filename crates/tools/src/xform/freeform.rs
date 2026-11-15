@@ -274,10 +274,11 @@ pub(super) fn release(cx: &ToolContext, a: Option<&Annotator>, g: Gesture, lines
     }
 }
 
-/// Escape during a drag: the point a drag-out deselected is selected again.
+/// Escape during a drag: the point a drag-out deselected is selected again, also when the drag
+/// came back inside the object.
 pub(super) fn cancel(g: &Gesture) -> Vec<Action> {
     match g.grab {
-        Grab::Point(i) if g.out => vec![Action::Cancel, select(Some(i))],
+        Grab::Point(i) if g.left => vec![Action::Cancel, select(Some(i))],
         _ => vec![Action::Cancel],
     }
 }
@@ -451,6 +452,31 @@ mod tests {
         assert!(!t.claims_key(&cx, ToolKey::Escape));
     }
 
+    /// A dropped click adds no point and leaves the line being drawn open: the next click still
+    /// joins it. A dropped drag of a point is canceled as by Escape.
+    #[test]
+    fn a_dropped_click_keeps_the_line_open() {
+        let (d, s) = doc(FreeformMode::Lines);
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        let mut t = GradientTool::default();
+        let add = |x: f64, y: f64, line: bool| Action::Exec("paint.freeform.addPoint".into(), json!({"at": [x, y], "line": line, "stroke": false}));
+        assert_eq!(click(&mut t, &cx, 140.0, 150.0), vec![add(140.0, 150.0, false)]);
+        cx.freeform_point = Some(2);
+        assert!(t.claims_key(&cx, ToolKey::Escape));
+        // The engine sends the release after the drop.
+        t.pointer(&cx, &ev(PointerKind::Down, 170.0, 160.0));
+        assert!(t.drop_press(&cx).is_empty());
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, 170.0, 160.0)).is_empty(), "the dropped click adds no point");
+        assert!(t.claims_key(&cx, ToolKey::Escape), "the line stays open");
+        assert_eq!(click(&mut t, &cx, 160.0, 140.0), vec![add(160.0, 140.0, true)]);
+        t.pointer(&cx, &ev(PointerKind::Down, 120.0, 121.0));
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::Drag, 130.0, 140.0))[0], Action::Begin("Gradient".into()));
+        assert_eq!(t.drop_press(&cx), vec![Action::Cancel]);
+        assert!(!t.busy());
+        assert!(t.pointer(&cx, &ev(PointerKind::Up, 130.0, 140.0)).is_empty());
+    }
+
     #[test]
     fn a_point_dragged_out_of_the_object_is_removed() {
         let (d, s) = doc(FreeformMode::Points);
@@ -473,6 +499,11 @@ mod tests {
         // Escape mid-drag restores the point and its selection.
         t.pointer(&cx, &ev(PointerKind::Down, 120.0, 120.0));
         t.pointer(&cx, &ev(PointerKind::Drag, 60.0, 60.0));
+        assert_eq!(t.key(&cx, ToolKey::Escape, Default::default()), vec![Action::Cancel, select(Some(0))]);
+        // Also after the drag came back inside.
+        t.pointer(&cx, &ev(PointerKind::Down, 120.0, 120.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 60.0, 60.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 110.0, 110.0));
         assert_eq!(t.key(&cx, ToolKey::Escape, Default::default()), vec![Action::Cancel, select(Some(0))]);
     }
 

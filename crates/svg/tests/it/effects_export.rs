@@ -30,7 +30,11 @@ fn revolve_caps_export_as_additional_vector_faces_and_leave_source_editable() {
     d.node_mut(id).unwrap().appearance.effects[0].params["cap"] = json!(true);
     let before = d.clone();
     let capped = export(&d, &ExportOptions::default());
-    assert_eq!(capped.matches("<path").count(), open.matches("<path").count() + 2, "two continuous caps, each with a fill and rim stroke");
+    assert_eq!(
+        vectorcraft_testkit::svg_shapes(&capped),
+        vectorcraft_testkit::svg_shapes(&open) + 2,
+        "two continuous caps, each with a fill and rim stroke"
+    );
     assert!(!capped.contains("<image"));
     assert_eq!(d, before);
 }
@@ -47,7 +51,7 @@ fn revolve_exports_shaded_vector_faces_and_keeps_the_source_live() {
     let d = doc_with(n);
     let before = d.clone();
     let svg = export(&d, &ExportOptions::default());
-    assert!(svg.matches("<path").count() > 50, "Revolve should export vector surfaces");
+    assert!(vectorcraft_testkit::svg_shapes(&svg) > 50, "Revolve should export vector surfaces");
     assert!(!svg.contains("<image"), "no raster fallback");
     assert_eq!(d, before, "export leaves source editable");
 }
@@ -66,7 +70,7 @@ fn smooth_revolve_exports_vector_gradients_without_rasterizing_or_editing_the_so
     let svg = export(&d, &ExportOptions::default());
     assert!(svg.matches("<linearGradient").count() > 50);
     assert!(svg.contains("gradientUnits=\"userSpaceOnUse\""));
-    assert!(svg.matches("<path").count() > 100);
+    assert!(vectorcraft_testkit::svg_shapes(&svg) > 100);
     assert!(svg.matches("stroke-linejoin=\"round\"").count() > 100, "seam strokes keep bounded joins in SVG");
     assert!(!svg.contains("stroke-miterlimit"));
     assert!(!svg.contains("<image") && !svg.contains("<filter"));
@@ -96,6 +100,37 @@ fn a_strokes_own_glow_filters_the_stroke_element_only() {
     );
     n.appearance.items[1].effects_mut().push(Effect { visible: false, ..fx("stylize.outerGlow") });
     assert!(!export(&doc_with(n), &ExportOptions::default()).contains("<filter "));
+}
+
+#[test]
+fn a_clipping_paths_transform_effect_moves_the_written_clip_path() {
+    // A clip group whose clipping path covers x 0 to 50; `effect` moves it 50 pt right.
+    let clipped = |x0: f64, effect: bool| {
+        let mut clip =
+            Node::path(NodeId(0), shapes::rectangle(Rect::new(x0, 0.0, x0 + 50.0, 100.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+        if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+            *clipping = true;
+        }
+        if effect {
+            clip.appearance.effects.push(Effect { id: "distort.transform".into(), params: json!({"moveH": 50}), visible: true });
+        }
+        let art = Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        let mut d = Document::new(200.0, 200.0);
+        let (clip, art) = (Node { id: d.alloc_id(), ..clip }, Node { id: d.alloc_id(), ..art });
+        let g = Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(clip), std::sync::Arc::new(art)], clip: true });
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, g).unwrap();
+        let svg = export(&d, &ExportOptions::default());
+        let open = svg.find("<clipPath").expect("a clip path");
+        let body = &svg[open..open + svg[open..].find("</clipPath>").expect("its end")];
+        body[body.find('>').unwrap()..].to_string()
+    };
+    assert_eq!(clipped(0.0, true), clipped(50.0, false), "the clip path is written where the effect moves it");
+    assert_ne!(clipped(0.0, true), clipped(0.0, false));
 }
 
 #[test]

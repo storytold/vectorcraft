@@ -151,6 +151,42 @@ fn built_in_views_apply_by_name_or_type() {
 }
 
 #[test]
+fn reapplying_the_current_grid_preset_records_no_undo_step() {
+    let mut s = session();
+    // On a document with no grid defined, a preset defines and shows one: an undo step.
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    assert_eq!(undo_len(&s), 1);
+    let g = grid(&s);
+    // The same preset again, by type or by name, leaves the grid as it is: no undo step.
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    run(&mut s, "perspective.grid.preset", json!({"name": "[2P-Normal View]"}));
+    assert_eq!((grid(&s), undo_len(&s)), (g.clone(), 1));
+    // Another active plane, or a hidden grid, is set back without an undo step.
+    run(&mut s, "perspective.plane.set", json!({"plane": "ground"}));
+    run(&mut s, "perspective.grid.show", json!({"visible": false}));
+    assert_ne!(grid(&s), g);
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    assert_eq!((grid(&s), undo_len(&s)), (g, 1));
+    // Another preset changes the grid.
+    run(&mut s, "perspective.grid.preset", json!({"kind": 3}));
+    assert_eq!((grid(&s).kind, undo_len(&s)), (3, 2));
+}
+
+#[test]
+fn define_grid_with_unchanged_fields_records_no_undo_step() {
+    let mut s = session();
+    // On a document with no grid defined, `perspective.grid.set` stores the grid: an undo step,
+    // and the grid no longer follows the first artboard.
+    run(&mut s, "perspective.grid.set", json!({}));
+    assert_eq!((run(&mut s, "perspective.grid.get", json!({}))["defined"].clone(), undo_len(&s)), (json!(true), 1));
+    // The stored grid's own values leave it as it is: no undo step.
+    let g = grid(&s);
+    run(&mut s, "perspective.grid.set", json!({}));
+    run(&mut s, "perspective.grid.set", json!({"cell": g.cell, "horizon": g.horizon}));
+    assert_eq!((grid(&s), undo_len(&s)), (g, 1));
+}
+
+#[test]
 fn presets_save_rename_delete_and_protect_the_built_in_ones() {
     let mut s = session();
     run(&mut s, "perspective.grid.preset", json!({"kind": 3}));
@@ -343,6 +379,23 @@ fn lock_station_point_swings_the_other_vanishing_point() {
 }
 
 #[test]
+fn a_grid_dragged_off_its_preset_reports_no_preset_name() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"name": "[1P-Normal View]"}));
+    let name = |s: &mut Session| run(s, "perspective.grid.get", json!({}))["define"]["name"].clone();
+    assert_eq!(name(&mut s), json!("[1P-Normal View]"));
+    // Moving a plane keeps the definition: still the preset.
+    run(&mut s, "perspective.plane.move", json!({"plane": "ground", "by": 50}));
+    assert_eq!(name(&mut s), json!("[1P-Normal View]"));
+    let g = grid(&s);
+    drag(&mut s, "perspectiveGrid", Point::new(g.vp_left, g.horizon), Point::new(g.vp_left - 40.0, g.horizon - 60.0));
+    assert!(!near(grid(&s).horizon, g.horizon), "the horizon moved");
+    assert_eq!(name(&mut s), json!(""), "a custom grid now");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(name(&mut s), json!("[1P-Normal View]"));
+}
+
+#[test]
 fn snap_to_grid_lands_drawn_and_moved_art_on_gridlines() {
     let mut s = session();
     run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
@@ -467,7 +520,10 @@ fn the_plane_widget_stays_on_screen_and_takes_clicks_with_any_tool() {
     click(&mut s, q, view);
     assert_eq!(grid(&s).plane, Plane::Ground);
     // Perspective Grid Options move it to another corner or hide it.
-    assert_eq!(run(&mut s, "perspective.widget.options", json!({"position": "bottomRight"})), json!({"show": true, "position": "bottomRight"}));
+    assert_eq!(
+        run(&mut s, "perspective.widget.options", json!({"position": "bottomRight"})),
+        json!({"show": true, "position": "bottomRight", "anchorPoint": true, "gridlineIntersection": true})
+    );
     let r = face(&s, view, WidgetCorner::BottomRight, Plane::Left);
     assert!(r.x > 100.0 + 450.0 && r.y > 50.0 + 300.0, "{r:?}");
     click(&mut s, r, view);

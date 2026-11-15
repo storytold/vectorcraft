@@ -1,11 +1,14 @@
 use super::common::{
-    dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds, replace_with_pieces, sibling_with, target_paths,
-    usize_opt,
+    PenRecord, Sample, dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, replace_with_pieces,
+    samples_param, sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
-    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, ParamCurve, PathData, Point, Result, Session, SubPath,
-    Value, bad, eraser_area, eraser_tip, f64_or, fill_contains, id_param, json, number_or, po,
+    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, Paint, ParamCurve, PathData, Point, Result, Session,
+    SubPath, Value, Vec2, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
 };
+use vectorcraft_brush::{Brush, BrushKind, Calligraphic, Variation};
+use vectorcraft_doc::StrokeLayer;
+use vectorcraft_tools::draw2::MIN_BRUSH_SIZE;
 
 /// Split a filled path into connected pieces (each outer contour with its holes).
 pub(in super::super) fn components(pd: &PathData) -> Vec<PathData> {
@@ -170,7 +173,7 @@ pub(in super::super) fn erase_outline(pd: &PathData, step: f64, remove: &dyn Fn(
 
 pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.split";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let anchor = usize_opt(p, "anchor", C)?;
     let seg = usize_opt(p, "segment", C)?;
@@ -200,9 +203,16 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
             _ => return Err(EngineError::Other("no such segment".into())),
         };
         let mut pieces = sp.cut_at(&std::collections::BTreeSet::from([k]));
+        // The cut leaves one of its two coincident end points selected, as `path.cutAtAnchors`
+        // does, so a Direct Selection drag pulls the path apart there.
+        let pick = |sel: &mut vectorcraft_doc::Selection, id: NodeId, si: usize| {
+            sel.clear();
+            sel.add(id);
+            sel.anchors.entry(id).or_default().insert((si, 0));
+        };
         if sp.closed {
             path.subpaths[si] = pieces.pop().ok_or_else(|| EngineError::Other("no such anchor".into()))?;
-            sel.set([id]);
+            pick(sel, id, si);
             return Ok(vec![id]);
         }
         let [left, right] = <[SubPath; 2]>::try_from(pieces).map_err(|_| EngineError::Other("cannot split an open path at its end point".into()))?;
@@ -211,12 +221,12 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
             let node = sibling_with(d, id, PathData::single(right))?;
             let (parent, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
             let nid = d.insert(parent, idx + 1, node)?;
-            sel.set([id, nid]);
+            pick(sel, nid, 0);
             Ok(vec![id, nid])
         } else {
             path.subpaths[si] = left;
             path.subpaths.insert(si + 1, right);
-            sel.set([id]);
+            pick(sel, id, si + 1);
             Ok(vec![id])
         }
     })?;
@@ -264,30 +274,146 @@ pub(super) fn knife(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.eraseRegion";
-    let pts = points_param(p, "points", C)?;
+    let samples = samples_param(p, "points", C)?;
     let size = number_or(p, "size", 10.0, C)?;
     if !(size.is_finite() && size > 0.0) {
         return Err(bad(C, "size must be positive"));
     }
     let angle = number_or(p, "angle", 0.0, C)?;
     let roundness = number_or(p, "roundness", 100.0, C)?;
+    let vary = eraser_variations(p, C)?;
+    if varies_beyond_size_pressure(&vary) {
+        return erase_varied(s, &samples, [angle, roundness, size], vary);
+    }
+    let pressure = if vary[2].0 == Variation::Pressure { size_pressure(p, &samples, C)? } else { None };
+    let pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
     let r = size / 2.0;
-    // The tip's short axis: an open path is sampled at least every half of it.
-    let short = size * roundness.clamp(1.0, 100.0) / 100.0;
+    // The tip's short axis (its narrowest with Pressure): an open path is sampled at least every half of it.
+    let narrowest = pressure.as_ref().map_or(size, |(_, v)| vectorcraft_tools::draw2::pressure_size(size, *v, 0.0));
+    let short = narrowest * roundness.clamp(1.0, 100.0) / 100.0;
     let st = s.doc()?;
-    let region = eraser_area(&pts, size, angle, roundness);
     // A point is under the tip when, with the tip squashed back into a circle, it is within the
     // circle's radius of the squashed drag.
-    let squash = eraser_tip(angle, roundness).inverse();
+    let stretch = eraser_tip(angle, roundness);
+    let squash = stretch.inverse();
     let round: Vec<Point> = pts.iter().map(|q| squash * *q).collect();
+    // With Size set to Pressure the tip is as wide as the pen pressed: the area is the squashed
+    // drag outlined at those widths, stretched back, and a point is under it when the area holds it.
+    let pressed = match (&pressure, round.len() > 1) {
+        (Some((prof, v)), true) => Some(pressure_region(&PathData::single(SubPath::polyline(&round, false)), size, *v, prof)?.transformed(stretch)),
+        (Some((prof, v)), false) => Some(eraser_area(&pts, vectorcraft_tools::draw2::pressure_size(size, *v, prof.at(0.0)), angle, roundness)),
+        (None, _) => None,
+    };
+    let reach = pressure.as_ref().map_or(r, |(_, v)| (size + v) / 2.0);
+    let region = pressed.clone().unwrap_or_else(|| eraser_area(&pts, size, angle, roundness));
+    let outline = pressed.map(|pd| pd.to_bezpath());
+    let under = |q: Point| match &outline {
+        Some(bp) => fill_contains(bp, FillRule::NonZero, q),
+        None => dist_to_polyline(&round, squash * q) <= r,
+    };
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, r))? {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach))? {
         if pd.is_closed() {
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
             plan.push((id, components(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Difference))));
-        } else if let Some(pieces) = erase_outline(&pd, short / 2.0, &|q| dist_to_polyline(&round, squash * q) <= r) {
+        } else if let Some(pieces) = erase_outline(&pd, short / 2.0, &under) {
+            plan.push((id, pieces));
+        }
+    }
+    apply_plan(s, "Eraser", plan)
+}
+
+/// The variation modes `path.eraseRegion` takes for each of `angleMode`, `roundnessMode` and
+/// `sizeMode`.
+const ERASER_MODES: &str = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\" or \"rotation\"";
+
+/// Eraser Tool Options' Angle, Roundness and Size variations: for each of angle (`angleMode` with
+/// `angleVariation` in degrees, at most 180), roundness (`roundnessMode` with `roundnessVariation`
+/// in percent, at most 100) and size (`sizeMode` with `sizeVariation` in points), its mode and how
+/// far it varies either way. A mode left out or null is Fixed, and a variation left out or null
+/// is 0; any other mode, or a variation that is negative or past its most, is refused.
+fn eraser_variations(p: &Value, cmd: &str) -> Result<[(Variation, f64); 3]> {
+    const KEYS: [(&str, &str, f64); 3] =
+        [("angleMode", "angleVariation", 180.0), ("roundnessMode", "roundnessVariation", 100.0), ("sizeMode", "sizeVariation", f64::INFINITY)];
+    let mut out = [(Variation::Fixed, 0.0); 3];
+    for (slot, (mode_key, var_key, most)) in out.iter_mut().zip(KEYS) {
+        let mode = match p.get(mode_key).filter(|v| !v.is_null()) {
+            None => Variation::Fixed,
+            Some(Value::String(id)) => Variation::parse(id).ok_or_else(|| bad(cmd, format!("{mode_key} is one of {ERASER_MODES}, not `{id}`")))?,
+            Some(other) => return Err(bad(cmd, format!("{mode_key} is one of {ERASER_MODES}, not {other}"))),
+        };
+        let variation = number_or(p, var_key, 0.0, cmd)?;
+        if !(variation.is_finite() && variation >= 0.0) {
+            return Err(bad(cmd, format!("{var_key} must be 0 or more")));
+        }
+        if variation > most {
+            return Err(bad(cmd, format!("{var_key} must be at most {most}")));
+        }
+        *slot = (mode, variation);
+    }
+    Ok(out)
+}
+
+/// Does any of the Eraser's Angle, Roundness and Size vary with something other than Size on
+/// Pressure? A mode whose variation is 0 does not vary.
+fn varies_beyond_size_pressure(vary: &[(Variation, f64); 3]) -> bool {
+    vary.iter().enumerate().any(|(i, (mode, v))| *v > 0.0 && *mode != Variation::Fixed && !(i == 2 && *mode == Variation::Pressure))
+}
+
+/// `path.eraseRegion` with its tip varying along the drag ([`eraser_variations`]): the area the
+/// tip covers is swept as a Calligraphic brush nib of the same angle, roundness, size, modes and
+/// variations, with what the pen recorded along the drag. Random draws one value for the drag
+/// and the pen modes follow the pen at each point; a drag without that recording (a mouse) takes
+/// the value itself. `tip`: the angle, roundness and size.
+fn erase_varied(s: &mut Session, samples: &[Sample], tip: [f64; 3], vary: [(Variation, f64); 3]) -> Result<Value> {
+    let [angle, roundness, size] = tip;
+    let mut pts: Vec<Point> = samples.iter().map(|s| s.pt).collect();
+    // A press without a drag is a dab: a sweep needs some length.
+    if let [only] = pts[..] {
+        pts.push(only + Vec2::new(0.01, 0.0));
+    }
+    // A nib's size is kept within 1296 pt and the stroke's width scales it: a larger tip is swept
+    // at a fraction of its size on a stroke as many times wider.
+    let [(am, av), (rm, rv), (sm, sv)] = vary;
+    let sv = if sm == Variation::Fixed { 0.0 } else { sv };
+    let scale = ((size + sv) / Calligraphic::RANGES[2].1).max(1.0);
+    let nib = Calligraphic {
+        angle,
+        roundness: roundness.clamp(1.0, 100.0),
+        size: size / scale,
+        variation: [av, rv, sv / scale],
+        modes: Some([am, rm, sm]),
+    };
+    let brush = Brush { name: "Eraser".into(), kind: BrushKind::Calligraphic(nib) };
+    let mut stroke = StrokeLayer::new(Paint::None, scale);
+    PenRecord::of_samples(samples).write(&mut stroke);
+    let spine = SubPath::polyline(&pts, false);
+    let st = s.doc()?;
+    let pieces = vectorcraft_brush::stroke_pieces(&st.doc, &brush, &PathData::single(spine).to_bezpath(), &stroke);
+    let areas: Vec<PathData> = pieces.iter().filter_map(|n| n.path_data().cloned()).collect();
+    if areas.is_empty() {
+        return Ok(json!({ "ids": [] }));
+    }
+    let region =
+        po::try_unite_all(&areas.iter().map(|a| (a, FillRule::NonZero)).collect::<Vec<_>>()).map_err(|e| EngineError::Other(e.to_string()))?;
+    let bp = region.to_bezpath();
+    // The narrowest the tip gets across: an open path is sampled at least every half of it.
+    let low = |i: usize| match vary[i] {
+        (Variation::Fixed, _) => tip[i],
+        (_, v) => tip[i] - v,
+    };
+    let short = low(2).max(MIN_BRUSH_SIZE) * low(1).clamp(1.0, 100.0) / 100.0;
+    let reach = (size + sv) / 2.0;
+    let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach))? {
+        if pd.is_closed() {
+            if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
+                continue;
+            }
+            plan.push((id, components(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Difference))));
+        } else if let Some(pieces) = erase_outline(&pd, short / 2.0, &|q| fill_contains(&bp, FillRule::NonZero, q)) {
             plan.push((id, pieces));
         }
     }

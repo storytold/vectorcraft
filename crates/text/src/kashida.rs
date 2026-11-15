@@ -104,13 +104,13 @@ pub(crate) const MAX_TATWEELS: f64 = 64.0;
 /// The kashidas of the glyphs `line` (indices into `sg`, a paragraph's glyphs in logical order;
 /// `text` is the plain text) of a justified line with `room` points to fill: for each Arabic
 /// word with joined letters, at its last pair of them, the byte offset of the cluster after the kashida and
-/// the kashida's length, in text order. Words end at spaces, inline graphics, and characters other than letters
-/// and marks (punctuation, digits, symbols). Every kashida takes an equal share of `room`, up to
+/// the kashida's length, in text order. Words end at spaces, inline graphics, warichu blocks, and characters other
+/// than letters and marks (punctuation, digits, symbols). Every kashida takes an equal share of `room`, up to
 /// `kind`'s longest in ems of the letter after it (as wide as its horizontal scale draws it); a
 /// Stylistic kashida is a whole number of tatweels, at most [`MAX_TATWEELS`], and a word whose
 /// share is shorter than one tatweel gets none. A line of words without joined letters, or whose
 /// font has no tatweel, gets none.
-pub(crate) fn plan(text: &str, sg: &[SGlyph], line: Range<usize>, kind: Kashida, room: f64) -> Vec<(usize, f64)> {
+pub(crate) fn plan(text: &str, sg: &[SGlyph], line: Range<usize>, kind: Kashida, room: f64, allows: impl Fn(usize) -> bool) -> Vec<(usize, f64)> {
     if kind == Kashida::None || !room.is_finite() || room <= 0.0 {
         return vec![];
     }
@@ -124,11 +124,12 @@ pub(crate) fn plan(text: &str, sg: &[SGlyph], line: Range<usize>, kind: Kashida,
         let end = (j + 1..line.end).find(|&e| sg.get(e).is_none_or(|n| n.byte != g.byte)).unwrap_or(line.end);
         let first = text.get(g.byte..g.byte + g.len).and_then(|s| s.chars().next());
         let not_a_letter = first.is_some_and(|c| !c.is_alphabetic() && joining(c) != Joining::Transparent);
-        if g.is_space() || g.inline.is_some() || not_a_letter {
+        // A warichu block is set as one piece at the length its lines set: it ends a word too.
+        if g.is_space() || g.inline.is_some() || g.wari.is_some() || not_a_letter {
             picks.extend(word.take());
             prev = None;
         } else {
-            if prev.and_then(|p| sg.get(p)).is_some_and(|a| joined(text, a, g)) && tatweel(g).is_some() {
+            if prev.and_then(|p| sg.get(p)).is_some_and(|a| joined(text, a, g) && allows(a.byte) && allows(g.byte)) && tatweel(g).is_some() {
                 word = Some(j);
             }
             prev = Some(j);

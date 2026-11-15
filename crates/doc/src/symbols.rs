@@ -2,13 +2,14 @@
 //! the document and measures it once, and an instance's bounds are its art's box placed by the
 //! instance's transform ([`Node::geometric_bounds_with`]).
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use vectorcraft_geom::{Affine, Rect};
 
-use crate::{AppearanceItem, Document, Node, NodeKind, SYMBOL_HALF};
+use crate::symbol_nine_slice::transformed;
+use crate::{AppearanceItem, Document, MAX_SYMBOL_NODES, NineSliceMap, Node, NodeKind, SYMBOL_HALF};
 
 /// The box a symbol instance is measured by when its symbol's art has no box
 /// ([`SymbolBoxes::art`]), and in [`Node::geometric_bounds`]: the 20 × 20 square around the origin
@@ -22,6 +23,12 @@ const MAX_DEPTH: usize = 32;
 /// Most effect reaches one set of boxes measures for transforms that place the art of symbols
 /// holding instances: past it, an estimate stands in ([`SymbolBoxes::effects_reach`]).
 const MAX_REACHES: usize = 4096;
+
+/// A symbol's name and the bits of the linear part of a transform that places its art.
+type Placing = (String, [u64; 4]);
+
+/// Each symbol name of a document → the index of the first symbol of that name.
+pub(crate) type SymbolNames = HashMap<String, usize>;
 
 /// A symbol's art measured in symbol space.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -37,6 +44,14 @@ pub(crate) struct ArtBox {
     /// The widest stroke of the objects with a visible brushed stroke in the art, or in the art
     /// of a symbol an instance in it shows: `None` when no object there has one.
     pub(crate) brush: Option<f64>,
+    /// Whether the art holds an instance of a symbol with 9-slice guides, or of a symbol whose art
+    /// holds one at any depth.
+    pub(crate) sliced: bool,
+    /// The box of the regions that the live geometry effects of the clipping paths in the art give
+    /// them ([`crate::hit::set_clip_region`]), and of the instances in the art whose art has such
+    /// regions, each measured by [`Node::reach_bounds_with`]. `None` when nothing in the art has
+    /// one.
+    pub(crate) reshaped: Option<Rect>,
 }
 
 /// The art boxes of a document's symbols, which [`Node::geometric_bounds_with`],
@@ -45,6 +60,10 @@ pub(crate) struct ArtBox {
 /// symbols change.
 pub struct SymbolBoxes<'a> {
     doc: &'a Document,
+    /// Each symbol name of the document → the index of the first symbol of that name (the one a
+    /// name finds), made the first time a name is looked up ([`Self::symbol_art`]) or given by
+    /// [`Self::with_names`].
+    names: OnceCell<Arc<SymbolNames>>,
     /// The art boxes measured so far, by symbol name (`None` for a symbol whose instances are
     /// measured by [`SYMBOL_SQUARE`]).
     measured: RefCell<HashMap<String, Option<ArtBox>>>,
@@ -73,6 +92,19 @@ pub struct SymbolBoxes<'a> {
     unplaced: RefCell<HashMap<String, f64>>,
     /// How many times [`Self::measure_art`] has run a measure on symbol art ([`Self::art_measured`]).
     runs: Cell<usize>,
+    /// The boxes [`Self::sliced_visual`] has measured, by symbol name and the bits of the linear
+    /// part of the transform that placed the art.
+    sliced: RefCell<HashMap<Placing, Option<Rect>>>,
+    /// How many objects of symbol art [`Self::sliced_visual`] has placed, the art of opacity masks
+    /// included.
+    sliced_placed: Cell<u64>,
+    /// The most objects of symbol art [`Self::sliced_visual`] places: [`MAX_SYMBOL_NODES`].
+    sliced_most: u64,
+    /// The widths [`Self::measured_width`] has measured, by kind and symbol name.
+    widths: RefCell<HashMap<(&'static str, String), Option<f64>>>,
+    /// While [`Self::consulted`] runs: the symbols whose art boxes [`Self::art`] has given outside
+    /// the measuring of symbol art.
+    consulted: RefCell<Option<HashSet<String>>>,
 }
 
 impl Document {
@@ -80,6 +112,7 @@ impl Document {
     pub fn symbol_boxes(&self) -> SymbolBoxes<'_> {
         SymbolBoxes {
             doc: self,
+            names: OnceCell::new(),
             measured: RefCell::default(),
             depths: RefCell::default(),
             quick: Cell::new(false),
@@ -90,8 +123,31 @@ impl Document {
             farthest: RefCell::default(),
             unplaced: RefCell::default(),
             runs: Cell::new(0),
+            sliced: RefCell::default(),
+            sliced_placed: Cell::new(0),
+            sliced_most: MAX_SYMBOL_NODES,
+            widths: RefCell::default(),
+            consulted: RefCell::default(),
         }
     }
+
+    /// Each symbol name of this document → the index of the first symbol of that name (the one a
+    /// name finds).
+    pub(crate) fn symbol_names(&self) -> SymbolNames {
+        #[cfg(test)]
+        SYMBOLS_READ.with(|c| c.set(c.get() + self.symbols.len()));
+        let mut names = HashMap::with_capacity(self.symbols.len());
+        for (i, s) in self.symbols.iter().enumerate() {
+            names.entry(s.name.clone()).or_insert(i);
+        }
+        names
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many symbols [`Document::symbol_names`] has read on this thread.
+    pub(crate) static SYMBOLS_READ: Cell<usize> = const { Cell::new(0) };
 }
 
 impl<'a> SymbolBoxes<'a> {
@@ -100,9 +156,33 @@ impl<'a> SymbolBoxes<'a> {
         self.doc
     }
 
+    /// Makes these boxes find symbols by `names` ([`Document::symbol_names`]), made from the
+    /// document's symbols while they had the names and order they have now.
+    pub(crate) fn with_names(self, names: &Arc<SymbolNames>) -> Self {
+        let _ = self.names.set(names.clone());
+        self
+    }
+
+    /// The art of the first symbol of the document named `name`, found in time independent of the
+    /// number of symbols after the first lookup.
+    pub(crate) fn symbol_art(&self, name: &str) -> Option<&'a Arc<Node>> {
+        let doc: &'a Document = self.doc;
+        let names = self.names.get_or_init(|| Arc::new(doc.symbol_names()));
+        let i = *names.get(name)?;
+        match doc.symbols.get(i) {
+            Some(s) if s.name == name => Some(&s.art),
+            // Names that no longer match the symbols: the first symbol of that name.
+            _ => doc.symbols.iter().find(|s| s.name == name).map(|s| &s.art),
+        }
+    }
+
     /// Makes these boxes measure every symbol instance as [`Node::reach_bounds_with`] does, by its
     /// art box alone. An instance that scales or turns stroked art then measures a little larger
-    /// than with [`Node::visual_bounds_with`], and its art is not transformed to measure it.
+    /// than with [`Node::visual_bounds_with`], and its art is not transformed to measure it. The
+    /// visual box of an instance placed through 9-slice guides holds the art box placed by each
+    /// cell's map ([`crate::NineSliceMap::placement_bounds`]). An instance whose art holds an
+    /// instance of a symbol with 9-slice guides at any depth is measured as its art placed by its
+    /// transform ([`Self::sliced_visual`]).
     pub fn quick(self) -> Self {
         self.quick.set(true);
         self
@@ -136,21 +216,37 @@ impl<'a> SymbolBoxes<'a> {
     /// art boxes. Returns `None` when [`Self::depth`] is `None` and when the art has no finite
     /// bounds: instances of the symbol are then measured by [`SYMBOL_SQUARE`].
     pub(crate) fn art(&self, name: &str) -> Option<ArtBox> {
-        if let Some(b) = self.measured.borrow().get(name) {
-            return *b;
+        let cached = self.measured.borrow().get(name).copied();
+        let b = cached.unwrap_or_else(|| {
+            let b = self.measure_art(name, |art| self.in_art(|| art_box(art, self))).flatten();
+            self.measured.borrow_mut().insert(name.to_string(), b);
+            b
+        });
+        if b.is_some()
+            && let Some(seen) = self.consulted.borrow_mut().as_mut()
+            && !seen.contains(name)
+        {
+            seen.insert(name.to_string());
         }
-        let b = self.measure_art(name, |art| self.in_art(|| art_box(art, self))).flatten();
-        self.measured.borrow_mut().insert(name.to_string(), b);
         b
+    }
+
+    /// Runs `measure`, and returns the names of the symbols whose art boxes it took from these
+    /// boxes, the art of symbols it measured left out: the symbols whose art the instances it
+    /// measured are measured by.
+    pub(crate) fn consulted(&self, measure: impl FnOnce()) -> HashSet<String> {
+        let was = self.consulted.replace(Some(HashSet::new()));
+        measure();
+        self.consulted.replace(was).unwrap_or_default()
     }
 
     /// Runs `measure` on the art of the symbol named `name`. Returns `None` when [`Self::depth`]
     /// is `None`, without running it.
     pub fn measure_art<R>(&self, name: &str, measure: impl FnOnce(&Arc<Node>) -> R) -> Option<R> {
         self.depth(name)?;
-        let sym = self.doc.symbols.iter().find(|s| s.name == name)?;
+        let art = self.symbol_art(name)?;
         self.runs.set(self.runs.get() + 1);
-        Some(measure(&sym.art))
+        Some(measure(art))
     }
 
     /// How many times [`Self::measure_art`] has run a measure on symbol art for these boxes, the
@@ -226,6 +322,18 @@ impl<'a> SymbolBoxes<'a> {
         self.art(name)?.brush
     }
 
+    /// The width `measure` gives for the symbol named `name`, measured once for these boxes for each
+    /// `kind`, which names what `measure` measures. `measure` may call this again for other names.
+    pub fn measured_width(&self, kind: &'static str, name: &str, measure: impl FnOnce() -> Option<f64>) -> Option<f64> {
+        let key = (kind, name.to_string());
+        if let Some(w) = self.widths.borrow().get(&key) {
+            return *w;
+        }
+        let w = measure();
+        self.widths.borrow_mut().insert(key, w);
+        w
+    }
+
     /// How far the visual box of an instance of the symbol named `name` grows in boxes made by
     /// [`Self::with_brush_art`]: `16 × max(w, 1) + 8` for the widest stroke `w` that
     /// [`Self::brush_width`] finds, as far as the renderer grows the cull bounds of a brushed path
@@ -261,10 +369,9 @@ impl<'a> SymbolBoxes<'a> {
     /// other symbols it reaches: the depth of each one it walks to the end, and `None` for those on
     /// the way down to a symbol that holds an instance of itself or nests too deep.
     fn find_depth(&self, name: &str, learned: &mut HashMap<String, Option<usize>>) -> Option<usize> {
-        let art = |n: &str| self.doc.symbols.iter().find(|s| s.name == n).map(|s| &s.art);
         // The symbols on the way down from `name`: each with the symbols its art shows that are
         // still to be walked, and the deepest nesting found under it so far.
-        let mut path: Vec<(String, Vec<String>, usize)> = vec![(name.to_string(), shown(self.doc, art(name)?), 0)];
+        let mut path: Vec<(String, Vec<String>, usize)> = vec![(name.to_string(), self.shown(self.symbol_art(name)?), 0)];
         loop {
             let (_, todo, _) = path.last_mut()?;
             let Some(next) = todo.pop() else {
@@ -294,8 +401,8 @@ impl<'a> SymbolBoxes<'a> {
                 // Symbols nested MAX_DEPTH deep under `name`.
                 None if path.len() >= MAX_DEPTH => return None,
                 None => {
-                    if let Some(a) = art(&next) {
-                        let todo = shown(self.doc, a);
+                    if let Some(a) = self.symbol_art(&next) {
+                        let todo = self.shown(a);
                         path.push((next, todo, 0));
                     }
                 }
@@ -303,18 +410,88 @@ impl<'a> SymbolBoxes<'a> {
         }
     }
 
-    /// The visual bounds of symbol `name`'s art drawn as an instance with transform `xf` draws it,
-    /// its strokes at their own weight, the instances in it measured by their art boxes. `None`
-    /// when [`Self::depth`] is `None`, in boxes made by [`Self::quick`], and while symbol art or a
-    /// click's box is measured.
+    /// The visual bounds of symbol `name`'s art drawn as an instance with transform `xf` draws it
+    /// (through its 9-slice guides when it has them, [`Document::place_symbol_art`]), its strokes
+    /// at their own weight, the instances in it measured by their art boxes. `None`
+    /// when [`Self::depth`] is `None`, in boxes made by [`Self::quick`], while symbol art or a
+    /// click's box is measured, and when placing the art through its guides could make more than
+    /// [`MAX_SYMBOL_NODES`] objects ([`crate::NineSliceMap::most_placed`]).
     pub(crate) fn placed_visual(&self, name: &str, xf: Affine) -> Option<Rect> {
+        self.placed_visual_within(name, xf, MAX_SYMBOL_NODES)
+    }
+
+    /// [`Self::placed_visual`], `None` when placing the art through its guides could make more
+    /// than `most` objects.
+    pub(crate) fn placed_visual_within(&self, name: &str, xf: Affine, most: u64) -> Option<Rect> {
         if self.quick.get() {
             return None;
         }
+        self.place_and_measure(name, xf, most)
+    }
+
+    /// [`Self::placed_visual`] in boxes made by [`Self::quick`] and while symbol art is measured
+    /// too, for a symbol whose art holds an instance of a symbol with 9-slice guides at any depth:
+    /// where that instance draws its art depends on the transform of each instance above it. The
+    /// art is placed once for each symbol and linear part of `xf`, and the box is moved by the rest
+    /// of `xf`. `None` for other symbols, when [`Self::placed_visual`] is `None` outside quick
+    /// boxes, and when placing the art would take the objects of the art these boxes have placed
+    /// for it past [`MAX_SYMBOL_NODES`], the art placed to measure the instances in placed art
+    /// included. The renderer draws no more objects of symbol art than that in one frame.
+    pub(crate) fn sliced_visual(&self, name: &str, xf: Affine) -> Option<Rect> {
+        if !self.art(name)?.sliced {
+            return None;
+        }
+        let [a, b, c, d, e, f] = xf.as_coeffs();
+        let (linear, moved) = (Affine::new([a, b, c, d, 0.0, 0.0]), Affine::translate((e, f)));
+        let key = (name.to_string(), [a, b, c, d].map(f64::to_bits));
+        let cached = self.sliced.borrow().get(&key).copied();
+        let v = match cached {
+            Some(v) => v,
+            None => {
+                // The most objects placing makes, the art of opacity masks included, is set aside
+                // while the art is placed and measured, and what placing did not make is given back.
+                let art = self.symbol_art(name)?;
+                let most = match self.slice_map(name, linear) {
+                    Some(m) => self.in_art(|| m.most_placed_with(art, self)),
+                    None => art.count_with_masks() as u64,
+                };
+                let used = self.sliced_placed.get();
+                if used.saturating_add(most) > self.sliced_most {
+                    return None;
+                }
+                self.sliced_placed.set(used + most);
+                let (v, placed) = self.place_and_count(name, linear, MAX_SYMBOL_NODES).unwrap_or((None, 0));
+                self.sliced_placed.set(self.sliced_placed.get().saturating_sub(most.saturating_sub(placed)));
+                self.sliced.borrow_mut().insert(key, v);
+                v
+            }
+        };
+        v.map(|v| moved.transform_rect_bbox(v))
+    }
+
+    /// [`Document::symbol_slice_map`] with the guides cutting the art box these boxes measure for
+    /// the symbol (its geometric part, which does not depend on the mode of the boxes).
+    pub(crate) fn slice_map(&self, name: &str, xf: Affine) -> Option<NineSliceMap> {
+        let guides = self.doc.symbol_nine_slice(name)?;
+        let art = self.art_bounds(name).or_else(|| self.symbol_art(name)?.geometric_bounds())?;
+        NineSliceMap::new(guides, art, self.doc.symbol_natural_xf(name), xf)
+    }
+
+    /// The box [`Self::placed_visual_within`] returns outside quick boxes.
+    fn place_and_measure(&self, name: &str, xf: Affine, most: u64) -> Option<Rect> {
+        self.place_and_count(name, xf, most).and_then(|(v, _)| v)
+    }
+
+    /// [`Self::place_and_measure`], with the number of objects of the placed art, the art of
+    /// opacity masks included. `None` when the art is not placed.
+    fn place_and_count(&self, name: &str, xf: Affine, most: u64) -> Option<(Option<Rect>, u64)> {
         self.measure_art(name, |art| {
-            let mut art = (**art).clone();
-            art.transform(xf, false);
-            self.in_art(|| art.visual(Some(self)))
+            let art = match self.slice_map(name, xf) {
+                Some(m) if self.in_art(|| m.most_placed_with(art, self)) > most => return None,
+                Some(m) => self.in_art(|| m.place_with(art, self)),
+                None => transformed(art, xf),
+            };
+            Some((self.in_art(|| art.visual(Some(self))), art.count_with_masks() as u64))
         })
         .flatten()
     }
@@ -333,10 +510,27 @@ impl<'a> SymbolBoxes<'a> {
     fn in_art<R>(&self, f: impl FnOnce() -> R) -> R {
         let pad = self.brush_art.replace(false);
         let strokes = self.art_strokes.replace(true);
+        let consulted = self.consulted.take();
         let r = self.quickly(f);
         self.brush_art.set(pad);
         self.art_strokes.set(strokes);
+        *self.consulted.borrow_mut() = consulted;
         r
+    }
+
+    /// The names of the symbols of the document that the instances in `art` show, each once.
+    fn shown(&self, art: &Node) -> Vec<String> {
+        let mut seen = HashSet::new();
+        let mut names = vec![];
+        art.walk(&mut |n| {
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+                && seen.insert(symbol.as_str())
+                && self.symbol_art(symbol).is_some()
+            {
+                names.push(symbol.clone());
+            }
+        });
+        names
     }
 }
 
@@ -349,21 +543,6 @@ fn give_up(path: &[(String, Vec<String>, usize)], learned: &mut HashMap<String, 
     None
 }
 
-/// The names of the symbols of `doc` that the instances in `art` show, each once.
-fn shown(doc: &Document, art: &Node) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut names = vec![];
-    art.walk(&mut |n| {
-        if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
-            && seen.insert(symbol.as_str())
-            && doc.symbols.iter().any(|s| s.name == *symbol)
-        {
-            names.push(symbol.clone());
-        }
-    });
-    names
-}
-
 /// Measures symbol art `art`, with the instances in it measured by `symbols`.
 fn art_box(art: &Arc<Node>, symbols: &SymbolBoxes) -> Option<ArtBox> {
     let finite = |r: &Rect| [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite());
@@ -372,6 +551,7 @@ fn art_box(art: &Arc<Node>, symbols: &SymbolBoxes) -> Option<ArtBox> {
     let reach = crate::live::max_outset(std::slice::from_ref(art), Some(symbols));
     let mut effects = false;
     let mut brush: Option<f64> = None;
+    let mut sliced = false;
     art.walk(&mut |n| {
         let mut own = n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects().iter()));
         effects |= own.any(|e| e.visible);
@@ -384,9 +564,21 @@ fn art_box(art: &Arc<Node>, symbols: &SymbolBoxes) -> Option<ArtBox> {
             if let Some(w) = symbols.brush_width(symbol) {
                 brush = Some(brush.map_or(w, |b| b.max(w)));
             }
+            sliced |= symbols.doc.symbol_nine_slice(symbol).is_some() || symbols.art(symbol).is_some_and(|a| a.sliced);
         }
     });
-    Some(ArtBox { geometric, visual, reach, effects, brush })
+    let mut reshaped = None;
+    if effects {
+        art.walk(&mut |n| {
+            let b = match &n.kind {
+                NodeKind::SymbolInstance { symbol, .. } if symbols.art(symbol).is_some_and(|a| a.reshaped.is_some()) => n.reach(Some(symbols)),
+                _ if n.clips() => n.children().and_then(|c| c.first()).and_then(|c| crate::hit::reshaped_clip_box(c)),
+                _ => None,
+            };
+            reshaped = vectorcraft_geom::union_opt(reshaped, b.filter(finite));
+        });
+    }
+    Some(ArtBox { geometric, visual, reach, effects, brush, sliced, reshaped })
 }
 
 #[cfg(test)]
@@ -410,7 +602,7 @@ mod tests {
     /// Symbol `name` holding `art` in a group.
     fn symbol(d: &mut Document, name: &str, art: Vec<Node>) {
         let group = Node::group(d.alloc_id(), art.into_iter().map(Arc::new).collect());
-        d.symbols.push(Symbol { name: name.into(), art: Arc::new(group) });
+        d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(group) });
     }
 
     #[test]
@@ -434,6 +626,133 @@ mod tests {
         // corner up to its miter limit).
         let reach = d.symbols[0].art.children().unwrap()[0].appearance.outset();
         assert_eq!(scaled.reach_bounds_with(&s), Some(Rect::new(0.0, 0.0, 60.0, 30.0).inflate(reach, reach)));
+    }
+
+    #[test]
+    fn quick_boxes_hold_art_that_9_slice_guides_move_past_the_instance() {
+        // A 100 × 100 frame with guides a quarter in, holding an instance of a bar from x 10 to 70.
+        // Scaled 2 times across, the bar crosses the left guide and is placed by the middle
+        // column's map, x → 3x − 50: it draws from x −20 to 160, past the frame's left edge at 0.
+        let mut d = Document::new(200.0, 200.0);
+        let bar = rect(&mut d, Rect::new(10.0, 40.0, 70.0, 60.0), 0.0);
+        symbol(&mut d, "Bar", vec![bar]);
+        let frame = rect(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), 0.0);
+        let inner = instance(&mut d, "Bar", Affine::IDENTITY);
+        symbol(&mut d, "Panel", vec![frame, inner]);
+        d.set_symbol_nine_slice("Panel", Some(crate::SymbolNineSlice::default()));
+        let panel = instance(&mut d, "Panel", Affine::scale_non_uniform(2.0, 1.0));
+        let exact = panel.visual_bounds_with(&d.symbol_boxes()).unwrap();
+        assert_eq!(exact, Rect::new(-20.0, 0.0, 200.0, 100.0));
+        let quick = panel.visual_bounds_with(&d.symbol_boxes().quick()).unwrap();
+        assert_eq!(quick.union(exact), quick, "{quick:?} holds {exact:?}");
+    }
+
+    #[test]
+    fn quick_boxes_hold_art_that_nested_9_slice_guides_move_past_the_instance() {
+        // The panel of the test above, in a symbol without guides: once at its natural size and
+        // once scaled 2 times across. Where the bar draws depends on the transform the holder's
+        // instance adds to the panel's.
+        let mut d = Document::new(200.0, 200.0);
+        let bar = rect(&mut d, Rect::new(10.0, 40.0, 70.0, 60.0), 0.0);
+        symbol(&mut d, "Bar", vec![bar]);
+        let frame = rect(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), 0.0);
+        let inner = instance(&mut d, "Bar", Affine::IDENTITY);
+        symbol(&mut d, "Panel", vec![frame, inner]);
+        d.set_symbol_nine_slice("Panel", Some(crate::SymbolNineSlice::default()));
+        let natural = instance(&mut d, "Panel", Affine::IDENTITY);
+        symbol(&mut d, "Holder", vec![natural]);
+        let wide = instance(&mut d, "Panel", Affine::scale_non_uniform(2.0, 1.0));
+        symbol(&mut d, "Wide holder", vec![wide]);
+        // The holder scaled 2 times across scales the panel 2 times across: the bar draws from x
+        // −20 to 160, as in the test above.
+        let holder = instance(&mut d, "Holder", Affine::scale_non_uniform(2.0, 1.0));
+        let quick = holder.visual_bounds_with(&d.symbol_boxes().quick()).unwrap();
+        let drawn = Rect::new(-20.0, 40.0, 160.0, 60.0);
+        assert_eq!(quick.union(drawn), quick, "{quick:?} holds {drawn:?}");
+        let wide_holder = instance(&mut d, "Wide holder", Affine::scale(2.0));
+        for n in [&holder, &wide_holder] {
+            let exact = n.visual_bounds_with(&d.symbol_boxes()).unwrap();
+            assert!(exact.x0 < 0.0, "{exact:?} reaches past the frame's left edge");
+            let quick = n.visual_bounds_with(&d.symbol_boxes().quick()).unwrap();
+            assert_eq!(quick.union(exact), quick, "{quick:?} holds {exact:?}");
+            let reach = n.reach_bounds_with(&d.symbol_boxes()).unwrap();
+            assert_eq!(reach.union(exact), reach, "{reach:?} holds {exact:?}");
+        }
+    }
+
+    #[test]
+    fn quick_boxes_place_art_that_holds_9_slice_instances_a_bounded_number_of_times() {
+        // A frame with guides, and 16 levels of symbols that each hold an instance of the level
+        // below a little taller and one turned a little: the transforms that place the frame differ
+        // for each of the 2^16 ways down, so measuring every one would place art 2^17 times.
+        let mut d = Document::new(200.0, 200.0);
+        let frame = rect(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), 0.0);
+        symbol(&mut d, "Level 0", vec![frame]);
+        d.set_symbol_nine_slice("Level 0", Some(crate::SymbolNineSlice::default()));
+        let (taller, turned) = (Affine::scale_non_uniform(1.0, 1.01), Affine::rotate(0.1));
+        for i in 1..=16 {
+            let below = format!("Level {}", i - 1);
+            let pair = vec![instance(&mut d, &below, taller), instance(&mut d, &below, turned)];
+            symbol(&mut d, &format!("Level {i}"), pair);
+        }
+        let top = instance(&mut d, "Level 16", taller);
+        // With room for 5,000 objects: each placement places at least one.
+        let s = SymbolBoxes { sliced_most: 5000, ..d.symbol_boxes().quick() };
+        assert!(top.visual_bounds_with(&s).is_some());
+        assert!(s.sliced_placed.get() <= 5000, "{} objects", s.sliced_placed.get());
+        assert!(s.art_measured() <= 5000 + d.symbols.len(), "{} measures", s.art_measured());
+        // Instances whose transforms differ only by a move place the art once.
+        let level = instance(&mut d, "Level 1", taller);
+        let moved = instance(&mut d, "Level 1", Affine::translate((5.0, 7.0)) * taller);
+        let s = d.symbol_boxes().quick();
+        let b = level.visual_bounds_with(&s).unwrap();
+        let measured = s.art_measured();
+        assert_eq!(moved.visual_bounds_with(&s), Some(Affine::translate((5.0, 7.0)).transform_rect_bbox(b)));
+        assert_eq!(s.art_measured(), measured);
+        // The art of an opacity mask counts toward the limit: a group holding the framed
+        // instance, masked by a group of 10 rectangles, is 13 objects.
+        let mut framed = instance(&mut d, "Level 0", Affine::IDENTITY);
+        let squares = (0..10).map(|_| Arc::new(rect(&mut d, Rect::new(0.0, 0.0, 10.0, 10.0), 0.0))).collect();
+        let mask = Node::group(d.alloc_id(), squares);
+        framed.extras_mut().mask = Some(Box::new(crate::OpacityMask::new(mask, true)));
+        symbol(&mut d, "Masked", vec![framed]);
+        let masked = instance(&mut d, "Masked", taller);
+        let s = d.symbol_boxes().quick();
+        assert!(masked.visual_bounds_with(&s).is_some());
+        assert_eq!(s.sliced_placed.get(), 13);
+    }
+
+    #[test]
+    fn measuring_9_slice_instances_reads_the_symbol_list_once() {
+        // 2,000 symbols, then a frame with guides and a symbol with guides holding the frame
+        // scaled 2 times across, each shown by 200 instances scaled by different amounts.
+        let mut d = Document::new(200.0, 200.0);
+        for i in 0..2000 {
+            let dot = rect(&mut d, Rect::new(0.0, 0.0, 1.0, 1.0), 0.0);
+            symbol(&mut d, &format!("Dot {i}"), vec![dot]);
+        }
+        let frame = rect(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0);
+        symbol(&mut d, "Panel", vec![frame]);
+        d.set_symbol_nine_slice("Panel", Some(crate::SymbolNineSlice::default()));
+        let wide = instance(&mut d, "Panel", Affine::scale_non_uniform(2.0, 1.0));
+        symbol(&mut d, "Holder", vec![wide]);
+        d.set_symbol_nine_slice("Holder", Some(crate::SymbolNineSlice::default()));
+        let scaled = |d: &mut Document, name: &str| -> Vec<Node> {
+            (1..=200).map(|i| instance(d, name, Affine::scale_non_uniform(1.0 + f64::from(i) / 100.0, 1.5))).collect()
+        };
+        let (panels, holders) = (scaled(&mut d, "Panel"), scaled(&mut d, "Holder"));
+        // What each instance measures in boxes of its own.
+        let exact: Vec<_> = panels.iter().map(|n| n.visual_bounds_with(&d.symbol_boxes())).collect();
+        let quick: Vec<_> = holders.iter().map(|n| n.visual_bounds_with(&d.symbol_boxes().quick())).collect();
+        let read = || SYMBOLS_READ.with(Cell::get);
+        let before = read();
+        let s = d.symbol_boxes();
+        assert_eq!(panels.iter().map(|n| n.visual_bounds_with(&s)).collect::<Vec<_>>(), exact);
+        let s = d.symbol_boxes().quick();
+        assert_eq!(holders.iter().map(|n| n.visual_bounds_with(&s)).collect::<Vec<_>>(), quick);
+        // Each set of boxes reads the list once to find symbols by name.
+        let symbols = d.symbols.len();
+        assert!(read() - before <= 2 * symbols, "{} symbols read", read() - before);
     }
 
     #[test]

@@ -16,6 +16,8 @@ pub(crate) const DOLLAR_EVAL_FILE: &str = "evalFile";
 // https://extendscript.docsforadobe.dev/extendscript-tools-features/user-notification-dialogs/
 pub(crate) const NOTIFY: &[&str] = &["alert", "confirm", "prompt"];
 
+// The global function. `$.localize` is a property of `$` (the Dollar object page above), so it is
+// a `$` member:
 // https://extendscript.docsforadobe.dev/extendscript-tools-features/localizing-extendscript-strings/
 pub(crate) const LOCALIZE: &str = "localize";
 
@@ -150,7 +152,7 @@ features! {
     DirectiveInclude "directive.include" Language,
     DirectiveOther "directive.other" Language,
     DirectiveTarget "directive.target" Language,
-    DirectiveTargetengine "directive.targetengine" HostOnly,
+    DirectiveTargetengine "directive.targetengine" Language,
     Dollar "dollar" Language,
     DollarEnv "dollar.env" Files,
     DollarEvalFile "dollar.evalFile" Files,

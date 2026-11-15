@@ -42,7 +42,7 @@ pub(super) fn delete(app: &mut VectorcraftApp, names: Vec<String>, now: bool) {
     }
     let message = match names.as_slice() {
         [n] => crate::i18n::fmt(tl!("Delete “{name}”?"), &[("name", n)]),
-        _ => crate::i18n::fmt(tl!("Delete these {count} swatches and groups?"), &[("count", &names.len().to_string())]),
+        _ => crate::i18n::tn(names.len() as u64, "Delete this {n} swatch or group?", "Delete these {n} swatches and groups?"),
     };
     crate::dialogs::confirm::ask(app, &message, tl!("Art using a deleted global swatch keeps its colour."), "swatch.delete", params);
 }
@@ -121,7 +121,7 @@ pub(super) fn new_swatch(app: &mut VectorcraftApp, sel: &[String], m: egui::Modi
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let view: View = pstate(ui.ctx(), "swatch-view");
+    let view = app.ui.swatches_view;
     let selected = selection(app, ui);
     let del = deletable(&selected);
     let opts = editable(app, &selected);
@@ -174,13 +174,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     for (v, label) in View::ALL {
         if menu_item(ui, label, true, v == view) {
-            set_pstate(ui.ctx(), "swatch-view", v);
+            app.run("ui.panelView", json!({ "panel": "swatches", "view": v })).ok();
         }
     }
     ui.separator();
     let find: bool = pstate(ui.ctx(), "swatch-show-find");
     if menu_item(ui, tl!("Show Find Field"), true, find) {
         set_pstate(ui.ctx(), "swatch-show-find", !find);
+    }
+    let recent = app.ui.swatches_show_recent_colors;
+    if menu_item(ui, tl!("Show Recent Colors"), true, recent) {
+        app.ui.swatches_show_recent_colors = !recent;
     }
     ui.separator();
     if menu_item(ui, tl!("Swatch Options…"), opts.is_some(), false)

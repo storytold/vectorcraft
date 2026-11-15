@@ -29,6 +29,11 @@ pub const EPS: f64 = 1e-9;
 /// Most line segments [`flatten`] makes of one curve, whatever its size and the tolerance.
 pub const MAX_FLATTEN_PER_CURVE: f64 = 4096.0;
 
+/// A curve whose control polygon is longer than this is drawn as a line by [`flatten`]: kurbo
+/// squares and cubes coordinates when it sizes its work, and with coordinates this large that
+/// overflows to infinity and it reserves a buffer no machine has. (Far beyond any drawing.)
+pub const MAX_FLATTEN_LENGTH: f64 = 1e60;
+
 /// [`kurbo::flatten`], each curve's tolerance raised so that it makes at most about
 /// [`MAX_FLATTEN_PER_CURVE`] segments. kurbo sizes its work and a buffer from the curve's
 /// coordinates before producing anything, so a small curve with far-out handles (from a file, or
@@ -60,7 +65,14 @@ pub fn flatten(path: impl IntoIterator<Item = PathEl>, tolerance: f64, mut callb
         };
         last = Some(to);
         let (Some(from), Some(length)) = (from, length) else { continue };
-        if !length.is_finite() {
+        // A short polygon far from the origin still overflows kurbo's `p * (mt * 2.0)` products.
+        let far = |p: Point| !(p.x.abs() <= MAX_FLATTEN_LENGTH && p.y.abs() <= MAX_FLATTEN_LENGTH);
+        let controls_far = match el {
+            PathEl::QuadTo(a, _) => far(a),
+            PathEl::CurveTo(a, b, _) => far(a) || far(b),
+            _ => false,
+        };
+        if length.is_nan() || length > MAX_FLATTEN_LENGTH || far(from) || far(to) || controls_far {
             callback(PathEl::LineTo(to));
             continue;
         }
@@ -198,6 +210,16 @@ mod tests {
         assert_eq!(ours, theirs);
         let nan = [PathEl::MoveTo(Point::ZERO), PathEl::QuadTo(Point::new(f64::NAN, 0.0), Point::new(1.0, 1.0))];
         assert_eq!(count(&nan, 0.25), 2);
+        // Finite coordinates whose squares overflow are a line to the end too.
+        let huge = [PathEl::MoveTo(Point::ZERO), PathEl::CurveTo(Point::new(1e200, 0.0), Point::new(-1e200, 1e200), Point::new(1.0, 0.0))];
+        assert_eq!(count(&huge, 0.25), 2);
+        // A short polygon out near f64::MAX: a line, and every point it emits is finite.
+        let m = f64::MAX / 2.0;
+        let far = [PathEl::MoveTo(Point::new(m, m)), PathEl::CurveTo(Point::new(m, m), Point::new(m, m), Point::new(m, m))];
+        let mut points = vec![];
+        flatten(far.iter().copied(), 0.25, |e| points.push(e));
+        assert_eq!(points.len(), 2);
+        assert!(points.iter().all(|e| matches!(e, PathEl::MoveTo(p) | PathEl::LineTo(p) if p.is_finite())), "{points:?}");
     }
 
     #[test]

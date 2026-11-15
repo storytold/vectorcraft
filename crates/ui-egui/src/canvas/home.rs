@@ -22,23 +22,31 @@ pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     });
 }
 
-/// The Home screen's column: welcome, New / Open, Recent Files, presets and community links.
+/// The Home screen's column: welcome, New / Open, Recent Files, Learn, presets and community links.
 fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(tl!("Welcome to VectorCraft")).font(theme::semibold(26.0)).color(t.text));
-    ui.add_space(4.0);
-    ui.label(egui::RichText::new(tl!("Vector illustration — fast, open, scriptable.")).size(14.0).color(t.text_dim));
-    ui.add_space(22.0);
-    ui.horizontal(|ui| {
-        if widgets::primary_button(ui, tl!("New file")).clicked() {
-            app.run("file.newDialog", json!({})).ok();
-        }
-        ui.add_space(8.0);
-        if widgets::secondary_button(ui, tl!("Open")).clicked() {
-            app.run("file.open", json!({})).ok();
-        }
+    // The welcome and the New / Open buttons sit centred, as PhotoCraft's Home screen does (#4684).
+    ui.vertical_centered(|ui| {
+        ui.label(egui::RichText::new(tl!("Welcome to VectorCraft")).font(theme::semibold(26.0)).color(t.text));
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new(tl!("Vector illustration — fast, open, scriptable.")).size(14.0).color(t.text_dim));
+        ui.add_space(22.0);
+        // `horizontal` fills the width, so the row's own width sets its left edge.
+        let gap = ui.spacing().item_spacing.x + 8.0;
+        let row = widgets::button_width(ui, tl!("New file")) + gap + widgets::button_width(ui, tl!("Open"));
+        ui.horizontal(|ui| {
+            ui.add_space(((ui.available_width() - row) / 2.0).max(0.0));
+            if widgets::primary_button(ui, tl!("New file")).clicked() {
+                app.run("file.newDialog", json!({})).ok();
+            }
+            ui.add_space(8.0);
+            if widgets::secondary_button(ui, tl!("Open")).clicked() {
+                app.run("file.open", json!({})).ok();
+            }
+        });
     });
     recent(app, ui);
+    learn(app, ui);
     ui.add_space(28.0);
     ui.label(egui::RichText::new(tl!("Quickly start a new file")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
@@ -54,9 +62,45 @@ fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     ui.add_space(28.0);
-    ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
+    ui.vertical_centered(|ui| {
+        ui.label(egui::RichText::new(tl!("Community")).font(theme::semibold(14.0)).color(t.text));
+        ui.add_space(10.0);
+        crate::community::links_centered(app, ui);
+    });
+}
+
+/// The id of the Home screen's Quick skill guide card.
+const LEARN_GUIDE_ID: &str = "home-quick-skill-guide";
+
+/// The Home screen's Learn section: the Quick skill guide card, which shows the Learn panel's list
+/// of skills, and the Learn panel's tutorials under their skills, each a button that shows the
+/// panel at its steps (`learn.show`). Neither opens, closes or switches a document, and the panel
+/// shows beside the Home screen.
+fn learn(app: &mut VectorcraftApp, ui: &mut Ui) {
+    use crate::panels::learn::{catalog, guide_card};
+    let t = Tokens::get(ui.ctx());
+    ui.add_space(28.0);
+    ui.label(egui::RichText::new(tl!("Learn")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
-    crate::community::links(app, ui);
+    guide_card(app, ui, egui::Id::unique(LEARN_GUIDE_ID), t.panel);
+    let mut open = None;
+    for skill in catalog::SKILLS {
+        ui.add_space(10.0);
+        ui.label(egui::RichText::new(skill.title).size(12.0).color(t.text_dim));
+        ui.add_space(4.0);
+        ui.horizontal_wrapped(|ui| {
+            for tutorial in skill.tutorials {
+                if widgets::secondary_button(ui, tutorial.title).clicked() {
+                    open = Some(tutorial.id);
+                }
+            }
+        });
+    }
+    if let Some(id) = open
+        && let Err(e) = app.run("learn.show", json!({ "tutorial": id }))
+    {
+        app.status(e);
+    }
 }
 
 /// The Home screen's Recent Files (#663): the first of File › Open Recent Files, each its name and
@@ -74,7 +118,7 @@ fn recent(app: &mut VectorcraftApp, ui: &mut Ui) {
     for path in files {
         if recent_row(ui, &path).clicked() {
             // A failure is reported to the user there.
-            let _ = crate::io::open_recent_reporting(app, &path);
+            let _ = crate::io::open_reporting(app, &path);
         }
     }
 }

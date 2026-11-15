@@ -48,6 +48,19 @@ fn every_guide_colour_is_a_library_member() {
     assert!(s.execute("color.harmony", &json!({"color": "#3a7bd5", "rule": "triad", "limitTo": "document"})).is_err(), "no document");
 }
 
+/// A `limitTo` that is not a string names no library: `color.harmony` refuses it with the error it
+/// gives for a name it does not know, and reads a null as no limit.
+#[test]
+fn a_limit_that_is_not_a_string_names_no_library() {
+    let mut s = Session::new();
+    for (limit, shown) in [(json!(5), "`5`"), (json!(true), "`true`"), (json!(["web-safe-216"]), "`[\"web-safe-216\"]`")] {
+        let e = s.execute("color.harmony", &json!({"color": "#3a7bd5", "rule": "triad", "limitTo": limit})).unwrap_err().to_string();
+        assert!(e.contains(&format!("no swatch library {shown}")), "{limit}: {e}");
+    }
+    let free = s.execute("color.harmony", &json!({"color": "#3a7bd5", "rule": "triad", "limitTo": null})).unwrap();
+    assert_eq!(free["colors"][0], "#3a7bd5");
+}
+
 #[test]
 fn document_swatches_limit_the_guide_and_recolor() {
     let mut s = Session::new();

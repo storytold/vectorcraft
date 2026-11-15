@@ -116,7 +116,7 @@ fn hex(data: &[u8]) -> Vec<u8> {
 }
 
 /// `data` decoded from base-85 (white space skipped, `z` for four zeros, up to `~>`).
-fn base85(data: &[u8]) -> Vec<u8> {
+fn base85(data: &[u8], max: usize) -> Vec<u8> {
     let (mut out, mut group) = (vec![], vec![]);
     let flush = |group: &mut Vec<u32>, out: &mut Vec<u8>| {
         let n = group.len();
@@ -128,6 +128,10 @@ fn base85(data: &[u8]) -> Vec<u8> {
         group.clear();
     };
     for &c in data.iter().take_while(|c| **c != b'~') {
+        // Past `max` the caller refuses it: stop growing (a `z` is four bytes from one).
+        if out.len() > max {
+            break;
+        }
         match c {
             b'z' if group.is_empty() => out.extend([0; 4]),
             b'!'..=b'u' => {
@@ -144,13 +148,15 @@ fn base85(data: &[u8]) -> Vec<u8> {
 }
 
 /// The most data of `len` bytes can grow to through `filters`: 1,032 times through Flate (its
-/// largest ratio), 3,641 through LZW (4,096 bytes from a 9-bit code), 64 through run-length.
+/// largest ratio), 3,641 through LZW (4,096 bytes from a 9-bit code), 64 through run-length, 4
+/// through ASCII85 (`z`).
 fn most_after(len: usize, filters: &[Name<'_>]) -> u128 {
     filters.iter().fold(len as u128, |n, f| {
         n.saturating_mul(match f.as_ref() {
             b"FlateDecode" | b"Fl" => 1032,
             b"LZWDecode" | b"LZW" => 3641,
             b"RunLengthDecode" | b"RL" => 64,
+            b"ASCII85Decode" | b"A85" => 4,
             _ => 1,
         })
     })
@@ -213,7 +219,7 @@ fn decode(data: &[u8], dict: &Dict<'_>, keep: bool) -> Result<Option<Vec<u8>>, T
             b"LZWDecode" | b"LZW" => lzw(&data, early, max),
             b"RunLengthDecode" | b"RL" => Some(run_length(&data, max)),
             b"ASCIIHexDecode" | b"AHx" => Some(hex(&data)),
-            b"ASCII85Decode" | b"A85" => Some(base85(&data)),
+            b"ASCII85Decode" | b"A85" => Some(base85(&data, max)),
             _ => None,
         };
         match out {
@@ -234,34 +240,52 @@ fn maybe_content(dict: &Dict<'_>) -> bool {
         && ![&b"Length1"[..], b"Length2", b"Length3", b"FunctionType", b"N"].iter().any(|k| dict.contains_key(k))
 }
 
-/// Would the reader fail on `stream` (or on an inline image in it, when it is content): a
-/// predictor it can't apply, or more than its [`budget`] decoded?
-pub(crate) fn unsafe_stream(stream: &Stream<'_>) -> bool {
-    unsafe_data(stream, true)
+/// Why the reader would fail on a stream ([`refused`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Refused {
+    /// A predictor whose decode parameters it can't apply ([`bad_predictor`]).
+    Parameters,
+    /// More than this many bytes decoded: the stream's [`budget`].
+    TooBig(usize),
 }
 
-/// [`unsafe_stream`], looking for inline images in it when `inside` (not in an inline image's own
+/// A stream the reader would fail on: why, and whether it is an inline image in it that it would
+/// fail on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Refusal {
+    pub why: Refused,
+    pub inline_image: bool,
+}
+
+/// Would the reader fail on `stream` (or on an inline image in it, when it is content): a
+/// predictor it can't apply, or more than its [`budget`] decoded? Why, if so.
+pub(crate) fn refused(stream: &Stream<'_>) -> Option<Refusal> {
+    refused_data(stream, true)
+}
+
+/// [`refused`], looking for inline images in it when `inside` (not in an inline image's own
 /// data: it would be read again for each inline image a hostile one nests).
-fn unsafe_data(stream: &Stream<'_>, inside: bool) -> bool {
+fn refused_data(stream: &Stream<'_>, inside: bool) -> Option<Refusal> {
     let dict = stream.dict();
+    let refusal = |why| Some(Refusal { why, inline_image: !inside });
     if params(dict).iter().any(bad_predictor) {
-        return true;
+        return refusal(Refused::Parameters);
     }
     let content = inside && maybe_content(dict);
     match decode(&stream.raw_data(), dict, content) {
-        Err(TooBig) => true,
+        Err(TooBig) => refusal(Refused::TooBig(budget(dict))),
         Ok(Some(data)) if content && data.windows(2).any(|w| w == b"ID") => {
             let mut ops = TypedIter::new(&data);
             while let Some(op) = ops.next() {
                 if let TypedInstruction::InlineImage(image) = op
-                    && unsafe_data(image.0, false)
+                    && let Some(r) = refused_data(image.0, false)
                 {
-                    return true;
+                    return Some(r);
                 }
             }
-            false
+            None
         }
-        Ok(_) => false,
+        Ok(_) => None,
     }
 }
 
@@ -722,8 +746,10 @@ mod tests {
     #[test]
     fn the_decoders_read_what_the_specification_writes() {
         assert_eq!(hex(b"48 65 6c6C6\n>junk"), b"Hell`");
-        assert_eq!(base85(b"87cURD]i,\"Ebo80~>"), b"Hello World!");
-        assert_eq!(base85(b"z!!~>"), [0, 0, 0, 0, 0]);
+        assert_eq!(base85(b"87cURD]i,\"Ebo80~>", usize::MAX), b"Hello World!");
+        assert_eq!(base85(b"z!!~>", usize::MAX), [0, 0, 0, 0, 0]);
+        // Zeros past the allowance are not written: a little over it, and the caller refuses it.
+        assert!(base85(&[b'z'; 1 << 20], 1000).len() <= 1004);
         assert_eq!(run_length(&[2, b'a', b'b', b'c', 254, b'x', 128, b'q'], MAX_DECODED), b"abcxxx");
         let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
         std::io::Write::write_all(&mut e, &[7; 1000]).unwrap();

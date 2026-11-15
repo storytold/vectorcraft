@@ -11,6 +11,10 @@ use crate::ImageBlob;
 /// address and aborts when an allocation fails, so it keeps the decoder's own 512 MB.
 pub const MAX_RASTER_ALLOC: u64 = if cfg!(target_arch = "wasm32") { 512 << 20 } else { 2 << 30 };
 
+/// A box of an image to sample, in 0 to 1 units of its width and height (`None`: all of it), the
+/// pixels to sample from it at most, and the pixel centres to take ([`ImageBlob::sample_pixels`]).
+pub type PixelPick<'a> = (Option<[f64; 4]>, usize, &'a dyn Fn(f64, f64) -> bool);
+
 /// The pixels of encoded image `bytes` as RGBA; `None` when they can't be decoded, would take
 /// more than `max` bytes as RGBA, or need more than `max` bytes to decode. The size is read from
 /// the header first: the decoder's limit is on the file's samples, and a gray image is a quarter
@@ -59,6 +63,157 @@ impl ImageBlob {
         let mut png = Vec::new();
         img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
         Some(Self::png(png))
+    }
+
+    /// For each of `picks`, at most its budget of the image's pixels (at least one), spread evenly
+    /// in rows and columns over the pick's box (`[u0, v0, u1, v1]`, where 0 to 1 spans the
+    /// image's width and height from the top left; clipped to the image; `None`: the whole image),
+    /// as straight RGBA. Only pixels whose centres the pick's function takes (in the same 0 to 1
+    /// units) are given, and the function is called once for each pixel sampled. The image is
+    /// decoded once for all the picks. `None` when it can't be decoded within [`MAX_RASTER_ALLOC`].
+    pub fn sample_pixels(&self, picks: &[PixelPick<'_>]) -> Option<Vec<Vec<[u8; 4]>>> {
+        let img = rgba_within(&self.bytes, MAX_RASTER_ALLOC)?;
+        let (w, h) = img.dimensions();
+        let (fw, fh) = (f64::from(w), f64::from(h));
+        let span = |a: f64, b: f64, n: f64| {
+            let (a, b) = (a.min(b), a.max(b));
+            ((a * n).floor().clamp(0.0, n) as u32, (b * n).ceil().clamp(0.0, n) as u32)
+        };
+        let sample = |area: Option<[f64; 4]>, budget: usize, keep: &dyn Fn(f64, f64) -> bool| {
+            let [u0, v0, u1, v1] = area.unwrap_or([0.0, 0.0, 1.0, 1.0]);
+            let (x0, x1) = span(u0, u1, fw);
+            let (y0, y1) = span(v0, v1, fh);
+            if x0 >= x1 || y0 >= y1 {
+                return vec![];
+            }
+            // Rows and columns in proportion to the box, at most `budget` cells in all.
+            let (bw, bh, budget) = (f64::from(x1 - x0), f64::from(y1 - y0), budget.max(1) as f64);
+            let (sx, sy) = if bw * bh <= budget {
+                (1, 1)
+            } else {
+                let rows = (budget * bh / bw).sqrt().floor().clamp(1.0, bh.min(budget));
+                let cols = (budget / rows).floor().clamp(1.0, bw);
+                ((bw / cols).ceil() as usize, (bh / rows).ceil() as usize)
+            };
+            let mut out = vec![];
+            for y in (y0..y1).step_by(sy) {
+                for x in (x0..x1).step_by(sx) {
+                    if keep((f64::from(x) + 0.5) / fw, (f64::from(y) + 0.5) / fh) {
+                        out.push(img.get_pixel(x, y).0);
+                    }
+                }
+            }
+            out
+        };
+        Some(picks.iter().map(|(area, budget, keep)| sample(*area, *budget, *keep)).collect())
+    }
+
+    /// The image as a grayscale PNG: `f` gives each pixel's gray level from its (straight) RGB, and
+    /// the PNG has an alpha channel only when some pixel isn't opaque. `f` runs once per distinct
+    /// color. `None` when the image can't be decoded, or when its file stores grayscale already
+    /// and no visible pixel changed.
+    pub fn map_gray(&self, mut f: impl FnMut([u8; 3]) -> u8) -> Option<ImageBlob> {
+        let img = rgba_within(&self.bytes, MAX_RASTER_ALLOC)?;
+        let (width, height) = img.dimensions();
+        let mut memo: HashMap<[u8; 3], u8> = HashMap::new();
+        let mut changed = self.gray_source().is_none();
+        let mut opaque = true;
+        let mut gray_alpha = Vec::with_capacity(img.len() / 2);
+        for px in img.pixels() {
+            let rgb = [px.0[0], px.0[1], px.0[2]];
+            let level = *memo.entry(rgb).or_insert_with(|| f(rgb));
+            changed |= px.0[3] > 0 && [level; 3] != rgb;
+            opaque &= px.0[3] == 255;
+            gray_alpha.extend_from_slice(&[level, px.0[3]]);
+        }
+        if !changed {
+            return None;
+        }
+        let mut png = Vec::new();
+        let mut out = Cursor::new(&mut png);
+        if opaque {
+            let levels = gray_alpha.iter().step_by(2).copied().collect();
+            image::GrayImage::from_raw(width, height, levels)?.write_to(&mut out, image::ImageFormat::Png).ok()?;
+        } else {
+            image::GrayAlphaImage::from_raw(width, height, gray_alpha)?.write_to(&mut out, image::ImageFormat::Png).ok()?;
+        }
+        Some(Self::png(png))
+    }
+}
+
+/// How a grayscale image's file stores its pixels ([`ImageBlob::gray_source`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GraySource {
+    /// One bit a pixel: black and white only.
+    pub one_bit: bool,
+    /// The file has an alpha channel.
+    pub alpha: bool,
+}
+
+impl ImageBlob {
+    /// Whether the image's file stores grayscale or 1-bit pixels (the images a fill color
+    /// colorizes), and how; `None` for color images and data that isn't an image. Reads only its
+    /// header.
+    pub fn gray_source(&self) -> Option<GraySource> {
+        let gray = |one_bit: bool, alpha: bool| Some(GraySource { one_bit, alpha });
+        if let Some((kind, _)) = crate::cmyk::tiff(&self.bytes) {
+            return match kind {
+                tiff::ColorType::Gray(bits) => gray(bits == 1, false),
+                tiff::ColorType::GrayA(bits) => gray(bits == 1, true),
+                _ => None,
+            };
+        }
+        if crate::cmyk::jpeg_components(&self.bytes) == Some(1) {
+            return gray(false, false);
+        }
+        use image::{ExtendedColorType as E, ImageDecoder as _};
+        let reader = image::ImageReader::new(Cursor::new(self.bytes.as_slice())).with_guessed_format().ok()?;
+        match reader.into_decoder().ok()?.original_color_type() {
+            E::L1 => gray(true, false),
+            E::La1 => gray(true, true),
+            E::L2 | E::L4 | E::L8 | E::L16 => gray(false, false),
+            E::La2 | E::La4 | E::La8 | E::La16 => gray(false, true),
+            _ => None,
+        }
+    }
+
+    /// How much of a colorize paint each pixel shows, row by row from the top: how dark the pixel
+    /// is (255 less its Rec. 709 luma) scaled by its alpha, so white and transparent pixels are 0.
+    /// Returns the width, the height and one byte a pixel; `None` when the image can't be decoded
+    /// within [`MAX_RASTER_ALLOC`].
+    pub fn coverage(&self) -> Option<(u32, u32, Vec<u8>)> {
+        let img = rgba_within(&self.bytes, MAX_RASTER_ALLOC)?;
+        let (w, h) = img.dimensions();
+        let cover = img
+            .pixels()
+            .map(|p| {
+                let [r, g, b, a] = p.0;
+                let luma = 0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32;
+                ((255.0 - luma).clamp(0.0, 255.0) * a as f32 / 255.0).round() as u8
+            })
+            .collect();
+        Some((w, h, cover))
+    }
+
+    /// The pixels as straight RGBA, row by row from the top, with the width and the height;
+    /// `None` when the image can't be decoded within [`MAX_RASTER_ALLOC`].
+    pub fn rgba(&self) -> Option<(u32, u32, Vec<u8>)> {
+        let img = rgba_within(&self.bytes, MAX_RASTER_ALLOC)?;
+        let (w, h) = img.dimensions();
+        Some((w, h, img.into_raw()))
+    }
+
+    /// The width and height in pixels the image's file says it has; `None` for data that isn't an
+    /// image the decoder reads. Reads only its header.
+    pub fn pixel_size(&self) -> Option<(u32, u32)> {
+        image::ImageReader::new(Cursor::new(self.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions().ok()
+    }
+
+    /// Whether the image's file is a PNG that stores palette indices (an indexed-color image).
+    /// Reads only its header.
+    pub fn indexed_png(&self) -> bool {
+        // The signature, then the IHDR chunk: length, type, width, height, bit depth, color type.
+        self.bytes.starts_with(b"\x89PNG\r\n\x1a\n") && self.bytes.get(12..16) == Some(b"IHDR".as_slice()) && self.bytes.get(25) == Some(&3)
     }
 }
 
@@ -132,6 +287,20 @@ impl ImageBlob {
         Some(out)
     }
 
+    /// Whether any pixel of the image is less than fully opaque. `false` when the image can't be
+    /// decoded. The last image decoded is kept, as for [`Self::sample`].
+    pub fn has_transparency(&self) -> bool {
+        self.decoded().is_some_and(|img| img.pixels().any(|p| p.0[3] < 255))
+    }
+
+    /// The alpha of each pixel, row by row from the top: the width, the height and one byte a
+    /// pixel. `None` when the image can't be decoded. The last image decoded is kept, as for
+    /// [`Self::sample`].
+    pub fn alpha(&self) -> Option<(u32, u32, Vec<u8>)> {
+        let img = self.decoded()?;
+        Some((img.width(), img.height(), img.pixels().map(|p| p.0[3]).collect()))
+    }
+
     /// The decoded pixels (the last image decoded is kept for the next sample).
     fn decoded(&self) -> Option<Arc<image::RgbaImage>> {
         thread_local! {
@@ -187,6 +356,33 @@ mod tests {
 
     fn pixels(b: &ImageBlob) -> Vec<[u8; 4]> {
         image::load_from_memory(&b.bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect()
+    }
+
+    /// Sampling reads the pixels of a box of the image, spread to about the budget, and only those
+    /// whose centres `keep` takes.
+    #[test]
+    fn sampled_pixels_stay_in_their_box_and_budget() {
+        // 4 × 2: a red left half and a blue right half.
+        let (r, b) = ([255, 0, 0, 255], [0, 0, 255, 255]);
+        let img = blob(&[r, r, b, b, r, r, b, b], 4, 2);
+        let any = |_: f64, _: f64| true;
+        let one = |b: &ImageBlob, area: Option<[f64; 4]>, budget: usize| b.sample_pixels(&[(area, budget, &any)]).unwrap().remove(0);
+        assert_eq!(one(&img, None, 100).len(), 8, "the budget covers every pixel");
+        assert_eq!(one(&img, Some([0.5, 0.0, 1.0, 1.0]), 100), vec![b; 4], "the right half");
+        assert_eq!(one(&img, Some([1.0, 1.0, 0.5, 0.0]), 100), vec![b; 4], "a box given backwards");
+        assert!(one(&img, Some([2.0, 0.0, 3.0, 1.0]), 100).is_empty(), "outside the image");
+        assert_eq!(one(&img, None, 2).len(), 2, "every second pixel of every second row");
+        assert_eq!(one(&img, None, 0), vec![r], "a budget of 0 counts as 1");
+        let left = |u: f64, _: f64| u < 0.5;
+        let both = img.sample_pixels(&[(None, 100, &left), (Some([0.5, 0.0, 1.0, 1.0]), 100, &any)]).unwrap();
+        assert_eq!(both, vec![vec![r; 4], vec![b; 4]], "several picks, each with the centres its function takes");
+        let sizes: Vec<usize> = img.sample_pixels(&[(None, 2, &any), (None, 100, &any)]).unwrap().iter().map(Vec::len).collect();
+        assert_eq!(sizes, [2, 8], "each pick keeps to its own budget");
+        // A narrow image keeps to the budget too.
+        let tall = blob(&vec![r; 5000], 1, 5000);
+        let n = one(&tall, None, 100).len();
+        assert!((50..=100).contains(&n), "{n} pixels");
+        assert!(ImageBlob::png(b"not a png".to_vec()).sample_pixels(&[(None, 100, &any)]).is_none());
     }
 
     /// A GIF whose `w` × `h` screen holds one opaque red pixel at the top left. The file holds no
@@ -297,5 +493,67 @@ mod tests {
         assert_eq!(b.content_key(), blob(&[[255, 0, 0, 255], [255, 0, 0, 128], [0, 0, 255, 255], [10, 20, 30, 0]], 2, 2).content_key());
         assert!(b.map_rgb(|c| c).is_none(), "nothing changed");
         assert!(ImageBlob::png(vec![1, 2, 3]).map_rgb(|c| c).is_none(), "undecodable");
+    }
+
+    /// An uncompressed 1-bit TIFF, BlackIsZero, of `w` × `h` pixels: `rows` holds each row's bits,
+    /// padded to a byte, most significant bit first.
+    fn bilevel_tiff(w: u16, h: u16, rows: &[u8]) -> Vec<u8> {
+        // Tag, type (3 short, 4 long) and value of each entry, in tag order.
+        let data_at = 8 + 2 + 9 * 12 + 4;
+        let entries: [(u16, u16, u32); 9] = [
+            (256, 3, w.into()),
+            (257, 3, h.into()),
+            (258, 3, 1),
+            (259, 3, 1),
+            (262, 3, 1),
+            (273, 4, data_at),
+            (277, 3, 1),
+            (278, 3, h.into()),
+            (279, 4, rows.len() as u32),
+        ];
+        let mut out = b"II*\0".to_vec();
+        out.extend_from_slice(&8u32.to_le_bytes());
+        out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+        for (tag, kind, value) in entries {
+            out.extend_from_slice(&tag.to_le_bytes());
+            out.extend_from_slice(&kind.to_le_bytes());
+            out.extend_from_slice(&1u32.to_le_bytes());
+            out.extend_from_slice(&value.to_le_bytes());
+        }
+        out.extend_from_slice(&0u32.to_le_bytes());
+        out.extend_from_slice(rows);
+        out
+    }
+
+    fn png_of(img: image::DynamicImage) -> ImageBlob {
+        let mut png = Vec::new();
+        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        ImageBlob::png(png)
+    }
+
+    #[test]
+    fn grayscale_and_1_bit_files_are_told_from_color_ones() {
+        let gray = |one_bit, alpha| Some(GraySource { one_bit, alpha });
+        let l8 = png_of(image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap()));
+        assert_eq!(l8.gray_source(), gray(false, false));
+        let la8 = png_of(image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(1, 1, vec![0, 128]).unwrap()));
+        assert_eq!(la8.gray_source(), gray(false, true));
+        let mut jpeg = Vec::new();
+        jpeg_encoder::Encoder::new(&mut jpeg, 90).encode(&[0, 255, 0, 255], 2, 2, jpeg_encoder::ColorType::Luma).unwrap();
+        assert_eq!(ImageBlob::new("image/jpeg", jpeg).gray_source(), gray(false, false));
+        // Black, white; white, black.
+        let tif = ImageBlob::new("image/tiff", bilevel_tiff(2, 2, &[0b0100_0000, 0b1000_0000]));
+        assert_eq!(tif.gray_source(), gray(true, false));
+        assert_eq!(tif.coverage(), Some((2, 2, vec![255, 0, 0, 255])), "black covers, white doesn't");
+        // Color images and data that isn't an image.
+        assert_eq!(blob(&[[0, 0, 0, 255], [9, 9, 9, 255]], 2, 1).gray_source(), None);
+        assert_eq!(ImageBlob::png(vec![1, 2, 3]).gray_source(), None);
+    }
+
+    #[test]
+    fn coverage_is_darkness_times_alpha() {
+        let la8 = png_of(image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(4, 1, vec![0, 255, 255, 255, 51, 255, 0, 128]).unwrap()));
+        assert_eq!(la8.coverage(), Some((4, 1, vec![255, 0, 204, 128])));
+        assert_eq!(ImageBlob::png(vec![1, 2, 3]).coverage(), None);
     }
 }

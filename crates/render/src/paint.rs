@@ -1,6 +1,7 @@
 //! Paint conversion (solid, gradients, patterns) and image decoding.
 
 use vectorcraft_color::{GradientKind, Paint};
+use vectorcraft_doc::resample::{Resample, resized};
 use vectorcraft_geom::{Rect, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko::{self, ColorStop};
@@ -19,8 +20,19 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
         }
         Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => crate::freeform::set_freeform_paint(ctx, g, bounds, f.ink),
         Paint::Gradient(g) => {
-            let geom = g.resolve(bounds);
-            let stops: Vec<ColorStop> = g.gradient.expanded_stops().iter().map(|(o, c, a)| ColorStop::from((*o, f.ink.color(c, *a)))).collect();
+            // A gradient that repeats or reflects: one run of its stops over its period, which
+            // the renderer extends past both ends.
+            let spread = g.gradient.is_spread();
+            let geom = if spread { g.resolve(bounds).period(g.gradient.kind, g.gradient.repeat_count()) } else { g.resolve(bounds) };
+            let extend = match g.gradient.spread {
+                _ if !spread => peniko::Extend::Pad,
+                vectorcraft_color::GradientSpread::Reflect => peniko::Extend::Reflect,
+                _ => peniko::Extend::Repeat,
+            };
+            let adjusted = f.ink.gradient(&g.gradient);
+            let gradient = adjusted.as_ref().unwrap_or(&g.gradient);
+            let ink = if adjusted.is_some() { f.ink.base() } else { f.ink };
+            let stops: Vec<ColorStop> = gradient.expanded_stops().iter().map(|(o, c, a)| ColorStop::from((*o, ink.color(c, *a)))).collect();
             if stops.is_empty() {
                 return false;
             }
@@ -37,6 +49,16 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
                     };
                     g.with_stops(stops.as_slice())
                 }
+                GradientKind::Conic => {
+                    // One turn about the origin, carried onto the extent ellipse: its frame starts
+                    // the sweep along the vector, and a mirrored frame reverses it. Repeated `n`
+                    // times, one run takes 1/n of the turn.
+                    ctx.set_paint_transform(geom.conic_frame());
+                    let turn = if spread { std::f32::consts::TAU / g.gradient.repeat_count() as f32 } else { std::f32::consts::TAU };
+                    peniko::Gradient::new_sweep((0.0, 0.0), 0.0, turn).with_stops(stops.as_slice())
+                }
+                // peniko has no diamond gradient: it is drawn as pixels, as a dithered fill is.
+                GradientKind::Diamond => return crate::dither::set_dithered_paint(ctx, g, bounds, bounds, f.ink, false),
                 _ => {
                     ctx.reset_paint_transform();
                     let (s, e) =
@@ -46,7 +68,7 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
             };
             // Colour and opacity blend each on its own, as the model samples them and as the PDF
             // and SVG exports draw them (peniko's default premultiplies).
-            ctx.set_paint(grad.with_interpolation_alpha_space(peniko::InterpolationAlphaSpace::Unpremultiplied));
+            ctx.set_paint(grad.with_extend(extend).with_interpolation_alpha_space(peniko::InterpolationAlphaSpace::Unpremultiplied));
             true
         }
         Paint::Pattern { pattern, xf } => crate::pattern::set_pattern_paint(ctx, pattern, *xf, f),
@@ -58,7 +80,19 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
 pub(crate) fn set_fill_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Frame) -> bool {
     match p {
         Paint::Gradient(g) if g.gradient.dither && g.gradient.kind != GradientKind::Freeform && !g.gradient.stops.is_empty() => {
-            crate::dither::set_dithered_paint(ctx, g, bounds, f.ink)
+            crate::dither::set_dithered_paint(ctx, g, bounds, bounds, f.ink, true)
+        }
+        _ => set_paint(ctx, p, bounds, f),
+    }
+}
+
+/// [`set_paint`] for a stroke whose outline (miters, caps and arrowheads included) fits the box
+/// `area` gives: a diamond gradient, drawn as pixels, is sampled over that box too, so the parts
+/// of the outline past `bounds` get the diamond's colors there. `area` runs only for a diamond.
+pub(crate) fn set_stroke_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, area: impl FnOnce() -> Rect, f: &Frame) -> bool {
+    match p {
+        Paint::Gradient(g) if g.gradient.kind == GradientKind::Diamond && !g.gradient.stops.is_empty() => {
+            crate::dither::set_dithered_paint(ctx, g, bounds, area(), f.ink, false)
         }
         _ => set_paint(ctx, p, bounds, f),
     }
@@ -72,6 +106,8 @@ thread_local! {
     /// Images that couldn't be decoded (and so drew nothing) on this thread, counted for exports to
     /// report.
     static DECODE_FAILURES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Images decoded, or tried, on this thread ([`image_decodes`]).
+    static DECODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -111,6 +147,12 @@ pub(crate) enum Undecoded {
 /// the canvas, thumbnails) fail to decode meanwhile are not counted.
 pub fn decode_failures() -> u64 {
     DECODE_FAILURES.with(std::cell::Cell::get)
+}
+
+/// How many images [`decode_pixmap_or_why`] and [`decode_pixmap_fit`] have decoded on this thread so
+/// far, failed decodes included. Images other threads decode are not counted.
+pub fn image_decodes() -> u64 {
+    DECODES.with(std::cell::Cell::get)
 }
 
 /// [`decode_in_room`]'s image or error.
@@ -154,6 +196,12 @@ fn room_for(rgba: u64, pinned: u64) -> Result<(), Undecoded> {
     }
 }
 
+/// Whether `w`×`h` pixels may be decoded whole ([`room_for`]) beside the images paints hold now.
+pub(crate) fn within_allowance(w: u32, h: u32) -> bool {
+    let bytes = (u64::from(w) * u64::from(h)).saturating_mul(4);
+    room_for(bytes, crate::images::store().pinned_bytes() as u64).is_ok()
+}
+
 /// Whether `bytes` of decoded pixels fit beside the images paints hold, which can't be evicted from
 /// the cache: a new image is decoded only while those and it fit twice [`MAX_DECODE_ALLOC`].
 fn fits_beside_pinned(bytes: u64) -> bool {
@@ -172,8 +220,7 @@ fn fits_beside_pinned(bytes: u64) -> bool {
 /// all: an image that isn't a PNG, JPEG, GIF or WebP; an image of more pixels than the allowance
 /// has bytes (2,147,483,648 pixels, or 536,870,912 in the web app; 46,341 × 46,341 is more); and an
 /// image whose decoded samples take more than the allowance, unless it is a PNG that isn't
-/// interlaced and is at most the allowance divided by [`ROW_SCRATCH`] pixels wide (read a row at a
-/// time).
+/// interlaced whose reader's buffers ([`png_row_scratch`]) fit the allowance (read a row at a time).
 pub fn reduced_size(bytes: &[u8]) -> Option<(u32, u32)> {
     reduction(bytes, allowance()).map(|r| r.to)
 }
@@ -211,26 +258,46 @@ fn reduction(bytes: &[u8], allowance: u64) -> Option<Reduction> {
         return None;
     }
     let to = fitted_dims(w, h, allowance)?;
-    // The PNG reader's row buffers take at most `ROW_SCRATCH` bytes a column, also within the allowance.
-    let rows = format == image::ImageFormat::Png
-        && u64::from(w).saturating_mul(ROW_SCRATCH) <= allowance
-        && png_reader(bytes).is_some_and(|r| !r.info().interlaced);
-    let scratch = if rows {
-        u64::from(w) * ROW_SCRATCH
+    // A PNG that isn't interlaced is read a row at a time when the reader's buffers fit the allowance.
+    let row_scratch = if format == image::ImageFormat::Png {
+        png_reader(bytes).filter(|r| !r.info().interlaced).and_then(|r| png_row_scratch(&r)).filter(|&s| s <= allowance)
     } else {
+        None
+    };
+    let rows = row_scratch.is_some();
+    let scratch = row_scratch.unwrap_or_else(|| {
         let band = u64::from(BAND) * u64::from(w) * (u64::from(d.color_type().bytes_per_pixel()) + 4);
         d.total_bytes().saturating_add(band)
-    };
+    });
     (rows || d.total_bytes() <= allowance).then_some(Reduction { size: (w, h), to, rows, scratch })
 }
 
 /// How many rows of an image decoded whole [`reduced_pixmap`] converts to RGBA at a time.
 const BAND: u32 = 16;
 
-/// The most memory a column of a PNG read a row at a time takes in the reader's row buffers: the
-/// row as stored (up to 8 bytes a pixel and a filter byte), the row before it, and the row given
-/// out (up to 4 bytes a pixel).
-const ROW_SCRATCH: u64 = 32;
+/// The bytes of rows already read that png 0.18's reader keeps in its stream buffer, at least,
+/// before it moves the rest of the buffer back to the start.
+const PNG_KEPT_ROWS: u64 = 128 << 10;
+
+/// The deflate window png 0.18's reader keeps after the rows it has unfiltered, and the step its
+/// stream buffer grows by.
+const PNG_WINDOW_AND_STEP: u64 = (32 << 10) + (8 << 10);
+
+/// The most memory `r` takes in its buffers to read its image a row at a time: the stream buffer
+/// holds the rows already read up to [`PNG_KEPT_ROWS`] or four rows, whichever is more, the previous
+/// and current rows, and [`PNG_WINDOW_AND_STEP`]. The buffer grows by doubling its reservation,
+/// and while it grows its old reservation and the new one, up to twice the size it holds, are both
+/// allocated: three times that size at most. A copy of a stored row and the row given out come on
+/// top. `None` when a row given out doesn't fit memory.
+fn png_row_scratch(r: &png::Reader<std::io::Cursor<&[u8]>>) -> Option<u64> {
+    let info = r.info();
+    // A filter byte and the row's samples, in whole bytes.
+    let stored = 1 + (u64::from(info.width) * info.color_type.samples() as u64 * info.bit_depth as u64).div_ceil(8);
+    let out = u64::try_from(r.output_line_size(info.width)?).ok()?;
+    let kept = (stored * 4).next_multiple_of(64).max(PNG_KEPT_ROWS);
+    let stream = kept + stored * 2 + PNG_WINDOW_AND_STEP;
+    Some(stream * 3 + stored + out)
+}
 
 /// The largest size of at most `w`×`h` pixels, keeping their proportions, whose pixels take at most
 /// `allowance` bytes as RGBA, with sides of at most `u16::MAX` pixels.
@@ -380,7 +447,7 @@ fn fit_pixmap(img: image::DynamicImage) -> image::DynamicImage {
     }
     let s = max as f64 / w.max(h) as f64;
     let (nw, nh) = (((w as f64 * s).round() as u32).clamp(1, max), ((h as f64 * s).round() as u32).clamp(1, max));
-    img.resize_exact(nw, nh, image::imageops::FilterType::Triangle)
+    resized(img, nw, nh, Resample::Filter(image::imageops::FilterType::Triangle))
 }
 
 /// [`decode_pixmap_or_why`]'s pixels.
@@ -394,7 +461,7 @@ pub fn decode_pixmap(bytes: &[u8]) -> Option<vello_cpu::Pixmap> {
 /// [`reduced_size`] when it has one; a failure is counted in [`decode_failures`].
 pub(crate) fn decode_pixmap_or_why(bytes: &[u8]) -> Result<vello_cpu::Pixmap, Undecoded> {
     counted(match decode_or_reduction(bytes) {
-        Ok(img) => pixmap_of(fit_pixmap(img).to_rgba8()).ok_or(Undecoded::Unreadable),
+        Ok(img) => decoded_pixmap(img).ok_or(Undecoded::Unreadable),
         Err(r) => r.and_then(|r| reduced_pixmap(bytes, &r)),
     })
 }
@@ -404,6 +471,7 @@ pub(crate) fn decode_pixmap_or_why(bytes: &[u8]) -> Result<vello_cpu::Pixmap, Un
 fn decode_or_reduction(bytes: &[u8]) -> Result<image::DynamicImage, Result<Reduction, Undecoded>> {
     #[cfg(test)]
     DECODE_ATTEMPTS.with(|n| n.set(n.get() + 1));
+    DECODES.with(|n| n.set(n.get() + 1));
     match decode_in_room(bytes) {
         Ok(img) => Ok(img),
         Err((image::ImageError::Limits(_), Undecoded::Unreadable)) => Err(reduction(bytes, allowance()).ok_or(Undecoded::Unreadable)),
@@ -437,7 +505,7 @@ pub fn decode_pixmap_fit(bytes: &[u8], w: u16, h: u16) -> Option<vello_cpu::Pixm
         }
     };
     let img = if img.width() > w as u32 || img.height() > h as u32 {
-        img.resize_exact(w as u32, h as u32, image::imageops::FilterType::Triangle)
+        resized(img, w as u32, h as u32, Resample::Filter(image::imageops::FilterType::Triangle))
     } else {
         img
     };
@@ -466,6 +534,11 @@ fn pixmap_of(img: image::RgbaImage) -> Option<vello_cpu::Pixmap> {
         })
         .collect();
     Some(vello_cpu::Pixmap::from_parts(data, w as u16, h as u16))
+}
+
+/// Decoded image `img` as [`decode_pixmap_or_why`] makes it a pixmap.
+pub(crate) fn decoded_pixmap(img: image::DynamicImage) -> Option<vello_cpu::Pixmap> {
+    pixmap_of(fit_pixmap(img).to_rgba8())
 }
 
 /// The substitution highlights' pink: Preferences › Highlight Substituted Fonts and Highlight
@@ -514,5 +587,36 @@ mod tests {
         assert_eq!(room_for(MAX_DECODE_ALLOC + 1, 2 * MAX_DECODE_ALLOC), Err(Undecoded::Unreadable));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC + 1), Err(Undecoded::NoRoom));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC), Ok(()));
+    }
+
+    /// Opaque red beside clear black, every other column of a `w` × 1 image.
+    fn striped(w: u32) -> image::RgbaImage {
+        image::RgbaImage::from_fn(w, 1, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+    }
+
+    /// Does each pixel of `pm` hold red at its own coverage (premultiplied, within a step)?
+    fn red_at_its_coverage(pm: &vello_cpu::Pixmap) -> bool {
+        let m = |c: u8, a: u8| ((u16::from(c) * u16::from(a) + 127) / 255) as u8;
+        pm.data().iter().all(|p| p.r.abs_diff(m(200, p.a)) <= 1 && p.g.abs_diff(m(30, p.a)) <= 1 && p.b.abs_diff(m(30, p.a)) <= 1)
+    }
+
+    /// A placed image drawn smaller keeps the color of its opaque pixels at its cut-out edges: the
+    /// clear pixels beside them do not darken them.
+    #[test]
+    fn an_image_drawn_smaller_keeps_its_color_beside_clear_pixels() {
+        let mut png = Vec::new();
+        striped(8).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let pm = decode_pixmap_fit(&png, 2, 1).unwrap();
+        assert_eq!((pm.width(), pm.height()), (2, 1));
+        assert!(pm.data().iter().all(|p| p.a > 0));
+        assert!(red_at_its_coverage(&pm), "{:?}", pm.data());
+    }
+
+    /// An image wider than a pixmap may be is shrunk to fit with its colors weighted by alpha the same way.
+    #[test]
+    fn an_image_shrunk_to_fit_a_pixmap_keeps_its_color_beside_clear_pixels() {
+        let pm = decoded_pixmap(image::DynamicImage::ImageRgba8(striped(u32::from(u16::MAX) + 4465))).unwrap();
+        assert_eq!(pm.width(), u16::MAX);
+        assert!(red_at_its_coverage(&pm));
     }
 }

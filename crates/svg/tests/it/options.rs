@@ -43,7 +43,7 @@ fn many_css_styles_preserve_first_use_numbers() {
 
     for (styling, definition_marker) in [(Styling::InternalCss, ".cls-"), (Styling::StyleEntities, "<!ENTITY st")] {
         let svg = export(&d, &ExportOptions { styling, ..Default::default() });
-        let paths: Vec<_> = svg.lines().filter(|line| line.contains("<path ")).collect();
+        let paths: Vec<_> = svg.lines().filter(|line| line.contains("<rect ")).collect();
         assert_eq!(paths.len(), 259, "{styling:?}");
         for (i, path) in paths.iter().enumerate() {
             let number = if i < 256 { i + 1 } else { [1, 129, 256][i - 256] };

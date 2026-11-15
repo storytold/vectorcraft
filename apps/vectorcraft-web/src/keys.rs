@@ -27,6 +27,19 @@ pub(crate) fn kept_from_browser(key: &str, code: &str, modifiers: Modifiers, alt
     vectorcraft_ui_egui::shortcuts::runs_a_shortcut(key, code, modifiers)
 }
 
+/// Leave a paste to its Paste event (#5555). eframe's web runner reports a Cmd+V press both as the
+/// key press and, with the clipboard's text, as a Paste event (the browser's `paste` comes in the
+/// same task as the `keydown`, so both are in one frame's input); the app pastes on each, as egui's
+/// window integration sends only the Paste. With a Paste in `events`, the paste key's press is
+/// dropped; its release stays, so the paste chord is still followed (`PasteChord`). A Cmd+V without
+/// a Paste (a clipboard with no text) keeps its press.
+pub(crate) fn drop_paste_key_presses(events: &mut Vec<egui::Event>) {
+    if !events.iter().any(|e| matches!(e, egui::Event::Paste(_))) {
+        return;
+    }
+    events.retain(|e| !matches!(e, egui::Event::Key { key: Key::V, pressed: true, modifiers, .. } if modifiers.command));
+}
+
 /// The modifiers of a key event as eframe reports them to egui (its `modifiers_from_kb_event`).
 #[cfg(target_arch = "wasm32")]
 fn modifiers(e: &web_sys::KeyboardEvent) -> Modifiers {
@@ -114,5 +127,32 @@ mod tests {
         let ctrl_alt = Modifiers::CTRL | Modifiers::COMMAND | Modifiers::ALT;
         assert!(!kept_from_browser("ż", "KeyZ", ctrl_alt, true));
         assert!(!kept_from_browser("}", "Digit0", ctrl_alt, true));
+    }
+
+    fn key(key: Key, pressed: bool, modifiers: Modifiers) -> egui::Event {
+        egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers }
+    }
+
+    #[test]
+    fn a_paste_chord_pastes_once() {
+        // Cmd+V and Cmd+Shift+V (Paste in Place): the press goes, the Paste and the release stay.
+        for mods in [cmd(), cmd() | Modifiers::SHIFT] {
+            let mut events = vec![key(Key::V, true, mods), egui::Event::Paste("<svg/>".into()), key(Key::V, false, mods)];
+            drop_paste_key_presses(&mut events);
+            assert_eq!(events, vec![egui::Event::Paste("<svg/>".into()), key(Key::V, false, mods)], "{mods:?}");
+        }
+    }
+
+    #[test]
+    fn keys_without_a_paste_stay() {
+        // No text on the clipboard: no Paste event, so the press is the paste chord's only report.
+        let mut events = vec![key(Key::V, true, cmd()), key(Key::V, false, cmd())];
+        drop_paste_key_presses(&mut events);
+        assert_eq!(events.len(), 2);
+        // Typing V, and other chords, beside a paste.
+        let typed = vec![key(Key::V, true, Modifiers::NONE), key(Key::C, true, cmd()), egui::Event::Paste("a".into())];
+        let mut events = typed.clone();
+        drop_paste_key_presses(&mut events);
+        assert_eq!(events, typed);
     }
 }

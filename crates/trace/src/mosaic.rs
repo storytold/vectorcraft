@@ -7,13 +7,14 @@ const MAX_SIDE: u32 = 4096;
 
 /// Average colour (straight RGBA) of each of `cols` × `rows` tiles covering `img`, row by row.
 /// Transparent pixels count by their alpha, so a tile over transparency fades out. Tiles over the
-/// same pixels (more tiles than pixels) are averaged once, and a raster whose bytes are not
-/// `width * height * 4` gives transparent tiles.
+/// same pixels (more tiles than pixels) are averaged once, and an empty raster or one whose bytes
+/// are not `width * height * 4` gives transparent tiles.
 pub fn mosaic(img: &Raster, cols: u32, rows: u32) -> Vec<[u8; 4]> {
     let (cols, rows) = (cols.clamp(1, MAX_SIDE), rows.clamp(1, MAX_SIDE));
     let tiles = cols as usize * rows as usize;
     let (w, h) = (img.width as usize, img.height as usize);
-    if w.checked_mul(h).and_then(|n| n.checked_mul(4)) != Some(img.rgba.len()) {
+    // An empty raster has nothing to average (its rows would still be walked, up to 2^32 of them).
+    if w == 0 || h == 0 || w.checked_mul(h).and_then(|n| n.checked_mul(4)) != Some(img.rgba.len()) {
         return vec![[0; 4]; tiles];
     }
     let mut out = Vec::with_capacity(tiles);
@@ -89,6 +90,9 @@ mod tests {
         // Bytes that are not the raster's size: transparent.
         let short = Raster { width: 4, height: 4, rgba: vec![] };
         assert_eq!(mosaic(&short, 2, 2), vec![[0; 4]; 4]);
+        // No pixels at all, however tall: transparent, with no rows walked.
+        let empty = Raster { width: 0, height: u32::MAX, rgba: vec![] };
+        assert_eq!(mosaic(&empty, 2, 2), vec![[0; 4]; 4]);
         // Transparency.
         let clear = Raster::from_fn(2, 2, |_, _| [9, 9, 9, 0]);
         assert_eq!(mosaic(&clear, 1, 1), vec![[0, 0, 0, 0]]);

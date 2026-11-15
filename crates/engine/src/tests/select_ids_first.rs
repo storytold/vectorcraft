@@ -73,6 +73,17 @@ fn ids_are_selected_first() {
         s.execute("select.none", &json!({})).unwrap();
         vec![c]
     };
+    let shape = |s: &mut Session, ids: &[u64]| {
+        s.execute("select.set", &json!({"ids": &ids[..2]})).unwrap();
+        let c = s.execute("object.compoundShape.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        c
+    };
+    let shaped = |s: &mut Session, ids: &[u64]| vec![shape(s, ids)];
+    let member = |s: &mut Session, ids: &[u64]| {
+        shape(s, ids);
+        vec![ids[1]]
+    };
     let one = |_: &mut Session, ids: &[u64]| vec![ids[1]];
     let cases: Vec<(&str, Value, Setup<'_>)> = vec![
         ("object.group", json!({}), &none),
@@ -81,6 +92,10 @@ fn ids_are_selected_first() {
         ("object.clippingMask.release", json!({}), &clipped),
         ("object.compoundPath.make", json!({}), &none),
         ("object.compoundPath.release", json!({}), &compound),
+        ("object.compoundShape.make", json!({"mode": "intersect"}), &none),
+        ("object.compoundShape.setMode", json!({"mode": "subtract"}), &member),
+        ("object.compoundShape.release", json!({}), &shaped),
+        ("object.compoundShape.expand", json!({}), &shaped),
         ("object.arrange.bringToFront", json!({}), &one),
         ("object.arrange.bringForward", json!({}), &one),
         ("object.arrange.sendBackward", json!({}), &one),
@@ -193,7 +208,7 @@ fn id_errors_name_the_command_run() {
         for (given, want) in [
             (json!([999]), "no such object id 999".to_string()),
             (json!([999, layer]), "no such object id 999".to_string()),
-            (json!([ids[0], ids[1], -1]), "invalid object id -1: expected a non-negative integer".to_string()),
+            (json!([ids[0], ids[1], -1]), "`ids` entry 2 is -1, not a non-negative integer object id".to_string()),
             (json!(ids[0]), "ids must be an array of non-negative integer object ids".to_string()),
         ] {
             let mut p = match *cmd {

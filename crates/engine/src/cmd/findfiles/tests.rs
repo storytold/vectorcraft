@@ -43,12 +43,62 @@ impl Visitor for Blocked {
     }
 }
 
+/// A test's folder tree, removed with everything in it when dropped, also when the test panics,
+/// and also when the test locked a folder in it. A removal that fails (a walker still holding a
+/// file open) is ignored.
+struct Tree(PathBuf);
+
+impl std::ops::Deref for Tree {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.0
+    }
+}
+
+impl Drop for Tree {
+    fn drop(&mut self) {
+        if std::fs::remove_dir_all(&self.0).is_err() {
+            unlock(&self.0);
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+}
+
+/// Gives the owner read, write and search permission on `folder` and on every folder in it, so
+/// that a tree holding a folder a test locked can be removed. Links are not followed.
+#[cfg(unix)]
+fn unlock(folder: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let Ok(meta) = std::fs::symlink_metadata(folder) else { return };
+    if !meta.is_dir() {
+        return;
+    }
+    let mode = meta.permissions().mode() & 0o7777;
+    if mode & 0o700 != 0o700 {
+        let _ = std::fs::set_permissions(folder, std::fs::Permissions::from_mode(mode | 0o700));
+    }
+    let Ok(entries) = std::fs::read_dir(folder) else { return };
+    for entry in entries.flatten() {
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            unlock(&entry.path());
+        }
+    }
+}
+
+/// Folders on other systems are removed as they are.
+#[cfg(not(unix))]
+fn unlock(_: &Path) {}
+
 /// A fresh folder (canonical, as a search reports it) holding `paths`: files, and folders where
-/// they end in `/`.
-fn tree(tag: &str, paths: &[&str]) -> PathBuf {
-    let root = vectorcraft_testkit::temp_dir(&format!("findfiles-{tag}"));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+/// they end in `/`. The folder is removed when the returned [`Tree`] is dropped.
+fn tree(tag: &str, paths: &[&str]) -> Tree {
+    let mut root = Tree(vectorcraft_testkit::temp_dir(&format!("findfiles-{tag}")));
+    // Empties what a tree whose removal failed left, keeping the folder as `temp_dir` made it
+    // (owner-only on Unix).
+    for entry in std::fs::read_dir(&root.0).unwrap().flatten() {
+        let path = entry.path();
+        let _ = if entry.file_type().is_ok_and(|t| t.is_dir()) { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+    }
     for p in paths {
         let path = root.join(p);
         if p.ends_with('/') {
@@ -58,7 +108,54 @@ fn tree(tag: &str, paths: &[&str]) -> PathBuf {
             std::fs::write(&path, b"font").unwrap();
         }
     }
-    plain(std::fs::canonicalize(&root).unwrap())
+    root.0 = plain(std::fs::canonicalize(&root.0).unwrap());
+    root
+}
+
+#[test]
+fn a_tree_is_removed_when_its_test_ends() {
+    let path = {
+        let root = tree("removed", &["a/b/one.ttf", "c/"]);
+        assert!(root.join("a/b/one.ttf").is_file() && root.join("c").is_dir());
+        root.to_path_buf()
+    };
+    assert!(!path.exists(), "{} is left", path.display());
+}
+
+#[test]
+fn a_tree_is_removed_when_its_test_panics() {
+    let mut path = PathBuf::new();
+    let r = vectorcraft_testkit::catch_quiet::<()>(|| {
+        let root = tree("unwound", &["a/b/one.ttf"]);
+        path = root.to_path_buf();
+        panic!("a failed assertion");
+    });
+    assert_eq!(r.err().as_deref(), Some("a failed assertion"));
+    assert!(!path.as_os_str().is_empty() && !path.exists(), "{} is left", path.display());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_tree_is_private_to_this_user() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tree("private", &["a/one.ttf"]);
+    let mode = std::fs::metadata(&*root).unwrap().permissions().mode();
+    assert_eq!(mode & 0o077, 0, "{}: mode {mode:o}", root.display());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_tree_with_a_locked_folder_is_removed_when_its_test_panics() {
+    use std::os::unix::fs::PermissionsExt;
+    let mut path = PathBuf::new();
+    let r = vectorcraft_testkit::catch_quiet::<()>(|| {
+        let root = tree("locked", &["a/locked/b/one.ttf"]);
+        path = root.to_path_buf();
+        std::fs::set_permissions(root.join("a/locked"), std::fs::Permissions::from_mode(0o000)).unwrap();
+        panic!("a failed assertion");
+    });
+    assert_eq!(r.err().as_deref(), Some("a failed assertion"));
+    assert!(!path.as_os_str().is_empty() && !path.exists(), "{} is left", path.display());
 }
 
 /// The rules of a search of `root`: its `Users/me` is the home folder, `refused` an app's folder.
@@ -66,9 +163,14 @@ fn rules(root: &Path) -> Rules {
     Rules { home: Some(root.join("Users/me")), user_content: vec![root.to_path_buf()], refused: vec![root.join("refused")] }
 }
 
-/// The search's progress once it ended (or after 10 seconds).
+/// How long a test waits for a search to end or to read a file. The wait only ends a test whose
+/// search never ends. A machine busy with other builds can hold a walker for seconds. It is shorter than a
+/// search's default 60 s deadline, which would end a search that does not end by itself.
+const WAIT: Duration = Duration::from_secs(30);
+
+/// The search's progress once it ended (or after [`WAIT`]).
 fn wait(s: &Search) -> Progress {
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     loop {
         let p = s.progress();
         if p.end.is_some() || Instant::now() > until {
@@ -178,6 +280,16 @@ fn a_picked_folder_inside_other_apps_folders_is_refused() {
     assert!(p.error().is_some_and(|e| e.ends_with("is not a folder")), "{p:?}");
     let p = search(&root, "missing", Limits::default(), 1, &[]);
     assert!(p.error().is_some_and(|e| e.starts_with(&root.join("missing").display().to_string())), "{p:?}");
+    // Each failure has the same reason without the folder's path.
+    let briefs = [
+        ("missing", "the folder can't be read"),
+        ("file.ttf", "the path isn't a folder"),
+        ("refused", "VectorCraft doesn't search other apps' or the system's folders"),
+        ("Users/Public/x", "VectorCraft doesn't search the Shared or Public folder in Users"),
+    ];
+    for (picked, why) in briefs {
+        assert_eq!(search(&root, picked, Limits::default(), 1, &[]).failure(), Some(why), "{picked}");
+    }
 }
 
 #[test]
@@ -205,14 +317,17 @@ fn the_search_ends_at_its_limits_and_when_stopped() {
 fn the_search_answers_at_its_deadline_while_a_walker_is_blocked() {
     let root = tree("blocked", &["f.ttf"]);
     let (tx, rx) = mpsc::channel();
+    let started = Instant::now();
     let s = begin(root.clone(), rules(&root), Limits { seconds: 0.2, ..Limits::default() }, 1, 1, Arc::new(Blocked(Mutex::new(rx))));
     std::thread::sleep(Duration::from_millis(300));
     let p = s.progress();
+    // The search ended when it answered, and it ran no longer than the test has waited.
+    let waited = started.elapsed().as_secs_f64();
     assert_eq!((p.state(), p.stopped()), ("stopped", Some("time")), "{p:?}");
-    assert!(p.seconds >= 0.2 && p.seconds < 5.0, "{p:?}");
+    assert!(p.seconds >= 0.2 && p.seconds <= waited, "{p:?}, {waited} s");
     let (tx2, rx2) = mpsc::channel();
     let s2 = begin(root.clone(), rules(&root), Limits::default(), 1, 1, Arc::new(Blocked(Mutex::new(rx2))));
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while s2.progress().read == 0 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
     }
@@ -246,7 +361,7 @@ fn files_found_are_kept_as_they_are_read() {
     let root = tree("kept", &["a.ttf", "b.ttf", "c.ttf"]);
     let (tx, rx) = mpsc::channel();
     let s = begin(root.clone(), rules(&root), Limits::default(), 1, 2, Arc::new(SecondBlocks(Mutex::new((0, rx)))));
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while s.progress().read < 2 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
     }
@@ -354,7 +469,7 @@ fn a_picked_folder_that_cant_be_listed_fails_the_search() {
     let p = search(&root, "locked", Limits::default(), 2, &["y.ttf"]);
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
     if enforced {
-        assert!(matches!(&p.end, Some(End::Failed(e)) if e.contains("locked")), "{p:?}");
+        assert!(matches!(&p.end, Some(End::Failed(e, "the folder can't be listed")) if e.contains("locked")), "{p:?}");
     } else {
         assert_eq!(found(&root, &p), ["locked/y.ttf"]);
     }
@@ -426,7 +541,7 @@ fn a_search_starts_with_the_threads_left_and_fails_when_none_is() {
     assert_eq!(c.err().as_deref(), Some("the search couldn't start: try again in a moment"));
     drop((tx_a, tx_b));
     assert_eq!((wait(&a).end, wait(&b).end), (Some(End::Done), Some(End::Done)));
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while POOL.live() > 0 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
     }

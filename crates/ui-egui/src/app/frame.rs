@@ -1,4 +1,4 @@
-use super::{GeometryStamp, InputGeneration, VectorcraftApp, canvas};
+use super::{GeometryStamp, InputGeneration, VectorcraftApp};
 
 impl VectorcraftApp {
     /// The host iteration count: one increment per `App::logic`/`App::ui` iteration (or a
@@ -9,8 +9,7 @@ impl VectorcraftApp {
 
     /// The canvas on screen in document coordinates (none before it is laid out).
     pub fn screen_frame(&self) -> Option<vectorcraft_tools::ScreenFrame> {
-        let (rect, view) = (self.canvas_rect?, self.view()?);
-        let xf = canvas::Xf::new(rect, view);
+        let (rect, xf) = (self.canvas_rect?, self.canvas_xf()?);
         let px = |x: f32, y: f32| xf.delta_to_doc(egui::vec2(x, y));
         Some(vectorcraft_tools::ScreenFrame {
             origin: xf.to_doc(rect.left_top()),
@@ -63,7 +62,7 @@ impl VectorcraftApp {
 
     /// Identify the document, modal dialog and focused widget that the current accepted input batch
     /// belongs to.
-    pub(super) fn input_generation(&self) -> InputGeneration {
+    pub(crate) fn input_generation(&self) -> InputGeneration {
         InputGeneration {
             document: self.session.active().map_or(0, |document| document.uid),
             dialog: self.ui.dialog.as_ref().map(|dialog| egui::Id::unique(&dialog.kind)),

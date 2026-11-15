@@ -3,6 +3,7 @@
 //! the size, position and maximized state saved with the UI preferences (`UiState::window`), moved
 //! onto a monitor that is still connected.
 
+use vectorcraft_ui_egui::DockMonitor;
 use vectorcraft_ui_egui::state::WindowGeometry;
 use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 
@@ -13,6 +14,9 @@ pub const MIN_SIZE: [f32; 2] = [800.0, 500.0];
 /// Room the first window leaves around itself for a taskbar, Dock or menu bar (the system doesn't
 /// say how much of the screen they take): a monitor with less room opens it maximized.
 const SCREEN_ROOM: [f32; 2] = [64.0, 128.0];
+
+/// Seconds between readings of the monitor list, which picks up a monitor connected while the app runs.
+const MONITORS_EVERY: f64 = 1.0;
 
 /// A monitor: its top-left corner and size in physical pixels, and its scale factor.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -67,6 +71,15 @@ impl Monitor {
             i32::try_from(want.max(lo).min(hi)).unwrap_or_default()
         })
     }
+
+    /// This monitor for floating panels, in the points egui reports for a window on it: physical
+    /// pixels divided by the monitor's scale factor and the UI zoom.
+    fn docking(&self, name: Option<String>, zoom: f32) -> DockMonitor {
+        let scale = self.scale * zoom;
+        let [x, y] = self.pos;
+        let [w, h] = self.size;
+        DockMonitor { name, rect: [x, y, w, h].map(|v| v as f32 / scale), scale }
+    }
 }
 
 /// Where the window opens: `saved` (the last session's geometry) kept on a connected monitor, else
@@ -107,6 +120,33 @@ pub fn place(saved: Option<WindowGeometry>, monitors: &[Monitor], home: Option<u
 /// `size` no bigger than `room`, and no smaller than the smallest window unless `room` is.
 fn fit(size: [f32; 2], room: [f32; 2]) -> [f32; 2] {
     std::array::from_fn(|i| size[i].min(room[i]).max(MIN_SIZE[i].min(room[i])).max(1.0))
+}
+
+/// Whether to list the monitors again: on the first frame, when the UI zoom changed, and at most
+/// every [`MONITORS_EVERY`] seconds while the app draws. `listed` holds the last list's time and zoom.
+pub fn monitors_due(listed: Option<(f64, f32)>, now: f64, zoom: f32) -> bool {
+    listed.is_none_or(|(at, listed_zoom)| listed_zoom != zoom || now - at >= MONITORS_EVERY)
+}
+
+/// The connected monitors for floating panels (`Services::dock_monitors`).
+pub fn dock_monitors(window: &winit::window::Window, zoom: f32) -> Vec<DockMonitor> {
+    let monitors: Vec<_> = window.available_monitors().map(|m| (Monitor::new(m.position(), m.size(), m.scale_factor()), m.name())).collect();
+    docking_list(&monitors, zoom, cfg!(target_os = "macos"))
+}
+
+/// The list for floating panels, empty when `monitors` have different scales and `shared_points` is
+/// false. macOS has one desktop of points. Elsewhere a new window multiplies its saved position by the
+/// scale of the monitor it is created on, which can put a window saved on another scale off every
+/// monitor. With an empty list craft-ui opens the window on the main window's monitor.
+///
+/// A name that two monitors share is left out, so craft-ui finds those monitors by their rects: macOS
+/// can give two displays of one model the same name.
+fn docking_list(monitors: &[(Monitor, Option<String>)], zoom: f32, shared_points: bool) -> Vec<DockMonitor> {
+    if !shared_points && monitors.windows(2).any(|pair| pair[0].0.scale != pair[1].0.scale) {
+        return Vec::new();
+    }
+    let unique = |name: &String| monitors.iter().filter(|(_, other)| other.as_ref() == Some(name)).count() == 1;
+    monitors.iter().map(|(monitor, name)| monitor.docking(name.clone().filter(unique), zoom)).collect()
 }
 
 /// Size and place the new window (eframe shows it after drawing the first frame) and return its
@@ -202,6 +242,51 @@ mod tests {
         // No monitor information: the default size, whatever was saved.
         assert_eq!(place(None, &[], None), WindowGeometry { pos: None, size: DEFAULT_SIZE, maximized: false });
         assert_eq!(place(saved(Some([9000, 9000]), [1e9, 1e9], true), &[], None).size, DEFAULT_SIZE);
+    }
+
+    #[test]
+    fn floating_panels_get_monitors_in_the_points_a_window_on_them_reports() {
+        let dock = |m: Monitor, zoom| m.docking(Some("m".into()), zoom);
+        let plain = dock(monitor(1920, 0, 1920, 1080, 1.0), 1.0);
+        assert_eq!(plain, DockMonitor { name: Some("m".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0 });
+        // A window at (3000, 200) on this monitor reports (1500, 100).
+        let scaled = dock(monitor(1920, -200, 3840, 2160, 2.0), 1.0);
+        assert_eq!(scaled, DockMonitor { name: Some("m".into()), rect: [960.0, -100.0, 1920.0, 1080.0], scale: 2.0 });
+        // The UI zoom divides what egui reports as well.
+        let zoomed = dock(monitor(-2560, 0, 2560, 1440, 1.0), 1.25);
+        assert_eq!(zoomed, DockMonitor { name: Some("m".into()), rect: [-2048.0, 0.0, 2048.0, 1152.0], scale: 1.25 });
+    }
+
+    #[test]
+    fn monitors_of_different_scales_are_listed_only_on_a_desktop_of_shared_points() {
+        let named = |m: Monitor, name: &str| (m, Some(name.to_string()));
+        let same = [named(monitor(0, 0, 1920, 1080, 1.5), "a"), named(monitor(1920, 0, 1920, 1080, 1.5), "b")];
+        assert_eq!(docking_list(&same, 1.0, false).len(), 2);
+        let mixed = [named(monitor(0, 0, 3840, 2160, 2.0), "a"), named(monitor(3840, 0, 1920, 1080, 1.0), "b")];
+        assert_eq!(docking_list(&mixed, 1.0, false), Vec::new());
+        assert_eq!(docking_list(&mixed, 1.0, true).len(), 2);
+        assert_eq!(docking_list(&[], 1.0, false), Vec::new());
+    }
+
+    #[test]
+    fn a_name_that_two_monitors_share_is_left_out_of_the_list() {
+        let list = [
+            (monitor(0, 0, 1920, 1080, 1.0), Some("Monitor #1".to_string())),
+            (monitor(1920, 0, 1920, 1080, 1.0), Some("Monitor #1".to_string())),
+            (monitor(3840, 0, 1920, 1080, 1.0), Some("Monitor #2".to_string())),
+            (monitor(5760, 0, 1920, 1080, 1.0), None),
+        ];
+        let names: Vec<_> = docking_list(&list, 1.0, false).into_iter().map(|m| m.name).collect();
+        assert_eq!(names, [None, None, Some("Monitor #2".to_string()), None]);
+    }
+
+    #[test]
+    fn the_monitor_list_is_read_on_the_first_frame_then_once_a_second_or_on_a_zoom_change() {
+        assert!(monitors_due(None, 0.0, 1.0));
+        assert!(!monitors_due(Some((5.0, 1.0)), 5.0, 1.0));
+        assert!(!monitors_due(Some((5.0, 1.0)), 5.5, 1.0));
+        assert!(monitors_due(Some((5.0, 1.0)), 6.0, 1.0));
+        assert!(monitors_due(Some((5.0, 1.0)), 5.5, 1.25));
     }
 
     #[test]

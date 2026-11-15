@@ -67,7 +67,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Missing Fonts",
             [],
             None,
-            "{} → {fonts: [{family, style, status: missing|substitute, resolved: {family, style}}] (sorted by name; at most 1000), count, fontsNextToDocument?} the fonts the active document's type uses, in its layers and its symbols, that aren't available as named: missing (the family is unknown and the fallback family stands in) or substitute (the family is there but not the style; resolved names the stand-in), as text.fonts says. CSS generic families such as sans-serif and names longer than 256 bytes are left out. fontsNextToDocument: the Fonts folder next to the saved document (File › Package writes it), when there is one and a search may start there (not in another app's folders, such as a mail app's attachments)",
+            "{} → {fonts: [{family, style, status: missing|substitute, resolved: {family, style}}] (sorted by name; at most 1000), count, fontsNextToDocument?} the fonts the active document's type uses, in its layers, its symbols and its patterns, opacity masks included (for type in a composite font, the fonts of the parts its characters are drawn in), that aren't available as named: missing (the family is unknown and the fallback family stands in) or substitute (the family is there but not the style; resolved names the stand-in), as text.fonts says. CSS generic families such as sans-serif and names longer than 256 bytes are left out. fontsNextToDocument: the Fonts folder next to the saved document (File › Package writes it), when there is one and a search may start there (not in another app's folders, such as a mail app's attachments)",
             has_doc,
             missing
         ),
@@ -76,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find Font Files",
             [],
             None,
-            "{folder?: an absolute path, fonts?: [{family, style?}] (1 to 1000; default: the active document's missing fonts, as text.missingFonts lists them), maxSeconds?: 60 (1 to 600), stop?: false (true: stop the last search)} with folder: look in it and its subfolders for font files that make the fonts available, on separate threads, and answer at once (state: searching); without folder: the last search's state, with the files found so far. A search reads the table directories and the name, fvar and OS/2 tables of .ttf, .otf, .ttc and .otc files of at most 256 MB and, on macOS, of suitcase fonts (files without an extension or with .suit, whose fonts are in a resource fork of at most 8 MB), and lists a file for a font when the file, added with text.addFontFiles, makes the font resolve exactly as text.fonts resolves it; fonts that resolve exactly already are left out. It doesn't enter app packages, folders named Program Files (also x86 and Arm), ProgramData, $Recycle.Bin or System Volume Information, the system's folders at the root of a volume, the Shared and Public folders in Users, a home folder's Library, AppData, Applications, snap and dot folders, a Library folder's app data folders or the folders the environment names for apps' data, and a search of a folder inside one of them fails; the walk also skips other hidden folders, folders whose contents are in the cloud and folders more than 64 levels deep, and follows no links (a picked path is resolved through its links); none on the web → {id (absent while idle), state: idle|searching|done|stopped|failed, folder?, fonts: [{family, style, status, files: [paths]}], searched?: {folders, files, fontFiles}, skipped?, unreadable?, stopped?: stop|time|limit, error?, seconds?}",
+            "{folder?: an absolute path, fonts?: [{family, style?}] (1 to 1000; default: the active document's missing fonts, as text.missingFonts lists them), maxSeconds?: 60 (1 to 600), stop?: false (true: stop the last search)} with folder: look in it and its subfolders for font files that make the fonts available, on separate threads, and answer at once (state: searching); without folder: the last search's state, with the files found so far. A search reads the table directories and the name, fvar and OS/2 tables of .ttf, .otf, .ttc and .otc files of at most 256 MB and, on macOS, of suitcase fonts (files without an extension or with .suit, whose fonts are in a resource fork of at most 8 MB), and lists a file for a font when the file, added with text.addFontFiles, makes the font resolve exactly as text.fonts resolves it; fonts that resolve exactly already are left out. It doesn't enter app packages, folders named Program Files (also x86 and Arm), ProgramData, $Recycle.Bin or System Volume Information, the system's folders at the root of a volume, the Shared and Public folders in Users, a home folder's Library, AppData, Applications, snap and dot folders, a Library folder's app data folders or the folders the environment names for apps' data, and a search of a folder inside one of them fails; the walk also skips other hidden folders, folders whose contents are in the cloud and folders more than 64 levels deep, and follows no links (a picked path is resolved through its links). With automation read roots, a reply leaves out the files found outside the caller's roots, and the folder when it is outside them (error then gives the reason without the path); none on the web → {id (absent while idle), state: idle|searching|done|stopped|failed, folder?, fonts: [{family, style, status, files: [paths]}], searched?: {folders, files, fontFiles}, skipped?, unreadable?, stopped?: stop|time|limit, error?, seconds?}",
             always,
             find
         ),
@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Font Files",
             [],
             None,
-            "{files: [paths the last text.findFontFiles search found] (1 to 1000)} copy the font files into VectorCraft's own Fonts folder (next to the preferences; the desktop app and vectorcraft-cli read it), never replacing a file there: the names Name.otf, Name 2.otf … Name 99.otf are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is kept; then scan the fonts again, as text.rescanFonts does, and type set in them redraws. Only regular .ttf, .otf, .ttc, .otc, .woff and .woff2 files and suitcase fonts (with their resource fork) are copied, at most 256 MB a file and 1 GB in all; any other file is skipped. Add only fonts you own or are licensed to install; none on the web → {folder, copied: [{from, to}], kept: [{from, to}], skipped: [{file, reason}], families?, faces?}",
+            "{files: [paths the last text.findFontFiles search found] (1 to 1000)} copy the font files into VectorCraft's own Fonts folder (next to the preferences; the desktop app and vectorcraft-cli read it), never replacing a file there: the names Name.otf, Name 2.otf … Name 99.otf are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is kept; then scan the fonts again, as text.rescanFonts does, and type set in them redraws. Only regular .ttf, .otf, .ttc, .otc, .woff and .woff2 files and suitcase fonts (with their resource fork) are copied, at most 256 MB a file and 1 GB in all; any other file is skipped. Add only fonts you own or are licensed to install. With automation read roots, folder is null when the Fonts folder is outside them, and a to or file path outside them is given as its file name; none on the web → {folder, copied: [{from, to}], kept: [{from, to}], skipped: [{file, reason}], families?, faces?}",
             always,
             add
         ),
@@ -103,8 +103,8 @@ pub struct MissingFont {
     pub resolved: Option<(String, String)>,
 }
 
-/// The fonts the type of `d` uses, in its layers and its symbols, that aren't available as named
-/// (sorted by family and style, each once whatever version its type names; at most 1000). CSS generic families such as `sans-serif`
+/// The fonts the type of `d` uses, in its layers, symbols and patterns, opacity masks included (a composite font's parts, those
+/// its characters are drawn in, in place of its name), that aren't available as named (sorted by family and style, each once whatever version its type names; at most 1000). CSS generic families such as `sans-serif`
 /// ([`GENERIC_FAMILIES`]) and names longer than 256 bytes are left out.
 pub fn missing_fonts(d: &Document) -> Vec<MissingFont> {
     let db = FontDb::global();
@@ -275,7 +275,9 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
 /// Where the session's last search stands (`text.findFontFiles` without `folder`).
 fn state(s: &Session) -> Value {
     let Some(f) = &s.font_search else { return json!({ "state": "idle", "fonts": [] }) };
-    let p = f.search.progress();
+    let mut p = f.search.progress();
+    // Only what the caller asking now may read: a search another caller started can hold more.
+    let (folder, error) = p.keep_readable(&f.folder);
     let mut files: Vec<Vec<String>> = vec![vec![]; f.fonts.len()];
     for (path, items) in &p.hits {
         for i in items {
@@ -293,16 +295,18 @@ fn state(s: &Session) -> Value {
             json!({ "family": font.family, "style": font.style, "status": font.status.as_str(), "files": files })
         })
         .collect();
-    let folder = if p.folder.as_os_str().is_empty() { f.folder.clone() } else { p.folder.to_string_lossy().into_owned() };
     let mut out = json!({
-        "id": f.id, "state": p.state(), "folder": folder, "fonts": fonts,
+        "id": f.id, "state": p.state(), "fonts": fonts,
         "searched": { "folders": p.folders, "files": p.files, "fontFiles": p.read },
         "skipped": p.skipped, "unreadable": p.unreadable, "seconds": (p.seconds * 10.0).round() / 10.0,
     });
+    if let Some(folder) = folder {
+        out["folder"] = json!(folder);
+    }
     if let Some(why) = p.stopped() {
         out["stopped"] = json!(why);
     }
-    if let Some(e) = p.error() {
+    if let Some(e) = error {
         out["error"] = json!(e);
     }
     out
@@ -348,12 +352,16 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // VectorCraft's own Fonts folder: no automation root applies to it.
     crate::file_access::unconfined(|| super::fileio::create_dir(&dir.to_string_lossy()))?;
     let report = copy_into(&files, dir);
-    let pairs = |v: &[(PathBuf, PathBuf)]| {
-        v.iter().map(|(from, to)| json!({ "from": from.to_string_lossy(), "to": to.to_string_lossy() })).collect::<Vec<_>>()
+    // The caller sees the Fonts folder and the copies in it only where its read roots reach.
+    let readable = |p: &Path| crate::file_access::current().is_none() || p.to_str().is_some_and(|p| crate::file_access::check_read(p).is_ok());
+    let shown = |p: &Path| -> String {
+        let shown = if readable(p) { Some(p.as_os_str()) } else { p.file_name() };
+        shown.map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
     };
+    let pairs = |v: &[(PathBuf, PathBuf)]| v.iter().map(|(from, to)| json!({ "from": from.to_string_lossy(), "to": shown(to) })).collect::<Vec<_>>();
     let mut out = json!({
-        "folder": dir.to_string_lossy(), "copied": pairs(&report.copied), "kept": pairs(&report.kept),
-        "skipped": report.skipped.iter().map(|(file, why)| json!({ "file": file.to_string_lossy(), "reason": why })).collect::<Vec<_>>(),
+        "folder": readable(dir).then(|| dir.to_string_lossy()), "copied": pairs(&report.copied), "kept": pairs(&report.kept),
+        "skipped": report.skipped.iter().map(|(file, why)| json!({ "file": shown(file), "reason": why })).collect::<Vec<_>>(),
     });
     if !report.copied.is_empty() || !report.kept.is_empty() {
         // The fonts are cataloged and type set in them redraws, as Refresh Font List does it.

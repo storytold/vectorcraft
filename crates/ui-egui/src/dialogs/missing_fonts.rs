@@ -54,7 +54,12 @@ fn after_open_for(app: &mut VectorcraftApp, r: &Value, web: bool) {
     if web {
         let n = vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).len();
         if n > 0 && r["warnings"].as_array().is_none_or(Vec::is_empty) {
-            app.status(format!("{n} font(s) aren't available here: their text shows in another font"));
+            app.status(crate::i18n::msg_n(
+                n as u64,
+                "{n} font isn't available here: its text shows in another font",
+                "{n} fonts aren't available here: their text shows in another font",
+                &[],
+            ));
         }
         return;
     }
@@ -337,19 +342,21 @@ pub(super) fn progress(ui: &mut egui::Ui, d: &Dialog) {
         widgets::dim_name(ui, &crate::i18n::message(crate::i18n::current(), e));
     }
     if let Some(s) = d.fields.get("searched") {
-        let (folders, files) = (s["folders"].to_string(), s["files"].to_string());
-        widgets::dim_name(
-            ui,
-            &crate::i18n::fmt(tl!("{folders} folder(s) and {files} file(s) searched"), &[("folders", &folders), ("files", &files)]),
-        );
+        let folders = crate::i18n::tn(s["folders"].as_u64().unwrap_or(0), "{n} folder", "{n} folders");
+        let files = crate::i18n::tn(s["files"].as_u64().unwrap_or(0), "{n} file", "{n} files");
+        widgets::dim_name(ui, &crate::i18n::fmt(tl!("{folders} and {files} searched"), &[("folders", &folders), ("files", &files)]));
     }
-    let count = |k: &str| d.fields.get(k).and_then(Value::as_u64).filter(|n| *n > 0).map(|n| n.to_string());
+    let count = |k: &str| d.fields.get(k).and_then(Value::as_u64).filter(|n| *n > 0);
     if let Some(n) = count("skipped") {
-        let text = tl!("{count} folder(s) skipped, such as other apps' and the system's folders and hidden ones");
-        widgets::dim_name(ui, &crate::i18n::fmt(text, &[("count", &n)]));
+        let text = crate::i18n::tn(
+            n,
+            "{n} folder skipped, such as another app's or the system's folder or a hidden one",
+            "{n} folders skipped, such as other apps' and the system's folders and hidden ones",
+        );
+        widgets::dim_name(ui, &text);
     }
     if let Some(n) = count("unreadable") {
-        widgets::dim_name(ui, &crate::i18n::fmt(tl!("{count} folder(s) or file(s) couldn't be read"), &[("count", &n)]));
+        widgets::dim_name(ui, &crate::i18n::tn(n, "{n} folder or file couldn't be read", "{n} folders or files couldn't be read"));
     }
     if matches!(d.fields.get("stopped").and_then(Value::as_str), Some("time" | "limit")) {
         widgets::dim_label(ui, tl!("The search stopped at its limit: search a smaller folder."));
@@ -397,13 +404,20 @@ fn add_fonts(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let n = len("copied") + len("kept");
     let folder = r["folder"].as_str().unwrap_or_default();
     match r["skipped"].as_array().and_then(|s| s.first()) {
-        None => app.status(format!("{n} font file(s) are now in {folder}")),
+        None => {
+            app.status(crate::i18n::msg_n(n as u64, "{n} font file is now in {folder}", "{n} font files are now in {folder}", &[("folder", folder)]))
+        }
         Some(first) => {
             let failed = len("skipped");
             let file =
                 first["file"].as_str().map(std::path::Path::new).and_then(std::path::Path::file_name).map(|f| f.to_string_lossy().into_owned());
             let reason = format!("{}: {}", file.unwrap_or_default(), first["reason"].as_str().unwrap_or_default());
-            app.status(format!("{n} font file(s) are now in {folder}; {failed} couldn't be added: {reason}"));
+            app.status(crate::i18n::msg_n(
+                n as u64,
+                "{n} font file is now in {folder}; {failed} couldn't be added: {reason}",
+                "{n} font files are now in {folder}; {failed} couldn't be added: {reason}",
+                &[("failed", &failed.to_string()), ("folder", folder), ("reason", &reason)],
+            ));
         }
     }
     Ok(r)

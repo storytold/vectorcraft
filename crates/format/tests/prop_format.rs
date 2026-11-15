@@ -171,6 +171,27 @@ fn rich_document_roundtrips() {
     assert_eq!(v["version"], vectorcraft_format::VERSION);
 }
 
+/// A file's Path Effects are its own business: whatever their parameters hold, they load and save
+/// as they are (the engine's tests draw them).
+#[test]
+fn path_effects_with_junk_params_round_trip() {
+    let mut d = rich_doc();
+    let mut id = None;
+    d.walk(|n| id = id.or(n.path_data().map(|_| n.id)));
+    let id = id.unwrap();
+    let effects: Vec<vectorcraft_doc::Effect> = [
+        ("addon.path.dashes", json!({"dash1": 1e308, "gap1": -1e308, "offset": "x", "alignCorners": 3})),
+        ("addon.path.addAnchors", json!({"count": 1e308, "maxCount": 1e308, "distance": -1e308, "spacing": "distance", "target": []})),
+        ("addon.path.extend", json!(null)),
+    ]
+    .into_iter()
+    .map(|(id, params)| vectorcraft_doc::Effect { id: id.into(), params, visible: true })
+    .collect();
+    d.node_mut(id).unwrap().appearance.effects = effects.clone();
+    let back = load(&save(&d, true)).unwrap();
+    assert_eq!(back.node(id).unwrap().appearance.effects, effects);
+}
+
 #[test]
 fn sniff_distinguishes_formats() {
     assert!(sniff(&save(&Document::new(1.0, 1.0), false)));

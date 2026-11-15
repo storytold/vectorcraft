@@ -5,6 +5,19 @@ use super::{
     PsError, REGISTRATION, Rc, Rect, Res, SHADING_SAMPLES, Shared, UNKNOWN_FUNCTIONS, UNKNOWN_SHADINGS, Vec2, clamp_between, ps_err,
 };
 
+#[cfg(test)]
+thread_local! {
+    /// How many patterns the lookups of tiling patterns on this thread compared with the pattern
+    /// they looked for.
+    static TILINGS_COMPARED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`TILINGS_COMPARED`] of this thread.
+#[cfg(test)]
+pub(crate) fn tilings_compared() -> u64 {
+    TILINGS_COMPARED.get()
+}
+
 impl Interp<'_> {
     // ---------- colour ----------
 
@@ -212,7 +225,13 @@ impl Interp<'_> {
         let proc = get("PaintProc").ok_or(PsError::Ps("undefined", "PaintProc".into()))?;
         let key = proc.items().cloned().ok_or(PsError::Ps("typecheck", "PaintProc".into()))?;
         let hash = tiling_hash(&key, tile, under.as_ref());
-        let made = self.out.tilings.get(&hash).and_then(|list| list.iter().find(|(p, t, u, _)| p.same(&key) && *t == tile && *u == under));
+        let made = self.out.tilings.get(&hash).and_then(|list| {
+            list.iter().find(|(p, t, u, _)| {
+                #[cfg(test)]
+                TILINGS_COMPARED.set(TILINGS_COMPARED.get().saturating_add(1));
+                p.same(&key) && *t == tile && *u == under
+            })
+        });
         if let Some((.., name)) = made {
             return Ok(Paint::Pattern { pattern: name.clone(), xf });
         }
@@ -292,7 +311,9 @@ impl Interp<'_> {
         // there are too many).
         let mut visits = 0;
         let points = linear_points(&f, 0, &mut visits).filter(|p| p.len() <= MAX_STITCH_STOPS);
-        let stitched = points.is_some();
+        // A sampled function is continuous: no hard colour changes at its samples.
+        let stitched =
+            points.is_some() && !matches!(&f, Obj::Dict(d) if d.borrow().get(&Key::name("FunctionType")).and_then(Obj::as_num) == Some(0.0));
         let ts: Vec<f64> = match points {
             Some(mut pts) => {
                 pts.retain(|t| (d0.min(d1)..=d0.max(d1)).contains(t));
@@ -452,6 +473,23 @@ fn linear_points(f: &Obj, depth: u32, visits: &mut usize) -> Option<Vec<f64>> {
     let num = |k: &str| d.get(&Key::name(k)).and_then(Obj::as_num);
     match num("FunctionType")? {
         2.0 if num("N").unwrap_or(1.0) == 1.0 => Some(vec![]),
+        // A sampled function of one input, interpolated linearly: straight between its samples.
+        0.0 if depth == 0 && num("Order").unwrap_or(1.0) == 1.0 => {
+            let nums = |k: &str| -> Vec<f64> {
+                d.get(&Key::name(k)).and_then(Obj::items).map(|i| i.borrow().iter().filter_map(Obj::as_num).collect()).unwrap_or_default()
+            };
+            let (domain, size, encode) = (nums("Domain"), nums("Size"), nums("Encode"));
+            let ([a, b], [s]) = (<[f64; 2]>::try_from(domain).ok()?, <[f64; 1]>::try_from(size).ok()?);
+            if !(1.0..=MAX_STITCH_STOPS as f64).contains(&s) || !a.is_finite() || !b.is_finite() {
+                return None;
+            }
+            let (e0, e1) = (encode.first().copied().unwrap_or(0.0), encode.get(1).copied().unwrap_or(s - 1.0));
+            if e1 == e0 || !e0.is_finite() || !e1.is_finite() {
+                return None;
+            }
+            // Where each sample index `k` falls in the domain, through `Encode`.
+            Some((0..s as usize).map(|k| a + (k as f64 - e0) * (b - a) / (e1 - e0)).filter(|x| x.is_finite()).collect())
+        }
         3.0 => {
             let items = d.get(&Key::name("Functions"))?.items()?;
             // More pieces than the stop cap allows: sample the function instead (tested before

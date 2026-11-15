@@ -9,6 +9,13 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="theme-color" content="#262626">
   <title>VectorCraft</title>
+  <!-- Tab and home-screen icons: copied from assets/app-icon (one folder per size, the PNG names are equal). -->
+  <link data-trunk rel="copy-file" href="../../assets/app-icon/hicolor/scalable/apps/ai.storyteller.vectorcraft.svg" data-target-path="icons" />
+  <link data-trunk rel="copy-file" href="../../assets/app-icon/hicolor/32x32/apps/ai.storyteller.vectorcraft.png" data-target-path="icons/32" />
+  <link data-trunk rel="copy-file" href="../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.vectorcraft.png" data-target-path="icons/256" />
+  <link rel="icon" type="image/svg+xml" href="icons/ai.storyteller.vectorcraft.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/32/ai.storyteller.vectorcraft.png">
+  <link rel="apple-touch-icon" href="icons/256/ai.storyteller.vectorcraft.png">
   <link data-trunk rel="rust" data-bin="vectorcraft-web" data-wasm-opt="z" data-weak-refs />
   <style>
     /* iPad: no page scroll, bounce, pinch zoom, text selection or callout; the app takes the gestures. */

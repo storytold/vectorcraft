@@ -14,7 +14,11 @@ fn names(v: &Value) -> Vec<String> {
 fn the_font_list_names_every_available_family_with_its_styles() {
     let mut s = Session::new();
     let fams = names(&s.execute("text.fontList", &json!({})).unwrap()["families"]);
-    assert_eq!(fams, *FontDb::global().menu_family_list());
+    // Other tests running at the same time add and remove composite fonts, which the lists show
+    // first; the installed families are compared.
+    let db = FontDb::global();
+    let installed_only = |list: &[String]| list.iter().filter(|f| db.has_installed_family(f)).cloned().collect::<Vec<_>>();
+    assert_eq!(installed_only(&fams), installed_only(&db.menu_family_list()));
     for f in ["Source Sans 3", "Source Serif 4", "Inter", "JetBrains Mono"] {
         assert!(fams.iter().any(|x| x == f), "{f}");
     }

@@ -8,7 +8,12 @@ use super::tests_appearance::{app_with_rect, click, frame_events, frame_raw, run
 use super::*;
 
 fn pointer(pos: egui::Pos2, pressed: bool, modifiers: egui::Modifiers) -> egui::Event {
-    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers }
+    pointer_by(pos, pressed, modifiers, egui::PointerButton::Primary)
+}
+
+/// `button` pressed (or released) at `pos` with `modifiers`.
+fn pointer_by(pos: egui::Pos2, pressed: bool, modifiers: egui::Modifiers, button: egui::PointerButton) -> egui::Event {
+    egui::Event::PointerButton { pos, button, pressed, modifiers }
 }
 
 /// One frame of the Appearance panel with `events` and `modifiers` held.
@@ -19,12 +24,17 @@ fn panel_frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::
 
 /// Drag from `from` to `to` in the Appearance panel, `modifiers` held on release.
 fn drag(ctx: &egui::Context, app: &mut VectorcraftApp, from: egui::Pos2, to: egui::Pos2, modifiers: egui::Modifiers) {
+    drag_by(ctx, app, from, to, modifiers, egui::PointerButton::Primary);
+}
+
+/// [`drag`] with `button`.
+fn drag_by(ctx: &egui::Context, app: &mut VectorcraftApp, from: egui::Pos2, to: egui::Pos2, modifiers: egui::Modifiers, button: egui::PointerButton) {
     let none = egui::Modifiers::NONE;
     panel_frame(ctx, app, vec![egui::Event::PointerMoved(from)], none);
-    panel_frame(ctx, app, vec![pointer(from, true, none)], none);
+    panel_frame(ctx, app, vec![pointer_by(from, true, none, button)], none);
     panel_frame(ctx, app, vec![egui::Event::PointerMoved(from + egui::vec2(0.0, 8.0))], none);
     panel_frame(ctx, app, vec![egui::Event::PointerMoved(to)], modifiers);
-    panel_frame(ctx, app, vec![pointer(to, false, modifiers)], modifiers);
+    panel_frame(ctx, app, vec![pointer_by(to, false, modifiers, button)], modifiers);
     panel_frame(ctx, app, vec![], none);
 }
 
@@ -59,7 +69,10 @@ fn an_effect_name_opens_its_dialog_prefilled_and_ok_edits_it_in_place() {
     let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
     click(&ctx, &mut app, text_rect(&texts, "Roughen").center(), appearance::show);
     let d = app.ui.dialog.clone().expect("the effect's dialog");
-    assert_eq!((d.kind.as_str(), d.f64("size", 0.0), d.fields["__index"].clone()), ("effect", 9.0, json!(0)));
+    assert_eq!(
+        (d.kind.as_str(), d.f64("size", 0.0), d.fields["__index"].clone(), d.fields["__item"].clone()),
+        ("effect", 9.0, json!(0), Value::Null)
+    );
     // The dialog previews; OK keeps the new value on the same effect as one undo step.
     let mut out = ctx.run_ui(Default::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
     out.textures_delta.clear();
@@ -115,9 +128,10 @@ fn choosing_an_applied_effect_asks_to_edit_it_or_add_another() {
     assert_eq!(app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap(), json!({"pending": "effectExists"}));
     crate::dialogs::confirm(&mut app).unwrap();
     let d = app.ui.dialog.clone().unwrap();
-    assert_eq!((d.kind.as_str(), d.f64("size", 0.0), d.fields["__index"].clone(), d.fields["__item"].clone()), ("effect", 9.0, json!(0), json!(0)));
+    assert_eq!((d.kind.as_str(), d.f64("size", 0.0), d.fields["__index"].clone()), ("effect", 9.0, json!(0)));
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(effects(&app, Some(0)).len(), 1);
+    assert!(effects(&app, None).is_empty());
     // "Add New": a fresh dialog with the defaults, which adds a second one.
     app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
     app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
@@ -203,7 +217,8 @@ fn shift_clicking_a_chip_opens_the_mixer_on_that_row() {
     // The chip sits 52 pt right of the label's start (label at EYE_W + 24, chip at EYE_W + 76).
     let label = text_rect(&texts, "Fill:");
     click_with(&ctx, &mut app, egui::pos2(label.left() + 52.0 + 9.0, label.center().y), egui::Modifiers::SHIFT);
-    assert_eq!(app.ui.open_panel.as_deref(), Some("color"));
+    // The Color panel opens as the row's popup.
+    assert_eq!(app.ui.transient_panel.as_deref(), Some("color"));
     assert_eq!(app.session.appearance_item(), Some(0));
 }
 
@@ -227,4 +242,41 @@ fn the_thumbnail_drags_the_appearance_and_the_properties_fx_button_opens_the_eff
     click(&props, &mut app, text_rect(&texts, "fx").center(), properties::show);
     let texts = frame_raw(&props, &mut app, Default::default(), properties::show);
     assert!(texts.iter().any(|(t, _)| t == "Distort & Transform"), "{texts:?}");
+}
+
+/// A secondary or middle drag of the thumbnail carries no appearance and shows no grabbing hand,
+/// and one of a fill or stroke row neither moves nor copies it; the primary button still does.
+#[test]
+fn only_a_primary_drag_carries_the_thumbnail_or_a_row() {
+    let mut app = app_with_rect(); // [Fill, Stroke]
+    let ctx = egui::Context::default();
+    let none = egui::Modifiers::NONE;
+    let kinds = |app: &VectorcraftApp| first_selected(app).unwrap().appearance.items.iter().map(|i| i.kind_name()).collect::<Vec<_>>();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    for button in [egui::PointerButton::Secondary, egui::PointerButton::Middle] {
+        let texts = panel_frame(&ctx, &mut app, vec![], none);
+        let label = text_rect(&texts, "Rectangle");
+        let thumb = egui::pos2(label.left() - 28.0, label.center().y);
+        for e in [egui::Event::PointerMoved(thumb), pointer_by(thumb, true, none, button)] {
+            panel_frame(&ctx, &mut app, vec![e], none);
+        }
+        let held = thumb + egui::vec2(30.0, 30.0);
+        let mut out =
+            ctx.run_ui(egui::RawInput { events: vec![egui::Event::PointerMoved(held)], ..Default::default() }, |ui| appearance::show(&mut app, ui));
+        out.textures_delta.clear();
+        assert!(!egui::DragAndDrop::has_any_payload(&ctx), "a {button:?} drag of the thumbnail carries nothing");
+        assert_ne!(out.platform_output.cursor_icon, egui::CursorIcon::Grabbing, "{button:?}");
+        panel_frame(&ctx, &mut app, vec![pointer_by(held, false, none, button)], none);
+        panel_frame(&ctx, &mut app, vec![], none);
+        // The fill dragged onto the stroke row, with and without Alt.
+        for modifiers in [none, egui::Modifiers::ALT] {
+            let texts = panel_frame(&ctx, &mut app, vec![], none);
+            drag_by(&ctx, &mut app, row_of(&texts, "Fill:"), row_of(&texts, "Stroke:") + egui::vec2(0.0, 9.0), modifiers, button);
+            assert_eq!(kinds(&app), ["fill", "stroke"], "a {button:?} drag moves and copies nothing");
+        }
+    }
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "no undo step");
+    let texts = panel_frame(&ctx, &mut app, vec![], none);
+    drag(&ctx, &mut app, row_of(&texts, "Fill:"), row_of(&texts, "Stroke:"), egui::Modifiers::ALT);
+    assert_eq!(kinds(&app), ["fill", "stroke", "fill"], "a primary Alt-drag copies the fill");
 }

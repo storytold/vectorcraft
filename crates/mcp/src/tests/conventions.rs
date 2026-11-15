@@ -57,16 +57,61 @@ fn command_listings_take_query_menu_and_brief() {
         let menu: Vec<&str> = c["menu"].as_array().unwrap().iter().map(|m| m.as_str().unwrap()).collect();
         assert_eq!(menu.get(..2), Some(&["Object", "Path"][..]), "{c}");
     }
-    // `brief` drops the params text and nothing else.
+    // `brief` drops the params text and the schemas, and nothing else.
     let full = payload(&call(&mut s, "command_list", json!({})));
     let brief = payload(&call(&mut s, "command_list", json!({"brief":true})));
     assert_eq!(ids(&full), ids(&brief));
     assert!(full.as_array().unwrap().iter().any(|c| c.get("params").is_some()));
-    assert!(brief.as_array().unwrap().iter().all(|c| c.get("params").is_none() && c.get("label").is_some()));
+    assert!(full.as_array().unwrap().iter().any(|c| c.get("inputSchema").is_some()));
+    assert!(
+        brief
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c.get("params").is_none() && c.get("schema").is_none() && c.get("inputSchema").is_none() && c.get("label").is_some())
+    );
     assert!(brief.to_string().len() * 2 < full.to_string().len(), "brief is much shorter");
     // The other listing takes them too.
     let r = payload(&call(&mut s, "list_commands", json!({"query":"rectangle","brief":true,"menu":""})));
     assert_eq!(ids(&r["commands"]), ids(&by_filter));
+}
+
+#[path = "../../../apischema/src/conformance.rs"]
+mod conformance;
+
+/// Both listings give a command with a parameter schema an `inputSchema` with an object root,
+/// which follows the 2020-12 rules, and the filters select the same commands as before.
+#[test]
+fn command_listings_carry_input_schemas() {
+    let mut s = Server::new(Box::new(Headless::with_document()));
+    let list = payload(&call(&mut s, "list_commands", json!({"filter":"view.saved"})));
+    let bare = payload(&call(&mut s, "command_list", json!({"filter":"view.saved"})));
+    assert_eq!(list["commands"], bare);
+    assert_eq!(list["count"], bare.as_array().unwrap().len());
+    let commands = bare.as_array().unwrap();
+    let with_input: Vec<&Value> = commands.iter().filter(|c| c.get("inputSchema").is_some()).collect();
+    assert!(with_input.len() >= 3, "{bare}");
+    for c in with_input {
+        let input = &c["inputSchema"];
+        assert_eq!(input["type"], "object", "{c}");
+        conformance::check_schema(input, c["id"].as_str().unwrap()).unwrap_or_else(|e| panic!("{e}\n{input:#}"));
+        assert!(!conformance::instance_valid(input, &Value::Null));
+        assert_eq!(conformance::instance_valid(&c["schema"], &Value::Null), c["schema"]["type"] != "object", "{c}");
+    }
+    let saved_list = commands.iter().find(|c| c["id"] == "view.saved.list").unwrap();
+    assert_eq!(saved_list["schema"]["type"], json!(["object", "null"]));
+    assert_eq!(saved_list["inputSchema"]["type"], "object");
+    // A command without a schema lists neither.
+    let new = payload(&call(&mut s, "command_list", json!({"filter":"file.new","enabled_only":true})));
+    let new = new.as_array().unwrap().iter().find(|c| c["id"] == "file.new").unwrap().clone();
+    assert!(new.get("schema").is_none() && new.get("inputSchema").is_none(), "{new}");
+    // `brief`, `menu` and the enabled filter select the same ids with and without the schemas.
+    let ids = |v: &Value| v.as_array().unwrap().iter().map(|c| c["id"].clone()).collect::<Vec<_>>();
+    let view = payload(&call(&mut s, "list_commands", json!({"menu":"view","enabledOnly":true})));
+    let view_brief = payload(&call(&mut s, "list_commands", json!({"menu":"view","enabledOnly":true,"brief":true})));
+    assert_eq!(ids(&view["commands"]), ids(&view_brief["commands"]));
+    assert_eq!(view["count"], view_brief["count"]);
+    assert!(view_brief["commands"].as_array().unwrap().iter().all(|c| c.get("inputSchema").is_none() && c.get("schema").is_none()));
 }
 
 #[test]
@@ -266,6 +311,84 @@ fn window_captures_take_max_side() {
     let r = call(&mut s, "screenshot", json!({"max_side": 300}));
     assert_eq!(r["isError"], true, "{r}");
     assert!(r["content"][0]["text"].as_str().unwrap().contains("`scale`"), "{r}");
+}
+
+/// The path an app from before `ui.screenshot {data}` was sent, with the mode of the folder holding
+/// it on unix (`None` elsewhere).
+type SeenPaths = std::sync::Arc<std::sync::Mutex<Vec<(String, Option<u32>)>>>;
+
+/// An app from before `ui.screenshot {data}`: it writes `png` (nothing when `None`) to the `path`
+/// it is sent, keeps the path in `seen` and answers `reply`. A capture without a path is answered
+/// with its size alone.
+struct OldWindow {
+    png: Option<Vec<u8>>,
+    reply: Result<Value, String>,
+    seen: SeenPaths,
+}
+impl Backend for OldWindow {
+    fn call(&mut self, method: &str, p: Value) -> Result<Value, String> {
+        if method != "ui.screenshot" {
+            return Err(format!("unexpected {method}"));
+        }
+        // Without a path it ignores `data` and sends the size alone.
+        let Some(path) = p["path"].as_str().map(str::to_owned) else { return Ok(json!({"width": 2, "height": 1})) };
+        #[cfg(unix)]
+        let mode = {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::path::Path::new(&path).parent().and_then(|d| std::fs::metadata(d).ok()).map(|m| m.permissions().mode() & 0o777)
+        };
+        #[cfg(not(unix))]
+        let mode = None;
+        self.seen.lock().unwrap().push((path.clone(), mode));
+        if let Some(png) = &self.png {
+            std::fs::write(&path, png).map_err(|e| format!("{path}: {e}"))?;
+        }
+        self.reply.clone()
+    }
+    fn has_ui(&self) -> bool {
+        true
+    }
+    fn describe(&self) -> String {
+        "old window".into()
+    }
+}
+
+/// An app without `ui.screenshot {data}` writes the window capture to a file in a new folder of its
+/// own inside the system's temporary folder (owner-only on unix), never to a fixed name in the
+/// shared folder itself. The folder is removed after the capture is read, and also when the app
+/// fails after writing it or the file can't be read.
+#[test]
+fn an_old_app_captures_the_window_in_a_new_private_folder() {
+    let temp = std::env::temp_dir();
+    let png = b"window capture".to_vec();
+    let size = json!({"width": 2, "height": 1});
+    let mut folders = Vec::new();
+    for (written, reply, ok) in [
+        (Some(png.clone()), Ok(size.clone()), true),
+        (Some(png.clone()), Ok(size.clone()), true),
+        (Some(png.clone()), Err("the capture failed".to_string()), false),
+        (None, Ok(size.clone()), false),
+    ] {
+        let seen = SeenPaths::default();
+        let mut s = Server::new(Box::new(OldWindow { png: written, reply, seen: seen.clone() }));
+        let r = call(&mut s, "screenshot", json!({"window": true}));
+        assert_eq!(r["isError"], !ok, "{r}");
+        if ok {
+            assert_eq!(vectorcraft_format::base64_decode(r["content"][0]["data"].as_str().unwrap()).unwrap(), png, "{r}");
+        }
+        let seen = seen.lock().unwrap().clone();
+        let [(path, mode)] = seen.as_slice() else { panic!("one capture: {seen:?}") };
+        let dir = std::path::Path::new(path).parent().unwrap().to_path_buf();
+        assert_eq!(dir.parent(), Some(temp.as_path()), "{path} is in a folder of its own inside {}", temp.display());
+        assert!(!dir.exists(), "{} is removed", dir.display());
+        if cfg!(unix) {
+            assert_eq!(*mode, Some(0o700), "{path}");
+        }
+        folders.push(dir);
+    }
+    folders.sort();
+    folders.dedup();
+    assert_eq!(folders.len(), 4, "each capture has a new folder: {folders:?}");
 }
 
 /// Each tool with another name for the same call names it in its description.

@@ -1,27 +1,34 @@
 //! Separations: the inks of a job ([`print_inks`]) and the document as one ink's plate, every
-//! colour (and image pixel) replaced by the grey of that ink's coverage.
+//! colour (and image pixel) replaced by the grey of that ink's coverage. An image placed from a
+//! DCS file prints its own plates ([`vectorcraft_doc::separated`]).
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_doc::inks::{Link, inks, plates, visit_node_colors};
+use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
 use vectorcraft_doc::overprint::darken_overprints;
-use vectorcraft_doc::{ColorMode, Document, Node};
+use vectorcraft_doc::{ColorMode, Document, ImageBlob, Node, NodeKind};
 
 use super::{DEFAULT_FREQUENCY, PrintInk, PrintSettings};
 
 /// The inks of a separation of `doc`: the process inks, then one per spot swatch (none when
-/// spots print as process), with the options of [`super::PrintOutput::inks`]; and a warning for
-/// each option naming no ink.
+/// spots print as process), with the options of [`super::PrintOutput::inks`]; and a warning
+/// naming the options that name no ink.
 pub fn print_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<String>) {
     let out = &set.output;
+    // Options by ink name, the first for a name winning: looked up, not searched for each ink.
+    let mut options = std::collections::HashMap::new();
+    for o in &out.inks {
+        options.entry(o.name.as_str()).or_insert(o);
+    }
     let list: Vec<PrintInk> = plates(doc)
         .into_iter()
         .filter(|p| !(p.spot && out.spots_to_process))
         .map(|p| {
-            let o = out.inks.iter().find(|i| i.name == p.name);
+            let o = options.get(p.name.as_str()).copied();
             PrintInk {
                 print: o.is_none_or(|o| o.print),
                 frequency: o.and_then(|o| o.frequency).unwrap_or(DEFAULT_FREQUENCY),
@@ -31,16 +38,26 @@ pub fn print_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<St
             }
         })
         .collect();
-    let warnings = out
-        .inks
-        .iter()
-        .filter(|i| !list.iter().any(|p| p.name == i.name))
-        .map(|i| {
-            format!("there is no ink named `{}` to print (inks: {})", i.name, list.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", "))
-        })
-        .collect();
+    // One warning for all the options naming no ink, each list cut short: the options and the
+    // inks both come from the file.
+    let names: BTreeSet<&str> = list.iter().map(|p| p.name.as_str()).collect();
+    let unknown: Vec<&str> = out.inks.iter().map(|i| i.name.as_str()).filter(|n| !names.contains(n)).collect();
+    let warnings = if unknown.is_empty() {
+        vec![]
+    } else {
+        let few = |all: Vec<&str>| {
+            let more = all.len().saturating_sub(MAX_NAMED);
+            let shown = all.into_iter().take(MAX_NAMED).map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ");
+            if more > 0 { format!("{shown} and {more} more") } else { shown }
+        };
+        let inks = few(list.iter().map(|p| p.name.as_str()).collect());
+        vec![format!("there is no ink named {} to print (inks: {inks})", few(unknown))]
+    };
     (list, warnings)
 }
+
+/// The most names a warning of [`print_inks`] lists.
+const MAX_NAMED: usize = 10;
 
 /// The colour settings separations of `doc` convert with: the document's colour spaces
 /// ([`crate::output::document_cms`]), with the printer profile as their CMYK profile when it is a
@@ -84,12 +101,33 @@ impl<'a> Separator<'a> {
         inks(self.doc, &self.cms, c, link, color.intent).on_plate(plate)
     }
 
-    /// Recolour `n`'s subtree as plate `plate`: the grey of each colour's coverage, unlinked.
+    /// [`Self::ink`] of a colour that prints process plates `plates` with its spot tint
+    /// ([`stop_inks`]): the spot plate prints the tint and the process plates print `plates`. With
+    /// spots as process, each process plate prints `plates` layered with the spot tint's process
+    /// equivalent, as a separated image's plates layer ([`vectorcraft_doc::separated::Separated::coverage_as`]).
+    fn stop_ink(&self, plate: &str, c: &Color, link: Link, plates: StopPlates) -> f32 {
+        let own = stop_inks(self.doc, &self.cms, c, link, plates, self.set.color.intent);
+        let (Some(_), Some((name, tint))) = (plates, own.spot.as_ref()) else {
+            return self.ink(plate, c, link);
+        };
+        if !self.set.output.spots_to_process {
+            return own.on_plate(plate);
+        }
+        let Some(i) = cms::PROCESS_PLATES.iter().position(|p| *p == plate) else {
+            return 0.0;
+        };
+        let spot = spot_color(self.doc, name).map_or(0.0, |s| self.ink(plate, &s.tinted(*tint), None));
+        1.0 - (1.0 - own.cmyk[i]) * (1.0 - spot)
+    }
+
+    /// Recolour `n`'s subtree as plate `plate`: the grey of each colour's coverage, unlinked and
+    /// without process plates.
     pub fn node(&self, plate: &str, n: &mut Node) {
-        visit_node_colors(n, &mut |c, swatch, tint| {
-            *c = Color::Gray { k: self.ink(plate, c, swatch.as_deref().map(|s| (s, *tint))) };
+        visit_node_colors(n, &mut |c, swatch, tint, plates| {
+            *c = Color::Gray { k: self.stop_ink(plate, c, swatch.as_deref().map(|s| (s, *tint)), *plates) };
             *swatch = None;
             *tint = 1.0;
+            *plates = None;
         });
     }
 
@@ -99,12 +137,45 @@ impl<'a> Separator<'a> {
     pub fn plate(&self, plate: &str) -> Document {
         let mut d = self.doc.clone();
         let discard_white = d.setup.discard_white_overprint;
+        let mut colorized = BTreeSet::new();
         let nodes = d.layers.iter_mut().chain(d.symbols.iter_mut().map(|s| &mut s.art)).chain(d.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
         for n in nodes {
             darken_overprints(n, discard_white);
             self.node(plate, Arc::make_mut(n));
+            keep_colorized_pixels(n, &d.images, &mut colorized);
         }
+        // A colorized image's pixels say where its color prints, on every plate: they are kept
+        // under their own key, and only the color is separated.
+        let mut kept = BTreeMap::new();
+        for key in colorized {
+            if let Some(blob) = d.images.get(&key) {
+                kept.insert(colorized_key(&key), blob.clone());
+            }
+        }
+        // A DCS file's image prints its own plates: a spot plate on its ink when the job prints
+        // that ink, else as its process equivalent.
+        let spots: BTreeSet<String> = if self.set.output.spots_to_process {
+            BTreeSet::new()
+        } else {
+            plates(self.doc).into_iter().filter(|p| p.spot).map(|p| p.name).collect()
+        };
+        let own = |name: &str| spots.contains(name);
+        // A spot plate printing as process prints as the document's swatch of its ink does, when
+        // there is one; else as the process equivalent its file gives.
+        let equivalent = |p: &vectorcraft_doc::separated::InkPlate| match self.doc.swatch(&p.name).and_then(|w| Some((w.paint.color()?, w.spot))) {
+            Some((c, spot)) => {
+                let c = self.doc.linked_color(c, spot);
+                cms::PROCESS_PLATES.map(|q| self.ink(q, &c, None))
+            }
+            None => p.cmyk,
+        };
         for blob in d.images.values_mut() {
+            if let Some(s) = blob.separated() {
+                if let Some(gray) = s.plate_png(plate, &own, &equivalent) {
+                    *blob = gray;
+                }
+                continue;
+            }
             let gray = blob.map_rgb(|[r, g, b]| {
                 let rgb = |v: u8| v as f32 / 255.0;
                 let v = (255.0 * (1.0 - self.ink(plate, &Color::rgb(rgb(r), rgb(g), rgb(b)), None))).round() as u8;
@@ -114,8 +185,51 @@ impl<'a> Separator<'a> {
                 *blob = gray;
             }
         }
+        d.images.extend(kept);
         // Every colour is a grey now: nothing to separate on the way out.
         d.color_mode = ColorMode::Rgb;
         d
+    }
+}
+
+/// The key a plate keeps colorized image `key`'s own pixels under.
+fn colorized_key(key: &str) -> String {
+    format!("{key}\u{0}colorized")
+}
+
+/// Point the colorized images in `n`'s subtree at [`colorized_key`], collecting their keys in
+/// `keys`. A colorized image with a color mask is separated as it shows: its masked pixels
+/// ([`Document::shown_image`]). An image whose pixels it shows in `images` don't take its colorize
+/// paint ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it
+/// shows.
+fn keep_colorized_pixels(n: &mut Arc<Node>, images: &BTreeMap<String, ImageBlob>, keys: &mut BTreeSet<String>) {
+    let colorized = |n: &Node| matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some();
+    if !colorized(n) && n.children().is_none_or(|ch| ch.is_empty()) {
+        return;
+    }
+    let node = Arc::make_mut(n);
+    let shown = match &node.kind {
+        NodeKind::Image(im) if colorized(node) => {
+            let mask = Document::color_mask_of(node).filter(|m| m.made_for(im) && images.contains_key(&m.key));
+            Some(mask.map_or(&im.key, |m| &m.key).clone())
+        }
+        _ => None,
+    };
+    if shown.as_ref().and_then(|key| images.get(key)).is_some_and(|b| !b.takes_colorize()) {
+        node.extras_mut().colorize = None;
+    }
+    if let Some(key) = shown.filter(|_| colorized(node)) {
+        if let Some(e) = node.extras_if_any() {
+            e.color_mask = None;
+        }
+        if let NodeKind::Image(im) = &mut node.kind {
+            im.key = colorized_key(&key);
+            keys.insert(key);
+        }
+    }
+    if let Some(ch) = node.children_mut() {
+        for c in ch.iter_mut() {
+            keep_colorized_pixels(c, images, keys);
+        }
     }
 }

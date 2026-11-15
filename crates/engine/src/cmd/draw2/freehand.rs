@@ -1,19 +1,21 @@
 use super::common::{
-    brush_region, path_kind, path_mut, path_of, points_param, poly_bounds, samples_param, stroke_paint, stroke_pressure, subpath_len, target_paths,
-    within_input_bound,
+    PenRecord, Sample, brush_region, path_kind, path_mut, path_of, poly_bounds, pressure_region, samples_param, size_pressure, stroke_paint,
+    subpath_len, target_paths, within_input_bound,
 };
 use super::{
     Anchor, Appearance, BTreeSet, BoolOp, Cap, Color, Document, EngineError, FillRule, Join, NewArt, Node, NodeId, NodeKind, Paint, PathData, Point,
-    PressureProfile, Result, Selection, Session, SimplifyOptions, SubPath, Value, bad, id_param, insert_look, json, number_or, po, remove_each,
-    str_param, switch_or,
+    Result, Selection, Session, SimplifyOptions, SubPath, Value, bad, insert_look, json, number_or, object_param, po, remove_each, str_param,
+    switch_or,
 };
 
 // ---------- Pencil / Paintbrush ----------
 
 /// Fit a freehand polyline: drop jitter, build a spline through the samples (sharp turns stay
-/// corners) and simplify it to `tol`.
+/// corners) and simplify it to `tol`. A closed stroke is fitted as the open one is and closed by a
+/// straight segment from its end back to its start: fitting round the gap would curve that segment
+/// on from both ends, past them and back.
 fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
-    let min = (tol * 0.3).max(vectorcraft_tools::draw2::MIN_FIDELITY * 0.3);
+    let min = (tol * 0.3).max(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE * 0.3);
     let (Some(&p0), Some(&pn)) = (pts.first(), pts.last()) else { return SubPath::new(vec![], closed) };
     let mut kept: Vec<Point> = vec![p0];
     for &p in pts.iter().skip(1) {
@@ -41,12 +43,26 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
             (kept[i], corner)
         })
         .collect();
-    let sp = vectorcraft_tools::draw2::catmull_rom(&marked, closed);
+    let sp = vectorcraft_tools::draw2::catmull_rom(&marked, false);
     if sp.anchors.len() < 3 {
-        return sp;
+        // Two anchors closed would run back over the line itself.
+        return SubPath::new(sp.anchors, closed && n > 2);
     }
-    let fitted = po::simplify_with(&PathData::single(sp.clone()), &SimplifyOptions { tolerance: tol, corner_angle_deg: 60.0, straight_lines: false });
-    fitted.subpaths.into_iter().next().filter(|s| s.anchors.len() >= 2).unwrap_or(sp)
+    let fitted = po::simplify_with(
+        &PathData::single(sp.clone()),
+        &SimplifyOptions { tolerance: tol, corner_angle_deg: 60.0, straight_lines: false, ..Default::default() },
+    );
+    let mut anchors = fitted.subpaths.into_iter().next().filter(|s| s.anchors.len() >= 2).unwrap_or(sp).anchors;
+    if closed {
+        // No handle on either side of the closing segment.
+        if let Some(l) = anchors.last_mut() {
+            l.h_out = l.p;
+        }
+        if let Some(f) = anchors.first_mut() {
+            f.h_in = f.p;
+        }
+    }
+    SubPath::new(anchors, closed)
 }
 
 /// The path of a freehand stroke: fitted at `tol` ([`fit_freehand`]), or with no `tol` the points
@@ -141,25 +157,65 @@ fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -
 }
 
 pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
+    freehand_brushed(s, p, None)
+}
+
+/// The object a brush on path `id` paints: the compound path a member path is in, else the path.
+fn brush_target(d: &Document, id: NodeId) -> NodeId {
+    d.parent_of(id).filter(|p| d.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. }))).unwrap_or(id)
+}
+
+/// Whether `ap` has a stroke a brush can paint: a stroke whose paint is not None.
+fn can_brush(ap: &Appearance) -> bool {
+    ap.stroke().is_some_and(|st| !st.paint.is_none())
+}
+
+fn no_stroke(name: &str) -> EngineError {
+    bad("brush.freehand", format!("cannot apply brush `{name}`: path has no stroke"))
+}
+
+/// Sets brush `name` on the stroke of object `id` of `d`.
+fn set_brush(d: &mut Document, id: NodeId, name: &str) {
+    if let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut()) {
+        st.brush = Some(name.to_string());
+    }
+}
+
+/// `path.freehand`, with the stroke painted with brush `brush_name` (one `brush.freehand` has
+/// checked) in the same undo step as the path. A path without a stroke is an error before
+/// anything changes.
+pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&str>) -> Result<Value> {
     const C: &str = "path.freehand";
     let samples = samples_param(p, "points", C)?;
-    if samples.iter().any(|(q, _)| !within_input_bound(*q)) {
+    if samples.iter().any(|q| !within_input_bound(q.pt)) {
         return Err(bad(C, "x and y must be finite"));
     }
-    let pressure = stroke_pressure(&samples);
-    let mut pts: Vec<Point> = samples.into_iter().map(|(pt, _)| pt).collect();
-    let tol = number_or(p, "fidelity", 1.5, C)?.clamp(vectorcraft_tools::draw2::MIN_FIDELITY, 100.0);
+    let pen = PenRecord::of_samples(&samples);
+    let mut pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
+    let tol = number_or(p, "fidelity", 1.5, C)?;
+    let (lo, hi) = (vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, vectorcraft_tools::draw2::MAX_FIT_TOLERANCE);
+    if !(lo..=hi).contains(&tol) {
+        return Err(bad(C, format!("`fidelity` must be from {lo} to {hi} pt")));
+    }
     // The tolerance the stroke is fitted at; with `fit: false` it is not fitted.
     let fit_tol = switch_or(p, "fit", true, C)?.then_some(tol);
     let closed = switch_or(p, "closed", false, C)?;
     let brush = str_param(p, "style") == Some("brush");
+    // The undo step's name: a stroke painted with a brush is a Paintbrush stroke, whatever its style.
+    let label = if brush || brush_name.is_some() { "Paintbrush" } else { "Pencil" };
     let keep_selected = switch_or(p, "keepSelected", true, C)?;
     let filled = switch_or(p, "fill", false, C)?;
     if let Some(ext) = p.get("extend").filter(|v| !v.is_null()) {
-        let id = id_param(ext, "id").ok_or_else(|| bad(C, "extend needs id"))?;
+        let id = object_param(ext, "id", C)?.ok_or_else(|| bad(C, "extend needs id"))?;
         let at_start = str_param(ext, "end") == Some("start");
         let (pd, _) = path_of(&s.doc()?.doc, id)?;
         let si = pd.subpaths.iter().rposition(|s| !s.closed && !s.anchors.is_empty()).ok_or_else(|| bad(C, "path has no open end"))?;
+        let target = brush_target(&s.doc()?.doc, id);
+        if let Some(name) = brush_name
+            && !s.doc()?.doc.node(target).is_some_and(|n| can_brush(&n.appearance))
+        {
+            return Err(no_stroke(name));
+        }
         let mut sp = pd.subpaths[si].clone();
         let old_len = subpath_len(&sp);
         if at_start {
@@ -171,13 +227,22 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         let Some(p0) = pts.first_mut() else { return Err(bad(C, "needs points")) };
         *p0 = end;
         if pts.len() < 2 {
+            // No stroke to add: the brush alone changes, when it is not the path's already.
+            if let Some(name) = brush_name
+                && s.doc()?.doc.node(target).and_then(|n| n.appearance.stroke()).is_some_and(|st| st.brush.as_deref() != Some(name))
+            {
+                s.edit("Paintbrush", |d, _| {
+                    set_brush(d, target, name);
+                    Ok(())
+                })?;
+            }
             return Ok(json!({ "id": id.0 }));
         }
         // A stroke that ends on an open end of another path connects the two: (that path, its last
         // open subpath, that subpath starting at the end the stroke ends on, it ends at its end).
         let connect = match p.get("connect").filter(|v| !v.is_null()) {
             Some(cn) => {
-                let other = id_param(cn, "id").ok_or_else(|| bad(C, "connect needs id"))?;
+                let other = object_param(cn, "id", C)?.ok_or_else(|| bad(C, "connect needs id"))?;
                 if other == id {
                     return Err(bad(C, "connect needs a path other than the one extended"));
                 }
@@ -197,9 +262,18 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             }
             None => None,
         };
-        let close_tol = (tol * 4.0).max(6.0);
-        let closing = connect.is_none() && sp.anchors.len() >= 2 && pts.last().is_some_and(|p| p.distance(first) <= close_tol);
-        if closing && let Some(l) = pts.last_mut() {
+        // `closed`, when given, says whether the stroke closes the path: the Pencil and the
+        // Paintbrush send it, by their Close Paths When Ends Are Within and Alt at the release.
+        // Left out, an extending stroke that ends within four Fidelities of the path's other end
+        // closes it: at least 6 pt and at most 400 pt, whatever the Fidelity it is fitted at.
+        let close_tol = (tol * 4.0).clamp(6.0, 400.0);
+        let near_first = pts.last().is_some_and(|p| p.distance(first) <= close_tol);
+        let wants_close = if p.get("closed").is_some_and(|v| !v.is_null()) { closed } else { near_first };
+        let closing = connect.is_none() && sp.anchors.len() >= 2 && wants_close;
+        // A stroke ending near the other end ends on it; one ending farther away closes with a
+        // straight segment back to it.
+        let ends_on_first = closing && near_first;
+        if ends_on_first && let Some(l) = pts.last_mut() {
             *l = first;
         }
         if let Some((_, _, y, _)) = &connect
@@ -216,13 +290,23 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             add.remove(0);
         }
         sp.anchors.extend(add);
-        if closing
+        if ends_on_first
             && sp.anchors.len() > 2
             && let Some(l) = sp.anchors.pop()
             && let Some(a0) = sp.anchors.first_mut()
         {
             a0.h_in = l.h_in;
             sp.closed = true;
+        } else if closing && !ends_on_first && sp.anchors.len() > 2 {
+            // Closed from away from the other end: a straight segment back to it, whatever
+            // handles the open ends carried.
+            sp.closed = true;
+            if let Some(l) = sp.anchors.last_mut() {
+                l.h_out = l.p;
+            }
+            if let Some(f) = sp.anchors.first_mut() {
+                f.h_in = f.p;
+            }
         }
         for a in &mut sp.anchors {
             *a = Anchor::with_handles(a.p, a.h_in, a.h_out);
@@ -240,17 +324,18 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             sp.anchors.extend_from_slice(rest);
             other_len = subpath_len(y);
         }
-        // The path's pressure (in the direction it is continued in) followed by the stroke's, and
-        // by the pressure of the path it connects to.
-        let pressure_of = |n: NodeId| s.doc().ok()?.doc.node(n).and_then(|n| n.appearance.stroke()).and_then(|st| st.pressure.clone());
-        let old_pressure = pressure_of(id);
-        let other_pressure = connect.as_ref().and_then(|(o, _, _, at_end)| pressure_of(*o).map(|p| if *at_end { p.reversed() } else { p }));
-        let joined = (old_pressure.is_some() || pressure.is_some() || other_pressure.is_some()).then(|| {
-            let old = old_pressure.map(|p| if at_start { p.reversed() } else { p });
-            let drawn = PressureProfile::extended(old.as_ref(), old_len, pressure.as_ref(), drawn_len - old_len);
-            if connect.is_some() { PressureProfile::extended(drawn.as_ref(), drawn_len, other_pressure.as_ref(), other_len) } else { drawn }
+        // What the pen recorded along the path (in the direction it is continued in), followed by
+        // what it recorded along the stroke, and by what it recorded along the path it connects to.
+        let record_of =
+            |n: NodeId| s.doc().ok().and_then(|d| d.doc.node(n).and_then(|n| n.appearance.stroke()).map(PenRecord::of)).unwrap_or_default();
+        let old = record_of(id);
+        let other = connect.as_ref().map(|(o, _, _, at_end)| if *at_end { record_of(*o).reversed() } else { record_of(*o) }).unwrap_or_default();
+        let joined = (!old.is_empty() || !pen.is_empty() || !other.is_empty()).then(|| {
+            let old = if at_start { old.reversed() } else { old };
+            let drawn = old.extended(old_len, &pen, drawn_len - old_len);
+            if connect.is_some() { drawn.extended(drawn_len, &other, other_len) } else { drawn }
         });
-        s.edit(if brush { "Paintbrush" } else { "Pencil" }, |d, sel| {
+        s.edit(label, |d, sel| {
             let reverse = at_start && !sp.closed;
             if reverse {
                 sp.reverse();
@@ -284,7 +369,10 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(joined) = joined
                 && let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut())
             {
-                st.pressure = if reverse { joined.map(|p| p.reversed()) } else { joined };
+                if reverse { joined.reversed() } else { joined }.write(st);
+            }
+            if let Some(name) = brush_name {
+                set_brush(d, target, name);
             }
             if keep_selected {
                 sel.set([id]);
@@ -296,20 +384,29 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "id": id.0 }));
     }
     if let Some(rd) = p.get("redraw").filter(|v| !v.is_null()) {
-        let id = id_param(rd, "id").ok_or_else(|| bad(C, "redraw needs id"))?;
+        let id = object_param(rd, "id", C)?.ok_or_else(|| bad(C, "redraw needs id"))?;
         let within = number_or(rd, "within", 12.0, C)?;
         if !within.is_finite() || within < 0.0 {
             return Err(bad(C, "redraw within must be a finite distance of 0 or more"));
         }
         let (pd, _) = path_of(&s.doc()?.doc, id)?;
-        // shortcut: a stroke pressure profile is left as it was, measured along the old path; fit
-        // it to the new length if Calligraphic pressure strokes get redrawn.
+        // shortcut: a stroke's pressure, tilt, bearing and rotation profiles are left as they
+        // were, measured along the old path; fit them to the new length if strokes drawn with a
+        // pen get redrawn.
         if let Some((si, sp)) = redraw_section(&pd, &pts, fit_tol, within) {
-            s.edit(if brush { "Paintbrush" } else { "Pencil" }, |d, sel| {
+            // A member path of a compound path is redrawn in it: the compound path is what is
+            // selected, and what a brush paints.
+            let whole = brush_target(&s.doc()?.doc, id);
+            if let Some(name) = brush_name
+                && !s.doc()?.doc.node(whole).is_some_and(|n| can_brush(&n.appearance))
+            {
+                return Err(no_stroke(name));
+            }
+            s.edit(label, |d, sel| {
                 *path_mut(d, id)?.subpaths.get_mut(si).ok_or_else(|| bad(C, "no such subpath"))? = sp;
-                // A member path of a compound path is redrawn in it: the compound path is what is
-                // selected.
-                let whole = d.parent_of(id).filter(|p| d.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. }))).unwrap_or(id);
+                if let Some(name) = brush_name {
+                    set_brush(d, whole, name);
+                }
                 if keep_selected {
                     sel.set([whole]);
                 } else {
@@ -330,9 +427,23 @@ pub(super) fn freehand(s: &mut Session, p: &Value) -> Result<Value> {
     let stroke = if brush || fill.is_none() { stroke_paint(s) } else { s.paint.stroke.clone() };
     let mut look = s.new_art_look(fill, stroke, s.paint.stroke_width.max(0.1));
     if let Some(st) = look.appearance.stroke_mut() {
-        st.pressure = pressure;
+        pen.write(st);
     }
-    insert_look(s, if brush { "Paintbrush" } else { "Pencil" }, path_kind(PathData::single(sp)), look, None, keep_selected)
+    if let Some(name) = brush_name {
+        if !can_brush(&look.appearance) {
+            return Err(no_stroke(name));
+        }
+        if let Some(st) = look.appearance.stroke_mut() {
+            st.brush = Some(name.to_string());
+        }
+    }
+    let out = insert_look(s, label, path_kind(PathData::single(sp)), look, None, keep_selected)?;
+    if !keep_selected {
+        // A new stroke with Keep selected off leaves nothing selected: Illustrator starts the stroke
+        // by dropping the earlier selection, it does not keep it (#5752).
+        s.select(|_, sel| sel.clear())?;
+    }
+    Ok(out)
 }
 
 // ---------- Blob Brush ----------
@@ -368,11 +479,39 @@ fn adjacent_to_topmost(doc: &Document, touched: &[NodeId], paint: &Paint) -> Vec
 
 pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.blob";
-    let pts = points_param(p, "points", C)?;
+    let samples = samples_param(p, "points", C)?;
     let size = number_or(p, "size", 10.0, C)?;
     if !(size.is_finite() && size > 0.0) {
         return Err(bad(C, "size must be positive"));
     }
+    let angle = number_or(p, "angle", 0.0, C)?;
+    let roundness = number_or(p, "roundness", 100.0, C)?;
+    if !angle.is_finite() || !roundness.is_finite() {
+        return Err(bad(C, "angle and roundness must be finite"));
+    }
+    let angle = angle.clamp(-180.0, 180.0);
+    let roundness = roundness.clamp(0.0, 100.0);
+    let tip = vectorcraft_tools::draw2::blob_tip(angle, roundness);
+    let squash = tip.inverse();
+    // Width profiles use distance along the spine, so measure pressure on the same squashed
+    // points that the outline reads for a non-round tip.
+    let mapped_samples: Vec<Sample> = if roundness < 100.0 {
+        samples
+            .iter()
+            .map(|s| {
+                let mut mapped = *s;
+                mapped.pt = squash * s.pt;
+                mapped
+            })
+            .collect()
+    } else {
+        samples.clone()
+    };
+    let pressure = size_pressure(p, &mapped_samples, C)?;
+    let pts: Vec<Point> = samples.into_iter().map(|s| s.pt).collect();
+    let mapped_pts: Vec<Point> = mapped_samples.into_iter().map(|s| s.pt).collect();
+    // The widest the brush gets: the area merges look in.
+    let reach = pressure.as_ref().map_or(size, |(_, v)| size + v);
     // With `fidelity` (pt), the brush follows the stroke fitted by [`fit_freehand`], as a Pencil
     // stroke is fitted. Without it, or when the fitted stroke has no length (a short stroke back to
     // its start), the brush follows every point.
@@ -380,11 +519,35 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => None,
         Some(_) => Some(number_or(p, "fidelity", 0.0, C)?.clamp(vectorcraft_tools::draw2::MIN_FIDELITY, 100.0)),
     };
-    let fitted = fidelity
-        .filter(|_| pts.len() > 1)
-        .map(|tol| po::outline_stroke(&PathData::single(fit_freehand(&pts, tol, false)), size, Cap::Round, Join::Round, 4.0))
-        .filter(|r| !r.is_empty());
-    let region = fitted.unwrap_or_else(|| brush_region(&pts, size));
+    let spine = |tol: Option<f64>| {
+        let path = match tol {
+            Some(tol) => PathData::single(fit_freehand(&pts, tol, false)),
+            None => PathData::single(SubPath::polyline(&pts, false)),
+        };
+        if roundness < 100.0 { path.transformed(squash) } else { path }
+    };
+    let region = match (&pressure, pts.len() > 1) {
+        (Some((prof, variation)), true) => {
+            let fitted = match fidelity {
+                Some(tol) => Some(pressure_region(&spine(Some(tol)), size, *variation, prof)?).filter(|r| !r.is_empty()),
+                None => None,
+            };
+            match fitted {
+                Some(r) => r,
+                None => pressure_region(&spine(None), size, *variation, prof)?,
+            }
+        }
+        // A click: one dab as wide as the pen pressed.
+        (Some((prof, variation)), false) => brush_region(&mapped_pts, vectorcraft_tools::draw2::pressure_size(size, *variation, prof.at(0.0))),
+        (None, _) => {
+            let fitted = fidelity
+                .filter(|_| pts.len() > 1)
+                .map(|tol| po::outline_stroke(&spine(Some(tol)), size, Cap::Round, Join::Round, 4.0))
+                .filter(|r| !r.is_empty());
+            fitted.unwrap_or_else(|| brush_region(&mapped_pts, size))
+        }
+    };
+    let region = if roundness < 100.0 { region.transformed(tip) } else { region };
     if region.is_empty() {
         return Err(EngineError::Other("empty brush stroke".into()));
     }
@@ -404,7 +567,7 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
         let all = Selection::default();
         let from = if only_selection { &st.selection } else { &all };
         // A fitted stroke can curve outside the points' bounds, so the area also takes in the shape.
-        let area = region.control_bounds().map_or_else(|| poly_bounds(&pts, size), |b| b.union(poly_bounds(&pts, size)));
+        let area = region.control_bounds().map_or_else(|| poly_bounds(&pts, reach), |b| b.union(poly_bounds(&pts, reach)));
         for id in target_paths(&st.doc, from, area) {
             let Some(n) = st.doc.node(id) else { continue };
             if !blob_match(n, &paint) {

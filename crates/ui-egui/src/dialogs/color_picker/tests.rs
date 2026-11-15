@@ -106,6 +106,94 @@ fn gamut_correction_gives_a_printable_colour() {
     assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &Color::rgb8(128, 128, 128)), None);
 }
 
+/// The cached warning follows the CMYK space it is checked in: assigning the document a CMYK
+/// profile, removing it, or changing the working CMYK space updates it for the same color.
+#[test]
+fn gamut_warning_follows_a_profile_change() {
+    const CHILD: &str = "VECTORCRAFT_TEST_GAMUT_PROFILE_CHANGE";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: change them in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "dialogs::color_picker::tests::gamut_warning_follows_a_profile_change", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated gamut test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    let fix = gamut_fix(&mut app, &ctx, "picker-gamut", &blue);
+    assert!(fix.is_some(), "pure blue is out of the default CMYK gamut");
+    // Device CMYK has no gamut to fall outside of.
+    app.run("edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), None);
+    app.run("edit.assignProfile", json!({"cmyk": null})).unwrap();
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), fix);
+    app.run("edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), None);
+    app.run("edit.colorSettings", json!({"cmyk": cms::GENERIC_CMYK})).unwrap();
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), fix);
+}
+
+/// Loading a new file of the document's assigned CMYK profile, under the same name, updates the
+/// cached warning for the same color.
+#[test]
+fn gamut_warning_follows_a_profile_loaded_again() {
+    const CHILD: &str = "VECTORCRAFT_TEST_GAMUT_PROFILE_RELOAD";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings and loaded profiles are process-wide: change them in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "dialogs::color_picker::tests::gamut_warning_follows_a_profile_loaded_again", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated gamut test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    // A built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
+    let renamed = |builtin: &str, name: &str| {
+        let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+        let mut bytes = cms::icc_bytes(builtin).unwrap().to_vec();
+        let (from, to) = (utf16(builtin), utf16(&format!("{name:<width$}", width = builtin.len())));
+        let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+        bytes[at..at + to.len()].copy_from_slice(&to);
+        bytes
+    };
+    let name = "Gamut Reload CMYK";
+    let dir = vectorcraft_testkit::temp_dir("gamut-reload-cmyk");
+    let mut app = app();
+    let load = |app: &mut VectorcraftApp, builtin: &str| {
+        let path = dir.join(format!("{}.icc", builtin.len()));
+        std::fs::write(&path, renamed(builtin, name)).unwrap();
+        let r = app.run("color.loadProfile", json!({"path": path.to_str().unwrap()})).unwrap();
+        assert_eq!(r["name"], name);
+    };
+    let ctx = egui::Context::default();
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    load(&mut app, cms::GENERIC_CMYK);
+    app.run("edit.assignProfile", json!({"cmyk": name})).unwrap();
+    let before = gamut_fix(&mut app, &ctx, "picker-gamut", &blue);
+    assert!(before.is_some(), "pure blue is out of the loaded profile's gamut");
+    load(&mut app, cms::DEVICE_CMYK);
+    let fresh = in_gamut(&mut app, &blue);
+    assert_ne!(fresh, before, "the new file gives another answer");
+    assert_eq!(gamut_fix(&mut app, &ctx, "picker-gamut", &blue), fresh);
+}
+
 /// The selected art takes each colour as it is picked; OK keeps the last as one undo step and
 /// Cancel puts the art back.
 #[test]
@@ -273,6 +361,30 @@ fn open_set_hex_and_confirm_fills() {
     app.run("ui.colorPicker", json!({"stroke": false, "color": {"c": 0, "m": 100, "y": 100, "k": 0}})).unwrap();
     super::super::confirm(&mut app).unwrap();
     assert_eq!(crate::panels::current_paints(&app).0.color(), Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
+}
+
+/// OK makes the picked fill or stroke color the Color Guide's base color (#3137); Cancel and a
+/// color picked for an artboard leave the base as it is.
+#[test]
+fn ok_makes_the_picked_color_the_color_guides_base() {
+    let mut app = app();
+    let base = |app: &VectorcraftApp| crate::panels::color_guide::base_color(app).to_hex();
+    app.ui.color_guide_base = Some(Color::WHITE);
+    app.run("ui.colorPicker", json!({})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("hex".into(), json!("2050a0"));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(base(&app), "#2050a0");
+    app.run("ui.colorPicker", json!({"stroke": true})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("hex".into(), json!("a02050"));
+    frame(&mut app);
+    super::super::cancel(&mut app);
+    assert_eq!(base(&app), "#2050a0", "Cancel keeps the base");
+    app.run("select.set", json!({"ids": []})).unwrap();
+    app.run("artboard.new", json!({})).unwrap();
+    app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("hex".into(), json!("00ff00"));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(base(&app), "#2050a0", "an artboard's color leaves the base");
 }
 
 /// #1692: Tab goes through one color model's fields before the next: H, S, B, then R, G, B, the

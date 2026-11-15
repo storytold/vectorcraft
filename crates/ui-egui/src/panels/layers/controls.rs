@@ -1,7 +1,7 @@
 use super::model::{ObjectKind, RowState, names, parse_names, toggled};
 use super::{
-    Document, HashSet, LayersDrag, Node, NodeId, NodeKind, PanelDrag, Sense, Stroke, StrokeKind, Ui, Value, VectorcraftApp, View, json,
-    last_selected, see_selection, vec2, widgets,
+    Arc, Document, HashSet, LayersDrag, Node, NodeId, NodeKind, PanelDrag, Sense, Stroke, Ui, Value, VectorcraftApp, View, json, last_selected,
+    see_selection, vec2, widgets,
 };
 
 /// The Filter button, lit while a filter is on, and its popup: Clear All, the object kinds under
@@ -12,25 +12,27 @@ pub(super) fn filter_button(app: &mut VectorcraftApp, ui: &mut Ui) {
     let button = widgets::icon_button(ui, "dc-filter", tl!("Filter"), f.is_on(), 24.0);
     let mut set = None;
     egui::Popup::menu(&button).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
-        ui.horizontal(|ui| {
-            widgets::subheader(ui, tl!("Filter"));
-            ui.add_space(12.0);
-            if ui.add_enabled(f.is_on(), egui::Button::new(egui::RichText::new(tl!("Clear All")).size(12.5)).frame(false)).clicked() {
-                set = Some(json!({"objects": [], "layers": []}));
+        widgets::menu_scroll(ui, |ui| {
+            ui.horizontal(|ui| {
+                widgets::subheader(ui, tl!("Filter"));
+                ui.add_space(12.0);
+                if ui.add_enabled(f.is_on(), egui::Button::new(egui::RichText::new(tl!("Clear All")).size(12.5)).frame(false)).clicked() {
+                    set = Some(json!({"objects": [], "layers": []}));
+                }
+            });
+            widgets::subheader(ui, tl!("By Object"));
+            for (k, _) in ObjectKind::ALL {
+                if widgets::check(ui, k.label(), f.objects.contains(&k), true) {
+                    set = Some(json!({"objects": toggled(&ObjectKind::ALL, &f.objects, k)}));
+                }
+            }
+            widgets::subheader(ui, tl!("By Layer"));
+            for (s, _) in RowState::ALL {
+                if widgets::check(ui, s.label(), f.layers.contains(&s), true) {
+                    set = Some(json!({"layers": toggled(&RowState::ALL, &f.layers, s)}));
+                }
             }
         });
-        widgets::subheader(ui, tl!("By Object"));
-        for (k, _) in ObjectKind::ALL {
-            if widgets::check(ui, k.label(), f.objects.contains(&k), true) {
-                set = Some(json!({"objects": toggled(&ObjectKind::ALL, &f.objects, k)}));
-            }
-        }
-        widgets::subheader(ui, tl!("By Layer"));
-        for (s, _) in RowState::ALL {
-            if widgets::check(ui, s.label(), f.layers.contains(&s), true) {
-                set = Some(json!({"layers": toggled(&RowState::ALL, &f.layers, s)}));
-            }
-        }
     });
     if let Some(p) = set {
         app.run("ui.layersFilter", p).ok();
@@ -61,10 +63,11 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
     {
         actions.push(("appearance.clear".into(), json!({"ids": [id.0]})));
     } else if trash.clicked() {
-        if view.rows.is_empty() && app.session.active().is_some_and(|d| !d.selection.is_empty()) {
+        // With no row highlighted, the selected art and ruler guides go.
+        if view.rows.is_empty() && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides()) {
             actions.push(("edit.clear".into(), json!({})));
         } else {
-            actions.push(("layer.delete".into(), json!({})));
+            actions.push(("ui.layerDelete".into(), json!({})));
         }
     }
     // Create New Layer: Alt asks for its options first, Ctrl/Cmd puts it on top of every layer,
@@ -80,17 +83,24 @@ pub(super) fn bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui, view: &View, doc
         }
     }
     // Rows dropped on the trash are deleted, on New Layer duplicated, as in Illustrator. Both are
-    // outlined while rows (or, on the trash, a target circle) hang over them.
-    for (button, cmd) in [(&trash, "layer.delete"), (&new_layer, "layer.duplicate")] {
-        if let Some(d) = button.dnd_release_payload::<LayersDrag>()
-            && let LayersDrag::Rows(ids) = &*d
-        {
-            actions.push((cmd.into(), json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})));
+    // outlined while rows (or, on the trash, a target circle) hang over them. Guide rows dropped on
+    // the trash delete their guides (`guide.remove`); New Layer does not take them.
+    for (button, cmd) in [(&trash, "ui.layerDelete"), (&new_layer, "layer.duplicate")] {
+        let deletes = cmd == "ui.layerDelete";
+        if let Some(d) = button.dnd_release_payload::<LayersDrag>() {
+            match &*d {
+                LayersDrag::Rows(ids) => actions.push((cmd.into(), json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))),
+                LayersDrag::Guides(guides) if deletes => actions.push(("guide.remove".into(), json!({"indexes": guides}))),
+                _ => {}
+            }
         }
-        let over = button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| matches!(*d, LayersDrag::Rows(_)))
-            || (cmd == "layer.delete" && button.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(_))));
+        let over = button.dnd_hover_payload::<LayersDrag>().is_some_and(|d| match *d {
+            LayersDrag::Rows(_) => true,
+            LayersDrag::Guides(_) => deletes,
+            LayersDrag::Art => false,
+        }) || (deletes && button.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(_))));
         if over {
-            child.painter().rect_stroke(button.rect, 3.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
+            widgets::drop_target_outline(&child, button.rect);
         }
     }
     // Create New Sublayer: Alt asks for its options first, and Ctrl/Cmd+Alt puts it under the
@@ -141,7 +151,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         Some(("New Layer…", "ui.newLayer", json!({}), true, false)),
         Some(("New Sublayer…", "ui.newLayer", json!({"sublayer": true}), current.is_some(), false)),
         Some(("Duplicate Selection", "layer.duplicate", json!({}), !targets.is_empty(), false)),
-        Some(("Delete Selection", "layer.delete", json!({}), !targets.is_empty(), false)),
+        Some(("Delete Selection", "ui.layerDelete", json!({}), !targets.is_empty(), false)),
         Some(("Options for Selection…", "ui.layerOptions", json!({}), !targets.is_empty(), false)),
         None,
         Some(("Make/Release Clipping Mask", "layer.clippingMask.toggle", json!({}), true, false)),
@@ -245,25 +255,95 @@ pub(super) fn collect_for_export_menu(ui: &mut Ui, enabled: bool, mut run: impl 
 /// the Select menu, then the active document's saved selections: choosing one recalls it.
 fn save_selection_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.menu_button(format!("   {}", tl!("Save Selection")), |ui| {
-        for (label, id) in [("Save Selection…", "select.save"), ("Update Selection", "select.update"), ("Edit Selection…", "select.editSaved")] {
-            if widgets::menu_item(ui, label, crate::menus::enabled(app, id), false) {
-                crate::menus::invoke(app, id, json!({}));
-                ui.close();
+        widgets::menu_scroll(ui, |ui| {
+            for (label, id) in [("Save Selection…", "select.save"), ("Update Selection", "select.update"), ("Edit Selection…", "select.editSaved")]
+            {
+                if widgets::menu_item(ui, label, crate::menus::enabled(app, id), false) {
+                    crate::menus::invoke(app, id, json!({}));
+                    ui.close();
+                }
             }
-        }
-        let names: Vec<String> = app.session.active().map(|d| d.doc.saved_selections.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
-        if !names.is_empty() {
-            ui.separator();
-        }
-        for name in names {
-            if widgets::menu_item_name(ui, &name, true, false) {
-                let selected = last_selected(app);
-                app.run("select.recall", json!({ "name": name })).ok();
-                see_selection(app, ui, selected);
-                ui.close();
+            let names: Vec<String> =
+                app.session.active().map(|d| d.doc.saved_selections.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
+            if !names.is_empty() {
+                ui.separator();
             }
-        }
+            for name in names {
+                if widgets::menu_item_name(ui, &name, true, false) {
+                    let selected = last_selected(app);
+                    app.run("select.recall", json!({ "name": name })).ok();
+                    see_selection(app, ui, selected);
+                    ui.close();
+                }
+            }
+        });
     });
+}
+
+/// `ui.layerDelete {ids?|id?, doc?, confirmed?}`: Delete Selection as the Layers panel runs it (the
+/// trash button, rows dropped on it, the panel menu, Delete and Backspace), on the rows
+/// `layer.delete` takes. When a layer or sublayer among them holds art (an object other than a
+/// guide, hidden, locked and nested ones included), it asks first: OK deletes those rows, by id, in
+/// the same document (`doc`, its uid, with `confirmed`); with another document active then, nothing
+/// is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
+/// go to `layer.delete` at once. → `layer.delete`'s result, or null while the question is open
+pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let confirmed = crate::menus::opt_bool(p, "confirmed")?.unwrap_or(false);
+    let key = "doc";
+    let doc = match p.get(key) {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_u64().ok_or_else(|| format!("`{key}` must be a whole number of 0 or more"))?),
+    };
+    let st = app.session.active().ok_or("no document open")?;
+    if doc.is_some_and(|d| d != st.uid) {
+        return Err("the active document changed while the question was open; nothing was deleted".into());
+    }
+    let rows: serde_json::Map<String, Value> = ["ids", "id"].iter().filter_map(|k| Some((k.to_string(), p.get(*k)?.clone()))).collect();
+    // An id the engine refuses: `layer.delete` gives the error, and deletes nothing.
+    let row = |v: &Value| v.as_u64().map(NodeId).filter(|id| st.doc.node(*id).is_some_and(|n| !n.is_ruler_guide()));
+    let ids: Option<Vec<NodeId>> = match (p.get("ids"), p.get("id")) {
+        (Some(v), _) => v.as_array().and_then(|a| a.iter().map(row).collect()),
+        (None, Some(v)) => row(v).map(|id| vec![id]),
+        (None, None) => {
+            let rows = st.highlighted_rows();
+            Some(if rows.is_empty() { st.current_layer().into_iter().collect() } else { rows })
+        }
+    };
+    let Some(ids) = ids.filter(|_| !confirmed) else { return app.run("layer.delete", Value::Object(rows)) };
+    let listed: HashSet<NodeId> = ids.iter().copied().collect();
+    let mut roots = vec![];
+    row_roots(&st.doc.layers, &listed, &mut roots);
+    let every_layer = st.doc.layers.iter().all(|l| listed.contains(&l.id));
+    if every_layer || !roots.iter().any(|n| n.is_layer() && holds_art(n)) {
+        return app.run("layer.delete", json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
+    }
+    let message = match roots.as_slice() {
+        [n] if n.is_layer() => tl!("Delete this layer and its artwork?"),
+        _ => tl!("Delete the selected items and their artwork?"),
+    };
+    let params = json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "doc": st.uid, "confirmed": true});
+    crate::dialogs::confirm::ask(app, message, "", "ui.layerDelete", params);
+    Ok(Value::Null)
+}
+
+/// The rows among `nodes` (and the rows inside them) that are in `listed` and not inside another
+/// listed row, top-level first.
+fn row_roots<'a>(nodes: &'a [Arc<Node>], listed: &HashSet<NodeId>, out: &mut Vec<&'a Node>) {
+    for n in nodes {
+        if out.len() == listed.len() {
+            return;
+        }
+        if listed.contains(&n.id) {
+            out.push(n);
+        } else if let Some(children) = n.children() {
+            row_roots(children, listed, out);
+        }
+    }
+}
+
+/// Whether a layer holds art: an object other than a guide, in it or in one of its sublayers.
+fn holds_art(layer: &Node) -> bool {
+    layer.children().into_iter().flatten().any(|c| if c.is_layer() { holds_art(c) } else { !c.is_guide() })
 }
 
 /// `ui.layersExpand {ids?, open?}`: open (or close) rows of the active document's Layers panel;

@@ -198,6 +198,30 @@ fn overprints(s: &Session, id: NodeId) -> (bool, bool) {
     (a.fill().unwrap().overprint, a.stroke().unwrap().overprint)
 }
 
+/// Overprint Black refuses a switch or `percentage` of the wrong type, which it would otherwise
+/// replace with the default: `{"fill": "false"}` marked the fills.
+#[test]
+fn overprint_black_refuses_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let k = rect(&mut s, [0.0, 0.0, 10.0, 10.0], black_ink(), Some(black_ink()), 1.0);
+    let before = undo_len(&s);
+    for (p, want) in [
+        (json!({"ids": [k.0], "fill": "false"}), "`fill` must be true or false"),
+        (json!({"ids": [k.0], "stroke": 0}), "`stroke` must be true or false"),
+        (json!({"ids": [k.0], "remove": "true"}), "`remove` must be true or false"),
+        (json!({"ids": [k.0], "includeCmyBlacks": "yes"}), "`includeCmyBlacks` must be true or false"),
+        (json!({"ids": [k.0], "includeSpotBlacks": 1}), "`includeSpotBlacks` must be true or false"),
+        (json!({"ids": [k.0], "percentage": "75"}), "`percentage` must be a number"),
+    ] {
+        let e = s.execute("edit.colors.overprintBlack", &p).unwrap_err().to_string();
+        assert!(e.contains(want), "{p}: {e}");
+    }
+    assert_eq!((overprints(&s, k), undo_len(&s)), ((false, false), before), "nothing changed, no undo step");
+    // A null is read as a key left out.
+    s.execute("edit.colors.overprintBlack", &json!({"ids": [k.0], "fill": null, "percentage": null})).unwrap();
+    assert_eq!(overprints(&s, k), (true, true));
+}
+
 #[test]
 fn overprint_black_options() {
     let mut s = session();

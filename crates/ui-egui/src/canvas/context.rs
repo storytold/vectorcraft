@@ -4,7 +4,10 @@ use super::{Ui, VectorcraftApp, Xf, json, widgets};
 /// Right-click: the object under the pointer is selected first unless it already is, then the
 /// context menu lists what applies to the selection ([`crate::menus::context_items`]). The locked
 /// objects under the pointer ([`vectorcraft_doc::hit::locked_objects_at`]) are kept in
-/// `ui.context_locked` while the menu is open, for its Unlock submenu.
+/// `ui.context_locked` while the menu is open, for its Unlock submenu. With the Intertwine tool, a
+/// right-click where three or more objects of the group overlap keeps the selection and puts what
+/// it arranges in `ui.context_intertwine` ([`vectorcraft_tools::intertwine::menu_target`]). With the
+/// Artboard tool, an artboard takes the place of the object ([`crate::panels::artboards::right_click`]).
 pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
     if resp.secondary_clicked()
         && let Some(p) = resp.interact_pointer_pos()
@@ -12,7 +15,20 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
         let p = xf.to_doc(p);
         let locked = hit_with(app, p, xf.zoom, |doc, p, opt| Some(vectorcraft_doc::hit::locked_objects_at(doc, p, opt)));
         app.ui.context_locked = app.session.active().map(|st| st.uid).zip(locked);
-        if let Some(st) = app.session.active()
+        app.ui.context_intertwine = app
+            .session
+            .active()
+            .filter(|_| app.session.tool_id() == "intertwine")
+            .and_then(|st| vectorcraft_tools::intertwine::menu_target(&st.doc, &st.selection.objects, p).map(|(g, m)| (st.uid, g, p, m)));
+        // Auto Spell Check: the underlined word right-clicked, for its suggestions.
+        app.ui.context_spelling = if app.ui.view.auto_spell_check { super::tool_overlays::misspelled_word_at(app, p) } else { None };
+        let on_artboards = app.session.tool_id() == "artboard";
+        if on_artboards {
+            crate::panels::artboards::right_click(app, p);
+        }
+        if !on_artboards
+            && app.ui.context_intertwine.is_none()
+            && let Some(st) = app.session.active()
             && let Some(top) = selection_hit_at(app, p, xf.zoom).map(|h| h.top_object(st.isolation))
             && !st.selection.contains(top)
         {
@@ -23,6 +39,9 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
     let mut clicked = None;
     if resp.context_menu(|ui| crate::menus::context_menu_body(app, ui, &mut clicked)).is_none() {
         app.ui.context_locked = None;
+        app.ui.context_intertwine = None;
+        app.ui.context_artboards = None;
+        app.ui.context_spelling = None;
     }
     if let Some((id, p)) = clicked {
         crate::menus::invoke(app, &id, p);
@@ -34,7 +53,10 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
 /// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it), the
 /// Appearance panel's thumbnail gives the object (the topmost one hit) the appearance it carries
 /// (`appearance.copyFrom`), a graphic style is applied to it (`graphicStyle.apply`; with Alt, on
-/// top of its appearance). A chip follows the pointer meanwhile.
+/// top of its appearance), and a brush is applied to it (`brush.apply`, `brush.addFromLibrary`
+/// for a brush library's). A Brushes panel scatter, art or pattern
+/// brush dropped where there is no art places a copy of its art there (`brush.placeArt`). A chip
+/// follows the pointer meanwhile.
 pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
     crate::panels::swatches::drag_preview(app, ui.ctx());
     let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else { return };
@@ -67,7 +89,19 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
         }
         return;
     }
-    let Some(hit) = hit_at(app, xf.to_doc(pos), xf.zoom) else { return };
+    let hit = hit_at(app, xf.to_doc(pos), xf.zoom);
+    // A scatter, art or pattern brush from the Brushes panel dropped where there is no art: a copy
+    // of its art, centered where it is dropped, to edit and Alt-drag back onto the brush.
+    if let (None, widgets::PanelDrag::Brush { name, def }) = (&hit, &*d)
+        && matches!(def["type"].as_str(), Some("scatter" | "art" | "pattern"))
+    {
+        let at = xf.to_doc(pos);
+        if let Err(e) = app.run("brush.placeArt", json!({"name": name, "x": at.x, "y": at.y})) {
+            app.status(e);
+        }
+        return;
+    }
+    let Some(hit) = hit else { return };
     let Some(st) = app.session.active() else { return };
     let (cmd, params) = match &*d {
         widgets::PanelDrag::Paint { params, .. } => {

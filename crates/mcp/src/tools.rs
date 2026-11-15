@@ -2,7 +2,7 @@
 //! [`Backend`].
 
 use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::fileio::{ARTBOARD_PARAMS, FORMATS, OPEN_EXTS, SAVE_FORMATS, format, save_reads_option, writable_format};
+use vectorcraft_engine::cmd::fileio::{ARTBOARD_PARAMS, FORMATS, OPEN_EXTS, SAVE_FORMATS, format, writable_format};
 
 use crate::backend::Backend;
 
@@ -35,5 +35,10 @@ impl ToolResult {
     }
     pub fn to_value(&self) -> Value {
         json!({"content": self.content, "isError": self.is_error})
+    }
+    /// The error's text, when the engine refused the call because a script is running.
+    pub(crate) fn script_busy(&self) -> Option<String> {
+        let text = self.content.first()?.get("text")?.as_str()?;
+        (self.is_error && text.ends_with(vectorcraft_engine::SCRIPT_BUSY)).then(|| text.to_string())
     }
 }

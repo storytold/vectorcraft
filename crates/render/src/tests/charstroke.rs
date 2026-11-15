@@ -2,9 +2,9 @@
 //! take every stroke option, as path strokes do.
 
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::text::{CharStyle, TextObject};
-use vectorcraft_doc::{AppearanceItem, Dash, LineJoin, Node, NodeKind};
-use vectorcraft_geom::Point;
+use vectorcraft_doc::text::{CharStyle, TextKind, TextObject};
+use vectorcraft_doc::{AppearanceItem, AreaFit, Dash, LineJoin, Node, NodeKind};
+use vectorcraft_geom::{PathData, Point};
 
 use crate::tests_fontchange::fonts_steady;
 use crate::*;
@@ -162,6 +162,71 @@ fn character_stroke_outlines_are_kept_between_frames() {
     r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
     let changed = character_outlines(&r);
     assert!(changed.len() == 1 && !Arc::ptr_eq(&changed[0], &first[0]), "the changed text is expanded again");
+}
+
+#[test]
+fn moving_type_reuses_character_strokes_without_changing_pixels() {
+    let _fonts = fonts_steady();
+    let (mut d, id) = stroked_text_doc("Type");
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    let first = character_outlines(&r);
+    assert_eq!(first.len(), 1);
+    if let Some(Node { kind: NodeKind::Text(t), .. }) = d.node_mut(id) {
+        t.xf = Affine::translate((10.0, 0.0)) * t.xf;
+    }
+    let moved = r.render(&d, SIZE, SIZE, Affine::IDENTITY, &opts);
+    let again = character_outlines(&r);
+    assert!(again.len() == 1 && Arc::ptr_eq(&again[0], &first[0]), "a move reuses the character stroke outline");
+    assert_eq!(moved.pixels, Renderer::new().render(&d, SIZE, SIZE, Affine::IDENTITY, &opts).pixels);
+    // The entry moved to the node shown, so the next frames find it without comparing the text.
+    let node = d.node_arc(id).unwrap();
+    assert!(r.texts.contains_key(&(Arc::as_ptr(node) as usize)), "kept under the moved node");
+    assert_eq!(r.texts.len(), 1, "and not also under the old one");
+}
+
+#[test]
+fn scaling_fitted_area_type_rebuilds_its_glyph_geometry() {
+    let _fonts = fonts_steady();
+    // 2 pt type, drawn 20× zoomed in. Shrink Text to Fit steps the size in tenths of a document
+    // point, so at 2 pt and at 3 pt it fits the same words at different fractions of full size.
+    let (mut d, id) = stroked_text_doc("Type");
+    if let Some(Node { kind: NodeKind::Text(t), .. }) = d.node_mut(id) {
+        t.xf = Affine::IDENTITY;
+        t.runs[0].style.size = 2.0;
+        t.runs[0].style.stroke_width = 0.05;
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 3.0, 3.0).to_path(0.1)) };
+        t.area.fit = AreaFit::ShrinkText { min_percent: 30.0 };
+    }
+    let text = |d: &Document| match d.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => (**t).clone(),
+        _ => panic!("the text object"),
+    };
+    let fit = |d: &Document| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(d)).fit_scale;
+    let view = Affine::scale(20.0);
+    let opts = RenderOptions::default();
+    let mut r = Renderer::new();
+    r.render(&d, SIZE, SIZE, view, &opts);
+    let first = r.texts.used_in(r.stamp).next().unwrap().1.clone();
+    let before = fit(&d);
+    if let Some(Node { kind: NodeKind::Text(t), .. }) = d.node_mut(id) {
+        t.xf = Affine::scale(1.5) * t.xf;
+    }
+    let after = fit(&d);
+    assert!(before > 0.3 && before < 1.0 && after > 0.3 && after < 1.0, "it fits above the minimum both times: {before}, {after}");
+    assert!((before - after).abs() > 0.01, "the scale changes the fitted size: {before}, {after}");
+    let scaled = r.render(&d, SIZE, SIZE, view, &opts);
+    let again = r.texts.used_in(r.stamp).next().unwrap().1.clone();
+    assert!(!Arc::ptr_eq(&first, &again), "changing area type's scale lays it out again");
+    assert_eq!(scaled.pixels, Renderer::new().render(&d, SIZE, SIZE, view, &opts).pixels);
+    // The words set at the earlier fit, which reusing the earlier layout would draw, draw other pixels.
+    let mut stale = d.clone();
+    if let Some(Node { kind: NodeKind::Text(t), .. }) = stale.node_mut(id) {
+        **t = vectorcraft_text::scaled(t, before);
+    }
+    assert_eq!(fit(&stale), 1.0, "the earlier fit's words fit as they are");
+    assert_ne!(scaled.pixels, Renderer::new().render(&stale, SIZE, SIZE, view, &opts).pixels, "the new fit changes the pixels");
 }
 
 /// Frames that draw character strokes from the cache draw the same pixels, and what a renderer
