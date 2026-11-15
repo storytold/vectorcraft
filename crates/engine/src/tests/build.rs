@@ -3908,6 +3908,266 @@ fn live_paint_bucket_triple_click_fills_every_face_of_the_same_fill() {
     assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green, red.clone(), red]);
 }
 
+/// A triple-click whose first click is released across an edge, in the face it then clicks twice,
+/// matches that face's fill from before the first click: the release painted it too.
+#[test]
+fn live_paint_bucket_triple_click_after_a_release_across_an_edge_matches_the_fill_before() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0, 150.0]);
+    let [a, b, c, d] = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0), (125.0, 25.0), (175.0, 25.0)])[..] else { panic!("four faces") };
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 201.0, 51.0));
+    paint_parts(&mut s, &all, &Paint::solid(Color::rgb(0.0, 0.0, 0.0)), &[(a, red.clone()), (b, red.clone()), (c, blue.clone()), (d, red.clone())]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 45.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 55.0, 25.0), v).unwrap();
+    assert_eq!([a, b].map(|f| fill_of(&s, f)), [green.clone(), green.clone()], "the release across x = 50 fills both faces");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 55.0, 25.0), v).unwrap();
+    }
+    assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green.clone(), blue, green]);
+}
+
+/// A triple-click whose third press lands in another face and is released in the face its first
+/// two clicks painted still matches that face's fill from before the first click.
+#[test]
+fn live_paint_bucket_triple_click_released_from_another_face_matches_the_fill_before() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0, 150.0]);
+    let [a, b, c, d] = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0), (125.0, 25.0), (175.0, 25.0)])[..] else { panic!("four faces") };
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 201.0, 51.0));
+    paint_parts(&mut s, &all, &Paint::solid(Color::rgb(0.0, 0.0, 0.0)), &[(a, red.clone()), (b, red.clone()), (c, blue.clone()), (d, red.clone())]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+        s.pointer(&PointerEvent::new(kind, 55.0, 25.0), v).unwrap();
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Down, 45.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 55.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::TripleClick, 55.0, 25.0), v).unwrap();
+    assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green.clone(), blue, green]);
+}
+
+/// A triple-click whose first click makes the Live Paint group and is released across an edge, in
+/// the face it then clicks twice, matches the fill that face was made with.
+#[test]
+fn live_paint_bucket_triple_click_after_making_the_group_across_an_edge_matches_the_made_fill() {
+    let mut s = session();
+    let ids: Vec<NodeId> = [0.0, 50.0, 200.0, 300.0].iter().map(|&x| rect(&mut s, x, 0.0, 50.0, 50.0)).collect();
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    for (id, c) in ids.iter().zip([red, red, blue, red]) {
+        set_fill(&mut s, *id, c);
+    }
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 45.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 55.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(25.0, 25.0)).expect("the click made a group");
+    let faces = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0), (225.0, 25.0), (325.0, 25.0)]);
+    assert_eq!(faces[..2].iter().map(|f| fill_of(&s, *f)).collect::<Vec<_>>(), [green.clone(), green.clone()], "the release fills both faces");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 55.0, 25.0), v).unwrap();
+    }
+    assert_eq!(faces.iter().map(|f| fill_of(&s, *f)).collect::<Vec<_>>(), [green.clone(), green.clone(), Paint::solid(blue), green]);
+}
+
+/// When the first click makes the Live Paint group and is released in a face covered by a source
+/// path with no fill in front of a filled one, the face was made with the filled source's fill, as
+/// Make gives it, so the triple-click there matches that fill and not none.
+#[test]
+fn live_paint_bucket_triple_click_after_making_the_group_under_an_unfilled_path_matches_the_made_fill() {
+    let mut s = session();
+    let red = Color::rgb(1.0, 0.0, 0.0);
+    let (a, b, d) = (rect(&mut s, 0.0, 0.0, 50.0, 50.0), rect(&mut s, 50.0, 0.0, 50.0, 50.0), rect(&mut s, 200.0, 0.0, 50.0, 50.0));
+    for id in [a, b, d] {
+        set_fill(&mut s, id, red);
+    }
+    let (c, e) = (rect(&mut s, 60.0, 10.0, 30.0, 30.0), rect(&mut s, 300.0, 0.0, 50.0, 50.0));
+    s.edit("t", |doc, _| {
+        for id in [c, e] {
+            doc.node_mut(id).unwrap().appearance.set_fill(Paint::None);
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0, d.0, c.0, e.0]})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 45.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 75.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(25.0, 25.0)).expect("the click made a group");
+    let faces = faces_at(&s, g, &[(75.0, 25.0), (225.0, 25.0), (325.0, 25.0)]);
+    assert_eq!(fill_of(&s, faces[0]), green, "the release fills the face under the unfilled path");
+    assert_eq!([faces[1], faces[2]].map(|f| fill_of(&s, f)), [Paint::solid(red), Paint::None], "Make gave the far faces red and none");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 75.0, 25.0), v).unwrap();
+    }
+    assert_eq!([faces[1], faces[2]].map(|f| fill_of(&s, f)), [green, Paint::None], "the triple-click matches the red the face was made with");
+}
+
+/// A triple-click whose first click adds paths to a selected Live Paint group and is released in a
+/// face of that group matches the face's fill, not the edge around it.
+#[test]
+fn live_paint_bucket_triple_click_after_merging_across_an_edge_matches_the_face_fill() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0]);
+    let [a] = faces_at(&s, g, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 51.0, 51.0));
+    paint_parts(&mut s, &all, &Paint::solid(Color::rgb(0.0, 0.0, 0.0)), &[(a, red.clone())]);
+    let (next, far) = (rect(&mut s, 50.0, 0.0, 50.0, 50.0), rect(&mut s, 200.0, 0.0, 50.0, 50.0));
+    set_fill(&mut s, next, Color::rgb(0.0, 0.0, 1.0));
+    set_fill(&mut s, far, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [g.0, next.0, far.0]})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 55.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 45.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(25.0, 25.0)).expect("the click merged the paths");
+    let faces = faces_at(&s, g, &[(25.0, 25.0), (225.0, 25.0)]);
+    assert_eq!(fill_of(&s, faces[0]), green, "the release fills the group's face");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 45.0, 25.0), v).unwrap();
+    }
+    assert_eq!(fill_of(&s, faces[1]), green, "the far face had the red the face had");
+}
+
+/// When the first click merges two selected Live Paint groups, a face of the group in front takes
+/// its source path's fill, so a triple-click there after a release across an edge matches that fill
+/// and not the paint the face had before the merge.
+#[test]
+fn live_paint_bucket_triple_click_after_merging_two_groups_matches_the_merged_fill() {
+    let mut s = session();
+    let back = live_squares(&mut s, &[0.0]);
+    let source = rect(&mut s, 100.0, 0.0, 50.0, 50.0);
+    set_fill(&mut s, source, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [source.0]})).unwrap();
+    let front = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [f] = faces_at(&s, front, &[(125.0, 25.0)])[..] else { panic!("one face") };
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    paint_parts(&mut s, &[], &Paint::None, &[(f, blue.clone())]);
+    let (next, far) = (rect(&mut s, 150.0, 0.0, 50.0, 50.0), rect(&mut s, 300.0, 0.0, 50.0, 50.0));
+    set_fill(&mut s, next, Color::rgb(1.0, 1.0, 0.0));
+    set_fill(&mut s, far, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [back.0, front.0, next.0, far.0]})).unwrap();
+    let merged = NodeId(s.execute("livePaint.merge", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [m] = faces_at(&s, merged, &[(125.0, 25.0)])[..] else { panic!("one face") };
+    assert_eq!(fill_of(&s, m), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "Merge gives the front group's face its source's fill");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [back.0, front.0, next.0, far.0]})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 155.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 145.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(125.0, 25.0)).expect("the click merged the groups");
+    let faces = faces_at(&s, g, &[(125.0, 25.0), (325.0, 25.0)]);
+    assert_eq!(fill_of(&s, faces[0]), green, "the release fills the front group's face");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 145.0, 25.0), v).unwrap();
+    }
+    assert_eq!(fill_of(&s, faces[1]), green, "the far face had the red the merge gave the face");
+}
+
+/// When the first click merges paths into a selected Live Paint group whose face has an unplaced
+/// gradient, Merge fixes the gradient to the face's fit, so a triple-click there after a release
+/// across an edge matches the fixed gradient: a far face whose source has that same fixed gradient
+/// takes the bucket's paint.
+#[test]
+fn live_paint_bucket_triple_click_after_merging_matches_the_fixed_gradient() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::WHITE)];
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0]);
+    let [f] = faces_at(&s, g, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    paint_parts(&mut s, &[], &Paint::None, &[(f, gradient.clone())]);
+    let (next, far) = (rect(&mut s, 50.0, 0.0, 50.0, 50.0), rect(&mut s, 200.0, 0.0, 50.0, 50.0));
+    set_fill(&mut s, next, Color::rgb(1.0, 1.0, 0.0));
+    s.execute("select.set", &json!({"ids": [g.0, next.0]})).unwrap();
+    let merged = NodeId(s.execute("livePaint.merge", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [m] = faces_at(&s, merged, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    let fixed = fill_of(&s, m);
+    assert_ne!(fixed, gradient, "Merge fixes the face's gradient to its fit");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.edit("t", |d, _| {
+        d.node_mut(far).unwrap().appearance.set_fill(fixed.clone());
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g.0, next.0, far.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 55.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 45.0, 25.0), v).unwrap();
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(45.0, 25.0)).expect("the click merged the paths");
+    let [far_face] = faces_at(&s, g, &[(225.0, 25.0)])[..] else { panic!("the far face") };
+    assert_eq!(fill_of(&s, far_face), fixed, "the far face keeps its source's fixed gradient");
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 45.0, 25.0), v).unwrap();
+    }
+    assert_eq!(fill_of(&s, far_face), green, "the far face had the fixed gradient the merge gave the face");
+}
+
+/// When the first click merges a line that splits a painted face of the selected Live Paint group,
+/// Merge keeps the face's paint in one part only and the other part takes its source path's fill;
+/// a triple-click in that other part after a release across an edge matches the source's fill.
+#[test]
+fn live_paint_bucket_triple_click_after_a_merge_splits_a_face_matches_the_part_fill() {
+    let mut s = session();
+    let source = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    set_fill(&mut s, source, Color::rgb(1.0, 0.0, 0.0));
+    s.execute("select.set", &json!({"ids": [source.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [f] = faces_at(&s, g, &[(25.0, 25.0)])[..] else { panic!("one face") };
+    paint_parts(&mut s, &[], &Paint::None, &[(f, Paint::solid(Color::rgb(0.0, 0.0, 1.0)))]);
+    let line = NodeId(s.execute("shape.line", &json!({"x1": 40, "y1": -10, "x2": 40, "y2": 60})).unwrap()["id"].as_u64().unwrap());
+    let next = rect(&mut s, 50.0, 0.0, 50.0, 50.0);
+    set_fill(&mut s, next, Color::rgb(1.0, 1.0, 0.0));
+    let (red_far, blue_far) = (rect(&mut s, 200.0, 0.0, 50.0, 50.0), rect(&mut s, 300.0, 0.0, 50.0, 50.0));
+    set_fill(&mut s, red_far, Color::rgb(1.0, 0.0, 0.0));
+    set_fill(&mut s, blue_far, Color::rgb(0.0, 0.0, 1.0));
+    let ids = json!({"ids": [g.0, line.0, next.0, red_far.0, blue_far.0]});
+    s.execute("select.set", &ids).unwrap();
+    let merged = NodeId(s.execute("livePaint.merge", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let parts = faces_at(&s, merged, &[(20.0, 25.0), (45.0, 25.0)]);
+    assert_eq!(
+        parts.iter().map(|p| fill_of(&s, *p)).collect::<Vec<_>>(),
+        [Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0))],
+        "Merge keeps the paint in the part that holds the face's inside point"
+    );
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &ids).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 55.0, 25.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 45.0, 25.0), v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 45.0, 25.0), v).unwrap();
+    }
+    let g = vectorcraft_tools::builder::live_paint_at(&s.doc().unwrap().doc, Point::new(45.0, 25.0)).expect("the click merged the paths");
+    let far = faces_at(&s, g, &[(225.0, 25.0), (325.0, 25.0)]);
+    assert_eq!(far.iter().map(|p| fill_of(&s, *p)).collect::<Vec<_>>(), [green, Paint::solid(Color::rgb(0.0, 0.0, 1.0))]);
+}
+
 /// A triple-click whose first click makes the Live Paint group from the selected paths matches the
 /// fill the face was made with.
 #[test]
@@ -3976,6 +4236,116 @@ fn live_paint_bucket_double_and_triple_click_paint_joined_and_same_stroke_edges(
     let r = s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [25, 0], "color": "#00ff00", "scope": "samePaint"})).unwrap();
     assert_eq!(r["count"], outer.len() + apart.len() - 1);
     assert_eq!(node(&s, apart[0]).appearance.stroke_paint(), black);
+}
+
+/// A double-click whose two clicks land on two joined edges paints every edge joined to them that
+/// had their stroke: the edge the first click painted still joins the others.
+#[test]
+fn live_paint_bucket_double_click_across_a_junction_paints_the_joined_edges() {
+    // A square with a line across its middle, cut at x = 30 and x = 70 by two lines from the top: the
+    // middle line's three edges join end to end.
+    let mut s = session();
+    let mut ids = vec![rect(&mut s, 0.0, 0.0, 100.0, 100.0).0];
+    for anchors in [
+        json!([{"x": 0, "y": 50}, {"x": 100, "y": 50}]),
+        json!([{"x": 30, "y": 0}, {"x": 30, "y": 70}]),
+        json!([{"x": 70, "y": 0}, {"x": 70, "y": 70}]),
+    ] {
+        ids.push(s.execute("path.create", &json!({ "anchors": anchors })).unwrap()["id"].as_u64().unwrap());
+    }
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let (black, red) = (Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 101.0));
+    paint_parts(&mut s, &all, &red, &[]);
+    let middle = edges_in(&s, g, Rect::new(-1.0, 49.0, 101.0, 51.0));
+    assert_eq!(middle.len(), 3, "the middle line's three edges");
+    paint_parts(&mut s, &middle, &black, &[]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.stroke = green.clone();
+    let shift = Mods { shift: true, ..Default::default() };
+    for (kind, x) in
+        [(PointerKind::Down, 50.0), (PointerKind::Up, 50.0), (PointerKind::Down, 85.0), (PointerKind::Up, 85.0), (PointerKind::DoubleClick, 85.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(shift), v).unwrap();
+    }
+    assert_eq!(middle.iter().map(|e| node(&s, *e).appearance.stroke_paint()).collect::<Vec<_>>(), [green.clone(), green.clone(), green]);
+    // `through` takes edge ids, with scope "connected" only.
+    for p in [
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": "x"}),
+        json!({"group": g.0, "point": [15, 50], "scope": "connected", "through": [-1]}),
+        json!({"group": g.0, "point": [15, 50], "scope": "samePaint", "through": []}),
+        json!({"group": g.0, "point": [15, 50], "through": []}),
+    ] {
+        assert!(s.execute("livePaint.strokeEdge", &p).is_err(), "{p}");
+    }
+}
+
+/// A double-click whose second press lands on the next joined edge and is released back on the
+/// edge the first click painted (at the end of the line) matches that edge's stroke paint from
+/// before the first click, and the edge the second press painted still joins the edge past it.
+#[test]
+fn live_paint_bucket_double_click_released_back_on_the_first_edge_paints_the_joined_edges() {
+    let mut s = session();
+    let mut ids = vec![rect(&mut s, 0.0, 0.0, 100.0, 100.0).0];
+    for anchors in [
+        json!([{"x": 0, "y": 50}, {"x": 100, "y": 50}]),
+        json!([{"x": 30, "y": 0}, {"x": 30, "y": 70}]),
+        json!([{"x": 70, "y": 0}, {"x": 70, "y": 70}]),
+    ] {
+        ids.push(s.execute("path.create", &json!({ "anchors": anchors })).unwrap()["id"].as_u64().unwrap());
+    }
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let (black, red) = (Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 101.0));
+    paint_parts(&mut s, &all, &red, &[]);
+    let middle = edges_in(&s, g, Rect::new(-1.0, 49.0, 101.0, 51.0));
+    assert_eq!(middle.len(), 3, "the middle line's three edges");
+    paint_parts(&mut s, &middle, &black, &[]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.stroke = green.clone();
+    let shift = Mods { shift: true, ..Default::default() };
+    for (kind, x) in
+        [(PointerKind::Down, 15.0), (PointerKind::Up, 15.0), (PointerKind::Down, 50.0), (PointerKind::Up, 15.0), (PointerKind::DoubleClick, 15.0)]
+    {
+        s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(shift), v).unwrap();
+    }
+    assert_eq!(middle.iter().map(|e| node(&s, *e).appearance.stroke_paint()).collect::<Vec<_>>(), [green.clone(), green.clone(), green]);
+}
+
+/// A triple-click whose second press holds Cmd (it goes to the selection tool Cmd lends) matches
+/// the fill the face had before the first click: the lent press counts as one that paints nothing.
+#[test]
+fn live_paint_bucket_triple_click_with_a_cmd_press_between_matches_the_fill_before() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0, 150.0]);
+    let [a, b, c, d] = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0), (125.0, 25.0), (175.0, 25.0)])[..] else { panic!("four faces") };
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 201.0, 51.0));
+    paint_parts(&mut s, &all, &Paint::solid(Color::rgb(0.0, 0.0, 0.0)), &[(a, red.clone()), (b, red.clone()), (c, blue.clone()), (d, red.clone())]);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = green.clone();
+    let cmd = Mods { cmd: true, ..Default::default() };
+    for (kind, m) in [
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::Down, cmd),
+        (PointerKind::Up, cmd),
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::TripleClick, Mods::default()),
+    ] {
+        s.pointer(&PointerEvent::new(kind, 25.0, 25.0).with_mods(m), v).unwrap();
+    }
+    assert_eq!(s.tool_id(), "livePaintBucket");
+    assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green.clone(), blue, green]);
 }
 
 /// A `scope` that is not one of the three, a `match` that is not a paint or is given with a scope

@@ -1386,6 +1386,39 @@ fn bucket_triple_click_with_a_click_on_another_face_between_matches_the_first_fi
     );
 }
 
+/// A triple-click whose second press the view tools take (held Space) matches the fill the face had
+/// before the first click: that press counts as one that paints nothing. The pointer leaving the
+/// canvas between three clicks adds no press.
+#[test]
+fn bucket_triple_click_with_a_view_tool_press_between_matches_the_first_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let (d, gid, f2, _) = live_group_doc();
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let own = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    let want = vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": own }))];
+    fn click(t: &mut LivePaintBucketTool, ctx: &ToolContext) {
+        t.pointer(ctx, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx);
+    t.press_elsewhere();
+    click(&mut t, &later);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), want, "a view tool's press between");
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx);
+    click(&mut t, &later);
+    t.hover_ended(&later);
+    click(&mut t, &later);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), want, "the pointer leaving between");
+}
+
 /// With Space held for the view tools, the pointer outlines no face or edge, as a press there
 /// paints nothing.
 #[test]
