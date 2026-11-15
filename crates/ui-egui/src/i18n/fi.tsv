@@ -523,6 +523,7 @@
 	Rotate (Classic)…	Kierrä (perinteinen)…
 	Surface	Pinta
 	Wireframe	Rautalanka
+	Render Settings	Renderöintiasetukset
 	No Shading	Ei varjostusta
 	Plastic	Muovi
 	Highlight Intensity	Kiillon voimakkuus
@@ -5901,6 +5902,7 @@ mark-style	Japanese	Japanilainen
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
 @msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektilla ei ole 3D-tehostetta (Pursota ja viistä, Pyöräytä, Täytä ilmalla tai Kierrä)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` on oltava objekti, jossa on vain `mode` arvolla shaded tai wireframe
 @msg	its 3D effect builds no solid	sen 3D-tehoste ei muodosta kappaletta
 @msg	bevel must be none or one of {_1}	bevel-arvon on oltava none tai jokin seuraavista: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} ei voi muodostaa kappaleita tästä kuvituksesta: sen symbolien esiintymät, sulautukset ja leikkausryhmät sisältävät liikaa objekteja

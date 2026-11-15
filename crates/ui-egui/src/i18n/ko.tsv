@@ -563,6 +563,7 @@ digits	Malayalam	말라얄람어
 	Rotate (Classic)…	회전(클래식)…
 	Surface	표면
 	Wireframe	와이어프레임
+	Render Settings	렌더링 설정
 	No Shading	셰이딩 없음
 	Plastic	플라스틱
 	Highlight Intensity	하이라이트 강도
@@ -5595,6 +5596,7 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`는 값이 shaded 또는 wireframe인 `mode`만 있는 객체여야 합니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
 @msg	bevel must be none or one of {_1}	bevel은 none 또는 {_1} 중 하나여야 합니다
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}은(는) 이 아트로 입체를 만들 수 없습니다. 심볼 인스턴스, 블렌드, 클리핑 그룹에 개체가 너무 많습니다

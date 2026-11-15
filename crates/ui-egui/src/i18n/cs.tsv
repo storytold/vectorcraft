@@ -526,6 +526,7 @@
 	Rotate (Classic)…	Otočit (klasické)…
 	Surface	Povrch
 	Wireframe	Drátový model
+	Render Settings	Nastavení vykreslování
 	No Shading	Bez stínování
 	Plastic	Plast
 	Highlight Intensity	Intenzita odlesku
@@ -6018,6 +6019,7 @@ mark-style	Japanese	Japonské
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
 @msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objekt nemá žádný 3D efekt (Vysunutí a zkosení, Rotační těleso, Nafouknutí ani Otočit)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musí být objekt obsahující pouze `mode` s hodnotou shaded nebo wireframe
 @msg	its 3D effect builds no solid	jeho 3D efekt nevytváří žádné těleso
 @msg	bevel must be none or one of {_1}	bevel musí být none nebo jedno z {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nemůže z této kresby vytvořit tělesa: její instance symbolů, prolnutí a ořezové skupiny obsahují příliš mnoho objektů

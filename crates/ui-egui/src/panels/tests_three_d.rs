@@ -149,6 +149,48 @@ fn the_panel_shows_the_dialog_controls_of_each_type() {
     assert!(!painted_text(&mut app, show).contains("Show axis"));
 }
 
+/// Render Settings › Wireframe: shown for the panel's four effects, it sets `render.mode` on every
+/// selected 3D effect that takes it in one undo step, the type switch keeps it, and choosing it
+/// again draws the shaded surface. A 3D (Classic) effect beside them is left as it is, and the
+/// menu is not shown for it alone.
+#[test]
+fn render_settings_wireframe_turns_the_mode_on_and_off_for_the_selection() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    assert!(painted_text(&mut app, show).contains("Render Settings"));
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.revolve", "item": null})).unwrap();
+    let c = app.run("shape.rectangle", json!({"x": 100, "y": 250, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.classicExtrude", "item": null})).unwrap();
+    let mode = |app: &VectorcraftApp, id: u64| {
+        let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+        n.appearance.effects[0].params.get("render").and_then(|r| r.get("mode")).and_then(Value::as_str).map(str::to_string)
+    };
+    app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
+    let ctx = egui::Context::default();
+    let history = undo_len(&app);
+    super::set_wireframe(&mut app, &ctx, true);
+    assert_eq!(undo_len(&app), history + 1);
+    assert_eq!((mode(&app, a).as_deref(), mode(&app, b).as_deref()), (Some("wireframe"), Some("wireframe")));
+    assert_eq!(mode(&app, c), None, "the classic effect takes no render settings");
+    assert!(super::wireframe_on(&target(&app).unwrap()));
+    // The object type changes in place and keeps the mode.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    set_type(&mut app, "inflate").unwrap();
+    assert_eq!(mode(&app, a).as_deref(), Some("wireframe"));
+    let history = undo_len(&app);
+    super::set_wireframe(&mut app, &ctx, false);
+    assert_eq!(undo_len(&app), history + 1);
+    assert_eq!(mode(&app, a).as_deref(), Some("shaded"));
+    assert!(!super::wireframe_on(&target(&app).unwrap()));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(mode(&app, a).as_deref(), Some("wireframe"));
+    // The 3D (Classic) effect alone has no Render Settings.
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    assert!(!painted_text(&mut app, show).contains("Render Settings"));
+}
+
 #[test]
 fn a_drag_previews_and_records_one_undo_step_when_released() {
     let mut app = app();

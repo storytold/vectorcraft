@@ -1158,6 +1158,7 @@ font-technology	Variable	可變
 	Rotate (Classic)…	旋轉 (經典)…
 	Surface	表面
 	Wireframe	線框
+	Render Settings	演算設定
 	No Shading	無網底
 	Plastic	塑膠
 	Highlight Intensity	亮部強度
@@ -5723,6 +5724,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必須是只含 `mode` 的物件，值為 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
 @msg	bevel must be none or one of {_1}	bevel 必須是 none 或 {_1} 其中之一
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}無法從此圖稿產生實體：其符號實例、漸變和剪裁群組包含的物件過多

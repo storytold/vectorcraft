@@ -4087,6 +4087,26 @@ it as a path. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) 
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"shadow":true,"shadowPosition":"below","shadowDistance":10,"shadowBounds":150}}}}
 ```
 
+## 3D render mode
+
+Revolve, Extrude & Bevel, Inflate and Rotate take `render`, an object whose `mode` is `"shaded"` (the default) or
+`"wireframe"` (**Window › 3D and Materials** › Render Settings › Wireframe), set with `effect.apply` or
+`effect.setParams` in one undo step. In wireframe mode the effect stays live and draws the edges of the faces it
+builds instead of its shaded surface: each edge once, in the paths [Expand as Wireframes](#expand-as-wireframes)
+gives for the 3D effect, with a 0.5 pt black stroke, round joins and no fill (VectorCraft's own choice), and no shadow or graphics.
+The edges are drawn whatever the opacity, blending mode or opacity mask of the fills, strokes and group members; the
+object's own opacity, blending mode and opacity mask apply to them as a whole.
+Geometry effects after the 3D effect reshape the drawn edges. Expand as Wireframes reshapes each face before it
+joins the edges, so with such an effect its paths can differ from the drawn ones. The mode is saved in the native file, SVG and PDF exports
+draw the edges, and `effect.expandAppearance` keeps them as paths. Past 1,000,000 edges the source path is drawn, as
+it is for a solid past its limits. A `render` that is not an object, a key other than `mode`, another mode, and
+`render` on Extrude & Bevel (Classic), Revolve (Classic) or Rotate (Classic) are refused before the document
+changes. See [three-d.md](three-d.md#3d-and-materials-panel).
+
+```json
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"render":{"mode":"wireframe"}}}}}
+```
+
 ## 3D object type
 
 `effect.setParams {index: int, threeDType: "plane" | "extrude" | "revolve" | "inflate", params?, item?, ids?, aligned?}`
