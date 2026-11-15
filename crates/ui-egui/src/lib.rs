@@ -2,7 +2,7 @@
 //!
 //! The UI is thin: every action goes through [`VectorcraftApp::run`], which dispatches UI commands
 //! (view/window) here and everything else to the engine. The same entry point serves menus,
-//! shortcuts, the ⌘K palette and the control channel ([`control`]).
+//! shortcuts, the command palette ([`palette`], Help › Search Commands…) and the control channel ([`control`]).
 #![forbid(unsafe_code)]
 
 /// VectorCraft as craft-update knows it, with its 128 px icon and accent colour: the update

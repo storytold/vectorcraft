@@ -284,6 +284,63 @@ fn a_gaussian_blur_becomes_the_effect_with_its_radius() {
     assert_eq!(effects(&d)[0].params["radius"], json!(12.0));
 }
 
+/// A blur that differs by direction in the document (standard deviations that differ, or an even
+/// one in a user space scaled unevenly or skewed) is kept as an SVG filter, which draws it as it
+/// is, not as an even Gaussian Blur. In a turned, flipped or evenly scaled user space an even blur
+/// stays the effect.
+#[test]
+fn a_blur_that_differs_by_direction_is_kept_as_its_filter() {
+    let ids = |body: &str| {
+        let (d, w) = open(body);
+        assert!(w.is_empty(), "{w:?}");
+        effects(&d).iter().map(|e| e.id.clone()).collect::<Vec<_>>()
+    };
+    let blur = |sd: &str, transform: &str| {
+        format!(
+            r##"<defs><filter id="b"><feGaussianBlur stdDeviation="{sd}"/></filter></defs><rect x="50" y="30" width="60" height="40" fill="#08f" transform="{transform}" filter="url(#b)"/>"##
+        )
+    };
+    assert_eq!(ids(&blur("4 1", "translate(0)")), ["svg.filter"]);
+    assert_eq!(ids(&blur("3", "scale(1 4)")), ["svg.filter"]);
+    assert_eq!(ids(&blur("3", "skewX(30)")), ["svg.filter"]);
+    assert_eq!(ids(&blur("3", "rotate(30) scale(2)")), ["blur.gaussian"]);
+    assert_eq!(ids(&blur("3", "scale(-2 2)")), ["blur.gaussian"]);
+    let shadow = |sd: &str| {
+        format!(
+            r##"<defs><filter id="s"><feDropShadow dx="2" dy="2" stdDeviation="{sd}"/></filter></defs><rect width="60" height="40" filter="url(#s)"/>"##
+        )
+    };
+    assert_eq!(ids(&shadow("3 1")), ["svg.filter"]);
+    assert_eq!(ids(&shadow("3")), ["stylize.dropShadow"]);
+}
+
+/// An SVG filter's blur in a user space scaled unevenly is written live and opens again as the
+/// same effect, which blurs more along the stretched axis, not as an even Gaussian Blur.
+#[test]
+fn an_exported_blur_in_a_stretched_user_space_opens_as_the_same_effect() {
+    let xml = r#"<filter id="b" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>"#;
+    let mut d = Document::new(200.0, 120.0);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(60.0, 40.0, 140.0, 80.0)),
+        Appearance::basic(Paint::solid(Color::rgb(0.9, 0.1, 0.1)), Paint::None, 0.0),
+    );
+    let params = json!({ "xml": xml, "scale": 2.0, "origin": [0.0, 0.0], "axes": [0.5, 0.0, 0.0, 2.0] });
+    n.appearance.effects = vec![Effect { id: "svg.filter".into(), params, visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = export(&d, &ExportOptions::default());
+    assert!(out.contains("<g filter=\"url(#") && !out.contains("<image"), "{out}");
+    let (back, w) = import_with_report(&out).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let fx = effects(&back);
+    assert_eq!(fx.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"], "{out}");
+    let num = |v: &serde_json::Value| v.as_f64().unwrap();
+    let axes: Vec<f64> = fx[0].params["axes"].as_array().unwrap().iter().map(num).collect();
+    assert!(axes.iter().zip([0.5, 0.0, 0.0, 2.0]).all(|(a, b)| (a - b).abs() < 1e-6), "{axes:?}");
+    assert_similar(&render_artboard(&d), &render_artboard(&back), 40.0, 0.02);
+}
+
 /// `color-interpolation-filters` (SVG 1.1 §15.7.6, initially linearRGB:
 /// https://www.w3.org/TR/SVG11/painting.html#ColorInterpolationFiltersProperty) picks whether the
 /// blur mixes colours in linear light; sRGB, on the primitive or the filter, keeps them as they

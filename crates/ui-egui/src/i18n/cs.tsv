@@ -1054,6 +1054,7 @@
 	Change Panel Layout	Změnit rozložení panelů
 	Close Panel	Zavřít panel
 	Collapse Panel Group	Sbalit skupinu panelů
+	Cycle Display Sizes	Přepínat velikosti zobrazení
 	Move Panel	Přesunout panel
 	Group with	Seskupit s
 	Resize panels	Změnit velikost panelů
@@ -1653,6 +1654,8 @@ lighting	Light	Světlo
 	Insert Aki Left	Vložit aki vlevo
 	Insert Aki Right	Vložit aki vpravo
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Upravit vodorovnou polohu diakritiky
+	Adjust Vertical Diacritic Position	Upravit svislou polohu diakritiky
 	Character Direction	Směr znaků
 	Digits	Číslice
 	Arabic	Arabské
@@ -3005,6 +3008,7 @@ digits	Malayalam	Malajálamské
 	Show smooth color wheel	Zobrazit plynulé barevné kolo
 	Show segmented color wheel	Zobrazit segmentované barevné kolo
 	Show color bars	Zobrazit barevné pruhy
+	Find the selected colors in the artwork	Najít vybrané barvy v kresbě
 	Harmony Rules	Pravidla harmonie
 	Keep this row's colors (exclude)	Ponechat barvy tohoto řádku (vyloučit)
 	Limit to Library:	Omezit na knihovnu:
@@ -3711,6 +3715,8 @@ theme	Appearance	Motiv
 	Create Graph	Vytvořit graf
 	Graph Data	Data grafu
 	Graph Type	Typ grafu
+	Graph Type…	Typ grafu…
+	Graph Data…	Data grafu…
 	Graph Options	Možnosti grafu
 	Left Axis	Levá osa
 	Right Axis	Pravá osa
@@ -5455,6 +5461,8 @@ imageTrace	Outline	Obrys
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
 @msg	unknown panel `{raw}`	neznámý panel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` nemá velikosti zobrazení k přepínání
+@msg	the panels are not shown	panely nejsou zobrazeny
 @msg	panels can't be shown in Presentation Mode	v režimu prezentace nelze panely zobrazit
 @msg	unknown preference `{key}`	neznámá předvolba `{key}`
 @msg	Preferences imported.	Předvolby byly importovány.
@@ -6307,6 +6315,7 @@ mark-style	Japanese	Japonské
 	Export Data Sets…	Exportovat sady dat…
 	Load Variable Library…	Načíst knihovnu proměnných…
 	Save Variable Library…	Uložit knihovnu proměnných…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„Importovat“ čte soubor zdroje dat s příponou .csv, .tsv, .txt nebo .xml
 @msg	a variable library holds text variables, and the document has none	knihovna proměnných obsahuje textové proměnné a dokument žádné nemá
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	proměnnou `{name}` nelze uložit do knihovny proměnných: přejmenujte ji tak, aby začínala písmenem nebo `_` a neobsahovala mezery ani jiné symboly než `-`, `_` a `.`
 @msg	{k} has control characters	{k} obsahuje řídicí znaky
@@ -9612,3 +9621,20 @@ breakText	Glyphs	Glyfy
 @msg	turn on at least one side	zapněte alespoň jednu stranu
 @msg	with no hem and no grommets there is nothing to mark	bez lemu a bez průchodek není co označit
 @msg	{saving} failed: {e}	{saving} se nezdařilo: {e}
+	Packaging Tools	Nástroje pro obaly
+	Fold Lines	Linie skladu
+	Make Cut Line	Vytvořit linii řezu
+	Make Crease Line	Vytvořit linii bigu
+	Make Partial Cut Line	Vytvořit linii částečného řezu
+	Make Perforation Line	Vytvořit linii perforace
+	Make Fold Line	Vytvořit linii skladu
+	Role Swatches…	Vzorník typů linií…
+	Role Swatches	Vzorník typů linií
+	Role	Typ linie
+	Cut Line	Linie řezu
+	Crease Line	Linie bigu
+	Partial Cut Line	Linie částečného řezu
+	Perforation Line	Linie perforace
+	No objects are selected.	Nejsou vybrány žádné objekty.
+	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
+	Remove Fold Line Role	Odstranit typ linie

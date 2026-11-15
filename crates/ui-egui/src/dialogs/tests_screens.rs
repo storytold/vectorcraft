@@ -1547,3 +1547,78 @@ fn an_artboard_name_stays_with_its_document() {
     assert_eq!(names(&app, 1), ["Artboard 1", "Artboard 2"]);
     assert!(log.borrow().is_empty(), "renaming must not export");
 }
+
+/// Escape or Enter in the first frame that draws an artboard's name field closes the field, and
+/// the dialog stays open.
+#[test]
+fn a_key_in_the_first_frame_of_an_artboard_name_closes_it() {
+    for view in ["grid", "list"] {
+        for key in [egui::Key::Escape, egui::Key::Enter] {
+            let (mut app, log) = app(2, true);
+            open(&mut app);
+            set(&mut app, "view", json!(view));
+            let mut h = ScreensFrame::new();
+            let out = h.settle(&mut app);
+            let at = screen_text_at(&out, "1  Artboard 1");
+            h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+            for pressed in [true, false, true, false] {
+                h.frame(
+                    &mut app,
+                    vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+                );
+            }
+            // The double-click opened the field in the last frame; this frame draws it first.
+            h.time += 0.1;
+            let input = egui::RawInput {
+                events: vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+                time: Some(h.time),
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+                ..Default::default()
+            };
+            let mut out = h.ctx.run_ui(input, |ui| {
+                crate::shortcuts::handle(&mut app, ui.ctx());
+                super::show(&mut app, ui.ctx());
+            });
+            out.textures_delta.clear();
+            h.settle(&mut app);
+            assert!(!h.ctx.egui_wants_keyboard_input(), "{view}, {key:?}: the field closes");
+            assert_eq!(kind(&app), Some(export_for_screens::KIND), "{view}, {key:?}");
+            assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Artboard 1", "{view}, {key:?}");
+            assert!(log.borrow().is_empty(), "{view}, {key:?}: the key must not export");
+        }
+    }
+}
+
+/// A double-click on an earlier artboard's name, both clicks in one frame, renames the artboard
+/// whose name was being typed before it opens the new field.
+#[test]
+fn double_clicking_another_artboard_name_keeps_the_typed_name() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let double_click = |h: &mut ScreensFrame, app: &mut VectorcraftApp, at: egui::Pos2| {
+            h.frame(app, vec![egui::Event::PointerMoved(at)]);
+            let events = [true, false, true, false]
+                .into_iter()
+                .map(|pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() })
+                .collect();
+            h.frame(app, events);
+            h.settle(app);
+        };
+        let out = h.settle(&mut app);
+        let first = screen_text_at(&out, "1  Artboard 1");
+        double_click(&mut h, &mut app, screen_text_at(&out, "2  Artboard 2"));
+        assert!(h.ctx.egui_wants_keyboard_input(), "{view}: the double-click opens the name");
+        h.frame(&mut app, vec![egui::Event::Text("Typed".into())]);
+        h.time += 1.0;
+        double_click(&mut h, &mut app, first);
+        let names: Vec<String> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
+        assert_eq!(names, ["Artboard 1", "Typed"], "{view}");
+        assert!(h.ctx.egui_wants_keyboard_input(), "{view}: the second double-click opens its name");
+        assert_eq!(field(&app, "boards"), before, "{view}");
+        assert!(log.borrow().is_empty(), "{view}: renaming must not export");
+    }
+}

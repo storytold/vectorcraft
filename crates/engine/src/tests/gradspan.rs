@@ -120,6 +120,28 @@ fn strokes_span_the_targets_too() {
 }
 
 #[test]
+fn a_lower_stroke_row_spans_the_box_that_row_paints() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 50.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 50.0, 100.0, 100.0);
+    // [Fill, Stroke 40 pt, Stroke 1 pt] on both.
+    s.execute("appearance.addStroke", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [a.0, b.0], "item": 1, "weight": 40})).unwrap();
+    for aligned in [false, true] {
+        s.execute("paint.setStroke", &json!({"ids": [a.0, b.0], "item": 1, "aligned": aligned, "gradient": black_to_white(), "span": "selection"}))
+            .unwrap();
+        for id in [a, b] {
+            let Paint::Gradient(g) = &s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_at(Some(1)).unwrap().paint else {
+                panic!("expected a gradient on stroke row 1")
+            };
+            // The 40 pt row reaches 20 pt past the union 0..400, not the 1 pt topmost stroke's 0.5 pt.
+            let geom = g.geom.expect("placed in document coordinates");
+            assert!(near(geom.start, Point::new(-20.0, 100.0)) && near(geom.end, Point::new(420.0, 100.0)), "aligned {aligned}, {id:?}: {geom:?}");
+        }
+    }
+}
+
+#[test]
 fn the_new_art_default_stays_unplaced() {
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
