@@ -885,6 +885,7 @@ impl<'a> Reader<'a> {
             return;
         }
         let Some(p) = self.envelopes.pop() else { return };
+        let scale = self.space_scale();
         let drawn = self.frames.last().filter(|f| f.children.len() == p.siblings + 1).and_then(|f| f.children.last());
         let Some(drawn) = drawn else {
             self.warn(crate::import::ai::envelope::drawn_note(p.typed));
@@ -894,7 +895,7 @@ impl<'a> Reader<'a> {
             self.wait_for_type(p);
             return;
         }
-        let live = (self.envelope_checks > 0).then(|| crate::import::ai::envelope::live(&p.obj, p.before, p.inner)).flatten();
+        let live = (self.envelope_checks > 0).then(|| crate::import::ai::envelope::live(&p.obj, p.before, p.inner, scale)).flatten();
         let Some(kind) = live else {
             self.warn(crate::import::ai::envelope::DRAWN);
             return;
@@ -982,8 +983,8 @@ impl Reader<'_> {
             self.warn(crate::import::ai::envelope::TYPE_DRAWN);
             return;
         }
-        let drawn = drawn.id;
-        self.typed_envelopes.push(crate::import::ai::envelope::TypedEnvelope { obj: p.obj, before: p.before, inner: p.inner, drawn });
+        let (drawn, scale) = (drawn.id, self.space_scale());
+        self.typed_envelopes.push(crate::import::ai::envelope::TypedEnvelope { obj: p.obj, before: p.before, inner: p.inner, drawn, scale });
     }
 }
 
