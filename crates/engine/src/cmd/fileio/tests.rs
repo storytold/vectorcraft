@@ -202,6 +202,25 @@ fn a_16_bit_cmyk_tiff_with_alpha_places_at_16_bits() {
     }
 }
 
+/// An opaque 16-bit CMYK TIFF's inks are rounded to the nearest 8-bit level, chunky and planar, and
+/// the stored image keeps its 16-bit samples.
+#[test]
+fn an_opaque_16_bit_cmyk_tiffs_inks_are_rounded_to_8_bits() {
+    let c = vec![0u16, 200, 0x80FF, 0x8100, 65535, 32896];
+    let m = vec![511u16, 65535, 0, 128, 129, 0];
+    let none = vec![0u16; 6];
+    let channels = [c, m, none.clone(), none];
+    let want: Vec<u8> = [[0, 2, 0, 0], [1, 255, 0, 0], [128, 0, 0, 0], [128, 0, 0, 0], [255, 1, 0, 0], [128, 0, 0, 0]].concat();
+    let chunky_bytes = hand_tiff(5, 16, &[], false, &channels);
+    let chunky = raster_image(&chunky_bytes).unwrap();
+    assert_eq!(chunky.blob.cmyk().map(|i| i.data), Some(want.clone()), "chunky: the inks");
+    assert_eq!(*chunky.blob.bytes, chunky_bytes, "chunky: the file is stored as it is");
+    let planar = raster_image(&hand_tiff(5, 16, &[], true, &channels)).unwrap();
+    assert_eq!(planar.blob.cmyk().map(|i| i.data), Some(want), "planar: the inks");
+    let stored = image::load_from_memory(&planar.blob.bytes).unwrap();
+    assert_eq!(stored.color(), image::ColorType::Rgb16, "planar: the stored image keeps 16-bit samples");
+}
+
 /// A CMYK or grayscale TIFF whose alpha follows another extra sample opens and places with that
 /// alpha, at 8 and 16 bits, chunky and planar; a CMYK one is not kept as inks. A CMYK one with two
 /// more samples than its ExtraSamples values count does too.

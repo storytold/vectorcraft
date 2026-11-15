@@ -38,6 +38,21 @@ pages describe it.
   3D effect of each other selected object in place (`effect.setParams` with `threeDType`): the settings both
   effects take keep their values, and the rest start at the new effect's defaults. One click is one undo step,
   and an object whose effect already has the type does not change.
+- **Render Settings › Wireframe**, under the object types, draws each selected 3D object as the edges of its
+  faces instead of its shaded surface, as the public
+  [Render 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/render-3d-vector-artwork.html)
+  page describes for editing Depth, Taper and Twist in a mesh view. The item is checked while the first selected
+  object's effect is in wireframe mode, and choosing it turns the mode on or off for every selected Extrude & Bevel,
+  Revolve, Inflate and Rotate (`effect.setParams` with `render: {mode}`), as one undo step. The effect stays live:
+  each edit to its settings redraws the edges. The edges are the ones Expand as Wireframes gives, each once, with a
+  0.5 pt black stroke, round joins and no fill (VectorCraft's own choice). Geometry effects after the 3D effect
+  reshape the drawn edges, as they reshape shaded art. Expand as Wireframes reshapes each face before it joins the
+  edges, so with such an effect its paths can differ from the drawn ones. The mesh shows every edge whatever the
+  opacity, blending mode or opacity mask of the fills, strokes and group members, as Expand as Wireframes does;
+  the object's own opacity, blending mode and opacity mask apply to it as a whole. The shadow and the graphics are
+  not drawn.
+  The mode is saved with the effect and drawn in every output, and Expand Appearance gives the edges as paths.
+  Choosing Wireframe again draws the shaded surface. The 3D (Classic) effects keep their own Wireframe surface.
 - Below them are the Object, Rotation and Lighting tabs of the effect's options dialog, with the same controls
   and ranges, showing the 3D effect of the first selected object (its own effects first, then those of its fills
   and strokes). A changed setting goes to the 3D effect of each selected object whose effect takes that setting;
@@ -479,6 +494,9 @@ Commands validate the shape and the parameters before the document changes. All 
 with `symbol` (the name of a document symbol), `face` (`front` or `back`, default `front`; `threeD.rotate` and
 `threeD.revolve` take `front` only), `x` and `y` (points, default 0), `scale` (1..10000%, default 100) and `rotation` (-360..360 degrees,
 default 0). Other keys, values out of range and graphics on the other 3D effects are rejected before editing.
+All four take `render` ([3D and Materials panel](#3d-and-materials-panel)): an object whose `mode` is `shaded` (the
+default) or `wireframe`. A `render` that is not an object, a key other than `mode`, another mode, and `render` on
+the 3D (Classic) effects are rejected before editing.
 
 ## What differs from the public documentation
 
@@ -531,8 +549,13 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   types and blend steps. Revolve (Classic) sweeps the surface Revolve sweeps, with Cap closing a partial sweep's cut
   sides ([revolve.md](revolve.md)), at 64 segments for a full turn, and draws
   every face back to front, so it has no Draw Hidden Faces setting. Rotate (Classic) turns the plane Rotate turns, seen
-  from either side, with the No Shading and Diffuse surfaces only. The track cube, map art, Turntable and 3D export
-  are separate, unbuilt items.
+  from either side, with the No Shading and Diffuse surfaces only. Preserve Spot Colors, on the Lighting tab of all
+  three, keeps a color linked to a spot or global swatch linked on every face: the highlight lowers its tint, and a
+  face that darkens gets black over it, multiplied and overprinting, so a spot color stays on its own plate. The
+  checkbox is unavailable while Shading Color is Custom
+  ([Preserve Spot Color](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260)); how
+  the faces are shaded with it is VectorCraft's own. The track cube, map art, Turntable and 3D export are separate,
+  unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 

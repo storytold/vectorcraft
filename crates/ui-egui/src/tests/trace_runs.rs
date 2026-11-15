@@ -162,6 +162,23 @@ fn a_trace_needs_its_image_as_it_was() {
     assert!(app.ui.status.contains("changed meanwhile: trace it again"), "{}", app.ui.status);
 }
 
+/// A trace started before File › Revert doesn't apply after it, even when the document was
+/// reverted to the same image: nothing changes, and the status bar says why.
+#[test]
+fn a_trace_started_before_a_revert_does_not_apply() {
+    let mut app = app();
+    let i = app.session.active_index().unwrap();
+    let copy = (*app.session.doc().unwrap().doc).clone();
+    let [img] = app.session.doc().unwrap().selection.objects[..] else { panic!("the image is selected") };
+    crate::menus::invoke(&mut app, "imageTrace.make", json!({"preset": "Default"}));
+    assert!(app.session.replace_document(i, copy));
+    wait(&mut app);
+    assert_eq!(undos(&app), 0, "nothing changes");
+    let st = app.session.doc().unwrap();
+    assert!(matches!(st.doc.node(img).unwrap().kind, vectorcraft_doc::NodeKind::Image(_)), "the image is not traced");
+    assert_eq!(app.ui.status, "Image Trace finished, but its document was reverted: trace it again");
+}
+
 /// The progress window opens after its delay with Cancel and Continue in Background; Continue in
 /// Background closes it and the trace goes on.
 #[test]
