@@ -92,7 +92,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eraser",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1), size?: pt (10), sizeMode?: \"fixed\" (default) | \"pressure\" (Eraser Tool Options' Size set to Pressure: the tip is size − sizeVariation across where the pen presses lightest and size + sizeVariation where it presses hardest, as path.blob), sizeVariation?: pt (0), angle?: ° (0: the tip's long axis counter-clockwise from level), roundness?: % (100, kept within 1–100)} erase the stroke of an elliptical tip from paths (selected, or all) → {ids}. The tip is `size` across its long axis, which runs at `angle` counter-clockwise from horizontal; its short axis is `roundness` percent of the long one",
+            "{points: [[x,y]…] or [[x,y,pressure]…] or [[x,y,pressure,tiltX,tiltY,rotation]…] (pen pressure 0..1, tilt −90..90°, barrel rotation ° clockwise, as path.freehand), size?: pt (10), angle?: ° (0: the tip's long axis counter-clockwise from level), roundness?: % (100, kept within 1–100), angleMode?, roundnessMode?, sizeMode?: \"fixed\" (default) | \"random\" | \"pressure\" | \"tilt\" | \"bearing\" | \"rotation\" (Eraser Tool Options' variation menus; a varied angle turns either way, clockwise or counter-clockwise), angleVariation?: ° (0–180, default 0, either way: clockwise or counter-clockwise), roundnessVariation?: % (0–100, default 0), sizeVariation?: pt (0 or more, default 0)} erase the stroke of an elliptical tip from paths (selected, or all) → {ids}. The tip is `size` across its long axis, which runs at `angle` counter-clockwise from horizontal; its short axis is `roundness` percent of the long one. A value whose mode is not fixed varies by up to its variation either way: random draws one value for the drag; pressure goes from the value less the variation where the pen presses lightest to the value plus it where it presses hardest (size on pressure as path.blob); tilt from less with the pen lying flat to more with it upright; bearing and rotation from less at −180° to more at 180° of the pen's lean direction or barrel turn. A drag without that pen reading (a mouse) erases at the value itself. An unknown mode, or a variation below 0 or past its range, is an error and erases nothing",
             has_doc,
             erase_region
         ),
@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smooth",
             [],
             None,
-            "{points: [[x,y]…], radius?: pt (12), fidelity?: pt (2.5; kept within 0.000078125 and about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom)} smooth selected paths near the drag → {ids, before, after}",
+            "{points: [[x,y]…], radius?: pt (12), fidelity?: pt (2.5; kept within 0.000078125 and about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom)} smooth selected paths near the drag, keeping a corner where the path turns by more than 57.5° at the anchor and over radius and twice radius on either side → {ids, before, after}",
             has_selection,
             smooth_region
         ),

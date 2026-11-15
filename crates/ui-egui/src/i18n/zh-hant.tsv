@@ -608,6 +608,7 @@ font-technology	Variable	可變
 	Copy All Styles	複製所有樣式
 	Copy Color Value (Hex)	複製顏色值 (Hex)
 	Copy Fonts Used in the Document	複製文件中使用的字體
+	Copy Info	複製資訊
 	Copy Links	複製連結
 	Copy Selected Style	複製所選樣式
 	Copy to User Defined	複製到使用者定義
@@ -875,6 +876,9 @@ font-technology	Variable	可變
 	The selected character's font is not available.	選取字元的字體無法使用。
 	No alternates for the selected character.	選取的字元沒有替代字。
 	Double-click to replace	按兩下以取代
+	Click to replace	按一下以取代
+	Show all alternates in the Glyphs panel	在「字符」面板中顯示所有替代字
+	Show Character Alternates	顯示字元的替代字
 	Select one character with the Type tool first.	請先用文字工具選取一個字元。
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} 是 {font} 的字形，不是所選文字所用字體（{text_font}）的字形。
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} 屬於 {base}（U+{base_code}）{place}；您選取的是 {sel}（U+{code}）。
@@ -1324,6 +1328,7 @@ file-filter	Templates	範本
 	Format	格式
 	Format Options	格式選項
 	Format Settings	格式設定
+	Format Settings…	格式設定…
 	Format:	格式：
 	Formats:	格式：
 	Fractional Widths	小數字寬
@@ -1686,6 +1691,7 @@ file-filter	Templates	範本
 	Images:	影像：
 	Import Keyboard Shortcuts…	匯入鍵盤快速鍵…
 	Import PDF	匯入 PDF
+	Import PDF pages as links	將 PDF 頁面匯入為連結
 	Import PDF Presets	匯入 PDF 預設集
 	Import Perspective Grid Presets	匯入透視格點預設集
 	Import Print Presets	匯入列印預設集
@@ -2585,6 +2591,7 @@ file-filter	Templates	範本
 @msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
+@msg	Copied the link info	已複製連結資訊
 @msg	Exported {path}	已匯出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	沒有可複製的 CSS：請選取有自己 CSS 的物件
 @msg	unknown highlight `{h}`	未知的反白顯示 `{h}`
@@ -2698,6 +2705,7 @@ file-filter	Templates	範本
 @msg	every numbered name for {name} is taken in the document's folder	文件所在資料夾中 {name} 的所有編號名稱都已被使用
 @msg	No linked files to look for	沒有要尋找的連結檔案
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	此連結位於符號、圖表設計、圖樣或不透明度遮色片中，在畫布上沒有位置
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	圖表數列中圖表設計的圖稿會依設計重新繪製：若要變更，請編輯設計
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步驟參照 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必須是由物件 id 組成的陣列，而非 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必須是由顏色組成的陣列，而非 {v}
@@ -2709,6 +2717,7 @@ file-filter	Templates	範本
 @msg	automation filesystem access is not granted: write authority is absent: {path}	未授予自動化檔案系統存取權：沒有寫入權限：{path}
 @msg	automation path rejected: outside the read root {root}: {path}	已拒絕自動化路徑：位於讀取根目錄 {root} 之外：{path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	已拒絕自動化路徑：位於所有讀取根目錄 {roots} 之外：{path}
+@msg	a linked JavaScript file is outside the read roots	連結的 JavaScript 檔案位於所有讀取根目錄之外
 @msg	automation path rejected: outside the write root {root}: {path}	已拒絕自動化路徑：位於寫入根目錄 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒絕自動化路徑：位於所有寫入根目錄 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒絕自動化路徑：路徑是空的
@@ -3780,6 +3789,8 @@ font-script	Japanese	漢字
 	Proof Setup	校樣設定
 	Properties	內容
 	Proportional Metrics	比例度量
+	H or V Style	橫排或直排樣式
+	Roman Italics	羅馬字斜體
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在後方插入空白
 	Tsume	比例間距
@@ -4529,6 +4540,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Sixth Space	六分之一空格
 	Size	大小
 	Size Tile to Art	拼貼符合圖稿大小
+	Move Tile with Art	拼貼隨圖稿移動
 	Size/Leading	大小/行距
 	Size:	大小：
 	Ridges per segment:	每段起伏數：
@@ -4559,6 +4571,18 @@ digits	Malayalam	馬來亞拉姆數字
 	Smart Guides (View → Smart Guides)	智慧型參考線 (檢視 → 智慧型參考線)
 	Smart Guides (⌘U)	智慧型參考線 (⌘U)
 	Smart Punctuation…	智慧型標點…
+	Smart Punctuation	智慧型標點
+	ff, fi, ffi Ligatures	ff、fi、ffi 連字
+	ff, fl, ffl Ligatures	ff、fl、ffl 連字
+	Smart Quotes	智慧型引號
+	Smart Spaces	智慧型空格
+	En, Em Dashes	短破折號和長破折號
+	Ellipses	刪節號
+	Expert Fractions	專家分數
+	Replace In	取代範圍
+	Selected Text Only	僅限選取的文字
+	Entire Document	整份文件
+	Report Results	報告結果
 	Smooth	平滑
 	Corner	角點
 	Relative	相對
@@ -4589,6 +4613,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Solid	實心
 	Sort by Kind	依類型排序
 	Sort by Name	依名稱排序
+	Sort by Size	依大小排序
 	Sort by Status	依狀態排序
 	Source code on GitHub	GitHub 上的原始碼
 	Source Sans 3	Source Sans 3
@@ -4708,6 +4733,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Swap Fill and Stroke (Shift+X)	對調填色與筆畫 (Shift+X)
 	Swap start and end arrowheads	對調起點與終點箭頭
 	Swap the selected object for the file, keeping its place and transform	以檔案取代選取的物件，並保留其位置與變形
+	Show Import Options	顯示讀入選項
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前詢問每個 PDF、DXF 或文字檔案的讀入選項；關閉時使用上次選擇的選項
 	Stylistic Alternates	風格替代字
 	Swash	花體字
 	Swatch Conflict	色票衝突
@@ -5167,6 +5194,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Working CMYK	使用中的 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加標記)
 	Working RGB (don't tag)	工作 RGB (不加標記)
+	Don't Color Manage This Document	不對此文件進行色彩管理
+	Working RGB: {name}	工作 RGB：{name}
+	Working CMYK: {name}	工作 CMYK：{name}
 	Workspace	工作區
 	Workspace {i}	工作區 {i}
 	Wrinkle Tool	皺摺工具
@@ -5392,6 +5422,7 @@ axis	Both	兩者
 
 # Photoshop-style raster effects (Effect menu, their dialogs).
 	Radial Blur…	放射狀模糊…
+	Blur Center	模糊中心
 	Smart Blur…	智慧型模糊…
 	Sharpen	銳利化
 	Unsharp Mask…	反銳利化遮罩…
@@ -5779,6 +5810,9 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
+	Move Light to Back	將光源移到後方
+	Move Light to Front	將光源移到前方
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	拖曳光源即可移動。方向鍵會移動具有焦點的光源；按住 Shift 以 15° 為間距。
 	Shadows	陰影
 	Distance from Object	與物件的距離
 	Shadow Bounds	陰影邊界
@@ -6312,6 +6346,8 @@ axis	Y Axis	Y 軸
 	Create New Set	建立新組
 	Stop Global Edit	停止整體編輯
 	Global Edit Options	整體編輯選項
+	Select Similar Objects	選取相似物件
+	Select Similar Options	選取相似物件選項
 	Leave Out of Global Edit	從整體編輯中排除
 	Match	符合
 	On Artboards	在工作區域上
@@ -6320,7 +6356,7 @@ axis	Y Axis	Y 軸
 @plural	Result: {n}|Results: {n}	結果：{n}
 @msg	select one object	請選取一個物件
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	整體編輯適用於路徑、複合路徑、符號實體及其群組
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	找不到相似的物件（旋轉或鏡像的副本不會相符）；請變更整體編輯選項後再試一次
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	找不到相似的物件（鏡像的副本不會相符）；請變更整體編輯選項後再試一次
 @msg	Global Edit is off	整體編輯未開啟
 @msg	only an object of the Global Edit other than the one it started from can be left out	只能從整體編輯中排除起始物件以外的物件
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：應為 all 或 1, 3-5 這類範圍，而不是 {v}
@@ -6434,6 +6470,13 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	石墨鉛筆
 	Wax Crayon	蠟筆
 	Charcoal Dust	炭粉
+
+# Original procedural circuit brushes.
+	Tech Circuit	電子電路
+	Circuit Trace	電路走線
+	Bus Lines	匯流排
+	Terminal Nodes	端子節點
+
 	Notched Ribbon	凹口緞帶
 	Double Line	雙線
 	Wave	波浪
@@ -7120,6 +7163,9 @@ breakText	Glyphs	字符
 	Open Tutorial Sample	開啟教學課程範例
 	Finish Tutorial	完成教學課程
 	Next Tutorial	下一個教學課程
+	Show Learn Tab	顯示學習索引標籤
+	Show Skill	顯示技能
+	Back One Level	返回上一層
 	Back to Skills	返回技能
 @msg	tutorial `{id}` has no practice sample	教學課程 `{id}` 沒有練習範例
 @msg	open the practice sample of `{id}` first (see learn.openSample)	請先開啟 `{id}` 的練習範例 (請參閱 learn.openSample)
@@ -7160,6 +7206,9 @@ breakText	Glyphs	字符
 	Grommets	扣眼
 	Grommet Inset	扣眼邊距
 	Diameter	直徑
+	Nest Shapes…	形狀排料…
+	Nest Shapes	形狀排料
+	Roll	捲材
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D 效果需要位於 1 億點以內的有限座標
@@ -7655,7 +7704,7 @@ breakText	Glyphs	字符
 @msg	too many arguments	引數過多
 @msg	too many quantifiers	量詞過多
 @msg	turn on at least one side	請至少開啟一側
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 功能 `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt；加上前置的 - 可關閉；swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom 和 aalt 可用 `tag=N` 指定替代字的編號，N 為 0 到 {_1}，例如 `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 功能 `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital；加上前置的 - 可關閉；swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom 和 aalt 可用 `tag=N` 指定替代字的編號，N 為 0 到 {_1}，例如 `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的參數 `{key}`
@@ -8779,6 +8828,8 @@ breakText	Glyphs	字符
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 檔案過大，無法置入為文字 (最多 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG 展開後超過 {0} 個巢狀 SVG 影像
 @msg	the SVG expands to more than {0} objects	SVG 展開後超過 {0} 個物件
+@msg	the SVG's style sheets take too long to match	比對 SVG 的樣式表耗時過長
+@msg	the SVG's styles expand to more than {0} MB	SVG 的樣式展開後超過 {0} MB
 @msg	the SVG has no drawable objects	SVG 中沒有可繪製的物件
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 檔案解壓縮後超過 {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文件的屬性超過 {MAX_PAGES} 頁，數量過多而無法置入

@@ -792,9 +792,12 @@ fn control_bar_nodes(ctx: &egui::Context, app: &mut VectorcraftApp, width: f32, 
     nodes
 }
 
-/// The control named `name` (a button's or link's label, a label's text).
+/// The control named `name`: a button's or link's label, else a label's text. A link's text run
+/// carries the same text as its value, and the update lists the nodes in no set order, so the
+/// label is looked for first.
 fn control_bar_node(nodes: &Nodes, name: &str) -> Option<egui::accesskit::Node> {
-    nodes.iter().find(|(_, n)| n.label() == Some(name) || n.value() == Some(name)).map(|(_, n)| n.clone())
+    let labeled = nodes.iter().find(|(_, n)| n.label() == Some(name));
+    labeled.or_else(|| nodes.iter().find(|(_, n)| n.value() == Some(name))).map(|(_, n)| n.clone())
 }
 
 /// Where the control named `name` ends, if it shows.
@@ -1060,7 +1063,9 @@ fn reset_panel_leaves_an_undo_group_open_in_another_document() {
     // The second document is open before the group begins, so switching to it opens no group in it.
     app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
     assert_eq!(app.session.active_index(), Some(1));
-    app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap();
+    let b = app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap()["id"].clone();
+    // A reset that changes nothing records no step, so B starts away from the panel's defaults.
+    app.run("text.setFormat", json!({"id": b, "mojikumi": "none"})).unwrap();
     app.session.set_active(0);
     app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
     app.run("text.setFormat", json!({"id": a, "mojikumi": "none"})).unwrap();

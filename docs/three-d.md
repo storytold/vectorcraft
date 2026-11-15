@@ -66,7 +66,8 @@ pages describe it.
   when no selected object has a visible 3D effect.
 - The Lighting tab also holds the Shadows switch and its settings ([Shadows](#shadows)). The Materials tab holds
   the Graphics ([Graphics](#graphics)); base materials and ray-traced rendering are not built (see below). The
-  rotation and light rings on the artboard are part of the options dialog only.
+  rotation and light rings on the artboard are part of the options dialog only. The panel's Lighting tab has the
+  lighting widget instead ([Lighting widget](#lighting-widget)).
 
 ## Extrude & Bevel
 
@@ -163,7 +164,8 @@ The rest is our reading:
   depths where they overlap, with caps on or off. A fill wall in a gap stays in its own depth order. Inflate's
   curved surfaces follow this only as closely as their flat facets do. A solid painted with a gradient that has
   transparent stops under a light that is not white is drawn with an opacity mask: its faces keep their places in
-  this order, in runs that each carry the mask, and so do its graphics. A member of a 3D group with its own opacity
+  this order, in runs that each carry the mask, and a graphic drawn after one of its faces carries the mask too
+  ([Graphics](#graphics)). A member of a 3D group with its own opacity
   mask or blending mode draws its fill's and strokes' faces in this order inside that mask or blending mode when
   they are opaque with Normal blending. Otherwise each solid is drawn on its own with its opacity and blending, the
   lower item's first. With a light that is not white, a puffed, shaded Inflate surface in a solid color takes its
@@ -301,6 +303,33 @@ applied 3D effect. Every target must have a 3D effect at that position; validati
 the whole operation is one undo step. The numeric light settings are saved, not a preset name.
 Existing documents keep their appearance unless a preset is chosen.
 
+### Lighting widget
+
+On the 3D and Materials panel's Lighting tab, above the list of lights, a sphere shows every light of the
+effect where it shines from, as the public
+[3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
+page describes for dragging light sources around the object. The sphere is seen from the front: a light's
+Rotation is its angle around the center, and its Height runs from the rim (0°) to the center (90°). A light in
+front of the object is a sun filled with its color, and a light behind the object is hollow. The selected light
+is drawn larger, above the others.
+
+- Pressing a light selects it in the list of lights and records nothing. Dragging it moves it on its side of the
+  object, rounded to 0.1°; Shift snaps Rotation and Height to 15°. The drag is previewed while the pointer is
+  down and is one undo step when it is released.
+- **Move Light to Back** moves the selected light behind the object, and **Move Light to Front** moves it back
+  in front, as the page's "Move selected light to the back/front of object" does. It sets the same
+  `lightBehind` (or a list light's `behind`) as the **Light behind the object** checkbox.
+- Each light takes the keyboard focus. Left and Right turn the focused light around the object by 1°
+  (counterclockwise and clockwise), Up and Down raise and lower it by 1°, and Shift makes each step 15°. Each
+  press changes only the setting it moves and is one undo step. A
+  step past 90° or below 0° Height changes nothing. Screen readers name each light with its number, Rotation,
+  Height and, for a light behind the object, its side.
+
+The widget sends the same settings as the Rotation, Height and Light behind the object controls
+(`effect.setParams`); there is no command of its own. The sphere's look, the 0.1° rounding and the arrow keys
+are VectorCraft's own. The options dialogs keep the light rings on the artboard instead, and the Lighting tab
+of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) has no lighting widget.
+
 ### Light settings
 
 One to ten directional lights. **Lights** selects the light whose settings and artboard gizmo are edited. **Add Light** adds and selects a white front light; **Delete Light** removes the selected light while retaining at least one. Ambient Light is shared by all lights. The public panel options' Light Settings are kept in their order:
@@ -389,8 +418,11 @@ These rules are VectorCraft's own:
   turned, foreshortened by the perspective and twisted and tapered with the face, and clipped to it. It is shaded
   with the face's light: each color is multiplied by the light that falls on the face, except in pattern tiles,
   which keep their own colors. It is drawn with the
-  opacity and blending mode of the fill or stroke the face is painted with. A graphic on a face turned away from
-  the viewer is not drawn.
+  opacity and blending mode of the fill or stroke the face is painted with. Solids whose fills and strokes have the
+  same opacity and blending mode share one graphic on each face, clipped to their faces there and drawn after the
+  last of them. An object's fill and stroke share it when the fill is drawn with an opacity mask too, and the
+  graphic takes the mask of the solid it is drawn after; members of a 3D group drawn with a mask keep graphics of
+  their own. A graphic on a face turned away from the viewer is not drawn.
 - On the back cap, X runs to the right as the back is seen from behind, so the graphic reads the right way round
   there.
 - On Revolve a graphic lies on the swept side, which has one face (Front), unrolled flat. X runs around the axis:

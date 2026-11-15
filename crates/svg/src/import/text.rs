@@ -378,24 +378,29 @@ fn clip_uses(
             Some(s) => own_transform(&cx.css, s),
             None => t.attribute("transform").unwrap_or("").to_string(),
         };
-        // One element can carry one clip path. The text's own clip path is in the text's user space
-        // and wins; a clip path of the `<use>` is in the `<use>`'s, so the text's transform moves
-        // to the importer instead.
-        let clipped = |n: XNode| cx.css.own(n, "clip-path").is_some_and(|v| v.trim() != "none");
+        // One element can carry one clip path. The text's own clip path is in the text's user space;
+        // a clip path of the `<use>` is in the `<use>`'s. With only the `<use>`'s, the text's
+        // transform moves to the importer. With both, the placeholder's clip path is one that
+        // holds both ([`both_clips`]).
+        let clipped = |n: XNode| cx.css.own(n, "clip-path").filter(|v| v.trim() != "none");
         let id = format!("{}{i}-{k}", slots.prefix);
-        let transform = if style_t.is_some_and(clipped) {
-            if clipped(style_u) {
-                let label = u.attribute("id").map_or_else(|| "a use of a text".to_string(), |id| format!("'{id}'"));
-                warnings.push(format!("clip path of {label} in a clip path ignored: the text's own applies"));
-            }
-            format!("{placed} {text_xf}")
-        } else {
-            slots.inner.insert(id.clone(), parse_transform(Some(&text_xf)));
-            placed
-        };
         let props = clip_props(&cx.css, style_t, Some(style_u));
         let mut out = String::new();
-        clip_placeholder(&mut out, q, &id, &transform, &props, u, marker);
+        match (style_t.and_then(clipped), clipped(style_u)) {
+            (Some(text_clip), Some(use_clip)) => {
+                let both = both_clips(&mut out, q, &id, &text_clip, &use_clip, parse_transform(Some(&text_xf)), marker);
+                let props = match (both, props.split_once(';')) {
+                    (Some(both), Some((_, rest))) => format!("clip-path:url(#{both});{rest}"),
+                    _ => props,
+                };
+                clip_placeholder(&mut out, q, &id, &format!("{placed} {text_xf}"), &props, u, marker);
+            }
+            (Some(_), None) => clip_placeholder(&mut out, q, &id, &format!("{placed} {text_xf}"), &props, u, marker),
+            (None, _) => {
+                slots.inner.insert(id.clone(), parse_transform(Some(&text_xf)));
+                clip_placeholder(&mut out, q, &id, &placed, &props, u, marker);
+            }
+        }
         // Another `<use>` can still show this one by its id: a copy of it stays in a `<defs>`, which
         // the clip path leaves out, with the properties style rules gave it written out.
         if u.attribute("id").is_some() {
@@ -652,6 +657,42 @@ fn clip_placeholder(out: &mut String, q: &str, id: &str, transform: &str, props:
     let transform = if transform.trim().is_empty() { IDENTITY } else { transform };
     let _ = write!(out, " style=\"transform:{};{}display:inline\"", xml_escape(transform), xml_escape(props));
     let _ = write!(out, " d=\"M{} {}H{}V{}H{}Z\"/>", b.x0, b.y0, b.x1, b.y1, b.x0);
+}
+
+/// Write, in a `<defs>` (which a clip path leaves out), a clip path for the placeholder `id` of a
+/// text with bounds `b` and transform `text_xf` shown by a `<use>`, when both have a clip path:
+/// it clips by the text's clip path `text_clip` in the text's user space and by the `<use>`'s
+/// `use_clip` in the `<use>`'s, each on a rectangle over the text's bounds there, so a clip path in
+/// bounding box units measures the text. Its id, or `None` when `text_xf` can't be inverted (the
+/// text then draws nothing).
+fn both_clips(out: &mut String, q: &str, id: &str, text_clip: &str, use_clip: &str, text_xf: Affine, b: Rect) -> Option<String> {
+    let det = text_xf.determinant();
+    if !det.is_finite() || det == 0.0 {
+        return None;
+    }
+    let [a, b2, c, d, e, f] = text_xf.inverse().as_coeffs();
+    let ub = text_xf.transform_rect_bbox(b);
+    let (id_u, id_t) = (format!("{id}-u"), format!("{id}-t"));
+    let rect = |out: &mut String, clip: &str, r: Rect| {
+        let _ = write!(
+            out,
+            "<{q}path style=\"transform:{IDENTITY};clip-path:{};display:inline\" d=\"M{} {}H{}V{}H{}Z\"/>",
+            xml_escape(clip),
+            r.x0,
+            r.y0,
+            r.x1,
+            r.y1,
+            r.x0
+        );
+    };
+    // The `<use>`'s clip path, moved back by the inverse of the text's transform from the
+    // placeholder's user space to the `<use>`'s.
+    let _ = write!(out, "<{q}defs><{q}clipPath id=\"{}\" style=\"transform:matrix({a} {b2} {c} {d} {e} {f})\">", xml_escape(&id_u));
+    rect(out, use_clip, ub);
+    let _ = write!(out, "</{q}clipPath><{q}clipPath id=\"{}\" style=\"clip-path:url(#{})\">", xml_escape(&id_t), xml_escape(&id_u));
+    rect(out, text_clip, b);
+    let _ = write!(out, "</{q}clipPath></{q}defs>");
+    Some(id_t)
 }
 
 /// Write the placeholder group for text `t` (namespace prefix `q`), slot `index`, with the text's
@@ -1432,16 +1473,26 @@ impl Ctx {
             let offset = tp.attribute("startOffset").and_then(|v| self.length(v, em, len)).unwrap_or(0.0) + dx[0];
             let width = if anchor > 0.0 { advance(&point_text(&cells)) } else { 0.0 };
             // On a path of one closed subpath, text that starts before the path's start or past its
-            // end wraps around the path. Otherwise it starts at the path's start or end.
+            // end wraps around the path. On an open path text may start before the path's start,
+            // and its characters before the start are not drawn; text that starts past the end
+            // starts at the end. Other paths start it at the path's start or end.
             let path = PathData::from_bezpath(&bp);
             let wraps = path.subpaths.len() == 1 && path.is_closed();
+            let open = !path.is_closed();
             let wrap = |s: f64| {
                 // `rem_euclid` can round a tiny negative value up to 1.
                 let s = s.rem_euclid(1.0);
                 if s < 1.0 { s } else { 0.0 }
             };
-            let start =
-                Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| if wraps { wrap(s) } else { s.clamp(0.0, 1.0) });
+            let start = Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| {
+                if wraps {
+                    wrap(s)
+                } else if open {
+                    s.clamp(-vectorcraft_doc::PATH_LEAD_MAX, 1.0)
+                } else {
+                    s.clamp(0.0, 1.0)
+                }
+            });
             obj.kind = TextKind::OnPath { path, start, end: None };
             obj.xf = Affine::IDENTITY;
         } else if vertical {

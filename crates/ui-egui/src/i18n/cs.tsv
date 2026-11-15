@@ -428,6 +428,18 @@
 	Title Case	Velká Počáteční Písmena
 	Sentence case	Velké první písmeno věty
 	Smart Punctuation…	Inteligentní interpunkce…
+	Smart Punctuation	Inteligentní interpunkce
+	ff, fi, ffi Ligatures	Ligatury ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatury ff, fl, ffl
+	Smart Quotes	Inteligentní uvozovky
+	Smart Spaces	Inteligentní mezery
+	En, Em Dashes	Krátké a dlouhé pomlčky
+	Ellipses	Výpustky
+	Expert Fractions	Odborné zlomky
+	Replace In	Nahradit v
+	Selected Text Only	Pouze vybraný text
+	Entire Document	Celý dokument
+	Report Results	Zobrazit výsledky
 	Create Outlines	Převést na křivky
 	Optical Margin Alignment	Optické zarovnání okrajů
 	Dynamic Text	Dynamický text
@@ -978,6 +990,7 @@
 
 # Photoshop-style raster effects (Effect menu, their dialogs).
 	Radial Blur…	Radiální rozostření…
+	Blur Center	Střed rozostření
 	Smart Blur…	Chytré rozostření…
 	Sharpen	Zostření
 	Unsharp Mask…	Maska rozostření…
@@ -1599,6 +1612,8 @@ lighting	Light	Světlo
 	Leading	Proklad
 	No Break	Nezalamovat
 	Proportional Metrics	Proporcionální metrika
+	H or V Style	Vodorovný nebo svislý styl
+	Roman Italics	Kurzíva latinky
 	Insert Aki Left	Vložit aki vlevo
 	Insert Aki Right	Vložit aki vpravo
 	Tsume	Tsume
@@ -1730,6 +1745,9 @@ digits	Malayalam	Malajálamské
 	The selected character's font is not available.	Písmo vybraného znaku není k dispozici.
 	No alternates for the selected character.	Vybraný znak nemá žádné alternativy.
 	Double-click to replace	Dvojklikem nahradíte
+	Click to replace	Kliknutím nahradíte
+	Show all alternates in the Glyphs panel	Zobrazit všechny alternativy v panelu Glyfy
+	Show Character Alternates	Zobrazovat alternativy znaku
 	Select one character with the Type tool first.	Nejprve nástrojem Text vyberte jeden znak.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} je glyf písma {font}, ne písma, kterým je vybraný text nastaven ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} patří znaku {base} (U+{base_code}) {place}; váš výběr je {sel} (U+{code}).
@@ -2116,6 +2134,7 @@ digits	Malayalam	Malajálamské
 	Show Swatch Bounds	Zobrazit hranice položky vzorníku
 	Show Tile Edge	Zobrazit okraj dlaždice
 	Size Tile to Art	Velikost dlaždice podle kresby
+	Move Tile with Art	Přesouvat dlaždici s kresbou
 	Tile Type:	Typ dlaždice:
 	Top in Front	Horní vpředu
 	V Spacing:	Svislá mezera:
@@ -2158,6 +2177,9 @@ digits	Malayalam	Malajálamské
 	Use Black Point Compensation	Použít kompenzaci černého bodu
 	Working CMYK (don't tag)	Pracovní CMYK (neoznačovat)
 	Working RGB (don't tag)	Pracovní RGB (neoznačovat)
+	Don't Color Manage This Document	Nespravovat barvy tohoto dokumentu
+	Working RGB: {name}	Pracovní RGB: {name}
+	Working CMYK: {name}	Pracovní CMYK: {name}
 	{name} (spot)	{name} (přímá)
 	Add to Profiles…	Přidat do profilů…
 	Align Stroke to Center	Zarovnat tah na střed
@@ -2277,6 +2299,7 @@ digits	Malayalam	Malajálamské
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	položka {i} v paths potřebuje path a ids (ID objektů, které nemá žádná jiná položka)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder bere path: ve složce tohoto souboru se hledají ostatní chybějící propojení
 	Show Missing	Zobrazit chybějící
+	Sort by Size	Seřadit podle velikosti
 	Sort by Status	Seřadit podle stavu
 	Clear Overrides	Vymazat přepsání
 	Create New {kind} Style	Vytvořit nový styl ({kind})
@@ -2533,6 +2556,7 @@ digits	Malayalam	Malajálamské
 	Export Asset	Exportovat prvek
 	Export to:	Exportovat do:
 	Format Settings	Nastavení formátu
+	Format Settings…	Nastavení formátu…
 	Formats:	Formáty:
 	Full Document	Celý dokument
 	Include Bleed	Zahrnout spadávku
@@ -2633,6 +2657,7 @@ digits	Malayalam	Malajálamské
 	e.g. 1-3, 5	např. 1-3, 5
 	First Page	První stránka
 	Import PDF	Importovat PDF
+	Import PDF pages as links	Importovat stránky PDF jako propojení
 	Last Page	Poslední stránka
 	Next Page	Další stránka
 	of {count}	z {count}
@@ -2716,6 +2741,7 @@ digits	Malayalam	Malajálamské
 	Transparent Background	Průhledné pozadí
 	Choose…	Vybrat…
 	Copy Fonts Used in the Document	Kopírovat písma použitá v dokumentu
+	Copy Info	Kopírovat informace
 	Copy Links	Kopírovat propojené soubory
 	Create Report	Vytvořit zprávu
 	Fonts whose licence doesn't allow embedding are not copied.	Písma, jejichž licence nepovoluje vkládání, se nekopírují.
@@ -2766,6 +2792,8 @@ digits	Malayalam	Malajálamské
 	Keep a link to an image file instead of only embedding it	Ponechat propojení na soubor obrázku, ne jen ho vložit
 	Place onto a new locked, dimmed template layer below the current layer	Umístit do nové zamčené, ztlumené vrstvy šablony pod aktuální vrstvou
 	Swap the selected object for the file, keeping its place and transform	Nahradit vybraný objekt souborem se zachováním jeho polohy a transformace
+	Show Import Options	Zobrazit možnosti importu
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Před umístěním se zeptat na možnosti importu každého souboru PDF, DXF nebo textového souboru; vypnuto: použijí se naposledy zvolené možnosti
 	On: one locked object showing the document, updated when it changes.	Zapnuto: jeden zamčený objekt zobrazující dokument, aktualizovaný při jeho změně.
 	Off: an editable copy of its art, embedded in this document.	Vypnuto: upravitelná kopie jeho kresby vložená do tohoto dokumentu.
 	Images: link to the file instead of only embedding it.	Obrázky: propojit se souborem místo pouhého vložení.
@@ -4685,6 +4713,7 @@ imageTrace	Outline	Obrys
 @msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
+@msg	Copied the link info	Informace o propojení zkopírovány
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty
 @msg	Couldn't copy to the system clipboard: {e}	Nelze kopírovat do systémové schránky: {e}
 @msg	Couldn't open {name}: {e}	{name} nelze otevřít: {e}
@@ -5497,6 +5526,7 @@ imageTrace	Outline	Obrys
 @msg	every numbered name for {name} is taken in the document's folder	ve složce dokumentu jsou obsazena všechna číslovaná jména pro {name}
 @msg	No linked files to look for	Žádné propojené soubory k vyhledání
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Propojení je uvnitř symbolu, návrhu grafu, vzorku nebo masky krytí a nemá na plátně žádné místo
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	kresba návrhu grafu v datové řadě grafu se znovu vykresluje podle návrhu: chcete-li ji změnit, upravte návrh
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který vyhodnocují jen `run` a `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musí být pole ID objektů, ne {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` musí být pole barev, ne {v}
@@ -5516,6 +5546,7 @@ imageTrace	Outline	Obrys
 @msg	automation filesystem access is not granted: write authority is absent: {path}	přístup automatizace k systému souborů není udělen: chybí oprávnění k zápisu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro čtení {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro čtení {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	propojený soubor JavaScript je mimo kořeny pro čtení
 @msg	automation path rejected: outside the write root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro zápis {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro zápis {roots}: {path}
 @msg	automation path rejected: path is empty	cesta automatizace odmítnuta: cesta je prázdná
@@ -6077,6 +6108,9 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+	Move Light to Back	Přesunout světlo dozadu
+	Move Light to Front	Přesunout světlo dopředu
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Přetažením světlo přesunete. Šipky posouvají světlo s fokusem; se Shiftem po 15°.
 	Shadows	Stíny
 	Distance from Object	Vzdálenost od objektu
 	Shadow Bounds	Hranice stínu
@@ -6666,6 +6700,8 @@ axis	Y Axis	osa Y
 	Create New Set	Vytvořit novou sadu
 	Stop Global Edit	Ukončit globální úpravy
 	Global Edit Options	Možnosti globálních úprav
+	Select Similar Objects	Vybrat podobné objekty
+	Select Similar Options	Možnosti výběru podobných
 	Leave Out of Global Edit	Vyřadit z globálních úprav
 	Match	Shoda
 	On Artboards	Na pracovních plochách
@@ -6674,7 +6710,7 @@ axis	Y Axis	osa Y
 @plural	Result: {n}|Results: {n}	Výsledek: {n}|Výsledky: {n}|Výsledky: {n}
 @msg	select one object	vyberte jeden objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globální úpravy pracují s cestami, složenými cestami, instancemi symbolů a jejich skupinami
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nebyly nalezeny žádné podobné objekty (otočené a zrcadlené kopie se nevyhledávají); změňte možnosti globálních úprav a zkuste to znovu
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	nebyly nalezeny žádné podobné objekty (zrcadlené kopie se nevyhledávají); změňte možnosti globálních úprav a zkuste to znovu
 @msg	Global Edit is off	Globální úpravy nejsou zapnuté
 @msg	only an object of the Global Edit other than the one it started from can be left out	z globálních úprav lze vyřadit jen jiný objekt než ten, od kterého začaly
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all nebo rozsah, například 1, 3-5, ne {v}
@@ -6788,6 +6824,13 @@ axis	Y Axis	osa Y
 	Graphite Pencil	Grafitová tužka
 	Wax Crayon	Vosková pastelka
 	Charcoal Dust	Uhlový prach
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technické obvody
+	Circuit Trace	Vodivá cesta
+	Bus Lines	Sběrnicové linky
+	Terminal Nodes	Koncové uzly
+
 	Notched Ribbon	Vroubkovaná stuha
 	Double Line	Dvojitá čára
 	Wave	Vlna
@@ -7589,6 +7632,9 @@ breakText	Glyphs	Glyfy
 	Open Tutorial Sample	Otevřít ukázku výukového kurzu
 	Finish Tutorial	Dokončit výukový kurz
 	Next Tutorial	Další výukový kurz
+	Show Learn Tab	Zobrazit kartu Výuky
+	Show Skill	Zobrazit dovednost
+	Back One Level	O úroveň zpět
 	Back to Skills	Zpět na dovednosti
 @msg	tutorial `{id}` has no practice sample	výukový kurz `{id}` nemá cvičnou ukázku
 @msg	open the practice sample of `{id}` first (see learn.openSample)	nejprve otevřete cvičnou ukázku kurzu `{id}` (viz learn.openSample)
@@ -7629,6 +7675,9 @@ breakText	Glyphs	Glyfy
 	Grommets	Průchodky
 	Grommet Inset	Odstup průchodek od okraje
 	Diameter	Průměr
+	Nest Shapes…	Skládat tvary…
+	Nest Shapes	Skládat tvary
+	Roll	Role
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' a 'arguments' nelze použít u funkcí ve striktním režimu
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Profil podporuje jeden efekt Rotační těleso. Upravte místo toho volby stávajícího efektu.
 @msg	Add Points at Crossings: a path went missing	Přidat body v křížení: jedna cesta se ztratila
@@ -9014,6 +9063,8 @@ breakText	Glyphs	Glyfy
 @msg	the RTF file is too large to place as type (at most {_1} MB)	soubor RTF je příliš velký na umístění jako text (nejvýše {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG se rozvine na více než {0} vnořených obrázků SVG
 @msg	the SVG expands to more than {0} objects	SVG se rozvine na více než {0} objektů
+@msg	the SVG's style sheets take too long to match	porovnání šablon stylů SVG trvá příliš dlouho
+@msg	the SVG's styles expand to more than {0} MB	styly SVG se rozvinou na více než {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	soubor SVG je větší než {MAX_IMPORT_BYTES} bajtů
 @msg	the SVG has no drawable objects	SVG nemá žádné vykreslitelné objekty
 @msg	the SVGZ file unpacks to more than {_1} MB	soubor SVGZ se rozbalí na více než {_1} MB
@@ -9235,7 +9286,7 @@ breakText	Glyphs	Glyfy
 @msg	unexpected resources	neočekávané prostředky
 @msg	unknown CMYK profile `{name}`	neznámý profil CMYK `{name}`
 @msg	unknown File Info field `{k}`	neznámé pole informací o souboru `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	neznámá funkce OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; předpona - funkci vypne; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom a aalt přijímají číslo alternativy jako `tag=N` s N od 0 do {_1}, například `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	neznámá funkce OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; předpona - funkci vypne; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom a aalt přijímají číslo alternativy jako `tag=N` s N od 0 do {_1}, například `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	neznámá funkce OpenType `{t}` ve featureChanges (značky, které přijímá `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	neznámé přednastavení PDF `{name}` (přednastavení: {_1})
 @msg	unknown Warp style	neznámý styl deformace
