@@ -147,6 +147,9 @@ fn bad_values_and_units_are_refused() {
         // A thousands comma is refused, as the number fields refuse it.
         json!({"value": "1,000 mm"}),
         json!({"value": "1,000.5"}),
+        json!({"value": "+1,000"}),
+        json!({"value": "1,000\""}),
+        json!({"value": "1,000'"}),
         // A long expression is refused instead of exhausting the stack.
         json!({"value": format!("1{}", "+1".repeat(200_000))}),
         json!({"value": format!("1{}", "+1".repeat(129))}),

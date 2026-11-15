@@ -317,19 +317,20 @@ pub fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
     if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
 }
 
-/// Is `text` a number written with a thousands comma, as `1,000` or `12,500 mm`: one to three
-/// digits (not a lone 0), a comma, exactly three digits, then at most a unit? Read as a decimal it
-/// would be a thousand times too small, so the field refuses it instead (`0,125` and `1,25` are
-/// decimals).
+/// Is `text` a number written with a thousands comma, as `1,000`, `+1,000`, `12,500 mm` or
+/// `1,000"`: a sign, one to three digits (not a lone 0), a comma, exactly three digits, then at
+/// most a unit? Read as a decimal it would be a thousand times too small, so the field refuses it
+/// instead (`0,125` and `1,25` are decimals).
 fn thousands(text: &str) -> bool {
-    let number = text.trim().trim_start_matches('-');
+    let number = text.trim();
+    let number = number.strip_prefix(['+', '-']).unwrap_or(number);
     let Some((whole, rest)) = number.split_once(',') else { return false };
     let (part, unit) = rest.split_at(rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len()));
     (1..=3).contains(&whole.len())
         && whole.bytes().all(|b| b.is_ascii_digit())
         && !whole.starts_with('0')
         && part.len() == 3
-        && unit.trim().chars().all(char::is_alphabetic)
+        && unit.trim().chars().all(|c| c.is_alphabetic() || c == '"' || c == '\'')
 }
 
 /// Is the length `pt` (points) a finite number in every unit of [`Unit::EAST_ASIAN`]? A length
