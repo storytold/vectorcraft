@@ -317,7 +317,11 @@ fn png_row_scratch_from_header(bytes: &[u8], width: u32, height: u32, total_byte
         match kind {
             b"IHDR" if len == 13 && !header => {
                 header = true;
-                if u32::from_be_bytes(data[..4].try_into().ok()?) != width || data[12] != 0 {
+                if at != 8
+                    || u32::from_be_bytes(data[..4].try_into().ok()?) != width
+                    || u32::from_be_bytes(data[4..8].try_into().ok()?) != height
+                    || data[12] != 0
+                {
                     return None;
                 }
             }
