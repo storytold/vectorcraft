@@ -17,7 +17,9 @@ impl VectorcraftApp {
         if self.fonts_ready {
             tools_float::cancel_move_on_escape(self, ctx);
             crate::custom_toolbars::cancel_move_on_escape(self, ctx);
-            shortcuts::handle(self, ctx);
+            if !crate::menus::handle_keyboard_input(self, ctx) {
+                shortcuts::handle(self, ctx);
+            }
         }
         // A Copy taken in this UI phase (an egui copy event, or a command it runs) is published in
         // this same pass: waiting for the next `tick` can leave the command unissued when an idle
