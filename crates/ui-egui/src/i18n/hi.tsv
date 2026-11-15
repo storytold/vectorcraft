@@ -1508,6 +1508,8 @@ antiAlias	Sharp	शार्प
 	Drag out from a corner, or click two straight lines, then click to place.	एक कोने से बाहर खींचें, या दो सीधी रेखाओं पर क्लिक करें, फिर जगह पर क्लिक करें।
 	Drag out from a segment, or click two points, then click to place.	एक खंड से बाहर खींचें, या दो बिंदुओं पर क्लिक करें, फिर जगह पर क्लिक करें।
 	Drag rings to rotate. Shift snaps to 15°.	घुमाने के लिए रिंग ड्रैग करें। Shift से 15° पर स्नैप होता है।
+	Track cube	घुमाने का घन
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	घुमाने के लिए फलक, किनारा या रिंग ड्रैग करें। Shift से स्क्रीन के एक अक्ष के चारों ओर घूमता है।
 	Drag the art to move it on the paper	इसे कागज पर स्थानांतरित करने के लिए कला को खींचें
 	Drag the light, or its rings. Shift snaps to 15°.	लाइट या उसकी रिंग ड्रैग करें। Shift से 15° पर स्नैप होता है।
 	Drag to float as a toolbar	एक टूलबार के रूप में तैरने के लिए खींचें

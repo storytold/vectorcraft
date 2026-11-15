@@ -313,6 +313,68 @@ fn the_shadow_cast_from_the_solids_drawn_is_the_shadow_of_solids_built_for_it() 
     }
 }
 
+/// A stroke's solid left out of the art (past its own limits) keeps no faces, and the shadow cast
+/// from the faces the solids kept leaves it out without building it: it casts nothing, as it draws
+/// nothing, and the fill's solid still casts.
+#[test]
+fn a_stroke_left_out_of_the_art_casts_no_shadow() {
+    for id in [EXTRUDE, INFLATE] {
+        let n = stroked_square(1, 0.0, 1.0);
+        let (path, rule) = profile(&n).unwrap();
+        let shapes = [Profile { path, rule, items: solid_paints(&n), opacity: 1.0, scopes: vec![] }];
+        let p = crate::merged_params(id, &json!({"shadow": true}));
+        let (parts, bounds) = solid_parts(&shapes, union_bounds(&shapes).unwrap());
+        let mut built: Vec<Option<SolidFaces>> =
+            built_solids_cast(id, &p, &parts, bounds, MAX_OBJECT_FACES, true, false).map(|r| r.unwrap().and_then(|(_, faces)| faces)).collect();
+        let stroke = parts.iter().position(|(item, ..)| matches!(item, AppearanceItem::Stroke(_))).unwrap();
+        assert!(built.len() == 2 && built.iter().all(Option::is_some), "{id}");
+        let (both, _, cast) = cast_built(id, &p, &shapes, built.clone()).unwrap().unwrap();
+        assert_eq!(cast.len(), 2, "{id}: the fill and the stroke cast");
+        built[stroke] = None;
+        let start = SOLIDS_BUILT.with(std::cell::Cell::get);
+        let (fill, _, cast) = cast_built(id, &p, &shapes, built).unwrap().unwrap();
+        assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get), start, "{id}: no solid is built for the shadow");
+        assert_eq!(cast.len(), 1, "{id}: the stroke left out casts nothing");
+        assert!(!fill.is_empty() && fill.len() < both.len(), "{id}: only the fill's faces are cast");
+    }
+}
+
+/// A command accepts each shadowed object that draws with its shadow, and with Rotate builds the
+/// plane of each visible fill and stroke once for the shadow: a fully transparent one casts nothing.
+#[test]
+fn the_check_accepts_the_shadowed_objects_that_draw() {
+    for id in [EXTRUDE, INFLATE, ROTATE] {
+        for params in shadow_settings(id) {
+            for n in shadowed(id, &params) {
+                let mut drawn = 0;
+                art(&n, id).unwrap().walk(&mut |c| drawn += usize::from(shadow_opacity(c).is_some()));
+                assert!(drawn > 0, "{id} {params}");
+                assert_eq!(validate_solid(&n, id, &params), Ok(()), "{id} {params}");
+            }
+        }
+    }
+    let shadow = json!({"shadow": true});
+    for (stroke, planes) in [(1.0, 2), (0.5, 2), (0.0, 1)] {
+        let n = stroked_square(1, 0.0, stroke);
+        let start = SOLIDS_BUILT.with(std::cell::Cell::get);
+        assert_eq!(validate_solid(&n, ROTATE, &shadow), Ok(()), "{stroke}");
+        assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get) - start, planes, "Rotate, a stroke at {stroke}");
+    }
+}
+
+/// In wireframe mode no shadow is drawn, so the check casts none: with Shadows on, Rotate builds no
+/// plane for a shadow, and Extrude & Bevel and Inflate build each solid once, as with the shadow off.
+#[test]
+fn the_check_casts_no_shadow_in_wireframe_mode() {
+    let n = stroked_square(1, 0.0, 1.0);
+    let wire = json!({"shadow": true, "render": {"mode": "wireframe"}});
+    for (id, solids) in [(ROTATE, 0), (EXTRUDE, 2), (INFLATE, 2)] {
+        let start = SOLIDS_BUILT.with(std::cell::Cell::get);
+        assert_eq!(validate_solid(&n, id, &wire), Ok(()), "{id}");
+        assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get) - start, solids, "{id}");
+    }
+}
+
 /// The opacity of each part of the shadow of `n` (its 3D effect's shadow on) and the shadow's art,
 /// as [`cast_shadow`] casts it from solids built for the shadow alone and as [`cast_built`] casts
 /// it from the faces the solids drawn kept.
