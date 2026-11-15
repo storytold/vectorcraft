@@ -6799,6 +6799,13 @@ axis	Y Axis	Y-axel
 	Graphite Pencil	Grafitpenna
 	Wax Crayon	Vaxkrita
 	Charcoal Dust	Koldamm
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniska kretsar
+	Circuit Trace	Kretsbana
+	Bus Lines	Bussledningar
+	Terminal Nodes	Anslutningspunkter
+
 	Notched Ribbon	Hackat band
 	Double Line	Dubbellinje
 	Wave	Våg

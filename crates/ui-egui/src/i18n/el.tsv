@@ -6773,6 +6773,13 @@ axis	Y Axis	Άξονας Y
 	Graphite Pencil	Μολύβι γραφίτη
 	Wax Crayon	Κηρομπογιά
 	Charcoal Dust	Σκόνη κάρβουνου
+
+# Original procedural circuit brushes.
+	Tech Circuit	Τεχνολογικά κυκλώματα
+	Circuit Trace	Διαδρομή κυκλώματος
+	Bus Lines	Γραμμές διαύλου
+	Terminal Nodes	Τερματικοί κόμβοι
+
 	Notched Ribbon	Οδοντωτή κορδέλα
 	Double Line	Διπλή γραμμή
 	Wave	Κύμα

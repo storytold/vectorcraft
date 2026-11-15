@@ -6658,6 +6658,13 @@ axis	Y Axis	Y 轴
 	Graphite Pencil	石墨铅笔
 	Wax Crayon	蜡笔
 	Charcoal Dust	炭粉
+
+# Original procedural circuit brushes.
+	Tech Circuit	电子电路
+	Circuit Trace	电路走线
+	Bus Lines	总线
+	Terminal Nodes	端子节点
+
 	Notched Ribbon	凹口丝带
 	Double Line	双线
 	Wave	波浪
