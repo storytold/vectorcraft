@@ -7023,10 +7023,12 @@ with `pointer_gesture` (a click places at 100% with the top-left corner there, a
 number, naming the key, and place nothing; null is the same as leaving the key out.
 
 In the app, `file.place` asks for a file's import options before placing it: a text file without `text` (Text Import
-Options), a DXF drawing without `dxf` (DXF Import Options), and a PDF, `.ai` or `.ait` file with several pages or a
-password and no `page` (Place PDF). `showImportOptions: false` places such a file without asking, with the options
-last confirmed in its dialog: the text options, and the DXF fit, lineweight, centering and layer choices with the
-drawing at 1:1 in its own unit. A PDF is placed on page 1 (or `page`) and its crop box, and an encrypted PDF given no
+Options), a DXF drawing without `dxf` (DXF Import Options), a PDF, `.ai` or `.ait` file with several pages or a
+password and no `page` (Place PDF), and a PSD or PSB file embedded without `layers` that has two layers or more or
+slices (Place PSD). `showImportOptions: false` places such a file without asking, with the options last confirmed in
+its dialog: the text options, the DXF fit, lineweight, centering and layer choices with the drawing at 1:1 in its own
+unit, and the PSD conversion, hidden-layer and Import Slices choices. A PDF is placed on page 1 (or `page`) and its
+crop box, and an encrypted PDF given no
 `password` still asks for the password. A `showImportOptions` that is not true or false is refused, and nothing is placed. The
 Place dialog (File › Place, or `file.place {paths}`) has a Show Import Options checkbox after Link, Template and
 Replace ([Place multiple files in a document](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-other-file-types/place-multiple-files-in-a-document.html)).

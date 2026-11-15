@@ -61,7 +61,7 @@ pub fn is_document(name: &str) -> bool {
 #[derive(Default)]
 pub struct PlaceState {
     /// Web: the bytes of the files picked for the Place dialog, by name.
-    picked: Vec<(String, Vec<u8>)>,
+    pub(crate) picked: Vec<(String, Vec<u8>)>,
     /// The loaded cursor's thumbnails by file name.
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
@@ -113,10 +113,11 @@ fn engine(app: &mut VectorcraftApp, id: &str, p: &Value) -> Result<Value, String
 
 /// File → Place… (`file.place`): with a file (`path` or `name` + `dataBase64`), place it, centred
 /// in the view unless `at`, `rect` or `replace` say otherwise (a text file without `text` options,
-/// a DXF drawing without `dxf` options and a PDF with several pages or a password and no `page`
-/// ask for them first, unless `showImportOptions: false` places them with the options confirmed
-/// last); with `paths`, the Place dialog for them; with neither, pick the files first. The file is
-/// read and placed at once (MCP, scripts).
+/// a DXF drawing without `dxf` options, a PSD file embedded without `layers` (when the user places
+/// it) and a PDF with several pages or a password and no `page` ask for them first, unless
+/// `showImportOptions: false` places them with the options confirmed last); with `paths`, the
+/// Place dialog for them; with neither, pick the files first. The file is read and placed at once
+/// (MCP, scripts).
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     place_file(app, p, Read::AtOnce)
 }
@@ -155,6 +156,7 @@ fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, 
         if let Some(dxf) = crate::dialogs::dxf_import::last_options(app, &p) {
             p["dxf"] = dxf;
         }
+        crate::dialogs::psd_import::last_options(app, &mut p);
     }
     if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
         return Ok(crate::dialogs::text_import::open(app, &p));
@@ -390,7 +392,9 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
                 // confirmed last.
                 q["text"] = crate::dialogs::text_import::last_options(app);
                 q["dxf"] = crate::dialogs::dxf_import::remembered(app);
-                if !link {
+                if !link || paths.is_empty() {
+                    // Files from bytes have no file to link to; they may carry the dialog's Link.
+                    q["link"] = json!(false);
                     crate::dialogs::psd_import::queue_options(app, &mut q);
                 }
             }
