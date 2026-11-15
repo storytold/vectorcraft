@@ -386,10 +386,32 @@ fn replacing_a_clipped_psd_keeps_its_scale() {
     assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(200.0), Some(100.0)), "{r}");
     let (anchors, _, _) = clip_group(&s.doc().unwrap().doc, NodeId(r["ids"][0].as_u64().unwrap()));
     assert_eq!(anchors, [[200.0, 150.0], [300.0, 250.0], [100.0, 250.0]]);
-    // Other art replacing the clip group takes its centre only, as before.
+    // A plain image replacing the clip group keeps its scale too.
     let plain = vectorcraft_format::base64_encode(&red_psd(&[]));
     let r = s.execute("file.place", &json!({"name": "plain.psd", "dataBase64": plain, "replace": true})).unwrap();
-    assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(100.0), Some(50.0)), "{r}");
+    assert_eq!((r["width"].as_f64(), r["height"].as_f64()), (Some(200.0), Some(100.0)), "{r}");
+}
+
+/// A plain image replacing a clipped PSD file takes the clipped image's scale and rotation.
+#[test]
+fn a_plain_image_replacing_a_clipped_psd_keeps_its_rotation() {
+    let data = vectorcraft_format::base64_encode(&red_psd(&triangle_resources()));
+    let plain = vectorcraft_format::base64_encode(&red_psd(&[]));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "cut.psd", "dataBase64": data, "at": [200, 200]})).unwrap();
+    let group = NodeId(r["ids"][0].as_u64().unwrap());
+    s.execute("object.scale", &json!({"sx": 200, "sy": 150})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let xf = |s: &Session, id: NodeId| match s.doc().unwrap().doc.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Image(im)) => im.xf.as_coeffs(),
+        other => panic!("not an image: {other:?}"),
+    };
+    let (_, _, image) = clip_group(&s.doc().unwrap().doc, group);
+    let before = xf(&s, image);
+    let r = s.execute("file.place", &json!({"name": "plain.psd", "dataBase64": plain, "replace": true})).unwrap();
+    let after = xf(&s, NodeId(r["ids"][0].as_u64().unwrap()));
+    assert!(after.iter().zip(before).all(|(a, b)| (a - b).abs() < 1e-9), "{after:?} != {before:?}");
 }
 
 #[test]
