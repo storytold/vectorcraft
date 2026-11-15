@@ -2819,6 +2819,22 @@ template layer, on a locked artboard while nothing is isolated, or outside the i
 such as a symbol instance just placed, is not passed over for being on a locked artboard while it stays selected. When
 the selection holds no other object, they return the error "nothing selected".
 
+`select.similar {by?}` is the Control bar's Select Similar Objects button and the Select Similar Options menu beside it
+([help](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=165)). It selects the
+objects like the first selected object by `by` and returns `{count, by}`. `by` is `fillColor`, `fillAndStroke`,
+`strokeColor`, `strokeWeight`, `opacity`, `blendingMode`, `appearance`, `graphicStyle`, `shapeType` or
+`symbolInstance`, which runs the `select.same.*` command of that name, or `all`, which selects the objects whose fill
+and stroke colors, stroke weight, opacity and blending mode all match (tints, compound paths and Live Paint faces as
+`select.same.fillColor`); Select › Reselect repeats `all` as `all`. The menu's items, their order and what `all`
+compares are VectorCraft's own. A `by` given is kept for the session once the selection is made, and the menu checks
+it; without `by` the command uses the kept one, `all` until one is given. Any other `by` is an error that keeps the
+selection and the kept attribute, and an error of the `select.same.*` command it runs (for example "the selection has
+no graphic style") keeps the kept attribute too. It needs a selection and records no undo step; the journal records the
+attribute used, so a recorded action repeats it, and a script run that fails puts the kept attribute back. The button
+and the menu show while something is selected and the
+Object Options group is on, at the right end of the bar after the X, Y, W and H fields. They take only the room the
+other controls leave, so the bar leaves them out, together, before any other control.
+
 `select.object.allOnSameLayers` selects the objects on the layers and sublayers of the selected objects that can be
 selected. A selected object that is hidden or locked, inside a hidden or locked group or layer, on a template layer, on
 a locked artboard while nothing is isolated, or outside the isolated group adds no layer. When the selection holds no
@@ -6862,7 +6878,8 @@ where it is.
 `window.control.options {group, visible?}` (desktop app) turns a group of the Control bar's options on (`visible:
 true`), off (`false`) or toggles it (omitted), and returns `{group, visible}`. The groups are `snapping` (the Snapping
 menu), `anchors` (Convert and Anchors), `toolOptions` (the active tool's options), `objectOptions` (Isolate Selected
-Object or Exit Isolation Mode, the envelope controls and the symbol instance controls), `imageOptions` (a selected
+Object or Exit Isolation Mode, the envelope controls, the symbol instance controls and Select Similar Objects),
+`imageOptions` (a selected
 image's or Image Trace object's controls), `fillStroke` (the fill and stroke chips, Stroke and its weight and width
 profile), `opacity`, `graphicStyle` (Style, Recolor Artwork and Global Edit Options), `character`, `paragraph`,
 `verticalAlignment` (area type's vertical alignment), `alignDistribute`, `transform` (the Transform link and the X/Y/W/H
