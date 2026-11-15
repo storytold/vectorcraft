@@ -229,6 +229,7 @@
 	Align to Artboard	Igazítás a rajztáblához
 	Align to Glyph Bounds	Igazítás a glifák határaihoz
 	Align to Key Object	Igazítás a kulcsobjektumhoz
+	Align to Key Anchor	Igazítás a kulcs-horgonyponthoz
 	Align to Page	Igazítás az oldalhoz
 	Align to Path	Igazítás az útvonalhoz
 	Align to Selection	Igazítás a kijelöléshez
@@ -4455,6 +4456,8 @@ mark-style	Japanese	Japán
 	Kana	Kana
 	Numerals	Számjegyek
 	Scale at Center	Méretezés középről
+	Delete Set	Készlet törlése
+	Direct Entry	Közvetlen bevitel
 	Up/Down:	Fel/le:
 	Left/Right:	Balra/jobbra:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko fel/le

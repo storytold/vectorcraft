@@ -164,6 +164,7 @@
 	Align to Artboard	Alinhar à Mesa de Trabalho
 	Align to Glyph Bounds	Alinhar aos Limites do Glifo
 	Align to Key Object	Alinhar ao Objeto-Chave
+	Align to Key Anchor	Alinhar ao Ponto de Ancoragem-Chave
 	Align to Page	Alinhar à Página
 	Align to Path	Alinhar ao Caminho
 	Align to Selection	Alinhar à Seleção
@@ -5353,6 +5354,8 @@ axis	Both	Ambos
 	Kana	Kana
 	Numerals	Números
 	Scale at Center	Dimensionar a partir do centro
+	Delete Set	Excluir conjunto
+	Direct Entry	Entrada direta
 	Up/Down:	Para Cima/Para Baixo:
 	Left/Right:	Esquerda/Direita:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko Para Cima/Para Baixo

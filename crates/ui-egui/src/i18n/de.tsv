@@ -135,6 +135,7 @@
 	Align to Artboard	An Zeichenfläche ausrichten
 	Align to Glyph Bounds	An Glyphenbegrenzung ausrichten
 	Align to Key Object	An Basisobjekt ausrichten
+	Align to Key Anchor	An Basisankerpunkt ausrichten
 	Align to Page	An Seite ausrichten
 	Align to Path	An Pfad ausrichten
 	Align to Selection	An Auswahl ausrichten
@@ -3738,6 +3739,8 @@ effect	Points	Punkte
 	Kana	Kana
 	Numerals	Ziffern
 	Scale at Center	Von der Mitte aus skalieren
+	Delete Set	Satz löschen
+	Direct Entry	Direkteingabe
 	Up/Down:	Oben/Unten:
 	Left/Right:	Links/Rechts:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko oben/unten

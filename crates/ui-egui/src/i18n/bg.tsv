@@ -146,6 +146,7 @@
 	Align to Artboard	Подравняване спрямо работната област
 	Align to Glyph Bounds	Подравняване спрямо границите на глифа
 	Align to Key Object	Подравняване спрямо ключов обект
+	Align to Key Anchor	Подравняване спрямо ключова опорна точка
 	Align to Page	Подравняване спрямо страницата
 	Align to Path	Подравняване спрямо пътя
 	Align to Selection	Подравняване спрямо селекцията
@@ -3654,6 +3655,8 @@ digits	Malayalam	Малаялам
 	Kana	Кана
 	Numerals	Цифри
 	Scale at Center	Мащабиране от центъра
+	Delete Set	Изтриване на набор
+	Direct Entry	Директно въвеждане
 	Up/Down:	Нагоре/надолу:
 	Left/Right:	Наляво/надясно:
 	Tate-chu-yoko Up/Down	Тате-чу-йоко нагоре/надолу

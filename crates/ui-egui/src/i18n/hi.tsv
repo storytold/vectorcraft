@@ -283,6 +283,7 @@
 	Align to Corners and Ends	कोनों और सिरों पर संरेखित करें
 	Align to Glyph Bounds	ग्लिफ़ की सीमाओं पर संरेखित करें
 	Align to Key Object	मुख्य ऑब्जेक्ट पर संरेखित करें
+	Align to Key Anchor	मुख्य एंकर पॉइंट पर संरेखित करें
 	Align to Page	पेज पर संरेखित करें
 	Align to Path	पाथ पर संरेखित करें
 	Align to Selection	सिलेक्शन पर संरेखित करें
@@ -5157,6 +5158,8 @@ antiAlias	Sharp	शार्प
 	Kana	काना
 	Numerals	अंक
 	Scale at Center	केंद्र से आकार बदलें
+	Delete Set	सेट हटाएँ
+	Direct Entry	सीधी प्रविष्टि
 	Technical Drawing	तकनीकी ड्राइंग
 	Telugu	तेलुगु
 	Temperature	तापमान

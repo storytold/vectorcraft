@@ -1427,6 +1427,7 @@ lighting	Light	Cahaya
 	Align to Artboard	Ratakan ke artboard
 	Align to Glyph Bounds	Ratakan ke batas glif
 	Align to Key Object	Ratakan ke objek kunci
+	Align to Key Anchor	Ratakan ke titik jangkar kunci
 	Align to Selection	Ratakan ke seleksi
 	Align To:	Ratakan ke:
 	Cancel Key Object	Batalkan objek kunci
@@ -1576,6 +1577,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Angka
 	Scale at Center	Skalakan dari tengah
+	Delete Set	Hapus set
+	Direct Entry	Entri langsung
 	Up/Down:	Atas/bawah:
 	Left/Right:	Kiri/kanan:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko atas/bawah

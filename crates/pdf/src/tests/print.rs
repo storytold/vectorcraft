@@ -663,6 +663,17 @@ fn a_spot_gradient_stop_prints_its_process_plates() {
 }
 
 #[test]
+fn a_spot_gradient_stop_whose_tint_is_not_a_number_prints_no_spot_ink() {
+    let mut mixed = GradientStop::new(0.0, Color::cmyk(0.25, 0.1, 0.8, 0.05));
+    (mixed.swatch, mixed.tint, mixed.plates) = (Some("Gold".into()), f32::NAN, Some([0.25, 0.0, 0.4, 0.0]));
+    let g = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![mixed, GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0))]));
+    let d = gold_gradient_doc(g);
+    let first = |v| gradient_plates(&d, v).into_iter().map(|(s, _)| s).collect::<Vec<_>>();
+    assert_eq!(first(json!({"output": {"mode": "separations"}})), [25.0, 0.0, 40.0, 0.0, 0.0], "Cyan, Magenta, Yellow, Black, Gold");
+    assert_eq!(first(json!({"output": {"mode": "separations", "spotsToProcess": true}})), [25.0, 0.0, 40.0, 0.0]);
+}
+
+#[test]
 fn a_freeform_gradients_points_separate_into_plates() {
     let mut g = GradientPaint::new(Gradient::new(GradientKind::Freeform, vec![GradientStop::new(0.0, Color::cmyk(0.0, 0.0, 0.0, 1.0))]));
     let point = FreeformPoint::new(vectorcraft_geom::Point::new(25.0, 25.0), Color::cmyk(0.0, 0.6, 0.0, 0.0));

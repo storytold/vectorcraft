@@ -148,6 +148,7 @@
 	Align to Artboard	Justera mot rityta
 	Align to Glyph Bounds	Justera mot glyfgränser
 	Align to Key Object	Justera mot nyckelobjekt
+	Align to Key Anchor	Justera mot nyckelankarpunkt
 	Align to Page	Justera mot sida
 	Align to Path	Justera mot bana
 	Align to Selection	Justera mot markering
@@ -3709,6 +3710,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Siffror
 	Scale at Center	Skala från mitten
+	Delete Set	Ta bort uppsättning
+	Direct Entry	Direktinmatning
 	Up/Down:	Upp/ned:
 	Left/Right:	Vänster/höger:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko upp/ned

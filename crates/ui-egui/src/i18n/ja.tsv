@@ -1077,6 +1077,7 @@ digits	Malayalam	マラヤーラム数字
 	Align to Artboard	アートボードに整列
 	Align to Glyph Bounds	字形の境界に整列
 	Align to Key Object	キーオブジェクトに整列
+	Align to Key Anchor	キーアンカーポイントに整列
 	Align to Page	ページに沿う
 	Align to Path	パスに沿う
 	Align to Selection	選択範囲に整列
@@ -4161,6 +4162,8 @@ file-filter	Templates	テンプレート
 	Kana	かな
 	Numerals	数字
 	Scale at Center	中心から拡大・縮小
+	Delete Set	セットを削除
+	Direct Entry	直接入力
 	Up/Down:	上下:
 	Left/Right:	左右:
 	Tate-chu-yoko Up/Down	縦中横の上下

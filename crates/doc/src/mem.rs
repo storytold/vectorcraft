@@ -105,8 +105,13 @@ impl Document {
         n += shared(&self.para_styles, &newer.para_styles, styles);
         n += shared(&self.composite_fonts, &newer.composite_fonts, |c| {
             let part = |p: &crate::CompositePart| p.font.capacity() + p.style.capacity();
+            let custom = |f: &crate::CompositeFont| {
+                vec_bytes(&f.custom) + f.custom.iter().map(|s| s.name.capacity() + s.characters.capacity() + part(&s.part)).sum::<usize>()
+            };
             vec_bytes(c)
-                + c.iter().map(|f| f.name.capacity() + crate::CharClass::ALL.into_iter().map(|k| part(f.parts.get(k))).sum::<usize>()).sum::<usize>()
+                + c.iter()
+                    .map(|f| f.name.capacity() + crate::CharClass::ALL.into_iter().map(|k| part(f.parts.get(k))).sum::<usize>() + custom(f))
+                    .sum::<usize>()
         });
         n += shared(&self.saved_selections, &newer.saved_selections, |s| {
             vec_bytes(s) + s.iter().map(|s: &SavedSelection| s.name.capacity() + vec_bytes(&s.objects)).sum::<usize>()

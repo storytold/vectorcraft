@@ -158,6 +158,7 @@
 	Align to Artboard	Выровнять по монтажной области
 	Align to Glyph Bounds	Выровнять по границам глифа
 	Align to Key Object	Выровнять по ключевому объекту
+	Align to Key Anchor	Выровнять по ключевой опорной точке
 	Align to Page	Выровнять по странице
 	Align to Path	Выровнять по контуру
 	Align to Selection	Выровнять по выделению
@@ -3819,6 +3820,8 @@ digits	Malayalam	Малаялам
 	Kana	Кана
 	Numerals	Цифры
 	Scale at Center	Масштабировать от центра
+	Delete Set	Удалить набор
+	Direct Entry	Прямой ввод
 	Up/Down:	Вверх/вниз:
 	Left/Right:	Влево/вправо:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko вверх/вниз
