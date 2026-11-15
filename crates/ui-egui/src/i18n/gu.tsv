@@ -743,6 +743,7 @@
 	Copy Artboard	આર્ટબોર્ડ નકલ કરો
 	Copy Color Value (Hex)	રંગ મૂલ્યની નકલ કરો (Hex)
 	Copy Guide	ગાઇડ નકલ કરો
+	Copy Info	માહિતી નકલ કરો
 	Copy Report	રિપોર્ટ નકલ કરો
 	Copy Script Console	સ્ક્રિપ્ટ કન્સોલ નકલ કરો
 	Copy Selected	પસંદ કરેલું નકલ કરો
@@ -1712,6 +1713,7 @@
 	Import Library	લાઇબ્રેરી આયાત કરો
 	Import Matches	આયાત મેળ
 	Import PDF	PDF આયાત કરો
+	Import PDF pages as links	PDF પેજને લિંક તરીકે આયાત કરો
 	Import PDF Presets	PDF આયાત પ્રીસેટ્સ
 	Import Perspective Grid Presets	પર્સ્પેક્ટિવ ગ્રિડ પ્રીસેટ્સ આયાત કરો
 	Import Preferences	પસંદગીઓ આયાત કરો
@@ -2742,6 +2744,8 @@
 	Proof Setup	પ્રૂફ સેટઅપ
 	Properties	ગુણધર્મો
 	Proportional Metrics	પ્રમાણસર મેટ્રિક્સ
+	H or V Style	આડી અથવા ઊભી શૈલી
+	Roman Italics	રોમન ઇટાલિક
 	Pucker	પકર
 	Pucker & Bloat…	પકર અને બ્લોટ…
 	Pucker Tool	પકર ટૂલ
@@ -2769,6 +2773,7 @@
 	Radar Graph Tool	રડાર ગ્રાફ ટૂલ
 	Radial	રેડિયલ
 	Radial Blur…	રેડિયલ બ્લર…
+	Blur Center	બ્લરનું કેન્દ્ર
 	Radial Dividers:	રેડિયલ વિભાજક:
 	Radial Glows	રેડિયલ ઝગમગાટ
 	Radial Gradient	રેડિયલ ગ્રેડિઅન્ટ
@@ -3565,6 +3570,18 @@
 	Smart Pen Panel	સ્માર્ટ પેન પેનલ
 	Smart Pen Tool	સ્માર્ટ પેન ટૂલ
 	Smart Punctuation…	સ્માર્ટ વિરામચિહ્નો…
+	Smart Punctuation	સ્માર્ટ વિરામચિહ્નો
+	ff, fi, ffi Ligatures	ff, fi, ffi લિગેચર
+	ff, fl, ffl Ligatures	ff, fl, ffl લિગેચર
+	Smart Quotes	સ્માર્ટ અવતરણચિહ્નો
+	Smart Spaces	સ્માર્ટ જગ્યાઓ
+	En, Em Dashes	En અને Em ડૅશ
+	Ellipses	એલિપ્સિસ
+	Expert Fractions	નિષ્ણાત અપૂર્ણાંકો
+	Replace In	આમાં બદલો
+	Selected Text Only	માત્ર પસંદ કરેલું લખાણ
+	Entire Document	આખો દસ્તાવેજ
+	Report Results	પરિણામોનો અહેવાલ
 	Smooth	સ્મૂધ
 	Smooth Anchors…	એન્કર સ્મૂધ કરો…
 	Smooth Tool	સ્મૂધ ટૂલ
@@ -4486,6 +4503,13 @@ antiAlias	Sharp	શાર્પ
 	Graphite Pencil	ગ્રેફાઇટ પેન્સિલ
 	Wax Crayon	વેક્સ ક્રેયોન
 	Charcoal Dust	ચારકોલનો ભૂકો
+
+# Original procedural circuit brushes.
+	Tech Circuit	ટેક સર્કિટ
+	Circuit Trace	સર્કિટ પથ
+	Bus Lines	બસ રેખાઓ
+	Terminal Nodes	ટર્મિનલ નોડ્સ
+
 	Notched Ribbon	ખાંચાવાળી રિબન
 	Double Line	બેવડી રેખા
 	Wave	તરંગ

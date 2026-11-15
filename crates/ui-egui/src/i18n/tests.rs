@@ -49,6 +49,9 @@ fn hindi_resolves_locales_and_uses_zero_one_plurals() {
 /// Every Hindi row uses the terms `docs/localization-hi.md` sets for what its English names:
 /// सेव for saving, स्वॉच for a swatch, क्रॉप for cropping, रिज़ॉल्यूशन for a resolution and पाथ for
 /// a path, never पाठ (a reading), and a number of points is a number (संख्या) in points (पॉइंट).
+/// Rows also never use a word's unrelated sense: a ruler is not शासक (a sovereign), a text character
+/// is not चरित्र (a personality), a vector point or a printer's mark is not अंक (a digit), fills are
+/// not भरता (the verb), Desired is not देसी (local), Even is not शाम (evening), and so on.
 #[test]
 fn hindi_rows_use_the_glossary_term_for_what_their_english_names() {
     let hi = Lang::from_code("hi").expect("hi registered");
@@ -57,15 +60,35 @@ fn hindi_rows_use_the_glossary_term_for_what_their_english_names() {
     for (_, src, translation) in &entries {
         let english = src.to_lowercase();
         let names = |words: &[&str]| english.split(|c: char| !c.is_ascii_alphabetic()).any(|w| words.contains(&w));
-        let banned: [(bool, &[&str]); 6] = [
-            (names(&["save", "saves", "saved", "saving"]), &["बचा", "सहेज"]),
+        let banned: &[(bool, &[&str])] = &[
+            (names(&["save", "saves", "saved", "saving"]), &["बचा", "बचत", "सहेज"]),
             (names(&["swatch", "swatches"]), &["घड़ी"]),
             (names(&["crop"]), &["फसल"]),
             (names(&["resolution", "resolutions"]), &["संकल्प"]),
             (names(&["path", "paths"]), &["पथ"]),
             (true, &["पाठ", "कई अंक"]),
+            (names(&["ruler", "rulers"]), &["शासक"]),
+            (names(&["character", "characters"]), &["चरित्र"]),
+            (names(&["point", "points", "mark", "marks"]), &["अंक"]),
+            (names(&["fill", "fills"]), &["भरता"]),
+            (names(&["desired"]), &["देसी", "इच्छा"]),
+            (names(&["even"]), &["शाम"]),
+            (names(&["force", "forced"]), &["सेना"]),
+            (names(&["same"]), &["समीर"]),
+            (names(&["thumbnail", "thumbnails"]), &["हिंदुस्तान"]),
+            (names(&["contrast"]), &["न्यायालय"]),
+            (names(&["function"]), &["समारोह"]),
+            (names(&["kern"]), &["बर्न"]),
+            (names(&["imageable"]), &["कल्पनाशील"]),
+            (names(&["constrain"]), &["कंस्ट्रक्शन"]),
+            (names(&["complement"]), &["संगम"]),
+            (names(&["concave"]), &["अवतरण"]),
+            (names(&["triad"]), &["त्रिद"]),
+            (names(&["trapped", "traps"]), &["निशानेबाज़", "जाल"]),
+            (names(&["alternate", "alternates"]), &["अल्टरनेटर"]),
+            (names(&["highlight"]), &["उच्च प्रकाश"]),
         ];
-        for (applies, words) in banned {
+        for &(applies, words) in banned {
             if let Some(word) = words.iter().find(|w| applies && translation.contains(**w)) {
                 wrong.push(format!("{word} in {src:?} -> {translation:?}"));
             }
@@ -135,6 +158,10 @@ fn hindi_rows_keep_the_meaning_of_their_english() {
         "पेज थंबनेल RGB पिक्सल का होना चाहिए, हर तरफ़ 1 से 256 (मिला 0 × 4)"
     );
     assert_eq!(message(hi, "invalid angle"), "अमान्य कोण");
+    assert_eq!(tr(hi, "Desired"), "वांछित");
+    let range = "न्यूनतम, वांछित से अधिक नहीं होना चाहिए और वांछित, अधिकतम से अधिक नहीं होना चाहिए";
+    assert_eq!(tr(hi, "Minimum must not exceed Desired, nor Desired Maximum."), format!("{range}।"));
+    assert_eq!(message(hi, "`wordSpacing`: Minimum must not exceed Desired, nor Desired Maximum"), format!("`wordSpacing`: {range}"));
 }
 
 /// Hindi messages keep every `a|b|c` list of accepted values exactly as their English writes it.
@@ -410,7 +437,7 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
         .collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 43, "{names:?}");
+    assert_eq!(names.len(), 46, "{names:?}");
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
@@ -1887,6 +1914,13 @@ fn uk() -> Lang {
     Lang::from_code("uk").expect("uk registered")
 }
 
+/// The Ukrainian Color Library labels use the word for colors (кольорів), not flowers (квітів).
+#[test]
+fn ukrainian_color_library_labels_name_colors() {
+    assert_eq!(uk().catalog().plain("Color Library"), Some("Бібліотека кольорів"));
+    assert_eq!(uk().catalog().plain("Color Library…"), Some("Бібліотека кольорів…"));
+}
+
 /// Every Ukrainian plural has all three forms; exercise different endings through real lookups.
 #[test]
 fn ukrainian_plurals_have_three_forms() {
@@ -1921,6 +1955,43 @@ fn ukrainian_plurals_have_three_forms() {
         }
     }
     assert!(count >= 13, "Ukrainian plural rows missing");
+}
+
+/// Ukrainian shows the image encoders', color profiles', swatch exchange files', Revolve's, DXF
+/// import's, the script engine's and the parameter checks' errors in Ukrainian, with their values,
+/// backticked names and accepted values kept as the English writes them.
+#[test]
+fn ukrainian_translates_encoder_profile_swatch_revolve_and_parameter_errors() {
+    for (english, ukrainian) in [
+        (
+            "PNG encoding failed: 0 × 0 pixels is not a valid image size",
+            "Не вдалося закодувати PNG: 0 × 0 пікселів не є допустимим розміром зображення",
+        ),
+        (
+            "70000 × 10 pixels is too large for GIF (at most 65535 pixels a side): lower the resolution",
+            "розмір 70000 × 10 пікселів завеликий для GIF (не більше 65535 пікселів на сторону): зменште роздільну здатність",
+        ),
+        ("profile colour space XYZ is not RGB, CMYK or Gray", "колірний простір профілю XYZ не є RGB, CMYK чи Gray"),
+        (
+            "color books in color space HSB aren't supported (only RGB, CMYK and Lab)",
+            "книги кольорів у колірному просторі HSB не підтримуються (лише RGB, CMYK і Lab)",
+        ),
+        ("the swatch exchange file holds more than 65536 colors and groups", "файл обміну зразками містить понад 65536 кольорів і груп"),
+        (
+            "Revolve surface is too complex; reduce Segments or simplify the profile",
+            "Обертання: поверхня надто складна; зменште «Сегменти» або спростіть профіль",
+        ),
+        ("regular expression too large", "регулярний вираз завеликий"),
+        ("this binary DXF file is damaged or cut short", "цей двійковий файл DXF пошкоджено або обрізано"),
+        (
+            "`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList",
+            "`view` має бути smallThumb, mediumThumb, largeThumb, smallList або largeList",
+        ),
+        ("give `fill` or `stroke`, not both", "укажіть `fill` або `stroke`, але не обидва"),
+        ("stop 2: oops", "точка переходу 2: oops"),
+    ] {
+        assert_eq!(message(uk(), english), ukrainian);
+    }
 }
 
 /// Catalogs written with spaces between words keep a fragment's leading and trailing spaces: the
