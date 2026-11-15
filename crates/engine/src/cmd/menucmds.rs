@@ -124,7 +124,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Object Mosaic…",
             ["Object"],
             None,
-            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt, 0.1..1000000; default the image's), percentages?: bool (width and height are percentages of the image's size, default 100), constrain?: \"width\"|\"height\"|null (Constrain Ratio: the mosaic keeps the image's proportions, the named side's size leads and the other side's is worked out from it), useRatio?: bool|\"width\"|\"height\" (square tiles as drawn, spacing taken off: the count on the side named, or with true on the constrained side, columns by default, stays and the other is the count, 1..1000, whose tiles come closest to square), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles coloured by the selected image's average tile colours → {id, tiles, columns, rows}",
+            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt, 0.1..1000000; default the image's), percentages?: bool (width and height are percentages of the image's size, default 100), constrain?: \"width\"|\"height\"|null (Constrain Ratio: the mosaic keeps the image's proportions, the named side's size leads and the other side's is worked out from it, both growing or shrinking in proportion to keep the sizes within 0.1..1000000), useRatio?: bool|\"width\"|\"height\" (square tiles as drawn, spacing taken off: the count on the side named, or with true on the constrained side, columns by default, stays and the other is the count, 1..1000, whose tiles come closest to square), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles colored by the selected image's average tile colors → {id, tiles, columns, rows}",
             has_image,
             object_mosaic
         ),
@@ -962,10 +962,15 @@ fn mosaic_plan(s: &Session, p: &Value) -> Result<MosaicPlan> {
         Some(false) => nw = nh * bw / bh,
         None => {}
     }
-    // A size under 0.1 pt grows to 0.1 pt, in proportion while Constrain Ratio keeps it.
+    // A size under 0.1 pt grows to 0.1 pt, in proportion while Constrain Ratio keeps it. A side
+    // Constrain Ratio works out above 1,000,000 pt shrinks to 1,000,000 pt, the other with it.
     let (nw, nh) = match constrain {
         Some(_) => {
-            let k = (0.1 / nw.min(nh)).max(1.0);
+            let k = (0.1 / nw.min(nh)).max(1.0).min(1_000_000.0 / nw.max(nh));
+            // Proportions over 10,000,000 to 1 leave no size with both sides within the range.
+            if nw.min(nh) * k < 0.1 * (1.0 - 1e-9) {
+                return Err(bad(C, "the image's proportions leave no size with both sides between 0.1 and 1000000 pt"));
+            }
             (nw * k, nh * k)
         }
         None => (nw.max(0.1), nh.max(0.1)),

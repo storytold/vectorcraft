@@ -1882,8 +1882,9 @@ nothing.
 
 These Object menu commands refuse a string, a number or another value that is not true or false with
 `` `copy` must be true or false ``, naming the key, and change nothing: `reflectX`, `reflectY`, `random`, `copy`,
-`relative`, `strokes`, `corners`, `objects` and `patterns` in `object.transformEach`; `gray`, `deleteRaster`
-and `percentages` in `object.createObjectMosaic`; `trim` in `object.cropImage`; `allArtboards` in `object.createTrimMarks`; and `byColumn`,
+`relative`, `strokes`, `corners`, `objects` and `patterns` in `object.transformEach`; `gray`, `deleteRaster` and
+`percentages` in `object.createObjectMosaic`; `trim` in `object.cropImage`; `allArtboards` in
+`object.createTrimMarks`; and `byColumn`,
 `moveArtwork`, `patterns` and `lockedAndHidden` in `artboard.rearrange`. A null is read as a key left out. `object.createTrimMarks`
 refuses a `style` that is not a string, such as `5`, with `` `style` must be roman or japanese ``, the message it gives
 for a string that names no style.
@@ -1896,7 +1897,8 @@ Grayscale), Resize Using Percentages, Delete Raster and Use Ratio. With no image
 
 - `percentages: true`: `width` and `height` are percentages of the image's size (a side left out is 100).
 - `constrain: "width"` or `"height"`: the mosaic keeps the image's proportions. The named side's size is used and the
-  other side's is worked out from it, so a `height` given with `constrain: "width"` is not used.
+  other side's is worked out from it, so a `height` given with `constrain: "width"` is not used. It is still checked
+  against the range below.
 - `useRatio: "width"` or `"height"`: the tiles are square as drawn, with the spacing taken off. The count on the named
   side (`columns` for `"width"`) stays, and the other count, within 1 to 1000, is the one whose tiles come closest to
   square, measured along the image's own sides when it is turned. `useRatio: true` keeps the `constrain` side, or the
@@ -1907,7 +1909,12 @@ A `width` or `height` outside 0.1 to 1000000 (points, or percent with `percentag
 `` `width` must be between 0.1 and 1000000 (got 0) ``. A `constrain` other than `"width"`, `"height"` or null is
 refused with `` `constrain` must be one of "width", "height" or null ``, and a `useRatio` other than those, true or
 false with `` `useRatio` must be one of "width", "height", true, false or null ``; the command then changes nothing. A
-side that `constrain` works out as under 0.1 pt grows to 0.1 pt, and the other side grows with it. The result also gives the `columns` and `rows` the mosaic was made with, here for a 100 × 50 pt image:
+side that `constrain` works out as under 0.1 pt grows to 0.1 pt, and the other side grows with it. A side that
+`constrain` works out as over 1000000 pt shrinks to 1000000 pt, and the other side shrinks with it. With `constrain`
+on an image more than 10000000 times wider than tall (or taller than wide), no size keeps both sides in the range, and
+the call is refused with `` the image's proportions leave no size with both sides between 0.1 and 1000000 pt ``.
+
+The result also gives the `columns` and `rows` the mosaic was made with, here for a 100 × 50 pt image:
 
 ```json
 {"columns": 10, "rows": 3, "useRatio": true}

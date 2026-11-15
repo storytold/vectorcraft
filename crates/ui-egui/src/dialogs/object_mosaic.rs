@@ -1,4 +1,4 @@
-//! Object → Create Object Mosaic: the selected image's Current Size, the mosaic's New Size, Tile
+//! Object › Create Object Mosaic…: the selected image's Current Size, the mosaic's New Size, Tile
 //! Spacing and Number of Tiles, Constrain Ratio (Width or Height), Result (Color or Grayscale),
 //! Resize Using Percentages, Delete Raster and Use Ratio. OK runs `object.createObjectMosaic` as one
 //! undo step.
@@ -234,14 +234,14 @@ fn params(d: &Dialog) -> Value {
 }
 
 /// A Width and a Height field for `keys`: lengths in `unit` of at least `least` points, or
-/// percentages with `pct`. With `follows`, the field of that key is grayed (Constrain Ratio sets it).
+/// percentages with `pct`, up to 1,000,000. With `follows`, the field of that key is grayed (Constrain Ratio sets it).
 fn pair(ui: &mut egui::Ui, d: &mut Dialog, keys: [&str; 2], unit: vectorcraft_doc::Unit, (pct, least): (bool, f64), follows: Option<&str>) {
     for (key, label) in keys.into_iter().zip([tl!("Width:"), tl!("Height:")]) {
         widgets::dim_label(ui, label);
         ui.add_enabled_ui(follows != Some(key), |ui| {
             if pct {
                 if let Some(v) = widgets::spin_plain(ui, ("mosaic", key), d.f64(key, 100.0), "%", 2, FIELD_W, 1.0, 0.1, &[]) {
-                    d.fields.insert(key.into(), json!(v));
+                    d.fields.insert(key.into(), json!(v.min(*SIZE_RANGE.end())));
                 }
             } else {
                 form::length_within(ui, d, key, unit, FIELD_W, Some(least..=1.0e6));
@@ -613,6 +613,45 @@ mod tests {
         let e = crate::dialogs::confirm(&mut app).unwrap_err();
         assert!(e.contains("height"), "{e}");
         assert_eq!(mosaic(&app), None);
+    }
+
+    /// A percentage typed in New Size above 1,000,000 is kept at 1,000,000, the most the command
+    /// takes, so Enter makes the mosaic: 1,000,000% of the 100 pt width is 1,000,000 pt.
+    #[test]
+    fn a_typed_percentage_stays_within_what_the_command_takes() {
+        let mut app = app_with_image();
+        open(&mut app, &json!({"percentages": true})).unwrap();
+        let ctx = context();
+        let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out.shapes
+                .iter()
+                .filter_map(|s| {
+                    if let egui::epaint::Shape::Text(t) = &s.shape {
+                        Some((t.galley.text().to_string(), t.visual_bounding_rect().center()))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        run(&mut app, vec![]);
+        let texts = run(&mut app, vec![]);
+        // New Size's Width field comes right after the row's Width caption.
+        let row = texts.iter().position(|(t, _)| t == "New Size:").expect("the New Size row");
+        let width = texts[row..].iter().position(|(t, _)| t == "Width:").and_then(|i| texts.get(row + i + 1));
+        assert_eq!(width.map(|(t, _)| t.as_str()), Some("100%"), "{texts:?}");
+        let at = width.map(|(_, p)| *p).unwrap();
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+        run(&mut app, vec![press(false)]);
+        run(&mut app, vec![]);
+        run(&mut app, vec![egui::Event::Text("2000000".into())]);
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        run(&mut app, vec![enter]);
+        assert!(app.ui.dialog.is_none(), "Enter makes the mosaic: {:?}", app.ui.dialog.as_ref().map(|d| d.str(form::REFUSED)));
+        assert_eq!(mosaic(&app).map(|m| (m.0, m.1)), Some((1e6, 50.0)));
     }
 
     /// The id of the image in the document.

@@ -4079,6 +4079,14 @@ fn object_mosaic_resizes_by_percentages_constrains_the_ratio_and_squares_the_til
     // A size under 0.1 pt grows in proportion while Constrain Ratio keeps it.
     let (w, h, ..) = mosaic_size(&mut s, json!({"width": 0.1, "constrain": "width"}));
     assert!((w - 0.2).abs() < 1e-6 && (h - 0.1).abs() < 1e-6, "{w} × {h}");
+    // A side Constrain Ratio works out above 1,000,000 pt shrinks to it, in proportion: a height of
+    // 1,000,000 pt over the 100 × 50 pt image would need a width of 2,000,000 pt.
+    assert_eq!(mosaic_size(&mut s, json!({"height": 1e6, "constrain": "height"})), (1e6, 5e5, json!(10), json!(10)));
+    // An image 20,000,000 times wider than it is tall has no such size: the call is refused.
+    s.execute("object.scale", &json!({"sx": 1, "sy": 1e-7})).unwrap();
+    let r = s.execute("object.createObjectMosaic", &json!({"width": 1e6, "constrain": "width"}));
+    let msg = "the image's proportions leave no size with both sides between 0.1 and 1000000 pt";
+    assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == msg), "{r:?}");
 }
 
 /// Use Ratio squares the tiles as drawn: with 4 pt between columns, 10 columns of 10 pt cells draw 6 pt wide, so the
@@ -4137,6 +4145,8 @@ fn object_mosaic_refuses_a_bad_ratio_side_size_or_switch() {
         (json!({"width": 0}), "`width` must be between 0.1 and 1000000 (got 0)"),
         (json!({"height": -5, "percentages": true}), "`height` must be between 0.1 and 1000000 (got -5)"),
         (json!({"width": 2e6, "percentages": true}), "`width` must be between 0.1 and 1000000 (got 2000000)"),
+        // A side Constrain Ratio works out is not used, but a size given for it is still checked.
+        (json!({"width": 200, "height": 0, "constrain": "width"}), "`height` must be between 0.1 and 1000000 (got 0)"),
         (json!({"useRatio": "true"}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
         (json!({"useRatio": 1}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
         (json!({"percentages": 1}), "`percentages` must be true or false"),

@@ -1128,8 +1128,8 @@ fn a_hex_code_pasted_into_the_hex_field_replaces_its_digits() {
     }
 }
 
-/// #1000: a count set in Object › Create Object Mosaic… reaches the command, so the mosaic has that
-/// many columns, not the 10 × 10 grid; Enter confirms the dialog.
+/// #1000: a count typed in Object › Create Object Mosaic…'s Number of Tiles reaches the command, so
+/// the mosaic has that many columns, not the 10 × 10 grid; Enter confirms the dialog.
 #[test]
 fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
     let mut app = app();
@@ -1138,16 +1138,36 @@ fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
     let ctx = egui::Context::default();
     theme::install_fonts(&ctx);
     theme::apply(&ctx, Default::default());
+    // A frame → the texts painted, with their centers.
     let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
         out.textures_delta.clear();
+        fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        texts
     };
     let entry = crate::menus::menu_entries(&app).into_iter().find(|e| e.label == "Create Object Mosaic…").expect("menu item");
     let (cmd, params) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
     crate::menus::invoke(&mut app, &cmd, params);
     frame(&mut app, vec![]);
-    app.ui.dialog.as_mut().expect("the mosaic dialog").fields.insert("columns".into(), json!(3.0));
+    let texts = frame(&mut app, vec![]);
+    // Number of Tiles' Width field comes right after the row's Width caption.
+    let row = texts.iter().position(|(t, _)| t == "Number of Tiles:").expect("the Number of Tiles row");
+    let columns = texts[row..].iter().position(|(t, _)| t == "Width:").and_then(|i| texts.get(row + i + 1));
+    assert_eq!(columns.map(|(t, _)| t.as_str()), Some("10"), "{texts:?}");
+    let at = columns.map(|(_, p)| *p).unwrap();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+    frame(&mut app, vec![press(false)]);
     frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("3".into())]);
     let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
     frame(&mut app, vec![enter]);
     assert!(app.ui.dialog.is_none());
