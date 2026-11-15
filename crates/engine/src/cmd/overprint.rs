@@ -126,8 +126,9 @@ fn kinds(p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<(bool, bool)>> {
         .collect()
 }
 
-/// Each kind's item target and objects: (fill?, item, ids). With `edit`, an explicit item that the graph design art left
-/// out has no row of that kind for is an error, as when the edit resolves it on the other objects.
+/// Each kind's item target and objects: (fill?, item, ids). With `edit`, the art of graph designs drawn in graph series
+/// is left out, and an explicit item that the art left out has no row of that kind for is an error, as when the edit
+/// resolves it on the other objects. Without it, the art is read with the other objects.
 fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>, edit: bool) -> Result<Vec<(bool, ItemTarget, Vec<NodeId>)>> {
     let item = item_target(s, p, cmd)?;
     kinds
@@ -135,11 +136,7 @@ fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>
         .map(|fill| {
             let it = item.of_kind(s, fill);
             let ids = it.targets(s, p)?;
-            let ids = if edit {
-                super::appearance::drop_design_art_rows(s, ids, it, fill, cmd)?
-            } else {
-                super::appearance::drop_design_art(&s.doc()?.doc, ids)
-            };
+            let ids = if edit { super::appearance::drop_design_art_rows(s, ids, it, fill, cmd)? } else { ids };
             Ok((fill, it, ids))
         })
         .collect()
