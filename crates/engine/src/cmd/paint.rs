@@ -1103,6 +1103,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
             (super::colorcmds::recolor(s, &q, cmd, label, f)?, leaf_targets(s, &ids)?.first().map(|id| (*id, None)))
         }
     };
+    // The paint remembered is one the edit recolored: a graph design's art that the item edit leaves out gives none.
     if let Some(shown) = shown_at.and_then(|(id, at)| s.doc().ok()?.doc.node(id).map(|n| proxy_paint(n, stroke, at))) {
         s.remember_paint(&shown);
     }

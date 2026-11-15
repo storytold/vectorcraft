@@ -379,6 +379,20 @@ fn edit_effects_at(
     indices: &[usize],
     mut f: impl FnMut(&mut Vec<Effect>, &[usize]) -> bool,
 ) -> Result<Vec<NodeId>> {
+    // With a graph design's art given first, the indices are effects of its list: one it doesn't have names no effect,
+    // and the edit is refused as a whole, as it is in a list that lacks one of them.
+    if let Some(of) = reference_of(s, p, item, cmd)?
+        && let Some(n) = s.doc()?.doc.node(of)
+    {
+        let ap = &n.appearance;
+        let len = match item.effects_item(ap, cmd)? {
+            None => ap.effects.len(),
+            Some(i) => ap.items.get(i).map_or(0, |it| it.effects().len()),
+        };
+        if indices.iter().any(|i| *i >= len) {
+            return Err(EngineError::Other(none.into()));
+        }
+    }
     // Each target's list and the positions in it, in the order the targets first come up.
     let mut targets: Vec<(NodeId, Option<usize>, Vec<usize>)> = vec![];
     for &index in indices {
@@ -1280,7 +1294,9 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let ids = s.edit("Expand Appearance", |d, _| {
         let before = d.clone();
-        // The art of graph designs in the graphs and series among the roots stays as the graph draws it.
+        // The art of graph designs in the graphs and series among the roots stays as the graph draws it. A group whose
+        // own effect turns it into other art as a whole (a blur, feather or inner glow makes it an image) takes its
+        // art into that art, which draws it, so that art has no place to go back to.
         let designs = super::appearance::design_art_in(d, &roots);
         // A dimension selected with the art it measures keeps its own lines and label: it is out
         // of the document while the art expands.

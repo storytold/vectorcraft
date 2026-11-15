@@ -6811,6 +6811,13 @@ axis	Y Axis	osa Y
 	Graphite Pencil	Grafitová tužka
 	Wax Crayon	Vosková pastelka
 	Charcoal Dust	Uhlový prach
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technické obvody
+	Circuit Trace	Vodivá cesta
+	Bus Lines	Sběrnicové linky
+	Terminal Nodes	Koncové uzly
+
 	Notched Ribbon	Vroubkovaná stuha
 	Double Line	Dvojitá čára
 	Wave	Vlna

@@ -493,6 +493,16 @@ fn paint_commands_leave_a_graph_designs_art_out() {
     refused_on_design_art(&mut s, "paint.freeform.addPoint", json!({"ids": [art.0], "at": [0, 0]}));
 }
 
+/// `attributes.info` reads the overprint of a graph design's art in a series, which the overprint edits leave out.
+#[test]
+fn attributes_info_reads_a_graph_designs_art() {
+    let (mut s, _, _, art, _) = design_art();
+    let info = s.execute("attributes.info", &json!({"ids": [art.0]})).unwrap();
+    assert_eq!(info["ids"], json!([art.0]));
+    assert_eq!(info["overprintFill"], json!(false), "{info}");
+    assert_eq!(info["overprintStroke"], json!(false), "{info}");
+}
+
 /// With only the art of a graph design selected, `stroke.setAdvanced` and the stroke mode of `paint.editGradient` act
 /// as edits of a selection, not of the stroke the next object drawn takes.
 #[test]
@@ -1039,6 +1049,77 @@ fn aligned_gradient_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other
             }
         }
     }
+}
+
+/// The Contents row of a graph design's copy and of a group whose stack differs is not moved with `aligned: true`, as
+/// the rows are not.
+#[test]
+fn aligned_contents_row_of_a_graph_designs_copy_and_a_different_stack_is_not_moved() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let (mut s, _, copy, _, _) = design_art();
+    s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.addFill", &json!({"ids": [g.0]})).unwrap();
+    s.execute("appearance.addFill", &json!({"ids": [g.0]})).unwrap();
+    assert_ne!(rows(&s, copy), rows(&s, g));
+    let (copy_was, g_was) = (rows(&s, copy), rows(&s, g));
+    let steps = s.doc().unwrap().history.undo.len();
+    let e = s.execute("appearance.moveItem", &json!({"ids": [copy.0, g.0], "from": "contents", "to": 1, "aligned": true})).unwrap_err();
+    assert!(e.to_string().contains("appearances differ"), "{e}");
+    assert_eq!((rows(&s, copy), rows(&s, g)), (copy_was, g_was));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// Invert with an `item` remembers the paint of an object it recolored, not that of a graph design's art given first,
+/// which it leaves out.
+#[test]
+fn invert_of_an_item_remembers_the_recolored_paint_not_the_design_arts() {
+    let (mut s, _, art, mark) = aligned_design_art();
+    s.execute("paint.invert", &json!({"ids": [art.0, mark.0], "item": 0, "stroke": false})).unwrap();
+    let Paint::Solid { color, .. } = s.doc().unwrap().doc.node(mark).unwrap().appearance.items[0].paint().clone() else {
+        panic!("the mark's fill stays a solid color");
+    };
+    assert_ne!(color, vectorcraft_color::Color::rgb(0.0, 0.0, 1.0), "the mark's blue fill is inverted");
+    assert_eq!(s.last_solid, color, "the mark's inverted fill is remembered, not the art's red one");
+}
+
+/// With a graph design's art given first and `aligned: true`, `effect.remove` and `effect.duplicate` with `indices` are an
+/// error and change nothing when one of the indices names no effect of the art.
+#[test]
+fn aligned_effect_indices_past_the_end_of_a_graph_designs_art_are_refused() {
+    let rows = |s: &Session, id: NodeId| (*s.doc().unwrap().doc.node(id).unwrap().appearance).clone();
+    let (mut s, _, art, mark) = aligned_design_art();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
+    s.edit("Shadow", |d, _| {
+        let shadow = d.node(mark).unwrap().appearance.effects[0].clone();
+        d.node_mut(art).unwrap().appearance.effects.push(shadow);
+        Ok(())
+    })
+    .unwrap();
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    let steps = s.doc().unwrap().history.undo.len();
+    for cmd in ["effect.remove", "effect.duplicate"] {
+        let e = s.execute(cmd, &json!({"ids": [art.0, mark.0], "item": null, "indices": [0, 9], "aligned": true})).unwrap_err();
+        assert!(e.to_string().contains("no effects at indices 0, 9"), "{cmd}: {e}");
+        assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was.clone()), "{cmd}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+    }
+    // With index 0 alone, which the art has, the mark's equal effect is removed.
+    s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "indices": [0], "aligned": true})).unwrap();
+    assert!(rows(&s, mark).effects.is_empty());
+}
+
+/// A blur on a series group makes the whole group an image, which draws the design's art with the series' other art:
+/// Expand Appearance does not put the art back beside the image.
+#[test]
+fn expanding_a_blurred_series_group_takes_a_graph_designs_art_into_the_image() {
+    let (mut s, id, copy, _, _) = design_art();
+    let series_group = series(s.doc().unwrap().doc.node(id).unwrap(), 0).id;
+    s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [series_group.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({"ids": [series_group.0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(matches!(d.node(series_group).unwrap().kind, NodeKind::Image(_)));
+    assert!(d.node(copy).is_none());
 }
 
 /// The paint commands leave the art of a graph design in a series out, a copy of the design given by id with an item

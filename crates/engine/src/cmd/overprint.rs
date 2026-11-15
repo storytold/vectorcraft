@@ -133,7 +133,7 @@ fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>
         .into_iter()
         .map(|fill| {
             let it = item.of_kind(s, fill);
-            Ok((fill, it, super::appearance::drop_design_art(&s.doc()?.doc, it.targets(s, p)?)))
+            Ok((fill, it, it.targets(s, p)?))
         })
         .collect()
 }
@@ -156,10 +156,15 @@ pub(super) fn edit_counted(s: &mut Session, label: &str, f: impl FnOnce(&mut Doc
 pub(super) type OverprintJob = ((bool, ItemTarget, Vec<NodeId>), bool);
 
 /// The overprint edits `p` asks for under `keys` (the fill's and the stroke's), aimed as
-/// `object.setOverprint` aims.
+/// `object.setOverprint` aims, leaving out the art of graph designs drawn in graph series.
 pub(super) fn overprint_jobs(s: &Session, p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<OverprintJob>> {
     let kinds = kinds(p, cmd, keys)?;
-    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0))?.into_iter().zip(kinds.iter().map(|k| k.1)).collect())
+    let d = &s.doc()?.doc;
+    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0))?
+        .into_iter()
+        .map(|(fill, it, ids)| (fill, it, super::appearance::drop_design_art(d, ids)))
+        .zip(kinds.iter().map(|k| k.1))
+        .collect())
 }
 
 /// Apply `jobs` to `d`, adding the objects changed to `changed`.

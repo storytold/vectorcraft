@@ -1,6 +1,8 @@
 # VectorCraft MCP server
 
 > **Last updated:** 2026-11-14 · **Change:** Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+>
+> Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
@@ -4605,9 +4607,9 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: nine generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Bristle
+Brush libraries are read-only sets of brushes: ten generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Bristle
 Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
-Charcoal Dust art brushes, id `dry-media`), the `.vectorcraft` files in the user library folder of the desktop app (User
+Charcoal Dust art brushes, id `dry-media`, and Tech Circuit with Circuit Trace (art), Bus Lines and Terminal Nodes (pattern), id `tech-circuit`), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
 `brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
@@ -6358,7 +6360,10 @@ desktop app) instead and undoes nothing ([the help page](https://helpx.adobe.com
 From the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool it chooses the
 drawing tool chosen last in the window, or the Pencil tool when none has been chosen yet; from any other tool it
 chooses the Selection tool, and the tool left becomes the drawing tool unless it is the Hand, Rotate View, Zoom or Print
-Tiling tool. It returns `{tool}` and adds no undo step. Pencil as the first drawing tool and the list of selection tools
+Tiling tool. It returns `{tool}` and adds no undo step. When the tool cannot be chosen it returns the error, the tool
+and the drawing tool stay as they were, and it adds no undo step; `tool.select`, `ui.cropImage`,
+`addon.pathtools.cornerTool` and `addon.pathtools.sharedEdgeTool` also return the error when their tool cannot be
+chosen. Pencil as the first drawing tool and the list of selection tools
 are VectorCraft's own rules. A tap in Presentation Mode runs nothing. Under VectorCraft's own rule, a tap on the canvas
 while a modal dialog is open runs nothing, and fingers already down when it opens make no tap when they lift, during
 the dialog or after it closes.
@@ -9752,7 +9757,9 @@ neighbors, the kerning of the two characters keeps it and the characters after i
 wider or narrower character moves the characters after it by the change in its width. Touch Type gives the character
 before it a kerning value of its own (with `dx`, and with any other change where the font kerned the character with
 its neighbors), and that character can then move by the font's kerning pair with the one before
-it, as with any style change to one character (`text.setRangeStyle`). The type stays editable.
+it, as with any style change to one character (`text.setRangeStyle`). The type stays editable. The characters of type
+on an open path that are not drawn because they fall before the path's start cannot be selected with the tool, and
+`text.touchType` returns an error for them.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.touchType","params":{"id":7,"start":1,"dx":10,"dy":4}}}
@@ -9842,9 +9849,10 @@ same in any language. Saved documents keep what they say, and imported text (PDF
 
 Type on a path flows between a start and an end bracket, stored as fractions of its path's length.
 `type.pathOptions {start?, end?, flip?, effect?, alignToPath?, spacing?, ids?}` sets them and the rest of Type on a
-Path Options: `end: null` puts the end bracket back at the end of the path (or once round a closed one); `flip`
-then turns the type to the other side of its path, the path running the other way and the brackets swapping ends so
-the type keeps its stretch of the path; `alignToPath` runs the `ascender`, `descender`, `center` or `baseline` (the
+Path Options: `end: null` puts the end bracket back at the end of the path (or once round a closed one); on an open
+path a `start` below 0 starts the text that far before the path's start (on a closed path it is the path's start);
+`flip` then turns the type to the other side of its path, the path running the other way and the brackets swapping
+ends so the type keeps its stretch of the path; `alignToPath` runs the `ascender`, `descender`, `center` or `baseline` (the
 default) along the path, each character by its own font, size and vertical scale: `ascender` runs the top of the
 font's em box along it (its ideographic em box, else an em box centered on the cap height), `descender` runs the
 bottom of the font's bounding box along it, and `center` runs a line at half the height of the top of the font's H
@@ -9856,6 +9864,13 @@ Spacing and leaves the brackets where they are. As in the reference app, the Sel
 show selected type on a path's brackets: dragging the start or end bracket (`pointer_gesture`) sets where the type
 begins or ends, dragging the centre bracket slides the type along its path and, dragged across the path, flips it
 (with Cmd/Ctrl held it only slides). Each is one undo step.
+
+Type on an open path that starts before the path's start keeps every character, and the characters whose middle falls
+before the path's start are not drawn. A `flip` starts it at the start bracket, and dragging the center bracket slides
+it from where it starts and no further before the path. Past the path's end, text that does not fit is overflow, as
+for other type on a path. SVG import reads a `<textPath>` anchored or offset before an open path's start this way, and
+SVG export writes it as a negative `startOffset`. Releasing it to point type keeps the first drawn character where it
+was drawn.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.pathOptions","params":{"start":0.25,"end":0.75,"flip":true}}}
@@ -12221,10 +12236,11 @@ VectorCraft addition and changes no parity score.
   the path's fill and stroke), so the released path has no fill and no stroke.
 - **The text** keeps its runs with their character attributes and its paragraph attributes, and becomes point type on
   one straight line along the object's own axis, with the baseline starting where the first character sat on the path
-  (type with no characters starts at its start bracket). Type on a Path Options (effect, align to path, spacing, flip,
-  brackets) don't apply to point type and are dropped. Type with Dynamic Text on (`type.dynamicText`) becomes point
-  type with it off, at the sizes it was drawn at: each size, leading and baseline shift is multiplied by the fit factor.
-  Without `keepOriginal` the type object itself becomes the point
+  (type with no characters starts at its start bracket; type that starts before an open path's start keeps its first
+  drawn character where it was drawn, with the characters that were not drawn before it). Type on a Path Options
+  (effect, align to path, spacing, flip, brackets) don't apply to point type and are dropped. Type with Dynamic Text
+  on (`type.dynamicText`) becomes point type with it off, at the sizes it was drawn at: each size, leading and
+  baseline shift is multiplied by the fit factor. Without `keepOriginal` the type object itself becomes the point
   type, keeping its id, so a frame of threaded text leaves its thread with the text it holds, as
   `type.convertToPointType` does for area type.
 - It acts on the type on a path among `ids` (or `id`, else the selection), groups included; other objects are left
@@ -12266,6 +12282,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-14 | Built-in Tech Circuit brush library (id `tech-circuit`): Circuit Trace, Bus Lines and Terminal Nodes; ten built-in libraries. |
 | 2026-11-13 | The Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides; Snap to Grid and Snap to Pixel still move its ends (#7252). |
 | 2026-11-13 | `path.freehand`: `closed`, when given, decides whether a stroke that continues a path (`extend`) closes it; the Pencil and the Paintbrush send it by Close Paths When Ends Are Within. |
 | 2026-11-13 | Snap to Point with Smart Guides off draws no Smart Guides labels or lines (#7250). |
