@@ -611,7 +611,9 @@ For `draw_shape` and `draw_path`, omitted paint fields inherit the current [new-
 For a filled shape or path without an outline, pass an explicit `fill` and `stroke: "none"`.
 Lines start with no fill and a visible stroke.
 The Fill/Stroke proxy commands run through `run_command`: `paint.invert` and `paint.complement` recolor the active
-proxy, including a grayscale image's colorized fill, while keeping each color's model. `paint.lastColor` /
+proxy, including a grayscale image's colorized fill, while keeping each color's model. Given a group without an
+Appearance item, they recolor the active proxy's fills or strokes of the objects inside it and of the group itself;
+`target: "contents"` leaves the group's own fills or strokes as they are. `paint.lastColor` /
 `paint.lastGradient` re-apply the last solid color or gradient, and `paint.recent` returns the recent colors that every
 paint command (and the eyedropper) feeds: up to 30, newest first and each once, kept across documents for the session.
 `paint.proxies` returns what the proxies show: the fill and stroke, which one is active, and whether the selected
