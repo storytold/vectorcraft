@@ -3787,6 +3787,8 @@ font-script	Japanese	漢字
 	Proof Setup	校樣設定
 	Properties	內容
 	Proportional Metrics	比例度量
+	H or V Style	橫排或直排樣式
+	Roman Italics	羅馬字斜體
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在後方插入空白
 	Tsume	比例間距
@@ -7676,7 +7678,7 @@ breakText	Glyphs	字符
 @msg	too many arguments	引數過多
 @msg	too many quantifiers	量詞過多
 @msg	turn on at least one side	請至少開啟一側
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 功能 `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt；加上前置的 - 可關閉；swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom 和 aalt 可用 `tag=N` 指定替代字的編號，N 為 0 到 {_1}，例如 `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 功能 `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital；加上前置的 - 可關閉；swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom 和 aalt 可用 `tag=N` 指定替代字的編號，N 為 0 到 {_1}，例如 `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的參數 `{key}`

@@ -9556,6 +9556,24 @@ not kerned). Off by default and saved only when on. One undo step.
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"proportionalMetrics":true}}}
 ```
 
+## H or V Style and Roman Italics
+
+With Show East Asian Options on, the OpenType panel menu has H or V Style and Roman Italics
+([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)). They are the character
+feature tags `hkna` and `ital` of `text.setStyle` and `text.setRangeStyle {features, featureChanges}`
+([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)). `hkna` draws kana with the
+forms the font makes for horizontal type, and in vertical type the shaper applies `vkna`, the forms for vertical type,
+in its place. `ital` draws half-width alphanumerics with the font's italic forms. A font without the feature draws the
+characters unchanged. Both are on or off only: `hkna=2` and `ital=0` are refused as unknown features, and `vkna` is
+not a tag of its own. A menu item is checked when every character the panel acts on has it; choosing it turns the
+feature on for all of them, or off when it is checked, each character keeping its other features, in one undo step.
+Reset OpenType Features turns both off. Character styles carry them, and Character Style Options › OpenType Features
+has an on, off or unset switch for each. Live SVG text writes them in `font-feature-settings`.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":6,"featureChanges":["hkna","ital"]}}}
+```
+
 ## Variable fonts
 
 `text.setFormat {fontAxes: {"wght": 650}}` (the selected type, or `ids`) and `text.setRangeStyle {id, start, end,
