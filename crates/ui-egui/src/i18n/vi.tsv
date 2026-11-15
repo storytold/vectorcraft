@@ -1364,6 +1364,7 @@ font-technology	Variable	Biến thiên
 	Rotate (Classic)…	Xoay (cổ điển)…
 	Surface	Bề mặt
 	Wireframe	Khung dây
+	Render Settings	Cài đặt kết xuất
 	No Shading	Không tô bóng
 	Plastic	Nhựa
 	Highlight Intensity	Cường độ điểm sáng
@@ -4025,6 +4026,8 @@ mark-style	Japanese	Kiểu Nhật
 	Swap Fill and Stroke (Shift+X)	Đổi màu tô và nét (Shift+X)
 	Swap start and end arrowheads	Đổi đầu mũi tên bắt đầu và kết thúc
 	Swap the selected object for the file, keeping its place and transform	Thay đối tượng đã chọn bằng tệp, giữ nguyên vị trí và biến đổi
+	Show Import Options	Hiện tùy chọn nhập
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Hỏi tùy chọn nhập của từng tệp PDF, DXF hoặc văn bản trước khi đặt; khi tắt, dùng các tùy chọn đã chọn gần nhất
 	Stylistic Alternates	Ký tự thay thế theo phong cách
 	Swash	Swash
 	Swatch Conflict	Xung đột mẫu màu
@@ -5410,6 +5413,7 @@ theme	Appearance	Giao diện
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` phải là một đối tượng chỉ chứa `mode`, với giá trị shaded hoặc wireframe
 @msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
 @msg	bevel must be none or one of {_1}	bevel phải là none hoặc một trong {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} không thể tạo khối từ hình vẽ này: các phiên bản ký hiệu, hòa trộn và nhóm cắt của nó chứa quá nhiều đối tượng
@@ -6309,6 +6313,8 @@ axis	Y Axis	Trục Y
 	Create New Set	Tạo bộ mới
 	Stop Global Edit	Dừng chỉnh sửa toàn cục
 	Global Edit Options	Tùy chọn chỉnh sửa toàn cục
+	Select Similar Objects	Chọn các đối tượng tương tự
+	Select Similar Options	Tùy chọn chọn đối tượng tương tự
 	Leave Out of Global Edit	Loại khỏi chỉnh sửa toàn cục
 	Match	Khớp
 	On Artboards	Trên các bảng vẽ

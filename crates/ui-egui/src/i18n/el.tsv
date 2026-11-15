@@ -1129,6 +1129,7 @@ font-technology	Variable	Μεταβλητές
 	Rotate (Classic)…	Περιστροφή (κλασικό)…
 	Surface	Επιφάνεια
 	Wireframe	Συρματόπλεγμα
+	Render Settings	Ρυθμίσεις απόδοσης
 	No Shading	Χωρίς σκίαση
 	Plastic	Πλαστικό
 	Highlight Intensity	Ένταση ανταύγειας
@@ -4108,6 +4109,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Swap Fill and Stroke (Shift+X)	Εναλλαγή γεμίσματος και περιγράμματος (Shift+X)
 	Swap start and end arrowheads	Εναλλαγή αρχικής και τελικής αιχμής βέλους
 	Swap the selected object for the file, keeping its place and transform	Αντικατάσταση επιλεγμένου αντικειμένου με το αρχείο, διατηρώντας θέση και μετασχηματισμό
+	Show Import Options	Εμφάνιση επιλογών εισαγωγής
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Ερώτηση για τις επιλογές εισαγωγής κάθε αρχείου PDF, DXF ή κειμένου πριν από την τοποθέτηση· απενεργοποιημένο: χρήση των τελευταίων επιλογών
 	Swatch Conflict	Διένεξη δείγματος χρώματος
 	Swatch Conflicts	Διενέξεις δειγμάτων χρωμάτων
 	Swatch exchange files keep solid colors only.	Τα αρχεία ανταλλαγής δειγμάτων διατηρούν μόνο συμπαγή χρώματα.
@@ -5387,6 +5390,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα για εξαγωγή
 @msg	The 3D object is too complex to export	Το αντικείμενο 3D είναι πολύ σύνθετο για εξαγωγή
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	το αντικείμενο δεν έχει εφέ 3D (Εξώθηση και λοξότμηση, Περιστροφή γύρω από άξονα, Φούσκωμα ή Περιστροφή)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	το `render` πρέπει να είναι αντικείμενο που περιέχει μόνο `mode`, με τιμή shaded ή wireframe
 @msg	its 3D effect builds no solid	το εφέ 3D του δεν δημιουργεί στερεό
 @msg	bevel must be none or one of {_1}	το bevel πρέπει να είναι none ή ένα από τα {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: δεν μπορούν να δημιουργηθούν στερεά από αυτό το σχέδιο· οι παρουσίες συμβόλων, οι αναμείξεις και οι ομάδες αποκοπής του περιέχουν πάρα πολλά αντικείμενα
@@ -6654,6 +6658,8 @@ axis	Y Axis	Άξονας Y
 	Create New Set	Δημιουργία νέου συνόλου
 	Stop Global Edit	Τερματισμός καθολικής επεξεργασίας
 	Global Edit Options	Επιλογές καθολικής επεξεργασίας
+	Select Similar Objects	Επιλογή παρόμοιων αντικειμένων
+	Select Similar Options	Επιλογές επιλογής παρόμοιων
 	Leave Out of Global Edit	Εξαίρεση από την καθολική επεξεργασία
 	Match	Αντιστοίχιση
 	On Artboards	Σε πίνακες σχεδίασης

@@ -1076,6 +1076,7 @@ antiAlias	Sharp	Nítido
 	Rotate (Classic)…	Girar (Clássico)…
 	Surface	Superfície
 	Wireframe	Aramado
+	Render Settings	Configurações de renderização
 	No Shading	Sem Sombreamento
 	Plastic	Plástico
 	Highlight Intensity	Intensidade do Realce
@@ -5242,6 +5243,8 @@ axis	Both	Ambos
 	Summary	Resumo
 	Superscript	Sobrescrito
 	Swap the selected object for the file, keeping its place and transform	Troca o objeto selecionado pelo arquivo, mantendo sua posição e transformação
+	Show Import Options	Mostrar Opções de Importação
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pergunta as opções de importação de cada arquivo PDF, DXF ou de texto antes de colocá-lo; desligado: usa as últimas opções escolhidas
 	Swatch Libraries Menu	Menu de Bibliotecas de Amostras
 	Create New Library…	Criar Nova Biblioteca…
 	Rename Library…	Renomear Biblioteca…
@@ -5976,6 +5979,7 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	um efeito 3D no preenchimento ou traçado de um grupo não desenha nada para exportar
 @msg	The 3D object is too complex to export	O objeto 3D é complexo demais para ser exportado
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	o objeto não tem efeito 3D (Extrusão e Bisel, Revolver, Inflar ou Girar)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve ser um objeto que contenha apenas `mode`, com o valor shaded ou wireframe
 @msg	its 3D effect builds no solid	seu efeito 3D não constrói nenhum sólido
 @msg	bevel must be none or one of {_1}	bevel deve ser none ou um de {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} não pode construir sólidos a partir desta arte: suas instâncias de símbolo, mesclagens e grupos de recorte contêm objetos demais
@@ -6613,6 +6617,8 @@ axis	Y Axis	Eixo Y
 	Create New Set	Criar Novo Conjunto
 	Stop Global Edit	Parar Edição Global
 	Global Edit Options	Opções de Edição Global
+	Select Similar Objects	Selecionar Objetos Semelhantes
+	Select Similar Options	Opções de Seleção de Semelhantes
 	Leave Out of Global Edit	Deixar Fora da Edição Global
 	Match	Corresponder
 	On Artboards	Nas Mesas de Trabalho

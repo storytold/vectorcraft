@@ -1194,6 +1194,7 @@ font-technology	Variable	Variabili
 	Rotate (Classic)…	Ruota (classico)…
 	Surface	Superficie
 	Wireframe	Reticolo
+	Render Settings	Impostazioni di rendering
 	No Shading	Nessuna ombreggiatura
 	Plastic	Plastica
 	Highlight Intensity	Intensità lucentezza
@@ -3658,6 +3659,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Inverti riempimento e traccia (Shift+X)
 	Swap start and end arrowheads	Inverti punte di freccia iniziale e finale
 	Swap the selected object for the file, keeping its place and transform	Sostituisci l'oggetto selezionato con il file, mantenendone posizione e trasformazione
+	Show Import Options	Mostra opzioni di importazione
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Chiedi le opzioni di importazione di ogni file PDF, DXF o di testo prima di inserirlo; disattivato: usa le ultime opzioni scelte
 	Stylistic Alternates	Alternative stilistiche
 	Swash	Ornamentale
 	Swatch Conflict	Conflitto campioni
@@ -5640,6 +5643,7 @@ lighting	Light	Luce
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla da esportare
 @msg	The 3D object is too complex to export	L'oggetto 3D è troppo complesso per essere esportato
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'oggetto non ha alcun effetto 3D (Estrusione e smusso, Rivoluzione, Gonfia o Ruota)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve essere un oggetto che contiene solo `mode`, con valore shaded o wireframe
 @msg	its 3D effect builds no solid	il suo effetto 3D non costruisce alcun solido
 @msg	bevel must be none or one of {_1}	bevel deve essere none o uno dei seguenti: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} non può costruire solidi da questo disegno: le sue istanze di simbolo, fusioni e gruppi di ritaglio contengono troppi oggetti
@@ -6324,6 +6328,8 @@ axis	Y Axis	Asse Y
 	Create New Set	Crea nuovo set
 	Stop Global Edit	Interrompi modifica globale
 	Global Edit Options	Opzioni modifica globale
+	Select Similar Objects	Seleziona oggetti simili
+	Select Similar Options	Opzioni selezione oggetti simili
 	Leave Out of Global Edit	Escludi dalla modifica globale
 	Match	Corrispondenza
 	On Artboards	Sulle tavole da disegno

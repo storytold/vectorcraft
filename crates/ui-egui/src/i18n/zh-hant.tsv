@@ -1158,6 +1158,7 @@ font-technology	Variable	可變
 	Rotate (Classic)…	旋轉 (經典)…
 	Surface	表面
 	Wireframe	線框
+	Render Settings	演算設定
 	No Shading	無網底
 	Plastic	塑膠
 	Highlight Intensity	亮部強度
@@ -4733,6 +4734,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Swap Fill and Stroke (Shift+X)	對調填色與筆畫 (Shift+X)
 	Swap start and end arrowheads	對調起點與終點箭頭
 	Swap the selected object for the file, keeping its place and transform	以檔案取代選取的物件，並保留其位置與變形
+	Show Import Options	顯示讀入選項
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前詢問每個 PDF、DXF 或文字檔案的讀入選項；關閉時使用上次選擇的選項
 	Stylistic Alternates	風格替代字
 	Swash	花體字
 	Swatch Conflict	色票衝突
@@ -5729,6 +5732,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必須是只含 `mode` 的物件，值為 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
 @msg	bevel must be none or one of {_1}	bevel 必須是 none 或 {_1} 其中之一
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}無法從此圖稿產生實體：其符號實例、漸變和剪裁群組包含的物件過多
@@ -6344,6 +6348,8 @@ axis	Y Axis	Y 軸
 	Create New Set	建立新組
 	Stop Global Edit	停止整體編輯
 	Global Edit Options	整體編輯選項
+	Select Similar Objects	選取相似物件
+	Select Similar Options	選取相似物件選項
 	Leave Out of Global Edit	從整體編輯中排除
 	Match	符合
 	On Artboards	在工作區域上

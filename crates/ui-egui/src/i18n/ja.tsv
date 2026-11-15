@@ -570,6 +570,7 @@ digits	Malayalam	マラヤーラム数字
 	Rotate (Classic)…	回転（クラシック）…
 	Surface	表面
 	Wireframe	ワイヤーフレーム
+	Render Settings	レンダリング設定
 	No Shading	陰影なし
 	Plastic	プラスチック
 	Highlight Intensity	ハイライトの強さ
@@ -4058,6 +4059,8 @@ file-filter	Templates	テンプレート
 	Superscript	上付き文字
 	Swap Fill and Stroke (Shift+X)	塗りと線を入れ替え (Shift+X)
 	Swap the selected object for the file, keeping its place and transform	選択したオブジェクトを、位置と変形を保ったままファイルに置き換え
+	Show Import Options	読み込みオプションを表示
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	配置する前に PDF、DXF、テキストファイルごとの読み込みオプションを確認。オフのときは前回選んだオプションを使用
 	Swatch Libraries Menu	スウォッチライブラリメニュー
 	System Layout	システムレイアウト
 	Tabular Lining	等幅ライニング
@@ -5682,6 +5685,7 @@ lighting	Light	ライト
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	グループの塗りまたは線にある 3D 効果には書き出せる描画がありません
 @msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	オブジェクトに 3D 効果 (押し出しとベベル、回転体、膨張、回転) がありません
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` は `mode` だけを持ち、その値が shaded または wireframe のオブジェクトにしてください
 @msg	its 3D effect builds no solid	3D 効果からソリッドが作成されません
 @msg	bevel must be none or one of {_1}	bevel には none または {_1} のいずれかを指定してください
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} はこのアートからソリッドを作成できません。シンボルインスタンス、ブレンド、クリッピンググループに含まれるオブジェクトが多すぎます
@@ -8196,6 +8200,8 @@ axis	Y Axis	Y 軸
 	Create New Set	新規セットを作成
 	Stop Global Edit	グローバル編集を終了
 	Global Edit Options	グローバル編集オプション
+	Select Similar Objects	類似オブジェクトを選択
+	Select Similar Options	類似オブジェクトの選択オプション
 	Leave Out of Global Edit	グローバル編集から除外
 	Match	一致
 	On Artboards	アートボード上

@@ -1164,6 +1164,7 @@ font-technology	Variable	Variabla
 	Rotate (Classic)…	Rotera (klassisk)…
 	Surface	Yta
 	Wireframe	Trådram
+	Render Settings	Renderingsinställningar
 	No Shading	Ingen skuggning
 	Plastic	Plast
 	Highlight Intensity	Högdagerintensitet
@@ -3534,6 +3535,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Byt plats på fyllning och kontur (Shift+X)
 	Swap start and end arrowheads	Byt plats på start- och slutpilspets
 	Swap the selected object for the file, keeping its place and transform	Ersätt det markerade objektet med filen och behåll dess placering och transformering
+	Show Import Options	Visa importalternativ
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Fråga efter importalternativ för varje PDF-, DXF- eller textfil innan den placeras; av: använd de senast valda alternativen
 	Stylistic Alternates	Stilistiska alternativ
 	Swash	Swash
 	Swatch Conflict	Färgrutekonflikt
@@ -5489,6 +5492,7 @@ lighting	Light	Ljus
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en grupps fyllning eller linje ritar ingenting att exportera
 @msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Extrudera och fasa, Rotera runt axel, Blås upp eller Rotera)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` måste vara ett objekt som bara innehåller `mode`, med värdet shaded eller wireframe
 @msg	its 3D effect builds no solid	dess 3D-effekt bygger ingen solid
 @msg	bevel must be none or one of {_1}	bevel måste vara none eller något av {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan inte bygga solider av den här teckningen: dess symbolinstanser, blandningar och urklippsgrupper innehåller för många objekt
@@ -6676,6 +6680,8 @@ axis	Y Axis	Y-axel
 	Create New Set	Skapa ny uppsättning
 	Stop Global Edit	Avsluta global redigering
 	Global Edit Options	Alternativ för global redigering
+	Select Similar Objects	Markera liknande objekt
+	Select Similar Options	Alternativ för att markera liknande
 	Leave Out of Global Edit	Uteslut från global redigering
 	Match	Matcha
 	On Artboards	På ritytor

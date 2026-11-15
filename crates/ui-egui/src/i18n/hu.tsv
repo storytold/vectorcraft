@@ -1479,6 +1479,7 @@ font-technology	Variable	Változó
 	Rotate (Classic)…	Elforgatás (klasszikus)…
 	Surface	Felület
 	Wireframe	Drótváz
+	Render Settings	Renderelési beállítások
 	No Shading	Nincs árnyékolás
 	Plastic	Műanyag
 	Highlight Intensity	Csillanás erőssége
@@ -4300,6 +4301,8 @@ mark-style	Japanese	Japán
 	Swap Fill and Stroke (Shift+X)	Kitöltés és körvonal cseréje (Shift+X)
 	Swap start and end arrowheads	Kezdő és záró nyílhegy cseréje
 	Swap the selected object for the file, keeping its place and transform	A kijelölt objektum cseréje a fájlra, a helye és az átalakítása megtartásával
+	Show Import Options	Importálási beállítások megjelenítése
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Elhelyezés előtt rákérdez minden PDF-, DXF- vagy szövegfájl importálási beállításaira; kikapcsolva a legutóbb választott beállításokat használja
 	Stylistic Alternates	Stilisztikai változatok
 	Swash	Cifra változatok
 	Swatch Conflict	Színminta-ütközés
@@ -6007,6 +6010,7 @@ imageTrace	Outline	Körvonal
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	a `render` csak `mode` mezőt tartalmazó objektum lehet, shaded vagy wireframe értékkel
 @msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
 @msg	bevel must be none or one of {_1}	a bevel értéke none vagy ezek egyike lehet: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ebből a rajzból nem hozható létre test: a szimbólumpéldányai, összemosásai és vágócsoportjai túl sok objektumot tartalmaznak
@@ -6681,6 +6685,8 @@ axis	Y Axis	Y tengely
 	Create New Set	Új készlet létrehozása
 	Stop Global Edit	Globális szerkesztés befejezése
 	Global Edit Options	Globális szerkesztés beállításai
+	Select Similar Objects	Hasonló objektumok kijelölése
+	Select Similar Options	Hasonlók kijelölésének beállításai
 	Leave Out of Global Edit	Kizárás a globális szerkesztésből
 	Match	Egyezés
 	On Artboards	Rajztáblákon

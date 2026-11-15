@@ -1125,6 +1125,7 @@ antiAlias	Sharp	锐利
 	Rotate (Classic)…	旋转 (经典)…
 	Surface	表面
 	Wireframe	线框
+	Render Settings	渲染设置
 	No Shading	无底纹
 	Plastic	塑料
 	Highlight Intensity	高光强度
@@ -3472,6 +3473,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Swap Fill and Stroke (Shift+X)	切换填色和描边 (Shift+X)
 	Swap start and end arrowheads	对调起点与终点箭头
 	Swap the selected object for the file, keeping its place and transform	以文件替换选择的对象，并保留其位置与变形
+	Show Import Options	显示导入选项
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前询问每个 PDF、DXF 或文本文件的导入选项；关闭时使用上次选择的选项
 	Stylistic Alternates	风格替代字
 	Swash	花饰字
 	Swatch Conflict	色板冲突
@@ -5894,6 +5897,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
 @msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必须是只含 `mode` 的对象，值为 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
 @msg	bevel must be none or one of {_1}	bevel 必须是 none 或 {_1} 之一
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}无法从此图稿生成实体：其符号实例、混合和剪切组包含的对象过多
@@ -6537,6 +6541,8 @@ axis	Y Axis	Y 轴
 	Create New Set	创建新组
 	Stop Global Edit	停止全局编辑
 	Global Edit Options	全局编辑选项
+	Select Similar Objects	选择相似对象
+	Select Similar Options	选择相似对象选项
 	Leave Out of Global Edit	从全局编辑中排除
 	Match	匹配
 	On Artboards	在画板上
