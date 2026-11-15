@@ -834,7 +834,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
             st.digits = v;
         }
         if let Some(v) = glyph_form {
-            st.glyph_form = v;
+            st.set_glyph_form(v);
         }
         if let Some(v) = &language {
             st.language.clone_from(v);

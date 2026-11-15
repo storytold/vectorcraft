@@ -6,7 +6,8 @@
 //! which runs `type.kinsokuSets.set` with every set as one undo step; Cancel leaves them as they were.
 //!
 //! Fields: `__doc` (the uid of the document the dialog opened on, which OK sets the sets of),
-//! `sets` (the sets as `type.kinsokuSets.set` takes them, each with the name it had in the
+//! `__opened` (the names of that document's sets when the dialog opened; OK keeps the sets the
+//! document gained since, after the dialog's own), `sets` (the sets as `type.kinsokuSets.set` takes them, each with the name it had in the
 //! document as `from`), `selected` (the index of the one picked), `name`, `cannotStart`,
 //! `cannotEnd`, `hanging` and `inseparable` (its name and categories as typed, the inseparable
 //! sequences separated by spaces), `base` (what New starts from), `code` (the code point Add
@@ -34,6 +35,10 @@ pub const COMMAND: &str = vectorcraft_engine::cmd::kinsokusets::SET;
 /// refuses `__` fields).
 const DOC: &str = "__doc";
 
+/// The field that holds the names of the document's sets when the dialog opened: OK keeps the
+/// sets the document gained since, which the dialog does not list.
+const OPENED: &str = "__opened";
+
 /// The categories, as the command's keys, in the order the dialog shows them.
 const CATEGORIES: [&str; 4] = ["cannotStart", "cannotEnd", "hanging", "inseparable"];
 
@@ -44,22 +49,23 @@ pub(super) const SPEC: DialogSpec =
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
     let uid = st.uid;
-    let sets: Vec<Value> = st
-        .doc
-        .kinsoku_sets
-        .iter()
-        .map(|k| {
-            let mut v = json!(k);
-            if let Some(o) = v.as_object_mut() {
-                o.insert("from".into(), json!(k.name));
-            }
-            v
-        })
-        .collect();
-    let mut d = Dialog::new(KIND, json!({ DOC: uid, "sets": sets, "selected": 0, "base": "hard", "into": "cannotStart", "code": "" }));
+    let sets: Vec<Value> = st.doc.kinsoku_sets.iter().map(listed).collect();
+    let opened: Vec<&str> = st.doc.kinsoku_sets.iter().map(|k| k.name.as_str()).collect();
+    let mut d =
+        Dialog::new(KIND, json!({ DOC: uid, OPENED: opened, "sets": sets, "selected": 0, "base": "hard", "into": "cannotStart", "code": "" }));
     show_selected(&mut d);
     app.ui.dialog = Some(d);
     Ok(Value::Null)
+}
+
+/// A set of the document as the dialog lists it: as `type.kinsokuSets.set` takes it, with its name
+/// in the document as `from`.
+fn listed(k: &KinsokuSet) -> Value {
+    let mut v = json!(k);
+    if let Some(o) = v.as_object_mut() {
+        o.insert("from".into(), json!(k.name));
+    }
+    v
 }
 
 /// The sets the dialog holds, as the command takes them.
@@ -318,7 +324,21 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         };
         app.run("document.activate", json!({ "index": index }))?;
     }
-    let r = app.run(COMMAND, json!({ "sets": list }));
+    // A `sets` field that is not a list of sets goes to the command as it is, which refuses it.
+    let raw = d.fields.get("sets").cloned().unwrap_or(Value::Null);
+    let sets = if raw.as_array().is_some_and(|a| a.iter().all(Value::is_object)) {
+        // A set the document gained while the dialog was open (a script, another command) is
+        // kept, after the dialog's sets.
+        let opened: Vec<&str> =
+            d.fields.get(OPENED).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+        if let Some(st) = app.session.active() {
+            list.extend(st.doc.kinsoku_sets.iter().filter(|k| !opened.contains(&k.name.as_str())).filter_map(|k| listed(k).as_object().cloned()));
+        }
+        json!(list)
+    } else {
+        raw
+    };
+    let r = app.run(COMMAND, json!({ "sets": sets }));
     // A name two sets share, a reserved name or a category too long keeps the dialog open to be
     // changed, with its document active.
     if r.is_ok() {

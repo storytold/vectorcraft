@@ -632,7 +632,10 @@ pub(super) fn break_line<'k>(
         ink += cluster_ink;
         back += cluster_back;
         let last = &g[cluster_end - 1];
-        if last.break_after() && last.len > 0 && kinsoku_allows(g, cluster_end - 1, kinsoku) && !splits_no_break(g, cluster_end) {
+        // Hanging punctuation that would hang alone where it overflows may end the line where it
+        // fits too: a custom set's may be a character no other rule breaks after.
+        let hang_break = burasagari != Burasagari::None && cluster_end == j + 1 && hangs(last, kinsoku);
+        if (last.break_after() || hang_break) && last.len > 0 && kinsoku_allows(g, cluster_end - 1, kinsoku) && !splits_no_break(g, cluster_end) {
             // Once the line holds a tab, whether a break fits as drawn is settled when the line ends.
             let hyphenated = last.is_soft_hyphen();
             if !hyphenated || (tabbed && fits.is_some()) || x + hyphen_glyph(last).adv <= width + EPS {
@@ -822,10 +825,18 @@ fn splits_no_break(g: &[SGlyph], end: usize) -> bool {
 
 /// Does kinsoku allow a line break after glyph `j`? Not after an opening bracket, nor before a
 /// closing one, a comma, a full stop, a small kana… (the character is pushed to the next line
-/// with the one before it).
+/// with the one before it). A line that breaks after spaces is drawn without them, so the
+/// character before them is the one that ends it: up to [`KINSOKU_SPACES_BACK`] spaces are looked
+/// past, and after a longer run of spaces the space itself counts.
 fn kinsoku_allows(g: &[SGlyph], j: usize, kinsoku: KinsokuRules<'_>) -> bool {
-    g.get(j).is_some_and(|gl| kinsoku_between(gl.ch, g.get(j + 1).map(|n| n.ch), kinsoku))
+    let Some(gl) = g.get(j) else { return false };
+    let before = if gl.is_space() { g[..j].iter().rev().take(KINSOKU_SPACES_BACK).find(|h| !h.is_space()).map_or(gl.ch, |h| h.ch) } else { gl.ch };
+    kinsoku_between(before, g.get(j + 1).map(|n| n.ch), kinsoku)
 }
+
+/// The most spaces [`kinsoku_allows`] looks past for the character that ends a line, so a long run
+/// of spaces is not read again at each of its breaks.
+const KINSOKU_SPACES_BACK: usize = 64;
 
 /// Kinsoku for a break between `before` and `after` (none: the end of the paragraph): Hard keeps
 /// every character of the set off the line start and end, Soft lets 々, ー and small kana start a

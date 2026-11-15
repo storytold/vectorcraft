@@ -244,6 +244,35 @@ fn ok_sets_the_document_the_dialog_opened_on() {
     assert!(app.session.documents().iter().all(|d| d.doc.kinsoku_sets.is_empty()));
 }
 
+/// OK keeps a set the document gained while the dialog was open, after the dialog's sets, and a
+/// set deleted in the dialog stays deleted. A `sets` field that is not a list of sets keeps the
+/// dialog open and leaves the document's sets as they are.
+#[test]
+fn ok_keeps_sets_added_while_open_and_refuses_malformed_sets() {
+    let mut app = app();
+    app.run("type.kinsokuSets.set", json!({ "sets": [{"name": "First", "cannotStart": "ゝ"}] })).unwrap();
+    open(&mut app).unwrap();
+    let both = json!([{"name": "First", "cannotStart": "ゝ"}, {"name": "Later", "cannotStart": "ー"}]);
+    app.run("type.kinsokuSets.set", json!({ "sets": both })).unwrap();
+    dialog(&mut app).fields.insert("cannotStart".into(), json!("ゞ"));
+    super::super::confirm(&mut app).unwrap();
+    let sets = doc_sets(&app);
+    let named = sets.iter().map(|k| (k.name.as_str(), k.cannot_start.clone())).collect::<Vec<_>>();
+    assert_eq!(named, [("First", vec!['ゞ']), ("Later", vec!['ー'])]);
+    open(&mut app).unwrap();
+    press(&mut app, Action::Delete);
+    super::super::confirm(&mut app).unwrap();
+    let names = |app: &VectorcraftApp| doc_sets(app).iter().map(|k| k.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&app), ["Later"]);
+    for bad in [Value::Null, json!({}), json!("Later"), json!([1])] {
+        open(&mut app).unwrap();
+        dialog(&mut app).fields.insert("sets".into(), bad.clone());
+        assert!(super::super::confirm(&mut app).is_err(), "{bad}");
+        assert!(app.ui.dialog.is_some(), "{bad}");
+        assert_eq!(names(&app), ["Later"], "{bad}");
+    }
+}
+
 /// Add takes a code point as U+XXXX, u+xxxx or bare hexadecimal, and never a control or space
 /// character or a value that is no character.
 #[test]

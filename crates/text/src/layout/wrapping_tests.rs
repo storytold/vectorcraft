@@ -1479,6 +1479,11 @@ fn a_custom_set_keeps_its_own_characters_off_line_ends() {
     let bracket = "一二三」四";
     assert_eq!(end(bracket, 35.0, Kinsoku::Hard.into()), 2, "Hard keeps 」 off the next line's start");
     assert_eq!(end(bracket, 35.0, breaking::KinsokuRules::Custom(&empty)), 3, "the empty set lets 」 start it");
+    // A space after 三 is not drawn at the end of the line, so a break after it would still end
+    // the line with 三.
+    let spaced = "一二三 四";
+    assert_eq!(end(spaced, 35.0, breaking::KinsokuRules::Custom(&finish)), 2, "三 does not end the line before a space");
+    assert_eq!(end(spaced, 35.0, breaking::KinsokuRules::Custom(&empty)), 4);
     let ends = candidates(text, &full_width(text), None, breaking::KinsokuRules::Custom(&start)).iter().map(|b| b.end).collect::<Vec<_>>();
     assert_eq!(ends, [1, 2, 4, 5]);
 }
@@ -1520,6 +1525,13 @@ fn a_custom_set_hangs_its_own_hanging_punctuation() {
     assert_eq!(end("一二三、四", breaking::KinsokuRules::Custom(&comma)), 4, "、 hangs");
     assert_eq!(end("一二三、四", breaking::KinsokuRules::Custom(&bang)), 3, "、 does not hang");
     assert_eq!(end("一二三!四", breaking::KinsokuRules::Custom(&bang)), 4, "! hangs");
+    // In a wider line where ! fits, the line still ends after it.
+    let text = "一二三!四";
+    let wide = |b: Burasagari| {
+        break_line(text, &full_width(text), 0, 40.0, &[], 0.0, None, b, breaking::KinsokuRules::Custom(&bang), PushOutOnly, false, false, &[], None).0
+    };
+    assert_eq!(wide(Burasagari::Standard), 4, "! fits and ends the line");
+    assert_eq!(wide(Burasagari::None), 3, "without Burasagari ! does not hang, and no line ends after it");
     // A hanging character that starts an inseparable sequence kept with Bunri-Kinshi does not hang
     // the rest of the sequence with it: the sequence goes to the next line.
     let joined = custom_set("", "", "!", &["!あ"]);
