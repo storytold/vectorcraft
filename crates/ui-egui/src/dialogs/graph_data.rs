@@ -7,13 +7,15 @@
 //! don't move the caret in the entry box). Pasting tab- or line-separated text fills the cells from
 //! the picked one. Import Data reads a tab-separated text file, Transpose row/column swaps rows and
 //! columns, Switch x/y swaps a scatter graph's y and x columns, Cell Style sets the number of
-//! decimals the sheet shows and its columns' width, and Revert reads the graph's data again. Apply
-//! (`graph.setData` with its series, categories and rows) redraws the graph and leaves the window
-//! open.
+//! decimals the sheet shows and the width of every column, dragging a column's right edge sets that
+//! column's width (in whole digits, 0 to 20, as Cell Style), and Revert reads the graph's data
+//! again. Apply (`graph.setData` with its series, categories and rows) redraws the graph and leaves
+//! the window open.
 //!
 //! Fields: `grid` (rows of cell texts), `sel` ([row, column]), `entry` (the picked cell's text
-//! being edited), `decimals` (null: as typed), `width` (digits), `__graph` (the graph's id) and
-//! `__scatter`.
+//! being edited), `decimals` (null: as typed), `width` (digits), `widths` (a column's own width in
+//! digits by its index, null or missing: `width`; setting `width` empties it), `__graph` (the graph's
+//! id) and `__scatter`.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES};
@@ -62,7 +64,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let entry = cell(&grid, 0, 1);
     app.ui.dialog = Some(Dialog::new(
         KIND,
-        json!({ "grid": grid, "sel": [0, 1], "entry": entry, "decimals": null, "width": 7, "__graph": id, "__scatter": scatter }),
+        json!({ "grid": grid, "sel": [0, 1], "entry": entry, "decimals": null, "width": 7, "widths": [], "__graph": id, "__scatter": scatter }),
     ));
     Ok(Value::Null)
 }
@@ -355,7 +357,7 @@ fn import(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
 }
 
 /// Draw the graph-data sheet: keyboard cell movement, block paste, import, transpose, switch-x/y
-/// and revert actions, decimals and column width, and only the cells in view.
+/// and revert actions, decimals and column widths, and only the cells in view.
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let entry_id = egui::Id::unique("graph-data-entry");
     if ui.memory(|m| m.has_focus(entry_id)) {
@@ -436,36 +438,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         widgets::dim_label(ui, tl!("Column Width:"));
         let mut w = d.fields.get("width").and_then(Value::as_u64).unwrap_or(7);
         if ui.add(egui::DragValue::new(&mut w).range(0..=MAX_WIDTH)).changed() {
-            d.fields.insert("width".into(), json!(w));
+            set_width(d, w);
         }
     });
     ui.add_space(6.0);
-    let at = sel(d);
-    let (rows, cols) = extent(d, at);
-    let decimals = d.fields.get("decimals").and_then(Value::as_u64);
-    let w = (d.fields.get("width").and_then(Value::as_u64).unwrap_or(7).min(MAX_WIDTH) as f32 * 7.0 + 10.0).max(12.0);
-    let mut clicked = None;
-    widgets::list_box(ui, |ui| {
-        // Only the cells in view are drawn: a graph's sheet can be 10,001 × 257.
-        egui::ScrollArea::both().id_salt("graph-data-sheet").max_height(280.0).auto_shrink([false, false]).show_viewport(ui, |ui, view| {
-            let (cw, ch) = (w + 1.0, ROW_H);
-            ui.set_min_size(egui::vec2(cols as f32 * cw, rows as f32 * ch));
-            let origin = ui.max_rect().min;
-            let span = |lo: f32, hi: f32, size: f32, n: usize| ((lo / size).floor().max(0.0) as usize, ((hi / size).ceil().max(0.0) as usize).min(n));
-            let (r0, r1) = span(view.min.y, view.max.y, ch, rows);
-            let (c0, c1) = span(view.min.x, view.max.x, cw, cols);
-            for r in r0..r1 {
-                for c in c0..c1 {
-                    let rect = egui::Rect::from_min_size(origin + egui::vec2(c as f32 * cw, r as f32 * ch), egui::vec2(w, ch - 1.0));
-                    let text = shown(cell_at(d, r, c), decimals);
-                    let b = egui::Button::selectable((r, c) == at, egui::RichText::new(text).monospace()).truncate();
-                    if ui.put(rect, b).clicked() && (r, c) != (0, 0) {
-                        clicked = Some((r, c));
-                    }
-                }
-            }
-        });
-    });
+    let (clicked, resized) = sheet(ui, d);
+    if let Some((c, n)) = resized
+        && n != col_digits(d, c)
+    {
+        set_col_digits(d, c, n);
+    }
     if let Some(to) = clicked {
         pick(d, to);
         ui.memory_mut(|mem| mem.request_focus(entry_id));
@@ -477,6 +459,123 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         app.status(e);
     }
     false
+}
+
+/// Cell Style's Column Width in digits.
+fn width(d: &Dialog) -> u64 {
+    d.fields.get("width").and_then(Value::as_u64).unwrap_or(7).min(MAX_WIDTH)
+}
+
+/// A column's width in digits: its own when its edge was dragged, else Cell Style's.
+fn col_digits(d: &Dialog, c: usize) -> u64 {
+    d.fields.get("widths").and_then(|w| w.get(c)).and_then(Value::as_u64).unwrap_or_else(|| width(d)).min(MAX_WIDTH)
+}
+
+/// Cell Style's Column Width: every column `n` digits wide, the ones given their own width too.
+fn set_width(d: &mut Dialog, n: u64) {
+    d.fields.insert("width".into(), json!(n.min(MAX_WIDTH)));
+    note_set(d, "width");
+}
+
+/// `ui.dialog.set` set `field`: a Column Width sets every column, as Cell Style's does.
+pub(super) fn note_set(d: &mut Dialog, field: &str) {
+    if field == "width" {
+        d.fields.insert("widths".into(), json!([]));
+    }
+}
+
+/// Set column `c`'s own width in digits (at most MAX_WIDTH).
+fn set_col_digits(d: &mut Dialog, c: usize, n: u64) {
+    if c >= MAX_COLS {
+        return;
+    }
+    let widths = d.fields.entry("widths").or_insert_with(|| json!([]));
+    if !widths.is_array() {
+        *widths = json!([]);
+    }
+    let Some(widths) = widths.as_array_mut() else { return };
+    if widths.len() <= c {
+        widths.resize(c + 1, Value::Null);
+    }
+    if let Some(w) = widths.get_mut(c) {
+        *w = json!(n.min(MAX_WIDTH));
+    }
+}
+
+/// A column `n` digits wide, in points on the sheet.
+fn digits_px(n: u64) -> f32 {
+    (n.min(MAX_WIDTH) as f32 * 7.0 + 10.0).max(12.0)
+}
+
+/// The width in digits nearest to `px` points, within Cell Style's 0 to MAX_WIDTH.
+fn px_digits(px: f32) -> u64 {
+    if px.is_finite() { ((px - 10.0) / 7.0).round().clamp(0.0, MAX_WIDTH as f32) as u64 } else { 0 }
+}
+
+/// The id of column `c`'s right edge on the sheet.
+fn edge_id(c: usize) -> egui::Id {
+    egui::Id::unique(("graph-data-column-edge", c))
+}
+
+/// The cell clicked on the sheet ([row, column]), and the column whose edge is dragged with its width
+/// in digits.
+type SheetInput = (Option<(usize, usize)>, Option<(usize, u64)>);
+
+/// Draw the sheet's cells in view, each column at its own width. Returns the cell clicked, and the
+/// column whose right edge is being dragged with the width in digits the pointer gives it.
+fn sheet(ui: &mut egui::Ui, d: &Dialog) -> SheetInput {
+    let at = sel(d);
+    let (rows, cols) = extent(d, at);
+    let decimals = d.fields.get("decimals").and_then(Value::as_u64);
+    // Each column's left edge, and the sheet's width last: a column is its width and a 1-point gap.
+    let mut xs = Vec::with_capacity(cols + 1);
+    let mut x = 0.0;
+    xs.push(x);
+    for c in 0..cols {
+        x += digits_px(col_digits(d, c)) + 1.0;
+        xs.push(x);
+    }
+    let left = |c: usize| xs.get(c).copied().unwrap_or(x);
+    let (mut clicked, mut resized) = (None, None);
+    widgets::list_box(ui, |ui| {
+        // Only the cells in view are drawn: a graph's sheet can be 10,001 × 257.
+        egui::ScrollArea::both().id_salt("graph-data-sheet").max_height(280.0).auto_shrink([false, false]).show_viewport(ui, |ui, view| {
+            let ch = ROW_H;
+            ui.set_min_size(egui::vec2(x, rows as f32 * ch));
+            let origin = ui.max_rect().min;
+            let (r0, r1) = ((view.min.y / ch).floor().max(0.0) as usize, ((view.max.y / ch).ceil().max(0.0) as usize).min(rows));
+            // The columns that reach into the view.
+            let c0 = (0..cols).find(|&c| left(c + 1) > view.min.x).unwrap_or(cols);
+            let c1 = (c0..cols).find(|&c| left(c) >= view.max.x).unwrap_or(cols);
+            for r in r0..r1 {
+                for c in c0..c1 {
+                    let size = egui::vec2(left(c + 1) - left(c) - 1.0, ch - 1.0);
+                    let rect = egui::Rect::from_min_size(origin + egui::vec2(left(c), r as f32 * ch), size);
+                    let text = shown(cell_at(d, r, c), decimals);
+                    let b = egui::Button::selectable((r, c) == at, egui::RichText::new(text).monospace()).truncate();
+                    if ui.put(rect, b).clicked() && (r, c) != (0, 0) {
+                        clicked = Some((r, c));
+                    }
+                }
+            }
+            // A column's right edge, over the rows in view: dragging it sets that column's width. The
+            // edge being dragged stays in the loop when it leaves the view, so the drag goes on.
+            let (top, bottom) = (origin.y + r0 as f32 * ch, origin.y + r1 as f32 * ch);
+            let dragged = ui.ctx().dragged_id().and_then(|id| (0..cols).find(|&c| edge_id(c) == id)).filter(|c| !(c0..c1).contains(c));
+            for c in (c0..c1).chain(dragged) {
+                let gap = origin.x + left(c + 1) - 0.5;
+                let edge = egui::Rect::from_x_y_ranges(gap - 3.0..=gap + 3.0, top..=bottom);
+                let h = ui.interact(edge, edge_id(c), egui::Sense::drag()).on_hover_cursor(egui::CursorIcon::ResizeColumn);
+                if h.dragged() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+                    if let Some(p) = h.interact_pointer_pos() {
+                        resized = Some((c, px_digits(p.x - origin.x - left(c))));
+                    }
+                }
+            }
+        });
+    });
+    (clicked, resized)
 }
 
 #[cfg(test)]
@@ -683,6 +782,76 @@ mod tests {
         assert_eq!(sel(app.ui.dialog.as_ref().unwrap()), (1, 1), "Shift+Tab: left");
         frame(&mut app, vec![key(egui::Key::ArrowUp, none)]);
         assert_eq!(sel(app.ui.dialog.as_ref().unwrap()), (0, 1), "Up");
+    }
+
+    /// Dragging a column's right edge shows the column-resize pointer and sets that column's width in
+    /// whole digits, the columns after it moving along; the other columns keep Cell Style's width.
+    /// A drag past 20 digits stops at 20, and Cell Style's Column Width then sets every column.
+    #[test]
+    fn dragging_a_column_edge_sets_that_columns_width() {
+        let (mut app, _) = app_with(",a,b\nQ1,1,2", "column");
+        open(&mut app).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out.platform_output.cursor_icon
+        };
+        let button =
+            |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let edge = |c: usize| ctx.read_response(edge_id(c)).map(|r| r.rect).unwrap_or_else(|| panic!("column {c}'s edge is drawn"));
+        let drag = |app: &mut VectorcraftApp, c: usize, dx: f32| {
+            let at = edge(c).center();
+            frame(app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+            for step in 1..=4 {
+                frame(app, vec![egui::Event::PointerMoved(at + egui::vec2(dx * step as f32 / 4.0, 0.0))]);
+            }
+            frame(app, vec![button(at + egui::vec2(dx, 0.0), false)]);
+            frame(app, vec![egui::Event::PointerMoved(egui::pos2(0.0, 0.0))]);
+        };
+        let digits = |app: &VectorcraftApp| {
+            let d = app.ui.dialog.as_ref().unwrap();
+            (0..4).map(|c| col_digits(d, c)).collect::<Vec<_>>()
+        };
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![]);
+        // The window takes its place over the first frames: hover where the edge is now.
+        let hovered = (0..10).any(|_| frame(&mut app, vec![egui::Event::PointerMoved(edge(1).center())]) == egui::CursorIcon::ResizeColumn);
+        assert!(hovered, "hovering an edge shows the column-resize pointer");
+        let (one, two) = (edge(1).center().x, edge(2).center().x);
+        // 70 points is 10 digits.
+        drag(&mut app, 1, 70.0);
+        assert_eq!(digits(&app), [7, 17, 7, 7]);
+        let moved = [edge(1).center().x - one, edge(2).center().x - two];
+        assert!(moved.iter().all(|m| (m - 70.0).abs() < 0.01), "the columns after it move along: {moved:?}");
+        drag(&mut app, 2, -500.0);
+        assert_eq!(digits(&app), [7, 17, 0, 7], "no narrower than 0 digits");
+        drag(&mut app, 0, 500.0);
+        assert_eq!(digits(&app), [20, 17, 0, 7], "no wider than 20 digits");
+        let d = app.ui.dialog.as_mut().unwrap();
+        set_width(d, 9);
+        assert_eq!(digits(&app), [9; 4], "Cell Style sets every column");
+    }
+
+    #[test]
+    fn a_column_width_in_points_maps_to_whole_digits() {
+        for n in 0..=MAX_WIDTH {
+            assert_eq!(px_digits(digits_px(n)), n);
+        }
+        assert_eq!((px_digits(-40.0), px_digits(1e9), px_digits(f32::NAN)), (0, MAX_WIDTH, 0));
+        let mut d = Dialog::new(KIND, json!({ "width": 7 }));
+        set_col_digits(&mut d, 3, 99);
+        set_col_digits(&mut d, MAX_COLS, 5);
+        assert_eq!((col_digits(&d, 2), col_digits(&d, 3)), (7, MAX_WIDTH));
+        assert_eq!(d.fields["widths"].as_array().map(Vec::len), Some(4), "a column past the sheet is left alone");
+        // `width` set by `ui.dialog.set` sets every column too, also when set back to the width before.
+        for w in [12, 7] {
+            crate::dialogs::set_field(&mut d, "width".into(), json!(w));
+            assert_eq!((col_digits(&d, 2), col_digits(&d, 3)), (w, w));
+        }
+        set_col_digits(&mut d, 1, 4);
+        assert_eq!((col_digits(&d, 1), col_digits(&d, 3)), (4, 7), "a drag after it gives that column its own width");
     }
 
     /// How many buttons (the sheet's cells and the window's own) Graph Data draws in the second of two
