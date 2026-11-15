@@ -1089,6 +1089,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{objects?: [paths|shapes|text|images|effects|groups|linkedFiles|guides], layers?: [locked|hidden]} set the Layers panel's Filter (By Object, By Layer): a row stays when it is of a kind in `objects` and in a state in `layers` (its own lock or eye; an empty list takes every row), or when a row inside it stays; Search All narrows the rows further. A key left out keeps its list. The filter lasts the session and does not change the document, its open rows or the selection → {objects, layers}",
     ),
     (
+        "ui.panelView",
+        "Set Panel View",
+        "",
+        "{panel: swatches|graphicStyles|symbols, view?} set a panel's view, as the view items of its panel menu do: for swatches smallThumb|mediumThumb (the default)|largeThumb|smallList|largeList, for graphicStyles and symbols thumbnail (the default)|smallList|largeList; without `view`, answer the current one. The view lasts the session and does not change the document; an unknown panel or view is an error and changes nothing → {panel, view}",
+    ),
+    (
         "ui.tileEdgeColor",
         "Tile Edge Color…",
         "",
@@ -1253,7 +1259,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.svgFilterDialog",
         "Apply SVG Filter…",
         "",
-        "{index?, item?} open Apply SVG Filter for the active document (dialog `svgFilter`, fields `selected`: a filter's name, `code`: the code being edited, `editing`: \"\", \"new\" or the name of the filter being edited; with index, for the applied svg.filter effect at index of item, as effect.dialog opens it): its list shows svgFilter.list's filters; OK runs svgFilter.apply with selected, or effect.setParams on the applied effect; New and Edit open the code, Save runs svgFilter.define, Delete runs svgFilter.delete and Import… svgFilter.import with a picked SVG file",
+        "{index?, item?} open Apply SVG Filter for the active document (dialog `svgFilter`, fields `selected`: a filter's name, `code`: the code being edited, `editing`: \"\", \"new\" or the name of the filter being edited; with index, for the applied svg.filter effect at index of item, as effect.dialog opens it): its list shows svgFilter.list's defaults (the document's filter of a default's name in its place) and then the document's other filters; OK runs svgFilter.apply with selected, and with index and item for the applied effect; New and Edit open the code, Save runs svgFilter.define (replace: the filter edited, a default included), Delete runs svgFilter.delete (off for a default the document holds no copy of) and Import… svgFilter.import with a picked SVG file",
     ),
     (
         "ui.importSvgFilter",
@@ -1455,6 +1461,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Show in Folder",
         "",
         "{id?} show the file of linked image `id` (default: the selected linked image) in the system's file manager → {path}",
+    ),
+    (
+        "links.copyInfo",
+        "Copy Info",
+        "",
+        "{ids?} copy the file names of images and placed documents `ids` (default: the selected ones and the rows picked in the Links panel, in links.list order) to the clipboard, one per line in that order; an embedded image gives the name its Links panel row shows (Links panel menu) → {text, names}",
     ),
     (
         "ui.placementOptionsDialog",

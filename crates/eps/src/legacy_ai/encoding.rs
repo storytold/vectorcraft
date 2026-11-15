@@ -123,6 +123,9 @@ pub(super) fn lost_attributes(t: &TextObject) -> bool {
             || s.optical_kerning
             || s.small_caps.is_some()
             || s.position != CharPosition::Normal
+            // Its text operators (§15.4) have no Insert Aki.
+            || s.aki_left != 0.0
+            || s.aki_right != 0.0
             || !s.features.is_empty()
             || !s.font_axes.is_empty()
     };
