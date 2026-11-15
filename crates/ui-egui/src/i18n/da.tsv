@@ -1533,6 +1533,7 @@
 	Free Transform	Fri transformering
 	Perspective Distort	Perspektivforvrængning
 	Radial Blur…	Radial sløring…
+	Blur Center	Sløringens midtpunkt
 	Smart Blur…	Smart sløring…
 	Sharpen	Skarphed
 	Unsharp Mask…	Uskarp maskering…
@@ -2139,6 +2140,8 @@ lighting	Light	Lys
 	Leading	Linjeafstand
 	No Break	Ingen ombrydning
 	Proportional Metrics	Proportionale metrikker
+	H or V Style	Vandret eller lodret stil
+	Roman Italics	Romersk kursiv
 	Insert Aki Left	Indsæt aki til venstre
 	Insert Aki Right	Indsæt aki til højre
 	Tsume	Tsume
@@ -2551,6 +2554,7 @@ digits	Malayalam	Malayalam
 	Show Swatch Bounds	Vis farveprøvegrænser
 	Show Tile Edge	Vis flisekant
 	Size Tile to Art	Tilpas flise til grafik
+	Move Tile with Art	Flyt flise med grafik
 	Tile Type:	Flisetype:
 	Top in Front	Toppen forrest
 	V Spacing:	Lodret afstand:
@@ -2593,6 +2597,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Brug sortpunktskompensation
 	Working CMYK (don't tag)	Arbejds-CMYK (mærk ikke)
 	Working RGB (don't tag)	Arbejds-RGB (mærk ikke)
+	Don't Color Manage This Document	Farvestyr ikke dette dokument
+	Working RGB: {name}	Arbejds-RGB: {name}
+	Working CMYK: {name}	Arbejds-CMYK: {name}
 	{name} (spot)	{name} (spotfarve)
 	Add to Profiles…	Tilføj til profiler…
 	Align Stroke to Center	Justér kontur til midten
@@ -3136,6 +3143,7 @@ digits	Malayalam	Malayalam
 	Transparent Background	Gennemsigtig baggrund
 	Choose…	Vælg…
 	Copy Fonts Used in the Document	Kopiér skrifttyper, der bruges i dokumentet
+	Copy Info	Kopiér info
 	Copy Links	Kopiér links
 	Create Report	Opret rapport
 	Fonts whose licence doesn't allow embedding are not copied.	Skrifttyper, hvis licens ikke tillader indlejring, kopieres ikke.
@@ -3186,6 +3194,8 @@ digits	Malayalam	Malayalam
 	Keep a link to an image file instead of only embedding it	Behold et link til en billedfil i stedet for kun at indlejre den
 	Place onto a new locked, dimmed template layer below the current layer	Placér på et nyt låst, nedtonet skabelonlag under det aktuelle lag
 	Swap the selected object for the file, keeping its place and transform	Udskift det markerede objekt med filen, mens placering og transformering bevares
+	Show Import Options	Vis importindstillinger
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Spørg om importindstillinger for hver PDF-, DXF- eller tekstfil, før den placeres; fra: brug de senest valgte indstillinger
 	On: one locked object showing the document, updated when it changes.	Til: ét låst objekt, der viser dokumentet, og som opdateres, når det ændres.
 	Off: an editable copy of its art, embedded in this document.	Fra: en redigerbar kopi af dens grafik, indlejret i dette dokument.
 	Images: link to the file instead of only embedding it.	Billeder: link til filen i stedet for kun at indlejre den.
@@ -4918,6 +4928,7 @@ imageTrace	Outline	Kontur
 	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Dette script har tilføjet rigtig mange objekter. Fortsæt, eller stop det og fortryd det, det har gjort?
 @msg	Copied the script report	Kopierede scriptrapporten
+@msg	Copied the link info	Kopierede linkinfo
 @msg	Corners edits the corners of a path	Hjørner redigerer hjørnerne på en kurve
 @msg	Couldn't copy to the system clipboard: {e}	Kunne ikke kopiere til systemets udklipsholder: {e}
 @msg	Couldn't open {name}: {e}	Kunne ikke åbne {name}: {e}
@@ -6060,6 +6071,9 @@ mark-style	Japanese	Japansk
 	Softness	Blødhed
 	Ambient Light	Omgivelseslys
 	Light behind the object	Lys bag objektet
+	Move Light to Back	Flyt lys bagud
+	Move Light to Front	Flyt lys frem
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Træk et lys for at flytte det. Piletasterne flytter lyset med fokus; Skift flytter det 15° ad gangen.
 	Shadows	Skygger
 	Distance from Object	Afstand fra objektet
 	Shadow Bounds	Skyggegrænser
@@ -6777,6 +6791,8 @@ axis	Y Axis	Y-akse
 	Create New Set	Opret nyt sæt
 	Stop Global Edit	Stop global redigering
 	Global Edit Options	Indstillinger for global redigering
+	Select Similar Objects	Vælg lignende objekter
+	Select Similar Options	Indstillinger for valg af lignende
 	Leave Out of Global Edit	Udelad fra global redigering
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering virker på stier, sammensatte stier, symbolforekomster og grupper af dem
 	Match	Match
@@ -6888,6 +6904,13 @@ axis	Y Axis	Y-akse
 	Graphite Pencil	Grafitblyant
 	Wax Crayon	Vokskridt
 	Charcoal Dust	Kulstøv
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniske kredsløb
+	Circuit Trace	Kredsløbsbane
+	Bus Lines	Buslinjer
+	Terminal Nodes	Terminalpunkter
+
 	Notched Ribbon	Takket bånd
 	Double Line	Dobbelt linje
 	Wave	Bølge

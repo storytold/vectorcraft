@@ -225,7 +225,67 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             same_attribute
         ),
+        cmd!(
+            "select.similar",
+            "Select Similar Objects",
+            [],
+            None,
+            "{by?: \"all\"|\"fillColor\"|\"fillAndStroke\"|\"strokeColor\"|\"strokeWeight\"|\"opacity\"|\"blendingMode\"|\"appearance\"|\"graphicStyle\"|\"shapeType\"|\"symbolInstance\"} the Control bar's Select Similar Objects button and its menu: selects the objects like the first selected object by `by`, running the select.same command of that name; `all` selects the objects with its fill and stroke colours, stroke weight, opacity and blending mode (tints, compound paths and Live Paint faces as select.same.fillColor). A `by` given is kept for the session once the selection is made; without it, the kept one (`all` until one is given). Any other `by` is an error that keeps the selection and the kept attribute → {count, by}",
+            has_selection,
+            similar
+        ),
     ]
+}
+
+/// The attributes Select Similar Objects (`select.similar`) selects by, in its menu's order, each
+/// with the Select › Same command it runs; `all` compares the fill and stroke colours, the stroke
+/// weight, the opacity and the blending mode at once, with no command of its own.
+pub const SIMILAR: [(&str, Option<&str>); 11] = [
+    ("all", None),
+    ("fillColor", Some("select.same.fillColor")),
+    ("fillAndStroke", Some("select.same.fillAndStroke")),
+    ("strokeColor", Some("select.same.strokeColor")),
+    ("strokeWeight", Some("select.same.strokeWeight")),
+    ("opacity", Some("select.same.opacity")),
+    ("blendingMode", Some("select.same.blendingMode")),
+    ("appearance", Some("select.same.appearance")),
+    ("graphicStyle", Some("select.same.graphicStyle")),
+    ("shapeType", Some("select.same.shapeType")),
+    ("symbolInstance", Some("select.same.symbolInstance")),
+];
+
+fn similar(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.similar";
+    let by = match text_param(p, "by", C)? {
+        Some(name) => *SIMILAR.iter().find(|(n, _)| *n == name).ok_or_else(|| {
+            let names: Vec<&str> = SIMILAR.iter().map(|(n, _)| *n).collect();
+            bad(C, format!("unknown `by` \"{name}\": expected one of {}", names.join(", ")))
+        })?,
+        None => *SIMILAR.iter().find(|(n, _)| *n == s.select_similar).unwrap_or(&SIMILAR[0]),
+    };
+    let mut r = match by.1 {
+        Some(same_cmd) => s.execute(same_cmd, &json!({}))?,
+        None => {
+            let tint = s.prefs.select_same_tint_percent;
+            let r = same_fill(s, C, |a, b| {
+                same_paint(&fill_of(a), &fill_of(b), tint)
+                    && same_paint(&stroke_of(a).0, &stroke_of(b).0, tint)
+                    && (stroke_weight(a) - stroke_weight(b)).abs() < 1e-9
+                    && (a.opacity - b.opacity).abs() < 1e-6
+                    && a.blend == b.blend
+            })?;
+            // Select › Reselect repeats `all`, whichever attribute is kept by then.
+            if let Some(last) = s.doc_mut()?.last_selection_cmd.as_mut() {
+                last.1 = json!({ "by": by.0 });
+            }
+            r
+        }
+    };
+    s.select_similar = by.0;
+    // A recorded action or the journal repeats the attribute used, not the one kept by then.
+    s.note_journal("by", json!(by.0));
+    r["by"] = json!(by.0);
+    Ok(r)
 }
 
 /// Selectable objects: children of visible, unlocked layers (or of the isolation container).

@@ -16,6 +16,7 @@ use vectorcraft_geom::{Affine, Rect, Vec2};
 use crate::pixel::PixelSpace;
 use crate::util::{num, text};
 
+pub mod defaults;
 #[cfg(test)]
 mod tests;
 

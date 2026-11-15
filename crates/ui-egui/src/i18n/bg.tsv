@@ -13,6 +13,7 @@
 	Edge Brightness	Яркост на ръба
 	Smoothness	Гладкост
 	Radial Blur…	Лъчезарно размазване…
+	Blur Center	Център на размазването
 	Smart Blur…	Интелигентно размазване…
 	Sharpen	Изостряне
 	Unsharp Mask…	Контурна маска…
@@ -635,6 +636,7 @@ font-technology	Variable	Променливи
 	Copy All Styles	Копиране на всички стилове
 	Copy Color Value (Hex)	Копиране на цветова стойност (Hex)
 	Copy Fonts Used in the Document	Копиране на шрифтовете, използвани в документа
+	Copy Info	Копиране на информация
 	Copy Links	Копиране на връзките
 	Copy Selected Style	Копиране на избрания стил
 	Copy to User Defined	Копиране в потребителски
@@ -2597,6 +2599,8 @@ font-technology	Variable	Променливи
 	Proof Setup	Настройка на пробен печат
 	Properties	Свойства
 	Proportional Metrics	Пропорционални метрики
+	H or V Style	Хоризонтален или вертикален стил
+	Roman Italics	Римски курсив
 	Insert Aki Left	Вмъкване на аки отляво
 	Insert Aki Right	Вмъкване на аки отдясно
 	Tsume	Цуме
@@ -3329,6 +3333,7 @@ digits	Malayalam	Малаялам
 	Sixth Space	Шесто разстояние
 	Size	Размер
 	Size Tile to Art	Оразмеряване на плочката според обектите
+	Move Tile with Art	Преместване на плочката заедно с обектите
 	Size/Leading	Размер/междуредие
 	Size:	Размер:
 	Ridges per segment:	Изпъкналости на сегмент:
@@ -3521,6 +3526,8 @@ digits	Malayalam	Малаялам
 	Swap Fill and Stroke (Shift+X)	Размяна на запълването и щриха (Shift+X)
 	Swap start and end arrowheads	Размяна на началната и крайната стрелка
 	Swap the selected object for the file, keeping its place and transform	Замяна на избрания обект с файла, като се запазват мястото и трансформациите му
+	Show Import Options	Показване на опциите за импортиране
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Питане за опциите за импортиране на всеки PDF, DXF или текстов файл преди поставянето му; изключено: използват се последно избраните опции
 	Stylistic Alternates	Стилистични алтернативи
 	Set {n}	Набор {n}
 	Swash	Декоративен елемент
@@ -3957,6 +3964,9 @@ digits	Malayalam	Малаялам
 	Working CMYK	Работен CMYK
 	Working CMYK (don't tag)	Работен CMYK (без етикет)
 	Working RGB (don't tag)	Работен RGB (без етикет)
+	Don't Color Manage This Document	Без управление на цветовете за този документ
+	Working RGB: {name}	Работен RGB: {name}
+	Working CMYK: {name}	Работен CMYK: {name}
 	Workspace	Работно пространство
 	Workspace {i}	Работно пространство {i}
 	Wrinkle Tool	Инструмент „Набръчкване“
@@ -4187,6 +4197,7 @@ axis	Both	И двете
 	Stop the script and undo what it did? Then quit again.	Да се спре ли скриптът и да се отменят ли промените му? След това излезте отново.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Този скрипт добави изключително много обекти. Да продължи ли, или да се спре и да се отменят промените му?
 @msg	Copied the script report	Копиран е отчетът за скрипта
+@msg	Copied the link info	Информацията за връзката е копирана
 @msg	Corners edits the corners of a path	Ъглите редактират ъглите на пътя
 @msg	Couldn't copy to the system clipboard: {e}	Неуспешно копиране в системния клипборд: {e}
 @msg	Couldn't open {name}: {e}	Неуспешно отваряне на {name}: {e}
@@ -5712,6 +5723,9 @@ theme	Appearance	Външен вид
 	Softness	Мекота
 	Ambient Light	Околна светлина
 	Light behind the object	Светлина зад обекта
+	Move Light to Back	Премести светлината отзад
+	Move Light to Front	Премести светлината отпред
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Плъзнете светлина, за да я преместите. Клавишите със стрелки местят фокусираната светлина; Shift я мести с 15°.
 	Shadows	Сенки
 	Distance from Object	Разстояние от обекта
 	Shadow Bounds	Граници на сянката
@@ -6144,6 +6158,8 @@ axis	Y Axis	Y ос
 	Create New Set	Създаване на нов набор
 	Stop Global Edit	Край на глобалното редактиране
 	Global Edit Options	Опции за глобално редактиране
+	Select Similar Objects	Избор на подобни обекти
+	Select Similar Options	Опции за избор на подобни
 	Leave Out of Global Edit	Изключване от глобалното редактиране
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобалното редактиране работи с пътища, съставни пътища, екземпляри на символи и групи от тях
 	Match	Съвпадение
@@ -6255,6 +6271,13 @@ axis	Y Axis	Y ос
 	Graphite Pencil	Графитен молив
 	Wax Crayon	Восъчен пастел
 	Charcoal Dust	Въглен прах
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технологични схеми
+	Circuit Trace	Проводяща писта
+	Bus Lines	Шинни линии
+	Terminal Nodes	Крайни възли
+
 	Notched Ribbon	Назъбена лента
 	Double Line	Двойна линия
 	Wave	Вълна

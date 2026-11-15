@@ -19,6 +19,7 @@
 	Edge Brightness	Luminosité du bord
 	Smoothness	Lissage
 	Radial Blur…	Flou radial…
+	Blur Center	Centre du flou
 	Smart Blur…	Flou optimisé…
 	Sharpen	Renforcement
 	Unsharp Mask…	Accentuation…
@@ -651,6 +652,7 @@ font-technology	Variable	Variables
 	Copy All Styles	Copier tous les styles
 	Copy Color Value (Hex)	Copier la valeur de couleur (hex)
 	Copy Fonts Used in the Document	Copier les polices utilisées dans le document
+	Copy Info	Copier les informations
 	Copy Links	Copier les liens
 	Copy Selected Style	Copier le style sélectionné
 	Copy to User Defined	Copier dans Défini par l’utilisateur
@@ -2667,6 +2669,8 @@ font-technology	Variable	Variables
 	Proof Setup	Format d’épreuve
 	Properties	Propriétés
 	Proportional Metrics	Métrique proportionnelle
+	H or V Style	Style horizontal ou vertical
+	Roman Italics	Italique des caractères romains
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
 	Tsume	Tsume
@@ -3414,6 +3418,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Espace d’un sixième
 	Size	Taille
 	Size Tile to Art	Ajuster le carreau à l’illustration
+	Move Tile with Art	Déplacer le carreau avec l’illustration
 	Size/Leading	Taille/interlignage
 	Size:	Taille :
 	Ridges per segment:	Crêtes par segment :
@@ -3605,6 +3610,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Permuter le fond et le contour (Maj+X)
 	Swap start and end arrowheads	Permuter les pointes de flèche de début et de fin
 	Swap the selected object for the file, keeping its place and transform	Remplacer l’objet sélectionné par le fichier, en conservant sa position et sa transformation
+	Show Import Options	Afficher les options d’importation
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Demander les options d’importation de chaque fichier PDF, DXF ou texte avant de le placer, sinon utiliser les dernières options choisies
 	Stylistic Alternates	Variantes stylistiques
 	Swash	Lettres ornées
 	Swatch Conflict	Conflit de nuances
@@ -4040,6 +4047,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMJN de travail
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
 	Working RGB (don't tag)	RVB de travail (sans balise)
+	Don't Color Manage This Document	Ne pas gérer les couleurs de ce document
+	Working RGB: {name}	RVB de travail : {name}
+	Working CMYK: {name}	CMJN de travail : {name}
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
 	Wrinkle Tool	Outil Fronces
@@ -4387,6 +4397,7 @@ axis	Both	Les deux
 @msg	there is no script engine named {name}	il n'y a aucun moteur de script nommé {name}
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
+@msg	Copied the link info	Informations sur le lien copiées
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
 @msg	Couldn't copy to the system clipboard: {e}	Impossible de copier dans le presse-papiers du système : {e}
 @msg	Couldn't open {name}: {e}	Impossible d’ouvrir {name} : {e}
@@ -5201,6 +5212,7 @@ axis	Both	Les deux
 @msg	every numbered name for {name} is taken in the document's folder	tous les noms numérotés pour {name} sont déjà pris dans le dossier du document
 @msg	No linked files to look for	Aucun fichier lié à rechercher
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Le lien se trouve dans un symbole, une conception de graphe, un motif ou un masque d’opacité et n’a pas de place sur le canevas
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	l’illustration d’une conception de graphe dans une série de graphe est redessinée à partir de la conception, qu’il faut modifier pour la changer
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services
@@ -5266,6 +5278,7 @@ axis	Both	Les deux
 @msg	automation filesystem access is not granted: write authority is absent: {path}	l’automatisation n’a pas accès au système de fichiers : aucune autorisation d’écriture : {path}
 @msg	automation path rejected: outside the read root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine de lecture {root} : {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines de lecture {roots} : {path}
+@msg	a linked JavaScript file is outside the read roots	un fichier JavaScript lié est hors des dossiers racines de lecture
 @msg	automation path rejected: outside the write root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine d’écriture {root} : {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines d’écriture {roots} : {path}
 @msg	automation path rejected: path is empty	chemin d’automatisation refusé : le chemin est vide
@@ -6099,6 +6112,9 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+	Move Light to Back	Placer la lumière derrière
+	Move Light to Front	Placer la lumière devant
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Faites glisser une lumière pour la déplacer. Les touches fléchées déplacent la lumière active ; Maj par pas de 15°.
 	Shadows	Ombres
 	Distance from Object	Distance de l'objet
 	Shadow Bounds	Limites de l'ombre
@@ -6692,6 +6708,8 @@ axis	Y Axis	Axe Y
 	Create New Set	Créer un jeu
 	Stop Global Edit	Arrêter la modification globale
 	Global Edit Options	Options de modification globale
+	Select Similar Objects	Sélectionner les objets similaires
+	Select Similar Options	Options de sélection des objets similaires
 	Leave Out of Global Edit	Exclure de la modification globale
 	Match	Correspondance
 	On Artboards	Sur les plans de travail
@@ -6814,6 +6832,13 @@ axis	Y Axis	Axe Y
 	Graphite Pencil	Crayon graphite
 	Wax Crayon	Craie grasse
 	Charcoal Dust	Poussière de fusain
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuits techniques
+	Circuit Trace	Piste de circuit
+	Bus Lines	Lignes de bus
+	Terminal Nodes	Nœuds terminaux
+
 	Notched Ribbon	Ruban cranté
 	Double Line	Double ligne
 	Wave	Vague
@@ -8907,6 +8932,7 @@ breakText	Glyphs	Glyphes
 @msg	the RTF file is too large to place as type (at most {_1} MB)	le fichier RTF est trop volumineux pour être importé comme texte (au plus {_1} Mo)
 @msg	the SVG expands to more than {0} nested SVG images	le SVG se développe en plus de {0} images SVG imbriquées
 @msg	the SVG expands to more than {0} objects	le SVG se développe en plus de {0} objets
+@msg	the SVG's style sheets take too long to match	la mise en correspondance des feuilles de style du SVG prend trop de temps
 @msg	the SVG's styles expand to more than {0} MB	les styles du SVG se développent en plus de {0} Mo
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	le fichier SVG dépasse {MAX_IMPORT_BYTES} octets
 @msg	the SVG has no drawable objects	le SVG n’a aucun objet dessinable
@@ -9126,7 +9152,7 @@ breakText	Glyphs	Glyphes
 @msg	unexpected resources	ressources inattendues
 @msg	unknown CMYK profile `{name}`	profil CMJN inconnu `{name}`
 @msg	unknown File Info field `{k}`	champ Informations sur le fichier inconnu `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	fonctionnalité OpenType inconnue `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital ; préfixe - pour désactiver ; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom et aalt acceptent un numéro de variante sous la forme `tag=N` avec N de 0 à {_1}, comme `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	fonctionnalité OpenType inconnue `{t}` dans featureChanges (les balises qu’accepte `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	paramètre prédéfini PDF inconnu `{name}` (paramètres prédéfinis : {_1})
 @msg	unknown Warp style	style de déformation inconnu

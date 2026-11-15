@@ -158,6 +158,17 @@ fn ligature_glyphs(t: &LigatureSubstFormat1<'_>, room: usize) -> Vec<u32> {
     out
 }
 
+/// Does `features` (a `GSUB` or `GPOS` feature list) have feature `tag` with at least one lookup?
+/// At most [`MAX_FEATURES`] feature records are read.
+fn has_feature(features: &skrifa::raw::tables::layout::FeatureList<'_>, tag: [u8; 4]) -> bool {
+    features
+        .feature_records()
+        .iter()
+        .take(MAX_FEATURES)
+        .filter(|r| r.feature_tag().to_be_bytes() == tag)
+        .any(|r| r.feature(features.offset_data()).is_ok_and(|f| !f.lookup_list_indices().is_empty()))
+}
+
 impl GsubIndex {
     /// Read `face`'s `GSUB` table. Empty when the face has none or it cannot be read; glyph ids past
     /// the face's glyph count are left out; the caps above bound what a damaged table makes it read.
@@ -302,6 +313,22 @@ pub enum JoiningPosition {
 impl FontFace {
     fn gsub_index(&self) -> &GsubIndex {
         self.gsub.get_or_init(|| GsubIndex::read(self))
+    }
+
+    /// Does the face's `GSUB` table have feature `tag` with at least one lookup? At most
+    /// [`MAX_FEATURES`] feature records are read; false when the face has no `GSUB` table or it
+    /// cannot be read.
+    pub fn has_substitution_feature(&self, tag: [u8; 4]) -> bool {
+        let Some(font) = self.skrifa() else { return false };
+        font.gsub().ok().and_then(|g| g.feature_list().ok()).is_some_and(|features| has_feature(&features, tag))
+    }
+
+    /// Does the face's `GPOS` table have feature `tag` with at least one lookup? At most
+    /// [`MAX_FEATURES`] feature records are read; false when the face has no `GPOS` table or it
+    /// cannot be read.
+    pub fn has_positioning_feature(&self, tag: [u8; 4]) -> bool {
+        let Some(font) = self.skrifa() else { return false };
+        font.gpos().ok().and_then(|g| g.feature_list().ok()).is_some_and(|features| has_feature(&features, tag))
     }
 
     /// What the features `aalt`, `salt`, `ss01` to `ss20`, `swsh`, `cv01` to `cv99`, `hist`,

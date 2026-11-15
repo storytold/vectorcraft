@@ -1442,6 +1442,7 @@
 	Free Transform	Vrij transformeren
 	Perspective Distort	Perspectief vervormen
 	Radial Blur…	Radiaal vervagen…
+	Blur Center	Middelpunt van vervaging
 	Smart Blur…	Slim vervagen…
 	Sharpen	Verscherpen
 	Unsharp Mask…	Onscherp maskeren…
@@ -2048,6 +2049,8 @@ lighting	Light	Licht
 	Leading	Regelafstand
 	No Break	Niet afbreken
 	Proportional Metrics	Proportionele metingen
+	H or V Style	Horizontale of verticale stijl
+	Roman Italics	Romeinse cursief
 	Insert Aki Left	Aki links invoegen
 	Insert Aki Right	Aki rechts invoegen
 	Tsume	Tsume
@@ -2460,6 +2463,7 @@ digits	Malayalam	Malayalam
 	Show Swatch Bounds	Staalgrenzen weergeven
 	Show Tile Edge	Tegelrand weergeven
 	Size Tile to Art	Tegel aan artwork aanpassen
+	Move Tile with Art	Tegel met artwork verplaatsen
 	Tile Type:	Tegeltype:
 	Top in Front	Bovenkant voorop
 	V Spacing:	V-spatiëring:
@@ -2502,6 +2506,9 @@ digits	Malayalam	Malayalam
 	Use Black Point Compensation	Zwartpuntcompensatie gebruiken
 	Working CMYK (don't tag)	Werk-CMYK (niet taggen)
 	Working RGB (don't tag)	Werk-RGB (niet taggen)
+	Don't Color Manage This Document	Geen kleurbeheer voor dit document
+	Working RGB: {name}	Werk-RGB: {name}
+	Working CMYK: {name}	Werk-CMYK: {name}
 	{name} (spot)	{name} (spotkleur)
 	Add to Profiles…	Toevoegen aan profielen…
 	Align Stroke to Center	Lijn in het midden uitlijnen
@@ -3045,6 +3052,7 @@ digits	Malayalam	Malayalam
 	Transparent Background	Transparante achtergrond
 	Choose…	Kies…
 	Copy Fonts Used in the Document	In het document gebruikte lettertypen kopiëren
+	Copy Info	Info kopiëren
 	Copy Links	Koppelingen kopiëren
 	Create Report	Rapport maken
 	Fonts whose licence doesn't allow embedding are not copied.	Lettertypen waarvan de licentie insluiten niet toestaat, worden niet gekopieerd.
@@ -3095,6 +3103,8 @@ digits	Malayalam	Malayalam
 	Keep a link to an image file instead of only embedding it	Een koppeling met een afbeeldingsbestand behouden in plaats van het alleen in te sluiten
 	Place onto a new locked, dimmed template layer below the current layer	Plaatsen op een nieuwe, vergrendelde, gedimde sjabloonlaag onder de huidige laag
 	Swap the selected object for the file, keeping its place and transform	Het geselecteerde object vervangen door het bestand, met behoud van positie en transformatie
+	Show Import Options	Importopties tonen
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Vóór het plaatsen naar de importopties van elk PDF-, DXF- of tekstbestand vragen; uit: de laatst gekozen opties gebruiken
 	On: one locked object showing the document, updated when it changes.	Aan: één vergrendeld object dat het document weergeeft, bijgewerkt wanneer het verandert.
 	Off: an editable copy of its art, embedded in this document.	Uit: een bewerkbare kopie van de artwork, ingesloten in dit document.
 	Images: link to the file instead of only embedding it.	Afbeeldingen: koppel aan het bestand in plaats van het alleen in te sluiten.
@@ -4827,6 +4837,7 @@ imageTrace	Outline	Contour
 	Stop the script and undo what it did? Then quit again.	Het script stoppen en de wijzigingen ervan ongedaan maken? Sluit daarna opnieuw af.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Dit script heeft heel veel objecten toegevoegd. Doorgaan, of het stoppen en de wijzigingen ervan ongedaan maken?
 @msg	Copied the script report	Scriptrapport gekopieerd
+@msg	Copied the link info	Koppelingsinfo gekopieerd
 @msg	Corners edits the corners of a path	Hoeken bewerkt de hoeken van een pad
 @msg	Couldn't copy to the system clipboard: {e}	Kon niet naar het systeemklembord kopiëren: {e}
 @msg	Couldn't open {name}: {e}	Kon {name} niet openen: {e}
@@ -6029,6 +6040,7 @@ imageTrace	Outline	Contour
 @msg	a layer's form has no dictionary	het formulier van een laag heeft geen woordenboek
 @msg	a legend draws at most {MAX_CHIPS} swatches	een legenda tekent maximaal {MAX_CHIPS} stalen
 @msg	a linked JavaScript file is outside the read roots	een gekoppeld JavaScript-bestand staat buiten de leesroots
+@msg	a linked image file is outside the read roots	een gekoppeld afbeeldingsbestand staat buiten de leesroots
 @msg	a name names one asset: give multiple: false, or one object	een naam noemt één asset: geef multiple: false, of één object
 @msg	a namespace declaration uses a reserved prefix or URI	een naamruimtedeclaratie gebruikt een gereserveerd voorvoegsel of een gereserveerde URI
 @msg	a namespace qualifier is undefined	een naamruimtekwalificatie is niet gedefinieerd
@@ -6986,6 +6998,7 @@ imageTrace	Outline	Contour
 @msg	the RTF file is too large to place as type (at most {_1} MB)	het RTF-bestand is te groot om als tekst te plaatsen (maximaal {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	de SVG wordt uitgevouwen tot meer dan {0} geneste SVG-afbeeldingen
 @msg	the SVG expands to more than {0} objects	de SVG wordt uitgevouwen tot meer dan {0} objecten
+@msg	the SVG's style sheets take too long to match	het vergelijken van de stijlbladen van de SVG duurt te lang
 @msg	the SVG's styles expand to more than {0} MB	de stijlen van de SVG worden uitgevouwen tot meer dan {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	het SVG-bestand is groter dan {MAX_IMPORT_BYTES} bytes
 @msg	the SVG has no drawable objects	de SVG heeft geen tekenbare objecten
@@ -7215,7 +7228,7 @@ imageTrace	Outline	Contour
 @msg	unexpected resources	onverwachte resources
 @msg	unknown CMYK profile `{name}`	onbekend CMYK-profiel `{name}`
 @msg	unknown File Info field `{k}`	onbekend veld `{k}` van Bestandsinfo
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	onbekende OpenType-functie `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; zet er - voor om uit te schakelen; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom en aalt accepteren het nummer van een alternatief als `tag=N` met N van 0 tot {_1}, zoals `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	onbekende OpenType-functie `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; zet er - voor om uit te schakelen; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom en aalt accepteren het nummer van een alternatief als `tag=N` met N van 0 tot {_1}, zoals `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	onbekende OpenType-functie `{t}` in featureChanges (de tags die `features` accepteert)
 @msg	unknown PDF preset `{name}` (presets: {_1})	onbekende PDF-voorinstelling `{name}` (voorinstellingen: {_1})
 @msg	unknown Warp style	onbekende warpstijl
@@ -7852,6 +7865,9 @@ mark-style	Japanese	Japans
 	Softness	Zachtheid
 	Ambient Light	Omgevingslicht
 	Light behind the object	Licht achter het object
+	Move Light to Back	Licht naar achteren
+	Move Light to Front	Licht naar voren
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Sleep een licht om het te verplaatsen. De pijltoetsen verplaatsen het licht met de focus; Shift verplaatst het per 15°.
 	Shadows	Schaduwen
 	Distance from Object	Afstand tot object
 	Shadow Bounds	Schaduwgrenzen
@@ -8611,6 +8627,8 @@ axis	Y Axis	Y-as
 	Create New Set	Nieuwe set maken
 	Stop Global Edit	Globale bewerking stoppen
 	Global Edit Options	Opties voor globale bewerking
+	Select Similar Objects	Vergelijkbare objecten selecteren
+	Select Similar Options	Opties voor vergelijkbare objecten selecteren
 	Leave Out of Global Edit	Uitsluiten van globale bewerking
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale bewerking werkt op paden, samengestelde paden, symboolinstanties en groepen daarvan
 	Match	Overeenkomst
@@ -8722,6 +8740,13 @@ axis	Y Axis	Y-as
 	Graphite Pencil	Grafietpotlood
 	Wax Crayon	Waskrijt
 	Charcoal Dust	Houtskoolstof
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technische schakelingen
+	Circuit Trace	Printspoor
+	Bus Lines	Buslijnen
+	Terminal Nodes	Aansluitpunten
+
 	Notched Ribbon	Gekerfd lint
 	Double Line	Dubbele lijn
 	Wave	Golf

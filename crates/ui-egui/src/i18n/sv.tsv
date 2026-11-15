@@ -15,6 +15,7 @@
 	Edge Brightness	Kantljusstyrka
 	Smoothness	Mjukhet
 	Radial Blur…	Radiell oskärpa…
+	Blur Center	Oskärpans mittpunkt
 	Smart Blur…	Smart oskärpa…
 	Sharpen	Skärpa
 	Unsharp Mask…	Oskarp mask…
@@ -637,6 +638,7 @@ font-technology	Variable	Variabla
 	Copy All Styles	Kopiera alla stilar
 	Copy Color Value (Hex)	Kopiera färgvärde (hex)
 	Copy Fonts Used in the Document	Kopiera typsnitt som används i dokumentet
+	Copy Info	Kopiera info
 	Copy Links	Kopiera länkar
 	Copy Selected Style	Kopiera markerad stil
 	Copy to User Defined	Kopiera till användardefinierade
@@ -2612,6 +2614,8 @@ font-technology	Variable	Variabla
 	Proof Setup	Provtrycksinställningar
 	Properties	Egenskaper
 	Proportional Metrics	Proportionella mått
+	H or V Style	Vågrät eller lodrät stil
+	Roman Italics	Romersk kursiv
 	Insert Aki Left	Infoga aki till vänster
 	Insert Aki Right	Infoga aki till höger
 	Tsume	Tsume
@@ -3344,6 +3348,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Sjättedelsblanksteg
 	Size	Storlek
 	Size Tile to Art	Anpassa rutans storlek efter grafiken
+	Move Tile with Art	Flytta rutan med grafiken
 	Size/Leading	Storlek/radavstånd
 	Size:	Storlek:
 	Ridges per segment:	Åsar per segment:
@@ -3535,6 +3540,8 @@ digits	Malayalam	Malayalam
 	Swap Fill and Stroke (Shift+X)	Byt plats på fyllning och kontur (Shift+X)
 	Swap start and end arrowheads	Byt plats på start- och slutpilspets
 	Swap the selected object for the file, keeping its place and transform	Ersätt det markerade objektet med filen och behåll dess placering och transformering
+	Show Import Options	Visa importalternativ
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Fråga efter importalternativ för varje PDF-, DXF- eller textfil innan den placeras; av: använd de senast valda alternativen
 	Stylistic Alternates	Stilistiska alternativ
 	Swash	Swash
 	Swatch Conflict	Färgrutekonflikt
@@ -3970,6 +3977,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	Arbets-CMYK
 	Working CMYK (don't tag)	Arbets-CMYK (tagga inte)
 	Working RGB (don't tag)	Arbets-RGB (tagga inte)
+	Don't Color Manage This Document	Färghantera inte det här dokumentet
+	Working RGB: {name}	Arbets-RGB: {name}
+	Working CMYK: {name}	Arbets-CMYK: {name}
 	Workspace	Arbetslayout
 	Workspace {i}	Arbetslayout {i}
 	Wrinkle Tool	Skrynkelverktyg
@@ -4308,6 +4318,7 @@ axis	Both	Båda
 @msg	there is no script engine named {name}	det finns ingen skriptmotor med namnet {name}
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
+@msg	Copied the link info	Kopierade länkinfo
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
 @msg	Couldn't open {name}: {e}	Kunde inte öppna {name}: {e}
@@ -5994,6 +6005,9 @@ theme	Appearance	Utseende
 	Softness	Mjukhet
 	Ambient Light	Omgivande ljus
 	Light behind the object	Ljus bakom objektet
+	Move Light to Back	Flytta ljus bakåt
+	Move Light to Front	Flytta ljus framåt
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Dra ett ljus för att flytta det. Piltangenterna flyttar ljuset med fokus; Skift flyttar det 15° i taget.
 	Shadows	Skuggor
 	Distance from Object	Avstånd från objektet
 	Shadow Bounds	Skuggans gränser
@@ -6677,6 +6691,8 @@ axis	Y Axis	Y-axel
 	Create New Set	Skapa ny uppsättning
 	Stop Global Edit	Avsluta global redigering
 	Global Edit Options	Alternativ för global redigering
+	Select Similar Objects	Markera liknande objekt
+	Select Similar Options	Alternativ för att markera liknande
 	Leave Out of Global Edit	Uteslut från global redigering
 	Match	Matcha
 	On Artboards	På ritytor
@@ -6799,6 +6815,13 @@ axis	Y Axis	Y-axel
 	Graphite Pencil	Grafitpenna
 	Wax Crayon	Vaxkrita
 	Charcoal Dust	Koldamm
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniska kretsar
+	Circuit Trace	Kretsbana
+	Bus Lines	Bussledningar
+	Terminal Nodes	Anslutningspunkter
+
 	Notched Ribbon	Hackat band
 	Double Line	Dubbellinje
 	Wave	Våg
@@ -8682,6 +8705,7 @@ digits	Hindi	Hindi
 @msg	the subpath has no ends to extend (it is closed or a single point)	delbanan har inga ändar att förlänga (den är stängd eller en enkel punkt)
 @msg	the SVG expands to more than {0} nested SVG images	SVG-filen expanderar till fler än {0} kapslade SVG-bilder
 @msg	the SVG expands to more than {0} objects	SVG-filen expanderar till fler än {0} objekt
+@msg	the SVG's style sheets take too long to match	matchningen av SVG-filens formatmallar tar för lång tid
 @msg	the SVG's styles expand to more than {0} MB	SVG-filens stilar expanderar till mer än {0} MB
 @msg	the SVG has no drawable objects	SVG-filen har inga ritbara objekt
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ-filen packas upp till mer än {_1} MB
