@@ -49,6 +49,8 @@ font-technology	Variable	가변
 	Insert Aki Left	앞 아키 삽입
 	Insert Aki Right	뒤 아키 삽입
 	Tsume	츠메
+	Adjust Horizontal Diacritic Position	발음 구별 기호 가로 위치 조정
+	Adjust Vertical Diacritic Position	발음 구별 기호 세로 위치 조정
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
@@ -1928,6 +1930,7 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Find the selected colors in the artwork	선택한 색상을 아트웍에서 찾기
 	Height	높이
 	Height:	높이:
 	Help › Search Commands…	도움말 › 명령 검색…
@@ -5557,6 +5560,8 @@ effect	Vertical	세로
 	Step up or down	한 단계 올리기 또는 내리기
 	Drag values or labels. Double-click a value to type.	값이나 레이블을 드래그하세요. 값을 더블클릭하면 입력할 수 있습니다.
 	Drag rings to rotate. Shift snaps to 15°.	링을 드래그해 회전하세요. Shift를 누르면 15°씩 스냅됩니다.
+	Track cube	회전 큐브
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	면, 모서리 또는 링을 드래그해 회전하세요. Shift를 누르면 화면의 한 축을 중심으로 회전합니다.
 	Drag the light, or its rings. Shift snaps to 15°.	조명이나 링을 드래그하세요. Shift를 누르면 15°씩 스냅됩니다.
 lighting	Light	광원
 	Keep visible surfaces only when expanding	확장 시 보이는 표면만 유지
@@ -9186,3 +9191,20 @@ breakText	Glyphs	글리프
 @msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what}은(는) 한 장에 {MAX_COPIES_PER_SHEET}개보다 많이 인쇄됩니다: 크기를 키우세요
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}은(는) 타일 {MAX_TILES}개보다 많이 나뉘어 인쇄됩니다: 크기를 줄이세요
 @msg	{what} {i} out of range	{what} {i}이(가) 범위를 벗어났습니다
+	Packaging Tools	패키징 도구
+	Fold Lines	접는 선
+	Make Cut Line	재단선으로 만들기
+	Make Crease Line	오시선으로 만들기
+	Make Partial Cut Line	하프 컷 선으로 만들기
+	Make Perforation Line	미싱선으로 만들기
+	Make Fold Line	접는 선으로 만들기
+	Role Swatches…	선 종류 견본…
+	Role Swatches	선 종류 견본
+	Role	선 종류
+	Cut Line	재단선
+	Crease Line	오시선
+	Partial Cut Line	하프 컷 선
+	Perforation Line	미싱선
+	No objects are selected.	선택한 개체가 없습니다.
+	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
+	Remove Fold Line Role	선 종류 제거

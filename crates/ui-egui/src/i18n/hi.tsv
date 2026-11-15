@@ -1508,6 +1508,8 @@ antiAlias	Sharp	शार्प
 	Drag out from a corner, or click two straight lines, then click to place.	एक कोने से बाहर खींचें, या दो सीधी रेखाओं पर क्लिक करें, फिर जगह पर क्लिक करें।
 	Drag out from a segment, or click two points, then click to place.	एक खंड से बाहर खींचें, या दो बिंदुओं पर क्लिक करें, फिर जगह पर क्लिक करें।
 	Drag rings to rotate. Shift snaps to 15°.	घुमाने के लिए रिंग ड्रैग करें। Shift से 15° पर स्नैप होता है।
+	Track cube	घुमाने का घन
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	घुमाने के लिए फलक, किनारा या रिंग ड्रैग करें। Shift से स्क्रीन के एक अक्ष के चारों ओर घूमता है।
 	Drag the art to move it on the paper	इसे कागज पर स्थानांतरित करने के लिए कला को खींचें
 	Drag the light, or its rings. Shift snaps to 15°.	लाइट या उसकी रिंग ड्रैग करें। Shift से 15° पर स्नैप होता है।
 	Drag to float as a toolbar	एक टूलबार के रूप में तैरने के लिए खींचें
@@ -3771,6 +3773,8 @@ antiAlias	Sharp	शार्प
 	Insert Aki Left	बाईं ओर आकी जोड़ें
 	Insert Aki Right	दाईं ओर आकी जोड़ें
 	Tsume	त्सुमे
+	Adjust Horizontal Diacritic Position	डायक्रिटिक की क्षैतिज स्थिति समायोजित करें
+	Adjust Vertical Diacritic Position	डायक्रिटिक की लंबवत स्थिति समायोजित करें
 	Proportional Oldstyle	आनुपातिक ओल्डस्टाइल
 	Protect Corners	कॉर्नर को सुरक्षित रखें
 	Proximity Guides	निकटता गाइड
@@ -4647,6 +4651,7 @@ antiAlias	Sharp	शार्प
 	Show Center Mark	शो सेंटर मार्क
 	Show Code	कोड दिखाएं
 	Show color bars	रंग सलाखों दिखाएँ
+	Find the selected colors in the artwork	चयनित रंगों को आर्टवर्क में खोजें
 	Show Color Groups	रंग समूह दिखाएँ
 	Show Color Swatches	रंग स्वॉचेस दिखाएँ
 	Show Corner Widget	शो कॉर्नर विजेट
@@ -9183,3 +9188,20 @@ theme	Appearance	अपीयरेंस
 	Nest Shapes…	आकृतियाँ सटाकर रखें…
 	Nest Shapes	आकृतियाँ सटाकर रखें
 	Roll	रोल
+	Packaging Tools	पैकेजिंग टूल्स
+	Fold Lines	फ़ोल्ड लाइनें
+	Make Cut Line	कट लाइन बनाएँ
+	Make Crease Line	क्रीज़ लाइन बनाएँ
+	Make Partial Cut Line	आंशिक कट लाइन बनाएँ
+	Make Perforation Line	परफ़ोरेशन लाइन बनाएँ
+	Make Fold Line	फ़ोल्ड लाइन बनाएँ
+	Role Swatches…	लाइन प्रकार के स्वॉचेस…
+	Role Swatches	लाइन प्रकार के स्वॉचेस
+	Role	लाइन प्रकार
+	Cut Line	कट लाइन
+	Crease Line	क्रीज़ लाइन
+	Partial Cut Line	आंशिक कट लाइन
+	Perforation Line	परफ़ोरेशन लाइन
+	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
+	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
+	Remove Fold Line Role	लाइन प्रकार हटाएँ
