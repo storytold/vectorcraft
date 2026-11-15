@@ -555,9 +555,15 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
     let of = super::appearance::reference_of(s, p, item, cmd)?;
     let paint = if span {
-        // With a design's art, the gradient spans only the objects with a row equal to the art's, which take it.
-        let spanned: Vec<NodeId> = ids.iter().zip(item.per_target_of(s, of, &ids)).filter_map(|(id, it)| it.map(|_| *id)).collect();
-        placed_across(&s.doc()?.doc, &spanned, paint, p, fill)
+        // With a design's art, the gradient spans only the objects with a row equal to the art's, which take it. Each
+        // object's box is that of the row it edits.
+        let d = &s.doc()?.doc;
+        let mut spanned = Vec::with_capacity(ids.len());
+        for (id, it) in ids.iter().zip(item.per_target_of(s, of, &ids)) {
+            let (Some(it), Some(n)) = (it, d.node(*id)) else { continue };
+            spanned.push((*id, it.resolve(&n.appearance, fill, cmd)?));
+        }
+        placed_across(d, &spanned, paint, p, fill)
     } else {
         paint
     };
@@ -730,14 +736,15 @@ fn spans_targets(p: &Value, paint: &Paint) -> std::result::Result<bool, String> 
     Ok(true)
 }
 
-/// `paint` placed once on the union of the bounds of `ids` (each one's fill box, or the box its
-/// stroke paints), at the gradient's angle and aspect: every target gets the same vector in
-/// document coordinates, so the ramp runs on across them (#2127).
-fn placed_across(d: &Document, ids: &[NodeId], paint: Paint, p: &Value, fill: bool) -> Paint {
+/// `paint` placed once on the union of the bounds of `ids` (each one's fill box, or the box the
+/// stroke it edits paints: the row given with it, `None` for the topmost), at the gradient's angle
+/// and aspect: every target gets the same vector in document coordinates, so the ramp runs on
+/// across them (#2127).
+fn placed_across(d: &Document, ids: &[(NodeId, Option<usize>)], paint: Paint, p: &Value, fill: bool) -> Paint {
     let union = ids
         .iter()
-        .filter_map(|id| d.node(*id))
-        .filter_map(|n| item_paint_bounds(n, None, fill).or_else(|| n.geometric_bounds()))
+        .filter_map(|(id, index)| Some((d.node(*id)?, *index)))
+        .filter_map(|(n, index)| item_paint_bounds(n, index, fill).or_else(|| n.geometric_bounds()))
         .filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()))
         .reduce(|a, b| a.union(b));
     let (Some(union), Paint::Gradient(g)) = (union, &paint) else { return paint };

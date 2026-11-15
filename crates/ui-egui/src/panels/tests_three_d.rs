@@ -1110,6 +1110,73 @@ fn the_classic_options_dialog_has_the_lighting_sphere_with_white_lights() {
     assert_eq!(color(EXTRUDE), egui::Color32::from_rgb(255, 0, 0));
 }
 
+fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
+    app.run("assets.list", json!({})).unwrap()["assets"].as_array().unwrap().clone()
+}
+
+/// The panel always shows Export 3D Object; it adds only the selected objects that have a 3D
+/// effect to Asset Export as 3D assets, in one undo step, selects their assets there and shows the
+/// Asset Export panel. Run again, it records nothing and still selects them.
+#[test]
+fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
+    let mut app = app();
+    assert!(painted_text(&mut app, show).contains("Export 3D Object"));
+    let ctx = egui::Context::default();
+    // Without a 3D object: an error, nothing recorded, no asset.
+    let history = undo_len(&app);
+    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    assert_eq!((undo_len(&app), assets(&mut app).len()), (history, 0));
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    app.run("layer.setProps", json!({"id": a, "name": "Box"})).unwrap();
+    assert!(painted_text(&mut app, show).contains("Export 3D Object"));
+    let plain = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    // A hidden 3D effect draws nothing to export: the object is left out like one without.
+    let hidden = app.run("shape.rectangle", json!({"x": 100, "y": 250, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("effect.setParams", json!({"index": 0, "item": null, "visible": false})).unwrap();
+    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    app.run("select.set", json!({"ids": [plain, a, hidden]})).unwrap();
+    assert_eq!(super::selected_3d_objects(&app), [a]);
+    assert!(!crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    let history = undo_len(&app);
+    super::export_3d_object(&mut app, &ctx).unwrap();
+    assert_eq!(undo_len(&app), history + 1);
+    let list = assets(&mut app);
+    assert_eq!(list.len(), 1, "{list:?}");
+    assert_eq!((list[0]["name"].clone(), list[0]["format3D"].clone()), (json!("Box"), json!("usda")));
+    let asset = list[0]["id"].as_u64().unwrap();
+    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
+    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    // Already an asset: no undo step, the same asset selected again, the panel left showing.
+    super::set_pstate(&ctx, "asset-export-selected", Vec::<u64>::new());
+    super::export_3d_object(&mut app, &ctx).unwrap();
+    assert_eq!((undo_len(&app), assets(&mut app).len()), (history + 1, 1));
+    assert_eq!(super::pstate::<Vec<u64>>(&ctx, "asset-export-selected"), [asset]);
+    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    // Undo takes the asset away.
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(assets(&mut app).is_empty());
+}
+
+/// A selected 3D object inside another selected 3D object is not collected on its own: the outer
+/// object's asset holds it.
+#[test]
+fn export_3d_object_leaves_out_a_3d_object_inside_another() {
+    let mut app = app();
+    let inner = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    let other = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [inner, other]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [inner, group]})).unwrap();
+    let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+    assert!(selected.contains(&inner) && selected.contains(&group), "{selected:?}");
+    assert_eq!(super::selected_3d_objects(&app), [group]);
+}
+
 #[test]
 fn changed_settings_lists_only_new_values() {
     let before = json!({"depth": 50.0, "cap": true, "bevel": "none"});

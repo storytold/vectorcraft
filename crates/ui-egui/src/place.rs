@@ -88,6 +88,11 @@ pub struct PlaceState {
 /// file is placed.
 const ASKED: &str = "__placeCursorAsk";
 
+/// The `file.place` param that keeps where a file dropped on a canvas goes (`{doc, reverts}`, as
+/// [`DropAt`]) through the import options dialog the drop opened, so its OK places the file in that
+/// document; hidden from the dialog's fields and removed before the file is placed.
+const DROPPED: &str = "__dropTarget";
+
 /// A place cursor thumbnail: decoded when the cursor is loaded, uploaded when first drawn (and
 /// again in a new graphics context).
 struct Thumb {
@@ -149,7 +154,23 @@ enum Read {
     ForUser { dropped: bool },
 }
 
-fn place_file(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value, String> {
+fn place_file(app: &mut VectorcraftApp, p: &Value, mut read: Read) -> Result<Value, String> {
+    // A file dropped on a canvas, and the OK of the import options its drop asked for, go to the
+    // document it was dropped on, which becomes active again; not when that document has closed or
+    // been reverted since.
+    if let Some(target) = p.get(DROPPED) {
+        let field = |k: &str| target.get(k).and_then(Value::as_u64);
+        let Some(i) = app.session.documents().iter().position(|st| Some(st.uid) == field("doc")) else {
+            return Err("the document it was dropped on was closed".into());
+        };
+        if app.session.documents().get(i).is_some_and(|st| Some(st.reverts) != field("reverts")) {
+            return Err("the document it was dropped on was reverted".into());
+        }
+        app.session.set_active(i);
+        if let Read::ForUser { .. } = read {
+            read = Read::ForUser { dropped: true };
+        }
+    }
     // The OK of import options a click of the place cursor asked for places within the roots the
     // cursor was loaded in. A caller with roots of its own places within those.
     let Some(token) = p.get(ASKED) else { return place_file_in(app, p, read) };
@@ -224,6 +245,7 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     }
     if let Some(o) = p.as_object_mut() {
         o.remove(ASKED);
+        o.remove(DROPPED);
     }
     match read {
         Read::ForUser { dropped } if crate::placing::available(app) => {
@@ -619,29 +641,20 @@ pub type DropFile = (String, Option<String>, Vec<u8>);
 /// Files dropped on the window, each placed on a canvas or opened (and added to Open Recent
 /// Files) as its target says: the placed ones first, so the last document opened is the one
 /// shown. A file for a canvas goes to the document it was dropped on, which becomes active again;
-/// it isn't placed when that document has closed or been reverted since.
+/// it isn't placed when that document has closed or been reverted since, and neither is it by the
+/// OK of an import options dialog the drop opened ([`DROPPED`]).
 pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile)>) {
     files.sort_by_key(|(target, _)| *target == DropTarget::Open);
     for (target, (name, path, bytes)) in files {
-        if let DropTarget::Place(d) = target {
-            let Some(i) = app.session.documents().iter().position(|st| st.uid == d.doc) else {
-                app.status(format!("Couldn't place {name}: the document it was dropped on was closed"));
-                continue;
-            };
-            if app.session.documents().get(i).is_some_and(|st| st.reverts != d.reverts) {
-                app.status(format!("Couldn't place {name}: the document it was dropped on was reverted"));
-                continue;
-            }
-            app.session.set_active(i);
-        }
         let r = match target {
-            DropTarget::Place(DropAt { at, embed, .. }) => {
+            DropTarget::Place(DropAt { doc, reverts, at, embed }) => {
                 let mut p = match &path {
                     Some(path) => json!({ "path": path }),
                     None => json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes) }),
                 };
                 p["at"] = json!([at.x, at.y]);
                 p["link"] = json!(!embed);
+                p[DROPPED] = json!({ "doc": doc, "reverts": reverts });
                 place_file(app, &p, Read::ForUser { dropped: true }).map(|_| ())
             }
             DropTarget::Open => match path.as_deref() {

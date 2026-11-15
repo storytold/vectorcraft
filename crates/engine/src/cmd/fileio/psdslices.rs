@@ -18,7 +18,7 @@
 use vectorcraft_doc::{SliceKind, SliceOptions};
 use vectorcraft_geom::Rect;
 
-use super::psdread::{Reader, TRUNCATED, header, resources};
+use super::psdread::{Reader, TRUNCATED, header, resource};
 
 /// The image resource that holds the slices.
 const SLICES: u16 = 1050;
@@ -51,12 +51,12 @@ struct Stored {
 }
 
 /// The slices PSD or PSB file `bytes` stores. `None` when it stores none (no `8BIM` resource 1050
-/// before the image resources end or are cut short). An error when the file isn't a PSD or PSB
-/// file, or its slices can't be read.
+/// before the image resources end, or before a block that is cut short ahead of it). An error when
+/// the file isn't a PSD or PSB file, resource 1050 is cut short, or its slices can't be read.
 fn read(bytes: &[u8]) -> Result<Option<Stored>, String> {
     let mut r = Reader::new(bytes);
     let h = header(&mut r)?;
-    let Some((_, _, data)) = resources(h.resources, true).find(|(id, _, _)| *id == SLICES) else { return Ok(None) };
+    let Some(data) = resource(h.resources, SLICES)? else { return Ok(None) };
     Ok(Some(Stored { slices: decode(data)?, size: (h.width, h.height) }))
 }
 
