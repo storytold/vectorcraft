@@ -36,6 +36,27 @@ fn right_click(h: &mut Harness<'static, VectorcraftApp>, name: &str) {
     h.run_steps(2);
 }
 
+fn cancel_then_confirm_delete(h: &mut Harness<'static, VectorcraftApp>) {
+    let before = h.state().session.doc().unwrap().doc.clone();
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    let dialog = h.state().ui.dialog.as_ref().expect("delete asks first");
+    assert_eq!(dialog.kind, crate::dialogs::confirm::KIND);
+    assert_eq!(dialog.str("message"), "Delete “Red”?");
+    assert_eq!(dialog.str("detail"), "Art using a deleted global swatch keeps its colour.");
+    assert_eq!(dialog.str("__command"), "swatch.delete");
+    assert_eq!(dialog.fields.get("__params"), Some(&json!({"names": ["Red"]})));
+    assert_eq!(h.state().session.doc().unwrap().doc, before);
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo);
+    crate::dialogs::cancel(h.state_mut());
+    assert!(h.state().ui.dialog.is_none());
+    assert_eq!(h.state().session.doc().unwrap().doc, before);
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo);
+    right_click(h, "Red");
+    h.get_by_label("   Delete Swatch").click();
+    h.run_steps(3);
+    crate::dialogs::confirm(h.state_mut()).unwrap();
+}
+
 #[test]
 fn right_click_selects_without_painting_and_dispatches_item_commands() {
     for (view, _) in View::ALL {
@@ -78,6 +99,9 @@ fn right_click_selects_without_painting_and_dispatches_item_commands() {
                     assert_eq!(h.state().session.doc().unwrap().doc, before);
                 }
                 "Delete Swatch" => {
+                    assert_eq!(h.state().session.doc().unwrap().doc, before);
+                    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo);
+                    cancel_then_confirm_delete(&mut h);
                     let doc = &h.state().session.doc().unwrap().doc;
                     assert!(doc.swatch("Red").is_none());
                     assert!(doc.swatch("Black").is_some());
@@ -123,6 +147,8 @@ fn right_clicking_the_active_panel_item_preserves_its_selection() {
         assert_eq!(selected(&h.ctx), names);
         h.get_by_label("   Delete Swatch").click();
         h.run_steps(3);
+        assert_eq!(h.state().ui.dialog.as_ref().unwrap().fields.get("__params"), Some(&json!({"names": ["Red"]})));
+        crate::dialogs::confirm(h.state_mut()).unwrap();
         let doc = &h.state().session.doc().unwrap().doc;
         assert!(doc.swatch("Black").is_some(), "only the clicked item is deleted");
         assert!(doc.swatch("Red").is_none());

@@ -237,8 +237,12 @@ fn item_context_menu(app: &mut VectorcraftApp, ui: &Ui, resp: &Response, e: &Ent
             None
         };
         if let Some(command) = command {
-            // run reports failures through the app's status message.
-            let _ = app.run(command, json!({"name": name}));
+            if command == "swatch.delete" {
+                actions::delete(app, vec![name.to_string()], false);
+            } else {
+                // run reports failures through the app's status message.
+                let _ = app.run(command, json!({"name": name}));
+            }
             ui.close();
         }
     });
