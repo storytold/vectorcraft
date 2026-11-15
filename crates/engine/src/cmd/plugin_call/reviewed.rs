@@ -206,6 +206,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "imageTrace.makeAndExpand",
     "imageTrace.release",
     "imageTrace.setView",
+    "info.readout",
     "layer.clippingMask.toggle",
     "layer.collectInNew",
     "layer.delete",
