@@ -843,6 +843,7 @@ font-technology	Variable	Változó
 	Copy Artboard	Rajztábla másolása
 	Copy Color Value (Hex)	Színérték másolása (hex)
 	Copy Fonts Used in the Document	A dokumentumban használt betűtípusok másolása
+	Copy Info	Adatok másolása
 	Copy Links	Csatolások másolása
 	Copy only fonts you own or are licensed to install.	Csak olyan betűtípust másolj, amely a tiéd, vagy amelynek telepítésére licenced van.
 	Copy Selected Style	Kijelölt stílus másolása
@@ -3232,6 +3233,8 @@ mark-style	Japanese	Japán
 	Proof Setup	Színpróba beállítása
 	Properties	Tulajdonságok
 	Proportional Metrics	Arányos metrika
+	H or V Style	Vízszintes vagy függőleges stílus
+	Roman Italics	Latin betűk dőlt változata
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
 	Tsume	Tsume
@@ -3266,6 +3269,7 @@ mark-style	Japanese	Japán
 	Radial	Körkörös
 	Radial Blur	Körkörös elmosás
 	Radial Blur…	Körkörös elmosás…
+	Blur Center	Elmosás középpontja
 	Radial Glows	Körkörös ragyogások
 	Organic Fades	Organikus áttűnések
 	Holographic	Holografikus
@@ -4070,6 +4074,7 @@ mark-style	Japanese	Japán
 	Sixth Space	Hatodkvirt-szóköz
 	Size	Méret
 	Size Tile to Art	Csempe méretezése a grafikához
+	Move Tile with Art	Csempe mozgatása a grafikával
 	Size/Leading	Méret/sorköz
 	Size:	Méret:
 	Size: {size}  Tracking: {tracking}	Méret: {size}  Betűköz: {tracking}
@@ -4300,6 +4305,8 @@ mark-style	Japanese	Japán
 	Swap Fill and Stroke (Shift+X)	Kitöltés és körvonal cseréje (Shift+X)
 	Swap start and end arrowheads	Kezdő és záró nyílhegy cseréje
 	Swap the selected object for the file, keeping its place and transform	A kijelölt objektum cseréje a fájlra, a helye és az átalakítása megtartásával
+	Show Import Options	Importálási beállítások megjelenítése
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Elhelyezés előtt rákérdez minden PDF-, DXF- vagy szövegfájl importálási beállításaira; kikapcsolva a legutóbb választott beállításokat használja
 	Stylistic Alternates	Stilisztikai változatok
 	Swash	Cifra változatok
 	Swatch Conflict	Színminta-ütközés
@@ -4789,6 +4796,9 @@ mark-style	Japanese	Japán
 	Working CMYK	Munka-CMYK
 	Working CMYK (don't tag)	Munka-CMYK (címke nélkül)
 	Working RGB (don't tag)	Munka-RGB (címke nélkül)
+	Don't Color Manage This Document	Ne legyen színkezelés ebben a dokumentumban
+	Working RGB: {name}	Munka-RGB: {name}
+	Working CMYK: {name}	Munka-CMYK: {name}
 	Working RGB	Munka-RGB
 	Workspace	Munkaterület
 	Workspace {i}	Munkaterület {i}
@@ -5045,6 +5055,7 @@ imageTrace	Outline	Körvonal
 @msg	automation path rejected: cannot resolve {path}: {e}	az automatizálás útvonala elutasítva: nem oldható fel: {path}: {e}
 @msg	automation path rejected: outside the read root {root}: {path}	az automatizálás útvonala elutasítva: kívül esik az olvasási gyökéren ({root}): {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	az automatizálás útvonala elutasítva: kívül esik az olvasási gyökereken ({roots}): {path}
+@msg	a linked JavaScript file is outside the read roots	egy csatolt JavaScript-fájl kívül esik az olvasási gyökereken
 @msg	automation path rejected: outside the write root {root}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökéren ({root}): {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökereken ({roots}): {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	az automatizálás útvonala elutasítva: szülőmappára lépés egy nem létező mappa alatt: {path}
@@ -5209,6 +5220,7 @@ imageTrace	Outline	Körvonal
 @msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
+@msg	Copied the link info	Csatolás adatai másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Nem sikerült a rendszer vágólapjára másolni: {e}
@@ -5252,6 +5264,7 @@ imageTrace	Outline	Körvonal
 @msg	every numbered name for {name} is taken in the document's folder	a dokumentum mappájában minden sorszámozott név foglalt: {name}
 @msg	No linked files to look for	Nincs keresendő csatolt fájl
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	A csatolás egy szimbólumban, diagrammintában, mintázatban vagy átlátszósági maszkban van, és nincs helye a vásznon
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	egy diagram adatsorában a diagramminta grafikája a mintából rajzolódik újra: a módosításához szerkeszd a mintát
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
@@ -6083,6 +6096,9 @@ imageTrace	Outline	Körvonal
 	Softness	Lágyság
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
+	Move Light to Back	Fény hátra
+	Move Light to Front	Fény előre
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Húzzon egy fényt az áthelyezéséhez. A nyílbillentyűk a fókuszban lévő fényt mozgatják; Shifttel 15°-onként.
 	Shadows	Árnyékok
 	Distance from Object	Távolság az objektumtól
 	Shadow Bounds	Árnyék határai
@@ -6672,6 +6688,8 @@ axis	Y Axis	Y tengely
 	Create New Set	Új készlet létrehozása
 	Stop Global Edit	Globális szerkesztés befejezése
 	Global Edit Options	Globális szerkesztés beállításai
+	Select Similar Objects	Hasonló objektumok kijelölése
+	Select Similar Options	Hasonlók kijelölésének beállításai
 	Leave Out of Global Edit	Kizárás a globális szerkesztésből
 	Match	Egyezés
 	On Artboards	Rajztáblákon
@@ -6794,6 +6812,13 @@ axis	Y Axis	Y tengely
 	Graphite Pencil	Grafitceruza
 	Wax Crayon	Zsírkréta
 	Charcoal Dust	Szénpor
+
+# Original procedural circuit brushes.
+	Tech Circuit	Műszaki áramkörök
+	Circuit Trace	Vezetősáv
+	Bus Lines	Buszvonalak
+	Terminal Nodes	Csatlakozási pontok
+
 	Notched Ribbon	Csipkézett szalag
 	Double Line	Dupla vonal
 	Wave	Hullám
@@ -8907,6 +8932,7 @@ breakText	Glyphs	Glifák
 @msg	the RTF file is too large to place as type (at most {_1} MB)	az RTF-fájl túl nagy ahhoz, hogy szövegként elhelyezhető legyen (legfeljebb {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	az SVG kibontva több mint {0} beágyazott SVG-képet tartalmaz
 @msg	the SVG expands to more than {0} objects	az SVG kibontva több mint {0} objektumot tartalmaz
+@msg	the SVG's style sheets take too long to match	az SVG stíluslapjainak illesztése túl sokáig tart
 @msg	the SVG's styles expand to more than {0} MB	az SVG stílusai kibontva több mint {0} MB-ot foglalnak
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	az SVG-fájl nagyobb, mint {MAX_IMPORT_BYTES} bájt
 @msg	the SVG has no drawable objects	az SVG-ben nincsenek kirajzolható objektumok
@@ -9129,7 +9155,7 @@ breakText	Glyphs	Glifák
 @msg	unexpected resources	váratlan erőforrások
 @msg	unknown CMYK profile `{name}`	ismeretlen CMYK-profil: `{name}`
 @msg	unknown File Info field `{k}`	ismeretlen fájlinformációs mező: `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	ismeretlen OpenType-funkció: `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; a - előtag kikapcsolja; a swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom és aalt egy alternatíva számát `tag=N` alakban fogadja, ahol N 0 és {_1} között lehet, például `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	ismeretlen OpenType-funkció: `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; a - előtag kikapcsolja; a swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom és aalt egy alternatíva számát `tag=N` alakban fogadja, ahol N 0 és {_1} között lehet, például `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	ismeretlen OpenType-funkció a featureChanges értékben: `{t}` (a `features` által fogadott címkék használhatók)
 @msg	unknown PDF preset `{name}` (presets: {_1})	ismeretlen PDF-előbeállítás: `{name}` (előbeállítások: {_1})
 @msg	unknown Warp style	ismeretlen hajlítási stílus

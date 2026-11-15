@@ -1,4 +1,4 @@
-use vectorcraft_doc::graph::art_bounds;
+use vectorcraft_doc::graph::graph_art_without_type as art_bounds;
 
 use super::axis::{MAX_TICK_MARKS, count_given, one_line};
 use super::data::apply_data;
@@ -21,12 +21,16 @@ fn bound_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Option<f64>>> {
 
 /// The bounds a redraw of graph `n` measures a move or scale on, as kept at the last generation and as they are now:
 /// those of its art without type ([`GraphSpec::placed_art`]), or those of all its art when the graph keeps no such
-/// bounds with a width and a height, or has no art without type now.
+/// bounds with a width and a height. `None` when the art measured has no width or no height now, or the graph keeps
+/// bounds of its art without type and has no such art now.
 fn measured(n: &Node) -> Option<(Rect, Rect)> {
     let kept = n.extras().graph.as_deref()?;
     let c = n.children()?;
-    let art = kept.placed_art.filter(|p| p.width() > 1e-9 && p.height() > 1e-9).zip(art_bounds(c));
-    art.or_else(|| kept.placed.zip(children_bounds(c)))
+    let solid = |r: &Rect| r.width() > 1e-9 && r.height() > 1e-9;
+    match kept.placed_art.filter(solid) {
+        Some(placed) => art_bounds(c).filter(solid).map(|now| (placed, now)),
+        None => kept.placed.zip(children_bounds(c).filter(solid)),
+    }
 }
 
 /// `r` carried by the change from bounds `from` to bounds `to`: each edge stays at the same place relative to them.
@@ -39,14 +43,28 @@ fn carried(r: Rect, from: Rect, to: Rect) -> Option<Rect> {
     Some(Rect::new(to.x0 + (r.x0 - from.x0) * sx, to.y0 + (r.y0 - from.y0) * sy, to.x0 + (r.x1 - from.x0) * sx, to.y0 + (r.y1 - from.y0) * sy))
 }
 
-/// The graphs holding objects `ids`, each with the bounds of its art without type and of all its art. Give them to
-/// [`keep_placed`] after an edit that changes a graph's art without moving the graph.
+/// The graphs holding objects `ids`, that are among them or that are inside them, each with the bounds of its art
+/// without type and of all its art. Give them to [`keep_placed`] after an edit that changes a graph's art without
+/// moving the graph.
 pub(crate) fn graphs_holding(d: &Document, ids: &[NodeId]) -> Vec<(NodeId, Option<Rect>, Option<Rect>)> {
-    let mut out: Vec<(NodeId, Option<Rect>, Option<Rect>)> = vec![];
+    let is_graph = |n: &Node| n.extras().graph.is_some();
+    let mut found: Vec<NodeId> = vec![];
     for id in ids {
         let Some(chain) = d.ancestry(*id) else { continue };
-        let holder = chain.iter().rev().skip(1).copied().find(|a| d.node(*a).is_some_and(|n| n.extras().graph.is_some()));
-        let Some(gid) = holder.filter(|g| !out.iter().any(|(o, ..)| o == g)) else { continue };
+        found.extend(chain.iter().rev().copied().find(|a| d.node(*a).is_some_and(is_graph)));
+        if let Some(n) = d.node(*id) {
+            n.walk(&mut |c| {
+                if is_graph(c) {
+                    found.push(c.id);
+                }
+            });
+        }
+    }
+    let mut out: Vec<(NodeId, Option<Rect>, Option<Rect>)> = vec![];
+    for gid in found {
+        if out.iter().any(|(o, ..)| *o == gid) {
+            continue;
+        }
         let children = d.node(gid).and_then(Node::children);
         out.push((gid, children.and_then(|c| art_bounds(c)), children.and_then(|c| children_bounds(c))));
     }
