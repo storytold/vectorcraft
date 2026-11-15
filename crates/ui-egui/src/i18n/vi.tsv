@@ -1653,6 +1653,14 @@ file-filter	Templates	Mẫu
 	Previous Artboard	Bảng vẽ trước
 	Next Artboard	Bảng vẽ tiếp theo
 	Last Artboard	Bảng vẽ cuối cùng
+	Status Bar Show	Hiển thị trên thanh trạng thái
+	Artboard Name	Tên bảng vẽ
+	Current Tool	Công cụ hiện tại
+	Date and Time	Ngày và giờ
+	Number of Undos	Số lần hoàn tác
+	Document Color Profile	Hồ sơ màu của tài liệu
+	Undos	Hoàn tác
+	Redos	Làm lại
 	Go To Link	Đến liên kết
 	Good	Tốt
 	GPL palettes keep solid colours only, as RGB.	Bảng màu GPL chỉ lưu màu đặc theo RGB.

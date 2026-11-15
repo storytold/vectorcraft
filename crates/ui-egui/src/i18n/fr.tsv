@@ -1396,6 +1396,14 @@ font-technology	Variable	Variables
 	Previous Artboard	Plan de travail précédent
 	Next Artboard	Plan de travail suivant
 	Last Artboard	Dernier plan de travail
+	Status Bar Show	Afficher dans la barre d'état
+	Artboard Name	Nom du plan de travail
+	Current Tool	Outil actif
+	Date and Time	Date et heure
+	Number of Undos	Nombre d'annulations
+	Document Color Profile	Profil colorimétrique du document
+	Undos	Annulations
+	Redos	Rétablissements
 	Go To Link	Atteindre le lien
 	GPL palettes keep solid colours only, as RGB.	Les palettes GPL ne conservent que les couleurs unies, en RVB.
 	GPU Performance	Performances GPU
