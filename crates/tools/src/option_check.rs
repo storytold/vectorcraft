@@ -176,17 +176,35 @@ mod tests {
         let read_only = |id: &str, k: &str| READ_ONLY.iter().any(|(ids, keys)| ids.contains(&id) && keys.contains(&k));
         let extra = ["place", "dimension"];
         let mut refused = Vec::new();
-        for id in crate::catalog::all_tools().map(|t| t.id).chain(extra) {
-            let tool = crate::create(id);
-            let Some(mut options) = tool.options().as_object().cloned() else { continue };
+        let mut check = |id: &str, tool: &dyn Tool, after: &str| {
+            let Some(mut options) = tool.options().as_object().cloned() else { return };
             options.retain(|k, _| !read_only(id, k));
             for (k, v) in &options {
                 if let Err(e) = tool.check_option(k, v) {
-                    refused.push(format!("tool `{id}`, option `{k}` = {v}: {e}"));
+                    refused.push(format!("tool `{id}`{after}, option `{k}` = {v}: {e}"));
                 }
             }
-            if let Err(e) = check_values(tool.as_ref(), &options) {
-                refused.push(e);
+            if let Err(e) = check_values(tool, &options) {
+                refused.push(format!("{e}{after}"));
+            }
+        };
+        for id in crate::catalog::all_tools().map(|t| t.id).chain(extra) {
+            let tool = crate::create(id);
+            check(id, tool.as_ref(), "");
+            // A number set past either end, or a true-or-false option flipped, is still taken back
+            // as the tool then reports it.
+            let Some(defaults) = tool.options().as_object().cloned() else { continue };
+            for (k, v) in defaults.iter().filter(|(k, _)| !read_only(id, k)) {
+                let tries = match v {
+                    Value::Number(_) => vec![json!(-1e9), json!(1e9)],
+                    Value::Bool(b) => vec![json!(!b)],
+                    _ => continue,
+                };
+                for value in tries {
+                    let mut changed = crate::create(id);
+                    changed.set_option(k, &value);
+                    check(id, changed.as_ref(), &format!(" after setting `{k}` to {value}"));
+                }
             }
         }
         assert!(refused.is_empty(), "{}", refused.join("\n"));

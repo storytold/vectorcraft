@@ -531,9 +531,10 @@ impl Tool for FamilyTool {
     }
 }
 
-/// Arc segment length from a dialog or preference value.
+/// Arc segment length from a dialog or preference value, at most 1e6 pt (as the option check
+/// takes it).
 fn arc_length(v: &Value, current: f64) -> f64 {
-    v.as_f64().filter(|n| n.is_finite()).map_or(current, |n| n.abs().max(1e-9))
+    v.as_f64().filter(|n| n.is_finite()).map_or(current, |n| n.abs().clamp(1e-9, 1e6))
 }
 
 /// A grid's Default Size side from option value `v`: a finite positive length (at most 1e6 pt),
@@ -1030,6 +1031,10 @@ mod tests {
                 "fillArc": true,
             })
         );
+        // A length past 1e6 pt is kept at 1e6, which `tool.setOption` takes back.
+        t.set_option("lengthX", &json!(-1e9));
+        assert_eq!(t.options()["lengthX"], json!(1e6));
+        assert_eq!(t.check_option("lengthX", &t.options()["lengthX"]), Ok(()));
     }
 
     /// While an arc is dragged out, C switches it between open and closed, F switches its base
