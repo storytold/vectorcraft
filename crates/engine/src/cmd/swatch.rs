@@ -93,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Merge Swatches",
             ["Window", "Swatches"],
             None,
-            "{names: [two or more solid-colour swatches], name?: the merged swatch's name (one swatch kept)} keep the first (its name and colour) and delete the others; paints linked to them take its colour and link to it (or unlink when it isn't global), as one undo step → {name, merged: [deleted names], relinked}",
+            "{names: [two or more solid-colour swatches], name?: the merged swatch's name (one swatch kept)} keep the first (its name and colour) and delete the others; paints linked to them take its colour and link to it (or unlink when it isn't global), and gradient stops linked to them drop their process plates, as one undo step → {name, merged: [deleted names], relinked}",
             has_doc,
             swatch_merge
         ),
@@ -688,6 +688,11 @@ impl Relink {
 /// batch, and a canceled batch preview, put back the paints the batch started with. A change is
 /// recorded with the step just made, so Undo and Redo put these paints back with the document.
 pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) -> Result<()> {
+    map_default_paints_by(s, &mut |p| p.map_links(f))
+}
+
+/// [`map_default_paints`] with `f` applied to each whole paint; `f` returns true when it changed it.
+fn map_default_paints_by(s: &mut Session, f: &mut dyn FnMut(&mut Paint) -> bool) -> Result<()> {
     if s.in_interaction() && s.batch_stash.is_none() {
         return Ok(());
     }
@@ -699,7 +704,7 @@ pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) -> Result<()> 
     });
     let mut changed = false;
     for p in [&mut pd.fill, &mut pd.stroke].into_iter().chain(template) {
-        changed |= p.map_links(f);
+        changed |= f(p);
     }
     if changed {
         super::colormgmt::record_new_art_colors(s, start)?;
@@ -1124,15 +1129,35 @@ fn swatch_merge(s: &mut Session, p: &Value) -> Result<Value> {
         *l = link.clone();
         true
     };
+    // A stop linked to a merged swatch loses its process plates, which printed with that ink.
+    let mut unplate = |p: &Paint| {
+        let mut q = p.clone();
+        drop_stop_plates(&mut q, &merged_names).then_some(q)
+    };
     let colorized_ok = super::paint::check_colorized(d).is_ok();
     let relinked = s.edit("Merge Swatches", |d, _| {
         take_swatches(d, merged, |_| true);
+        map_all_paints(d, &mut unplate);
         let relinked = map_swatch_links(d, &mut relink);
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok(relinked)
     })?;
-    map_default_paints(s, &mut relink)?;
+    map_default_paints_by(s, &mut |p| {
+        let unplated = drop_stop_plates(p, &merged_names);
+        p.map_links(&mut relink) | unplated
+    })?;
     Ok(json!({"name": keep, "merged": merged, "relinked": relinked}))
+}
+
+/// Clear the process plates of `p`'s gradient stops linked to a swatch in `names`. True when any
+/// stop had plates.
+fn drop_stop_plates(p: &mut Paint, names: &HashSet<&str>) -> bool {
+    let Paint::Gradient(g) = p else { return false };
+    g.gradient
+        .stops
+        .iter_mut()
+        .filter(|st| st.swatch.as_deref().is_some_and(|l| names.contains(l)))
+        .fold(false, |ch, st| st.plates.take().is_some() | ch)
 }
 
 fn swatch_ungroup(s: &mut Session, p: &Value) -> Result<Value> {

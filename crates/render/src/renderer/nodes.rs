@@ -146,6 +146,7 @@ impl Renderer {
         }
         if stale {
             self.fx_geom.retain(|_, e| !effects::has_plugin_effect(&e.node));
+            self.fx_stages.retain(|_, e| !effects::has_plugin_effect(&e.0));
             self.geom.retain(|_, e| !holds_plugin_effect(&e.node) && !holds_instance(&e.node));
             // The art of a group holds what its members' plug-in effects draw.
             self.fx_arts.retain(|(node, ..)| !holds_plugin_effect(node));

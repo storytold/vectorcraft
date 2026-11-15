@@ -79,6 +79,10 @@ pub struct NodeExtras {
     /// knockout group its knockout shape is the whole area of its triangle, not only where the
     /// image is opaque ([`Node::knockout_outline`]).
     pub warp_piece: bool,
+    /// A group of the pieces a clipping path's fills and strokes draw once their geometry effects
+    /// are applied, one path or compound path per fill and stroke: as the clipping path of a clip group it paints
+    /// those pieces as the path paints its fills and strokes ([`Node::clip_paint`]).
+    pub clip_pieces: bool,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -108,6 +112,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     pixel_aligned: false,
     color_mask: None,
     warp_piece: false,
+    clip_pieces: false,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal
