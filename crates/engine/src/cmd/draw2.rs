@@ -33,3 +33,4 @@ mod smooth;
 pub use commands::specs;
 pub(super) use common::{ids_json, replace_with_pieces, usize_opt};
 pub(super) use cut::{components, erase_outline};
+pub(super) use freehand::freehand_brushed;

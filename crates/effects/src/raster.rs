@@ -606,9 +606,62 @@ fn transform_step(e: &Effect) -> Option<Affine> {
     (copies == 0 && !flag(&p, "random", false)).then(|| map.with_translation(Vec2::ZERO))
 }
 
+/// The Transform effects of `effects` that move the image of its last visible Rasterize effect
+/// instead of the art it is made from: the indices of the visible Transform effects listed after
+/// it that move the art, when from the first visible Transform effect after it on every visible
+/// effect is a Transform effect that moves the art once (no copies, not at random). Effects apply
+/// in the order they are listed, so the image is made of the art before those Transform effects
+/// and moves with them, its pixel grid and room around the art included. `None` when there is no
+/// such Transform effect, or the effects after the Rasterize effect hold anything else from there
+/// on.
+pub fn rasterize_stage(effects: &[Effect]) -> Option<Vec<usize>> {
+    let r = effects.iter().rposition(|e| e.visible && e.id == RASTERIZE)?;
+    let first = r + 1 + effects.get(r + 1..)?.iter().position(|e| e.visible && e.id == "distort.transform")?;
+    let mut at = vec![];
+    for (i, e) in effects.iter().enumerate().skip(first).filter(|(_, e)| e.visible) {
+        if e.id != "distort.transform" || transform_step(e).is_none() {
+            return None;
+        }
+        if crate::distort::transform_map(Rect::ZERO, &merged_params(&e.id, &e.params), 0).0 != Affine::IDENTITY {
+            at.push(i);
+        }
+    }
+    (!at.is_empty()).then_some(at)
+}
+
+/// `effects` with the Transform effects at `at` hidden ([`rasterize_stage`]): what the image of
+/// the Rasterize effect before them is made from.
+pub fn staged_effects(effects: &[Effect], at: &[usize]) -> Vec<Effect> {
+    let mut out = effects.to_vec();
+    for &i in at {
+        if let Some(e) = out.get_mut(i) {
+            e.visible = false;
+        }
+    }
+    out
+}
+
+/// The map the Transform effects at `at` of `effects` ([`rasterize_stage`]) move the Rasterize
+/// image by, for `staged`, the geometry the effects before them make: each one's map about its
+/// reference point on the bounds of the geometry it takes, as the geometry pass applies it, the
+/// last one outermost. `None` when `staged` is empty or the map is not a number.
+pub fn stage_map(effects: &[Effect], at: &[usize], staged: &vectorcraft_geom::PathData) -> Option<Affine> {
+    let mut cur = staged.clone();
+    let mut b = staged.bounds()?;
+    let mut map = Affine::IDENTITY;
+    for &i in at {
+        let e = effects.get(i)?;
+        let (m, _) = crate::distort::transform_map(b, &merged_params(&e.id, &e.params), 0);
+        map = m * map;
+        cur = cur.transformed(m);
+        b = cur.bounds().unwrap_or(b);
+    }
+    map.is_finite().then_some(map)
+}
+
 /// Does raster effect `id` follow the Transform effects listed after it ([`followed`])? An SVG
 /// filter does not, and neither does Rasterize, whose image keeps its own pixel grid and room
-/// around the art.
+/// around the art: the image moves with those Transform effects instead ([`rasterize_stage`]).
 pub(crate) fn follows(id: &str) -> bool {
     crate::is_raster(id) && id != crate::SVG_FILTER && id != RASTERIZE
 }
