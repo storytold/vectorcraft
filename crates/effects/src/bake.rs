@@ -29,7 +29,7 @@ use crate::distort::{transform_move, transform_offsets};
 use crate::group::{has_own_paint, paints};
 use crate::reshape::{
     as_art, clip_region_path, clipping_text_outline, dressed, geometry_effects, glyph_outlines, knockout_inside, outline_nested_text,
-    painted_type_clip, reshape_leaves,
+    paint_type_clip, reshape_leaves,
 };
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
@@ -687,9 +687,8 @@ fn moved_type_group(n: &Node) -> Option<Node> {
 /// them. `None` when no type stays type.
 fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
     fn keep(d: &Document, n: &mut Node, moves: &[serde_json::Value], clipping: bool, kept: &mut bool) {
-        // Clipping type that paints becomes the art of its fills and strokes around the clip.
-        if !clipping && let Some(painted) = painted_type_clip(Some(d), n) {
-            *n = painted;
+        if !clipping {
+            paint_type_clip(Some(d), n);
         }
         let clips = n.clips();
         let Some(ch) = n.children_mut() else { return };

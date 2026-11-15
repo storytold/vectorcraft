@@ -1151,6 +1151,7 @@ font-technology	Variable	Променливи
 	Rotate (Classic)…	Ротация (класическа)…
 	Surface	Повърхност
 	Wireframe	Телена рамка
+	Render Settings	Настройки за рендериране
 	No Shading	Без засенчване
 	Plastic	Пластмаса
 	Highlight Intensity	Интензивност на отблясъка
@@ -1365,6 +1366,40 @@ font-technology	Variable	Променливи
 	Graph	Диаграма
 	Graph Data	Данни за диаграма
 	Graph Type	Тип диаграма
+	Graph Options	Опции на диаграмата
+	Left Axis	Лява ос
+	Right Axis	Дясна ос
+	Category Axis	Ос на категориите
+	Separate Scales	Отделни скали
+	Add Drop Shadow	Добавяне на падаща сянка
+	Add Legend Across Top	Добавяне на легенда отгоре
+	First Row in Front	Първият ред отпред
+	First Column in Front	Първата колона отпред
+	Legend	Легенда
+	Column Width	Ширина на колоната
+	Bar Width	Ширина на стълба
+	Cluster Width	Ширина на групата
+	Mark Data Points	Маркиране на точките от данни
+	Connect Data Points	Свързване на точките от данни
+	Edge-to-Edge Lines	Линии от край до край
+	Draw Filled Lines	Чертане на запълнени линии
+	Tick Values	Стойности на отметките
+	Override Calculated Values	Замяна на изчислените стойности
+	Divisions	Деления
+	Tick Marks	Отметки
+	Tick Marks per Division	Отметки на деление
+	Draw Tick Marks Between Labels	Чертане на отметки между етикетите
+	Add Labels	Добавяне на етикети
+	Maximum must be more than Minimum.	Максимумът трябва да е по-голям от минимума.
+	Column Graph	Колонна диаграма
+	Stacked Column Graph	Колонна диаграма с натрупване
+	Bar Graph	Стълбчеста диаграма
+	Stacked Bar Graph	Стълбчеста диаграма с натрупване
+	Line Graph	Линейна диаграма
+	Area Graph	Площна диаграма
+	Scatter Graph	Диаграма на разсейване
+	Pie Graph	Кръгова диаграма
+	Radar Graph	Радарна диаграма
 	Graph Design	Дизайн на диаграма
 	Graph Marker	Маркер на диаграма
 	New Design	Нов дизайн
@@ -1484,6 +1519,7 @@ font-technology	Variable	Променливи
 	Highlight anchors on mouse over	Маркиране на опорните точки при задържане на мишката
 	Highlight Rows	Маркиране на редовете
 	Highlight Variable	Маркиране на променливи
+	Sort Variables	Сортиране на променливите
 	Highlight Substituted Fonts	Маркиране на заменени шрифтове
 	Highlight Substituted Glyphs	Маркиране на заменени глифи
 	History	История
@@ -1946,6 +1982,7 @@ font-technology	Variable	Променливи
 	Menu Dialog	Диалогов прозорец на менюто
 	Merge	Сливане
 	Merge colors into one row	Сливане на цветовете в един ред
+	New Row	Нов ред
 	Merge Graphic Styles	Сливане на графични стилове
 	Merge Graphic Styles…	Сливане на графични стилове…
 	Merge Layers	Сливане на слоеве

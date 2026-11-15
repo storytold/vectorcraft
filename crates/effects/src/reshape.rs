@@ -759,47 +759,6 @@ pub(crate) fn clip_region_path(clip: &Node) -> Option<Node> {
     Some(p)
 }
 
-/// Clip group or clipping layer `n` whose clipping path is type that paints ([`Node::clip_paint`]),
-/// with that type as plain art drawn as the renderer draws it: a path of the region it clips to
-/// clips ([`clip_region_path`]), its fills become art behind the clipped members inside the clip,
-/// and its strokes become art over the clip group, outside the clip. Each part is the type's art
-/// with only those fills or strokes ([`as_art`]), its own geometry effects applied. With strokes,
-/// `n` becomes a group with its id, name, visibility and transparency that holds a clip group of
-/// the clipping path, the fills and the members (with `n`'s id), then the strokes; a clipping
-/// layer keeps its ruler guides last ([`painted_clip_inner`] finds that clip group). `None` when
-/// `n` does not clip, its clipping path is not type, or the type paints nothing.
-pub(crate) fn painted_type_clip(doc: Option<&Document>, n: &Node) -> Option<Node> {
-    let first = n.children()?.first().filter(|_| n.clips())?;
-    if !matches!(first.kind, NodeKind::Text(_)) {
-        return None;
-    }
-    let paint = first.clip_paint();
-    if paint.fill.is_none() && paint.stroke.is_none() {
-        return None;
-    }
-    let clip = clip_region_path(first)?;
-    let fill = paint.fill.and_then(|p| as_art(doc, &p, None));
-    let stroke = paint.stroke.and_then(|p| as_art(doc, &p, None));
-    let mut m = n.clone();
-    let ch = m.children_mut()?;
-    *ch.first_mut()? = Arc::new(clip);
-    if let Some(fill) = fill {
-        ch.insert(1, Arc::new(fill));
-    }
-    let Some(stroke) = stroke else { return Some(m) };
-    let guides = ch.split_off(Node::guide_run_start(ch));
-    let mut inner = Node::new(n.id, NodeKind::Group { children: std::mem::take(ch), clip: true });
-    knockout_inside(&mut m, &mut inner);
-    match &mut m.kind {
-        NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } => {
-            *children = [Arc::new(inner), Arc::new(stroke)].into_iter().chain(guides).collect();
-            *clip = false;
-        }
-        _ => return None,
-    }
-    Some(m)
-}
-
 /// Knockout Group for clip group `m` turned into a group around `inner`, a clip group of its
 /// members, and its clipping path's strokes: `inner` takes `m`'s setting, so the clipped art knocks
 /// out as before, and `m` is set Off so the strokes paint over it, as the renderer draws them. A
@@ -811,7 +770,7 @@ pub(crate) fn knockout_inside(m: &mut Node, inner: &mut Node) {
     }
 }
 
-/// The clip group in `n` when `n` is a group or layer that [`painted_type_clip`] made of a clip
+/// The clip group in `n` when `n` is a group or layer that [`paint_type_clip`] made of a clip
 /// group and its clipping type's strokes: a group that does not clip whose first member is a clip
 /// group with `n`'s id and whose second member has the id of that clip group's clipping path. The
 /// clip group's region is what `n` stands for, as the clip group it was made from: the strokes
@@ -855,13 +814,12 @@ pub(crate) fn clip_bounds(n: &Node) -> Option<Rect> {
 
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
-/// its outlines with its visibility and effects ([`clipping_text_outline`]); when it paints, the
-/// clip group becomes its art with the type's fills and strokes ([`painted_type_clip`]). The
-/// swatches and patterns that live-effect plug-ins painting their pieces name are looked up in
-/// `doc`.
+/// its outlines with its visibility and effects ([`clipping_text_outline`]), and its fills and
+/// strokes become art of their own ([`paint_type_clip`]). The swatches and patterns that
+/// live-effect plug-ins painting their pieces name are looked up in `doc`.
 pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping: bool) {
-    if !clipping && let Some(painted) = painted_type_clip(doc, n) {
-        *n = painted;
+    if !clipping {
+        paint_type_clip(doc, n);
     }
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
@@ -877,6 +835,45 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
         } else if c.children().is_some() {
             outline_nested_text(doc, Arc::make_mut(c), clipping);
         }
+    }
+}
+
+/// When `n` is a clip group or clipping layer whose clipping path is type that paints
+/// ([`Node::clip_paint`]), make it the art the canvas draws for it: a path of the region the type
+/// clips to clips ([`clip_region_path`]), its fills as art ([`as_art`]) paint behind the clipped
+/// art inside the clip, and its strokes as art paint over it, outside the clip. Each part is the
+/// type's art with only those fills or strokes, their own geometry effects applied. With strokes,
+/// `n` becomes a group (keeping its id, name, visibility and transparency) that holds a clip group
+/// of the clipping path, the fills and the other members, with `n`'s id, then the strokes; a
+/// clipping layer keeps its ruler guides last. [`knockout_inside`] sets the Knockout Group of both,
+/// and [`painted_clip_inner`] finds that clip group. The other members stay as they are. Hidden
+/// type paints nothing.
+pub(crate) fn paint_type_clip(doc: Option<&Document>, n: &mut Node) {
+    let Some(first) = n.children().and_then(|ch| ch.first()).filter(|_| n.clips()) else { return };
+    if !matches!(first.kind, NodeKind::Text(_)) || !first.visible {
+        return;
+    }
+    let paint = first.clip_paint();
+    if paint.fill.is_none() && paint.stroke.is_none() {
+        return;
+    }
+    let Some(clip) = clip_region_path(first) else { return };
+    let art = |part: Option<Node>| part.and_then(|p| as_art(doc, &p, None)).map(Arc::new);
+    let (fill, stroke) = (art(paint.fill), art(paint.stroke));
+    let id = n.id;
+    let Some(ch) = n.children_mut() else { return };
+    let Some(slot) = ch.first_mut() else { return };
+    *slot = Arc::new(clip);
+    if let Some(fill) = fill {
+        ch.insert(1, fill);
+    }
+    let Some(stroke) = stroke else { return };
+    let guides = ch.split_off(Node::guide_run_start(ch));
+    let mut inner = Node::new(id, NodeKind::Group { children: std::mem::take(ch), clip: true });
+    knockout_inside(n, &mut inner);
+    if let NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } = &mut n.kind {
+        *children = [Arc::new(inner), stroke].into_iter().chain(guides).collect();
+        *clip = false;
     }
 }
 
