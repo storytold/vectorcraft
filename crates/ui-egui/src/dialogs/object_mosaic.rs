@@ -140,12 +140,19 @@ fn derived(d: &Dialog) -> Option<(&'static str, f64)> {
 }
 
 /// Resize Using Percentages turned on or off: the new size shown the other way, so it stays the
-/// same size. When a size the command takes (all but the side Constrain Ratio sets) falls outside
-/// what the command accepts the other way, the fields and the mode stay as they are and the dialog
-/// shows the limit.
+/// same size. When a size field does not hold a number, or a size the command takes (all but the
+/// side Constrain Ratio sets) falls outside what the command accepts the other way, the fields and
+/// the mode stay as they are and the dialog shows why.
 fn switch_percentages(d: &mut Dialog, on: bool) {
     let (iw, ih) = image(d);
-    let (w, h) = (d.f64("width", iw), d.f64("height", ih));
+    let size = |key: &str| number(d, key, 100.0).as_f64().ok_or_else(|| format!("`{key}` must be a number (got {})", d.str(key)));
+    let (w, h) = match (size("width"), size("height")) {
+        (Ok(w), Ok(h)) => (w, h),
+        (Err(why), _) | (_, Err(why)) => {
+            d.fields.insert(form::REFUSED.into(), json!(why));
+            return;
+        }
+    };
     let (w, h) = if on { (w / iw * 100.0, h / ih * 100.0) } else { (iw * w / 100.0, ih * h / 100.0) };
     let skip = follower(d);
     if let Some((key, v)) = [("width", w), ("height", h)].into_iter().find(|(k, v)| skip != Some(*k) && !SIZE_RANGE.contains(v)) {
@@ -207,7 +214,8 @@ fn switch(d: &Dialog, key: &str) -> Value {
 /// `object.createObjectMosaic` parameters from the fields. With Constrain Ratio on, the side it
 /// sets is left out while it holds the size Constrain Ratio gives it: the command works it out from
 /// the kept side and grows both in proportion to its 0.1 pt minimum. Any other value set on that
-/// side is passed on for the command to check.
+/// side, and a refused value `ui.dialog.set` gave it even when it equals that size, is passed on for
+/// the command to check.
 fn params(d: &Dialog) -> Value {
     let mut p = json!({
         "columns": number(d, "columns", 10.0), "rows": number(d, "rows", 10.0),
@@ -217,6 +225,7 @@ fn params(d: &Dialog) -> Value {
         "gray": switch(d, "gray"), "deleteRaster": switch(d, "deleteRaster"),
     });
     if let (Some((key, v)), Some(o)) = (derived(d), p.as_object_mut())
+        && !d.bool(&kept(key))
         && o.get(key).and_then(Value::as_f64).is_some_and(|x| x == v)
     {
         o.remove(key);
@@ -571,6 +580,36 @@ mod tests {
             crate::dialogs::set_field(d, field.into(), value);
         }
         frame(&mut app, &ctx);
+        let e = crate::dialogs::confirm(&mut app).unwrap_err();
+        assert!(e.contains("height"), "{e}");
+        assert_eq!(mosaic(&app), None);
+    }
+
+    /// A width `ui.dialog.set` gave that is not a number stays when Resize Using Percentages is set,
+    /// with the mode unchanged and the reason shown, and OK refuses it.
+    #[test]
+    fn a_size_that_is_not_a_number_stays_when_percentages_switch() {
+        let mut app = app_with_image();
+        open(&mut app, &json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        crate::dialogs::set_field(d, "width".into(), json!("abc"));
+        crate::dialogs::set_field(d, "percentages".into(), json!(true));
+        assert_eq!((d.str("width"), d.bool("percentages")), ("abc".into(), false));
+        assert!(d.str(form::REFUSED).contains("`width` must be a number"), "{}", d.str(form::REFUSED));
+        let e = crate::dialogs::confirm(&mut app).unwrap_err();
+        assert!(e.contains("width"), "{e}");
+        assert_eq!(mosaic(&app), None);
+    }
+
+    /// With Constrain Ratio on, a refused height `ui.dialog.set` gave is refused on OK even when it
+    /// equals the size Constrain Ratio works out from the width (0.05 pt from 0.1 pt over 100 × 50 pt).
+    #[test]
+    fn a_refused_height_equal_to_the_constrained_size_is_refused() {
+        let mut app = app_with_image();
+        open(&mut app, &json!({"constrain": "width"})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        crate::dialogs::set_field(d, "width".into(), json!(0.1));
+        crate::dialogs::set_field(d, "height".into(), json!(0.05));
         let e = crate::dialogs::confirm(&mut app).unwrap_err();
         assert!(e.contains("height"), "{e}");
         assert_eq!(mosaic(&app), None);
