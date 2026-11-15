@@ -2880,6 +2880,7 @@ digits	Malayalam	Malajalam
 	Limit to Library:	Ogranicz do biblioteki:
 	Link harmony colors	Połącz kolory harmonii
 	Merge colors into one row	Scal kolory w jeden wiersz
+	New Row	Nowy wiersz
 	No colors to recolor (preserved colors are left out).	Brak kolorów do zmiany (zachowane kolory są pomijane).
 	Preserve:	Zachowaj:
 	Randomly change color order	Losowo zmień kolejność kolorów
@@ -3550,6 +3551,40 @@ theme	Appearance	Wygląd
 	Create Graph	Utwórz wykres
 	Graph Data	Dane wykresu
 	Graph Type	Typ wykresu
+	Graph Options	Opcje wykresu
+	Left Axis	Lewa oś
+	Right Axis	Prawa oś
+	Category Axis	Oś kategorii
+	Separate Scales	Oddzielne skale
+	Add Drop Shadow	Dodaj cień
+	Add Legend Across Top	Dodaj legendę u góry
+	First Row in Front	Pierwszy wiersz z przodu
+	First Column in Front	Pierwsza kolumna z przodu
+	Legend	Legenda
+	Column Width	Szerokość kolumny
+	Bar Width	Szerokość słupka
+	Cluster Width	Szerokość grupy
+	Mark Data Points	Oznacz punkty danych
+	Connect Data Points	Połącz punkty danych
+	Edge-to-Edge Lines	Linie od krawędzi do krawędzi
+	Draw Filled Lines	Rysuj wypełnione linie
+	Tick Values	Wartości podziałki
+	Override Calculated Values	Zastąp obliczone wartości
+	Divisions	Podziały
+	Tick Marks	Znaczniki podziałki
+	Tick Marks per Division	Znaczniki na podział
+	Draw Tick Marks Between Labels	Rysuj znaczniki między etykietami
+	Add Labels	Dodaj etykiety
+	Maximum must be more than Minimum.	Maksimum musi być większe niż minimum.
+	Column Graph	Wykres kolumnowy
+	Stacked Column Graph	Skumulowany wykres kolumnowy
+	Bar Graph	Wykres słupkowy
+	Stacked Bar Graph	Skumulowany wykres słupkowy
+	Line Graph	Wykres liniowy
+	Area Graph	Wykres warstwowy
+	Scatter Graph	Wykres punktowy
+	Pie Graph	Wykres kołowy
+	Radar Graph	Wykres radarowy
 	Vector Halftone	Półton wektorowy
 	spot	dodatkowy
 	Text	Tekst
@@ -4121,6 +4156,7 @@ axis	Both	Obie
 	Replace:	Zastąp:
 	Type on a Path Options	Opcje tekstu na ścieżce
 	Highlight Variable	Wyróżnij zmienną
+	Sort Variables	Sortuj zmienne
 	New Variable	Nowa zmienna
 	List Variables	Wyświetl zmienne
 	Bind Variable	Powiąż zmienną
