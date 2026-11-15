@@ -653,9 +653,11 @@ fn apart(offsets: &[Vec2], b: Rect) -> bool {
 
 /// Type `n` whose own geometry effects only move it ([`transform_moves`]) as a group of the moved
 /// type ([`moved_type`]). The group keeps `n`'s id, name, visibility, transparency, opacity mask and
-/// remaining (raster) effects, and the type in it has none of them. `None` otherwise.
+/// remaining (raster) effects, and the type in it has none of them. `None` otherwise, and for type
+/// whose copies each carry the raster effects listed before their Transform effect
+/// ([`crate::outer_effects`]), which is baked through its outlines as the canvas draws it.
 fn moved_type_group(n: &Node) -> Option<Node> {
-    if !matches!(n.kind, NodeKind::Text(_)) {
+    if !matches!(n.kind, NodeKind::Text(_)) || crate::reshape::copied_raster_at(n).is_some() {
         return None;
     }
     let moves = transform_moves(&geometry_effects(n))?;
