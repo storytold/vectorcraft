@@ -1539,6 +1539,7 @@ font-technology	Variable	Variables
 	Highlight anchors on mouse over	Resaltar anclas al pasar el puntero
 	Highlight Rows	Resaltar filas
 	Highlight Variable	Resaltar variable
+	Sort Variables	Ordenar variables
 	Highlight Substituted Fonts	Resaltar fuentes sustituidas
 	Highlight Substituted Glyphs	Resaltar glifos sustituidos
 	History	Historial

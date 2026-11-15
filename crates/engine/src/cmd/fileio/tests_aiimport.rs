@@ -966,7 +966,7 @@ fn an_ai_file_opens_its_variable_library() {
                 {"name": "v_file", "kind": "image", "bindings": 0},
                 {"name": "v_graph", "kind": "graph", "bindings": 0},
                 {"name": "v_unbound", "kind": "unknown", "bindings": 0},
-            ], "locked": true})
+            ], "locked": true, "sort": {"by": "none", "descending": false}})
         );
         let r = s.execute("dataset.list", &json!({})).unwrap();
         assert_eq!(r["active"], "ds_two", "{r}");

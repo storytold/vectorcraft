@@ -692,6 +692,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "variable.makeTextDynamic",
     "variable.makeVisibilityDynamic",
     "variable.rename",
+    "variable.sort",
     "variable.unbind",
 ];
 

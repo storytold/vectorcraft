@@ -1549,6 +1549,7 @@ file-filter	Templates	Шаблоны
 	Highlight anchors on mouse over	Выделять опорные точки при наведении
 	Highlight Rows	Выделять строки
 	Highlight Variable	Подсветить переменную
+	Sort Variables	Сортировать переменные
 	Highlight Substituted Fonts	Выделять заменённые шрифты
 	Highlight Substituted Glyphs	Выделять заменённые глифы
 	History	История

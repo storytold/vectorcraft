@@ -1533,6 +1533,7 @@ font-technology	Variable	Variables
 	Highlight anchors on mouse over	Mettre en évidence les points d’ancrage au survol
 	Highlight Rows	Surligner les lignes
 	Highlight Variable	Surligner la variable
+	Sort Variables	Trier les variables
 	Highlight Substituted Fonts	Surligner les polices remplacées
 	Highlight Substituted Glyphs	Surligner les glyphes remplacés
 	History	Historique

@@ -5352,6 +5352,7 @@ theme	Appearance	Erscheinungsbild
 	Texture Image	Strukturbild
 	Canvas	Leinwand
 	Highlight Variable	Variable hervorheben
+	Sort Variables	Variablen sortieren
 	New Variable	Neue Variable
 	Delete Variable	Variable löschen
 	Lock Variables	Variablen sperren
