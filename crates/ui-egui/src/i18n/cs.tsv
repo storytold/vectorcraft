@@ -9613,3 +9613,13 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Tap	Krátký stisk
+	Clear Hold	Vymazat podržení
+	Hold Shortcuts	Zkratky podržením
+	Hold Shortcut Delay	Prodleva zkratek podržením
+	How hold shortcuts work	Jak fungují zkratky podržením
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klikněte a stiskněte klávesu, kterou pro toto podržíte (Esc zruší). Podržení klávesy spustí toto; krátký stisk spustí vlastní zkratku klávesy.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Krátký stisk klávesy spustí její zkratku. Podržení klávesy po dobu prodlevy místo toho spustí nástroj nebo příkaz z jejího sloupce Podržení. Zkratka podržením je klávesa s písmenem, číslicí nebo interpunkcí, samotná nebo se Shiftem.
+@msg	Hold {_1} is already used by {_2}	Podržení {_1} už používá {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	zkratka podržením je klávesa, která píše znak, samotná nebo se Shiftem ({shown} obsahuje Cmd, Ctrl nebo Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} nemůže být zkratkou podržením: použijte písmeno, číslici nebo interpunkční klávesu

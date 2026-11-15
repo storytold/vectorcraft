@@ -9709,3 +9709,13 @@ shape	Open	Открытый
 	Remove Fold Line Role	Убрать тип линии
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Tap	Короткое нажатие
+	Clear Hold	Очистить удержание
+	Hold Shortcuts	Клавиши удержания
+	Hold Shortcut Delay	Задержка клавиш удержания
+	How hold shortcuts work	Как работают клавиши удержания
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Щелкните, затем нажмите клавишу, которую нужно удерживать для этого (Esc отменяет). Удержание клавиши запускает это; короткое нажатие запускает собственное сочетание клавиши.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Короткое нажатие клавиши запускает ее сочетание. Удержание клавиши в течение задержки запускает вместо этого инструмент или команду из ее столбца «Удерживать». Клавиша удержания — это клавиша буквы, цифры или знака препинания, отдельно или с Shift.
+@msg	Hold {_1} is already used by {_2}	Удержание {_1} уже используется для {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	клавиша удержания — это клавиша, которая вводит символ, отдельно или с Shift ({shown} содержит Cmd, Ctrl или Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не может быть клавишей удержания: используйте букву, цифру или клавишу знака препинания

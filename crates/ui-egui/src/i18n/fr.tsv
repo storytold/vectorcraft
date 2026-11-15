@@ -9598,4 +9598,14 @@ breakText	Glyphs	Glyphes
 	No objects are selected.	Aucun objet n’est sélectionné.
 	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
 	Remove Fold Line Role	Supprimer le type de ligne
+	Tap	Appui bref
+	Clear Hold	Effacer le maintien
+	Hold Shortcuts	Raccourcis de maintien
+	Hold Shortcut Delay	Délai des raccourcis de maintien
+	How hold shortcuts work	Fonctionnement des raccourcis de maintien
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Cliquez, puis appuyez sur une touche à maintenir pour cet élément (Échap annule). Maintenir la touche exécute cet élément ; un appui bref exécute le raccourci propre à la touche.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Un appui bref sur une touche exécute son raccourci. Maintenir la touche pendant le délai exécute à la place l’outil ou la commande de sa colonne Maintenir. Un raccourci de maintien est une touche de lettre, de chiffre ou de ponctuation, seule ou avec Maj.
+@msg	Hold {_1} is already used by {_2}	Le maintien de {_1} est déjà utilisé par {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	un raccourci de maintien est une touche qui saisit un caractère, seule ou avec Maj ({shown} comporte Cmd, Ctrl ou Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ne peut pas être un raccourci de maintien : utilisez une lettre, un chiffre ou une touche de ponctuation
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution

@@ -7793,3 +7793,13 @@ breakText	Glyphs	Glifs
 	Open a document to mark its fold lines.	Obre un document per marcar-ne les línies de plegat.
 	Remove Fold Line Role	Elimina el tipus de línia
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Tap	Pulsació breu
+	Clear Hold	Esborra la pulsació llarga
+	Hold Shortcuts	Dreceres de pulsació llarga
+	Hold Shortcut Delay	Retard de les dreceres de pulsació llarga
+	How hold shortcuts work	Com funcionen les dreceres de pulsació llarga
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Fes clic i prem una tecla per mantenir premuda per a això (Esc cancel·la). Mantenir premuda la tecla executa això; una pulsació breu executa la drecera pròpia de la tecla.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Una pulsació breu d’una tecla executa la seva drecera. Mantenir premuda la tecla durant el retard executa en canvi l’eina o l’ordre de la seva columna Mantén. Una drecera de pulsació llarga és una tecla de lletra, xifra o puntuació, sola o amb Shift.
+@msg	Hold {_1} is already used by {_2}	La pulsació llarga de {_1} ja la fa servir {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	una drecera de pulsació llarga és una tecla que escriu un caràcter, sola o amb Shift ({shown} té Cmd, Ctrl o Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} no pot ser una drecera de pulsació llarga: fes servir una lletra, una xifra o una tecla de puntuació

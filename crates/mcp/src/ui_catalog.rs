@@ -173,8 +173,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Cmd+I",
         "{} open the Check Spelling dialog to walk through unrecognized words with suggestions, ignore, change and dictionary options",
     ),
-    ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
-    ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, default, overridden}]"),
+    (
+        "shortcuts.set",
+        "Set Keyboard Shortcut",
+        "",
+        "{id: command id or tool:<id>, shortcut?: \"Cmd+Shift+K\" | \"\" (none) | null (default), hold?: a character key alone or with Shift (\"X\", \"Shift+X\", \".\") | \"\" | null (none), force?} → {id, shortcut, hold, removedFrom}; `hold` alone leaves the shortcut as it is; a hold shortcut acts while the holdShortcuts preference is on",
+    ),
+    ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, hold, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),
     ("shortcuts.reset", "Reset Keyboard Shortcuts", "", "{}"),
     (
@@ -188,7 +193,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "shortcuts.exportText",
         "Export Keyboard Shortcuts as Text…",
         "",
-        "{path?} save the current set's tools and menu commands with their shortcuts as a UTF-8 text file (Keyboard Shortcuts › Export Text…): the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none; without `path`, pick a file",
+        "{path?} save the current set's tools and menu commands with their shortcuts as a UTF-8 text file (Keyboard Shortcuts › Export Text…): the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none, and while the holdShortcuts preference is on a third `Hold <key>` column on a row with a hold shortcut; without `path`, pick a file",
     ),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     (

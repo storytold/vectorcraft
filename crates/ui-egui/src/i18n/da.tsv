@@ -7703,3 +7703,13 @@ breakText	Glyphs	Glyffer
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Tap	Kort tryk
+	Clear Hold	Ryd hold
+	Hold Shortcuts	Holdegenveje
+	Hold Shortcut Delay	Forsinkelse for holdegenveje
+	How hold shortcuts work	Sådan virker holdegenveje
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik, og tryk derefter på en tast, der skal holdes nede for dette (Esc annullerer). Når tasten holdes nede, køres dette; et kort tryk kører tastens egen genvej.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Et kort tryk på en tast kører dens genvej. Når tasten holdes nede i forsinkelsens varighed, køres i stedet værktøjet eller kommandoen i dens Hold-kolonne. En holdegenvej er en bogstav-, ciffer- eller tegnsætningstast, alene eller med Shift.
+@msg	Hold {_1} is already used by {_2}	Hold {_1} bruges allerede af {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	en holdegenvej er en tast, der skriver et tegn, alene eller med Shift ({shown} har Cmd, Ctrl eller Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan ikke være en holdegenvej: brug et bogstav, et ciffer eller en tegnsætningstast

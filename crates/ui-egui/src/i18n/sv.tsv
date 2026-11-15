@@ -9283,3 +9283,13 @@ digits	Hindi	Hindi
 	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
 	Remove Fold Line Role	Ta bort linjetyp
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Tap	Kort tryck
+	Clear Hold	Rensa håll
+	Hold Shortcuts	Hållkortkommandon
+	Hold Shortcut Delay	Fördröjning för hållkortkommandon
+	How hold shortcuts work	Så fungerar hållkortkommandon
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klicka och tryck sedan på en tangent som ska hållas ned för detta (Esc avbryter). Att hålla ned tangenten kör detta; ett kort tryck kör tangentens eget kortkommando.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Ett kort tryck på en tangent kör dess kortkommando. Att hålla ned tangenten under fördröjningen kör i stället verktyget eller kommandot i dess Håll-kolumn. Ett hållkortkommando är en bokstavs-, siffer- eller skiljeteckentangent, ensam eller med Shift.
+@msg	Hold {_1} is already used by {_2}	Håll {_1} används redan av {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ett hållkortkommando är en tangent som skriver ett tecken, ensam eller med Shift ({shown} har Cmd, Ctrl eller Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan inte vara ett hållkortkommando: använd en bokstav, en siffra eller en skiljeteckentangent

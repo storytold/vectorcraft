@@ -9211,3 +9211,13 @@ breakText	Glyphs	Glyphen
 	No objects are selected.	Es sind keine Objekte ausgewählt.
 	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
 	Remove Fold Line Role	Linienart entfernen
+	Tap	Kurz drücken
+	Clear Hold	Halten löschen
+	Hold Shortcuts	Halte-Tastaturbefehle
+	Hold Shortcut Delay	Verzögerung für Halte-Tastaturbefehle
+	How hold shortcuts work	So funktionieren Halte-Tastaturbefehle
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klicken Sie und drücken Sie dann eine Taste, die hierfür gehalten werden soll (Esc bricht ab). Halten der Taste führt dies aus; kurzes Drücken führt den eigenen Tastaturbefehl der Taste aus.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kurzes Drücken einer Taste führt ihren Tastaturbefehl aus. Halten der Taste für die Dauer der Verzögerung führt stattdessen das Werkzeug oder den Befehl in ihrer Spalte „Halten“ aus. Ein Halte-Tastaturbefehl ist eine Buchstaben-, Ziffern- oder Satzzeichentaste, allein oder mit Shift.
+@msg	Hold {_1} is already used by {_2}	Halten {_1} wird bereits von {_2} verwendet
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	Ein Halte-Tastaturbefehl ist eine Taste, die ein Zeichen eingibt, allein oder mit Shift ({shown} enthält Cmd, Ctrl oder Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kann kein Halte-Tastaturbefehl sein: Verwenden Sie einen Buchstaben, eine Ziffer oder eine Satzzeichentaste

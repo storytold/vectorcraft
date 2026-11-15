@@ -9245,3 +9245,13 @@ breakText	Glyphs	Glifi
 	No objects are selected.	Nessun oggetto selezionato.
 	Open a document to mark its fold lines.	Apri un documento per segnarne le linee di piega.
 	Remove Fold Line Role	Rimuovi tipo di linea
+	Tap	Pressione breve
+	Clear Hold	Cancella pressione prolungata
+	Hold Shortcuts	Scorciatoie a pressione prolungata
+	Hold Shortcut Delay	Ritardo delle scorciatoie a pressione prolungata
+	How hold shortcuts work	Come funzionano le scorciatoie a pressione prolungata
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Fai clic, poi premi un tasto da tenere premuto per questo (Esc annulla). Tenere premuto il tasto esegue questo; una pressione breve esegue la scorciatoia del tasto stesso.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Una pressione breve di un tasto esegue la sua scorciatoia. Tenere premuto il tasto per la durata del ritardo esegue invece lo strumento o il comando della sua colonna Tieni premuto. Una scorciatoia a pressione prolungata è un tasto di lettera, cifra o punteggiatura, da solo o con Shift.
+@msg	Hold {_1} is already used by {_2}	La pressione prolungata di {_1} è già usata da {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	una scorciatoia a pressione prolungata è un tasto che digita un carattere, da solo o con Shift ({shown} ha Cmd, Ctrl o Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} non può essere una scorciatoia a pressione prolungata: usa una lettera, una cifra o un tasto di punteggiatura

@@ -9452,3 +9452,13 @@ breakText	Glyphs	字形
 	Open a document to mark its fold lines.	打开文档以标记其折线。
 	Remove Fold Line Role	移除线条类型
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Tap	短按
+	Clear Hold	清除按住
+	Hold Shortcuts	按住快捷键
+	Hold Shortcut Delay	按住快捷键延迟
+	How hold shortcuts work	按住快捷键的工作方式
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	单击后按下要为此按住的键 (Esc 取消)。按住该键会运行此项；短按会运行该键自己的快捷键。
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	短按一个键会运行它的快捷键。按住该键达到延迟时间，则改为运行其“按住”列中的工具或命令。按住快捷键是字母、数字或标点键，可单独使用或与 Shift 组合。
+@msg	Hold {_1} is already used by {_2}	按住 {_1} 已被 {_2} 使用
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	按住快捷键是可输入字符的键，单独使用或与 Shift 组合 ({shown} 含有 Cmd、Ctrl 或 Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} 不能作为按住快捷键：请使用字母、数字或标点键

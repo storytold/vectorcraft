@@ -670,6 +670,12 @@ pub struct UiState {
     /// stored in the form every earlier version reads.
     #[serde(default, with = "crate::keymap::stored")]
     pub shortcut_overrides: craft_keymap::Overrides,
+    /// Hold shortcuts: command id, `tool:<id>` or `panel:<id>` → a character key, alone or with
+    /// Shift ("X", "Shift+X", "."). Holding the key for the Hold Shortcut Delay runs the entry; a
+    /// quick press runs the key's own shortcut when it is let go. Kept apart from
+    /// `shortcut_overrides`, so earlier versions read the settings without them.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub shortcut_holds: std::collections::BTreeMap<String, String>,
     /// Name of the shortcut set (preset or "Custom").
     #[serde(default = "default_shortcut_set", deserialize_with = "crate::shortcut_editor::deserialize_set_name")]
     pub shortcut_set: String,
@@ -1221,6 +1227,7 @@ impl Default for UiState {
             action_playback: Default::default(),
             action_playing: None,
             shortcut_overrides: Default::default(),
+            shortcut_holds: Default::default(),
             shortcut_set: default_shortcut_set(),
             workspace: default_workspace(),
             touch_workspace_restore: None,

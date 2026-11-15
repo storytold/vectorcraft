@@ -7033,3 +7033,13 @@ breakText	Glyphs	Glif
 	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
 	Remove Fold Line Role	Hapus jenis garis
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Tap	Tekan singkat
+	Clear Hold	Hapus Tahan
+	Hold Shortcuts	Pintasan tahan
+	Hold Shortcut Delay	Jeda pintasan tahan
+	How hold shortcuts work	Cara kerja pintasan tahan
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik, lalu tekan tombol yang ditahan untuk ini (Esc membatalkan). Menahan tombol menjalankan ini; tekan singkat menjalankan pintasan milik tombol itu sendiri.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Tekan singkat sebuah tombol menjalankan pintasannya. Menahan tombol selama jeda menjalankan alat atau perintah di kolom Tahan sebagai gantinya. Pintasan tahan adalah tombol huruf, angka, atau tanda baca, sendiri atau dengan Shift.
+@msg	Hold {_1} is already used by {_2}	Tahan {_1} sudah digunakan oleh {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	pintasan tahan adalah tombol yang mengetik karakter, sendiri atau dengan Shift ({shown} memakai Cmd, Ctrl, atau Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} tidak bisa menjadi pintasan tahan: gunakan huruf, angka, atau tombol tanda baca

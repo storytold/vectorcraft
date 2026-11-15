@@ -9885,3 +9885,13 @@ font-script	Japanese	იაპონური
 	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მოსანიშნად.
 	Remove Fold Line Role	ხაზის ტიპის მოხსნა
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Tap	მოკლე დაჭერა
+	Clear Hold	ხანგრძლივი დაჭერის გასუფთავება
+	Hold Shortcuts	ხანგრძლივი დაჭერის მალსახმობები
+	Hold Shortcut Delay	ხანგრძლივი დაჭერის დაყოვნება
+	How hold shortcuts work	როგორ მუშაობს ხანგრძლივი დაჭერის მალსახმობები
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	დაწკაპეთ, შემდეგ დააჭირეთ კლავიშს, რომელიც ამისთვის უნდა დაიჭიროთ (Esc აუქმებს). კლავიშის ხანგრძლივი დაჭერა ამას უშვებს; მოკლე დაჭერა კლავიშის საკუთარ მალსახმობს უშვებს.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	კლავიშის მოკლე დაჭერა მის მალსახმობს უშვებს. თუ კლავიშს დაყოვნების ხანგრძლივობით დაიჭერთ, ამის ნაცვლად გაეშვება მისი „დაჭერა“ სვეტის ხელსაწყო ან ბრძანება. ხანგრძლივი დაჭერის მალსახმობი არის ასოს, ციფრის ან სასვენი ნიშნის კლავიში, ცალკე ან Shift კლავიშთან ერთად.
+@msg	Hold {_1} is already used by {_2}	ხანგრძლივი დაჭერა {_1} უკვე გამოიყენება ამისთვის: {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ხანგრძლივი დაჭერის მალსახმობი არის კლავიში, რომელიც სიმბოლოს წერს, ცალკე ან Shift კლავიშთან ერთად ({shown} შეიცავს Cmd, Ctrl ან Alt კლავიშს)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ვერ იქნება ხანგრძლივი დაჭერის მალსახმობი: გამოიყენეთ ასო, ციფრი ან სასვენი ნიშნის კლავიში

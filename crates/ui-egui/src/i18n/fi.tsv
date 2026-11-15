@@ -7850,3 +7850,13 @@ breakText	Glyphs	Merkit
 	Open a document to mark its fold lines.	Avaa asiakirja, niin voit merkitä sen taittoviivat.
 	Remove Fold Line Role	Poista viivatyyppi
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Tap	Lyhyt painallus
+	Clear Hold	Tyhjennä pitkä painallus
+	Hold Shortcuts	Pitkän painalluksen pikanäppäimet
+	Hold Shortcut Delay	Pitkän painalluksen viive
+	How hold shortcuts work	Näin pitkän painalluksen pikanäppäimet toimivat
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Napsauta ja paina sitten näppäintä, jota pidetään pohjassa tätä varten (Esc peruuttaa). Näppäimen pitäminen pohjassa suorittaa tämän; lyhyt painallus suorittaa näppäimen oman pikanäppäimen.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Näppäimen lyhyt painallus suorittaa sen pikanäppäimen. Kun näppäintä pidetään pohjassa viiveen ajan, suoritetaan sen sijaan sen Pidä pohjassa -sarakkeen työkalu tai komento. Pitkän painalluksen pikanäppäin on kirjain-, numero- tai välimerkkinäppäin yksin tai Shiftin kanssa.
+@msg	Hold {_1} is already used by {_2}	Pitkä painallus {_1} on jo käytössä kohteella {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	pitkän painalluksen pikanäppäin on merkin kirjoittava näppäin yksin tai Shiftin kanssa ({shown} sisältää Cmd-, Ctrl- tai Alt-näppäimen)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ei voi olla pitkän painalluksen pikanäppäin: käytä kirjainta, numeroa tai välimerkkinäppäintä

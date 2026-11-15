@@ -6330,6 +6330,33 @@ page describes saving the list from the Keyboard Shortcuts dialog as a text file
 {"name":"run_command","arguments":{"command":"shortcuts.exportText","params":{"path":"/Users/me/Shortcuts.txt"}}}
 ```
 
+A tool or command can also have a hold shortcut: a key that types a character (a letter, a digit or a punctuation
+key), alone or with Shift. Space and the backtick key cannot be hold shortcuts, and neither can a key with Cmd, Ctrl or
+Alt. Hold shortcuts act only while the preference `holdShortcuts` is on; it is off by default, and Edit › Keyboard
+Shortcuts shows it as the Hold Shortcuts checkbox, with a ? button that explains it. While it is off, the dialog shows
+no Hold column and every key runs on its press. While it is on, the dialog shows a Hold column and the Hold Shortcut
+Delay (`keyHoldDelay`, 0.2 to 1.0 s, 0.35 s by default; VectorCraft's own values). Preferences › General › Options
+lists both settings too, with Hold Shortcut Delay dimmed while Hold Shortcuts is off. A key with a hold shortcut then
+waits when it goes down: held for the delay, it runs its hold shortcut once and its repeats are ignored until it is let
+go; let go sooner, it runs what the key runs without a hold shortcut, at the release. Another key pressed while one
+waits, or Cmd, Ctrl or Alt pressed then, ends the wait first, so keys act in the order they went down. The window losing
+the keyboard, a dialog, a text field, Presentation Mode or an input method composition ends the wait and runs nothing.
+Keys without a hold shortcut run on their press as before, and so does a letter with Shift when only the letter alone
+has a hold shortcut, or a key the active tool uses itself (E with the Extend Path tool).
+
+`shortcuts.set {id, hold}` sets a hold shortcut, and `hold: ""` or `null` removes it; `hold` alone leaves the entry's
+shortcut as it is, and a key that another entry already holds is refused unless `force` is true. Hold shortcuts are
+kept apart from shortcuts: Use Default, Clear and `shortcut: null` leave them, and `overridden` in `shortcuts.list` is
+about the shortcut only. `shortcuts.list` rows give the hold shortcut as `hold`, `shortcuts.conflicts` lists a key two
+entries hold as `"Hold X"`, and Reset to Defaults and a preset remove every hold shortcut. `shortcuts.export` writes
+them as a `holds` object (entry id to key) when there are any, and `shortcuts.import` reads it; a file without `holds`
+has none, and a `holds` value that is not a usable hold shortcut fails the import, which then changes nothing.
+`shortcuts.exportText` adds a third `Hold X` column to a row with a hold shortcut while `holdShortcuts` is on.
+
+```json
+{"name":"run_command","arguments":{"command":"shortcuts.set","params":{"id":"paint.swap","hold":"X"}}}
+```
+
 The desktop app adds its active artboard, the one the Artboards panel highlights, to the `object.align`,
 `object.distribute`, `object.distributeSpacing` and `select.allOnArtboard` calls it runs without `artboard`, as it does
 for `edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack` (while the Artboard tool has several artboards
@@ -6556,8 +6583,9 @@ interface and not the art: a zoom shows the art at the same size at every UI Sca
 preference `holdToolKeys` also needs the desktop app. It is on by default: a single-key tool shortcut held for 0.25 s
 or more, or held while its tool is used, chooses the tool until the key is let go and then returns to the tool active
 before, after any drag in progress; a quicker press chooses the tool for good. With it off, every press and every key
-repeat chooses the tool. The canvas preference `boundingBoxWhileMovingAndDrawing` (off by default) also needs the
-desktop app: on, with View › Show Bounding Box, the bounding box and its handles stay visible while a drag moves the
+repeat chooses the tool. While `holdShortcuts` is on, a tool key that also has a hold shortcut runs the hold shortcut
+when held, and a quick press chooses its tool for good. The canvas preference `boundingBoxWhileMovingAndDrawing` (off
+by default) also needs the desktop app: on, with View › Show Bounding Box, the bounding box and its handles stay visible while a drag moves the
 selection, and the Rectangle, Rounded Rectangle, Ellipse, Polygon and Star tools draw the box around the shape being
 drawn; off, the box hides during both, except that a Selection tool move with `realTimeDrawing` off still moves the
 box. `highlightAlternateGlyphs` (off by default: on, the canvas paints a pink cell behind glyphs OpenType features

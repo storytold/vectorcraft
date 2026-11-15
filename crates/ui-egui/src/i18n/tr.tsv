@@ -9567,3 +9567,13 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Tap	Kısa Basma
+	Clear Hold	Basılı Tutmayı Temizle
+	Hold Shortcuts	Basılı Tutma Kısayolları
+	Hold Shortcut Delay	Basılı Tutma Kısayolu Gecikmesi
+	How hold shortcuts work	Basılı tutma kısayolları nasıl çalışır
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Tıklayın, ardından bunun için basılı tutulacak tuşa basın (Esc iptal edilir). Tuşu basılı tutmak bunu çalıştırır; kısa basmak tuşun kendi kısayolunu çalıştırır.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Bir tuşa kısa basmak onun kısayolunu çalıştırır. Tuşu gecikme süresi boyunca basılı tutmak bunun yerine Basılı tutun sütunundaki aracı veya komutu çalıştırır. Basılı tutma kısayolu, tek başına veya Shift ile bir harf, rakam ya da noktalama tuşudur.
+@msg	Hold {_1} is already used by {_2}	Basılı tutma {_1} zaten {_2} tarafından kullanılıyor
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	basılı tutma kısayolu, tek başına veya Shift ile bir karakter yazan tuştur ({shown} Cmd, Ctrl veya Alt içeriyor)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} basılı tutma kısayolu olamaz: bir harf, rakam veya noktalama tuşu kullanın

@@ -4798,3 +4798,13 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર
 	Standard Every-line Composer	સ્ટાન્ડર્ડ એવરી-લાઇન કમ્પોઝર
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer આમાંથી એક હોવું જોઈએ: "singleLine", "everyLine", "standardSingleLine" અથવા "standardEveryLine"
+	Tap	ટૂંકું દબાણ
+	Clear Hold	હોલ્ડ સાફ કરો
+	Hold Shortcuts	હોલ્ડ શોર્ટકટ
+	Hold Shortcut Delay	હોલ્ડ શોર્ટકટ વિલંબ
+	How hold shortcuts work	હોલ્ડ શોર્ટકટ કેવી રીતે કામ કરે છે
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	ક્લિક કરો, પછી આ માટે દબાવી રાખવાની કી દબાવો (Esc રદ કરે છે). કી દબાવી રાખવાથી આ ચાલે છે; ટૂંકું દબાણ કીનો પોતાનો શોર્ટકટ ચલાવે છે.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	કીને ટૂંકું દબાવવાથી તેનો શોર્ટકટ ચાલે છે. વિલંબ જેટલો સમય કી દબાવી રાખવાથી તેના બદલે તેની હોલ્ડ કૉલમમાંનું ટૂલ અથવા આદેશ ચાલે છે. હોલ્ડ શોર્ટકટ એ અક્ષર, અંક અથવા વિરામચિહ્નની કી છે, એકલી અથવા Shift સાથે.
+@msg	Hold {_1} is already used by {_2}	હોલ્ડ {_1} પહેલેથી {_2} વાપરે છે
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	હોલ્ડ શોર્ટકટ એ અક્ષર લખતી કી છે, એકલી અથવા Shift સાથે ({shown} માં Cmd, Ctrl અથવા Alt છે)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} હોલ્ડ શોર્ટકટ ન હોઈ શકે: અક્ષર, અંક અથવા વિરામચિહ્નની કી વાપરો

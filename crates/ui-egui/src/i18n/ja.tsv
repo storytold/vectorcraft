@@ -9312,3 +9312,13 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Tap	短押し
+	Clear Hold	長押しを消去
+	Hold Shortcuts	長押しショートカット
+	Hold Shortcut Delay	長押しショートカットの遅延
+	How hold shortcuts work	長押しショートカットのしくみ
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	クリックしてから、これに使う長押しのキーを押します (Esc でキャンセル)。キーを長押しするとこれを実行し、短く押すとキー自体のショートカットを実行します。
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	キーを短く押すと、そのショートカットを実行します。遅延の時間だけキーを押し続けると、代わりに長押し列のツールまたはコマンドを実行します。長押しショートカットには、文字、数字、句読点のキーを単独で、または Shift と組み合わせて使用できます。
+@msg	Hold {_1} is already used by {_2}	長押し {_1} はすでに {_2} で使用されています
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	長押しショートカットは、文字を入力するキーを単独で、または Shift と組み合わせたものです ({shown} には Cmd、Ctrl、Alt のいずれかが含まれています)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} は長押しショートカットにできません: 文字、数字、句読点のいずれかのキーを使用してください

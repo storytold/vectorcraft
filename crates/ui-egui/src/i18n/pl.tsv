@@ -9466,3 +9466,13 @@ breakText	Glyphs	Glify
 	No objects are selected.	Nie zaznaczono żadnych obiektów.
 	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
 	Remove Fold Line Role	Usuń rodzaj linii
+	Tap	Krótkie naciśnięcie
+	Clear Hold	Wyczyść przytrzymanie
+	Hold Shortcuts	Skróty przytrzymania
+	Hold Shortcut Delay	Opóźnienie skrótów przytrzymania
+	How hold shortcuts work	Jak działają skróty przytrzymania
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Kliknij, a następnie naciśnij klawisz, który ma być przytrzymywany dla tego elementu (Esc anuluje). Przytrzymanie klawisza uruchamia ten element; krótkie naciśnięcie uruchamia własny skrót klawisza.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Krótkie naciśnięcie klawisza uruchamia jego skrót. Przytrzymanie klawisza przez czas opóźnienia uruchamia zamiast tego narzędzie lub polecenie z jego kolumny Przytrzymaj. Skrót przytrzymania to klawisz litery, cyfry lub znaku interpunkcyjnego, sam lub z Shift.
+@msg	Hold {_1} is already used by {_2}	Przytrzymanie {_1} jest już używane przez {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	skrót przytrzymania to klawisz wpisujący znak, sam lub z Shift ({shown} zawiera Cmd, Ctrl lub Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} nie może być skrótem przytrzymania: użyj litery, cyfry lub klawisza interpunkcyjnego

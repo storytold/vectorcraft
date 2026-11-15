@@ -9684,3 +9684,13 @@ swatch	Yellow Green	Verde-amarelado
 	No objects are selected.	Nenhum objeto selecionado.
 	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
 	Remove Fold Line Role	Remover Tipo de Linha
+	Tap	Toque Rápido
+	Clear Hold	Limpar Pressionamento Longo
+	Hold Shortcuts	Atalhos de Pressionamento Longo
+	Hold Shortcut Delay	Atraso dos Atalhos de Pressionamento Longo
+	How hold shortcuts work	Como funcionam os atalhos de pressionamento longo
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Clique e depois pressione uma tecla para manter pressionada para isto (Esc cancela). Manter a tecla pressionada executa isto; um toque rápido executa o atalho da própria tecla.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Um toque rápido em uma tecla executa o atalho dela. Manter a tecla pressionada pelo tempo do atraso executa, em vez disso, a ferramenta ou o comando da coluna Manter pressionado. Um atalho de pressionamento longo é uma tecla de letra, número ou pontuação, sozinha ou com Shift.
+@msg	Hold {_1} is already used by {_2}	O pressionamento longo de {_1} já é usado por {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	um atalho de pressionamento longo é uma tecla que digita um caractere, sozinha ou com Shift ({shown} tem Cmd, Ctrl ou Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} não pode ser um atalho de pressionamento longo: use uma letra, um número ou uma tecla de pontuação

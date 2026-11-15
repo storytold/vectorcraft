@@ -1093,6 +1093,45 @@ fn scroll_sideways_with_cmd_wheel_dims_with_zoom_with_mouse_wheel() {
     }
 }
 
+/// General › Hold Shortcut Delay: its field is dimmed while Hold Shortcuts is unchecked in the
+/// dialog, and a click on it then does not give it the keyboard.
+#[test]
+fn hold_shortcut_delay_dims_without_hold_shortcuts() {
+    fn text(s: &egui::Shape, f: &dyn Fn(&str) -> bool) -> Option<egui::Rect> {
+        match s {
+            egui::Shape::Text(t) if f(t.galley.text()) => Some(t.visual_bounding_rect()),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| text(s, f)),
+            _ => None,
+        }
+    }
+    for on in [true, false] {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut a = app();
+        let mut d = Dialog::new("preferences", json!({"holdShortcuts": on, "keyHoldDelay": 0.35}));
+        let mut frame = |d: &mut Dialog, events: Vec<egui::Event>| {
+            let raw = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 2400.0))),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, |ui| category_fields(ui, &mut a, d, "General"));
+            out.textures_delta.clear();
+            let label = out.shapes.iter().find_map(|c| text(&c.shape, &|t| t.starts_with("Hold Shortcut Delay")));
+            let field = out.shapes.iter().find_map(|c| text(&c.shape, &|t| t.starts_with("0.35")));
+            (label, field)
+        };
+        let (label, field) = frame(&mut d, vec![]);
+        assert!(label.is_some(), "no label (on {on})");
+        let at = field.unwrap_or_else(|| panic!("no field (on {on})"));
+        let press =
+            |pressed| egui::Event::PointerButton { pos: at.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut d, vec![egui::Event::PointerMoved(at.center()), press(true)]);
+        frame(&mut d, vec![press(false)]);
+        assert_eq!(ctx.memory(|m| m.focused().is_some()), on, "a click gives the field the keyboard only while Hold Shortcuts is on ({on})");
+    }
+}
+
 /// Type › Show samples on white: its checkbox is dimmed while Enable in-menu font previews is
 /// unchecked in the dialog, and a click on it then leaves the setting as it was.
 #[test]

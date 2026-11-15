@@ -191,6 +191,7 @@ impl VectorcraftApp {
             input_frames: vec![],
             shortcuts_frames: vec![],
             held_tool: Vec::new(),
+            hold_keys: Default::default(),
             synthetic_injected: false,
             injected_events: vec![],
             injected_generation: InputGeneration::default(),

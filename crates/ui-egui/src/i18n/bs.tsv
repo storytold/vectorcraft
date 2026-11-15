@@ -7071,3 +7071,13 @@ shape	Open	Otvoren
 	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
 	Remove Fold Line Role	Ukloni vrstu linije
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Tap	Kratki pritisak
+	Clear Hold	Očisti zadržavanje
+	Hold Shortcuts	Prečice zadržavanjem
+	Hold Shortcut Delay	Kašnjenje prečica zadržavanjem
+	How hold shortcuts work	Kako rade prečice zadržavanjem
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Kliknite, zatim pritisnite tipku koju treba zadržati za ovo (Esc otkazuje). Zadržavanje tipke pokreće ovo; kratki pritisak pokreće vlastitu prečicu tipke.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kratki pritisak tipke pokreće njenu prečicu. Zadržavanje tipke tokom kašnjenja umjesto toga pokreće alat ili naredbu iz njene kolone Zadrži. Prečica zadržavanjem je tipka sa slovom, cifrom ili interpunkcijskim znakom, sama ili sa Shift.
+@msg	Hold {_1} is already used by {_2}	Zadržavanje {_1} već koristi {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	prečica zadržavanjem je tipka koja upisuje znak, sama ili sa Shift ({shown} ima Cmd, Ctrl ili Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ne može biti prečica zadržavanjem: koristite slovo, cifru ili interpunkcijsku tipku

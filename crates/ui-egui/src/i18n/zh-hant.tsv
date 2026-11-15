@@ -9262,3 +9262,13 @@ breakText	Glyphs	字符
 	Open a document to mark its fold lines.	開啟文件以標記其摺線。
 	Remove Fold Line Role	移除線條類型
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Tap	短按
+	Clear Hold	清除按住
+	Hold Shortcuts	按住快速鍵
+	Hold Shortcut Delay	按住快速鍵延遲
+	How hold shortcuts work	按住快速鍵的運作方式
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	按一下後按下要為此按住的按鍵 (Esc 取消)。按住該按鍵會執行此項；短按會執行該按鍵本身的快速鍵。
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	短按按鍵會執行它的快速鍵。按住按鍵達延遲時間，則改為執行其「按住」欄中的工具或命令。按住快速鍵是字母、數字或標點符號按鍵，可單獨使用或搭配 Shift。
+@msg	Hold {_1} is already used by {_2}	按住 {_1} 已被 {_2} 使用
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	按住快速鍵是可輸入字元的按鍵，可單獨使用或搭配 Shift ({shown} 含有 Cmd、Ctrl 或 Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} 不能作為按住快速鍵：請使用字母、數字或標點符號按鍵

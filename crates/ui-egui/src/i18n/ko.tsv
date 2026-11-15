@@ -9208,3 +9208,13 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Tap	짧게 누르기
+	Clear Hold	길게 누르기 지우기
+	Hold Shortcuts	길게 누르기 단축키
+	Hold Shortcut Delay	길게 누르기 단축키 지연 시간
+	How hold shortcuts work	길게 누르기 단축키 작동 방식
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	클릭한 다음 이 항목에 길게 누를 키를 누르세요 (Esc로 취소). 키를 길게 누르면 이 항목이 실행되고, 짧게 누르면 키 자체의 단축키가 실행됩니다.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	키를 짧게 누르면 해당 단축키가 실행됩니다. 지연 시간 동안 키를 누르고 있으면 대신 누르고 있기 열의 도구나 명령이 실행됩니다. 길게 누르기 단축키는 문자, 숫자 또는 문장 부호 키이며, 단독으로 또는 Shift와 함께 사용합니다.
+@msg	Hold {_1} is already used by {_2}	길게 누르기 {_1}은(는) 이미 {_2}에서 사용 중입니다
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	길게 누르기 단축키는 문자를 입력하는 키를 단독으로 또는 Shift와 함께 사용해야 합니다 ({shown}에 Cmd, Ctrl 또는 Alt가 있음)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown}은(는) 길게 누르기 단축키가 될 수 없습니다: 문자, 숫자 또는 문장 부호 키를 사용하세요

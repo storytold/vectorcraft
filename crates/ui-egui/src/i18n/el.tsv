@@ -7767,3 +7767,13 @@ breakText	Glyphs	Γλύφοι
 	Open a document to mark its fold lines.	Ανοίξτε ένα έγγραφο για να σημειώσετε τις γραμμές δίπλωσής του.
 	Remove Fold Line Role	Αφαίρεση τύπου γραμμής
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Tap	Σύντομο πάτημα
+	Clear Hold	Εκκαθάριση παρατεταμένου πατήματος
+	Hold Shortcuts	Συντομεύσεις παρατεταμένου πατήματος
+	Hold Shortcut Delay	Καθυστέρηση συντομεύσεων παρατεταμένου πατήματος
+	How hold shortcuts work	Πώς λειτουργούν οι συντομεύσεις παρατεταμένου πατήματος
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Κάντε κλικ και πατήστε ένα πλήκτρο που θα κρατάτε πατημένο για αυτό (Esc για ακύρωση). Το παρατεταμένο πάτημα του πλήκτρου εκτελεί αυτό. Ένα σύντομο πάτημα εκτελεί τη συντόμευση του ίδιου του πλήκτρου.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Ένα σύντομο πάτημα πλήκτρου εκτελεί τη συντόμευσή του. Αν κρατήσετε πατημένο το πλήκτρο για τον χρόνο καθυστέρησης, εκτελείται αντί γι’ αυτό το εργαλείο ή η εντολή της στήλης «Κρατήστε πατημένο». Μια συντόμευση παρατεταμένου πατήματος είναι ένα πλήκτρο γράμματος, ψηφίου ή σημείου στίξης, μόνο του ή με Shift.
+@msg	Hold {_1} is already used by {_2}	το παρατεταμένο πάτημα του {_1} χρησιμοποιείται ήδη από το {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	μια συντόμευση παρατεταμένου πατήματος είναι ένα πλήκτρο που πληκτρολογεί έναν χαρακτήρα, μόνο του ή με Shift (το {shown} έχει Cmd, Ctrl ή Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	το {shown} δεν μπορεί να είναι συντόμευση παρατεταμένου πατήματος: χρησιμοποιήστε γράμμα, ψηφίο ή πλήκτρο στίξης

@@ -7424,3 +7424,13 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Tap	Nhấn nhanh
+	Clear Hold	Xóa nhấn giữ
+	Hold Shortcuts	Phím tắt nhấn giữ
+	Hold Shortcut Delay	Độ trễ phím tắt nhấn giữ
+	How hold shortcuts work	Cách phím tắt nhấn giữ hoạt động
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Nhấp, rồi nhấn phím cần giữ cho mục này (Esc để hủy). Giữ phím sẽ chạy mục này; nhấn nhanh sẽ chạy phím tắt riêng của phím đó.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Nhấn nhanh một phím sẽ chạy phím tắt của phím đó. Giữ phím trong khoảng độ trễ sẽ chạy công cụ hoặc lệnh trong cột Giữ của phím thay vào đó. Phím tắt nhấn giữ là một phím chữ cái, chữ số hoặc dấu câu, dùng riêng hoặc cùng Shift.
+@msg	Hold {_1} is already used by {_2}	Nhấn giữ {_1} đã được {_2} sử dụng
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	phím tắt nhấn giữ là một phím gõ ra ký tự, dùng riêng hoặc cùng Shift ({shown} có Cmd, Ctrl hoặc Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} không thể là phím tắt nhấn giữ: hãy dùng chữ cái, chữ số hoặc phím dấu câu

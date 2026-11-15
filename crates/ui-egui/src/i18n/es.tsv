@@ -7754,3 +7754,13 @@ breakText	Glyphs	Glifos
 	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
 	Remove Fold Line Role	Quitar tipo de línea
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Tap	Pulsación breve
+	Clear Hold	Borrar pulsación larga
+	Hold Shortcuts	Métodos abreviados de pulsación larga
+	Hold Shortcut Delay	Retardo de pulsación larga
+	How hold shortcuts work	Cómo funcionan los métodos abreviados de pulsación larga
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Haz clic y presiona una tecla que mantener pulsada para esto (Esc cancela). Mantener pulsada la tecla ejecuta esto; una pulsación breve ejecuta el método abreviado propio de la tecla.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Una pulsación breve de una tecla ejecuta su método abreviado. Mantener pulsada la tecla durante el retardo ejecuta en su lugar la herramienta o el comando de su columna Mantener pulsado. Un método abreviado de pulsación larga es una tecla de letra, dígito o puntuación, sola o con Shift.
+@msg	Hold {_1} is already used by {_2}	La pulsación larga de {_1} ya la usa {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	un método abreviado de pulsación larga es una tecla que escribe un carácter, sola o con Shift ({shown} tiene Cmd, Ctrl o Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} no puede ser un método abreviado de pulsación larga: usa una letra, un dígito o una tecla de puntuación

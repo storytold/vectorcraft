@@ -7018,3 +7018,13 @@ breakText	Glyphs	Глифи
 	Open a document to mark its fold lines.	Отворете документ, за да отбележите линиите му на сгъване.
 	Remove Fold Line Role	Премахни вида на линията
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Tap	Кратко натискане
+	Clear Hold	Изчистване на задържането
+	Hold Shortcuts	Комбинации със задържане
+	Hold Shortcut Delay	Забавяне на комбинациите със задържане
+	How hold shortcuts work	Как работят комбинациите със задържане
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Щракнете и натиснете клавиш, който да се задържа за това (Esc отменя). Задържането на клавиша изпълнява това; краткото натискане изпълнява собствената комбинация на клавиша.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Краткото натискане на клавиш изпълнява неговата комбинация. Задържането на клавиша за времето на забавяне изпълнява вместо това инструмента или командата от колоната му „Задръжте“. Комбинация със задържане е клавиш с буква, цифра или препинателен знак, самостоятелно или с Shift.
+@msg	Hold {_1} is already used by {_2}	Задържането на {_1} вече се използва от {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	комбинация със задържане е клавиш, който въвежда знак, самостоятелно или с Shift ({shown} съдържа Cmd, Ctrl или Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не може да бъде комбинация със задържане: използвайте буква, цифра или препинателен знак

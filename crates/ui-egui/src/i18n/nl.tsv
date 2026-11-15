@@ -9646,3 +9646,13 @@ breakText	Glyphs	Glyphs
 	No objects are selected.	Er zijn geen objecten geselecteerd.
 	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
 	Remove Fold Line Role	Lijnsoort verwijderen
+	Tap	Kort drukken
+	Clear Hold	Vasthouden wissen
+	Hold Shortcuts	Vasthoudsneltoetsen
+	Hold Shortcut Delay	Vertraging vasthoudsneltoetsen
+	How hold shortcuts work	Zo werken vasthoudsneltoetsen
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Klik en druk vervolgens een toets in die hiervoor wordt vastgehouden (Esc annuleert). De toets vasthouden voert dit uit; kort drukken voert de eigen sneltoets van de toets uit.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kort drukken op een toets voert de sneltoets ervan uit. De toets vasthouden gedurende de vertraging voert in plaats daarvan het gereedschap of de opdracht in de kolom Houd uit. Een vasthoudsneltoets is een letter-, cijfer- of leestekentoets, alleen of met Shift.
+@msg	Hold {_1} is already used by {_2}	Vasthouden {_1} wordt al gebruikt door {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	een vasthoudsneltoets is een toets die een teken typt, alleen of met Shift ({shown} bevat Cmd, Ctrl of Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan geen vasthoudsneltoets zijn: gebruik een letter, een cijfer of een leestekentoets

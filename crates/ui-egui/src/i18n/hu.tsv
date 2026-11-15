@@ -9601,3 +9601,13 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+	Tap	Rövid lenyomás
+	Clear Hold	Nyomva tartás törlése
+	Hold Shortcuts	Nyomva tartásos billentyűparancsok
+	Hold Shortcut Delay	Nyomva tartás késleltetése
+	How hold shortcuts work	Így működnek a nyomva tartásos billentyűparancsok
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Kattints, majd nyomd le a billentyűt, amelyet ehhez nyomva kell tartani (Esc: mégse). A billentyű nyomva tartása ezt futtatja; a rövid lenyomás a billentyű saját billentyűparancsát futtatja.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Egy billentyű rövid lenyomása a billentyűparancsát futtatja. Ha a késleltetés idejéig nyomva tartod, helyette a Nyomva tartás oszlopában lévő eszköz vagy parancs fut. Nyomva tartásos billentyűparancs lehet egy betű-, szám- vagy írásjelbillentyű, önmagában vagy Shifttel.
+@msg	Hold {_1} is already used by {_2}	már foglalt: nyomva tartás {_1} (használja: {_2})
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	a nyomva tartásos billentyűparancs egy karaktert beíró billentyű, önmagában vagy Shifttel ({shown} Cmd, Ctrl vagy Alt billentyűt tartalmaz)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} nem lehet nyomva tartásos billentyűparancs: használj betű-, szám- vagy írásjelbillentyűt
