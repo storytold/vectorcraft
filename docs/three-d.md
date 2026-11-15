@@ -121,6 +121,14 @@ How a facet carries its seam depends on the lights and the paint:
   groups clipped to the union of its facets, so no seam reaches past the surface; a gradient fill, and a solid-color
   fill or stroke whose faces share one depth order with another solid's, fills each facet's ramps through a clip of
   the facet and its seam, outlined with round joins.
+  The facets of a surface drawn this way lie over an underlay
+  of themselves whose seams are 2 pt wide, reaching 1 pt past each edge, and one clip to the union of the facets and
+  their seams removes what the underlay paints past the surface. Where two facets' antialiased edges meet, the
+  underlay fills the pixels they leave partly uncovered with the neighbors' own light, so no black channel backdrop
+  or background shows there. Compared with the same art drawn at 3x and averaged down, away from the surface's outline
+  and from places where the light changes sharply, a pixel drawn at 1:1 is opaque where the 3x art is opaque, and
+  otherwise its alpha is within 3 levels. Inflate seen straight on with an opaque fill also has each color channel
+  within 3 levels (VectorCraft's own measure).
 - Extrude & Bevel (Classic), Rotate (Classic) and Revolve (Classic): a path and a seam for every face; gradient and
   pattern faces seam only the base paint, and the shading and highlight layers cover the face alone. The Wireframe
   surface draws edges only, with no seam.
@@ -155,7 +163,8 @@ The rest is our reading:
   depths where they overlap, with caps on or off. A fill wall in a gap stays in its own depth order. Inflate's
   curved surfaces follow this only as closely as their flat facets do. A solid painted with a gradient that has
   transparent stops under a light that is not white is drawn with an opacity mask: its faces keep their places in
-  this order, in runs that each carry the mask, and so do its graphics. A member of a 3D group with its own opacity
+  this order, in runs that each carry the mask, and a graphic drawn after one of its faces carries the mask too
+  ([Graphics](#graphics)). A member of a 3D group with its own opacity
   mask or blending mode draws its fill's and strokes' faces in this order inside that mask or blending mode when
   they are opaque with Normal blending. Otherwise each solid is drawn on its own with its opacity and blending, the
   lower item's first. With a light that is not white, a puffed, shaded Inflate surface in a solid color takes its
@@ -171,6 +180,10 @@ The rest is our reading:
   once their faces pass it no later solid is built: the object draws its source art, and applying or editing the
   effect, Export 3D Object and **Expand as Wireframes** report that the 3D surface is too complex. A stroke left
   out for its own limits does not count.
+- Inflate works out how high every shape puffs before it builds the first solid, because the highest puff sets
+  how far away the eye is. At a Volume of 0 % no shape puffs, so each shape's puff is worked out only when its
+  solid is built, and none is worked out for the solids after the limit stops. The shadow builds no solid for a
+  fill or stroke that is fully transparent.
 
 ## Groups
 
@@ -377,8 +390,11 @@ These rules are VectorCraft's own:
   turned, foreshortened by the perspective and twisted and tapered with the face, and clipped to it. It is shaded
   with the face's light: each color is multiplied by the light that falls on the face, except in pattern tiles,
   which keep their own colors. It is drawn with the
-  opacity and blending mode of the fill or stroke the face is painted with. A graphic on a face turned away from
-  the viewer is not drawn.
+  opacity and blending mode of the fill or stroke the face is painted with. Solids whose fills and strokes have the
+  same opacity and blending mode share one graphic on each face, clipped to their faces there and drawn after the
+  last of them. An object's fill and stroke share it when the fill is drawn with an opacity mask too, and the
+  graphic takes the mask of the solid it is drawn after; members of a 3D group drawn with a mask keep graphics of
+  their own. A graphic on a face turned away from the viewer is not drawn.
 - On the back cap, X runs to the right as the back is seen from behind, so the graphic reads the right way round
   there.
 - On Revolve a graphic lies on the swept side, which has one face (Front), unrolled flat. X runs around the axis:

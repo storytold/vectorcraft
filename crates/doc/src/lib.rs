@@ -55,12 +55,14 @@ mod pixels;
 pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
 pub mod placed_document;
 pub mod plugin_data;
+pub mod ppi;
 pub mod profiles;
 pub mod puppet;
 pub mod range;
 pub mod rastersettings;
 mod reach;
 pub mod recolor;
+pub mod resample;
 pub mod selection;
 pub mod separated;
 pub mod setup;
@@ -117,6 +119,7 @@ pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOption
 pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
 pub use text::GlyphChoice;
+pub use text::GlyphForm;
 pub use text::WarichuAlign;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,

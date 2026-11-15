@@ -893,6 +893,35 @@ fn presets_resolve() {
 }
 
 #[test]
+fn presets_have_their_paths_corners_and_noise() {
+    let expected: &[(&str, f64, f64, u32)] = &[
+        ("Default", 50.0, 75.0, 25),
+        ("High Fidelity Photo", 50.0, 50.0, 5),
+        ("Low Fidelity Photo", 50.0, 50.0, 10),
+        ("3 Colors", 50.0, 50.0, 15),
+        ("6 Colors", 50.0, 50.0, 15),
+        ("16 Colors", 50.0, 50.0, 15),
+        ("Shades of Gray", 50.0, 50.0, 15),
+        ("Black and White Logo", 50.0, 75.0, 25),
+        ("Sketched Art", 50.0, 50.0, 20),
+        ("Silhouettes", 50.0, 50.0, 90),
+        ("Line Art", 50.0, 75.0, 20),
+        ("Technical Drawing", 50.0, 100.0, 1),
+        ("Outline", 50.0, 75.0, 20),
+    ];
+    for &(name, paths, corners, noise) in expected {
+        let p = preset(name).unwrap();
+        assert_eq!((p.paths, p.corners, p.noise), (paths, corners, noise), "{name}");
+    }
+    // The color counts stay as they were.
+    let colors: Vec<u32> = ["High Fidelity Photo", "Low Fidelity Photo", "3 Colors", "6 Colors", "16 Colors", "Shades of Gray"]
+        .iter()
+        .map(|n| preset(n).unwrap().colors)
+        .collect();
+    assert_eq!(colors, [64, 20, 3, 6, 16, 8]);
+}
+
+#[test]
 fn params_json_roundtrip_and_partial() {
     let p = preset("6 Colors").unwrap();
     let v = serde_json::to_value(&p).unwrap();
@@ -1083,6 +1112,30 @@ fn decode_to_fit_scales_an_oversized_image_down() {
     assert!(matches!(err, TraceError::TooLarge { width: 30_000, height: 30_000, max: 192 }), "{err}");
     // Between the two limits the header is accepted and decoding goes on (this one has no pixels).
     assert!(matches!(Raster::decode_to_fit(&png_header(9000, 9000)), Err(TraceError::Decode(_))));
+}
+
+/// Scaling an oversized image down weighs each color by its alpha: a clear pixel next to an
+/// opaque one leaves the opaque color as it is and only lowers the alpha.
+#[test]
+fn scaling_down_weighs_color_by_alpha() {
+    use crate::raster::box_reduced;
+    const RED: [u8; 4] = [200, 30, 30, 255];
+    // Opaque red and clear black columns, decoded from a PNG and scaled to fit as `decode_to_fit`
+    // does: each scaled pixel covers a red and a clear one.
+    let half_clear = Raster::from_fn(4, 2, |x, _| if x % 2 == 0 { RED } else { [0; 4] });
+    let decoded = image::load_from_memory(&half_clear.encode_png()).unwrap().into_rgba8();
+    let fitted = Raster::fitted(&decoded, 2);
+    assert_eq!((fitted.width, fitted.height), (2, 1));
+    assert_eq!(fitted.rgba, [[200, 30, 30, 128]; 2].concat());
+    // A partly clear blue pulls an opaque red toward it by its alpha.
+    let mixed = Raster::from_fn(2, 1, |x, _| if x == 0 { [255, 0, 0, 255] } else { [0, 0, 255, 85] });
+    assert_eq!(box_reduced(&mixed.rgba, 2, 1, 1, 1), [191, 0, 64, 170]);
+    // A wholly clear block stays clear, with the plain mean of its colors.
+    let clear = Raster::from_fn(2, 1, |x, _| [100 * x as u8, 0, 0, 0]);
+    assert_eq!(box_reduced(&clear.rgba, 2, 1, 1, 1), [50, 0, 0, 0]);
+    // A 3 → 2 reduction counts every source pixel once.
+    let ramp = Raster::from_fn(3, 3, |x, y| [(x * 60 + y * 10) as u8, 0, 0, 255]);
+    assert_eq!(box_reduced(&ramp.rgba, 3, 3, 2, 2), [0, 0, 0, 255, 90, 0, 0, 255, 15, 0, 0, 255, 105, 0, 0, 255]);
 }
 
 /// Four flat colours with anti-aliased (blended) edges between the quadrants.
@@ -2006,6 +2059,16 @@ fn a_gray_photo_is_continuous_tone_as_its_color_original_is() {
             [v, v, v, 255]
         });
         assert!(!quantize::continuous_tone(&bands), "nine gray bands {step} levels apart");
+    }
+}
+
+/// A gray photo with little or no noise (a render, a denoised scan) is continuous tone, as its
+/// color original is. Sixteen colors stay 0.19 as far from its pixels as eight do.
+#[test]
+fn a_clean_gray_photo_is_continuous_tone_as_its_color_original_is() {
+    for noise in [0.0, 1.0, 2.0, 3.0] {
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, true)), "gray, noise {noise}");
     }
 }
 

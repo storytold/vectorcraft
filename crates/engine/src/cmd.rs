@@ -827,7 +827,7 @@ pub use docmenu::guide_indexes;
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
-pub use plugin_call::{Location, key_location, location_in, location_keys};
+pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location_keys};
 pub(crate) use vectorcraft_doc::range::parse_range;
 
 /// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see
@@ -891,6 +891,10 @@ pub use buildcmds::live_paint_gaps;
 /// Whether Reset Transformation changes a symbol instance (the Symbols panel menu and the
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
+
+/// The byte order of UTF-16 text without a byte-order mark, by Import Data Sets' rule (the Graph
+/// Data window reads files by it too).
+pub use variablecmds::utf16_order_without_mark;
 
 /// Command ids kept only so older scripts keep working: `(alias, the command it duplicates)`.
 /// They run as before but the command palette leaves them out (it lists the command once).

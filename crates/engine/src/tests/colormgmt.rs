@@ -16,7 +16,10 @@ use crate::*;
 /// Every test here reads or changes the process-wide proof view or colour settings: one at a time.
 /// Tests that switch the Color Settings away from the defaults live in `tests/color_settings.rs`
 /// (their own process): every colour shown or rendered goes through them, so no lock could cover
-/// all the tests that would see the change.
+/// all the tests that would see the change. A unit test that assigns its front document a profile
+/// other than the working space changes the active settings the same way until another document
+/// comes to the front: it starts with `crate::tests::in_own_process`, which runs it again in a
+/// child process.
 pub(crate) static GLOBAL: Mutex<()> = Mutex::new(());
 
 fn session() -> Session {
