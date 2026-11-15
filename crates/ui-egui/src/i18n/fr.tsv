@@ -1427,6 +1427,8 @@ font-technology	Variable	Variables
 	Graph	Graphe
 	Graph Data	Données du graphe
 	Graph Type	Type de graphe
+	Graph Type…	Type de graphe…
+	Graph Data…	Données du graphe…
 	Graph Options	Options du graphe
 	Left Axis	Axe gauche
 	Right Axis	Axe droit
@@ -1541,6 +1543,7 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Afficher la roue chromatique continue
 	Show segmented color wheel	Afficher la roue chromatique segmentée
 	Show color bars	Afficher les barres de couleur
+	Find the selected colors in the artwork	Rechercher les couleurs sélectionnées dans l’illustration
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
 	Height	Hauteur
@@ -2718,6 +2721,8 @@ font-technology	Variable	Variables
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajuster la position horizontale des signes diacritiques
+	Adjust Vertical Diacritic Position	Ajuster la position verticale des signes diacritiques
 	Character Direction	Direction des caractères
 	Digits	Chiffres
 	Arabic	Arabes
@@ -5110,6 +5115,8 @@ axis	Both	Les deux
 @msg	unknown option `{path}.{k}`	option inconnue `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	surimpressions inconnues `{o}` (preserve, simulate ou discard)
 @msg	unknown panel `{raw}`	panneau inconnu `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` n’a pas de tailles d’affichage à parcourir
+@msg	the panels are not shown	les panneaux ne sont pas affichés
 @msg	panels can't be shown in Presentation Mode	les panneaux ne peuvent pas être affichés en mode Présentation
 @msg	unknown preference `{key}`	préférence inconnue `{key}`
 @msg	Preferences imported.	Préférences importées.
@@ -5504,6 +5511,7 @@ effect	Soft	Doux
 	Change Panel Layout	Modifier la disposition des panneaux
 	Close Panel	Fermer le panneau
 	Collapse Panel Group	Réduire le groupe de panneaux
+	Cycle Display Sizes	Parcourir les tailles d’affichage
 	Move Panel	Déplacer le panneau
 	Group with	Regrouper avec
 	Resize panels	Redimensionner les panneaux
@@ -6284,6 +6292,7 @@ theme	Appearance	Apparence
 	Export Data Sets…	Exporter des jeux de données…
 	Load Variable Library…	Charger une bibliothèque de variables…
 	Save Variable Library…	Enregistrer une bibliothèque de variables…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	« Importer » lit un fichier de source de données d’extension .csv, .tsv, .txt ou .xml
 @msg	a variable library holds text variables, and the document has none	une bibliothèque de variables contient des variables de texte, et le document n’en a aucune
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	la variable `{name}` ne peut pas être enregistrée dans une bibliothèque de variables : renommez-la pour qu’elle commence par une lettre ou `_`, sans espaces ni symboles autres que `-`, `_` et `.`
 @msg	{k} has control characters	{k} contient des caractères de contrôle
@@ -9579,4 +9588,21 @@ breakText	Glyphs	Glyphes
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels, c’est trop grand pour le PSD ({MAX_SIDE} pixels par côté au plus) : réduisez la résolution
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	c’est un dessin DWG, qui ne peut pas être lu : enregistrez-le depuis l’application de CAO au format DXF et ouvrez ce fichier
 @msg	this binary DXF file is damaged or cut short	ce fichier DXF binaire est endommagé ou tronqué
+	Packaging Tools	Outils d’emballage
+	Fold Lines	Lignes de pliage
+	Make Cut Line	Convertir en ligne de découpe
+	Make Crease Line	Convertir en ligne de rainage
+	Make Partial Cut Line	Convertir en ligne de découpe partielle
+	Make Perforation Line	Convertir en ligne de perforation
+	Make Fold Line	Convertir en ligne de pliage
+	Role Swatches…	Nuances des types de ligne…
+	Role Swatches	Nuances des types de ligne
+	Role	Type de ligne
+	Cut Line	Ligne de découpe
+	Crease Line	Ligne de rainage
+	Partial Cut Line	Ligne de découpe partielle
+	Perforation Line	Ligne de perforation
+	No objects are selected.	Aucun objet n’est sélectionné.
+	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
+	Remove Fold Line Role	Supprimer le type de ligne
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution

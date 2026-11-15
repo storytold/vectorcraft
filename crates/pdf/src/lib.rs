@@ -134,7 +134,8 @@ impl PdfOptions {
 pub struct ImportOptions {
     /// Import at most this many pages (of those picked); `None` = all of them.
     pub max_pages: Option<usize>,
-    /// Horizontal gap in points between the artboards created for consecutive pages.
+    /// Horizontal gap in points between the artboards created for consecutive pages (on trim
+    /// boxes, plus the document's bleed on both sides).
     pub artboard_gap: f64,
     /// 0-based pages to import, in this order; `None` = every page.
     pub pages: Option<Vec<usize>>,

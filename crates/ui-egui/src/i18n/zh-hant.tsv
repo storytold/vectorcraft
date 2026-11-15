@@ -1416,6 +1416,8 @@ file-filter	Templates	範本
 	Graph	圖表
 	Graph Data	圖表資料
 	Graph Type	圖表類型
+	Graph Type…	圖表類型…
+	Graph Data…	圖表資料…
 	Graph Options	圖表選項
 	Left Axis	左軸
 	Right Axis	右軸
@@ -1532,6 +1534,7 @@ file-filter	Templates	範本
 	Show smooth color wheel	顯示平滑色輪
 	Show segmented color wheel	顯示分段色輪
 	Show color bars	顯示顏色條
+	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
 	Height:	高度：
@@ -2438,6 +2441,8 @@ file-filter	Templates	範本
 @msg	give only one of onto, below and above	onto、below 和 above 只能提供其中一個
 @msg	column must be true or a number from 1	column 必須是 true 或從 1 起算的數字
 @msg	unknown panel `{raw}`	未知的面板 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` 沒有可切換的顯示大小
+@msg	the panels are not shown	面板未顯示
 @msg	panels can't be shown in Presentation Mode	簡報模式下無法顯示面板
 @msg	x and y must both be numbers	x 和 y 都必須是數字
 @msg	Downloaded {what}	已下載 {what}
@@ -3843,6 +3848,8 @@ font-script	Japanese	漢字
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在後方插入空白
 	Tsume	比例間距
+	Adjust Horizontal Diacritic Position	調整變音符號水平位置
+	Adjust Vertical Diacritic Position	調整變音符號垂直位置
 	Character Direction	字元方向
 	Digits	數字
 	Arabic	阿拉伯數字
@@ -5667,6 +5674,7 @@ effect	Soft	柔和
 	Change Panel Layout	變更面板配置
 	Close Panel	關閉面板
 	Collapse Panel Group	摺疊面板群組
+	Cycle Display Sizes	切換顯示大小
 	Move Panel	移動面板
 	Group with	群組至
 	Resize panels	調整面板大小
@@ -5965,6 +5973,7 @@ lighting	Light	光源
 	Export Data Sets…	匯出資料集…
 	Load Variable Library…	載入變數資料庫…
 	Save Variable Library…	儲存變數資料庫…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	「匯入」讀取副檔名為 .csv、.tsv、.txt 或 .xml 的資料來源檔案
 @msg	a variable library holds text variables, and the document has none	變數資料庫包含文字變數，但文件中沒有文字變數
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	無法將變數 `{name}` 儲存到變數資料庫：請重新命名，使其以字母或 `_` 開頭，且不含空格或 `-`、`_`、`.` 以外的符號
 @msg	{k} has control characters	{k} 包含控制字元
@@ -9242,4 +9251,21 @@ breakText	Glyphs	字符
 @msg	{v} is not an asset id	{v} 不是資產 ID
 @msg	{what} can't be intertwined	{what} 無法交織
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} 連同出血和標記無法容納於紙張
+	Packaging Tools	包裝工具
+	Fold Lines	摺線
+	Make Cut Line	設為切割線
+	Make Crease Line	設為壓痕線
+	Make Partial Cut Line	設為半切線
+	Make Perforation Line	設為打孔線
+	Make Fold Line	設為摺線
+	Role Swatches…	線條類型色票…
+	Role Swatches	線條類型色票
+	Role	線條類型
+	Cut Line	切割線
+	Crease Line	壓痕線
+	Partial Cut Line	半切線
+	Perforation Line	打孔線
+	No objects are selected.	未選取任何物件。
+	Open a document to mark its fold lines.	開啟文件以標記其摺線。
+	Remove Fold Line Role	移除線條類型
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小

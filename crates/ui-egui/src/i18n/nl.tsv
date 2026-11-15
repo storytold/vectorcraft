@@ -1478,6 +1478,7 @@
 	Change Panel Layout	Paneelindeling wijzigen
 	Close Panel	Paneel sluiten
 	Collapse Panel Group	Paneelgroep samenvouwen
+	Cycle Display Sizes	Weergavegrootten doorlopen
 	Move Panel	Paneel verplaatsen
 	Group with	Groeperen met
 	Resize panels	Panelen van formaat wijzigen
@@ -2055,6 +2056,8 @@ lighting	Light	Licht
 	Insert Aki Left	Aki links invoegen
 	Insert Aki Right	Aki rechts invoegen
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Horizontale positie van diakritische tekens aanpassen
+	Adjust Vertical Diacritic Position	Verticale positie van diakritische tekens aanpassen
 	Character Direction	Tekenrichting
 	Digits	Cijfers
 	Arabic	Arabisch
@@ -3281,6 +3284,7 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vloeiend kleurenwiel tonen
 	Show segmented color wheel	Gesegmenteerd kleurenwiel tonen
 	Show color bars	Kleurbalken tonen
+	Find the selected colors in the artwork	De geselecteerde kleuren zoeken in de artwork
 	Harmony Rules	Harmonieregels
 	Keep this row's colors (exclude)	De kleuren van deze rij behouden (uitsluiten)
 	Limit to Library:	Beperken tot bibliotheek:
@@ -3936,6 +3940,8 @@ theme	Appearance	Vormgeving
 	Create Graph	Diagram maken
 	Graph Data	Diagramgegevens
 	Graph Type	Diagramtype
+	Graph Type…	Diagramtype…
+	Graph Data…	Diagramgegevens…
 	Graph Options	Diagramopties
 	Left Axis	Linkeras
 	Right Axis	Rechteras
@@ -5448,6 +5454,8 @@ imageTrace	Outline	Contour
 @msg	unknown option `{path}.{k}`	onbekende optie `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (preserve, simulate of discard)
 @msg	unknown panel `{raw}`	onbekend paneel `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` heeft geen weergavegrootten om te doorlopen
+@msg	the panels are not shown	de panelen worden niet getoond
 @msg	unknown preference `{key}`	onbekende voorkeur `{key}`
 @msg	Preferences imported.	Voorkeuren geïmporteerd.
 @msg	not a preferences file: {e}	geen voorkeurenbestand: {e}
@@ -8109,6 +8117,7 @@ mark-style	Japanese	Japans
 	Export Data Sets…	Gegevenssets exporteren…
 	Load Variable Library…	Variabelenbibliotheek laden…
 	Save Variable Library…	Variabelenbibliotheek opslaan…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	‘Importeren’ leest een gegevensbronbestand met de extensie .csv, .tsv, .txt of .xml
 @msg	a variable library holds text variables, and the document has none	een variabelenbibliotheek bevat tekstvariabelen, en het document heeft er geen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	variabele `{name}` kan niet in een variabelenbibliotheek worden opgeslagen: geef haar een naam die met een letter of `_` begint, zonder spaties of andere symbolen dan `-`, `_` en `.`
 @msg	{k} has control characters	{k} bevat stuurtekens
@@ -9627,3 +9636,20 @@ breakText	Glyphs	Glyphs
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor JPEG (maximaal 65535 pixels per zijde): verlaag de resolutie
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels is te groot voor Targa (maximaal 65535 pixels per zijde): verlaag de resolutie
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels is te groot voor PSD (maximaal {MAX_SIDE} pixels per zijde): verlaag de resolutie
+	Packaging Tools	Verpakkingsgereedschap
+	Fold Lines	Vouwlijnen
+	Make Cut Line	Snijlijn maken
+	Make Crease Line	Rillijn maken
+	Make Partial Cut Line	Halve snijlijn maken
+	Make Perforation Line	Perforatielijn maken
+	Make Fold Line	Vouwlijn maken
+	Role Swatches…	Stalen van lijnsoorten…
+	Role Swatches	Stalen van lijnsoorten
+	Role	Lijnsoort
+	Cut Line	Snijlijn
+	Crease Line	Rillijn
+	Partial Cut Line	Halve snijlijn
+	Perforation Line	Perforatielijn
+	No objects are selected.	Er zijn geen objecten geselecteerd.
+	Open a document to mark its fold lines.	Open een document om de vouwlijnen te markeren.
+	Remove Fold Line Role	Lijnsoort verwijderen

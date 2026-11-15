@@ -259,7 +259,8 @@ pub(crate) fn stroke_width(face: &Facet, p: &Value) -> f64 {
 /// its tone and highlight (with Black Overprint, as [`overprinted_face`] draws it; with Preserve Spot
 /// Colors, a color linked to a swatch as [`linked_face`] draws it). A gradient with transparent stops
 /// is shaded opaque and then masked by its own transparency, so the shading follows the gradient's
-/// coverage.
+/// coverage; without a placement of its own, it is placed once on all the faces
+/// ([`crate::lighting::opaque_surface_paint`]).
 pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32, blend: BlendMode, p: &Value) -> Node {
     let shading = classic_shading(p);
     let lights = lights(p);
@@ -267,7 +268,7 @@ pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32
     let preserve = preserves_spot_colors(p);
     let overprint = black_overprint(p);
     let wire = shading.surface == ClassicSurface::Wireframe;
-    let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_paint(source) };
+    let (paint, mask) = if wire { (source.clone(), None) } else { crate::lighting::opaque_surface_paint(source, || super::facets_bounds(&facets)) };
     let paint = &paint;
     let children = facets
         .into_iter()
