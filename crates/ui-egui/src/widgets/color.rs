@@ -927,7 +927,7 @@ pub struct WheelResponse {
     /// (degrees) and saturation under the pointer (1 for a marker past the wheel's edge).
     pub clicked: Option<(Option<usize>, [f32; 2])>,
     /// A right-click on the wheel, or on a marker past its edge: the color whose marker is within
-    /// reach of it (if any), the color on whose line from the centre it is (when it is on no
+    /// reach of it (if any), the color on whose line from the center it is (when it is on no
     /// marker), and the hue (degrees) and saturation under the pointer.
     pub secondary: Option<(Option<usize>, Option<usize>, [f32; 2])>,
     /// The wheel's own response, for a right-click menu.
@@ -994,7 +994,7 @@ fn wheel(ui: &mut Ui, id: &str, size: f32, colors: &[Color], base: Option<usize>
                 painter.circle_stroke(p, 8.5, Stroke::new(1.5, t.accent));
             }
         }
-        // A right-click: the marker under it, or else the line from the centre to a marker.
+        // A right-click: the marker under it, or else the line from the center to a marker.
         if resp.secondary_clicked()
             && let Some(p) = resp.interact_pointer_pos()
         {

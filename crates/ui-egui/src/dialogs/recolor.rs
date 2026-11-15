@@ -35,7 +35,7 @@
 //! grid of the color's hue at 7 saturations by 7 brightnesses; a click moves the marker there as a
 //! drag would), Color Picker and Remove Color; a right-click elsewhere on the wheel offers Add New
 //! Color, which adds the hue and saturation there as the Add Color tool does, and a color added on
-//! the line from the centre to a marker moves with that marker when the colors are unlinked. Set
+//! the line from the center to a marker moves with that marker when the colors are unlinked. Set
 //! Current Color As Base Color, before the color chips, makes the selected color the base. With art, the Prominent Colors bar under the wheel shows the new
 //! colors, each part as wide as its row's share of the art's uses, the largest first; dragging the
 //! edge between two parts moves width between them, and when the drag ends the rows' current

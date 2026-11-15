@@ -1432,7 +1432,7 @@ fn a_markers_menu_opens_the_color_picker() {
 }
 
 /// A right-click on the wheel away from the markers offers Add New Color, which adds the hue and
-/// saturation there as a new color. A color added on the line from the centre to a marker moves
+/// saturation there as a new color. A color added on the line from the center to a marker moves
 /// with that marker when the colors are unlinked, and the others stay.
 #[test]
 fn add_new_color_on_a_markers_line_moves_with_that_marker() {

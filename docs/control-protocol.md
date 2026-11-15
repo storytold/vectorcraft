@@ -303,7 +303,7 @@ color bar opens a menu with Set As Base Color (moves `base: true` to that row), 
 at 7 saturations, 0% to 100%, by 7 brightnesses, 100% down to 14%; a click moves the color there as a drag of its
 marker would, so linked colors follow), Color Picker and Remove Color; the base color's menu has neither Set As Base
 Color nor Remove Color. A right-click elsewhere on either wheel offers Add New Color, which adds a color as the Add
-Color tool does. A color added on the line from the centre to a marker moves with that marker while the colors are
+Color tool does. A color added on the line from the center to a marker moves with that marker while the colors are
 unlinked: the marker's row gets `tie: n` and the added row `follows: n`, and dragging the marker, or Select Shade on
 it, moves every row that follows its `tie` by the same change. Set Current Color As Base Color, before the color chips,
 makes the selected color the base. The rows keep these marks when Randomize (`recolor.randomize`) or Prominent Colors
