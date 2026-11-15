@@ -855,7 +855,8 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
                 if let Some(b) = p.bounds()
                     && let Some(mut shadow) = shadow_of(n.id, fx, &p, item, b, fx_options(fx), kept).ok()?
                 {
-                    shadow.appearance.effects = art.appearance.effects.clone();
+                    // The shadow keeps its own blur (the light's Softness) below the later effects.
+                    shadow.appearance.effects.extend(art.appearance.effects.iter().cloned());
                     shadows.push(Arc::new(shadow));
                 }
                 children.push(Arc::new(art));

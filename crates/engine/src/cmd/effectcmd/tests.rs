@@ -1017,6 +1017,49 @@ fn a_3d_shadow_is_one_undo_step_saved_exported_and_expanded() {
     assert_eq!(shadows, 1);
 }
 
+/// With the light's Softness, the 3D shadow is blurred: the canvas paints past the hard shadow's
+/// edge, the object's bounds take the blur in, SVG export blurs it as it does a Gaussian Blur
+/// effect, and Expand Appearance keeps it as an image with no live effect left.
+#[test]
+fn a_soft_3d_shadow_is_drawn_measured_exported_and_expanded_blurred() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": effects::EXTRUDE, "ids": [id.0], "item": null})).unwrap();
+    let set = |s: &mut Session, params: serde_json::Value| {
+        s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": params})).unwrap();
+    };
+    let draw = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    let bounds = |s: &Session| {
+        let doc = &s.doc().unwrap().doc;
+        vectorcraft_render::effect_bounds(&doc.symbol_boxes(), doc.node(id).unwrap()).unwrap()
+    };
+    let blurs = |s: &mut Session| {
+        let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+        svg.matches("<feGaussianBlur").count()
+    };
+    let none = draw(&s);
+    set(&mut s, json!({"shadow": true, "shadowDistance": 50}));
+    let (hard, hard_bounds, hard_blurs) = (draw(&s), bounds(&s), blurs(&mut s));
+    let undo = s.doc().unwrap().history.undo.len();
+    set(&mut s, json!({"lightSoftness": 100}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let (soft, soft_bounds) = (draw(&s), bounds(&s));
+    // Pixels the hard shadow leaves as they are, the soft one paints.
+    let spread = none.chunks(4).zip(hard.chunks(4)).zip(soft.chunks(4)).filter(|((n, h), s)| n == h && n != s).count();
+    assert!(spread > 100, "{spread}");
+    assert!(soft_bounds.contains_rect(hard_bounds) && soft_bounds.area() > hard_bounds.area(), "{hard_bounds:?} {soft_bounds:?}");
+    assert_eq!(blurs(&mut s), hard_blurs + 1, "SVG export blurs the shadow as a Gaussian Blur effect");
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    let (mut live, mut pictures) = (0, 0);
+    s.doc().unwrap().doc.walk(|n| {
+        live += usize::from(!n.appearance.effects.is_empty() || n.appearance.items.iter().any(|i| !i.effects().is_empty()));
+        pictures += usize::from(matches!(n.kind, NodeKind::Image(_)));
+    });
+    assert_eq!((live, pictures), (0, 1), "the blurred shadow expands to an image");
+}
+
 /// Radial Blur's Blur Center: stored as given, drawn about that point of the object's bounds, and
 /// a value outside 0 to 1 (or not a number) is refused with nothing changed and no undo step.
 #[test]
