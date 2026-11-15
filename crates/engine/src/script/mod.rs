@@ -2005,7 +2005,11 @@ impl Session {
             Ok(Ok(Progress::Done(_))) if job.host.dialogs.unused() > 0 => {
                 let n = job.host.dialogs.unused();
                 let kind = LimitKind::Host;
-                let message = format!("`answers` has {n} answer{} the script did not use", if n == 1 { "" } else { "s" });
+                let message = if n == 1 {
+                    format!("`answers` has {n} answer the script did not use")
+                } else {
+                    format!("`answers` has {n} answers the script did not use")
+                };
                 Some(self.script_failed(job, &RunError { kind: RunErrorKind::Limit(kind), message, line: 0, column: 0 }))
             }
             Ok(Ok(Progress::Done(_))) => {
