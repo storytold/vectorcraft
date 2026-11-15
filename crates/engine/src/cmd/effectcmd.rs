@@ -444,6 +444,17 @@ fn check_revolve_count(n: &Node, cmd: &str) -> Result<()> {
 
 pub(crate) const ONE_3D: &str = "An object takes one 3D effect. Edit the existing effect's options, or remove it first.";
 
+/// The Pathfinder Options that `effect.apply` gives a Pathfinder effect for the keys its `params`
+/// leave out: the preferences' Pathfinder Options in force.
+pub fn pathfinder_effect_options(s: &Session) -> effects::PathfinderEffectOptions {
+    let current = super::pathops::current_pf_options(s);
+    effects::PathfinderEffectOptions {
+        precision: current.precision,
+        remove_redundant_points: current.remove_redundant_points,
+        remove_unpainted: current.remove_unpainted,
+    }
+}
+
 /// `effect.apply`: adds effect `effect` (or `id`) with `params`, its defaults filled in, to the
 /// targets' active item as one undo step. A 3D effect must fit each target, which takes only one;
 /// a Pathfinder effect on loose objects groups them first. → `{ids, index, item}`.
@@ -475,13 +486,7 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     // A Pathfinder effect keeps the Pathfinder Options in force when it is applied, those `params`
     // give aside. They join the journal entry, so replaying it gives the same effect.
     if effects::takes_pathfinder_options(id) {
-        let current = super::pathops::current_pf_options(s);
-        let options = effects::PathfinderEffectOptions {
-            precision: current.precision,
-            remove_redundant_points: current.remove_redundant_points,
-            remove_unpainted: current.remove_unpainted,
-        };
-        if let Value::Object(filled) = options.to_params() {
+        if let Value::Object(filled) = pathfinder_effect_options(s).to_params() {
             for (key, v) in filled {
                 if params.get(&key).is_none() {
                     params[key.as_str()] = v;

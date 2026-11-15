@@ -861,6 +861,9 @@ pub use compoundshape::selected_member_modes;
 /// Pathfinder Options (`Prefs::pathfinder`).
 pub use pathops::{PATHFINDER_PRECISION_RANGE, PathfinderOptions};
 
+/// The Pathfinder Options a new Pathfinder effect takes (`effect.apply`).
+pub use effectcmd::pathfinder_effect_options;
+
 /// The Attributes panel's state ([`Session::attributes_info`]).
 pub use overprint::AttributesInfo;
 

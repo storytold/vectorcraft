@@ -1162,8 +1162,9 @@ pub const INSERT_MENU_ITEM: &str = "ui.action.insertMenuItem";
 /// step that aligns to the key object fails in playback when there is none then. An Effect ›
 /// Pathfinder item's step holds the Pathfinder Options in force now
 /// ([`crate::dialogs::pathfinder_options::menu_effect_params`]), as clicking the item applies the
-/// effect with them, so a later Pathfinder Options change does not change the step. A View menu item that the app runs itself
-/// ([`crate::menus::plays_in_app`]) plays on its own, with no undo step ([`play`]). The place is as
+/// effect with them, so a later Pathfinder Options change does not change the step. A View menu
+/// item that the app runs itself ([`crate::menus::plays_in_app`]) plays on its own, with no undo
+/// step ([`play`]). The place is as
 /// [`insert_stop`] takes it, and the step is selected as a stop is. A command and params that no such
 /// item has, a param of another type, params that are not an object, or a place [`insert_stop`]
 /// refuses is an error, and then nothing changes. Insert Menu Item's OK runs this. → {set, action,
@@ -5621,7 +5622,8 @@ mod tests {
 
     /// A listed menu item runs from the menu what its step runs in playback: the click opens no
     /// dialog, and it journals the item's own command with the params its step holds. An Object ›
-    /// Align item's step holds the Align To choice that the click sends, and the app adds the active
+    /// Align item's step holds the Align To choice that the click sends, an Effect › Pathfinder
+    /// item's step holds the Pathfinder Options that the click applies, and the app adds the active
     /// artboard to both.
     #[test]
     fn every_listed_menu_item_runs_from_the_menu_what_its_step_holds() {
@@ -5679,6 +5681,40 @@ mod tests {
         let group = app.session.doc().unwrap().selection.objects[0];
         let effects = &app.session.doc().unwrap().doc.node(group).unwrap().appearance.effects;
         assert_eq!((effects.len(), effects[0].id.as_str(), &effects[0].params), (1, "pathfinder.add", &options));
+    }
+
+    /// Every Effect › Pathfinder item's step holds the Pathfinder Options that clicking the item
+    /// journals, with options other than the defaults in force.
+    #[test]
+    fn every_pathfinder_effect_item_step_holds_the_options_its_click_applies() {
+        let options = json!({"precision": 0.25, "removeRedundantPoints": false, "removeUnpainted": true});
+        let items: Vec<_> = crate::menus::insertable_items(false)
+            .into_iter()
+            .filter(|item| {
+                item.command == "effect.apply"
+                    && item.params.get("effect").and_then(Value::as_str).is_some_and(vectorcraft_effects::takes_pathfinder_options)
+            })
+            .collect();
+        assert!(!items.is_empty());
+        for item in items {
+            let (mut app, _, ids) = app_with_two_rectangles();
+            app.run("object.pathfinder.options", options.clone()).unwrap();
+            app.ui.action_sets[0].actions[0].steps.clear();
+            app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": item.command, "params": item.params})).unwrap();
+            let held = app.ui.action_sets[0].actions[0].steps[0].1.clone();
+            assert_eq!(held["params"], options, "{item:?}");
+            app.run("select.set", json!({ "ids": ids })).unwrap();
+            let start = app.session.journal.len();
+            crate::menus::invoke(&mut app, item.command, item.params.clone());
+            let ran: Vec<_> = app.session.journal_for_action(start).into_iter().filter(|(c, _)| c == item.command).collect();
+            assert!(!ran.is_empty(), "{item:?} did not run");
+            for (_, mut p) in ran {
+                if let Some(o) = p.as_object_mut() {
+                    o.remove("artboard");
+                }
+                assert_eq!(p, held, "{item:?}");
+            }
+        }
     }
 
     /// With anchor points selected, an Object › Align item sends its params unchanged, and the points

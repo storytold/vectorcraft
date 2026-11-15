@@ -21,14 +21,9 @@ pub fn open(app: &mut VectorcraftApp) {
     app.ui.dialog = Some(Dialog::new(KIND, json!(app.session.prefs.pathfinder)));
 }
 
-/// The Pathfinder Options that `effect.apply` gives a new Pathfinder effect: the Pathfinder panel's,
-/// with the default precision in place of one out of range.
+/// The Pathfinder Options that `effect.apply` gives a new Pathfinder effect, as its params.
 pub fn options_in_force(app: &VectorcraftApp) -> Value {
-    let mut current = app.session.prefs.pathfinder;
-    if !vectorcraft_engine::cmd::PATHFINDER_PRECISION_RANGE.contains(&current.precision) {
-        current.precision = vectorcraft_engine::PathfinderOptions::default().precision;
-    }
-    json!(current)
+    vectorcraft_engine::cmd::pathfinder_effect_options(&app.session).to_params()
 }
 
 /// The params that an Effect › Pathfinder menu item with params `p` (`effect.apply`) runs with: its
