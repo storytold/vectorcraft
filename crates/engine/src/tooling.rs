@@ -651,7 +651,7 @@ impl Session {
         match ev.kind {
             PointerKind::Down | PointerKind::Drag => self.pointer_held = true,
             PointerKind::Up | PointerKind::Move => self.pointer_held = false,
-            PointerKind::DoubleClick => {}
+            PointerKind::DoubleClick | PointerKind::TripleClick => {}
         }
         match ev.kind {
             PointerKind::Down => {
@@ -1101,6 +1101,12 @@ impl Session {
     /// Dimension tool after its first point).
     pub fn pointer_held(&self) -> bool {
         self.pointer_held
+    }
+
+    /// What the Info panel shows for the active tool as it is now
+    /// ([`vectorcraft_tools::Tool::readout`]), in the view of the last pointer event.
+    pub fn tool_readout(&mut self) -> Option<vectorcraft_tools::Readout> {
+        self.with_tool_cx(self.last_view, |t, cx| t.readout(cx))
     }
 
     /// Is the active tool moving, scaling or rotating the selection with a drag?

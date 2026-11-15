@@ -749,6 +749,14 @@ pub struct UiState {
     /// File → Place: Link is on (the Place dialog remembers it).
     #[serde(default = "yes")]
     pub place_link: bool,
+    /// File → Place: Show Import Options is on (the Place dialog remembers it). Each placed file
+    /// with import options (a PDF's page and box, a DXF drawing, a text file) asks for them first;
+    /// off, it is placed with the options last confirmed for its format.
+    #[serde(default = "yes")]
+    pub place_import_options: bool,
+    /// The Text Import Options confirmed last (`file.place`'s `text` options; null: never used).
+    #[serde(default)]
+    pub text_import: Value,
     /// The file the open dialog reads, kept out of its JSON fields (Import PDF); dropped when no
     /// dialog is open.
     #[serde(skip)]
@@ -838,6 +846,14 @@ pub struct UiState {
     /// Search All text does.
     #[serde(skip)]
     pub layers_filter: crate::panels::layers::Filter,
+    /// The Swatches, Graphic Styles and Symbols panels' views, chosen in their panel menus
+    /// (`ui.panelView`). They are not saved and last the session.
+    #[serde(skip)]
+    pub swatches_view: crate::panels::swatches::View,
+    #[serde(skip)]
+    pub graphic_styles_view: crate::panels::graphic_styles::View,
+    #[serde(skip)]
+    pub symbols_view: crate::panels::symbols::View,
     /// The Image Trace panel's Advanced section is open (as it was last left).
     #[serde(default = "yes")]
     pub image_trace_advanced: bool,
@@ -1219,6 +1235,8 @@ impl Default for UiState {
             swatches_show_recent_colors: true,
             svg_options: Value::Null,
             place_link: true,
+            place_import_options: true,
+            text_import: Value::Null,
             dialog_file: None,
             made_text_style: vec![],
             pending_fonts: vec![],
@@ -1242,6 +1260,9 @@ impl Default for UiState {
             layers_panel: Default::default(),
             navigator_panel: Default::default(),
             layers_filter: Default::default(),
+            swatches_view: Default::default(),
+            graphic_styles_view: Default::default(),
+            symbols_view: Default::default(),
             image_trace_advanced: true,
             image_trace_preview: true,
             glyphs_preview: 0,

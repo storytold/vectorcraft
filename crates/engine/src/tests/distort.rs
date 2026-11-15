@@ -1,6 +1,6 @@
 //! Width points, Liquify, Puppet Warp and Perspective Grid commands and tools.
 
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_geom::{PathData, Point, Rect, Shape};
 use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
@@ -623,6 +623,25 @@ fn attach_projects_onto_the_plane_and_releases() {
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(path(&s, a).bounds().unwrap(), Rect::new(450.0, 300.0, 550.0, 400.0));
+}
+
+#[test]
+fn a_repeated_id_attaches_moves_and_transforms_an_object_once() {
+    let edited = |cmd: &str, ids: &[u64], extra: Value| {
+        let mut s = session();
+        s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+        let a = rect(&mut s, 450.0, 300.0, 100.0, 100.0);
+        let ids: Vec<u64> = ids.iter().map(|_| a.0).collect();
+        let mut p = json!({"ids": ids, "plane": "right"});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        s.execute(cmd, &p).unwrap();
+        path(&s, a)
+    };
+    let moved = json!({"from": [480.0, 330.0], "to": [500.0, 350.0], "constrain": true});
+    let scaled = json!({"matrix": [1.5, 0.0, 0.0, 1.5, 10.0, 0.0]});
+    for (cmd, extra) in [("perspective.attach", json!({})), ("perspective.move", moved), ("perspective.transform", scaled)] {
+        assert_eq!(edited(cmd, &[0, 0], extra.clone()), edited(cmd, &[0], extra), "{cmd}");
+    }
 }
 
 #[test]

@@ -17,6 +17,7 @@
 	Smoothness	Згладжування
 
 	Radial Blur…	Радіальне розмиття…
+	Blur Center	Центр розмиття
 	Smart Blur…	Розумне розмиття…
 	Sharpen	Різкість
 	Unsharp Mask…	Нерізка маска…
@@ -540,8 +541,8 @@ font-technology	Variable	Варіативні
 	Color Guide Options	Параметри колірного гіда
 	Color Guide Options…	Параметри колірного гіда…
 	Color images	Кольорові зображення
-	Color Library	Бібліотека квітів
-	Color Library…	Бібліотека квітів…
+	Color Library	Бібліотека кольорів
+	Color Library…	Бібліотека кольорів…
 	Color Management	Керування кольором
 	Color Mixer (Shift-click the chip)	Змішувач кольорів (Shift+клацання на зразку)
 	Color Mode	Колірний режим
@@ -639,6 +640,7 @@ font-technology	Variable	Варіативні
 	Copy All Styles	Копіювати всі стилі
 	Copy Color Value (Hex)	Копіювати значення кольору (hex)
 	Copy Fonts Used in the Document	Копіювати шрифти, використані у документі
+	Copy Info	Копіювати відомості
 	Copy Links	Копіювати зв’язки
 	Copy Selected Style	Копіювати вибраний стиль
 	Copy to User Defined	Копіювати в «Користувацькі»
@@ -1186,6 +1188,7 @@ font-technology	Variable	Варіативні
 	Rotate (Classic)…	Поворот (класичний)…
 	Surface	Поверхня
 	Wireframe	Каркас
+	Render Settings	Параметри рендерингу
 	No Shading	Без затінення
 	Plastic	Пластик
 	Highlight Intensity	Інтенсивність відблиску
@@ -2703,6 +2706,8 @@ mark-style	Japanese	Японський
 	Proof Setup	Налаштування кольоропроби
 	Properties	Властивості
 	Proportional Metrics	Пропорційні метрики
+	H or V Style	Горизонтальний або вертикальний стиль
+	Roman Italics	Римський курсив
 	Insert Aki Left	Вставити акі ліворуч
 	Insert Aki Right	Вставити акі праворуч
 	Tsume	Цуме
@@ -3453,6 +3458,7 @@ digits	Malayalam	Малаялам
 	Sixth Space	Шоста шпація
 	Size	Розмір
 	Size Tile to Art	Підігнати плитку за малюнком
+	Move Tile with Art	Переміщувати плитку разом із малюнком
 	Size/Leading	Розмір/інтерліньяж
 	Size:	Розмір:
 	Ridges per segment:	Гребенів на сегмент:
@@ -3646,6 +3652,8 @@ effect	Points	Точки
 	Swap Fill and Stroke (Shift+X)	Змінити заливку та обведення (Shift+X)
 	Swap start and end arrowheads	Поміняти початкову та кінцеву стрілки
 	Swap the selected object for the file, keeping its place and transform	Замінити виділений об’єкт файлом, зберігши його положення та перетворення
+	Show Import Options	Показувати параметри імпорту
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Запитувати параметри імпорту кожного файлу PDF, DXF чи текстового файлу перед розміщенням; якщо вимкнено, використовуються останні вибрані параметри
 	Stylistic Alternates	Стилістичні альтернативи
 	Swash	Розчерк
 	Swatch Conflict	Конфлікт зразків
@@ -3735,6 +3743,48 @@ effect	Points	Точки
 	Composite Fonts	Складені шрифти
 	Export Composite Fonts	Експорт складених шрифтів
 	Import Composite Fonts	Імпорт складених шрифтів
+@msg	each font must be {name, parts}	кожен шрифт має бути у вигляді {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	невідомий ключ `{k}`; шрифт приймає name і parts
+@msg	each font needs a name	кожен шрифт повинен мати назву
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` не може бути назвою складеного шрифту (від 1 до {COMPOSITE_NAME_MAX} символів, без керівних символів)
+@msg	`{name}`: parts must be an object	`{name}`: parts має бути об’єктом
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: невідомий клас `{k}`; класи: kanji, kana, punctuation, symbols, roman і numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} має бути об’єктом
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: невідомий ключ `{k}` у {_1}
+@msg	`{name}`: give the kanji part	`{name}`: вкажіть частину kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	документ містить щонайбільше {COMPOSITE_FONTS_MAX} складених шрифтів
+@msg	two composite fonts are named `{_1}`	два складені шрифти мають назву `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` є назвою встановленого шрифту
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} використовує `{font}`, а це складений шрифт
+@msg	give fonts: [{name, parts}…]	вкажіть fonts: [{name, parts}…]
+@msg	path is empty	path порожній
+@msg	fonts must be a list of composite fonts	fonts має бути списком складених шрифтів
+@msg	names must be strings	names мають бути рядками
+@msg	no composite font named `{n}`	немає складеного шрифту з назвою `{n}`
+@msg	names must be a list of names	names має бути списком назв
+@msg	no composite fonts to export	немає складених шрифтів для експорту
+@msg	not a composite fonts file: {e}	це не файл складених шрифтів: {e}
+@msg	not a composite fonts file: no compositeFonts list	це не файл складених шрифтів: немає списку compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	у файлі понад {COMPOSITE_FONTS_MAX} складених шрифтів
+@msg	the file is larger than 4 MB	файл більший за 4 МБ
+@msg	dataBase64 is not base64	dataBase64 не у форматі base64
+@msg	give one of path, data or dataBase64	вкажіть path, data або dataBase64
+@msg	the file holds no composite fonts	у файлі немає складених шрифтів
+@msg	the file holds two composite fonts named `{_1}`	у файлі два складені шрифти з назвою `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` не може бути назвою складеного шрифту
+@msg	{k}: give a font	{k}: вкажіть шрифт
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: вкажіть шрифт
+@msg	{k}: size must be {_1} to {_2}%	{k}: size має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size має бути від {_1} до {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline має бути від {_1} до {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: масштаб має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: масштаб має бути від {_1} до {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: масштабувати можна лише kana, roman і numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: масштабувати можна лише kana, roman і numerals
+@msg	{k}: only kana can be scaled at the center	{k}: масштабувати від центру можна лише kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: масштабувати від центру можна лише kana
+@msg	no composite font	немає складеного шрифту
 	Delete Font	Видалити шрифт
 	Kanji	Кандзі
 	Kana	Кана
@@ -4083,6 +4133,9 @@ effect	Points	Точки
 	Working CMYK	Робочий CMYK
 	Working CMYK (don't tag)	Робочий CMYK (без позначки)
 	Working RGB (don't tag)	Робочий RGB (без позначки)
+	Don't Color Manage This Document	Не керувати кольором цього документа
+	Working RGB: {name}	Робочий RGB: {name}
+	Working CMYK: {name}	Робочий CMYK: {name}
 	Workspace	Робоче середовище
 	Workspace {i}	Робоче середовище {i}
 	Wrinkle Tool	Інструмент «Зморшки»
@@ -4428,6 +4481,7 @@ axis	Both	Обидві
 @msg	there is no script engine named {name}	рушія скриптів з назвою {name} немає
 @msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано
+@msg	Copied the link info	Відомості про зв’язок скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
 @msg	Couldn't open {name}: {e}	Не вдалося відкрити {name}: {e}
@@ -5242,6 +5296,7 @@ axis	Both	Обидві
 @msg	every numbered name for {name} is taken in the document's folder	усі нумеровані імена для {name} уже зайняті в папці документа
 @msg	No linked files to look for	Немає пов’язаних файлів для пошуку
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Зв’язок міститься в символі, дизайні діаграми, візерунку або масці непрозорості й не має місця на полотні
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	графіка дизайну діаграми в ряді даних діаграми перемальовується за дизайном: щоб змінити її, відредагуйте дизайн
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб
@@ -5287,6 +5342,7 @@ axis	Both	Обидві
 @msg	automation filesystem access is not granted: write authority is absent: {path}	автоматизація не має доступу до файлової системи: немає права на запис: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для читання {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для читання {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	зв’язаний файл JavaScript перебуває поза кореневими папками для читання
 @msg	automation path rejected: outside the write root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для запису {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для запису {roots}: {path}
 @msg	automation path rejected: path is empty	шлях автоматизації відхилено: шлях порожній
@@ -5610,6 +5666,7 @@ lighting	Light	Світло
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-ефект на заливці або обведенні групи не малює нічого для експорту
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	об’єкт не має 3D-ефекту (Видавлювання та фаска, Обертання, Надування або Повернути)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` має бути об’єктом лише з полем `mode` зі значенням shaded або wireframe
 @msg	its 3D effect builds no solid	його 3D-ефект не будує тіла
 @msg	bevel must be none or one of {_1}	bevel має бути none або одним з: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: не вдається побудувати тіла з цієї ілюстрації: її екземпляри символів, переходи та відсічні групи містять забагато об’єктів
@@ -5693,6 +5750,9 @@ lighting	Light	Світло
 	Softness	М'якість
 	Ambient Light	Навколишнє світло
 	Light behind the object	Світло позаду об'єкта
+	Move Light to Back	Перемістити світло назад
+	Move Light to Front	Перемістити світло вперед
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Перетягніть світло, щоб перемістити його. Клавіші зі стрілками переміщують вибране світло; із Shift — кроками по 15°.
 	Shadows	Тіні
 	Distance from Object	Відстань від об'єкта
 	Shadow Bounds	Межі тіні
@@ -6291,6 +6351,8 @@ axis	Y Axis	Вісь Y
 	Create New Set	Створити новий набір
 	Stop Global Edit	Завершити глобальне редагування
 	Global Edit Options	Параметри глобального редагування
+	Select Similar Objects	Виділити схожі об’єкти
+	Select Similar Options	Параметри виділення схожих
 	Leave Out of Global Edit	Виключити з глобального редагування
 	Match	Збіг
 	On Artboards	На монтажних областях
@@ -6413,6 +6475,13 @@ axis	Y Axis	Вісь Y
 	Graphite Pencil	Графітний олівець
 	Wax Crayon	Восковий олівець
 	Charcoal Dust	Вугільний пил
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технічні схеми
+	Circuit Trace	Доріжка схеми
+	Bus Lines	Лінії шини
+	Terminal Nodes	Контактні вузли
+
 	Notched Ribbon	Стрічка з насічками
 	Double Line	Подвійна лінія
 	Wave	Хвиля
@@ -8628,6 +8697,7 @@ breakText	Glyphs	Гліфи
 @msg	the RTF file is too large to place as type (at most {_1} MB)	файл RTF завеликий, щоб помістити його як текст (не більше {_1} МБ)
 @msg	the SVG expands to more than {0} nested SVG images	SVG розгортається у понад {0} вкладених зображень SVG
 @msg	the SVG expands to more than {0} objects	SVG розгортається у понад {0} об’єктів
+@msg	the SVG's style sheets take too long to match	зіставлення таблиць стилів SVG триває надто довго
 @msg	the SVG's styles expand to more than {0} MB	стилі SVG розгортаються у понад {0} МБ
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	файл SVG більший за {MAX_IMPORT_BYTES} байтів
 @msg	the SVG has no drawable objects	SVG не містить об’єктів, які можна намалювати
@@ -8847,7 +8917,7 @@ breakText	Glyphs	Гліфи
 @msg	unexpected resources	неочікувані ресурси
 @msg	unknown CMYK profile `{name}`	невідомий профіль CMYK `{name}`
 @msg	unknown File Info field `{k}`	невідоме поле відомостей про файл `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	невідома функція OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; префікс - вимикає функцію; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom і aalt приймають номер альтернативи у вигляді `tag=N`, де N від 0 до {_1}, наприклад `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	невідома функція OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; префікс - вимикає функцію; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom і aalt приймають номер альтернативи у вигляді `tag=N`, де N від 0 до {_1}, наприклад `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	невідома функція OpenType `{t}` у featureChanges (допустимі теги, які приймає `features`)
 @msg	unknown PDF preset `{name}` (presets: {_1})	невідомий набір PDF `{name}` (набори: {_1})
 @msg	unknown Warp style	невідомий стиль деформації

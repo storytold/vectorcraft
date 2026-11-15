@@ -99,7 +99,7 @@ pub(crate) fn set_limit(app: &mut VectorcraftApp, p: &Value) -> Result<Value, St
 
 /// The Limit to Library popup: None, Document Swatches, then the colour libraries.
 fn limit_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.set_min_width(200.0);
+    widgets::menu_min_width(ui, 200.0);
     let cur = app.ui.color_guide_limit.clone();
     let mut chosen = None;
     for (key, label) in [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, swatches::DOCUMENT_SWATCHES)] {

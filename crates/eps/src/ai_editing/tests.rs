@@ -4191,6 +4191,57 @@ fn standard_vertical_roman_alignment_comes_back() {
     assert_eq!(flags(&texts(&read_back(&both))[0])[2], (false, true));
 }
 
+/// Insert Aki Left and Right come back on each run, in vertical and horizontal type: a run with
+/// either writes it as key 49 or 50 in 1/1000 em, a run without writes neither, and nothing is
+/// reported. Each object lays out as it did. A run that also has an attribute the text document
+/// leaves out is still reported.
+#[test]
+fn insert_aki_comes_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(14.0, Color::BLACK);
+    let left = CharStyle { aki_left: 250.0, ..plain.clone() };
+    let both = CharStyle { aki_left: 125.5, aki_right: 500.0, ..plain.clone() };
+    let mut doc = Document::new(200.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut down = TextObject::point(vectorcraft_geom::Point::new(150.0, 20.0), "", plain.clone());
+    down.runs = vec![TextRun::new("AB", left.clone()), TextRun::new("CD", plain.clone()), TextRun::new("EF", both.clone())];
+    down.vertical = true;
+    let mut across = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "", plain.clone());
+    across.runs = vec![TextRun::new("GH", both.clone()), TextRun::new("IJ", plain.clone())];
+    for t in [down, across] {
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&type_lines(&back), &type_lines(&doc));
+    let texts = |d: &Document| -> Vec<TextObject> {
+        d.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
+    };
+    let aki = |t: &TextObject| t.runs.iter().map(|r| (r.style.aki_left, r.style.aki_right)).collect::<Vec<_>>();
+    let (written, read) = (texts(&doc), texts(&back));
+    assert_eq!(read.iter().map(aki).collect::<Vec<_>>(), [vec![(250.0, 0.0), (0.0, 0.0), (125.5, 500.0)], vec![(125.5, 500.0), (0.0, 0.0)]]);
+    let origins = |t: &TextObject| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| (r3(g.origin.x), r3(g.origin.y))).collect::<Vec<_>>()
+    };
+    for (w, r) in written.iter().zip(&read) {
+        assert_eq!(origins(r), origins(w), "vertical={}", w.vertical);
+    }
+    let decoded = text_document(&program(&doc));
+    for (key, count) in [("/49 250.0", 1), ("/49 125.5", 2), ("/50 500.0", 2)] {
+        assert_eq!(decoded.matches(key).count(), count, "{key}: {decoded}");
+    }
+    assert_eq!(decoded.matches("/49 ").count() + decoded.matches("/50 ").count(), 5, "{decoded}");
+    // Underline is still left out, and reported.
+    let mut lossy = doc.clone();
+    let id = lossy.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = lossy.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.underline = true;
+    }
+    assert_eq!(export_ai_editing(&lossy, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
+}
+
 /// The text document of program `text` (LF line ends), decoded, with its UTF-16 strings' zero
 /// bytes left out.
 fn text_document(text: &str) -> String {
@@ -5077,6 +5128,16 @@ fn a_first_baseline_minimum_and_a_path_end_the_reader_cant_read_are_reported() {
     };
     assert_eq!(with(on_path(Some(0.999))).0, [writer::TYPE_ATTRIBUTES]);
     assert!(with(on_path(None)).0.is_empty());
+    // Type that starts before its open path comes back starting at the path's start.
+    let mut before = on_path(None);
+    if let TextKind::OnPath { start, .. } = &mut before.kind {
+        *start = -0.25;
+    }
+    let (warnings, back) = with(before);
+    assert_eq!(warnings, [writer::TYPE_ATTRIBUTES]);
+    let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type") };
+    let TextKind::OnPath { start, .. } = t.kind else { panic!("type on a path") };
+    assert!(start.abs() < 1e-3, "{start}");
     let (warnings, back) = with(on_path(Some(0.5)));
     assert!(warnings.is_empty(), "{warnings:?}");
     let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type") };
@@ -10396,7 +10457,7 @@ fn an_envelope_is_written_in_the_order_the_reader_reads_it() {
 /// Envelopes the reader would open in another shape, or not at all, are written as their distorted
 /// art with a warning, and open as that art: an envelope of type, one in a turned frame, a warp drawn
 /// without its style's net, a mesh the reader would lay out the other way round, a top object
-/// whose sides don't pair up, a Fidelity that isn't a whole number and bounds margins kept with
+/// with a side of more segments than the grid has columns, a Fidelity that isn't a whole number and bounds margins kept with
 /// Distort Appearance off. Other live objects keep their own warning.
 #[test]
 fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
@@ -10433,15 +10494,10 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
             **kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: transpose(points, 3, 2), handles: vec![] };
         }
     });
-    let mut uneven = kurbo::BezPath::new();
-    uneven.move_to((30.0, 10.0));
-    for p in [(100.0, 0.0), (170.0, 10.0), (170.0, 90.0), (30.0, 90.0)] {
-        uneven.line_to(p);
-    }
-    uneven.close_path();
-    let lopsided = change(&|k| {
+    // A top side of 51 segments: more grid columns than the reader reads.
+    let crowded = change(&|k| {
         if let NodeKind::Envelope { kind, .. } = k {
-            **kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven), corners: None };
+            **kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven_top_object(51)), corners: None };
         }
     });
     let fractional = change(&|k| {
@@ -10460,7 +10516,7 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
         ("turned", turned),
         ("old warp", old_warp),
         ("sideways mesh", sideways),
-        ("lopsided top object", lopsided),
+        ("top object past the grid's limit", crowded),
         ("fractional fidelity", fractional),
         ("margin kept", margin_kept),
     ];
@@ -10479,6 +10535,131 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
 /// `points`, a grid of `rows + 1` rows of `cols + 1` points, as `cols + 1` rows of `rows + 1`.
 fn transpose(points: Vec<kurbo::Point>, rows: usize, cols: usize) -> Vec<kurbo::Point> {
     (0..=cols).flat_map(|c| (0..=rows).map(move |r| (r, c))).map(|(r, c)| points[r * (cols + 1) + c]).collect()
+}
+
+/// A top object over (30, 10)-(170, 90) whose top side is `top` straight segments, falling and
+/// rising by 10 pt between its anchors, and whose other sides are one straight segment each.
+fn uneven_top_object(top: usize) -> kurbo::BezPath {
+    let mut path = kurbo::BezPath::new();
+    path.move_to((30.0, 10.0));
+    for k in 1..top {
+        path.line_to((30.0 + 140.0 * k as f64 / top as f64, if k % 2 == 1 { 20.0 } else { 10.0 }));
+    }
+    for p in [(170.0, 10.0), (170.0, 90.0), (30.0, 90.0)] {
+        path.line_to(p);
+    }
+    path.close_path();
+    path
+}
+
+/// Do the patches of top objects `a` and `b` lie within 0.001 pt of each other at every place of a
+/// 32 × 32 grid?
+fn same_top_object_patch(a: &vectorcraft_doc::live::EnvelopeKind, b: &vectorcraft_doc::live::EnvelopeKind) -> bool {
+    use vectorcraft_doc::live::{Coons, EnvelopeKind};
+    let (EnvelopeKind::TopObject { path, corners }, EnvelopeKind::TopObject { path: p, corners: c }) = (a, b) else { return false };
+    let (Some(a), Some(b)) = (Coons::from_top_object(path, *corners), Coons::from_top_object(p, *c)) else { return false };
+    let at = |i: u32| f64::from(i) / 32.0;
+    (0..=32).all(|j| (0..=32).all(|i| a.eval(at(i), at(j)).distance(b.eval(at(i), at(j))) < 1e-3))
+}
+
+/// A top object whose top and bottom sides have different numbers of segments is written live, its
+/// side with fewer segments split into as many as the side across from it has, with Edit Contents off
+/// and on: two straight segments over one straight one, three over one, and two over one curve.
+/// VectorCraft's reader opens it as a top object with its corners on the same four points, the same
+/// patch, contents, Fidelity, Edit Contents and Envelope Options, and saved again it opens the same.
+#[test]
+fn a_top_object_with_uneven_sides_is_read_back_live() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut curved = kurbo::BezPath::new();
+    curved.move_to((30.0, 10.0));
+    curved.line_to((100.0, 0.0));
+    curved.line_to((170.0, 10.0));
+    curved.line_to((170.0, 90.0));
+    curved.curve_to((130.0, 105.0), (70.0, 105.0), (30.0, 90.0));
+    curved.close_path();
+    let shapes = [("two over one", uneven_top_object(2), 6), ("three over one", uneven_top_object(3), 8), ("two over a curve", curved, 6)];
+    for (name, path, anchors) in shapes {
+        let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&path), corners: None };
+        for editing in [false, true] {
+            let what = format!("{name}, editing {editing}");
+            let doc = envelope_doc(kind.clone(), 50.0, editing, EnvelopeOptions::NEW);
+            let text = program(&doc);
+            assert!(text.contains("AIDeformOptionsKey") && text.contains("%_3 /Int (AIDeformStyle) ,\n"), "{what}: {text}");
+            let (back, warnings, notes) = envelope_back(&doc);
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}: {warnings:?}");
+            assert!(!notes.iter().any(|w| w == crate::import::ENVELOPE_DRAWN), "{what}: {notes:?}");
+            let NodeKind::Envelope { content, kind: got, fidelity, editing: e, options, frame } = &back.kind else { panic!("{what}: {back:#?}") };
+            assert_eq!((*fidelity, *e, *options, **frame), (50.0, editing, EnvelopeOptions::NEW, Affine::IDENTITY), "{what}");
+            let EnvelopeKind::TopObject { path: outline, corners: Some(corners) } = &**got else { panic!("{what}: {got:?}") };
+            let sp = &outline.subpaths[0];
+            assert_eq!(sp.anchors.len(), anchors, "{what}: {outline:?}");
+            let points = corners.map(|i| sp.anchors[i as usize].p);
+            let want = [(30.0, 10.0), (170.0, 10.0), (170.0, 90.0), (30.0, 90.0)].map(kurbo::Point::from);
+            assert!(points.iter().zip(want).all(|(a, b)| a.distance(b) < 1e-6), "{what}: {points:?}");
+            assert!(same_top_object_patch(&kind, got), "{what}: {got:?}");
+            let colors: Vec<Option<Color>> = content.iter().map(|c| c.appearance.fill_paint().color()).collect();
+            assert_eq!(colors, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{what}");
+            let mut again = Document::new(200.0, 100.0);
+            let layer = again.layers[0].id;
+            again.insert(Some(layer), usize::MAX, back.clone()).unwrap();
+            let (twice, warnings, notes) = envelope_back(&again);
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}, saved again: {warnings:?}");
+            let NodeKind::Envelope { kind: twice, .. } = &twice.kind else { panic!("{what}, saved again: {twice:#?} {notes:?}") };
+            assert!(same_top_object_patch(&kind, twice), "{what}, saved again: {twice:?}");
+        }
+    }
+}
+
+/// A top object with a top side of 50 segments over a bottom side of one is written live with a grid
+/// of 50 columns, the most the reader reads.
+#[test]
+fn a_top_object_split_to_the_grids_limit_is_read_back_live() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven_top_object(50)), corners: None };
+    let doc = envelope_doc(kind.clone(), 50.0, false, EnvelopeOptions::NEW);
+    let text = program(&doc);
+    assert!(text.contains("[50 1] /Size X#"), "{text}");
+    let (back, warnings, notes) = envelope_back(&doc);
+    assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let NodeKind::Envelope { kind: got, .. } = &back.kind else { panic!("{back:#?} {notes:?}") };
+    assert!(same_top_object_patch(&kind, got), "{got:?}");
+}
+
+/// A top object whose side with fewer segments would share out the content another way once split
+/// (two curves that aren't one curve, under three segments) is written as its art, with a warning.
+#[test]
+fn a_top_object_whose_split_side_would_map_another_way_is_written_as_its_art() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut path = uneven_top_object(3);
+    path.truncate(5);
+    path.curve_to((150.0, 110.0), (120.0, 110.0), (100.0, 90.0));
+    path.curve_to((80.0, 95.0), (40.0, 80.0), (30.0, 90.0));
+    path.close_path();
+    let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&path), corners: None };
+    let doc = envelope_doc(kind, 50.0, false, EnvelopeOptions::NEW);
+    assert!(!program(&doc).contains("AIDeformOptionsKey"));
+    let (back, warnings, _) = envelope_back(&doc);
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(matches!(back.kind, NodeKind::Group { .. }), "{back:#?}");
+}
+
+/// A top object whose split side would map the content another way only between the places of an
+/// even grid of eighths is written as its art too: a bottom side of a long straight segment, which is
+/// split, and a short curve in its last eighth, which the reader then samples at fewer points.
+#[test]
+fn a_top_object_whose_split_side_differs_between_eighths_is_written_as_its_art() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut path = uneven_top_object(3);
+    path.truncate(5);
+    path.curve_to((168.0, 85.0), (164.0, 85.0), (162.0, 90.0));
+    path.line_to((30.0, 90.0));
+    path.close_path();
+    let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&path), corners: None };
+    let doc = envelope_doc(kind, 50.0, false, EnvelopeOptions::NEW);
+    assert!(!program(&doc).contains("AIDeformOptionsKey"));
+    let (back, warnings, _) = envelope_back(&doc);
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(matches!(back.kind, NodeKind::Group { .. }), "{back:#?}");
 }
 
 /// An envelope with its contents in an opacity mask's art is written as its art there, and an
@@ -10854,5 +11035,75 @@ fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
         let text = program(&doc);
         assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 1, "locked {locked}: {text}");
         same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 5.0, true)]);
+    }
+}
+
+/// A graph whose records read back whole is written with them, each series' group tagged before
+/// its name, and opens again as the same live graph, also from a PDF-compatible file's first page.
+#[test]
+fn graphs_are_written_with_their_records_and_open_live() {
+    use crate::ai_graph::sample;
+    for (what, doc) in sample::kept() {
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::GRAPHS), "{what}: {:?}", out.warnings);
+        let text = program(&doc);
+        assert_eq!((text.matches("%_Gs\n").count(), text.matches("%_GS\n").count()), (1, 1), "{what}: {text}");
+        assert!(text.contains("U\n%_2 ") && text.contains(" 0 0 Go\n%_/ArtDictionary :\n"), "{what}: the tag comes before the series' name: {text}");
+        let written = sample::graphs(&doc);
+        let graphs = sample::graphs(&read_back(&doc));
+        assert_eq!(graphs.len(), 1, "{what}");
+        assert!(sample::same(&written[0].0, &graphs[0].0), "{what}: {:#?}\n{:#?}", written[0].0, graphs[0].0);
+        assert_eq!(graphs[0].1, written[0].1, "{what}: the members and their series");
+    }
+    let doc = sample::document(sample::spec(vectorcraft_doc::GraphKind::Column));
+    let (p, _) = private_data(&doc, &opts()).unwrap();
+    let pdf =
+        vectorcraft_pdf::export(&doc, &vectorcraft_pdf::PdfOptions { private_data: Some(p), ..vectorcraft_pdf::PdfOptions::uncompressed() }).unwrap();
+    let (read, _) = crate::ai_alone(&vectorcraft_pdf::illustrator_data(&pdf, None).unwrap()).unwrap();
+    let graphs = sample::graphs(&read);
+    assert_eq!(graphs.len(), 1);
+    assert!(sample::same(&sample::graphs(&doc)[0].0, &graphs[0].0));
+}
+
+/// A graph whose records wouldn't read back as it is is written as its art, without records, with
+/// the warning.
+#[test]
+fn graphs_the_records_cant_keep_are_written_as_their_art() {
+    use crate::ai_graph::sample;
+    for (what, doc) in sample::unkept() {
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::GRAPHS), "{what}: {:?}", out.warnings);
+        let text = program(&doc);
+        assert!(!text.contains("%_Gs") && !text.contains(" Go\n") && !text.contains("%_GS"), "{what}: {text}");
+        let read = read_back(&doc);
+        assert!(sample::graphs(&read).is_empty(), "{what}");
+        let paths = |d: &Document| {
+            let mut count = 0;
+            d.walk(|n| count += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+            count
+        };
+        assert_eq!(paths(&read), paths(&doc), "{what}: the graph's art is kept");
+    }
+}
+
+/// A graph with art left out for the object limit is written as the art there is room for, without
+/// records or tags, with the warning; with room for all of it, it is written with its records.
+#[test]
+fn a_graph_with_art_left_out_is_written_without_records() {
+    use crate::ai_graph::sample;
+    let doc = sample::document(sample::spec(vectorcraft_doc::GraphKind::Column));
+    let all = export_ai_editing(&doc, &opts()).unwrap();
+    let read = crate::import::objects_read(&all.program).unwrap();
+    let room = export_within(&doc, &opts(), read).unwrap();
+    assert_eq!(room.program, all.program);
+    for max in [0, 1, read / 2, read - 1] {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        assert!(
+            out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT) && out.warnings.iter().any(|w| w == writer::GRAPHS),
+            "{max}: {:?}",
+            out.warnings
+        );
+        assert!(!text.contains("%_Gs") && !text.contains(" Go\n") && !text.contains("%_GS"), "{max}: {text}");
     }
 }

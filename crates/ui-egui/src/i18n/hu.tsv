@@ -838,6 +838,7 @@ font-technology	Variable	Változó
 	Copy Artboard	Rajztábla másolása
 	Copy Color Value (Hex)	Színérték másolása (hex)
 	Copy Fonts Used in the Document	A dokumentumban használt betűtípusok másolása
+	Copy Info	Adatok másolása
 	Copy Links	Csatolások másolása
 	Copy only fonts you own or are licensed to install.	Csak olyan betűtípust másolj, amely a tiéd, vagy amelynek telepítésére licenced van.
 	Copy Selected Style	Kijelölt stílus másolása
@@ -1478,6 +1479,7 @@ font-technology	Variable	Változó
 	Rotate (Classic)…	Elforgatás (klasszikus)…
 	Surface	Felület
 	Wireframe	Drótváz
+	Render Settings	Renderelési beállítások
 	No Shading	Nincs árnyékolás
 	Plastic	Műanyag
 	Highlight Intensity	Csillanás erőssége
@@ -3227,6 +3229,8 @@ mark-style	Japanese	Japán
 	Proof Setup	Színpróba beállítása
 	Properties	Tulajdonságok
 	Proportional Metrics	Arányos metrika
+	H or V Style	Vízszintes vagy függőleges stílus
+	Roman Italics	Latin betűk dőlt változata
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
 	Tsume	Tsume
@@ -3261,6 +3265,7 @@ mark-style	Japanese	Japán
 	Radial	Körkörös
 	Radial Blur	Körkörös elmosás
 	Radial Blur…	Körkörös elmosás…
+	Blur Center	Elmosás középpontja
 	Radial Glows	Körkörös ragyogások
 	Organic Fades	Organikus áttűnések
 	Holographic	Holografikus
@@ -4065,6 +4070,7 @@ mark-style	Japanese	Japán
 	Sixth Space	Hatodkvirt-szóköz
 	Size	Méret
 	Size Tile to Art	Csempe méretezése a grafikához
+	Move Tile with Art	Csempe mozgatása a grafikával
 	Size/Leading	Méret/sorköz
 	Size:	Méret:
 	Size: {size}  Tracking: {tracking}	Méret: {size}  Betűköz: {tracking}
@@ -4295,6 +4301,8 @@ mark-style	Japanese	Japán
 	Swap Fill and Stroke (Shift+X)	Kitöltés és körvonal cseréje (Shift+X)
 	Swap start and end arrowheads	Kezdő és záró nyílhegy cseréje
 	Swap the selected object for the file, keeping its place and transform	A kijelölt objektum cseréje a fájlra, a helye és az átalakítása megtartásával
+	Show Import Options	Importálási beállítások megjelenítése
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Elhelyezés előtt rákérdez minden PDF-, DXF- vagy szövegfájl importálási beállításaira; kikapcsolva a legutóbb választott beállításokat használja
 	Stylistic Alternates	Stilisztikai változatok
 	Swash	Cifra változatok
 	Swatch Conflict	Színminta-ütközés
@@ -4364,6 +4372,48 @@ mark-style	Japanese	Japán
 	Composite Fonts	Összetett betűtípusok
 	Export Composite Fonts	Összetett betűtípusok exportálása
 	Import Composite Fonts	Összetett betűtípusok importálása
+@msg	each font must be {name, parts}	minden betűtípusnak {name, parts} alakúnak kell lennie
+@msg	unknown key `{k}`; a font takes name and parts	ismeretlen kulcs: `{k}`; egy betűtípus name és parts kulcsot fogad
+@msg	each font needs a name	minden betűtípusnak kell egy név
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nem lehet összetett betűtípus neve (1–{COMPOSITE_NAME_MAX} karakter, vezérlőkarakterek nélkül)
+@msg	`{name}`: parts must be an object	`{name}`: a parts értékének objektumnak kell lennie
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: ismeretlen osztály: `{k}`; az osztályok: kanji, kana, punctuation, symbols, roman és numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: a(z) {_1} értékének objektumnak kell lennie
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: ismeretlen kulcs: `{k}` itt: {_1}
+@msg	`{name}`: give the kanji part	`{name}`: adja meg a kanji részt
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	egy dokumentum legfeljebb {COMPOSITE_FONTS_MAX} összetett betűtípust tartalmazhat
+@msg	two composite fonts are named `{_1}`	két összetett betűtípus neve is `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` egy telepített betűtípus neve
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: a(z) {_2} a(z) `{font}` összetett betűtípust használja
+@msg	give fonts: [{name, parts}…]	adja meg: fonts: [{name, parts}…]
+@msg	path is empty	a path üres
+@msg	fonts must be a list of composite fonts	a fonts értékének összetett betűtípusok listájának kell lennie
+@msg	names must be strings	a names elemeinek karakterláncoknak kell lenniük
+@msg	no composite font named `{n}`	nincs `{n}` nevű összetett betűtípus
+@msg	names must be a list of names	a names értékének nevek listájának kell lennie
+@msg	no composite fonts to export	nincs exportálható összetett betűtípus
+@msg	not a composite fonts file: {e}	nem összetettbetűtípus-fájl: {e}
+@msg	not a composite fonts file: no compositeFonts list	nem összetettbetűtípus-fájl: nincs compositeFonts lista
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	a fájl több mint {COMPOSITE_FONTS_MAX} összetett betűtípust tartalmaz
+@msg	the file is larger than 4 MB	a fájl nagyobb 4 MB-nál
+@msg	dataBase64 is not base64	a dataBase64 nem base64
+@msg	give one of path, data or dataBase64	adja meg a path, data vagy dataBase64 egyikét
+@msg	the file holds no composite fonts	a fájl nem tartalmaz összetett betűtípust
+@msg	the file holds two composite fonts named `{_1}`	a fájl két `{_1}` nevű összetett betűtípust tartalmaz
+@msg	`{_1}` can't name a composite font	`{_1}` nem lehet összetett betűtípus neve
+@msg	{k}: give a font	{k}: adjon meg egy betűtípust
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: adjon meg egy betűtípust
+@msg	{k}: size must be {_1} to {_2}%	{k}: a size értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: a size értéke {_1}–{_2}% lehet
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: a baseline értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: a baseline értéke {_1}–{_2}% lehet
+@msg	{k}: scale must be {_1} to {_2}%	{k}: a méretezés {_1}–{_2}% lehet
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: a méretezés {_1}–{_2}% lehet
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: csak a kana, roman és numerals méretezhető
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: csak a kana, roman és numerals méretezhető
+@msg	{k}: only kana can be scaled at the center	{k}: csak a kana méretezhető a középpontból
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: csak a kana méretezhető a középpontból
+@msg	no composite font	nincs összetett betűtípus
 	Delete Font	Betűtípus törlése
 	Kanji	Kandzsi
 	Kana	Kana
@@ -4784,6 +4834,9 @@ mark-style	Japanese	Japán
 	Working CMYK	Munka-CMYK
 	Working CMYK (don't tag)	Munka-CMYK (címke nélkül)
 	Working RGB (don't tag)	Munka-RGB (címke nélkül)
+	Don't Color Manage This Document	Ne legyen színkezelés ebben a dokumentumban
+	Working RGB: {name}	Munka-RGB: {name}
+	Working CMYK: {name}	Munka-CMYK: {name}
 	Working RGB	Munka-RGB
 	Workspace	Munkaterület
 	Workspace {i}	Munkaterület {i}
@@ -5040,6 +5093,7 @@ imageTrace	Outline	Körvonal
 @msg	automation path rejected: cannot resolve {path}: {e}	az automatizálás útvonala elutasítva: nem oldható fel: {path}: {e}
 @msg	automation path rejected: outside the read root {root}: {path}	az automatizálás útvonala elutasítva: kívül esik az olvasási gyökéren ({root}): {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	az automatizálás útvonala elutasítva: kívül esik az olvasási gyökereken ({roots}): {path}
+@msg	a linked JavaScript file is outside the read roots	egy csatolt JavaScript-fájl kívül esik az olvasási gyökereken
 @msg	automation path rejected: outside the write root {root}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökéren ({root}): {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	az automatizálás útvonala elutasítva: kívül esik az írási gyökereken ({roots}): {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	az automatizálás útvonala elutasítva: szülőmappára lépés egy nem létező mappa alatt: {path}
@@ -5204,6 +5258,7 @@ imageTrace	Outline	Körvonal
 @msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
+@msg	Copied the link info	Csatolás adatai másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Nem sikerült a rendszer vágólapjára másolni: {e}
@@ -5247,6 +5302,7 @@ imageTrace	Outline	Körvonal
 @msg	every numbered name for {name} is taken in the document's folder	a dokumentum mappájában minden sorszámozott név foglalt: {name}
 @msg	No linked files to look for	Nincs keresendő csatolt fájl
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	A csatolás egy szimbólumban, diagrammintában, mintázatban vagy átlátszósági maszkban van, és nincs helye a vásznon
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	egy diagram adatsorában a diagramminta grafikája a mintából rajzolódik újra: a módosításához szerkeszd a mintát
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
@@ -5997,6 +6053,7 @@ imageTrace	Outline	Körvonal
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	a `render` csak `mode` mezőt tartalmazó objektum lehet, shaded vagy wireframe értékkel
 @msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
 @msg	bevel must be none or one of {_1}	a bevel értéke none vagy ezek egyike lehet: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ebből a rajzból nem hozható létre test: a szimbólumpéldányai, összemosásai és vágócsoportjai túl sok objektumot tartalmaznak
@@ -6079,6 +6136,9 @@ imageTrace	Outline	Körvonal
 	Softness	Lágyság
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
+	Move Light to Back	Fény hátra
+	Move Light to Front	Fény előre
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Húzzon egy fényt az áthelyezéséhez. A nyílbillentyűk a fókuszban lévő fényt mozgatják; Shifttel 15°-onként.
 	Shadows	Árnyékok
 	Distance from Object	Távolság az objektumtól
 	Shadow Bounds	Árnyék határai
@@ -6668,6 +6728,8 @@ axis	Y Axis	Y tengely
 	Create New Set	Új készlet létrehozása
 	Stop Global Edit	Globális szerkesztés befejezése
 	Global Edit Options	Globális szerkesztés beállításai
+	Select Similar Objects	Hasonló objektumok kijelölése
+	Select Similar Options	Hasonlók kijelölésének beállításai
 	Leave Out of Global Edit	Kizárás a globális szerkesztésből
 	Match	Egyezés
 	On Artboards	Rajztáblákon
@@ -6790,6 +6852,13 @@ axis	Y Axis	Y tengely
 	Graphite Pencil	Grafitceruza
 	Wax Crayon	Zsírkréta
 	Charcoal Dust	Szénpor
+
+# Original procedural circuit brushes.
+	Tech Circuit	Műszaki áramkörök
+	Circuit Trace	Vezetősáv
+	Bus Lines	Buszvonalak
+	Terminal Nodes	Csatlakozási pontok
+
 	Notched Ribbon	Csipkézett szalag
 	Double Line	Dupla vonal
 	Wave	Hullám
@@ -8903,6 +8972,7 @@ breakText	Glyphs	Glifák
 @msg	the RTF file is too large to place as type (at most {_1} MB)	az RTF-fájl túl nagy ahhoz, hogy szövegként elhelyezhető legyen (legfeljebb {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	az SVG kibontva több mint {0} beágyazott SVG-képet tartalmaz
 @msg	the SVG expands to more than {0} objects	az SVG kibontva több mint {0} objektumot tartalmaz
+@msg	the SVG's style sheets take too long to match	az SVG stíluslapjainak illesztése túl sokáig tart
 @msg	the SVG's styles expand to more than {0} MB	az SVG stílusai kibontva több mint {0} MB-ot foglalnak
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	az SVG-fájl nagyobb, mint {MAX_IMPORT_BYTES} bájt
 @msg	the SVG has no drawable objects	az SVG-ben nincsenek kirajzolható objektumok
@@ -9125,7 +9195,7 @@ breakText	Glyphs	Glifák
 @msg	unexpected resources	váratlan erőforrások
 @msg	unknown CMYK profile `{name}`	ismeretlen CMYK-profil: `{name}`
 @msg	unknown File Info field `{k}`	ismeretlen fájlinformációs mező: `{k}`
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	ismeretlen OpenType-funkció: `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; a - előtag kikapcsolja; a swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom és aalt egy alternatíva számát `tag=N` alakban fogadja, ahol N 0 és {_1} között lehet, például `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	ismeretlen OpenType-funkció: `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; a - előtag kikapcsolja; a swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom és aalt egy alternatíva számát `tag=N` alakban fogadja, ahol N 0 és {_1} között lehet, például `salt=2`)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	ismeretlen OpenType-funkció a featureChanges értékben: `{t}` (a `features` által fogadott címkék használhatók)
 @msg	unknown PDF preset `{name}` (presets: {_1})	ismeretlen PDF-előbeállítás: `{name}` (előbeállítások: {_1})
 @msg	unknown Warp style	ismeretlen hajlítási stílus
