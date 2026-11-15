@@ -37,10 +37,12 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let id = d.str("__effect");
             let defaults = vectorcraft_effects::default_params(&id).unwrap_or(json!({}));
-            // Reset all resets the shape, view and light; the mapped graphics stay.
+            // Reset all resets the shape, view and light; the mapped graphics and the render
+            // settings stay.
             let defaults = match defaults {
                 Value::Object(mut m) => {
                     m.remove(vectorcraft_effects::GRAPHICS);
+                    m.remove(vectorcraft_effects::RENDER);
                     Value::Object(m)
                 }
                 other => other,
