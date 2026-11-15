@@ -18,6 +18,7 @@
 	Edge Brightness	Brillo del borde
 	Smoothness	Suavizado
 	Radial Blur…	Desenfoque radial…
+	Blur Center	Centro del desenfoque
 	Smart Blur…	Desenfoque inteligente…
 	Sharpen	Enfocar
 	Unsharp Mask…	Máscara de enfoque…
@@ -645,6 +646,7 @@ font-technology	Variable	Variables
 	Copy All Styles	Copiar todos los estilos
 	Copy Color Value (Hex)	Copiar valor de color (hex)
 	Copy Fonts Used in the Document	Copiar fuentes usadas en el documento
+	Copy Info	Copiar información
 	Copy Links	Copiar vínculos
 	Copy Selected Style	Copiar estilo seleccionado
 	Copy to User Defined	Copiar en Definido por el usuario
@@ -2669,6 +2671,8 @@ font-technology	Variable	Variables
 	Proof Setup	Ajuste de prueba
 	Properties	Propiedades
 	Proportional Metrics	Métrica proporcional
+	H or V Style	Estilo horizontal o vertical
+	Roman Italics	Cursiva romana
 	Insert Aki Left	Insertar aki a la izquierda
 	Insert Aki Right	Insertar aki a la derecha
 	Tsume	Tsume
@@ -4393,6 +4397,7 @@ axis	Both	Ambos
 @msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
+@msg	Copied the link info	Se copió la información del vínculo
 @msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado
 @msg	Couldn't copy to the system clipboard: {e}	No se pudo copiar al portapapeles del sistema: {e}
 @msg	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
@@ -4865,6 +4870,7 @@ axis	Both	Ambos
 @msg	result would exceed the canvas (coordinates out of range)	el resultado excedería el lienzo (coordenadas fuera de rango)
 @msg	objects can't be nested more than 32 deep	los objetos no pueden anidarse a más de 32 niveles
 @msg	the SVG's elements are nested more than {0} deep	los elementos del SVG están anidados a más de {0} niveles
+@msg	the SVG's style sheets take too long to match	la comparación de las hojas de estilo del SVG tarda demasiado
 @msg	the SVG's styles expand to more than {0} MB	los estilos del SVG se expanden a más de {0} MB
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale debe ser un número de {_1} a {_2}, no {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale debe ser un número de {_1} a {_2}, no {s}

@@ -974,6 +974,7 @@
 	Free Transform	Vapaa muunnos
 	Perspective Distort	Perspektiivivääristys
 	Radial Blur…	Säteittäinen sumennus…
+	Blur Center	Sumennuksen keskipiste
 	Smart Blur…	Älykäs sumennus…
 	Sharpen	Terävöitä
 	Unsharp Mask…	Epäterävä maski…
@@ -1586,6 +1587,8 @@ lighting	Light	Valo
 	Leading	Riviväli
 	No Break	Ei katkoa
 	Proportional Metrics	Suhteelliset metriikat
+	H or V Style	Vaaka- tai pystytyyli
+	Roman Italics	Latinalainen kursiivi
 	Insert Aki Left	Lisää aki vasemmalle
 	Insert Aki Right	Lisää aki oikealle
 	Tsume	Tsume
@@ -2679,6 +2682,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Läpinäkyvä tausta
 	Choose…	Valitse…
 	Copy Fonts Used in the Document	Kopioi asiakirjassa käytetyt fontit
+	Copy Info	Kopioi tiedot
 	Copy Links	Kopioi linkit
 	Create Report	Luo raportti
 	Fonts whose licence doesn't allow embedding are not copied.	Fontteja, joiden lisenssi ei salli upottamista, ei kopioida.
@@ -4618,6 +4622,7 @@ imageTrace	Outline	Ääriviiva
 @msg	there is no script engine named {name}	skriptimoottoria nimeltä {name} ei ole
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
+@msg	Copied the link info	Linkin tiedot kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}
 @msg	Couldn't open {name}: {e}	Tiedostoa {name} ei voitu avata: {e}
@@ -5080,6 +5085,7 @@ imageTrace	Outline	Ääriviiva
 @msg	result would exceed the canvas (coordinates out of range)	tulos ylittäisi kankaan (koordinaatit alueen ulkopuolella)
 @msg	objects can't be nested more than 32 deep	objekteja ei voi sisäkkäistää yli 32 tason syvyyteen
 @msg	the SVG's elements are nested more than {0} deep	elementit ovat SVG-tiedostossa sisäkkäin yli {0} tason syvyydessä
+@msg	the SVG's style sheets take too long to match	SVG-tiedoston tyylisivujen täsmäytys kestää liian kauan
 @msg	the SVG's styles expand to more than {0} MB	SVG-tiedoston tyylit laajenevat yli {0} megatavuksi
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {s}

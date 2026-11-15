@@ -971,6 +971,7 @@
 	Free Transform	Slobodna transformacija
 	Perspective Distort	Izobličenje perspektive
 	Radial Blur…	Radijalno zamućenje…
+	Blur Center	Središte zamućenja
 	Smart Blur…	Pametno zamućenje…
 	Sharpen	Izoštri
 	Unsharp Mask…	Maska izoštravanja…
@@ -1583,6 +1584,8 @@ lighting	Light	Svjetlo
 	Leading	Prored
 	No Break	Bez preloma
 	Proportional Metrics	Proporcionalna metrika
+	H or V Style	Horizontalni ili vertikalni stil
+	Roman Italics	Latinični kurziv
 	Insert Aki Left	Umetni aki lijevo
 	Insert Aki Right	Umetni aki desno
 	Tsume	Tsume
@@ -2700,6 +2703,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Prozirna pozadina
 	Choose…	Odaberi…
 	Copy Fonts Used in the Document	Kopiraj fontove korištene u dokumentu
+	Copy Info	Kopiraj informacije
 	Copy Links	Kopiraj veze
 	Create Report	Kreiraj izvještaj
 	Fonts whose licence doesn't allow embedding are not copied.	Fontovi čija licenca ne dozvoljava ugrađivanje ne kopiraju se.
@@ -4547,6 +4551,7 @@ imageTrace	Outline	Obris
 	Stop the script and undo what it did? Then quit again.	Zaustaviti skriptu i poništiti ono što je uradila? Zatim ponovo izađite.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Ova skripta je dodala veoma mnogo objekata. Nastaviti, ili je zaustaviti i poništiti ono što je uradila?
 @msg	Copied the script report	Izvještaj skripte kopiran
+@msg	Copied the link info	Informacije o vezi kopirane
 @msg	Corners edits the corners of a path	Uglovi uređuje uglove putanje
 @msg	Couldn't copy to the system clipboard: {e}	Nije moguće kopirati u sistemski međuspremnik: {e}
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}

@@ -15,6 +15,7 @@
 	Edge Brightness	Kenar Parlaklığı
 	Smoothness	Pürüzsüzlük
 	Radial Blur…	Radyal Bulanıklık…
+	Blur Center	Bulanıklık Merkezi
 	Smart Blur…	Akıllı Bulanıklaştırma…
 	Sharpen	Keskinleştir
 	Unsharp Mask…	Keskinliği Azaltma Maskesi…
@@ -624,6 +625,7 @@ font-technology	Variable	Değişken
 	Copy All Styles	Tüm Stilleri Kopyala
 	Copy Color Value (Hex)	Renk Değerini Kopyala (Hex)
 	Copy Fonts Used in the Document	Belgede Kullanılan Yazı Tiplerini Kopyala
+	Copy Info	Bilgiyi Kopyala
 	Copy Links	Bağlantıları Kopyala
 	Copy Selected Style	Seçilen Stili Kopyala
 	Copy to User Defined	Kullanıcı Tanımlıya Kopyala
@@ -2453,6 +2455,8 @@ shape	Open	Açık
 	Proof Setup	Prova Kurulumu
 	Properties	Özellikler
 	Proportional Metrics	Orantılı Metrikler
+	H or V Style	Yatay veya Dikey Stil
+	Roman Italics	Roma İtalik
 	Insert Aki Left	Sola Aki Ekle
 	Insert Aki Right	Sağa Aki Ekle
 	Tsume	Tsume
@@ -4166,6 +4170,7 @@ axis	Both	Her İkisi
 @msg	there is no script engine named {name}	{name} adlı bir betik motoru yok
 @msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı
+@msg	Copied the link info	Bağlantı bilgisi kopyalandı
 @msg	Corners edits the corners of a path	Köşeler bir yolun köşelerini düzenler
 @msg	Couldn't copy to the system clipboard: {e}	Sistem panosuna kopyalanamadı: {e}
 @msg	Couldn't open {name}: {e}	{name} açılamadı: {e}
@@ -4635,6 +4640,7 @@ axis	Both	Her İkisi
 @msg	result would exceed the canvas (coordinates out of range)	sonuç tuvali aşacaktır (koordinatlar aralık dışındadır)
 @msg	objects can't be nested more than 32 deep	nesneler 32'den fazla derinliğe yerleştirilemez
 @msg	the SVG's elements are nested more than {0} deep	SVG'nin öğeleri {0} derinliğinden daha fazla yuvalanmıştır
+@msg	the SVG's style sheets take too long to match	SVG'nin stil sayfalarının eşleştirilmesi çok uzun sürüyor
 @msg	the SVG's styles expand to more than {0} MB	SVG'nin stilleri genişletildiğinde {0} MB'tan fazla yer kaplıyor
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale {_1} ile {_2} arasında bir sayı olmalıdır, {_3} değil
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale {_1} ile {_2} arasında bir sayı olmalıdır, {s} değil
@@ -7117,7 +7123,7 @@ axis	Y Axis	Y ekseni
 @msg	toString is not a function	toString bir işlev değil
 @msg	too many arguments	çok fazla bağımsız değişken
 @msg	too many quantifiers	çok fazla niceleyici
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	bilinmeyen OpenType özelliği `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; kapatmak için başına - koyun; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom ve aalt bir alternatifin numarasını `tag=N` biçiminde alır, N 0 ile {_1} arasındadır, örneğin `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	bilinmeyen OpenType özelliği `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; kapatmak için başına - koyun; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom ve aalt bir alternatifin numarasını `tag=N` biçiminde alır, N 0 ile {_1} arasındadır, örneğin `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	bilinmeyen renk taklidi `{d}` (diffusion, pattern, noise veya none)
 @msg	unknown panel `{panel}`	bilinmeyen panel `{panel}`
 @msg	unknown parameter `{key}`	bilinmeyen parametre `{key}`

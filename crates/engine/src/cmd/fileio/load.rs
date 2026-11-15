@@ -864,7 +864,9 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// they are, with their ink amounts ([`ImageBlob::cmyk`]), except that ones storing one plane per
 /// ink are written again with their inks together ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]);
 /// CMYK TIFFs with an alpha channel, which the decoder can't read, become RGBA in the active color
-/// settings' CMYK, as do CMYK Photoshop documents, whose merged image is read ([`psdread`]).
+/// settings' CMYK, whichever of their extra channels is the alpha
+/// ([`vectorcraft_doc::cmyk::extra_samples_tiff_rgba`]), as do CMYK Photoshop documents, whose
+/// merged image is read ([`psdread`]).
 /// 1-bit TIFFs compressed with CCITT Group 3, which the decoder can't read either, become RGBA
 /// too ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]).
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read
@@ -1072,14 +1074,30 @@ pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
     let layer = d.layers[0].id;
     let id = d.alloc_id();
     let xf = Affine::scale_non_uniform(sx, sy);
-    let mut n = Node::new(
+    let n = Node::new(
         id,
         NodeKind::Image(Box::new(ImageObject { key: key.clone(), width, height, xf, link: None, placement: Default::default(), pixels: None })),
     );
+    let mut n = file_clipped(&mut d, n, psdread::clipping_path(bytes));
     n.name = Some(name.to_string());
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;
     Ok(d)
+}
+
+/// Image `image` of `d` clipped by `clip`, the clipping path its file names in the image's pixel
+/// space (a PSD or PSB file's, [`psdread::clipping_path`]): a clip group of that path (even-odd,
+/// with no paint) and the image. Without one the image stays as it is.
+pub(crate) fn file_clipped(d: &mut Document, image: Node, clip: Option<vectorcraft_geom::PathData>) -> Node {
+    let (Some(mut path), NodeKind::Image(im)) = (clip, &image.kind) else { return image };
+    path.transform(im.xf);
+    let none = vectorcraft_color::Paint::None;
+    let mut clip = Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance::basic(none.clone(), none, 0.0));
+    if let NodeKind::Path { clipping, rule, .. } = &mut clip.kind {
+        *clipping = true;
+        *rule = vectorcraft_geom::FillRule::EvenOdd;
+    }
+    Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(clip), std::sync::Arc::new(image)], clip: true })
 }
 
 /// Does this import note say that the file has something the document doesn't?

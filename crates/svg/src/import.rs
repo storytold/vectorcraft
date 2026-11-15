@@ -110,6 +110,8 @@ pub(crate) fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) 
         return Err(too_deep());
     }
     let xml = parse(svg)?;
+    // Before the style cascade of `depth::height`, as `import` measures it.
+    budget::check(&xml, budget::Cost::LIMITS, depth::MAX_ELEMENT_DEPTH)?;
     if depth::height(&xml, depth::MAX_ELEMENT_DEPTH).is_none() {
         return Err(too_deep());
     }
@@ -139,7 +141,7 @@ pub(crate) fn import_finding(
     let xml = parse(svg)?;
     // Before the style cascade of `depth::height` and the prepass, which keeps the declarations of
     // each element it reads; measured again below on the text usvg reads when that differs.
-    let styles = budget::check(&xml, budget::MAX_COPIED_STYLES, depth::MAX_ELEMENT_DEPTH)?;
+    let spent = budget::check(&xml, budget::Cost::LIMITS, depth::MAX_ELEMENT_DEPTH)?;
     let Some(height) = depth::height(&xml, depth::MAX_ELEMENT_DEPTH) else {
         return Err(too_deep());
     };
@@ -160,13 +162,13 @@ pub(crate) fn import_finding(
     let text_xml = found.text_source.as_deref().map(parse).transpose()?;
     let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
     // Before usvg copies what `<use>`s show and the style values of each copy: the text usvg reads.
-    let styles = match &src {
-        Cow::Borrowed(_) if !rewritten => styles,
-        Cow::Borrowed(_) => budget::check(&xml, budget::MAX_COPIED_STYLES, usize::MAX)?,
-        Cow::Owned(prepared) => budget::check(&parse(prepared)?, budget::MAX_COPIED_STYLES, usize::MAX)?,
+    let spent = match &src {
+        Cow::Borrowed(_) if !rewritten => spent,
+        Cow::Borrowed(_) => budget::check(&xml, budget::Cost::LIMITS, usize::MAX)?,
+        Cow::Owned(prepared) => budget::check(&parse(prepared)?, budget::Cost::LIMITS, usize::MAX)?,
     };
     let files = found.files;
-    files.copied_styles(styles);
+    files.spent_by_svg(spent);
     let tree = {
         let opt = usvg::Options {
             dpi: units.dpi as f32,
