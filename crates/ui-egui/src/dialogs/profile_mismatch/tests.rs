@@ -102,6 +102,39 @@ fn drop_asks_as_paste_does(app: &mut VectorcraftApp, count: impl Fn(&Vectorcraft
     assert_eq!(count(app), before + n);
 }
 
+/// A paste question about both models has a choice for each, starting on its model's policy, and
+/// picking one model's choice in the dialog leaves the other's as it was; OK checks the choice.
+#[test]
+fn a_paste_question_about_both_models_has_a_choice_for_each() {
+    let both = [
+        json!({"model": "rgb", "clipboard": "Wide RGB", "document": "sRGB", "default": "preserveNumbers"}),
+        json!({"model": "cmyk", "clipboard": "Ink A", "document": "Ink B", "default": "convert"}),
+    ];
+    assert_eq!(first_choice(&both), json!({"rgb": "preserveNumbers", "cmyk": "convert"}));
+    assert_eq!(first_choice(&both[1..]), json!("convert"), "one model starts on its policy");
+    for (choice, ok) in [
+        (json!({"rgb": "convert", "cmyk": "preserveNumbers"}), true),
+        (json!("convert"), true),
+        (json!({"rgb": "convert"}), false),
+        (json!({"rgb": "convert", "cmyk": "keep"}), false),
+        (json!({"rgb": "convert", "cmyk": "convert", "lab": "convert"}), false),
+        (json!(""), false),
+    ] {
+        assert_eq!(valid_choice(&choice, &both), ok, "{choice}");
+    }
+    // Picking CMYK's choice keeps RGB's, also when one choice was set for both.
+    let start = first_choice(&both);
+    assert_eq!(pick(&start, &both, "cmyk", "preserveNumbers"), json!({"rgb": "preserveNumbers", "cmyk": "preserveNumbers"}));
+    assert_eq!(pick(&json!("convert"), &both, "rgb", "preserveNumbers"), json!({"rgb": "preserveNumbers", "cmyk": "convert"}));
+    assert_eq!(pick(&json!("convert"), &both[..1], "rgb", "preserveNumbers"), json!("preserveNumbers"));
+    // The dialog draws a pair of choices under each model's line.
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let fields = json!({ "mismatches": both, "choice": start, "__command": "edit.paste", "__params": {} });
+    app.ui.dialog = Some(Dialog::new(PASTE_KIND, fields));
+    let text = frame(&mut app);
+    assert_eq!(text.matches("Preserve the color numbers").count(), 2, "{text}");
+}
+
 /// With Color Settings' Ask boxes on, File › Open asks about a document whose profile is not the
 /// working space, or that has none, and opens it as chosen; Cancel doesn't open it, and a refused
 /// choice keeps the dialog. Paste, and a drag from another document, ask about colors from another

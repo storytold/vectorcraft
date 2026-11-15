@@ -1427,3 +1427,46 @@ fn assign_profile_goes_with_assign_only() {
     let err = open_with(tagged, json!({"profileChoice": "discard", "assignProfile": cms::DISPLAY_P3})).0.unwrap_err();
     assert!(err.contains("`assignProfile` goes with `profileChoice`: \"assign\" only"), "{err}");
 }
+
+/// `profileMismatch: {rgb?, cmyk?}` gives each model its own choice, and a model left out follows
+/// its policy; a key other than rgb and cmyk, or a value other than the two choices, is refused and
+/// pastes nothing.
+#[test]
+fn paste_takes_a_choice_for_each_model() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let both = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [both.0], "color": "#3366cc"}));
+    exec(&mut s, "paint.setStroke", json!({"ids": [both.0], "color": {"c": 20, "m": 40, "y": 60, "k": 10}}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB, "cmyk": cms::DEVICE_CMYK}));
+    select(&mut s, &[both]);
+    exec(&mut s, "edit.copy", json!({}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    exec(&mut s, "edit.colorSettings", json!({"cmykPolicy": "convert"}));
+    let blue0 = vectorcraft_color::Color::from_hex("#3366cc").unwrap();
+    let pasted = |s: &mut Session, choice: serde_json::Value| {
+        let r = exec(s, "edit.paste", json!({ "profileMismatch": choice }));
+        let id = vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap());
+        let fill = s.doc().unwrap().doc.node(id).and_then(|n| n.appearance.fill()).and_then(|f| f.paint.color()).unwrap();
+        let picked = |model: &str| r["profileMismatch"].as_array().unwrap().iter().find(|m| m["model"] == model).map(|m| m["choice"].clone());
+        (fill, picked("rgb"), picked("cmyk"))
+    };
+    // The CMYK policy's own choice, as a paste that leaves both models to their policies makes it.
+    let (_, rgb_policy, cmyk_policy) = pasted(&mut s, serde_json::Value::Null);
+    assert_eq!(rgb_policy, Some(json!("preserveNumbers")));
+    assert!(cmyk_policy.is_some(), "the stroke's CMYK color is a mismatch too");
+    let (fill, rgb, cmyk) = pasted(&mut s, json!({"rgb": "convert"}));
+    assert_eq!((rgb, &cmyk), (Some(json!("convert")), &cmyk_policy), "CMYK follows its policy");
+    let source = cms::for_document(Some(cms::WIDE_GAMUT_RGB), None);
+    assert!(fill != blue0 && cms::delta_e2000(source.lab(&blue0), cms::working().lab(&fill)) < 1.0, "{blue0:?} → {fill:?}");
+    let (fill, rgb, cmyk) = pasted(&mut s, json!({"cmyk": "preserveNumbers"}));
+    assert_eq!((fill, rgb, cmyk), (blue0, Some(json!("preserveNumbers")), Some(json!("preserveNumbers"))));
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let before = objects(&s);
+    for bad in [json!({"lab": "convert"}), json!({"rgb": "keep"}), json!({"rgb": 1}), json!([]), json!(true)] {
+        assert!(s.execute("edit.paste", &json!({ "profileMismatch": bad })).is_err(), "{bad}");
+        assert!(s.execute("clipboard.conflicts", &json!({ "profileMismatch": bad })).is_err(), "{bad}");
+    }
+    assert_eq!(objects(&s), before, "a refused choice pastes nothing");
+}

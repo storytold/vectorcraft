@@ -982,16 +982,47 @@ impl PasteProfile {
         if policy == Policy::Convert { PasteProfile::Convert } else { PasteProfile::PreserveNumbers }
     }
 
-    /// The `profileMismatch` param of paste command `cmd` (`None` when left out).
-    pub(crate) fn param(p: &Value, cmd: &str) -> Result<Option<Self>> {
-        match text_param(p, "profileMismatch", cmd)? {
-            None => Ok(None),
-            Some("preserveNumbers") => Ok(Some(PasteProfile::PreserveNumbers)),
-            Some("convert") => Ok(Some(PasteProfile::Convert)),
-            Some(_) => {
-                let key = "profileMismatch";
-                Err(bad(cmd, format!("`{key}` must be one of {}", "preserveNumbers, convert")))
+    /// The `profileMismatch` param of paste command `cmd` (`None` when left out): one choice for
+    /// both models, or `{rgb?, cmyk?}` with a choice for each (a model left out follows its policy).
+    pub(crate) fn param(p: &Value, cmd: &str) -> Result<Option<PasteChoice>> {
+        let key = "profileMismatch";
+        let refuse = || bad(cmd, format!("`{key}` must be one of {}", "preserveNumbers, convert, {rgb?, cmyk?} of those"));
+        let one = |v: &Value| match v.as_str() {
+            Some("preserveNumbers") => Ok(PasteProfile::PreserveNumbers),
+            Some("convert") => Ok(PasteProfile::Convert),
+            _ => Err(refuse()),
+        };
+        match p.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::Object(o)) => {
+                if o.keys().any(|k| k != "rgb" && k != "cmyk") {
+                    return Err(refuse());
+                }
+                let model = |m: &str| o.get(m).map(&one).transpose();
+                Ok(Some(PasteChoice { rgb: model("rgb")?, cmyk: model("cmyk")? }))
             }
+            Some(v) => {
+                let c = one(v)?;
+                Ok(Some(PasteChoice { rgb: Some(c), cmyk: Some(c) }))
+            }
+        }
+    }
+}
+
+/// What Paste does with the mismatched colors of each model (`profileMismatch`); a model without a
+/// choice follows its policy ([`PasteProfile::of`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PasteChoice {
+    pub rgb: Option<PasteProfile>,
+    pub cmyk: Option<PasteProfile>,
+}
+
+impl PasteChoice {
+    /// The choice for the colors of `model`, if any.
+    pub fn of(&self, model: ColorMode) -> Option<PasteProfile> {
+        match model {
+            ColorMode::Rgb => self.rgb,
+            ColorMode::Cmyk => self.cmyk,
         }
     }
 }
@@ -1044,14 +1075,15 @@ pub(crate) fn paste_mismatches(clip: &super::clipboard::Clipboard, d: &vectorcra
 
 /// The clipboard `clip` as pasting it into `d` brings it: for each mismatched model
 /// ([`paste_mismatches`]), its colors keep their numbers or convert from the source profile into
-/// the destination's with the working intent, as `choice` says (default: each model's policy,
-/// [`PasteProfile::of`]). A source or destination profile that is not available keeps the numbers.
+/// the destination's with the working intent, as `choice` says for that model (default: the
+/// model's policy, [`PasteProfile::of`]). A source or destination profile that is not available
+/// keeps the numbers.
 /// → the converted clipboard (`None` when nothing converts; its resources paste as another
 /// document's) and a line for each mismatched model (`{model, clipboard, document, choice}`).
 pub(crate) fn paste_profiles(
     clip: &super::clipboard::Clipboard,
     d: &vectorcraft_doc::Document,
-    choice: Option<PasteProfile>,
+    choice: Option<PasteChoice>,
 ) -> (Option<super::clipboard::Clipboard>, Vec<Value>) {
     let mismatches = paste_mismatches(clip, d);
     let mut report = Vec::new();
@@ -1061,7 +1093,7 @@ pub(crate) fn paste_profiles(
         // Both profiles must be here to convert between them.
         let here = |name: &str| cms::profile(name).is_some_and(|p| p.kind == kind);
         let available = here(&m.from) && here(&m.to);
-        let picked = if available { choice.unwrap_or(m.default) } else { PasteProfile::PreserveNumbers };
+        let picked = if available { choice.and_then(|c| c.of(m.model)).unwrap_or(m.default) } else { PasteProfile::PreserveNumbers };
         if picked == PasteProfile::Convert {
             match m.model {
                 ColorMode::Rgb => rgb_on = true,

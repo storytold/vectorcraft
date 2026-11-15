@@ -1695,11 +1695,13 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   `convert`, `discard`; `leave`, `assignWorking`, `assign` with `assignProfile`) states the answer, else the policy
   applies, and the reply's `profileChoice` names the answer used. Copy remembers the profiles the colors showed
   through; pasting them into a document with another RGB or CMYK profile keeps their numbers or converts them, as
-  `profileMismatch` on the paste commands and `edit.dropSelection` says, else as the model's policy does (`convert`
-  converts, the others keep the numbers; a profile that is not available keeps them). `clipboard.profileMismatch`
-  lists the models that differ, only those whose colors the copied objects use (with `sourceDocument` and `ids`, the
-  objects a drop brings), and with `askMismatchPaste` on the desktop app asks first on Paste and on a drag between
-  documents. New from Template and File › Revert follow the policies without asking.
+  `profileMismatch` on the paste commands and `edit.dropSelection` says (`preserveNumbers` or `convert` for both
+  models, or `{rgb?, cmyk?}` with one for each), else as the model's policy does (`convert` converts, the others keep
+  the numbers; a profile that is not available keeps them). `clipboard.profileMismatch` lists the models that
+  differ, only those whose colors the copied objects use (with `sourceDocument` and `ids`, the objects a drop
+  brings), and with `askMismatchPaste` on the desktop app asks first on Paste and on a drag between documents. A
+  question about both models has a choice for each, each starting on its model's policy. New from Template and
+  File › Revert follow the policies without asking.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or

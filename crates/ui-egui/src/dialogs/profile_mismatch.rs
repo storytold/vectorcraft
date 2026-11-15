@@ -13,7 +13,8 @@
 //! Pasting ([`PASTE_KIND`]): colors copied, or dragged ([`DROP`]), from a document whose profile is
 //! not this document's ask whether to keep their numbers or convert them. OK runs the paste or the
 //! drop with `profileMismatch`; Cancel pastes or drops nothing. Fields: `mismatches` (as
-//! `clipboard.profileMismatch` lists them), `choice` (`preserveNumbers` | `convert`), `__command`
+//! `clipboard.profileMismatch` lists them), `choice` (`preserveNumbers` | `convert`, or with both
+//! models `{rgb, cmyk}` of those, one for each), `__command`
 //! and `__params` (the paste or drop to run), and `__doc` (the uid of the document it was asked in).
 
 use serde_json::{Value, json};
@@ -202,8 +203,7 @@ pub fn ask_paste(app: &mut VectorcraftApp, command: &str, params: &Value) -> Opt
         return None;
     }
     let mismatches = paste_mismatches(app, command, params).filter(|a| !a.is_empty())?;
-    // The policy of the first model starts chosen.
-    let choice = mismatches[0]["default"].as_str().unwrap_or("preserveNumbers").to_string();
+    let choice = first_choice(&mismatches);
     let doc = app.session.active().map(|st| st.uid);
     let fields = json!({ "mismatches": mismatches, "choice": choice, "__command": command, "__params": params, DOC: doc });
     // A deferred paste this dialog asked about gives way to the new one.
@@ -222,25 +222,75 @@ fn paste_mismatches(app: &mut VectorcraftApp, command: &str, params: &Value) -> 
     found["mismatches"].as_array().cloned()
 }
 
+/// The choice the paste question starts on: the model's policy for one model, and for both a
+/// choice for each (`{rgb, cmyk}`), each starting on its model's policy.
+fn first_choice(mismatches: &[Value]) -> Value {
+    let default = |m: &Value| m["default"].as_str().unwrap_or("preserveNumbers").to_string();
+    match mismatches {
+        [m] => json!(default(m)),
+        _ => Value::Object(mismatches.iter().filter_map(|m| Some((m["model"].as_str()?.to_string(), json!(default(m))))).collect()),
+    }
+}
+
+/// What `choice` (one choice for every model, or `{rgb?, cmyk?}`) picks for the colors of `model`.
+fn picked<'a>(choice: &'a Value, model: &str) -> &'a str {
+    choice.as_str().or_else(|| choice.get(model).and_then(Value::as_str)).unwrap_or_default()
+}
+
+/// `choice` with `value` picked for the colors of `model`: with one model the value alone, with
+/// both a choice for each in which the other model's stays as `choice` has it.
+fn pick(choice: &Value, mismatches: &[Value], model: &str, value: &str) -> Value {
+    if mismatches.len() < 2 {
+        return json!(value);
+    }
+    let each =
+        mismatches.iter().filter_map(|m| m["model"].as_str()).map(|m| (m.to_string(), json!(if m == model { value } else { picked(choice, m) })));
+    Value::Object(each.collect())
+}
+
+/// Is `choice` one choice for every model, or a choice for each of `mismatches`' models?
+fn valid_choice(choice: &Value, mismatches: &[Value]) -> bool {
+    let known = |v: &str| paste_choices().iter().any(|(c, _)| *c == v);
+    match choice {
+        Value::String(s) => known(s),
+        Value::Object(o) => {
+            let models: Vec<&str> = mismatches.iter().filter_map(|m| m["model"].as_str()).collect();
+            o.len() == models.len() && models.iter().all(|m| o.get(*m).and_then(Value::as_str).is_some_and(known))
+        }
+        _ => false,
+    }
+}
+
 fn paste_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let mismatches = d.fields.get("mismatches").and_then(Value::as_array).cloned().unwrap_or_default();
+    let choice = d.fields.get("choice").cloned().unwrap_or(Value::Null);
+    // With both models, each has its own choice under its line; with one, the choice follows it.
     for m in &mismatches {
-        let model = m["model"].as_str().unwrap_or_default().to_ascii_uppercase();
+        let id = m["model"].as_str().unwrap_or_default();
+        let model = id.to_ascii_uppercase();
         let (from, to) = (m["clipboard"].as_str().unwrap_or_default(), m["document"].as_str().unwrap_or_default());
         let text = tl!("The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.");
         ui.label(crate::i18n::fmt(text, &[("model", model.as_str()), ("from", from), ("to", to)]));
-    }
-    ui.add_space(10.0);
-    let choice = d.str("choice");
-    grid(ui, |ui| {
-        for (value, text) in paste_choices() {
-            label(ui, "");
-            if widgets::radio(ui, text, choice == value, true) {
-                d.fields.insert("choice".into(), json!(value));
-            }
-            ui.end_row();
+        ui.add_space(6.0);
+        let now = picked(&choice, id);
+        let clicked = ui.push_id(id, |ui| {
+            grid(ui, |ui| {
+                let mut clicked = None;
+                for (value, text) in paste_choices() {
+                    label(ui, "");
+                    if widgets::radio(ui, text, now == value, true) {
+                        clicked = Some(value);
+                    }
+                    ui.end_row();
+                }
+                clicked
+            })
+        });
+        if let Some(value) = clicked.inner {
+            d.fields.insert("choice".into(), pick(&choice, &mismatches, id, value));
         }
-    });
+        ui.add_space(10.0);
+    }
     false
 }
 
@@ -252,10 +302,11 @@ const DOC: &str = "__doc";
 /// does and pastes nothing. When the profiles that paste or drop would bring have changed since it
 /// asked (the clipboard or the dragged objects' document changed), it asks again about the new ones.
 fn paste_confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
-    let choice = d.str("choice");
-    if !paste_choices().iter().any(|(v, _)| *v == choice) {
+    let choice = d.fields.get("choice").cloned().unwrap_or(Value::Null);
+    let asked = d.fields.get("mismatches").and_then(Value::as_array).cloned().unwrap_or_default();
+    if !valid_choice(&choice, &asked) {
         let key = "choice";
-        return Err(format!("`{key}` must be one of {}", "preserveNumbers, convert"));
+        return Err(format!("`{key}` must be one of {}", "preserveNumbers, convert, {rgb, cmyk} of those"));
     }
     let deferred = d.fields.get("__deferredPaste").and_then(Value::as_u64);
     if deferred.is_none() && d.fields.get(DOC).and_then(Value::as_u64) != app.session.active().map(|st| st.uid) {
@@ -273,7 +324,7 @@ fn paste_confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
             return r;
         }
     }
-    params["profileMismatch"] = json!(choice);
+    params["profileMismatch"] = choice;
     app.ui.dialog = None;
     // A paste that waited for its clipboard runs in the context it was given in.
     crate::placing::confirm_swatch_paste(app, &command, params, deferred)
