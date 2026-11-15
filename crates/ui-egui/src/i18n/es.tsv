@@ -4503,6 +4503,14 @@ axis	Both	Ambos
 @msg	is a prompt's answer, whose `value` must be a string or null	es la respuesta de un prompt, cuyo `value` debe ser una cadena o null
 @msg	must have `kind` alert, confirm or prompt	debe tener `kind` alert, confirm o prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` solo es para una ejecución sin nadie a quien preguntar: en la aplicación, la persona responde cada cuadro de diálogo
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` debe ser un número entero de 1 a {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` está anidado a más de 64 niveles
+@msg	`args` must be an object	`args` debe ser un objeto
+@msg	`args` is larger than 1 MiB	`args` ocupa más de 1 MiB
+@msg	`path` is empty	`path` está vacío
+@msg	`installed` takes a `path`, not a `source`	`installed` admite un `path`, no un `source`
+@msg	`path` must name a .js or .jsx file	`path` debe indicar un archivo .js o .jsx
+@msg	give exactly one of `path` and `source`	indique exactamente uno de `path` y `source`
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
 @msg	Copied the link info	Se copió la información del vínculo

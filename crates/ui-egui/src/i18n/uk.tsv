@@ -7470,6 +7470,14 @@ breakText	Glyphs	Гліфи
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` містить понад {MAX_ANSWERS} відповідей
 @msg	`answers` is larger than 1 MiB	`answers` більший за 1 МіБ
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` призначений лише для запуску, у якому немає кого запитати: у застосунку людина сама відповідає на кожне діалогове вікно
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` має бути цілим числом від 1 до {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` має вкладеність понад 64 рівні
+@msg	`args` must be an object	`args` має бути об’єктом
+@msg	`args` is larger than 1 MiB	`args` більший за 1 МіБ
+@msg	`path` is empty	параметр `path` порожній
+@msg	`installed` takes a `path`, not a `source`	`installed` приймає `path`, а не `source`
+@msg	`path` must name a .js or .jsx file	`path` має вказувати на файл .js або .jsx
+@msg	give exactly one of `path` and `source`	укажіть рівно одне з: `path`, `source`
 @msg	`answers` must be a list of answers	`answers` має бути списком відповідей
 @msg	`artboard` must be the index of an artboard of the document	`artboard` має бути індексом монтажної області документа
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` має бути [x, y]

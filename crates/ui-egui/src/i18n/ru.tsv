@@ -4540,6 +4540,14 @@ axis	Both	Оба
 @msg	is a prompt's answer, whose `value` must be a string or null	является ответом на prompt, поэтому его `value` должно быть строкой или null
 @msg	must have `kind` alert, confirm or prompt	должен иметь `kind` alert, confirm или prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` предназначен только для запуска, в котором некого спросить: в приложении человек сам отвечает на каждое диалоговое окно
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` должен быть целым числом от 1 до {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` вложен глубже 64 уровней
+@msg	`args` must be an object	`args` должен быть объектом
+@msg	`args` is larger than 1 MiB	`args` больше 1 МиБ
+@msg	`path` is empty	параметр `path` пуст
+@msg	`installed` takes a `path`, not a `source`	`installed` принимает `path`, а не `source`
+@msg	`path` must name a .js or .jsx file	`path` должен указывать на файл .js или .jsx
+@msg	give exactly one of `path` and `source`	укажите ровно одно из: `path` и `source`
 @msg	Running a script	Выполняется скрипт
 @msg	Copied the script report	Отчёт о сценарии скопирован
 @msg	Copied the link info	Сведения о связи скопированы

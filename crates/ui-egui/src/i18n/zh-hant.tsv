@@ -2636,6 +2636,14 @@ file-filter	Templates	範本
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主指令碼引擎在每次執行時都是新的，從不保留，因此無法捨棄
 @msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 僅適用於沒有人可詢問的執行：在應用程式中，由使用者回答每個對話框
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` 必須是 1 到 {_1} 之間的整數
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 的巢狀層次超過 64 層
+@msg	`args` must be an object	`args` 必須是物件
+@msg	`args` is larger than 1 MiB	`args` 大於 1 MiB
+@msg	`path` is empty	`path` 為空
+@msg	`installed` takes a `path`, not a `source`	`installed` 需要 `path`，而不是 `source`
+@msg	`path` must name a .js or .jsx file	`path` 必須指向 .js 或 .jsx 檔案
+@msg	give exactly one of `path` and `source`	`path` 和 `source` 請只提供其中一個
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
 @msg	Copied the link info	已複製連結資訊

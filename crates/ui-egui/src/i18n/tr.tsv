@@ -4258,6 +4258,14 @@ axis	Both	Her İkisi
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	ana betik motoru her çalıştırmada yenidir ve hiç saklanmaz, bu yüzden bırakılamaz
 @msg	there is no script engine named {name}	{name} adlı bir betik motoru yok
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` yalnızca sorulacak kimsenin olmadığı bir çalıştırma içindir: uygulamada her iletişim kutusunu kişi yanıtlar
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` 1 ile {_1} arasında bir tam sayı olmalıdır
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 64 düzeyden daha derin iç içe geçmiş
+@msg	`args` must be an object	`args` bir nesne olmalıdır
+@msg	`args` is larger than 1 MiB	`args` 1 MiB'tan büyük
+@msg	`path` is empty	`path` boş
+@msg	`installed` takes a `path`, not a `source`	`installed` bir `path` alır, `source` almaz
+@msg	`path` must name a .js or .jsx file	`path` bir .js veya .jsx dosyasını adlandırmalıdır
+@msg	give exactly one of `path` and `source`	`path` ve `source` değerlerinden tam olarak birini verin
 @msg	Running a script	Betik çalıştırılıyor
 @msg	Copied the script report	Komut dosyası raporu kopyalandı
 @msg	Copied the link info	Bağlantı bilgisi kopyalandı

@@ -4811,6 +4811,14 @@ imageTrace	Outline	Obrys
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hlavní skriptovací jádro je pro každý běh nové a nikdy se neuchovává, proto je nelze zahodit
 @msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` je jen pro běh, kde se nemá koho zeptat: v aplikaci odpovídá na každý dialog uživatel
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` musí být celé číslo od 1 do {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` je vnořen hlouběji než 64 úrovní
+@msg	`args` must be an object	`args` musí být objekt
+@msg	`args` is larger than 1 MiB	`args` je větší než 1 MiB
+@msg	`path` is empty	`path` je prázdný
+@msg	`installed` takes a `path`, not a `source`	`installed` přijímá `path`, ne `source`
+@msg	`path` must name a .js or .jsx file	`path` musí označovat soubor .js nebo .jsx
+@msg	give exactly one of `path` and `source`	zadejte právě jedno z `path` a `source`
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
 @msg	Copied the link info	Informace o propojení zkopírovány

@@ -4735,6 +4735,14 @@ imageTrace	Outline	Ääriviiva
 @msg	is a prompt's answer, whose `value` must be a string or null	on prompt-vastaus, joten sen `value`-arvon on oltava merkkijono tai null
 @msg	must have `kind` alert, confirm or prompt	`kind`-arvon on oltava alert, confirm tai prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` on vain ajolle, jossa ei ole ketään kysyttävää: sovelluksessa henkilö vastaa jokaiseen valintaikkunaan
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` on oltava kokonaisluku väliltä 1–{_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` on sisäkkäin yli 64 tason syvyydellä
+@msg	`args` must be an object	`args` on oltava objekti
+@msg	`args` is larger than 1 MiB	`args` on suurempi kuin 1 MiB
+@msg	`path` is empty	`path` on tyhjä
+@msg	`installed` takes a `path`, not a `source`	`installed` ottaa `path`-arvon, ei `source`-arvoa
+@msg	`path` must name a .js or .jsx file	`path` on oltava .js- tai .jsx-tiedosto
+@msg	give exactly one of `path` and `source`	anna tasan yksi arvoista `path` ja `source`
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
 @msg	Copied the link info	Linkin tiedot kopioitiin

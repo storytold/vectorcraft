@@ -157,6 +157,14 @@
 @msg	is a prompt's answer, whose `value` must be a string or null	er svaret på en prompt, hvis `value` skal være en streng eller null
 @msg	must have `kind` alert, confirm or prompt	skal have `kind` alert, confirm eller prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` er kun til en kørsel uden nogen at spørge: i appen besvarer personen hver dialog
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` skal være et heltal fra 1 til {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` er indlejret mere end 64 niveauer dybt
+@msg	`args` must be an object	`args` skal være et objekt
+@msg	`args` is larger than 1 MiB	`args` er større end 1 MiB
+@msg	`path` is empty	`path` er tom
+@msg	`installed` takes a `path`, not a `source`	`installed` tager en `path`, ikke en `source`
+@msg	`path` must name a .js or .jsx file	`path` skal angive en .js- eller .jsx-fil
+@msg	give exactly one of `path` and `source`	angiv præcis én af `path` og `source`
 @msg	Running a script	Kører et script
 @msg	Data Recovery can't keep copies in {path}: {e}	Datagendannelse kan ikke opbevare kopier i {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kan ikke indlæses fra {path}: {e}

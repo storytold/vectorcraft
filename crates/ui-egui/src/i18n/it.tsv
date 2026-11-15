@@ -7313,6 +7313,14 @@ breakText	Glyphs	Glifi
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` ha più di {MAX_ANSWERS} risposte
 @msg	`answers` is larger than 1 MiB	`answers` supera 1 MiB
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` è solo per un'esecuzione senza nessuno a cui chiedere: nell'app, la persona risponde a ogni finestra di dialogo
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` deve essere un numero intero da 1 a {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` è annidato per più di 64 livelli
+@msg	`args` must be an object	`args` deve essere un oggetto
+@msg	`args` is larger than 1 MiB	`args` supera 1 MiB
+@msg	`path` is empty	`path` è vuoto
+@msg	`installed` takes a `path`, not a `source`	`installed` accetta un `path`, non un `source`
+@msg	`path` must name a .js or .jsx file	`path` deve indicare un file .js o .jsx
+@msg	give exactly one of `path` and `source`	indica esattamente uno tra `path` e `source`
 @msg	`answers` must be a list of answers	`answers` deve essere un elenco di risposte
 @msg	`artboard` must be the index of an artboard of the document	`artboard` deve essere l'indice di una tavola da disegno del documento
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` deve essere [x, y]

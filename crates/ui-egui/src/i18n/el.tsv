@@ -2508,6 +2508,14 @@ axis	Both	Και τα δύο
 @msg	is a prompt's answer, whose `value` must be a string or null	είναι απάντηση σε prompt, οπότε το `value` πρέπει να είναι συμβολοσειρά ή null
 @msg	must have `kind` alert, confirm or prompt	πρέπει να έχει `kind` alert, confirm ή prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	το `answers` είναι μόνο για εκτέλεση χωρίς κανέναν να ερωτηθεί: στην εφαρμογή, το άτομο απαντά σε κάθε παράθυρο διαλόγου
+@msg	`maxFuel` must be a whole number from 1 to {_1}	το `maxFuel` πρέπει να είναι ακέραιος από 1 έως {_1}
+@msg	`args{place}` is nested more than 64 levels deep	το `args{place}` έχει ένθεση μεγαλύτερη των 64 επιπέδων
+@msg	`args` must be an object	το `args` πρέπει να είναι αντικείμενο
+@msg	`args` is larger than 1 MiB	το `args` είναι μεγαλύτερο από 1 MiB
+@msg	`path` is empty	το `path` είναι κενό
+@msg	`installed` takes a `path`, not a `source`	το `installed` δέχεται `path`, όχι `source`
+@msg	`path` must name a .js or .jsx file	το `path` πρέπει να ορίζει αρχείο .js ή .jsx
+@msg	give exactly one of `path` and `source`	δώστε ακριβώς ένα από τα `path` και `source`
 @msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Copied the link info	Οι πληροφορίες συνδέσμου αντιγράφηκαν

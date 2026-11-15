@@ -7529,6 +7529,14 @@ breakText	Glyphs	字形
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` 中的回答超过 {MAX_ANSWERS} 个
 @msg	`answers` is larger than 1 MiB	`answers` 大于 1 MiB
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 仅用于无人可问的运行：在应用中，由用户回答每个对话框
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` 必须是 1 到 {_1} 之间的整数
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 的嵌套超过 64 层
+@msg	`args` must be an object	`args` 必须是对象
+@msg	`args` is larger than 1 MiB	`args` 大于 1 MiB
+@msg	`path` is empty	`path` 为空
+@msg	`installed` takes a `path`, not a `source`	`installed` 需要 `path`，而不是 `source`
+@msg	`path` must name a .js or .jsx file	`path` 必须指向 .js 或 .jsx 文件
+@msg	give exactly one of `path` and `source`	`path` 和 `source` 中必须且只能给出一个
 @msg	`answers` must be a list of answers	`answers` 必须是回答的列表
 @msg	`artboard` must be the index of an artboard of the document	`artboard` 必须是文档中某个画板的索引
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` 必须是 [x, y]

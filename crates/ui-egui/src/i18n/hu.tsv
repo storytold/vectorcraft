@@ -5314,6 +5314,14 @@ imageTrace	Outline	Körvonal
 @msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
 @msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	az `answers` csak olyan futtatáshoz való, ahol nincs kit megkérdezni: az alkalmazásban minden párbeszédpanelre a felhasználó válaszol
+@msg	`maxFuel` must be a whole number from 1 to {_1}	a `maxFuel` értéke 1 és {_1} közötti egész szám lehet
+@msg	`args{place}` is nested more than 64 levels deep	az `args{place}` 64 szintnél mélyebben van egymásba ágyazva
+@msg	`args` must be an object	az `args` értékének objektumnak kell lennie
+@msg	`args` is larger than 1 MiB	`args`: nagyobb 1 MiB-nál
+@msg	`path` is empty	a `path` üres
+@msg	`installed` takes a `path`, not a `source`	az `installed` `path` értéket vár, nem `source` értéket
+@msg	`path` must name a .js or .jsx file	a `path` értékének .js vagy .jsx fájlt kell megadnia
+@msg	give exactly one of `path` and `source`	pontosan egyet adj meg ezek közül: `path`, `source`
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Copied the link info	Csatolás adatai másolva

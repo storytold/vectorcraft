@@ -5732,6 +5732,14 @@ digits	Malayalam	Malaiàlam
 @msg	is a prompt's answer, whose `value` must be a string or null	és la resposta d'un prompt, i el seu `value` ha de ser una cadena o null
 @msg	must have `kind` alert, confirm or prompt	ha de tenir `kind` alert, confirm o prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` només és per a una execució sense ningú a qui preguntar: a l'aplicació, la persona respon cada quadre de diàleg
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` ha de ser un nombre enter d’1 a {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` està imbricat en més de 64 nivells
+@msg	`args` must be an object	`args` ha de ser un objecte
+@msg	`args` is larger than 1 MiB	`args` ocupa més d'1 MiB
+@msg	`path` is empty	`path` és buit
+@msg	`installed` takes a `path`, not a `source`	`installed` admet un `path`, no un `source`
+@msg	`path` must name a .js or .jsx file	`path` ha d’indicar un fitxer .js o .jsx
+@msg	give exactly one of `path` and `source`	indiqueu exactament un de `path` i `source`
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Copied the link info	S’ha copiat la informació de l’enllaç

@@ -5237,6 +5237,14 @@ theme	Appearance	외관
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel`은(는) 1에서 {_1} 사이의 정수여야 합니다
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}`이(가) 64단계보다 깊게 중첩되어 있습니다
+@msg	`args` must be an object	`args`은(는) 개체여야 합니다
+@msg	`args` is larger than 1 MiB	`args`이(가) 1 MiB보다 큽니다
+@msg	`path` is empty	`path`이(가) 비어 있습니다
+@msg	`installed` takes a `path`, not a `source`	`installed`에는 `source`가 아니라 `path`를 지정하세요
+@msg	`path` must name a .js or .jsx file	`path`은(는) .js 또는 .jsx 파일을 가리켜야 합니다
+@msg	give exactly one of `path` and `source`	`path`, `source` 중 정확히 하나를 지정하세요
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Copied the link info	링크 정보를 복사했습니다

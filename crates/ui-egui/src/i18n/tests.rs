@@ -3903,6 +3903,85 @@ fn script_answers_errors_are_translated() {
     }
 }
 
+/// `script.run`'s other refusals of its parameters (`maxFuel`, `args`, `path`, `source`,
+/// `installed`, `name`) and its errors for a script it cannot read are translated in every language
+/// that translates every message, with the code names, the place in `args`, the file suffixes, the
+/// limits and the file's path kept. The command's error stays in English.
+#[test]
+fn script_run_param_errors_are_translated() {
+    use serde_json::{Value, json};
+    use vectorcraft_engine::{EngineError, Session};
+    let refusals = [
+        "`maxFuel` must be a whole number from 1 to {_1}",
+        "`args{place}` is nested more than 64 levels deep",
+        "`args` must be an object",
+        "`args` is larger than 1 MiB",
+        "`path` is empty",
+        "`installed` takes a `path`, not a `source`",
+        "`path` must name a .js or .jsx file",
+        "give exactly one of `path` and `source`",
+    ];
+    let scanned = message_literals();
+    for template in refusals {
+        assert!(scanned.contains(template), "{template}");
+    }
+    let dir = vectorcraft_testkit::TempDir::new("i18n-script-run-params");
+    let not_text = dir.join("not-text.js");
+    std::fs::write(&not_text, [0x66, 0xff, 0xfe]).expect("write");
+    let folder = dir.join("folder.js");
+    std::fs::create_dir(&folder).expect("folder");
+    let (not_text, folder) = (not_text.to_string_lossy().into_owned(), folder.to_string_lossy().into_owned());
+    let mut deep = json!(1);
+    for _ in 0..70 {
+        deep = json!([deep]);
+    }
+    let fuel = vectorcraft_engine::script::MAX_FUEL;
+    // Each call, with the English message its parameter refusal gives, or `None` for an error that
+    // is not one.
+    let bad: Vec<(Value, Option<String>)> = vec![
+        (json!({"source": "1", "maxFuel": 0}), Some(format!("`maxFuel` must be a whole number from 1 to {fuel}"))),
+        (json!({"source": "1", "maxFuel": fuel + 1}), Some(format!("`maxFuel` must be a whole number from 1 to {fuel}"))),
+        (json!({"source": "1", "args": {"a": deep}}), Some(format!("`args.a{}` is nested more than 64 levels deep", "[0]".repeat(64)))),
+        (json!({"source": "1", "args": [1]}), Some("`args` must be an object".into())),
+        (json!({"source": "1", "args": {"x": "x".repeat(1 << 20)}}), Some("`args` is larger than 1 MiB".into())),
+        (json!({"path": ""}), Some("`path` is empty".into())),
+        (json!({"source": "1", "installed": true}), Some("`installed` takes a `path`, not a `source`".into())),
+        (json!({"path": "notes.txt"}), Some("`path` must name a .js or .jsx file".into())),
+        (json!({}), Some("give exactly one of `path` and `source`".into())),
+        (json!({"path": "a.js", "source": "1"}), Some("give exactly one of `path` and `source`".into())),
+        (json!({"path": 1}), Some("`path` must be a string".into())),
+        (json!({"source": "1", "name": false}), Some("`name` must be a string".into())),
+        (json!({"source": "1", "installed": "yes"}), Some("`installed` must be true or false".into())),
+        (json!({"path": "built.jsxbin"}), None),
+        (json!({"source": "x".repeat(vectorcraft_engine::script::MAX_SOURCE_BYTES + 1)}), None),
+        (json!({"path": "listed.js", "installed": true}), None),
+        (json!({"path": not_text}), None),
+        (json!({"path": folder}), None),
+    ];
+    let mut s = Session::new();
+    for (params, want) in bad {
+        let e = s.execute("script.run", &params).unwrap_err();
+        let line = e.to_string();
+        let inner = match (&e, &want) {
+            (EngineError::BadParams { cmd, msg }, Some(want)) if cmd == "script.run" && msg == want => want.clone(),
+            (EngineError::Other(msg), None) => msg.clone(),
+            _ => panic!("{params:.80}: {e}"),
+        };
+        // The code names and the place in `args`, the numbers, the file suffixes and the path.
+        let mut kept: Vec<&str> = inner.split('`').skip(1).step_by(2).collect();
+        kept.extend(inner.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()));
+        kept.extend([".jsx", ".js", not_text.as_str(), folder.as_str()].into_iter().filter(|k| inner.contains(*k)));
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            let shown = message(lang, &line);
+            let translated = message(lang, &inner);
+            assert_ne!(translated, inner, "{code}");
+            assert!(shown.contains(&translated) && !shown.contains("invalid parameters"), "{code}: {shown}");
+            assert!(kept.iter().all(|k| shown.contains(k)), "{code}: {shown}");
+        }
+    }
+}
+
 /// The errors of a command's parameter schema are translated in every language that translates
 /// every message, with the parameter's path and the refused value kept.
 #[test]

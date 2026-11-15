@@ -4414,6 +4414,14 @@ axis	Both	Båda
 @msg	is a prompt's answer, whose `value` must be a string or null	är svaret på en prompt, vars `value` måste vara en sträng eller null
 @msg	must have `kind` alert, confirm or prompt	måste ha `kind` alert, confirm eller prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` är bara för en körning utan någon att fråga: i appen svarar personen på varje dialogruta
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` måste vara ett heltal från 1 till {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` är kapslat mer än 64 nivåer djupt
+@msg	`args` must be an object	`args` måste vara ett objekt
+@msg	`args` is larger than 1 MiB	`args` är större än 1 MiB
+@msg	`path` is empty	`path` är tomt
+@msg	`installed` takes a `path`, not a `source`	`installed` tar en `path`, inte en `source`
+@msg	`path` must name a .js or .jsx file	`path` måste ange en .js- eller .jsx-fil
+@msg	give exactly one of `path` and `source`	ange exakt en av `path` och `source`
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
 @msg	Copied the link info	Kopierade länkinfo

@@ -5310,6 +5310,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	メインのスクリプトエンジンは実行ごとに新しく作られ、保持されないため、破棄できません
 @msg	there is no script engine named {name}	{name} という名前のスクリプトエンジンはありません
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` は尋ねる相手がいない実行専用です。アプリでは、各ダイアログに本人が回答します
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` には 1 から {_1} までの整数を指定してください
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` の入れ子が 64 階層を超えています
+@msg	`args` must be an object	`args` はオブジェクトである必要があります
+@msg	`args` is larger than 1 MiB	`args` が 1 MiB を超えています
+@msg	`path` is empty	`path` が空です
+@msg	`installed` takes a `path`, not a `source`	`installed` には `source` ではなく `path` を指定してください
+@msg	`path` must name a .js or .jsx file	`path` には .js または .jsx ファイルを指定してください
+@msg	give exactly one of `path` and `source`	`path` と `source` のうち 1 つだけを指定してください
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
 @msg	Copied the link info	リンク情報をコピーしました

@@ -7927,6 +7927,14 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tem mais de {MAX_ANSWERS} respostas
 @msg	`answers` is larger than 1 MiB	`answers` tem mais de 1 MiB
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` é só para uma execução sem ninguém a quem perguntar: no app, a pessoa responde a cada caixa de diálogo
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` deve ser um número inteiro de 1 a {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` está aninhado em mais de 64 níveis
+@msg	`args` must be an object	`args` deve ser um objeto
+@msg	`args` is larger than 1 MiB	`args` tem mais de 1 MiB
+@msg	`path` is empty	`path` está vazio
+@msg	`installed` takes a `path`, not a `source`	`installed` aceita um `path`, não um `source`
+@msg	`path` must name a .js or .jsx file	`path` deve indicar um arquivo .js ou .jsx
+@msg	give exactly one of `path` and `source`	informe exatamente um de `path` e `source`
 @msg	`answers` must be a list of answers	`answers` deve ser uma lista de respostas
 @msg	`artboard` must be the index of an artboard of the document	`artboard` deve ser o índice de uma prancheta do documento
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` deve ser [x, y]

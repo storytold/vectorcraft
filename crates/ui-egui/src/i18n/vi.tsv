@@ -4979,6 +4979,14 @@ theme	Appearance	Giao diện
 @msg	is a prompt's answer, whose `value` must be a string or null	là câu trả lời cho prompt, nên `value` phải là chuỗi hoặc null
 @msg	must have `kind` alert, confirm or prompt	phải có `kind` là alert, confirm hoặc prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` chỉ dành cho lần chạy không có ai để hỏi: trong ứng dụng, người dùng trả lời từng hộp thoại
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` phải là số nguyên từ 1 đến {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` lồng sâu hơn 64 cấp
+@msg	`args` must be an object	`args` phải là một đối tượng
+@msg	`args` is larger than 1 MiB	`args` lớn hơn 1 MiB
+@msg	`path` is empty	`path` trống
+@msg	`installed` takes a `path`, not a `source`	`installed` nhận `path`, không nhận `source`
+@msg	`path` must name a .js or .jsx file	`path` phải chỉ đến tệp .js hoặc .jsx
+@msg	give exactly one of `path` and `source`	hãy cung cấp đúng một trong `path` và `source`
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
 @msg	Copied the link info	Đã sao chép thông tin liên kết

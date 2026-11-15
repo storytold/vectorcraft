@@ -7806,6 +7806,14 @@ imageTrace	Outline	კონტური
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	მთავარი სკრიპტის ძრავა ყოველი გაშვებისთვის ახალია და არასოდეს ინახება, ამიტომ მისი მოცილება შეუძლებელია
 @msg	there is no script engine named {name}	სკრიპტის ძრავა სახელით {name} არ არსებობს
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` მხოლოდ ისეთი გაშვებისთვისაა, სადაც შესაკითხი არავინაა: აპში თითოეულ დიალოგს ადამიანი პასუხობს
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` უნდა იყოს მთელი რიცხვი 1-დან {_1}-მდე
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 64 დონეზე ღრმადაა ჩადგმული
+@msg	`args` must be an object	`args` უნდა იყოს ობიექტი
+@msg	`args` is larger than 1 MiB	`args` 1 MiB-ზე დიდია
+@msg	`path` is empty	`path` ცარიელია
+@msg	`installed` takes a `path`, not a `source`	`installed` იღებს `path`-ს და არა `source`-ს
+@msg	`path` must name a .js or .jsx file	`path` უნდა ასახელებდეს .js ან .jsx ფაილს
+@msg	give exactly one of `path` and `source`	მიუთითეთ ზუსტად ერთი: `path` ან `source`
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
 @msg	Copied the link info	კოპირებულია ბმულის ინფორმაცია
