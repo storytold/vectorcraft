@@ -2408,6 +2408,45 @@ fn an_edit_renders_only_its_part_of_the_canvas() {
     assert!(canvas(&app, delta).is_some_and(|(pos, _)| pos.is_none()), "a new view renders all of it");
 }
 
+/// A canvas more device pixels across than the largest texture side the display supports renders
+/// its art at fewer pixels a point, within that size, and draws it over the whole canvas. Pixel
+/// Preview's region of document pixels stays within it too.
+#[test]
+fn the_art_renders_within_the_largest_texture_side() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":400,"height":300})).unwrap();
+    app.canvas.worker_started = true; // every frame on this thread, however long it takes
+    let ctx = egui::Context::default();
+    ctx.set_pixels_per_point(2.0);
+    // The first frame sets the pixels a point, the second draws at them.
+    for _ in 0..2 {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            max_texture_side: Some(1024),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+    }
+    let rect = app.canvas_rect.unwrap();
+    assert!(rect.width() * ctx.pixels_per_point() > 1024.0, "the canvas is {rect:?} at {} pixels a point", ctx.pixels_per_point());
+    let size = app.canvas.texture.as_ref().map(|t| t.size()).unwrap();
+    assert_eq!(size[0].max(size[1]), 1024, "the frame is {size:?} pixels");
+    let k = app.canvas.key.clone().unwrap();
+    assert!(
+        (k.w as f32 / k.ppp - rect.width()).abs() < 1.0 && (k.h as f32 / k.ppp - rect.height()).abs() < 1.0,
+        "the frame covers the canvas {rect:?}: {} × {} pixels at {} a point",
+        k.w,
+        k.h,
+        k.ppp
+    );
+
+    let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 500.0)), zoom: 0.5, center: Point::new(0.0, 0.0), rot: 0.0 };
+    let [x0, _, x1, _] = pixel_region(&xf, 4096).expect("a region 2,000 document pixels wide");
+    assert_eq!(x1 - x0, 2000);
+    assert_eq!(pixel_region(&xf, 1024), None, "more than the display's largest texture");
+}
+
 /// A placed document's bitmap made in the background renders the canvas again only where the
 /// objects showing its file are: both copies of the file are in the part rendered again.
 #[test]
@@ -3149,7 +3188,8 @@ fn a_drag_back_to_its_start_renders_again_after_it() {
     assert!(!app.canvas.moved);
 }
 
-/// Cache metadata, worker requests and view transforms use the renderer's bounded raster size.
+/// Cache metadata, worker requests and view transforms use the renderer's bounded raster size,
+/// on a display that reports a larger texture side than that.
 /// Keep the worker controlled so huge virtual viewports never allocate huge test images.
 #[test]
 fn canvas_render_jobs_use_renderer_limited_dimensions() {
@@ -3160,7 +3200,11 @@ fn canvas_render_jobs_use_renderer_limited_dimensions() {
     app.canvas.worker_started = true;
     app.ui.view.rulers = false;
     let frame = |app: &mut VectorcraftApp, size, ppp| {
-        let mut input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(pos2(0.0, 0.0), size)), ..Default::default() };
+        let mut input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(pos2(0.0, 0.0), size)),
+            max_texture_side: Some(1 << 20),
+            ..Default::default()
+        };
         input.viewports.get_mut(&egui::ViewportId::ROOT).unwrap().native_pixels_per_point = Some(ppp);
         let mut output = ctx.run_ui(input, |ui| show(app, ui));
         output.textures_delta.clear();
@@ -4739,6 +4783,67 @@ fn scrolls_and_pans_move_the_view_by_whole_device_pixels() {
         assert!((by.x - want.x).abs() <= 1.0 && (by.y - want.y).abs() <= 1.0, "drag {k}: moved {by:?} device pixels for {want:?}");
     }
     frame(&mut app, vec![primary(p0 + vec2(-5.55, 22.71), false)]);
+}
+
+/// On a canvas whose frame renders at fewer pixels a point than the display's ([`frame_ppp`]),
+/// the wheel and the Hand tool move the view by whole pixels of that frame.
+#[test]
+fn scrolls_and_pans_move_a_lowered_frame_by_whole_pixels() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true; // every frame on this thread
+    let ctx = egui::Context::default();
+    ctx.set_pixels_per_point(2.0);
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 0.016;
+        let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), max_texture_side: Some(1024), events, ..Default::default() };
+        ctx.run_ui(input, |ui| show(app, ui)).textures_delta.clear();
+    };
+    frame(&mut app, vec![]);
+    app.view_mut().unwrap().center = Point::new(200.3, 150.7);
+    frame(&mut app, vec![]);
+    let ppp = app.canvas.key.as_ref().map(|k| k.ppp).unwrap();
+    assert!(ppp < 2.0, "the frame renders at {ppp} pixels a point");
+    // The pan of the canvas's render view, in pixels of its frame.
+    let pan = |app: &VectorcraftApp| {
+        let v = app.view().unwrap();
+        (Affine::scale(v.zoom * f64::from(ppp)) * Affine::translate(-v.center.to_vec2())).translation()
+    };
+    let whole = |by: vectorcraft_geom::Vec2| (by - vectorcraft_geom::Vec2::new(by.x.round(), by.y.round())).hypot() < 1e-6;
+    let wheel = |d: egui::Vec2| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: d,
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let rect = app.canvas_rect.unwrap();
+    frame(&mut app, vec![egui::Event::PointerMoved(rect.center())]);
+    let start = pan(&app);
+    for (k, d) in [vec2(0.37, 11.13), vec2(-12.71, 0.0), vec2(21.9, -3.83)].into_iter().enumerate() {
+        frame(&mut app, vec![wheel(d)]);
+        let by = pan(&app) - start;
+        assert!(whole(by), "scroll {k}: the view moved {by:?} pixels of the frame");
+    }
+    for k in 0..60 {
+        frame(&mut app, vec![]);
+        let by = pan(&app) - start;
+        assert!(whole(by), "frame {k} after the scrolls: the view moved {by:?} pixels of the frame");
+    }
+    assert!((pan(&app) - start).hypot() > 10.0, "the wheel moved the view");
+    app.select_tool("hand");
+    let p0 = rect.center() + vec2(0.3, 0.1);
+    frame(&mut app, vec![egui::Event::PointerMoved(p0)]);
+    let start = pan(&app);
+    frame(&mut app, vec![primary(p0, true)]);
+    for (k, d) in [vec2(13.37, -7.61), vec2(40.19, 3.33)].into_iter().enumerate() {
+        frame(&mut app, vec![egui::Event::PointerMoved(p0 + d)]);
+        let by = pan(&app) - start;
+        assert!(whole(by), "drag {k}: the view moved {by:?} pixels of the frame");
+    }
+    frame(&mut app, vec![primary(p0 + vec2(40.19, 3.33), false)]);
 }
 
 /// The part of a device pixel a scroll leaves is added to the next scroll of the same view, and
