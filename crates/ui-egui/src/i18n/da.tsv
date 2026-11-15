@@ -5390,6 +5390,7 @@ imageTrace	Outline	Kontur
 @msg	plug-in failed: {0}	plug-in fejlede: {0}
 @msg	plug-in manifest: {0}	plug-in-manifest: {0}
 @msg	plug-in output: {0}	plug-in-output: {0}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	plug-in parameters: {0}	plug-in-parametre: {0}
 @msg	plug-in trapped: {0}	plug-in'et blev fanget: {0}
 @msg	print settings are not an object	printindstillingerne er ikke et objekt
