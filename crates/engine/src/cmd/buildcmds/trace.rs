@@ -22,20 +22,21 @@ fn is_trace_group(n: &Node) -> bool {
         && n.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
 }
 
-/// The name of the group that holds an Abutting trace's seam fills (see [`tr::TraceResult::seams`]).
+/// The name of the clip group that holds an Abutting trace's seam fills (see [`tr::seam_fills`]).
 const SEAM_FILLS_NAME: &str = "Seam Fills";
 
-/// Whether `n` can be a trace's seam fills group: a group named as one, or a group of stroked paths
-/// without fills, so that it is still found after it is renamed or its strokes are edited. (Auto
-/// Grouping groups hold filled paths.)
+/// Whether `n` can be a trace's seam fills group: a clip group named as one, or a clip group whose
+/// members after the clipping path are stroked paths without fills, so that it is still found
+/// after it is renamed or its strokes are edited. (Auto Grouping groups are not clip groups.)
 fn is_seam_fills(n: &Node) -> bool {
     let stroke_only = |m: &Arc<Node>| {
         matches!(m.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
             && m.appearance.fill_paint() == Paint::None
             && m.appearance.stroke_paint() != Paint::None
     };
-    matches!(n.kind, NodeKind::Group { clip: false, .. })
-        && (n.name.as_deref() == Some(SEAM_FILLS_NAME) || n.children().is_some_and(|c| !c.is_empty() && c.iter().all(stroke_only)))
+    let NodeKind::Group { clip: true, children } = &n.kind else { return false };
+    n.name.as_deref() == Some(SEAM_FILLS_NAME)
+        || children.split_first().is_some_and(|(_, members)| !members.is_empty() && members.iter().all(stroke_only))
 }
 
 const LIVE_PATHFINDER_BY_COLOR: &str = "byColor can't regroup a trace with a live Pathfinder effect: expand without byColor";
@@ -410,7 +411,8 @@ fn by_color_param(cmd: &str, p: &Value) -> Result<bool> {
 /// starts another group of that paint, which keeps the stacking order of those items. Items
 /// farther apart can still share antialiased pixels at small view or raster-export scales, so
 /// their edge pixels may change. The seam fills' group, when it is the lowest item, stays as it is,
-/// under every other group. Any other group among `items` (Auto Grouping) is refused.
+/// under every other group; above another item it is refused. Any other group among `items` (Auto
+/// Grouping) is refused.
 fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Vec<Arc<Node>>> {
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Bound::{Excluded, Unbounded};
@@ -464,6 +466,9 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
     let mut large: BTreeMap<usize, Vec<Rect>> = BTreeMap::new();
     let mut all_boxes: BTreeMap<usize, Vec<Rect>> = BTreeMap::new();
     for (item, bounds) in items {
+        if is_seam_fills(&item) {
+            return Err(bad(cmd, "byColor needs the seam fills' group under every path: move it to the bottom or delete it"));
+        }
         if matches!(item.kind, NodeKind::Group { .. }) {
             return Err(bad(cmd, "byColor can't split Auto Grouping groups: trace without Auto Grouping"));
         }
@@ -630,12 +635,12 @@ fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
 }
 
 /// What a trace made of an image: the size in pixels it was decoded at, the paths, and their seam
-/// fills ([`seams_within`]).
+/// fills, if any ([`seams_within`]).
 pub struct Traced {
     inputs: TraceInputs,
     raster: (u32, u32),
     res: tr::TraceResult,
-    seams: Vec<tr::TracedPath>,
+    seams: Option<tr::SeamFills>,
 }
 
 impl Traced {
@@ -659,18 +664,23 @@ fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, steps: &(dyn Fn(u64
         tr::TraceError::Cancelled => EngineError::Cancelled,
         e => EngineError::Other(e.to_string()),
     })?;
-    let seams = seams_within(&res, params, MAX_TRACE_ANCHORS);
-    Ok(Traced { inputs: inputs.clone(), raster: (raster.width, raster.height), res, seams })
+    if !steps(0, 0) {
+        return Err(EngineError::Cancelled);
+    }
+    let size = (raster.width, raster.height);
+    let seams = seams_within(&res, params, size, MAX_TRACE_ANCHORS);
+    Ok(Traced { inputs: inputs.clone(), raster: size, res, seams })
 }
 
-/// The seam fills of `res`, traced with `params` ([`tr::seam_fills`]), while the paths and the seam
-/// fills together stay within `max` anchors: the seam fills have at most as many anchors as the
-/// paths, so a trace whose paths have more than half of `max` gets none.
-fn seams_within(res: &tr::TraceResult, params: &tr::TraceParams, max: usize) -> Vec<tr::TracedPath> {
-    if res.anchor_count() > max / 2 {
-        return vec![];
+/// The seam fills of `res`, traced with `params` from a `size` raster ([`tr::seam_fills`]), while
+/// the paths, the seam fills' strokes and their clip together stay within `max` anchors: the
+/// strokes have at most as many anchors as the paths and the clip has four, so a trace whose paths
+/// have more than half of `max` less two gets none.
+fn seams_within(res: &tr::TraceResult, params: &tr::TraceParams, size: (u32, u32), max: usize) -> Option<tr::SeamFills> {
+    if res.anchor_count().saturating_mul(2).saturating_add(4) > max {
+        return None;
     }
-    tr::seam_fills(&res.paths, params)
+    tr::seam_fills(&res.paths, params, size)
 }
 
 /// An Image Trace made away from its command, off the UI thread (#3098). [`TraceRun::prepare`]
@@ -801,9 +811,11 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
             // Gradients: a path the tracer found to be a linear gradient is filled with it.
             tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf))
         };
-        // Abutting: the seam fills, in a group of their own under every path.
-        let seams: Vec<Arc<Node>> = seam_fills
+        // Abutting: the seam fills, in a clip group of their own under every path, clipped to the
+        // image's box.
+        let strokes: Vec<Arc<Node>> = seam_fills
             .iter()
+            .flat_map(|f| &f.strokes)
             .filter_map(|tp| {
                 let width = tp.stroke?;
                 let mut n = shape_node(d, tp.path.transformed(xf), None);
@@ -819,8 +831,13 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
                 Some(Arc::new(n))
             })
             .collect();
-        if !seams.is_empty() {
-            let mut g = Node::group(d.alloc_id(), seams);
+        if let Some(f) = seam_fills.as_ref().filter(|_| !strokes.is_empty()) {
+            let mut clip = shape_node(d, f.clip.transformed(xf), None);
+            if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+                *clipping = true;
+            }
+            let members = std::iter::once(Arc::new(clip)).chain(strokes).collect();
+            let mut g = Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true });
             g.name = Some(SEAM_FILLS_NAME.into());
             children.push(Arc::new(g));
         }
@@ -1183,13 +1200,14 @@ mod trace_limit_tests {
         });
         let params = tr::TraceParams { mode: tr::Mode::Color, colors: 2, method: tr::Method::Abutting, ..tr::TraceParams::default() };
         let res = tr::trace(&img, &params);
-        let all = tr::seam_fills(&res.paths, &params);
-        assert!(!all.is_empty(), "{res:?}");
+        let all = tr::seam_fills(&res.paths, &params, (24, 16));
+        assert!(all.is_some(), "{res:?}");
         let anchors = res.anchor_count();
-        // Twice the paths' anchors leaves room for any seam fills.
-        assert_eq!(seams_within(&res, &params, 2 * anchors), all);
+        assert!(anchors + all.as_ref().map_or(0, tr::SeamFills::anchor_count) <= 2 * anchors + 4);
+        // Twice the paths' anchors and the clip's four leave room for any seam fills.
+        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + 4), all);
         // One anchor short of that: none.
-        assert_eq!(seams_within(&res, &params, 2 * anchors - 1), []);
+        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + 3), None);
     }
 
     #[test]

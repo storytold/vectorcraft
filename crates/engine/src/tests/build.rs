@@ -5440,9 +5440,10 @@ fn add_image(s: &mut Session, r: &vectorcraft_trace::Raster, xf: Affine) -> Node
     .unwrap()
 }
 
-/// The traced paths of an Image Trace object: its children but the image and the seam fills.
+/// The traced paths of an Image Trace object: its children but the image and the seam fills'
+/// clip group (a trace makes no other clip group).
 fn traced_paths(n: &Node) -> Vec<Arc<Node>> {
-    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_)) && c.name.as_deref() != Some("Seam Fills")).cloned().collect()
+    n.children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_) | NodeKind::Group { clip: true, .. })).cloned().collect()
 }
 
 #[test]
@@ -6092,7 +6093,12 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     assert!(matches!(kids[0].kind, NodeKind::Image(_)));
     let group = seams(&n).unwrap();
     assert!(Arc::ptr_eq(&group, &kids[1]), "the seam fills come under the paths");
-    let strokes = group.children().unwrap();
+    assert!(matches!(group.kind, NodeKind::Group { clip: true, .. }), "{group:?}");
+    // The two paths cover the image, so the strokes are clipped to its box.
+    let (clip, strokes) = group.children().unwrap().split_first().unwrap();
+    assert!(matches!(clip.kind, NodeKind::Path { clipping: true, .. }), "{clip:?}");
+    let cb = outline(clip).0.bounds().unwrap();
+    assert!([cb.x0, cb.y0, cb.x1 - 80.0, cb.y1 - 40.0].iter().all(|v| v.abs() < 1e-9), "{cb:?}");
     assert_eq!(strokes.len(), 1);
     assert_eq!(strokes[0].appearance.fill_paint(), Paint::None);
     let AppearanceItem::Stroke(layer) = &strokes[0].appearance.items[0] else { panic!("{:?}", strokes[0].appearance) };
@@ -6110,6 +6116,14 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     assert_eq!(names.len(), 3, "{names:?}");
     assert_eq!(names[0], "Edges", "{names:?}");
     assert_eq!(n.children().unwrap()[0].id, group.id);
+    // Above a path, the seam fills' group is refused by name, not as an Auto Grouping group.
+    let (mut s, _, r) = made("abutting", "imageTrace.make", false);
+    let g = NodeId(r["id"].as_u64().unwrap());
+    let kids = node(&s, g).children().unwrap().clone();
+    s.execute("object.arrange.bringToFront", &json!({"ids": [kids[1].id.0]})).unwrap();
+    assert_eq!(node(&s, g).children().unwrap().last().map(|c| c.id), Some(kids[1].id));
+    let e = s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap_err().to_string();
+    assert!(e.contains("seam fills") && !e.contains("Auto Grouping"), "{e}");
     let (mut s, img, _) = made("abutting", "imageTrace.make", false);
     assert_eq!(ids(&s.execute("imageTrace.release", &json!({})).unwrap()), vec![img]);
     // Make and Expand by color too.
@@ -6124,8 +6138,28 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     add_image(&mut s, &art, Affine::scale_non_uniform(3.0, 0.5));
     let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
     let group = seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).unwrap();
-    let AppearanceItem::Stroke(layer) = &group.children().unwrap()[0].appearance.items[0] else { panic!("{group:?}") };
+    let AppearanceItem::Stroke(layer) = &group.children().unwrap()[1].appearance.items[0] else { panic!("{group:?}") };
     assert!((layer.width - 4.5).abs() < 1e-9, "{}", layer.width);
+    // White left out: the strokes are still clipped to the image's box.
+    let band = vectorcraft_trace::Raster::from_fn(24, 16, |x, y| match ((4..12).contains(&y), x < 12) {
+        (false, _) => [255; 4],
+        (true, true) => [200, 30, 30, 255],
+        (true, false) => [30, 30, 200, 255],
+    });
+    let mut s = session();
+    add_image(&mut s, &band, Affine::IDENTITY);
+    let r = s
+        .execute(
+            "imageTrace.make",
+            &json!({"params": {"mode": "color", "palette": "limited", "colors": 3, "method": "abutting", "ignoreWhite": true}}),
+        )
+        .unwrap();
+    assert_eq!(r["paths"], 2, "{r}");
+    let group = seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).unwrap();
+    let clip = &group.children().unwrap()[0];
+    assert!(matches!(clip.kind, NodeKind::Path { .. }), "{clip:?}");
+    let cb = outline(clip).0.bounds().unwrap();
+    assert!([cb.x0, cb.y0, cb.x1 - 24.0, cb.y1 - 16.0].iter().all(|v| v.abs() < 1e-9), "{cb:?}");
 }
 
 /// Expand by color: each color's paths in a group of their own, named by the color, the groups
@@ -7186,6 +7220,31 @@ fn image_trace_views_draw_on_screen_only_and_expand_to_the_result() {
         assert_eq!(*expanded.get_or_insert_with(|| shapes.clone()), shapes, "{view:?}: expanded");
         s.execute("edit.undo", &json!({})).unwrap();
     }
+}
+
+/// Outline views draw the traced paths' outlines and leave out an Abutting trace's seam fills
+/// (their clipping box and strokes).
+#[test]
+fn image_trace_outline_view_leaves_out_the_seam_fills() {
+    let mut s = session();
+    // Red beside blue in the middle of a transparent 60 × 40 image, placed at 50, 50 and scaled 2×.
+    let art = vectorcraft_trace::Raster::from_fn(60, 40, |x, y| match ((10..50).contains(&x) && (10..30).contains(&y), x < 30) {
+        (false, _) => [0, 0, 0, 0],
+        (true, true) => [200, 30, 30, 255],
+        (true, false) => [30, 30, 200, 255],
+    });
+    add_image(&mut s, &art, Affine::translate((50.0, 50.0)) * Affine::scale(2.0));
+    let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
+    let g = NodeId(r["id"].as_u64().unwrap());
+    assert!(node(&s, g).children().unwrap().iter().any(|c| matches!(c.kind, NodeKind::Group { clip: true, .. })), "seam fills");
+    s.execute("imageTrace.setView", &json!({"id": g.0, "view": "outlines"})).unwrap();
+    let screen = render_doc(&s, true);
+    // The image's top edge (y = 50), away from the art: nothing drawn.
+    for x in [60, 110, 160] {
+        assert!(screen.pixel(x, 50)[0] > 245 && screen.pixel(x, 51)[0] > 245, "x = {x}: {:?}", screen.pixel(x, 50));
+    }
+    // The art's left edge (x = 70) is outlined.
+    assert!((68..=72).any(|x| screen.pixel(x, 90)[0] < 128));
 }
 
 /// #569: merging the regions of a rosette of unfilled ellipses (each off the centre, petals
