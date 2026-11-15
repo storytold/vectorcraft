@@ -26,7 +26,8 @@ pub(in crate::ai_editing) const PANEL_EMPTY: &str =
 pub(in crate::ai_editing) const WARPED_IMAGES: &str = "images with a Warp after the first 256 envelopes and images with a Warp are written as their drawn look, without their Warp, in the editing data for other apps";
 pub(in crate::ai_editing) const STYLE_LINKS: &str = "links to graphic styles are left out of the editing data for other apps on type, images, symbol instances, knockout shapes and other objects that aren't written with their graphic style";
 
-/// How many objects of `doc`'s layers, opacity masks and symbols are linked to a graphic style.
+/// How many objects of `doc`'s layers, opacity masks, symbols and pattern tiles are linked to a
+/// graphic style.
 pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
     fn count(n: &Node) -> usize {
         // Ruler guides are not written as objects.
@@ -37,7 +38,9 @@ pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
         let mask = n.extras().mask.as_ref().map_or(0, |m| count(&m.art));
         own + mask + n.children().map_or(0, |c| c.iter().map(|m| count(m)).sum())
     }
-    doc.layers.iter().map(|l| count(l)).sum::<usize>() + doc.symbols.iter().map(|s| count(&s.art)).sum::<usize>()
+    doc.layers.iter().map(|l| count(l)).sum::<usize>()
+        + doc.symbols.iter().map(|s| count(&s.art)).sum::<usize>()
+        + doc.patterns.iter().flat_map(|p| p.art.iter()).map(|a| count(a)).sum::<usize>()
 }
 
 /// The objects of `doc`'s layers and of their opacity masks' art that may be written with an art
@@ -48,10 +51,30 @@ pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
 /// Knockout Shape (the reader takes an object's transparency
 /// from its look, which doesn't carry it). A group's members are paths, compound paths or such
 /// groups, none with effects or anything baking changes.
-pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, Arc<Node>> {
-    fn walk(nodes: &[Arc<Node>], out: &mut HashMap<NodeId, Arc<Node>>) {
+pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> StyledMap {
+    styled_in(&doc.layers, true)
+}
+
+/// The objects that may be written with an art style, by id, as they are before baking.
+pub(in crate::ai_editing) type StyledMap = HashMap<NodeId, Arc<Node>>;
+
+/// The objects of the opacity masks' art in each of `doc`'s symbols' art, by symbol name, and in
+/// each of its patterns' tile art, by pattern name, that may be written with an art style, as
+/// [`styled_objects`] finds them on the layers. A definition's own objects outside its masks' art
+/// are not among them, and definitions without such objects are left out.
+pub(in crate::ai_editing) fn styled_definitions(doc: &Document) -> (HashMap<String, StyledMap>, HashMap<String, StyledMap>) {
+    let symbols = doc.symbols.iter().map(|s| (s.name.clone(), styled_in(std::slice::from_ref(&s.art), false)));
+    let patterns = doc.patterns.iter().map(|p| (p.name.clone(), styled_in(&p.art, false)));
+    let kept = |(_, m): &(String, StyledMap)| !m.is_empty();
+    (symbols.filter(kept).collect(), patterns.filter(kept).collect())
+}
+
+/// The objects of `nodes` that may be written with an art style ([`styled_objects`]): with `own`,
+/// `nodes` and their members as well as their opacity masks' art, else their masks' art only.
+fn styled_in(nodes: &[Arc<Node>], own: bool) -> StyledMap {
+    fn walk(nodes: &[Arc<Node>], own: bool, out: &mut StyledMap) {
         for n in nodes {
-            if candidate(n) {
+            if own && candidate(n) {
                 out.insert(n.id, n.clone());
             }
             if let Some(m) = n.extras().mask.as_ref() {
@@ -59,7 +82,7 @@ pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, A
                 if !art.visible {
                     Arc::make_mut(&mut art).visible = true;
                 }
-                walk(std::slice::from_ref(&art), out);
+                walk(std::slice::from_ref(&art), true, out);
             }
             // A group's members are written with a style of their own only when the group is written
             // without one. Baking a container with effects of its own changes its members, which
@@ -67,12 +90,12 @@ pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, A
             if let NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } = &n.kind
                 && !bakes_members(n)
             {
-                walk(children, out);
+                walk(children, own, out);
             }
         }
     }
     let mut out = HashMap::new();
-    walk(&doc.layers, &mut out);
+    walk(nodes, own, &mut out);
     out
 }
 
@@ -613,7 +636,8 @@ impl Writer<'_> {
         let doc = self.doc;
         // A new document's styles are what the reader gives a file without a style list; they are
         // still written when an object is linked to one of them, so that it keeps its link.
-        let linked = self.styled.values().any(|n| n.extras().graphic_style.is_some());
+        let definitions = self.symbol_styled.values().chain(self.pattern_styled.values()).flat_map(HashMap::values);
+        let linked = self.styled.values().chain(definitions).any(|n| n.extras().graphic_style.is_some());
         if !linked && doc.graphic_styles == Document::new(1.0, 1.0).graphic_styles {
             return;
         }

@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, Node, ParaDirection, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, LineCap, LineJoin, Node, ParaDirection, TextKind, TextObject, TextRun};
 use vectorcraft_text::TextLayout;
 
 /// One glyph's placement: its baseline origin, advance direction, size and horizontal scale.
@@ -70,8 +70,19 @@ pub(crate) struct Upright {
     pub top: Point,
 }
 
+/// A stroke on type: its paint and width, and the cap, join and miter limit the file strokes the
+/// glyphs with (#7741).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TypeStroke {
+    pub paint: Paint,
+    pub width: f64,
+    pub cap: LineCap,
+    pub join: LineJoin,
+    pub miter_limit: f64,
+}
+
 /// What a run of type is drawn with: its font (cache key, family and style), size, horizontal
-/// scale, fill and stroke (paint and width).
+/// scale, fill and stroke.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Look {
     pub font: u128,
@@ -82,7 +93,7 @@ pub(crate) struct Look {
     pub size: f64,
     pub h_scale: f64,
     pub fill: Option<Paint>,
-    pub stroke: Option<(Paint, f64)>,
+    pub stroke: Option<TypeStroke>,
     /// The fill, the stroke overprints.
     pub overprint_fill: bool,
     pub overprint_stroke: bool,
@@ -102,7 +113,11 @@ impl Look {
     }
 
     fn style(&self) -> CharStyle {
-        let (stroke, stroke_width) = self.stroke.clone().unwrap_or((Paint::None, 0.0));
+        let default = CharStyle::default();
+        let (stroke, stroke_width, stroke_cap, stroke_join, stroke_miter_limit) = match self.stroke.clone() {
+            Some(s) => (s.paint, s.width, s.cap, s.join, s.miter_limit),
+            None => (Paint::None, 0.0, default.stroke_cap, default.stroke_join, default.stroke_miter_limit),
+        };
         CharStyle {
             font_family: self.family.clone(),
             font_style: self.style.clone(),
@@ -112,9 +127,12 @@ impl Look {
             fill: self.fill.clone().unwrap_or(Paint::None),
             stroke,
             stroke_width,
+            stroke_cap,
+            stroke_join,
+            stroke_miter_limit,
             overprint_fill: self.overprint_fill,
             overprint_stroke: self.overprint_stroke,
-            ..CharStyle::default()
+            ..default
         }
     }
 }
@@ -187,6 +205,9 @@ pub(crate) struct TextLine {
     /// Runs of glyphs drawn alike: their look, how far the file raised them off the line's
     /// baseline (points, up; text rise, `Ts`), their text.
     runs: Vec<(Look, f64, String)>,
+    /// Where the last glyph's text starts in the last run (bytes): a stroke over that glyph
+    /// alone restyles only its text ([`stroke_last`](Self::stroke_last)).
+    last_start: usize,
     /// The bytes of text the horizontal glyphs added to `runs` so far (counted as they come: a
     /// sum over the runs for each glyph is quadratic when every glyph is a run).
     text_bytes: usize,
@@ -257,6 +278,7 @@ impl TextLine {
             last_size: at.size,
             baseline: vec![],
             runs: vec![],
+            last_start: 0,
             text_bytes: 0,
             slots: vec![],
             authored: vec![],
@@ -303,6 +325,7 @@ impl TextLine {
         let size = self.at.size.max(at.size);
         let Some((last, _, run)) = self.runs.last_mut() else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
+            self.last_start = 0;
             self.record_actual_fill(look, at, content);
             self.authored.extend(text.chars().map(|_| content.authored()));
             (self.upright, self.next, self.last) = (Some(upright), at.origin + down * at.size, at.origin);
@@ -334,9 +357,11 @@ impl TextLine {
             && (matches!(content, TextContent::Pen)
                 || (!matches!(content, TextContent::Actual(_)) && !self.authored.last().copied().unwrap_or(false)))
         {
+            self.last_start = run.len();
             run.push_str(text);
         } else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
+            self.last_start = 0;
         }
         self.record_actual_fill(look, at, content);
         self.authored.extend(text.chars().map(|_| content.authored()));
@@ -425,12 +450,15 @@ impl TextLine {
                 && (*last_shift - shift).abs() < 1e-3
                 && (pen || (!matches!(content, TextContent::Actual(_)) && !self.authored.last().copied().unwrap_or(false)))
             {
+                self.last_start = run.len();
                 run.push_str(text);
             } else {
                 self.runs.push((look.clone(), shift, text.to_string()));
+                self.last_start = 0;
             }
         } else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
+            self.last_start = 0;
         }
         self.record_actual_fill(look, at, content);
         self.text_bytes = self.text_bytes.saturating_add(text.len());
@@ -463,7 +491,7 @@ impl TextLine {
     /// The reader fills a whole Tj/TJ before replaying its glyphs as strokes. A replay
     /// must neither consume the replacement nor rewind the pen. Only the first glyph's
     /// style belongs to the replacement; suppressed glyphs have no text to restyle.
-    pub fn stroke_actual(&mut self, font: u128, at: Placement, stroke: (Paint, f64), overprint: bool) -> bool {
+    pub fn stroke_actual(&mut self, font: u128, at: Placement, stroke: TypeStroke, overprint: bool) -> bool {
         let key = (font, at.origin.x.to_bits(), at.origin.y.to_bits());
         let Some(run) = self.actual_fills.remove(&key) else { return false };
         if let Some((look, ..)) = run.and_then(|i| self.runs.get_mut(i)) {
@@ -501,13 +529,34 @@ impl TextLine {
         Some(bp)
     }
 
-    /// A stroke (`stroke`: paint and width) over the glyph just drawn at `at` in `font` (fill
-    /// and stroke rendering), which `overprint`s or not: the run is stroked. `false`: it isn't
-    /// that glyph.
-    pub fn stroke_last(&mut self, font: u128, at: Placement, stroke: (Paint, f64), overprint: bool) -> bool {
-        let Some((look, ..)) = self.runs.last_mut().filter(|(l, ..)| l.font == font && (at.origin - self.last).hypot() < self.at.size * 1e-3) else {
+    /// A stroke (`stroke`: paint, width, cap, join and miter limit) over the glyph just drawn at
+    /// `at` in `font` (fill and stroke rendering), which `overprint`s or not: that glyph is
+    /// stroked. `false`: it isn't that glyph.
+    ///
+    /// A filled glyph joins a run of the same fill whatever its stroke ([`Look::takes`]), so the
+    /// run can hold glyphs before it that are stroked otherwise or not at all: then the glyph's
+    /// text becomes a run of its own with this stroke, and the glyphs before it keep theirs
+    /// (#7741). The line's text is the same either way, so the characters' slots, gaps and
+    /// authored flags, kept along the whole line, still line up.
+    pub fn stroke_last(&mut self, font: u128, at: Placement, stroke: TypeStroke, overprint: bool) -> bool {
+        let start = self.last_start;
+        let Some((look, shift, text)) =
+            self.runs.last_mut().filter(|(l, ..)| l.font == font && (at.origin - self.last).hypot() < self.at.size * 1e-3)
+        else {
             return false;
         };
+        let same = look.stroke.as_ref() == Some(&stroke) && look.overprint_stroke == overprint;
+        // Only the last glyph's text in the run (`start` within it, on a character boundary):
+        // split it off. A run of that glyph alone is stroked whole, as before.
+        if !same && start > 0 && start < text.len() && text.is_char_boundary(start) {
+            let tail = text.split_off(start);
+            let mut own = look.clone();
+            (own.stroke, own.overprint_stroke) = (Some(stroke), overprint);
+            let shift = *shift;
+            self.runs.push((own, shift, tail));
+            self.last_start = 0;
+            return true;
+        }
         (look.stroke, look.overprint_stroke) = (Some(stroke), overprint);
         true
     }
