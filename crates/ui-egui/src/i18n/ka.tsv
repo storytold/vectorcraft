@@ -1863,6 +1863,7 @@ digits	Malayalam	მალაიალამური
 	Show Swatch Bounds	ფერის ნიმუშის საზღვრების ჩვენება
 	Show Tile Edge	ფილის კიდის ჩვენება
 	Size Tile to Art	ფილის ზომის ნახატზე მორგება
+	Move Tile with Art	ფილის ნახატთან ერთად გადატანა
 	Tile Type:	ფილის ტიპი:
 	Top in Front	ზედა წინ
 	V Spacing:	ვერტ. დაშორება:
@@ -1905,6 +1906,9 @@ digits	Malayalam	მალაიალამური
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
 	Working RGB (don't tag)	სამუშაო RGB (ტეგის გარეშე)
+	Don't Color Manage This Document	ამ დოკუმენტის ფერების მართვის გარეშე
+	Working RGB: {name}	სამუშაო RGB: {name}
+	Working CMYK: {name}	სამუშაო CMYK: {name}
 	{name} (spot)	{name} (სპოტ)
 	Add to Profiles…	პროფილებში დამატება…
 	Align Stroke to Center	კონტურის ცენტრზე სწორება
@@ -2492,6 +2496,8 @@ digits	Malayalam	მალაიალამური
 	Keep a link to an image file instead of only embedding it	გამოსახულების ფაილის ბმულის შენარჩუნება მხოლოდ ჩაშენების ნაცვლად
 	Place onto a new locked, dimmed template layer below the current layer	ახალ ჩაკეტილ, ჩამქრალ შაბლონის შრეზე განთავსება მიმდინარე შრის ქვემოთ
 	Swap the selected object for the file, keeping its place and transform	მონიშნული ობიექტის ფაილით ჩანაცვლება მისი ადგილისა და გარდაქმნის შენარჩუნებით
+	Show Import Options	იმპორტის პარამეტრების ჩვენება
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	განთავსებამდე თითოეული PDF, DXF ან ტექსტური ფაილის იმპორტის პარამეტრების მოთხოვნა; გამორთულისას ბოლოს არჩეული პარამეტრები გამოიყენება
 	On: one locked object showing the document, updated when it changes.	ჩართული: ერთი ჩაკეტილი ობიექტი, რომელიც დოკუმენტს აჩვენებს და მისი ცვლილებისას ახლდება.
 	Off: an editable copy of its art, embedded in this document.	გამორთული: მისი ნახატის რედაქტირებადი ასლი, ჩაშენებული ამ დოკუმენტში.
 	Images: link to the file instead of only embedding it.	გამოსახულებები: ფაილის ბმული მხოლოდ ჩაშენების ნაცვლად.
@@ -4864,6 +4870,9 @@ font-technology	Variable	ცვლადი
 @msg	automation filesystem access is not granted: write authority is absent: {path}	ავტომატიზაციას ფაილურ სისტემაზე წვდომა არ აქვს: ჩაწერის უფლება არ არის: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირეული საქაღალდის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირეული საქაღალდეების {roots} გარეთაა: {path}
+@msg	a linked JavaScript file is outside the read roots	დაკავშირებული JavaScript ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
+@msg	the library's file is outside the read roots	ბიბლიოთეკის ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
+@msg	{file} names more than one linked JavaScript file	{file} ერთზე მეტ დაკავშირებულ JavaScript ფაილს ასახელებს
 @msg	automation path rejected: outside the write root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირეული საქაღალდის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირეული საქაღალდეების {roots} გარეთაა: {path}
 @msg	automation path rejected: path is empty	ავტომატიზაციის გზა უარყოფილია: გზა ცარიელია
@@ -5225,6 +5234,7 @@ font-technology	Variable	ცვლადი
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	No linked files to look for	მოსაძებნი დაკავშირებული ფაილები არ არის
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	ბმული სიმბოლოში, დიაგრამის დიზაინში, პატერნში ან გაუმჭვირვალობის ნიღაბშია და ტილოზე ადგილი არ აქვს
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	დიაგრამის სერიაში დიაგრამის დიზაინის ნახატი დიზაინიდან თავიდან იხატება: მის შესაცვლელად დიზაინი შეცვალეთ
 	Ruler Origin	სახაზავების სათავე
 	Reset Ruler Origin	სახაზავების სათავის ჩამოყრა
 	Artistic	მხატვრული
@@ -5653,6 +5663,9 @@ imageTrace	Outline	კონტური
 	In the File	ფაილში
 	Keys	კლავიშები
 	Light behind the object	სინათლე ობიექტის უკან
+	Move Light to Back	სინათლის უკან გადატანა
+	Move Light to Front	სინათლის წინ გადატანა
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	გადაათრიეთ სინათლე მის გადასაადგილებლად. ისრიანი ღილაკები ფოკუსირებულ სინათლეს ამოძრავებს; Shift-ით 15°-იანი ბიჯით.
 	Shadows	ჩრდილები
 	Distance from Object	მანძილი ობიექტიდან
 	Shadow Bounds	ჩრდილის საზღვრები
@@ -6642,6 +6655,8 @@ axis	Y Axis	Y ღერძი
 	Create New Set	ახალი ნაკრების შექმნა
 	Stop Global Edit	გლობალური რედაქტირების დასრულება
 	Global Edit Options	გლობალური რედაქტირების პარამეტრები
+	Select Similar Objects	მსგავსი ობიექტების მონიშვნა
+	Select Similar Options	მსგავსის მონიშვნის პარამეტრები
 	Leave Out of Global Edit	გლობალური რედაქტირებიდან გამორიცხვა
 	Match	დამთხვევა
 	On Artboards	სამუშაო დაფებზე
@@ -6764,6 +6779,13 @@ axis	Y Axis	Y ღერძი
 	Graphite Pencil	გრაფიტის ფანქარი
 	Wax Crayon	ცვილის ფანქარი
 	Charcoal Dust	ნახშირის მტვერი
+
+# Original procedural circuit brushes.
+	Tech Circuit	ტექნიკური სქემები
+	Circuit Trace	სქემის გამტარი
+	Bus Lines	სალტის ხაზები
+	Terminal Nodes	ტერმინალური კვანძები
+
 	Notched Ribbon	დაკბილული ლენტი
 	Double Line	ორმაგი ხაზი
 	Wave	ტალღა
@@ -7649,6 +7671,9 @@ font-script	Japanese	იაპონური
 	Grommets	ლუვერები
 	Grommet Inset	ლუვერების დაშორება კიდიდან
 	Diameter	დიამეტრი
+	Nest Shapes…	ფორმების განლაგება…
+	Nest Shapes	ფორმების განლაგება
+	Roll	რულონი
 
 # Missing rows: menu strings, tl! strings and status/error messages untranslated on main (2026-11-14)
 	Add as Single Graphic	ერთ გრაფიკად დამატება
@@ -8156,7 +8181,6 @@ font-script	Japanese	იაპონური
 @msg	a legend draws at most {MAX_CHIPS} swatches	ლეგენდა ხატავს მაქსიმუმ {MAX_CHIPS} ფერის ნიმუშს
 @msg	a line can't run from a point to itself	ხაზი წერტილიდან იმავე წერტილამდე ვერ გაივლის
 @msg	a line needs at least two points	ხაზს სჭირდება მინიმუმ ორი წერტილი
-@msg	a linked JavaScript file is outside the read roots	დაკავშირებული JavaScript ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
 @msg	a name names one asset: give multiple: false, or one object	სახელი ერთ რესურსს აღნიშნავს: მიუთითეთ multiple: false ან ერთი ობიექტი
 @msg	a namespace declaration uses a reserved prefix or URI	სახელთა სივრცის გამოცხადება დაჯავშნილ პრეფიქსს ან URI-ს იყენებს
 @msg	a namespace qualifier is undefined	სახელთა სივრცის კვალიფიკატორი განსაზღვრული არ არის
@@ -9179,7 +9203,6 @@ font-script	Japanese	იაპონური
 @msg	the action set ids are not a list	მოქმედებების ნაკრების იდენტიფიკატორები სია არ არის
 @msg	the active paint is not a gradient	აქტიური საღებავი გრადიენტი არ არის
 @msg	the argument list is not an object	არგუმენტების სია ობიექტი არ არის
-@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	დიაგრამის სერიაში დიაგრამის დიზაინის ნახატი დიზაინიდან თავიდან იხატება: მის შესაცვლელად დიზაინი შეცვალეთ
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	სამუშაო დაფები ტილოზე არ ეტევა: შეამცირეთ სამუშაო დაფების რაოდენობა, დაშორება ან ზომა
 @msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	ნახატი EPS-ისთვის ზედმეტად დიდია: PostScript-ის 256 MB-ის შემდეგ დანარჩენი გამოტოვებულია
 @msg	the banner has no width or height	ბანერს სიგანე ან სიმაღლე არ აქვს
@@ -9252,7 +9275,6 @@ font-script	Japanese	იაპონური
 @msg	the library has no item `{other}`	ბიბლიოთეკას არ აქვს ელემენტი `{other}`
 @msg	the library holds {MAX_GROUPS} groups already	ბიბლიოთეკა უკვე შეიცავს {MAX_GROUPS} ჯგუფს
 @msg	the library holds {MAX_ITEMS} items of this kind already	ბიბლიოთეკა უკვე შეიცავს ამ სახის {MAX_ITEMS} ელემენტს
-@msg	the library's file is outside the read roots	ბიბლიოთეკის ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
 @msg	the line is too long, or the paths it passes too many, to check	ხაზი ზედმეტად გრძელია, ან მის მიერ გადაკვეთილი ტრაექტორიები ზედმეტად ბევრია შესამოწმებლად
 @msg	the method needs an XML value	მეთოდს XML მნიშვნელობა სჭირდება
 @msg	the name is empty	სახელი ცარიელია
@@ -9536,7 +9558,6 @@ font-script	Japanese	იაპონური
 @msg	{dir}: {e}	{dir}: {e}
 @msg	{doc} has no folder	{doc}: დოკუმენტს საქაღალდე არ აქვს
 @msg	{file} isn't linked	{file} დაკავშირებული არ არის
-@msg	{file} names more than one linked JavaScript file	{file} ერთზე მეტ დაკავშირებულ JavaScript ფაილს ასახელებს
 @msg	{folder} is not a package folder	{folder} შეფუთვის საქაღალდე არ არის
 @msg	{folder}: more than {max} files and folders	{folder}: {max}-ზე მეტი ფაილი და საქაღალდე
 @msg	{folder}: {e}	{folder}: {e}
@@ -9666,9 +9687,6 @@ font-script	Japanese	იაპონური
 @msg	{k}: scale must be {_1} to {_2}%	{k}: მასშტაბი უნდა იყოს {_1}-დან {_2}%-მდე
 @msg	{k}: size must be {_1} to {_2}%	{k}: ზომა უნდა იყოს {_1}-დან {_2}%-მდე
 @msg	{what} is at most {max}	{what} მაქსიმუმ {max}-ია
-	Nest Shapes…	ფორმების განლაგება…
-	Nest Shapes	ფორმების განლაგება
-	Roll	რულონი
 	Automatic Plane Positioning	სიბრტყის ავტომატური პოზიციონირება
 	Emboss	რელიეფი
 	Glow	ნათება
@@ -9731,3 +9749,12 @@ font-script	Japanese	იაპონური
 @msg	variable `{_1}` starts or ends with white space or holds a control character, which a variable library can't hold	ცვლადი `{_1}` იწყება ან მთავრდება ჰარით ან შეიცავს მმართველ სიმბოლოს, რასაც ცვლადების ბიბლიოთეკა ვერ შეინახავს
 	Set Panel View	პანელის ხედის დაყენება
 @msg	`panel` is swatches, graphicStyles or symbols	`panel` უნდა იყოს swatches, graphicStyles ან symbols
+@msg	`showImportOptions` must be true or false	`showImportOptions` უნდა იყოს true ან false
+@msg	`start` is a number up to 1 (below 0: before an open path's start)	`start` არის რიცხვი 1-მდე (0-ზე ნაკლები: ღია ტრაექტორიის დასაწყისამდე)
+@msg	the character at byte {start} is not drawn: it falls before its path's start	ბაიტზე {start} მდგომი სიმბოლო არ იხატება: ის ტრაექტორიის დასაწყისამდე ხვდება
+@msg	unknown `by` "{name}": expected one of {_1}	უცნობი `by` "{name}": მოსალოდნელია ერთ-ერთი: {_1}
+@msg	{mode_key} is one of {ERASER_MODES}, not `{id}`	{mode_key} არის ერთ-ერთი: {ERASER_MODES}, და არა `{id}`
+@msg	{mode_key} is one of {ERASER_MODES}, not {other}	{mode_key} არის ერთ-ერთი: {ERASER_MODES}, და არა {other}
+@msg	{var_key} must be 0 or more	{var_key} უნდა იყოს 0 ან მეტი
+@msg	{var_key} must be at most {most}	{var_key} უნდა იყოს მაქსიმუმ {most}
+@msg	a linked image file is outside the read roots	დაკავშირებული გამოსახულების ფაილი წაკითხვის ძირეული საქაღალდეების გარეთაა
