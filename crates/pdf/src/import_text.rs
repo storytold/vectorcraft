@@ -226,6 +226,8 @@ pub(crate) struct TextLine {
     pub file_font: bool,
     /// Whether this line holds Type 3 font glyphs.
     pub has_type3: bool,
+    /// A glyph of the line differs from the one its font keeps for the same character ([`crate::import_fonts::FileFontGlyphs::conflicts`]).
+    pub file_conflict: bool,
 }
 
 /// Where the file put a glyph: the glyph's index in the line, and its advance in the file's font
@@ -279,6 +281,7 @@ impl TextLine {
             held: vec![],
             file_font: false,
             has_type3: false,
+            file_conflict: false,
         }
     }
 

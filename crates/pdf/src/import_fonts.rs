@@ -10,8 +10,9 @@
 //! font program). The first glyph of each character is kept: a font that draws one character with
 //! two glyphs (a vertical form, an alternate) shows the first one for both.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
+use kurbo::BezPath;
 use vectorcraft_doc::{FILE_FONT_MIME, ImageBlob};
 use vectorcraft_text::{FileFontInfo, FileGlyph, MAX_FILE_GLYPHS, build_file_font};
 
@@ -48,7 +49,8 @@ struct Gathered {
     style: String,
     info: FileFontInfo,
     glyphs: Vec<FileGlyph>,
-    chars: HashSet<char>,
+    /// Each character's glyph, by its index in `glyphs`.
+    chars: HashMap<char, usize>,
 }
 
 impl FileFontGlyphs {
@@ -63,14 +65,24 @@ impl FileFontGlyphs {
             return i;
         }
         let i = self.fonts.len();
-        self.fonts.push(Gathered { family: family.to_string(), style: style.to_string(), info: info(), glyphs: vec![], chars: HashSet::new() });
+        self.fonts.push(Gathered { family: family.to_string(), style: style.to_string(), info: info(), glyphs: vec![], chars: HashMap::new() });
         self.index.insert((family.to_string(), style.to_string()), i);
         i
     }
 
     /// Does font `font` still want a glyph for `ch` (none gathered yet, and room for it)?
     pub fn wants(&self, font: usize, ch: char) -> bool {
-        self.count < MAX_GLYPHS && self.fonts.get(font).is_some_and(|f| f.glyphs.len() < MAX_FILE_GLYPHS && !f.chars.contains(&ch))
+        self.count < MAX_GLYPHS && self.fonts.get(font).is_some_and(|f| f.glyphs.len() < MAX_FILE_GLYPHS && !f.chars.contains_key(&ch))
+    }
+
+    /// Does font `font` hold a glyph for `ch` that differs from `outline` or `advance`? A font keeps
+    /// one glyph per character, so a file's other glyph for it (a stylistic alternate that maps to
+    /// the same character) can't go into it: the line it is on is kept as outlines instead.
+    pub fn conflicts(&self, font: usize, ch: char, outline: &BezPath, advance: f64) -> bool {
+        self.fonts
+            .get(font)
+            .and_then(|f| f.chars.get(&ch).and_then(|&i| f.glyphs.get(i)))
+            .is_some_and(|g| g.outline != *outline || g.advance != advance)
     }
 
     /// Gather `glyph` for font `font`.
@@ -79,7 +91,7 @@ impl FileFontGlyphs {
             return;
         }
         if let Some(f) = self.fonts.get_mut(font) {
-            f.chars.insert(glyph.ch);
+            f.chars.insert(glyph.ch, f.glyphs.len());
             f.glyphs.push(glyph);
             self.count += 1;
         }

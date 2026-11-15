@@ -196,3 +196,31 @@ fn embedded_fonts_off_sets_type_in_the_fallback_font_with_the_warning() {
     let st = texts(&r.document)[0].first_style().clone();
     assert_eq!(st.font_family, "Source Serif 9", "the text still names the file's font");
 }
+
+/// Two different glyphs of the embedded font that map to one character (a normal and an alternate
+/// `a`, here the glyphs of `a` and `b` both named `a` by the ToUnicode map) can't both go into the
+/// font kept with the document, which has one glyph per character: the line with the second one is
+/// kept as outlines, so each glyph draws as the file draws it (outlines are plain paths, which a save keeps).
+#[test]
+fn two_glyphs_for_one_character_both_survive_import_and_save() {
+    let face = FontDb::global().face("Source Serif 4", "Regular").unwrap();
+    let mut pdf = krilla::Document::new();
+    let mut page = pdf.start_page_with(PageSettings::from_wh(400.0, 200.0).unwrap());
+    let mut s = page.surface();
+    let font = Font::new(uninstalled_serif().into(), 0).unwrap();
+    // Glyph `from` standing for the character "a", on its own line at y.
+    let mut draw = |y: f32, from: char| {
+        let g = KrillaGlyph::new(GlyphId::new(face.glyph_for(from)), 0.5, 0.0, 0.0, 0.0, 0..1, None);
+        s.draw_glyphs(KPoint::from_xy(20.0, y), &[g], font.clone(), "a", 30.0, false);
+    };
+    draw(40.0, 'a');
+    draw(100.0, 'b');
+    draw(160.0, 'a');
+    s.finish();
+    page.finish();
+    let r = import(&pdf.finish().unwrap());
+    let text: Vec<String> = texts(&r.document).iter().map(|t| t.plain_text()).collect();
+    assert!(text.iter().any(|t| t == "a"), "the glyphs the font keeps stay live type: {text:?}");
+    assert!(text.len() < 3, "the line with the other glyph is not live type: {text:?}");
+    assert!(!outlines(&r.document).elements().is_empty(), "the other glyph is kept as its outline");
+}

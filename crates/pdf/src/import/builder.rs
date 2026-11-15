@@ -465,11 +465,15 @@ impl<'p> Builder<'p> {
         let glyphs = std::mem::take(&mut self.text_glyphs);
         let Some(mut line) = self.text.take() else { return false };
         let held = std::mem::take(&mut line.held);
+        let (line_conflict, line_type3) = (line.file_conflict, line.has_type3);
         // Type the file names itself (ActualText) is in reading order as it stands.
         let checked = !glyphs.is_empty() && line.mapped() && !line.has_type3;
         let mut outlined = false;
         if let Some((t, opacity, facts)) = line.finish() {
-            if checked && reshaped::reshapes(&t.plain_text()) && !reshaped::draws_as(&t, &facts.ink) {
+            // A line with a glyph the file's font can't keep (another glyph for the same character)
+            // is kept as outlines too, so each glyph draws as the file does.
+            let conflict = line_conflict && !glyphs.is_empty() && !line_type3;
+            if conflict || (checked && reshaped::reshapes(&t.plain_text()) && !reshaped::draws_as(&t, &facts.ink)) {
                 outlined = true;
                 if self.mask.is_some() {
                     self.flush_glyphs();
@@ -1173,15 +1177,19 @@ impl<'p> Builder<'p> {
                 line.file_font = true;
             }
             let mut chars = text.chars();
-            if let (Some(ch), None) = (chars.next(), chars.next())
-                && self.file_glyphs.wants(font, ch)
-            {
+            if let (Some(ch), None) = (chars.next(), chars.next()) {
                 // A glyph set vertically has no horizontal width: its column's, twice its centre.
                 let advance = match vx {
                     Some(vx) => 2.0 * vx,
                     None => width.map_or(500.0, f64::from),
                 };
-                self.file_glyphs.add(font, FileGlyph { ch, outline: outline.clone(), advance });
+                if self.file_glyphs.wants(font, ch) {
+                    self.file_glyphs.add(font, FileGlyph { ch, outline: outline.clone(), advance });
+                } else if self.file_glyphs.conflicts(font, ch, &outline, advance)
+                    && let Some(line) = &mut self.text
+                {
+                    line.file_conflict = true;
+                }
             }
         }
         // Its ink: a stroke the file draws as outlines of the glyphs is told by it.
