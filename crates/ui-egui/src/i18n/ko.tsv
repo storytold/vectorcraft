@@ -7456,6 +7456,7 @@ breakText	Glyphs	글리프
 @msg	`names` must be an array of style names	`names`은(는) 스타일 이름의 배열이어야 합니다
 @msg	`new` is a design name, or true	`new`은(는) 디자인 이름 또는 true입니다
 @msg	`origin` must be [x, y] in points	`origin`은(는) 포인트 단위의 [x, y]여야 합니다
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes`은(는) [a, b, c, d]여야 하며, 각 값은 -1000에서 1000 사이이고 a·d - b·c는 0에서 0.001 이상 떨어져야 합니다
 @msg	`path` must be a folder	`path`은(는) 폴더여야 합니다
 @msg	`path` must be a path object	`path`은(는) 패스 개체여야 합니다
 @msg	`picks` must be an array (got {v})	`picks`은(는) 배열이어야 합니다({v} 입력됨)

@@ -5801,6 +5801,7 @@ imageTrace	Outline	Contour
 @msg	`names` must be an array of style names	`names` moet een array van stijlnamen zijn
 @msg	`new` is a design name, or true	`new` is de naam van een ontwerp, of true
 @msg	`origin` must be [x, y] in points	`origin` moet [x, y] in punten zijn
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` moet [a, b, c, d] zijn, elk van -1000 tot 1000, met a·d - b·c minstens 0,001 van 0 af
 @msg	`path` must be a folder	`path` moet een map zijn
 @msg	`path` must be a path object	`path` moet een padobject zijn
 @msg	`picks` must be an array (got {v})	`picks` moet een array zijn (kreeg {v})

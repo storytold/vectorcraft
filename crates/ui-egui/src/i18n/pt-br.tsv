@@ -7925,6 +7925,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`names` must be an array of style names	`names` deve ser uma matriz de nomes de estilos
 @msg	`new` is a design name, or true	`new` é o nome de um projeto, ou true
 @msg	`origin` must be [x, y] in points	`origin` deve ser [x, y] em pontos
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` deve ser [a, b, c, d], cada um de -1000 a 1000, com a·d - b·c a pelo menos 0.001 de 0
 @msg	`path` must be a folder	`path` deve ser uma pasta
 @msg	`path` must be a path object	`path` deve ser um objeto de caminho
 @msg	`picks` must be an array (got {v})	`picks` deve ser uma matriz (recebido {v})

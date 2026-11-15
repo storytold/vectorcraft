@@ -6431,6 +6431,7 @@ axis	Y Axis	Y-axel
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	kräver godkännande: det begär {0}, som användaren beviljar när pluginet installeras för sig
 @msg	`angle` must be a number	`angle` måste vara ett tal
 @msg	`aspect` must be from 0.01 to 100	`aspect` måste vara från 0.01 till 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` måste vara [a, b, c, d], vart och ett från -1000 till 1000, med a·d - b·c minst 0.001 från 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` måste vara "butt", "round" eller "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` måste vara "nonzero" eller "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` måste vara en https://-adress på högst {MAX_HELP_URL} byte

@@ -5602,6 +5602,7 @@ antiAlias	Sharp	शार्प
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	स्वीकृति आवश्यक: यह {0} माँगता है, जिसे उपयोगकर्ता इसे अलग से स्थापित करते समय देता है
 @msg	`angle` must be a number	`angle` एक संख्या होना चाहिए
 @msg	`aspect` must be from 0.01 to 100	`aspect` 0.01 से 100 तक होना चाहिए
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` [a, b, c, d] होना चाहिए, हर मान -1000 से 1000 तक, और a·d - b·c का 0 से अंतर कम से कम 0.001 होना चाहिए
 @msg	`cap` must be "butt", "round" or "square"	`cap` "butt", "round" या "square" होना चाहिए
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` "nonzero" या "evenodd" होना चाहिए
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` अधिकतम {MAX_HELP_URL} बाइट का https:// पता होना चाहिए

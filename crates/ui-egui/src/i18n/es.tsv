@@ -6390,6 +6390,7 @@ axis	Y Axis	Eje Y
 @msg	{what} points outside memory	{what} apunta fuera de la memoria
 @msg	`angle` must be a number	`angle` debe ser un número
 @msg	`aspect` must be from 0.01 to 100	`aspect` debe estar entre 0.01 y 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` debe ser [a, b, c, d], cada uno entre -1000 y 1000, con a·d - b·c a al menos 0.001 de 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` debe ser "butt", "round" o "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` debe ser "nonzero" o "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` debe ser una dirección https:// de {MAX_HELP_URL} bytes como máximo

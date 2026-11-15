@@ -6809,6 +6809,7 @@ axis	Y Axis	Y ekseni
 @msg	`name` must be a name that is not empty	`name` boş olmayan bir ad olmalıdır
 @msg	`name` must not be empty	`name` boş olmamalıdır
 @msg	`origin` must be [x, y] in points	`origin` punto cinsinden [x, y] olmalıdır
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` [a, b, c, d] olmalıdır; her biri -1000 ile 1000 arasında, a·d - b·c ise 0'dan en az 0.001 uzakta olmalıdır
 @msg	`picks` must be an array (got {v})	`picks` bir dizi olmalıdır (verilen: {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` 1 ile {MAX_PICKS} arasında seçim içermelidir (verilen: {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` 2 ile 100000 arasında nokta içermelidir

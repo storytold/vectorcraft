@@ -7432,6 +7432,7 @@ breakText	Glyphs	字形
 @msg	`name` must be a name that is not empty	`name` 必须是非空的名称
 @msg	`name` must not be empty	`name` 不能为空
 @msg	`origin` must be [x, y] in points	`origin` 必须是以点为单位的 [x, y]
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` 必须是 [a, b, c, d]，每个值在 -1000 到 1000 之间，且 a·d - b·c 与 0 的差至少为 0.001
 @msg	`picks` must be an array (got {v})	`picks` 必须是数组 (实际为 {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` 必须包含 1 到 {MAX_PICKS} 个拾取项 (实际为 {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` 必须包含 2 到 100000 个点

@@ -7861,6 +7861,7 @@ breakText	Glyphs	Glyfy
 @msg	`names` must be an array of style names	`names` musí být pole názvů stylů
 @msg	`new` is a design name, or true	`new` je název návrhu, nebo true
 @msg	`origin` must be [x, y] in points	`origin` musí být [x, y] v bodech
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` musí být [a, b, c, d], každé od -1000 do 1000, a a·d - b·c se musí od 0 lišit alespoň o 0.001
 @msg	`path` must be a folder	`path` musí být složka
 @msg	`path` must be a path object	`path` musí být objekt cesty
 @msg	`picks` must be an array (got {v})	`picks` musí být pole (zadáno {v})

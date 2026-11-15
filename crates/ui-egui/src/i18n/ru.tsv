@@ -6058,6 +6058,7 @@ axis	Y Axis	Ось Y
 @msg	{what} points outside memory	{what} указывает за пределы памяти
 @msg	`angle` must be a number	`angle` должно быть числом
 @msg	`aspect` must be from 0.01 to 100	`aspect` должно быть от 0.01 до 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` должно быть [a, b, c, d], каждое от -1000 до 1000, а a·d - b·c должно отличаться от 0 не менее чем на 0.001
 @msg	`cap` must be "butt", "round" or "square"	`cap` должно быть "butt", "round" или "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` должно быть "nonzero" или "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` должно быть адресом https:// длиной не более {MAX_HELP_URL} байт

@@ -6398,6 +6398,7 @@ axis	Y Axis	Y ღერძი
 @msg	{what} points outside memory	{what} მეხსიერების გარეთ მიუთითებს
 @msg	`angle` must be a number	`angle` უნდა იყოს რიცხვი
 @msg	`aspect` must be from 0.01 to 100	`aspect` უნდა იყოს 0.01-დან 100-მდე
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` უნდა იყოს [a, b, c, d], თითოეული -1000-დან 1000-მდე, ხოლო a·d - b·c უნდა განსხვავდებოდეს 0-ისგან მინიმუმ 0.001-ით
 @msg	`cap` must be "butt", "round" or "square"	`cap` უნდა იყოს "butt", "round" ან "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` უნდა იყოს "nonzero" ან "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` უნდა იყოს https:// მისამართი, არაუმეტეს {MAX_HELP_URL} ბაიტისა

@@ -6552,6 +6552,7 @@ digits	Malayalam	Malaiàlam
 @msg	{what} points outside memory	{what} apunta fora de la memòria
 @msg	`angle` must be a number	`angle` ha de ser un nombre
 @msg	`aspect` must be from 0.01 to 100	`aspect` ha d’estar entre 0.01 i 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` ha de ser [a, b, c, d], cadascun entre -1000 i 1000, amb a·d - b·c com a mínim a 0.001 de 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` ha de ser "butt", "round" o "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` ha de ser "nonzero" o "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` ha de ser una adreça https:// de {MAX_HELP_URL} bytes com a màxim

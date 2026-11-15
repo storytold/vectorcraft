@@ -6054,6 +6054,7 @@ axis	Y Axis	Trục Y
 @msg	{what} points outside memory	{what} trỏ ra ngoài bộ nhớ
 @msg	`angle` must be a number	`angle` phải là một số
 @msg	`aspect` must be from 0.01 to 100	`aspect` phải từ 0.01 đến 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` phải là [a, b, c, d], mỗi số từ -1000 đến 1000, và a·d - b·c phải cách 0 ít nhất 0.001
 @msg	`cap` must be "butt", "round" or "square"	`cap` phải là "butt", "round" hoặc "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` phải là "nonzero" hoặc "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` phải là một địa chỉ https:// dài tối đa {MAX_HELP_URL} byte

@@ -6425,6 +6425,7 @@ axis	Y Axis	Y 軸
 @msg	`name` must be a name that is not empty	`name` には空でない名前を指定してください
 @msg	`name` must not be empty	`name` を空にすることはできません
 @msg	`origin` must be [x, y] in points	`origin` にはポイント単位の [x, y] を指定してください
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` には [a, b, c, d] を指定してください (各値は -1000 から 1000、a·d - b·c は 0 から 0.001 以上離れた値)
 @msg	`picks` must be an array (got {v})	`picks` には配列を指定してください (指定値: {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` には 1～{MAX_PICKS} 個の指定が必要です (指定数: {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` には 2～100000 個の点が必要です
