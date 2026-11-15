@@ -5,8 +5,8 @@ use super::drag::{
     tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
-    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, rotate_about, scroll_view, touch_gestures, trackpad_turn,
-    wheel, whole_pixels, zoom_about,
+    HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, pan_ppp, rotate_about, scroll_view, touch_gestures,
+    trackpad_turn, wheel, whole_pixels, zoom_about,
 };
 use super::{Color32, Drag, Mods, Point, PointerEvent, PointerKind, Pos2, Shape, Stroke, Ui, VectorcraftApp, View, Xf, json};
 
@@ -22,7 +22,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     // double-taps) where it was seen last (#491).
     let at = hover.or_else(|| pointer.interact_pos().filter(|p| rect.contains(*p)));
     let view = app.view_info();
-    let (_, backquote_before) = backquote_seen(ui);
+    let (backquote_now, backquote_before) = backquote_seen(ui);
     let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal };
     touch_gestures(app, ui, rect, view, modal);
     // Pressed and held still, a pen or a finger opens the context menu (egui's long touch): the
@@ -31,14 +31,15 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         drop_press(app, ui, view);
     }
     let drag: Option<Drag> = ui.data(|d| d.get_temp(drag_id()));
-    // A modifier pressed or released over the canvas re-hovers the tool, so what it changes shows
-    // without moving the mouse (Alt switches the Shape Builder to erase mode).
+    // A modifier or Backtick pressed or released over the canvas re-hovers the tool, so what it
+    // changes shows without moving the mouse (Alt switches the Shape Builder to erase mode, and ~
+    // places the rings of a flare being drawn anew).
     let mods_changed = ui.data_mut(|d| {
         let id = egui::Id::unique("canvas-mods");
         let prev = d.get_temp::<egui::Modifiers>(id);
         d.insert_temp(id, m);
         prev.is_some_and(|prev| prev != m)
-    });
+    }) || backquote_before.is_some_and(|before| before != backquote_now);
     // Where the tool hovers: the pointer over the canvas itself, not over a floating panel, a menu,
     // a popup or a dialog drawn on top of it ([`on_canvas`]).
     let hover_tool = hover.filter(|p| on_canvas(ui, resp, *p));
@@ -133,6 +134,8 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             drag_released(app, ui, &f, d, release_pos(ui, button).unwrap_or(p));
         }
     } else if let Some(p) = hover_tool
+        // A press on an artboard's name starts no drag: the moves while it is held are not hover.
+        && !(pointer.primary_down() && ui.data(|d| d.get_temp::<(usize, bool)>(name_press_id()).is_some()))
         && (pointer.is_moving() || mods_changed || !was_over || tool_switched || (context_changed && app.session.tool_wants_rehover()))
     {
         let ev = PointerEvent {
@@ -367,7 +370,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
     let ui_zoom = app.canvas_ui_zoom;
     match d {
         Drag::Pan { start, center, .. } => {
-            let ppp = ui.ctx().pixels_per_point();
+            let ppp = pan_ppp(app, ui);
             if let Some(vm) = app.view_mut() {
                 vm.center = center;
                 pan_pixels(vm, (ppp, ui_zoom), whole_pixels(p - start, ppp));

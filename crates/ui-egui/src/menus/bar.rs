@@ -117,7 +117,7 @@ fn switch_on_hover(ctx: &egui::Context, titles: &[egui::Response]) -> bool {
 /// it scrolls when it is taller than the window.
 pub(super) fn menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
-        ui.set_min_width(230.0);
+        widgets::menu_min_width(ui, 230.0);
         render_items(app, ui, items, true, clicked);
     });
 }
@@ -137,7 +137,7 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
             Entry::Sub(label, children) => {
                 ui.menu_button(label, |ui| {
                     widgets::menu_scroll(ui, |ui| {
-                        ui.set_min_width(200.0);
+                        widgets::menu_min_width(ui, 200.0);
                         render_items(app, ui, children, checks || only_toggles(app, children), clicked);
                     });
                 });

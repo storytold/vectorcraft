@@ -1545,7 +1545,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 char_level.set(false);
                 *chars = crate::harakat::own_chars(raw, &by_char, range.end, text, |gid| classes.get(skrifa::GlyphId::new(gid)) == 3);
             }
-            if feats.proportional(st) {
+            // Runs shaped together may differ in their glyph form, and a width form turns `palt` off.
+            if feats.proportional(st) || runs.get(source_runs.clone()).unwrap_or_default().iter().any(|(_, s)| feats.proportional(s)) {
                 // `palt` is positioning only: the same glyphs set on their full widths tell which
                 // advances it changed (kerning and the rest change both alike).
                 let full = shape(&with_more(&|s| feats.resolve_fixed_width(s)), along);

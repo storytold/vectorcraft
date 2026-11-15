@@ -3044,7 +3044,7 @@ fn control_bar_overflow(app: &mut crate::VectorcraftApp, ctx: &egui::Context, sc
     control_bar_frame_in(app, ctx, screen, vec![]);
     let out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
     let nodes: Vec<_> = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
-    let menu_left = nodes.iter().find(|n| n.label().is_some_and(|l| l == "Panel menu")).and_then(|n| n.bounds())?.x0 as f32;
+    let menu_left = nodes.iter().find(|n| n.label().is_some_and(|l| l == tl!("Panel menu"))).and_then(|n| n.bounds())?.x0 as f32;
     // The bar's frame spans the whole bar, the panel menu button included.
     let bar_width = if app.ui.control_bar_floating { screen.width().min(800.0) } else { screen.width() };
     let shapes = out.shapes.iter().filter_map(|cs| {
@@ -3057,8 +3057,12 @@ fn control_bar_overflow(app: &mut crate::VectorcraftApp, ctx: &egui::Context, sc
 }
 
 /// In a narrow window, the Control bar leaves out a control it has no room for, Fill and Stroke,
-/// Opacity and Character included: every control it shows is drawn whole, left of the panel menu button, which
-/// shows in every width, with the bar docked to the top or the bottom or floating.
+/// Opacity and Character included, and the groups other modules draw in it: a shape tool's, the
+/// Dimension, Mirror & Cut, Puppet Warp and Crop Image tools' options, a linked or embedded image's
+/// controls, an Image Trace object's, a warp or mesh envelope's, a symbol instance's and the Artboard
+/// tool's, in English and in German. Every control it shows is drawn whole, left of the panel menu
+/// button, which shows in every width, with the bar docked to the top or the bottom or floating. In a
+/// wide window, each of those groups shows its controls.
 #[test]
 fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     use crate::tests_removeanchors::{control_frame, has};
@@ -3098,8 +3102,113 @@ fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     let bar = control_frame(&mut app, &ctx, vec![]);
     assert!(has(&bar, "Character:"), "the Character group shows in a wide window: {bar:?}");
     check(&mut app, "type selected");
+    let area = app.run("text.create", json!({"x": 20, "y": 150, "text": "Area", "area": {"width": 150, "height": 40}})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [area] })).unwrap();
+    check(&mut app, "area type selected");
     app.run("select.set", json!({ "ids": [] })).unwrap();
     check(&mut app, "nothing selected");
+    // A wide window shows the group's controls named `names`.
+    let wide = |app: &mut crate::VectorcraftApp, case: &str, names: &[&str]| {
+        control_frame(app, &ctx, vec![]);
+        let bar = control_frame(app, &ctx, vec![]);
+        let missing: Vec<_> = names.iter().filter(|n| !has(&bar, n)).collect();
+        assert!(missing.is_empty(), "{case}: {missing:?} missing in a wide window: {bar:?}");
+    };
+    // The tools' options, with a rectangle selected and with nothing selected.
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    for tool in ["rectangle", "ellipse", "polygon", "star", "spiral", "box3d", "dimension", "mirrorCut", "puppetWarp"] {
+        app.select_tool(tool);
+        check(&mut app, tool);
+    }
+    app.select_tool("polygon");
+    wide(&mut app, "Polygon", &["Round", "Random", "Reset"]);
+    app.select_tool("mirrorCut");
+    wide(&mut app, "Mirror & Cut", &["Axis:", "Keep:"]);
+    app.select_tool("puppetWarp");
+    wide(&mut app, "Puppet Warp", &["Expand:", "Show Mesh", "Select All Pins"]);
+    app.select_tool("dimension");
+    wide(&mut app, "Dimension", &["Linear", "Radial", "Tool Options…"]);
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    app.select_tool("spiral");
+    check(&mut app, "spiral, nothing selected");
+    wide(&mut app, "Spiral", &["Segments", "Inner Radius:", "Reset"]);
+    app.select_tool("selection");
+    // An embedded and a linked image, an Image Trace object and Crop Image's options.
+    let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let selected = |app: &crate::VectorcraftApp| app.session.active().unwrap().selection.objects.iter().map(|n| n.0).collect::<Vec<_>>();
+    app.run("file.place", json!({"name": "half.png", "dataBase64": vectorcraft_format::base64_encode(&png), "link": false})).unwrap();
+    check(&mut app, "an embedded image");
+    wide(&mut app, "an embedded image", &["Unembed…", "Image Trace", "Mask", "Crop Image", "Remove Background"]);
+    app.select_tool(vectorcraft_tools::cropimage::ID);
+    check(&mut app, "Crop Image");
+    wide(&mut app, "Crop Image", &["X:", "Y:", "W:"]);
+    app.select_tool("selection");
+    app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
+    let trace = selected(&app);
+    check(&mut app, "an Image Trace object");
+    wide(&mut app, "an Image Trace object", &["Preset:", "View:", "Expand"]);
+    let dir = vectorcraft_testkit::temp_dir("control-bar-narrow-linked");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("half.png");
+    std::fs::write(&path, &png).unwrap();
+    app.run("file.place", json!({"path": path, "link": true})).unwrap();
+    let linked = selected(&app);
+    check(&mut app, "a linked image");
+    wide(&mut app, "a linked image", &["Embed", "Edit Original", "Remove Background"]);
+    // A warp and a mesh envelope, and a symbol instance.
+    let shape = |app: &mut crate::VectorcraftApp, x: f64| {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        app.run("select.set", json!({ "ids": [id] })).unwrap();
+        id
+    };
+    shape(&mut app, 60.0);
+    app.run("object.envelope.makeWithWarp", json!({})).unwrap();
+    check(&mut app, "a warp envelope");
+    wide(&mut app, "a warp envelope", &["Style:", "Horizontal", "Vertical", "Bend:", "V:", "Reset"]);
+    shape(&mut app, 110.0);
+    app.run("object.envelope.makeWithMesh", json!({"rows": 2, "cols": 2})).unwrap();
+    let mesh = selected(&app);
+    check(&mut app, "a mesh envelope");
+    wide(&mut app, "a mesh envelope", &["Rows:", "Columns:", "Reset"]);
+    let art = shape(&mut app, 160.0);
+    let instance = app.run("symbol.new", json!({"name": "Mark", "ids": [art]})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [instance] })).unwrap();
+    check(&mut app, "a symbol instance");
+    wide(&mut app, "a symbol instance", &["Replace:", "Reset"]);
+    // The Artboard tool.
+    app.select_tool("artboard");
+    check(&mut app, "the Artboard tool");
+    wide(&mut app, "the Artboard tool", &["Preset:", "Name:", "Transform"]);
+    // German labels, which are longer.
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    check(&mut app, "the Artboard tool, in German");
+    app.select_tool("selection");
+    app.run("select.set", json!({ "ids": [instance] })).unwrap();
+    check(&mut app, "a symbol instance, in German");
+    shape(&mut app, 210.0);
+    app.run("object.envelope.makeWithWarp", json!({})).unwrap();
+    check(&mut app, "a warp envelope, in German");
+    app.select_tool("puppetWarp");
+    check(&mut app, "Puppet Warp, in German");
+    app.select_tool("dimension");
+    check(&mut app, "Dimension, in German");
+    app.select_tool("selection");
+    for (ids, case) in [(&trace, "an Image Trace object"), (&linked, "a linked image"), (&mesh, "a mesh envelope")] {
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        check(&mut app, &format!("{case}, in German"));
+    }
+    app.run("file.place", json!({"name": "half.png", "dataBase64": vectorcraft_format::base64_encode(&png), "link": false})).unwrap();
+    check(&mut app, "an embedded image, in German");
+    app.select_tool(vectorcraft_tools::cropimage::ID);
+    check(&mut app, "Crop Image, in German");
+    for tool in ["polygon", "spiral", "box3d", "mirrorCut"] {
+        app.select_tool(tool);
+        check(&mut app, &format!("{tool}, in German"));
+    }
+    app.select_tool("selection");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
     assert!(faults.is_empty(), "a control drawn past the bar's room: {faults:#?}");
 }
 
@@ -3156,6 +3265,84 @@ fn a_narrow_control_bar_shows_preferences_without_document_setup() {
     }
     assert!(both, "a wide bar shows Document Setup and Preferences");
     assert!(preferences_only, "some width has room for Preferences but not Document Setup");
+}
+
+/// A narrow Control bar shows a linked image's Embed button without Edit Original, and the Artboard
+/// tool's Transform link after an Artboard tool option it had no room for.
+#[test]
+fn a_narrow_control_bar_shows_embed_without_edit_original_and_the_artboard_link_without_its_options() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let dir = vectorcraft_testkit::temp_dir("control-bar-embed-alone");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("half.png");
+    std::fs::write(&path, &png).unwrap();
+    app.run("file.place", json!({"path": path, "link": true})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let shows = |nodes: &[egui::accesskit::Node], name: &str| nodes.iter().any(|n| n.label().is_some_and(|l| l == name));
+    // Whether some width shows `first` and `second`, and whether some width shows `first` alone.
+    let sweep = |app: &mut crate::VectorcraftApp, first: &str, second: &str| {
+        let (mut both, mut first_only) = (false, false);
+        for w in (150..=1400).step_by(2) {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w as f32, 300.0));
+            control_bar_frame_in(app, &ctx, screen, vec![]);
+            let nodes = control_bar_frame_in(app, &ctx, screen, vec![]);
+            let (a, b) = (shows(&nodes, first), shows(&nodes, second));
+            both |= a && b;
+            first_only |= a && !b;
+        }
+        (both, first_only)
+    };
+    let (both, embed_only) = sweep(&mut app, "Embed", "Edit Original");
+    assert!(both, "a wide bar shows Embed and Edit Original");
+    assert!(embed_only, "some width has room for Embed but not Edit Original");
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    app.select_tool("artboard");
+    let (both, link_only) = sweep(&mut app, "Transform", "Rearrange All Artboards");
+    assert!(both, "a wide bar shows the Artboard tool's Transform link and Rearrange All Artboards");
+    assert!(link_only, "some width has room for the Transform link but not Rearrange All Artboards");
+}
+
+/// The Control bar's Select Similar Objects button takes only the room every control ahead of it
+/// left, so it never shows while the bar left out one of a selected image's controls for room.
+#[test]
+fn select_similar_stays_out_while_an_image_control_is_left_out() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let dir = vectorcraft_testkit::temp_dir("control-bar-similar-image");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("half.png");
+    std::fs::write(&path, &png).unwrap();
+    app.run("file.place", json!({"path": path, "link": false})).unwrap();
+    // With these groups off, the image's controls come right before the button.
+    for group in ["opacity", "graphicStyle", "alignDistribute", "transform"] {
+        app.run("window.control.options", json!({"group": group, "visible": false})).unwrap();
+    }
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let shows = |nodes: &[egui::accesskit::Node], name: &str| nodes.iter().any(|n| n.label().is_some_and(|l| l == name));
+    let mut seen = false;
+    for w in (150..=1600).step_by(2) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w as f32, 300.0));
+        control_bar_frame_in(&mut app, &ctx, screen, vec![]);
+        let nodes = control_bar_frame_in(&mut app, &ctx, screen, vec![]);
+        if shows(&nodes, "Select Similar Objects") {
+            assert!(shows(&nodes, "Remove Background"), "{w}: shown while Remove Background is left out");
+            seen = true;
+        }
+    }
+    assert!(seen, "a wide bar shows the button after the image's controls");
 }
 
 /// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps
@@ -3500,6 +3687,162 @@ fn the_control_bar_shows_the_global_edit_options() {
         seen |= shown.is_some();
     }
     assert!(seen, "a wide bar has room for it");
+}
+
+/// The Control bar's Select Similar Objects button selects the objects like the first selected one
+/// by the attribute kept for the session (All at first), and the Select Similar Options menu beside
+/// it selects by the item chosen, which is kept and checked from then on. Both show with something
+/// selected while the Object Options group is on, and fit inside the bar or are left out.
+#[test]
+fn the_control_bar_selects_similar_objects() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64, color: &str| {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"ids": [id], "color": color})).unwrap();
+        id
+    };
+    let a = rect(&mut app, 20.0, "#ff0000");
+    let b = rect(&mut app, 100.0, "#ff0000");
+    let c = rect(&mut app, 200.0, "#0000ff");
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2400.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    let find = |nodes: &Nodes, name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name) || n.value() == Some(name)).map(|(_, n)| n.clone());
+    // A menu item's label carries its check mark or the room for it.
+    let item = |nodes: &Nodes, name: &str| {
+        nodes.iter().find(|(_, n)| n.label().or(n.value()).is_some_and(|t| t.trim_start_matches(['✓', ' ']) == name)).map(|(_, n)| n.clone())
+    };
+    let center = |n: &egui::accesskit::Node| {
+        let b = n.bounds().unwrap_or_else(|| panic!("{n:?}"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    let selected = |app: &crate::VectorcraftApp| {
+        let mut ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+        ids.sort();
+        ids
+    };
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    assert!(find(&nodes, "Select Similar Objects").is_none() && find(&nodes, "Select Similar Options").is_none(), "nothing selected");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let button = find(&nodes, "Select Similar Objects").unwrap_or_else(|| panic!("one rectangle: the button shows"));
+    click(&mut app, center(&button));
+    assert_eq!(selected(&app), vec![a, b], "All: the red rectangles");
+    // The menu selects by the item chosen and keeps it.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    frame(&mut app, vec![]);
+    let options = find(&frame(&mut app, vec![]), "Select Similar Options").unwrap_or_else(|| panic!("the options menu shows"));
+    let nodes = click(&mut app, center(&options));
+    for label in [
+        "All",
+        "Fill Color",
+        "Fill & Stroke",
+        "Stroke Color",
+        "Stroke Weight",
+        "Opacity",
+        "Blending Mode",
+        "Appearance",
+        "Graphic Style",
+        "Shape",
+        "Symbol Instance",
+    ] {
+        assert!(item(&nodes, label).is_some(), "{label} in the menu");
+    }
+    assert!(find(&nodes, "✓ All").is_some(), "All is checked at first");
+    let stroke = item(&nodes, "Stroke Color").unwrap_or_else(|| panic!("Stroke Color"));
+    click(&mut app, center(&stroke));
+    assert_eq!(app.session.select_similar, "strokeColor");
+    assert_eq!(selected(&app), vec![a, b, c], "Stroke Color: all three share the default stroke");
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    click(&mut app, center(&find(&nodes, "Select Similar Objects").unwrap_or_else(|| panic!("the button"))));
+    assert_eq!(selected(&app), vec![a, b, c], "the button keeps Stroke Color");
+    let options = find(&frame(&mut app, vec![]), "Select Similar Options").unwrap_or_else(|| panic!("the options menu"));
+    let nodes = click(&mut app, center(&options));
+    assert!(find(&nodes, "✓ Stroke Color").is_some(), "the kept item is checked");
+    // The panel menu's Object Options group turns them off.
+    app.run("window.control.options", json!({"group": "objectOptions"})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(find(&frame(&mut app, vec![]), "Select Similar Objects").is_none(), "Object Options off");
+    app.run("window.control.options", json!({"group": "objectOptions"})).unwrap();
+    // At any width the button and its menu fit inside the bar together or are left out. They take
+    // only the room left at the end of the bar, so they show only while the Align buttons and the
+    // inline X field do too. A control ahead of them that appears in a wider bar (the Distribute
+    // buttons) can take that room again, so the widest bar is the one that must show them.
+    let mut seen = false;
+    for width in (600..=2400).step_by(10) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+        let mut nodes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let shown = find(&nodes, "Select Similar Objects").and_then(|n| n.bounds());
+        let menu = find(&nodes, "Select Similar Options").and_then(|n| n.bounds());
+        assert_eq!(shown.is_some(), menu.is_some(), "{width}: the button and its menu show together");
+        if let Some(b) = menu {
+            assert!(b.x1 <= f64::from(width), "{width}: {b:?}");
+            assert!(find(&nodes, "Horizontal Align Left").is_some(), "{width}: shown without the Align buttons");
+            let x = nodes.iter().find(|(_, n)| n.label() == Some("X:") || n.value() == Some("X:")).and_then(|(_, n)| n.bounds());
+            assert!(x.is_some_and(|x| x.x1 <= b.x0), "{width}: shown without the X field ahead of it: {x:?}");
+        }
+        seen = shown.is_some();
+    }
+    assert!(seen, "the widest bar has room for it");
+    // With the Transform group off they still show at the end of a wide bar, after the Align
+    // buttons.
+    app.run("window.control.options", json!({"group": "transform", "visible": false})).unwrap();
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let (button, align) = (find(&nodes, "Select Similar Objects"), find(&nodes, "Horizontal Align Left"));
+    let (Some(b), Some(a)) = (button.and_then(|n| n.bounds()), align.and_then(|n| n.bounds())) else {
+        panic!("Transform off: the button and the Align buttons show")
+    };
+    assert!(a.x1 <= b.x0, "after the Align buttons: {a:?} {b:?}");
+    // With the Transform group off, its link and X/Y/W/H fields take no room: the button and its
+    // menu show in the narrowest bar that holds them after every control ahead of them, and never
+    // while a control ahead of them is left out.
+    let mut first = None;
+    for width in (600..=2400).step_by(10) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+        let mut nodes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let Some(b) = find(&nodes, "Select Similar Options").and_then(|n| n.bounds()) else {
+            continue;
+        };
+        for name in ["Stroke:", "Opacity:", "Horizontal Align Left", "Recolor Artwork"] {
+            assert!(find(&nodes, name).is_some(), "{width}: shown without {name} ahead of it");
+        }
+        first.get_or_insert((width, b.x1));
+    }
+    let Some((width, end)) = first else { panic!("Transform off: a wide bar has room for them") };
+    let free = f64::from(width) - end;
+    assert!(free < 120.0, "Transform off: the narrowest bar that shows them, {width} pt wide, leaves {free} pt after them");
 }
 
 /// At any width the Control bar shows the inline X, Y, W and H fields whole inside its right margin,

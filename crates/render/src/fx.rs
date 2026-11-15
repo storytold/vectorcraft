@@ -72,7 +72,7 @@ mod renderer;
 pub(crate) use bounds::visual_bounds;
 pub(crate) use bounds::{
     brushed_cull_bounds, cull_bounds, drawn_outline, drawn_outlines, painted_brush_width, painted_cull_bounds, painted_reach, path_cull_bounds,
-    three_d_art_bounds, with_own_raster_reach,
+    rasterize_stage, three_d_art_bounds, with_own_raster_reach,
 };
 #[cfg(test)]
 pub(crate) use entries::Drawn;

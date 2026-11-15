@@ -443,7 +443,13 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
                 // The text document holds the Ascent first baseline by leaving it out, without a minimum.
                 || (t.area.first_baseline == FirstBaseline::Ascent && t.area.first_baseline_min != 0.0)))
         || (matches!(t.kind, TextKind::OnPath { .. })
-            && (t.path_effect != PathEffect::default() || t.path_align != PathAlign::default() || t.path_spacing != 0.0 || end_read_as_none(t)))
+            && (t.path_effect != PathEffect::default()
+                || t.path_align != PathAlign::default()
+                || t.path_spacing != 0.0
+                || end_read_as_none(t)
+                // The writer writes type that starts before its open path starting at the
+                // path's start.
+                || t.kind.starts_before_path()))
 }
 
 /// Key 35 of a run in style `st`, as the reader's `Texts::style` reads it: 3 for Tate-chu-yoko, 1
@@ -616,6 +622,15 @@ fn place_on(segments: &[[f64; 8]], f: f64) -> f64 {
         left -= len;
     }
     segments.len() as f64
+}
+
+/// Where the text document ended at some point ([`TextDoc::written`]).
+#[derive(Clone, Copy)]
+pub(in crate::ai_editing) struct TextMark {
+    at: (usize, usize, usize, usize, usize),
+    values: usize,
+    lost: bool,
+    planned: usize,
 }
 
 /// The text document being written.
@@ -1044,6 +1059,24 @@ impl TextDoc {
             }
         }
         self.threaded.get(&id).copied()
+    }
+
+    /// Where the text document written so far ends, for [`Self::take_back`].
+    pub(in crate::ai_editing) fn written(&self) -> TextMark {
+        TextMark { at: self.mark(), values: self.doc_values, lost: self.lost, planned: self.planned.len() }
+    }
+
+    /// Take the frames, stories and fonts added since `m` out again, with what they counted. Where
+    /// a thread was planned since, its frames name its story, so nothing is taken out.
+    pub(in crate::ai_editing) fn take_back(&mut self, m: TextMark) {
+        if self.planned.len() != m.planned {
+            return;
+        }
+        let (frames, stories, bytes, text, fonts) = m.at;
+        self.frames.truncate(frames);
+        self.stories.truncate(stories);
+        self.fonts.truncate(fonts);
+        (self.doc_bytes, self.text_bytes, self.doc_values, self.lost) = (bytes, text, m.values, m.lost);
     }
 
     /// Whether a thread written since the last call has attributes the text document leaves out.

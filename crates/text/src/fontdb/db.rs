@@ -74,6 +74,7 @@ impl FontDb {
             stamp: Mutex::new(None),
             instances: Mutex::new(Instances::default()),
             composites: RwLock::new(HashMap::new()),
+            custom_classes: Mutex::new(HashMap::new()),
         }
     }
 

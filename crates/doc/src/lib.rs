@@ -120,6 +120,7 @@ pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
 pub use text::GlyphChoice;
 pub use text::GlyphForm;
+pub use text::PATH_LEAD_MAX;
 pub use text::WarichuAlign;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
@@ -127,7 +128,7 @@ pub use text::{
     RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
     VerticalAlign, WrapShape,
 };
-pub use text::{CharClass, CompositeFont, CompositePart, CompositeParts};
+pub use text::{CharClass, CompositeClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet};
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;
