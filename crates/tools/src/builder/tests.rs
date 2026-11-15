@@ -1124,6 +1124,320 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     assert_eq!(id, "livePaint.strokeEdge");
 }
 
+/// A double-click runs a click's command with `scope: "connected"` and a triple-click with
+/// `"samePaint"`, matching the paint the face or edge had before the first click there.
+#[test]
+fn bucket_double_and_triple_click_widen_what_a_click_paints() {
+    let (d, gid, f2, e) = live_group_doc();
+    let red = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    painted.node_mut(e).unwrap().appearance.set_stroke(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let face_before = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    let edge_before = serde_json::to_value(d.node(e).unwrap().appearance.stroke_paint()).unwrap();
+    let red_json = serde_json::to_value(&red).unwrap();
+    assert_ne!(face_before, red_json);
+    assert_ne!(edge_before, red_json);
+    let fill = |scope: &str, like: Option<&Value>| {
+        let mut v = json!({ "group": gid.0, "point": [75.0, 25.0], "scope": scope });
+        if let Some(like) = like {
+            v["match"] = like.clone();
+        }
+        vec![Action::Exec("livePaint.fill".into(), v)]
+    };
+    let click = |t: &mut LivePaintBucketTool, cx: &ToolContext, x: f64, m: Mods| {
+        t.pointer(cx, &ev(PointerKind::Down, x, 25.0).with_mods(m));
+        t.pointer(cx, &ev(PointerKind::Up, x, 25.0).with_mods(m));
+    };
+    let mut t = LivePaintBucketTool::default();
+    // The clicks paint the face as they arrive; the triple-click matches the fill from before them.
+    click(&mut t, &cx, 75.0, Mods::default());
+    click(&mut t, &later, 75.0, Mods::default());
+    assert_eq!(t.pointer(&later, &ev(PointerKind::DoubleClick, 75.0, 25.0)), fill("connected", None));
+    click(&mut t, &later, 75.0, Mods::default());
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), fill("samePaint", Some(&face_before)));
+    // A new click there starts again from the fill it finds.
+    click(&mut t, &later, 75.0, Mods::default());
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), fill("samePaint", Some(&red_json)));
+    // A click before the triple-click's own three is not part of it.
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx, 75.0, Mods::default());
+    for _ in 0..3 {
+        click(&mut t, &later, 75.0, Mods::default());
+    }
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), fill("samePaint", Some(&red_json)));
+    // Shift: the edge, matching its stroke from before the first click.
+    let shift = Mods { shift: true, ..Default::default() };
+    let stroke = |scope: &str, like: &Value| {
+        vec![Action::Exec(
+            "livePaint.strokeEdge".into(),
+            json!({ "group": gid.0, "point": [51.0, 25.0], "tolerance": 4.0, "scope": scope, "match": like }),
+        )]
+    };
+    click(&mut t, &cx, 51.0, shift);
+    click(&mut t, &later, 51.0, shift);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::DoubleClick, 51.0, 25.0).with_mods(shift)), stroke("connected", &edge_before));
+    click(&mut t, &later, 51.0, shift);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 51.0, 25.0).with_mods(shift)), stroke("samePaint", &edge_before));
+    // With Alt or Space held, or with both options off, a double-click or triple-click paints nothing.
+    let alt = Mods { alt: true, ..Default::default() };
+    let space = Mods { space: true, ..Default::default() };
+    for k in [PointerKind::DoubleClick, PointerKind::TripleClick] {
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(alt)).is_empty(), "{k:?}");
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(Mods { cmd: true, ..Default::default() })).is_empty(), "{k:?} with Cmd");
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(space)).is_empty(), "{k:?} with Space");
+        assert!(t.pointer(&cx, &ev(k, 51.0, 25.0).with_mods(Mods { shift: true, ..space })).is_empty(), "{k:?} with Shift and Space");
+    }
+    // A press with Space held paints nothing either.
+    for m in [space, Mods { shift: true, ..space }] {
+        for (k, x) in [(PointerKind::Down, 75.0), (PointerKind::Up, 75.0), (PointerKind::Down, 51.0), (PointerKind::Up, 51.0)] {
+            assert!(t.pointer(&cx, &ev(k, x, 25.0).with_mods(m)).is_empty(), "{k:?} at {x} with {m:?}");
+        }
+    }
+    t.set_option("paintFills", &json!(false));
+    for k in [PointerKind::DoubleClick, PointerKind::TripleClick] {
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0)).is_empty(), "{k:?}");
+    }
+    // Outside every face, nothing is painted.
+    t.set_option("paintFills", &json!(true));
+    assert!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 400.0, 400.0)).is_empty());
+}
+
+/// A triple-click whose third click lands on a face the double-click's flood filled matches that
+/// face's fill from before the double-click.
+#[test]
+fn bucket_triple_click_on_a_face_the_double_click_flooded_matches_its_earlier_fill() {
+    let (mut d, gid, f2, _) = live_group_doc();
+    let red = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    let f1 = crate::builder::face_at(d.node(gid).unwrap(), Point::new(25.0, 25.0)).unwrap().id;
+    for f in [f1, f2] {
+        d.node_mut(f).unwrap().appearance.set_fill(red.clone());
+    }
+    let mut first = d.clone();
+    first.node_mut(f1).unwrap().appearance.set_fill(blue.clone());
+    let mut flooded = first.clone();
+    flooded.node_mut(f2).unwrap().appearance.set_fill(blue.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (start, first, flooded) = (cx(&d, &s, &p), cx(&first, &s, &p), cx(&flooded, &s, &p));
+    let mut t = LivePaintBucketTool::default();
+    let click = |t: &mut LivePaintBucketTool, cx: &ToolContext, x: f64| {
+        t.pointer(cx, &ev(PointerKind::Down, x, 25.0));
+        t.pointer(cx, &ev(PointerKind::Up, x, 25.0));
+    };
+    click(&mut t, &start, 25.0);
+    click(&mut t, &first, 25.0);
+    t.pointer(&first, &ev(PointerKind::DoubleClick, 25.0, 25.0));
+    click(&mut t, &flooded, 75.0);
+    let like = serde_json::to_value(&red).unwrap();
+    assert_eq!(
+        t.pointer(&flooded, &ev(PointerKind::TripleClick, 75.0, 25.0)),
+        vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": like }))]
+    );
+}
+
+/// On an edge that stores a stroke paint but draws none (its stroke hidden, or the edge fully
+/// transparent), a double-click or triple-click matches no paint, with or without the clicks
+/// before it.
+#[test]
+fn bucket_multi_click_on_an_edge_matches_the_paint_it_draws() {
+    let (mut d, gid, _, e) = live_group_doc();
+    d.node_mut(e).unwrap().appearance.set_stroke(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 0.0)));
+    let mut hidden = d.clone();
+    hidden.node_mut(e).unwrap().appearance.stroke_mut().unwrap().visible = false;
+    let mut clear = d.clone();
+    clear.node_mut(e).unwrap().opacity = 0.0;
+    let none = serde_json::to_value(vectorcraft_color::Paint::None).unwrap();
+    let s = Selection::default();
+    let p = paint();
+    let shift = Mods { shift: true, ..Default::default() };
+    let stroke = |scope: &str| {
+        vec![Action::Exec(
+            "livePaint.strokeEdge".into(),
+            json!({ "group": gid.0, "point": [51.0, 25.0], "tolerance": 4.0, "scope": scope, "match": none }),
+        )]
+    };
+    for doc in [&hidden, &clear] {
+        let cx = cx(doc, &s, &p);
+        let mut t = LivePaintBucketTool::default();
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 51.0, 25.0).with_mods(shift)), stroke("connected"));
+        for _ in 0..3 {
+            t.pointer(&cx, &ev(PointerKind::Down, 51.0, 25.0).with_mods(shift));
+            t.pointer(&cx, &ev(PointerKind::Up, 51.0, 25.0).with_mods(shift));
+        }
+        assert_eq!(t.pointer(&cx, &ev(PointerKind::TripleClick, 51.0, 25.0).with_mods(shift)), stroke("samePaint"));
+    }
+}
+
+/// A triple-click whose first click makes the Live Paint group matches the fill of the face the
+/// group makes there: an open path in front, whose outline bounds no face, does not give it.
+#[test]
+fn bucket_triple_click_on_a_made_group_skips_open_paths() {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_geom::{PathData, SubPath};
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let back = d.alloc_id();
+    let mut look = Appearance::default_art();
+    look.set_fill(red.clone());
+    d.insert(Some(l), 0, Node::path(back, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), look)).unwrap();
+    // An open U around (75, 25), filled blue.
+    let u = [Point::new(60.0, 5.0), Point::new(60.0, 45.0), Point::new(90.0, 45.0), Point::new(90.0, 5.0)];
+    let front = d.alloc_id();
+    let mut look = Appearance::default_art();
+    look.set_fill(blue);
+    d.insert(Some(l), 1, Node::path(front, PathData::single(SubPath::polyline(&u, false)), look)).unwrap();
+    // The face the planar map makes there takes its fill from the square, as the group's would.
+    let shapes: Vec<vectorcraft_pathops::Shape> = [back, front]
+        .iter()
+        .enumerate()
+        .filter_map(|(k, id)| node_outline(d.node(*id)?).map(|(path, rule)| vectorcraft_pathops::Shape::new(path, rule, k as u64)))
+        .collect();
+    let (regions, _) = vectorcraft_pathops::live_paint(&shapes);
+    let face = regions.iter().find(|r| r.contains(Point::new(75.0, 25.0))).expect("a face at (75, 25)");
+    assert_eq!(face.top(), Some(0), "the square is the face's top shape");
+    let mut s = Selection::default();
+    s.set([back, front]);
+    let p = paint();
+    let (made, ..) = live_group_doc();
+    let none = Selection::default();
+    let (cx, later) = (cx(&d, &s, &p), cx(&made, &none, &p));
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
+    t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
+    for _ in 0..2 {
+        t.pointer(&later, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(&later, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let acts = t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0));
+    let [Action::Exec(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    assert_eq!(v["match"], serde_json::to_value(&red).unwrap());
+}
+
+/// A triple-click whose first click makes the Live Paint group on one face and whose other two
+/// clicks fill another face matches the fill the second face had before the first click on it,
+/// not the fill under the first click or the fill the clicks gave it.
+#[test]
+fn bucket_triple_click_after_making_the_group_on_another_face_matches_its_own_face() {
+    use vectorcraft_color::{Color, Paint};
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let square = d.alloc_id();
+    let mut look = Appearance::default_art();
+    look.set_fill(red.clone());
+    d.insert(Some(l), 0, Node::path(square, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), look)).unwrap();
+    let mut s = Selection::default();
+    s.set([square]);
+    let p = paint();
+    let (made, _, f2, _) = live_group_doc();
+    let mut painted = made.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(blue.clone());
+    let none = Selection::default();
+    let (cx, later, after) = (cx(&d, &s, &p), cx(&made, &none, &p), cx(&painted, &none, &p));
+    let mut t = LivePaintBucketTool::default();
+    // The first click makes the group and fills the face at (25, 25); the next two fill (75, 25),
+    // the first of them painting it blue.
+    t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
+    t.pointer(&cx, &ev(PointerKind::Up, 25.0, 25.0));
+    for ctx in [&later, &after] {
+        t.pointer(ctx, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let acts = t.pointer(&after, &ev(PointerKind::TripleClick, 75.0, 25.0));
+    let [Action::Exec(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    let own = serde_json::to_value(made.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    assert_ne!(own, serde_json::to_value(&blue).unwrap());
+    assert_eq!(v["match"], own);
+}
+
+/// A triple-click whose clicks land on one face, another face, then the first face again matches
+/// the fill the first face had before the first click on it, not the fill that click gave it.
+#[test]
+fn bucket_triple_click_with_a_click_on_another_face_between_matches_the_first_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let (d, gid, f2, _) = live_group_doc();
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let mut t = LivePaintBucketTool::default();
+    // The first click paints the face at (75, 25) red; the second fills the face at (25, 25).
+    for (ctx, x) in [(&cx, 75.0), (&later, 25.0), (&later, 75.0)] {
+        t.pointer(ctx, &ev(PointerKind::Down, x, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, x, 25.0));
+    }
+    let acts = t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0));
+    let own = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    assert_eq!(
+        acts,
+        vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": own }))]
+    );
+}
+
+/// A triple-click whose second press the view tools take (held Space) matches the fill the face had
+/// before the first click: that press counts as one that paints nothing. The pointer leaving the
+/// canvas between three clicks adds no press.
+#[test]
+fn bucket_triple_click_with_a_view_tool_press_between_matches_the_first_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let (d, gid, f2, _) = live_group_doc();
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let own = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    let want = vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": own }))];
+    fn click(t: &mut LivePaintBucketTool, ctx: &ToolContext) {
+        t.pointer(ctx, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx);
+    t.press_elsewhere();
+    click(&mut t, &later);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), want, "a view tool's press between");
+    let mut t = LivePaintBucketTool::default();
+    click(&mut t, &cx);
+    click(&mut t, &later);
+    t.hover_ended(&later);
+    click(&mut t, &later);
+    assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0)), want, "the pointer leaving between");
+}
+
+/// With Space held for the view tools, the pointer outlines no face or edge, as a press there
+/// paints nothing.
+#[test]
+fn bucket_highlights_nothing_with_space_held() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let outlined = |t: &LivePaintBucketTool| t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { .. }));
+    let space = Mods { space: true, ..Default::default() };
+    for (x, m) in [(75.0, space), (51.0, Mods { shift: true, ..space })] {
+        t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(m));
+        assert!(!outlined(&t), "at {x} with {m:?}");
+    }
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    assert!(outlined(&t));
+}
+
 /// After a fill drag, the cursor swatch preview shows at the release point, not where the pointer
 /// last moved before the press.
 #[test]
@@ -2290,6 +2604,221 @@ fn live_paint_selection_double_click_selects_connected_faces_or_edges() {
     t.set_option("selectFills", &json!(false));
     assert!(dbl(&mut t, 25.0, 25.0, Mods::default()).is_empty());
     assert!(dbl(&mut t, 25.0, 1.0, alt).is_empty());
+}
+
+/// A triple-click on a face selects every face of its group with that face's fill, joined to it or
+/// not; on an edge (Alt), every edge of its group that draws with that edge's stroke paint. Shift
+/// toggles them. Hidden parts, other groups and parts with another paint are left out.
+#[test]
+fn live_paint_selection_triple_click_selects_every_part_of_the_same_paint() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], [ab, bc, top_a, top_b, top_c, bottom]) = live_strip(&mut d);
+    let (other, [_, other_top, ..]) = live_square(&mut d, Rect::new(200.0, 0.0, 300.0, 100.0));
+    let other_face = faces(d.node(other).unwrap())[0].id;
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    // A and C are red and B is blue; the other group's face is red and its top edge black, too.
+    for (id, fill) in [(a, &red), (b, &blue), (c, &red), (other_face, &red)] {
+        d.node_mut(id).unwrap().appearance.set_fill(fill.clone());
+    }
+    d.node_mut(other_top).unwrap().appearance.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+    let s = Selection::default();
+    let p = paint();
+    let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let toggle = |ids: &[NodeId]| vec![Action::Exec("select.toggle".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let alt = Mods { alt: true, ..Default::default() };
+    let shift = Mods { shift: true, ..Default::default() };
+    let tri = |d: &Document, t: &mut LivePaintSelectionTool, x: f64, y: f64, m: Mods| {
+        let cx = cx(d, &s, &p);
+        t.pointer(&cx, &ev(PointerKind::TripleClick, x, y).with_mods(m))
+    };
+    let mut t = LivePaintSelectionTool::default();
+    // A face: every face of its group with its fill, even across the stroked edge BC; the clicked face first.
+    assert_eq!(tri(&d, &mut t, 125.0, 25.0, Mods::default()), set(&[c, a]));
+    assert_eq!(tri(&d, &mut t, 75.0, 25.0, Mods::default()), set(&[b]));
+    // An edge: every edge of its group that draws with its stroke paint, joined to it or not.
+    assert_eq!(tri(&d, &mut t, 25.0, 1.0, alt), set(&[top_a, top_b, bottom]));
+    assert_eq!(tri(&d, &mut t, 125.0, 1.0, alt), set(&[top_c, bc]));
+    assert_eq!(tri(&d, &mut t, 50.0, 25.0, alt), set(&[ab]));
+    // With Shift held, the parts leave the selection or join it.
+    assert_eq!(tri(&d, &mut t, 25.0, 25.0, shift), toggle(&[a, c]));
+    assert_eq!(tri(&d, &mut t, 125.0, 1.0, Mods { alt: true, shift: true, ..Default::default() }), toggle(&[top_c, bc]));
+    // Away from the group, a triple-click adds nothing to what its clicks did.
+    assert!(tri(&d, &mut t, 400.0, 400.0, Mods::default()).is_empty());
+    // A hidden face of the same fill is left out.
+    d.node_mut(c).unwrap().visible = false;
+    assert_eq!(tri(&d, &mut t, 25.0, 25.0, Mods::default()), set(&[a]));
+    // On the other group, a triple-click selects that group's parts alone.
+    assert_eq!(tri(&d, &mut t, 250.0, 50.0, Mods::default()), set(&[other_face]));
+    assert_eq!(tri(&d, &mut t, 250.0, 1.0, alt), set(&[other_top]));
+    // Select Fills off: the triple-click picks the edge nearest the pointer; both off: nothing.
+    t.set_option("selectFills", &json!(false));
+    assert_eq!(tri(&d, &mut t, 25.0, 1.0, Mods::default()), set(&[top_a, top_b, bottom]));
+    t.set_option("selectStrokes", &json!(false));
+    assert!(tri(&d, &mut t, 25.0, 25.0, Mods::default()).is_empty());
+    assert!(tri(&d, &mut t, 25.0, 1.0, alt).is_empty());
+}
+
+/// The whole event series of a triple-click (three presses and releases, the double-click after
+/// the second release and the triple-click after the third), applied to a selection: without
+/// Shift the selection ends as the parts with the clicked part's paint, and with Shift as the
+/// selection from before the clicks with those parts toggled, whatever the double-click reached.
+#[test]
+fn live_paint_selection_triple_click_series_ends_with_the_same_paint_parts() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], [_, bc, top_a, top_b, top_c, bottom]) = live_strip(&mut d);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    // A and C are red and B is blue; a double-click on A also reaches B across the unstroked edge AB.
+    for (id, fill) in [(a, &red), (b, &blue), (c, &red)] {
+        d.node_mut(id).unwrap().appearance.set_fill(fill.clone());
+    }
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let apply = |sel: &mut Vec<u64>, acts: Vec<Action>| {
+        for act in acts {
+            let Action::Exec(cmd, args) = act else { panic!("{act:?}") };
+            let ids: Vec<u64> = match (args.get("ids"), args.get("id")) {
+                (Some(v), _) => v.as_array().unwrap().iter().map(|i| i.as_u64().unwrap()).collect(),
+                (None, Some(i)) => vec![i.as_u64().unwrap()],
+                (None, None) => vec![],
+            };
+            match cmd.as_str() {
+                "select.set" => *sel = ids,
+                "select.none" => sel.clear(),
+                "select.toggle" => {
+                    for i in ids {
+                        match sel.iter().position(|x| *x == i) {
+                            Some(k) => {
+                                sel.remove(k);
+                            }
+                            None => sel.push(i),
+                        }
+                    }
+                }
+                other => panic!("{other}"),
+            }
+        }
+    };
+    // The first click at `first`, every later event at (`x`, `y`).
+    let series = |t: &mut LivePaintSelectionTool, sel: &mut Vec<u64>, first: (f64, f64), x: f64, y: f64, m: Mods| {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            apply(sel, t.pointer(&cx, &ev(kind, first.0, first.1).with_mods(m)));
+        }
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick, PointerKind::Down, PointerKind::Up, PointerKind::TripleClick] {
+            apply(sel, t.pointer(&cx, &ev(kind, x, y).with_mods(m)));
+        }
+    };
+    let sorted = |ids: &[NodeId]| {
+        let mut v: Vec<u64> = ids.iter().map(|i| i.0).collect();
+        v.sort_unstable();
+        v
+    };
+    let alt = Mods { alt: true, ..Default::default() };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintSelectionTool::default();
+    for (start, first, x, y, m, want) in [
+        (vec![], (25.0, 25.0), 25.0, 25.0, Mods::default(), sorted(&[a, c])),
+        (vec![top_c.0], (25.0, 25.0), 25.0, 25.0, Mods::default(), sorted(&[a, c])),
+        (vec![], (25.0, 25.0), 25.0, 25.0, shift, sorted(&[a, c])),
+        (vec![top_c.0, c.0], (25.0, 25.0), 25.0, 25.0, shift, sorted(&[a, top_c])),
+        (vec![], (25.0, 1.0), 25.0, 1.0, Mods { alt: true, shift: true, ..Default::default() }, sorted(&[top_a, top_b, bottom])),
+        (vec![bc.0], (125.0, 1.0), 125.0, 1.0, alt, sorted(&[top_c, bc])),
+        // The first click on A and the rest on B, beside it: B alone has B's fill.
+        (vec![], (49.0, 25.0), 51.0, 25.0, shift, sorted(&[b])),
+        (vec![c.0], (49.0, 25.0), 51.0, 25.0, shift, sorted(&[b, c])),
+    ] {
+        let mut sel = start.clone();
+        series(&mut t, &mut sel, first, x, y, m);
+        sel.sort_unstable();
+        assert_eq!(sel, want, "from {start:?} at {first:?} then ({x}, {y}) with {m:?}");
+    }
+    // Shift first held at the third click: the two clicks and the double-click select A and B, and
+    // the parts with A's fill are toggled from that selection.
+    let mut sel = vec![top_c.0];
+    for (kind, m) in [
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::Down, Mods::default()),
+        (PointerKind::Up, Mods::default()),
+        (PointerKind::DoubleClick, Mods::default()),
+        (PointerKind::Down, shift),
+        (PointerKind::Up, shift),
+        (PointerKind::TripleClick, shift),
+    ] {
+        apply(&mut sel, t.pointer(&cx, &ev(kind, 25.0, 25.0).with_mods(m)));
+    }
+    sel.sort_unstable();
+    assert_eq!(sel, sorted(&[b, c]));
+    // A Shift-click on C, then a click on A without Shift, which selects A alone, and Shift held
+    // from the double-click on: the parts with A's fill are toggled from that selection.
+    let mut sel = vec![];
+    for (kind, x, m) in [
+        (PointerKind::Down, 125.0, shift),
+        (PointerKind::Up, 125.0, shift),
+        (PointerKind::Down, 25.0, Mods::default()),
+        (PointerKind::Up, 25.0, Mods::default()),
+        (PointerKind::DoubleClick, 25.0, shift),
+        (PointerKind::Down, 25.0, shift),
+        (PointerKind::Up, 25.0, shift),
+        (PointerKind::TripleClick, 25.0, shift),
+    ] {
+        apply(&mut sel, t.pointer(&cx, &ev(kind, x, 25.0).with_mods(m)));
+    }
+    assert_eq!(sel, vec![c.0]);
+}
+
+/// A Shift-triple-click on a face whose double-click already reaches a joined face of the same
+/// fill selects every face with that fill: the joined face the double-click toggled on is not
+/// toggled off again.
+#[test]
+fn live_paint_selection_shift_triple_click_keeps_joined_faces_of_the_same_fill() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], _) = live_strip(&mut d);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    // A and B are joined across the unstroked edge AB; C is parted from them by the stroked edge BC.
+    for id in [a, b, c] {
+        d.node_mut(id).unwrap().appearance.set_fill(red.clone());
+    }
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = LivePaintSelectionTool::default();
+    let mut sel: Vec<u64> = vec![];
+    for kind in [
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::DoubleClick,
+        PointerKind::Down,
+        PointerKind::Up,
+        PointerKind::TripleClick,
+    ] {
+        for act in t.pointer(&cx, &ev(kind, 25.0, 25.0).with_mods(shift)) {
+            let Action::Exec(cmd, args) = act else { panic!("{act:?}") };
+            assert_eq!(cmd, "select.toggle");
+            let ids: Vec<u64> = match (args.get("ids"), args.get("id")) {
+                (Some(v), _) => v.as_array().unwrap().iter().map(|i| i.as_u64().unwrap()).collect(),
+                (None, Some(i)) => vec![i.as_u64().unwrap()],
+                (None, None) => vec![],
+            };
+            for i in ids {
+                match sel.iter().position(|x| *x == i) {
+                    Some(k) => {
+                        sel.remove(k);
+                    }
+                    None => sel.push(i),
+                }
+            }
+        }
+    }
+    sel.sort_unstable();
+    let mut want = vec![a.0, b.0, c.0];
+    want.sort_unstable();
+    assert_eq!(sel, want);
 }
 
 #[test]

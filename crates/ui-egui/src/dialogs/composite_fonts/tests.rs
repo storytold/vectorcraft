@@ -172,3 +172,111 @@ fn the_dialog_draws_with_and_without_fonts() {
     frame(&mut app);
     assert_eq!(fonts(dialog(&mut app)).len(), 1);
 }
+
+fn try_press(app: &mut VectorcraftApp, act: Action) -> Result<(), String> {
+    let mut d = app.ui.dialog.clone().unwrap();
+    let r = run(app, &mut d, act);
+    app.ui.dialog = Some(d);
+    r
+}
+
+fn sets(app: &mut VectorcraftApp) -> Vec<CustomCharSet> {
+    fonts(dialog(app)).first().map(|f| f.custom.clone()).unwrap_or_default()
+}
+
+/// Custom shows the font's custom character sets: New adds a set (based on the one picked), Add
+/// puts typed characters or the characters of Unicode codes into it once each, Delete takes the
+/// picked character out, Delete Set takes the set out; OK sets them with the font as one step.
+#[test]
+fn custom_character_sets_are_edited_in_the_dialog() {
+    let mut app = app();
+    open(&mut app).unwrap();
+    press(&mut app, Action::New);
+    press(&mut app, Action::Custom);
+    assert!(dialog(&mut app).bool("custom"));
+    frame(&mut app);
+    press(&mut app, Action::NewSet);
+    frame(&mut app);
+    assert_eq!(dialog(&mut app).str("setName"), "Character Set 1");
+    let kanji = fonts(dialog(&mut app))[0].parts.kanji.clone();
+    assert_eq!(sets(&mut app)[0].part, kanji);
+    // Direct Entry adds each character once.
+    dialog(&mut app).fields.insert("entry".into(), json!("※A※"));
+    press(&mut app, Action::AddChars);
+    assert_eq!(sets(&mut app)[0].characters, "※A");
+    assert_eq!(dialog(&mut app).str("entry"), "");
+    // Unicode takes codes, with or without U+, and skips characters already in the set.
+    dialog(&mut app).fields.insert("entryMode".into(), json!("unicode"));
+    dialog(&mut app).fields.insert("entry".into(), json!("U+3042, 41"));
+    press(&mut app, Action::AddChars);
+    assert_eq!(sets(&mut app)[0].characters, "※Aあ");
+    for bad in ["zz", "1F600", "0009"] {
+        dialog(&mut app).fields.insert("entry".into(), json!(bad));
+        assert!(try_press(&mut app, Action::AddChars).is_err(), "{bad}");
+        assert_eq!(sets(&mut app)[0].characters, "※Aあ");
+    }
+    dialog(&mut app).fields.insert("entryMode".into(), json!("direct"));
+    dialog(&mut app).fields.insert("entry".into(), json!("B😀"));
+    assert!(try_press(&mut app, Action::AddChars).is_err());
+    assert_eq!(sets(&mut app)[0].characters, "※Aあ");
+    frame(&mut app);
+    // Delete takes the picked character out.
+    dialog(&mut app).fields.insert("char".into(), json!(0));
+    press(&mut app, Action::DeleteChar);
+    assert_eq!(sets(&mut app)[0].characters, "Aあ");
+    // The set's name is edited in Name; New is based on the set picked.
+    dialog(&mut app).fields.insert("setName".into(), json!("Letters"));
+    frame(&mut app);
+    press(&mut app, Action::NewSet);
+    let list = sets(&mut app);
+    assert_eq!(list.iter().map(|s| (s.name.as_str(), s.characters.as_str())).collect::<Vec<_>>(), [("Letters", "Aあ"), ("Character Set 1", "Aあ")]);
+    assert_eq!(dialog(&mut app).fields.get("set"), Some(&json!(1)));
+    press(&mut app, Action::DeleteSet);
+    assert_eq!(sets(&mut app).len(), 1);
+    assert_eq!(dialog(&mut app).str("setName"), "Letters");
+    frame(&mut app);
+    dialog(&mut app).fields.insert("name".into(), json!("UI Composite Sets"));
+    frame(&mut app);
+    let before = steps(&app);
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(steps(&app), before + 1);
+    let f = &app.session.active().unwrap().doc.composite_fonts[0];
+    assert_eq!((f.custom.len(), f.custom[0].name.as_str(), f.custom[0].characters.as_str()), (1, "Letters", "Aあ"));
+}
+
+/// `ui.dialog.set` takes `custom`, `entry` and `char` as soon as the dialog opens, before Custom is
+/// clicked or anything is typed, and Add then adds the characters it set.
+#[test]
+fn custom_set_fields_are_set_right_after_open() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let font =
+        json!({"name": "UI Composite Open", "parts": {"kanji": {"font": "Inter"}}, "custom": [{"name": "Marks", "characters": "", "font": "Inter"}]});
+    app.run(COMMAND, json!({ "fonts": [font] })).unwrap();
+    open(&mut app).unwrap();
+    for (field, value) in [("custom", json!(true)), ("entry", json!("※〒")), ("char", json!(0))] {
+        let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": field, "value": value}));
+        let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+        assert!(r.get("error").is_none(), "{field}: {r}");
+        assert_eq!(dialog(&mut app).fields.get(field), Some(&value), "{field}");
+    }
+    frame(&mut app);
+    press(&mut app, Action::AddChars);
+    assert_eq!(sets(&mut app)[0].characters, "※〒");
+}
+
+/// Two sets of the same name keep the dialog open and change nothing.
+#[test]
+fn custom_sets_sharing_a_name_keep_the_dialog_open() {
+    let mut app = app();
+    open(&mut app).unwrap();
+    press(&mut app, Action::New);
+    press(&mut app, Action::NewSet);
+    press(&mut app, Action::NewSet);
+    dialog(&mut app).fields.insert("setName".into(), json!("character set 1"));
+    dialog(&mut app).fields.insert("custom".into(), json!(true));
+    frame(&mut app);
+    assert!(super::super::confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_some());
+    assert!(names(&app).is_empty());
+}

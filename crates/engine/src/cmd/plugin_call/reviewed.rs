@@ -40,6 +40,9 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.image.colorMask",
     "addon.image.removeBackground",
     "addon.image.removeColorMask",
+    "addon.packaging.roles",
+    "addon.packaging.setRole",
+    "addon.packaging.setRoleSwatch",
     "addon.pathtools.addPoints",
     "addon.pathtools.close",
     "addon.pathtools.corner",
@@ -207,6 +210,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "imageTrace.makeAndExpand",
     "imageTrace.release",
     "imageTrace.setView",
+    "info.readout",
     "layer.clippingMask.toggle",
     "layer.collectInNew",
     "layer.delete",
@@ -537,6 +541,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "select.same.textStrokeColor",
     "select.segments",
     "select.set",
+    "select.similar",
     "select.storedPath",
     "select.toggle",
     "select.update",
@@ -693,6 +698,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "variable.makeTextDynamic",
     "variable.makeVisibilityDynamic",
     "variable.rename",
+    "variable.sort",
     "variable.unbind",
 ];
 

@@ -11,6 +11,15 @@ use super::{
 };
 use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, SPREAD, SPREAD_CAPPED};
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Writer::coverage`] has worked out an image's coverage on this thread.
+    pub(super) static COVERAGE_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// An image's coverage ([`ImageBlob::coverage`]): its width, its height and one byte a pixel.
+type Coverage = (u32, u32, Arc<Vec<u8>>);
+
 pub(super) struct Writer<'a> {
     doc: &'a Document,
     /// The document → art space.
@@ -50,8 +59,13 @@ pub(super) struct Writer<'a> {
     /// The image decoded last (`None` when it can't be): the pieces of a warped image, which follow
     /// one another, decode it once.
     last_image: Option<(ImageBlob, Option<Arc<image::DynamicImage>>)>,
+    /// The coverage of [`Self::last_image`] once a colorized piece of it asked for it (`Some(None)`
+    /// when it can't be worked out), so the pieces of a colorized warped image work it out once.
+    last_coverage: Option<Option<Coverage>>,
     /// The images written whole so far, by the address of their data (which each entry keeps).
     whole_images: std::collections::HashMap<usize, Arc<Vec<u8>>>,
+    /// Writing a graph's art with its records: a graph inside it is written as its art.
+    in_graph: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -77,7 +91,9 @@ impl<'a> Writer<'a> {
             kumi: false,
             clips: vec![],
             last_image: None,
+            last_coverage: None,
             whole_images: std::collections::HashMap::new(),
+            in_graph: false,
         }
     }
 
@@ -264,7 +280,12 @@ impl<'a> Writer<'a> {
         if n.name.as_deref().is_some_and(|s| !s.is_empty()) && !n.is_layer() {
             self.warn(NAMES);
         }
-        if n.extras().graph.is_some() {
+        // A graph on the layers keeps its data and settings when its records read back whole.
+        let graph = match n.extras().graph.is_some() {
+            true if self.nest == 0 && !self.in_graph => crate::ai_graph::records(n, self.to_art),
+            _ => None,
+        };
+        if n.extras().graph.is_some() && graph.is_none() {
             self.warn(GRAPHS);
         }
         let locked = locked || n.locked;
@@ -273,7 +294,10 @@ impl<'a> Writer<'a> {
                 self.warn(SUBLAYERS);
                 self.group(children, *clip, locked);
             }
-            NodeKind::Group { children, clip } => self.group(children, *clip, locked),
+            NodeKind::Group { children, clip } => match &graph {
+                Some(records) => self.graph(children, locked, records),
+                None => self.group(children, *clip, locked),
+            },
             NodeKind::Path { path, rule, guide, .. } => {
                 self.lock(locked);
                 if *guide {
@@ -350,6 +374,25 @@ impl<'a> Writer<'a> {
             self.lock(locked);
             self.line("U");
         }
+    }
+
+    /// A graph's group (`u` … `U`) between its records (§17): `%_Gs` and its functional records
+    /// before it, `%_GS` after it, and each series' group followed by its `Go` tag.
+    fn graph(&mut self, children: &[Arc<Node>], locked: bool, records: &crate::ai_graph::Records) {
+        self.lock(locked);
+        self.body.push_str(&records.head);
+        self.line("u");
+        self.in_graph = true;
+        for c in children {
+            self.node(c, locked);
+            if let Some(tag) = records.tags.get(&c.id) {
+                self.line(tag);
+            }
+        }
+        self.in_graph = false;
+        self.lock(locked);
+        self.line("U");
+        self.line(crate::ai_graph::END);
     }
 
     /// A clipping group: its first member's outline clips the others (`h W n`). That member's fills
@@ -1074,7 +1117,7 @@ impl<'a> Writer<'a> {
         let fit = Affine::scale_non_uniform(f64::from(width.max(1)) / f64::from(w), f64::from(height.max(1)) / f64::from(h));
         let coverage = match colorize {
             Some(paint) => {
-                let Some((_, _, coverage)) = ImageBlob::coverage(blob).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
+                let Some((_, _, coverage)) = self.coverage(blob).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
                     self.warn(UNDECODED);
                     return;
                 };
@@ -1142,7 +1185,24 @@ impl<'a> Writer<'a> {
         }
         let img = image::load_from_memory(&blob.bytes).ok().map(Arc::new);
         self.last_image = Some((blob.clone(), img.clone()));
+        self.last_coverage = None;
         img
+    }
+
+    /// The coverage of `blob` ([`ImageBlob::coverage`]), worked out once for images that follow one
+    /// another with the same data, as [`Self::decoded`] decodes them.
+    fn coverage(&mut self, blob: &ImageBlob) -> Option<Coverage> {
+        let last = self.last_image.as_ref().is_some_and(|(last, _)| Arc::ptr_eq(&last.bytes, &blob.bytes) && last.mime == blob.mime);
+        if last && let Some(coverage) = &self.last_coverage {
+            return coverage.clone();
+        }
+        #[cfg(test)]
+        COVERAGE_RUNS.with(|n| n.set(n.get() + 1));
+        let coverage = ImageBlob::coverage(blob).map(|(w, h, c)| (w, h, Arc::new(c)));
+        if last {
+            self.last_coverage = Some(coverage.clone());
+        }
+        coverage
     }
 
     /// An image's lines (§8.4): `%AI5_File:`, `%AI5_BeginRaster`, matrix `m` as `[ a b c d tx ty ]`

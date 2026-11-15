@@ -80,16 +80,22 @@ pub fn spot_color(doc: &Document, name: &str) -> Option<Color> {
 /// A colour's swatch link and tint (`(swatch name, tint 0..1)`), as the colour visitors pass it.
 pub type Link<'a> = Option<(&'a str, f32)>;
 
+/// An ink amount clamped to 0..1; an amount that is not a finite number prints no ink.
+fn ink_amount(v: f32) -> f32 {
+    if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
+}
+
 /// Separate one colour into inks. A colour linked to a spot swatch prints on that plate only, at
-/// its tint; one linked to the Registration swatch prints its tint on every plate.
+/// its tint; one linked to the Registration swatch prints its tint on every plate. A tint that is
+/// not a finite number prints no ink.
 pub fn inks(doc: &Document, c: &Cms, color: &Color, link: Link, intent: Intent) -> Inks {
     if let Some((REGISTRATION, tint)) = link {
-        return Inks { cmyk: [tint.clamp(0.0, 1.0); 4], spot: None, registration: true };
+        return Inks { cmyk: [ink_amount(tint); 4], spot: None, registration: true };
     }
     if let Some((name, tint)) = link
         && doc.swatch(name).is_some_and(|s| s.spot && s.paint.color().is_some())
     {
-        return Inks { cmyk: [0.0; 4], spot: Some((name.to_string(), tint.clamp(0.0, 1.0))), registration: false };
+        return Inks { cmyk: [0.0; 4], spot: Some((name.to_string(), ink_amount(tint))), registration: false };
     }
     Inks { cmyk: c.to_cmyk(color, intent), spot: None, registration: false }
 }
@@ -104,7 +110,7 @@ pub type StopPlates = Option<[f32; 4]>;
 pub fn stop_inks(doc: &Document, c: &Cms, color: &Color, link: Link, plates: StopPlates, intent: Intent) -> Inks {
     let mut ink = inks(doc, c, color, link, intent);
     if let (Some(p), Some(_)) = (plates, &ink.spot) {
-        ink.cmyk = p.map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 });
+        ink.cmyk = p.map(ink_amount);
     }
     ink
 }
@@ -225,6 +231,30 @@ mod tests {
         for link in [Some(("Teal", 1.0)), Some(("Missing", 1.0)), None, Some((REGISTRATION, 0.5))] {
             assert_eq!(ink(link, Some([0.25, 0.0, 0.4, 0.0])), inks(&d, &c, &look, link, Intent::RelativeColorimetric), "{link:?}");
         }
+    }
+
+    #[test]
+    fn a_spot_or_registration_tint_that_is_not_a_finite_number_prints_no_ink() {
+        let d = gold_doc();
+        let c = vectorcraft_color::cms::active();
+        let look = Color::cmyk(0.25, 0.1, 0.8, 0.05);
+        let ink = |link: Link| inks(&d, &c, &look, link, Intent::RelativeColorimetric);
+        for t in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let spot = ink(Some(("Gold", t)));
+            assert_eq!(spot, Inks { cmyk: [0.0; 4], spot: Some(("Gold".into(), 0.0)), registration: false }, "{t}");
+            assert_eq!((spot.on_plate("Gold"), spot.on_plate("Cyan")), (0.0, 0.0), "{t}");
+            let reg = ink(Some((REGISTRATION, t)));
+            assert_eq!(reg, Inks { cmyk: [0.0; 4], spot: None, registration: true }, "{t}");
+            assert_eq!((reg.on_plate("Gold"), reg.on_plate("Black")), (0.0, 0.0), "{t}");
+            // A stop's process plates still print beside a spot tint that prints nothing.
+            let stop = stop_inks(&d, &c, &look, Some(("Gold", t)), Some([0.25, 0.0, 0.4, 0.0]), Intent::RelativeColorimetric);
+            assert_eq!((stop.cmyk, stop.on_plate("Gold")), ([0.25, 0.0, 0.4, 0.0], 0.0), "{t}");
+        }
+        // Finite tints outside 0..1 are clamped.
+        assert_eq!(ink(Some(("Gold", 2.0))).on_plate("Gold"), 1.0);
+        assert_eq!(ink(Some(("Gold", -1.0))).on_plate("Gold"), 0.0);
+        assert_eq!(ink(Some((REGISTRATION, 2.0))).cmyk, [1.0; 4]);
+        assert_eq!(ink(Some((REGISTRATION, -1.0))).cmyk, [0.0; 4]);
     }
 
     #[test]
