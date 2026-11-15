@@ -482,6 +482,13 @@ impl<'a> Reader<'a> {
             return Ok(());
         }
         let Some(f) = self.frames.pop() else { return Ok(()) };
+        let depth = self.frames.len();
+        // A block left open ends with its dictionary, and envelopes still waiting in it keep their
+        // drawn art: nothing after the dictionary is theirs.
+        self.envelope_blocks.retain(|d| *d <= depth);
+        while let Some(p) = self.envelopes.pop_if(|p| p.depth > depth) {
+            self.warn(crate::import::ai::envelope::drawn_note(p.typed));
+        }
         let Frame { kind, children, base, hidden, gs, pending_unread_fill, pending_unread_stroke, after, mesh_ended, state, .. } = f;
         let Kind::Obj(mut o) = kind else { return Ok(()) };
         obj::close(&mut o, &mut self.stack, base);
@@ -496,7 +503,10 @@ impl<'a> Reader<'a> {
         }
         self.after_object = after;
         self.mesh_ended = mesh_ended;
-        if matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(_), .. })) {
+        // An object's dictionary in an envelope's `AIDeformArtKey` block is about the art before it
+        // there, as it is in a container: an envelope there is one of the outer envelope's contents.
+        let in_block = o.ty == "ArtDictionary" && self.envelope_blocks.last() == Some(&depth);
+        if !in_block && matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(_), .. })) {
             return self.push(V::Obj(Rc::new(*o)));
         }
         match o.ty.as_str() {
