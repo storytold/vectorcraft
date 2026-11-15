@@ -42,12 +42,21 @@ const CHARS_PER_ROW: usize = 20;
 /// and a few custom sets.
 const TABLE_HEIGHT: f32 = 340.0;
 
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Composite Fonts").into(), body, confirm, min_width: 760.0, ..DialogSpec::FORM };
+/// `char` is held only while a character is picked, so `ui.dialog.set` takes it from `inputs`.
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Composite Fonts").into(),
+    body,
+    confirm,
+    min_width: 760.0,
+    inputs: |_| &["custom", "entry", "char"],
+    ..DialogSpec::FORM
+};
 
-/// Open Composite Fonts on the active document's composite fonts, the first one picked.
+/// Open Composite Fonts on the active document's composite fonts, the first one picked, with the
+/// custom character sets hidden and nothing typed.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let fonts = app.session.active().ok_or("no document open")?.doc.composite_fonts.to_vec();
-    let mut d = Dialog::new(KIND, json!({ "fonts": fonts, "selected": 0, "entryMode": "direct" }));
+    let mut d = Dialog::new(KIND, json!({ "fonts": fonts, "selected": 0, "custom": false, "entryMode": "direct", "entry": "" }));
     show_selected(&mut d);
     app.ui.dialog = Some(d);
     Ok(Value::Null)

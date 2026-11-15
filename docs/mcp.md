@@ -9333,7 +9333,8 @@ picked. Custom shows the font's custom character sets: Character Set picks one, 
 Delete Set takes it out, and Name renames it. Character › Direct Entry adds the characters typed, and Character ›
 Unicode adds the characters of hexadecimal codes (`3042`, `U+3042`, several separated by spaces or commas); Add skips
 characters the set already lists. Delete takes the character picked out of the set. OK runs `type.compositeFonts.set`
-with every font as one undo step; a refused font keeps the dialog open.
+with every font as one undo step; a refused font keeps the dialog open. `ui.dialog.set` takes `custom`, `entry` and
+`char` (the index of the character picked in the set) as soon as the dialog opens.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"},"roman":{"font":"Source Sans 3","size":95,"baseline":-2},"numerals":{"font":"Source Sans 3"}}}]}}}

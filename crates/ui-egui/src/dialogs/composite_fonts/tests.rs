@@ -244,6 +244,27 @@ fn custom_character_sets_are_edited_in_the_dialog() {
     assert_eq!((f.custom.len(), f.custom[0].name.as_str(), f.custom[0].characters.as_str()), (1, "Letters", "Aあ"));
 }
 
+/// `ui.dialog.set` takes `custom`, `entry` and `char` as soon as the dialog opens, before Custom is
+/// clicked or anything is typed, and Add then adds the characters it set.
+#[test]
+fn custom_set_fields_are_set_right_after_open() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let font =
+        json!({"name": "UI Composite Open", "parts": {"kanji": {"font": "Inter"}}, "custom": [{"name": "Marks", "characters": "", "font": "Inter"}]});
+    app.run(COMMAND, json!({ "fonts": [font] })).unwrap();
+    open(&mut app).unwrap();
+    for (field, value) in [("custom", json!(true)), ("entry", json!("※〒")), ("char", json!(0))] {
+        let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": field, "value": value}));
+        let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+        assert!(r.get("error").is_none(), "{field}: {r}");
+        assert_eq!(dialog(&mut app).fields.get(field), Some(&value), "{field}");
+    }
+    frame(&mut app);
+    press(&mut app, Action::AddChars);
+    assert_eq!(sets(&mut app)[0].characters, "※〒");
+}
+
 /// Two sets of the same name keep the dialog open and change nothing.
 #[test]
 fn custom_sets_sharing_a_name_keep_the_dialog_open() {
