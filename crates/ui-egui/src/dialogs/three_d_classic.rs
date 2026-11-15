@@ -161,7 +161,10 @@ pub(super) fn map_art_controls(app: &crate::VectorcraftApp, ui: &mut egui::Ui, d
         let none = tl!("None");
         let options: Vec<&str> = std::iter::once(none).chain(names.iter().map(String::as_str)).collect();
         let shown = map.as_ref().map_or(none, |m| m.symbol.as_str());
-        if let Some(k) = crate::widgets::dropdown_names(ui, "map-art-symbol", shown, &options, 190.0) {
+        // With every map the object takes in use, a surface without one cannot be given one.
+        let room = map.is_some() || maps.len() < vectorcraft_effects::MAX_MAPS;
+        let picked = ui.add_enabled_ui(room, |ui| crate::widgets::dropdown_names(ui, "map-art-symbol", shown, &options, 190.0)).inner;
+        if let Some(k) = picked.filter(|_| room) {
             edited = k.checked_sub(1).and_then(|k| names.get(k)).map(|name| match &map {
                 Some(m) => SurfaceMap { symbol: name.clone(), ..m.clone() },
                 None => SurfaceMap { surface: current, symbol: name.clone(), x: 0.0, y: 0.0, scale_x: 100.0, scale_y: 100.0, rotation: 0.0 },

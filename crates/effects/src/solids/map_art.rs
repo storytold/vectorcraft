@@ -211,6 +211,9 @@ pub(crate) struct SolidLayout {
 #[derive(Default)]
 pub(crate) struct MapBudget {
     elements: usize,
+    /// The points of the maps' symbols cut into straight pieces, against [`MAX_ELEMENTS`].
+    input: usize,
+    /// The points the maps' art draws on the faces, against [`MAX_SURFACE_POINTS`].
     points: usize,
     cuts: usize,
 }
@@ -377,7 +380,7 @@ impl<'a> MapArt<'a> {
         let mut pieces = vec![];
         for piece in art {
             let placed = place * piece.path.to_bezpath();
-            let mut polygons = straight_pieces(&placed, &mut budget.points)?;
+            let mut polygons = straight_pieces(&placed, &mut budget.input)?;
             polygons.retain(|p| p.len() >= 3 && p.iter().all(|q| q.is_finite()));
             let boxes: Vec<Rect> = polygons.iter().filter_map(|polygon| box_of(polygon)).collect();
             let Some(bounds) = boxes.iter().copied().reduce(|a, b| a.union(b)) else { continue };

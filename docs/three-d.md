@@ -592,7 +592,7 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   checkbox is unavailable while Shading Color is Custom
   ([Preserve Spot Color](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260)); how
   the faces are shaded with it is VectorCraft's own. Extrude & Bevel (Classic) and Revolve (Classic) take Map Art
-  ([Map Art](#map-art)). The track cube, Turntable and 3D export are separate, unbuilt items.
+  ([Map Art](#map-art)). The track cube and Turntable are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 

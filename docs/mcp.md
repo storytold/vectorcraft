@@ -4434,7 +4434,8 @@ Rotate (Classic) and the other 3D effects take no map.
   through the object's solids in the order they are built: each solid's front cap and back cap, then each side wall
   from corner to corner of the outline, then the bevel above each wall. Revolve (Classic) has one surface, its swept
   side. The numbering is VectorCraft's own.
-- `symbol` names the symbol mapped onto the surface, and `null` removes the surface's map; `null` with `x`, `y`,
+- `symbol` names the symbol mapped onto the surface, and `null` removes the surface's map, also a map kept past the
+  object's surface count; `null` with `x`, `y`,
   `scaleX`, `scaleY`, `rotation` or `fit: true` is refused. Omitted, the surface keeps its map's symbol; a surface with
   no map then is refused.
 - `x` and `y` (points, -1000000..1000000) place the center of the art from the center of the surface laid out flat,
@@ -4447,7 +4448,7 @@ Rotate (Classic) and the other 3D effects take no map.
 
 One of `surface`, `clearAll`, `shade` and `invisible` is required. Without `index` each object's first Extrude &
 Bevel (Classic) or Revolve (Classic) is edited, its own before its fills' and strokes'; `item` needs `index`. A surface
-past the count, an unknown symbol, a value out of range, an unknown key or an object without one of the two effects is
+past the count (except to remove a map kept there), an unknown symbol, a value out of range, an unknown key or an object without one of the two effects is
 refused, and nothing changes. When nothing changes, no undo step is recorded. It returns `{ids, maps}`: the objects
 changed and the first object's maps.
 

@@ -72,6 +72,22 @@ fn map_art_sets_edits_and_removes_a_surfaces_map_one_undo_step_each() {
 }
 
 #[test]
+fn a_map_past_the_surface_count_can_still_be_removed() {
+    let (mut s, id) = setup("threeD.classicExtrude");
+    s.execute("threeD.mapArt", &json!({"surface": 1, "symbol": "Mark"})).unwrap();
+    s.execute("threeD.mapArt", &json!({"surface": 6, "symbol": "Mark"})).unwrap();
+    // With no depth the solid is a plane with fewer surfaces, and the map of surface 6 stays.
+    s.execute("effect.setParams", &json!({"index": 0, "item": null, "params": {"depth": 0}})).unwrap();
+    let e = s.execute("threeD.mapArt", &json!({"surface": 6, "symbol": "Mark", "x": 3.0})).unwrap_err().to_string();
+    assert!(e.contains("the object's surface count"), "{e}");
+    s.execute("threeD.mapArt", &json!({"surface": 6, "symbol": null})).unwrap();
+    assert_eq!(params(&s, id)["mapArt"], json!([map(1, 0.0, (100.0, 100.0), 0.0)]));
+    // A surface past the count with no map is still refused.
+    let e = s.execute("threeD.mapArt", &json!({"surface": 9, "symbol": null})).unwrap_err().to_string();
+    assert!(e.contains("the object's surface count"), "{e}");
+}
+
+#[test]
 fn scale_to_fit_centers_the_art_and_fills_the_surface() {
     let (mut s, id) = setup("threeD.classicExtrude");
     // The cap is 100 × 100 and the symbol's art 11 × 21.

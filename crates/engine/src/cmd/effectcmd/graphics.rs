@@ -37,7 +37,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Map Art",
             [],
             None,
-            "{surface?: integer (1..the object's surface count: Extrude & Bevel (Classic) numbers each solid's front cap and back cap, then each side wall from corner to corner of the outline, then the bevel above each wall; Revolve (Classic)'s swept side is surface 1), symbol?: name of a document symbol|null (with surface: the symbol mapped onto it; null removes the surface's map and is refused with x, y, scaleX, scaleY, rotation or fit true; omitted: the surface's map keeps its symbol, and a surface with no map is refused), x?: pt, y?: pt (-1000000..1000000; the offset of the art's center from the center of the surface laid out flat; a new map starts at 0, 0), scaleX?: %, scaleY?: % (1..10000; of the symbol's own width and height; a new map starts at 100), rotation?: degrees (-360..360; counterclockwise; a new map starts at 0), fit?: bool (false; true is Scale to Fit: the art is centered and scaled to fill the surface, each side on its own when the art is square to the surface, else in proportion; art with no area keeps its scales), clearAll?: bool (false; true removes every map first, so with surface only that surface's map is left), shade?: bool (Shade Artwork: the mapped art takes the tone and highlight of its face), invisible?: bool (Invisible Geometry: with at least one map, only the mapped art is drawn), index?: int (the 3D effect's position; default: each object's first Extrude & Bevel (Classic) or Revolve (Classic), its own before its fills' and strokes'), item?: appearance item index|null (refused without index; as effect.setParams), ids?|id?} set, edit or remove the art mapped onto the numbered surfaces of each selected object's 3D effect, which must be Extrude & Bevel (Classic) or Revolve (Classic) (Rotate (Classic) takes no map); one of surface, clearAll, shade or invisible is required; the maps are the effect's mapArt, mapShade and mapInvisible parameters; one undo step, and none when nothing changes → {ids: [the objects changed], maps: [the first object's maps]}",
+            "{surface?: integer (1..the object's surface count: Extrude & Bevel (Classic) numbers each solid's front cap and back cap, then each side wall from corner to corner of the outline, then the bevel above each wall; Revolve (Classic)'s swept side is surface 1), symbol?: name of a document symbol|null (with surface: the symbol mapped onto it; null removes the surface's map, also a map kept past the surface count, and is refused with x, y, scaleX, scaleY, rotation or fit true; omitted: the surface's map keeps its symbol, and a surface with no map is refused), x?: pt, y?: pt (-1000000..1000000; the offset of the art's center from the center of the surface laid out flat; a new map starts at 0, 0), scaleX?: %, scaleY?: % (1..10000; of the symbol's own width and height; a new map starts at 100), rotation?: degrees (-360..360; counterclockwise; a new map starts at 0), fit?: bool (false; true is Scale to Fit: the art is centered and scaled to fill the surface, each side on its own when the art is square to the surface, else in proportion; art with no area keeps its scales), clearAll?: bool (false; true removes every map first, so with surface only that surface's map is left), shade?: bool (Shade Artwork: the mapped art takes the tone and highlight of its face), invisible?: bool (Invisible Geometry: with at least one map, only the mapped art is drawn), index?: int (the 3D effect's position; default: each object's first Extrude & Bevel (Classic) or Revolve (Classic), its own before its fills' and strokes'), item?: appearance item index|null (refused without index; as effect.setParams), ids?|id?} set, edit or remove the art mapped onto the numbered surfaces of each selected object's 3D effect, which must be Extrude & Bevel (Classic) or Revolve (Classic) (Rotate (Classic) takes no map); one of surface, clearAll, shade or invisible is required; the maps are the effect's mapArt, mapShade and mapInvisible parameters; one undo step, and none when nothing changes → {ids: [the objects changed], maps: [the first object's maps]}",
             has_doc,
             map_art
         ),
@@ -250,14 +250,16 @@ fn map_art(s: &mut Session, p: &Value) -> Result<Value> {
                     vec![]
                 }
             };
-            let Some(flat) = surfaces.get(surface - 1) else {
-                return Err(bad(C, format!("object {}: `surface` must be from 1 to {}, the object's surface count", id.0, surfaces.len())));
-            };
             // Read before clearAll empties the list, so with clearAll the surface keeps its map.
             let current = effects::surface_maps(&merged).into_iter().find(|m| m.surface == surface);
+            // A map kept past the surface count (the solid lost surfaces) can still be removed.
+            let flat = surfaces.get(surface - 1);
+            if flat.is_none() && !(removes && current.is_some()) {
+                return Err(bad(C, format!("object {}: `surface` must be from 1 to {}, the object's surface count", id.0, surfaces.len())));
+            }
             if removes {
                 params = effects::with_surface_map(&params, surface, None);
-            } else {
+            } else if let Some(flat) = flat {
                 // The values given go over the surface's map, or over a new map's defaults.
                 let mut given = match (&current, p.get("symbol")) {
                     (Some(m), _) => m.to_value(),

@@ -125,6 +125,44 @@ fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
 }
 
 #[test]
+fn map_art_maps_no_more_surfaces_than_an_object_takes() {
+    let max = vectorcraft_effects::MAX_MAPS;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":300,"height":300})).unwrap();
+    let mark = app.run("path.create", json!({"d":"M250 250L260 250L260 270L250 270Z"})).unwrap()["id"].clone();
+    app.run("threeD.addGraphic", json!({"name":"Mark","ids":[mark]})).unwrap();
+    // A star with 36 points has 72 corners, so its solid has two caps and 72 walls.
+    let corners: Vec<String> = (0..72)
+        .map(|i| {
+            let (r, a) = (if i % 2 == 0 { 100.0 } else { 60.0 }, f64::from(i) * std::f64::consts::TAU / 72.0);
+            format!("{:.3} {:.3}", 150.0 + r * a.cos(), 150.0 + r * a.sin())
+        })
+        .collect();
+    app.run("path.create", json!({"d": format!("M{}Z", corners.join(" L"))})).unwrap();
+    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let mut h = Harness { app, ctx, screen: vec2(1280.0, 900.0), texts: vec![] };
+    h.settle();
+    h.click(h.rect("Map Art…").center());
+    let count: usize = h.texts.iter().find_map(|(s, _)| s.strip_prefix("/ ")).and_then(|n| n.parse().ok()).expect("the surface count");
+    assert!(count > max, "{count} surfaces");
+    // Every map the object takes is used, and the surface shown has none.
+    let full: Vec<Value> = (1..=max).map(|surface| json!({"surface": surface, "symbol": "Mark"})).collect();
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("mapArt".into(), json!(full));
+    d.fields.insert("__mapSurface".into(), json!(max + 1));
+    h.settle();
+    h.click(h.rect("None").center());
+    if h.texts.iter().any(|(s, _)| s == "Mark") {
+        h.click(h.rect("Mark").center());
+    }
+    let raw = h.app.ui.dialog.as_ref().unwrap().fields.get("mapArt").cloned().unwrap_or_default();
+    assert_eq!(raw.as_array().map(Vec::len), Some(max), "no map past the limit is written");
+}
+
+#[test]
 fn values_labels_sliders_and_reset_dots_change_the_live_effect_in_one_undo_step() {
     let mut h = Harness::new(vec2(1280.0, 900.0));
     let before = h.app.session.doc().unwrap().doc.clone();

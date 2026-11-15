@@ -235,6 +235,17 @@ fn a_map_past_the_surfaces_draws_nothing_and_a_missing_symbol_is_left_out() {
     assert_eq!(missing(&d, &json!({"mapArt": [{"surface": 1, "symbol": "Mark"}]})), None);
 }
 
+#[test]
+fn the_points_drawn_on_earlier_surfaces_leave_the_next_symbol_its_own_allowance() {
+    let d = document();
+    let art = MapArt::of(Some(&d), CLASSIC_EXTRUDE, &json!({"mapArt": [{"surface": 3, "symbol": "Mark"}]})).unwrap();
+    let wall = SolidSurface { kind: SurfaceKind::Wall, width: 100.0, height: 50.0, center: None };
+    // Earlier surfaces drew more points on their faces than one symbol may take cut into pieces.
+    let mut budget = MapBudget { points: MAX_ELEMENTS + 1, ..MapBudget::default() };
+    let pieces = art.unrolled(&art.maps[0], &wall, &mut budget).expect("the symbol is cut into pieces");
+    assert_eq!(pieces.len(), 1);
+}
+
 fn missing(d: &Document, p: &Value) -> Option<String> {
     super::super::missing_symbol(d, p, None)
 }
