@@ -643,6 +643,45 @@ fn window_panels_peek_rejects_what_it_cannot_show_and_changes_nothing() {
 }
 
 #[test]
+fn panels_shown_by_window_panels_peek_stay_until_the_pointer_moves_or_leaves_the_window() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap(), json!("right"));
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_some(), "with no pointer movement, the panels stay");
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], json!("right"));
+    h.frame(vec![Event::PointerMoved(wide.center())]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_none(), "the pointer moved away from them, so they hide");
+    // The pointer leaving the window counts as moving away.
+    h.app.run("window.panels.peek", json!({"side": "right"})).unwrap();
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_some());
+    h.frame(vec![Event::PointerGone]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_none(), "the pointer left the window, so they hide");
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], Value::Null);
+}
+
+#[test]
+fn panels_held_by_a_flyout_hide_after_it_closes_with_the_pointer_still_away_from_them() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    // The pointer rests on the canvas, then outside the window, while a flyout holds the panels.
+    for away in [vec![Event::PointerMoved(wide.center())], vec![Event::PointerGone]] {
+        h.app.run("window.panels.peek", json!({"side": "right"})).unwrap();
+        h.app.ui.open_panel = Some("swatches".into());
+        h.frame(away);
+        wait(&mut h, peek::GRACE * 2.0);
+        assert!(h.tab("properties").is_some(), "an open flyout keeps them");
+        h.app.ui.open_panel = None;
+        wait(&mut h, peek::GRACE * 2.0);
+        assert!(h.tab("properties").is_none(), "the flyout closed with the pointer away from them, so they hide");
+        assert_eq!(inspect(&h.app, &h.ctx)["peek"], Value::Null);
+    }
+}
+
+#[test]
 fn edge_panels_are_the_docked_panels_on_each_side_of_the_canvas() {
     let layout = default_from(DockTab::ALL[0], &[], false, None, None);
     let right = peek::edge_panels(&layout, peek::Edge::Right);
