@@ -118,10 +118,31 @@ fn shown_figure(app: &VectorcraftApp) -> Option<usize> {
     shared(app, |s| figure(&OtFeatures::from_tags(s.features.iter().map(String::as_str))))
 }
 
-/// Whether `flag` is on for every character the panel acts on (`Some(true)`), for none of them
-/// (`Some(false)`), or only for some (`None`).
+/// Whether `flag` is on for every character a toggle changes (`Some(true)`), for none of them
+/// (`Some(false)`), or only for some (`None`). At a Type tool caret the command styles all the
+/// text ([`run_features`]), so every character of the text counts, as in [`edit`].
 fn shown_flag(app: &VectorcraftApp, flag: Flag) -> Option<bool> {
-    shared(app, |s| flag.get(&OtFeatures::from_tags(s.features.iter().map(String::as_str))))
+    let on = |s: &CharStyle| flag.get(&OtFeatures::from_tags(s.features.iter().map(String::as_str)));
+    if let Some(runs) = caret_text(app).map(|t| &t.runs)
+        && let Some(first) = runs.first()
+    {
+        let v = on(&first.style);
+        return runs.iter().all(|r| on(&r.style) == v).then_some(v);
+    }
+    shared(app, on)
+}
+
+/// The text object of the Type tool's caret (an empty selection), whose text the panel's
+/// commands style as a whole.
+fn caret_text(app: &VectorcraftApp) -> Option<&vectorcraft_doc::TextObject> {
+    let (id, a, b) = text_editing(app)?;
+    if b > a {
+        return None;
+    }
+    match &app.session.active()?.doc.node(id)?.kind {
+        NodeKind::Text(t) => Some(t),
+        _ => None,
+    }
 }
 
 /// The Figure menu's text for entry `shown`: Mixed when the characters differ.
@@ -160,12 +181,9 @@ fn edit(app: &mut VectorcraftApp, change: Change) {
         change.apply(&mut after);
         after == before
     };
-    let unchanged = match text_editing(app) {
-        Some((id, a, b)) if b <= a => match app.session.active().and_then(|st| st.doc.node(id)).map(|n| &n.kind) {
-            Some(NodeKind::Text(t)) => Some(t.runs.iter().all(|r| same(&r.style))),
-            _ => None,
-        },
-        _ => shared(app, same),
+    let unchanged = match caret_text(app) {
+        Some(t) => Some(t.runs.iter().all(|r| same(&r.style))),
+        None => shared(app, same),
     };
     if unchanged != Some(true) {
         run_features(app, "featureChanges", OtFeatures::changes(|f| change.apply(f)));
@@ -320,7 +338,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if app.session.prefs.show_east_asian_options {
         ui.separator();
-        // Checked when every character the panel acts on has it; chosen then, it turns it off.
+        // Checked when every character it changes has it; chosen then, it turns it off.
         for (label, flag) in east_asian_items() {
             let on = shown_flag(app, flag) == Some(true);
             if menu_item(ui, label, has, on) {
@@ -787,6 +805,34 @@ mod tests {
             let at = row(&mut app, "Reset OpenType Features").1;
             super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
             assert_eq!(run_features(&mut app, &id, 8), [("かなAB".to_string(), Value::Null)], "{label}: reset");
+        }
+    }
+
+    /// At a Type tool caret after a character that has H or V Style or Roman Italics while the
+    /// rest of the text does not, the item and the checkbox rows read every character the command
+    /// styles at a caret (all of them): the item shows unchecked, a Small Caps row set the same way
+    /// shows a dash, and choosing the item turns its feature on for the whole text.
+    #[test]
+    fn caret_items_read_every_character_they_change() {
+        for (label, tag) in [("H or V Style", "hkna"), ("Roman Italics", "ital")] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.prefs.show_east_asian_options = true;
+            app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+            app.session.select_tool("type", Default::default()).unwrap();
+            let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "かなAB"})).unwrap()["id"].clone();
+            app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "features": [tag, "smcp"]})).unwrap();
+            app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+            // The caret after "か", whose style the next typed character takes.
+            app.session.set_tool_option("select", &json!({"start": 3, "end": 3}));
+            assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((3, 3)));
+            assert_eq!(shown_flag(&app, Flag::Field(|f| &mut f.small_caps)), None, "{label}: Small Caps row");
+            let ctx = egui::Context::default();
+            let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+            let Some((text, at)) = texts.into_iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label) else { panic!("{label} missing") };
+            assert!(!text.starts_with('✓'), "{label}: {text:?}");
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            let runs = run_features(&mut app, &id, 8);
+            assert!(runs.iter().all(|(_, f)| f.as_array().is_some_and(|f| f.iter().any(|x| x == tag))), "{label}: {runs:?}");
         }
     }
 }
