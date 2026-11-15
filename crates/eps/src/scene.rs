@@ -313,6 +313,19 @@ impl<'a> Scene<'a> {
         self
     }
 
+    /// [`Self::run`], with how many placements draw each encoded image the scene kept, and the
+    /// indices in `codes` that its image, colorized-image and field caches name.
+    #[cfg(test)]
+    pub fn run_with_codes(mut self) -> (Page, Vec<usize>, Vec<usize>) {
+        let doc = self.doc;
+        for l in &doc.layers {
+            self.node(l, false);
+        }
+        let uses = self.codes.iter().map(|c| c.uses).collect();
+        let cached = self.images.values().chain(self.colorized_images.values()).flatten().chain(self.fields.values().flatten()).copied().collect();
+        (self.page(), uses, cached)
+    }
+
     pub fn run(mut self) -> Page {
         let doc = self.doc;
         for l in &doc.layers {
@@ -556,7 +569,7 @@ impl<'a> Scene<'a> {
         if self.size() > self.max_body {
             self.body.truncate(was);
             self.unplace(placed);
-            self.forget_fields(codes);
+            self.forget_codes(codes);
             self.warn(TOO_LARGE);
         }
     }
@@ -1439,24 +1452,21 @@ impl<'a> Scene<'a> {
         self.place_image(i, place);
     }
 
-    /// Forget the field images after the first `n` codes that no placement draws any longer, last
-    /// first, up to the first code that is drawn or isn't a field image.
-    fn forget_fields(&mut self, n: usize) {
-        while self.codes.len() > n {
-            let i = self.codes.len() - 1;
-            let Some(code) = self.codes.get(i) else { break };
-            if code.uses > 0 {
-                break;
-            }
-            let key = code.content_key();
-            let Some(bucket) = self.fields.get_mut(&key) else { break };
-            let Some(at) = bucket.iter().position(|&j| j == i) else { break };
-            bucket.swap_remove(at);
-            if bucket.is_empty() {
-                self.fields.remove(&key);
-            }
-            self.codes.pop();
+    /// Forget the encoded images after the first `n` codes that no placement draws any longer, and
+    /// the cache entries that name them: placed images, colorized images and fields. A code that a
+    /// placement still draws keeps itself and every code before it.
+    fn forget_codes(&mut self, n: usize) {
+        let keep = self.codes.iter().rposition(|c| c.uses > 0).map_or(n, |last| n.max(last + 1));
+        if keep >= self.codes.len() {
+            return;
         }
+        self.codes.truncate(keep);
+        self.images.retain(|_, e| e.is_none_or(|i| i < keep));
+        self.colorized_images.retain(|_, e| e.is_none_or(|i| i < keep));
+        self.fields.retain(|_, bucket| {
+            bucket.retain(|&i| i < keep);
+            !bucket.is_empty()
+        });
     }
 
     /// A placed image (`blob`, cached under `key`): its pixel grid of `width` × `height` placed
@@ -1469,7 +1479,13 @@ impl<'a> Scene<'a> {
         let encoded = match self.images.get(key) {
             Some(e) => *e,
             None => {
-                let e = self.decode_image(blob).and_then(|img| self.encode_image(img.as_raw(), img.width(), img.height())).map(|c| self.add_code(c));
+                let code = self.decode_image(blob).and_then(|img| self.encode_image(img.as_raw(), img.width(), img.height()));
+                // An image that can't be placed isn't kept.
+                if code.as_ref().is_some_and(|c| self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body) {
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let e = code.map(|c| self.add_code(c));
                 self.images.insert(key.to_string(), e);
                 e
             }
@@ -1501,7 +1517,13 @@ impl<'a> Scene<'a> {
         let encoded = match self.colorized_images.get(&cache) {
             Some(e) => *e,
             None => {
-                let e = self.encode_colorized(blob, paint).map(|c| self.add_code(c));
+                let code = self.encode_colorized(blob, paint);
+                // An image that can't be placed isn't kept.
+                if code.as_ref().is_some_and(|c| self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body) {
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let e = code.map(|c| self.add_code(c));
                 self.colorized_images.insert(cache, e);
                 e
             }
