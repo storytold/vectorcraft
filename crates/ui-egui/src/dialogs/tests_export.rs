@@ -304,6 +304,23 @@ fn nothing_to_export_keeps_export_as_open_before_the_save_dialog() {
     assert!(written.borrow().is_empty());
 }
 
+/// Art that a plot leaves out (here at 0% opacity) is nothing to export as HP-GL of the art's
+/// bounds, before the save dialog; other formats still export it.
+#[test]
+fn art_a_plot_leaves_out_keeps_hpgl_export_as_open_before_the_save_dialog() {
+    let (mut app, _) = app(1);
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| panic!("no save dialog without art the plot draws")));
+    app.run("select.all", json!({})).unwrap();
+    app.run("transparency.set", json!({"opacity": 0})).unwrap();
+    app.run("file.exportAs", json!({"format": "hpgl"})).unwrap();
+    assert!(confirm(&mut app).unwrap_err().contains("no visible art"));
+    assert_eq!(kind(&app), Some("exportAs"));
+    app.services.pick_save = Some(Box::new(|p: &crate::FilePick| Some(format!("/out/{}", p.name))));
+    set(&mut app, "format", json!("png"));
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("pngOptions"));
+}
+
 #[test]
 fn pdf_artboards_continue_in_the_save_pdf_dialog() {
     let (mut app, written) = app(3);

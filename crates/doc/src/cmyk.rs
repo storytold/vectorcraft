@@ -56,19 +56,114 @@ fn is_tiff(bytes: &[u8]) -> bool {
     bytes.starts_with(b"II*\0") || bytes.starts_with(b"MM\0*")
 }
 
-/// The width and height of the first image of TIFF `bytes` when it has more strips or tiles than
-/// the `tiff` decoder can count: strips per plane times planes past `u32::MAX`, or tiles per plane
-/// times planes past `usize::MAX`. A file that stores one plane per channel (PlanarConfiguration 2)
-/// has a plane for each channel; other files have one. The decoder multiplies these counts without
-/// a check, which panics where overflow checks are on. Such an image, when it is at least a pixel
-/// wide, claims at least 2^32 samples.
-/// Where a tag repeats, the value giving the most strips or tiles counts. `None` for other images
+/// What [`jpeg_frames`] found in a JPEG's headers.
+enum Frames {
+    /// Every frame header declares a size the check accepts, or there is none.
+    Fit,
+    /// The width and height of the first frame header the check refuses.
+    Misfit(u16, u16),
+    /// The steps ran past [`MAX_JPEG_HEADER_STEPS`].
+    OverBudget,
+}
+
+/// Checks the width and height each 8-bit baseline, extended or progressive frame header in the
+/// headers of a JPEG declares with `fits`. The JPEG is the bytes after its start-of-image marker:
+/// `parts[0]` followed by `parts[1]`. The headers are read as the decoder reads them, up to the
+/// first start-of-scan or end-of-image marker: every other marker is followed by its segment's
+/// length, and bytes between segments are passed over, as are fill bytes (0xFF, and 0x00 after
+/// one) before a marker. `steps` counts each byte looked at and each segment passed over.
+fn jpeg_frames(parts: [&[u8]; 2], steps: &mut u64, fits: impl Fn(u16, u16) -> bool) -> Frames {
+    let byte = |i: usize| match i.checked_sub(parts[0].len()) {
+        None => parts[0].get(i).copied(),
+        Some(j) => parts[1].get(j).copied(),
+    };
+    let u16_at = |i: usize| Some(u16::from_be_bytes([byte(i)?, byte(i.checked_add(1)?)?]));
+    let mut p = 0usize;
+    loop {
+        *steps += 1;
+        if *steps > MAX_JPEG_HEADER_STEPS {
+            return Frames::OverBudget;
+        }
+        let Some(b) = byte(p) else { return Frames::Fit };
+        p += 1;
+        if b != 0xFF {
+            continue;
+        }
+        while matches!(byte(p), Some(0xFF | 0)) {
+            p += 1;
+            *steps += 1;
+            if *steps > MAX_JPEG_HEADER_STEPS {
+                return Frames::OverBudget;
+            }
+        }
+        let Some(marker) = byte(p) else { return Frames::Fit };
+        p += 1;
+        if matches!(marker, 0xDA | 0xD9) {
+            return Frames::Fit;
+        }
+        // Length (2 bytes), then for a frame header its precision, height and width.
+        let Some(len) = u16_at(p) else { return Frames::Fit };
+        if matches!(marker, 0xC0..=0xC2)
+            && byte(p.saturating_add(2)) == Some(8)
+            && let (Some(h), Some(w)) = (u16_at(p.saturating_add(3)), u16_at(p.saturating_add(5)))
+            && !fits(w, h)
+        {
+            return Frames::Misfit(w, h);
+        }
+        if len < 2 {
+            return Frames::Fit;
+        }
+        p = p.saturating_add(usize::from(len));
+    }
+}
+
+/// Most strips or tiles the first image of a TIFF may have: VectorCraft's own limit, 1/1024 of
+/// [`crate::MAX_RASTER_ALLOC`] (524,288 in the web app, 2,097,152 on the desktop). The decoder
+/// reads an offset and a byte count of 8 bytes each for every one into memory before anything else.
+pub const MAX_TIFF_CHUNKS: u64 = crate::MAX_RASTER_ALLOC / 1024;
+
+/// Most pixels the JPEG of a JPEG-compressed TIFF tile may declare when it declares more pixels
+/// than the whole image has: VectorCraft's own limit (2048 × 2048, 16 MB as CMYK).
+pub const MAX_JPEG_TILE_PIXELS: u64 = 1 << 22;
+
+/// Most steps reading the JPEG headers of a TIFF's strips or tiles may take (a byte looked at, a
+/// segment passed over or a strip offset read): VectorCraft's own limit.
+const MAX_JPEG_HEADER_STEPS: u64 = 1 << 24;
+
+/// The width and height of the first image of TIFF or BigTIFF `bytes` when it has more strips or
+/// tiles than the `tiff` decoder can count: strips per plane times planes past `u32::MAX`, or tiles
+/// per plane times planes past `usize::MAX`. A file that stores one plane per channel
+/// (PlanarConfiguration 2) has a plane for each channel; other files have one. The decoder
+/// multiplies these counts without a check, which panics where overflow checks are on. Such an
+/// image, when it is at least a pixel wide, claims at least 2^32 samples.
+/// It also gives them for an image with more than [`MAX_TIFF_CHUNKS`] strips or tiles, counted from
+/// its size or from the number of values its StripOffsets and StripByteCounts tags hold, or its
+/// TileOffsets and TileByteCounts tags for a tiled image. An image the decoder reads as strips (it
+/// has both strip tables and neither tile table) counts strips, and one it reads as tiles counts
+/// tiles; the decoder refuses an image with any other mix of these tags before it reads a table.
+/// For a JPEG-compressed image (Compression 7) it gives the width and height a strip's or tile's
+/// JPEG declares in a frame header (in the JPEGTables, or in the strip or tile before its first
+/// scan) when they are wider or taller than the strip or tile, or, for a tile, when they make more
+/// than [`MAX_JPEG_TILE_PIXELS`] pixels and more than the image has. The decoder allocates the
+/// pixels the JPEG declares. It gives the image's width and height when reading those headers
+/// takes more than 16,777,216 steps (a byte looked at, a segment passed over or a strip offset
+/// read), when the strip or tile offsets are of a type other than BYTE, UNDEFINED, SHORT, LONG,
+/// IFD, LONG8 or IFD8, and when the image's width and height, a striped image's RowsPerStrip or a
+/// tiled image's tile size isn't a single value of one of those types.
+/// Where a tag repeats, the value giving the most strips or tiles counts, and the JPEG check uses
+/// the last entry of a field type the decoder knows, as the decoder does. `None` for other images
 /// and for bytes that aren't a TIFF.
 pub fn oversized_tiff(bytes: &[u8]) -> Option<(u32, u32)> {
-    let le = bytes.starts_with(b"II*\0");
-    if !le && !bytes.starts_with(b"MM\0*") {
+    let le = bytes.starts_with(b"II");
+    let head = bytes.get(..4)?;
+    // A BigTIFF counts and points with 8 bytes where a TIFF uses 4, so its entries are 20 bytes.
+    let big = if head == b"II*\0" || head == b"MM\0*" {
+        false
+    } else if head == b"II+\0" || head == b"MM\0+" {
+        true
+    } else {
         return None;
-    }
+    };
     let u16_at = |at: usize| -> Option<u16> {
         let b: [u8; 2] = bytes.get(at..at.checked_add(2)?)?.try_into().ok()?;
         Some(if le { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
@@ -77,32 +172,71 @@ pub fn oversized_tiff(bytes: &[u8]) -> Option<(u32, u32)> {
         let b: [u8; 4] = bytes.get(at..at.checked_add(4)?)?.try_into().ok()?;
         Some(if le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
     };
-    let ifd = usize::try_from(u32_at(4)?).ok()?;
-    // (tag, the entry's single BYTE, SHORT, LONG or IFD value, which sits in the entry, or its
-    // single LONG8 or IFD8 value that fits in 32 bits, which sits where the entry points)
-    let entry = |i: usize| -> Option<(u16, Option<u32>)> {
-        let e = ifd.checked_add(i.checked_mul(12)?.checked_add(2)?)?;
-        let (ty, count, at) = (u16_at(e.checked_add(2)?)?, u32_at(e.checked_add(4)?)?, e.checked_add(8)?);
-        let value = match (ty, count) {
-            (1, 1) => bytes.get(at).map(|&b| u32::from(b)),
-            (3, 1) => u16_at(at).map(u32::from),
-            (4 | 13, 1) => u32_at(at),
-            (16 | 18, 1) => {
-                let at = usize::try_from(u32_at(at)?).ok()?;
-                let (lo, hi) = (u32_at(at)?, u32_at(at.checked_add(4)?)?);
-                let wide = if le { u64::from(hi) << 32 | u64::from(lo) } else { u64::from(lo) << 32 | u64::from(hi) };
-                u32::try_from(wide).ok()
-            }
+    let u64_at = |at: usize| -> Option<u64> {
+        let b: [u8; 8] = bytes.get(at..at.checked_add(8)?)?.try_into().ok()?;
+        Some(if le { u64::from_le_bytes(b) } else { u64::from_be_bytes(b) })
+    };
+    let word_len: usize = if big { 8 } else { 4 };
+    let word = |at: usize| if big { u64_at(at) } else { u32_at(at).map(u64::from) };
+    // The bytes one value of each field type takes; 0 for types the decoder doesn't know.
+    let width_of = |ty: u16| -> usize {
+        match ty {
+            1 | 2 | 6 | 7 => 1,
+            3 | 8 => 2,
+            4 | 9 | 11 | 13 => 4,
+            5 | 10 | 12 | 16..=18 => 8,
+            _ => 0,
+        }
+    };
+    let ifd = usize::try_from(word(if big { 8 } else { 4 })?).ok()?;
+    let entries = if big { u64_at(ifd)? } else { u64::from(u16_at(ifd)?) };
+    let first = ifd.checked_add(if big { 8 } else { 2 })?;
+    // (tag, field type, number of values, where the values are: in the entry when they fit in its
+    // last word, otherwise where that word points)
+    let entry = |i: usize| -> Option<(u16, u16, u64, Option<usize>)> {
+        let e = first.checked_add(i.checked_mul(4 + 2 * word_len)?)?;
+        let (tag, ty, count) = (u16_at(e)?, u16_at(e.checked_add(2)?)?, word(e.checked_add(4)?)?);
+        let at = e.checked_add(4 + word_len)?;
+        let fits = u64::try_from(width_of(ty)).ok()?.checked_mul(count).is_some_and(|n| n <= word_len as u64);
+        let values = if fits { Some(at) } else { word(at).and_then(|p| usize::try_from(p).ok()) };
+        Some((tag, ty, count, values))
+    };
+    // Value `i` of an entry's BYTE, UNDEFINED, SHORT, LONG, IFD, LONG8 or IFD8 values at `at`.
+    let nth = |ty: u16, at: usize, i: u64| -> Option<u64> {
+        let p = at.checked_add(usize::try_from(i).ok()?.checked_mul(width_of(ty))?)?;
+        match ty {
+            1 | 7 => bytes.get(p).map(|&b| u64::from(b)),
+            3 => u16_at(p).map(u64::from),
+            4 | 13 => u32_at(p).map(u64::from),
+            16 | 18 => u64_at(p),
             _ => None,
-        };
-        Some((u16_at(e)?, value))
+        }
     };
     let (mut width, mut height, mut planes, mut planar) = (0u32, 0u32, 1u32, false);
     let (mut rows, mut tile_w, mut tile_h) = (None::<u32>, None::<u32>, None::<u32>);
+    // The most values a strip table and a tile table hold.
+    let (mut strip_chunks, mut tile_chunks) = (0u64, 0u64);
+    // The decoder keeps the last entry of a tag whose field type it knows. These are the last such
+    // entries (type, count, where) of the tags `LAST` lists.
+    const LAST: [u16; 11] = [256, 257, 259, 278, 322, 323, 273, 279, 324, 325, 347];
+    let mut last = [None::<(u16, u64, Option<usize>)>; LAST.len()];
     let least = |was: Option<u32>, v: u32| Some(was.map_or(v, |w| w.min(v)));
-    for i in 0..usize::from(u16_at(ifd)?) {
-        let Some((tag, value)) = entry(i) else { break };
-        let Some(v) = value else { continue };
+    // The entry's single BYTE, UNDEFINED, SHORT, LONG or IFD value, or its single LONG8 or IFD8
+    // value when that fits in 32 bits.
+    let single = |ty: u16, count: u64, at: Option<usize>| at.filter(|_| count == 1).and_then(|at| nth(ty, at, 0)).and_then(|v| u32::try_from(v).ok());
+    for i in 0..usize::try_from(entries).unwrap_or(usize::MAX) {
+        let Some((tag, ty, count, at)) = entry(i) else { break };
+        match tag {
+            273 | 279 => strip_chunks = strip_chunks.max(count),
+            324 | 325 => tile_chunks = tile_chunks.max(count),
+            _ => {}
+        }
+        if width_of(ty) > 0
+            && let Some(slot) = LAST.iter().position(|&t| t == tag).and_then(|k| last.get_mut(k))
+        {
+            *slot = Some((ty, count, at));
+        }
+        let Some(v) = single(ty, count, at) else { continue };
         match tag {
             256 => width = width.max(v),
             257 => height = height.max(v),
@@ -115,13 +249,87 @@ pub fn oversized_tiff(bytes: &[u8]) -> Option<(u32, u32)> {
         }
     }
     let planes = if planar { u128::from(planes) } else { 1 };
-    let tiles = match (tile_w, tile_h) {
-        (Some(tw @ 1..), Some(th @ 1..)) => u128::from(width.div_ceil(tw)) * u128::from(height.div_ceil(th)) * planes > usize::MAX as u128,
-        _ => false,
+    let tiled = match (tile_w, tile_h) {
+        (Some(tw @ 1..), Some(th @ 1..)) => u128::from(width.div_ceil(tw)) * u128::from(height.div_ceil(th)) * planes,
+        _ => 0,
     };
+    let tiles = tiled > usize::MAX as u128;
     let rows = rows.unwrap_or(height);
-    let strips = rows > 0 && u128::from(height.saturating_sub(1) / rows + 1) * planes > u128::from(u32::MAX);
-    (tiles || strips).then_some((width, height))
+    let striped = height.saturating_sub(1).checked_div(rows).map_or(0, |n| u128::from(n + 1) * planes);
+    let strips = striped > u128::from(u32::MAX);
+    if tiles || strips {
+        return Some((width, height));
+    }
+    let last_of = |tag: u16| LAST.iter().position(|&t| t == tag).and_then(|k| last.get(k).copied().flatten());
+    // The single value the decoder reads from the last entry of `tag`: `None` without one, and
+    // `Some(None)` when that entry doesn't hold a single value read here.
+    let value_of = |tag: u16| last_of(tag).map(|(ty, count, at)| single(ty, count, at));
+    // The decoder reads strips when the image has both strip tables and neither tile table, tiles
+    // in the opposite case, and refuses every other image before it reads a table.
+    let layout = match [273, 279, 324, 325].map(|tag| last_of(tag).is_some()) {
+        [true, true, false, false] => Some((273, striped.max(u128::from(strip_chunks)))),
+        [false, false, true, true] => Some((324, tiled.max(u128::from(tile_chunks)))),
+        _ => None,
+    };
+    let (offsets_tag, chunks) = layout?;
+    if chunks > u128::from(MAX_TIFF_CHUNKS) {
+        return Some((width, height));
+    }
+    if value_of(259) != Some(Some(7)) {
+        return None;
+    }
+    // The JPEG check uses the sizes the decoder reads. A size it needs that isn't a single value
+    // read here refuses the image.
+    let (Some(Some(w_img)), Some(Some(h_img))) = (value_of(256), value_of(257)) else { return Some((width, height)) };
+    let tile = offsets_tag == 324;
+    // RowsPerStrip, which the decoder reads only for strips.
+    let rows = if tile { Some(h_img) } else { value_of(278).unwrap_or(Some(h_img)) };
+    let Some(rows) = rows else { return Some((width, height)) };
+    let (tw, th) = match (value_of(322).flatten(), value_of(323).flatten()) {
+        (Some(tw), Some(th)) => (tw, th),
+        _ if tile => return Some((width, height)),
+        _ => (0, 0),
+    };
+    // A strip is as wide as the image and RowsPerStrip tall (at most the image's height); a tile's
+    // JPEG may be as large as the tile, which the edge tiles of the image overhang.
+    let fits = |w: u16, h: u16| {
+        let (w, h) = (u32::from(w), u32::from(h));
+        if tile {
+            let pixels = u64::from(w) * u64::from(h);
+            w <= tw && h <= th && (pixels <= MAX_JPEG_TILE_PIXELS || pixels <= u64::from(w_img) * u64::from(h_img))
+        } else {
+            w <= w_img && h <= rows.min(h_img)
+        }
+    };
+    // The decoder reads the JPEGTables after their start-of-image marker and without their last two
+    // bytes, followed by each strip or tile after its first two bytes; without JPEGTables, each
+    // strip or tile after its start-of-image marker.
+    let tables = last_of(347)
+        .and_then(|(_, count, at)| {
+            let at = at?;
+            let end = at.checked_add(usize::try_from(count).ok()?)?.min(bytes.len());
+            bytes.get(at.checked_add(2)?..end.checked_sub(2)?)
+        })
+        .unwrap_or_default();
+    let (ty, count, at) = last_of(offsets_tag)?;
+    let at = at?;
+    // The decoder also takes offsets of other types (a RATIONAL or ASCII value), which aren't read
+    // here: such an image is refused.
+    if !matches!(ty, 1 | 3 | 4 | 7 | 13 | 16 | 18) {
+        return Some((width, height));
+    }
+    let mut steps = 0u64;
+    for i in 0..count {
+        steps += 1;
+        let Some(at) = nth(ty, at, i).and_then(|o| usize::try_from(o).ok()) else { break };
+        let part = bytes.get(at.saturating_add(2)..).unwrap_or_default();
+        match jpeg_frames([tables, part], &mut steps, fits) {
+            Frames::Fit => {}
+            Frames::Misfit(w, h) => return Some((u32::from(w), u32::from(h))),
+            Frames::OverBudget => return Some((width, height)),
+        }
+    }
+    None
 }
 
 /// The color type of TIFF `bytes` and its decoder; `None` for [`oversized_tiff`] images too.
@@ -386,6 +594,21 @@ impl ImageBlob {
         if bytes.starts_with(&[0xFF, 0xD8]) { jpeg_inks(bytes) } else { tiff_inks(bytes) }
     }
 
+    /// The CMYK ICC profile a CMYK image carries: a four-component JPEG's `ICC_PROFILE` APP2
+    /// segments put together, or a CMYK TIFF's tag 34675. `None` for other images, and for a
+    /// profile that isn't one of CMYK colors. Reads only the file's headers and tags.
+    pub fn cmyk_icc_profile(&self) -> Option<Vec<u8>> {
+        let bytes = self.bytes.as_slice();
+        if jpeg_components(bytes) == Some(4) {
+            return cmyk_icc(jpeg_icc(bytes));
+        }
+        let (kind, mut d) = tiff(bytes)?;
+        if !matches!(kind, tiff::ColorType::CMYK(8 | 16)) {
+            return None;
+        }
+        cmyk_icc(tiff_icc(&mut d))
+    }
+
     /// The ink amounts around pixel (`x`, `y`) of a CMYK image, in the pixel space of an image
     /// object of `object` (width, height) pixels: the average of the `size` × `size` pixels centered
     /// on it, clipped to the image, as C, M, Y and K bytes. `None` outside the image and for images
@@ -515,9 +738,10 @@ pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi:
 /// all, as RGBA pixels: CMYK with an alpha channel (5 samples), each colour converted by `rgb` (ink
 /// amounts 0..1 → sRGB 0..1; the inks can't be kept with the transparency, so they show as RGB),
 /// and grayscale with extra samples, of which the first is the alpha when the file says so (other
-/// channels are left out). Associated (premultiplied) alpha is divided back out. The samples may be
-/// stored together or one plane per channel. `None` for other images and ones larger than
-/// [`MAX_CMYK_PIXELS`].
+/// channels are left out). Associated (premultiplied) alpha is divided back out, and a pixel with
+/// no associated alpha has no color. 16-bit samples are converted at 16 bits, and only the result
+/// is rounded to 8 bits. The samples may be stored together or one plane per channel. `None` for
+/// other images and ones larger than [`MAX_CMYK_PIXELS`].
 pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3]) -> Option<image::RgbaImage> {
     use tiff::tags::Tag;
     let (kind, mut d) = tiff(bytes)?;
@@ -535,20 +759,33 @@ pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3])
         _ => return None,
     };
     let n = usize::try_from(pixels(w, h)?).ok()?;
-    let data = read_samples(&mut d, n, samples)?;
-    let mut out = Vec::with_capacity(n * 4);
-    for p in data.chunks_exact(samples) {
-        let opacity = if alpha { p.get(colour).copied().unwrap_or(u8::MAX) } else { u8::MAX };
-        let a = f32::from(opacity) / 255.0;
-        let level = |v: u8| {
-            let v = f32::from(v) / 255.0;
-            if extra == Some(1) && a > 0.0 { (v / a).min(1.0) } else { v }
+    let data = read_samples_at_depth(&mut d, n, samples)?;
+    // Sample `i` of the image, 0..1.
+    let level_at = |i: usize| match &data {
+        Samples::Eight(v) => v.get(i).map(|&s| f32::from(s) / 255.0),
+        Samples::Sixteen(v) => v.get(i).map(|&s| f32::from(s) / 65535.0),
+    };
+    // Sample `i` of the image as 8 bits, a 16-bit sample rounded to the nearest.
+    let byte_at = |i: usize| match &data {
+        Samples::Eight(v) => v.get(i).copied(),
+        Samples::Sixteen(v) => v.get(i).map(|&s| u8::try_from((u32::from(s) + 128) / 257).unwrap_or(u8::MAX)),
+    };
+    let mut out = Vec::with_capacity(n.checked_mul(4)?);
+    for first in (0..n).map(|p| p * samples) {
+        let (opacity, a) = if alpha { (byte_at(first + colour).unwrap_or(u8::MAX), level_at(first + colour).unwrap_or(1.0)) } else { (u8::MAX, 1.0) };
+        let level = |s: usize| {
+            let v = level_at(first + s).unwrap_or(0.0);
+            match extra {
+                Some(1) if a > 0.0 => (v / a).min(1.0),
+                // No associated alpha: the color is zero (TIFF 6.0, Associated Alpha Handling).
+                Some(1) if alpha => 0.0,
+                _ => v,
+            }
         };
-        let [r, g, b] = match *p {
-            [c, m, y, k, ..] if colour == 4 => rgb([level(c), level(m), level(y), level(k)]),
-            [v, ..] if photometric == Some(0) => [1.0 - level(v); 3],
-            [v, ..] => [level(v); 3],
-            [] => continue,
+        let [r, g, b] = match colour {
+            4 => rgb([level(0), level(1), level(2), level(3)]),
+            _ if photometric == Some(0) => [1.0 - level(0); 3],
+            _ => [level(0); 3],
         };
         out.extend([r, g, b].map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8));
         out.push(opacity);
@@ -767,6 +1004,85 @@ mod tests {
         assert_eq!(gray(0), [255, 255, 255, 255, 51, 51, 51, 255, 0, 0, 0, 255], "a channel that isn't alpha: opaque");
     }
 
+    /// Five 16-bit samples a pixel: the four inks and one extra sample, which the file's
+    /// `ExtraSamples` names.
+    struct Cmyka16;
+    impl tiff::encoder::colortype::ColorType for Cmyka16 {
+        type Inner = u16;
+        const TIFF_VALUE: tiff::tags::PhotometricInterpretation = tiff::tags::PhotometricInterpretation::CMYK;
+        const BITS_PER_SAMPLE: &'static [u16] = &[16; 5];
+        const SAMPLE_FORMAT: &'static [tiff::tags::SampleFormat] = &[tiff::tags::SampleFormat::Uint; 5];
+        fn horizontal_predict(row: &[u16], result: &mut Vec<u16>) {
+            result.extend_from_slice(row);
+        }
+    }
+
+    /// Two 16-bit samples a pixel: gray and one extra sample.
+    struct GrayExtra16;
+    impl tiff::encoder::colortype::ColorType for GrayExtra16 {
+        type Inner = u16;
+        const TIFF_VALUE: tiff::tags::PhotometricInterpretation = tiff::tags::PhotometricInterpretation::BlackIsZero;
+        const BITS_PER_SAMPLE: &'static [u16] = &[16, 16];
+        const SAMPLE_FORMAT: &'static [tiff::tags::SampleFormat] = &[tiff::tags::SampleFormat::Uint; 2];
+        fn horizontal_predict(row: &[u16], result: &mut Vec<u16>) {
+            result.extend_from_slice(row);
+        }
+    }
+
+    /// A one-row TIFF of `C`'s pixels `data`, with the ExtraSamples value `extra`.
+    fn extra_tiff<C: tiff::encoder::colortype::ColorType<Inner = u16>>(extra: u16, data: &[u16]) -> Vec<u8> {
+        let samples = C::BITS_PER_SAMPLE.len();
+        let mut file = Cursor::new(Vec::new());
+        let mut enc = tiff::encoder::TiffEncoder::new(&mut file).unwrap();
+        let mut img = enc.new_image::<C>(u32::try_from(data.len() / samples).unwrap(), 1).unwrap();
+        img.encoder().write_tag(tiff::tags::Tag::ExtraSamples, &[extra][..]).unwrap();
+        img.write_data(data).unwrap();
+        file.into_inner()
+    }
+
+    /// 16-bit CMYK with alpha converts its 16-bit inks and alpha, and rounds only the result to 8
+    /// bits; the high byte of each sample alone would give other pixels.
+    #[test]
+    fn a_16_bit_cmyk_tiff_with_alpha_converts_at_16_bits() {
+        let naive = |[c, m, y, k]: [f32; 4]| [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)];
+        let read = |extra: u16, data: &[u16]| extra_samples_tiff_rgba(&extra_tiff::<Cmyka16>(extra, data), naive).expect("CMYKA reads").into_raw();
+        // Unassociated: 129 of cyan, opaque; no ink at an alpha of 129; no ink at an alpha of 386.
+        let straight = [129, 0, 0, 0, 65535, 0, 0, 0, 0, 129, 0, 0, 0, 0, 386];
+        assert_eq!(read(2, &straight), [254, 255, 255, 255, 255, 255, 255, 1, 255, 255, 255, 2]);
+        // Associated: cyan 128 at an alpha of 256 (half cyan); K 255 at an alpha of 511 (about half K).
+        let premultiplied = [128, 0, 0, 0, 256, 0, 0, 0, 255, 511];
+        assert_eq!(read(1, &premultiplied), [128, 255, 255, 1, 128, 128, 128, 2], "divided by the 16-bit alpha");
+    }
+
+    /// 16-bit gray with alpha converts at 16 bits as well.
+    #[test]
+    fn a_16_bit_grayscale_tiff_with_alpha_converts_at_16_bits() {
+        let read = |extra: u16| {
+            // A gray of 129, opaque, then 128 at an alpha of 256.
+            let bytes = extra_tiff::<GrayExtra16>(extra, &[129, 65535, 128, 256]);
+            extra_samples_tiff_rgba(&bytes, |_| [0.0; 3]).expect("gray with alpha reads").into_raw()
+        };
+        assert_eq!(read(2), [1, 1, 1, 255, 0, 0, 0, 1], "unassociated");
+        assert_eq!(read(1), [1, 1, 1, 255, 128, 128, 128, 1], "associated, divided by the 16-bit alpha");
+    }
+
+    /// With associated alpha, a pixel whose alpha is zero has no color (TIFF 6.0, Associated
+    /// Alpha Handling), whatever its color samples hold.
+    #[test]
+    fn a_pixel_with_no_associated_alpha_has_no_color() {
+        use tiff::encoder::{TiffEncoder, colortype::CMYKA8};
+        let naive = |[c, m, y, k]: [f32; 4]| [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)];
+        let mut file = Cursor::new(Vec::new());
+        let mut enc = TiffEncoder::new(&mut file).unwrap();
+        let mut img = enc.new_image::<CMYKA8>(1, 1).unwrap();
+        img.encoder().write_tag(tiff::tags::Tag::ExtraSamples, &[1u16][..]).unwrap();
+        img.write_data(&[255, 0, 0, 0, 0]).unwrap();
+        let cmyk = extra_samples_tiff_rgba(&file.into_inner(), naive).expect("CMYKA reads");
+        assert_eq!(cmyk.into_raw(), [255, 255, 255, 0], "no ink");
+        let gray = extra_samples_tiff_rgba(&extra_tiff::<GrayExtra16>(1, &[50_000, 0]), |_| [0.0; 3]).expect("gray reads");
+        assert_eq!(gray.into_raw(), [0, 0, 0, 0], "a gray of zero");
+    }
+
     /// A header claiming more tiles than can be counted: (2^32 − 1)² pixels in tiles of one pixel,
     /// times 2 planes.
     #[test]
@@ -783,7 +1099,7 @@ mod tests {
             f
         };
         assert_eq!(oversized_tiff(&header(2)), Some((u32::MAX, u32::MAX)));
-        assert_eq!(oversized_tiff(&header(1)), None, "one plane: (2^32 − 1)² tiles can be counted in 64 bits");
+        assert_eq!(oversized_tiff(&header(1)), Some((u32::MAX, u32::MAX)), "one plane: countable, but past MAX_TIFF_CHUNKS");
         assert!(tiff(&header(2)).is_none(), "not decoded");
     }
 
@@ -823,6 +1139,227 @@ mod tests {
         for h in [header(&tile_sizes), header(&long8)] {
             assert!(tiff(&h).is_none(), "not decoded");
         }
+    }
+
+    /// A little-endian TIFF, or BigTIFF when `big`, holding `data` right after its header (from
+    /// byte 8, or 16 in a BigTIFF), then one directory of `entries` (tag, field type, values). An
+    /// entry's values sit in the entry when they fit, otherwise after the directory.
+    fn tiff_file(big: bool, entries: &[(u16, u16, Vec<u64>)], data: &[u8]) -> Vec<u8> {
+        let (word, head) = if big { (8, 16) } else { (4, 8) };
+        let put = |f: &mut Vec<u8>, v: u64, n: usize| f.extend(&v.to_le_bytes()[..n]);
+        let mut f = if big { b"II+\0\x08\0\0\0".to_vec() } else { b"II*\0".to_vec() };
+        let ifd = head + data.len();
+        put(&mut f, ifd as u64, word);
+        f.extend(data);
+        put(&mut f, entries.len() as u64, if big { 8 } else { 2 });
+        let after = f.len() + entries.len() * (4 + 2 * word) + word;
+        let mut tail = vec![];
+        for (tag, ty, values) in entries {
+            let width = match ty {
+                1 | 7 => 1,
+                3 => 2,
+                4 => 4,
+                _ => 8,
+            };
+            f.extend([tag.to_le_bytes(), ty.to_le_bytes()].concat());
+            put(&mut f, values.len() as u64, word);
+            let mut v = vec![];
+            for &x in values {
+                put(&mut v, x, width);
+            }
+            if v.len() <= word {
+                v.resize(word, 0);
+                f.extend(v);
+            } else {
+                put(&mut f, (after + tail.len()) as u64, word);
+                tail.extend(v);
+            }
+        }
+        put(&mut f, 0, word);
+        f.extend(tail);
+        f
+    }
+
+    /// A JPEG of four components whose progressive frame header declares `w` × `h` pixels, with a
+    /// scan header and no scan data.
+    fn jpeg_header(w: u16, h: u16) -> Vec<u8> {
+        let mut j = vec![0xFF, 0xD8, 0xFF, 0xC2, 0, 20, 8];
+        j.extend(h.to_be_bytes());
+        j.extend(w.to_be_bytes());
+        j.push(4);
+        for id in 1..=4 {
+            j.extend([id, 0x11, 0]);
+        }
+        j.extend([0xFF, 0xDA, 0, 14, 4, 1, 0, 2, 0, 3, 0, 4, 0, 0, 63, 0, 0xFF, 0xD9]);
+        j
+    }
+
+    /// The directory of a 1 × 1 CMYK image with alpha, JPEG-compressed in one strip of `len` bytes
+    /// at byte `at`.
+    fn jpeg_strip_entries(at: u64, len: u64) -> Vec<(u16, u16, Vec<u64>)> {
+        vec![
+            (256, 4, vec![1]),
+            (257, 4, vec![1]),
+            (258, 3, vec![8; 5]),
+            (259, 3, vec![7]),
+            (262, 3, vec![5]),
+            (273, 4, vec![at]),
+            (277, 3, vec![5]),
+            (278, 4, vec![1]),
+            (279, 4, vec![len]),
+            (338, 3, vec![2]),
+        ]
+    }
+
+    /// A strip's JPEG that declares more pixels than the strip holds would have the decoder
+    /// allocate them: a 1 × 1 image whose JPEG claims 16384 × 16384 is refused before any decoder
+    /// opens it, in a TIFF or a BigTIFF, with fill bytes or other bytes before the frame header,
+    /// and with the frame header in the JPEGTables.
+    #[test]
+    fn a_jpeg_strip_declaring_more_than_its_strip_is_refused() {
+        let big = jpeg_header(16384, 16384);
+        let file = tiff_file(false, &jpeg_strip_entries(8, big.len() as u64), &big);
+        assert_eq!(oversized_tiff(&file), Some((16384, 16384)));
+        assert!(tiff(&file).is_none(), "not decoded");
+        let bigtiff = tiff_file(true, &jpeg_strip_entries(16, big.len() as u64), &big);
+        assert_eq!(oversized_tiff(&bigtiff), Some((16384, 16384)), "BigTIFF");
+        // The decoder reads the last ImageWidth and ImageLength: 1 × 1 after 16384 × 16384, in one
+        // strip without RowsPerStrip.
+        let mut entries = jpeg_strip_entries(8, big.len() as u64);
+        entries.retain(|e| e.0 != 278);
+        entries.splice(0..0, [(256, 4, vec![16384]), (257, 4, vec![16384])]);
+        assert_eq!(oversized_tiff(&tiff_file(false, &entries, &big)), Some((16384, 16384)), "repeated sizes");
+        // StripOffsets as a BYTE, which the decoder reads, and as a RATIONAL, which it reads as two
+        // offsets.
+        for (ty, expected) in [(1, (16384, 16384)), (5, (1, 1))] {
+            let mut entries = jpeg_strip_entries(8, big.len() as u64);
+            for e in &mut entries {
+                if e.0 == 273 {
+                    e.1 = ty;
+                }
+            }
+            assert_eq!(oversized_tiff(&tiff_file(false, &entries, &big)), Some(expected), "StripOffsets of type {ty}");
+        }
+        let one = jpeg_header(1, 1);
+        assert_eq!(oversized_tiff(&tiff_file(false, &jpeg_strip_entries(8, one.len() as u64), &one)), None, "a JPEG as large as its strip");
+        let wide = jpeg_header(2, 1);
+        assert_eq!(oversized_tiff(&tiff_file(false, &jpeg_strip_entries(8, wide.len() as u64), &wide)), Some((2, 1)), "one pixel too wide");
+        for (what, prefix) in [("fill bytes", &[0xFF, 0x00, 0xFF][..]), ("other bytes", &[0x12, 0x34][..])] {
+            let mut j = big[..2].to_vec();
+            j.extend(prefix);
+            j.extend(&big[2..]);
+            let file = tiff_file(false, &jpeg_strip_entries(8, j.len() as u64), &j);
+            assert_eq!(oversized_tiff(&file), Some((16384, 16384)), "{what} before the frame header");
+        }
+        // The JPEGTables hold the frame header; the strip holds only the scan.
+        let tables = [&big[..24], &[0xFF, 0xD9][..]].concat();
+        let scan = [&[0xFF, 0xD8][..], &big[24..]].concat();
+        let mut entries = jpeg_strip_entries(8 + tables.len() as u64, scan.len() as u64);
+        entries.push((347, 7, tables.iter().map(|&b| u64::from(b)).collect()));
+        let file = tiff_file(false, &entries, &[tables, scan].concat());
+        assert_eq!(oversized_tiff(&file), Some((16384, 16384)), "frame header in the JPEGTables");
+        // An encoder's 8 × 8 RGB JPEG, with its own segments before the frame header, in an
+        // 8 × 8 image of one strip, and of strips 4 rows tall.
+        let mut real = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut real).encode(&[90; 8 * 8 * 3], 8, 8, image::ExtendedColorType::Rgb8).unwrap();
+        let rgb = |rows: u64| {
+            let entries = [
+                (256, 4, vec![8]),
+                (257, 4, vec![8]),
+                (258, 3, vec![8; 3]),
+                (259, 3, vec![7]),
+                (262, 3, vec![2]),
+                (273, 4, vec![8]),
+                (277, 3, vec![3]),
+                (278, 4, vec![rows]),
+                (279, 4, vec![real.len() as u64]),
+            ];
+            oversized_tiff(&tiff_file(false, &entries, &real))
+        };
+        assert_eq!(rgb(8), None, "an encoder's JPEG as large as its strip");
+        assert_eq!(rgb(4), Some((8, 8)), "an encoder's JPEG taller than its strip");
+    }
+
+    /// A tile's JPEG may be as large as the tile, which overhangs the image, and when it is more
+    /// than MAX_JPEG_TILE_PIXELS, no larger than the image.
+    #[test]
+    fn a_jpeg_tile_declaring_more_than_its_tile_is_refused() {
+        let tiled_with = |tile: u64, j: &[u8], rows: Vec<u64>| {
+            let mut entries: Vec<_> = jpeg_strip_entries(0, 0).into_iter().filter(|e| !matches!(e.0, 273 | 278 | 279)).collect();
+            if !rows.is_empty() {
+                entries.push((278, 4, rows));
+            }
+            entries.extend([(322, 4, vec![tile]), (323, 4, vec![tile]), (324, 4, vec![8]), (325, 4, vec![j.len() as u64])]);
+            oversized_tiff(&tiff_file(false, &entries, j))
+        };
+        let tiled = |tile: u64, j: &[u8]| tiled_with(tile, j, vec![]);
+        assert_eq!(tiled_with(16, &jpeg_header(16, 16), vec![1, 1]), None, "RowsPerStrip, unread in a tiled image");
+        assert_eq!(tiled(16, &jpeg_header(16, 16)), None, "as large as the tile");
+        assert_eq!(tiled(16, &jpeg_header(17, 16)), Some((17, 16)), "wider than the tile");
+        assert_eq!(tiled(16, &jpeg_header(16, 17)), Some((16, 17)), "taller than the tile");
+        assert_eq!(tiled(4096, &jpeg_header(2048, 2048)), None, "MAX_JPEG_TILE_PIXELS");
+        assert_eq!(tiled(4096, &jpeg_header(2048, 2049)), Some((2048, 2049)), "past MAX_JPEG_TILE_PIXELS and the image");
+    }
+
+    /// The decoder reads every strip's offset and byte count before anything else: an image with
+    /// more than MAX_TIFF_CHUNKS strips, counted from its size or from its tables, is refused.
+    #[test]
+    fn tiffs_with_more_strips_than_their_tables_may_hold_are_refused() {
+        let file = |height: u64, count: u32| {
+            let entries = [
+                (256, 4, vec![1]),
+                (257, 4, vec![height]),
+                (258, 3, vec![8]),
+                (262, 3, vec![1]),
+                (273, 4, vec![8]),
+                (278, 4, vec![1]),
+                (279, 4, vec![1]),
+            ];
+            let mut f = tiff_file(false, &entries, &[0]);
+            // StripOffsets' count, its values left out of the file.
+            let at = 8 + 1 + 2 + 4 * 12 + 4;
+            f[at..at + 4].copy_from_slice(&count.to_le_bytes());
+            f
+        };
+        let most = MAX_TIFF_CHUNKS;
+        assert_eq!(oversized_tiff(&file(most, 1)), None, "MAX_TIFF_CHUNKS rows of a strip each");
+        assert_eq!(oversized_tiff(&file(most + 1, 1)), Some((1, u32::try_from(most + 1).unwrap())), "one strip more");
+        assert_eq!(oversized_tiff(&file(1, u32::try_from(most).unwrap())), None, "MAX_TIFF_CHUNKS offsets");
+        assert_eq!(oversized_tiff(&file(1, u32::try_from(most + 1).unwrap())), Some((1, 1)), "one offset more");
+        assert!(tiff(&file(1, 1 << 25)).is_none(), "not decoded");
+        // Tile sizes without tile tables: the decoder reads the strips and never counts the
+        // 4,194,304 tiles of a pixel the sizes give.
+        let strips_with_tile_sizes = |offsets: Option<u16>| {
+            let mut entries = vec![
+                (256, 4, vec![2048]),
+                (257, 4, vec![2048]),
+                (258, 3, vec![8]),
+                (262, 3, vec![1]),
+                (273, 4, vec![8]),
+                (279, 4, vec![2048 * 2048]),
+                (322, 4, vec![1]),
+                (323, 4, vec![1]),
+            ];
+            entries.extend(offsets.map(|tag| (tag, 4, vec![8])));
+            entries.sort_by_key(|e| e.0);
+            oversized_tiff(&tiff_file(false, &entries, &[0]))
+        };
+        assert_eq!(strips_with_tile_sizes(None), None, "a strip image with tile sizes of one pixel");
+        assert_eq!(strips_with_tile_sizes(Some(324)), None, "strip and tile tables: the decoder refuses it unread");
+    }
+
+    /// Strips whose JPEG headers take more than MAX_JPEG_HEADER_STEPS steps to read refuse the
+    /// file: here every strip points at the same 1 MB without a marker.
+    #[test]
+    fn jpeg_strips_that_take_too_long_to_read_are_refused() {
+        let file = |strips: u64| {
+            let mut entries = jpeg_strip_entries(0, 0);
+            entries.retain(|e| !matches!(e.0, 257 | 273 | 279));
+            entries.extend([(257, 4, vec![strips]), (273, 4, vec![8; strips as usize]), (279, 4, vec![1 << 20; strips as usize])]);
+            tiff_file(false, &entries, &std::iter::repeat_n(0, 1 << 20).collect::<Vec<u8>>())
+        };
+        assert_eq!(oversized_tiff(&file(8)), None, "about 8 million steps");
+        assert_eq!(oversized_tiff(&file(17)), Some((1, 17)), "about 17 million steps");
     }
 
     fn inks() -> Inks {

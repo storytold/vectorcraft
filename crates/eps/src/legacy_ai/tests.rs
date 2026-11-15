@@ -658,6 +658,47 @@ fn images_are_written_in_the_form_the_specification_shows() {
     assert!(rgb.iter().zip([247.0, 148.0, 29.0]).all(|(c, want)| (c * 255.0 - want).abs() < 0.1), "{rgb:?}");
 }
 
+/// The pieces of an image cut into a raster mesh warp (as Object › Expand leaves a Warp on an
+/// image) are written as the image whole once, then each as the part of it that its triangle shows,
+/// and the file draws as the document does ([`write`] runs it).
+#[test]
+fn the_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
+    // GUARDS: each of a warped image's 200 pieces was written with all of the image's samples.
+    let mut doc = Document::new(200.0, 160.0);
+    let mut png = vec![];
+    image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let blob = ImageBlob::new("image/png", png);
+    let key = blob.content_key();
+    doc.images.insert(key.clone(), blob);
+    let im = ImageObject {
+        key,
+        width: 64,
+        height: 64,
+        xf: Affine::new([2.0, 0.0, 0.0, 2.0, 20.0, 10.0]),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let photo = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im.clone())));
+    let bend = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 12.0 * ((p.x - 20.0) / 128.0 * std::f64::consts::PI).sin());
+    let warped = vectorcraft_doc::live::mesh_warp_image(&photo, &im, &bend, 10, false, false);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, warped).unwrap();
+    let text = String::from_utf8(write(&doc).bytes).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 200);
+    let digits = |lines: &Vec<&str>| {
+        lines.iter().filter_map(|l| l.strip_prefix('%')).filter(|l| l.bytes().all(|b| b.is_ascii_hexdigit())).map(str::len).sum::<usize>()
+    };
+    let whole = 64 * 64 * 3 * 2;
+    assert_eq!(digits(&images[0]), whole, "the first piece holds the whole image");
+    // Each piece holds its cell (two triangles share one) and 2 pixels more around it.
+    let total: usize = images.iter().map(digits).sum();
+    assert!(total < 10 * whole, "{total} digits of samples for an image of {whole}");
+}
+
 /// An image whose data is empty is left out with the note for empty or too large images, and an
 /// image whose data can't be decoded is left out with the decode note.
 #[test]
@@ -1392,6 +1433,41 @@ fn variable_font_settings_are_warned_as_left_out() {
     let out = write(&doc);
     assert!(out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
     assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
+}
+
+/// A legacy `.ai` text object has no Insert Aki (§15.4): type with Insert Aki Left or Right is
+/// written as text with the warning that it is left out. Written as outlines, the glyphs keep the
+/// space it adds, and nothing is reported.
+#[test]
+fn insert_aki_is_warned_as_left_out_of_text() {
+    for (left, right) in [(250.0, 0.0), (0.0, 125.0)] {
+        let mut doc = typed();
+        let id = texts(&doc)[0].0.id;
+        if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+            t.runs[0].style.aki_left = left;
+            t.runs[0].style.aki_right = right;
+        }
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES), "{left} {right}: {:?}", out.warnings);
+        assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
+    }
+    let width = |aki: f64| {
+        let mut st = style(20.0, red());
+        st.aki_left = aki;
+        st.aki_right = aki;
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "HH", st);
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = write_with(&doc, LegacyAiOptions { outline_text: true, ..LegacyAiOptions::default() });
+        assert!(!out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+        let back = crate::import(&out.bytes).unwrap().document;
+        children(&children(&back.layers[0])[0])[0].visual_bounds().unwrap().width()
+    };
+    // Between the two H's: 0.5 em after the first and 0.5 em before the second, 20 pt.
+    let (plain, spaced) = (width(0.0), width(500.0));
+    assert!((spaced - plain - 20.0).abs() < 0.05, "{plain} {spaced}");
 }
 
 /// Standard Vertical Roman Alignment is written as `Tv` and Tate-chu-yoko in horizontal type as a

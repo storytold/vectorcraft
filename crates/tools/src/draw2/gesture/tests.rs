@@ -22,23 +22,65 @@ fn drag_held(t: &mut GestureTool, cx: &ToolContext, pts: &[(f64, f64)], m: Mods)
     v
 }
 
-/// The Pencil's new path starts and ends on Smart Guides (#506), the points between where
-/// the hand went.
+/// The Pencil follows the hand from the press to the release: it ignores Smart Guides and Snap to Point and shows no
+/// Smart Guides, hovering or drawing over the art, with Smart Guides on or with only Snap to Point.
 #[test]
-fn pencil_ends_snap_to_smart_guides() {
+fn pencil_follows_the_hand_and_shows_no_smart_guides() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
-    let cx = cx(&d, &s, &p);
-    let mut t = GestureTool::new("pencil");
-    let acts = drag(&mut t, &cx, &[(102.0, 98.0), (151.0, 300.0), (250.0, 320.0), (198.0, 203.0)], Mods::default());
-    let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
-    assert_eq!(v["points"], json!([[100.0, 100.0], [151.0, 300.0], [250.0, 320.0], [200.0, 200.0]]));
+    let on = cx(&d, &s, &p);
+    let snap_to_point = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    // Near the corners at (100, 100) and (200, 200), within Snap to Point's 2 px of them.
+    let hand = [(101.0, 99.0), (151.0, 300.0), (250.0, 320.0), (199.0, 201.0)];
+    for cx in [&on, &snap_to_point] {
+        let mut t = GestureTool::new("pencil");
+        t.pointer(cx, &PointerEvent::new(PointerKind::Move, hand[0].0, hand[0].1));
+        assert!(t.overlays(cx).is_empty(), "hovering: {:?}", t.overlays(cx));
+        t.pointer(cx, &PointerEvent::new(PointerKind::Down, hand[0].0, hand[0].1));
+        for &(x, y) in &hand[1..] {
+            t.pointer(cx, &PointerEvent::new(PointerKind::Drag, x, y));
+            assert!(t.snap.guides().is_empty(), "drawing: {:?}", t.snap.guides());
+        }
+        let last = hand[hand.len() - 1];
+        let acts = t.pointer(cx, &PointerEvent::new(PointerKind::Up, last.0, last.1));
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(v["points"], json!(hand.map(|(x, y)| [x, y])));
+    }
     // The Paintbrush follows the hand all the way.
     let mut t = GestureTool::new("paintbrush");
-    let acts = drag(&mut t, &cx, &[(102.0, 98.0), (151.0, 300.0)], Mods::default());
+    let acts = drag(&mut t, &on, &[(102.0, 98.0), (151.0, 300.0)], Mods::default());
     let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
     assert_eq!(v["points"][0], json!([102.0, 98.0]));
+}
+
+/// Snap to Grid and Snap to Pixel are not Smart Guides: they still move the Pencil's ends (and an
+/// Alt line's), while the points between follow the hand.
+#[test]
+fn pencil_ends_still_snap_to_the_grid_and_pixels() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let grid = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let pixel = ToolContext { snap_to_pixel: true, ..cx(&d, &s, &p) };
+    let on = |cx: &ToolContext, q: (f64, f64)| match cx.snap_to_grid {
+        true => vectorcraft_geom::snap::snap_point_to_grid(Point::new(q.0, q.1), cx.grid_step()),
+        false => Point::new(q.0.round(), q.1.round()),
+    };
+    let hand = [(301.3, 302.6), (351.4, 420.2), (447.7, 452.9)];
+    for cx in [&grid, &pixel] {
+        let (first, last) = (on(cx, hand[0]), on(cx, hand[2]));
+        assert!(first != Point::new(hand[0].0, hand[0].1) && last != Point::new(hand[2].0, hand[2].1));
+        let mut t = GestureTool::new("pencil");
+        let acts = drag(&mut t, cx, &hand, Mods::default());
+        let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+        assert_eq!(v["points"], json!([[first.x, first.y], [351.4, 420.2], [last.x, last.y]]));
+        // Alt's straight line ends on the grid or a pixel too.
+        let mut t = GestureTool::new("pencil");
+        let acts = drag_held(&mut t, cx, &[hand[0], hand[2]], Mods { alt: true, ..Mods::default() });
+        let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+        assert_eq!(v["points"][1], json!([last.x, last.y]));
+    }
 }
 
 /// #852: the Paintbrush sends each point's pen pressure; a mouse (always fully pressed) and
@@ -693,10 +735,10 @@ fn pencil_shift_draws_a_straight_line_at_45_degree_steps() {
     }
 }
 
-/// #3799: a Shift line leaves no Smart Guides of its press on screen while it is dragged
-/// (its end doesn't snap), and Alt at its release leaves it open.
+/// #3799: a Shift line shows no Smart Guides, at its press or while it is dragged, and Alt at its
+/// release leaves it open.
 #[test]
-fn pencil_shift_line_drops_the_press_guides_and_stays_open_with_alt() {
+fn pencil_shift_line_shows_no_guides_and_stays_open_with_alt() {
     let (d, _) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
@@ -704,7 +746,7 @@ fn pencil_shift_line_drops_the_press_guides_and_stays_open_with_alt() {
     let shift = Mods { shift: true, ..Default::default() };
     let mut t = GestureTool::new("pencil");
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 102.0, 98.0).with_mods(shift));
-    assert!(!t.overlays(&cx).is_empty(), "the press snaps to the corner and shows it");
+    assert!(t.snap.guides().is_empty(), "the press: {:?}", t.snap.guides());
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 140.0).with_mods(shift));
     assert!(t.overlays(&cx).is_empty(), "{:?}", t.overlays(&cx));
     let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
@@ -793,7 +835,7 @@ fn pencil_shows_the_star_before_a_press_that_draws_a_new_path() {
         }
     }
     let mut t = GestureTool::new("pencil");
-    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::Pencil, "over an end the stroke continues");
+    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::PencilContinue, "over an end the stroke continues");
     assert_eq!(t.cursor(&cx, middle, Mods::default()), Cursor::Pencil, "over the path the stroke redraws");
     assert_eq!(t.cursor(&cx, away, Mods::default()), Cursor::PencilNew, "away from the path");
     // While a stroke is drawn, the Pencil's own cursor.
@@ -838,7 +880,7 @@ fn pencil_shift_line_continues_a_selected_path_from_its_end() {
 }
 
 /// Before a press over an end of a selected open path, the Pencil shows its continuation cursor
-/// exactly when the press would draw a straight line that continues the path; away from the
+/// exactly when the press continues the path, freehand or with a straight line; away from the
 /// ends, with nothing selected, with Edit Selected Paths off, once the press is down and with
 /// the Paintbrush, it does not.
 #[test]
@@ -859,12 +901,9 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     let shift = Mods { shift: true, ..Default::default() };
     let alt = Mods { alt: true, ..Default::default() };
     let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
-    // The release's stroke: a straight line that continues the path.
-    let continues = |acts: &[Vec<Action>]| {
-        acts.last()
-            .and_then(|a| a.first())
-            .is_some_and(|a| matches!(a, Action::Preview(_, v) if v.get("extend").is_some() && v["points"].as_array().is_some_and(|q| q.len() == 2)))
-    };
+    // The release's stroke continues the path.
+    let continues =
+        |acts: &[Vec<Action>]| acts.last().and_then(|a| a.first()).is_some_and(|a| matches!(a, Action::Preview(_, v) if v.get("extend").is_some()));
     for alt_smooth in [false, true] {
         for m in [Mods::default(), shift, alt, shift_alt] {
             for (at, other_end) in [(Point::new(405.0, 303.0), (500.0, 296.0)), (Point::new(296.0, 302.0), (200.0, 310.0))] {
@@ -880,7 +919,7 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     let end = Point::new(405.0, 303.0);
     assert_eq!(t.cursor(&cx, end, shift), Cursor::PencilContinue);
     assert_eq!(t.cursor(&cx, end, alt), Cursor::PencilContinue, "Alt alone continues at any angle");
-    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::Pencil, "without Shift or Alt the stroke is freehand");
+    assert_eq!(t.cursor(&cx, end, Mods::default()), Cursor::PencilContinue, "a freehand stroke continues it too");
     assert_eq!(t.cursor(&cx, Point::new(350.0, 360.0), shift), Cursor::PencilStraight, "away from the ends");
     // While the line is drawn, the Pencil's own cursor.
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, end.x, end.y).with_mods(shift));
@@ -895,6 +934,105 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     assert_eq!(GestureTool::new("pencil").cursor(&cx_none, end, shift), Cursor::PencilStraight, "nothing selected");
     assert_eq!(GestureTool::new("paintbrush").cursor(&cx, end, shift), Cursor::Paintbrush);
     assert_eq!(Cursor::PencilContinue.precise(), Cursor::Crosshair, "Use Precise Cursors");
+}
+
+/// A Pencil stroke continuing a selected path shows the continuation cursor while a release would
+/// connect it to an open end of another path selected at the press, and the closing ring while a
+/// release would close the path because the stroke ends within Close Paths When Ends Are Within
+/// of the path's other end, a straight line too; the release does what the cursor showed.
+#[test]
+fn a_continued_stroke_shows_where_it_connects_or_closes() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, pts: &[(f64, f64)]| {
+        let id = d.alloc_id();
+        let mut els = vec![vectorcraft_geom::PathEl::MoveTo(Point::new(pts[0].0, pts[0].1))];
+        els.extend(pts[1..].iter().map(|&(x, y)| vectorcraft_geom::PathEl::LineTo(Point::new(x, y))));
+        let pd = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(els));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, pd, vectorcraft_doc::Appearance::default_art())).unwrap();
+        id
+    };
+    let a = add(&mut d, &[(300.0, 300.0), (400.0, 300.0), (400.0, 400.0)]);
+    let b = add(&mut d, &[(500.0, 500.0), (600.0, 500.0)]);
+    let p = paint();
+    let mut both = Selection::default();
+    both.set([a, b]);
+    let mut cx = cx(&d, &both, &p);
+    cx.smart_guides = false;
+    cx.snap_to_point = false;
+    let none = Mods::default();
+    let shift = Mods { shift: true, ..Default::default() };
+    // Runs a stroke from `pts[0]`, giving the cursor at its last point before the release and the
+    // release's `path.freehand` parameters.
+    let run = |t: &mut GestureTool, pts: &[(f64, f64)], m: Mods| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1).with_mods(m));
+        for &(x, y) in &pts[1..] {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y).with_mods(m));
+        }
+        let (x, y) = pts[pts.len() - 1];
+        let shown = t.cursor(&cx, Point::new(x, y), m);
+        let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(m));
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+        (shown, v.clone())
+    };
+    let mut t = GestureTool::new("pencil");
+    // To the other selected path's start: it connects, and doesn't close.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (450.0, 450.0), (498.0, 502.0)], none);
+    assert_eq!(shown, Cursor::PencilContinue, "near the other path's end");
+    assert_eq!(
+        (v["extend"].clone(), v["connect"].clone(), v["closed"].clone()),
+        (json!({"id": a.0, "end": "end"}), json!({"id": b.0, "end": "start"}), json!(false))
+    );
+    // Back near the path's own start (10 px from it): the ring, and the release closes it.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 420.0), (290.0, 380.0), (292.0, 306.0)], none);
+    assert_eq!(shown, Cursor::PencilClose, "near the path's other end");
+    assert_eq!((v["extend"].clone(), v["closed"].clone()), (json!({"id": a.0, "end": "end"}), json!(true)));
+    assert!(v.get("connect").is_none(), "{v}");
+    // Farther than Close Paths When Ends Are Within (15 px): no ring, and it stays open.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 420.0), (290.0, 380.0), (290.0, 330.0)], none);
+    assert_eq!((shown, v["closed"].clone()), (Cursor::Pencil, json!(false)), "away from the other end");
+    // A straight line from the end to near the start: the ring, and it closes the path.
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 350.0), (306.0, 306.0)], shift);
+    assert_eq!(shown, Cursor::PencilClose, "a straight line near the other end");
+    assert_eq!((v["points"].as_array().map(Vec::len), v["closed"].clone()), (Some(2), json!(true)));
+    // Close Paths When Ends Are Within off: neither ring nor close.
+    t.set_option("closeWithin", &json!(0.0));
+    let (shown, v) = run(&mut t, &[(400.0, 400.0), (350.0, 420.0), (290.0, 380.0), (292.0, 306.0)], none);
+    assert_eq!((shown, v["closed"].clone()), (Cursor::Pencil, json!(false)), "at 0 px");
+}
+
+/// The continuation cursor tests where the release ends, after snapping, not the pointer: here
+/// Snap to Grid moves a stroke's end from 13 pt away from another selected path's end (outside Edit
+/// Selected Paths' 12 px) to 9 pt away, so the release connects, and the cursor says so.
+#[test]
+fn the_continuation_cursor_follows_the_snapped_release() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, a: (f64, f64), b: (f64, f64)| {
+        let id = d.alloc_id();
+        let els = vec![vectorcraft_geom::PathEl::MoveTo(Point::new(a.0, a.1)), vectorcraft_geom::PathEl::LineTo(Point::new(b.0, b.1))];
+        let pd = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(els));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, pd, vectorcraft_doc::Appearance::default_art())).unwrap();
+        id
+    };
+    // On the 9 pt grid.
+    let a = add(&mut d, (306.0, 306.0), (405.0, 405.0));
+    let b = add(&mut d, (504.0, 504.0), (603.0, 504.0));
+    let p = paint();
+    let mut both = Selection::default();
+    both.set([a, b]);
+    let mut cx = cx(&d, &both, &p);
+    cx.smart_guides = false;
+    cx.snap_to_point = false;
+    cx.snap_to_grid = true;
+    let mut t = GestureTool::new("pencil");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 405.0, 405.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 460.0, 450.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 517.0, 504.0));
+    assert_eq!(t.cursor(&cx, Point::new(517.0, 504.0), Mods::default()), Cursor::PencilContinue);
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 517.0, 504.0));
+    let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["connect"], json!({"id": b.0, "end": "start"}), "{v}");
 }
 
 /// #3846: Alt during a Shift line doesn't promise a close the release can't do, and with Alt
@@ -1649,10 +1787,11 @@ fn paintbrush_alt_with_a_two_anchor_curve_selected_smooths() {
     }
 }
 
-/// #3799: Alt's line starts and ends on Smart Guides as a stroke does, and pressed on an end of
-/// a selected open path it continues the path from that end to the pointer.
+/// #3799: Alt's line runs from the press to the pointer as a stroke does, snapping to nothing,
+/// and pressed on an end of a selected open path it continues the path from that end to the
+/// pointer.
 #[test]
-fn pencil_alt_line_snaps_its_ends_and_continues_a_selected_path() {
+fn pencil_alt_line_follows_the_hand_and_continues_a_selected_path() {
     let (mut d, _) = doc_with_rect();
     let alt = Mods { alt: true, ..Default::default() };
     let p = paint();
@@ -1662,7 +1801,7 @@ fn pencil_alt_line_snaps_its_ends_and_continues_a_selected_path() {
         let mut t = GestureTool::new("pencil");
         let acts = drag_held(&mut t, &cx, &[(102.0, 98.0), (151.0, 300.0), (198.0, 203.0)], alt);
         let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
-        assert_eq!(v["points"], json!([[100.0, 100.0], [200.0, 200.0]]));
+        assert_eq!(v["points"], json!([[102.0, 98.0], [198.0, 203.0]]));
     }
     let l = d.layers[0].id;
     let id = d.alloc_id();

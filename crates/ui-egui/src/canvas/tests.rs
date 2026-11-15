@@ -5831,8 +5831,12 @@ fn show_hidden_characters_lays_out_only_type_that_changed() {
     let same = |a: &std::sync::Arc<HiddenMarks>, b: &std::sync::Arc<HiddenMarks>| std::sync::Arc::ptr_eq(a, b);
     let (before, after) = frames(&mut app, &|_| {});
     assert!(before.iter().zip(&after).all(|(a, b)| same(a, b)), "a frame lays out no type");
+    // Each attempt sets different text: text the object already has is no edit, and a second
+    // attempt with the same text would leave the object as it was.
+    let edits = std::cell::Cell::new(0);
     let (before, after) = frames(&mut app, &|app| {
-        app.session.execute("text.setText", &json!({"id": ids[1].0, "text": "a b c"})).unwrap();
+        edits.set(edits.get() + 1);
+        app.session.execute("text.setText", &json!({"id": ids[1].0, "text": format!("a b c {}", edits.get())})).unwrap();
     });
     assert!(!same(&before[1], &after[1]), "the edited object is laid out again");
     assert!(same(&before[0], &after[0]) && same(&before[2], &after[2]), "the others are not");
@@ -7413,6 +7417,73 @@ fn space_types_a_space_while_editing_text_and_does_not_pan() {
     typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::COMMAND)]);
     assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true), "Cmd+Space click zooms in");
     typing_frame(&mut app, &ctx, vec![space(false, Modifiers::COMMAND), Event::ModifiersChanged(Modifiers::NONE)]);
+    assert_eq!(plain(&app, id), "a ", "the text is as typed");
+}
+
+/// While the Type tool edits text, a zoom marquee that Cmd+Space started keeps its Space rules once
+/// Cmd is let go: Space held since the press sizes it, and Space pressed again moves it on every
+/// frame it stays held, without typing a space. With no marquee, Space types a space again, and
+/// during an animated zoom drag it types none.
+#[test]
+fn space_moves_a_text_edit_zoom_marquee_after_cmd_is_let_go() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() - vec2(100.0, 50.0);
+    let space = |pressed, modifiers| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers };
+    let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    let corners = |app: &mut VectorcraftApp| -> (Pos2, Pos2) {
+        let lines: Vec<Vec<Pos2>> = shapes(app, &ctx)
+            .into_iter()
+            .filter_map(|s| match s {
+                Shape::Path(p) if p.stroke.color == egui::epaint::ColorMode::Solid(Color32::from_white_alpha(230)) => Some(p.points),
+                _ => None,
+            })
+            .collect();
+        let [line] = &lines[..] else { panic!("one marquee: {lines:?}") };
+        (line[0], line[2])
+    };
+    typing_frame(&mut app, &ctx, vec![Event::Text("a".into())]);
+    let z0 = app.view().unwrap().zoom;
+    // Space held since the Cmd+Space press sizes the marquee, also once Cmd is let go.
+    typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true, Modifiers::COMMAND), Event::PointerMoved(at)]);
+    typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
+    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at + vec2(50.0, 25.0))]);
+    typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::NONE), Event::PointerMoved(at + vec2(80.0, 40.0))]);
+    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at + vec2(100.0, 50.0))]);
+    assert_eq!(corners(&mut app), (at, at + vec2(100.0, 50.0)), "Space held since the press sizes it");
+    // Let go and pressed again, Space moves the marquee on this frame and the frames after it.
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![space(true, Modifiers::NONE), Event::Text(" ".into()), Event::PointerMoved(at + vec2(120.0, 60.0))]);
+    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at + vec2(140.0, 70.0))]);
+    assert_eq!(corners(&mut app), (at + vec2(40.0, 20.0), at + vec2(140.0, 70.0)), "Space moves it and keeps its 100 × 50 size");
+    assert_eq!(plain(&app, id), "a", "the Space that moves the marquee types nothing");
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![space(true, Modifiers::NONE), Event::Ime(egui::ImeEvent::Commit(" ".into()))]);
+    assert_eq!(plain(&app, id), "a", "nor does a space an input method commits for it");
+    // Let go, the drag sizes it again, and the release zooms to the moved marquee.
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::NONE), Event::PointerMoved(at + vec2(180.0, 95.0))]);
+    assert_eq!(corners(&mut app), (at + vec2(40.0, 20.0), at + vec2(180.0, 95.0)), "let go, the drag sizes it again");
+    typing_frame(&mut app, &ctx, vec![button(at + vec2(180.0, 95.0), false, Modifiers::NONE)]);
+    let want = z0 * f64::from((rect.width() / 140.0).min(rect.height() / 75.0));
+    assert!((app.view().unwrap().zoom - want).abs() < 1e-6, "{z0} → {}, not {want}", app.view().unwrap().zoom);
+    assert!(app.session.tool_wants_text(), "editing goes on");
+    // With no marquee, Space types a space.
+    typing_frame(&mut app, &ctx, vec![space(true, Modifiers::NONE), Event::Text(" ".into())]);
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::NONE)]);
+    assert_eq!(plain(&app, id), "a ", "Space types a space");
+    // With Animated Zoom, Space during the Cmd+Space drag does not type a space either.
+    app.run("prefs.set", json!({"key": "animatedZoom", "value": true})).unwrap();
+    typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true, Modifiers::COMMAND), Event::PointerMoved(at)]);
+    typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
+    typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::NONE), space(false, Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![space(true, Modifiers::NONE), Event::Text(" ".into())]);
+    typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::NONE)]);
     assert_eq!(plain(&app, id), "a ", "the text is as typed");
 }
 
@@ -10447,9 +10518,34 @@ fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     assert_eq!(boards(&app), before, "one undo step");
 }
 
+/// The names and places of the buttons the Contextual Task Bar draws, from the accessibility tree
+/// (`ctx` has it enabled): an icon-only button is named by its hover text.
+fn task_bar_buttons(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, egui::Rect)> {
+    frame(app, ctx, vec![]);
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+    out.textures_delta.clear();
+    let Some(bar) = task_bar_rect(ctx) else { return vec![] };
+    let Some(update) = out.platform_output.accesskit_update.as_ref() else { return vec![] };
+    let mut v: Vec<(String, egui::Rect)> = update
+        .nodes
+        .iter()
+        .filter(|(_, n)| n.role() == egui::accesskit::Role::Button)
+        .filter_map(|(_, n)| {
+            let b = n.bounds()?;
+            let r = egui::Rect::from_min_max(Pos2::new(b.x0 as f32, b.y0 as f32), Pos2::new(b.x1 as f32, b.y1 as f32));
+            let label = n.label()?;
+            bar.contains(r.center()).then(|| (label.to_string(), r))
+        })
+        .collect();
+    v.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
+    v
+}
+
 /// With anchors direct-selected, the Contextual Task Bar offers Remove Anchor Points, Connect,
-/// Cut Path, Corner and Smooth. Smooth and Corner convert the selected anchor, Cut Path opens
-/// the path there and Connect closes it again, as the Control bar's anchor buttons do.
+/// Cut Path and the two convert buttons, which show their icons alone. Converting to smooth and to
+/// corner changes the selected anchor, Cut Path opens the path there and Connect closes it again,
+/// as the Control bar's anchor buttons do.
 #[test]
 fn the_task_bar_connects_cuts_and_converts_direct_selected_anchors() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -10458,10 +10554,21 @@ fn the_task_bar_connects_cuts_and_converts_direct_selected_anchors() {
     app.select_tool("directSelection");
     app.run("select.anchors", json!({"id": id, "anchors": [[0, 1]]})).unwrap();
     let ctx = egui::Context::default();
+    ctx.enable_accesskit();
     let names = |app: &mut VectorcraftApp| task_bar_labels(app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
-    assert_eq!(names(&mut app), ["Remove Anchor Points", "Connect", "Cut Path", "Corner", "Smooth", "Duplicate"]);
+    assert_eq!(names(&mut app), ["Remove Anchor Points", "Connect", "Cut Path", "Duplicate"]);
+    let buttons = task_bar_buttons(&mut app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+    let expected = [
+        "Remove Anchor Points",
+        "Connect",
+        "Cut Path",
+        "Convert Selected Anchor Points to Corner",
+        "Convert Selected Anchor Points to Smooth",
+        "Duplicate",
+    ];
+    assert_eq!(buttons[..expected.len()], expected, "{buttons:?}");
     let press = |app: &mut VectorcraftApp, label: &str| {
-        let labels = task_bar_labels(app, &ctx);
+        let labels = task_bar_buttons(app, &ctx);
         let at = labels.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("{label} in {labels:?}")).1.center();
         let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
@@ -10471,11 +10578,11 @@ fn the_task_bar_connects_cuts_and_converts_direct_selected_anchors() {
     let subpath =
         |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().path_data().unwrap().subpaths[0].clone();
     let last_undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.last().unwrap().label.clone();
-    press(&mut app, "Smooth");
+    press(&mut app, "Convert Selected Anchor Points to Smooth");
     let a = subpath(&app).anchors[1];
     assert!(a.has_in() && a.has_out(), "smooth: {a:?}");
     assert_eq!(last_undo(&app), "Convert Anchor Points");
-    press(&mut app, "Corner");
+    press(&mut app, "Convert Selected Anchor Points to Corner");
     let a = subpath(&app).anchors[1];
     assert!(!a.has_in() && !a.has_out(), "corner: {a:?}");
     press(&mut app, "Cut Path");
