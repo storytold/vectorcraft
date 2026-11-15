@@ -145,6 +145,7 @@
 	Align to Artboard	Çalışma Yüzeyine Hizala
 	Align to Glyph Bounds	Glif Sınırlarına Hizala
 	Align to Key Object	Anahtar Nesneye Hizala
+	Align to Key Anchor	Anahtar Bağlantı Noktasına Hizala
 	Align to Page	Sayfaya Hizala
 	Align to Path	Yola Hizala
 	Align to Selection	Seçime Hizala
@@ -3575,6 +3576,8 @@ digits	Malayalam	Malayalam
 	Kana	Kana
 	Numerals	Rakamlar
 	Scale at Center	Merkezden Ölçekle
+	Delete Set	Seti Sil
+	Direct Entry	Doğrudan Giriş
 	Up/Down:	Yukarı/Aşağı:
 	Left/Right:	Sol/Sağ:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko Yukarı/Aşağı
@@ -5203,6 +5206,11 @@ axis	Both	Her İkisi
 @msg	Imported library {name}	İçe aktarılan kitaplık {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB İlkesi:
+	CMYK Policy:	CMYK İlkesi:
+	Preserve Embedded Profiles	Gömülü Profilleri Koru
+	Convert to Working Space	Çalışma Alanına Dönüştür
+	Preserve Numbers	Sayıları Koru
 	Texture	Doku
 	Craquelure…	Küçük çatlak…
 	Grain…	Tahıl…
@@ -6376,6 +6384,8 @@ theme	Appearance	Görünüm
 	Save Variable Library…	Değişken Kitaplığını Kaydet…
 @msg	a variable library holds text variables, and the document has none	değişken kitaplığı metin değişkenleri içerir ve belgede hiç metin değişkeni yok
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	`{name}` değişkeni değişken kitaplığına kaydedilemiyor: adını bir harf veya `_` ile başlayacak, boşluk ya da `-`, `_` ve `.` dışında simge içermeyecek şekilde değiştirin
+@msg	{k} has control characters	{k} denetim karakterleri içeriyor
+@msg	{k} has control characters or line breaks	{k} denetim karakterleri veya satır sonları içeriyor
 @msg	data set `{name}` holds a control character, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir denetim karakteri içeriyor
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	`{name}` veri kümesi, değişken kitaplığının tutamayacağı bir boşlukla başlıyor veya bitiyor
 	Long	Uzun
@@ -6670,6 +6680,7 @@ axis	Y Axis	Y ekseni
 @msg	stops must be in order of `offset`	duraklar `offset` sırasında olmalıdır
 @msg	the document has no pattern {pattern}	belgede {pattern} deseni yok
 @msg	the document has no swatch {n}	belgede {n} renk örneği yok
+@msg	`plates` requires a stop linked to a spot swatch	`plates`, nokta rengi örneğine bağlı bir degrade durağı gerektirir
 @msg	the output	çıktı
 @msg	the path has no anchor points	yolun bağlantı noktası yok
 @msg	too many anchor points (limit {MAX_ANCHORS})	çok fazla bağlantı noktası (sınır {MAX_ANCHORS})

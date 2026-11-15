@@ -986,6 +986,11 @@
 	NTSC Colors	NTSC boje
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB pravilo:
+	CMYK Policy:	CMYK pravilo:
+	Preserve Embedded Profiles	Zadrži ugrađene profile
+	Convert to Working Space	Pretvori u radni prostor
+	Preserve Numbers	Zadrži brojeve
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Krakelura…
@@ -1492,6 +1497,7 @@ lighting	Light	Svjetlo
 	Align to Artboard	Poravnaj s radnom pločom
 	Align to Glyph Bounds	Poravnaj s granicama glifa
 	Align to Key Object	Poravnaj s ključnim objektom
+	Align to Key Anchor	Poravnaj s ključnom sidrenom tačkom
 	Align to Selection	Poravnaj prema odabiru
 	Align To:	Poravnaj s:
 	Cancel Key Object	Otkaži ključni objekat
@@ -1641,6 +1647,8 @@ digits	Malayalam	Malajalam
 	Kana	Kana
 	Numerals	Brojevi
 	Scale at Center	Skaliraj od centra
+	Delete Set	Izbriši skup
+	Direct Entry	Direktan unos
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko gore/dolje

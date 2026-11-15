@@ -894,6 +894,11 @@
 	NTSC Colors	NTSC ფერები
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB წესი:
+	CMYK Policy:	CMYK წესი:
+	Preserve Embedded Profiles	ჩაშენებული პროფილების შენარჩუნება
+	Convert to Working Space	სამუშაო სივრცეში გადაყვანა
+	Preserve Numbers	რიცხვების შენარჩუნება
 	CMYK	CMYK
 	Texture	ტექსტურა
 	Craquelure…	კრაკელიური…
@@ -1366,6 +1371,7 @@ lighting	Light	სინათლე
 	Align to Artboard	სამუშაო დაფაზე სწორება
 	Align to Glyph Bounds	გლიფის საზღვრებზე სწორება
 	Align to Key Object	საკვანძო ობიექტზე სწორება
+	Align to Key Anchor	საკვანძო საყრდენ წერტილზე სწორება
 	Align to Selection	მონიშნულზე სწორება
 	Align To:	სწორება:
 	Cancel Key Object	საკვანძო ობიექტის გაუქმება
@@ -1556,6 +1562,8 @@ digits	Malayalam	მალაიალამური
 	Kana	კანა
 	Numerals	ციფრები
 	Scale at Center	ცენტრიდან მასშტაბირება
+	Delete Set	ნაკრების წაშლა
+	Direct Entry	პირდაპირი შეყვანა
 	Up/Down:	ზემოთ/ქვემოთ:
 	Left/Right:	მარცხნივ/მარჯვნივ:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko ზემოთ/ქვემოთ
@@ -5933,6 +5941,8 @@ imageTrace	Outline	კონტური
 	Save Variable Library…	ცვლადების ბიბლიოთეკის შენახვა…
 @msg	a variable library holds text variables, and the document has none	ცვლადების ბიბლიოთეკა ტექსტურ ცვლადებს შეიცავს, დოკუმენტს კი არცერთი არ აქვს
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	ცვლადი `{name}` ვერ შეინახება ცვლადების ბიბლიოთეკაში: გადაარქვით სახელი ისე, რომ იწყებოდეს ასოთი ან `_`-ით, ჰარეების და `-`, `_` და `.`-ის გარდა სხვა სიმბოლოების გარეშე
+@msg	{k} has control characters	{k} შეიცავს მმართველ სიმბოლოებს
+@msg	{k} has control characters or line breaks	{k} შეიცავს მმართველ სიმბოლოებს ან სტრიქონის წყვეტებს
 @msg	data set `{name}` holds a control character, which a variable library can't hold	მონაცემთა ნაკრები `{name}` შეიცავს მმართველ სიმბოლოს, რომელსაც ცვლადების ბიბლიოთეკა ვერ შეინახავს
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	მონაცემთა ნაკრები `{name}` იწყება ან მთავრდება ჰარით, რომელსაც ცვლადების ბიბლიოთეკა ვერ შეინახავს
 	Make Graph Dynamic	დიაგრამის დინამიკურად ქცევა
@@ -6551,6 +6561,7 @@ axis	Y Axis	Y ღერძი
 @msg	stops must be in order of `offset`	გადასვლის წერტილები `offset`-ის მიხედვით უნდა იყოს დალაგებული
 @msg	the document has no pattern {pattern}	დოკუმენტს არ აქვს პატერნი {pattern}
 @msg	the document has no swatch {n}	დოკუმენტს არ აქვს ფერის ნიმუში {n}
+@msg	`plates` requires a stop linked to a spot swatch	`plates` მოითხოვს გადასვლის წერტილს, რომელიც სპოტ-ფერის ნიმუშთანაა დაკავშირებული
 @msg	the output	გამოტანა
 @msg	the path has no anchor points	ტრაექტორიას საყრდენი წერტილები არ აქვს
 @msg	too many anchor points (limit {MAX_ANCHORS})	ძალიან ბევრი საყრდენი წერტილი (ლიმიტი {MAX_ANCHORS})

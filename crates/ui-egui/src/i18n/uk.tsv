@@ -154,6 +154,7 @@
 	Align to Artboard	Вирівняти по монтажній області
 	Align to Glyph Bounds	Вирівняти за межами гліфа
 	Align to Key Object	Вирівняти за ключовим об’єктом
+	Align to Key Anchor	Вирівняти за ключовою опорною точкою
 	Align to Page	Вирівняти за сторінкою
 	Align to Path	Вирівняти за контуром
 	Align to Selection	Вирівняти за виділенням
@@ -3828,6 +3829,8 @@ effect	Points	Точки
 	Kana	Кана
 	Numerals	Цифри
 	Scale at Center	Масштабувати від центру
+	Delete Set	Видалити набір
+	Direct Entry	Пряме введення
 	Up/Down:	Вгору/вниз:
 	Left/Right:	Ліворуч/праворуч:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko вгору/вниз
@@ -5432,6 +5435,11 @@ axis	Both	Обидві
 @msg	Imported library {name}	Імпортовано бібліотеку {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Правило RGB:
+	CMYK Policy:	Правило CMYK:
+	Preserve Embedded Profiles	Зберігати вбудовані профілі
+	Convert to Working Space	Перетворювати в робочий простір
+	Preserve Numbers	Зберігати числа
 	Texture	Текстура
 	Craquelure…	Кракелюри…
 	Grain…	Зерно…
@@ -5871,6 +5879,8 @@ lighting	Light	Світло
 	Save Variable Library…	Зберегти бібліотеку змінних…
 @msg	a variable library holds text variables, and the document has none	бібліотека змінних містить текстові змінні, а в документі їх немає
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	змінну `{name}` не можна зберегти в бібліотеці змінних: перейменуйте її так, щоб ім’я починалося з літери або `_` і не містило пробілів і символів, крім `-`, `_` і `.`
+@msg	{k} has control characters	{k} містить керівні символи
+@msg	{k} has control characters or line breaks	{k} містить керівні символи або розриви рядків
 @msg	data set `{name}` holds a control character, which a variable library can't hold	набір даних `{name}` містить керівний символ, який бібліотека змінних не може містити
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	набір даних `{name}` починається або закінчується пробілом, який бібліотека змінних не може містити
 	Make Graph Dynamic	Зробити діаграму динамічною
@@ -6202,6 +6212,7 @@ axis	Y Axis	Вісь Y
 @msg	stops must be in order of `offset`	точки переходу мають іти в порядку `offset`
 @msg	the document has no pattern {pattern}	у документі немає візерунка {pattern}
 @msg	the document has no swatch {n}	у документі немає зразка {n}
+@msg	`plates` requires a stop linked to a spot swatch	для `plates` потрібна точка переходу, пов’язана зі зразком плашкового кольору
 @msg	the output	виведення
 @msg	the path has no anchor points	контур не має опорних точок
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
@@ -9110,7 +9121,6 @@ breakText	Glyphs	Гліфи
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	файли {kind} не мають прозорості, а файл містив би таке: {what}; спочатку зведіть прозорість (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	зображення {kind} не можна відкрити (див. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` не є одним із варіантів
-@msg	{k} has control characters{_1}	{k} містить керівні символи{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} задовгий (не більше {MAX_TEXT} символів)
 @msg	{k} must be > 0	{k} має бути > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} має бути числом (pt) або довжиною на зразок "210 mm"

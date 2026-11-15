@@ -1067,6 +1067,7 @@ digits	Malayalam	말라얄람어
 	Align to Artboard	아트보드에 정렬
 	Align to Glyph Bounds	글리프 경계에 정렬
 	Align to Key Object	키 개체에 정렬
+	Align to Key Anchor	키 앵커 포인트에 정렬
 	Align to Page	페이지에 정렬
 	Align to Path	패스에 정렬
 	Align to Selection	선택 영역에 정렬
@@ -4151,6 +4152,8 @@ file-filter	Templates	템플릿
 	Kana	가나
 	Numerals	숫자
 	Scale at Center	중심에서 크기 조정
+	Delete Set	집합 삭제
+	Direct Entry	직접 입력
 	Up/Down:	위/아래:
 	Left/Right:	왼쪽/오른쪽:
 	Tate-chu-yoko Up/Down	다테추요코 위/아래
@@ -5416,6 +5419,11 @@ theme	Appearance	외관
 @msg	Imported library {name}	라이브러리 {name}을(를) 가져왔습니다
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB 정책:
+	CMYK Policy:	CMYK 정책:
+	Preserve Embedded Profiles	포함된 프로필 유지
+	Convert to Working Space	작업 공간으로 변환
+	Preserve Numbers	숫자 유지
 	Texture	텍스처
 	Craquelure…	크랙…
 	Grain…	그레인…
@@ -5852,6 +5860,8 @@ lighting	Light	광원
 	Save Variable Library…	변수 라이브러리 저장…
 @msg	a variable library holds text variables, and the document has none	변수 라이브러리에는 텍스트 변수가 들어가는데 문서에 텍스트 변수가 없습니다
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	변수 `{name}`은(는) 변수 라이브러리에 저장할 수 없습니다: 문자나 `_`로 시작하고 공백이나 `-`, `_`, `.` 이외의 기호가 없도록 이름을 바꾸세요
+@msg	{k} has control characters	{k}에 제어 문자가 있습니다
+@msg	{k} has control characters or line breaks	{k}에 제어 문자 또는 줄 바꿈이 있습니다
 @msg	data set `{name}` holds a control character, which a variable library can't hold	데이터 세트 `{name}`에 변수 라이브러리에 담을 수 없는 제어 문자가 있습니다
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	데이터 세트 `{name}`의 앞이나 뒤에 변수 라이브러리에 담을 수 없는 공백이 있습니다
 	Make Graph Dynamic	그래프를 동적으로 만들기
@@ -6183,6 +6193,7 @@ axis	Y Axis	Y축
 @msg	stops must be in order of `offset`	정지점은 `offset` 순서여야 합니다
 @msg	the document has no pattern {pattern}	문서에 패턴 {pattern}이(가) 없습니다
 @msg	the document has no swatch {n}	문서에 견본 {n}이(가) 없습니다
+@msg	`plates` requires a stop linked to a spot swatch	`plates`에는 별색 견본에 연결된 정지점이 필요합니다
 @msg	the output	출력
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
