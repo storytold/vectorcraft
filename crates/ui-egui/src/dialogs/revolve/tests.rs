@@ -460,6 +460,88 @@ fn classic_rotate_shows_its_options_and_applies_as_one_step() {
     assert_eq!(h.app.session.doc().unwrap().doc, before);
 }
 
+/// The classic effects' track cube: a drag on its face turns the object live and the presets show
+/// Custom, Escape during a drag puts the angles back, the ring turns Z alone, the arrow keys turn
+/// it with the keyboard focus, and OK keeps it all as one undo step. The newer effects have no cube.
+#[test]
+fn the_track_cube_turns_the_classic_effects_live_in_one_undo_step() {
+    use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, EXTRUDE, ROTATE};
+    let square = "M100 100 L200 100 L200 200 L100 200 Z";
+    for effect in [EXTRUDE, ROTATE] {
+        let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+        h.settle();
+        assert!(!h.texts.iter().any(|(t, _)| t == "Track cube"), "{effect} has no track cube");
+    }
+    for effect in [CLASSIC_EXTRUDE, CLASSIC_REVOLVE] {
+        let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+        h.settle();
+        h.rect("Track cube");
+    }
+    let mut h = Harness::with(square, CLASSIC_ROTATE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    h.rect("Off-Axis Front");
+    let start = ["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k));
+    let cube = h.response("three-d-track-cube");
+    // A face, dragged right: the object turns, the document previews it, and the preset is Custom.
+    h.drag(cube.center(), vec2(30.0, 0.0));
+    let turned = ["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k));
+    assert_ne!(turned, start, "the drag turned the object");
+    h.rect("Custom");
+    let fx = |h: &Harness| {
+        let state = h.app.session.doc().unwrap();
+        state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params.clone()
+    };
+    assert_eq!(fx(&h)["rotationY"].as_f64(), Some(turned[1]), "the preview follows the cube");
+    // Escape during a drag puts the angles back and keeps the dialog open.
+    let p = cube.center();
+    h.frame(vec![Event::PointerMoved(p), button(p, true)]);
+    h.frame(vec![Event::PointerMoved(p + vec2(0.0, 30.0))]);
+    h.frame(vec![Event::PointerMoved(p + vec2(0.0, 40.0))]);
+    assert_ne!(h.value("rotationX"), turned[0]);
+    h.frame(vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    h.frame(vec![button(p + vec2(0.0, 40.0), false)]);
+    h.settle();
+    assert!(h.app.ui.dialog.is_some(), "Escape ends the drag, not the dialog");
+    assert_eq!(["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k)), turned);
+    // The ring turns in the screen plane: Z alone.
+    let top = pos2(cube.center().x, cube.center().y - 53.5);
+    h.drag(top, vec2(12.0, 2.0));
+    assert_eq!((h.value("rotationX"), h.value("rotationY")), (turned[0], turned[1]));
+    assert!(h.value("rotationZ") > turned[2], "clockwise: {} -> {}", turned[2], h.value("rotationZ"));
+    // With the keyboard focus (the drags gave it), Right turns about the screen's vertical axis.
+    let z = h.value("rotationZ");
+    assert!(h.ctx.memory(|m| m.has_focus(Id::unique("three-d-track-cube"))), "the drag gave the cube the keyboard focus");
+    h.frame(vec![Event::Key { key: egui::Key::PageUp, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    h.settle();
+    assert!((h.value("rotationZ") - (z - 1.0)).abs() < 0.011, "Page Up turns 1° counterclockwise");
+    let y = h.value("rotationY");
+    h.frame(vec![Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    h.settle();
+    assert_ne!(h.value("rotationY"), y, "Right turns the cube");
+    let last = h.value("rotationZ");
+    dialogs::confirm(&mut h.app).unwrap();
+    assert_eq!(fx(&h)["rotationZ"].as_f64(), Some(last));
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+/// A mixed rotation (the 3D and Materials panel's selected effects differ) leaves the cube off.
+#[test]
+fn the_track_cube_is_off_while_a_rotation_is_mixed() {
+    use vectorcraft_effects::CLASSIC_ROTATE;
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_ROTATE, vec2(1400.0, 1000.0));
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("rotationX".into(), Value::Null);
+    h.settle();
+    let cube = h.response("three-d-track-cube");
+    h.drag(cube.center(), vec2(30.0, 0.0));
+    let d = h.app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields.get("rotationX"), Some(&Value::Null));
+    assert!(!h.ctx.read_response(Id::unique("three-d-track-cube")).unwrap().sense.senses_drag());
+}
+
 #[test]
 fn extrude_bevel_options_enable_with_a_bevel_shape() {
     let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));

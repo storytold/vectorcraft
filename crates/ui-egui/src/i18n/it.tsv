@@ -5488,6 +5488,8 @@ effect	Regular	Normale
 	Step up or down	Aumenta o riduci di un passo
 	Drag values or labels. Double-click a value to type.	Trascina i valori o le etichette. Fai doppio clic su un valore per digitarlo.
 	Drag rings to rotate. Shift snaps to 15°.	Trascina gli anelli per ruotare. Shift usa incrementi di 15°.
+	Track cube	Cubo di rotazione
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Trascina una faccia, uno spigolo o l'anello per ruotare. Shift ruota attorno a un asse dello schermo.
 	Drag the light, or its rings. Shift snaps to 15°.	Trascina la luce o i suoi anelli. Shift usa incrementi di 15°.
 lighting	Light	Luce
 	Keep visible surfaces only when expanding	Mantieni solo le superfici visibili durante l’espansione
