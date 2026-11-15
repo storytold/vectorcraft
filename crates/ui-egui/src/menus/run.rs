@@ -845,6 +845,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
+        "ui.panelView" => crate::panels::set_view(app, p),
         "ui.flattenTransparencyDialog" => {
             crate::dialogs::flatten::open(app);
             Ok(Value::Null)
@@ -976,6 +977,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         }
         "links.editOriginal" => crate::panels::links::open_file(app, p, false),
         "links.reveal" => crate::panels::links::open_file(app, p, true),
+        "links.copyInfo" => crate::panels::links::copy_info(app, p),
         "ui.placementOptionsDialog" => crate::dialogs::placement_options::open(app, p),
         "ui.relinkDialog" => crate::dialogs::relink::open(app, p),
         "ui.findLinksInFolder" => {

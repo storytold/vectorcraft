@@ -1169,6 +1169,74 @@ fn placing_symbols_reaches_the_art_of_nested_instances() {
     assert!(near_rect(bounds(&out, 900), Rect::new(110.0, 140.0, 120.0, 150.0)), "{:?}", bounds(&out, 900));
 }
 
+/// A 10 pt square with id `id`, masked by `art` (the mask enabled unless `disabled`).
+fn masked_square(id: u64, art: Node, disabled: bool) -> Node {
+    let mut n = Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let mut mask = vectorcraft_doc::OpacityMask::new(art, false);
+    mask.disabled = disabled;
+    n.extras_mut().mask = Some(Box::new(mask));
+    n
+}
+
+/// Whether the art of `n`'s opacity mask is still a symbol instance, and its bounds when it is not.
+fn mask_art(n: &Node) -> (bool, Option<Rect>) {
+    let art = &n.extras().mask.as_ref().unwrap_or_else(|| panic!("node {:?} has a mask", n.id)).art;
+    (matches!(art.kind, NodeKind::SymbolInstance { .. }), art.geometric_bounds())
+}
+
+/// An instance in the art of an enabled opacity mask is placed and baked like any other, so the
+/// mask masks with the art the instance draws, and the masked object stays as it is (a clipping
+/// path stays one); one in a disabled mask, in the mask of an object the export leaves out, or in
+/// a ruler guide's mask, stays as it is.
+#[test]
+fn placing_symbols_reaches_instances_in_opacity_masks() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(masked_square(700, instance(900, "S", Affine::IDENTITY), false));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, masked_square(701, instance(901, "S", Affine::IDENTITY), true)).unwrap();
+    let mut hidden = masked_square(702, instance(902, "S", Affine::IDENTITY), false);
+    hidden.visible = false;
+    d.insert(Some(layer), 2, hidden).unwrap();
+    let mut clipping = masked_square(703, instance(903, "S", Affine::IDENTITY), false);
+    if let NodeKind::Path { clipping: c, .. } = &mut clipping.kind {
+        *c = true;
+    }
+    d.insert(Some(layer), 3, Node::group(NodeId(704), vec![Arc::new(clipping)])).unwrap();
+    let mut guide = Node::new(NodeId(705), NodeKind::RulerGuide { vertical: false, pos: 5.0, artboard: None });
+    guide.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(instance(905, "S", Affine::IDENTITY), false)));
+    d.insert(Some(layer), 4, guide).unwrap();
+    add_symbol(&mut d, "S", moved_square(800));
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    for id in [700, 703] {
+        let (still, b) = mask_art(out.node(NodeId(id)).unwrap());
+        assert!(!still && b.is_some_and(|b| near_rect(b, Rect::new(110.0, 40.0, 120.0, 50.0))), "{id}: {b:?}");
+    }
+    assert!(matches!(out.node(NodeId(703)).unwrap().kind, NodeKind::Path { clipping: true, .. }), "the clipping path stays one");
+    assert!(mask_art(out.node(NodeId(701)).unwrap()).0, "a disabled mask's instance stays");
+    assert!(mask_art(out.node(NodeId(702)).unwrap()).0, "a hidden object's mask's instance stays");
+    assert!(mask_art(out.node(NodeId(705)).unwrap()).0, "a ruler guide's mask's instance stays");
+}
+
+/// A symbol whose art holds an instance only in an opacity mask's art is placed too, and the
+/// instance in its mask is placed with it.
+#[test]
+fn placing_symbols_reaches_instances_in_the_masks_of_symbol_art() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", moved_square(800));
+    add_symbol(&mut d, "Outer", masked_square(803, instance(802, "Inner", Affine::IDENTITY), false));
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    assert!(!is_instance(&out, 900), "the outer instance is placed");
+    let mut found = None;
+    out.node(NodeId(900)).unwrap().walk(&mut |n| {
+        if n.id == NodeId(803) {
+            found = Some(mask_art(n));
+        }
+    });
+    let (still, b) = found.unwrap_or_else(|| panic!("the masked square is in the placed art"));
+    assert!(!still && b.is_some_and(|b| near_rect(b, Rect::new(110.0, 40.0, 120.0, 50.0))), "{b:?}");
+}
+
 /// A symbol whose art holds an instance of itself is placed until the depth limit, and the export
 /// ends.
 #[test]

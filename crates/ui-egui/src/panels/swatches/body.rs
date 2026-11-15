@@ -16,17 +16,21 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
         crate::panels::empty_state(ui, "swatch-book", tl!("No document"), tl!("Open a document to see its swatches."));
         return;
     }
-    let view: View = pstate(ui.ctx(), "swatch-view");
+    let view = app.ui.swatches_view;
     let kind: Kind = pstate(ui.ctx(), "swatch-kind");
     // Top row: proxy at left, list / grid view toggles at right.
     ui.horizontal(|ui| {
         crate::panels::proxy(app, ui, 34.0);
         ui.add_space(ui.available_width() - 58.0);
+        let mut to = None;
         if widgets::icon_button(ui, "dc-list-view", tl!("Show List View"), view.is_list(), 26.0).clicked() {
-            set_pstate(ui.ctx(), "swatch-view", View::SmallList);
+            to = Some(View::SmallList);
         }
         if widgets::icon_button(ui, "dc-grid-view", tl!("Show Thumbnail View"), !view.is_list(), 26.0).clicked() {
-            set_pstate(ui.ctx(), "swatch-view", View::MediumThumb);
+            to = Some(View::MediumThumb);
+        }
+        if let Some(v) = to {
+            app.run("ui.panelView", json!({ "panel": "swatches", "view": v })).ok();
         }
     });
     ui.add_space(4.0);
