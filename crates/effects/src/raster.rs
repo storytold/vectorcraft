@@ -613,12 +613,43 @@ pub(crate) fn follows(id: &str) -> bool {
     crate::is_raster(id) && id != crate::SVG_FILTER && id != RASTERIZE
 }
 
+thread_local! {
+    /// The linear part of the Transform effects of the groups and layers whose members are being
+    /// evaluated ([`LaterGroups`]), which those groups apply to the members' raster effects once
+    /// the members are evaluated: the members' light and stroke directions are rounded for them as
+    /// well ([`follow_transform`]).
+    static LATER_GROUPS: std::cell::Cell<Affine> = const { std::cell::Cell::new(Affine::IDENTITY) };
+}
+
+/// The Transform effects of a group or layer whose members are being evaluated before the group's
+/// own effects are applied to them, added to [`LATER_GROUPS`] until it is dropped.
+pub(crate) struct LaterGroups(Affine);
+
+impl LaterGroups {
+    /// Add the Transform effects of `owner`, a group's or layer's own effects ([`contents_step`]),
+    /// to those the members will still go through.
+    pub(crate) fn enter(owner: &[Effect]) -> Self {
+        let was = LATER_GROUPS.with(|l| l.get());
+        if let Some(step) = contents_step(owner) {
+            LATER_GROUPS.with(|l| l.set(was * step));
+        }
+        LaterGroups(was)
+    }
+}
+
+impl Drop for LaterGroups {
+    fn drop(&mut self) {
+        LATER_GROUPS.with(|l| l.set(self.0));
+    }
+}
+
 /// Make raster effect `e` follow `a`, the linear part of a Transform effect listed after it, as
 /// that effect transforms what `e` paints: its distances and raster sizes scale by `a`'s mean
 /// scale ([`crate::scale_effect`]), a Drop Shadow's offset turns, reflects and scales with `a`,
 /// and a pixel filter's light direction, stroke direction or screen angles turn and reflect with
-/// it ([`pixel::turned_directions`]; `later` is the map `e` still goes through when it is drawn).
-/// Effects that [`follows`] leaves out stay as they are.
+/// it ([`pixel::turned_directions`]; `later` is the map `e` still goes through when it is drawn,
+/// before the Transform effects of the groups around it in [`LATER_GROUPS`]). Effects that
+/// [`follows`] leaves out stay as they are.
 fn follow_transform(e: &mut Effect, a: Affine, later: Affine) {
     if !follows(&e.id) {
         return;
@@ -627,7 +658,7 @@ fn follow_transform(e: &mut Effect, a: Affine, later: Affine) {
         let p = merged_params(&e.id, &e.params);
         a * Point::new(num(&p, "x", 7.0), num(&p, "y", 7.0))
     });
-    let turned = pixel::turned_directions(&e.id, &e.params, a, later);
+    let turned = pixel::turned_directions(&e.id, &e.params, a, LATER_GROUPS.with(|l| l.get()) * later);
     if let Some(k) = vectorcraft_doc::Scaling::factor(a) {
         crate::scale_effect(e, k);
     }

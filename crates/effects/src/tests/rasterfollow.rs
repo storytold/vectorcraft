@@ -580,6 +580,29 @@ fn nested_and_baked_directions_match_canvas() {
     }
 }
 
+/// A member's light under two nested groups that each turn 30° turns 60° in all, rounded once:
+/// Top Left, not Left (Top Left after the inner group's turn, then Left after the outer one's).
+#[test]
+fn nested_group_turns_round_the_light_once() {
+    let relief = || fx("sketch.basRelief", json!({"lightDirection": "top"}));
+    let thirty = || transform(json!({"rotate": 30}));
+    let inner = group(41, vec![square(42, vec![relief()]), fill_square(43, vec![relief()])], vec![thirty()]);
+    let outer = group(40, vec![inner], vec![thirty()]);
+    let art = crate::evaluate_container(None, &outer).unwrap();
+    assert_eq!(lights_in(&art), vec![Light::TopLeft; 2]);
+    let mut d = Document::new(800.0, 800.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, outer).unwrap();
+    let baked = bake_document(&d).unwrap();
+    for id in [42, 43] {
+        assert_eq!(lights_in(baked.node(NodeId(id)).unwrap()), vec![Light::TopLeft], "{id}");
+    }
+    // Three groups make 90°: Left, not Bottom Left.
+    let three = group(44, vec![group(45, vec![group(46, vec![square(47, vec![relief()])], vec![thirty()])], vec![thirty()])], vec![thirty()]);
+    let art = crate::evaluate_container(None, &three).unwrap();
+    assert_eq!(lights_in(&art), vec![Light::Left]);
+}
+
 /// A Transform effect after a 3D effect that makes copies or moves at random holds back the shadow
 /// before the 3D effect, as it does without the 3D effect.
 #[test]
