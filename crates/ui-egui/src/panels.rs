@@ -265,7 +265,7 @@ pub fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, rect: Rect) {
     let resp = menu_button(ui, id, rect);
     egui::Popup::menu(&resp).show(|ui| {
         crate::widgets::menu_scroll(ui, |ui| {
-            ui.set_min_width(220.0);
+            crate::widgets::menu_min_width(ui, 220.0);
             if panel_menu_items(app, ui, id) {
                 ui.separator();
             }
