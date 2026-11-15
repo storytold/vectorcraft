@@ -903,7 +903,7 @@ fn max_diff(a: &[u8], b: &[u8]) -> String {
 /// destination) rather than from its numbers read as sRGB ones; an untagged image is converted
 /// from sRGB as before. A gray image keeps its profile (gray stays gray), and an RGB profile the
 /// CMS can't read leaves the numbers converted as sRGB ones, with a warning. An RGB destination
-/// that is the document's own RGB profile leaves RGB images as they are, so the image keeps its
+/// other than sRGB that is the document's own RGB profile leaves RGB images as they are, so the image keeps its
 /// profile.
 #[test]
 fn convert_to_destination_converts_tagged_images_from_their_profile() {

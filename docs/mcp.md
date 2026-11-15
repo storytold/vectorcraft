@@ -5604,8 +5604,8 @@ whose profile the color engine can't read, or whose pixels can't be decoded, kee
 conversion it keeps its profile. With `destination` and a CMYK destination, or an RGB one other than sRGB that images
 are converted to, an RGB image that carries an ICC profile is converted from that profile to sRGB with the same intent
 and then to the destination, instead of having its numbers read as sRGB (a profile the color engine can't read leaves
-them read as sRGB, with a warning); a gray image keeps its profile, as gray is not converted. An RGB destination that
-is the document's own RGB profile leaves RGB colors and RGB images as they are, so a tagged RGB image keeps its profile
+them read as sRGB, with a warning); a gray image keeps its profile, as gray is not converted. An RGB destination other
+than sRGB that is the document's own RGB profile leaves RGB colors and RGB images as they are, so a tagged RGB image keeps its profile
 there.
 `preserveNumbers` still reads an image's numbers as sRGB. The destination is any profile `edit.colorSettings` lists (default: the document's
 for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
