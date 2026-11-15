@@ -427,6 +427,7 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     super::params::check_effect_color(C, id, &params)?;
     super::params::check_effect_channel(C, id, &params)?;
+    super::params::check_effect_center(C, id, &params)?;
     // Crop Marks take their style from the preferences when applied.
     if id == effects::CROP_MARKS && params.get("style").is_none() {
         params["style"] = json!(s.crop_mark_style().id());
@@ -740,6 +741,7 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     for effect in &edited {
         super::params::check_effect_color(C, effect, &params)?;
         super::params::check_effect_channel(C, effect, &params)?;
+        super::params::check_effect_center(C, effect, &params)?;
     }
     if edited.iter().any(|e| texture_load_effect(e)) {
         load_texture(&mut params, C)?;
@@ -833,11 +835,13 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
 const GLASS: &str = "distort.glass";
 /// Effect › Texture › Texturizer.
 const TEXTURIZER: &str = "texture.texturizer";
+/// Effect › Artistic › Rough Pastels.
+const ROUGH_PASTELS: &str = "artistic.roughPastels";
 
 /// Does effect `id` have Load Texture: a `textureImage` that `effect.apply` reads from an image
-/// file (Glass, Texturizer)?
+/// file (Glass, Texturizer, Rough Pastels)?
 pub(crate) fn texture_load_effect(id: &str) -> bool {
-    id == GLASS || id == TEXTURIZER
+    id == GLASS || id == TEXTURIZER || id == ROUGH_PASTELS
 }
 
 /// Glass's `textureImage` in `params` as Glass stores it: an image file (`{path}`, or `{name?,
