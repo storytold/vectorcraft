@@ -163,7 +163,7 @@ pub(super) fn edit_counted(s: &mut Session, label: &str, f: impl FnOnce(&mut Doc
 pub(super) type OverprintJob = ((bool, ItemTarget, Vec<NodeId>), bool);
 
 /// The overprint edits `p` asks for under `keys` (the fill's and the stroke's), aimed as
-/// `object.setOverprint` aims.
+/// `object.setOverprint` aims, leaving out the art of graph designs drawn in graph series.
 pub(super) fn overprint_jobs(s: &Session, p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<OverprintJob>> {
     let kinds = kinds(p, cmd, keys)?;
     Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0), true)?.into_iter().zip(kinds.iter().map(|k| k.1)).collect())

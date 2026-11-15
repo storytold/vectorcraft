@@ -6417,6 +6417,13 @@ axis	Y Axis	Вісь Y
 	Graphite Pencil	Графітний олівець
 	Wax Crayon	Восковий олівець
 	Charcoal Dust	Вугільний пил
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технічні схеми
+	Circuit Trace	Доріжка схеми
+	Bus Lines	Лінії шини
+	Terminal Nodes	Контактні вузли
+
 	Notched Ribbon	Стрічка з насічками
 	Double Line	Подвійна лінія
 	Wave	Хвиля
