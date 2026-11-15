@@ -893,6 +893,35 @@ fn presets_resolve() {
 }
 
 #[test]
+fn presets_have_their_paths_corners_and_noise() {
+    let expected: &[(&str, f64, f64, u32)] = &[
+        ("Default", 50.0, 75.0, 25),
+        ("High Fidelity Photo", 50.0, 50.0, 5),
+        ("Low Fidelity Photo", 50.0, 50.0, 10),
+        ("3 Colors", 50.0, 50.0, 15),
+        ("6 Colors", 50.0, 50.0, 15),
+        ("16 Colors", 50.0, 50.0, 15),
+        ("Shades of Gray", 50.0, 50.0, 15),
+        ("Black and White Logo", 50.0, 75.0, 25),
+        ("Sketched Art", 50.0, 50.0, 20),
+        ("Silhouettes", 50.0, 50.0, 90),
+        ("Line Art", 50.0, 75.0, 20),
+        ("Technical Drawing", 50.0, 100.0, 1),
+        ("Outline", 50.0, 75.0, 20),
+    ];
+    for &(name, paths, corners, noise) in expected {
+        let p = preset(name).unwrap();
+        assert_eq!((p.paths, p.corners, p.noise), (paths, corners, noise), "{name}");
+    }
+    // The color counts stay as they were.
+    let colors: Vec<u32> = ["High Fidelity Photo", "Low Fidelity Photo", "3 Colors", "6 Colors", "16 Colors", "Shades of Gray"]
+        .iter()
+        .map(|n| preset(n).unwrap().colors)
+        .collect();
+    assert_eq!(colors, [64, 20, 3, 6, 16, 8]);
+}
+
+#[test]
 fn params_json_roundtrip_and_partial() {
     let p = preset("6 Colors").unwrap();
     let v = serde_json::to_value(&p).unwrap();
@@ -1094,7 +1123,7 @@ fn scaling_down_weighs_color_by_alpha() {
     // Opaque red and clear black columns, decoded from a PNG and scaled to fit as `decode_to_fit`
     // does: each scaled pixel covers a red and a clear one.
     let half_clear = Raster::from_fn(4, 2, |x, _| if x % 2 == 0 { RED } else { [0; 4] });
-    let decoded = Raster::decode(&half_clear.encode_png()).unwrap();
+    let decoded = image::load_from_memory(&half_clear.encode_png()).unwrap().into_rgba8();
     let fitted = Raster::fitted(&decoded, 2);
     assert_eq!((fitted.width, fitted.height), (2, 1));
     assert_eq!(fitted.rgba, [[200, 30, 30, 128]; 2].concat());
@@ -2033,6 +2062,16 @@ fn a_gray_photo_is_continuous_tone_as_its_color_original_is() {
     }
 }
 
+/// A gray photo with little or no noise (a render, a denoised scan) is continuous tone, as its
+/// color original is. Sixteen colors stay 0.19 as far from its pixels as eight do.
+#[test]
+fn a_clean_gray_photo_is_continuous_tone_as_its_color_original_is() {
+    for noise in [0.0, 1.0, 2.0, 3.0] {
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, true)), "gray, noise {noise}");
+    }
+}
+
 /// Sepia: dark brown to cream.
 const SEPIA: [[f64; 3]; 2] = [[45.0, 28.0, 15.0], [250.0, 235.0, 205.0]];
 /// A single blue hue: navy to pale blue.
@@ -2138,18 +2177,10 @@ fn small_accents_of_other_colors_leave_a_tinted_photo_continuous_tone() {
 /// `img` saved as a JPEG of `quality` and read back.
 fn through_jpeg(img: &Raster, quality: u8) -> Raster {
     let rgb: Vec<u8> = img.rgba.chunks(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-    let encoded = craft_image_codecs::Image::from_u8(
-        img.width,
-        img.height,
-        craft_image_codecs::ChannelLayout::Rgb,
-        rgb,
-    )
-    .unwrap();
-    let opts = craft_image_codecs::EncodeOptions {
-        jpeg_quality: quality,
-        ..Default::default()
-    };
-    let bytes = craft_image_codecs::encode(&encoded, craft_image_codecs::Format::Jpeg, &opts).unwrap();
+    let mut bytes = vec![];
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, quality)
+        .encode(&rgb, img.width, img.height, image::ExtendedColorType::Rgb8)
+        .unwrap();
     Raster::decode(&bytes).unwrap()
 }
 
