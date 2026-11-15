@@ -464,6 +464,31 @@ fn the_symbol_check_counts_what_the_view_draws() {
 }
 
 #[test]
+fn a_wireframe_is_not_refused_for_graphics_it_does_not_draw() {
+    let check = |d: &Document, id: &str, mut p: Value, wire: bool| {
+        if wire {
+            p["render"] = json!({"mode": "wireframe"});
+        }
+        validate_three_d_in(Some(d), &object(id, p.clone()), id, &p)
+    };
+    // The straight 30,000-sided polygon at 1000% fits the symbol limit, but cut into pieces on
+    // Inflate's puffed front it is too complex.
+    let straight = dense_document(false);
+    let big = json!({"perspectiveAngle": 0.0, "graphics": [{"symbol": "Dense", "scale": 1000.0}]});
+    assert!(validate_symbols(&straight, &big).is_ok());
+    let e = check(&straight, INFLATE, big.clone(), false).unwrap_err();
+    assert!(e.contains("too complex"), "{e}");
+    // Two copies of the curved one under a perspective are past the symbol limit on Extrude & Bevel.
+    let curved = dense_document(true);
+    let two = json!({"perspectiveAngle": 60.0, "graphics": [{"symbol": "Dense"}, {"symbol": "Dense", "face": "back"}]});
+    let e = check(&curved, EXTRUDE, two.clone(), false).unwrap_err();
+    assert!(e.contains("too complex"), "{e}");
+    // A wireframe draws the faces' edges and no graphics, so neither is checked.
+    assert_eq!(check(&straight, INFLATE, big, true), Ok(()));
+    assert_eq!(check(&curved, EXTRUDE, two, true), Ok(()));
+}
+
+#[test]
 fn a_plane_and_a_hollow_solid() {
     let d = document();
     let plane = object(ROTATE, json!({"rotationY": 30.0, "graphics": [{"symbol": "Mark"}]}));

@@ -309,7 +309,8 @@ pub fn validate_solid_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value) 
 /// Inflate or Rotate, as drawn, or a new one after its other effects when it has none.
 fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at: (Option<usize>, Option<usize>)) -> Result<(), String> {
     validate_solid_params(id, p)?;
-    if let Some(doc) = doc {
+    // In wireframe mode the edges are drawn with no graphics, and their art is not checked.
+    if let Some(doc) = doc.filter(|_| !wireframe::wireframe_params(id, p)) {
         graphics::validate_symbols(doc, p)?;
     }
     let label = label_of(id);
@@ -362,10 +363,11 @@ fn check_cast(id: &str, p: &Value, shapes: &[Profile]) -> Result<(), String> {
 /// past their limits on the front and puffed back of the solids of `shapes`: their art, or the
 /// parts they draw on its pieces ([`graphics::surface_parts`]), or when the solids can't be built
 /// with their pieces carrying the graphics. They are built as the art builds them
-/// ([`surfaces_with`]). Without `doc` nothing is drawn, and nothing is checked.
+/// ([`surfaces_with`]). Without `doc` nothing is drawn, and nothing is checked. In wireframe mode no
+/// graphics are drawn, and none are checked.
 fn check_membrane_graphics(doc: Option<&Document>, n: &Node, id: &str, p: &Value, shapes: &[Profile]) -> Result<(), String> {
     let Some(doc) = doc else { return Ok(()) };
-    if id != INFLATE || mapped_graphics(p).is_empty() {
+    if id != INFLATE || wireframe::wireframe_params(id, p) || mapped_graphics(p).is_empty() {
         return Ok(());
     }
     for face in PlanarFace::ALL {

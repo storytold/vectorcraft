@@ -4244,7 +4244,8 @@ joins the edges, so with such an effect its paths can differ from the drawn ones
 draw the edges, and `effect.expandAppearance` keeps them as paths. Past 1,000,000 edges the source path is drawn, as
 it is for a solid past its limits. A `render` that is not an object, a key other than `mode`, another mode, and
 `render` on Extrude & Bevel (Classic), Revolve (Classic) or Rotate (Classic) are refused before the document
-changes. See [three-d.md](three-d.md#3d-and-materials-panel).
+changes. In wireframe mode the graphics' art is not checked against the graphics limits, so art too complex for the
+shaded surface does not refuse the wireframe. See [three-d.md](three-d.md#3d-and-materials-panel).
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"render":{"mode":"wireframe"}}}}}
