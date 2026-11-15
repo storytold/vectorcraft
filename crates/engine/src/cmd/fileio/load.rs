@@ -1074,8 +1074,8 @@ pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
 /// space (a PSD or PSB file's, [`psdread::clipping_path`]): a clip group of that path (even-odd,
 /// with no paint) and the image. Without one the image stays as it is.
 pub(crate) fn file_clipped(d: &mut Document, image: Node, clip: Option<vectorcraft_geom::PathData>) -> Node {
-    let (Some(path), NodeKind::Image(im)) = (clip, &image.kind) else { return image };
-    let path = path.transformed(im.xf);
+    let (Some(mut path), NodeKind::Image(im)) = (clip, &image.kind) else { return image };
+    path.transform(im.xf);
     let none = vectorcraft_color::Paint::None;
     let mut clip = Node::path(d.alloc_id(), path, vectorcraft_doc::Appearance::basic(none.clone(), none, 0.0));
     if let NodeKind::Path { clipping, rule, .. } = &mut clip.kind {
