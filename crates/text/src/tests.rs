@@ -10,6 +10,7 @@ mod bidi;
 mod bitmaps;
 mod colr;
 mod combos;
+mod composers;
 mod composite;
 mod devanagari;
 mod embed;

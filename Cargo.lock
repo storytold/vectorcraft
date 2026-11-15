@@ -6632,6 +6632,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "vectorcraft-brush",
  "vectorcraft-doc",
  "vectorcraft-geom 0.24.1",
  "vectorcraft-testkit",
@@ -6824,6 +6825,7 @@ version = "0.24.1"
 dependencies = [
  "craft-docpath",
  "craft-svg",
+ "data-url",
  "flate2",
  "image",
  "kurbo 0.13.1",
@@ -6928,6 +6930,7 @@ name = "vectorcraft-ui-egui"
 version = "0.24.1"
 dependencies = [
  "bytemuck",
+ "chrono",
  "craft-keymap",
  "craft-ui",
  "craft-update",

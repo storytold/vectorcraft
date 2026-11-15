@@ -478,9 +478,9 @@ impl SmartPenTool {
         } else {
             straighten_segment(&mut sp, prev);
         }
-        let tail = sp.anchors.get(prev..)?;
+        let tail = sp.anchors.get_range(prev..)?;
         let mut bp = BezPath::new();
-        SubPath::new(tail.to_vec(), false).to_bezpath_into(&mut bp);
+        SubPath::new(tail, false).to_bezpath_into(&mut bp);
         Some(bp)
     }
 }
