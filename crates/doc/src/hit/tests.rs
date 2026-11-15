@@ -1961,6 +1961,48 @@ fn a_symbol_instance_is_hit_on_the_stroke_of_its_art_past_its_box() {
     assert_eq!(at(108.0, HitOptions { outline: true, ..HitOptions::default() }), None, "Outline view");
 }
 
+/// Outside a symbol instance's box, an instance nested in its art counts where its own art is, not
+/// anywhere in its box: a click or a marquee on empty space in the nested box, where a moved
+/// clipping path shows the art past the outer box, selects nothing, and on art drawn there it
+/// selects the outer instance.
+#[test]
+fn a_nested_symbol_instances_box_past_the_outer_box_is_not_a_hit() {
+    set_clip_region(moved_clip_region);
+    // `Two` draws squares at the corners of 0..200 × 0..100, and with `middle` one at 140..160 ×
+    // 40..60. The outer symbol clips an instance of it to 0..100 × 0..100, which `test.move` moves
+    // to 100..200: the outer box is 0..100, the nested box 0..200.
+    let build = |middle: bool| {
+        let mut d = Document::new(600.0, 400.0);
+        let l = d.layers[0].id;
+        let square = |d: &mut Document, r: Rect| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::default_art()));
+        let mut squares = vec![square(&mut d, Rect::new(0.0, 0.0, 10.0, 10.0)), square(&mut d, Rect::new(190.0, 90.0, 200.0, 100.0))];
+        if middle {
+            squares.push(square(&mut d, Rect::new(140.0, 40.0, 160.0, 60.0)));
+        }
+        group_symbol(&mut d, "Two", squares);
+        let (mut mask, _) = half_clipped(&mut d);
+        mask.appearance.effects.push(test_move());
+        let nested = instance_of(&mut d, "Two");
+        let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), nested]);
+        clip.set_clips(true);
+        group_symbol(&mut d, "Outer", vec![Arc::new(clip)]);
+        let inst = d.alloc_id();
+        d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Outer".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+        (d, inst)
+    };
+    let at = |d: &Document, x: f64, y: f64| hit_test(d, Point::new(x, y), HitOptions::default()).map(|h| h.leaf);
+    let inside = Rect::new(145.0, 45.0, 155.0, 55.0);
+    let (d, inst) = build(false);
+    assert_eq!(at(&d, 150.0, 50.0), None, "empty space in the nested box");
+    assert!(marquee(&d, inside, None, false).is_empty(), "marquee on empty space in the nested box");
+    assert_eq!(at(&d, 195.0, 95.0), Some(inst), "on the nested art past the outer box");
+    assert_eq!(at(&d, 50.0, 50.0), Some(inst), "in the outer box");
+    let (d, inst) = build(true);
+    assert_eq!(at(&d, 150.0, 50.0), Some(inst), "on the nested art");
+    // Across the middle square's left edge.
+    assert_eq!(marquee(&d, Rect::new(135.0, 45.0, 145.0, 55.0), None, false), [inst], "marquee on the nested art");
+}
+
 /// Adds the symbol `Clipped`: a clip group whose clipping path's region `test.move` moves to
 /// 100..200 × 0..100, past the 0..100 box, over a 0..200 × 0..100 rectangle shown when `shown`.
 /// A click at (150, 50) hits an instance of it on the rectangle, or, with the rectangle hidden,

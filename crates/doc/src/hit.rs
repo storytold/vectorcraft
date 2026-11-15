@@ -1066,9 +1066,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
         }
         // A symbol instance is hit within its bounds, and outside them where its art paints
-        // ([`instance_art_hit`]).
+        // ([`instance_art_hit`]). In the art of another instance walked outside that instance's
+        // bounds, it is hit only where its own art paints ([`ArtOnly`]).
         NodeKind::SymbolInstance { .. } => {
-            if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+            if !ArtOnly::on() && n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
                 return Some(HitKind::Bounds);
             }
             instance_art_hit(n, p, opt, symbols)
@@ -1331,7 +1332,38 @@ fn instance_art_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) 
     #[cfg(test)]
     ARTS_WALKED.with(|c| c.set(c.get() + 1));
     let opt = HitOptions { clip_outlines: false, ..opt };
+    let _art_only = ArtOnly::set();
     FindPart { art: &art, p, opt, symbols, whole_instance: true }.find(&art.art, &mut vec![], None, false)
+}
+
+thread_local! {
+    /// Whether a symbol instance's art is being walked outside the instance's box ([`ArtOnly`]).
+    static ART_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// While a guard lives, a symbol instance is hit ([`hit_leaf`]) and touched by a marquee
+/// ([`marquee_with`]) only where its own art is, by the same rule at every level, and not anywhere
+/// in its box. [`instance_art_hit`] and the marquee's walk of an instance's art hold one: they walk
+/// the art outside the instance's box, where the box of an instance nested in the art can reach
+/// past it over empty space.
+struct ArtOnly {
+    was: bool,
+}
+
+impl ArtOnly {
+    fn set() -> Self {
+        Self { was: ART_ONLY.replace(true) }
+    }
+
+    fn on() -> bool {
+        ART_ONLY.get()
+    }
+}
+
+impl Drop for ArtOnly {
+    fn drop(&mut self) {
+        ART_ONLY.set(self.was);
+    }
 }
 
 thread_local! {
@@ -1703,8 +1735,9 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds, outline)),
             NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds, outline)),
             // A symbol instance is touched by its box, and outside it where the live geometry
-            // effects of a clipping path in its art show the art.
-            NodeKind::SymbolInstance { .. } => box_touches(n, s, r) || !outline && instance_art_touches(n, s, r, whole_compounds),
+            // effects of a clipping path in its art show the art. In the art of another instance
+            // walked outside that instance's box, it is touched only by its own art ([`ArtOnly`]).
+            NodeKind::SymbolInstance { .. } => !ArtOnly::on() && box_touches(n, s, r) || !outline && instance_art_touches(n, s, r, whole_compounds),
             _ => box_touches(n, s, r),
         }
     }
@@ -1718,13 +1751,13 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     }
     /// Does the marquee `r` touch the art of symbol instance `n` placed as the canvas draws it, as
     /// it touches a group of that art? Only for art whose clipping paths have live geometry effects
-    /// ([`SymbolBoxes::art`]), and only when `r` meets the instance's reach
-    /// ([`Node::reach_bounds_with`]): elsewhere the art lies within the instance's box. Not once the
-    /// marquee has placed as many objects of symbol art as [`ArtWalk`] allows.
+    /// ([`SymbolBoxes::art`]), or for any art while [`ArtOnly`] is on, and only when `r` meets the
+    /// instance's reach ([`Node::reach_bounds_with`]): elsewhere the art lies within the instance's
+    /// box. Not once the marquee has placed as many objects of symbol art as [`ArtWalk`] allows.
     fn instance_art_touches(n: &Node, s: &SymbolBoxes, r: Rect, whole_compounds: bool) -> bool {
         let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return false };
         let meets = |b: Rect| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1;
-        if s.art(symbol).is_none_or(|a| a.reshaped.is_none()) || !n.reach_bounds_with(s).is_some_and(meets) {
+        if s.art(symbol).is_none_or(|a| a.reshaped.is_none() && !ArtOnly::on()) || !n.reach_bounds_with(s).is_some_and(meets) {
             return false;
         }
         let _walk = ArtWalk::open();
@@ -1737,6 +1770,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
         }
         #[cfg(test)]
         ARTS_WALKED.with(|c| c.set(c.get() + 1));
+        let _art_only = ArtOnly::set();
         art.place(&art.art, None).is_some_and(|placed| placed.visible && touches(&placed, s, r, None, whole_compounds, false))
     }
     fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool, out: &mut Vec<NodeId>) {
