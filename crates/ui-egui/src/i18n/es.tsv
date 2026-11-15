@@ -5555,6 +5555,8 @@ axis	Both	Ambos
 	Step up or down	Subir o bajar un paso
 	Drag values or labels. Double-click a value to type.	Arrastra los valores o las etiquetas. Haz doble clic en un valor para escribir.
 	Drag rings to rotate. Shift snaps to 15°.	Arrastra los anillos para girar. Shift ajusta a pasos de 15°.
+	Track cube	Cubo de rotación
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Arrastra una cara, una arista o el anillo para girar. Shift gira sobre un eje de la pantalla.
 	Drag the light, or its rings. Shift snaps to 15°.	Arrastra la luz o sus anillos. Shift ajusta a pasos de 15°.
 lighting	Light	Luz
 	Keep visible surfaces only when expanding	Conservar solo superficies visibles al expandir
