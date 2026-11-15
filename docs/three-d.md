@@ -79,6 +79,16 @@ pages describe it.
   own choice. The group keeps the object's place, id, name, opacity, blending mode, opacity mask, attributes
   and text wrap and is selected; objects without a visible 3D effect do not change. It is one undo step, and an error changes nothing
   when no selected object has a visible 3D effect.
+- **Export 3D Object** is a button in the panel, as the public
+  [Export 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/export-3d-vector-artwork.html)
+  page describes; VectorCraft places it at the bottom of the panel. It adds each selected object that has a visible
+  3D effect to Asset Export as a 3D asset, the same as
+  Asset Export's own Export 3D Object (`assets.add3D` with those objects' ids), selects their assets in the Asset
+  Export panel and shows that panel, where the Format row and Export write the mesh files
+  ([3D assets in mcp.md](mcp.md#3d-assets)). Selected objects without a visible 3D effect are left out, and so is
+  a 3D object inside another selected 3D object, whose asset holds it. The button is unavailable while no selected
+  object has a visible 3D effect. Adding the assets is one undo step; when every one of the objects is an asset already, nothing is
+  recorded and their assets are selected again.
 - The Lighting tab also holds the Shadows switch and its settings ([Shadows](#shadows)). The Materials tab holds
   the Graphics ([Graphics](#graphics)); base materials and ray-traced rendering are not built (see below). The
   rotation and light rings on the artboard are part of the options dialog only. The panel's Lighting tab has the
