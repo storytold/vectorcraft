@@ -25,6 +25,7 @@
 	Edge Brightness	Kantenhelligkeit
 	Smoothness	Glättung
 	Radial Blur…	Radialer Weichzeichner…
+	Blur Center	Mittelpunkt der Weichzeichnung
 	Smart Blur…	Selektiver Weichzeichner…
 	Sharpen	Scharfzeichnen
 	Unsharp Mask…	Unscharf maskieren…
@@ -623,6 +624,7 @@ font-technology	Variable	Variabel
 	Copy All Styles	Alle Stile kopieren
 	Copy Color Value (Hex)	Farbwert kopieren (Hex)
 	Copy Fonts Used in the Document	Im Dokument verwendete Schriften kopieren
+	Copy Info	Informationen kopieren
 	Copy Links	Verknüpfungen kopieren
 	Copy Selected Style	Ausgewählten Stil kopieren
 	Copy to User Defined	In „Benutzerdefiniert“ kopieren
@@ -2635,6 +2637,8 @@ mark-style	Japanese	Japanisch
 	Proof Setup	Proof einrichten
 	Properties	Eigenschaften
 	Proportional Metrics	Proportionale Metrik
+	H or V Style	Horizontaler oder vertikaler Stil
+	Roman Italics	Lateinische Kursive
 	Insert Aki Left	Aki links einfügen
 	Insert Aki Right	Aki rechts einfügen
 	Tsume	Tsume
@@ -4315,6 +4319,7 @@ theme	Appearance	Erscheinungsbild
 @msg	there is no script engine named {name}	es gibt keine Skript-Engine namens {name}
 @msg	Running a script	Skript wird ausgeführt
 @msg	Copied the script report	Skriptbericht kopiert
+@msg	Copied the link info	Verknüpfungsinformationen kopiert
 @msg	Corners edits the corners of a path	„Ecken“ bearbeitet die Ecken eines Pfads
 @msg	Couldn't copy to the system clipboard: {e}	In die Systemzwischenablage konnte nicht kopiert werden: {e}
 @msg	Couldn't open {name}: {e}	{name} konnte nicht geöffnet werden: {e}
@@ -6398,6 +6403,13 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technische Schaltungen
+	Circuit Trace	Leiterbahn
+	Bus Lines	Busleitungen
+	Terminal Nodes	Anschlussknoten
+
 	Notched Ribbon	Gekerbtes Band
 	Double Line	Doppellinie
 	Wave	Welle
@@ -7475,7 +7487,7 @@ breakText	Glyphs	Glyphen
 @msg	toString is not a function	toString ist keine Funktion
 @msg	too many arguments	zu viele Argumente
 @msg	too many quantifiers	zu viele Quantifizierer
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	unbekannte OpenType-Funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; mit vorangestelltem - ausschalten; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom und aalt nehmen die Nummer einer Alternative als `tag=N` mit N von 0 bis {_1}, etwa `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	unbekannte OpenType-Funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; mit vorangestelltem - ausschalten; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom und aalt nehmen die Nummer einer Alternative als `tag=N` mit N von 0 bis {_1}, etwa `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	unbekanntes Dithering `{d}` (diffusion, pattern, noise oder none)
 @msg	unknown panel `{panel}`	unbekanntes Bedienfeld `{panel}`
 @msg	unknown parameter `{key}`	unbekannter Parameter `{key}`
@@ -8597,6 +8609,7 @@ breakText	Glyphs	Glyphen
 @msg	the RTF file is too large to place as type (at most {_1} MB)	die RTF-Datei ist zu groß, um als Text platziert zu werden (höchstens {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	das SVG wird zu mehr als {0} verschachtelten SVG-Bildern erweitert
 @msg	the SVG expands to more than {0} objects	das SVG wird zu mehr als {0} Objekten erweitert
+@msg	the SVG's style sheets take too long to match	das Abgleichen der Stylesheets des SVG dauert zu lange
 @msg	the SVG's styles expand to more than {0} MB	die Stile des SVG werden auf mehr als {0} MB erweitert
 @msg	the SVG has no drawable objects	das SVG hat keine zeichenbaren Objekte
 @msg	the SVGZ file unpacks to more than {_1} MB	die SVGZ-Datei wird auf mehr als {_1} MB entpackt

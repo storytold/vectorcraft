@@ -50,6 +50,8 @@ font-technology	Variable	バリアブル
 	x-Height	x ハイト
 	ICF Box	平均字面
 	Proportional Metrics	プロポーショナルメトリクス
+	H or V Style	横組み・縦組み用かな
+	Roman Italics	欧文イタリック
 	Insert Aki Left	前にアキを挿入
 	Insert Aki Right	後ろにアキを挿入
 	Tsume	文字ツメ
@@ -3775,6 +3777,7 @@ gradient-kind	Radial	円形
 	Convert To Outlines	アウトラインに変換
 	Copy All Objects	すべてのオブジェクトをコピー
 	Copy Fonts Used in the Document	ドキュメントで使用しているフォントをコピー
+	Copy Info	情報をコピー
 	Copy Links	リンクをコピー
 	Couldn't copy to the system clipboard: {e}	システムのクリップボードにコピーできませんでした：{e}
 	Couldn't paste from the clipboard: {e}	クリップボードからペーストできませんでした：{e}
@@ -4265,6 +4268,7 @@ theme	Appearance	外観
 
 # Photoshop-style raster effects (Effect menu, their dialogs).
 	Radial Blur…	ぼかし (放射状)…
+	Blur Center	ぼかしの中心
 	Smart Blur…	ぼかし (詳細)…
 	Sharpen	シャープ
 	Unsharp Mask…	アンシャープマスク…
@@ -5209,6 +5213,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	there is no script engine named {name}	{name} という名前のスクリプトエンジンはありません
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
+@msg	Copied the link info	リンク情報をコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
 @msg	unknown highlight `{h}`	`{h}` は不明なハイライトの指定です
@@ -6730,7 +6735,7 @@ axis	Y Axis	Y 軸
 @msg	toString is not a function	toString は関数ではありません
 @msg	too many arguments	引数が多すぎます
 @msg	too many quantifiers	量指定子が多すぎます
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	`{t}` は不明な OpenType 機能です (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt。オフにするには先頭に - を付けます。swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt には、`salt=2` のように `tag=N` の形式で代替字形の番号を指定できます。N は 0 から {_1} まで)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	`{t}` は不明な OpenType 機能です (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital。オフにするには先頭に - を付けます。swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt には、`salt=2` のように `tag=N` の形式で代替字形の番号を指定できます。N は 0 から {_1} まで)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	`{d}` は不明なディザの指定です (diffusion、pattern、noise、none のいずれか)
 @msg	unknown panel `{panel}`	`{panel}` は不明なパネルです
 @msg	unknown parameter `{key}`	`{key}` は不明なパラメーターです
@@ -7853,6 +7858,7 @@ axis	Y Axis	Y 軸
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF ファイルが大きすぎて、文字として配置できません (最大 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG を展開すると、入れ子の SVG 画像が {0} 個を超えます
 @msg	the SVG expands to more than {0} objects	SVG を展開すると、オブジェクトが {0} 個を超えます
+@msg	the SVG's style sheets take too long to match	SVG のスタイルシートの照合に時間がかかりすぎます
 @msg	the SVG's styles expand to more than {0} MB	SVG のスタイルを展開すると {0} MB を超えます
 @msg	the SVG has no drawable objects	SVG に描画できるオブジェクトがありません
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ ファイルを展開すると {_1} MB を超えます
@@ -8303,6 +8309,13 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	黒鉛鉛筆
 	Wax Crayon	ワックスクレヨン
 	Charcoal Dust	木炭の粉
+
+# Original procedural circuit brushes.
+	Tech Circuit	電子回路
+	Circuit Trace	回路配線
+	Bus Lines	バス配線
+	Terminal Nodes	端子ノード
+
 	Notched Ribbon	ノッチリボン
 	Double Line	二重線
 	Wave	波
