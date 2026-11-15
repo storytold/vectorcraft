@@ -1883,14 +1883,14 @@ fn a_png_past_the_allowance_draws_at_reduced_size() {
     assert_eq!((pm.width(), pm.height(), [c.r, c.g, c.b, c.a]), (300, 300, [200, 40, 40, 255]));
     // A row is read only while the reader's buffers fit the allowance, counting the stream buffer
     // three times for the moment it grows. Below 4,096 columns of 16-bit RGBA they take 516,103
-    // bytes and 60 a column: 1,398 columns take 599,983 bytes, within 600,000, and 1,399 columns
-    // take 600,043 and are not decoded (their samples, 8 bytes a pixel, are past it too).
+    // bytes plus 64 bytes a column: 1,310 columns take 599,943 bytes, within 600,000, and 1,311
+    // columns take 600,007 and are not decoded (their samples, 8 bytes a pixel, are past it too).
     let wide = |w: u32| {
         let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(w, 60, image::Rgba([51400, 10280, 10280, 65535]));
         encoded(image::DynamicImage::ImageRgba16(img), image::ImageFormat::Png)
     };
-    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1398))), Some((1398, 60)));
-    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1399))), None);
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1310))), Some((1310, 60)));
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1311))), None);
     // An image of more pixels than the allowance has bytes is not read: 1,000 × 400 8-bit gray
     // pixels are drawn at 500 × 200 within 400,000 bytes, and 1,000 × 401 are not.
     let gray = |h: u32| encoded(image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(1000, h, image::Luma([90]))), image::ImageFormat::Png);
@@ -1938,13 +1938,13 @@ fn a_reduced_decode_counts_what_reading_takes_beside_the_images_paints_hold() {
     // Decoded whole: 14,400 bytes of RGB and a 16-row band of 8,960 bytes, beside a 73 × 54 result
     // of 15,768 bytes.
     let jpeg = encoded(image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(80, 60, image::Rgb([30, 120, 200]))), image::ImageFormat::Jpeg);
-    // Read a row at a time: 540,103 bytes in the reader's buffers for 400 columns of 16-bit RGBA,
+    // Read a row at a time: 541,703 bytes in the reader's buffers for 400 columns of 16-bit RGBA,
     // beside a 387 × 387 result of 599,076 bytes.
     let png = encoded(
         image::DynamicImage::ImageRgba16(image::ImageBuffer::from_pixel(400, 400, image::Rgba([51400, 10280, 10280, 65535]))),
         image::ImageFormat::Png,
     );
-    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 600_000, 599_076 + 540_103, (387, 387))] {
+    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 600_000, 599_076 + 541_703, (387, 387))] {
         let failed = decode_failures();
         let none = with_allowance(allowance, || with_room(room - 1, || paint::decode_pixmap_or_why(bytes)));
         assert_eq!(none.err(), Some(paint::Undecoded::NoRoom), "not decoded with a byte too few, and tried again later");
