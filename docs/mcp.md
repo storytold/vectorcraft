@@ -2579,6 +2579,9 @@ The rest of this section is VectorCraft's own rules:
   `The Scripts folder cannot be read`.
 - A listed file is checked again when it is chosen. A file that is gone, is no longer a `.js` or `.jsx` file under
   the folder, or is or lies behind a link ends with `the script is no longer in the Scripts folder`, and nothing runs.
+  The file is read once for that check, and the text that read checked is the text that runs; its `#include` lines
+  and `$.evalFile` read in the folder that read found. `script.run {path, installed: true}` runs a listed script the
+  same way.
 - The web build has no Scripts folder, and neither has a run with `VECTORCRAFT_NO_PREFS` set.
 
 `script.listInstalled {}` returns the same listing: `{folder, scripts: [{path, label, folders}], truncated,
