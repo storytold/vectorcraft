@@ -962,7 +962,10 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
             None => {
                 let mut opts = craft_image_codecs::DecodeOptions::default();
                 opts.limits.max_alloc = MAX_RASTER_ALLOC;
-                opts.limits.max_pixels = MAX_RASTER_ALLOC / 4;
+                // `max_alloc` checks the actual decoded sample size (including 16-bit RGBA).
+                // Keep the former 1-billion-pixel ceiling; the RGBA allowance is separately
+                // applied by `size_note` and the image placement path.
+                opts.limits.max_pixels = 1 << 30;
                 opts.keep_orientation = true;
                 let decoded = craft_image_codecs::decode_as_with(kind, bytes, &opts).map_err(|e| match e {
                     craft_image_codecs::CodecError::LimitExceeded(_) => err("image is too large to draw"),
