@@ -437,7 +437,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.add_space(12.0);
         widgets::dim_label(ui, tl!("Column Width:"));
         let mut w = d.fields.get("width").and_then(Value::as_u64).unwrap_or(7);
-        if ui.add(egui::DragValue::new(&mut w).range(0..=MAX_WIDTH)).changed() {
+        let r = ui.add(egui::DragValue::new(&mut w).range(0..=MAX_WIDTH));
+        // A value entered with Enter sets every column, also when it is the width shown. Leaving the
+        // field without a new value keeps the columns' own widths.
+        if r.changed() || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
             set_width(d, w);
         }
     });
@@ -559,18 +562,38 @@ fn sheet(ui: &mut egui::Ui, d: &Dialog) -> SheetInput {
                 }
             }
             // A column's right edge, over the rows in view: dragging it sets that column's width. The
-            // edge being dragged stays in the loop when it leaves the view, so the drag goes on.
+            // edge being dragged stays in the loop when it leaves the view, so the drag goes on, also in
+            // the frame it is released.
             let (top, bottom) = (origin.y + r0 as f32 * ch, origin.y + r1 as f32 * ch);
-            let dragged = ui.ctx().dragged_id().and_then(|id| (0..cols).find(|&c| edge_id(c) == id)).filter(|c| !(c0..c1).contains(c));
+            let dragged = ui
+                .ctx()
+                .dragged_id()
+                .or_else(|| ui.ctx().drag_stopped_id())
+                .and_then(|id| (0..cols).find(|&c| edge_id(c) == id))
+                .filter(|c| !(c0..c1).contains(c));
             for c in (c0..c1).chain(dragged) {
                 let gap = origin.x + left(c + 1) - 0.5;
                 let edge = egui::Rect::from_x_y_ranges(gap - 3.0..=gap + 3.0, top..=bottom);
                 let h = ui.interact(edge, edge_id(c), egui::Sense::drag()).on_hover_cursor(egui::CursorIcon::ResizeColumn);
+                // The width is the column's width when the drag started plus how far the pointer has
+                // moved since, so a scroll offset that changes with the sheet's width doesn't change it.
+                if h.drag_started()
+                    && let Some(p) = ui.input(|i| i.pointer.press_origin()).or_else(|| h.interact_pointer_pos())
+                {
+                    ui.data_mut(|m| m.insert_temp(edge_id(c), (p.x, left(c + 1) - left(c) - 1.0)));
+                }
                 if h.dragged() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
-                    if let Some(p) = h.interact_pointer_pos() {
-                        resized = Some((c, px_digits(p.x - origin.x - left(c))));
-                    }
+                }
+                // The release can come in the same frame as the last move: it sets the width too.
+                if (h.dragged() || h.drag_stopped())
+                    && let Some(p) = h.interact_pointer_pos()
+                    && let Some((x0, w0)) = ui.data(|m| m.get_temp::<(f32, f32)>(edge_id(c)))
+                {
+                    resized = Some((c, px_digits(w0 + p.x - x0)));
+                }
+                if h.drag_stopped() {
+                    ui.data_mut(|m| m.remove::<(f32, f32)>(edge_id(c)));
                 }
             }
         });
@@ -832,6 +855,101 @@ mod tests {
         let d = app.ui.dialog.as_mut().unwrap();
         set_width(d, 9);
         assert_eq!(digits(&app), [9; 4], "Cell Style sets every column");
+    }
+
+    /// A drag whose last move comes in the frame it is released sets the width to where it was
+    /// released. A held drag on a sheet scrolled to its right end keeps its width while the scroll
+    /// offset follows the narrower sheet. Entering the width that Column Width shows sets every
+    /// column, the dragged ones too.
+    #[test]
+    fn a_column_drag_ends_where_released_and_the_shown_width_entered_sets_every_column() {
+        let rows: Vec<Vec<f64>> = (0..3).map(|i| vec![i as f64; 30]).collect();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("graph.create", json!({"type": "column", "x": 0, "y": 0, "width": 200, "height": 150, "rows": rows})).unwrap();
+        open(&mut app).unwrap();
+        let cols = extent(app.ui.dialog.as_ref().unwrap(), (0, 1)).1;
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out =
+                ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+        };
+        let button =
+            |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let edge = |c: usize| ctx.read_response(edge_id(c)).map(|r| r.rect).unwrap_or_else(|| panic!("column {c}'s edge is drawn"));
+        let digits = |app: &VectorcraftApp, c: usize| col_digits(app.ui.dialog.as_ref().unwrap(), c);
+        for _ in 0..3 {
+            frame(&mut app, vec![]);
+        }
+        // The last move and the release in one frame: 70 points is 10 digits.
+        let at = edge(1).center();
+        frame(&mut app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+        let to = at + egui::vec2(70.0, 0.0);
+        frame(&mut app, vec![egui::Event::PointerMoved(to), button(to, false)]);
+        frame(&mut app, vec![egui::Event::PointerMoved(egui::pos2(0.0, 0.0))]);
+        assert_eq!(digits(&app, 1), 17, "the width where the drag was released");
+        // Scroll the sheet to its right end, then narrow a column by 5 digits and hold the pointer still.
+        let over = edge(1).center() - egui::vec2(20.0, 0.0);
+        let wheel = egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(-100_000.0, 0.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        };
+        frame(&mut app, vec![egui::Event::PointerMoved(over), wheel]);
+        for _ in 0..30 {
+            frame(&mut app, vec![]);
+        }
+        let c = cols - 2;
+        let at = edge(c).center();
+        frame(&mut app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+        for step in 1..=5 {
+            frame(&mut app, vec![egui::Event::PointerMoved(at - egui::vec2(7.0 * step as f32, 0.0))]);
+        }
+        for _ in 0..10 {
+            frame(&mut app, vec![]);
+        }
+        assert_eq!(digits(&app, c), 2, "a held drag keeps its width");
+        let to = at - egui::vec2(35.0, 0.0);
+        frame(&mut app, vec![button(to, false)]);
+        frame(&mut app, vec![egui::Event::PointerMoved(egui::pos2(0.0, 0.0))]);
+        assert_eq!(digits(&app, c), 2, "the width where the drag was released");
+        // Column Width still shows 7: entering 7 there sets every column to 7.
+        let nodes = frame(&mut app, vec![]);
+        let label = nodes
+            .iter()
+            .find(|(_, n)| n.role() == egui::accesskit::Role::Label && n.value() == Some("Column Width:"))
+            .and_then(|(_, n)| n.bounds())
+            .expect("the Column Width label is drawn");
+        let field = nodes
+            .iter()
+            .filter(|(_, n)| n.role() == egui::accesskit::Role::SpinButton)
+            .filter_map(|(_, n)| n.bounds())
+            .filter(|b| b.x0 >= label.x1 && b.y0 < label.y1 && b.y1 > label.y0)
+            .min_by(|a, b| a.x0.total_cmp(&b.x0))
+            .expect("the Column Width field is drawn");
+        let at = egui::pos2(((field.x0 + field.x1) / 2.0) as f32, ((field.y0 + field.y1) / 2.0) as f32);
+        let click = |app: &mut VectorcraftApp, at| {
+            frame(app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+            frame(app, vec![button(at, false)]);
+            frame(app, vec![]);
+        };
+        // Clicking into the field and away from it, without a new value, keeps the columns' widths.
+        click(&mut app, at);
+        click(&mut app, egui::pos2(((label.x0 + label.x1) / 2.0) as f32, ((label.y0 + label.y1) / 2.0) as f32));
+        assert_eq!((digits(&app, 1), digits(&app, c), digits(&app, 0)), (17, 2, 7), "leaving the field keeps the widths");
+        click(&mut app, at);
+        frame(&mut app, vec![egui::Event::Text("7".into())]);
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        frame(&mut app, vec![enter]);
+        frame(&mut app, vec![]);
+        assert_eq!((digits(&app, 1), digits(&app, c), digits(&app, 0)), (7, 7, 7), "Column Width sets every column");
     }
 
     #[test]
