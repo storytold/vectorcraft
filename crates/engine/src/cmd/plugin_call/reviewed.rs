@@ -536,6 +536,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "select.same.textStrokeColor",
     "select.segments",
     "select.set",
+    "select.similar",
     "select.storedPath",
     "select.toggle",
     "select.update",

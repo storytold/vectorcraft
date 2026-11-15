@@ -3583,6 +3583,8 @@ effect	Points	Punkte
 	Swap Fill and Stroke (Shift+X)	Fläche und Kontur vertauschen (Shift+X)
 	Swap start and end arrowheads	Pfeilspitzen an Anfang und Ende vertauschen
 	Swap the selected object for the file, keeping its place and transform	Das ausgewählte Objekt durch die Datei ersetzen; Position und Transformation bleiben erhalten
+	Show Import Options	Importoptionen anzeigen
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Vor dem Platzieren nach den Importoptionen jeder PDF-, DXF- oder Textdatei fragen; aus: die zuletzt gewählten Optionen verwenden
 	Stylistic Alternates	Stilistische Varianten
 	Swash	Schwungschrift
 	Swatch Conflict	Farbfeldkonflikt
@@ -6288,6 +6290,8 @@ axis	Y Axis	Y-Achse
 	Create New Set	Neuen Satz erstellen
 	Stop Global Edit	Globale Bearbeitung beenden
 	Global Edit Options	Optionen für globale Bearbeitung
+	Select Similar Objects	Ähnliche Objekte auswählen
+	Select Similar Options	Optionen für ähnliche Objekte
 	Leave Out of Global Edit	Von globaler Bearbeitung ausschließen
 	Match	Übereinstimmung
 	On Artboards	Auf Zeichenflächen
@@ -8995,6 +8999,7 @@ breakText	Glyphs	Glyphen
 @msg	a line can't run from a point to itself	eine Linie kann nicht von einem Punkt zu sich selbst verlaufen
 @msg	a line needs at least two points	eine Linie braucht mindestens zwei Punkte
 @msg	a linked JavaScript file is outside the read roots	eine verknüpfte JavaScript-Datei liegt außerhalb der Lesestammordner
+@msg	a linked image file is outside the read roots	eine verknüpfte Bilddatei liegt außerhalb der Lesestammordner
 @msg	a number cannot be read	eine Zahl kann nicht gelesen werden
 @msg	a swatch exchange block is too long	ein Block der Farbfeld-Austauschdatei ist zu lang
 @msg	a swatch exchange name is too long	ein Name in der Farbfeld-Austauschdatei ist zu lang

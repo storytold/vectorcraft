@@ -3472,6 +3472,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Swap Fill and Stroke (Shift+X)	切换填色和描边 (Shift+X)
 	Swap start and end arrowheads	对调起点与终点箭头
 	Swap the selected object for the file, keeping its place and transform	以文件替换选择的对象，并保留其位置与变形
+	Show Import Options	显示导入选项
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	置入前询问每个 PDF、DXF 或文本文件的导入选项；关闭时使用上次选择的选项
 	Stylistic Alternates	风格替代字
 	Swash	花饰字
 	Swatch Conflict	色板冲突
@@ -6537,6 +6539,8 @@ axis	Y Axis	Y 轴
 	Create New Set	创建新组
 	Stop Global Edit	停止全局编辑
 	Global Edit Options	全局编辑选项
+	Select Similar Objects	选择相似对象
+	Select Similar Options	选择相似对象选项
 	Leave Out of Global Edit	从全局编辑中排除
 	Match	匹配
 	On Artboards	在画板上

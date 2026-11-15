@@ -4058,6 +4058,8 @@ file-filter	Templates	テンプレート
 	Superscript	上付き文字
 	Swap Fill and Stroke (Shift+X)	塗りと線を入れ替え (Shift+X)
 	Swap the selected object for the file, keeping its place and transform	選択したオブジェクトを、位置と変形を保ったままファイルに置き換え
+	Show Import Options	読み込みオプションを表示
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	配置する前に PDF、DXF、テキストファイルごとの読み込みオプションを確認。オフのときは前回選んだオプションを使用
 	Swatch Libraries Menu	スウォッチライブラリメニュー
 	System Layout	システムレイアウト
 	Tabular Lining	等幅ライニング
@@ -8197,6 +8199,8 @@ axis	Y Axis	Y 軸
 	Create New Set	新規セットを作成
 	Stop Global Edit	グローバル編集を終了
 	Global Edit Options	グローバル編集オプション
+	Select Similar Objects	類似オブジェクトを選択
+	Select Similar Options	類似オブジェクトの選択オプション
 	Leave Out of Global Edit	グローバル編集から除外
 	Match	一致
 	On Artboards	アートボード上
