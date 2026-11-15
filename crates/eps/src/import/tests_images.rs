@@ -359,6 +359,7 @@ fn ccitt_fax_data_in_the_program_ends_at_its_end_of_block() {
     for (k, eol, aligned, params) in [
         (-1, false, false, "/K -1 /Columns 70"),
         (0, true, false, "/Columns 70 /EndOfLine true"),
+        (0, true, true, "/Columns 70 /EndOfLine true /EncodedByteAlign true"),
         (2, true, false, "/K 2 /Columns 70 /Rows 7 /EndOfLine true"),
         (3, true, true, "/K 3 /Columns 70 /EndOfLine true /EncodedByteAlign true"),
     ] {
