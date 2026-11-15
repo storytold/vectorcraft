@@ -16,6 +16,7 @@
 	Edge Brightness	Яркость края
 	Smoothness	Сглаживание
 	Radial Blur…	Радиальное размытие…
+	Blur Center	Центр размытия
 	Smart Blur…	Умное размытие…
 	Sharpen	Резкость
 	Unsharp Mask…	Нерезкая маска…
@@ -643,6 +644,7 @@ font-technology	Variable	Вариативные
 	Copy All Styles	Копировать все стили
 	Copy Color Value (Hex)	Копировать значение цвета (hex)
 	Copy Fonts Used in the Document	Копировать шрифты, использованные в документе
+	Copy Info	Копировать сведения
 	Copy Links	Копировать связи
 	Copy Selected Style	Копировать выбранный стиль
 	Copy to User Defined	Копировать в «Пользовательский»
@@ -1713,6 +1715,7 @@ file-filter	Templates	Шаблоны
 	Images:	Изображения:
 	Import Keyboard Shortcuts…	Импортировать сочетания клавиш…
 	Import PDF	Импортировать PDF
+	Import PDF pages as links	Импортировать страницы PDF как связи
 	Import PDF Presets	Импортировать наборы PDF
 	Import Perspective Grid Presets	Импортировать наборы сетки перспективы
 	Import Print Presets	Импортировать наборы печати
@@ -2697,6 +2700,8 @@ mark-style	Japanese	Японский
 	Proof Setup	Настройка цветопробы
 	Properties	Свойства
 	Proportional Metrics	Пропорциональные метрики
+	H or V Style	Горизонтальный или вертикальный стиль
+	Roman Italics	Римский курсив
 	Insert Aki Left	Вставить аки слева
 	Insert Aki Right	Вставить аки справа
 	Tsume	Цумэ
@@ -3477,6 +3482,18 @@ digits	Malayalam	Малаялам
 	Smart Guides (View → Smart Guides)	Умные направляющие (Просмотр → Умные направляющие)
 	Smart Guides (⌘U)	Умные направляющие (⌘U)
 	Smart Punctuation…	Умная пунктуация…
+	Smart Punctuation	Умная пунктуация
+	ff, fi, ffi Ligatures	Лигатуры ff, fi, ffi
+	ff, fl, ffl Ligatures	Лигатуры ff, fl, ffl
+	Smart Quotes	Умные кавычки
+	Smart Spaces	Умные пробелы
+	En, Em Dashes	Средние и длинные тире
+	Ellipses	Многоточия
+	Expert Fractions	Экспертные дроби
+	Replace In	Заменить в
+	Selected Text Only	Только выделенный текст
+	Entire Document	Весь документ
+	Report Results	Отчёт о результатах
 	Smooth	Сгладить
 	Corner	Угол
 	Relative	Относительно
@@ -3507,6 +3524,7 @@ digits	Malayalam	Малаялам
 	Solid	Сплошной
 	Sort by Kind	Сортировать по типу
 	Sort by Name	Сортировать по имени
+	Sort by Size	Сортировать по размеру
 	Sort by Status	Сортировать по состоянию
 	Source code on GitHub	Исходный код на GitHub
 	Source Sans 3	Source Sans 3
@@ -4441,6 +4459,7 @@ axis	Both	Оба
 @msg	this script's file access can be allowed only once	доступ этого скрипта к файлам можно разрешить только один раз
 @msg	Only the person at the keyboard can allow a script's file access	Разрешить скрипту доступ к файлам может только человек за клавиатурой
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Скрипт получает не больше 2 048 файлов: файлы, выбранные после них, пропущены
+@msg	Copied the link info	Сведения о связи скопированы
 @msg	Corners edits the corners of a path	«Углы» редактирует углы контура
 @msg	Couldn't copy to the system clipboard: {e}	Не удалось скопировать в системный буфер обмена: {e}
 @msg	Couldn't open {name}: {e}	Не удалось открыть {name}: {e}
@@ -4913,6 +4932,8 @@ axis	Both	Оба
 @msg	result would exceed the canvas (coordinates out of range)	результат превысил бы холст (координаты вне диапазона)
 @msg	objects can't be nested more than 32 deep	объекты нельзя вкладывать глубже 32 уровней
 @msg	the SVG's elements are nested more than {0} deep	элементы SVG вложены глубже {0} уровней
+@msg	the SVG's style sheets take too long to match	сопоставление таблиц стилей SVG занимает слишком много времени
+@msg	the SVG's styles expand to more than {0} MB	после развёртывания стили SVG занимают более {0} МБ
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale должен быть числом от {_1} до {_2}, а не {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale должен быть числом от {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	выделите (или укажите как объект) объекты, оформление которых не является основным

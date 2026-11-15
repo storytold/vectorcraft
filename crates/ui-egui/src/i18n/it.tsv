@@ -18,6 +18,7 @@
 	Edge Brightness	Luminosità bordo
 	Smoothness	Uniformità
 	Radial Blur…	Sfocatura radiale…
+	Blur Center	Centro della sfocatura
 	Smart Blur…	Sfocatura intelligente…
 	Sharpen	Nitidezza
 	Unsharp Mask…	Maschera di contrasto…
@@ -645,6 +646,7 @@ font-technology	Variable	Variabili
 	Copy All Styles	Copia tutti gli stili
 	Copy Color Value (Hex)	Copia valore colore (hex)
 	Copy Fonts Used in the Document	Copia i font usati nel documento
+	Copy Info	Copia informazioni
 	Copy Links	Copia collegamenti
 	Copy Selected Style	Copia stile selezionato
 	Copy to User Defined	Copia in Definito dall'utente
@@ -1724,6 +1726,7 @@ file-filter	Templates	Modelli
 	Images:	Immagini:
 	Import Keyboard Shortcuts…	Importa scelte rapide da tastiera…
 	Import PDF	Importa PDF
+	Import PDF pages as links	Importa le pagine PDF come collegamenti
 	Import PDF Presets	Importa preset PDF
 	Import Perspective Grid Presets	Importa preset griglia prospettica
 	Import Print Presets	Importa preset di stampa
@@ -2710,6 +2713,8 @@ mark-style	Japanese	Giapponese
 	Proof Setup	Impostazione prova
 	Properties	Proprietà
 	Proportional Metrics	Metrica proporzionale
+	H or V Style	Stile orizzontale o verticale
+	Roman Italics	Corsivo romano
 	Insert Aki Left	Inserisci aki a sinistra
 	Insert Aki Right	Inserisci aki a destra
 	Tsume	Tsume
@@ -3490,6 +3495,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Guide sensibili (Visualizza → Guide sensibili)
 	Smart Guides (⌘U)	Guide sensibili (⌘U)
 	Smart Punctuation…	Punteggiatura intelligente…
+	Smart Punctuation	Punteggiatura intelligente
+	ff, fi, ffi Ligatures	Legature ff, fi, ffi
+	ff, fl, ffl Ligatures	Legature ff, fl, ffl
+	Smart Quotes	Virgolette intelligenti
+	Smart Spaces	Spazi intelligenti
+	En, Em Dashes	Trattini medi e lineette
+	Ellipses	Puntini di sospensione
+	Expert Fractions	Frazioni esperte
+	Replace In	Sostituisci in
+	Selected Text Only	Solo testo selezionato
+	Entire Document	Intero documento
+	Report Results	Mostra risultati
 	Smooth	Smussa
 	Corner	Angolo
 	Relative	Relativo
@@ -3520,6 +3537,7 @@ digits	Malayalam	Malayalam
 	Solid	Pieno
 	Sort by Kind	Ordina per tipo
 	Sort by Name	Ordina per nome
+	Sort by Size	Ordina per dimensione
 	Sort by Status	Ordina per stato
 	Source code on GitHub	Codice sorgente su GitHub
 	Source Sans 3	Source Sans 3
@@ -4456,6 +4474,7 @@ axis	Both	Entrambi
 @msg	this script's file access can be allowed only once	l'accesso ai file di questo script può essere consentito solo una volta
 @msg	Only the person at the keyboard can allow a script's file access	Solo la persona alla tastiera può consentire l’accesso ai file di uno script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Uno script riceve al massimo 2.048 file: i file scelti dopo questi sono stati esclusi
+@msg	Copied the link info	Informazioni collegamento copiate
 @msg	Corners edits the corners of a path	Angoli modifica gli angoli di un tracciato
 @msg	Couldn't copy to the system clipboard: {e}	Impossibile copiare negli appunti di sistema: {e}
 @msg	Couldn't open {name}: {e}	Impossibile aprire {name}: {e}
@@ -7535,7 +7554,7 @@ breakText	Glyphs	Glifi
 @msg	toString is not a function	toString non è una funzione
 @msg	too many arguments	troppi argomenti
 @msg	too many quantifiers	troppi quantificatori
-@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	funzione OpenType sconosciuta `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; anteponi - per disattivarla; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt accettano il numero di un'alternativa come `tag=N` con N da 0 a {_1}, ad esempio `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	funzione OpenType sconosciuta `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; anteponi - per disattivarla; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom e aalt accettano il numero di un'alternativa come `tag=N` con N da 0 a {_1}, ad esempio `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	dithering sconosciuto `{d}` (diffusion, pattern, noise o none)
 @msg	unknown panel `{panel}`	pannello sconosciuto `{panel}`
 @msg	unknown parameter `{key}`	parametro sconosciuto `{key}`
@@ -8657,6 +8676,8 @@ breakText	Glyphs	Glifi
 @msg	the RTF file is too large to place as type (at most {_1} MB)	il file RTF è troppo grande per essere inserito come testo (al massimo {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	l'SVG si espande in più di {0} immagini SVG annidate
 @msg	the SVG expands to more than {0} objects	l'SVG si espande in più di {0} oggetti
+@msg	the SVG's style sheets take too long to match	l'abbinamento dei fogli di stile dell'SVG richiede troppo tempo
+@msg	the SVG's styles expand to more than {0} MB	gli stili dell'SVG si espandono a oltre {0} MB
 @msg	the SVG has no drawable objects	l'SVG non ha oggetti disegnabili
 @msg	the SVGZ file unpacks to more than {_1} MB	il file SVGZ si decomprime in più di {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	il documento Word ha più di {MAX_PAGES} pagine di proprietà, troppe per essere inserito

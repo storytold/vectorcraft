@@ -268,8 +268,6 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let highlighted_bound: Vec<u64> = highlighted.as_ref().map(|h| bound_objects(st, h)).unwrap_or_default();
     let Picked { selected, has_selection, selection_bound, single_type, single_image, selection_graph } = picked(st);
     let locked = st.doc.variables.locked;
-    // Save Variable Library writes text variables only.
-    let has_text = st.doc.variables.variables.iter().any(|v| v.kind == VariableKind::Text);
 
     if widgets::menu_item(ui, tl!("New Variable…"), !locked, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
@@ -333,7 +331,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::menu_item(ui, tl!("Load Variable Library…"), true, false) {
         crate::picks::button(app, load_library);
     }
-    if widgets::menu_item(ui, tl!("Save Variable Library…"), has_text, false) {
+    if widgets::menu_item(ui, tl!("Save Variable Library…"), !vars.is_empty(), false) {
         crate::picks::button(app, save_library);
     }
     ui.separator();
@@ -494,19 +492,22 @@ mod tests {
         assert!(text.contains("Name") && text.contains("Data Set 1"), "{text}");
     }
 
-    /// Load Variable Library's warning about variables that aren't text shows in the status bar,
-    /// translated in every language but English.
+    /// Load Variable Library defines a library's variables of every kind and gives no warning. The
+    /// warning an SVG's variable data gives about variables that aren't text is translated in every
+    /// language but English.
     #[test]
-    fn the_variable_library_warning_shows_in_the_status_bar() {
+    fn the_svg_variable_data_warning_is_translated() {
         use crate::i18n::{Lang, message};
         let mut app = app_with_data();
+        let status = app.ui.status.clone();
         let xml = r#"<variableSets><variableSet><variables><variable varName="Logo" trait="other"/></variables></variableSet></variableSets>"#;
         app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
-        assert_eq!(app.ui.status, "variables that aren't text were left out: other (1)");
+        assert_eq!(app.ui.status, status, "the load gives no warning");
+        let warning = "variables that aren't text were left out: other (1)";
         let langs: Vec<Lang> = Lang::all().filter(|l| l.code() != "en").collect();
         assert!(langs.len() >= 23, "{} languages", langs.len());
         for l in langs {
-            let shown = message(l, &app.ui.status);
+            let shown = message(l, warning);
             assert!(!shown.contains("left out") && shown.contains("other") && shown.contains('1'), "{}: {shown}", l.code());
         }
     }

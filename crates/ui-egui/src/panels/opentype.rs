@@ -1,13 +1,14 @@
 //! OpenType panel: per-character OpenType features (ligatures, alternates, swashes, small caps,
-//! ordinals, fractions, figure style, position) for the selected text (every frame of each
-//! selected threaded story) or the Type tool's selected characters.
+//! ordinals, fractions, figure style, position, and with the East Asian options the menu's H or V
+//! Style and Roman Italics) for the selected text (every frame of each selected threaded story) or
+//! the Type tool's selected characters.
 
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{CharStyle, NodeKind};
 use vectorcraft_text::{EXTRA_FEATURES, FontDb, OtFeatures, StylisticSet};
 
-use super::character::{shared, text_editing, text_style};
+use super::character::{any_style, shared, text_editing, text_style};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -117,10 +118,42 @@ fn shown_figure(app: &VectorcraftApp) -> Option<usize> {
     shared(app, |s| figure(&OtFeatures::from_tags(s.features.iter().map(String::as_str))))
 }
 
-/// Whether `flag` is on for every character the panel acts on (`Some(true)`), for none of them
-/// (`Some(false)`), or only for some (`None`).
+/// Whether `flag` is on for every character a toggle changes (`Some(true)`), for none of them
+/// (`Some(false)`), or only for some (`None`). At a Type tool caret, and after Select All in a
+/// threaded story, the command styles all the text ([`run_features`]), so every character of it
+/// counts, as in [`edit`].
 fn shown_flag(app: &VectorcraftApp, flag: Flag) -> Option<bool> {
-    shared(app, |s| flag.get(&OtFeatures::from_tags(s.features.iter().map(String::as_str))))
+    let on = |s: &CharStyle| flag.get(&OtFeatures::from_tags(s.features.iter().map(String::as_str)));
+    if let Some(mut runs) = whole_text_runs(app) {
+        // A run with no text, such as an empty frame's, counts only when no run has text.
+        if runs.iter().any(|r| !r.text.is_empty()) {
+            runs.retain(|r| !r.text.is_empty());
+        }
+        let Some(first) = runs.first() else {
+            return shared(app, on);
+        };
+        let v = on(&first.style);
+        return runs.iter().all(|r| on(&r.style) == v).then_some(v);
+    }
+    shared(app, on)
+}
+
+/// The runs the panel's commands style as a whole while the Type tool edits text: those of every
+/// frame of the story after Select All in threaded text, else at a caret (an empty selection)
+/// those of the text object. `None` for a range in one text object, or with no Type tool editing.
+fn whole_text_runs(app: &VectorcraftApp) -> Option<Vec<&vectorcraft_doc::TextRun>> {
+    let (id, a, b) = text_editing(app)?;
+    let st = app.session.active()?;
+    let ids = match super::character::text_story(app) {
+        Some(story) => story,
+        None if b <= a => vec![id],
+        None => return None,
+    };
+    let runs = ids.into_iter().filter_map(|id| match &st.doc.node(id)?.kind {
+        NodeKind::Text(t) => Some(t.runs.iter()),
+        _ => None,
+    });
+    Some(runs.flatten().collect())
 }
 
 /// The Figure menu's text for entry `shown`: Mixed when the characters differ.
@@ -150,8 +183,9 @@ impl Change {
 }
 
 /// Make `change` to the features of each character the panel acts on, from the character's own
-/// features (`featureChanges`), unless it changes none of them. At a Type tool caret the
-/// command styles all the text, so every character of the text is checked.
+/// features (`featureChanges`), unless it changes none of them. At a Type tool caret, and after
+/// Select All in a threaded story, the command styles all the text, so every character of it is
+/// checked ([`whole_text_runs`]).
 fn edit(app: &mut VectorcraftApp, change: Change) {
     let same = |s: &CharStyle| {
         let before = OtFeatures::from_tags(s.features.iter().map(String::as_str));
@@ -159,12 +193,9 @@ fn edit(app: &mut VectorcraftApp, change: Change) {
         change.apply(&mut after);
         after == before
     };
-    let unchanged = match text_editing(app) {
-        Some((id, a, b)) if b <= a => match app.session.active().and_then(|st| st.doc.node(id)).map(|n| &n.kind) {
-            Some(NodeKind::Text(t)) => Some(t.runs.iter().all(|r| same(&r.style))),
-            _ => None,
-        },
-        _ => shared(app, same),
+    let unchanged = match whole_text_runs(app) {
+        Some(runs) => Some(runs.iter().all(|r| same(&r.style))),
+        None => shared(app, same),
     };
     if unchanged != Some(true) {
         run_features(app, "featureChanges", OtFeatures::changes(|f| change.apply(f)));
@@ -203,7 +234,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::dim_label(ui, tl!("Select text to set its OpenType features."));
         return;
     };
-    let cur = OtFeatures::from_tags(st.features.iter().map(String::as_str));
     let mut change = None;
     let fig = shown_figure(app);
     ui.horizontal(|ui| {
@@ -251,12 +281,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         });
     });
-    if cur.ligatures && vectorcraft_text::ligatures_suppressed_by(st.tracking) && !vectorcraft_text::explicit_ligatures(&st.features) {
+    if tracking_drops_ligatures(app) {
         widgets::dim_label(ui, tl!("Ligatures are off while the text is tracked."));
     }
     if let Some(c) = change {
         edit(app, c);
     }
+}
+
+/// Whether tracking turns off the standard ligatures of any character the panel acts on: one with
+/// Standard Ligatures on, tracked past [`vectorcraft_text::ligatures_suppressed_by`]'s limit and
+/// without an explicit `liga` or `clig` tag ([`vectorcraft_text::explicit_ligatures`]).
+fn tracking_drops_ligatures(app: &VectorcraftApp) -> bool {
+    any_style(app, |s| {
+        OtFeatures::from_tags(s.features.iter().map(String::as_str)).ligatures
+            && vectorcraft_text::ligatures_suppressed_by(s.tracking)
+            && !vectorcraft_text::explicit_ligatures(&s.features)
+    })
 }
 
 /// The stylistic sets of the font `st` names. A font that is not available offers none, rather than
@@ -294,15 +335,35 @@ fn rows() -> [Toggle; 9] {
     ]
 }
 
+/// The panel menu's East Asian items, with Show East Asian Options: label and the feature each
+/// turns on and off. H or V Style sets kana in the forms the font draws for the writing direction
+/// (`hkna`, shaped as `vkna` in vertical type), and Roman Italics sets half-width alphanumerics
+/// in the font's italic forms (`ital`).
+fn east_asian_items() -> [Toggle; 2] {
+    [(tl!("H or V Style"), Flag::Extra("hkna")), (tl!("Roman Italics"), Flag::Extra("ital"))]
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if menu_item(ui, tl!("Reset OpenType Features"), text_style(app).is_some(), false) {
+    let has = text_style(app).is_some();
+    if menu_item(ui, tl!("Reset OpenType Features"), has, false) {
         set(app, OtFeatures::default());
+    }
+    if app.session.prefs.show_east_asian_options {
+        ui.separator();
+        // Checked when every character it changes has it; chosen then, it turns it off.
+        for (label, flag) in east_asian_items() {
+            let on = shown_flag(app, flag) == Some(true);
+            if menu_item(ui, label, has, on) {
+                edit(app, Change::Toggle(flag, !on));
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
+    use vectorcraft_doc::NodeId;
 
     use super::*;
 
@@ -644,6 +705,45 @@ mod tests {
         );
     }
 
+    /// With the Selection tool on the first frame of a threaded story, the tracked-ligatures note
+    /// reads every frame: it shows when a later, locked frame is tracked with Standard Ligatures
+    /// on, and not once that frame's ligatures are explicit, off, or its tracking is back within
+    /// the limit.
+    #[test]
+    fn ligature_note_reads_every_frame_of_the_story() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 900, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(6);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.session.execute("text.create", &area).unwrap()["id"].clone();
+        let b = app.session.execute("text.thread.add", &json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].clone();
+        assert!(!run_features(&mut app, &b, 4).is_empty(), "the second frame holds text");
+        app.session.execute("text.setStyle", &json!({"ids": [b], "tracking": 100})).unwrap();
+        app.session.execute("select.set", &json!({"ids": [b]})).unwrap();
+        app.session.execute("object.lock", &json!({})).unwrap();
+        app.session.execute("select.set", &json!({"ids": [a]})).unwrap();
+        assert_eq!(text_editing(&app), None);
+        assert_eq!(text_style(&app).unwrap().0.tracking, 0.0, "the panel reads its first run from the first frame");
+        assert!(tracking_drops_ligatures(&app), "the tracked second frame shows the note");
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        // Commands write `liga` as the default and leave it out; an opened file can keep it.
+        let b_id = NodeId(b.as_u64().unwrap());
+        for tags in [&["liga"][..], &["clig"][..], &["-liga"][..]] {
+            let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+            let Some(NodeKind::Text(t)) = doc.node_mut(b_id).map(|n| &mut n.kind) else { panic!("no second frame") };
+            for r in &mut t.runs {
+                r.style.features = tags.iter().map(|s| s.to_string()).collect();
+            }
+            assert!(!tracking_drops_ligatures(&app), "{tags:?}");
+        }
+        app.session.execute("text.setStyle", &json!({"ids": [b], "features": [], "tracking": 20})).unwrap();
+        assert!(!tracking_drops_ligatures(&app), "tracking within the limit");
+        app.session.execute("text.setStyle", &json!({"ids": [b], "tracking": -100})).unwrap();
+        assert!(tracking_drops_ligatures(&app), "tight tracking shows the note too");
+    }
+
     /// At a caret whose insertion style is already a denominator, Denominator still reaches the
     /// characters the command styles at a caret (all of them) in one undo step; chosen again once
     /// every character has it, it adds no undo step.
@@ -664,5 +764,128 @@ mod tests {
         assert_eq!(run_features(&mut app, &id, 4), [("1/23".to_string(), json!(["dnom"]))]);
         edit(&mut app, Change::Position(4));
         assert_eq!(undo_steps(&app), undo + 1);
+    }
+
+    /// H or V Style and Roman Italics are in the panel menu with the East Asian options only.
+    #[test]
+    fn kana_style_and_roman_italics_show_with_the_east_asian_options() {
+        let mut app = selected_text();
+        let shown = |app: &mut VectorcraftApp| {
+            let text = crate::tests_labels::painted_text(app, menu);
+            (text.contains("H or V Style"), text.contains("Roman Italics"))
+        };
+        assert_eq!(shown(&mut app), (false, false));
+        app.session.prefs.show_east_asian_options = true;
+        assert_eq!(shown(&mut app), (true, true));
+    }
+
+    /// With the Type tool's characters only partly set, H or V Style and Roman Italics show
+    /// unchecked; chosen, each turns its feature on for every selected character in one undo step,
+    /// each run keeping its other features, and shows checked; chosen again, it turns it off.
+    /// Reset OpenType Features clears both.
+    #[test]
+    fn kana_style_and_roman_italics_turn_on_and_off() {
+        for (label, tag) in [("H or V Style", "hkna"), ("Roman Italics", "ital")] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.prefs.show_east_asian_options = true;
+            app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+            app.session.select_tool("type", Default::default()).unwrap();
+            let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "かなAB"})).unwrap()["id"].clone();
+            app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "features": [tag, "smcp"]})).unwrap();
+            app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+            // "かなAB" is 8 bytes.
+            app.session.set_tool_option("select", &json!({"start": 0, "end": 8}));
+            let ctx = egui::Context::default();
+            let row = |app: &mut VectorcraftApp, label: &str| {
+                let texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], menu);
+                texts.into_iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{label} missing"))
+            };
+            let has = |runs: &[(String, Value)], t: &str| runs.iter().all(|(_, f)| f.as_array().is_some_and(|f| f.iter().any(|x| x == t)));
+            let (text, at) = row(&mut app, label);
+            assert!(!text.starts_with('✓'), "{label}: {text:?}");
+            let undo = undo_steps(&app);
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            assert_eq!(undo_steps(&app), undo + 1, "{label}");
+            let runs = run_features(&mut app, &id, 8);
+            assert!(has(&runs, tag), "{label}: {runs:?}");
+            assert!(has(&runs[..1], "smcp") && runs[0].0 == "か", "{label} keeps the other features: {runs:?}");
+            let (text, at) = row(&mut app, label);
+            assert!(text.starts_with('✓'), "{label}: {text:?}");
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            assert_eq!(run_features(&mut app, &id, 8), [("か".to_string(), json!(["smcp"])), ("なAB".to_string(), Value::Null)], "{label} off");
+            app.session.execute("text.setRangeStyle", &json!({"id": id, "features": ["hkna", "ital", "dlig"]})).unwrap();
+            let at = row(&mut app, "Reset OpenType Features").1;
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            assert_eq!(run_features(&mut app, &id, 8), [("かなAB".to_string(), Value::Null)], "{label}: reset");
+        }
+    }
+
+    /// At a Type tool caret after a character that has H or V Style or Roman Italics while the
+    /// rest of the text does not, the item and the checkbox rows read every character the command
+    /// styles at a caret (all of them): the item shows unchecked, a Small Caps row set the same way
+    /// shows a dash, and choosing the item turns its feature on for the whole text.
+    #[test]
+    fn caret_items_read_every_character_they_change() {
+        for (label, tag) in [("H or V Style", "hkna"), ("Roman Italics", "ital")] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.prefs.show_east_asian_options = true;
+            app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+            app.session.select_tool("type", Default::default()).unwrap();
+            let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "かなAB"})).unwrap()["id"].clone();
+            app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "features": [tag, "smcp"]})).unwrap();
+            app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+            // The caret after "か", whose style the next typed character takes.
+            app.session.set_tool_option("select", &json!({"start": 3, "end": 3}));
+            assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((3, 3)));
+            assert_eq!(shown_flag(&app, Flag::Field(|f| &mut f.small_caps)), None, "{label}: Small Caps row");
+            let ctx = egui::Context::default();
+            let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+            let Some((text, at)) = texts.into_iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label) else { panic!("{label} missing") };
+            assert!(!text.starts_with('✓'), "{label}: {text:?}");
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            let runs = run_features(&mut app, &id, 8);
+            assert!(runs.iter().all(|(_, f)| f.as_array().is_some_and(|f| f.iter().any(|x| x == tag))), "{label}: {runs:?}");
+        }
+    }
+
+    /// After Select All in a threaded story whose edited frame is empty, the item reads the text
+    /// of every frame the command styles: with the story's text set with H or V Style or Roman
+    /// Italics it shows checked, and choosing it turns the feature off for that text.
+    #[test]
+    fn select_all_from_an_empty_frame_reads_the_whole_story() {
+        for (label, tag) in [("H or V Style", "hkna"), ("Roman Italics", "ital")] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.prefs.show_east_asian_options = true;
+            app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+            let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+            let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+            let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+            let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+            app.run("select.set", json!({"ids": [a, b]})).unwrap();
+            app.run("text.thread.create", json!({})).unwrap();
+            app.session.select_tool("type", Default::default()).unwrap();
+            app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+            app.run("select.all", json!({})).unwrap();
+            // A frame threaded in before the first takes the whole text, leaving the edited frame empty.
+            let c = app.run("text.thread.add", json!({"from": a, "before": true, "rect": [700, 10, 400, 600]})).unwrap()["id"].as_u64().unwrap();
+            app.run("text.setRangeStyle", json!({"id": c, "features": [tag]})).unwrap();
+            assert_eq!(text_editing(&app).map(|(id, a, b)| (id.0, a, b)), Some((a, 0, 0)), "{label}");
+            assert_eq!(super::super::character::text_story(&app).map(|frames| frames.len()), Some(3), "{label}");
+            // The empty frames' runs, which hold no character, without the feature.
+            for id in [a, b] {
+                let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+                let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("no frame {id}") };
+                for r in &mut t.runs {
+                    r.style.features.clear();
+                }
+            }
+            let ctx = egui::Context::default();
+            let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], menu);
+            let Some((text, at)) = texts.into_iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label) else { panic!("{label} missing") };
+            assert!(text.starts_with('✓'), "{label}: {text:?}");
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            let runs = run_features(&mut app, &json!(c), story.len());
+            assert!(runs.iter().all(|(_, f)| !f.as_array().is_some_and(|f| f.iter().any(|x| x == tag))), "{label}: {runs:?}");
+        }
     }
 }
