@@ -1003,6 +1003,78 @@ fn saved_for_older_apps_with_a_precision_the_placed_art_is_rounded_too() {
     assert_ne!(preview, crate::cmd::fileio::preview_png(&s.doc().unwrap().doc).unwrap());
 }
 
+/// Saved for an older version, a placed document held only in stored brushes' art (a scatter
+/// brush's art and a pattern brush's tile) is saved as the art it shows, with the resources that art
+/// uses, and a precision save's preview shows that art as the file holds it, rounded. The current
+/// version keeps it placed.
+#[test]
+fn saved_for_older_apps_placed_documents_in_brush_art_become_their_art() {
+    let dir = Folder::new("placed-brush-older");
+    let src = dir.file("badge.vectorcraft");
+    // A symbol `Star` and a triangle off the whole-point grid.
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let star = Node::path(vectorcraft_doc::NodeId(900), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), look(BLUE));
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Star".into(), art: std::sync::Arc::new(star) });
+    let id = d.alloc_id();
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Star".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    let points = [(3.4876474632797176, 10.5), (96.5, 2.4876), (40.4876, 97.5)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    let path = vectorcraft_geom::PathData::single(vectorcraft_geom::path::SubPath::polyline(&points, true));
+    let id = d.alloc_id();
+    d.insert(Some(layer), 1, Node::path(id, path, look(RED))).unwrap();
+    write(&src, &vectorcraft_format::save_file(&d));
+    let mut s = session();
+    let id = place(&mut s, &src);
+    let art = s.doc().unwrap().doc.node(id).unwrap().clone();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let scatter = vectorcraft_brush::Scatter { art: art.clone(), ..Default::default() };
+        let pattern = vectorcraft_brush::PatternBrush { side: art, ..Default::default() };
+        vectorcraft_brush::store(
+            d,
+            &[
+                vectorcraft_brush::Brush { name: "Badge Dots".into(), kind: vectorcraft_brush::BrushKind::Scatter(scatter) },
+                vectorcraft_brush::Brush { name: "Badge Band".into(), kind: vectorcraft_brush::BrushKind::Pattern(pattern) },
+            ],
+        );
+        assert!(!d.has_placed(), "only the brushes hold it");
+    }
+    let line = s.execute("shape.line", &json!({"x1": 20, "y1": 150, "x2": 380, "y2": 150})).unwrap()["id"].clone();
+    s.execute("brush.apply", &json!({"name": "Badge Dots", "ids": [line]})).unwrap();
+    // The placed documents in each brush's art.
+    let placed_in_brushes = |d: &Document| {
+        let mut n = 0;
+        for b in vectorcraft_brush::library(d) {
+            for art in b.art() {
+                art.walk(&mut |c| n += usize::from(matches!(c.kind, NodeKind::PlacedDocument(_))));
+            }
+        }
+        n
+    };
+    let prefix = vectorcraft_doc::placed_document::RESOURCE_PREFIX;
+    let older = vectorcraft_format::VERSION - 1;
+    let old =
+        vectorcraft_format::load(&decode(&s.execute("document.serialize", &json!({"format": "vectorcraft", "version": older})).unwrap())).unwrap();
+    assert_eq!(placed_in_brushes(&old), 0, "{}", old.unknown[vectorcraft_brush::DOC_KEY]);
+    assert_eq!(vectorcraft_brush::library(&old).len(), 2);
+    for b in vectorcraft_brush::library(&old) {
+        assert!(matches!(b.art()[0].kind, NodeKind::Group { .. }), "{}: {}", b.name, b.art()[0].kind_label());
+    }
+    assert!(old.symbols.iter().any(|s| s.name.starts_with(prefix)), "the art's symbol is saved with it");
+    let current = vectorcraft_format::load(&decode(&s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap())).unwrap();
+    assert_eq!(placed_in_brushes(&current), 2, "the current version keeps them placed");
+    assert!(current.symbols.iter().all(|s| !s.name.starts_with(prefix)));
+    // With a precision, the preview shows the brushes' art as the file holds it, rounded.
+    let file = decode(&s.execute("file.saveCopy", &json!({"version": older, "precision": 0, "preview": true})).unwrap());
+    let saved = vectorcraft_format::load(&file).unwrap();
+    assert_eq!(placed_in_brushes(&saved), 0);
+    let preview = vectorcraft_format::preview(&file);
+    assert!(preview.is_some());
+    assert_eq!(preview, crate::cmd::fileio::preview_png(&saved).unwrap());
+    assert_ne!(preview, crate::cmd::fileio::preview_png(&s.doc().unwrap().doc).unwrap());
+}
+
 #[test]
 fn break_link_gives_the_editable_copy_placing_without_link_gives() {
     let dir = Folder::new("placed-break");
