@@ -92,6 +92,27 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
     assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
 }
 
+/// A Save PDF that fails keeps the dialog open and says why inside it (#6861): the status bar is
+/// behind the dialog. Saving again, once it works, clears the message.
+#[test]
+fn a_failed_save_says_why_in_the_dialog() {
+    let (mut app, written, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf"})).unwrap();
+    set_field(&mut app, "__allArtboards", json!(false));
+    set_field(&mut app, "range", json!("9"));
+    let e = super::super::confirm(&mut app).unwrap_err();
+    assert!(written.borrow().is_empty(), "nothing was written");
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!(d.str(ERROR), e, "the dialog holds the reason");
+    assert!(!e.is_empty());
+    assert!(params(d).get(ERROR).is_none(), "the message is not an option of the export");
+    frame(&mut app);
+    set_field(&mut app, "range", json!("1"));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(written.borrow().len(), 1);
+}
+
 /// Opened for a page of the art's bounds (Export As with Use Artboards off), the dialog has no
 /// Artboards section, and OK writes one page of the art's bounds with its options, a saved preset
 /// and View PDF after Saving included.

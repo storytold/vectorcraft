@@ -143,10 +143,31 @@ fn params(d: &Dialog) -> Value {
     p
 }
 
-/// Save PDF: write the file (a PDF copy, or the PDF a Save As / Save a Copy asked for, `__save`);
-/// the dialog stays open when that fails (bad range, cancelled save…). While Save Preset… asks for
-/// a name, OK (and Enter) saves the preset instead.
+/// The field that holds why the last Save PDF failed, shown in the dialog (the status bar sits
+/// behind it, #6861).
+const ERROR: &str = "__error";
+
+/// Save PDF: write the file (see [`write`]). When that fails the dialog stays open and says why,
+/// under its sections, as well as in the status bar the dialog covers.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let r = write(app, d);
+    if let Some(open) = app.ui.dialog.as_mut().filter(|o| o.kind == d.kind) {
+        match &r {
+            Err(e) => {
+                open.fields.insert(ERROR.into(), json!(e));
+            }
+            Ok(_) => {
+                open.fields.remove(ERROR);
+            }
+        }
+    }
+    r
+}
+
+/// Write the file (a PDF copy, or the PDF a Save As / Save a Copy asked for, `__save`); the
+/// dialog stays open when that fails (bad range, cancelled save…). While Save Preset… asks for a
+/// name, OK (and Enter) saves the preset instead.
+fn write(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if d.fields.contains_key(SAVE_AS) {
         let mut d = d.clone();
         let r = save_preset(app, &mut d);
@@ -408,6 +429,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 "Summary" => summary(app, ui, d),
                 _ => general(ui, d, editor),
             });
+            if let Some(e) = d.fields.get(ERROR).and_then(Value::as_str) {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(crate::i18n::message(crate::i18n::current(), e)).color(t.error));
+            }
         });
     });
     false
