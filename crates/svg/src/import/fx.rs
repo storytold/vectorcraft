@@ -315,9 +315,51 @@ impl V {
     }
 }
 
-/// σ of a blur with standard deviations `x`, `y` (their mean: the effects blur evenly).
-fn sd(x: f32, y: f32) -> f64 {
-    (x as f64 + y as f64) / 2.0
+/// σ of a blur with standard deviations `x`, `y` in a user space the document scales by the same
+/// amount in every direction when `even` (turned, flipped or scaled alike along both axes). The
+/// effects blur evenly: `None` when the blur differs by direction in the document, unless `blurs`
+/// is [`Blurs::Nearest`], which takes the mean.
+fn sd(x: f32, y: f32, even: bool, blurs: Blurs) -> Option<f64> {
+    let uneven = (x > 0.0 || y > 0.0) && (x != y || !even);
+    (blurs == Blurs::Nearest || !uneven).then_some((x as f64 + y as f64) / 2.0)
+}
+
+/// How [`effects`] reads a blur that differs by direction in the document, which the effects
+/// draw the same in every direction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Blurs {
+    /// Not as an effect: the filter is left for an SVG Filters effect ([`kept`]), which draws it.
+    Exact,
+    /// As the even blur of the mean standard deviation.
+    Nearest,
+}
+
+/// Whether the linear part of `ts` scales every direction by the same amount (a turn, a flip and
+/// an even scale), so an even blur stays even in the document.
+fn even_space(ts: Affine) -> bool {
+    let [a, b, c, d, _, _] = ts.as_coeffs();
+    let tol = 1e-9 * ts.determinant().abs().sqrt().max(1.0);
+    let near = |p: f64, q: f64| (p - q).abs() <= tol;
+    (near(a, d) && near(b, -c)) || (near(a, -d) && near(b, c))
+}
+
+/// `filters` (in the order they apply) imported in user space mapped to the document by `ts`: as
+/// the live effects they draw as ([`effects`]), else as SVG Filters effects that keep their XML
+/// ([`kept`]), else as the live effects nearest them (a blur that differs by direction drawn as
+/// an even one). With whether they are live effects. `None` when none of these takes them.
+pub(super) fn imported(
+    filters: &[Arc<Filter>],
+    ts: Affine,
+    blends: &HashMap<String, String>,
+    sources: &HashMap<String, Source>,
+) -> Option<(Vec<Effect>, bool)> {
+    if let Some(fx) = effects(filters, ts, blends, Blurs::Exact) {
+        return Some((fx, true));
+    }
+    if let Some(fx) = kept(filters, ts, sources) {
+        return Some((fx, false));
+    }
+    effects(filters, ts, blends, Blurs::Nearest).map(|fx| (fx, true))
 }
 
 fn color(c: usvg::Color) -> Color {
@@ -364,9 +406,10 @@ fn transferred(v: V, [r, g, b, a]: [&TransferFunction; 4], srgb: bool) -> Option
     }
 }
 
-/// Evaluate one filter's primitives, `k` the scale from its user space to the document.
+/// Evaluate one filter's primitives, `k` the scale from its user space to the document, `even`
+/// when that scale is the same in every direction ([`even_space`]), blurs read as `blurs` says.
 /// `None` when one does something the effects cannot represent.
-fn eval(f: &Filter, k: f64) -> Option<V> {
+fn eval(f: &Filter, k: f64, even: bool, blurs: Blurs) -> Option<V> {
     let mut results: HashMap<&str, V> = HashMap::new();
     let mut last = V::Graphic;
     for p in f.primitives() {
@@ -380,7 +423,7 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
         let v = match p.kind() {
             Kind::GaussianBlur(b) => {
                 let linear = p.color_interpolation() == ColorInterpolation::LinearRGB;
-                input(b.input())?.blur(sd(b.std_dev_x().get(), b.std_dev_y().get()), linear)?
+                input(b.input())?.blur(sd(b.std_dev_x().get(), b.std_dev_y().get(), even, blurs)?, linear)?
             }
             Kind::Offset(o) => input(o.input())?.offset(o.dx() as f64, o.dy() as f64)?,
             Kind::Flood(fl) => V::Flood(color(fl.color()), fl.opacity().get()),
@@ -450,8 +493,8 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
                 }
             }
             Kind::DropShadow(d) if matches!(input(d.input())?, V::Graphic) => {
-                let shape =
-                    Shape { sd: sd(d.std_dev_x().get(), d.std_dev_y().get()), dx: d.dx() as f64, dy: d.dy() as f64, moved: true, inverted: false };
+                let sd = sd(d.std_dev_x().get(), d.std_dev_y().get(), even, blurs)?;
+                let shape = Shape { sd, dx: d.dx() as f64, dy: d.dy() as f64, moved: true, inverted: false };
                 V::Stack(vec![V::Paint { shape, color: color(d.color()), opacity: d.opacity().get(), clipped: false }, V::Graphic])
             }
             _ => return None,
@@ -463,10 +506,12 @@ fn eval(f: &Filter, k: f64) -> Option<V> {
 }
 
 /// The live effects `filters` (in the order they apply) stand for, in user space mapped to the
-/// document by `ts`; `blends`: the modes our export recorded ([`blends`]). `None` when one of
-/// them isn't an effect the canvas draws.
-pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<String, String>) -> Option<Vec<Effect>> {
+/// document by `ts`; `blends`: the modes our export recorded ([`blends`]); `blurs`: how a blur
+/// that differs by direction reads ([`Blurs`]). `None` when one of them isn't an effect the
+/// canvas draws.
+fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<String, String>, blurs: Blurs) -> Option<Vec<Effect>> {
     let k = ts.determinant().abs().sqrt();
+    let even = even_space(ts);
     let [a, b, c, d, _, _] = ts.as_coeffs();
     let along = |dx: f64, dy: f64| Vec2::new(a * dx + c * dy, b * dx + d * dy);
     let num = |v: f64| (v * 1000.0).round() / 1000.0;
@@ -475,7 +520,7 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
         let blur = |sd: f64| num(2.0 * sd * k);
         let mode = blends.get(f.id()).map_or("normal", String::as_str);
         let paint = |c: Color, o: f32| (c.to_hex(), num(o as f64 * 100.0));
-        let (id, params) = match eval(f, k)? {
+        let (id, params) = match eval(f, k, even, blurs)? {
             V::Graphic => continue,
             // SVG blurs in linear light unless the filter asks for sRGB (`color-interpolation-filters`).
             V::Blurred(sd, true) => ("blur.gaussian", json!({ "radius": blur(sd), "linear": true })),

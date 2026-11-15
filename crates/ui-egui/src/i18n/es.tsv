@@ -1547,6 +1547,7 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Mostrar rueda de color continua
 	Show segmented color wheel	Mostrar rueda de color segmentada
 	Show color bars	Mostrar barras de color
+	Find the selected colors in the artwork	Buscar los colores seleccionados en la ilustración
 	Harmony Sets	Conjuntos de armonía
 	Height	Altura
 	Height:	Altura:
@@ -2725,6 +2726,8 @@ font-technology	Variable	Variables
 	Insert Aki Left	Insertar aki a la izquierda
 	Insert Aki Right	Insertar aki a la derecha
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajustar posición horizontal de los diacríticos
+	Adjust Vertical Diacritic Position	Ajustar posición vertical de los diacríticos
 	Character Direction	Dirección de caracteres
 	Digits	Dígitos
 	Arabic	Árabes
@@ -7733,4 +7736,21 @@ breakText	Glyphs	Glifos
 	Nest Shapes…	Anidar formas…
 	Nest Shapes	Anidar formas
 	Roll	Rollo
+	Packaging Tools	Herramientas de embalaje
+	Fold Lines	Líneas de plegado
+	Make Cut Line	Convertir en línea de corte
+	Make Crease Line	Convertir en línea de hendido
+	Make Partial Cut Line	Convertir en línea de corte parcial
+	Make Perforation Line	Convertir en línea de perforación
+	Make Fold Line	Convertir en línea de plegado
+	Role Swatches…	Muestras de los tipos de línea…
+	Role Swatches	Muestras de los tipos de línea
+	Role	Tipo de línea
+	Cut Line	Línea de corte
+	Crease Line	Línea de hendido
+	Partial Cut Line	Línea de corte parcial
+	Perforation Line	Línea de perforación
+	No objects are selected.	No hay objetos seleccionados.
+	Open a document to mark its fold lines.	Abre un documento para marcar sus líneas de plegado.
+	Remove Fold Line Role	Quitar tipo de línea
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
