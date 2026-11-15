@@ -913,6 +913,7 @@
 	Free Transform	Transformasi bebas
 	Perspective Distort	Distorsi perspektif
 	Radial Blur…	Kabur radial…
+	Blur Center	Pusat kabur
 	Smart Blur…	Kabur cerdas…
 	Sharpen	Pertajam
 	Unsharp Mask…	Unsharp Mask…
@@ -1519,6 +1520,8 @@ lighting	Light	Cahaya
 	Leading	Leading
 	No Break	Tanpa pemenggalan
 	Proportional Metrics	Metrik proporsional
+	H or V Style	Gaya horizontal atau vertikal
+	Roman Italics	Miring Romawi
 	Insert Aki Left	Sisipkan aki kiri
 	Insert Aki Right	Sisipkan aki kanan
 	Tsume	Tsume
@@ -2516,6 +2519,7 @@ digits	Malayalam	Malayalam
 	Transparent Background	Latar belakang transparan
 	Choose…	Pilih…
 	Copy Fonts Used in the Document	Salin font yang digunakan dalam dokumen
+	Copy Info	Salin info
 	Copy Links	Salin tautan
 	Create Report	Buat laporan
 	Fonts whose licence doesn't allow embedding are not copied.	Font yang lisensinya tidak mengizinkan penyematan tidak disalin.
@@ -4298,6 +4302,7 @@ imageTrace	Outline	Kontur
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Skrip ini telah menambahkan sangat banyak objek. Lanjutkan, atau hentikan dan batalkan yang telah dilakukannya?
 @msg	Copied the script report	Berhasil menyalin laporan skrip
+@msg	Copied the link info	Berhasil menyalin info tautan
 @msg	Corners edits the corners of a path	Corners menyunting sudut jalur
 @msg	Couldn't copy to the system clipboard: {e}	Tidak dapat menyalin ke papan klip sistem: {e}
 @msg	Couldn't open {name}: {e}	Tidak dapat membuka {name}: {e}
