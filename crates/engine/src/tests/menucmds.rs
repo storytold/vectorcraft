@@ -2234,6 +2234,10 @@ fn type_menu_and_find_commands_refuse_a_param_of_the_wrong_type() {
         ("type.smartPunctuation", json!({"dashes": "false"}), switch("dashes")),
         ("type.smartPunctuation", json!({"ellipsis": 0}), switch("ellipsis")),
         ("type.smartPunctuation", json!({"quotes": "no"}), switch("quotes")),
+        ("type.smartPunctuation", json!({"fiLigatures": 1}), switch("fiLigatures")),
+        ("type.smartPunctuation", json!({"flLigatures": "true"}), switch("flLigatures")),
+        ("type.smartPunctuation", json!({"spaces": "on"}), switch("spaces")),
+        ("type.smartPunctuation", json!({"fractions": [true]}), switch("fractions")),
         ("type.smartPunctuation", json!({"scope": 5}), scope.clone()),
         ("type.smartPunctuation", json!({"scope": "page"}), scope),
         ("type.changeCase", json!({"case": 5}), string("case")),
@@ -3563,10 +3567,152 @@ fn smart_punctuation_with_nothing_to_change_records_no_undo_step() {
     for id in [t, r] {
         select_with_a_step_to_redo(&mut s, &[id]);
         let before = history(&s);
-        assert_eq!(s.execute("type.smartPunctuation", &json!({})).unwrap(), json!({"changed": 0}), "{id:?}");
+        let r = s.execute("type.smartPunctuation", &json!({})).unwrap();
+        assert_eq!(r["changed"], 0, "{id:?}");
+        assert!(r["replaced"].as_object().unwrap().values().all(|n| n == 0), "{id:?}: {r}");
         assert_eq!(history(&s), before, "{id:?}");
     }
     assert_eq!(plain(&s, t), "“Hi” it’s 1–2 and 3—4…");
+}
+
+/// Does the face text `font` draws with have a glyph for every character of `chars`?
+fn font_covers(font: &str, chars: &str) -> bool {
+    let face = vectorcraft_text::FontDb::global().face(font, "Regular");
+    face.is_some_and(|f| chars.chars().all(|c| f.covers(c)))
+}
+
+/// Every option on: the ligatures, Smart Spaces and Expert Fractions, each counted on its own, in
+/// one undo step. Fractions next to a digit, a slash or a decimal part are left as they are.
+#[test]
+fn smart_punctuation_ligatures_spaces_and_fractions_are_counted() {
+    let mut s = session();
+    assert!(font_covers("Source Sans 3", "\u{FB00}\u{FB01}\u{FB02}\u{FB03}\u{FB04}½¾"), "Source Sans 3 draws the ligatures and fractions");
+    let words = "An office's fluffy flow.  Then 1/2 and 3/4, not 1/25, 1/2/26 or 1/2.5.";
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let undo = history(&s).0;
+    let all = json!({"fiLigatures": true, "flLigatures": true, "quotes": true, "spaces": true, "dashes": true, "ellipsis": true, "fractions": true});
+    let r = s.execute("type.smartPunctuation", &all).unwrap();
+    assert_eq!(plain(&s, t), "An o\u{FB03}ce’s \u{FB02}u\u{FB00}y \u{FB02}ow. Then ½ and ¾, not 1/25, 1/2/26 or 1/2.5.");
+    let replaced = json!({"fiLigatures": 2, "flLigatures": 2, "quotes": 1, "spaces": 1, "dashes": 0, "ellipses": 0, "fractions": 2});
+    assert_eq!(r, json!({"changed": 1, "replaced": replaced}));
+    assert_eq!(history(&s).0, undo + 1);
+}
+
+/// The ff, fl, ffl option alone leaves fi and ffi as letters (ffi keeps its ff ligature, counted
+/// with this option), and the other options are off unless asked for.
+#[test]
+fn smart_punctuation_fl_ligatures_alone() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "office fit baffle.  1/2", "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"flLigatures": true})).unwrap();
+    assert_eq!(plain(&s, t), "o\u{FB00}ice fit ba\u{FB04}e.  1/2");
+    assert_eq!(r["replaced"], json!({"fiLigatures": 0, "flLigatures": 2, "quotes": 0, "spaces": 0, "dashes": 0, "ellipses": 0, "fractions": 0}));
+}
+
+/// A ligature or a fraction the run's font has no glyph for stays as its letters, while the run's
+/// other replacements still happen.
+#[test]
+fn smart_punctuation_skips_ligatures_and_fractions_the_font_lacks() {
+    let mut s = session();
+    let mono = "JetBrains Mono";
+    assert!(!font_covers(mono, "\u{FB01}") && !font_covers(mono, "⅐"), "{mono} has no fi ligature or one-seventh");
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "fit 1/7 a--b", "font": mono})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fiLigatures": true, "fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "fit 1/7 a–b");
+    let counts = (&r["replaced"]["fiLigatures"], &r["replaced"]["fractions"], &r["replaced"]["dashes"]);
+    assert_eq!(counts, (&json!(0), &json!(0), &json!(1)));
+}
+
+/// A fraction at the end of a run is checked against the start of the next run: 1/25 and 1/2.5
+/// split after their 1/2 stay as they are, and a 1/2 the next run's space ends is replaced.
+#[test]
+fn expert_fractions_look_past_the_end_of_a_run() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "1/25 1/2.5 1/2 x", "font": "Source Sans 3"})).unwrap());
+    for (start, end) in [(0, 3), (5, 8), (11, 14)] {
+        s.execute("text.setRangeStyle", &json!({"id": t.0, "start": start, "end": end, "size": 30})).unwrap();
+    }
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "1/25 1/2.5 ½ x");
+    assert_eq!(r["replaced"]["fractions"], 1);
+}
+
+/// An inline graphic separates the text on either side of it: the space after it is not a second
+/// space after the period before it, and the digit before it does not stop a fraction after it.
+#[test]
+fn an_inline_graphic_separates_smart_spaces_and_fractions() {
+    let mut s = session();
+    let r = rect(&mut s, 600.0, 500.0, 10.0, 10.0);
+    sel(&mut s, &[r]);
+    s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "A.  B 71/2", "font": "Source Sans 3"})).unwrap());
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 7, "symbol": "Mark"})).unwrap();
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 3, "symbol": "Mark"})).unwrap();
+    let texts = |s: &Session| match node(s, t).kind {
+        NodeKind::Text(o) => o.runs.iter().map(|r| if r.inline.is_some() { "[g]".to_string() } else { r.text.clone() }).collect::<String>(),
+        _ => String::new(),
+    };
+    assert_eq!(texts(&s), "A. [g] B 7[g]1/2");
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "fractions": true})).unwrap();
+    assert_eq!(texts(&s), "A. [g] B 7[g]½");
+    assert_eq!((&r["replaced"]["spaces"], &r["replaced"]["fractions"]), (&json!(0), &json!(1)));
+}
+
+/// Smart Spaces keeps one space after each period, also when the spaces start in the next run,
+/// and leaves single spaces and spaces after other characters alone.
+#[test]
+fn smart_spaces_keeps_one_space_after_a_period() {
+    let mut s = session();
+    let t = text(&mut s, "A.   B. C.  D  E");
+    // "C." is in a run of its own, and the spaces after it start the next one.
+    s.execute("text.setRangeStyle", &json!({"id": t.0, "start": 8, "end": 10, "size": 30})).unwrap();
+    assert!(matches!(node(&s, t).kind, NodeKind::Text(ref o) if o.runs.len() > 1));
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "quotes": false, "dashes": false, "ellipsis": false})).unwrap();
+    assert_eq!(plain(&s, t), "A. B. C. D  E");
+    assert_eq!(r["replaced"]["spaces"], 2);
+}
+
+/// Ruby stays on the characters it was set on when Smart Punctuation makes the text before them
+/// longer (curly quotes) or shorter (Smart Spaces), and no replacement takes in characters on both
+/// sides of a ruby span's end: the fi with ruby on its i stays as letters, and a second space after
+/// a period with ruby of its own stays.
+#[test]
+fn smart_punctuation_keeps_ruby_on_its_characters() {
+    let mut s = session();
+    let spans = |s: &Session, t| match node(s, t).kind {
+        NodeKind::Text(o) => o.ruby.iter().map(|r| (r.start, r.end)).collect::<Vec<_>>(),
+        _ => vec![],
+    };
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "'A'.  base fit X.  Y", "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    for (start, end) in [(1, 2), (6, 10), (12, 13), (18, 19)] {
+        s.execute("type.ruby", &json!({"text": "r", "start": start, "end": end})).unwrap();
+    }
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "fiLigatures": true})).unwrap();
+    assert_eq!(plain(&s, t), "‘A’. base fit X.  Y");
+    assert_eq!((&r["replaced"]["spaces"], &r["replaced"]["fiLigatures"]), (&json!(1), &json!(0)));
+    let text = plain(&s, t);
+    let on: Vec<&str> = spans(&s, t).into_iter().map(|(a, b)| &text[a..b]).collect();
+    assert_eq!(on, ["A", "base", "i", " "]);
+}
+
+/// Expert Fractions leaves a fraction next to a digit of another script as it is.
+#[test]
+fn expert_fractions_skip_fractions_next_to_digits_of_any_script() {
+    let mut s = session();
+    let words = "\u{662}1/2 1/2\u{662} 1/2.\u{662} 1/2";
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "\u{662}1/2 1/2\u{662} 1/2.\u{662} ½");
+    assert_eq!(r["replaced"]["fractions"], 1);
 }
 
 #[test]

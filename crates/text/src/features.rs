@@ -319,6 +319,9 @@ impl OtFeatures {
                 v.push(f(&t, u32::from(s.extra_values.get(i).copied().unwrap_or(0).max(1))));
             }
         }
+        if let Some(tag) = st.glyph_form.feature() {
+            v.push(f(tag, true));
+        }
         if self.vertical {
             // Not `vrt2`: its glyphs are already turned on their side, and the layout turns Latin
             // and digits itself (they would lie upside down, and tate-chu-yoko break).
