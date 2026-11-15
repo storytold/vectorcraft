@@ -513,6 +513,7 @@
 	Rotate (Classic)…	Rotiraj (klasično)…
 	Surface	Površina
 	Wireframe	Žičani model
+	Render Settings	Postavke renderovanja
 	No Shading	Bez sjenčenja
 	Plastic	Plastika
 	Highlight Intensity	Intenzitet odsjaja
@@ -985,6 +986,11 @@
 	NTSC Colors	NTSC boje
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB pravilo:
+	CMYK Policy:	CMYK pravilo:
+	Preserve Embedded Profiles	Zadrži ugrađene profile
+	Convert to Working Space	Pretvori u radni prostor
+	Preserve Numbers	Zadrži brojeve
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Krakelura…
@@ -1491,6 +1497,7 @@ lighting	Light	Svjetlo
 	Align to Artboard	Poravnaj s radnom pločom
 	Align to Glyph Bounds	Poravnaj s granicama glifa
 	Align to Key Object	Poravnaj s ključnim objektom
+	Align to Key Anchor	Poravnaj s ključnom sidrenom tačkom
 	Align to Selection	Poravnaj prema odabiru
 	Align To:	Poravnaj s:
 	Cancel Key Object	Otkaži ključni objekat
@@ -1640,6 +1647,8 @@ digits	Malayalam	Malajalam
 	Kana	Kana
 	Numerals	Brojevi
 	Scale at Center	Skaliraj od centra
+	Delete Set	Izbriši skup
+	Direct Entry	Direktan unos
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko gore/dolje
@@ -2757,6 +2766,8 @@ digits	Malayalam	Malajalam
 	Keep a link to an image file instead of only embedding it	Zadrži vezu na slikovnu datoteku umjesto samo ugrađivanja
 	Place onto a new locked, dimmed template layer below the current layer	Postavi na novi zaključani, zatamnjeni sloj predloška ispod trenutnog sloja
 	Swap the selected object for the file, keeping its place and transform	Zamijeni odabrani objekat datotekom, zadržavajući njegovo mjesto i transformaciju
+	Show Import Options	Prikaži opcije uvoza
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pitaj za opcije uvoza svake PDF, DXF ili tekstualne datoteke prije postavljanja; isključeno: koriste se posljednje odabrane opcije
 	On: one locked object showing the document, updated when it changes.	Uključeno: jedan zaključani objekat koji prikazuje dokument, ažuriran kad se on promijeni.
 	Off: an editable copy of its art, embedded in this document.	Isključeno: kopija njegovog crteža koja se može uređivati, ugrađena u ovaj dokument.
 	Images: link to the file instead of only embedding it.	Slike: poveži s datotekom umjesto samo ugrađivanja.
@@ -2890,6 +2901,7 @@ digits	Malayalam	Malajalam
 	Limit to Library:	Ograniči na biblioteku:
 	Link harmony colors	Poveži boje harmonije
 	Merge colors into one row	Spoji boje u jedan red
+	New Row	Novi red
 	No colors to recolor (preserved colors are left out).	Nema boja za ponovno bojenje (sačuvane boje su izostavljene).
 	Preserve:	Očuvaj:
 	Randomly change color order	Nasumično promijeni redoslijed boja
@@ -3572,6 +3584,40 @@ theme	Appearance	Izgled
 	Create Graph	Kreiraj grafikon
 	Graph Data	Podaci grafikona
 	Graph Type	Vrsta grafikona
+	Graph Options	Opcije grafikona
+	Left Axis	Lijeva osa
+	Right Axis	Desna osa
+	Category Axis	Osa kategorija
+	Separate Scales	Odvojene skale
+	Add Drop Shadow	Dodaj sjenu
+	Add Legend Across Top	Dodaj legendu na vrh
+	First Row in Front	Prvi red naprijed
+	First Column in Front	Prva kolona naprijed
+	Legend	Legenda
+	Column Width	Širina stupca
+	Bar Width	Širina trake
+	Cluster Width	Širina grupe
+	Mark Data Points	Označi tačke podataka
+	Connect Data Points	Poveži tačke podataka
+	Edge-to-Edge Lines	Linije od ivice do ivice
+	Draw Filled Lines	Crtaj ispunjene linije
+	Tick Values	Vrijednosti crtica
+	Override Calculated Values	Zamijeni izračunate vrijednosti
+	Divisions	Podioci
+	Tick Marks	Crtice
+	Tick Marks per Division	Crtica po podioku
+	Draw Tick Marks Between Labels	Crtaj crtice između oznaka
+	Add Labels	Dodaj oznake
+	Maximum must be more than Minimum.	Maksimum mora biti veći od minimuma.
+	Column Graph	Stupčasti grafikon
+	Stacked Column Graph	Naslagani stupčasti grafikon
+	Bar Graph	Trakasti grafikon
+	Stacked Bar Graph	Naslagani trakasti grafikon
+	Line Graph	Linijski grafikon
+	Area Graph	Površinski grafikon
+	Scatter Graph	Raspršeni grafikon
+	Pie Graph	Tortni grafikon
+	Radar Graph	Radarski grafikon
 	Vector Halftone	Vektorski polutonovi
 	spot	spot
 	Text	Tekst
@@ -4178,6 +4224,7 @@ axis	Both	Obje
 	Replace:	Zamijeni:
 	Type on a Path Options	Opcije teksta na putanji
 	Highlight Variable	Istakni varijablu
+	Sort Variables	Sortiraj varijable
 	New Variable	Nova varijabla
 	List Variables	Izlistaj varijable
 	Bind Variable	Veži varijablu
@@ -6192,6 +6239,8 @@ axis	Y Axis	Y osa
 	Create New Set	Napravi novi skup
 	Stop Global Edit	Zaustavi globalno uređivanje
 	Global Edit Options	Opcije globalnog uređivanja
+	Select Similar Objects	Odaberi slične objekte
+	Select Similar Options	Opcije odabira sličnih
 	Leave Out of Global Edit	Isključi iz globalnog uređivanja
 	Match	Podudaranje
 	On Artboards	Na radnim pločama

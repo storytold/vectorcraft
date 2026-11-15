@@ -485,6 +485,7 @@
 	Rotate (Classic)…	Obróć (klasyczny)…
 	Surface	Powierzchnia
 	Wireframe	Szkielet
+	Render Settings	Ustawienia renderowania
 	No Shading	Bez cieniowania
 	Plastic	Plastik
 	Highlight Intensity	Intensywność połysku
@@ -945,6 +946,11 @@
 	NTSC Colors	Kolory NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Zasada RGB:
+	CMYK Policy:	Zasada CMYK:
+	Preserve Embedded Profiles	Zachowaj osadzone profile
+	Convert to Working Space	Konwertuj do przestrzeni roboczej
+	Preserve Numbers	Zachowaj wartości liczbowe
 	CMYK	CMYK
 	Texture	Tekstura
 	Craquelure…	Spękania…
@@ -1432,6 +1438,7 @@ lighting	Light	Światło
 	Align to Artboard	Wyrównaj do obszaru kompozycji
 	Align to Glyph Bounds	Wyrównaj do granic glifów
 	Align to Key Object	Wyrównaj do obiektu kluczowego
+	Align to Key Anchor	Wyrównaj do kluczowego punktu kontrolnego
 	Align to Selection	Wyrównaj do zaznaczenia
 	Align To:	Wyrównaj do:
 	Cancel Key Object	Anuluj obiekt kluczowy
@@ -1576,11 +1583,55 @@ digits	Malayalam	Malajalam
 	Composite Fonts	Fonty złożone
 	Export Composite Fonts	Eksportuj fonty złożone
 	Import Composite Fonts	Importuj fonty złożone
+@msg	each font must be {name, parts}	każdy font musi mieć postać {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	nieznany klucz `{k}`; font przyjmuje name i parts
+@msg	each font needs a name	każdy font musi mieć nazwę
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nie może być nazwą fontu złożonego (od 1 do {COMPOSITE_NAME_MAX} znaków, bez znaków sterujących)
+@msg	`{name}`: parts must be an object	`{name}`: parts musi być obiektem
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: nieznana klasa `{k}`; klasy to kanji, kana, punctuation, symbols, roman i numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} musi być obiektem
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: nieznany klucz `{k}` w {_1}
+@msg	`{name}`: give the kanji part	`{name}`: podaj część kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	dokument może zawierać najwyżej {COMPOSITE_FONTS_MAX} fontów złożonych
+@msg	two composite fonts are named `{_1}`	dwa fonty złożone mają nazwę `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` to nazwa zainstalowanego fontu
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} używa `{font}`, który jest fontem złożonym
+@msg	give fonts: [{name, parts}…]	podaj fonts: [{name, parts}…]
+@msg	path is empty	path jest puste
+@msg	fonts must be a list of composite fonts	fonts musi być listą fontów złożonych
+@msg	names must be strings	names muszą być ciągami znaków
+@msg	no composite font named `{n}`	brak fontu złożonego o nazwie `{n}`
+@msg	names must be a list of names	names musi być listą nazw
+@msg	no composite fonts to export	brak fontów złożonych do eksportu
+@msg	not a composite fonts file: {e}	to nie jest plik fontów złożonych: {e}
+@msg	not a composite fonts file: no compositeFonts list	to nie jest plik fontów złożonych: brak listy compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	plik zawiera więcej niż {COMPOSITE_FONTS_MAX} fontów złożonych
+@msg	the file is larger than 4 MB	plik jest większy niż 4 MB
+@msg	dataBase64 is not base64	dataBase64 nie jest w formacie base64
+@msg	give one of path, data or dataBase64	podaj path, data lub dataBase64
+@msg	the file holds no composite fonts	plik nie zawiera fontów złożonych
+@msg	the file holds two composite fonts named `{_1}`	plik zawiera dwa fonty złożone o nazwie `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` nie może być nazwą fontu złożonego
+@msg	{k}: give a font	{k}: podaj font
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: podaj font
+@msg	{k}: size must be {_1} to {_2}%	{k}: size musi wynosić od {_1} do {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size musi wynosić od {_1} do {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline musi wynosić od {_1} do {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline musi wynosić od {_1} do {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skala musi wynosić od {_1} do {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skala musi wynosić od {_1} do {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: skalować można tylko kana, roman i numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: skalować można tylko kana, roman i numerals
+@msg	{k}: only kana can be scaled at the center	{k}: od środka można skalować tylko kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: od środka można skalować tylko kana
+@msg	no composite font	brak fontu złożonego
 	Delete Font	Usuń font
 	Kanji	Kanji
 	Kana	Kana
 	Numerals	Cyfry
 	Scale at Center	Skaluj od środka
+	Delete Set	Usuń zestaw
+	Direct Entry	Wprowadzanie bezpośrednie
 	Up/Down:	W górę/w dół:
 	Left/Right:	W lewo/w prawo:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko w górę/w dół
@@ -2705,6 +2756,8 @@ digits	Malayalam	Malajalam
 	Keep a link to an image file instead of only embedding it	Zachowaj łącze do pliku obrazu zamiast tylko go osadzać
 	Place onto a new locked, dimmed template layer below the current layer	Umieść na nowej zablokowanej, przyciemnionej warstwie szablonu pod bieżącą warstwą
 	Swap the selected object for the file, keeping its place and transform	Zamień zaznaczony obiekt na plik, zachowując jego miejsce i przekształcenie
+	Show Import Options	Pokaż opcje importu
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Pytaj o opcje importu każdego pliku PDF, DXF lub tekstowego przed umieszczeniem; wył.: używaj ostatnio wybranych opcji
 	On: one locked object showing the document, updated when it changes.	Wł.: jeden zablokowany obiekt pokazujący dokument, aktualizowany przy jego zmianie.
 	Off: an editable copy of its art, embedded in this document.	Wył.: edytowalna kopia jego kompozycji, osadzona w tym dokumencie.
 	Images: link to the file instead of only embedding it.	Obrazy: połącz z plikiem zamiast tylko go osadzać.
@@ -2835,6 +2888,7 @@ digits	Malayalam	Malajalam
 	Limit to Library:	Ogranicz do biblioteki:
 	Link harmony colors	Połącz kolory harmonii
 	Merge colors into one row	Scal kolory w jeden wiersz
+	New Row	Nowy wiersz
 	No colors to recolor (preserved colors are left out).	Brak kolorów do zmiany (zachowane kolory są pomijane).
 	Preserve:	Zachowaj:
 	Randomly change color order	Losowo zmień kolejność kolorów
@@ -3505,6 +3559,40 @@ theme	Appearance	Wygląd
 	Create Graph	Utwórz wykres
 	Graph Data	Dane wykresu
 	Graph Type	Typ wykresu
+	Graph Options	Opcje wykresu
+	Left Axis	Lewa oś
+	Right Axis	Prawa oś
+	Category Axis	Oś kategorii
+	Separate Scales	Oddzielne skale
+	Add Drop Shadow	Dodaj cień
+	Add Legend Across Top	Dodaj legendę u góry
+	First Row in Front	Pierwszy wiersz z przodu
+	First Column in Front	Pierwsza kolumna z przodu
+	Legend	Legenda
+	Column Width	Szerokość kolumny
+	Bar Width	Szerokość słupka
+	Cluster Width	Szerokość grupy
+	Mark Data Points	Oznacz punkty danych
+	Connect Data Points	Połącz punkty danych
+	Edge-to-Edge Lines	Linie od krawędzi do krawędzi
+	Draw Filled Lines	Rysuj wypełnione linie
+	Tick Values	Wartości podziałki
+	Override Calculated Values	Zastąp obliczone wartości
+	Divisions	Podziały
+	Tick Marks	Znaczniki podziałki
+	Tick Marks per Division	Znaczniki na podział
+	Draw Tick Marks Between Labels	Rysuj znaczniki między etykietami
+	Add Labels	Dodaj etykiety
+	Maximum must be more than Minimum.	Maksimum musi być większe niż minimum.
+	Column Graph	Wykres kolumnowy
+	Stacked Column Graph	Skumulowany wykres kolumnowy
+	Bar Graph	Wykres słupkowy
+	Stacked Bar Graph	Skumulowany wykres słupkowy
+	Line Graph	Wykres liniowy
+	Area Graph	Wykres warstwowy
+	Scatter Graph	Wykres punktowy
+	Pie Graph	Wykres kołowy
+	Radar Graph	Wykres radarowy
 	Vector Halftone	Półton wektorowy
 	spot	dodatkowy
 	Text	Tekst
@@ -4076,6 +4164,7 @@ axis	Both	Obie
 	Replace:	Zastąp:
 	Type on a Path Options	Opcje tekstu na ścieżce
 	Highlight Variable	Wyróżnij zmienną
+	Sort Variables	Sortuj zmienne
 	New Variable	Nowa zmienna
 	List Variables	Wyświetl zmienne
 	Bind Variable	Powiąż zmienną
@@ -5855,6 +5944,7 @@ mark-style	Japanese	Japońskie
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efekt 3D na wypełnieniu lub obrysie grupy nie rysuje niczego do eksportu
 @msg	The 3D object is too complex to export	Obiekt 3D jest zbyt złożony, aby go wyeksportować
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	obiekt nie ma efektu 3D (Wyciągnięcie i fazowanie, Obrót, Nadmuchanie ani Obróć)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musi być obiektem zawierającym tylko `mode` o wartości shaded lub wireframe
 @msg	its 3D effect builds no solid	jego efekt 3D nie tworzy żadnej bryły
 @msg	bevel must be none or one of {_1}	bevel musi mieć wartość none lub jedną z: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nie może utworzyć brył z tego rysunku: jego wystąpienia symboli, przejścia i grupy przycinające zawierają zbyt wiele obiektów
@@ -6553,6 +6643,8 @@ axis	Y Axis	Oś Y
 	Create New Set	Utwórz nowy zestaw
 	Stop Global Edit	Zakończ edycję globalną
 	Global Edit Options	Opcje edycji globalnej
+	Select Similar Objects	Zaznacz podobne obiekty
+	Select Similar Options	Opcje zaznaczania podobnych
 	Leave Out of Global Edit	Wyklucz z edycji globalnej
 	Match	Dopasowanie
 	On Artboards	Na obszarach kompozycji

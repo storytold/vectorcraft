@@ -106,7 +106,9 @@ private editing data. VectorCraft:
   Round Corners, Scribble, Convert to Shape, Offset Path, Outline Object or Outline Stroke, and groups with Pathfinder ›
   Add. Groups keep them when their members are paths, compound paths or such groups, without effects of their own; when the
   group's effects change its members' outlines, a member's strokes are plain lines, and its fills are not pattern
-  fills written as tiles or gradients that fit their object. The look holds the object's vector art, without the shadow, glow or feather. Other objects with
+  fills written as tiles or gradients that fit their object. The look holds the object's vector art, without the shadow, glow or feather.
+  This holds for objects on the layers and in opacity masks' art, the masks' art in a symbol's art and in a pattern's tile
+  included; a symbol's or a pattern's other objects are written as described next. Other objects with
   live effects are written as their vector art with their geometry effects applied, and their other effects, such as
   Drop Shadow, the glows and Feather, are left out with a warning. A path, compound path or group linked to a graphic style names it when it has the style's
   appearance and the style is written; other links to graphic styles, those on a styled group's members included, are
@@ -190,7 +192,8 @@ private editing data. VectorCraft:
   14; #868: round trip with Illustrator 2018 loses layers and groups), some files 4× slower to open since the
   editing data is read whole (#758), live effects that are not read or have settings that are not read, and
   brushes come in as their drawn look (#637; pattern fills are read since #1025, and symbols and their instances
-  open live, as do the symbols of a symbol library without layers); legacy `.ai` without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868; guides
+  open live, those that files of versions 10 to 13 place with a `TransformMatrix` included, as do the symbols of a
+  symbol library without layers); legacy `.ai` without the prolog opens since #1027, its legacy type (`To` … `TO`) since #868; guides
   open as ruler guides and guide paths since #5057 (#779), hidden, locked and named ruler guides with their state.
   Type under a Warp effect is compared with the art saved with it: type that draws as that art stays editable with
   the effect live, and type that draws differently, or that the file's limit of checks has no check left for, opens
@@ -271,7 +274,7 @@ The app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 A run of type in the editing data whose baseline direction is 1 opens with Standard Vertical Roman Alignment (https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html) on, which is VectorCraft's own mapping: its half-width characters stand upright in vertical type, and horizontal type keeps the mark with no change to its layout. A run whose baseline direction is 2 or 3 (Tate-chu-yoko), or that names none in the run, its character style or the document's defaults, opens with it off. The scripting reference lists 1, 2 and 3 as the Standard, vertical rotated and Tate-chu-yoko baseline directions (https://web.archive.org/web/20170621180804/https://wwwimages.adobe.com/content/dam/Adobe/en/devnet/illustrator/sdk/CC2015_3/Illustrator%20VBScript%20Reference.pdf, page 256).
 A Scatter brush in the editing data whose last 15 numbers start with 1 comes into the Brushes panel in Tints. Each brush art section is read without its frame: an unnamed, unpainted rectangle with no settings of its own at the art's bounds (within 1/1000 pt), closed, or open with its first corner again at the end. A wider frame stays in the art, and an art group with a state or look of its own (hidden, locked, isolated, knockout, an opacity, a blend mode, a name, a mask, a note or an appearance) stays a group.
 
-An object in a pattern's art or in a brush's art takes the file's art styles in the same way as an object on a layer: with a style VectorCraft reads, it comes in as itself with its effects live, not as the look it draws. An object in a pattern's art with a style in the file's style list keeps that graphic style's id. An art styles section inside a symbol's, a pattern's or a brush's art is skipped.
+An object in a pattern's art or in a brush's art takes the file's art styles in the same way as an object on a layer: with a style VectorCraft reads, it comes in as itself with its effects live, not as the look it draws. An object in a pattern's art with a style in the file's style list keeps that graphic style's id, as does an object in an opacity mask's art. An art styles section inside a symbol's, a pattern's or a brush's art is skipped.
 
 Names in the editing data that aren't UTF-8 (layers, objects, artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables and data sets) are read as Windows-1252 unless `legacyNameEncoding` (`convert --legacy-name-encoding`) picks `macintosh`, `windows-949`, `shift_jis`, `gbk` or `big5`; the open result's warnings list the first three such names as read and count the rest. The text values of data sets are read in the same encoding.
 

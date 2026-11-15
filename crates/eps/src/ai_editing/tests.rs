@@ -6761,6 +6761,159 @@ fn hidden_and_nested_mask_art_keep_live_offset_path() {
     }
 }
 
+/// An image 60 × 40 points at (10, 10) whose opacity mask, of `art`, doesn't clip.
+fn masked_image_node(doc: &mut Document, art: Node) -> Node {
+    let im = image_node(doc, ImageBlob::png(rgb_png()), (3, 2), Affine::new([60.0, 0.0, 0.0, 40.0, 10.0, 10.0]), None);
+    with_mask(im, art)
+}
+
+/// A red square from (10, 10) to (70, 50) whose opacity mask, of `art`, doesn't clip.
+fn masked_square(doc: &mut Document, art: Node) -> Node {
+    let sq = square(doc, Rect::new(10.0, 10.0, 70.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+    with_mask(sq, art)
+}
+
+/// `n` with an opacity mask of `art` that doesn't clip.
+fn with_mask(mut n: Node, art: Node) -> Node {
+    n.extras_mut().mask = Some(OpacityMask { art: Arc::new(art), clip: false, invert: false, disabled: false, linked: true }.into());
+    n
+}
+
+/// The opacity mask art of the first object with one in `n`, its masks' art included.
+fn mask_art_in(n: &Node) -> Option<Arc<Node>> {
+    let mut art = None;
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+        if art.is_none()
+            && let Some(mask) = m.extras().mask.as_ref()
+        {
+            art = Some(mask.art.clone());
+        }
+    });
+    art
+}
+
+/// The Offset Path distance of `n`'s one live effect, when that is all it has.
+fn offset_path_of(n: &Node) -> Option<f64> {
+    match n.appearance.effects.as_slice() {
+        [e] if e.id == "path.offsetPath" => e.params.get("offset").and_then(serde_json::Value::as_f64),
+        _ => None,
+    }
+}
+
+/// The opacity mask art of an image in a symbol's art keeps its live effects as an art style: a
+/// black path with Offset Path reads back with the effect live on the definition's mask art, when
+/// the mask's art root is hidden and when the symbol is used inside another symbol's art too, and
+/// both instances draw as they did.
+#[test]
+fn a_symbols_mask_art_keeps_live_offset_path() {
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 6.0}));
+    let made = |effects: Vec<vectorcraft_doc::Effect>, case: &str| {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut grown = styled_rect(&mut doc, "Grown", Rect::new(25.0, 20.0, 45.0, 40.0), solid(Color::BLACK), Paint::None, effects);
+        grown.visible = case != "hidden";
+        let im = masked_image_node(&mut doc, grown);
+        doc.symbols.push(Symbol { dynamic: false, name: "Picture".into(), art: Arc::new(im) });
+        let mut used = "Picture";
+        if case == "nested" {
+            let inner = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Picture".into(), xf: Affine::translate((5.0, 0.0)) });
+            let dot = square(&mut doc, Rect::new(0.0, 0.0, 4.0, 4.0), Color::rgb(1.0, 0.0, 0.0));
+            let frame = group(&mut doc, vec![inner, dot], false);
+            doc.symbols.push(Symbol { dynamic: false, name: "Frame".into(), art: Arc::new(frame) });
+            used = "Frame";
+        }
+        for x in [0.0, 100.0] {
+            let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: used.into(), xf: Affine::translate((x, 20.0)) });
+            doc.insert(Some(layer), usize::MAX, instance).unwrap();
+        }
+        doc
+    };
+    for case in ["shown", "hidden", "nested"] {
+        let doc = made(vec![offset.clone()], case);
+        assert!(pixels_apart(&doc, &made(vec![], case)) > 0, "{case}: the effect draws nothing");
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{case}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let picture = back.symbols.iter().find(|s| s.name == "Picture").unwrap_or_else(|| panic!("{case}: {:?}", back.symbols));
+        let art = mask_art_in(&picture.art).unwrap_or_else(|| panic!("{case}: no masked image in {:?}", picture.art.kind));
+        assert_eq!(offset_path_of(&art), Some(6.0), "{case}: {:?}", art.appearance.effects);
+        assert_eq!(pixels_apart(&doc, &back), 0, "{case}");
+    }
+}
+
+/// The opacity mask art of a square in a pattern's tile keeps its live effects as an art style: the
+/// tile's black path with Offset Path reads back with the effect live, and the pattern fill draws as
+/// it did.
+#[test]
+fn a_pattern_tiles_mask_art_keeps_live_offset_path() {
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 6.0}));
+    let made = |effects: Vec<vectorcraft_doc::Effect>| {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let grown = styled_rect(&mut doc, "Grown", Rect::new(25.0, 20.0, 45.0, 40.0), solid(Color::BLACK), Paint::None, effects);
+        let sq = masked_square(&mut doc, grown);
+        let tile = Rect::new(0.0, 0.0, 80.0, 60.0);
+        doc.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Masked", vec![Arc::new(sq)]) });
+        let fill = Paint::Pattern { pattern: "Masked".into(), xf: Affine::IDENTITY };
+        let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 160.0, 60.0)), Appearance::basic(fill, Paint::None, 0.0));
+        doc.insert(Some(layer), usize::MAX, filled).unwrap();
+        doc
+    };
+    let doc = made(vec![offset]);
+    assert!(pixels_apart(&doc, &made(vec![])) > 0, "the effect draws nothing");
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let def = back.pattern("Masked").unwrap_or_else(|| panic!("{:?}", back.patterns.iter().map(|p| &p.name).collect::<Vec<_>>()));
+    let art = def.art.iter().find_map(|a| mask_art_in(a)).expect("a masked image in the tile");
+    assert_eq!(offset_path_of(&art), Some(6.0), "{:?}", art.appearance.effects);
+    assert_eq!(pixels_apart(&doc, &back), 0);
+}
+
+/// Each opacity mask's art keeps its own art style: masks on the layers, in a symbol's art and in a
+/// pattern's tile with different Offset Path distances read back with their own distances, and a
+/// symbol's mask art with an effect no art style holds (Roughen) reads back without a live effect.
+#[test]
+fn mask_art_styles_stay_with_their_own_art() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let masked = |doc: &mut Document, effect: vectorcraft_doc::Effect| {
+        let grown = styled_rect(doc, "Grown", Rect::new(25.0, 20.0, 45.0, 40.0), solid(Color::BLACK), Paint::None, vec![effect]);
+        masked_image_node(doc, grown)
+    };
+    let by = |d: f64| fx("path.offsetPath", serde_json::json!({"offset": d}));
+    let on_layer = masked(&mut doc, by(3.0));
+    doc.insert(Some(layer), usize::MAX, on_layer).unwrap();
+    let picture = masked(&mut doc, by(6.0));
+    doc.symbols.push(Symbol { dynamic: false, name: "Picture".into(), art: Arc::new(picture) });
+    let rough = masked(&mut doc, fx("distort.roughen", serde_json::json!({"size": 6.0, "relative": false, "points": "corner"})));
+    doc.symbols.push(Symbol { dynamic: false, name: "Rough".into(), art: Arc::new(rough) });
+    for (symbol, x) in [("Picture", 100.0), ("Rough", 120.0)] {
+        let instance = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf: Affine::translate((x, 40.0)) });
+        doc.insert(Some(layer), usize::MAX, instance).unwrap();
+    }
+    let grown = styled_rect(&mut doc, "Grown", Rect::new(25.0, 20.0, 45.0, 40.0), solid(Color::BLACK), Paint::None, vec![by(9.0)]);
+    let tile = masked_square(&mut doc, grown);
+    doc.patterns.push(vectorcraft_doc::PatternDef {
+        tile: Rect::new(0.0, 0.0, 80.0, 60.0),
+        ..vectorcraft_doc::PatternDef::new("Masked", vec![Arc::new(tile)])
+    });
+    let fill = Paint::Pattern { pattern: "Masked".into(), xf: Affine::IDENTITY };
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 60.0, 80.0, 100.0)), Appearance::basic(fill, Paint::None, 0.0));
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let back = read_back(&doc);
+    let symbol_art = |name: &str| {
+        let s = back.symbols.iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name}: {:?}", back.symbols));
+        mask_art_in(&s.art).unwrap_or_else(|| panic!("{name}: no masked image"))
+    };
+    assert_eq!(offset_path_of(&image_mask_art(&back)), Some(3.0));
+    assert_eq!(offset_path_of(&symbol_art("Picture")), Some(6.0));
+    let tile = back.pattern("Masked").and_then(|p| p.art.iter().find_map(|a| mask_art_in(a))).expect("a masked image in the tile");
+    assert_eq!(offset_path_of(&tile), Some(9.0));
+    let rough = symbol_art("Rough");
+    assert!(rough.appearance.effects.is_empty(), "{:?}", rough.appearance.effects);
+}
+
 /// A geometry effect on an opacity mask's art that no art style holds (Roughen) is applied to the
 /// art written, so the mask reads back drawing what it drew, but for pixels on its edge that the
 /// written points' rounding moves.
@@ -6898,6 +7051,142 @@ fn a_filled_even_odd_object_is_written_as_its_drawn_look() {
     let n = &back.layers[0].children().unwrap()[0];
     assert!(matches!(n.kind, NodeKind::Path { rule: FillRule::EvenOdd, .. }), "{n:?}");
     assert_eq!(n.extras().graphic_style, None);
+}
+
+/// Links to graphic styles in pattern tiles count toward the warning about lost links: a tile's
+/// object linked to a style, which is written without its link, warns; and so does an object on the
+/// layers that loses its link while a tile's opacity mask art keeps its own.
+#[test]
+fn pattern_tile_style_links_count_toward_lost_links() {
+    let made = |linked_tile: bool| {
+        let mut doc = Document::new(200.0, 100.0);
+        let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+        let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+        g.id = 7;
+        doc.graphic_styles.push(g);
+        let mut linked = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(25.0, 20.0, 45.0, 40.0)), ap.clone());
+        linked.extras_mut().graphic_style = Some(7);
+        let art = if linked_tile {
+            linked
+        } else {
+            // An even-odd path is written without its link (see the test above).
+            let mut lost = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 10.0, 140.0, 40.0)), ap);
+            lost.extras_mut().graphic_style = Some(7);
+            if let NodeKind::Path { rule, .. } = &mut lost.kind {
+                *rule = FillRule::EvenOdd;
+            }
+            put(&mut doc, lost);
+            masked_square(&mut doc, linked)
+        };
+        doc.patterns.push(vectorcraft_doc::PatternDef {
+            tile: Rect::new(0.0, 0.0, 80.0, 60.0),
+            ..vectorcraft_doc::PatternDef::new("Linked", vec![Arc::new(art)])
+        });
+        let fill = Paint::Pattern { pattern: "Linked".into(), xf: Affine::IDENTITY };
+        let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 50.0, 80.0, 100.0)), Appearance::basic(fill, Paint::None, 0.0));
+        put(&mut doc, filled);
+        doc
+    };
+    for linked_tile in [true, false] {
+        let doc = made(linked_tile);
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{linked_tile}: {:?}", out.warnings);
+    }
+    let back = read_back(&made(false));
+    let tile = back.pattern("Linked").and_then(|p| p.art.iter().find_map(|a| mask_art_in(a))).expect("a masked square in the tile");
+    assert!(tile.extras().graphic_style.is_some(), "the tile's mask art keeps its link");
+}
+
+/// An opacity mask's art linked to a graphic style reads back linked to it.
+#[test]
+fn opacity_mask_art_keeps_its_graphic_style_link() {
+    let mut doc = Document::new(200.0, 100.0);
+    let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+    g.id = 7;
+    doc.graphic_styles.push(g);
+    let mut linked = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(25.0, 20.0, 45.0, 40.0)), ap);
+    linked.extras_mut().graphic_style = Some(7);
+    let sq = masked_square(&mut doc, linked);
+    put(&mut doc, sq);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let art = mask_art_in(&back.layers[0]).expect("a masked square");
+    let id = art.extras().graphic_style.expect("the mask's art keeps its link");
+    assert_eq!(back.graphic_style_by_id(id).map(|g| g.name.as_str()), Some("Solid"));
+}
+
+/// A link written in a pattern tile's opacity mask art that the object limit then leaves out with
+/// the rest of the tile is not counted as kept: at every limit where the style isn't written, the
+/// export warns that the link is lost.
+#[test]
+fn mask_art_links_left_out_at_the_object_limit_are_reported_lost() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+    g.id = 7;
+    doc.graphic_styles.push(g);
+    let mut linked = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(25.0, 20.0, 45.0, 40.0)), ap);
+    linked.extras_mut().graphic_style = Some(7);
+    let mut art = vec![Arc::new(masked_square(&mut doc, linked))];
+    for i in 0..6 {
+        let x = 2.0 + 12.0 * f64::from(i);
+        art.push(Arc::new(square(&mut doc, Rect::new(x, 52.0, x + 8.0, 58.0), Color::rgb(0.0, 0.0, 1.0))));
+    }
+    doc.patterns.push(vectorcraft_doc::PatternDef { tile: Rect::new(0.0, 0.0, 80.0, 60.0), ..vectorcraft_doc::PatternDef::new("Linked", art) });
+    let fill = Paint::Pattern { pattern: "Linked".into(), xf: Affine::IDENTITY };
+    let filled = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 80.0, 60.0)), Appearance::basic(fill, Paint::None, 0.0));
+    doc.insert(Some(layer), usize::MAX, filled).unwrap();
+    let mut left_out = 0;
+    for max in 1..40 {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        let text = String::from_utf8_lossy(&out.program).into_owned();
+        if !text.contains("(Solid) XW") {
+            left_out += 1;
+            assert!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{max}: {:?}", out.warnings);
+        }
+    }
+    assert!(left_out > 0 && left_out < 39, "{left_out}");
+}
+
+/// The links of opacity masks' art in a symbol no instance uses and in a pattern only the Swatches
+/// panel holds are written with those definitions, after the layers, and count as kept: no warning
+/// about lost links.
+#[test]
+fn mask_art_links_in_unused_definitions_are_not_reported_lost() {
+    let mut doc = Document::new(200.0, 100.0);
+    let ap = Appearance::basic(black_fill(), Paint::None, 0.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Solid", ap.clone());
+    g.id = 7;
+    doc.graphic_styles.push(g);
+    let linked = |doc: &mut Document| {
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(25.0, 20.0, 45.0, 40.0)), ap.clone());
+        n.extras_mut().graphic_style = Some(7);
+        masked_square(doc, n)
+    };
+    let unused = linked(&mut doc);
+    doc.symbols.push(Symbol { dynamic: false, name: "Unused".into(), art: Arc::new(unused) });
+    let tile = linked(&mut doc);
+    doc.patterns.push(vectorcraft_doc::PatternDef {
+        tile: Rect::new(0.0, 0.0, 80.0, 60.0),
+        ..vectorcraft_doc::PatternDef::new("Swatch only", vec![Arc::new(tile)])
+    });
+    let swatch = Swatch {
+        name: "Swatch only".into(),
+        paint: Paint::Pattern { pattern: "Swatch only".into(), xf: Affine::IDENTITY },
+        global: false,
+        spot: false,
+    };
+    swatches_plus(&mut doc, vec![swatch]);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::STYLE_LINKS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let symbol = back.symbols.iter().find(|s| s.name == "Unused").and_then(|s| mask_art_in(&s.art)).expect("the unused symbol's mask art");
+    assert!(symbol.extras().graphic_style.is_some(), "the symbol's mask art keeps its link");
+    let tile = back.pattern("Swatch only").and_then(|p| p.art.iter().find_map(|a| mask_art_in(a))).expect("the swatch's mask art");
+    assert!(tile.extras().graphic_style.is_some(), "the pattern's mask art keeps its link");
 }
 
 /// A compound path filled by the non-zero rule keeps its effects, its gradient fill and its link to
@@ -10455,9 +10744,10 @@ fn an_envelope_is_written_in_the_order_the_reader_reads_it() {
 }
 
 /// Envelopes the reader would open in another shape, or not at all, are written as their distorted
-/// art with a warning, and open as that art: an envelope of type, one in a turned frame, a warp drawn
+/// art with a warning, and open as that art: an envelope of type with text wrap options, one of
+/// mirrored type (written as its outlines), one in a turned frame, a warp drawn
 /// without its style's net, a mesh the reader would lay out the other way round, a top object
-/// whose sides don't pair up, a Fidelity that isn't a whole number and bounds margins kept with
+/// with a side of more segments than the grid has columns, a Fidelity that isn't a whole number and bounds margins kept with
 /// Distort Appearance off. Other live objects keep their own warning.
 #[test]
 fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
@@ -10470,10 +10760,24 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
         f(&mut doc.node_mut(id).unwrap().kind);
         doc
     };
-    let typed = change(&|k| {
+    let type_node = |id: u64| {
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 50.0), "Type", vectorcraft_doc::CharStyle::default());
+        Node::new(vectorcraft_doc::NodeId(id), NodeKind::Text(Box::new(t)))
+    };
+    let wrapped_type = change(&|k| {
         if let NodeKind::Envelope { content, .. } = k {
-            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 50.0), "Type", vectorcraft_doc::CharStyle::default());
-            content.push(Arc::new(Node::new(vectorcraft_doc::NodeId(9_000), NodeKind::Text(Box::new(t)))));
+            let mut t = type_node(9_000);
+            t.extras_mut().wrap = Some(vectorcraft_doc::TextWrap { offset: 6.0, invert: false });
+            content.push(Arc::new(t));
+        }
+    });
+    let mirrored_type = change(&|k| {
+        if let NodeKind::Envelope { content, .. } = k {
+            let mut t = type_node(9_001);
+            if let NodeKind::Text(t) = &mut t.kind {
+                t.xf = Affine::new([-1.0, 0.0, 0.0, 1.0, 50.0, 50.0]);
+            }
+            content.push(Arc::new(t));
         }
     });
     let turned = change(&|k| {
@@ -10494,15 +10798,10 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
             **kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: transpose(points, 3, 2), handles: vec![] };
         }
     });
-    let mut uneven = kurbo::BezPath::new();
-    uneven.move_to((30.0, 10.0));
-    for p in [(100.0, 0.0), (170.0, 10.0), (170.0, 90.0), (30.0, 90.0)] {
-        uneven.line_to(p);
-    }
-    uneven.close_path();
-    let lopsided = change(&|k| {
+    // A top side of 51 segments: more grid columns than the reader reads.
+    let crowded = change(&|k| {
         if let NodeKind::Envelope { kind, .. } = k {
-            **kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven), corners: None };
+            **kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven_top_object(51)), corners: None };
         }
     });
     let fractional = change(&|k| {
@@ -10517,11 +10816,12 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
         }
     });
     let cases = [
-        ("type", typed),
+        ("type with text wrap options", wrapped_type),
+        ("mirrored type, written as its outlines", mirrored_type),
         ("turned", turned),
         ("old warp", old_warp),
         ("sideways mesh", sideways),
-        ("lopsided top object", lopsided),
+        ("top object past the grid's limit", crowded),
         ("fractional fidelity", fractional),
         ("margin kept", margin_kept),
     ];
@@ -10540,6 +10840,296 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
 /// `points`, a grid of `rows + 1` rows of `cols + 1` points, as `cols + 1` rows of `rows + 1`.
 fn transpose(points: Vec<kurbo::Point>, rows: usize, cols: usize) -> Vec<kurbo::Point> {
     (0..=cols).flat_map(|c| (0..=rows).map(move |r| (r, c))).map(|(r, c)| points[r * (cols + 1) + c]).collect()
+}
+
+/// An envelope named `Bent` of `kind` ([`envelope_node`]) whose contents also hold point type
+/// "Type", 24 pt and blue, from (104, 62), with Edit Contents `editing`.
+fn typed_envelope_node(doc: &mut Document, kind: vectorcraft_doc::live::EnvelopeKind, editing: bool) -> Node {
+    let mut envelope = envelope_node(doc, kind, 50.0, editing, vectorcraft_doc::live::EnvelopeOptions::NEW);
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(104.0, 62.0), "Type", style(24.0, Color::rgb(0.0, 0.0, 1.0)));
+    let text = text_node(doc, t);
+    let NodeKind::Envelope { content, .. } = &mut envelope.kind else { unreachable_envelope() };
+    content.push(Arc::new(text));
+    envelope
+}
+
+/// A 200 × 100 document of `envelope` alone.
+fn alone(envelope: Node) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    doc
+}
+
+/// `doc` written, then read back through its editing copy beside a page that draws as `doc` does,
+/// its live objects as their art: the objects on its first layer, the writer's warnings and the
+/// reader's notes.
+fn read_with_page(doc: &Document) -> (Vec<Arc<Node>>, Vec<String>, Vec<String>) {
+    let (p, warnings) = private_data(doc, &opts()).unwrap();
+    let mut page = doc.clone();
+    let ids: Vec<vectorcraft_doc::NodeId> = page.layers[0].children().into_iter().flatten().map(|n| n.id).collect();
+    for id in ids {
+        if let Some(n) = page.node_mut(id) {
+            *n = vectorcraft_effects::expand_live_deep(Some(doc), n);
+        }
+    }
+    let (read, notes, layers) = crate::layered_ai(&p.data, page, vec![], false, false, 1.0);
+    assert!(layers, "{notes:?}");
+    (read.layers[0].children().cloned().unwrap_or_default(), warnings, notes)
+}
+
+/// The type in `nodes` and their groups, with whether it shows.
+fn type_in(nodes: &[Arc<Node>]) -> Vec<(String, bool)> {
+    let mut out = vec![];
+    for n in nodes {
+        match &n.kind {
+            NodeKind::Text(t) => out.push((t.plain_text(), n.visible)),
+            NodeKind::Group { children, .. } => out.extend(type_in(children)),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// An envelope whose contents hold type keeps the type as type: a warp, a mesh and a top object
+/// envelope, with Edit Contents off and on, open as the same live envelope with the type shown
+/// and editable in its contents beside the rest of them, no copy of the type left on the layer,
+/// and again when saved as they opened.
+#[test]
+fn an_envelope_of_type_is_read_back_live_with_its_type() {
+    for (name, kind) in live_envelope_kinds() {
+        for editing in [false, true] {
+            let what = format!("{name}, editing {editing}");
+            let mut doc = Document::new(200.0, 100.0);
+            let mut envelope = typed_envelope_node(&mut doc, kind.clone(), editing);
+            for round in ["saved", "saved again"] {
+                doc = alone(envelope);
+                let (top, warnings, notes) = read_with_page(&doc);
+                assert!(!warnings.iter().any(|w| w == writer::ENVELOPES || w == writer::TYPE), "{what}, {round}: {warnings:?}");
+                assert!(
+                    !notes.iter().any(|n| n == crate::import::ENVELOPE_TYPE_DRAWN || n == crate::import::ENVELOPE_DRAWN),
+                    "{what}, {round}: {notes:?}"
+                );
+                let [back] = top.as_slice() else { panic!("{what}, {round}: {top:#?} {notes:?}") };
+                let NodeKind::Envelope { content, kind: got, editing: e, fidelity, .. } = &back.kind else {
+                    panic!("{what}, {round}: {back:#?} {notes:?}")
+                };
+                assert_eq!((*e, *fidelity), (editing, 50.0), "{what}, {round}");
+                assert!(same_envelope_kind(&kind, got), "{what}, {round}: {got:?}");
+                assert_eq!(back.name.as_deref(), Some("Bent"), "{what}, {round}");
+                assert_eq!(type_in(content), [("Type".to_string(), true)], "{what}, {round}");
+                let colors: Vec<Option<Color>> =
+                    content.iter().filter(|c| !matches!(c.kind, NodeKind::Text(_))).map(|c| c.appearance.fill_paint().color()).collect();
+                assert_eq!(colors, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{what}, {round}");
+                envelope = (**back).clone();
+            }
+        }
+    }
+}
+
+/// A top object over (30, 10)-(170, 90) whose top side is `top` straight segments, falling and
+/// rising by 10 pt between its anchors, and whose other sides are one straight segment each.
+fn uneven_top_object(top: usize) -> kurbo::BezPath {
+    let mut path = kurbo::BezPath::new();
+    path.move_to((30.0, 10.0));
+    for k in 1..top {
+        path.line_to((30.0 + 140.0 * k as f64 / top as f64, if k % 2 == 1 { 20.0 } else { 10.0 }));
+    }
+    for p in [(170.0, 10.0), (170.0, 90.0), (30.0, 90.0)] {
+        path.line_to(p);
+    }
+    path.close_path();
+    path
+}
+
+/// Do the patches of top objects `a` and `b` lie within 0.001 pt of each other at every place of a
+/// 32 × 32 grid?
+fn same_top_object_patch(a: &vectorcraft_doc::live::EnvelopeKind, b: &vectorcraft_doc::live::EnvelopeKind) -> bool {
+    use vectorcraft_doc::live::{Coons, EnvelopeKind};
+    let (EnvelopeKind::TopObject { path, corners }, EnvelopeKind::TopObject { path: p, corners: c }) = (a, b) else { return false };
+    let (Some(a), Some(b)) = (Coons::from_top_object(path, *corners), Coons::from_top_object(p, *c)) else { return false };
+    let at = |i: u32| f64::from(i) / 32.0;
+    (0..=32).all(|j| (0..=32).all(|i| a.eval(at(i), at(j)).distance(b.eval(at(i), at(j))) < 1e-3))
+}
+
+/// A top object whose top and bottom sides have different numbers of segments is written live, its
+/// side with fewer segments split into as many as the side across from it has, with Edit Contents off
+/// and on: two straight segments over one straight one, three over one, and two over one curve.
+/// VectorCraft's reader opens it as a top object with its corners on the same four points, the same
+/// patch, contents, Fidelity, Edit Contents and Envelope Options, and saved again it opens the same.
+#[test]
+fn a_top_object_with_uneven_sides_is_read_back_live() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut curved = kurbo::BezPath::new();
+    curved.move_to((30.0, 10.0));
+    curved.line_to((100.0, 0.0));
+    curved.line_to((170.0, 10.0));
+    curved.line_to((170.0, 90.0));
+    curved.curve_to((130.0, 105.0), (70.0, 105.0), (30.0, 90.0));
+    curved.close_path();
+    let shapes = [("two over one", uneven_top_object(2), 6), ("three over one", uneven_top_object(3), 8), ("two over a curve", curved, 6)];
+    for (name, path, anchors) in shapes {
+        let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&path), corners: None };
+        for editing in [false, true] {
+            let what = format!("{name}, editing {editing}");
+            let doc = envelope_doc(kind.clone(), 50.0, editing, EnvelopeOptions::NEW);
+            let text = program(&doc);
+            assert!(text.contains("AIDeformOptionsKey") && text.contains("%_3 /Int (AIDeformStyle) ,\n"), "{what}: {text}");
+            let (back, warnings, notes) = envelope_back(&doc);
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}: {warnings:?}");
+            assert!(!notes.iter().any(|w| w == crate::import::ENVELOPE_DRAWN), "{what}: {notes:?}");
+            let NodeKind::Envelope { content, kind: got, fidelity, editing: e, options, frame } = &back.kind else { panic!("{what}: {back:#?}") };
+            assert_eq!((*fidelity, *e, *options, **frame), (50.0, editing, EnvelopeOptions::NEW, Affine::IDENTITY), "{what}");
+            let EnvelopeKind::TopObject { path: outline, corners: Some(corners) } = &**got else { panic!("{what}: {got:?}") };
+            let sp = &outline.subpaths[0];
+            assert_eq!(sp.anchors.len(), anchors, "{what}: {outline:?}");
+            let points = corners.map(|i| sp.anchors[i as usize].p);
+            let want = [(30.0, 10.0), (170.0, 10.0), (170.0, 90.0), (30.0, 90.0)].map(kurbo::Point::from);
+            assert!(points.iter().zip(want).all(|(a, b)| a.distance(b) < 1e-6), "{what}: {points:?}");
+            assert!(same_top_object_patch(&kind, got), "{what}: {got:?}");
+            let colors: Vec<Option<Color>> = content.iter().map(|c| c.appearance.fill_paint().color()).collect();
+            assert_eq!(colors, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{what}");
+            let mut again = Document::new(200.0, 100.0);
+            let layer = again.layers[0].id;
+            again.insert(Some(layer), usize::MAX, back.clone()).unwrap();
+            let (twice, warnings, notes) = envelope_back(&again);
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}, saved again: {warnings:?}");
+            let NodeKind::Envelope { kind: twice, .. } = &twice.kind else { panic!("{what}, saved again: {twice:#?} {notes:?}") };
+            assert!(same_top_object_patch(&kind, twice), "{what}, saved again: {twice:?}");
+        }
+    }
+}
+
+/// An envelope of type is written live with room for every object the reader reads of it, the
+/// copy of its type it reads in the envelope's dictionary included. Written as its art, it takes
+/// its type's story out of the text document with it: where its record doesn't fit within the
+/// object limit, and where other type in its contents is written as its outlines (mirrored type).
+/// The file then has no text document.
+#[test]
+fn an_envelope_of_type_written_as_its_art_leaves_no_story() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    for editing in [false, true] {
+        let mut doc = Document::new(200.0, 100.0);
+        let envelope = typed_envelope_node(&mut doc, kind.clone(), editing);
+        let doc = alone(envelope);
+        let program = export_ai_editing(&doc, &opts()).unwrap().program;
+        let all = String::from_utf8_lossy(&program).replace("\r\n", "\n");
+        assert!(all.contains("AIDeformOptionsKey") && all.contains("%AI11_BeginTextDocument"), "editing {editing}: {all}");
+        let read = crate::import::objects_read(&program).unwrap();
+        let out = export_within(&doc, &opts(), read).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "editing {editing}: {:?}", out.warnings);
+        let out = export_within(&doc, &opts(), read - 1).unwrap();
+        let short = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "editing {editing}: {:?}", out.warnings);
+        assert!(!short.contains("AIDeformOptionsKey") && !short.contains("%AI11_BeginTextDocument"), "editing {editing}: {short}");
+    }
+
+    let mut doc = Document::new(200.0, 100.0);
+    let mut envelope = typed_envelope_node(&mut doc, kind, false);
+    let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 40.0), "Back", style(12.0, Color::BLACK));
+    t.xf = Affine::new([-1.0, 0.0, 0.0, 1.0, 50.0, 40.0]);
+    let mirrored = text_node(&mut doc, t);
+    let NodeKind::Envelope { content, .. } = &mut envelope.kind else { unreachable_envelope() };
+    content.push(Arc::new(mirrored));
+    let out = export_ai_editing(&alone(envelope), &opts()).unwrap();
+    let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+    assert!(out.warnings.iter().any(|w| w == writer::ENVELOPES) && !out.warnings.iter().any(|w| w == writer::TYPE), "{:?}", out.warnings);
+    assert!(!text.contains("AIDeformOptionsKey") && !text.contains("%AI11_BeginTextDocument"), "{text}");
+}
+
+/// Type in an envelope that is a symbol's art, or a frame of a thread, keeps the envelope written
+/// as its art: the reader would open its type as drawn art.
+#[test]
+fn an_envelope_of_type_in_a_symbol_or_a_thread_is_written_as_its_art() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    use vectorcraft_doc::{TextKind, TextObject};
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    let mut doc = Document::new(200.0, 100.0);
+    let art = typed_envelope_node(&mut doc, kind.clone(), false);
+    doc.symbols.push(Symbol { dynamic: false, name: "Bent".into(), art: Arc::new(art) });
+    let placed = instance(&mut doc, "Bent", Affine::translate((10.0, 5.0)));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, placed).unwrap();
+    let (p, warnings) = private_data(&doc, &opts()).unwrap();
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let (back, notes) = crate::ai_alone(&p.data).unwrap();
+    let symbol = back.symbols.iter().find(|s| s.name == "Bent").unwrap_or_else(|| panic!("{:?} {notes:?}", back.symbols));
+    let mut live = 0;
+    symbol.art.walk(&mut |n| live += usize::from(matches!(n.kind, NodeKind::Envelope { .. })));
+    assert_eq!(live, 0, "{notes:?}");
+
+    let mut doc = Document::new(200.0, 100.0);
+    let mut envelope = envelope_node(&mut doc, kind, 50.0, false, vectorcraft_doc::live::EnvelopeOptions::NEW);
+    let area = |r: Rect, s: &str| {
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, s, style(10.0, Color::BLACK));
+        (t.kind, t.xf) = (TextKind::Area { frame: shapes::rectangle(r) }, Affine::IDENTITY);
+        t
+    };
+    let first = text_node(&mut doc, area(Rect::new(50.0, 30.0, 150.0, 70.0), "One two three four"));
+    let second = text_node(&mut doc, area(Rect::new(10.0, 85.0, 190.0, 95.0), ""));
+    doc.text_threads.push(vec![first.id, second.id]);
+    let NodeKind::Envelope { content, .. } = &mut envelope.kind else { unreachable_envelope() };
+    content.push(Arc::new(first));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    let text = program(&doc);
+    assert!(!text.contains("AIDeformOptionsKey"), "{text}");
+    let warnings = export_ai_editing(&doc, &opts()).unwrap().warnings;
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+}
+
+/// A top object with a top side of 50 segments over a bottom side of one is written live with a grid
+/// of 50 columns, the most the reader reads.
+#[test]
+fn a_top_object_split_to_the_grids_limit_is_read_back_live() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven_top_object(50)), corners: None };
+    let doc = envelope_doc(kind.clone(), 50.0, false, EnvelopeOptions::NEW);
+    let text = program(&doc);
+    assert!(text.contains("[50 1] /Size X#"), "{text}");
+    let (back, warnings, notes) = envelope_back(&doc);
+    assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let NodeKind::Envelope { kind: got, .. } = &back.kind else { panic!("{back:#?} {notes:?}") };
+    assert!(same_top_object_patch(&kind, got), "{got:?}");
+}
+
+/// A top object whose side with fewer segments would share out the content another way once split
+/// (two curves that aren't one curve, under three segments) is written as its art, with a warning.
+#[test]
+fn a_top_object_whose_split_side_would_map_another_way_is_written_as_its_art() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut path = uneven_top_object(3);
+    path.truncate(5);
+    path.curve_to((150.0, 110.0), (120.0, 110.0), (100.0, 90.0));
+    path.curve_to((80.0, 95.0), (40.0, 80.0), (30.0, 90.0));
+    path.close_path();
+    let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&path), corners: None };
+    let doc = envelope_doc(kind, 50.0, false, EnvelopeOptions::NEW);
+    assert!(!program(&doc).contains("AIDeformOptionsKey"));
+    let (back, warnings, _) = envelope_back(&doc);
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(matches!(back.kind, NodeKind::Group { .. }), "{back:#?}");
+}
+
+/// A top object whose split side would map the content another way only between the places of an
+/// even grid of eighths is written as its art too: a bottom side of a long straight segment, which is
+/// split, and a short curve in its last eighth, which the reader then samples at fewer points.
+#[test]
+fn a_top_object_whose_split_side_differs_between_eighths_is_written_as_its_art() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut path = uneven_top_object(3);
+    path.truncate(5);
+    path.curve_to((168.0, 85.0), (164.0, 85.0), (162.0, 90.0));
+    path.line_to((30.0, 90.0));
+    path.close_path();
+    let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&path), corners: None };
+    let doc = envelope_doc(kind, 50.0, false, EnvelopeOptions::NEW);
+    assert!(!program(&doc).contains("AIDeformOptionsKey"));
+    let (back, warnings, _) = envelope_back(&doc);
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(matches!(back.kind, NodeKind::Group { .. }), "{back:#?}");
 }
 
 /// An envelope with its contents in an opacity mask's art is written as its art there, and an
