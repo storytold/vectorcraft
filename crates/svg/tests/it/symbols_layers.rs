@@ -358,6 +358,30 @@ fn a_kept_hidden_instance_is_written_with_its_symbols_effects() {
     assert!(boxes[0].is_some_and(|b| (b.x0 - 110.0).abs() < 1e-3 && (b.x1 - 120.0).abs() < 1e-3), "{boxes:?}: {svg}");
 }
 
+/// Named art in a symbol with a geometry effect takes no id in the instances written as their
+/// art, as in an instance that has its own copy of a symbol's art, so two instances do not write
+/// the same id. The instances keep their own names as ids.
+#[test]
+fn instances_written_as_their_art_give_its_names_no_id() {
+    let mut d = Document::new(200.0, 120.0);
+    add_moved_symbol(&mut d, Rect::new(10.0, 10.0, 20.0, 20.0), 100.0);
+    let mut art = (*d.symbols[0].art).clone();
+    art.name = Some("Spot".into());
+    d.symbols[0].art = Arc::new(art);
+    for (name, xf) in [("First", Affine::IDENTITY), ("Second", Affine::translate((0.0, 40.0)))] {
+        let mut n = instance(&mut d, "Moved", xf);
+        n.name = Some(name.into());
+        let id = n.id;
+        *d.node_mut(id).unwrap() = n;
+    }
+    let svg = export(&d, &ExportOptions::default());
+    let ids: Vec<&str> = svg.split(" id=\"").skip(1).filter_map(|s| s.split('"').next()).collect();
+    let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "{ids:?}: {svg}");
+    assert!(!svg.contains("Spot"), "{svg}");
+    assert!(ids.contains(&"First") && ids.contains(&"Second"), "{ids:?}: {svg}");
+}
+
 /// An instance nested in the art of a scaled instance that has its own copy of the art is
 /// written as its art too when the def can't stand for it under the outer scale: its stroke
 /// keeps its weight, as on the canvas, rather than doubling with a scaled `<use>`.
