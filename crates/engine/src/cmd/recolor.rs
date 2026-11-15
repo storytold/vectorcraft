@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Randomize Colors",
             [],
             None,
-            "{map: rows as recolor.apply, order?: true (shuffle the new colours among the rows that aren't excluded), saturationBrightness?: false (random saturation and brightness, hue kept), seed?: 0} → {map: the rows with their new colours as keys}",
+            "{map: rows as recolor.apply, order?: true (shuffle the new colours among the rows that aren't excluded and hold current colours), saturationBrightness?: false (random saturation and brightness, hue kept), seed?: 0; an excluded row, and a row whose from is empty, keeps its new colour} → {map: the rows with their new colours as keys}",
             always,
             randomize
         ),
@@ -1746,8 +1746,11 @@ fn randomize(_: &mut Session, p: &Value) -> Result<Value> {
     let mut rng = Rng::new(super::menucmds::whole_or(p, "seed", 0, C)?);
     let (order, saturation_brightness) = (switch_or(p, "order", true, C)?, switch_or(p, "saturationBrightness", false, C)?);
     // Each new color with its row's tint and model: a tint moves with its color, and goes when
-    // the color changes; a model moves with its color.
-    let mut news: Vec<(Color, f32, Option<ModelRule>)> = rows.iter().filter_map(|r| r.new_color().map(|c| (c, r.tint, r.model))).collect();
+    // the color changes; a model moves with its color. A row with no current colors recolors
+    // nothing, so it keeps its new color and takes no other row's.
+    let takes = |r: &Row| !r.from.is_empty() && r.new_color().is_some();
+    let mut news: Vec<(Color, f32, Option<ModelRule>)> =
+        rows.iter().filter(|r| takes(r)).filter_map(|r| r.new_color().map(|c| (c, r.tint, r.model))).collect();
     if order {
         rng.shuffle(&mut news);
     }
@@ -1765,7 +1768,7 @@ fn randomize(_: &mut Session, p: &Value) -> Result<Value> {
         .iter()
         .map(|r| {
             let (to, tint, model) =
-                if r.new_color().is_some() { news.next().map_or((None, 1.0, None), |(c, t, m)| (Some(c), t, m)) } else { (r.to, r.tint, r.model) };
+                if takes(r) { news.next().map_or((None, 1.0, None), |(c, t, m)| (Some(c), t, m)) } else { (r.to, r.tint, r.model) };
             let mut row = json!({"from": r.from.iter().map(Match::to_json).collect::<Vec<_>>(), "to": to.as_ref().map(key_str)});
             if r.exclude {
                 row["exclude"] = json!(true);
