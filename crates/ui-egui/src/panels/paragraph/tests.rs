@@ -792,9 +792,12 @@ fn control_bar_nodes(ctx: &egui::Context, app: &mut VectorcraftApp, width: f32, 
     nodes
 }
 
-/// The control named `name` (a button's or link's label, a label's text).
+/// The control named `name`: a button's or link's label, else a label's text. A link's text run
+/// carries the same text as its value, and the update lists the nodes in no set order, so the
+/// label is looked for first.
 fn control_bar_node(nodes: &Nodes, name: &str) -> Option<egui::accesskit::Node> {
-    nodes.iter().find(|(_, n)| n.label() == Some(name) || n.value() == Some(name)).map(|(_, n)| n.clone())
+    let labeled = nodes.iter().find(|(_, n)| n.label() == Some(name));
+    labeled.or_else(|| nodes.iter().find(|(_, n)| n.value() == Some(name))).map(|(_, n)| n.clone())
 }
 
 /// Where the control named `name` ends, if it shows.
