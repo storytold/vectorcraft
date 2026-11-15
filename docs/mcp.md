@@ -878,10 +878,14 @@ leaves room for a legend label's stored indents, spacing and leading.
 
 When a graph is drawn again, its plot moves and scales with any move or scale of the graph made since it was last
 drawn. The graph saves the bounds of its art other than type as `placedArt` (and the bounds of all of its art as
-`placed`), and measures the move or scale on those. Changing the size, indents or spacing of the labels, moving a label
-on its own and `type.createOutlines` on labels do not move or scale the plot. A graph opened from a `.ai` file saves
-`placedArt` too. A graph saved without `placedArt`, or with a `placedArt` that has no width or height, is measured on
-`placed`.
+`placed`), and measures the move or scale on those. Changing the size or indents of the labels, moving a label on its
+own, `type.createOutlines` on labels and `object.path.outlineStroke` on the graph's strokes do not move or scale the
+plot. Outlined labels are no longer type: moving one of them on its own, like moving a swatch, an axis or a tick mark on
+its own, can move or scale the plot at the next redraw. When all of a graph's art other than type has been deleted, or
+the art measured has no width or no height, a redraw leaves the plot where it is and does not follow a move or scale of
+the graph. A graph opened from a `.ai` file
+saves `placedArt` too. A graph saved without `placedArt`, or with a `placedArt` that has no width or height, is
+measured on `placed`.
 
 The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, and the paint, stroke, gradient and
 transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
@@ -1106,8 +1110,9 @@ way. `document.exportPdf {useArtboards: false}` writes that one page as well, an
 art's bounds is measured without what the plot leaves out: non-printing layers, objects at 0% opacity, placed images,
 gradient meshes whose every point is at 0% opacity, and paths without effects whose fills and strokes paint nothing.
 An image or a mesh with a Crop Marks effect, or with a Vector Halftone effect that makes dots, is measured.
-Such objects in the art of a symbol that is not dynamic are left out of its instances too, and an instance whose
-symbol holds nothing else is left out.
+Such objects in the art of a symbol are left out of its instances too, and an instance whose symbol holds nothing
+else is left out. In the art of a dynamic symbol, an object that an instance's fill, stroke or opacity makes
+the plot draw is measured.
 A document whose only visible art is left out is refused, and Export As refuses an HP-GL plot of it before the save
 dialog. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
 is in VectorCraft Default), the export comes back with a warning that says so. A `.ai` export with
@@ -5133,8 +5138,12 @@ when its symbol or a symbol nested in its art holds an instance of itself, and w
 nest 32 deep in its art. PDF and EPS export and the SVG of an artboard leave out art outside the page or artboard, and
 Skip Blank Artboards skips an artboard with no art on it. For both, the box of an instance whose art holds brushed
 strokes grows by 16 times the widest stroke (at least 1 pt) of the objects in its art that have a brushed stroke,
-plus 8 pt. The SVG of an artboard also keeps an object whose effects paint onto the artboard, and an object that holds
-an instance when the effects in the symbol's art, or the instance's own, paint onto it.
+plus 8 pt. PDF and EPS export and Skip Blank Artboards grow the box of an object with a visible, painted brushed stroke the
+same way, by its own widest stroke, and the box of an object that holds one by the largest such room among them (of a
+clip group, only its clipping path counts). Print with Ignore Artboards frames the page around the art with the same
+room for brushed objects and for instances whose art holds brushed strokes. The SVG of an artboard also keeps an
+object whose effects paint onto the artboard, and an object that holds an instance when the effects in the symbol's
+art, or the instance's own, paint onto it.
 
 ## Expand
 
@@ -5252,8 +5261,19 @@ it. The native format keeps the events and the files.
 
 ## SVG filters
 
-Effect › SVG Filters lists the document's SVG filters below Apply SVG Filter… and Import SVG Filter…; choosing one
-applies it to the selection. `svgFilter.list {}` returns them as `filters: [{name, xml}]`. Each is one `<filter>`
+Effect › SVG Filters lists the default SVG filters and then the document's other filters below Apply SVG Filter… and
+Import SVG Filter…; choosing one applies it to the selection
+([apply SVG filter effects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/apply-svg-filter-effects.html)).
+The 14 defaults are VectorCraft's own set, written with [SVG 1.1 filter primitives](https://www.w3.org/TR/SVG11/filters.html):
+Soft Blur, Heavy Blur, Soft Shadow, Hard Shadow, Glow, Bevel, Emboss, Thicken, Thin, Rough Edges, Grain, Grayscale,
+Invert and Hue Shift. Every document lists them, and a document holds none of them until one is applied or edited
+there. `svgFilter.apply` with a default's name copies the default into the document in the same undo step (refused
+when the document already holds 64 filters), and `svgFilter.define` with `replace` naming a default adds the edited
+copy under that name (code equal to the default's adds nothing). The document's filter of a default's name is then
+listed in the default's place. `svgFilter.delete` refuses a default the document holds no copy of; deleting the copy
+lists the default again, and applying the default again makes the effects that still name it draw with it.
+`svgFilter.list {}` returns the document's filters as `filters: [{name, xml}]` and the defaults as
+`defaults: [{name, xml, inDocument}]`. Each filter is one `<filter>`
 element whose `id` is its name, with 1 to 64 primitives and at most 64 KB of XML (`feTurbulence` octaves up to 10,
 `feConvolveMatrix` kernels up to 9 cells a side, `feMorphology` radii and `kernelUnitLength` up to 100 and
 `stdDeviation` up to 500 user units, elements nested at most 16 deep). It holds only filter primitives,
@@ -5264,8 +5284,9 @@ a filter after the others, or with `replace` replaces the filter of that name, w
 filter has is refused, and the same filter again records no undo step. `svgFilter.delete {name}` removes one, and `svgFilter.import
 {path?|svg?}` adds the `<filter>` elements of an SVG file (at most 16 MB, not SVGZ, the first 256 filters) or of SVG text, leaving out the names the
 document already has and the filters `svgFilter.define` would refuse (`{added, skipped}`). Each change is one undo
-step. `svgFilter.apply {name, ids?|id?, item?}` applies one as the live effect `svg.filter`, as `effect.apply` does,
-in one undo step. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
+step. `svgFilter.apply {name, ids?|id?, item?, index?}` applies one as the live effect `svg.filter`, as `effect.apply` does,
+in one undo step; with `index` it puts the filter in the place of the applied `svg.filter` effect at that index of
+`item`, as `effect.setParams` does, and an index that is not an applied SVG filter is an error. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
 what every object that uses it draws, in the edit's one undo step, and an application after an edit takes the edited
 filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
 empty) until a filter of that name is defined or imported again. A pasted effect that names one of the document's
@@ -7912,10 +7933,11 @@ and is missing from the picture" once for all such images.
 
 `document.open` and `file.place` read `.emf` and `.wmf` (placeable or not) into one artboard, the picture's frame, and
 one layer: paths with their fills and strokes (pens become strokes with caps, joins and dashes), clipping groups,
-images and point type in the font the file names. Records VectorCraft doesn't read (EMF+ drawing among them) are
-skipped with one warning. `clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard
-for `edit.paste`; the app pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's
-clipboard service offers it (the Windows desktop service doesn't read metafiles yet).
+images and point type in the font the file names. An EMF that draws with EMF+ records is read from them. Hatched and
+pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
+`clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard for `edit.paste`; the app
+pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's clipboard service offers it
+(the Windows desktop service doesn't read metafiles yet).
 
 ```json
 {"name":"export","arguments":{"path":"/tmp/logo.emf"}}
@@ -9015,7 +9037,8 @@ Options). Warichu characters are set at `warichuScale` percent of their size (10
 `warichuLines` lines (a whole number from 1 to 6, default 2) inside their line: one above the other in horizontal type
 and side by side across the column in vertical type, the first line above or to the right. `warichuGap` is the space
 between the lines in points (0 to 100, default 0, document points as `baselineShift`). The stack is centered across the
-line on the center of the line's ideographic em box, and the line keeps the height of the characters' own size.
+line on the center of the line's ideographic em box, and the line keeps the height of the characters' own size, or
+more when the stack needs it: the line's ascent and descent take in the characters of the outer lines.
 A stretch of warichu characters is one block that takes the settings of its first character; a character with other
 settings, another size or the other kind of leading (Auto or a number) starts a new one, and a tab, a forced line break or a tate-chu-yoko character ends it. In
 vertical type a character marked `tateChuYoko` as well is set as tate-chu-yoko at its own size, and two or three digits
@@ -9062,7 +9085,11 @@ menus, and a value typed past 1000 sets 1000; Reset Panel sets both to 0. Charac
 in Advanced Character Formats. With Fractional Widths off or System Layout on, each side is set in whole points, and
 justification keeps that width. Live SVG text places each character the space moves, and type on a path with
 Insert Aki is written as outlines. An SVG saved without Preserve Editing (`preserveEditing`) reopens without the
-Insert Aki values; save it with Preserve Editing to keep them editable.
+Insert Aki values; save it with Preserve Editing to keep them editable. An `.ai` file's text document keeps both
+values, and opening the file reads them back. The stored values are read in thousandths of an em and a negative
+value opens as 0; these are VectorCraft's own rules. When a legacy `.ai` save writes type as text, it writes type with
+Insert Aki without the values and warns that they are left out. With `outlineText: true` it writes the type as outlines,
+which keep the space Insert Aki adds, and does not warn that the values are left out.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"akiRight":500}}}
@@ -9088,6 +9115,27 @@ as outlines.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"tsume":50}}}
+```
+
+## East Asian glyph forms
+
+`text.setFormat` and `text.setRangeStyle {glyphForm}` set the East Asian glyph form the characters are drawn in
+([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)): `"traditional"`,
+`"expert"`, `"jis04"`, `"jis90"`, `"jis78"`, `"jis83"`, `"fullWidth"`, `"halfWidth"`, `"thirdWidth"` or
+`"quarterWidth"`, which draw them with the font's OpenType feature `trad`, `expt`, `jp04`, `jp90`, `jp78`, `jp83`,
+`fwid`, `hwid`, `twid` or `qwid` ([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)),
+or `"default"`, the font's default glyphs. A character holds one form at a time, so setting one replaces another. The
+text keeps its characters, and a character the font has no glyph of that form for keeps its own. Runs that differ only
+in their form are shaped as one piece of text. The form is saved only when it is not `"default"`, character styles
+carry it, PDF draws the glyphs the canvas draws, and live SVG text writes it in `font-feature-settings`. Another value
+is refused with `` `glyphForm` must be one of "traditional", … ``. One undo step, and a `text.setFormat` call that
+gives the form the characters already have records none. With Show East Asian Options on, the Glyphs panel menu lists
+the ten forms and Revert To Default Forms: a form is checked when every selected character has it, choosing it again
+does nothing, and it is disabled when none of the faces that draw the selected text, fallback faces included, has a
+feature for it.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"glyphForm":"jis78"}}}
 ```
 
 ## Composite Fonts

@@ -72,7 +72,7 @@ pub use bake::{
     StrokeArt, WrittenLayers, bake_appearance, bake_document, bake_document_placing_symbols, bake_type_appearance, expand_art, expand_leaf,
     fresh_ids, needs_bake,
 };
-pub use clip::{WarpSeams, clip_outline, knockout_silhouette, warp_pieces_translucent};
+pub use clip::{WarpSeams, clip_outline, knockout_silhouette, reshaped_clip_outline, warp_pieces_translucent};
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
     is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, shape_art,
