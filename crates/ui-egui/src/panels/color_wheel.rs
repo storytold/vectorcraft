@@ -214,7 +214,8 @@ impl Used {
 /// document revision and selection and kept as they are while an interaction is in progress (a
 /// preview raises the revision on every frame of a drag). In art with more than [`LARGE_USES`]
 /// color uses, an edit reads them again only after [`LARGE_EVERY`] seconds. A row that holds more
-/// than the colors last asked for reads them again.
+/// than the colors last asked for reads them again once no interaction is in progress, and in such
+/// art only after the same wait.
 fn used_colors(app: &mut VectorcraftApp, ui: &Ui, per_row: usize) -> Arc<UsedCache> {
     let limit = per_row.max(MAX_CHIPS);
     let key: UsedKey = app.session.active().map(|d| {
@@ -223,10 +224,9 @@ fn used_colors(app: &mut VectorcraftApp, ui: &Ui, per_row: usize) -> Arc<UsedCac
         (d.uid, d.revision, d.selection.objects.len(), h.finish())
     });
     let now = ui.input(|i| i.time);
-    if let Some(cache) = pstate::<Option<Arc<UsedCache>>>(ui.ctx(), USED)
-        && (cache.limit >= per_row || cache.colors.len() < cache.limit)
-    {
-        if cache.key == key || app.session.in_interaction() {
+    if let Some(cache) = pstate::<Option<Arc<UsedCache>>>(ui.ctx(), USED) {
+        let fits = cache.limit >= per_row || cache.colors.len() < cache.limit;
+        if app.session.in_interaction() || (cache.key == key && fits) {
             return cache;
         }
         let scope = |k: &UsedKey| k.map(|(doc, _, n, h)| (doc, n, h));

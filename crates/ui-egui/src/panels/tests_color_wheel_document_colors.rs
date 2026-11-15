@@ -305,6 +305,47 @@ fn in_large_art_an_edit_reads_the_colors_again_after_half_a_second() {
     assert!(!has(&h, &label("#00ff00", 3)));
 }
 
+/// A row widened past the 128 colors last read keeps them while an interaction is in progress, and
+/// in art with more than 5,000 color uses until half a second after the last read.
+#[test]
+fn a_widened_row_waits_for_the_interaction_and_the_half_second() {
+    let (mut app, reds, _) = app();
+    let hex = |i: usize| format!("#{:02x}{:02x}80", i % 256, i / 256 + 1);
+    for i in 0..160 {
+        rect(&mut app, 170.0, json!({"color": hex(i)}));
+    }
+    for _ in 0..5 {
+        app.run("select.all", json!({})).unwrap();
+        app.run("edit.duplicate", json!({})).unwrap();
+    }
+    app.run("select.none", json!({})).unwrap();
+    let uses = app.session.execute("color.used", &json!({})).unwrap()["uses"].as_u64().unwrap();
+    assert!(uses > 5_000, "{uses} uses");
+    let (narrow, wide) = (vec2(260.0, 360.0), vec2(3400.0, 360.0));
+    let mut h = Harness::builder().with_size(narrow).with_step_dt(0.1).build_ui_state(|ui, app: &mut VectorcraftApp| show(app, ui), app);
+    h.run_steps(6);
+    let shown = |h: &Harness<'static, VectorcraftApp>| (0..160).filter(|i| has(h, &label(&hex(*i), 32))).count();
+    // During an interaction the wide row keeps the 128 colors read for the narrow one.
+    h.state_mut().session.begin_interaction("test").unwrap();
+    h.set_size(wide);
+    h.run_steps(6);
+    assert!(shown(&h) <= 128, "{} colors show during the interaction", shown(&h));
+    h.state_mut().session.cancel_interaction().unwrap();
+    h.run_steps(6);
+    assert!(shown(&h) > 128, "{} colors show after the interaction", shown(&h));
+    // An edit read in the narrow row, then a wide row within half a second, waits for the half second.
+    h.set_size(narrow);
+    h.run_steps(1);
+    h.state_mut().run("paint.setFill", json!({"ids": [reds[0]], "color": "#00ff00"})).unwrap();
+    h.run_steps(1);
+    assert!(has(&h, &label("#ff0000", 95)), "the edit is read at once");
+    h.set_size(wide);
+    h.run_steps(1);
+    assert!(shown(&h) <= 128, "{} colors show within half a second", shown(&h));
+    h.run_steps(5);
+    assert!(shown(&h) > 128, "{} colors show after half a second", shown(&h));
+}
+
 /// Without the setting the row is not drawn, and the panel menu's Show Document Colors turns it on.
 #[test]
 fn the_panel_menu_turns_the_row_on_and_off() {
