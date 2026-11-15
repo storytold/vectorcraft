@@ -20,7 +20,7 @@ use text::TextSlots;
 
 pub use depth::MAX_ELEMENT_DEPTH;
 pub(crate) use depth::xml_too_deep;
-pub use files::{MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT};
+pub use files::{MAX_DATA_URL_BYTES, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT};
 pub(crate) use fx::BLEND;
 
 /// Most objects an imported SVG may expand to: a guard against `<use>` and nested-image
@@ -205,7 +205,7 @@ pub(crate) fn import_finding(
         symbol_suffixes: HashMap::new(),
         pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
-        filter_sources: fx::sources(&xml, &scan.markers),
+        filter_sources: fx::sources(&xml, &scan.markers, |h| files.data_href(h)),
         files,
         non_scaling: found.non_scaling,
         data: found.data,

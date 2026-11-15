@@ -3972,6 +3972,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Toggle Line Composer	Εναλλαγή σύνθεσης γραμμών
 	Sixth Space	Διάστημα ενός έκτου
 	Size Tile to Art	Προσαρμογή μεγέθους πλακιδίου στο σχέδιο
+	Move Tile with Art	Μετακίνηση πλακιδίου μαζί με το σχέδιο
 	Size/Leading	Μέγεθος/διάστιχο
 	Ridges per segment:	Ράχες ανά τμήμα:
 	Size: {size}  Tracking: {tracking}	Μέγεθος: {size}  Απόσταση χαρακτήρων: {tracking}
@@ -4107,6 +4108,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Swap Fill and Stroke (Shift+X)	Εναλλαγή γεμίσματος και περιγράμματος (Shift+X)
 	Swap start and end arrowheads	Εναλλαγή αρχικής και τελικής αιχμής βέλους
 	Swap the selected object for the file, keeping its place and transform	Αντικατάσταση επιλεγμένου αντικειμένου με το αρχείο, διατηρώντας θέση και μετασχηματισμό
+	Show Import Options	Εμφάνιση επιλογών εισαγωγής
+	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Ερώτηση για τις επιλογές εισαγωγής κάθε αρχείου PDF, DXF ή κειμένου πριν από την τοποθέτηση· απενεργοποιημένο: χρήση των τελευταίων επιλογών
 	Swatch Conflict	Διένεξη δείγματος χρώματος
 	Swatch Conflicts	Διενέξεις δειγμάτων χρωμάτων
 	Swatch exchange files keep solid colors only.	Τα αρχεία ανταλλαγής δειγμάτων διατηρούν μόνο συμπαγή χρώματα.
@@ -4433,6 +4436,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Width Tool	Πλάτος (Width Tool)
 	Working CMYK (don't tag)	Χώρος εργασίας CMYK (χωρίς ετικέτα)
 	Working RGB (don't tag)	Χώρος εργασίας RGB (χωρίς ετικέτα)
+	Don't Color Manage This Document	Χωρίς διαχείριση χρωμάτων για αυτό το έγγραφο
+	Working RGB: {name}	Χώρος εργασίας RGB: {name}
+	Working CMYK: {name}	Χώρος εργασίας CMYK: {name}
 	Workspace {i}	Χώρος εργασίας {i}
 	Wrinkle Tool	Πτυχώσεις (Wrinkle Tool)
 	Write Layers	Εγγραφή επιπέδων
@@ -5162,6 +5168,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	every numbered name for {name} is taken in the document's folder	όλα τα αριθμημένα ονόματα για το {name} χρησιμοποιούνται ήδη στον φάκελο εγγράφου
 @msg	No linked files to look for	Δεν υπάρχουν συνδεδεμένα αρχεία για αναζήτηση
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Ο σύνδεσμος βρίσκεται μέσα σε σύμβολο, σχεδιασμό γραφήματος, μοτίβο ή μάσκα αδιαφάνειας και δεν έχει θέση στον καμβά
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	το έργο ενός σχεδιασμού γραφήματος σε μια σειρά γραφήματος σχεδιάζεται ξανά από τον σχεδιασμό: επεξεργαστείτε τον σχεδιασμό για να το αλλάξετε
 	Hide VectorCraft	Απόκρυψη VectorCraft
 	Bring All to Front	Μεταφορά όλων στο προσκήνιο
 	Break Link	Κατάργηση σύνδεσης
@@ -5219,6 +5226,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	automation filesystem access is not granted: write authority is absent: {path}	δεν έχει επιτραπεί πρόσβαση αυτοματισμού στο σύστημα αρχείων: δεν υπάρχει δικαίωμα εγγραφής: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας ανάγνωσης {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός των ριζών ανάγνωσης {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	ένα συνδεδεμένο αρχείο JavaScript είναι εκτός των ριζών ανάγνωσης
+@msg	the library's file is outside the read roots	το αρχείο της βιβλιοθήκης είναι εκτός των ριζών ανάγνωσης
+@msg	{file} names more than one linked JavaScript file	το {file} αντιστοιχεί σε περισσότερα από ένα συνδεδεμένα αρχεία JavaScript
 @msg	automation path rejected: outside the write root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας εγγραφής {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός των ριζών εγγραφής {roots}: {path}
 @msg	automation path rejected: path is empty	απορρίφθηκε η διαδρομή αυτοματισμού: η διαδρομή είναι κενή
@@ -5779,6 +5789,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	 to set spacing and orientation	 για ορισμό απόστασης και προσανατολισμού
 	:	:
 	Light behind the object	Φως πίσω από το αντικείμενο
+	Move Light to Back	Μετακίνηση φωτός πίσω
+	Move Light to Front	Μετακίνηση φωτός μπροστά
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Σύρετε ένα φως για να το μετακινήσετε. Τα πλήκτρα βέλους μετακινούν το εστιασμένο φως· με Shift ανά 15°.
 	Shadows	Σκιές
 	Distance from Object	Απόσταση από το αντικείμενο
 	Shadow Bounds	Όρια σκιάς
@@ -6643,6 +6656,8 @@ axis	Y Axis	Άξονας Y
 	Create New Set	Δημιουργία νέου συνόλου
 	Stop Global Edit	Τερματισμός καθολικής επεξεργασίας
 	Global Edit Options	Επιλογές καθολικής επεξεργασίας
+	Select Similar Objects	Επιλογή παρόμοιων αντικειμένων
+	Select Similar Options	Επιλογές επιλογής παρόμοιων
 	Leave Out of Global Edit	Εξαίρεση από την καθολική επεξεργασία
 	Match	Αντιστοίχιση
 	On Artboards	Σε πίνακες σχεδίασης

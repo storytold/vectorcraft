@@ -298,6 +298,15 @@ impl GlyphForm {
             GlyphForm::QuarterWidth => b"qwid",
         })
     }
+
+    /// Is this one of the monospaced width forms (`fwid`, `hwid`, `twid`, `qwid`)? A font may
+    /// draw them with other glyphs (`GSUB`) or with other widths for the same glyphs (`GPOS`), and
+    /// they set the characters on a fixed width, so Proportional Metrics (`palt`) is not applied
+    /// with them.
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid>
+    pub fn is_width(self) -> bool {
+        matches!(self, GlyphForm::FullWidth | GlyphForm::HalfWidth | GlyphForm::ThirdWidth | GlyphForm::QuarterWidth)
+    }
 }
 
 /// A glyph chosen for one character ([`CharStyle::glyph_alternate`]): the glyph id and the face it
@@ -784,6 +793,15 @@ impl CharStyle {
     pub fn keep_scripts_in_range(&mut self) {
         self.position = self.position.in_range();
         self.small_caps = self.small_caps.map(small_caps_in_range);
+    }
+    /// Sets the East Asian glyph form ([`CharStyle::glyph_form`]). A form other than the default
+    /// also takes away the character's glyph choice ([`CharStyle::glyph_alternate`]), which would
+    /// otherwise keep drawing its own glyph; the default form keeps it.
+    pub fn set_glyph_form(&mut self, form: GlyphForm) {
+        self.glyph_form = form;
+        if form != GlyphForm::Default {
+            self.glyph_alternate = None;
+        }
     }
 }
 
