@@ -180,6 +180,21 @@ impl IccProfile {
         Some(dst.map(|x| x.clamp(0.0, 1.0)))
     }
 
+    /// Device pixels `v` (RGB / CMYK / Gray, 0..1, the profile's channels a pixel, any number of
+    /// pixels) → sRGB in `dst` (three values a pixel), converted with `intent` in one pass of the
+    /// cached transform. `None` when `v` doesn't hold whole pixels, `dst` doesn't hold three values
+    /// for each, or no transform can be built.
+    pub fn to_srgb_pixels(&self, v: &[f32], dst: &mut [f32], intent: Intent) -> Option<()> {
+        let n = self.channels();
+        if !v.len().is_multiple_of(n) || dst.len() != v.len() / n * 3 {
+            return None;
+        }
+        let xf = self.to_xf(intent)?;
+        xf.transform(v, dst).ok()?;
+        dst.iter_mut().for_each(|x| *x = x.clamp(0.0, 1.0));
+        Some(())
+    }
+
     /// sRGB → device values.
     pub fn from_srgb(&self, rgb: [f32; 3], intent: Intent) -> Option<Vec<f32>> {
         let xf = self.inverse_xf(intent)?;

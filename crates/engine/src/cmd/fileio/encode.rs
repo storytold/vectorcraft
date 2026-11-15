@@ -2,13 +2,13 @@
 //! (unknown keys are ignored, so one params object can carry the options of several formats).
 
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use vectorcraft_doc::{Artboard, Document, Node, NodeKind};
+use vectorcraft_doc::{Artboard, Document, Node, NodeKind, SYMBOL_SIZES, SymbolOverride};
 use vectorcraft_geom::Rect;
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, JpegOptions};
@@ -450,31 +450,107 @@ pub fn export_art_bounds(doc: &Document, format: &str) -> Option<Rect> {
 /// The bounds of the visible art of `doc` with the objects that `left_out` picks hidden
 /// ([`hidden_nodes`]) and the ones in the art of the symbols that instances show taken out
 /// ([`without_nodes`]: symbol art is measured with its hidden objects). An instance of a symbol
-/// whose art is all picked or hidden is hidden too. The art of a dynamic symbol is measured whole:
-/// an instance can paint its objects, and finds them by their places in the art.
+/// whose art is all picked or hidden is hidden too. The drawn instances of a dynamic symbol that
+/// make the same appearance changes to its art are measured on a copy of the symbol of their own,
+/// in which each object is judged with those changes ([`as_drawn`]); the objects taken out of
+/// a dynamic symbol's art leave empty groups in their places, by which instances find the objects
+/// they change. Each copy keeps its symbol's 9-slice guides and natural size. An instance whose art
+/// goes through 9-slice guides at any depth is measured as its art placed through them
+/// ([`placed_instances`]), with the objects `left_out` picks hidden after placing: the guides cut
+/// the box of the whole art. Where an instance stays one, the art of a symbol with 9-slice guides,
+/// and of the symbols whose instances are in that art at any depth ([`sliced_art`]), is measured
+/// whole.
 fn bounds_without(doc: &Document, left_out: &dyn Fn(&Node) -> bool) -> Option<Rect> {
-    // The symbols instances show (the first of each name) that aren't dynamic.
+    // The symbols instances show (the first of each name).
     let mut names = HashSet::new();
-    let shown: Vec<(usize, &vectorcraft_doc::Symbol)> =
-        doc.symbols.iter().enumerate().filter(|(_, s)| names.insert(s.name.as_str())).filter(|(_, s)| !s.dynamic).collect();
+    let shown: Vec<usize> = doc.symbols.iter().enumerate().filter(|(_, s)| names.insert(s.name.as_str())).map(|(i, _)| i).collect();
+    // The sets of appearance changes the drawn instances of each dynamic symbol make to its art;
+    // `None` for a symbol with more than `MAX_ART_COPIES`, which is measured whole.
+    let mut sets: HashMap<&str, Option<Vec<Vec<&SymbolOverride>>>> =
+        shown.iter().filter_map(|i| doc.symbols.get(*i)).filter(|s| s.dynamic).map(|s| (s.name.as_str(), Some(Vec::new()))).collect();
+    if !sets.is_empty() {
+        let mut walked = HashSet::new();
+        for l in &doc.layers {
+            drawn_changes(doc, l, left_out, true, &mut walked, &mut sets);
+        }
+    }
+    // Each set of changes gets a copy of its symbol, appended after the symbols, which the instances
+    // that make those changes show instead.
+    let variant = |symbol: &str, n: &Node| -> Option<String> {
+        let k = sets.get(symbol)?.as_ref()?.iter().position(|c| *c == own_changes(n))?;
+        Some(format!("{symbol}\u{0}{k}"))
+    };
+    let mut copies: Vec<(usize, &[&SymbolOverride])> = Vec::new();
+    let remapped_doc = sets.values().flatten().any(|v| !v.is_empty()).then(|| {
+        let mut d = doc.clone();
+        for l in &mut d.layers {
+            if let Some(n) = remapped(l, &variant) {
+                *l = n;
+            }
+        }
+        for s in &mut d.symbols {
+            if let Some(n) = remapped(&s.art, &variant) {
+                s.art = n;
+            }
+        }
+        for i in &shown {
+            let Some(s) = d.symbols.get(*i).cloned() else { continue };
+            for (k, c) in sets.get(s.name.as_str()).into_iter().flatten().flatten().enumerate() {
+                copies.push((d.symbols.len(), c.as_slice()));
+                let name = format!("{}\u{0}{k}", s.name);
+                copy_placement(&mut d, &s.name, &name);
+                d.symbols.push(vectorcraft_doc::Symbol { name, ..s.clone() });
+            }
+        }
+        d
+    });
+    let src = remapped_doc.as_ref().unwrap_or(doc);
+    let whole = sliced_art(src);
+    // The symbols to measure with the changes their instances make (`None` for a static symbol),
+    // without the dynamic symbols measured whole.
+    let entries: Vec<(usize, Option<&[&SymbolOverride]>)> = shown
+        .iter()
+        .filter_map(|i| src.symbols.get(*i).map(|s| (*i, s)))
+        .filter(|(_, s)| !s.dynamic || sets.get(s.name.as_str()).is_some_and(Option::is_some))
+        .map(|(i, s)| (i, s.dynamic.then_some(&[][..])))
+        .chain(copies.iter().map(|(i, c)| (*i, Some(*c))))
+        .collect();
     // The symbols whose art `left_out` leaves nothing of, those that only hold instances of such
     // symbols included.
     let mut empty: HashSet<&str> = HashSet::new();
-    while let Some((_, s)) = shown.iter().find(|(_, s)| !empty.contains(s.name.as_str()) && all_left_out(&s.art, left_out, &empty)) {
+    while let Some(s) = entries.iter().find_map(|(i, c)| {
+        src.symbols.get(*i).filter(|s| !empty.contains(s.name.as_str()) && all_left_out(&s.art, left_out, &empty, *c, &mut Vec::new()))
+    }) {
         empty.insert(&s.name);
     }
     let left_out =
         &|n: &Node| left_out(n) || matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if empty.contains(symbol.as_str()) && !has_effects(n));
-    let layers = hidden_nodes(&doc.layers, left_out);
-    let symbols: Vec<(usize, Arc<Node>)> = shown
+    // The instances whose art goes through 9-slice guides, at any depth, are measured as their art
+    // placed by those guides without the objects `left_out` picks, and without a clip group that
+    // holds only such objects.
+    let layers = hidden_nodes(&src.layers, left_out);
+    let placing = holding(src, &whole);
+    let layers = if placing.is_empty() {
+        layers
+    } else {
+        let picked = &|n: &Node| {
+            left_out(n) || matches!(n.kind, NodeKind::Group { clip: true, .. }) && all_left_out(n, left_out, &empty, None, &mut Vec::new())
+        };
+        let mut budget = 0;
+        let from = layers.as_deref().unwrap_or(&src.layers);
+        Some(from.iter().map(|l| placed_instances(src, l, &placing, picked, &mut budget, 0).unwrap_or_else(|| l.clone())).collect())
+    };
+    let symbols: Vec<(usize, Arc<Node>)> = entries
         .iter()
-        .filter(|(_, s)| !empty.contains(s.name.as_str()))
-        .filter_map(|(i, s)| without_nodes(&s.art, left_out).map(|art| (*i, art)))
+        .filter_map(|(i, c)| {
+            let s = src.symbols.get(*i).filter(|s| !empty.contains(s.name.as_str()) && !whole.contains(s.name.as_str()))?;
+            without_nodes(&s.art, left_out, *c, &mut Vec::new()).map(|art| (*i, art))
+        })
         .collect();
     if layers.is_none() && symbols.is_empty() {
-        return vectorcraft_render::encode::art_bounds(doc);
+        return vectorcraft_render::encode::art_bounds(src);
     }
-    let mut d = doc.clone();
+    let mut d = remapped_doc.unwrap_or_else(|| doc.clone());
     if let Some(layers) = layers {
         d.layers = layers;
     }
@@ -486,20 +562,254 @@ fn bounds_without(doc: &Document, left_out: &dyn Fn(&Node) -> bool) -> Option<Re
     vectorcraft_render::encode::art_bounds(&d)
 }
 
+/// Give symbol `to` of `d` the 9-slice guides and the natural size that symbol `from` has.
+fn copy_placement(d: &mut Document, from: &str, to: &str) {
+    if let Some(guides) = d.symbol_nine_slice(from) {
+        d.set_symbol_nine_slice(to, Some(guides));
+    }
+    if let Some(size) = d.unknown.get(SYMBOL_SIZES).and_then(|m| m.get(from)).cloned()
+        && let Some(sizes) = d.unknown.get_mut(SYMBOL_SIZES).and_then(Value::as_object_mut)
+    {
+        sizes.insert(to.to_string(), size);
+    }
+}
+
+/// The names of the symbols of `doc` with 9-slice guides, and of the symbols whose instances are in
+/// the art of those at any depth.
+fn sliced_art(doc: &Document) -> HashSet<&str> {
+    let mut arts: HashMap<&str, &Arc<Node>> = HashMap::new();
+    for s in &doc.symbols {
+        arts.entry(s.name.as_str()).or_insert(&s.art);
+    }
+    let mut todo: Vec<&str> = arts.keys().copied().filter(|name| doc.symbol_nine_slice(name).is_some()).collect();
+    let mut found = HashSet::new();
+    while let Some(name) = todo.pop() {
+        if !found.insert(name) {
+            continue;
+        }
+        if let Some(&art) = arts.get(name) {
+            art.walk(&mut |n| {
+                if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                    todo.push(symbol.as_str());
+                }
+            });
+        }
+    }
+    found
+}
+
+/// The names of the symbols of `doc` in `sliced`, and of the symbols whose art holds an instance of
+/// one of those at any depth.
+fn holding<'a>(doc: &'a Document, sliced: &HashSet<&'a str>) -> HashSet<&'a str> {
+    let mut held_by: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut seen = HashSet::new();
+    for s in doc.symbols.iter().filter(|s| seen.insert(s.name.as_str())) {
+        s.art.walk(&mut |n| {
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                held_by.entry(symbol.as_str()).or_default().push(s.name.as_str());
+            }
+        });
+    }
+    let mut found = HashSet::new();
+    let mut todo: Vec<&str> = sliced.iter().copied().collect();
+    while let Some(name) = todo.pop() {
+        if found.insert(name) {
+            todo.extend(held_by.get(name).into_iter().flatten().copied());
+        }
+    }
+    found
+}
+
+/// The most instances deep [`placed_instances`] places symbol art.
+const MAX_PLACED_DEPTH: usize = 32;
+
+/// `n` with each instance of the `placing` symbols in it, and in its layers and groups at any depth,
+/// made a group with the instance's appearance that holds the instance's art (with its changes and
+/// stain) as `doc` places it, through the symbol's 9-slice guides when it has them, without the
+/// objects `picked` picks ([`without_nodes`]; hidden when it picks the whole art); `None` when `n`
+/// holds no such instance, or is hidden. An instance on a perspective grid, one
+/// [`MAX_PLACED_DEPTH`] instances deep, one in another kind of object (a blend, for example), and
+/// one whose art would take the objects placed in all (`budget`) past
+/// [`vectorcraft_doc::MAX_SYMBOL_NODES`] stay instances.
+/// Their symbols' art is measured whole, as taking objects out of it would change the box the
+/// guides cut, and the page can come out larger than the plot.
+fn placed_instances(
+    doc: &Document,
+    n: &Arc<Node>,
+    placing: &HashSet<&str>,
+    picked: &dyn Fn(&Node) -> bool,
+    budget: &mut u64,
+    depth: usize,
+) -> Option<Arc<Node>> {
+    // Hidden art is not plotted, and placing it would take from the budget of the art that is.
+    if !n.visible {
+        return None;
+    }
+    match &n.kind {
+        NodeKind::SymbolInstance { symbol, xf } => {
+            if !placing.contains(symbol.as_str()) || depth >= MAX_PLACED_DEPTH || n.projection().is_some() {
+                return None;
+            }
+            let sym = doc.symbols.iter().find(|s| s.name == *symbol)?;
+            let art = vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n);
+            let most = doc.symbol_slice_map(symbol, *xf).map_or(art.count_with_masks() as u64, |m| m.most_placed(&art, doc));
+            if budget.saturating_add(most) > vectorcraft_doc::MAX_SYMBOL_NODES {
+                return None;
+            }
+            let art = Arc::new(doc.place_symbol_art(symbol, &art, *xf)?);
+            *budget = budget.saturating_add(art.count_with_masks() as u64);
+            let art = placed_instances(doc, &art, placing, picked, budget, depth + 1).unwrap_or(art);
+            let art = if picked(&art) {
+                let mut hidden = (*art).clone();
+                hidden.visible = false;
+                Arc::new(hidden)
+            } else {
+                without_nodes(&art, picked, None, &mut Vec::new()).unwrap_or(art)
+            };
+            let mut g = (**n).clone();
+            g.kind = NodeKind::Group { children: vec![art], clip: false };
+            Some(Arc::new(g))
+        }
+        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
+            let mut out: Option<Vec<Arc<Node>>> = None;
+            for (i, c) in children.iter().enumerate() {
+                if let Some(new) = placed_instances(doc, c, placing, picked, budget, depth)
+                    && let Some(slot) = out.get_or_insert_with(|| children.clone()).get_mut(i)
+                {
+                    *slot = new;
+                }
+            }
+            out.map(|c| {
+                let mut m = (**n).clone();
+                if let Some(children) = m.children_mut() {
+                    *children = c;
+                }
+                Arc::new(m)
+            })
+        }
+        _ => None,
+    }
+}
+
+/// The appearance changes instance `n` makes to its symbol's art, without those that change nothing.
+fn own_changes(n: &Node) -> Vec<&SymbolOverride> {
+    n.extras().symbol_overrides.iter().filter(|o| !o.is_empty()).collect()
+}
+
+/// `n` with each instance at any depth that `variant` gives another symbol (from the instance's
+/// symbol and the instance) made an instance of that symbol; `None` when none is.
+fn remapped(n: &Arc<Node>, variant: &dyn Fn(&str, &Node) -> Option<String>) -> Option<Arc<Node>> {
+    if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+        let name = variant(symbol, n)?;
+        let mut m = (**n).clone();
+        if let NodeKind::SymbolInstance { symbol, .. } = &mut m.kind {
+            *symbol = name;
+        }
+        return Some(Arc::new(m));
+    }
+    let children = n.children()?;
+    let mut out: Option<Vec<Arc<Node>>> = None;
+    for (i, c) in children.iter().enumerate() {
+        if let Some(new) = remapped(c, variant)
+            && let Some(slot) = out.get_or_insert_with(|| children.clone()).get_mut(i)
+        {
+            *slot = new;
+        }
+    }
+    out.map(|c| {
+        let mut m = (**n).clone();
+        if let Some(children) = m.children_mut() {
+            *children = c;
+        }
+        Arc::new(m)
+    })
+}
+
 /// Whether `n` is hidden, picked by `left_out`, an instance of one of the `empty` symbols, or a
 /// layer or a group holding only such objects (its clipping path among them when it clips). A
 /// Shaper group, or a layer, group or instance with effects, fills or strokes of its own, is none
-/// of these unless it is hidden or picked.
-fn all_left_out(n: &Node, left_out: &dyn Fn(&Node) -> bool, empty: &HashSet<&str>) -> bool {
+/// of these unless it is hidden or picked. In the art of a dynamic symbol (`changed`, the changes
+/// an instance makes to it; `n` is at place `at`), each object is judged with those changes
+/// ([`as_drawn`]).
+fn all_left_out(n: &Node, left_out: &dyn Fn(&Node) -> bool, empty: &HashSet<&str>, changed: Option<&[&SymbolOverride]>, at: &mut Vec<u32>) -> bool {
+    let m = as_drawn(n, changed, at);
     !n.visible
-        || left_out(n)
-        || !has_effects(n)
+        || left_out(&m)
+        || !has_effects(&m)
             && n.extras().shaper.is_none()
             && match &n.kind {
-                NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().all(|c| all_left_out(c, left_out, empty)),
+                NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().enumerate().all(|(i, c)| {
+                    at.push(i as u32);
+                    let out = all_left_out(c, left_out, empty, changed, at);
+                    at.pop();
+                    out
+                }),
                 NodeKind::SymbolInstance { symbol, .. } => empty.contains(symbol.as_str()),
                 _ => false,
             }
+}
+
+/// Add the sets of appearance changes that the instances in `n` and its subtree make to the art of
+/// the symbols `sets` names, each set once, and those of the instances in the art of the symbols the
+/// instances show (`walked`, the symbols already looked in). With `hidden` (in a layer), the
+/// instances that are hidden or that `left_out` picks, and those in such an object, are left out.
+/// In symbol art every instance counts, since an instance of the symbol can change the objects
+/// that hold it. A symbol with more than [`MAX_ART_COPIES`] sets gets `None`.
+fn drawn_changes<'a>(
+    doc: &'a Document,
+    n: &'a Node,
+    left_out: &dyn Fn(&Node) -> bool,
+    hidden: bool,
+    walked: &mut HashSet<&'a str>,
+    sets: &mut HashMap<&'a str, Option<Vec<Vec<&'a SymbolOverride>>>>,
+) {
+    if hidden && (!n.visible || left_out(n)) {
+        return;
+    }
+    if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+        let changes = own_changes(n);
+        if let Some(entry) = sets.get_mut(symbol.as_str())
+            && !changes.is_empty()
+        {
+            let full = match entry {
+                Some(list) if !list.contains(&changes) && list.len() < MAX_ART_COPIES => {
+                    list.push(changes);
+                    false
+                }
+                Some(list) => !list.contains(&changes),
+                None => false,
+            };
+            if full {
+                *entry = None;
+            }
+        }
+        if walked.insert(symbol.as_str())
+            && let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol)
+        {
+            drawn_changes(doc, &s.art, left_out, false, walked, sets);
+        }
+    }
+    for c in n.children().into_iter().flatten() {
+        drawn_changes(doc, c, left_out, hidden, walked, sets);
+    }
+}
+
+/// The most copies of one dynamic symbol's art [`bounds_without`] measures, one for each set of
+/// appearance changes its instances make; a symbol whose instances make more sets is measured whole.
+const MAX_ART_COPIES: usize = 64;
+
+/// `n`, the object at place `at` of a symbol's art, with the appearance changes `changed` that an
+/// instance makes to it applied in their order; `n` itself for the art of a symbol that is not
+/// dynamic (`changed` is `None`) and when no change names `at`.
+fn as_drawn<'a>(n: &'a Node, changed: Option<&[&SymbolOverride]>, at: &[u32]) -> Cow<'a, Node> {
+    let here: Vec<SymbolOverride> =
+        changed.into_iter().flatten().filter(|o| o.path == at).map(|o| SymbolOverride { path: Vec::new(), ..(*o).clone() }).collect();
+    if here.is_empty() {
+        return Cow::Borrowed(n);
+    }
+    let mut m = n.clone();
+    vectorcraft_doc::symbol_overrides::apply(&mut m, &here);
+    Cow::Owned(m)
 }
 
 /// Whether `n` has a visible effect, fill or stroke of its own, which the objects it holds can
@@ -511,25 +821,32 @@ fn has_effects(n: &Node) -> bool {
 /// `n` without the objects that `left_out` picks in it, when it is a layer or a group, and in the
 /// layers and groups in it at any depth; `None` when it picks none of them. A clipping layer or
 /// group keeps its clipping path, its first object, and a Shaper group and a layer or group with
-/// effects, fills or strokes of its own keep all they hold.
-fn without_nodes(n: &Arc<Node>, left_out: &dyn Fn(&Node) -> bool) -> Option<Arc<Node>> {
+/// effects, fills or strokes of its own keep all they hold. In the art of a dynamic symbol
+/// (`changed`, the changes an instance makes to it, as for [`all_left_out`]; `n` is at place
+/// `at`), each object is judged with those changes ([`as_drawn`]), and an object taken out leaves
+/// an empty group in its place.
+fn without_nodes(n: &Arc<Node>, left_out: &dyn Fn(&Node) -> bool, changed: Option<&[&SymbolOverride]>, at: &mut Vec<u32>) -> Option<Arc<Node>> {
     let (NodeKind::Layer { children, clip, .. } | NodeKind::Group { children, clip }) = &n.kind else { return None };
-    if has_effects(n) || n.extras().shaper.is_some() {
+    if has_effects(&as_drawn(n, changed, at)) || n.extras().shaper.is_some() {
         return None;
     }
-    let mut changed = false;
+    let mut taken = false;
     let kept: Vec<Arc<Node>> = children
         .iter()
         .enumerate()
         .filter_map(|(i, c)| {
-            if left_out(c) && !(*clip && i == 0) {
-                changed = true;
-                return None;
-            }
-            Some(without_nodes(c, left_out).inspect(|_| changed = true).unwrap_or_else(|| c.clone()))
+            at.push(i as u32);
+            let out = if left_out(&as_drawn(c, changed, at)) && !(*clip && i == 0) {
+                taken = true;
+                changed.map(|_| Arc::new(Node::group(c.id, Vec::new())))
+            } else {
+                Some(without_nodes(c, left_out, changed, at).inspect(|_| taken = true).unwrap_or_else(|| c.clone()))
+            };
+            at.pop();
+            out
         })
         .collect();
-    changed.then(|| {
+    taken.then(|| {
         let mut new = (**n).clone();
         if let NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } = &mut new.kind {
             *children = kept;

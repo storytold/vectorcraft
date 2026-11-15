@@ -25,13 +25,17 @@ pub(super) struct PopupWindow<'a> {
     height: f32,
     draw: Draw<'a>,
     texts: Vec<(String, Rect)>,
+    /// The full texts of the last frame's texts drawn ending in an ellipsis.
+    shortened: Vec<String>,
+    /// The last frame's screen-reader nodes, when the window's context has them turned on.
+    nodes: Vec<egui::accesskit::Node>,
 }
 
 impl<'a> PopupWindow<'a> {
     pub(super) fn new(app: &mut VectorcraftApp, height: f32, draw: impl FnMut(&mut VectorcraftApp, &mut Ui) + 'a) -> Self {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
-        let mut window = Self { ctx, time: 0.0, width: WIDTH, height, draw: Box::new(draw), texts: vec![] };
+        let mut window = Self { ctx, time: 0.0, width: WIDTH, height, draw: Box::new(draw), texts: vec![], shortened: vec![], nodes: vec![] };
         window.frames(app, 2);
         window
     }
@@ -45,6 +49,15 @@ impl<'a> PopupWindow<'a> {
         let mut out = self.ctx.run_ui(input, |ui| draw(app, ui));
         out.textures_delta.clear();
         self.texts = crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
+        self.shortened = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(text) if text.galley.elided => Some(text.galley.text().to_string()),
+                _ => None,
+            })
+            .collect();
+        self.nodes = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
     }
 
     /// Makes the window `width` pt wide and draws the frames that takes.
@@ -214,7 +227,7 @@ pub(super) fn assert_last_row_scrolls_into_view(
 /// scroll bar's column, whether or not its list scrolls. The row `widest` is drawn the widest; the
 /// wheel brings it into view when the popup opens without it. The popup and that row keep their
 /// place and size while the popup stays open. After the 200 pt window becomes `narrow` pt wide,
-/// the popup and its rows in view stay inside the window.
+/// the popup, its scroll bar and its rows in view stay inside the window.
 pub(super) fn assert_rows_stay_on_one_line(
     app: &mut VectorcraftApp,
     mut draw: impl FnMut(&mut VectorcraftApp, &mut Ui),
@@ -228,6 +241,7 @@ pub(super) fn assert_rows_stay_on_one_line(
         |window: &PopupWindow| -> Vec<(String, Rect)> { rows.iter().filter_map(|row| window.text(row).map(|rect| (row.clone(), rect))).collect() };
     let assert_inside = |window: &PopupWindow, drawn: &[(String, Rect)], name: &str| {
         let popup = window.popup().unwrap_or_else(|| panic!("the popup is open in the {name} window"));
+        assert!(popup.right() <= window.width + 0.5, "the popup at {popup:?} ends inside the {name} window, at x = {}", window.width);
         for (row, rect) in drawn {
             assert!(
                 rect.left() >= popup.left() && rect.right() <= popup.right() - bar,
@@ -331,6 +345,68 @@ fn menu_of(ui: &mut Ui, rows: usize) {
 /// A blank document, for windows that draw no panel.
 fn app() -> VectorcraftApp {
     VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default())
+}
+
+/// A row's name too long for the narrow window in [`a_shortened_menu_row_keeps_its_full_text`].
+const LONG_ROW: &str = "A row whose name is far too long for a narrow window";
+/// A dimmed row's name too long for the same window.
+const DIMMED_ROW: &str = "A dimmed row whose name is also far too long";
+
+/// In a window too narrow for a menu's row, the menu stays inside the window and the row ends in
+/// an ellipsis. Screen readers get the row's full text, a click still chooses it, and resting the
+/// pointer on it shows the full text in a tooltip inside the window, as it does on a dimmed row. A
+/// row that fits is drawn in full and shows no tooltip.
+#[test]
+fn a_shortened_menu_row_keeps_its_full_text() {
+    let clicked = std::cell::Cell::new(false);
+    let draw = |_: &mut VectorcraftApp, ui: &mut Ui| {
+        let button = ui.button("Open");
+        egui::Popup::menu(&button).show(|ui| {
+            crate::widgets::menu_scroll(ui, |ui| {
+                // More than the window has, as the menu bar's menus ask for.
+                crate::widgets::menu_min_width(ui, 230.0);
+                if ui.button(LONG_ROW).clicked() {
+                    clicked.set(true);
+                }
+                let _ = ui.button("Short");
+                let _ = ui.add_enabled(false, egui::Button::new(DIMMED_ROW));
+            })
+        });
+    };
+    let mut app = app();
+    let mut window = PopupWindow::new(&mut app, 300.0, draw);
+    window.ctx.enable_accesskit();
+    window.resize(&mut app, 160.0);
+    let at = window.text("Open").expect("the button").center();
+    window.click(&mut app, at);
+    let popup = window.popup().expect("the menu is open");
+    assert!(popup.left() >= 0.0 && popup.right() <= 160.5, "the menu at {popup:?} is inside the 160 pt wide window");
+    let row = window.text(LONG_ROW).expect("the long row");
+    assert!(row.right() <= popup.right(), "the long row at {row:?} ends inside the menu at {popup:?}");
+    assert!(window.shortened.iter().any(|text| text == LONG_ROW), "the long row ends in an ellipsis: {:?}", window.shortened);
+    assert!(!window.shortened.iter().any(|text| text == "Short"), "the short row is drawn in full");
+    assert!(window.nodes.iter().any(|node| node.label() == Some(LONG_ROW)), "screen readers get the long row's full text");
+    let drawn = |window: &PopupWindow, wanted: &str| window.texts.iter().filter(|(text, _)| text == wanted).count();
+    assert_eq!(drawn(&window, LONG_ROW), 1, "no tooltip shows before the pointer rests on the row");
+
+    window.frame(&mut app, vec![Event::PointerMoved(window.text("Short").expect("the short row").center())]);
+    window.frames(&mut app, 60);
+    assert_eq!(drawn(&window, "Short"), 1, "the short row shows no tooltip");
+
+    window.frame(&mut app, vec![Event::PointerMoved(row.center())]);
+    window.frames(&mut app, 60);
+    assert_eq!(drawn(&window, LONG_ROW), 2, "resting the pointer on the long row shows its full text in a tooltip");
+    let tip = window.texts.iter().filter(|(text, _)| text == LONG_ROW).map(|(_, rect)| *rect).find(|rect| *rect != row);
+    assert!(tip.is_some_and(|tip| tip.left() >= 0.0 && tip.right() <= 160.5), "the tooltip at {tip:?} is inside the window");
+
+    assert!(window.shortened.iter().any(|text| text == DIMMED_ROW), "the dimmed row ends in an ellipsis");
+    let dimmed = window.text(DIMMED_ROW).expect("the dimmed row");
+    window.frame(&mut app, vec![Event::PointerMoved(dimmed.center())]);
+    window.frames(&mut app, 60);
+    assert_eq!(drawn(&window, DIMMED_ROW), 2, "resting the pointer on the dimmed row shows its full text in a tooltip");
+
+    window.click(&mut app, row.center());
+    assert!(clicked.get(), "a click on the shortened row chooses it");
 }
 
 /// A long menu opened from a button `y` pt down a window stays at one place on every frame, and so
