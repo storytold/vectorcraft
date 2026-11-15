@@ -425,6 +425,18 @@
 	Title Case	Otsikon kirjainkoko
 	Sentence case	Virkkeen kirjainkoko
 	Smart Punctuation…	Älykäs välimerkitys…
+	Smart Punctuation	Älykäs välimerkitys
+	ff, fi, ffi Ligatures	Ligatuurit ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatuurit ff, fl, ffl
+	Smart Quotes	Älykkäät lainausmerkit
+	Smart Spaces	Älykkäät välilyönnit
+	En, Em Dashes	Lyhyet ja pitkät ajatusviivat
+	Ellipses	Kolme pistettä
+	Expert Fractions	Erikoismurtoluvut
+	Replace In	Korvaa kohteessa
+	Selected Text Only	Vain valittu teksti
+	Entire Document	Koko asiakirja
+	Report Results	Näytä tulokset
 	Create Outlines	Muunna ääriviivoiksi
 	Optical Margin Alignment	Optinen reunustasaus
 	Dynamic Text	Dynaaminen teksti
@@ -962,6 +974,7 @@
 	Free Transform	Vapaa muunnos
 	Perspective Distort	Perspektiivivääristys
 	Radial Blur…	Säteittäinen sumennus…
+	Blur Center	Sumennuksen keskipiste
 	Smart Blur…	Älykäs sumennus…
 	Sharpen	Terävöitä
 	Unsharp Mask…	Epäterävä maski…
@@ -1574,6 +1587,8 @@ lighting	Light	Valo
 	Leading	Riviväli
 	No Break	Ei katkoa
 	Proportional Metrics	Suhteelliset metriikat
+	H or V Style	Vaaka- tai pystytyyli
+	Roman Italics	Latinalainen kursiivi
 	Insert Aki Left	Lisää aki vasemmalle
 	Insert Aki Right	Lisää aki oikealle
 	Tsume	Tsume
@@ -2241,6 +2256,7 @@ digits	Malayalam	Malajalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-merkintä {i} tarvitsee path- ja ids-arvot (objektitunnukset, joita millään muulla merkinnällä ei ole)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder ottaa path-arvon: muita puuttuvia linkkejä haetaan tämän tiedoston kansiosta
 	Show Missing	Näytä puuttuvat
+	Sort by Size	Lajittele koon mukaan
 	Sort by Status	Lajittele tilan mukaan
 	Clear Overrides	Tyhjennä ohitukset
 	Create New {kind} Style	Luo uusi tyyli: {kind}
@@ -2581,6 +2597,7 @@ digits	Malayalam	Malajalam
 	e.g. 1-3, 5	esim. 1-3, 5
 	First Page	Ensimmäinen sivu
 	Import PDF	Tuo PDF
+	Import PDF pages as links	Tuo PDF-sivut linkkeinä
 	Last Page	Viimeinen sivu
 	Next Page	Seuraava sivu
 	of {count}	/ {count}
@@ -2664,6 +2681,7 @@ digits	Malayalam	Malajalam
 	Transparent Background	Läpinäkyvä tausta
 	Choose…	Valitse…
 	Copy Fonts Used in the Document	Kopioi asiakirjassa käytetyt fontit
+	Copy Info	Kopioi tiedot
 	Copy Links	Kopioi linkit
 	Create Report	Luo raportti
 	Fonts whose licence doesn't allow embedding are not copied.	Fontteja, joiden lisenssi ei salli upottamista, ei kopioida.
@@ -4605,6 +4623,7 @@ imageTrace	Outline	Ääriviiva
 @msg	there is no script engine named {name}	skriptimoottoria nimeltä {name} ei ole
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
+@msg	Copied the link info	Linkin tiedot kopioitiin
 @msg	Corners edits the corners of a path	Kulmat-toiminto muokkaa polun kulmia
 @msg	Couldn't copy to the system clipboard: {e}	Järjestelmän leikepöydälle ei voitu kopioida: {e}
 @msg	Couldn't open {name}: {e}	Tiedostoa {name} ei voitu avata: {e}
@@ -5067,6 +5086,8 @@ imageTrace	Outline	Ääriviiva
 @msg	result would exceed the canvas (coordinates out of range)	tulos ylittäisi kankaan (koordinaatit alueen ulkopuolella)
 @msg	objects can't be nested more than 32 deep	objekteja ei voi sisäkkäistää yli 32 tason syvyyteen
 @msg	the SVG's elements are nested more than {0} deep	elementit ovat SVG-tiedostossa sisäkkäin yli {0} tason syvyydessä
+@msg	the SVG's style sheets take too long to match	SVG-tiedoston tyylisivujen täsmäytys kestää liian kauan
+@msg	the SVG's styles expand to more than {0} MB	SVG-tiedoston tyylit laajenevat yli {0} megatavuksi
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {s}
 @msg	select (or target) objects whose appearance isn't basic	valitse (tai kohdista) objektit, joiden ulkoasu ei ole perusulkoasu

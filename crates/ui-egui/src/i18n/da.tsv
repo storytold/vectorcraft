@@ -998,6 +998,18 @@
 	Title Case	Stort bogstav i hvert ord
 	Sentence case	Stort begyndelsesbogstav
 	Smart Punctuation…	Smart tegnsætning…
+	Smart Punctuation	Smart tegnsætning
+	ff, fi, ffi Ligatures	Ligaturer ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligaturer ff, fl, ffl
+	Smart Quotes	Smarte anførselstegn
+	Smart Spaces	Smarte mellemrum
+	En, Em Dashes	Korte og lange tankestreger
+	Ellipses	Udeladelsesprikker
+	Expert Fractions	Ekspertbrøker
+	Replace In	Erstat i
+	Selected Text Only	Kun markeret tekst
+	Entire Document	Hele dokumentet
+	Report Results	Rapportér resultater
 	Create Outlines	Opret konturer
 	Optical Margin Alignment	Optisk marginjustering
 	Dynamic Text	Dynamisk tekst
@@ -1510,6 +1522,7 @@
 	Free Transform	Fri transformering
 	Perspective Distort	Perspektivforvrængning
 	Radial Blur…	Radial sløring…
+	Blur Center	Sløringens midtpunkt
 	Smart Blur…	Smart sløring…
 	Sharpen	Skarphed
 	Unsharp Mask…	Uskarp maskering…
@@ -2116,6 +2129,8 @@ lighting	Light	Lys
 	Leading	Linjeafstand
 	No Break	Ingen ombrydning
 	Proportional Metrics	Proportionale metrikker
+	H or V Style	Vandret eller lodret stil
+	Roman Italics	Romersk kursiv
 	Insert Aki Left	Indsæt aki til venstre
 	Insert Aki Right	Indsæt aki til højre
 	Tsume	Tsume
@@ -2689,6 +2704,7 @@ digits	Malayalam	Malayalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	post {i} i paths skal have path og ids (objekt-id'er, som ingen anden post har)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder tager path: der søges efter de andre manglende links i den fils mappe
 	Show Missing	Vis manglende
+	Sort by Size	Sortér efter størrelse
 	Sort by Status	Sortér efter status
 	Clear Overrides	Ryd tilsidesættelser
 	Create New {kind} Style	Opret ny {kind}-typografi
@@ -3028,6 +3044,7 @@ digits	Malayalam	Malayalam
 	e.g. 1-3, 5	f.eks. 1-3, 5
 	First Page	Første side
 	Import PDF	Importér PDF
+	Import PDF pages as links	Importér PDF-sider som links
 	Last Page	Sidste side
 	Next Page	Næste side
 	of {count}	af {count}
@@ -3111,6 +3128,7 @@ digits	Malayalam	Malayalam
 	Transparent Background	Gennemsigtig baggrund
 	Choose…	Vælg…
 	Copy Fonts Used in the Document	Kopiér skrifttyper, der bruges i dokumentet
+	Copy Info	Kopiér info
 	Copy Links	Kopiér links
 	Create Report	Opret rapport
 	Fonts whose licence doesn't allow embedding are not copied.	Skrifttyper, hvis licens ikke tillader indlejring, kopieres ikke.
@@ -4895,6 +4913,7 @@ imageTrace	Outline	Kontur
 	Stop the script and undo what it did? Then quit again.	Stop scriptet og fortryd det, det har gjort? Afslut derefter igen.
 	This script has added a great many objects. Continue, or stop it and undo what it did?	Dette script har tilføjet rigtig mange objekter. Fortsæt, eller stop det og fortryd det, det har gjort?
 @msg	Copied the script report	Kopierede scriptrapporten
+@msg	Copied the link info	Kopierede linkinfo
 @msg	Corners edits the corners of a path	Hjørner redigerer hjørnerne på en kurve
 @msg	Couldn't copy to the system clipboard: {e}	Kunne ikke kopiere til systemets udklipsholder: {e}
 @msg	Couldn't open {name}: {e}	Kunne ikke åbne {name}: {e}

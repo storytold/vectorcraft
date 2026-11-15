@@ -452,6 +452,62 @@ fn a_symbol_instances_brush_art_keeps_its_artboard_printed() {
 }
 
 #[test]
+fn a_brushed_paths_brush_art_keeps_its_artboard_printed_and_framed() {
+    // A line from (-5, 40) to (-5, 60) with a 1 pt red stroke painted by a 20 pt round nib, alone,
+    // in a group or as the art of a symbol instance: the line lies left of the artboard, and the nib
+    // paints 10 pt either side of it, onto the artboard.
+    let line = || {
+        let mut stroke = Appearance::basic(Paint::None, rgb(1.0, 0.0, 0.0), 1.0);
+        stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+        Node::path(vectorcraft_doc::NodeId(0), shapes::line((-5.0, 40.0).into(), (-5.0, 60.0).into()), stroke)
+    };
+    for what in ["path", "group", "symbol instance"] {
+        let mut d = doc(100.0, 100.0, &[]);
+        let mut lib = vectorcraft_brush::library(&d);
+        let Some(vectorcraft_brush::BrushKind::Calligraphic(c)) = lib.iter_mut().find(|b| b.name == "3 pt. Round").map(|b| &mut b.kind) else {
+            panic!("the 3 pt. Round brush")
+        };
+        c.size = 20.0;
+        vectorcraft_brush::store(&mut d, &lib);
+        let mut n = match what {
+            "path" => line(),
+            "group" => Node::group(vectorcraft_doc::NodeId(0), vec![Arc::new(line())]),
+            _ => {
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(line()) });
+                Node::new(vectorcraft_doc::NodeId(0), NodeKind::SymbolInstance { symbol: "Nib".into(), xf: vectorcraft_geom::Affine::IDENTITY })
+            }
+        };
+        n.id = d.alloc_id();
+        let layer = d.default_layer().unwrap();
+        d.insert(Some(layer), 0, n).unwrap();
+        // Skip Blank Artboards keeps the artboard, and its page holds the nib's art.
+        let p = pages(&job(&d, json!({"skipBlank": true})).bytes);
+        assert_eq!(p.len(), 1, "{what}");
+        assert!(p[0].1.iter().any(|(_, paint)| rgb8(paint) == [255, 0, 0]), "{what}: {p:?}");
+        // Ignoring artboards, the page holds all the nib's art, 20 × 40 pt.
+        let pv = preview(&d, &settings(json!({"artboards": "ignore"}))).unwrap();
+        let t = pv.sheets[0].trim;
+        assert!(t[2] - t[0] >= 20.0 && t[3] - t[1] >= 40.0, "{what}: {t:?}");
+    }
+    // A compound path is painted with its own appearance: the brushed stroke left on its path
+    // paints nothing, and the artboard stays blank.
+    let mut d = doc(100.0, 100.0, &[]);
+    let kind = NodeKind::Compound { children: vec![Arc::new(line())], rule: vectorcraft_geom::FillRule::NonZero };
+    let mut compound = Node::new(d.alloc_id(), kind);
+    compound.appearance = Appearance::basic(Paint::None, rgb(1.0, 0.0, 0.0), 1.0).into();
+    let layer = d.default_layer().unwrap();
+    d.insert(Some(layer), 0, compound).unwrap();
+    assert!(preview(&d, &settings(json!({"skipBlank": true}))).is_err());
+    // A brushed stroke without a paint draws no brush art: the artboard stays blank.
+    let mut d = doc(100.0, 100.0, &[]);
+    let mut unpainted = line();
+    unpainted.id = d.alloc_id();
+    unpainted.appearance.stroke_mut().unwrap().paint = Paint::None;
+    d.insert(Some(layer), 0, unpainted).unwrap();
+    assert!(preview(&d, &settings(json!({"skipBlank": true}))).is_err());
+}
+
+#[test]
 fn symbol_art_effects_print_where_they_draw() {
     // A red square and the symbol's blue square, each moved 100 pt right by a Transform effect,
     // print at the same distance from the page's left edge.
