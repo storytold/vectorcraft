@@ -529,9 +529,14 @@ fn tagged_tiffs_keep_their_icc_profile() {
             );
         }
     }
-    // Converted pixels are in the destination's colours, not the image's profile.
+    // Converted pixels are in the destination's colours, not the image's profile, which the CMS
+    // can't read (it has no tags): they are converted as sRGB ones, with a warning.
     for destination in [vectorcraft_color::cms::DISPLAY_P3, vectorcraft_color::cms::GENERIC_CMYK] {
-        let spaces = export(&tiff(&colour(), &rgb), json!({"output": {"conversion": "destination", "destination": destination}}));
+        let mut settings: PdfSettings = serde_json::from_value(json!({"output": {"conversion": "destination", "destination": destination}})).unwrap();
+        settings.compression.compress_text = false;
+        let r = export_with_report(&tiff(&colour(), &rgb), &PdfOptions { settings, ..Default::default() }).unwrap();
+        assert!(r.warnings.len() == 1 && r.warnings[0].contains("converted to the destination as sRGB"), "{destination}: {:?}", r.warnings);
+        let spaces = image_spaces(&r.bytes);
         assert!(spaces.len() == 1 && spaces[0].icc.as_deref() != Some(rgb.as_slice()), "converted to {destination}: {spaces:?}");
     }
     // PDF/X-1a allows no ICC-based color spaces: a tagged gray TIFF (8 or 16 bits), PNG or JPEG is
@@ -836,4 +841,111 @@ fn convert_to_srgb_converts_images_with_the_color_settings_intent() {
         seen.push(samples[0].clone());
     }
     assert!(seen[0] != seen[1], "the two intents give different samples");
+}
+
+/// A 600 × 600 image of sixteen blocks of colour, saturated ones (the primaries and secondaries)
+/// among them.
+fn colour_blocks() -> DynamicImage {
+    const LEVELS: [u8; 4] = [0, 90, 200, 255];
+    image::RgbImage::from_fn(600, 600, |x, y| {
+        let (i, j) = ((x / 150) as usize, (y / 150) as usize);
+        image::Rgb([LEVELS[i], LEVELS[j], LEVELS[(i + 2 * j) % 4]])
+    })
+    .into()
+}
+
+/// The samples (8 bits each) of `img`'s pixels as `convert` gives each one's: each distinct
+/// colour converts once.
+fn converted_samples(img: &DynamicImage, convert: impl Fn([u8; 3]) -> Vec<u8>) -> Vec<u8> {
+    let mut seen: std::collections::HashMap<[u8; 3], Vec<u8>> = std::collections::HashMap::new();
+    let mut out = vec![];
+    for p in img.to_rgb8().pixels() {
+        out.extend_from_slice(seen.entry(p.0).or_insert_with(|| convert(p.0)));
+    }
+    out
+}
+
+/// The largest difference between samples `a` and `b` (8 bits each) and where it is: (difference,
+/// sample index, the two samples), or the two lengths when they differ.
+fn max_diff(a: &[u8], b: &[u8]) -> String {
+    if a.len() != b.len() {
+        return format!("lengths {} and {}", a.len(), b.len());
+    }
+    let worst = a.iter().zip(b).enumerate().max_by_key(|(_, (a, b))| a.abs_diff(**b));
+    worst.map_or_else(String::new, |(i, (x, y))| format!("largest difference {} at sample {i}: {x} vs {y}", x.abs_diff(*y)))
+}
+
+/// With Convert to Destination and a CMYK destination, or an RGB one other than sRGB, a colour
+/// image that carries an ICC profile is converted from that profile (to sRGB, then to the
+/// destination) rather than from its numbers read as sRGB ones; an untagged image is converted
+/// from sRGB as before. A gray image keeps its profile (gray stays gray), and an RGB profile the
+/// CMS can't read leaves the numbers converted as sRGB ones, with a warning.
+#[test]
+fn convert_to_destination_converts_tagged_images_from_their_profile() {
+    use vectorcraft_color::cms::{self, ColorSettings, DISPLAY_P3, GENERIC_CMYK, Intent, WIDE_GAMUT_RGB, icc_bytes};
+    let intent = Intent::RelativeColorimetric;
+    let active = std::sync::Arc::new(cms::Cms::new(&ColorSettings { intent, ..ColorSettings::default() }).unwrap());
+    let mut p3 = icc_bytes(DISPLAY_P3).unwrap().to_vec();
+    p3[8..12].copy_from_slice(&[4, 0x20, 0, 0]);
+    let p3_profile = cms::IccProfile::from_bytes(None, &p3).unwrap();
+    // A P3 pixel's sRGB samples.
+    let from_p3 = |rgb: [u8; 3]| p3_profile.to_srgb(&rgb.map(|v| f32::from(v) / 255.0), intent).unwrap().map(|v| (v * 255.0).round() as u8);
+    let img = colour_blocks();
+    let tagged_png = doc(tagged(&img, &p3, ImageFormat::Png), "image/png");
+    let untagged_png = doc(encoded(img.clone(), ImageFormat::Png), "image/png");
+    let device = |space: &str| vec![Written { space: space.into(), icc: None, bits: 8, filter: "FlateDecode".into(), smask: false }];
+    // Each destination: the space images are written in, and how an sRGB pixel's samples convert
+    // to it (the tables the export builds from the destination's color settings).
+    let cmyk = cms::Cms::new(&ColorSettings { intent, cmyk: GENERIC_CMYK.into(), ..ColorSettings::default() }).unwrap();
+    let wide = cms::Cms::new(&ColorSettings { intent, rgb: WIDE_GAMUT_RGB.into(), ..ColorSettings::default() }).unwrap();
+    let cmy = cms::ProofLut::build(|rgb| {
+        let v = cmyk.srgb_to_cmyk(rgb, intent);
+        [v[0], v[1], v[2]]
+    });
+    let black = cms::ProofLut::build(|rgb| [cmyk.srgb_to_cmyk(rgb, intent)[3], 0.0, 0.0]);
+    let wide_lut = cms::ProofLut::build(|rgb| wide.srgb_to_rgb(rgb));
+    let to_cmyk = |rgb: [u8; 3]| [cmy.apply8(rgb).as_slice(), &black.apply8(rgb)[..1]].concat();
+    let to_wide = |rgb: [u8; 3]| wide_lut.apply8(rgb).to_vec();
+    type ToDest<'a> = &'a dyn Fn([u8; 3]) -> Vec<u8>;
+    let destinations: [(&str, &str, ToDest<'_>); 2] = [(GENERIC_CMYK, "DeviceCMYK", &to_cmyk), (WIDE_GAMUT_RGB, "DeviceRGB", &to_wide)];
+    for (name, space, to_dest) in destinations {
+        let settings = json!({"output": {"conversion": "destination", "destination": name}});
+        let export = |d: &Document| cms::with_active(active.clone(), || export_images(d, settings.clone()));
+        let (spaces, pdf) = export(&tagged_png);
+        assert_eq!(spaces, device(space), "{name}: tagged");
+        let samples = image_samples(&pdf);
+        let want = converted_samples(&img, |rgb| to_dest(from_p3(rgb)));
+        let as_srgb = converted_samples(&img, to_dest);
+        assert!(
+            samples.len() == 1 && samples_close(&samples[0], &want, false, 1),
+            "{name}: converted from the profile, {}",
+            max_diff(&samples[0], &want)
+        );
+        assert!(!samples_close(&samples[0], &as_srgb, false, 8), "{name}: not converted as sRGB");
+        // An untagged image is converted from sRGB, as before.
+        let (spaces, pdf) = export(&untagged_png);
+        assert_eq!(spaces, device(space), "{name}: untagged");
+        let samples = image_samples(&pdf);
+        assert!(
+            samples.len() == 1 && samples_close(&samples[0], &as_srgb, false, 1),
+            "{name}: untagged converted as sRGB, {}",
+            max_diff(&samples[0], &as_srgb)
+        );
+    }
+    // A gray image keeps its gray profile in a CMYK destination.
+    let gray = gray_profile(&[0x01CD]);
+    let settings = json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}});
+    let gray_doc = doc(tagged(&colour().grayscale(), &gray, ImageFormat::Tiff), "image/tiff");
+    let (spaces, _) = cms::with_active(active.clone(), || export_images(&gray_doc, settings.clone()));
+    assert!(spaces.len() == 1 && spaces[0].space == "ICCBased" && spaces[0].icc.as_deref() == Some(gray.as_slice()), "gray: {spaces:?}");
+    // A profile the CMS can't read: converted as sRGB, with a warning.
+    let unread = icc_profile(b"RGB ", 600);
+    let mut s: PdfSettings = serde_json::from_value(settings).unwrap();
+    s.compression.compress_text = false;
+    let unread_doc = doc(tagged(&img, &unread, ImageFormat::Png), "image/png");
+    let r = cms::with_active(active, || export_with_report(&unread_doc, &PdfOptions { settings: s, ..Default::default() })).unwrap();
+    assert!(r.warnings.iter().any(|w| w.contains("converted to the destination as sRGB")), "{:?}", r.warnings);
+    assert_eq!(image_spaces(&r.bytes), device("DeviceCMYK"), "unread profile");
+    let as_srgb = converted_samples(&img, to_cmyk);
+    assert!(image_samples(&r.bytes).first().is_some_and(|s| samples_close(s, &as_srgb, false, 1)), "unread profile: converted as sRGB");
 }

@@ -12,9 +12,10 @@
 //!   by pixel (CMYK images too: they keep their numbers unless converted, see [`CmykPixels`]);
 //!   printer's marks are not. With `destination` and an sRGB destination, a gray or RGB image
 //!   that carries an ICC profile is converted from it to sRGB with the same intent and written
-//!   without it ([`ColorOut::image_srgb_intent`]); without conversion it keeps its
-//!   profile. The destination is a profile name; empty, the document's profile for its colour
-//!   mode.
+//!   without it ([`ColorOut::image_srgb_intent`]); with `destination` and a destination its
+//!   pixels are converted to (CMYK, another RGB space), a colour image is converted from its
+//!   profile to sRGB and then to the destination. Without conversion it keeps its profile. The
+//!   destination is a profile name; empty, the document's profile for its colour mode.
 //! - Profiles ([`ProfileInclusion`]): with `all`, with `destination`, and with `taggedSource` on a
 //!   document that was assigned profiles, colours are written in ICC-based colour spaces: CMYK
 //!   with the CMYK profile in effect (the destination when converting to CMYK, else the
@@ -346,10 +347,13 @@ impl ColorOut {
 
     /// The intent a gray or RGB image that carries an ICC profile is converted from it to sRGB
     /// with ([`crate::images::recode`]): the colour settings' intent, with Convert to Destination
-    /// and an sRGB destination, also when the document's RGB space is sRGB. `None` otherwise:
-    /// such an image keeps its profile.
+    /// and an sRGB destination, also when the document's RGB space is sRGB, or a destination
+    /// colour images' pixels are then converted to ([`Self::pixels`]: CMYK, another RGB space).
+    /// `None` otherwise, Preserve Numbers included: such an image keeps its profile, or its
+    /// numbers are converted as sRGB ones.
     pub(crate) fn image_srgb_intent(&self) -> Option<Intent> {
-        self.dest.as_ref().filter(|d| d.destination && d.model == Model::Rgb && d.srgb).map(|_| self.intent)
+        let d = self.dest.as_ref().filter(|d| d.destination)?;
+        ((d.model == Model::Rgb && d.srgb) || self.pixels().is_some()).then_some(self.intent)
     }
 
     /// The CMYK profile CMYK image `blob` is tagged with ([`crate::images::cmyk_icc`]): the one it
