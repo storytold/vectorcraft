@@ -455,10 +455,11 @@ fn a_symbol_instance_fill_shadow_shadows_its_filled_art() {
 
     assert!(expandable(&s), "the fill's shadow can be expanded");
     run(&mut s, "effect.expandAppearance", json!({}));
-    let ch = node(&s, id).children().cloned().expect("the instance becomes a group");
+    let n = node(&s, id);
+    let ch = n.children().cloned().expect("the instance becomes a group");
     assert!(matches!(ch[0].kind, NodeKind::Image(_)), "the shadow is an image under the art: {}", ch[0].kind_label());
-    assert!(matches!(ch[1].kind, NodeKind::SymbolInstance { .. }), "the art stays an instance: {}", ch[1].kind_label());
-    no_effects_left(&ch[1]);
+    n.walk(&mut |part| assert!(!matches!(part.kind, NodeKind::SymbolInstance { .. }), "the art is no longer an instance"));
+    no_effects_left(&n);
     let after = render(&s);
     assert!(differing(&before, &after, 24) < 400, "expanding changed {} pixels", differing(&before, &after, 24));
     run(&mut s, "edit.undo", json!({}));
@@ -506,6 +507,143 @@ fn a_nested_symbol_instance_takes_the_outer_fill_shadow() {
     run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
     shadow_row(&mut s, id, row);
     assert!(dark(render(&s).pixel(165, 100)), "the inner art casts the shadow: {:?}", render(&s).pixel(165, 100));
+}
+
+/// An instance of an Inner symbol of the square, with a new fill without paint on top that `inner`
+/// gives effects, placed in the art of an Outer symbol; the Outer instance is selected, with a new
+/// fill without paint on top. Returns the Outer instance and its new row's index.
+fn nested_with_row(s: &mut Session, inner: impl FnOnce(&mut Session, NodeId, usize)) -> (NodeId, usize) {
+    let (inner_id, inner_row) = instance_with_row(s, "Inner", true);
+    inner(s, inner_id, inner_row);
+    let id = NodeId(run(s, "symbol.new", json!({"name": "Outer"}))["id"].as_u64().unwrap());
+    run(s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(s, id).appearance.items.len() - 1;
+    run(s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    (id, row)
+}
+
+/// The symbol instances and the images in `n`.
+fn instances_and_images(n: &Node) -> (usize, usize) {
+    let mut found = (0, 0);
+    n.walk(&mut |part| match part.kind {
+        NodeKind::SymbolInstance { .. } => found.0 += 1,
+        NodeKind::Image(_) => found.1 += 1,
+        _ => {}
+    });
+    found
+}
+
+/// Replace the art of every symbol with an empty group.
+fn empty_symbols(s: &mut Session) {
+    let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    for (i, sym) in d.symbols.iter_mut().enumerate() {
+        sym.art = std::sync::Arc::new(Node::group(NodeId(91_000 + i as u64), vec![]));
+    }
+}
+
+/// When the outer instance's art expands, an instance in it whose own fill has a shadow becomes art
+/// too, the shadow an image under it: no instance or effect is left, the look stays, and the result
+/// no longer follows either symbol.
+#[test]
+fn a_nested_instance_fill_shadow_becomes_an_image_when_the_outer_art_expands() {
+    let mut s = session();
+    let (id, row) = nested_with_row(&mut s, shadow_row);
+    offset_row(&mut s, id, row, 10.0);
+    let before = render(&s);
+    assert!(dark(before.pixel(175, 100)), "the inner art casts its shadow: {:?}", before.pixel(175, 100));
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    let (instances, images) = instances_and_images(&n);
+    assert_eq!(instances, 0, "the outer and inner instances become art");
+    assert!(images >= 1, "the inner shadow is an image");
+    no_effects_left(&n);
+    let after = render(&s);
+    assert!(differing(&before, &after, 24) < 400, "expanding changed {} pixels", differing(&before, &after, 24));
+    empty_symbols(&mut s);
+    assert_eq!(differing(&after, &render(&s), 0), 0, "the expanded art no longer follows the symbols");
+}
+
+/// A shadow on the outer instance's fill alone: the instance becomes its art over the shadow's
+/// image, and an instance in that art with a shadow of its own becomes art and an image in turn, in
+/// one undo step.
+#[test]
+fn an_outer_fill_shadow_expands_the_instance_and_reaches_the_nested_art() {
+    let mut s = session();
+    let (id, row) = nested_with_row(&mut s, shadow_row);
+    shadow_row(&mut s, id, row);
+    let before = render(&s);
+    assert!(expandable(&s));
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    let (instances, images) = instances_and_images(&n);
+    assert_eq!(instances, 0, "the outer and inner instances become art");
+    assert!(images >= 2, "the outer and inner shadows are images: {images}");
+    no_effects_left(&n);
+    let after = render(&s);
+    assert!(differing(&before, &after, 24) < 400, "expanding changed {} pixels", differing(&before, &after, 24));
+
+    run(&mut s, "edit.undo", json!({}));
+    assert!(matches!(node(&s, id).kind, NodeKind::SymbolInstance { .. }), "one undo gives the instance back");
+    run(&mut s, "edit.redo", json!({}));
+    empty_symbols(&mut s);
+    assert_eq!(differing(&after, &render(&s), 0), 0, "the expanded art no longer follows the symbols");
+}
+
+/// A blur on the nested instance's fill: the nested instance becomes the image.
+#[test]
+fn a_nested_instance_fill_blur_becomes_an_image_when_the_outer_art_expands() {
+    let mut s = session();
+    let blur = |s: &mut Session, id: NodeId, row: usize| {
+        run(s, "effect.apply", json!({"ids": [id.0], "item": row, "effect": "blur.gaussian", "params": {"radius": 3}}));
+    };
+    let (id, row) = nested_with_row(&mut s, blur);
+    offset_row(&mut s, id, row, 10.0);
+    let before = render(&s);
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    let (instances, images) = instances_and_images(&n);
+    assert_eq!(instances, 0, "the outer and inner instances become art");
+    assert_eq!(images, 1, "the blurred inner art is one image");
+    no_effects_left(&n);
+    let after = render(&s);
+    assert!(differing(&before, &after, 24) < 400, "expanding changed {} pixels", differing(&before, &after, 24));
+}
+
+/// A shadow on a hidden fill of the nested instance draws nothing, and expanding makes no image of it.
+#[test]
+fn a_hidden_nested_instance_fill_shadow_makes_no_image() {
+    let mut s = session();
+    let hidden = |s: &mut Session, id: NodeId, row: usize| {
+        shadow_row(s, id, row);
+        run(s, "appearance.setItem", json!({"ids": [id.0], "index": row, "visible": false}));
+    };
+    let (id, row) = nested_with_row(&mut s, hidden);
+    offset_row(&mut s, id, row, 10.0);
+    assert!(!dark(render(&s).pixel(175, 100)), "the hidden fill casts no shadow");
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    assert_eq!(instances_and_images(&n), (0, 0), "the instances become art without an image");
+    no_effects_left(&n);
+}
+
+/// A nested instance with a shadow whose symbol is missing stays as it is while the outer art
+/// expands around it.
+#[test]
+fn a_nested_instance_of_a_missing_symbol_stays_an_instance() {
+    let mut s = session();
+    let (id, row) = nested_with_row(&mut s, shadow_row);
+    offset_row(&mut s, id, row, 10.0);
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        d.symbols.retain(|sym| sym.name != "Inner");
+    }
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    assert_eq!(instances_and_images(&n), (1, 0), "the inner instance stays, without an image");
 }
 
 /// Export draws a symbol instance's fill shadow on the filled shapes of its art: baking leaves the

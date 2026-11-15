@@ -97,7 +97,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too; a symbol instance whose topmost fill or stroke is visible, has an opacity above 0 and has a geometry effect becomes a group of its art, that fill's effects reshaping the art's filled shapes and that stroke's effects reshaping its stroked shapes, as the canvas draws them. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. A dimension whose art it changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked. Hidden fills, strokes and effects are dropped. In Safe Mode, an object with a visible plug-in effect (in it, or in a symbol it places) is an error and nothing changes. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too; a symbol instance whose topmost fill or stroke is visible, has an opacity above 0 and has a geometry or raster effect becomes a group of its art, that fill's effects reshaping the art's filled shapes and that stroke's effects reshaping its stroked shapes, as the canvas draws them, its raster effects an image as for other objects; a symbol instance in that art whose topmost fill or stroke has such an effect (its own or one the outer instance passes on) becomes its art and image in turn. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. A dimension whose art it changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked. Hidden fills, strokes and effects are dropped. In Safe Mode, an object with a visible plug-in effect (in it, or in a symbol it places) is an error and nothing changes. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
             can_expand,
             expand_appearance
         ),
@@ -1007,12 +1007,10 @@ fn expand_pieces(
 }
 
 /// Replace each symbol instance in `m`, art an instance placed (`depth` instances deep), whose
-/// active fill or stroke has a geometry effect ([`effects::has_item_geometry`]) by its art as
-/// [`effects::expand_outlined`] makes it, and the instances in that art in turn, so
-/// [`expand_pieces`] bakes their effects with the rest. An instance stays as it is when it is more
-/// than [`vectorcraft_doc::depth::MAX_DEPTH`] instances deep, its symbol is missing, or its art
-/// would take the objects placed so far past `budget`.
-fn expand_nested_instances(d: &Document, m: &mut Node, depth: usize, budget: &mut u64) {
+/// active fill or stroke has a geometry or raster effect ([`effects::has_item_geometry`],
+/// [`effects::has_instance_row_raster`]) by its art ([`expanded_instance`]), and the instances in
+/// that art in turn, so [`expand_pieces`] bakes their effects with the rest.
+fn expand_nested_instances(d: &mut Document, m: &mut Node, depth: usize, budget: &mut u64) {
     for c in m.children_mut().into_iter().flatten() {
         if !matches!(c.kind, NodeKind::SymbolInstance { .. }) {
             if c.children().is_some() {
@@ -1020,22 +1018,51 @@ fn expand_nested_instances(d: &Document, m: &mut Node, depth: usize, budget: &mu
             }
             continue;
         }
-        let NodeKind::SymbolInstance { symbol, .. } = &c.kind else { continue };
-        if depth >= vectorcraft_doc::depth::MAX_DEPTH || !effects::has_item_geometry(c) {
-            continue;
-        }
-        let Some(sym) = d.symbols.iter().find(|s| s.name == *symbol) else { continue };
-        let count = sym.art.count() as u64;
-        if count > *budget {
-            continue;
-        }
-        *budget -= count;
-        let art = vectorcraft_render::instance_art(&sym.art, c);
-        if let Some(mut a) = effects::expand_outlined(Some(d), c, Some(&art)) {
-            expand_nested_instances(d, &mut a, depth + 1, budget);
+        if let Some(a) = expanded_instance(d, c, depth, budget) {
             *c = Arc::new(a);
         }
     }
+}
+
+/// Symbol instance `c`, art an instance placed (`depth` instances deep), as art: the raster
+/// effects of its active fill or stroke an embedded image ([`raster_image`]) that replaces the art
+/// (blur, feather, inner glow) or goes below it (shadows, outer glows), and its art as
+/// [`effects::expand_outlined`] makes it without them, or as [`effects::instance_as_art`] does when
+/// it has no geometry effect, with the instances in that art expanded in turn. `None`, the instance
+/// staying as it is, when its active fill and stroke have no such effect, it is more than
+/// [`vectorcraft_doc::depth::MAX_DEPTH`] instances deep, its symbol is missing, or its art would
+/// take the objects placed so far past `budget`. When the image of its raster effects can't be
+/// made, they stay on the art its geometry effects make, and without one it stays as it is.
+fn expanded_instance(d: &mut Document, c: &Node, depth: usize, budget: &mut u64) -> Option<Node> {
+    let NodeKind::SymbolInstance { symbol, .. } = &c.kind else { return None };
+    let raster = effects::has_instance_row_raster(c);
+    if depth >= vectorcraft_doc::depth::MAX_DEPTH || !(raster || effects::has_item_geometry(c)) {
+        return None;
+    }
+    let sym = d.symbols.iter().find(|s| s.name == *symbol)?;
+    let count = sym.art.count() as u64;
+    if count > *budget {
+        return None;
+    }
+    *budget -= count;
+    let art = vectorcraft_render::instance_art(&sym.art, c);
+    let image = if raster { raster_image(d, c) } else { None };
+    let mut v = c.clone();
+    if image.is_some() {
+        rasterfx::strip_raster(&mut v, false);
+    }
+    let below = match image {
+        Some((image, false)) => return Some(rasterfx::replace_with_image(v, image)),
+        Some((image, true)) => Some(image),
+        None => None,
+    };
+    let mut a = effects::expand_outlined(Some(&*d), &v, Some(&art))
+        .or_else(|| if below.is_some() { effects::instance_as_art(Some(&*d), &v, Some(&art)) } else { None })?;
+    expand_nested_instances(d, &mut a, depth + 1, budget);
+    if let Some(image) = below {
+        rasterfx::put_below(d, &mut a, image);
+    }
+    Some(a)
 }
 
 /// Does `n` hold an id of `seen`, or one id twice: does [`effects::fresh_ids`] give it new ids?
@@ -1192,7 +1219,12 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
                     }
                     _ => None,
                 };
-                effects::expand_outlined(Some(&*d), &v, symbol.as_ref()).map(|mut m| {
+                // A symbol instance whose active fill or stroke has only effects that paint below it
+                // (now in the image) becomes its art as well.
+                let row_raster = image.is_some() && effects::has_instance_row_raster(&n);
+                let outlined = effects::expand_outlined(Some(&*d), &v, symbol.as_ref())
+                    .or_else(|| if row_raster { effects::instance_as_art(Some(&*d), &v, symbol.as_ref()) } else { None });
+                outlined.map(|mut m| {
                     let mut budget = vectorcraft_doc::MAX_SYMBOL_NODES;
                     expand_nested_instances(d, &mut m, 1, &mut budget);
                     expand_pieces(d, &mut m, true, brushes, &mut stroke_art);
