@@ -8687,8 +8687,9 @@ is offered only for a file with slices and applies to either choice. File › Pl
 file placed without Link, and so does a file dropped on the canvas with Shift held. The dialog starts from the
 choices made last, at first Convert Layers to Objects without hidden layers, with Import Slices. A file with fewer
 than two layers and no slices, a file placed with Link, and `document.open` and `file.place` run as commands don't
-show it. Several files placed together without Link load the place cursor without asking, and each PSD or PSB file
-among them comes in with the choices made last.
+show it. Several files placed together without Link load the place cursor without asking. With Show Import Options
+on, each PSD or PSB file among them that would show the dialog shows it when it is clicked or dragged; with it off,
+each one comes in with the choices made last.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/poster.psd","layers":true,"hiddenLayers":true}}}
