@@ -3001,6 +3001,7 @@
 	Assign profile:	პროფილის მინიჭება:
 	Preserve the color numbers	ფერების რიცხვების შენარჩუნება
 	Convert to keep the colors' appearance	გადაყვანა ფერების იერსახის შესანარჩუნებლად
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` გამოიყენება მხოლოდ `{key}`: "assign"-თან
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	ჩასმული ფერები მოდის დოკუმენტიდან, რომლის {model} პროფილია „{from}“; ამ დოკუმენტის პროფილია „{to}“.
 	CMYK	CMYK
 	Texture	ტექსტურა

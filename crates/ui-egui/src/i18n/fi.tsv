@@ -1011,6 +1011,7 @@
 	Assign profile:	Määritä profiili:
 	Preserve the color numbers	Säilytä värien lukuarvot
 	Convert to keep the colors' appearance	Muunna ja säilytä värien ulkoasu
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` annetaan vain, kun `{key}` on "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Liitetyt värit ovat asiakirjasta, jonka {model}-profiili on ”{from}”; tämän asiakirjan profiili on ”{to}”.
 	CMYK	CMYK
 	Texture	Tekstuuri

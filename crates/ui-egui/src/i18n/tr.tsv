@@ -5229,6 +5229,7 @@ axis	Both	Her İkisi
 	Assign profile:	Profil ata:
 	Preserve the color numbers	Renk değerlerini koru
 	Convert to keep the colors' appearance	Renklerin görünümünü korumak için dönüştür
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` yalnızca `{key}`: "assign" ile kullanılır
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Yapıştırılan renkler {model} profili “{from}” olan bir belgeden geliyor; bu belgeninki “{to}”.
 	Texture	Doku
 	Craquelure…	Küçük çatlak…

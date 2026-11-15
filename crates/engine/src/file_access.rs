@@ -46,7 +46,7 @@ pub struct AutomationRoots {
     write: Vec<Root>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Root {
     /// The folder made absolute, links followed: what paths are compared with.
     resolved: PathBuf,
@@ -126,6 +126,25 @@ impl AutomationRoots {
         }
     }
 
+    /// The roots that grant only what both `self` and `other` grant: for each kind, every root of
+    /// one that lies inside a root of the other. A kind left with none grants no access of its kind.
+    pub fn intersect(&self, other: &Self) -> Arc<Self> {
+        let both = |a: &[Root], b: &[Root]| {
+            let mut out: Vec<Root> = Vec::new();
+            for r in a
+                .iter()
+                .filter(|r| b.iter().any(|o| inside(&r.resolved, &o.resolved)))
+                .chain(b.iter().filter(|o| a.iter().any(|r| inside(&o.resolved, &r.resolved))))
+            {
+                if !out.iter().any(|o| o.resolved == r.resolved) {
+                    out.push(r.clone());
+                }
+            }
+            out
+        };
+        Arc::new(Self { read: both(&self.read, &other.read), write: both(&self.write, &other.write) })
+    }
+
     /// The roots for people: `read A, B; write C` (`none` for a kind without any).
     pub fn describe(&self) -> String {
         let list = |roots: &[Root]| {
@@ -198,6 +217,27 @@ impl ScopeHandle {
     /// Run `f` in the captured scope.
     pub fn run<T>(self, f: impl FnOnce() -> T) -> T {
         with_scope(self.0, f)
+    }
+
+    /// The roots in force in this scope, if any (as [`current`] gives them on its thread).
+    fn roots(&self) -> Option<Arc<AutomationRoots>> {
+        match &self.0 {
+            Some(Scope::Confined(r)) => Some(r.clone()),
+            Some(Scope::Unconfined) => None,
+            None => PROCESS.get().cloned(),
+        }
+    }
+
+    /// The captured scope narrowed to what the calling thread may reach as well: the roots of both
+    /// are in force ([`AutomationRoots::intersect`]), and without roots in either, none are.
+    pub fn within_current(self) -> Self {
+        let here = Self::capture();
+        match (self.roots(), here.roots()) {
+            (None, None) => self,
+            (Some(r), None) | (None, Some(r)) => Self(Some(Scope::Confined(r))),
+            (Some(a), Some(b)) if Arc::ptr_eq(&a, &b) => Self(Some(Scope::Confined(a))),
+            (Some(a), Some(b)) => Self(Some(Scope::Confined(a.intersect(&b)))),
+        }
     }
 }
 
@@ -613,6 +653,29 @@ mod tests {
 
     fn s(p: PathBuf) -> String {
         p.to_string_lossy().into_owned()
+    }
+
+    /// The roots both grant: the deeper of two nested roots, nothing for roots apart, and a kind
+    /// only one grants is not granted.
+    #[test]
+    fn intersected_roots_grant_what_both_grant() {
+        let (base, roots) = folders("intersect");
+        let narrow = AutomationRoots::new(&[&base.join("in/sub"), &base.join("in2")], &[]).unwrap().unwrap();
+        let both = roots.intersect(&narrow);
+        assert_eq!(both.check(&s(base.join("in/sub/x.svg")), Access::Read), Ok(()));
+        assert!(both.check(&s(base.join("in/a.svg")), Access::Read).is_err(), "only the narrow root grants it");
+        assert!(both.check(&s(base.join("in2")), Access::Read).is_err(), "only the narrow roots grant it");
+        assert!(both.check(&s(base.join("out/x.svg")), Access::Write).is_err(), "only the first grants writes");
+        assert_eq!(both.describe(), narrow.intersect(&roots).describe(), "either order");
+        let unconfined = ScopeHandle(Some(Scope::Unconfined));
+        let within = |saved: ScopeHandle, here: Option<&Arc<AutomationRoots>>| {
+            confine(here, || saved.within_current()).run(|| current().map(|r| r.describe()))
+        };
+        assert_eq!(within(unconfined.clone(), Some(&narrow)), Some(narrow.describe()), "a confined caller keeps its roots");
+        assert_eq!(within(ScopeHandle(Some(Scope::Confined(roots.clone()))), None), Some(roots.describe()), "the saved roots stay");
+        assert_eq!(within(ScopeHandle(Some(Scope::Confined(roots.clone()))), Some(&narrow)), Some(both.describe()));
+        assert!(unconfined.run(|| current().is_none()));
+        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]

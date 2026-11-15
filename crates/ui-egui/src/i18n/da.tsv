@@ -1574,6 +1574,7 @@
 	Assign profile:	Tildel profil:
 	Preserve the color numbers	Bevar farveværdierne
 	Convert to keep the colors' appearance	Konverter for at bevare farvernes udseende
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` hører kun til `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	De indsatte farver kommer fra et dokument med {model}-profilen »{from}«; dette dokuments er »{to}«.
 	CMYK	CMYK
 	Texture	Tekstur

@@ -5350,6 +5350,7 @@ axis	Both	Båda
 	Assign profile:	Tilldela profil:
 	Preserve the color numbers	Behåll färgvärdena
 	Convert to keep the colors' appearance	Konvertera så att färgerna ser likadana ut
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` hör bara ihop med `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	De inklistrade färgerna kommer från ett dokument med {model}-profilen ”{from}”; det här dokumentets är ”{to}”.
 	Texture	Textur
 	Craquelure…	Krakelering…

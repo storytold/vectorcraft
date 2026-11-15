@@ -5450,6 +5450,7 @@ theme	Appearance	외관
 	Assign profile:	프로필 지정:
 	Preserve the color numbers	색상 값 유지
 	Convert to keep the colors' appearance	색상의 모양을 유지하도록 변환
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}`은(는) `{key}`: "assign"일 때만 씁니다
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	붙여넣은 색상은 {model} 프로필이 “{from}”인 문서에서 왔습니다. 이 문서의 프로필은 “{to}”입니다.
 	Texture	텍스처
 	Craquelure…	크랙…

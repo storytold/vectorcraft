@@ -222,6 +222,12 @@ impl VectorcraftApp {
                 return r;
             }
         }
+        // A drag from another document asks as Paste does (its swatches are always added).
+        if id == dialogs::profile_mismatch::DROP
+            && let Some(r) = dialogs::profile_mismatch::ask_paste(self, id, &params)
+        {
+            return r;
+        }
         // Native files carry the view they reopen at.
         if fileio::SaveMode::of(id).is_some() {
             io::remember_view(self);

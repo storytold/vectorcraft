@@ -750,7 +750,8 @@ impl ProfileChoice {
         };
         // `assignProfile` goes with `assign` only.
         if profile.is_some() && !matches!(choice, ProfileChoice::Assign(_)) {
-            return Err(bad(cmd, format!("`{key}` must be one of {}", "assign")));
+            let path = "assignProfile";
+            return Err(bad(cmd, format!("`{path}` goes with `{key}`: \"assign\" only")));
         }
         Ok(choice)
     }
@@ -1045,11 +1046,8 @@ pub(crate) fn paste_mismatches(clip: &super::clipboard::Clipboard, d: &vectorcra
 /// ([`paste_mismatches`]), its colors keep their numbers or convert from the source profile into
 /// the destination's with the working intent, as `choice` says (default: each model's policy,
 /// [`PasteProfile::of`]). A source or destination profile that is not available keeps the numbers.
-/// → the
-/// converted clipboard (`None` when nothing converts; its resources paste as another document's)
-/// and a
-/// line for each mismatched model
-/// (`{model, clipboard, document, choice}`).
+/// → the converted clipboard (`None` when nothing converts; its resources paste as another
+/// document's) and a line for each mismatched model (`{model, clipboard, document, choice}`).
 pub(crate) fn paste_profiles(
     clip: &super::clipboard::Clipboard,
     d: &vectorcraft_doc::Document,

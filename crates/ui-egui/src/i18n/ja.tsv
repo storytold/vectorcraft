@@ -5523,6 +5523,7 @@ swatch	Bright Violet	ビビッドバイオレット
 	Assign profile:	プロファイルを割り当て:
 	Preserve the color numbers	カラーの数値を保持
 	Convert to keep the colors' appearance	カラーの見た目を保つように変換
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` は `{key}`: "assign" のときだけ指定してください
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	ペーストしたカラーは {model} プロファイルが「{from}」のドキュメントのものです。このドキュメントのプロファイルは「{to}」です。
 	Texture	テクスチャ
 	Craquelure…	クラッキング…

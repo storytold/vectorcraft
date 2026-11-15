@@ -968,6 +968,7 @@
 	Assign profile:	Przypisz profil:
 	Preserve the color numbers	Zachowaj wartości kolorów
 	Convert to keep the colors' appearance	Konwertuj, aby zachować wygląd kolorów
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` łączy się tylko z `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Wklejone kolory pochodzą z dokumentu z profilem {model} „{from}”; profil tego dokumentu to „{to}”.
 	CMYK	CMYK
 	Texture	Tekstura

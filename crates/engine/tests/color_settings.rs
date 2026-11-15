@@ -1372,3 +1372,58 @@ fn paste_keeps_or_converts_colors_from_another_profile() {
     assert!(r.get("profileMismatch").is_none());
     assert_eq!(same, blue0);
 }
+
+/// A drag between documents is a paste for Profile Mismatches: clipboard.profileMismatch with
+/// `sourceDocument` and `ids` lists what the drop brings, edit.dropSelection takes `profileMismatch`
+/// and reports what it did, and a wrong choice drops nothing.
+#[test]
+fn a_drop_takes_the_profile_mismatch_choice() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let blue = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [blue.0], "color": "#3366cc"}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    let source = s.documents()[0].uid;
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let blue0 = vectorcraft_color::Color::from_hex("#3366cc").unwrap();
+    assert_eq!(exec(&mut s, "clipboard.profileMismatch", json!({}))["mismatches"], json!([]), "the clipboard is empty");
+    let dragged = json!({"sourceDocument": source, "ids": [blue.0]});
+    assert_eq!(
+        exec(&mut s, "clipboard.profileMismatch", dragged.clone())["mismatches"],
+        json!([{"model": "rgb", "clipboard": cms::WIDE_GAMUT_RGB, "document": cms::canonical_name(cms::SRGB), "default": "preserveNumbers"}])
+    );
+    for bad in [json!({"sourceDocument": source}), json!({"ids": [blue.0]}), json!({"sourceDocument": 999_999, "ids": [blue.0]})] {
+        assert!(s.execute("clipboard.profileMismatch", &bad).is_err(), "{bad}");
+    }
+    let dropped = |s: &mut Session, choice: Option<&str>| {
+        let mut p = json!({"sourceDocument": source, "ids": [blue.0], "grab": [5, 5], "at": [50, 50]});
+        if let Some(c) = choice {
+            p["profileMismatch"] = json!(c);
+        }
+        let r = exec(s, "edit.dropSelection", p);
+        let id = vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap());
+        (r, s.doc().unwrap().doc.node(id).and_then(|n| n.appearance.fill()).and_then(|f| f.paint.color()).unwrap())
+    };
+    let (r, kept) = dropped(&mut s, None);
+    assert_eq!((kept, &r["profileMismatch"][0]["choice"]), (blue0, &json!("preserveNumbers")), "the policy keeps the numbers");
+    let (r, moved) = dropped(&mut s, Some("convert"));
+    assert_eq!(r["profileMismatch"][0]["choice"], "convert");
+    let from = cms::for_document(Some(cms::WIDE_GAMUT_RGB), None);
+    assert!(moved != blue0 && cms::delta_e2000(from.lab(&blue0), cms::working().lab(&moved)) < 1.0, "{blue0:?} → {moved:?}");
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let before = objects(&s);
+    let bad = json!({"sourceDocument": source, "ids": [blue.0], "grab": [5, 5], "at": [50, 50], "profileMismatch": "keep"});
+    assert!(s.execute("edit.dropSelection", &bad).is_err());
+    assert_eq!(objects(&s), before, "a refused choice drops nothing");
+}
+
+/// `assignProfile` beside another choice than `assign` is refused with a message that says it goes
+/// with `assign` only.
+#[test]
+fn assign_profile_goes_with_assign_only() {
+    let _g = settings();
+    let ProfileFiles { tagged, .. } = &profile_files("profile-assign-only");
+    let err = open_with(tagged, json!({"profileChoice": "discard", "assignProfile": cms::DISPLAY_P3})).0.unwrap_err();
+    assert!(err.contains("`assignProfile` goes with `profileChoice`: \"assign\" only"), "{err}");
+}

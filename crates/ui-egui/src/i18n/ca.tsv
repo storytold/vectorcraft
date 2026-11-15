@@ -787,6 +787,7 @@ antiAlias	Sharp	Nítid
 	Assign profile:	Assigna el perfil:
 	Preserve the color numbers	Conserva els valors dels colors
 	Convert to keep the colors' appearance	Converteix per conservar l’aspecte dels colors
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` només va amb `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Els colors enganxats provenen d’un document amb el perfil {model} “{from}”; el d’aquest document és “{to}”.
 	Coarse Dots	Punts gruixuts
 	Collapse Panel Group	Replega el grup de panells

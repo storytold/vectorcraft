@@ -1008,6 +1008,7 @@
 	Assign profile:	Dodijeli profil:
 	Preserve the color numbers	Zadrži brojeve boja
 	Convert to keep the colors' appearance	Pretvori da boje zadrže izgled
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` ide samo uz `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Zalijepljene boje dolaze iz dokumenta čiji je {model} profil „{from}”; profil ovog dokumenta je „{to}”.
 	CMYK	CMYK
 	Texture	Tekstura

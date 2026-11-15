@@ -630,6 +630,7 @@ font-technology	Variable	Biến thiên
 	Assign profile:	Gán cấu hình:
 	Preserve the color numbers	Giữ giá trị số của màu
 	Convert to keep the colors' appearance	Chuyển đổi để giữ diện mạo của màu
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` chỉ dùng với `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Màu đã dán đến từ tài liệu có cấu hình {model} “{from}”; cấu hình của tài liệu này là “{to}”.
 	Coarse Dots	Chấm thô
 	Collapse Panels to Icons	Thu gọn bảng thành biểu tượng

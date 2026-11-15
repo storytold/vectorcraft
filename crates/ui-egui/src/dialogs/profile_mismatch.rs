@@ -10,11 +10,11 @@
 //! | `missing`), `name` (the file's), `model` (`RGB` | `CMYK`), `profile` (the one it is tagged
 //! with), `working`, `choice` (a `profileChoice` of `document.open`) and `assignProfile`.
 //!
-//! Pasting ([`PASTE_KIND`]): colors copied from a document whose profile is not this document's ask
-//! whether to keep their numbers or convert them. OK runs the paste with `profileMismatch`; Cancel
-//! pastes nothing. Fields: `mismatches` (as `clipboard.profileMismatch` lists them), `choice`
-//! (`preserveNumbers` | `convert`), `__command` and `__params` (the paste to run), and `__doc` (the
-//! uid of the document it was asked in).
+//! Pasting ([`PASTE_KIND`]): colors copied, or dragged ([`DROP`]), from a document whose profile is
+//! not this document's ask whether to keep their numbers or convert them. OK runs the paste or the
+//! drop with `profileMismatch`; Cancel pastes or drops nothing. Fields: `mismatches` (as
+//! `clipboard.profileMismatch` lists them), `choice` (`preserveNumbers` | `convert`), `__command`
+//! and `__params` (the paste or drop to run), and `__doc` (the uid of the document it was asked in).
 
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, ProfileKind};
@@ -31,6 +31,8 @@ use crate::{VectorcraftApp, widgets};
 pub const OPEN_KIND: &str = "profileMismatchOpen";
 /// The dialog kind of the question pasting asks.
 pub const PASTE_KIND: &str = "profileMismatchPaste";
+/// The command a drag of artwork from another document runs, which asks as a paste does.
+pub const DROP: &str = "edit.dropSelection";
 
 pub(super) const OPEN_SPEC: DialogSpec = DialogSpec {
     heading: |d| if d.str("issue") == "missing" { tl!("Missing Profile") } else { tl!("Embedded Profile Mismatch") }.into(),
@@ -56,7 +58,7 @@ pub(crate) struct PendingOpen {
     /// Where it was read from: it goes on the recent files once it opens.
     path: Option<String>,
     /// The automation roots in force where the open was asked for: its linked files are read, and
-    /// the document is installed, under them.
+    /// the document is installed, under them and those of the caller that confirms.
     scope: ScopeHandle,
 }
 
@@ -147,20 +149,21 @@ fn open_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool 
     false
 }
 
-/// OK: open the waiting file as chosen, under the automation roots of the open. A choice the file
-/// refuses keeps the dialog open.
+/// OK: open the waiting file as chosen, under the automation roots of the open and those of the
+/// caller that confirms both. A choice the file refuses keeps the dialog open.
 fn open_confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     let choice = open_choice(d)?;
     let Some(mut pending) = app.pending_profile_open.take() else {
         app.ui.dialog = None;
         return Ok(Value::Null);
     };
-    if let Err(e) = pending.scope.clone().run(|| pending.file.answer(choice)) {
+    let scope = pending.scope.clone().within_current();
+    if let Err(e) = scope.clone().run(|| pending.file.answer(choice)) {
         app.pending_profile_open = Some(pending);
         return Err(e.to_string());
     }
     app.ui.dialog = None;
-    let PendingOpen { file, path, scope } = pending;
+    let PendingOpen { file, path, .. } = pending;
     let name = file.name();
     scope.run(|| match fileio::open_read(&mut app.session, file) {
         Ok(r) => {
@@ -190,15 +193,15 @@ pub(crate) fn settle(app: &mut VectorcraftApp) {
     }
 }
 
-/// Before running paste `command` with `params`: when Ask When Pasting is on, `params` don't say
-/// what to do (`profileMismatch`) and the pasted colors come from another profile, open the dialog
-/// instead and answer `{dialog}`.
+/// Before running paste `command` (or `edit.dropSelection`, a drag from another document) with
+/// `params`: when Ask When Pasting is on, `params` don't say what to do (`profileMismatch`) and the
+/// pasted or dropped colors come from another profile, open the dialog instead and answer
+/// `{dialog}`.
 pub fn ask_paste(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<DialogResult> {
     if params.get("profileMismatch").is_some() || !cms::working_settings().ask_mismatch_paste {
         return None;
     }
-    let found = app.session.execute("clipboard.profileMismatch", &json!({})).ok()?;
-    let mismatches = found["mismatches"].as_array().filter(|a| !a.is_empty())?.clone();
+    let mismatches = paste_mismatches(app, command, params).filter(|a| !a.is_empty())?;
     // The policy of the first model starts chosen.
     let choice = mismatches[0]["default"].as_str().unwrap_or("preserveNumbers").to_string();
     let doc = app.session.active().map(|st| st.uid);
@@ -209,6 +212,14 @@ pub fn ask_paste(app: &mut VectorcraftApp, command: &str, params: &Value) -> Opt
     }
     app.ui.dialog = Some(Dialog::new(PASTE_KIND, fields));
     Some(Ok(json!({ "dialog": PASTE_KIND })))
+}
+
+/// The models whose profiles differ for paste `command` with `params` (`clipboard.profileMismatch`):
+/// a drop brings the objects it names, a paste the clipboard's. `None` when they can't be listed.
+fn paste_mismatches(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Vec<Value>> {
+    let query = if command == DROP { json!({ "sourceDocument": params.get("sourceDocument"), "ids": params.get("ids") }) } else { json!({}) };
+    let found = app.session.execute("clipboard.profileMismatch", &query).ok()?;
+    found["mismatches"].as_array().cloned()
 }
 
 fn paste_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
@@ -238,7 +249,8 @@ const DOC: &str = "__doc";
 
 /// OK: run the paste with the choice; any Swatch Conflict question comes next. When another
 /// document has become the active one since a paste that runs at once asked, it closes as Cancel
-/// does and pastes nothing.
+/// does and pastes nothing. When the profiles that paste or drop would bring have changed since it
+/// asked (the clipboard or the dragged objects' document changed), it asks again about the new ones.
 fn paste_confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     let choice = d.str("choice");
     if !paste_choices().iter().any(|(v, _)| *v == choice) {
@@ -250,11 +262,21 @@ fn paste_confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         app.ui.dialog = None;
         return Ok(json!({}));
     }
+    let command = d.str("__command");
     let mut params = d.fields.get("__params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
+    if deferred.is_none()
+        && let Some(now) = paste_mismatches(app, &command, &params).filter(|a| !a.is_empty())
+        && d.fields.get("mismatches").and_then(Value::as_array) != Some(&now)
+    {
+        app.ui.dialog = None;
+        if let Some(r) = ask_paste(app, &command, &params) {
+            return r;
+        }
+    }
     params["profileMismatch"] = json!(choice);
     app.ui.dialog = None;
     // A paste that waited for its clipboard runs in the context it was given in.
-    crate::placing::confirm_swatch_paste(app, &d.str("__command"), params, deferred)
+    crate::placing::confirm_swatch_paste(app, &command, params, deferred)
 }
 
 #[cfg(test)]

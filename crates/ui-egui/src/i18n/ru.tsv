@@ -5481,6 +5481,7 @@ axis	Both	Оба
 	Assign profile:	Назначить профиль:
 	Preserve the color numbers	Сохранить числовые значения цветов
 	Convert to keep the colors' appearance	Преобразовать, сохранив вид цветов
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` используется только с `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Вставленные цвета взяты из документа с профилем {model} «{from}»; у этого документа профиль «{to}».
 	Texture	Текстура
 	Craquelure…	Кракелюры…

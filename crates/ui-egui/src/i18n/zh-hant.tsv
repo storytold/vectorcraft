@@ -5600,6 +5600,7 @@ axis	Both	兩者
 	Assign profile:	指定描述檔：
 	Preserve the color numbers	保留色彩數值
 	Convert to keep the colors' appearance	轉換以保持色彩外觀
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` 只能與 `{key}`: "assign" 一起提供
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	貼上的色彩來自 {model} 描述檔為「{from}」的文件；此文件的描述檔為「{to}」。
 	Texture	紋理
 	Craquelure…	龜裂紋…

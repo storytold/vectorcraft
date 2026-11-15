@@ -5481,6 +5481,7 @@ axis	Both	Entrambi
 	Assign profile:	Assegna profilo:
 	Preserve the color numbers	Mantieni i valori dei colori
 	Convert to keep the colors' appearance	Converti per mantenere l'aspetto dei colori
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` va solo con `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	I colori incollati provengono da un documento con profilo {model} “{from}”; quello di questo documento è “{to}”.
 	Texture	Texture
 	Craquelure…	Craquelé…

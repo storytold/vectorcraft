@@ -914,6 +914,7 @@ antiAlias	Sharp	शार्प
 	Assign profile:	प्रोफ़ाइल असाइन करें:
 	Preserve the color numbers	रंगों की संख्याएँ बनाए रखें
 	Convert to keep the colors' appearance	रंगों का रूप बनाए रखने के लिए बदलें
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` केवल `{key}`: "assign" के साथ उपयोग होता है
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	पेस्ट किए गए रंग ऐसे दस्तावेज़ से आए हैं जिसकी {model} प्रोफ़ाइल "{from}" है; इस दस्तावेज़ की "{to}" है।
 	Coarse Dots	मोटे बिंदु
 	Coincidence:	संयोग:

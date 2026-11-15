@@ -5367,6 +5367,7 @@ imageTrace	Outline	轮廓
 	Assign profile:	指定配置文件：
 	Preserve the color numbers	保留颜色数值
 	Convert to keep the colors' appearance	转换以保持颜色外观
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` 只能与 `{key}`: "assign" 一起给出
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	粘贴的颜色来自 {model} 配置文件为“{from}”的文档；此文档的配置文件为“{to}”。
 	Art & Illustration	艺术和插画
 	Branding	品牌

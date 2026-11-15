@@ -5397,6 +5397,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Assign profile:	Αντιστοίχιση προφίλ:
 	Preserve the color numbers	Διατήρηση των αριθμών των χρωμάτων
 	Convert to keep the colors' appearance	Μετατροπή με διατήρηση της εμφάνισης των χρωμάτων
+@msg	`{path}` goes with `{key}`: "assign" only	το `{path}` συνδυάζεται μόνο με `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Τα χρώματα που επικολλήθηκαν προέρχονται από έγγραφο με προφίλ {model} «{from}»· το προφίλ αυτού του εγγράφου είναι «{to}».
 	System Title Bar	Γραμμή τίτλου συστήματος
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας

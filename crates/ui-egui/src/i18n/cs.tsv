@@ -1027,6 +1027,7 @@
 	Assign profile:	Přiřadit profil:
 	Preserve the color numbers	Zachovat hodnoty barev
 	Convert to keep the colors' appearance	Převést a zachovat vzhled barev
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` patří jen k `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Vložené barvy pocházejí z dokumentu s profilem {model} „{from}“; tento dokument má „{to}“.
 	CMYK	CMYK
 	Texture	Textura

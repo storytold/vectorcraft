@@ -114,7 +114,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Drop Artwork",
             [],
             None,
-            "{sourceDocument: uid, ids: [id…], grab: [x,y], at: [x,y]} copy 1–10000 editable source objects from an open document to the active document, preserving the grab point and clipboard, as one undo step; colors from a document with another RGB or CMYK profile keep their numbers or convert as edit.colorSettings' policy of their model says (as edit.paste without profileMismatch)",
+            "{sourceDocument: uid, ids: [id…], grab: [x,y], at: [x,y], profileMismatch?: \"preserveNumbers\"|\"convert\"} copy 1–10000 editable source objects from an open document to the active document, preserving the grab point and clipboard, as one undo step; colors from a document with another RGB or CMYK profile keep their numbers or convert as profileMismatch says, else as edit.colorSettings' policy of their model says (as edit.paste; clipboard.profileMismatch {sourceDocument, ids} lists them, and with askMismatchPaste on the desktop app asks first) → {ids, added, merged, renamed, profileMismatch?}",
             has_doc,
             drop_selection
         ),
@@ -1196,26 +1196,12 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
 /// Document ids scope node ids: two tabs may contain objects with the same node id.
 fn drop_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "edit.dropSelection";
-    let uid = u64_req(p, "sourceDocument", CMD)?;
+    u64_req(p, "sourceDocument", CMD)?;
     let point = |key: &str| finite_numbers::<2>(&p[key]).ok_or_else(|| bad(CMD, format!("{key} must be [x, y] with finite coordinates")));
     let grab = point("grab")?;
     let at = point("at")?;
-    let source = s.documents().iter().find(|d| d.uid == uid).ok_or_else(|| bad(CMD, "that document is no longer open"))?;
-    let key = "ids";
-    let values = p[key].as_array().ok_or_else(|| bad(CMD, format!("{key} must be an array of non-negative integer object ids")))?;
-    if values.is_empty() || values.len() > 10000 {
-        return Err(bad(CMD, "ids must contain 1–10000 object ids"));
-    }
-    let ids = values
-        .iter()
-        .map(|value| value.as_u64().map(NodeId).ok_or_else(|| bad(CMD, format!("invalid object id {value}: expected a non-negative integer"))))
-        .collect::<Result<Vec<_>>>()?;
-    // Validate the entire batch in one walk; node ids are local to the source document.
-    let paths = source.doc.index_paths(ids.iter().copied());
-    if let Some(id) = ids.iter().find(|id| !paths.contains_key(id)) {
-        return Err(EngineError::NoNode(*id));
-    }
-    let clip = Clipboard::copy(source, &roots_of(&source.doc, ids), false);
+    let profile = super::colormgmt::PasteProfile::param(p, CMD)?;
+    let clip = drop_clip(s, p, CMD)?;
     let bounds = clip.bounds().ok_or_else(|| bad(CMD, "the art has no bounds"))?;
     let center = bounds.center() + Vec2::new(at[0] - grab[0], at[1] - grab[1]);
     if !center.x.is_finite() || !center.y.is_finite() {
@@ -1223,9 +1209,38 @@ fn drop_selection(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // A drop preserves the source colours even when the flyer has same-named swatches.
     let choices = SwatchChoices::parse(PasteMode::Drag.label(), &json!({"swatchConflict": "add"}))?;
-    // Colors from another profile keep their numbers or convert as the policies say.
-    let (converted, _) = super::colormgmt::paste_profiles(&clip, &s.doc()?.doc, None);
-    paste_clip(s, &json!({"center": [center.x, center.y]}), PasteMode::Drag, converted.as_ref().unwrap_or(&clip), &choices)
+    // Colors from another profile keep their numbers or convert, as `profileMismatch` says, else as
+    // the policies say.
+    let (converted, report) = super::colormgmt::paste_profiles(&clip, &s.doc()?.doc, profile);
+    let mut r = paste_clip(s, &json!({"center": [center.x, center.y]}), PasteMode::Drag, converted.as_ref().unwrap_or(&clip), &choices);
+    if let Ok(v) = &mut r
+        && !report.is_empty()
+    {
+        v["profileMismatch"] = json!(report);
+    }
+    r
+}
+
+/// The objects `ids` of the open document `sourceDocument` that `edit.dropSelection` drops, copied
+/// as a clipboard is (errors name command `cmd`).
+pub(crate) fn drop_clip(s: &Session, p: &Value, cmd: &str) -> Result<Clipboard> {
+    let uid = u64_req(p, "sourceDocument", cmd)?;
+    let source = s.documents().iter().find(|d| d.uid == uid).ok_or_else(|| bad(cmd, "that document is no longer open"))?;
+    let key = "ids";
+    let values = p[key].as_array().ok_or_else(|| bad(cmd, format!("{key} must be an array of non-negative integer object ids")))?;
+    if values.is_empty() || values.len() > 10000 {
+        return Err(bad(cmd, "ids must contain 1–10000 object ids"));
+    }
+    let ids = values
+        .iter()
+        .map(|value| value.as_u64().map(NodeId).ok_or_else(|| bad(cmd, format!("invalid object id {value}: expected a non-negative integer"))))
+        .collect::<Result<Vec<_>>>()?;
+    // Validate the entire batch in one walk; node ids are local to the source document.
+    let paths = source.doc.index_paths(ids.iter().copied());
+    if let Some(id) = ids.iter().find(|id| !paths.contains_key(id)) {
+        return Err(EngineError::NoNode(*id));
+    }
+    Ok(Clipboard::copy(source, &roots_of(&source.doc, ids), false))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

@@ -56,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste Profile Mismatch",
             [],
             None,
-            "{} → {mismatches: [{model: \"rgb\"|\"cmyk\", clipboard, document, default: \"preserveNumbers\"|\"convert\"}]} the color models whose colors the copied objects use and whose profile in the document they were copied from (its assigned profile, else the working space then) is not the active document's: Paste keeps their numbers or converts them into the document's profile as edit.paste* {profileMismatch} says, else as the model's policy of edit.colorSettings does (convert: converts; the others: keeps the numbers). With askMismatchPaste on, the desktop app asks first. Objects from outside an open document have none",
+            "{sourceDocument?, ids?: as edit.dropSelection} → {mismatches: [{model: \"rgb\"|\"cmyk\", clipboard, document, default: \"preserveNumbers\"|\"convert\"}]} the color models whose colors the copied objects (with sourceDocument and ids: the objects edit.dropSelection drops) use and whose profile in the document they were copied from (its assigned profile, else the working space then) is not the active document's: Paste keeps their numbers or converts them into the document's profile as edit.paste* and edit.dropSelection {profileMismatch} say, else as the model's policy of edit.colorSettings does (convert: converts; the others: keeps the numbers). With askMismatchPaste on, the desktop app asks first. Objects from outside an open document have none",
             has_doc,
             profile_mismatch
         ),
@@ -441,8 +441,8 @@ impl Clipboard {
 
     /// The clipboard with every color of its objects and of the resources it carries (swatches,
     /// symbols, patterns, graphic styles, brushes, character and paragraph styles, the background
-    /// colors of copied artboards) mapped by `conv`,
-    /// as Document Color Mode maps a document's ([`super::colormgmt::convert_art_and_style_colors`]).
+    /// colors of copied artboards) mapped by `conv`, as Document Color Mode maps a document's
+    /// ([`super::colormgmt::convert_art_and_style_colors`]).
     /// Images keep their pixels.
     pub(crate) fn with_colors(&self, conv: &dyn Fn(&vectorcraft_color::Color) -> vectorcraft_color::Color) -> Self {
         let mut d = self.to_document();
@@ -572,8 +572,12 @@ fn conflicts(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "swatches": list }))
 }
 
-fn profile_mismatch(s: &mut Session, _: &Value) -> Result<Value> {
-    let list: Vec<Value> = super::colormgmt::paste_mismatches(&s.clipboard, &s.doc()?.doc).iter().map(|m| m.to_json()).collect();
+fn profile_mismatch(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "clipboard.profileMismatch";
+    // With `sourceDocument` and `ids`, the objects a drop brings, else the clipboard's.
+    let dropped = if p.get("sourceDocument").is_some() || p.get("ids").is_some() { Some(super::edit::drop_clip(s, p, CMD)?) } else { None };
+    let clip = dropped.as_ref().unwrap_or(&s.clipboard);
+    let list: Vec<Value> = super::colormgmt::paste_mismatches(clip, &s.doc()?.doc).iter().map(|m| m.to_json()).collect();
     Ok(json!({ "mismatches": list }))
 }
 

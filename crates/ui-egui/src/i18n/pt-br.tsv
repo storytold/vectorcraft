@@ -3538,6 +3538,7 @@ imageTrace	Outline	Contorno
 	Assign profile:	Atribuir perfil:
 	Preserve the color numbers	Preservar os valores das cores
 	Convert to keep the colors' appearance	Converter para manter a aparência das cores
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` só acompanha `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	As cores coladas vêm de um documento com o perfil {model} “{from}”; o deste documento é “{to}”.
 	Texture	Textura
 	Craquelure…	Craquelê…

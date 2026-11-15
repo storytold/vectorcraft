@@ -950,6 +950,7 @@
 	Assign profile:	Tetapkan profil:
 	Preserve the color numbers	Pertahankan angka warna
 	Convert to keep the colors' appearance	Konversi agar tampilan warna tetap sama
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` hanya dipakai dengan `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	Warna yang ditempel berasal dari dokumen dengan profil {model} “{from}”; profil dokumen ini “{to}”.
 	CMYK	CMYK
 	Texture	Tekstur

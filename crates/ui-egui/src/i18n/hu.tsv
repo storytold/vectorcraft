@@ -718,6 +718,7 @@ font-technology	Variable	Változó
 	Assign profile:	Profil hozzárendelése:
 	Preserve the color numbers	A színértékek megtartása
 	Convert to keep the colors' appearance	Konvertálás a színek megjelenésének megtartásával
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` csak a(z) `{key}`: "assign" értékkel használható
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	A beillesztett színek olyan dokumentumból származnak, amelynek {model}-profilja „{from}”; ennek a dokumentumnak „{to}”.
 	Coarse Dots	Durva pontok
 	Collapse Panels to Icons	Panelek ikonná csukása

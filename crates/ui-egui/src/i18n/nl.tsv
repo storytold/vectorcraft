@@ -1470,6 +1470,7 @@
 	Assign profile:	Profiel toewijzen:
 	Preserve the color numbers	Kleurwaarden behouden
 	Convert to keep the colors' appearance	Omzetten zodat de kleuren er hetzelfde uitzien
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` hoort alleen bij `{key}`: "assign"
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	De geplakte kleuren komen uit een document met het {model}-profiel „{from}”; dat van dit document is „{to}”.
 	CMYK	CMYK
 	Texture	Textuur
