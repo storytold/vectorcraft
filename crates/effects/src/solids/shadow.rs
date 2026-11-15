@@ -50,6 +50,14 @@ pub(crate) struct Ink {
     pub(crate) blend: BlendMode,
 }
 
+impl Ink {
+    /// Whether art in this ink casts part of a shadow: its opacity is a finite number above zero.
+    /// Art at zero, negative, NaN or infinite opacity casts nothing.
+    pub(crate) fn casts(self) -> bool {
+        self.opacity.is_finite() && self.opacity > 0.0
+    }
+}
+
 /// The shadow of the faces in `caster` as a path of object `id`, cast by art in `ink`: filled
 /// black at [`SHADOW_OPACITY`] times its opacity, in its blending mode, with the nonzero rule;
 /// `None` when it casts nothing.
