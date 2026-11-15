@@ -7312,6 +7312,34 @@ written unless the whole batch succeeds puts the saves and exports last, or runs
 {"name":"run_command","arguments":{"command":"file.info","params":{"author":"Ada","keywords":"poster, fair","rating":4,"copyrightStatus":"copyrighted","copyrightNotice":"© 2026 Ada"}}}
 ```
 
+A PDF, `.ai` or `.ait` also opens with the `authorTitle` and `rating` its XMP packet gives (`photoshop:AuthorsPosition`,
+`xmp:Rating`, a whole number from 0 to 5).
+
+Metadata templates (the menu at the top of File Info: Save Metadata Template…, Import…, the saved templates and
+Templates Folder; https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=260) keep File
+Info fields in an XMP file. `file.info.saveTemplate {name?, path?, fields?}` writes the `title` (when it is not the
+document's name), `author`, `authorTitle`, `description`, `keywords`, `rating` (from 1), `copyrightStatus`,
+`copyrightNotice` and `copyrightUrl` that have a value as an XMP packet, using the properties listed above; the dates
+are left out. `fields` takes `file.info`'s editable keys in place of the document's values. `name` saves into the
+metadata templates folder as `<name>.xmp` (the folder is made when it is missing; a name with characters file systems reject, a dot at either end, or a
+device name such as `CON` is refused, and a template of the same name is replaced), `path` writes that file, and with
+neither the reply's `data` is the packet; `name` and `path` together are refused. In the app the folder is
+`Metadata Templates` in VectorCraft's settings folder; the web build has none.
+`file.info.applyTemplate {path?|name?|data?, mode, apply?, base?}` reads one template (a file, a template in the
+folder, or the packet as text; at most 8 MB, more than any saved template holds) and merges it in one undo step, recording nothing when no field changes.
+`mode` is VectorCraft's own name for the three ways: `replace` clears the fields a template can hold (not the title)
+and takes the template's, `keep` keeps the fields and takes each one the template gives, and `append` keeps the fields,
+adds the template's keywords and takes its other fields only where the field is empty. A value `file.info` would
+refuse is left out. With `apply: false` nothing changes and the reply is the merged File Info, merged into `base` (the
+fields as `file.info` takes them) when given; the File Info dialog uses this for Import. A missing or bad `mode`, a
+file that is not XMP and a file over 8 MB are refused. `file.info.templates {create?}` lists the folder's `.xmp` files
+(the first 1,000 by name) as `{name, file, path}`, with the `folder` where the caller's file access shows full
+paths; `create: true` makes the folder first. `applyTemplate`'s `name` takes either a listed `name` or its `file`.
+
+```json
+{"name":"run_command","arguments":{"command":"file.info.applyTemplate","params":{"name":"Studio","mode":"append"}}}
+```
+
 ## Document Raster Effects Settings
 
 `document.rasterEffectsSettings` holds how raster effects (shadows, glows, blurs, feathers) become images when PDF

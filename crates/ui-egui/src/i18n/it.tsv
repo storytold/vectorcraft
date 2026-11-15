@@ -653,6 +653,18 @@ font-technology	Variable	Variabili
 	Copy Width Point	Copia punto di larghezza
 	Copyright	Copyright
 	Copyright Info URL:	URL informazioni copyright:
+	Save Metadata Template…	Salva modello di metadati…
+	Import Options	Opzioni di importazione
+	Clear existing fields and use the template's	Cancella i campi esistenti e usa quelli del modello
+	Keep existing fields, but replace those the template has	Mantieni i campi esistenti, ma sostituisci quelli presenti nel modello
+	Keep existing fields, but append those the template has	Mantieni i campi esistenti, ma aggiungi quelli presenti nel modello
+@msg	the template name can't be empty	il nome del modello non può essere vuoto
+@msg	the template name isn't usable as a file name	il nome del modello non è utilizzabile come nome di file
+@msg	no metadata templates folder here	qui non c'è una cartella dei modelli di metadati
+@msg	give `name` or `path`, not both	indica `name` o `path`, non entrambi
+@msg	give one of `path`, `name` and `data`	indica uno tra `path`, `name` e `data`
+@msg	mode must be replace, keep or append	la modalità deve essere replace, keep o append
+@msg	the file is not an XMP metadata template	il file non è un modello di metadati XMP
 	Copyright Notice:	Nota sul copyright:
 	Copyright Status:	Stato copyright:
 	Copyright Symbol	Simbolo di copyright

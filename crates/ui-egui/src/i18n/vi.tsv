@@ -747,6 +747,18 @@ font-technology	Variable	Biến thiên
 	Copy Width Point	Sao chép điểm chiều rộng
 	Copyright	Bản quyền
 	Copyright Info URL:	URL thông tin bản quyền:
+	Save Metadata Template…	Lưu mẫu siêu dữ liệu…
+	Import Options	Tùy chọn nhập
+	Clear existing fields and use the template's	Xóa các trường hiện có và dùng các trường của mẫu
+	Keep existing fields, but replace those the template has	Giữ các trường hiện có, nhưng thay thế các trường mà mẫu có
+	Keep existing fields, but append those the template has	Giữ các trường hiện có, nhưng nối thêm các trường mà mẫu có
+@msg	the template name can't be empty	tên mẫu không được để trống
+@msg	the template name isn't usable as a file name	không thể dùng tên mẫu làm tên tệp
+@msg	no metadata templates folder here	không có thư mục mẫu siêu dữ liệu ở đây
+@msg	give `name` or `path`, not both	hãy chỉ định `name` hoặc `path`, không phải cả hai
+@msg	give one of `path`, `name` and `data`	hãy chỉ định một trong `path`, `name` và `data`
+@msg	mode must be replace, keep or append	chế độ phải là replace, keep hoặc append
+@msg	the file is not an XMP metadata template	tệp không phải là mẫu siêu dữ liệu XMP
 	Copyright Notice:	Thông báo bản quyền:
 	Copyright Status:	Trạng thái bản quyền:
 	Copyright Symbol	Ký hiệu bản quyền

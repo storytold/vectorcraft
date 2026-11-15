@@ -2980,6 +2980,18 @@ digits	Malayalam	Malayalam
 	Author Title:	Forfattertitel:
 	Author:	Forfatter:
 	Copyright Info URL:	URL til ophavsretinfo:
+	Save Metadata Template…	Gem metadataskabelon…
+	Import Options	Importindstillinger
+	Clear existing fields and use the template's	Ryd eksisterende felter, og brug skabelonens
+	Keep existing fields, but replace those the template has	Behold eksisterende felter, men erstat dem, skabelonen har
+	Keep existing fields, but append those the template has	Behold eksisterende felter, men tilføj dem, skabelonen har
+@msg	the template name can't be empty	skabelonnavnet må ikke være tomt
+@msg	the template name isn't usable as a file name	skabelonnavnet kan ikke bruges som filnavn
+@msg	no metadata templates folder here	der er ingen mappe til metadataskabeloner her
+@msg	give `name` or `path`, not both	angiv `name` eller `path`, ikke begge
+@msg	give one of `path`, `name` and `data`	angiv én af `path`, `name` og `data`
+@msg	mode must be replace, keep or append	tilstanden skal være replace, keep eller append
+@msg	the file is not an XMP metadata template	filen er ikke en XMP-metadataskabelon
 	Copyright Notice:	Ophavsretserklæring:
 	Copyright Status:	Ophavsretstatus:
 	Created:	Oprettet:

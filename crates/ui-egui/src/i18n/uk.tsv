@@ -647,6 +647,18 @@ font-technology	Variable	Варіативні
 	Copy Width Point	Копіювати точку ширини
 	Copyright	Авторські права
 	Copyright Info URL:	URL інформації про авторські права:
+	Save Metadata Template…	Зберегти шаблон метаданих…
+	Import Options	Параметри імпорту
+	Clear existing fields and use the template's	Очистити наявні поля й використати поля шаблону
+	Keep existing fields, but replace those the template has	Зберегти наявні поля, але замінити ті, що є в шаблоні
+	Keep existing fields, but append those the template has	Зберегти наявні поля, але додати ті, що є в шаблоні
+@msg	the template name can't be empty	назва шаблону не може бути порожньою
+@msg	the template name isn't usable as a file name	назву шаблону не можна використати як назву файлу
+@msg	no metadata templates folder here	тут немає папки шаблонів метаданих
+@msg	give `name` or `path`, not both	укажіть `name` або `path`, але не обидва
+@msg	give one of `path`, `name` and `data`	укажіть один із параметрів `path`, `name` і `data`
+@msg	mode must be replace, keep or append	режим має бути replace, keep або append
+@msg	the file is not an XMP metadata template	файл не є шаблоном метаданих XMP
 	Copyright Notice:	Повідомлення про авторські права:
 	Copyright Status:	Статус авторських прав:
 	Copyright Symbol	Символ авторського права

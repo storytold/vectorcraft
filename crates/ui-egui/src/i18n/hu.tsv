@@ -847,6 +847,18 @@ font-technology	Variable	Változó
 	Copyright	Szerzői jog
 	Copyright and Contact Info	Szerzői jogi és kapcsolati adatok
 	Copyright Info URL:	Szerzői jogi információ URL-je:
+	Save Metadata Template…	Metaadatsablon mentése…
+	Import Options	Importálási beállítások
+	Clear existing fields and use the template's	Meglévő mezők törlése és a sablon mezőinek használata
+	Keep existing fields, but replace those the template has	Meglévő mezők megtartása, de a sablonban szereplők cseréje
+	Keep existing fields, but append those the template has	Meglévő mezők megtartása, de a sablonban szereplők hozzáfűzése
+@msg	the template name can't be empty	a sablon neve nem lehet üres
+@msg	the template name isn't usable as a file name	a sablon neve nem használható fájlnévként
+@msg	no metadata templates folder here	itt nincs metaadatsablon-mappa
+@msg	give `name` or `path`, not both	adja meg a `name` vagy a `path` paramétert, de ne mindkettőt
+@msg	give one of `path`, `name` and `data`	adja meg a `path`, a `name` és a `data` paraméterek egyikét
+@msg	mode must be replace, keep or append	a mód értéke replace, keep vagy append lehet
+@msg	the file is not an XMP metadata template	a fájl nem XMP-metaadatsablon
 	Copyright Notice:	Szerzői jogi közlemény:
 	Copyright Status:	Szerzői jogi állapot:
 	Copyright Symbol	Szerzői jogi jel

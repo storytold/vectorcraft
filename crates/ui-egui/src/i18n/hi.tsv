@@ -1078,6 +1078,18 @@ antiAlias	Sharp	शार्प
 	Copyright	कॉपीराइट
 	Copyright and Contact Info	कॉपीराइट और संपर्क जानकारी
 	Copyright Info URL:	कॉपीराइट जानकारी URL:
+	Save Metadata Template…	मेटाडेटा टेम्पलेट सेव करें…
+	Import Options	इम्पोर्ट विकल्प
+	Clear existing fields and use the template's	मौजूदा फ़ील्ड साफ़ करें और टेम्पलेट के फ़ील्ड उपयोग करें
+	Keep existing fields, but replace those the template has	मौजूदा फ़ील्ड रखें, लेकिन टेम्पलेट में मौजूद फ़ील्ड बदलें
+	Keep existing fields, but append those the template has	मौजूदा फ़ील्ड रखें, लेकिन टेम्पलेट में मौजूद फ़ील्ड जोड़ें
+@msg	the template name can't be empty	टेम्पलेट का नाम खाली नहीं हो सकता
+@msg	the template name isn't usable as a file name	टेम्पलेट का नाम फ़ाइल नाम के रूप में उपयोग नहीं किया जा सकता
+@msg	no metadata templates folder here	यहाँ कोई मेटाडेटा टेम्पलेट फ़ोल्डर नहीं है
+@msg	give `name` or `path`, not both	`name` या `path` दें, दोनों नहीं
+@msg	give one of `path`, `name` and `data`	`path`, `name` और `data` में से एक दें
+@msg	mode must be replace, keep or append	मोड replace, keep या append होना चाहिए
+@msg	the file is not an XMP metadata template	फ़ाइल XMP मेटाडेटा टेम्पलेट नहीं है
 	Copyright Notice:	कॉपीराइट सूचना:
 	Copyright Status:	कॉपीराइट स्थिति:
 	Copyright Symbol	कॉपीराइट सिंबल

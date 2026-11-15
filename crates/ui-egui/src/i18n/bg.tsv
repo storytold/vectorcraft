@@ -638,6 +638,11 @@ font-technology	Variable	Променливи
 	Copy Width Point	Копиране на точка на ширина
 	Copyright	Авторско право
 	Copyright Info URL:	URL адрес с информация за авторското право:
+	Save Metadata Template…	Запази шаблон за метаданни…
+	Import Options	Опции за импортиране
+	Clear existing fields and use the template's	Изчисти съществуващите полета и използвай тези от шаблона
+	Keep existing fields, but replace those the template has	Запази съществуващите полета, но замени съдържащите се в шаблона
+	Keep existing fields, but append those the template has	Запази съществуващите полета, но добави съдържащите се в шаблона
 	Copyright Notice:	Бележка за авторското право:
 	Copyright Status:	Статус на авторското право:
 	Copyright Symbol	Символ за авторско право
