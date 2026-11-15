@@ -43,6 +43,7 @@ pub(super) use prepass::Edits;
 use prepass::{Extras, labels, prepass};
 pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
 
+mod budget;
 mod css;
 mod css_transform;
 mod depth;
@@ -109,6 +110,8 @@ pub(crate) fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) 
         return Err(too_deep());
     }
     let xml = parse(svg)?;
+    // Before the style cascade of `depth::height`, as `import` measures it.
+    budget::check(&xml, budget::Cost::LIMITS, depth::MAX_ELEMENT_DEPTH)?;
     if depth::height(&xml, depth::MAX_ELEMENT_DEPTH).is_none() {
         return Err(too_deep());
     }
@@ -136,10 +139,14 @@ pub(crate) fn import_finding(
         return Err(too_deep());
     }
     let xml = parse(svg)?;
+    // Before the style cascade of `depth::height` and the prepass, which keeps the declarations of
+    // each element it reads; measured again below on the text usvg reads when that differs.
+    let spent = budget::check(&xml, budget::Cost::LIMITS, depth::MAX_ELEMENT_DEPTH)?;
     let Some(height) = depth::height(&xml, depth::MAX_ELEMENT_DEPTH) else {
         return Err(too_deep());
     };
     let (svg, found) = prepass(svg, &scan.markers, &xml, opts)?;
+    let rewritten = matches!(svg, Cow::Owned(_));
     // The prepass's edits are in the text: the XML is read again only when it made any.
     let xml = match &svg {
         Cow::Borrowed(_) => xml,
@@ -154,7 +161,14 @@ pub(crate) fn import_finding(
     let mut warnings = found.warnings;
     let text_xml = found.text_source.as_deref().map(parse).transpose()?;
     let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
+    // Before usvg copies what `<use>`s show and the style values of each copy: the text usvg reads.
+    let spent = match &src {
+        Cow::Borrowed(_) if !rewritten => spent,
+        Cow::Borrowed(_) => budget::check(&xml, budget::Cost::LIMITS, usize::MAX)?,
+        Cow::Owned(prepared) => budget::check(&parse(prepared)?, budget::Cost::LIMITS, usize::MAX)?,
+    };
     let files = found.files;
+    files.spent_by_svg(spent);
     let tree = {
         let opt = usvg::Options {
             dpi: units.dpi as f32,
@@ -164,6 +178,9 @@ pub(crate) fn import_finding(
         };
         usvg::Tree::from_str(&src, &opt).map_err(|e| SvgError::Parse(e.to_string()))?
     };
+    if let Some(err) = files.refused() {
+        return Err(err);
+    }
     let size = tree.size();
     let k = units.k;
     let mut doc = Document::new(size.width() as f64 * k, size.height() as f64 * k);

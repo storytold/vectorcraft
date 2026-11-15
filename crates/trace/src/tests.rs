@@ -893,6 +893,35 @@ fn presets_resolve() {
 }
 
 #[test]
+fn presets_have_their_paths_corners_and_noise() {
+    let expected: &[(&str, f64, f64, u32)] = &[
+        ("Default", 50.0, 75.0, 25),
+        ("High Fidelity Photo", 50.0, 50.0, 5),
+        ("Low Fidelity Photo", 50.0, 50.0, 10),
+        ("3 Colors", 50.0, 50.0, 15),
+        ("6 Colors", 50.0, 50.0, 15),
+        ("16 Colors", 50.0, 50.0, 15),
+        ("Shades of Gray", 50.0, 50.0, 15),
+        ("Black and White Logo", 50.0, 75.0, 25),
+        ("Sketched Art", 50.0, 50.0, 20),
+        ("Silhouettes", 50.0, 50.0, 90),
+        ("Line Art", 50.0, 75.0, 20),
+        ("Technical Drawing", 50.0, 100.0, 1),
+        ("Outline", 50.0, 75.0, 20),
+    ];
+    for &(name, paths, corners, noise) in expected {
+        let p = preset(name).unwrap();
+        assert_eq!((p.paths, p.corners, p.noise), (paths, corners, noise), "{name}");
+    }
+    // The color counts stay as they were.
+    let colors: Vec<u32> = ["High Fidelity Photo", "Low Fidelity Photo", "3 Colors", "6 Colors", "16 Colors", "Shades of Gray"]
+        .iter()
+        .map(|n| preset(n).unwrap().colors)
+        .collect();
+    assert_eq!(colors, [64, 20, 3, 6, 16, 8]);
+}
+
+#[test]
 fn params_json_roundtrip_and_partial() {
     let p = preset("6 Colors").unwrap();
     let v = serde_json::to_value(&p).unwrap();
@@ -1083,6 +1112,30 @@ fn decode_to_fit_scales_an_oversized_image_down() {
     assert!(matches!(err, TraceError::TooLarge { width: 30_000, height: 30_000, max: 192 }), "{err}");
     // Between the two limits the header is accepted and decoding goes on (this one has no pixels).
     assert!(matches!(Raster::decode_to_fit(&png_header(9000, 9000)), Err(TraceError::Decode(_))));
+}
+
+/// Scaling an oversized image down weighs each color by its alpha: a clear pixel next to an
+/// opaque one leaves the opaque color as it is and only lowers the alpha.
+#[test]
+fn scaling_down_weighs_color_by_alpha() {
+    use crate::raster::box_reduced;
+    const RED: [u8; 4] = [200, 30, 30, 255];
+    // Opaque red and clear black columns, decoded from a PNG and scaled to fit as `decode_to_fit`
+    // does: each scaled pixel covers a red and a clear one.
+    let half_clear = Raster::from_fn(4, 2, |x, _| if x % 2 == 0 { RED } else { [0; 4] });
+    let decoded = image::load_from_memory(&half_clear.encode_png()).unwrap().into_rgba8();
+    let fitted = Raster::fitted(&decoded, 2);
+    assert_eq!((fitted.width, fitted.height), (2, 1));
+    assert_eq!(fitted.rgba, [[200, 30, 30, 128]; 2].concat());
+    // A partly clear blue pulls an opaque red toward it by its alpha.
+    let mixed = Raster::from_fn(2, 1, |x, _| if x == 0 { [255, 0, 0, 255] } else { [0, 0, 255, 85] });
+    assert_eq!(box_reduced(&mixed.rgba, 2, 1, 1, 1), [191, 0, 64, 170]);
+    // A wholly clear block stays clear, with the plain mean of its colors.
+    let clear = Raster::from_fn(2, 1, |x, _| [100 * x as u8, 0, 0, 0]);
+    assert_eq!(box_reduced(&clear.rgba, 2, 1, 1, 1), [50, 0, 0, 0]);
+    // A 3 → 2 reduction counts every source pixel once.
+    let ramp = Raster::from_fn(3, 3, |x, y| [(x * 60 + y * 10) as u8, 0, 0, 255]);
+    assert_eq!(box_reduced(&ramp.rgba, 3, 3, 2, 2), [0, 0, 0, 255, 90, 0, 0, 255, 15, 0, 0, 255, 105, 0, 0, 255]);
 }
 
 /// Four flat colours with anti-aliased (blended) edges between the quadrants.
@@ -2009,6 +2062,16 @@ fn a_gray_photo_is_continuous_tone_as_its_color_original_is() {
     }
 }
 
+/// A gray photo with little or no noise (a render, a denoised scan) is continuous tone, as its
+/// color original is. Sixteen colors stay 0.19 as far from its pixels as eight do.
+#[test]
+fn a_clean_gray_photo_is_continuous_tone_as_its_color_original_is() {
+    for noise in [0.0, 1.0, 2.0, 3.0] {
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, true)), "gray, noise {noise}");
+    }
+}
+
 /// Sepia: dark brown to cream.
 const SEPIA: [[f64; 3]; 2] = [[45.0, 28.0, 15.0], [250.0, 235.0, 205.0]];
 /// A single blue hue: navy to pale blue.
@@ -2203,6 +2266,59 @@ fn tinted_flat_art_stays_flat_art() {
     // scan stays flat art with up to 16 levels of noise on its tone.
     for stops in [&GRAY_RAMP, &SEPIA, &BLUE] {
         assert!(!quantize::continuous_tone(&tinted(&gray_scan_of_flat_art(16.0), stops, 0.0)), "{stops:?} scan, noise 16");
+    }
+}
+
+/// `levels` clean gray bands 20 px wide, evenly spaced from black to white.
+fn even_gray_bands(levels: u32) -> Raster {
+    Raster::from_fn(levels * 20, 60, |x, _| {
+        let v = (x / 20 * 255 / (levels - 1)) as u8;
+        [v, v, v, 255]
+    })
+}
+
+#[test]
+fn flat_art_of_up_to_sixteen_clean_levels_stays_flat_art() {
+    // Equal bands: eight colors leave more than a tenth of what a single color leaves.
+    let tints: [(&str, &[[f64; 3]]); 4] = [("gray", &GRAY_RAMP), ("sepia", &SEPIA), ("blue", &BLUE), ("duotone", &DUOTONE)];
+    let mut smoothed = vec![];
+    for (name, stops) in tints {
+        for levels in [10, 12, 14, 16] {
+            let bands = tinted(&even_gray_bands(levels), stops, 0.0);
+            if quantize::continuous_tone(&bands) {
+                smoothed.push(format!("{levels} {name} bands"));
+            }
+            if quantize::continuous_tone(&beside_transparent_colors(&bands)) {
+                smoothed.push(format!("{levels} {name} bands beside transparent colors"));
+            }
+        }
+    }
+    assert!(smoothed.is_empty(), "continuous tone: {smoothed:?}");
+}
+
+#[test]
+fn thin_lines_on_flat_art_of_up_to_sixteen_clean_levels_are_traced() {
+    for levels in [12, 16] {
+        for (name, stops) in [("gray", &GRAY_RAMP[..]), ("sepia", &SEPIA[..])] {
+            let bands = even_gray_bands(levels);
+            // A 1 px black line across the bands at y = 30, and a 1 px white line down the second
+            // band at x = 25.
+            let lined = Raster::from_fn(bands.width, bands.height, |x, y| {
+                if y == 30 {
+                    [0, 0, 0, 255]
+                } else if x == 25 {
+                    [255, 255, 255, 255]
+                } else {
+                    let i = ((y * bands.width + x) * 4) as usize;
+                    [bands.rgba[i], bands.rgba[i + 1], bands.rgba[i + 2], 255]
+                }
+            });
+            let res = trace(&tinted(&lined, stops, 0.0), &sixteen_colors());
+            assert_eq!(res.palette.len(), levels as usize, "{levels} {name} bands: {:?}", res.palette);
+            // The black band with the black line; the white band above and below the line; the
+            // white line above and below it; the second band in four; each other band in two.
+            assert_eq!(res.paths.len(), 1 + 2 + 2 + 4 + 2 * (levels as usize - 3), "{levels} {name} bands");
+        }
     }
 }
 
