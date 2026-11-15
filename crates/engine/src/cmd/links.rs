@@ -1314,27 +1314,54 @@ pub(crate) fn file_hidden(path: &str, doc_path: Option<&str>) -> bool {
 /// gray or missing names none: the SVG writes gray pixels colorized and leaves out an image
 /// without pixels. The images of the art the SVG writes (opacity masks included) and of the
 /// symbols, patterns and brushes that art uses, as Copy follows them, are checked: the SVG writes
-/// no other resource. Hidden layers and objects are written only with
-/// SVG Options › hidden layers kept (`hidden`), and template layers never ([`svg_written`]).
-/// Always `false` without read roots in force.
-pub(crate) fn svg_names_hidden_image(d: &Document, base: LinkBase, link: bool, hidden: bool) -> bool {
-    if crate::file_access::current().is_none() || !names_hidden_image(d, base, link) {
+/// no other resource. A placed document's images are those of the art the SVG draws for it. Hidden
+/// layers and objects are written only with SVG Options › hidden layers kept (`hidden`), in the
+/// layers and in the symbols, patterns and graph designs alike, and template layers never. SVG Tiny
+/// 1.2 (`tiny`) writes no opacity masks ([`svg_written`]). Always `false` without read roots in
+/// force.
+pub(crate) fn svg_names_hidden_image(d: &Document, base: LinkBase, link: bool, hidden: bool, tiny: bool) -> bool {
+    if crate::file_access::current().is_none() {
         return false;
     }
-    let art = d.layers.iter().filter_map(|l| svg_written(l, hidden)).collect();
-    names_hidden_image(&super::clipboard::Clipboard::gather(d, art).to_document(), base, link)
+    if !d.has_placed() && !names_hidden_image(d, base, link) {
+        return false;
+    }
+    // The writer draws placed documents' art with the pixels their files hold.
+    let placed = d.with_placed_art();
+    let d = &*placed;
+    let art = d.layers.iter().filter_map(|l| svg_written(d, l, hidden, tiny)).collect();
+    let mut out = super::clipboard::Clipboard::gather(d, art).to_document();
+    let written = |n: &std::sync::Arc<Node>| {
+        let empty = || Node::new(n.id, NodeKind::Group { children: vec![], clip: false });
+        std::sync::Arc::new(svg_written(d, n, hidden, tiny).unwrap_or_else(empty))
+    };
+    for s in &mut out.symbols {
+        s.art = written(&s.art);
+    }
+    for g in &mut out.graph_designs {
+        g.art = written(&g.art);
+    }
+    for p in &mut out.patterns {
+        p.art = p.art.iter().filter_map(|n| svg_written(d, n, hidden, tiny)).map(std::sync::Arc::new).collect();
+    }
+    names_hidden_image(&out, base, link)
 }
 
-/// `n` as the SVG writer writes it, or `None` when it writes none of it: a hidden layer or object
-/// is left out unless `hidden`, a template layer's art always, and a disabled opacity mask's art.
-/// Only layers and groups lose members; other objects keep theirs as they are.
-fn svg_written(n: &Node, hidden: bool) -> Option<Node> {
+/// `n` (an object of `d`) as the SVG writer writes it, or `None` when it writes none of it: a
+/// hidden layer or object is left out unless `hidden`, a template layer's art always, a disabled
+/// opacity mask's art, and with SVG Tiny 1.2 (`tiny`) every opacity mask's art. A placed document
+/// is the art the writer draws for it. Only layers and groups lose members; other objects keep
+/// theirs as they are.
+fn svg_written(d: &Document, n: &Node, hidden: bool, tiny: bool) -> Option<Node> {
     if !(n.visible || hidden) {
         return None;
     }
+    if matches!(n.kind, NodeKind::PlacedDocument(_)) {
+        return svg_written(d, &vectorcraft_render::effects::expand_live_deep(Some(d), n), hidden, tiny);
+    }
     let mut n = n.clone();
-    let mask = n.extras().mask.as_deref().filter(|m| !m.disabled).and_then(|m| {
-        let art = svg_written(&m.art, hidden)?;
+    let mask = n.extras().mask.as_deref().filter(|m| !m.disabled && !tiny).and_then(|m| {
+        let art = svg_written(d, &m.art, hidden, tiny)?;
         Some(Box::new(vectorcraft_doc::OpacityMask { art: std::sync::Arc::new(art), ..m.clone() }))
     });
     if n.extras().mask.is_some() {
@@ -1343,7 +1370,7 @@ fn svg_written(n: &Node, hidden: bool) -> Option<Node> {
     match &mut n.kind {
         NodeKind::Layer { template: true, children, .. } => children.clear(),
         NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
-            *children = children.iter().filter_map(|c| svg_written(c, hidden)).map(std::sync::Arc::new).collect();
+            *children = children.iter().filter_map(|c| svg_written(d, c, hidden, tiny)).map(std::sync::Arc::new).collect();
         }
         _ => {}
     }

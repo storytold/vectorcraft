@@ -1380,6 +1380,8 @@ file-filter	Templates	模板
 	Graph	图表
 	Graph Data	图表数据
 	Graph Type	图表类型
+	Graph Type…	图表类型…
+	Graph Data…	图表数据…
 	Graph Options	图表选项
 	Left Axis	左轴
 	Right Axis	右轴
@@ -4792,6 +4794,8 @@ imageTrace	Outline	轮廓
 @msg	give only one of onto, below and above	onto、below 和 above 只能给出一个
 @msg	column must be true or a number from 1	column 必须是 true 或从 1 开始的数字
 @msg	unknown panel `{raw}`	未知面板 `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` 没有可切换的显示大小
+@msg	the panels are not shown	面板未显示
 @msg	panels can't be shown in Presentation Mode	演示模式下无法显示面板
 @msg	x and y must both be numbers	x 和 y 都必须是数字
 @msg	Downloaded {what}	已下载 {what}
@@ -5833,6 +5837,7 @@ effect	Vertical	垂直
 	Change Panel Layout	更改面板布局
 	Close Panel	关闭面板
 	Collapse Panel Group	折叠面板组
+	Cycle Display Sizes	切换显示大小
 	Move Panel	移动面板
 	Group with	组合到
 	Resize panels	调整面板大小
@@ -6132,6 +6137,7 @@ lighting	Light	光源
 	Export Data Sets…	导出数据集…
 	Load Variable Library…	载入变量库…
 	Save Variable Library…	保存变量库…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	“导入”读取扩展名为 .csv、.tsv、.txt 或 .xml 的数据源文件
 @msg	a variable library holds text variables, and the document has none	变量库包含文本变量，而文档中没有文本变量
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	无法将变量 `{name}` 保存到变量库中：请重命名，使其以字母或 `_` 开头，且不含空格或 `-`、`_`、`.` 以外的符号
 @msg	{k} has control characters	{k} 包含控制字符
