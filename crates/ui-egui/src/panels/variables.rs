@@ -430,6 +430,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         delete_active_dataset(app);
     }
     ui.separator();
+    // One file dialog for either kind of data source; the extension picks the reader.
+    if widgets::menu_item(ui, tl!("Import…"), true, false) {
+        crate::picks::button(app, import_data_source);
+    }
     if widgets::menu_item(ui, tl!("Import Data Sets…"), true, false) {
         crate::picks::button(app, import_datasets);
     }
@@ -450,6 +454,23 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if widgets::menu_item(ui, tl!("Select All Bound Objects"), !bound.is_empty(), false) {
         app.run("select.set", json!({"ids": bound})).ok();
+    }
+}
+
+/// Variables panel: Import… opens one file dialog for a CSV, TSV, TXT or XML file and runs
+/// `variable.import` on the chosen file, which reads it by its extension.
+fn import_data_source(app: &mut VectorcraftApp) {
+    let pick = crate::FilePick {
+        filters: vec![
+            crate::FilePick::filter("Data sources", &["csv", "tsv", "txt", "xml"]),
+            crate::FilePick::filter("CSV", &["csv", "tsv", "txt"]),
+            crate::FilePick::filter("XML", &["xml"]),
+        ],
+        ..Default::default()
+    };
+    let Some(path) = crate::picks::open(app, &pick) else { return };
+    if let Err(e) = app.run("variable.import", json!({"path": path})) {
+        app.status(e);
     }
 }
 
@@ -758,6 +779,8 @@ mod tests {
             "Update Data Set",
             "Rename Data Set…",
             "Delete Data Set",
+            "Import…",
+            "Import Data Sets…",
             "Load Variable Library…",
             "Save Variable Library…",
             "Select Bound Object",

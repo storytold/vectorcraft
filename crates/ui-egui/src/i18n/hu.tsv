@@ -686,6 +686,7 @@ font-technology	Variable	Változó
 	Close Library	Könyvtár bezárása
 	Close Panel	Panel bezárása
 	Collapse Panel Group	Panelcsoport összecsukása
+	Cycle Display Sizes	Megjelenítési méretek váltása
 	Close Path	Útvonal lezárása
 	Close paths when ends are within:	Útvonalak lezárása, ha a végek távolsága legfeljebb:
 	Clumped	Csomós
@@ -1784,6 +1785,8 @@ file-filter	Templates	Sablonok
 	Graph	Diagram
 	Graph Data	Diagramadatok
 	Graph Type	Diagramtípus
+	Graph Type…	Diagramtípus…
+	Graph Data…	Diagramadatok…
 	Graph Options	Diagrambeállítások
 	Left Axis	Bal tengely
 	Right Axis	Jobb tengely
@@ -5954,6 +5957,8 @@ imageTrace	Outline	Körvonal
 @msg	unknown option `{path}.{k}`	ismeretlen beállítás: `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
 @msg	unknown panel `{raw}`	ismeretlen panel: `{raw}`
+@msg	`{panel}` has no display sizes to cycle	a(z) `{panel}` panelnek nincsenek váltható megjelenítési méretei
+@msg	the panels are not shown	a panelek nem láthatók
 @msg	panels can't be shown in Presentation Mode	bemutató módban a panelek nem jeleníthetők meg
 @msg	unknown preference `{key}`	ismeretlen beállítás: `{key}`
 @msg	Preferences imported.	A beállítások importálva.
@@ -6275,6 +6280,7 @@ imageTrace	Outline	Körvonal
 	Export Data Sets…	Adatkészletek exportálása…
 	Load Variable Library…	Változókönyvtár betöltése…
 	Save Variable Library…	Változókönyvtár mentése…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	Az „Importálás” .csv, .tsv, .txt vagy .xml kiterjesztésű adatforrásfájlt olvas be
 @msg	a variable library holds text variables, and the document has none	a változókönyvtár szöveges változókat tartalmaz, a dokumentumban pedig nincs ilyen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a(z) `{name}` változó nem menthető változókönyvtárba: nevezze át úgy, hogy betűvel vagy `_` jellel kezdődjön, szóközök és a `-`, `_` és `.` jeltől eltérő szimbólumok nélkül
 @msg	{k} has control characters	{k} vezérlőkaraktereket tartalmaz
