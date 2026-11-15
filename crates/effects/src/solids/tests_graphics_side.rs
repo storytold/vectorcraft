@@ -225,3 +225,31 @@ fn a_side_graphic_past_its_limits_is_refused() {
     assert!(validate_three_d_in(Some(&d), &n, EXTRUDE, &json!({"rotationX": -90.0, "graphics": [{"symbol": "Rings"}]})).is_ok());
     assert!(validate_three_d_in(Some(&d), &n, EXTRUDE, &json!({"graphics": [{"symbol": "Mark", "face": "side"}]})).is_ok());
 }
+
+/// With the shadow on, the solid that carries the side's graphics is built once, for both its faces
+/// and its shadow: the graphic keeps its place on the wall, and the shadow is the one the object
+/// casts without a graphic.
+#[test]
+fn a_side_graphic_keeps_its_place_with_the_shadow_on() {
+    let d = document();
+    let shadow = |art: &Node| {
+        let first = &art.children().unwrap()[0];
+        let [AppearanceItem::Fill(fill)] = first.appearance.items.as_slice() else { panic!("no shadow first: {first:?}") };
+        assert!(fill.paint.color() == Some(Color::BLACK) && (fill.opacity - 0.5).abs() < 1e-6, "{fill:?}");
+        first.path_data().and_then(PathData::bounds).unwrap()
+    };
+    let lit = json!({"shade": true, "lightHeight": 90.0, "shadow": true, "shadowDistance": 50.0});
+    let mut with_graphic = lit.clone();
+    with_graphic["graphics"] = json!([{"symbol": "Mark", "face": "side"}]);
+    let n = object(with_graphic);
+    super::super::SOLID_GEOMETRY_BUILT.with(|b| b.set(0));
+    super::super::SOLIDS_BUILT.with(|b| b.set(0));
+    let art = solid_art_in(Some(&d), &n).unwrap();
+    let builds = (super::super::SOLID_GEOMETRY_BUILT.with(std::cell::Cell::get), super::super::SOLIDS_BUILT.with(std::cell::Cell::get));
+    assert_eq!(builds, (1, 1), "one build for the faces and the shadow");
+    let found = faces_with_parts(&art);
+    assert_eq!(found.len(), 1, "drawn once, on the top wall");
+    assert!(near(bounds(&found), Rect::new(45.0, 45.0, 55.0, 55.0)), "{:?}", bounds(&found));
+    let without = solid_art_in(Some(&d), &object(lit)).unwrap();
+    assert!(near(shadow(&art), shadow(&without)), "{:?} {:?}", shadow(&art), shadow(&without));
+}

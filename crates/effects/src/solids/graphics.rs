@@ -1,6 +1,6 @@
-//! Graphics mapped onto a 3D object's planar faces (Window › 3D and Materials › Materials ›
-//! Graphics): the art of a document symbol drawn on Extrude & Bevel's front or back cap, or on a
-//! plane, turned, foreshortened and shaded with that face and clipped to it.
+//! Graphics mapped onto a 3D object's faces (Window › 3D and Materials › Materials ›
+//! Graphics): the art of a document symbol drawn on Extrude & Bevel's front or back cap or on its
+//! side, or on a plane, turned, foreshortened and shaded with that face and clipped to it.
 //!
 //! The effect keeps its graphics in its `graphics` parameter, each `{symbol, face, x, y, scale,
 //! rotation}`: the symbol's name, the face, the offset of the graphic's center from the center of
