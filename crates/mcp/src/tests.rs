@@ -16,6 +16,7 @@ mod gradient;
 mod limits;
 mod links;
 mod liquify;
+mod livepaint;
 mod pen;
 mod persp;
 mod place;
