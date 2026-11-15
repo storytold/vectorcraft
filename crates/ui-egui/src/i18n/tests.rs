@@ -437,7 +437,7 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
         .collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 43, "{names:?}");
+    assert_eq!(names.len(), 46, "{names:?}");
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
@@ -3205,6 +3205,48 @@ fn selected_path_reason_is_translated() {
         assert_eq!(message(lang, reason), row, "{code}");
         let shown = message(lang, &error);
         assert!(shown.contains(row) && !shown.contains(reason) && shown.contains("`path.reverse`"), "{code}: {shown}");
+    }
+}
+
+/// The refusals of a linked JavaScript file or a library's file outside the read roots, of a file
+/// name that fits more than one linked JavaScript file, and of an appearance edit of the art a
+/// graph design draws in a graph series have translated rows in languages that translate every
+/// message. Each row keeps `{file}` and shows translated both alone and inside the
+/// invalid-parameters error of the command that returns it.
+#[test]
+fn read_root_script_and_graph_design_reasons_are_translated() {
+    use vectorcraft_engine::EngineError;
+    let reasons = [
+        ("document.export", "a linked JavaScript file is outside the read roots"),
+        ("swatch.library.copyToUser", "the library's file is outside the read roots"),
+        ("svgInteractivity.removeFile", "{file} names more than one linked JavaScript file"),
+        ("appearance", "the art of a graph design in a graph series is drawn again from the design: edit the design to change it"),
+    ];
+    let literals = message_literals();
+    for (_, reason) in reasons {
+        assert!(literals.contains(reason), "{reason}");
+    }
+    let mut rows = [0; 4];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        for (i, (cmd, reason)) in reasons.into_iter().enumerate() {
+            let row = entries.iter().find(|(ctx, src, _)| ctx == "@msg" && src == reason).map(|(_, _, tr)| tr.as_str());
+            let Some(row) = row else { continue };
+            rows[i] += 1;
+            assert_ne!(row, reason, "{code}");
+            assert_eq!(row.matches("{file}").count(), reason.matches("{file}").count(), "{code}: {row}");
+            let sample = reason.replace("{file}", "\"a.js\"");
+            let translated = row.replace("{file}", "\"a.js\"");
+            assert_eq!(message(lang, &sample), translated, "{code}");
+            let error = EngineError::BadParams { cmd: cmd.into(), msg: sample.clone() }.to_string();
+            assert_eq!(message(Lang::EN, &error), error);
+            let shown = message(lang, &error);
+            assert!(shown.contains(&translated) && !shown.contains(&sample) && shown.contains(&format!("`{cmd}`")), "{code}: {shown}");
+        }
+    }
+    for ((_, reason), count) in reasons.into_iter().zip(rows) {
+        assert!(count > 0, "no complete-message catalog has a `@msg` row for {reason:?}");
     }
 }
 

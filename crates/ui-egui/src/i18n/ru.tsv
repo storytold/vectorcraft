@@ -3452,6 +3452,7 @@ digits	Malayalam	Малаялам
 	Sixth Space	Шестая шпация
 	Size	Размер
 	Size Tile to Art	Подогнать плитку по рисунку
+	Move Tile with Art	Перемещать плитку вместе с рисунком
 	Size/Leading	Размер/интерлиньяж
 	Size:	Размер:
 	Ridges per segment:	Гребней на сегмент:
@@ -4079,6 +4080,9 @@ digits	Malayalam	Малаялам
 	Working CMYK	Рабочий CMYK
 	Working CMYK (don't tag)	Рабочий CMYK (без пометки)
 	Working RGB (don't tag)	Рабочий RGB (без пометки)
+	Don't Color Manage This Document	Не управлять цветом этого документа
+	Working RGB: {name}	Рабочий RGB: {name}
+	Working CMYK: {name}	Рабочий CMYK: {name}
 	Workspace	Рабочая среда
 	Workspace {i}	Рабочая среда {i}
 	Wrinkle Tool	Инструмент «Морщины»
@@ -5276,6 +5280,7 @@ axis	Both	Оба
 @msg	every numbered name for {name} is taken in the document's folder	все нумерованные имена для {name} уже заняты в папке документа
 @msg	No linked files to look for	Нет связанных файлов для поиска
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Связь находится внутри символа, дизайна диаграммы, узора или непрозрачной маски и не имеет места на холсте
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	графика дизайна диаграммы в ряду данных диаграммы перерисовывается по дизайну: чтобы изменить её, отредактируйте дизайн
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы
@@ -5323,6 +5328,7 @@ axis	Both	Оба
 @msg	automation filesystem access is not granted: write authority is absent: {path}	у автоматизации нет доступа к файловой системе: нет права на запись: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	путь автоматизации отклонён: вне корневой папки для чтения {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	путь автоматизации отклонён: вне корневых папок для чтения {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	связанный файл JavaScript находится вне корневых папок для чтения
 @msg	automation path rejected: outside the write root {root}: {path}	путь автоматизации отклонён: вне корневой папки для записи {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	путь автоматизации отклонён: вне корневых папок для записи {roots}: {path}
 @msg	automation path rejected: path is empty	путь автоматизации отклонён: путь пуст
@@ -5730,6 +5736,9 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
+	Move Light to Back	Переместить свет назад
+	Move Light to Front	Переместить свет вперёд
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Перетащите источник света, чтобы переместить его. Клавиши со стрелками перемещают выбранный источник; с Shift — шагами по 15°.
 	Shadows	Тени
 	Distance from Object	Расстояние от объекта
 	Shadow Bounds	Границы тени
@@ -6450,6 +6459,13 @@ axis	Y Axis	Ось Y
 	Graphite Pencil	Графитный карандаш
 	Wax Crayon	Восковой мелок
 	Charcoal Dust	Угольная пыль
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технические схемы
+	Circuit Trace	Дорожка схемы
+	Bus Lines	Линии шины
+	Terminal Nodes	Контактные узлы
+
 	Notched Ribbon	Лента с насечками
 	Double Line	Двойная линия
 	Wave	Волна

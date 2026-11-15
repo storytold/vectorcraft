@@ -558,6 +558,12 @@ impl ScriptScope {
             && !self.fenced.iter().any(|f| inside(real, f) && !self.open.iter().any(|o| inside(o, f) && inside(real, o)))
     }
 
+    /// The scope of a script run from a file in the folder whose real path, with its links already
+    /// followed, is `real`: that folder, which is not looked up again.
+    pub(crate) fn of_real_folder(real: PathBuf) -> Self {
+        Self { roots: vec![real], ..Self::default() }
+    }
+
     /// Is `path` refused by its name alone: a `..` component, a NUL, a Windows device name or
     /// stream, or a computer on the network?
     pub(crate) fn refused_by_name(path: &Path) -> bool {

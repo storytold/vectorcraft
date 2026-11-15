@@ -3218,6 +3218,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Altıncı Uzay
 	Size	Boyut
 	Size Tile to Art	Sanata Boyut Döşeme
+	Move Tile with Art	Döşemeyi Sanatla Taşı
 	Size/Leading	Boyut/Satır Aralığı
 	Size:	Boyut:
 	Ridges per segment:	Segment başına sırtlar:
@@ -3827,6 +3828,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMYK'de çalışıyor
 	Working CMYK (don't tag)	CMYK çalışıyor (etiketlemeyin)
 	Working RGB (don't tag)	Çalışan RGB (etiketlemeyin)
+	Don't Color Manage This Document	Bu belgede renk yönetimi yapma
+	Working RGB: {name}	Çalışma RGB'si: {name}
+	Working CMYK: {name}	Çalışma CMYK'sı: {name}
 	Workspace	Çalışma Alanı
 	Workspace {i}	Çalışma Alanı {i}
 	Wrinkle Tool	Kırışıklık Aracı
@@ -5903,6 +5907,9 @@ theme	Appearance	Görünüm
 	Softness	Yumuşaklık
 	Ambient Light	Ortam Işığı
 	Light behind the object	Nesnenin arkasındaki ışık
+	Move Light to Back	Işığı Arkaya Taşı
+	Move Light to Front	Işığı Öne Taşı
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Işığı taşımak için sürükleyin. Ok tuşları odaktaki ışığı taşır; Shift ile 15° adımlarla.
 	Shadows	Gölgeler
 	Distance from Object	Nesneden uzaklık
 	Shadow Bounds	Gölge sınırları
@@ -8715,6 +8722,13 @@ axis	Y Axis	Y ekseni
 	Graphite Pencil	Grafit Kalem
 	Wax Crayon	Mum Boya
 	Charcoal Dust	Kömür Tozu
+
+# Original procedural circuit brushes.
+	Tech Circuit	Teknik devreler
+	Circuit Trace	Devre izi
+	Bus Lines	Veriyolu hatları
+	Terminal Nodes	Bağlantı düğümleri
+
 	Notched Ribbon	Çentikli Şerit
 	Double Line	Çift Çizgi
 	Wave	Dalga

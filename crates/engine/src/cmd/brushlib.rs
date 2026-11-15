@@ -178,6 +178,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
+    BuiltinBrushLibrary { id: "tech-circuit", name: "Tech Circuit", make: tech_circuit },
 ];
 
 /// Built-in library `id`, made once.
@@ -395,6 +396,59 @@ fn bristle_brushes() -> BrushLibrary {
 fn border(name: &str, side: Node, corner: Option<Node>, fit: PatternFit) -> Brush {
     let kind = BrushKind::Pattern(PatternBrush { side, outer_corner: corner.clone(), inner_corner: corner, fit, ..Default::default() });
     Brush { name: name.into(), kind }
+}
+
+/// Tech Circuit: original conductor geometry, drawn as filled paths so widths and chamfers
+/// survive brush warping. Pattern tiles meet at x = 0 and 24 with identical lead cross-sections.
+fn tech_circuit() -> BrushLibrary {
+    let pad = |x: f64| {
+        black(polygon(&[
+            (x - 4.0, -2.0),
+            (x - 2.0, -4.0),
+            (x + 2.0, -4.0),
+            (x + 4.0, -2.0),
+            (x + 4.0, 2.0),
+            (x + 2.0, 4.0),
+            (x - 2.0, 4.0),
+            (x - 4.0, 2.0),
+        ]))
+    };
+    // 45-degree jogs lift the conductor to a parallel run and bring it back.
+    let trace = group(vec![
+        black(polygon(&[
+            (4.0, -1.0),
+            (23.0, -1.0),
+            (33.0, -11.0),
+            (61.0, -11.0),
+            (71.0, -1.0),
+            (96.0, -1.0),
+            (96.0, 1.0),
+            (70.0, 1.0),
+            (60.0, -9.0),
+            (34.0, -9.0),
+            (24.0, 1.0),
+            (4.0, 1.0),
+        ])),
+        pad(4.0),
+        pad(96.0),
+    ]);
+    let bus = group([-4.0, 0.0, 4.0].into_iter().map(|y| black(shapes::rectangle(Rect::new(0.0, y - 0.75, 24.0, y + 0.75)))).collect());
+    let terminals = group(vec![
+        // Overlap the ring's rim without filling the test point's hole.
+        black(shapes::rectangle(Rect::new(0.0, -0.6, 15.5, 0.6))),
+        black(shapes::rectangle(Rect::new(18.5, -0.6, 24.0, 0.6))),
+        pad(6.0),
+        ring(Point::new(17.0, 0.0), 3.0, 1.4),
+    ]);
+    built(
+        "Tech Circuit",
+        Document::new(100.0, 100.0),
+        vec![
+            art("Circuit Trace", trace, Colorization::Tints),
+            border("Bus Lines", bus, None, PatternFit::Stretch),
+            border("Terminal Nodes", terminals, None, PatternFit::Stretch),
+        ],
+    )
 }
 
 /// An invisible rectangle that fixes a tile's width.

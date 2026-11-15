@@ -2103,6 +2103,7 @@ digits	Malayalam	Malajalam
 	Show Swatch Bounds	Prikaži granice uzorka boje
 	Show Tile Edge	Prikaži ivicu pločice
 	Size Tile to Art	Prilagodi pločicu crtežu
+	Move Tile with Art	Pomjeri pločicu s crtežom
 	Tile Type:	Vrsta pločice:
 	Top in Front	Vrh naprijed
 	V Spacing:	Okomiti razmak:
@@ -2145,6 +2146,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Koristi kompenzaciju crne tačke
 	Working CMYK (don't tag)	Radni CMYK (bez oznake)
 	Working RGB (don't tag)	Radni RGB (bez oznake)
+	Don't Color Manage This Document	Ne upravljaj bojama ovog dokumenta
+	Working RGB: {name}	Radni RGB: {name}
+	Working CMYK: {name}	Radni CMYK: {name}
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Dodaj u profile…
 	Align Stroke to Center	Poravnaj potez po sredini
@@ -5804,6 +5808,9 @@ mark-style	Japanese	Japanski
 	Softness	Mekoća
 	Ambient Light	Ambijentalno svjetlo
 	Light behind the object	Svjetlo iza objekta
+	Move Light to Back	Pomjeri svjetlo iza
+	Move Light to Front	Pomjeri svjetlo naprijed
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Prevucite svjetlo da ga pomjerite. Tipke sa strelicama pomjeraju fokusirano svjetlo; Shift ga pomjera za 15°.
 	Shadows	Sjene
 	Distance from Object	Udaljenost od objekta
 	Shadow Bounds	Granice sjene
@@ -6314,6 +6321,13 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tehnički sklopovi
+	Circuit Trace	Vod sklopa
+	Bus Lines	Linije sabirnice
+	Terminal Nodes	Priključni čvorovi
+
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
 	Wave	Talas

@@ -3342,6 +3342,7 @@ digits	Malayalam	Malayalam
 	Sixth Space	Sjättedelsblanksteg
 	Size	Storlek
 	Size Tile to Art	Anpassa rutans storlek efter grafiken
+	Move Tile with Art	Flytta rutan med grafiken
 	Size/Leading	Storlek/radavstånd
 	Size:	Storlek:
 	Ridges per segment:	Åsar per segment:
@@ -3968,6 +3969,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	Arbets-CMYK
 	Working CMYK (don't tag)	Arbets-CMYK (tagga inte)
 	Working RGB (don't tag)	Arbets-RGB (tagga inte)
+	Don't Color Manage This Document	Färghantera inte det här dokumentet
+	Working RGB: {name}	Arbets-RGB: {name}
+	Working CMYK: {name}	Arbets-CMYK: {name}
 	Workspace	Arbetslayout
 	Workspace {i}	Arbetslayout {i}
 	Wrinkle Tool	Skrynkelverktyg
@@ -6019,6 +6023,9 @@ theme	Appearance	Utseende
 	Softness	Mjukhet
 	Ambient Light	Omgivande ljus
 	Light behind the object	Ljus bakom objektet
+	Move Light to Back	Flytta ljus bakåt
+	Move Light to Front	Flytta ljus framåt
+	Drag a light to move it. The arrow keys move the focused light; Shift steps 15°.	Dra ett ljus för att flytta det. Piltangenterna flyttar ljuset med fokus; Skift flyttar det 15° i taget.
 	Shadows	Skuggor
 	Distance from Object	Avstånd från objektet
 	Shadow Bounds	Skuggans gränser
@@ -6817,6 +6824,13 @@ axis	Y Axis	Y-axel
 	Graphite Pencil	Grafitpenna
 	Wax Crayon	Vaxkrita
 	Charcoal Dust	Koldamm
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniska kretsar
+	Circuit Trace	Kretsbana
+	Bus Lines	Bussledningar
+	Terminal Nodes	Anslutningspunkter
+
 	Notched Ribbon	Hackat band
 	Double Line	Dubbellinje
 	Wave	Våg
