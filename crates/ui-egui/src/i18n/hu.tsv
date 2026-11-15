@@ -7847,6 +7847,7 @@ breakText	Glyphs	Glifák
 @msg	`names` must be an array of style names	`names`: stílusnevek tömbje kell
 @msg	`new` is a design name, or true	`new`: diagramminta neve vagy true
 @msg	`origin` must be [x, y] in points	`origin`: [x, y] kell pontban megadva
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes`: [a, b, c, d] kell, mindegyik -1000 és 1000 között, és a·d - b·c legalább 0.001-gyel térjen el 0-tól
 @msg	`path` must be a folder	`path`: mappa kell
 @msg	`path` must be a path object	`path`: útvonalobjektum kell
 @msg	`picks` must be an array (got {v})	`picks`: tömb kell (kapott érték: {v})

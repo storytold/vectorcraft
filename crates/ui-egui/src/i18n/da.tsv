@@ -427,6 +427,7 @@
 @msg	{what} points outside memory	{what} peger uden for hukommelsen
 @msg	`angle` must be a number	`angle` skal være et tal
 @msg	`aspect` must be from 0.01 to 100	`aspect` skal være fra 0,01 til 100
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` skal være [a, b, c, d], hver fra -1000 til 1000, med a·d - b·c mindst 0,001 fra 0
 @msg	`cap` must be "butt", "round" or "square"	`cap` skal være "butt", "round" eller "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` skal være "nonzero" eller "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` skal være en https://-adresse på højst {MAX_HELP_URL} byte

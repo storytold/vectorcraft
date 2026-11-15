@@ -6586,6 +6586,7 @@ axis	Y Axis	Y-akseli
 @msg	{what} points outside memory	{what} osoittaa muistin ulkopuolelle
 @msg	`angle` must be a number	`angle` on oltava luku
 @msg	`aspect` must be from 0.01 to 100	`aspect` on oltava 0.01 ja 100 välillä
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` on oltava [a, b, c, d], kukin -1000 ja 1000 välillä, ja a·d - b·c:n on oltava vähintään 0.001:n päässä 0:sta
 @msg	`cap` must be "butt", "round" or "square"	`cap` on oltava "butt", "round" tai "square"
 @msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` on oltava "nonzero" tai "evenodd"
 @msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` on oltava enintään {MAX_HELP_URL} tavun https://-osoite

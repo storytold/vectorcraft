@@ -7292,6 +7292,7 @@ breakText	Glyphs	Glyphen
 @msg	`name` must be a name that is not empty	`name` muss ein nicht leerer Name sein
 @msg	`name` must not be empty	`name` darf nicht leer sein
 @msg	`origin` must be [x, y] in points	`origin` muss [x, y] in Punkt sein
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` muss [a, b, c, d] sein, jeweils von -1000 bis 1000, mit a·d - b·c mindestens 0,001 von 0 entfernt
 @msg	`picks` must be an array (got {v})	`picks` muss ein Array sein (erhalten: {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` muss 1 bis {MAX_PICKS} Auswahlen enthalten (erhalten: {_1})
 @msg	`radius` must be 0 or more	`radius` muss 0 oder größer sein

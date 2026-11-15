@@ -5566,17 +5566,30 @@ SVG Filter (New, Edit, Delete, Import…), and from the Appearance panel it edit
 
 The canvas, raster export, printing and PDF draw the filter with the object as its source graphic, its user space
 starting at `origin` (`[x, y]` in points, `[0, 0]` by default) with its units `scale` points (1 by default), its
-object bounding box the drawn object's, and at the Document Raster Effects resolution when the view is finer. The
+axes along `axes` (`[a, b, c, d]`: one unit along the filter's x axis points `[a, b]` in the document and one along
+its y axis `[c, d]`, before `scale`; absent or `[1, 0, 0, 1]`, the document's axes, and `effect.setParams` sets them
+back with `[1, 0, 0, 1]`, since the commands refuse `null`; each number -1000 to 1000 and `a·d - b·c` at least
+0.001 from 0, or the command refuses it), its object bounding box the drawn object's, and at the Document Raster Effects resolution when the view is finer. The
 filter runs on coarser pixels when a morphology radius or kernel unit would span more than 32 of them, or a standard
-deviation more than 512. An effect whose XML these rules refuse (from a file or a script) is not drawn or exported. The
+deviation more than 512. With `axes`, the filter runs on pixels lined up with its own axes, so offsets, blurs and the
+region run along them, and the result is drawn onto the object's pixels through `axes`; those pixels are about as fine
+along each axis as the object's and coarser when there would be more than 4 times as many, or when a radius, kernel
+unit or standard deviation would span more than 32 or 512 of them. The object's box is then
+its box in that user space: a region measured against it, and a region or primitive lengths in `objectBoundingBox`
+units, are measured against that box. Moving, turning, scaling or skewing the object moves `origin` with it and
+leaves `axes` as they are, and `scale` too unless Scale Strokes & Effects scales it. An effect whose XML or `axes` these rules refuse (from a file or a script) is not drawn or exported. The
 filter is drawn and written rebuilt from its filter elements and their filter attributes alone, without comments,
 text, descriptions or other attributes. An image in a filter is drawn only when its bytes are a PNG, JPEG, GIF or WebP
 within the pixel limit. A filter region in user space given in percentages is measured against the object's box (x
 and y from its top-left corner), and one in em or ex or left out takes the default region of that box (10% beyond
 each side); these are VectorCraft's own rules. Scale Strokes & Effects scales
-`scale`. SVG export writes the filter as a `<filter>` element when it is the object's last effect, its only pixel
-effect and `scale` is 1 (with a region measured against the object's box, its only raster effect), with the object in a
-group that places the filter's user space and such a region written in user units. The filter is written in SVG 1.1
+`scale`. SVG export writes the filter as a `<filter>` element when it is the object's last effect and its only pixel
+effect (with a region measured against the object's box, its only raster effect) and SVG import can store its user
+space again (`scale` and `axes` together within the import limits below), with the object in a
+group that places the filter's user space and such a region written in user units. When `scale` isn't 1 or the effect
+has `axes`, that group's transform is the filter's user space and the object is written in document coordinates in a
+group inside the filter whose transform is the inverse, so its strokes keep their widths; SVG import reads that back
+as the same `scale`, `origin` and `axes`. The filter is written in SVG 1.1
 terms: `feImage`'s reference as `xlink:href`; each `feDropShadow` as the blur, offset, flood, composite and merge that
 [Filter Effects](https://www.w3.org/TR/filter-effects-1/#feDropShadowElement) gives as its equivalent; colors as
 `#rrggbb` with a flood color's alpha in `flood-opacity`; `image-rendering` as `optimizeSpeed` or `optimizeQuality`;
@@ -5588,9 +5601,12 @@ whose `flood-color` is `currentColor` or with `primitiveUnits="objectBoundingBox
 its shadows are expanded, has no SVG 1.1 form. Neither does a filter whose written form, with its region and id, is
 one SVG import would not read, such as one longer than 64 KB. In that case, otherwise, and with the SVG Tiny 1.2 profile, the object
 becomes an image. SVG import keeps a filter that the live effects (Drop Shadow, the
-glows, Gaussian Blur, Feather) can't express as an `svg.filter` effect holding the filter's XML, with `scale` and
-`origin` from the object's user space, unless that user space is turned, skewed or scaled past 0.001 to 1000 points
-to a unit, or the filter is styled by the document's style sheets: such a filter is left out with a warning. The native format keeps the document's filters and the effects.
+glows, Gaussian Blur, Feather) can't express as an `svg.filter` effect holding the filter's XML, with `scale`,
+`origin` and, when the object's user space is turned, skewed or scaled unevenly (a `rotate`, `skewX`, `skewY`, uneven
+`scale` or `matrix` transform), `axes` from that user space, so the filter runs in the element's user space as
+[SVG 1.1](https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion) defines it. A filter is left out with a
+warning when that user space is scaled past 0.001 to 1000 points to a unit (the square root of its area scale), its
+`axes` would pass the limits above, or the filter is styled by the document's style sheets. The native format keeps the document's filters and the effects.
 
 ```json
 {"name":"run_command","arguments":{"command":"svgFilter.define","params":{"xml":"<filter id=\"Soft\"><feGaussianBlur stdDeviation=\"2\"/></filter>"}}}

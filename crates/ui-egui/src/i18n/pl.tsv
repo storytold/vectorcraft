@@ -7567,6 +7567,7 @@ breakText	Glyphs	Glify
 @msg	`name` must be a name that is not empty	`name` musi być niepustą nazwą
 @msg	`name` must not be empty	`name` nie może być puste
 @msg	`origin` must be [x, y] in points	`origin` musi mieć postać [x, y] w punktach
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` musi mieć postać [a, b, c, d], każda wartość od -1000 do 1000, a a·d - b·c musi różnić się od 0 o co najmniej 0,001
 @msg	`picks` must be an array (got {v})	`picks` musi być tablicą (podano {v})
 @msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` musi zawierać od 1 do {MAX_PICKS} wskazań (podano {_1})
 @msg	`points` must hold from 2 to 100000 points	`points` musi zawierać od 2 do 100000 punktów

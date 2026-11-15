@@ -7581,6 +7581,7 @@ breakText	Glyphs	Гліфи
 @msg	`names` must be an array of style names	`names` має бути масивом імен стилів
 @msg	`new` is a design name, or true	`new` — це назва дизайну або true
 @msg	`origin` must be [x, y] in points	`origin` має бути [x, y] у пунктах
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` має бути [a, b, c, d], кожне від -1000 до 1000, а a·d - b·c має відрізнятися від 0 щонайменше на 0.001
 @msg	`path` must be a folder	`path` має бути папкою
 @msg	`path` must be a path object	`path` має бути об’єктом-контуром
 @msg	`picks` must be an array (got {v})	`picks` має бути масивом (отримано {v})
