@@ -596,8 +596,8 @@ fn a_graph_pasted_without_formatting_keeps_plain_labels_when_drawn_again() {
     let r = node(&s, p).extras().graph.as_deref().unwrap().rect;
     let off = [r.x0 - plot.x0 - 10.0, r.y0 - plot.y0 - 20.0, r.x1 - plot.x1 - 10.0, r.y1 - plot.y1 - 20.0];
     assert!(off.iter().all(|d| d.abs() < 1e-6), "the plot moves by the offset and keeps its size: {plot:?} → {r:?}");
-    s.execute("graph.setType", &json!({"id": p.0, "type": "column"})).unwrap();
-    assert_eq!(graph_label_looks(&s, p), pasted, "a change of type draws them the same way");
+    s.execute("graph.setType", &json!({"id": p.0, "type": "column", "dropShadow": true})).unwrap();
+    assert_eq!(graph_label_looks(&s, p), pasted, "a change of graph type options draws them the same way");
 
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
