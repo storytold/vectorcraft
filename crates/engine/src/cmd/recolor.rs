@@ -1492,6 +1492,10 @@ struct ColorMap {
     group: Vec<GroupSwatch>,
     keys: HashMap<ColorKey, usize>,
     hexes: HashMap<String, usize>,
+    /// The current colors of the rows whose new color was removed (`to: null`, not excluded),
+    /// which keep their colors.
+    removed_keys: std::collections::HashSet<ColorKey>,
+    removed_hexes: std::collections::HashSet<String>,
     /// Set when a colour took a new colour of another model in its own model.
     converted: std::cell::Cell<bool>,
     /// The Global Adjust every mapped colour takes after its row's new colour.
@@ -1510,11 +1514,23 @@ impl ColorMap {
             group,
             keys: HashMap::new(),
             hexes: HashMap::new(),
+            removed_keys: Default::default(),
+            removed_hexes: Default::default(),
             converted: Default::default(),
             adjust,
         };
         for (n, r) in rows.iter().enumerate().filter(|(_, r)| !r.from.is_empty()) {
-            let Some(to) = r.new_color() else { continue };
+            let Some(to) = r.new_color() else {
+                if !r.exclude {
+                    for m in &r.from {
+                        match m {
+                            Match::Key(k) => out.removed_keys.insert(*k),
+                            Match::Hex(h) => out.removed_hexes.insert(h.clone()),
+                        };
+                    }
+                }
+                continue;
+            };
             let i = out.rows.len();
             let colors: Vec<Color> = r.from.iter().map(Match::color).collect();
             let link = links.get(n).cloned().flatten();
@@ -1555,9 +1571,18 @@ impl ColorMap {
     /// the row gives it the new color in that color's model and the Global Adjust gives it the
     /// swatch's new color at that tint;
     /// other rows map the colour, which loses its link when it changes or when the group's rewrite
-    /// would change it. True when anything changed.
+    /// would change it; a color of a row whose new color was removed keeps its color and loses its
+    /// link to a swatch of the group whose rewrite would change it. True when anything changed.
     fn map_link(&self, c: &mut Color, link: &mut Option<String>, tint: &mut f32) -> bool {
-        let Some(i) = self.row_of(*c) else { return false };
+        let Some(i) = self.row_of(*c) else {
+            let removed = self.removed_keys.contains(&ColorKey::of(c)) || self.removed_hexes.contains(&c.to_hex());
+            let rewritten = link.as_deref().and_then(|n| self.group.iter().find(|g| g.name == n)).is_some_and(|g| g.shown.tinted(*tint) != *c);
+            if removed && rewritten {
+                *link = None;
+                return true;
+            }
+            return false;
+        };
         let (Some(row), Some(l)) = (self.rows.get(i), self.links.get(i)) else { return false };
         if l.is_none()
             && let Some(g) = link.as_deref().and_then(|n| self.group.iter().find(|g| g.name == n))
