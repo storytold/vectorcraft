@@ -3534,7 +3534,7 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Bileşik Fontlar
 	Export Composite Fonts	Bileşik Fontları Dışa Aktar
 	Import Composite Fonts	Bileşik Fontları İçe Aktar
-@msg	each font must be {name, parts}	her font {name, parts} biçiminde olmalı
+@msg	each font must be {{name, parts}}	her font {{name, parts}} biçiminde olmalı
 @msg	unknown key `{k}`; a font takes name and parts	bilinmeyen anahtar `{k}`; bir font name ve parts alır
 @msg	each font needs a name	her fontun bir adı olmalı
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` bir bileşik fontun adı olamaz (1 ile {COMPOSITE_NAME_MAX} karakter arası, denetim karakteri olmadan)
@@ -3547,7 +3547,7 @@ digits	Malayalam	Malayalam
 @msg	two composite fonts are named `{_1}`	iki bileşik fontun adı `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` yüklü bir fontun adı
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2}, bir bileşik font olan `{font}` ile ayarlı
-@msg	give fonts: [{name, parts}…]	fonts verin: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	fonts verin: [{{name, parts}}…]
 @msg	path is empty	path boş
 @msg	fonts must be a list of composite fonts	fonts bir bileşik font listesi olmalı
 @msg	names must be strings	names dizeler olmalı
@@ -6948,7 +6948,7 @@ axis	Y Axis	Y ekseni
 @msg	`rows` must be lists of numbers or nulls, not {r}	`rows`, sayı veya null listeleri olmalıdır, {r} değil
 @msg	`scale` must be a number from 0.001 to 1000	`scale` 0.001 ile 1000 arasında bir sayı olmalıdır
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` boş olmayan bir dizi olmalıdır
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` "document", {artboards} veya {layers} olmalıdır
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` "document", {{artboards: [index, …]}} veya {{layers: [id, …]}} olmalıdır
 @msg	`side` must be "left", "right", "top" or "bottom"	`side` "left", "right", "top" veya "bottom" olmalıdır
 @msg	`side` places the artboard: leave out x, y, width and height	`side` çalışma yüzeyini yerleştirir: x, y, width ve height değerlerini vermeyin
 @msg	`source` is the only path in series group `target`	`source`, `target` seri grubundaki tek yoldur
@@ -7133,7 +7133,7 @@ axis	Y Axis	Y ekseni
 @msg	not a regular expression	bir düzenli ifade değil
 @msg	not an action set: the text doesn't start with /version and a number	bir eylem seti değil: metin /version ve bir sayıyla başlamıyor
 @msg	nothing to repeat	yinelenecek bir şey yok
-@msg	numbers out of order in {_1} quantifier	{_1} niceleyicisinde sayılar sırasız
+@msg	numbers out of order in {{}} quantifier	{{}} niceleyicisinde sayılar sırasız
 @msg	object {_1} needs a 3D effect	{_1} nesnesinde bir 3D efekti olmalıdır
 @msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	nesne {_1}: içi boş bir Kalıp Çıkarma ve Eğim efektinin kapakları yoktur: bir grafik eşlemek için Kapak seçeneğini açın
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	nesne {_1}: derinlik 0 olduğunda nesnenin tek yüzü vardır: grafiklerini ön yüze eşleyin
@@ -7204,7 +7204,7 @@ axis	Y Axis	Y ekseni
 @msg	a linked JavaScript file is outside the read roots	bağlantılı bir JavaScript dosyası okuma köklerinin dışında
 @msg	the line is too long, or the paths it passes too many, to check	çizgi denetlenemeyecek kadar uzun veya geçtiği yollar çok fazla
 @msg	the method needs an XML value	yöntem için bir XML değeri gerekir
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	boya bir serbest biçimli degrade değil (paint.editGradient {kind} ile bir tane uygulayın)
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	boya bir serbest biçimli degrade değil (paint.editGradient {{kind: "freeform"}} ile bir tane uygulayın)
 @msg	the parameters or body do not form one function	parametreler veya gövde tek bir işlev oluşturmuyor
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	yapıştırılan {name} SVG filtresi belgedeki aynı adlı filtreden farklı çiziyor ve ona uyan boş bir ad yok
 @msg	the paths are too many or too tangled to find where they cross	yollar, kesiştikleri yerler bulunamayacak kadar çok veya karışık

@@ -1657,7 +1657,7 @@ digits	Malayalam	Malajalam
 	Composite Fonts	Yhdistelmäfontit
 	Export Composite Fonts	Vie yhdistelmäfontit
 	Import Composite Fonts	Tuo yhdistelmäfontit
-@msg	each font must be {name, parts}	jokaisen fontin on oltava {name, parts}
+@msg	each font must be {{name, parts}}	jokaisen fontin on oltava {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	tuntematon avain `{k}`; fontti ottaa name ja parts
 @msg	each font needs a name	jokainen fontti tarvitsee nimen
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ei kelpaa yhdistelmäfontin nimeksi (1–{COMPOSITE_NAME_MAX} merkkiä, ei ohjausmerkkejä)
@@ -1670,7 +1670,10 @@ digits	Malayalam	Malajalam
 @msg	two composite fonts are named `{_1}`	kahden yhdistelmäfontin nimi on `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` on asennetun fontin nimi
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} käyttää fonttia `{font}`, joka on yhdistelmäfontti
-@msg	give fonts: [{name, parts}…]	anna fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	anna fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope`-arvon on oltava "document", {{artboards: [index, …]}} tai {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	luvut väärässä järjestyksessä kvanttorissa {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	maali ei ole vapaamuotoinen liukuväri (käytä sellaista komennolla paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path on tyhjä
 @msg	fonts must be a list of composite fonts	fonts on oltava luettelo yhdistelmäfonteista
 @msg	names must be strings	names on oltava merkkijonoja

@@ -1684,7 +1684,7 @@ digits	Malayalam	Malajálamské
 	Composite Fonts	Složená písma
 	Export Composite Fonts	Exportovat složená písma
 	Import Composite Fonts	Importovat složená písma
-@msg	each font must be {name, parts}	každé písmo musí být {name, parts}
+@msg	each font must be {{name, parts}}	každé písmo musí být {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	neznámý klíč `{k}`; písmo přijímá name a parts
 @msg	each font needs a name	každé písmo potřebuje název
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nemůže být názvem složeného písma (1 až {COMPOSITE_NAME_MAX} znaků, bez řídicích znaků)
@@ -1697,7 +1697,7 @@ digits	Malayalam	Malajálamské
 @msg	two composite fonts are named `{_1}`	dvě složená písma se jmenují `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` je název nainstalovaného písma
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} používá `{font}`, což je složené písmo
-@msg	give fonts: [{name, parts}…]	zadejte fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	zadejte fonts: [{{name, parts}}…]
 @msg	path is empty	path je prázdné
 @msg	fonts must be a list of composite fonts	fonts musí být seznam složených písem
 @msg	names must be strings	names musí být řetězce
@@ -8028,7 +8028,7 @@ breakText	Glyphs	Glyfy
 @msg	`scale` must be a number from 0.001 to 1000	`scale` musí být číslo od 0.001 do 1000
 @msg	`scale` must be a number in (0, 100]	`scale` musí být číslo v rozsahu (0, 100]
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` musí být neprázdné pole
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` musí být "document", {artboards} nebo {layers}
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` musí být "document", {{artboards: [index, …]}} nebo {{layers: [id, …]}}
 @msg	`scope` must be "selection" or "document", not {other}	`scope` musí být "selection" nebo "document", ne {other}
 @msg	`script` must be a string	`script` musí být řetězec
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` je neprázdný seznam indexů řad
@@ -8922,7 +8922,7 @@ breakText	Glyphs	Glyfy
 @msg	nothing to print: every artboard picked is blank	není co tisknout: každá zvolená pracovní plocha je prázdná
 @msg	nothing to print: the document has no art that prints	není co tisknout: dokument nemá žádnou kresbu, která se tiskne
 @msg	nothing to repeat	není co opakovat
-@msg	numbers out of order in {_1} quantifier	čísla v kvantifikátoru {_1} jsou ve špatném pořadí
+@msg	numbers out of order in {{}} quantifier	čísla v kvantifikátoru {{}} jsou ve špatném pořadí
 @msg	object is not a path	objekt není cesta
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	průhlednost objektu nelze nabrat na zvýrazněné znaky; vypněte Průhlednost ve volbách kapátka nebo vyberte celý objekt
 @msg	object {_1} can't be set as point type	objekt {_1} nelze nastavit jako bodový text
@@ -9280,7 +9280,7 @@ breakText	Glyphs	Glyfy
 @msg	the page has no area	stránka nemá plochu
 @msg	the page's type in an unread object's box isn't in its page art	text stránky v rámečku nepřečteného objektu není v kresbě jeho stránky
 @msg	the paint behind the proxy is not a gradient	nátěr za aktivním políčkem není přechod
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	nátěr není volný přechod (použijte ho pomocí paint.editGradient {kind})
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	nátěr není volný přechod (použijte ho pomocí paint.editGradient {{kind: "freeform"}})
 @msg	the parameters or body do not form one function	parametry nebo tělo netvoří jednu funkci
 @msg	the parent must be a layer or sublayer	nadřazený prvek musí být vrstva nebo podvrstva
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	vložený filtr SVG {name} se vykresluje jinak než filtr dokumentu s tímto názvem a nehodí se pro něj žádný volný název

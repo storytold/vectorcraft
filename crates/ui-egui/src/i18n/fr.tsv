@@ -3748,7 +3748,7 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Polices composites
 	Export Composite Fonts	Exporter des polices composites
 	Import Composite Fonts	Importer des polices composites
-@msg	each font must be {name, parts}	chaque police doit être {name, parts}
+@msg	each font must be {{name, parts}}	chaque police doit être {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	clé inconnue `{k}` ; une police prend name et parts
 @msg	each font needs a name	chaque police doit avoir un nom
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ne peut pas nommer une police composite (1 à {COMPOSITE_NAME_MAX} caractères, sans caractères de contrôle)
@@ -3761,7 +3761,7 @@ digits	Malayalam	Malayalam
 @msg	two composite fonts are named `{_1}`	deux polices composites s’appellent `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` est le nom d’une police installée
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}` : {_2} utilise `{font}`, une police composite
-@msg	give fonts: [{name, parts}…]	indiquez fonts : [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	indiquez fonts : [{{name, parts}}…]
 @msg	path is empty	path est vide
 @msg	fonts must be a list of composite fonts	fonts doit être une liste de polices composites
 @msg	names must be strings	names doit contenir des chaînes
@@ -7893,7 +7893,7 @@ breakText	Glyphs	Glyphes
 @msg	`scale` must be a number from 0.001 to 1000	`scale` doit être un nombre compris entre 0.001 et 1000
 @msg	`scale` must be a number in (0, 100]	`scale` doit être un nombre dans (0, 100]
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` doit être une liste non vide
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` doit valoir "document", {artboards} ou {layers}
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` doit valoir "document", {{artboards: [index, …]}} ou {{layers: [id, …]}}
 @msg	`scope` must be "selection" or "document", not {other}	`scope` doit valoir "selection" ou "document", pas {other}
 @msg	`script` must be a string	`script` doit être une chaîne
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` est une liste non vide d’indices de séries
@@ -8783,7 +8783,7 @@ breakText	Glyphs	Glyphes
 @msg	nothing to print: every artboard picked is blank	rien à imprimer : chaque plan de travail choisi est vide
 @msg	nothing to print: the document has no art that prints	rien à imprimer : le document n’a aucune illustration imprimable
 @msg	nothing to repeat	rien à répéter
-@msg	numbers out of order in {_1} quantifier	nombres dans le désordre dans le quantificateur {_1}
+@msg	numbers out of order in {{}} quantifier	nombres dans le désordre dans le quantificateur {{}}
 @msg	object is not a path	l’objet n’est pas un tracé
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	la transparence d’un objet ne peut pas être prélevée sur des caractères en surbrillance ; désactivez Transparence dans les options de la pipette ou sélectionnez l’objet entier
 @msg	object {_1} can't be set as point type	l’objet {_1} ne peut pas être converti en texte de point
@@ -9140,7 +9140,7 @@ breakText	Glyphs	Glyphes
 @msg	the page has no area	la page n’a pas de surface
 @msg	the page's type in an unread object's box isn't in its page art	le texte de la page dans le cadre d’un objet non lu n’est pas dans l’illustration de sa page
 @msg	the paint behind the proxy is not a gradient	la peinture derrière l’échantillon n’est pas un dégradé
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	la peinture n’est pas un dégradé de forme libre (appliquez-en un avec paint.editGradient {kind})
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	la peinture n’est pas un dégradé de forme libre (appliquez-en un avec paint.editGradient {{kind: "freeform"}})
 @msg	the parameters or body do not form one function	les paramètres ou le corps ne forment pas une seule fonction
 @msg	the parent must be a layer or sublayer	le parent doit être un calque ou un sous-calque
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	le filtre SVG collé {name} dessine autrement que le filtre du document qui porte ce nom, et aucun nom libre ne lui convient

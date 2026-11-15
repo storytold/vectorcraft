@@ -4752,7 +4752,7 @@ digits	Malayalam	Malaiàlam
 	Composite Fonts	Tipus de lletra compostos
 	Export Composite Fonts	Exporta tipus de lletra compostos
 	Import Composite Fonts	Importa tipus de lletra compostos
-@msg	each font must be {name, parts}	cada tipus de lletra ha de ser {name, parts}
+@msg	each font must be {{name, parts}}	cada tipus de lletra ha de ser {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	clau desconeguda `{k}`; un tipus de lletra admet name i parts
 @msg	each font needs a name	cada tipus de lletra necessita un nom
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no pot anomenar un tipus de lletra compost (d’1 a {COMPOSITE_NAME_MAX} caràcters, sense caràcters de control)
@@ -4765,7 +4765,10 @@ digits	Malayalam	Malaiàlam
 @msg	two composite fonts are named `{_1}`	dos tipus de lletra compostos es diuen `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` és el nom d’un tipus de lletra instal·lat
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, un tipus de lletra compost
-@msg	give fonts: [{name, parts}…]	indiqueu fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	indiqueu fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` ha de ser "document", {{artboards: [index, …]}} o {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	nombres desordenats al quantificador {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	la pintura no és un degradat de forma lliure (apliqueu-ne un amb paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path és buit
 @msg	fonts must be a list of composite fonts	fonts ha de ser una llista de tipus de lletra compostos
 @msg	names must be strings	names ha de contenir cadenes

@@ -3788,7 +3788,7 @@ digits	Malayalam	Малаялам
 	Composite Fonts	Составные шрифты
 	Export Composite Fonts	Экспорт составных шрифтов
 	Import Composite Fonts	Импорт составных шрифтов
-@msg	each font must be {name, parts}	каждый шрифт должен иметь вид {name, parts}
+@msg	each font must be {{name, parts}}	каждый шрифт должен иметь вид {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	неизвестный ключ `{k}`; шрифт принимает name и parts
 @msg	each font needs a name	у каждого шрифта должно быть имя
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` не может быть именем составного шрифта (от 1 до {COMPOSITE_NAME_MAX} символов, без управляющих символов)
@@ -3801,7 +3801,7 @@ digits	Malayalam	Малаялам
 @msg	two composite fonts are named `{_1}`	два составных шрифта называются `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` является именем установленного шрифта
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} использует `{font}`, а это составной шрифт
-@msg	give fonts: [{name, parts}…]	укажите fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	укажите fonts: [{{name, parts}}…]
 @msg	path is empty	path пуст
 @msg	fonts must be a list of composite fonts	fonts должен быть списком составных шрифтов
 @msg	names must be strings	names должны быть строками
@@ -8013,7 +8013,7 @@ shape	Open	Открытый
 @msg	`scale` must be a number from 0.001 to 1000	`scale` должно быть числом от 0.001 до 1000
 @msg	`scale` must be a number in (0, 100]	`scale` должно быть числом в диапазоне (0, 100]
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` должно быть непустым массивом
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` должно быть "document", {artboards} или {layers}
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` должно быть "document", {{artboards: [index, …]}} или {{layers: [id, …]}}
 @msg	`scope` must be "selection" or "document", not {other}	`scope` должно быть "selection" или "document", а не {other}
 @msg	`script` must be a string	`script` должно быть строкой
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` — непустой список индексов рядов
@@ -8904,7 +8904,7 @@ shape	Open	Открытый
 @msg	nothing to print: every artboard picked is blank	нечего печатать: все выбранные монтажные области пусты
 @msg	nothing to print: the document has no art that prints	нечего печатать: в документе нет печатаемой графики
 @msg	nothing to repeat	нечего повторять
-@msg	numbers out of order in {_1} quantifier	числа в квантификаторе {_1} идут в неверном порядке
+@msg	numbers out of order in {{}} quantifier	числа в квантификаторе {{}} идут в неверном порядке
 @msg	object is not a path	объект не является контуром
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	прозрачность объекта нельзя перенести на выделенные символы; отключите «Прозрачность» в окне «Параметры пипетки» или выделите объект целиком
 @msg	object {_1} can't be set as point type	объект {_1} нельзя преобразовать в текст из точки
@@ -9263,7 +9263,7 @@ shape	Open	Открытый
 @msg	the page has no area	у страницы нет площади
 @msg	the page's type in an unread object's box isn't in its page art	текста страницы в рамке непрочитанного объекта нет в графике этой страницы
 @msg	the paint behind the proxy is not a gradient	краска за индикатором не является градиентом
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	краска не является произвольным градиентом (примените его через paint.editGradient {kind})
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	краска не является произвольным градиентом (примените его через paint.editGradient {{kind: "freeform"}})
 @msg	the parameters or body do not form one function	параметры или тело не образуют одну функцию
 @msg	the parent must be a layer or sublayer	родитель должен быть слоем или подслоем
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	вставленный фильтр SVG {name} рисует иначе, чем фильтр документа с тем же именем, и свободного имени для него не нашлось

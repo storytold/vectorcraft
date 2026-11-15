@@ -3605,7 +3605,6 @@ digits	Malayalam	მალაიალამური
 	Composite Fonts	კომპოზიტური შრიფტები
 	Export Composite Fonts	კომპოზიტური შრიფტების ექსპორტი
 	Import Composite Fonts	კომპოზიტური შრიფტების იმპორტი
-@msg	each font must be {name, parts}	თითოეული შრიფტი უნდა იყოს {name, parts}
 @msg	unknown key `{k}`; a font takes name and parts	უცნობი გასაღები `{k}`; შრიფტი იღებს name-სა და parts-ს
 @msg	each font needs a name	თითოეულ შრიფტს სახელი სჭირდება
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ვერ იქნება კომპოზიტური შრიფტის სახელი (1-დან {COMPOSITE_NAME_MAX} სიმბოლომდე, მმართველი სიმბოლოების გარეშე)
@@ -3618,7 +3617,6 @@ digits	Malayalam	მალაიალამური
 @msg	two composite fonts are named `{_1}`	ორ კომპოზიტურ შრიფტს ჰქვია `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` დაინსტალირებული შრიფტის სახელია
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} იყენებს `{font}`-ს, რომელიც კომპოზიტური შრიფტია
-@msg	give fonts: [{name, parts}…]	მიუთითეთ fonts: [{name, parts}…]
 @msg	path is empty	path ცარიელია
 @msg	fonts must be a list of composite fonts	fonts უნდა იყოს კომპოზიტური შრიფტების სია
 @msg	names must be strings	names უნდა იყოს სტრიქონები

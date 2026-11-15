@@ -3707,7 +3707,7 @@ effect	Points	Punkte
 	Composite Fonts	Zusammengesetzte Schriften
 	Export Composite Fonts	Zusammengesetzte Schriften exportieren
 	Import Composite Fonts	Zusammengesetzte Schriften importieren
-@msg	each font must be {name, parts}	jede Schrift muss {name, parts} sein
+@msg	each font must be {{name, parts}}	jede Schrift muss {{name, parts}} sein
 @msg	unknown key `{k}`; a font takes name and parts	unbekannter Schlüssel `{k}`; eine Schrift nimmt name und parts
 @msg	each font needs a name	jede Schrift braucht einen Namen
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kann keine zusammengesetzte Schrift benennen (1 bis {COMPOSITE_NAME_MAX} Zeichen, keine Steuerzeichen)
@@ -3720,7 +3720,7 @@ effect	Points	Punkte
 @msg	two composite fonts are named `{_1}`	zwei zusammengesetzte Schriften heißen `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` ist der Name einer installierten Schrift
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} ist in `{font}` gesetzt, einer zusammengesetzten Schrift
-@msg	give fonts: [{name, parts}…]	geben Sie fonts an: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	geben Sie fonts an: [{{name, parts}}…]
 @msg	path is empty	path ist leer
 @msg	fonts must be a list of composite fonts	fonts muss eine Liste zusammengesetzter Schriften sein
 @msg	names must be strings	names müssen Zeichenketten sein
@@ -7323,7 +7323,7 @@ breakText	Glyphs	Glyphen
 @msg	`rows` must be lists of numbers or nulls, not {r}	`rows` müssen Listen aus Zahlen oder null-Werten sein, nicht {r}
 @msg	`scale` must be a number from 0.001 to 1000	`scale` muss eine Zahl von 0,001 bis 1000 sein
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` muss ein nicht leeres Array sein
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` muss „document“, {artboards} oder {layers} sein
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` muss "document", {{artboards: [index, …]}} oder {{layers: [id, …]}} sein
 @msg	`side` must be "left", "right", "top" or "bottom"	`side` muss „left“, „right“, „top“ oder „bottom“ sein
 @msg	`side` places the artboard: leave out x, y, width and height	`side` platziert die Zeichenfläche: Lassen Sie x, y, width und height weg
 @msg	`source` is the only path in series group `target`	`source` ist der einzige Pfad in der Reihengruppe `target`
@@ -7503,7 +7503,7 @@ breakText	Glyphs	Glyphen
 @msg	not a regular expression	kein regulärer Ausdruck
 @msg	not an action set: the text doesn't start with /version and a number	kein Aktionssatz: Der Text beginnt nicht mit /version und einer Zahl
 @msg	nothing to repeat	nichts zu wiederholen
-@msg	numbers out of order in {_1} quantifier	Zahlen in falscher Reihenfolge im Quantifizierer {_1}
+@msg	numbers out of order in {{}} quantifier	Zahlen in falscher Reihenfolge im Quantifizierer {{}}
 @msg	object {_1} needs a 3D effect	Objekt {_1} braucht einen 3D-Effekt
 @msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	Objekt {_1}: Ein hohles „Extrudieren und abgeflachte Kante“ hat keine Deckflächen: Aktivieren Sie „Deckflächen“, um eine Grafik zuzuweisen
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	Objekt {_1}: Bei einer Tiefe von 0 hat das Objekt nur eine Fläche: Weisen Sie seine Grafiken der Vorderseite zu
@@ -7571,7 +7571,7 @@ breakText	Glyphs	Glyphen
 @msg	the guide is hidden or locked	die Hilfslinie ist ausgeblendet oder gesperrt
 @msg	the library's file is outside the read roots	die Datei der Bibliothek liegt außerhalb der Lesestammordner
 @msg	the method needs an XML value	die Methode braucht einen XML-Wert
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	die Farbe ist kein Freiformverlauf (wenden Sie einen mit paint.editGradient {kind} an)
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	die Farbe ist kein Freiformverlauf (wenden Sie einen mit paint.editGradient {{kind: "freeform"}} an)
 @msg	the parameters or body do not form one function	die Parameter oder der Rumpf bilden keine einzelne Funktion
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	der eingefügte SVG-Filter {name} zeichnet anders als der gleichnamige Filter des Dokuments, und kein freier Name passt zu ihm
 @msg	the pen table holds more than 255 pens	die Stifttabelle enthält mehr als 255 Stifte

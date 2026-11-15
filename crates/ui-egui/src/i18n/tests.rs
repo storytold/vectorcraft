@@ -2237,7 +2237,7 @@ fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
 #[test]
 fn composite_font_errors_translate_in_complete_languages() {
     const SOURCES: &[&str] = &[
-        "each font must be {name, parts}",
+        "each font must be {{name, parts}}",
         "unknown key `{k}`; a font takes name and parts",
         "each font needs a name",
         "`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)",
@@ -2250,7 +2250,7 @@ fn composite_font_errors_translate_in_complete_languages() {
         "two composite fonts are named `{_1}`",
         "`{_1}` is the name of an installed font",
         "`{_1}`: {_2} is set in `{font}`, a composite font",
-        "give fonts: [{name, parts}…]",
+        "give fonts: [{{name, parts}}…]",
         "path is empty",
         "fonts must be a list of composite fonts",
         "names must be strings",
@@ -2498,6 +2498,53 @@ fn literal_brace_rows_match_only_their_message() {
     assert_eq!(c.message("short y").map(|(f, _)| f), Some("short {x} (de)"));
     // In the real catalog, a serde reason after the plug-in output error stays English.
     assert_eq!(message(de(), "plug-in output: expected value at line 1 column 1"), "Plug-in-Ausgabe: expected value at line 1 column 1");
+}
+
+/// Every complete-message catalog translates the messages that print braces as text through an
+/// exact row with doubled braces, keeps each literal example whole, and has no row with a
+/// placeholder in their place: such a row also translates other text with the same start and end.
+#[test]
+fn literal_brace_messages_have_exact_rows_in_complete_languages() {
+    // A row's source, the message as shown, and the text its translation keeps.
+    let cases: &[(&str, &str, &[&str])] = &[
+        ("each font must be {{name, parts}}", "each font must be {name, parts}", &["{name, parts}"]),
+        ("give fonts: [{{name, parts}}…]", "give fonts: [{name, parts}…]", &["fonts", "[{name, parts}…]"]),
+        (
+            r#"`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}"#,
+            r#"`scope` must be "document", {artboards: [index, …]} or {layers: [id, …]}"#,
+            &["`scope`", r#""document""#, "{artboards: [index, …]}", "{layers: [id, …]}"],
+        ),
+        ("numbers out of order in {{}} quantifier", "numbers out of order in {} quantifier", &["{}"]),
+        (
+            r#"the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})"#,
+            r#"the paint is not a freeform gradient (apply one with paint.editGradient {kind: "freeform"})"#,
+            &["paint.editGradient", r#"{kind: "freeform"}"#],
+        ),
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: Vec<(&str, &str)> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, tr)| (src.as_str(), tr.as_str())).collect();
+        for (source, shown, kept) in cases {
+            let Some((_, tr)) = rows.iter().find(|(src, _)| src == source) else { panic!("{code} has no row for {source:?}") };
+            let out = message(lang, shown);
+            assert_eq!(out, fill_once(tr, &[]), "{code}: {shown}");
+            assert_ne!(out, *shown, "{code} leaves {shown:?} in English");
+            for k in *kept {
+                assert!(out.contains(k), "{code}: {k} in {out}");
+            }
+            // The text before the first brace and after the last one, which an older row with a
+            // placeholder in place of the braced example also starts and ends with.
+            let head = source.find('{').map_or("", |at| &source[..at]);
+            let tail = source.rfind('}').map_or("", |at| &source[at + 1..]);
+            let broad: Vec<&str> = rows
+                .iter()
+                .map(|(src, _)| *src)
+                .filter(|src| src != source && src.contains('{') && src.starts_with(head) && src.ends_with(tail))
+                .collect();
+            assert!(broad.is_empty(), "{code} keeps placeholder rows in place of {source:?}: {broad:?}");
+        }
+    }
 }
 
 /// `plugin.run` of an importer, an exporter or a live effect names the command that runs it with
@@ -4641,9 +4688,9 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("dataBase64 is not base64", &["dataBase64"]),
     ("decimals must be {_1}–{_2} (got {_3})", &["decimals"]),
     ("detect must be true or false", &["detect"]),
-    ("each font must be {name, parts}", &["name", "parts"]),
+    ("each font must be {{name, parts}}", &["name", "parts"]),
     ("fonts must be a list of composite fonts", &["fonts"]),
-    ("give fonts: [{name, parts}…]", &["fonts", "name", "parts"]),
+    ("give fonts: [{{name, parts}}…]", &["fonts", "name", "parts"]),
     ("give one of path, data or dataBase64", &["path", "data", "dataBase64"]),
     ("give origin: [x, y], or reset: true", &["origin", "reset"]),
     ("global must be true or false", &["global"]),

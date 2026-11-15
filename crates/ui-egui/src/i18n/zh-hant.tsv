@@ -4880,7 +4880,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Composite Fonts	複合字體
 	Export Composite Fonts	匯出複合字體
 	Import Composite Fonts	匯入複合字體
-@msg	each font must be {name, parts}	每個字體都必須是 {name, parts}
+@msg	each font must be {{name, parts}}	每個字體都必須是 {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	未知的鍵 `{k}`；字體可用的鍵為 name 和 parts
 @msg	each font needs a name	每個字體都需要名稱
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` 不能作為複合字體的名稱（1 到 {COMPOSITE_NAME_MAX} 個字元，不含控制字元）
@@ -4893,7 +4893,7 @@ digits	Malayalam	馬來亞拉姆數字
 @msg	two composite fonts are named `{_1}`	有兩個複合字體都名為 `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` 是已安裝字體的名稱
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`：{_2} 使用了複合字體 `{font}`
-@msg	give fonts: [{name, parts}…]	請指定 fonts：[{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	請指定 fonts：[{{name, parts}}…]
 @msg	path is empty	path 為空
 @msg	fonts must be a list of composite fonts	fonts 必須是複合字體清單
 @msg	names must be strings	names 必須是字串
@@ -7509,7 +7509,7 @@ breakText	Glyphs	字符
 @msg	`rows` must be lists of numbers or nulls, not {r}	`rows` 必須是由數字或 null 組成的清單，而非 {r}
 @msg	`scale` must be a number from 0.001 to 1000	`scale` 必須是 0.001 到 1000 之間的數字
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` 必須是非空陣列
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` 必須是 "document"、{artboards} 或 {layers}
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` 必須是 "document"、{{artboards: [index, …]}} 或 {{layers: [id, …]}}
 @msg	`side` must be "left", "right", "top" or "bottom"	`side` 必須是 "left"、"right"、"top" 或 "bottom"
 @msg	`side` places the artboard: leave out x, y, width and height	`side` 會決定工作區域的位置：請不要提供 x、y、width 和 height
 @msg	`source` is the only path in series group `target`	`source` 是系列群組 `target` 中唯一的路徑
@@ -7695,7 +7695,7 @@ breakText	Glyphs	字符
 @msg	not a regular expression	不是正規表示式
 @msg	not an action set: the text doesn't start with /version and a number	不是動作組：文字的開頭不是 /version 和一個數字
 @msg	nothing to repeat	沒有可重複的內容
-@msg	numbers out of order in {_1} quantifier	{_1} 量詞中的數字順序錯誤
+@msg	numbers out of order in {{}} quantifier	{{}} 量詞中的數字順序錯誤
 @msg	object {_1} needs a 3D effect	物件 {_1} 需要 3D 效果
 @msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	物件 {_1}：空心的「突出與斜角」沒有端面：請開啟「端點」才能對應圖形
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	物件 {_1}：深度為 0 時物件只有一個面：請將圖形對應到正面
@@ -7768,7 +7768,7 @@ breakText	Glyphs	字符
 @msg	the library's file is outside the read roots	資料庫的檔案位於讀取根目錄之外
 @msg	the line is too long, or the paths it passes too many, to check	線條過長，或經過的路徑過多，無法檢查
 @msg	the method needs an XML value	此方法需要 XML 值
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	此上色不是任意形狀漸層 (請以 paint.editGradient {kind} 套用)
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	此上色不是任意形狀漸層 (請以 paint.editGradient {{kind: "freeform"}} 套用)
 @msg	the parameters or body do not form one function	參數或主體無法構成一個函式
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	貼上的 SVG 濾鏡 {name} 的繪製結果與文件中同名的濾鏡不同，而且找不到可用的名稱
 @msg	the paths are too many or too tangled to find where they cross	路徑過多或過於糾結，無法找出交叉處

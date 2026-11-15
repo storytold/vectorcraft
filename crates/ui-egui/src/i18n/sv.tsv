@@ -3678,7 +3678,7 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Sammansatta typsnitt
 	Export Composite Fonts	Exportera sammansatta typsnitt
 	Import Composite Fonts	Importera sammansatta typsnitt
-@msg	each font must be {name, parts}	varje typsnitt måste vara {name, parts}
+@msg	each font must be {{name, parts}}	varje typsnitt måste vara {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	okänd nyckel `{k}`; ett typsnitt tar name och parts
 @msg	each font needs a name	varje typsnitt behöver ett namn
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan inte vara namnet på ett sammansatt typsnitt (1 till {COMPOSITE_NAME_MAX} tecken, inga styrtecken)
@@ -3691,7 +3691,10 @@ digits	Malayalam	Malayalam
 @msg	two composite fonts are named `{_1}`	två sammansatta typsnitt heter `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` är namnet på ett installerat typsnitt
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} använder `{font}`, ett sammansatt typsnitt
-@msg	give fonts: [{name, parts}…]	ange fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	ange fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` måste vara "document", {{artboards: [index, …]}} eller {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	talen står i fel ordning i kvantifieraren {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	färgen är inte en fri gradient (använd en med paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path är tom
 @msg	fonts must be a list of composite fonts	fonts måste vara en lista med sammansatta typsnitt
 @msg	names must be strings	names måste vara strängar

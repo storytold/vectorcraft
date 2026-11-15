@@ -3802,7 +3802,7 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Font compositi
 	Export Composite Fonts	Esporta font compositi
 	Import Composite Fonts	Importa font compositi
-@msg	each font must be {name, parts}	ogni font deve essere {name, parts}
+@msg	each font must be {{name, parts}}	ogni font deve essere {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	chiave sconosciuta `{k}`; un font accetta name e parts
 @msg	each font needs a name	ogni font deve avere un nome
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` non può essere il nome di un font composito (da 1 a {COMPOSITE_NAME_MAX} caratteri, senza caratteri di controllo)
@@ -3815,7 +3815,7 @@ digits	Malayalam	Malayalam
 @msg	two composite fonts are named `{_1}`	due font compositi si chiamano `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` è il nome di un font installato
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, un font composito
-@msg	give fonts: [{name, parts}…]	indica fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	indica fonts: [{{name, parts}}…]
 @msg	path is empty	path è vuoto
 @msg	fonts must be a list of composite fonts	fonts deve essere un elenco di font compositi
 @msg	names must be strings	names deve contenere stringhe
@@ -7365,7 +7365,7 @@ breakText	Glyphs	Glifi
 @msg	`rows` must be lists of numbers or nulls, not {r}	`rows` deve essere un elenco di liste di numeri o null, non {r}
 @msg	`scale` must be a number from 0.001 to 1000	`scale` deve essere un numero compreso tra 0.001 e 1000
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` deve essere un array non vuoto
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` deve essere "document", {artboards} o {layers}
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` deve essere "document", {{artboards: [index, …]}} o {{layers: [id, …]}}
 @msg	`side` must be "left", "right", "top" or "bottom"	`side` deve essere "left", "right", "top" o "bottom"
 @msg	`side` places the artboard: leave out x, y, width and height	`side` posiziona la tavola da disegno: ometti x, y, width e height
 @msg	`source` is the only path in series group `target`	`source` è l'unico tracciato nel gruppo in serie `target`
@@ -7550,7 +7550,7 @@ breakText	Glyphs	Glifi
 @msg	not a regular expression	non è un'espressione regolare
 @msg	not an action set: the text doesn't start with /version and a number	non è un set di azioni: il testo non inizia con /version e un numero
 @msg	nothing to repeat	niente da ripetere
-@msg	numbers out of order in {_1} quantifier	numeri non in ordine nel quantificatore {_1}
+@msg	numbers out of order in {{}} quantifier	numeri non in ordine nel quantificatore {{}}
 @msg	object {_1} needs a 3D effect	l'oggetto {_1} richiede un effetto 3D
 @msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	oggetto {_1}: un'estrusione e smussatura cava non ha tappi: attiva Tappo per applicare una grafica
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	oggetto {_1}: con una profondità di 0 l'oggetto ha una sola faccia: applica le sue grafiche sulla faccia anteriore
@@ -7619,7 +7619,7 @@ breakText	Glyphs	Glifi
 @msg	the library's file is outside the read roots	il file della libreria è fuori dalle cartelle di lettura consentite
 @msg	the line is too long, or the paths it passes too many, to check	la linea è troppo lunga, o i tracciati che attraversa sono troppi, per poterla verificare
 @msg	the method needs an XML value	il metodo richiede un valore XML
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	la pittura non è una sfumatura a forma libera (applicane una con paint.editGradient {kind})
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	la pittura non è una sfumatura a forma libera (applicane una con paint.editGradient {{kind: "freeform"}})
 @msg	the parameters or body do not form one function	i parametri o il corpo non formano un'unica funzione
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	il filtro SVG incollato {name} disegna in modo diverso dal filtro del documento con quel nome, e non c'è un nome libero adatto
 @msg	the paths are too many or too tangled to find where they cross	i tracciati sono troppi o troppo intrecciati per trovare dove si incrociano

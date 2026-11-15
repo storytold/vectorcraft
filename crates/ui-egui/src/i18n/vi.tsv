@@ -4149,7 +4149,7 @@ mark-style	Japanese	Kiểu Nhật
 	Composite Fonts	Phông chữ tổ hợp
 	Export Composite Fonts	Xuất phông chữ tổ hợp
 	Import Composite Fonts	Nhập phông chữ tổ hợp
-@msg	each font must be {name, parts}	mỗi phông chữ phải là {name, parts}
+@msg	each font must be {{name, parts}}	mỗi phông chữ phải là {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	khóa không xác định `{k}`; một phông chữ nhận name và parts
 @msg	each font needs a name	mỗi phông chữ cần có tên
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` không thể là tên phông chữ tổ hợp (từ 1 đến {COMPOSITE_NAME_MAX} ký tự, không có ký tự điều khiển)
@@ -4162,7 +4162,10 @@ mark-style	Japanese	Kiểu Nhật
 @msg	two composite fonts are named `{_1}`	có hai phông chữ tổ hợp cùng tên `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` là tên của một phông chữ đã cài đặt
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} dùng `{font}`, một phông chữ tổ hợp
-@msg	give fonts: [{name, parts}…]	hãy cung cấp fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	hãy cung cấp fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` phải là "document", {{artboards: [index, …]}} hoặc {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	các số không theo thứ tự trong lượng từ {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	màu tô không phải là chuyển sắc dạng tự do (hãy áp dụng một chuyển sắc bằng paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path trống
 @msg	fonts must be a list of composite fonts	fonts phải là danh sách phông chữ tổ hợp
 @msg	names must be strings	names phải là chuỗi

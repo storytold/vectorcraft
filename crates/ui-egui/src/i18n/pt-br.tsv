@@ -5333,7 +5333,7 @@ axis	Both	Ambos
 	Composite Fonts	Fontes compostas
 	Export Composite Fonts	Exportar fontes compostas
 	Import Composite Fonts	Importar fontes compostas
-@msg	each font must be {name, parts}	cada fonte deve ser {name, parts}
+@msg	each font must be {{name, parts}}	cada fonte deve ser {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	chave desconhecida `{k}`; uma fonte aceita name e parts
 @msg	each font needs a name	cada fonte precisa de um nome
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` não pode nomear uma fonte composta (de 1 a {COMPOSITE_NAME_MAX} caracteres, sem caracteres de controle)
@@ -5346,7 +5346,7 @@ axis	Both	Ambos
 @msg	two composite fonts are named `{_1}`	duas fontes compostas se chamam `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` é o nome de uma fonte instalada
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, uma fonte composta
-@msg	give fonts: [{name, parts}…]	informe fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	informe fonts: [{{name, parts}}…]
 @msg	path is empty	path está vazio
 @msg	fonts must be a list of composite fonts	fonts deve ser uma lista de fontes compostas
 @msg	names must be strings	names deve conter strings
@@ -8090,7 +8090,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`scale` must be a number from 0.001 to 1000	`scale` deve ser um número de 0.001 a 1000
 @msg	`scale` must be a number in (0, 100]	`scale` deve ser um número em (0, 100]
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` deve ser uma matriz não vazia
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` deve ser "document", {artboards} ou {layers}
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` deve ser "document", {{artboards: [index, …]}} ou {{layers: [id, …]}}
 @msg	`scope` must be "selection" or "document", not {other}	`scope` deve ser "selection" ou "document", não {other}
 @msg	`script` must be a string	`script` deve ser uma string
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` é uma lista não vazia de índices de séries
@@ -8983,7 +8983,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	nothing to print: every artboard picked is blank	nada para imprimir: todas as pranchetas escolhidas estão em branco
 @msg	nothing to print: the document has no art that prints	nada para imprimir: o documento não tem arte imprimível
 @msg	nothing to repeat	nada para repetir
-@msg	numbers out of order in {_1} quantifier	números fora de ordem no quantificador {_1}
+@msg	numbers out of order in {{}} quantifier	números fora de ordem no quantificador {{}}
 @msg	object is not a path	o objeto não é um caminho
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	a transparência do objeto não pode ser aplicada aos caracteres destacados; desative Transparência nas Opções do Conta-gotas ou selecione o objeto inteiro
 @msg	object {_1} can't be set as point type	o objeto {_1} não pode ser definido como texto de ponto
@@ -9341,7 +9341,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	the page has no area	a página não tem área
 @msg	the page's type in an unread object's box isn't in its page art	o texto da página na caixa de um objeto não lido não está na arte da página
 @msg	the paint behind the proxy is not a gradient	a pintura por trás do proxy não é um gradiente
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	a pintura não é um gradiente de forma livre (aplique um com paint.editGradient {kind})
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	a pintura não é um gradiente de forma livre (aplique um com paint.editGradient {{kind: "freeform"}})
 @msg	the parameters or body do not form one function	os parâmetros ou o corpo não formam uma única função
 @msg	the parent must be a layer or sublayer	o pai deve ser uma camada ou subcamada
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	o filtro SVG colado {name} desenha de modo diferente do filtro do documento com esse nome, e nenhum nome livre serve para ele

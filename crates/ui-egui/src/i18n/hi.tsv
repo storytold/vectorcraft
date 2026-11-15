@@ -5135,7 +5135,7 @@ antiAlias	Sharp	शार्प
 	Composite Fonts	कंपोज़िट फ़ॉन्ट
 	Export Composite Fonts	कंपोज़िट फ़ॉन्ट एक्सपोर्ट करें
 	Import Composite Fonts	कंपोज़िट फ़ॉन्ट इम्पोर्ट करें
-@msg	each font must be {name, parts}	हर फ़ॉन्ट {name, parts} होना चाहिए
+@msg	each font must be {{name, parts}}	हर फ़ॉन्ट {{name, parts}} होना चाहिए
 @msg	unknown key `{k}`; a font takes name and parts	अज्ञात कुंजी `{k}`; फ़ॉन्ट name और parts लेता है
 @msg	each font needs a name	हर फ़ॉन्ट का एक नाम होना चाहिए
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` कंपोज़िट फ़ॉन्ट का नाम नहीं हो सकता (1 से {COMPOSITE_NAME_MAX} अक्षर, कोई नियंत्रण अक्षर नहीं)
@@ -5148,7 +5148,10 @@ antiAlias	Sharp	शार्प
 @msg	two composite fonts are named `{_1}`	दो कंपोज़िट फ़ॉन्ट का नाम `{_1}` है
 @msg	`{_1}` is the name of an installed font	`{_1}` एक इंस्टॉल किए गए फ़ॉन्ट का नाम है
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} `{font}` में सेट है, जो एक कंपोज़िट फ़ॉन्ट है
-@msg	give fonts: [{name, parts}…]	fonts दें: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	fonts दें: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` को "document", {{artboards: [index, …]}} या {{layers: [id, …]}} होना चाहिए
+@msg	numbers out of order in {{}} quantifier	{{}} क्वांटिफ़ायर में संख्याएँ क्रम में नहीं हैं
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	पेंट फ्रीफॉर्म ग्रेडिएंट नहीं है (paint.editGradient {{kind: "freeform"}} से एक लागू करें)
 @msg	path is empty	path खाली है
 @msg	fonts must be a list of composite fonts	fonts कंपोज़िट फ़ॉन्ट की सूची होनी चाहिए
 @msg	names must be strings	names स्ट्रिंग होने चाहिए

@@ -4432,7 +4432,7 @@ mark-style	Japanese	Japán
 	Composite Fonts	Összetett betűtípusok
 	Export Composite Fonts	Összetett betűtípusok exportálása
 	Import Composite Fonts	Összetett betűtípusok importálása
-@msg	each font must be {name, parts}	minden betűtípusnak {name, parts} alakúnak kell lennie
+@msg	each font must be {{name, parts}}	minden betűtípusnak {{name, parts}} alakúnak kell lennie
 @msg	unknown key `{k}`; a font takes name and parts	ismeretlen kulcs: `{k}`; egy betűtípus name és parts kulcsot fogad
 @msg	each font needs a name	minden betűtípusnak kell egy név
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nem lehet összetett betűtípus neve (1–{COMPOSITE_NAME_MAX} karakter, vezérlőkarakterek nélkül)
@@ -4445,7 +4445,7 @@ mark-style	Japanese	Japán
 @msg	two composite fonts are named `{_1}`	két összetett betűtípus neve is `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` egy telepített betűtípus neve
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: a(z) {_2} a(z) `{font}` összetett betűtípust használja
-@msg	give fonts: [{name, parts}…]	adja meg: fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	adja meg: fonts: [{{name, parts}}…]
 @msg	path is empty	a path üres
 @msg	fonts must be a list of composite fonts	a fonts értékének összetett betűtípusok listájának kell lennie
 @msg	names must be strings	a names elemeinek karakterláncoknak kell lenniük
@@ -7899,7 +7899,7 @@ breakText	Glyphs	Glifák
 @msg	`scale` must be a number from 0.001 to 1000	`scale`: 0.001 és 1000 közötti szám kell
 @msg	`scale` must be a number in (0, 100]	`scale`: a (0, 100] tartományba eső szám kell
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}`: nem üres tömb kell
-@msg	`scope` must be "document", {artboards} or {layers}	`scope`: "document", {artboards} vagy {layers} kell
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope`: "document", {{artboards: [index, …]}} vagy {{layers: [id, …]}} kell
 @msg	`scope` must be "selection" or "document", not {other}	`scope`: "selection" vagy "document" kell, ez nem az: {other}
 @msg	`script` must be a string	`script`: karakterlánc kell
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes`: adatsorindexek nem üres listája
@@ -8793,7 +8793,7 @@ breakText	Glyphs	Glifák
 @msg	nothing to print: every artboard picked is blank	nincs mit nyomtatni: minden kiválasztott rajztábla üres
 @msg	nothing to print: the document has no art that prints	nincs mit nyomtatni: a dokumentumban nincs nyomtatásra kerülő grafika
 @msg	nothing to repeat	nincs mit ismételni
-@msg	numbers out of order in {_1} quantifier	a számok rossz sorrendben vannak ebben a kvantorban: {_1}
+@msg	numbers out of order in {{}} quantifier	a számok rossz sorrendben vannak ebben a kvantorban: {{}}
 @msg	object is not a path	az objektum nem útvonal
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	az objektum átlátszósága nem vehető át kiemelt karakterekre; kapcsold ki az Átlátszóság beállítást a Pipetta beállításaiban, vagy jelöld ki a teljes objektumot
 @msg	object {_1} can't be set as point type	ez az objektum nem állítható be pontszövegként: {_1}
@@ -9151,7 +9151,7 @@ breakText	Glyphs	Glifák
 @msg	the page has no area	az oldalnak nincs területe
 @msg	the page's type in an unread object's box isn't in its page art	az oldal egy be nem olvasott objektum keretében lévő szövege nincs benne az oldal grafikájában
 @msg	the paint behind the proxy is not a gradient	a mintadoboz mögötti festés nem színátmenet
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	a festés nem szabad formájú színátmenet (alkalmazz egyet a paint.editGradient {kind} paranccsal)
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	a festés nem szabad formájú színátmenet (alkalmazz egyet a paint.editGradient {{kind: "freeform"}} paranccsal)
 @msg	the parameters or body do not form one function	a paraméterek vagy a törzs nem alkotnak egyetlen függvényt
 @msg	the parent must be a layer or sublayer	a szülő réteg vagy alréteg kell legyen
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	a beillesztett SVG-szűrő ({name}) másképp rajzol, mint a dokumentum azonos nevű szűrője, és nem jut neki szabad név

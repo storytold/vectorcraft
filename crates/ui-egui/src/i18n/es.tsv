@@ -3756,7 +3756,7 @@ digits	Malayalam	Malayálam
 	Composite Fonts	Fuentes compuestas
 	Export Composite Fonts	Exportar fuentes compuestas
 	Import Composite Fonts	Importar fuentes compuestas
-@msg	each font must be {name, parts}	cada fuente debe ser {name, parts}
+@msg	each font must be {{name, parts}}	cada fuente debe ser {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	clave desconocida `{k}`; una fuente admite name y parts
 @msg	each font needs a name	cada fuente necesita un nombre
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no puede nombrar una fuente compuesta (de 1 a {COMPOSITE_NAME_MAX} caracteres, sin caracteres de control)
@@ -3769,7 +3769,10 @@ digits	Malayalam	Malayálam
 @msg	two composite fonts are named `{_1}`	dos fuentes compuestas se llaman `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` es el nombre de una fuente instalada
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, una fuente compuesta
-@msg	give fonts: [{name, parts}…]	indique fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	indique fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` debe ser "document", {{artboards: [index, …]}} o {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	números desordenados en el cuantificador {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	la pintura no es un degradado de forma libre (aplique uno con paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path está vacío
 @msg	fonts must be a list of composite fonts	fonts debe ser una lista de fuentes compuestas
 @msg	names must be strings	names debe contener cadenas

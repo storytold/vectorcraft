@@ -4255,7 +4255,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Composite Fonts	Σύνθετες γραμματοσειρές
 	Export Composite Fonts	Εξαγωγή σύνθετων γραμματοσειρών
 	Import Composite Fonts	Εισαγωγή σύνθετων γραμματοσειρών
-@msg	each font must be {name, parts}	κάθε γραμματοσειρά πρέπει να είναι {name, parts}
+@msg	each font must be {{name, parts}}	κάθε γραμματοσειρά πρέπει να είναι {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	άγνωστο κλειδί `{k}`· μια γραμματοσειρά δέχεται name και parts
 @msg	each font needs a name	κάθε γραμματοσειρά χρειάζεται όνομα
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	το `{raw}` δεν μπορεί να είναι όνομα σύνθετης γραμματοσειράς (1 έως {COMPOSITE_NAME_MAX} χαρακτήρες, χωρίς χαρακτήρες ελέγχου)
@@ -4268,7 +4268,10 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	two composite fonts are named `{_1}`	δύο σύνθετες γραμματοσειρές ονομάζονται `{_1}`
 @msg	`{_1}` is the name of an installed font	το `{_1}` είναι όνομα εγκατεστημένης γραμματοσειράς
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: το {_2} χρησιμοποιεί την `{font}`, που είναι σύνθετη γραμματοσειρά
-@msg	give fonts: [{name, parts}…]	δώστε fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	δώστε fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	το `scope` πρέπει να είναι "document", {{artboards: [index, …]}} ή {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	αριθμοί εκτός σειράς στον ποσοδείκτη {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	το χρώμα δεν είναι ντεγκραντέ ελεύθερης μορφής (εφαρμόστε ένα με paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	το path είναι κενό
 @msg	fonts must be a list of composite fonts	το fonts πρέπει να είναι λίστα σύνθετων γραμματοσειρών
 @msg	names must be strings	τα names πρέπει να είναι συμβολοσειρές
