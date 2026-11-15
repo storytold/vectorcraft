@@ -7247,7 +7247,9 @@ to}]}`.
 `edit.pasteWithoutFormatting` sets the labels of a pasted graph in a new graph's label character style and
 paragraph attributes, keeping each label's alignment and where it starts. The pasted graph no longer keeps its labels' character and
 paragraph formats, so a later `graph.setData` or `graph.setType` sets the labels the same way. The rest of the
-graph's art is pasted as it was copied.
+graph's art is pasted as it was copied. A pie's legend labels in its wedges are white on a dark wedge and black on a
+light one, by the wedge colors as pasted: a wedge linked to a swatch merged with the document's takes that swatch's
+color first.
 
 A global or spot swatch whose name the document gives another colour is a conflict: `clipboard.conflicts` lists
 them, and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
