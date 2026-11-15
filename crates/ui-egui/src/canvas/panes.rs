@@ -322,16 +322,18 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     app.canvas.panes.shown.retain(|s, _| live.contains(s));
     app.canvas.panes.pending.retain(|s, _| live.contains(s));
     app.canvas.panes.fits.retain(|s, _| live.contains(s));
-    // A window opened, closed, floated or docked changes the panes, and so does coming back to the
-    // panes from one window: each window fits its new pane. With as many panes as before, only a
-    // window that moved to another pane fits it, as when a tab brings its window into the last pane
-    // of a 2-up to 6-up layout: the others keep their zoom and scroll. Windows are compared by
-    // their slots, since a closed document shifts the indices of the documents after it.
+    // A window that moved to another pane fits it, and so does a window whose pane changed place or
+    // size because a window opened, closed, floated or docked, or because the panes came back from
+    // one window. A window that keeps its pane keeps its zoom and scroll, as when a tab brings its
+    // window into the last pane of a 2-up to 6-up layout, or when 6-Up loses its sixth document.
+    // Windows are compared by their slots, since a closed document shifts the indices of the
+    // documents after it, and panes by their place in the layout.
     let before = std::mem::take(&mut app.canvas.panes.last_slots);
     let now: Vec<Option<Slot>> = shown.iter().map(|w| slot(app, *w)).collect();
-    let same_panes = before.len() == now.len();
+    let unit = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(1.0, 1.0));
+    let (cells_before, cells_now) = (layout_cells(layout, before.len(), unit), layout_cells(layout, now.len(), unit));
     for (i, (w, s)) in shown.iter().zip(&now).enumerate() {
-        if same_panes && s.is_some() && before.get(i) == Some(s) {
+        if s.is_some() && before.get(i) == Some(s) && cells_before.get(i) == cells_now.get(i) {
             continue;
         }
         if let Some(v) = crate::doc_windows::view_mut(app, *w) {

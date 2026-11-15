@@ -232,6 +232,39 @@ fn closing_a_document_in_an_n_up_layout_fits_the_documents_that_change_panes() {
     assert!(v.fitted && (v.zoom - fit_zoom(area, Rect::new(0.0, 0.0, 400.0, 300.0), 0.0, 1.0)).abs() < 1e-9, "it fits its new pane: {v:?}");
 }
 
+/// 6-Up keeps its three columns and two rows with five documents: closing the sixth leaves the
+/// others in their panes with the zoom they had. Side by side, closing one widens every pane, and
+/// each document fits its new pane.
+#[test]
+fn closing_a_document_keeps_the_zoom_of_the_documents_whose_panes_stay() {
+    let mut app = app_with(6);
+    let ctx = egui::Context::default();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("window.arrange.tile", json!({"layout": "6up"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(panes(&app).0, [0, 1, 2, 3, 4, 5]);
+    app.views[1].zoom *= 2.0;
+    let zoomed = app.views[1].zoom;
+    app.run("file.close", json!({"index": 5})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let (docs, rects) = panes(&app);
+    assert_eq!((docs, columns_and_rows(&rects)), (vec![0, 1, 2, 3, 4], (3, 2)));
+    assert_eq!(app.views[1].zoom, zoomed, "the document that kept its pane keeps its zoom");
+
+    let mut app = app_with(3);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("window.arrange.tile", json!({"layout": "vertical"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    app.views[1].zoom *= 2.0;
+    app.run("file.close", json!({"index": 2})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let (docs, rects) = panes(&app);
+    assert_eq!(docs, [0, 1]);
+    let area = view_rects(&app, rects[1], ctx.pixels_per_point()).1;
+    let v = app.views[1];
+    assert!(v.fitted && (v.zoom - fit_zoom(area, Rect::new(0.0, 0.0, 400.0, 300.0), 0.0, 1.0)).abs() < 1e-9, "it fits its wider pane: {v:?}");
+}
+
 #[test]
 fn tile_refuses_a_layout_it_does_not_have() {
     let mut app = app_with(3);
