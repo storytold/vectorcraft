@@ -3633,6 +3633,29 @@ fn the_control_bar_selects_similar_objects() {
         panic!("Transform off: the button and the Align buttons show")
     };
     assert!(a.x1 <= b.x0, "after the Align buttons: {a:?} {b:?}");
+    // With the Transform group off, its link and X/Y/W/H fields take no room: the button and its
+    // menu show in the narrowest bar that holds them after every control ahead of them, and never
+    // while a control ahead of them is left out.
+    let mut first = None;
+    for width in (600..=2400).step_by(10) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+        let mut nodes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let Some(b) = find(&nodes, "Select Similar Options").and_then(|n| n.bounds()) else {
+            continue;
+        };
+        for name in ["Stroke:", "Opacity:", "Horizontal Align Left", "Recolor Artwork"] {
+            assert!(find(&nodes, name).is_some(), "{width}: shown without {name} ahead of it");
+        }
+        first.get_or_insert((width, b.x1));
+    }
+    let Some((width, end)) = first else { panic!("Transform off: a wide bar has room for them") };
+    let free = f64::from(width) - end;
+    assert!(free < 120.0, "Transform off: the narrowest bar that shows them, {width} pt wide, leaves {free} pt after them");
 }
 
 /// At any width the Control bar shows the inline X, Y, W and H fields whole inside its right margin,

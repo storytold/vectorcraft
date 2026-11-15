@@ -61,6 +61,7 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
     for (label, buttons) in groups.into_iter().take(shown) {
         let text = egui::RichText::new(label).size(12.0).color(t.text);
         if in_row && ui.available_width() < row_width(ui, &[widgets::text_width(ui, text.clone())]) + buttons_width(ui, buttons.len()) {
+            left_out(ui);
             break;
         }
         ui.horizontal(|ui| {
@@ -164,9 +165,13 @@ const GLOBAL_EDIT_OPTIONS_WIDTH: f32 = 24.0;
 /// It opens the Properties panel's Global Edit Options, which set the same session options, and is
 /// off and closed while Global Edit is on, as that panel's dropdown is. It sits after Recolor
 /// Artwork, ahead of the X/Y/W/H fields that the bar leaves out when it runs short of room, and is
-/// left out when the room left, less `reserve` ([`transform_reserve`]), cannot hold it.
+/// left out when the room left, less `reserve` ([`transform_reserve`]), cannot hold it ([`left_out`]).
 fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
-    if !crate::menus::enabled(app, "select.globalEdit") || ui.available_width() < row_width(ui, &[GLOBAL_EDIT_OPTIONS_WIDTH]) + reserve {
+    if !crate::menus::enabled(app, "select.globalEdit") {
+        return;
+    }
+    if ui.available_width() < row_width(ui, &[GLOBAL_EDIT_OPTIONS_WIDTH]) + reserve {
+        left_out(ui);
         return;
     }
     let on = app.session.active().is_some_and(|d| d.global_edit.is_some());
@@ -287,6 +292,24 @@ fn boundary(ui: &mut Ui, draw: impl FnOnce(&mut Ui)) {
     ui.data_mut(|d| d.insert_temp(key, b));
 }
 
+/// The key of the pass in which a control of the row `ui` was last left out for room.
+fn left_out_key(ui: &Ui) -> egui::Id {
+    ui.unique_id().with("cb-left-out")
+}
+
+/// Notes that a control of the Control bar's row `ui` was left out in this pass for want of room,
+/// so the controls the bar leaves out first stay out too ([`any_left_out`]).
+pub(crate) fn left_out(ui: &mut Ui) {
+    let (key, pass) = (left_out_key(ui), ui.ctx().cumulative_pass_nr());
+    ui.data_mut(|d| d.insert_temp(key, pass));
+}
+
+/// Whether a control of the row `ui` was left out in this pass for want of room ([`left_out`]).
+fn any_left_out(ui: &Ui) -> bool {
+    let (key, pass) = (left_out_key(ui), ui.ctx().cumulative_pass_nr());
+    ui.data(|d| d.get_temp::<u64>(key)) == Some(pass)
+}
+
 /// The separator that ends a group of the Control bar's controls, drawn as `ui.separator()` draws
 /// one, and left out when no control follows it ([`boundary`]) or the row has no room left for it.
 pub(crate) fn group_separator(ui: &mut Ui) {
@@ -348,23 +371,26 @@ fn transform_reserve(app: &VectorcraftApp, ui: &Ui, selected: bool) -> f32 {
 /// Align To menu and, for two or more objects, the Distribute buttons (a single object keeps the bar
 /// as it was); each shows only while the end of the bar keeps its room. Groups the panel menu has
 /// off are left out, and take no room. Without `room` (the Character group had none), all of these
-/// groups are left out, so the bar trims them from its right end before the Character group. Also
-/// returns whether the Character group and the Align group had their room: the Align buttons, the
-/// Align To menu and the Distribute buttons the selection calls for all showed, or the group is
-/// off.
-fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize, room: bool) -> (bool, bool) {
+/// groups are left out, so the bar trims them from its right end before the Character group. The
+/// Character group without its room, and a control left out for room here, are noted with
+/// [`left_out`].
+fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize, room: bool) -> bool {
+    if !room {
+        left_out(ui);
+    }
     let nothing = objects == 0;
     let end = end_width(app, ui, nothing);
     if room && group_on(app, "paragraph") && crate::panels::paragraph::control_bar(app, ui, BUTTON, |ui| group_end_width(ui) + end) {
         group_end(ui);
     }
-    if room
-        && group_on(app, "verticalAlignment")
-        && crate::panels::properties::vertical_align::shown(app).is_some()
-        && ui.available_width() >= buttons_width(ui, 4) + group_end_width(ui) + end
-        && crate::panels::properties::vertical_align::buttons(app, ui, BUTTON)
-    {
-        group_end(ui);
+    if room && group_on(app, "verticalAlignment") && crate::panels::properties::vertical_align::shown(app).is_some() {
+        if ui.available_width() >= buttons_width(ui, 4) + group_end_width(ui) + end {
+            if crate::panels::properties::vertical_align::buttons(app, ui, BUTTON) {
+                group_end(ui);
+            }
+        } else {
+            left_out(ui);
+        }
     }
     if nothing {
         // Each button shows only while the bar has room left for it, so Preferences can show
@@ -377,30 +403,34 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
                 app.run("edit.preferences", json!({})).ok();
             }
         }
-        return (false, false);
+        return false;
     }
     let transform = group_on(app, "transform");
     let end = if transform { separator_width(ui) + end } else { 0.0 };
-    let align_on = group_on(app, "alignDistribute");
-    // Whether the whole group showed: the Align buttons, the Align To menu and the Distribute
-    // buttons the selection calls for.
-    let mut whole = !align_on;
-    if room && align_on && ui.available_width() >= buttons_width(ui, 7) + end {
+    if room && group_on(app, "alignDistribute") {
+        if ui.available_width() < buttons_width(ui, 7) + end {
+            left_out(ui);
+            return transform;
+        }
         crate::panels::align::align_buttons(app, ui, BUTTON);
         if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x + end {
             crate::panels::align::align_to_menu(app, ui, BUTTON);
-            whole = objects < 2;
-            if objects > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
-                ui.add_space(GROUP_GAP);
-                crate::panels::align::distribute_buttons(app, ui, BUTTON);
-                whole = true;
+            if objects > 1 {
+                if ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
+                    ui.add_space(GROUP_GAP);
+                    crate::panels::align::distribute_buttons(app, ui, BUTTON);
+                } else {
+                    left_out(ui);
+                }
             }
+        } else {
+            left_out(ui);
         }
         if transform {
             boundary(ui, separator);
         }
     }
-    (transform, room && whole)
+    transform
 }
 
 /// Draws the Control bar's Align group after the artboard controls, with the Artboard tool in use:
@@ -603,9 +633,10 @@ fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
 /// and the width profile, and the separator after them while a control follows ([`group_separator`]).
 /// Short of room, the bar leaves out the width profile first, then the Stroke link with the weight,
 /// then the two chips; each shows only while the bar has room for all of it and `reserve` after it
-/// ([`transform_reserve`]).
+/// ([`transform_reserve`]), and a control left out is noted with [`left_out`].
 fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     if ui.available_width() < row_width(ui, &[CHIP_WIDTH, CHIP_WIDTH]) + reserve {
+        left_out(ui);
         return;
     }
     let shown_stroke = crate::panels::current_stroke(app);
@@ -619,11 +650,13 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     if ui.available_width() >= row_width(ui, &[link, WEIGHT_FIELD_WIDTH]) + reserve {
         stroke_panel::link(app, ui, tl!("Stroke:"));
         stroke_panel::weight_field(app, ui, "cb-stroke", weight, WEIGHT_FIELD_WIDTH);
-        if ui.available_width() >= row_width(ui, &[stroke_panel::PROFILE_DROPDOWN_WIDTH]) + reserve
-            && let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref()))
-        {
+        if ui.available_width() < row_width(ui, &[stroke_panel::PROFILE_DROPDOWN_WIDTH]) + reserve {
+            left_out(ui);
+        } else if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
             app.run("stroke.set", json!({"profile": id})).ok();
         }
+    } else {
+        left_out(ui);
     }
     group_end(ui);
 }
@@ -634,7 +667,7 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
 /// the bar leaves out Global Edit Options first, then Recolor Artwork, then the Style link with its
 /// chip. The Opacity link with its field and the Style link with its chip each show only while the
 /// bar has room for all of it and `reserve` after it ([`transform_reserve`]), so the narrower Style
-/// part can show without the Opacity part.
+/// part can show without the Opacity part. A control left out is noted with [`left_out`].
 fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity: f32, selected: bool, reserve: f32) {
     let (opacity_on, style_on) = (group_on(app, "opacity"), group_on(app, "graphicStyle") && selected);
     let mut drawn = false;
@@ -651,10 +684,15 @@ fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity:
                 app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
             }
             drawn = true;
+        } else {
+            left_out(ui);
         }
     }
     let text = egui::RichText::new(tl!("Style:")).size(12.0).color(t.text).underline();
-    if style_on && ui.available_width() >= GROUP_GAP + row_width(ui, &[widgets::text_width(ui, text.clone()), CHIP_WIDTH]) + reserve {
+    let style_room = GROUP_GAP + row_width(ui, &[widgets::text_width(ui, text.clone()), CHIP_WIDTH]) + reserve;
+    if style_on && ui.available_width() < style_room {
+        left_out(ui);
+    } else if style_on {
         // Style picker: the selection's graphic style; its menu applies another.
         ui.add_space(GROUP_GAP);
         if ui.link(text).clicked() {
@@ -665,10 +703,9 @@ fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity:
         egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
         // Recolor Artwork, when the selection has colours to recolour.
         let colored = app.session.active().is_some_and(|st| crate::canvas::has_colors(&st.doc, &st.selection.objects));
-        if colored
-            && ui.available_width() >= buttons_width(ui, 1) + reserve
-            && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, BUTTON).clicked()
-        {
+        if colored && ui.available_width() < buttons_width(ui, 1) + reserve {
+            left_out(ui);
+        } else if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, BUTTON).clicked() {
             crate::menus::invoke(app, "ui.recolorDialog", json!({}));
         }
         global_edit_options(app, ui, reserve);
@@ -707,13 +744,12 @@ fn similar_label(by: &str) -> &'static str {
 /// then on, and the kept one is checked. Both are off while `select.similar` cannot run. They show
 /// together at the right end of the bar, after a separator, while something is selected and the
 /// panel menu has Object Options on, and only in the room every control ahead of them left
-/// ([`contents`]): the bar leaves them out before any other control, and while `ahead_shown` is
-/// false (a control ahead of them was left out for room). They show only while the room left is
-/// also at least `keep`.
-fn trailing_select_similar(app: &mut VectorcraftApp, ui: &mut Ui, ahead_shown: bool, keep: f32) {
+/// ([`contents`]): the bar leaves them out before any other control, and while a control ahead of
+/// them was left out for room ([`any_left_out`]). Groups the panel menu has off take no room.
+fn trailing_select_similar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let selected = app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
     let width = separator_width(ui) + row_width(ui, &[BUTTON, SELECT_SIMILAR_MENU_WIDTH]);
-    if !ahead_shown || !selected || !group_on(app, "objectOptions") || ui.available_width() < width.max(keep) {
+    if any_left_out(ui) || !selected || !group_on(app, "objectOptions") || ui.available_width() < width {
         return;
     }
     boundary(ui, separator);
@@ -881,6 +917,8 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         let label = egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text);
         if ui.available_width() >= widgets::text_width(ui, label.clone()) {
             ui.label(label);
+        } else {
+            left_out(ui);
         }
         // With the Artboard tool in use, the bar shows the active artboard's controls in place
         // of the object controls.
@@ -923,11 +961,9 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         // The Character group shows whole, with the Transform link's room left after it, or not at
         // all; left out, it leaves out the groups between it and the link too.
         let room = !group_on(app, "character") || crate::panels::character::control_bar(app, ui, reserve);
-        let (transform, groups_fit) = groups_before_transform(app, ui, sel.len(), room);
-        if !transform {
-            // With the Transform group off, the room its link and X/Y/W/H fields would take stays
-            // free too, as a group left out ahead takes less than that.
-            trailing_select_similar(app, ui, groups_fit, crate::panels::transform::link_width(ui) + inline_transform_width(ui, t));
+        if !groups_before_transform(app, ui, sel.len(), room) {
+            // With the Transform group off, its link and X/Y/W/H fields take no room.
+            trailing_select_similar(app, ui);
             erase_trailing(ui);
             return;
         }
@@ -942,8 +978,9 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         crate::panels::transform::link(app, ui);
         // The bounding box, rotated with rotated objects: its centre and its own sides.
         let selection_box = app.selection_box();
-        let fields_left_out = selection_box.is_some() && ui.available_width() < inline_transform_width(ui, t);
-        if let Some(b) = selection_box.as_ref().filter(|_| !fields_left_out) {
+        if selection_box.is_some() && ui.available_width() < inline_transform_width(ui, t) {
+            left_out(ui);
+        } else if let Some(b) = selection_box {
             let c = b.center();
             let origin = app.ruler_origin();
             let link = crate::panels::transform::proportional(app, ui);
@@ -973,7 +1010,7 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
             }
         }
         // Select Similar Objects comes last: it takes only the room every control ahead of it left.
-        trailing_select_similar(app, ui, groups_fit && !fields_left_out, 0.0);
+        trailing_select_similar(app, ui);
         erase_trailing(ui);
     });
     // Controls that keep their size can still run into the button's room in a narrow window;
