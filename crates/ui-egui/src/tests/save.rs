@@ -355,6 +355,37 @@ fn a_save_does_not_replace_the_file_read_from_through_a_file_written_beside_the_
     let _ = std::fs::remove_dir_all(d);
 }
 
+#[test]
+fn file_save_does_not_replace_the_file_read_from_through_a_file_written_beside_the_path() {
+    let d = dir("lossy-beside-save");
+    let path = d.join("Art.eps").to_string_lossy().to_string();
+    let mut app = app();
+    checks_files_there(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut app);
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+    crate::background::wait_all(&mut app);
+    let siblings = artboard_files(&d);
+    assert_eq!(siblings.len(), 2, "{siblings:?}");
+    let sibling = siblings[0].clone();
+    let saved = std::fs::read(&sibling).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.imported_from = Some(sibling.clone());
+    st.import_losses = vec!["hidden type".into()];
+    rect(&mut app);
+    // File > Save to the document's own file reuses its options, so it writes the artboard files
+    // again; the one the document was read from is refused, as on Save As.
+    let _ = app.run("file.save", json!({}));
+    crate::background::wait_all(&mut app);
+    assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != dialogs::confirm::REPLACE_FILES));
+    assert_eq!(std::fs::read(&sibling).unwrap(), saved);
+    assert!(!std::path::Path::new(&path).exists(), "no file of the set is written when one is refused");
+    assert!(app.session.active().unwrap().is_dirty());
+    let _ = std::fs::remove_dir_all(d);
+}
+
 /// The app checks for files that are there, as the desktop app does.
 fn checks_files_there(app: &mut VectorcraftApp) {
     app.services.exists = Some(std::sync::Arc::new(|p: &str| std::path::Path::new(p).exists()));
