@@ -3960,8 +3960,9 @@ already walks Image Trace. Short agent entry points:
   group that draws with that stroke paint; the stroke's weight is not compared. An edge draws with the paint of its
   topmost stroke that is shown, with paint, above 0 pt and not fully transparent, and with none when the edge is fully
   transparent or has no such stroke. Each click of a double-click or triple-click runs as it
-  arrives and is its own undo step. `match` is the paint the face or edge had before the first of the double-click's
-  two clicks or the triple-click's three that painted it, or before the double-click when the triple-click's double-click
+  arrives and is its own undo step when it changes a paint. `match` is the paint the face or edge had before the first of
+  the double-click's two clicks or the triple-click's three that painted it (including a click whose drag or release crossed it), or
+  before the double-click when the triple-click's double-click
   reached it, so the clicks before the last do not change what it matches;
   a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. A face that
   the Bucket fills has all its fills replaced by one fill with the paint, shown, fully opaque and blending normally, in the
@@ -3975,8 +3976,10 @@ already walks Image Trace. Short agent entry points:
   `livePaint.fill {scope}` and `livePaint.strokeEdge {scope}` take `scope` as `"one"` (the default), `"connected"` or
   `"samePaint"`; any other value is an error and changes nothing. `match` is a paint in the model JSON that
   `document.node {id}` writes for an appearance's paints (`{"type": "none"}` for none), taken only with a scope that compares paints, and
-  defaults to the face's fill or the stroke paint the edge draws with. `livePaint.fill` refuses a `scope` other than `"one"` with
-  `points`. Both replies add `count`, the number of faces or edges the click reaches, including those that already had the
+  defaults to the face's fill or the stroke paint the edge draws with. `livePaint.strokeEdge {scope: "connected", through}`
+  takes `through`, at most 4096 edge ids that the join counts as drawing with `match` whatever they draw with now; the tool
+  passes the edge the double-click's first click painted when that edge drew with `match` before the click. `through` with another scope, or one that is not an array of ids, is an error. `livePaint.fill` refuses
+  a `scope` other than `"one"` with `points`. Both replies add `count`, the number of faces or edges the click reaches, including those that already had the
   paint.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
   keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
