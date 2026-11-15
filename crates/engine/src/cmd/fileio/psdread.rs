@@ -105,7 +105,7 @@ pub(super) struct Header<'a> {
     /// Colour mode data: an indexed image's palette (256 reds, then greens, then blues).
     palette: &'a [u8],
     /// The image resources.
-    resources: &'a [u8],
+    pub(super) resources: &'a [u8],
     /// The layer and mask information.
     pub(super) layers: &'a [u8],
 }
@@ -172,7 +172,7 @@ pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
 /// The image resource blocks of `resources`, in file order: each one's id, name (the bytes of its
 /// Pascal string) and data. Stops at the first block that is cut short. With `signed`, only the
 /// blocks whose signature is `8BIM` are given.
-fn resources(resources: &[u8], signed: bool) -> impl Iterator<Item = (u16, &[u8], &[u8])> {
+pub(super) fn resources(resources: &[u8], signed: bool) -> impl Iterator<Item = (u16, &[u8], &[u8])> {
     let mut r = Reader::new(resources);
     std::iter::from_fn(move || {
         if r.rest().is_empty() {
