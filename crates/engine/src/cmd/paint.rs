@@ -1082,9 +1082,17 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
         return Ok(json!({ "changed": changed as usize }));
     }
     let item = item_target(s, p, cmd)?.of_kind(s, !stroke);
+    // Read before the check below, so that a bad param (such as `target`, or an explicit `item` the art has no row
+    // for) is still an error.
+    let targets = super::appearance::drop_design_art_rows(s, item.targets(s, p)?, item, !stroke, cmd)?;
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
+    // Only design art was given or selected: nothing changes, the defaults and remembered colors included.
+    if ids.is_empty() {
+        return Ok(json!({ "changed": 0 }));
+    }
     let (r, shown_item) = match item {
         ItemTarget::Item { index, .. } => {
-            let ids = super::appearance::drop_design_art(&s.doc()?.doc, item.targets(s, p)?);
+            let ids = targets;
             // Only design art was given or selected: nothing changes, the remembered colors included.
             if ids.is_empty() {
                 return Ok(json!({ "changed": 0 }));
@@ -1099,12 +1107,17 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
             (json!({ "changed": changed }), Some(index))
         }
         // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
+        // Design art inside a given graph or series group is left out too.
         ItemTarget::Top => {
-            let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
+            let leaves = targets;
+            if leaves.is_empty() {
+                return Ok(json!({ "changed": 0 }));
+            }
+            let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": leaves.iter().map(|i| i.0).collect::<Vec<_>>()});
             (super::colorcmds::recolor(s, &q, cmd, label, f)?, None)
         }
     };
-    let shown_ids = if shown_item.is_some() { ids } else { leaf_targets(s, &ids)? };
+    let shown_ids = if shown_item.is_some() { ids } else { super::appearance::drop_design_art(&s.doc()?.doc, leaf_targets(s, &ids)?) };
     if let Some(shown) = shown_ids.first().and_then(|id| s.doc().ok()?.doc.node(*id).map(|n| proxy_paint(n, stroke, shown_item))) {
         s.remember_paint(&shown);
     }

@@ -830,11 +830,11 @@ design art is selected or given), `threeD.mapGraphic`,
 `graphicStyle.apply`, `graphicStyle.addFromLibrary` with `apply`, `graphicStyle.breakLink`, `transparency.set`, the
 `paint.freeform.*` commands that edit points and lines, and `appearance.copyFrom` as the target.
 `appearance.transfer` with design art as its `target`, or as its `source` without `copy`, is an error.
-`paint.setFill`, `paint.setStroke`, `paint.swap`, `paint.default`, `paint.invert` and `paint.complement` with an
-`item`, `stroke.set`, `stroke.weightUp`, `stroke.weightDown`, `stroke.setAdvanced`, `paint.editGradient`,
+`paint.setFill`, `paint.setStroke`, `paint.swap`, `paint.default`, `paint.invert`, `paint.complement`,
+`stroke.set`, `stroke.weightUp`, `stroke.weightDown`, `stroke.setAdvanced`, `paint.editGradient`,
 `paint.setGradientGeom` and `object.setOverprint` leave the art out without an error. When all their objects are design art,
-`paint.editGradient`, `paint.swap`, `paint.default`, and `paint.invert` and `paint.complement` with an `item` also leave
-the paint for new art and the remembered colors as they are. When the first selected object is design art, the commands
+`paint.editGradient`, `paint.swap`, `paint.default`, `paint.invert`, `paint.complement` and `stroke.set` also leave
+the paint and stroke weight for new art and the remembered colors as they are. When the first selected object is design art, the commands
 do not use the Appearance panel's active row. To change the art, edit the design with `graph.design`.
 
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke

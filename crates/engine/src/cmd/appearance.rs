@@ -451,6 +451,20 @@ pub(crate) fn drop_design_art(d: &Document, mut ids: Vec<NodeId>) -> Vec<NodeId>
     ids
 }
 
+/// [`drop_design_art`] for an edit of the `item` rows of `ids` (`fill`: fill rows): an explicit `item` that a design's
+/// art has no row of that kind for is still an error of `cmd`, as on any other object.
+pub(crate) fn drop_design_art_rows(s: &Session, ids: Vec<NodeId>, item: ItemTarget, fill: bool, cmd: &str) -> Result<Vec<NodeId>> {
+    let d = &s.doc()?.doc;
+    for (id, it) in ids.iter().zip(item.per_target(s, &ids)) {
+        if let (Some(it), Some(n)) = (it, d.node(*id))
+            && super::graph::is_design_art(d, *id)
+        {
+            it.resolve(&n.appearance, fill, cmd)?;
+        }
+    }
+    Ok(drop_design_art(d, ids))
+}
+
 /// The outermost art of graph designs drawn in graph series inside `roots`: the objects directly in a series group that
 /// [`super::graph::is_design_art`] accepts.
 pub(crate) fn design_art_in(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
@@ -633,7 +647,10 @@ pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bo
     }
     let ItemTarget::Item { index, .. } = item else { return Ok(default) };
     let d = &s.doc()?.doc;
-    let ids = drop_design_art(d, appearance_targets(s, p)?);
+    let all = appearance_targets(s, p)?;
+    // The art of a graph design is left out, unless it is all there is: the item is then a row of that art.
+    let kept = drop_design_art(d, all.clone());
+    let ids = if kept.is_empty() { all } else { kept };
     Ok(ids.get(item.anchor(s, &ids)).and_then(|id| d.node(*id)?.appearance.items.get(index)).map_or(default, |it| !it.is_fill()))
 }
 

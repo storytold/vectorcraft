@@ -454,7 +454,7 @@ fn an_edit_of_a_graph_designs_art_is_lost_when_the_graph_is_drawn_again() {
 /// it, and edit the other objects they are given.
 #[test]
 fn paint_commands_leave_a_graph_designs_art_out() {
-    let (mut s, _, copy, art, mark) = design_art();
+    let (mut s, graph, copy, art, mark) = design_art();
     let fill = top_row(&s, art, true);
     let commands = [
         ("stroke.set", json!({"weight": 5})),
@@ -466,6 +466,7 @@ fn paint_commands_leave_a_graph_designs_art_out() {
         ("paint.swap", json!({})),
         ("paint.default", json!({})),
         ("paint.invert", json!({"item": fill, "stroke": false})),
+        ("paint.invert", json!({})),
     ];
     let (copy_was, art_was) = (look(&s, copy), look(&s, art));
     for (cmd, p) in &commands {
@@ -489,6 +490,11 @@ fn paint_commands_leave_a_graph_designs_art_out() {
     s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
     s.execute("stroke.set", &json!({"weight": 5})).unwrap();
     assert_eq!(look(&s, art), art_was);
+    // Given the whole graph, Invert recolors the marks and leaves the art.
+    let mark_was = look(&s, mark);
+    s.execute("paint.invert", &json!({"ids": [graph.0]})).unwrap();
+    assert_eq!(look(&s, art), art_was);
+    assert_ne!(look(&s, mark), mark_was);
     // A freeform gradient point is refused on the art alone.
     refused_on_design_art(&mut s, "paint.freeform.addPoint", json!({"ids": [art.0], "at": [0, 0]}));
 }
@@ -524,6 +530,10 @@ fn paint_edits_of_design_art_alone_leave_the_defaults() {
         ("paint.default", json!({})),
         ("paint.invert", json!({"item": fill, "stroke": false})),
         ("paint.complement", json!({"item": fill, "stroke": false})),
+        ("paint.invert", json!({})),
+        ("paint.complement", json!({"stroke": true})),
+        ("stroke.set", json!({"weight": 7})),
+        ("stroke.weightUp", json!({})),
     ];
     for (cmd, p) in &commands {
         let was = defaults(&s);
@@ -538,6 +548,40 @@ fn paint_edits_of_design_art_alone_leave_the_defaults() {
         assert_eq!(defaults(&s), was, "{cmd}, selected");
         s.execute("select.set", &json!({"ids": []})).unwrap();
     }
+    // A bad `item`, `aligned` or `target` is still an error with only design art given.
+    for bad in [
+        json!({"ids": [art.0], "item": "top"}),
+        json!({"ids": [art.0], "item": fill, "aligned": "yes"}),
+        json!({"ids": [art.0], "item": fill, "target": "nowhere"}),
+    ] {
+        assert!(s.execute("paint.invert", &bad).is_err(), "{bad}");
+    }
+    // So is an `item` the art has no row for, in each command that leaves the art out.
+    let steps = s.doc().unwrap().history.undo.len();
+    for (cmd, p) in [
+        ("paint.invert", json!({})),
+        ("stroke.set", json!({"weight": 2})),
+        ("stroke.weightUp", json!({})),
+        ("stroke.setAdvanced", json!({"swapArrows": true})),
+        ("paint.editGradient", json!({"kind": "linear"})),
+        ("paint.setGradientGeom", json!({"start": [0, 0], "end": [50, 50]})),
+        ("object.setOverprint", json!({"fill": true})),
+    ] {
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        q["item"] = json!(99);
+        assert!(s.execute(cmd, &q).is_err(), "{cmd}");
+    }
+    // The art's stroke row named without `stroke` is a stroke row: the gradient commands succeed and change nothing.
+    let stroke_row = top_row(&s, art, false);
+    for p in [json!({"kind": "linear"}), json!({"start": [0, 0], "end": [50, 50]})] {
+        let cmd = if p.get("kind").is_some() { "paint.editGradient" } else { "paint.setGradientGeom" };
+        let mut q = p.clone();
+        q["ids"] = json!([art.0]);
+        q["item"] = json!(stroke_row);
+        s.execute(cmd, &q).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
     // With nothing selected, the swap still swaps the defaults.
     let was = defaults(&s);
     s.execute("paint.swap", &json!({})).unwrap();
