@@ -417,7 +417,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "artistic.roughPastels",
             "Rough Pastels…",
             ARTISTIC,
-            "{strokeLength: 0..40 (6; longer pastel strokes), strokeDetail: 1..20 (10; bristle texture along the strokes), texture: \"brick\"|\"burlap\"|\"canvas\"|\"sandstone\" (\"canvas\"), scaling: % 50..200 (100), relief: 0..50 (4), lightDirection: \"bottom\"|\"bottomLeft\"|\"left\"|\"topLeft\"|\"top\"|\"topRight\"|\"right\"|\"bottomRight\" (\"top\"), invert: bool (false)} repaints the object in soft diagonal pastel strokes over a textured surface, keeping its coverage. Slider ranges follow the documented controls; numeric defaults are chosen for VectorCraft and are not verified against proprietary defaults.",
+            "{strokeLength: 0..40 (6; longer pastel strokes), strokeDetail: 1..20 (10; bristle texture along the strokes), texture: \"brick\"|\"burlap\"|\"canvas\"|\"sandstone\"|\"loaded\" (\"canvas\"; \"loaded\" draws the image in textureImage and draws Canvas when there is none; the others are surfaces made in code), textureImage?: {path} | {name?, dataBase64} | string (Load Texture…: an image file that File › Place reads, within the renderer's pixel allowance, stored as its gray levels in a grayscale PNG in base64; a file sets texture to \"loaded\" unless texture is given, and the stored string, as effect.list gives it, is kept as it is), scaling: % 50..200 (100), relief: 0..50 (4), lightDirection: \"bottom\"|\"bottomLeft\"|\"left\"|\"topLeft\"|\"top\"|\"topRight\"|\"right\"|\"bottomRight\" (\"top\"), invert: bool (false)} repaints the object in soft diagonal pastel strokes over a textured surface, keeping its coverage. A loaded texture lies one image pixel per point at 100 %, centered on the object's center and repeated; each pixel's luma is the surface's height, from 0 for black to 1 pt for white, and a transparent pixel counts as middle gray. Slider ranges follow the documented controls; numeric defaults are chosen for VectorCraft and are not verified against proprietary defaults.",
             json!({
                 "strokeLength": 6.0,
                 "strokeDetail": 10.0,
@@ -468,8 +468,8 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "blur.radial",
             "Radial Blur…",
             BLUR,
-            "{amount: 1..100 (10; spin: an arc of `amount`°, zoom: the content scaled by up to about ±amount/2 %), method: \"spin\"|\"zoom\" (\"spin\"), quality: \"draft\"|\"good\"|\"best\" (\"good\"; 16, 64 or 256 samples)} blurs around the object's centre",
-            json!({"amount": 10.0, "method": "spin", "quality": "good"}),
+            "{amount: 1..100 (10; spin: an arc of `amount`°, zoom: the content scaled by up to about ±amount/2 %), method: \"spin\"|\"zoom\" (\"spin\"), quality: \"draft\"|\"good\"|\"best\" (\"good\"; 16, 64 or 256 samples), centerX: 0..1 (0.5; the Blur Center across the object's bounds, 0 their left edge), centerY: 0..1 (0.5; the Blur Center down the object's bounds, 0 their top edge)} blurs around the Blur Center, which moves and scales with the object. A centerX or centerY outside 0..1 is refused",
+            json!({"amount": 10.0, "method": "spin", "quality": "good", "centerX": 0.5, "centerY": 0.5}),
         ),
         r(
             "blur.smart",

@@ -1115,6 +1115,44 @@ fn the_check_builds_the_profile_of_a_shape_with_no_fill() {
     }
 }
 
+/// A filled shape is checked about the bounds the effect draws its solid about, which take in the
+/// strokes beside it. A shape of many small curves is too complex for Extrude & Bevel about the
+/// shapes' own bounds, where its curves are sampled more finely, and passes about the bounds of a
+/// wide stroke in its group, as its solid draws there.
+#[test]
+fn the_check_builds_a_filled_shape_about_the_bounds_its_solid_draws_about() {
+    // 900 curves about (100, 100), each bulging 1 pt out from a side of a polygon 80 pt across.
+    let corners = 900;
+    let center = Point::new(100.0, 100.0);
+    let corner = |k: usize| {
+        let (s, c) = (k as f64 * std::f64::consts::TAU / corners as f64).sin_cos();
+        Point::new(center.x + 40.0 * c, center.y + 40.0 * s)
+    };
+    let mut b = BezPath::new();
+    b.move_to(corner(0));
+    for k in 0..corners {
+        let (p0, p3) = (corner(k), corner(k + 1));
+        let out = p0.midpoint(p3) - center;
+        let out = out / out.hypot();
+        b.curve_to(p0 + (p3 - p0) / 3.0 + out, p0 + (p3 - p0) * (2.0 / 3.0) + out, p3);
+    }
+    b.close_path();
+    let filled = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::None, 0.0));
+    let mut line = BezPath::new();
+    line.move_to((80.0, 100.0));
+    line.line_to((120.0, 100.0));
+    let mut wide = Node::path(NodeId(2), PathData::from_bezpath(&line), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2000.0));
+    wide.appearance.items.retain(|i| matches!(i, AppearanceItem::Stroke(_)));
+    let p = json!({"bevel": "rounded", "bevelRepeat": 6});
+    let (path, rule) = profile(&filled).unwrap();
+    let own = path.bounds().unwrap().union(wide.path_data().unwrap().bounds().unwrap());
+    assert_eq!(facets(EXTRUDE, &path, rule, own, &p).map(|_| ()), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()), "about its own bounds");
+    let mut g = Node::group(NodeId(9999), vec![Arc::new(filled), Arc::new(wide)]);
+    assert_eq!(validate_solid(&g, EXTRUDE, &p), Ok(()));
+    g.appearance.effects.push(fx(EXTRUDE, p));
+    assert!(solid_art(&g).is_some(), "the solid draws");
+}
+
 /// A convex polygon of `corners` corners about (20,000, 20,000), filled red, with no stroke.
 fn polygon_node(id: u64, corners: usize) -> Node {
     let points: Vec<Point> = (0..corners)
