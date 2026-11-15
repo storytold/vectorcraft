@@ -1072,7 +1072,10 @@ font-technology	Variable	Variables
 	Every (minutes)	Toutes les (minutes)
 	Every option is at its default.	Toutes les options ont leur valeur par défaut.
 	Every option matches {base}.	Toutes les options correspondent à {base}.
-	Every-line Composer	Compositeur multiligne
+	Middle Eastern & South Asian Single-line Composer	Compositeur ligne par ligne (Moyen-Orient et Asie du Sud)
+	Middle Eastern & South Asian Every-line Composer	Compositeur multiligne (Moyen-Orient et Asie du Sud)
+	Standard Single-line Composer	Compositeur standard ligne par ligne
+	Standard Every-line Composer	Compositeur standard multiligne
 	Exact dash lengths	Longueurs de tirets exactes
 	Exceptions (comma separated)	Exceptions (séparées par des virgules)
 	Exclude	Exclusion
@@ -1396,6 +1399,14 @@ font-technology	Variable	Variables
 	Previous Artboard	Plan de travail précédent
 	Next Artboard	Plan de travail suivant
 	Last Artboard	Dernier plan de travail
+	Status Bar Show	Afficher dans la barre d'état
+	Artboard Name	Nom du plan de travail
+	Current Tool	Outil actif
+	Date and Time	Date et heure
+	Number of Undos	Nombre d'annulations
+	Document Color Profile	Profil colorimétrique du document
+	Undos	Annulations
+	Redos	Rétablissements
 	Go To Link	Atteindre le lien
 	GPL palettes keep solid colours only, as RGB.	Les palettes GPL ne conservent que les couleurs unies, en RVB.
 	GPU Performance	Performances GPU
@@ -1529,6 +1540,7 @@ font-technology	Variable	Variables
 	Show smooth color wheel	Afficher la roue chromatique continue
 	Show segmented color wheel	Afficher la roue chromatique segmentée
 	Show color bars	Afficher les barres de couleur
+	Find the selected colors in the artwork	Rechercher les couleurs sélectionnées dans l’illustration
 	Harmony Rules:	Règles d’harmonie :
 	Harmony Sets	Ensembles d’harmonies
 	Height	Hauteur
@@ -2706,6 +2718,8 @@ font-technology	Variable	Variables
 	Insert Aki Left	Insérer un aki à gauche
 	Insert Aki Right	Insérer un aki à droite
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Ajuster la position horizontale des signes diacritiques
+	Adjust Vertical Diacritic Position	Ajuster la position verticale des signes diacritiques
 	Character Direction	Direction des caractères
 	Digits	Chiffres
 	Arabic	Arabes
@@ -3445,7 +3459,6 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Guillemet simple ouvrant
 	Single Quotes:	Guillemets simples :
 	Single Right Quotation Mark	Guillemet simple fermant
-	Single-line Composer	Compositeur ligne par ligne
 	Toggle Line Composer	Basculer le compositeur de lignes
 	Sixth Space	Espace d’un sixième
 	Size	Taille
@@ -4471,6 +4484,7 @@ axis	Both	Les deux
 @msg	`name` must be the name of a script engine	`name` doit être le nom d'un moteur de script
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	le moteur de script principal est nouveau à chaque exécution et n'est jamais conservé, il ne peut donc pas être supprimé
 @msg	there is no script engine named {name}	il n'y a aucun moteur de script nommé {name}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l'application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
 @msg	Copied the link info	Informations sur le lien copiées
@@ -5535,6 +5549,8 @@ effect	Soft	Doux
 	Step up or down	Augmenter ou diminuer d’un cran
 	Drag values or labels. Double-click a value to type.	Faites glisser les valeurs ou les libellés. Double-cliquez sur une valeur pour la saisir.
 	Drag rings to rotate. Shift snaps to 15°.	Faites glisser les anneaux pour tourner. Maj contraint par pas de 15°.
+	Track cube	Cube de rotation
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Faites glisser une face, une arête ou l'anneau pour tourner. Maj fait tourner autour d'un axe de l'écran.
 	Drag the light, or its rings. Shift snaps to 15°.	Faites glisser la lumière ou ses anneaux. Maj contraint par pas de 15°.
 	Keep visible surfaces only when expanding	Conserver uniquement les surfaces visibles lors de la décomposition
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Découpe la géométrie masquée lors de la décomposition de l’aspect. L’aperçu conserve toute la surface. Les peintures transparentes et les surfaces dépassant les limites de visibilité conservent toutes les faces.
@@ -7672,6 +7688,7 @@ breakText	Glyphs	Glyphes
 @msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Échec de la vectorisation de l’image : erreur interne : son thread s’est arrêté (merci de signaler ce bogue)
 @msg	Image Trace failed: {e}	Échec de la vectorisation de l’image : {e}
 @msg	Image Trace finished, but its document was closed	La vectorisation de l’image est terminée, mais son document a été fermé
+@msg	Image Trace finished, but its document was reverted: trace it again	La vectorisation de l’image est terminée, mais son document a été rétabli à la version précédente : vectorisez-la à nouveau
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	La vectorisation de l’image est terminée, mais l’image ou ses réglages ont changé entre-temps : vectorisez-la à nouveau
 @msg	Import SVG Filter reads SVG files, not SVGZ	Importer un filtre SVG lit les fichiers SVG, pas SVGZ
 @msg	Invalid dimension offset	Décalage de cote non valide
@@ -7844,6 +7861,7 @@ breakText	Glyphs	Glyphes
 @msg	`names` must be an array of style names	`names` doit être une liste de noms de styles
 @msg	`new` is a design name, or true	`new` est un nom de motif, ou true
 @msg	`origin` must be [x, y] in points	`origin` doit être [x, y] en points
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes` doit être [a, b, c, d], chacun compris entre -1000 et 1000, avec a·d - b·c à au moins 0.001 de 0
 @msg	`path` must be a folder	`path` doit être un dossier
 @msg	`path` must be a path object	`path` doit être un objet tracé
 @msg	`picks` must be an array (got {v})	`picks` doit être une liste (reçu : {v})
@@ -8243,7 +8261,7 @@ breakText	Glyphs	Glyphes
 @msg	column: true floats the whole column and takes no onto, above or below	column: true rend flottante toute la colonne et n’accepte ni onto, ni above, ni below
 @msg	command must be a shape.* command	command doit être une commande shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}] : `command` manquant
-@msg	composer must be "singleLine" or "everyLine"	composer doit valoir "singleLine" ou "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer doit être "singleLine", "everyLine", "standardSingleLine" ou "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	les formes composées acceptent les tracés, tracés transparents, groupes, formes composées, textes, dégradés de formes et enveloppes
 @msg	compound {_1} must contain exactly one open path to join	le tracé transparent {_1} doit contenir exactement un tracé ouvert à joindre
 @msg	connect end must be "start" or "end"	l’extrémité de connect doit valoir "start" ou "end"
@@ -9563,4 +9581,21 @@ breakText	Glyphs	Glyphes
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels, c’est trop grand pour le PSD ({MAX_SIDE} pixels par côté au plus) : réduisez la résolution
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	c’est un dessin DWG, qui ne peut pas être lu : enregistrez-le depuis l’application de CAO au format DXF et ouvrez ce fichier
 @msg	this binary DXF file is damaged or cut short	ce fichier DXF binaire est endommagé ou tronqué
+	Packaging Tools	Outils d’emballage
+	Fold Lines	Lignes de pliage
+	Make Cut Line	Convertir en ligne de découpe
+	Make Crease Line	Convertir en ligne de rainage
+	Make Partial Cut Line	Convertir en ligne de découpe partielle
+	Make Perforation Line	Convertir en ligne de perforation
+	Make Fold Line	Convertir en ligne de pliage
+	Role Swatches…	Nuances des types de ligne…
+	Role Swatches	Nuances des types de ligne
+	Role	Type de ligne
+	Cut Line	Ligne de découpe
+	Crease Line	Ligne de rainage
+	Partial Cut Line	Ligne de découpe partielle
+	Perforation Line	Ligne de perforation
+	No objects are selected.	Aucun objet n’est sélectionné.
+	Open a document to mark its fold lines.	Ouvrez un document pour marquer ses lignes de pliage.
+	Remove Fold Line Role	Supprimer le type de ligne
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution

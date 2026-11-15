@@ -49,6 +49,8 @@ font-technology	Variable	가변
 	Insert Aki Left	앞 아키 삽입
 	Insert Aki Right	뒤 아키 삽입
 	Tsume	츠메
+	Adjust Horizontal Diacritic Position	발음 구별 기호 가로 위치 조정
+	Adjust Vertical Diacritic Position	발음 구별 기호 세로 위치 조정
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
@@ -1678,7 +1680,10 @@ antiAlias	Sharp	날카롭게
 	Every (minutes)	간격 (분)
 	Every option is at its default.	모든 옵션이 기본값입니다.
 	Every option matches {base}.	모든 옵션이 {base}와(과) 같습니다.
-	Every-line Composer	전체 줄 컴포저
+	Middle Eastern & South Asian Single-line Composer	한 줄 조판 (중동·남아시아)
+	Middle Eastern & South Asian Every-line Composer	전체 줄 컴포저 (중동·남아시아)
+	Standard Single-line Composer	표준 한 줄 조판
+	Standard Every-line Composer	표준 전체 줄 컴포저
 	Exact dash lengths	정확한 대시 길이
 	Exceptions (comma separated)	예외 (쉼표로 구분)
 	Exclusion	제외
@@ -1875,6 +1880,14 @@ antiAlias	Sharp	날카롭게
 	Previous Artboard	이전 아트보드
 	Next Artboard	다음 아트보드
 	Last Artboard	마지막 아트보드
+	Status Bar Show	상태 표시줄 표시
+	Artboard Name	아트보드 이름
+	Current Tool	현재 도구
+	Date and Time	날짜 및 시간
+	Number of Undos	실행 취소 횟수
+	Document Color Profile	문서 색상 프로파일
+	Undos	실행 취소
+	Redos	다시 실행
 	Gradient Fill: click to apply, drag onto art	그레이디언트 칠: 클릭하여 적용, 아트웍에 끌어 놓기
 	Gradient Mesh	그레이디언트 메시
 	Gradient Tool	그레이디언트 도구
@@ -1917,6 +1930,7 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Find the selected colors in the artwork	선택한 색상을 아트웍에서 찾기
 	Height	높이
 	Height:	높이:
 	Help › Search Commands…	도움말 › 명령 검색…
@@ -3271,7 +3285,6 @@ mark-style	Japanese	일본식
 	Simulate Colored Paper	색 용지 시뮬레이션
 	Simulate Paper	용지 시뮬레이션
 	Single Quotes:	작은따옴표:
-	Single-line Composer	한 줄 조판
 	Toggle Line Composer	줄 조판 방식 전환
 	Size Tile to Art	타일을 아트웍 크기에 맞춤
 	Move Tile with Art	아트웍과 함께 타일 이동
@@ -5226,6 +5239,7 @@ theme	Appearance	외관
 @msg	`name` must be the name of a script engine	`name`은(는) 스크립트 엔진의 이름이어야 합니다
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Copied the link info	링크 정보를 복사했습니다
@@ -5546,6 +5560,8 @@ effect	Vertical	세로
 	Step up or down	한 단계 올리기 또는 내리기
 	Drag values or labels. Double-click a value to type.	값이나 레이블을 드래그하세요. 값을 더블클릭하면 입력할 수 있습니다.
 	Drag rings to rotate. Shift snaps to 15°.	링을 드래그해 회전하세요. Shift를 누르면 15°씩 스냅됩니다.
+	Track cube	회전 큐브
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	면, 모서리 또는 링을 드래그해 회전하세요. Shift를 누르면 화면의 한 축을 중심으로 회전합니다.
 	Drag the light, or its rings. Shift snaps to 15°.	조명이나 링을 드래그하세요. Shift를 누르면 15°씩 스냅됩니다.
 lighting	Light	광원
 	Keep visible surfaces only when expanding	확장 시 보이는 표면만 유지
@@ -7399,6 +7415,7 @@ breakText	Glyphs	글리프
 @msg	Image Trace failed: {e}	이미지 추적 실패: {e}
 @msg	Image Trace finished, but its document was closed	이미지 추적이 끝났지만 문서가 닫혔습니다
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	이미지 추적이 끝났지만 그 사이에 이미지나 설정이 바뀌었습니다: 다시 추적하세요
+@msg	Image Trace finished, but its document was reverted: trace it again	이미지 추적이 끝났지만 문서가 되돌려졌습니다: 다시 추적하세요
 @msg	Import SVG Filter reads SVG files, not SVGZ	SVG 필터 가져오기는 SVGZ가 아닌 SVG 파일을 읽습니다
 @msg	Invalid dimension offset	잘못된 치수 오프셋
 @msg	Invalid point	잘못된 점
@@ -7572,6 +7589,7 @@ breakText	Glyphs	글리프
 @msg	`names` must be an array of style names	`names`은(는) 스타일 이름의 배열이어야 합니다
 @msg	`new` is a design name, or true	`new`은(는) 디자인 이름 또는 true입니다
 @msg	`origin` must be [x, y] in points	`origin`은(는) 포인트 단위의 [x, y]여야 합니다
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes`은(는) [a, b, c, d]여야 하며, 각 값은 -1000에서 1000 사이이고 a·d - b·c는 0에서 0.001 이상 떨어져야 합니다
 @msg	`path` must be a folder	`path`은(는) 폴더여야 합니다
 @msg	`path` must be a path object	`path`은(는) 패스 개체여야 합니다
 @msg	`picks` must be an array (got {v})	`picks`은(는) 배열이어야 합니다({v} 입력됨)
@@ -7978,7 +7996,7 @@ breakText	Glyphs	글리프
 @msg	column: true floats the whole column and takes no onto, above or below	column: true는 열 전체를 띄우며 onto, above, below와 함께 쓸 수 없습니다
 @msg	command must be a shape.* command	command는 shape.* 명령이어야 합니다
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command`가 없습니다
-@msg	composer must be "singleLine" or "everyLine"	composer는 "singleLine" 또는 "everyLine"이어야 합니다
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer는 "singleLine", "everyLine", "standardSingleLine" 또는 "standardEveryLine"이어야 합니다
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	컴파운드 모양에는 패스, 컴파운드 패스, 그룹, 컴파운드 모양, 문자, 블렌드, 엔벨로프를 넣을 수 있습니다
 @msg	compound {_1} must contain exactly one open path to join	컴파운드 {_1}에는 연결할 열린 패스가 정확히 하나 있어야 합니다
 @msg	connect needs a path other than the one extended	connect에는 연장한 패스가 아닌 다른 패스가 필요합니다
@@ -9173,3 +9191,20 @@ breakText	Glyphs	글리프
 @msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what}은(는) 한 장에 {MAX_COPIES_PER_SHEET}개보다 많이 인쇄됩니다: 크기를 키우세요
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}은(는) 타일 {MAX_TILES}개보다 많이 나뉘어 인쇄됩니다: 크기를 줄이세요
 @msg	{what} {i} out of range	{what} {i}이(가) 범위를 벗어났습니다
+	Packaging Tools	패키징 도구
+	Fold Lines	접는 선
+	Make Cut Line	재단선으로 만들기
+	Make Crease Line	오시선으로 만들기
+	Make Partial Cut Line	하프 컷 선으로 만들기
+	Make Perforation Line	미싱선으로 만들기
+	Make Fold Line	접는 선으로 만들기
+	Role Swatches…	선 종류 견본…
+	Role Swatches	선 종류 견본
+	Role	선 종류
+	Cut Line	재단선
+	Crease Line	오시선
+	Partial Cut Line	하프 컷 선
+	Perforation Line	미싱선
+	No objects are selected.	선택한 개체가 없습니다.
+	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
+	Remove Fold Line Role	선 종류 제거

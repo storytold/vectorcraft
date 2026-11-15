@@ -567,6 +567,16 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     let tol = number_or(p, "tolerance", 4.0, C)?.clamp(0.0, 1000.0);
     let scope = scope_param(p, C)?;
     let like = match_param(p, C, scope != LpScope::One, "\"connected\" or \"samePaint\"")?;
+    let through: Vec<NodeId> = match p.get("through") {
+        None => vec![],
+        Some(_) if scope != LpScope::Connected => return Err(bad(C, "through applies to scope \"connected\"")),
+        Some(v) => {
+            let ids = v.as_array().filter(|ids| ids.len() <= 4096).ok_or_else(|| bad(C, "through must be an array of at most 4096 edge ids"))?;
+            ids.iter()
+                .map(|id| id.as_u64().map(NodeId).ok_or_else(|| bad(C, "through must be an array of at most 4096 edge ids")))
+                .collect::<Result<_>>()?
+        }
+    };
     let (eid, count, changed) = {
         let d = &s.doc()?.doc;
         let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad(C, format!("{g} is not a Live Paint group")))?;
@@ -575,7 +585,7 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
         let like = like.unwrap_or_else(|| b::lp_stroke_paint(start));
         let targets = match scope {
             LpScope::One => vec![eid],
-            LpScope::Connected => b::connected_edges(n, eid, &like),
+            LpScope::Connected => b::connected_edges_through(n, eid, &like, &through),
             LpScope::SamePaint => std::iter::once(eid)
                 .chain(b::edges(n).into_iter().filter(|e| e.visible && e.id != eid && b::lp_stroke_paint(e) == like).map(|e| e.id))
                 .collect(),

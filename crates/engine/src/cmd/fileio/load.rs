@@ -528,17 +528,26 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
         // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
-        "psd" | "psb" if opts.layers => {
-            let cms = vectorcraft_color::cms::active();
-            match super::psdlayers::import(bytes, opts.hidden_layers, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)) {
-                Ok(Some((doc, warnings))) => (doc, warnings, false),
-                Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
-                Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
-            }
-        }
+        "psd" | "psb" if opts.layers => match super::psdlayers::import_active(bytes, opts.hidden_layers) {
+            Ok(Some((doc, warnings))) => (doc, warnings, false),
+            Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
+            Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
+        },
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
+    // A PSD or PSB file's slices become user slices over its canvas (`importSlices`, default on),
+    // whether its layers or its merged image came in.
+    if matches!(format.id, "psd" | "psb")
+        && opts.import_slices
+        && let Some(canvas) = doc.artboards.first().map(|a| a.rect)
+    {
+        let (slices, notes) = super::psd_slices(bytes, canvas);
+        for (rect, options) in slices {
+            crate::cmd::slices::add_slice(&mut doc, rect, options);
+        }
+        warnings.extend(notes);
+    }
     // A PDF, `.ai` or `.ait` read from its pages or its editing copy, not restored from the document
     // it carries, opens with the File Info it gives (a PostScript `.ai` gives none).
     if matches!(format.id, "pdf" | "ai" | "ait")
@@ -885,12 +894,19 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
         return Some(format!("an image of {w} × {h} pixels is too large to draw"));
     }
-    let d = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?;
+    let reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    let format = reader.format()?;
+    let d = reader.into_decoder().ok()?;
     let (w, h) = d.dimensions();
     // The allowance also counts the pixels as RGBA: an image of fewer than 4 bytes a pixel (gray,
     // gray with alpha, RGB) takes more than the decoder counts (#1717).
     let rgba_over = u64::from(w) * u64::from(h) > MAX_RASTER_ALLOC / 4;
-    (rgba_over || d.total_bytes() > MAX_RASTER_ALLOC).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
+    let samples_over = d.total_bytes() > MAX_RASTER_ALLOC;
+    // The renderer can stream a non-interlaced PNG a row at a time when those buffers fit. Its
+    // full decoded byte count can exceed the allowance even though drawing it at native size is
+    // safe; use the renderer's decision for that case instead of warning from total_bytes alone.
+    let png_streams_at_size = samples_over && format == image::ImageFormat::Png && vectorcraft_render::reduced_size(bytes) == Some((w, h));
+    (rgba_over || (samples_over && !png_streams_at_size)).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
 }
 
 /// What Open, Place and the Links panel say of encoded image `bytes` that [`too_large_note`] is

@@ -167,6 +167,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} toggle a red underline under the words of the document's type its dictionaries don't know (text.spelling.check lists them), kept up to date as the type changes; type with effects isn't underlined → whether Auto Spell Check is on",
     ),
+    (
+        "ui.checkSpelling",
+        "Check Spelling…",
+        "Cmd+I",
+        "{} open the Check Spelling dialog to walk through unrecognized words with suggestions, ignore, change and dictionary options",
+    ),
     ("shortcuts.set", "Set Keyboard Shortcut", "", "{id: command id or tool:<id>, shortcut: \"Cmd+Shift+K\" | \"\" (none) | null (default), force?}"),
     ("shortcuts.list", "List Keyboard Shortcuts", "", "{query?} → [{id, label, group, shortcut, default, overridden}]"),
     ("shortcuts.conflicts", "Keyboard Shortcut Conflicts", "", "{} → [{shortcut, ids}]"),
@@ -392,7 +398,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "type.lineComposer",
         "Toggle Line Composer",
         "Cmd+Alt+Shift+C",
-        "{} the selected type's paragraphs (or those the Type tool's selection touches) use the Single-line Composer when they all use the Every-line Composer, else the Every-line Composer (text.setFormat {composer}) → \"singleLine\" | \"everyLine\"",
+        "{} the selected type's paragraphs (or those the Type tool's selection touches) use the Single-line Composer when they all use the Every-line Composer, else the Every-line Composer; paragraphs that all use a Standard composer keep it, any other mix takes the Middle Eastern & South Asian one (text.setFormat {composer}) → \"singleLine\" | \"everyLine\" | \"standardSingleLine\" | \"standardEveryLine\"",
     ),
     (
         "type.hyphenate",
@@ -432,6 +438,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.nextArtboard", "Next Artboard", "", "{} the navigator's Next Artboard button: view.goToArtboard {index: \"next\"} → {index}"),
     ("view.lastArtboard", "Last Artboard", "", "{} the navigator's Last Artboard button: view.goToArtboard {index: \"last\"} → {index}"),
+    (
+        "view.statusBarShow",
+        "Status Bar Show",
+        "",
+        "{show: \"artboardName\" | \"currentTool\" | \"dateTime\" | \"undos\" | \"colorProfile\"} the status bar's Show menu (a click on its info field): the field shows the name of the artboard the navigator shows, the tool in use (the default), the date and time (local on the desktop, UTC on the web), the active document's undo and redo step counts, or the profile its colors use (the one assigned for its color mode, else, or when that one is not available, that mode's working space); kept with the UI state; any other value is an error → show",
+    ),
     ("view.edges", "Hide Edges", "Cmd+H", "{}"),
     ("view.artboards", "Hide Artboards", "Cmd+Shift+H", "{}"),
     (
@@ -1615,7 +1627,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.actionSet.load",
         "Load Actions…",
         "",
-        "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused, and so is any set, .aia ones too, that Save Actions… would write larger than 8 MiB (a file with less white space, or a name that gets a number); the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}. An action set another app saved as text (.aia, starting /version; read with actionSet.read) comes in with its actions. A step with a label and no recorded values comes in when exactly one menu command has that label (in English or the interface language, any case, no final …), and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with no values and opens no dialog (never a submenu's item, a file or document command, Paste, Undo, Redo or an add-on's command), with no params and excluded from playback when it is off in the file; the other steps, every step with no label and every step recorded with values (a recorded menu item too) among them, are left out → {set, name, actions, skipped: [{action, step: its label, else its name}] (the first 1,000), leftOut: n}, and the status bar says how many were left out; a set with no name takes the file's name, else Actions; a file actionSet.read marks truncated is refused, and text that starts /version and isn't an action set gives \"not an action set file\"",
+        "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused, and so is any set, .aia ones too, that Save Actions… would write larger than 8 MiB (a file with less white space, or a name that gets a number); the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}. An action set another app saved as text (.aia, starting /version; read with actionSet.read) comes in with its actions. A step with a label and no recorded values comes in when exactly one menu command has that label (in English or the interface language, any case, no final …), and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with no values and opens no dialog (never a submenu's item, a file or document command, Paste, Undo, Redo or an add-on's command), with no params and excluded from playback when it is off in the file. A Set Selection step (found by its internal name, whatever its label) comes in as select.byNote {note, caseSensitive, wholeWord} when it has exactly three recorded values: text (ustring, UTF-8; 1 to 1,024 bytes once trimmed), word and case (boolean, 0 or 1); with any other values it is left out. The other steps, every other step with no label and every other step recorded with values (a recorded menu item too) among them, are left out → {set, name, actions, skipped: [{action, step: its label, else its name}] (the first 1,000), leftOut: n}, and the status bar says how many were left out; a set with no name takes the file's name, else Actions; a file actionSet.read marks truncated is refused, and text that starts /version and isn't an action set gives \"not an action set file\"",
     ),
     (
         "ui.actionSet.delete",
