@@ -5328,6 +5328,8 @@ effect	Soft	Yumuşak
 	Reset all Revolve settings to their defaults.	Tüm Revolve ayarlarını varsayılan değerlerine sıfırlayın.
 	Drag values or labels. Double-click a value to type.	Değerleri veya etiketleri sürükleyin. Yazmak için bir değeri çift tıklayın.
 	Drag rings to rotate. Shift snaps to 15°.	Döndürmek için halkaları sürükleyin. Kaydırma 15°'ye sabitlenir.
+	Track cube	Döndürme küpü
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Döndürmek için bir yüzü, kenarı veya halkayı sürükleyin. Shift tek bir ekran ekseni etrafında döndürür.
 	Drag the light, or its rings. Shift snaps to 15°.	Işığı veya halkalarını sürükleyin. Kaydırma 15°'ye sabitlenir.
 	Keep visible surfaces only when expanding	Görünür yüzeyleri yalnızca genişletirken koruyun
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Görünümü Genişlet'te kapsanan geometriyi kırpın. Canlı önizleme tüm yüzeyi korur. Şeffaf boyalar ve görünürlük sınırlarını aşan yüzeyler tüm yüzleri korur.
