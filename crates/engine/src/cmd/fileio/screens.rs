@@ -1148,6 +1148,13 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     let single: Option<Vec<usize>> = items.iter().map(|i| i.artboard).collect::<Option<Vec<_>>>().filter(|a| naming.single_pdf && a.len() > 1);
     let st = s.doc()?;
     super::check_scripts_of(C, &st.doc, st.path.as_deref(), || rows.iter().any(|r| items.iter().any(|i| names_scripts(i, r, single.as_deref()))))?;
+    // The file each item writes for each SVG row, before the folder is made or any row is written.
+    let base = crate::cmd::links::LinkBase::of(s.doc()?);
+    for r in rows.iter().filter(|r| matches!(r.format.id, "svg" | "svgz")) {
+        for item in &items {
+            super::check_images_in(C, r.format.id, &item.doc, base, &r.options_for(item.region, item.artboard)?)?;
+        }
+    }
     // Appearance of Black › Printing / Exporting for RGB raster rows.
     // Include Artboard Fill off: the encoders leave the background colors out.
     let fill = if o.include_artboard_fill == Some(false) { json!({ "includeArtboardFill": false }) } else { json!({}) };
