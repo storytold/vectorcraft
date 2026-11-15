@@ -1621,12 +1621,13 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   settings again at the next start, after the profiles above are registered (#6335). Saved settings that name a
   profile that is no longer there, or a damaged file, leave the defaults (logged), and the next change writes over
   the file; settings saved without policies take the default, `preserveEmbedded`. `rgbPolicy` (`off`,
-  `preserveEmbedded`, `convert`) and `cmykPolicy` (the same and `preserveNumbers`) decide what `document.open` and
-  `file.revert` do with an RGB or CMYK profile the file is tagged with that is not the working space: keep it, take
-  it off and keep the color numbers (`off`, `preserveNumbers`), or convert the colors of that model into the working
-  space with the intent and take it off (`convert`; a profile that is not available stays). The reply's `warnings`
-  name each profile, and a document a policy changed opens with unsaved changes. A profile that is the working space
-  stays whatever the policy.
+  `preserveEmbedded`, `convert`) and `cmykPolicy` (the same and `preserveNumbers`) decide what `document.open`,
+  `file.newFromTemplate` and `file.revert` do with an RGB or CMYK profile the file is tagged with that is not the
+  working space: keep it, take it off and keep the color numbers (`off`, `preserveNumbers`), or convert the colors
+  of that model into the working space with the intent and black point compensation and take it off (`convert`; a
+  profile that is not available stays). The reply's `warnings` name each profile, and a document a policy changed
+  opens with unsaved changes. A profile that is the working space stays whatever the policy. `document.open`'s
+  `colorMode` converts the colors after the policies, through the profiles the document keeps.
   `edit.assignProfile` tags the document only: colors show and convert through the profiles it assigns, and the
   working spaces and the file stay as they are. The profiles in use are those of the document in front, after
   `file.new`, `document.open`, `document.activate`, `file.close`, `file.revert`, `edit.undo`, `edit.redo` and a

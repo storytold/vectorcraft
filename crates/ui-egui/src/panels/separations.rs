@@ -102,8 +102,8 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, the RGB
-/// and CMYK color management policies, Load
-/// Profile… and Gamut Check, and the profile the active document is assigned.
+/// and CMYK color management policies, Load Profile… and Gamut Check, and the profile the active
+/// document is assigned.
 fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = cms::working_settings();
     widgets::section_header(ui, tl!("Color Settings"));

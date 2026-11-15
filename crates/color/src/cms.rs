@@ -578,9 +578,9 @@ impl Cms {
 
     /// An RGB or CMYK colour of this context's space as the colour of the same model in `dest`'s
     /// space that looks the same, converted with `intent` (Edit → Color Settings › Convert to
-    /// Working Space). RGB converts directly from profile to profile, with this context's
-    /// black-point compensation. CMYK converts between two loaded profiles through ProPhoto RGB
-    /// ([`IccProfile::to_same_model_of`]), and through Lab when either space is built in. Grey and
+    /// Working Space). RGB converts directly from profile to profile, and CMYK between two loaded
+    /// profiles through ProPhoto RGB ([`IccProfile::to_same_model_of`]), both with this context's
+    /// black-point compensation; CMYK goes through Lab when either space is built in. Grey and
     /// Lab colours stay as they are.
     pub fn convert_into(&self, dest: &Cms, c: &Color, intent: Intent) -> Color {
         match *c {
@@ -598,7 +598,7 @@ impl Cms {
             Color::Cmyk { c, m, y, k } => {
                 let inks = [c, m, y, k].map(|v| v.clamp(0.0, 1.0));
                 let direct = match (&self.cmyk, &dest.cmyk) {
-                    (CmykSpace::Icc(s), CmykSpace::Icc(d)) => s.to_same_model_of(d, &inks, intent),
+                    (CmykSpace::Icc(s), CmykSpace::Icc(d)) => s.to_same_model_of(d, &inks, intent, self.settings.bpc),
                     _ => None,
                 };
                 let [c, m, y, k] = match direct.as_deref() {

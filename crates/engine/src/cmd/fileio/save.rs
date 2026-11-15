@@ -1352,7 +1352,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "New from Template…",
             ["File"],
             Some("Cmd+Shift+N"),
-            "{path} or {name, dataBase64}: open a template (or any readable file) as a new untitled document → {index, title, format, warnings}",
+            "{path} or {name, dataBase64}: open a template (or any readable file) as a new untitled document; the color management policies of edit.colorSettings apply as at document.open → {index, title, format, warnings (with the policies' notes)}",
             always,
             super::load::new_from_template
         ),
