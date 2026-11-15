@@ -5984,6 +5984,7 @@ mark-style	Japanese	Japońskie
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musi być tablicą
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie, Obrót i Nadmuchanie
 @msg	Revolve maps graphics onto its side: map them onto the front	Obrót nakłada grafiki na swoją powierzchnię boczną: umieść je na przedniej stronie
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	obiekt {_1}: tył Nadmuchania przyjmuje grafiki tylko przy włączonych opcjach Obie strony i Zakończenie
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiki są zbyt złożone dla tej powierzchni: uprość rysunki symboli lub zmniejsz Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` przyjmuje najwyżej {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Płaszczyzna ma jedną stronę: umieść jej grafiki na przedniej stronie

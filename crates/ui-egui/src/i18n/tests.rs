@@ -2772,6 +2772,28 @@ fn three_d_refusals_translate_with_their_values() {
     assert_eq!(message(de(), &errors[1].0), "ungültige Parameter für `effect.apply`: Licht: intensity muss eine Zahl von 0 bis 100 sein");
 }
 
+/// Map Graphic's refusal of Inflate's back while Both sides or Cap is off shows in every
+/// complete-message language, with the object's number as given.
+#[test]
+fn inflate_back_refusal_translates_in_every_complete_catalog() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let mark = s.execute("path.create", &json!({"d": "M300 300L310 300L310 320L300 320Z"})).unwrap()["id"].clone();
+    s.execute("threeD.addGraphic", &json!({"name": "Mark", "ids": [mark]})).unwrap();
+    let id = s.execute("path.create", &json!({"d": "M100 100L200 100L200 200L100 200Z"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": "threeD.inflate", "item": null, "params": {}})).unwrap();
+    let e = s.execute("threeD.mapGraphic", &json!({"symbol": "Mark", "face": "back", "ids": [id]})).unwrap_err().to_string();
+    let english = "Inflate's back takes graphics with Both sides and Cap on";
+    assert!(e.ends_with(&format!("object {id}: {english}")), "{e}");
+    assert_eq!(message(Lang::EN, &e), e);
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, &e);
+        assert!(!shown.contains(english) && shown.contains(&id.to_string()) && shown.contains("`threeD.mapGraphic`"), "{code}: {e} -> {shown}");
+    }
+}
+
 /// A value a message quotes is a name and is shown as written, even when a catalog row translates
 /// the same text: a symbol called Rotate stays Rotate while the effect's name is translated.
 #[test]

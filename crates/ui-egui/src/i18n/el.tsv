@@ -5528,6 +5528,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`{GRAPHICS}` must be an array	το `{GRAPHICS}` πρέπει να είναι πίνακας
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση, Περιστροφή γύρω από άξονα και Φούσκωμα
 @msg	Revolve maps graphics onto its side: map them onto the front	Η Περιστροφή γύρω από άξονα αντιστοιχίζει τα γραφικά στην πλευρική της επιφάνεια: αντιστοιχίστε τα στην μπροστινή όψη
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	το αντικείμενο {_1}: η πίσω όψη του Φουσκώματος δέχεται γραφικά μόνο με ενεργά τα Και οι δύο πλευρές και Κλείσιμο άκρου
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Τα γραφικά είναι πολύ σύνθετα για αυτή την επιφάνεια: απλοποιήστε το σχέδιο των συμβόλων ή μειώστε τα Τμήματα
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	το `{GRAPHICS}` δέχεται το πολύ {MAX_GRAPHICS} γραφικά
 @msg	A plane has one face: map its graphics onto the front	Ένα επίπεδο έχει μία όψη: αντιστοιχίστε τα γραφικά του στην μπροστινή όψη

@@ -5474,6 +5474,7 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafikler Düzlem, Ekstrüzyon, Döndür ve Şişir nesne türlerine eşlenir
 @msg	Revolve maps graphics onto its side: map them onto the front	Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	nesne {_1}: Şişir efektinin arka yüzü yalnızca Her iki taraf ve Kapak açıkken grafik alır
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle

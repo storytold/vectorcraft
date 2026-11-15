@@ -6138,6 +6138,7 @@ imageTrace	Outline	Körvonal
 @msg	`{GRAPHICS}` must be an array	a `{GRAPHICS}` értéke tömb kell legyen
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	A grafikák a Sík, a Kihúzás, a Forgatás tengely körül és a Felfújás objektumtípusra kerülnek
 @msg	Revolve maps graphics onto its side: map them onto the front	A Forgatás tengely körül a grafikákat a palástjára helyezi: az elülső oldalra helyezze őket
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	{_1} objektum: a Felfújás hátoldala csak a Mindkét oldal és a Zárólap bekapcsolásával fogad grafikát
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	A grafikák túl összetettek ehhez a felülethez: egyszerűsítse a szimbólumok rajzát, vagy csökkentse a Szakaszok értékét
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	a `{GRAPHICS}` legfeljebb {MAX_GRAPHICS} grafikát fogad
 @msg	A plane has one face: map its graphics onto the front	A síknak egy oldala van: a grafikáit az elülső oldalra helyezze

@@ -5769,6 +5769,7 @@ lighting	Light	Luce
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve essere un array
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Le grafiche si applicano ai tipi di oggetto Piano, Estrusione, Rivoluzione e Gonfia
 @msg	Revolve maps graphics onto its side: map them onto the front	Rivoluzione applica le grafiche sul suo lato: applicatele sulla faccia anteriore
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	oggetto {_1}: il retro di Gonfia accetta grafiche solo con Entrambi i lati e Chiusura attivi
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Le grafiche sono troppo complesse per questa superficie: semplificate il disegno dei simboli o riducete Segmenti
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accetta al massimo {MAX_GRAPHICS} grafiche
 @msg	A plane has one face: map its graphics onto the front	Un piano ha una sola faccia: applicate le sue grafiche sulla faccia anteriore

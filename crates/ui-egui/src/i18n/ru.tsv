@@ -5767,6 +5767,7 @@ lighting	Light	Свет
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` должен быть массивом
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графика наносится на объекты типов «Плоскость», «Выдавливание», «Вращение» и «Надувание»
 @msg	Revolve maps graphics onto its side: map them onto the front	«Вращение» наносит графику на свою боковую поверхность: размещайте её на передней стороне
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	объект {_1}: задняя сторона «Надувания» принимает графику только при включённых параметрах «С обеих сторон» и «Торцы»
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графика слишком сложна для этой поверхности: упростите иллюстрации символов или уменьшите «Сегменты»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` принимает не более {MAX_GRAPHICS} графических элементов
 @msg	A plane has one face: map its graphics onto the front	У плоскости одна сторона: размещайте её графику на передней стороне

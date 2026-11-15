@@ -333,6 +333,7 @@
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` skal være et array
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér, Omdrej og Pust op
 @msg	Revolve maps graphics onto its side: map them onto the front	Omdrej kortlægger grafik på siden: kortlæg den på forsiden
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objektet {_1}: bagsiden af Pust op tager kun imod grafik, når Begge sider og Kappe er slået til
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikken er for kompleks til denne overflade: forenkl symbolernes grafik, eller reducér Segmenter
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tager højst {MAX_GRAPHICS} grafikelementer
 @msg	A plane has one face: map its graphics onto the front	Et plan har én flade: kortlæg dets grafik på forsiden

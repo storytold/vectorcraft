@@ -5725,6 +5725,7 @@ lighting	Light	Licht
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` muss ein Array sein
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiken werden auf die Objekttypen Ebene, Extrudieren, Kreiseln und Aufblasen abgebildet
 @msg	Revolve maps graphics onto its side: map them onto the front	Kreiseln bildet Grafiken auf seiner Mantelfläche ab: Bilden Sie sie auf der Vorderseite ab
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	Objekt {_1}: Die Rückseite von „Aufblasen“ nimmt Grafiken nur mit aktivierten Optionen „Beidseitig“ und „Deckflächen“ auf
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Die Grafiken sind für diese Oberfläche zu komplex: Vereinfachen Sie das Bildmaterial der Symbole oder verringern Sie Segmente
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nimmt höchstens {MAX_GRAPHICS} Grafiken auf
 @msg	A plane has one face: map its graphics onto the front	Eine Ebene hat nur eine Seite: Bilden Sie ihre Grafiken auf der Vorderseite ab

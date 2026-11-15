@@ -5860,6 +5860,7 @@ lighting	Light	光源
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	圖形會對應到「平面」、「突出」、「迴轉」與「膨脹」物件類型
 	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	圖形會對應到「平面」、「突出」、「迴轉」與「膨脹」物件類型。
 @msg	Revolve maps graphics onto its side: map them onto the front	迴轉會將圖形對應到其側面：請將圖形對應到正面
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	物件 {_1}：只有開啟「雙面」和「封口」後，膨脹的背面才能對應圖形
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	圖形對此表面過於複雜：請簡化符號的圖稿或減少分段數
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 個圖形
 @msg	A plane has one face: map its graphics onto the front	平面只有一個面：請將其圖形對應到正面

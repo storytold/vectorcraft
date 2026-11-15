@@ -5749,6 +5749,7 @@ lighting	Light	Світло
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання», «Обертання» та «Надування»
 @msg	Revolve maps graphics onto its side: map them onto the front	«Обертання» наносить графіку на свою бічну поверхню: розміщуйте її на передній стороні
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	об’єкт {_1}: задній бік «Надування» приймає графіку лише з увімкненими параметрами «З обох боків» і «Торці»
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графіка надто складна для цієї поверхні: спростіть ілюстрації символів або зменште «Сегменти»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` приймає не більше {MAX_GRAPHICS} графічних елементів
 @msg	A plane has one face: map its graphics onto the front	Площина має одну сторону: розміщуйте її графіку на передній стороні

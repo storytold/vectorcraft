@@ -6105,6 +6105,7 @@ mark-style	Japanese	Japonesas
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve ser uma matriz
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Os gráficos são mapeados nos tipos de objeto Plano, Extrusão, Revolver e Inflar
 @msg	Revolve maps graphics onto its side: map them onto the front	Revolver mapeia os gráficos na sua lateral: mapeie-os na face frontal
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objeto {_1}: o verso de Inflar recebe gráficos apenas com Ambos os Lados e Tampa ativados
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Os gráficos são complexos demais para esta superfície: simplifique a arte dos símbolos ou reduza Segmentos
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` aceita no máximo {MAX_GRAPHICS} gráficos
 @msg	A plane has one face: map its graphics onto the front	Um plano tem uma única face: mapeie seus gráficos na face frontal

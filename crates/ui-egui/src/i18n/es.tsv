@@ -6108,6 +6108,7 @@ mark-style	Japanese	Japonesas
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Los gráficos se asignan a los tipos de objeto Plano, Extrusión, Revolución e Inflar
 	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	Los gráficos se asignan a los tipos de objeto Plano, Extrusión, Revolución e Inflar.
 @msg	Revolve maps graphics onto its side: map them onto the front	Revolución asigna los gráficos a su lateral: asígnelos a la cara frontal
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	el objeto {_1}: la cara posterior de Inflar admite gráficos solo con Ambos lados y Tapa activados
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Los gráficos son demasiado complejos para esta superficie: simplifique la ilustración de los símbolos o reduzca Segmentos
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admite como máximo {MAX_GRAPHICS} gráficos
 @msg	A plane has one face: map its graphics onto the front	Un plano tiene una sola cara: asigne sus gráficos a la cara frontal

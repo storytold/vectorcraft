@@ -6049,6 +6049,7 @@ mark-style	Japanese	Japanilainen
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` on oltava taulukko
 @msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota, Pyöräytä ja Täytä ilmalla
 @msg	Revolve maps graphics onto its side: map them onto the front	Pyöräytä sijoittaa grafiikat kylkeensä: sijoita ne etupuolelle
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	objekti {_1}: Täytä ilmalla -tehosteen takapuoli ottaa grafiikoita vain, kun Molemmat puolet ja Pääty ovat käytössä
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiikat ovat liian monimutkaisia tälle pinnalle: yksinkertaista symbolien kuvitusta tai pienennä Segmentit-arvoa
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` hyväksyy enintään {MAX_GRAPHICS} grafiikkaa
 @msg	A plane has one face: map its graphics onto the front	Tasolla on yksi puoli: sijoita sen grafiikat etupuolelle
