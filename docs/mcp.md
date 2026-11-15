@@ -8691,7 +8691,10 @@ path is that path, under the even-odd rule, so the image shows only inside it. T
 that can be edited or released. `file.place` answers `image`, the id of the image in the clip group. The
 [import options help page](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
 says that a file imported as one flattened image keeps the document's clipping path when it has one. `links.update`
-and `links.relink` read the file's pixels again and leave the clip group and its clipping path as they are. Files that name no clipping path, or name a path
+and `links.relink` read the file again: the clip group's clipping path becomes the one the new file names, under the
+even-odd rule, and the clip group stays as a plain group of the image when the new file names none. A plain image relinked to such a
+file goes into a clip group of its path. A clip group whose clipping path was changed in the document, or whose fill rule was, is kept as a
+clipping mask, with the file's clip group inside it. Files that name no clipping path, or name a path
 they don't have, come in as a plain image. `file.place` with `replace` on such a clip group puts a new image, clipped or
 not, at the scale and rotation of the image in the group.
 
