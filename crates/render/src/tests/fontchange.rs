@@ -117,6 +117,24 @@ fn variable_font_settings_are_not_highlighted_as_substituted_glyphs() {
     assert!(g.alternate_glyphs(&t).elements().is_empty());
 }
 
+/// Type in a missing font that starts before its open path: only the characters drawn on the path
+/// are highlighted as substituted.
+#[test]
+fn characters_before_an_open_path_are_not_highlighted() {
+    let _steady = fonts_steady();
+    let style = CharStyle { size: 20.0, font_family: "No Such Family 5932".into(), ..Default::default() };
+    let mut t = TextObject::point(Point::ZERO, "MMMM", style);
+    let mut line = vectorcraft_geom::BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let whole = text_geom(&t).substituted_fonts;
+    assert!(!whole.elements().is_empty());
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -0.9, end: None };
+    let g = text_geom(&t);
+    assert!(g.all.elements().is_empty() && g.substituted_fonts.elements().is_empty(), "{:?}", g.substituted_fonts);
+}
+
 /// Type in a composite font draws each class of character in its part's face, which is not a
 /// substitute: Document Setup's highlight of substituted glyphs leaves it alone.
 #[test]

@@ -1103,6 +1103,12 @@ impl Session {
         self.pointer_held
     }
 
+    /// What the Info panel shows for the active tool as it is now
+    /// ([`vectorcraft_tools::Tool::readout`]), in the view of the last pointer event.
+    pub fn tool_readout(&mut self) -> Option<vectorcraft_tools::Readout> {
+        self.with_tool_cx(self.last_view, |t, cx| t.readout(cx))
+    }
+
     /// Is the active tool moving, scaling or rotating the selection with a drag?
     pub fn tool_transforming(&self) -> bool {
         self.tool.transforming()
