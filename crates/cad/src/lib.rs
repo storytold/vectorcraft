@@ -1,4 +1,4 @@
-//! CAD interchange: a hand-written ASCII DXF writer (versions R12 to 2018) and a reader on
+//! CAD interchange: a DXF writer (versions R12 to 2018) on `craft_dxf::drawing` and a reader on
 //! `craft_dxf::model`, and an HP-GL/2 plot file reader and writer.
 //!
 //! [`export`] writes the visible art of a document into one DXF drawing: each layer becomes a DXF
@@ -15,7 +15,7 @@
 //! [`hpgl::import`] reads an HP-GL plotter file, and [`hpgl::export`] writes one: see [`hpgl`].
 //!
 //! - `aci`: the 256-colour index palette and the nearest index of a colour.
-//! - `writer`: group codes, handles and the file's sections, tables and objects.
+//! - The ASCII file around those entities is written by `craft_dxf::drawing`.
 //! - `scene`: the document walk that turns objects into entities.
 //! - `import`: the reader, entities to art, blocks to symbols.
 //! - `hpgl`: the HP-GL reader, the pen's moves to paths, and the writer, paths to pen moves.
@@ -24,7 +24,6 @@ mod aci;
 pub mod hpgl;
 pub mod import;
 mod scene;
-mod writer;
 
 use vectorcraft_doc::{Document, Unit};
 use vectorcraft_geom::Rect;
@@ -136,8 +135,24 @@ impl DxfVersion {
         self >= Self::R2004
     }
     /// Text is UTF-8 (earlier versions escape what isn't ASCII as `\U+XXXX`).
-    fn utf8(self) -> bool {
+    pub fn utf8(self) -> bool {
         self >= Self::R2007
+    }
+}
+
+impl From<DxfVersion> for craft_dxf::drawing::Format {
+    fn from(v: DxfVersion) -> Self {
+        match v {
+            DxfVersion::R12 => Self::R12,
+            DxfVersion::R13 => Self::R13,
+            DxfVersion::R14 => Self::R14,
+            DxfVersion::R2000 => Self::R2000,
+            DxfVersion::R2004 => Self::R2004,
+            DxfVersion::R2007 => Self::R2007,
+            DxfVersion::R2010 => Self::R2010,
+            DxfVersion::R2013 => Self::R2013,
+            DxfVersion::R2018 => Self::R2018,
+        }
     }
 }
 
