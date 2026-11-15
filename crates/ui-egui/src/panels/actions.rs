@@ -312,7 +312,7 @@ pub fn default_sets() -> Vec<ActionSet> {
             Action::new("Center on Artboard", vec![step("object.align", json!({"horizontal": "center", "vertical": "center", "to": "artboard"}))]),
             Action::new("Outline Text", vec![step("type.createOutlines", json!({}))]),
             Action::new("Rotate 90° CW", vec![step("object.rotate", json!({"angle": -90}))]),
-            Action::new("Reflect Horizontal", vec![step("object.reflect", json!({"axis": "vertical"}))]),
+            Action::new("Reflect Horizontal", vec![step("object.reflect", json!({"axis": "vertical", "basis": "box"}))]),
         ],
     )]
 }
@@ -2719,6 +2719,28 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The built-in Reflect Horizontal reflects a rotated object across its bounding box's own axis,
+    /// as the Reflect dialog does, so the box keeps its angle; a saved step without a basis, recorded
+    /// before Reflect followed the box, still reflects across the page's axis.
+    #[test]
+    fn the_built_in_reflect_follows_the_turned_box() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = vectorcraft_doc::NodeId(
+            app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap(),
+        );
+        app.run("select.set", json!({"ids": [id.0]})).unwrap();
+        app.run("object.rotate", json!({"angle": 30})).unwrap();
+        let angle = |app: &VectorcraftApp| app.session.active().unwrap().doc.bbox_angle(&[id]);
+        let reflect = default_sets()[0].actions.iter().position(|a| a.name == "Reflect Horizontal").unwrap();
+        app.ui.action_sets = default_sets();
+        play(&mut app, 0, reflect).unwrap();
+        assert!((angle(&app) - 30.0).abs() < 1e-6, "{}", angle(&app));
+        app.ui.action_sets = vec![ActionSet::new("Old", vec![Action::new("Reflect", vec![("object.reflect".into(), json!({"axis": "vertical"}))])])];
+        play(&mut app, 0, 0).unwrap();
+        assert!((angle(&app) + 30.0).abs() < 1e-6, "{}", angle(&app));
     }
 
     /// An action recorded with a key its command no longer reads still plays, accelerated and one
