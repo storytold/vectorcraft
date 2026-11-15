@@ -1539,6 +1539,7 @@ file-filter	Templates	Vorlagen
 	Add Color Tool	Farbe-hinzufügen-Werkzeug
 	Remove Color Tool	Farbe-entfernen-Werkzeug
 	Remove Color	Farbe entfernen
+	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
 	Height:	Höhe:
@@ -2691,6 +2692,8 @@ mark-style	Japanese	Japanisch
 	Insert Aki Left	Aki links einfügen
 	Insert Aki Right	Aki rechts einfügen
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Horizontale Position diakritischer Zeichen anpassen
+	Adjust Vertical Diacritic Position	Vertikale Position diakritischer Zeichen anpassen
 	Character Direction	Zeichenrichtung
 	Digits	Ziffern
 	Arabic	Arabisch
@@ -9194,3 +9197,20 @@ breakText	Glyphs	Glyphen
 	Nest Shapes…	Formen verschachteln…
 	Nest Shapes	Formen verschachteln
 	Roll	Rolle
+	Packaging Tools	Verpackungswerkzeuge
+	Fold Lines	Faltlinien
+	Make Cut Line	Als Schnittlinie festlegen
+	Make Crease Line	Als Rilllinie festlegen
+	Make Partial Cut Line	Als Teilschnittlinie festlegen
+	Make Perforation Line	Als Perforationslinie festlegen
+	Make Fold Line	Als Faltlinie festlegen
+	Role Swatches…	Farbfelder der Linienarten…
+	Role Swatches	Farbfelder der Linienarten
+	Role	Linienart
+	Cut Line	Schnittlinie
+	Crease Line	Rilllinie
+	Partial Cut Line	Teilschnittlinie
+	Perforation Line	Perforationslinie
+	No objects are selected.	Es sind keine Objekte ausgewählt.
+	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
+	Remove Fold Line Role	Linienart entfernen

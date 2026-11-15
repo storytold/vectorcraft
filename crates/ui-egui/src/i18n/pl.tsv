@@ -1547,6 +1547,8 @@ lighting	Light	Światło
 	Insert Aki Left	Wstaw aki z lewej
 	Insert Aki Right	Wstaw aki z prawej
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Dostosuj poziome położenie znaków diakrytycznych
+	Adjust Vertical Diacritic Position	Dostosuj pionowe położenie znaków diakrytycznych
 	Character Direction	Kierunek znaków
 	Digits	Cyfry
 	Arabic	Arabskie
@@ -2899,6 +2901,7 @@ digits	Malayalam	Malajalam
 	Add Color Tool	Narzędzie Dodaj kolor
 	Remove Color Tool	Narzędzie Usuń kolor
 	Remove Color	Usuń kolor
+	Find the selected colors in the artwork	Znajdź zaznaczone kolory w kompozycji
 	Keep this row's colors (exclude)	Zachowaj kolory tego wiersza (wyklucz)
 	Limit to Library:	Ogranicz do biblioteki:
 	Link harmony colors	Połącz kolory harmonii
@@ -9449,3 +9452,20 @@ breakText	Glyphs	Glify
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu JPEG (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu Targa (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pikseli to za dużo dla formatu PSD (najwyżej {MAX_SIDE} pikseli na bok): zmniejsz rozdzielczość
+	Packaging Tools	Narzędzia do opakowań
+	Fold Lines	Linie zgięcia
+	Make Cut Line	Utwórz linię cięcia
+	Make Crease Line	Utwórz linię bigowania
+	Make Partial Cut Line	Utwórz linię nacięcia
+	Make Perforation Line	Utwórz linię perforacji
+	Make Fold Line	Utwórz linię zgięcia
+	Role Swatches…	Próbki rodzajów linii…
+	Role Swatches	Próbki rodzajów linii
+	Role	Rodzaj linii
+	Cut Line	Linia cięcia
+	Crease Line	Linia bigowania
+	Partial Cut Line	Linia nacięcia
+	Perforation Line	Linia perforacji
+	No objects are selected.	Nie zaznaczono żadnych obiektów.
+	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
+	Remove Fold Line Role	Usuń rodzaj linii
