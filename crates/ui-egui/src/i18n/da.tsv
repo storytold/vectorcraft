@@ -2158,6 +2158,8 @@ lighting	Light	Lys
 	Insert Aki Left	Indsæt aki til venstre
 	Insert Aki Right	Indsæt aki til højre
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Juster vandret placering af diakritiske tegn
+	Adjust Vertical Diacritic Position	Juster lodret placering af diakritiske tegn
 	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
@@ -3384,6 +3386,7 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vis glat farvehjul
 	Show segmented color wheel	Vis segmenteret farvehjul
 	Show color bars	Vis farvebjælker
+	Find the selected colors in the artwork	Find de valgte farver i grafikken
 	Harmony Rules	Harmoniregler
 	Keep this row's colors (exclude)	Behold farverne i denne række (ekskludér)
 	Limit to Library:	Begræns til bibliotek:
@@ -7682,4 +7685,21 @@ breakText	Glyphs	Glyffer
 	Nest Shapes…	Pak figurer tæt…
 	Nest Shapes	Pak figurer tæt
 	Roll	Rulle
+	Packaging Tools	Emballageværktøjer
+	Fold Lines	Foldelinjer
+	Make Cut Line	Gør til skærelinje
+	Make Crease Line	Gør til rillelinje
+	Make Partial Cut Line	Gør til delvis skærelinje
+	Make Perforation Line	Gør til perforeringslinje
+	Make Fold Line	Gør til foldelinje
+	Role Swatches…	Farveprøver for linjetyper…
+	Role Swatches	Farveprøver for linjetyper
+	Role	Linjetype
+	Cut Line	Skærelinje
+	Crease Line	Rillelinje
+	Partial Cut Line	Delvis skærelinje
+	Perforation Line	Perforeringslinje
+	No objects are selected.	Ingen objekter er markeret.
+	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
+	Remove Fold Line Role	Fjern linjetype
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
