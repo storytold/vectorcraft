@@ -4514,6 +4514,7 @@ theme	Appearance	외관
 @msg	no history to clear	지울 히스토리가 없습니다
 @msg	no history state {v}	히스토리 상태 {v}이(가) 없습니다
 @msg	Expand Appearance: the selection has a basic appearance	모양새 확장: 선택 항목은 기본 모양새입니다
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	일부 래스터 효과는 이미지로 만들지 않았습니다: 이미지 1,024개 또는 총 256메가픽셀을 넘기 때문입니다
 @msg	select (or target) objects whose appearance isn't basic	모양새가 기본이 아닌 개체를 선택(또는 대상 지정)하세요
 @msg	{C}: no effect at index {from}	{C}: 인덱스 {from}에 효과가 없습니다
 @msg	Expand: no gradient fills	확장: 그레이디언트 칠이 없습니다

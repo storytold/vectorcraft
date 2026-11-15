@@ -5021,6 +5021,7 @@ theme	Appearance	Giao diện
 @msg	every numbered name for {name} is taken in the document's folder	mọi tên đánh số cho {name} đã được dùng trong thư mục tài liệu
 @msg	every search thread stopped on an internal error (please report this bug)	mọi luồng tìm kiếm đã dừng do lỗi nội bộ (vui lòng báo cáo lỗi này)
 @msg	Expand Appearance: the selection has a basic appearance	Mở rộng diện mạo: vùng chọn có diện mạo cơ bản
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	một số hiệu ứng raster không được chuyển thành hình ảnh: chúng sẽ cần hơn 1.024 hình ảnh hoặc tổng cộng 256 megapixel
 @msg	Expand: no brush strokes selected	Mở rộng: chưa chọn nét cọ
 @msg	Expand: no gradient fills	Mở rộng: không có tô chuyển sắc
 @msg	Expand: nothing to expand	Mở rộng: không có gì để mở rộng

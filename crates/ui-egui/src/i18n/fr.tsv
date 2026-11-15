@@ -4509,6 +4509,7 @@ axis	Both	Les deux
 @msg	select a path	sélectionnez un tracé
 @msg	Divide Objects Below: select exactly one path	Diviser les objets inférieurs : sélectionnez exactement un tracé
 @msg	Downloaded {what}	{what} téléchargé
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	certains effets pixellisés n’ont pas été convertis en images, car ils occuperaient plus de 1024 images ou 256 mégapixels au total
 @msg	Expand Appearance: the selection has a basic appearance	Décomposer l’aspect : la sélection a un aspect de base
 @msg	Expand: no brush strokes selected	Décomposer : aucun contour de forme sélectionné
 @msg	Expand: no gradient fills	Décomposer : aucun fond en dégradé

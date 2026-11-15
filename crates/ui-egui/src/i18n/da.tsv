@@ -5044,6 +5044,7 @@ imageTrace	Outline	Kontur
 @msg	Divide Objects Below: select exactly one path	Opdel objekter nedenunder: markér præcis én kurve
 @msg	Downloaded {what}	Downloadede {what}
 @msg	Expand Appearance: the selection has a basic appearance	Udvid udseende: markeringen har et grundlæggende udseende
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	nogle rastereffekter blev ikke lavet om til billeder: de ville kræve mere end 1.024 billeder eller i alt 256 megapixel
 @msg	Expand: no brush strokes selected	Udvid: ingen penselstrøg er markeret
 @msg	Expand: no gradient fills	Udvid: ingen gradientfyld
 @msg	Expand: nothing to expand	Udvid: intet at udvide

@@ -646,6 +646,46 @@ fn a_nested_instance_of_a_missing_symbol_stays_an_instance() {
     assert_eq!(instances_and_images(&n), (1, 0), "the inner instance stays, without an image");
 }
 
+/// 1,100 blurred instances in the outer art, far fewer objects than the symbol limit: one Expand
+/// Appearance makes 1,024 images of them, and the other 76 stay instances with their blur, which
+/// the result reports.
+#[test]
+fn nested_instance_raster_effects_stop_at_the_image_limit() {
+    let mut s = session();
+    // Images of a pixel or two each.
+    run(&mut s, "document.rasterEffectsSettings", json!({"resolution": 1}));
+    let blur = |s: &mut Session, id: NodeId, row: usize| {
+        run(s, "effect.apply", json!({"ids": [id.0], "item": row, "effect": "blur.gaussian", "params": {"radius": 3}}));
+    };
+    let (id, row) = nested_with_row(&mut s, blur);
+    offset_row(&mut s, id, row, 10.0);
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let outer = d.symbols.iter().position(|sym| sym.name == "Outer").unwrap();
+        let inner = (*d.symbols[outer].art).clone();
+        assert!(matches!(inner.kind, NodeKind::SymbolInstance { .. }), "the outer art is the inner instance");
+        let copies = (0..1_100)
+            .map(|_| {
+                let mut copy = inner.clone();
+                copy.id = d.alloc_id();
+                std::sync::Arc::new(copy)
+            })
+            .collect();
+        d.symbols[outer].art = std::sync::Arc::new(Node::group(d.alloc_id(), copies));
+    }
+
+    let r = run(&mut s, "effect.expandAppearance", json!({}));
+    assert_eq!(r["rasterLeft"], 76, "{r}");
+    assert!(r["warning"].as_str().is_some_and(|w| w.contains("1,024 images")), "{r}");
+    let n = node(&s, id);
+    assert_eq!(instances_and_images(&n), (76, 1_024), "1,024 instances become images and the rest stay");
+    n.walk(&mut |part| {
+        if matches!(part.kind, NodeKind::SymbolInstance { .. }) {
+            assert!(part.appearance.items.iter().any(|i| i.effects().iter().any(|e| e.id == "blur.gaussian")), "a left instance keeps its blur");
+        }
+    });
+}
+
 /// Export draws a symbol instance's fill shadow on the filled shapes of its art: baking leaves the
 /// shadow on the art's fill, not its stroke, and PDF export makes an image of it.
 #[test]

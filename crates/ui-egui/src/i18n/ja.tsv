@@ -4587,6 +4587,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no history to clear	消去するヒストリーがありません
 @msg	no history state {v}	ヒストリーの状態 {v} はありません
 @msg	Expand Appearance: the selection has a basic appearance	アピアランスを分割: 選択範囲は基本アピアランスです
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	一部のラスター効果は画像になりませんでした: 1,024 枚または合計 256 メガピクセルを超えるためです
 @msg	select (or target) objects whose appearance isn't basic	基本アピアランスではないオブジェクトを選択するか、ターゲットに指定してください
 @msg	{C}: no effect at index {from}	{C}: インデックス {from} に効果がありません
 @msg	Expand: no gradient fills	拡張: グラデーションの塗りがありません

@@ -6966,6 +6966,7 @@ antiAlias	Sharp	शार्प
 @msg	every search thread stopped on an internal error (please report this bug)	प्रत्येक खोज धागा एक आंतरिक त्रुटि पर बंद कर दिया (कृपया इस बग की रिपोर्ट करें)
 @msg	exit isolation mode first	पहले अलगाव मोड से बाहर निकलें
 @msg	Expand Appearance: the selection has a basic appearance	उपस्थिति का विस्तार: सिलेक्शन में एक बुनियादी उपस्थिति है
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	कुछ रास्टर इफ़ेक्ट इमेज में नहीं बदले गए: उनके लिए 1,024 से अधिक इमेज या कुल 256 मेगापिक्सेल लगते
 @msg	Expand: no brush strokes selected	विस्तार: सिलेक्टेड कोई ब्रश स्ट्रोक नहीं
 @msg	Expand: no gradient fills	एक्सपैंड: कोई ग्रेडिएंट फ़िल नहीं
 @msg	Expand: nothing to expand	विस्तार: विस्तार करने के लिए कुछ नहीं

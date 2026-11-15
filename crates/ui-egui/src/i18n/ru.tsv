@@ -4568,6 +4568,7 @@ axis	Both	Оба
 @msg	Divide Objects Below: select exactly one path	Разделение объектов ниже: выделите ровно один контур
 @msg	Downloaded {what}	Скачано: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Разбор оформления: у выделения основное оформление
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	некоторые растровые эффекты не преобразованы в изображения: для них нужно больше 1024 изображений или 256 мегапикселей в сумме
 @msg	Expand: no brush strokes selected	Разбор: не выделены мазки кисти
 @msg	Expand: no gradient fills	Разбор: нет градиентных заливок
 @msg	Expand: nothing to expand	Разбор: нечего разбирать

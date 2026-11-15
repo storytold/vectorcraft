@@ -5778,6 +5778,7 @@ digits	Malayalam	Malaiàlam
 @msg	every numbered name for {name} is taken in the document's folder	tots els noms numerats per a {name} estan ocupats a la carpeta del document
 @msg	every search thread stopped on an internal error (please report this bug)	tots els fils de cerca s’han aturat per un error intern (informeu d’aquest error)
 @msg	Expand Appearance: the selection has a basic appearance	Expandeix l’aparença: la selecció té una aparença bàsica
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	alguns efectes ràster no s’han convertit en imatges: ocuparien més de 1.024 imatges o 256 megapíxels en total
 @msg	Expand: no brush strokes selected	Expandeix: no s’ha seleccionat cap traç de pinzell
 @msg	Expand: no gradient fills	Expandeix: no hi ha farciments de degradat
 @msg	Expand: nothing to expand	Expandeix: no hi ha res per expandir

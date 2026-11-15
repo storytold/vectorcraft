@@ -4660,6 +4660,7 @@ imageTrace	Outline	Kontur
 @msg	Divide Objects Below: select exactly one path	Podziel obiekty poniżej: zaznacz dokładnie jedną ścieżkę
 @msg	Downloaded {what}	Pobrano {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozszerz wygląd: zaznaczenie ma wygląd podstawowy
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	niektóre efekty rastrowe nie zostały zamienione na obrazy: zajęłyby więcej niż 1024 obrazy lub łącznie 256 megapikseli
 @msg	Expand: no brush strokes selected	Rozszerz: nie zaznaczono pociągnięć pędzla
 @msg	Expand: no gradient fills	Rozszerz: brak wypełnień gradientem
 @msg	Expand: nothing to expand	Rozszerz: nie ma czego rozszerzać

@@ -5251,6 +5251,10 @@ instance in the art whose topmost fill or stroke has a geometry or raster effect
 passes on, becomes its art and image the same way, and so do the instances in that art (VectorCraft's own rule).
 Before, an instance whose fill or stroke had only a shadow or glow stayed an instance over the image, and a raster
 effect on an instance in the art stayed live.
+One Expand Appearance makes at most 1,024 images of raster effects, holding 256 megapixels in all (VectorCraft's own
+limits). An object or symbol instance whose image would go past them stays as it is, with its effects and the objects
+in it; the result then carries a `warning` and `rasterLeft`, the number of objects left so, and when nothing else
+expands the command fails with the same message. A legacy `.ai` save notes it the same way.
 The result is `{ids}`; when an image in the art can't be decoded, the images made from
 raster effects do not show it, and the result also carries the `warning` that Flatten Transparency gives.
 A path's strokes stay strokes, as the

@@ -4941,6 +4941,7 @@ imageTrace	Outline	Contour
 @msg	Divide Objects Below: select exactly one path	Objecten eronder verdelen: selecteer precies één pad
 @msg	Downloaded {what}	{what} gedownload
 @msg	Expand Appearance: the selection has a basic appearance	Vormgeving uitbreiden: de selectie heeft een basisvormgeving
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	sommige rastereffecten zijn niet omgezet in afbeeldingen: ze zouden meer dan 1.024 afbeeldingen of in totaal 256 megapixel nodig hebben
 @msg	Expand: no brush strokes selected	Uitbreiden: geen penseelstreken geselecteerd
 @msg	Expand: no gradient fills	Uitbreiden: geen verloopvullingen
 @msg	Expand: nothing to expand	Uitbreiden: niets om uit te breiden
