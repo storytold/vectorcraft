@@ -7306,18 +7306,26 @@ fn image_trace_views_draw_on_screen_only_and_expand_to_the_result() {
 #[test]
 fn image_trace_outline_view_leaves_out_the_seam_fills() {
     // Red beside blue in the middle of a transparent 60 × 40 image, placed at 50, 50 and scaled 2×,
-    // then 2× across and 2.5× down.
+    // or 2× across and 2.5× down.
     let art = vectorcraft_trace::Raster::from_fn(60, 40, |x, y| match ((10..50).contains(&x) && (10..30).contains(&y), x < 30) {
         (false, _) => [0, 0, 0, 0],
         (true, true) => [200, 30, 30, 255],
         (true, false) => [30, 30, 200, 255],
     });
-    for scale in [Affine::scale(2.0), Affine::scale_non_uniform(2.0, 2.5)] {
+    for (scale, stretched) in [(Affine::scale(2.0), false), (Affine::scale_non_uniform(2.0, 2.5), true)] {
         let mut s = session();
         add_image(&mut s, &art, Affine::translate((50.0, 50.0)) * scale);
         let r = s.execute("imageTrace.make", &json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "method": "abutting"}})).unwrap();
         let g = NodeId(r["id"].as_u64().unwrap());
-        assert!(node(&s, g).children().unwrap().iter().any(|c| matches!(c.kind, NodeKind::Group { clip: true, .. })), "seam fills");
+        let seams =
+            node(&s, g).children().unwrap().iter().find(|c| matches!(c.kind, NodeKind::Group { clip: true, .. })).cloned().expect("seam fills");
+        // Strokes, or on the stretched image their outlines, filled.
+        let members = &seams.children().unwrap()[1..];
+        assert!(!members.is_empty());
+        for m in members {
+            let (fill, stroke) = (m.appearance.fill_paint(), m.appearance.stroke_paint());
+            assert_eq!((fill != Paint::None, stroke != Paint::None), (stretched, !stretched), "{scale:?}: {fill:?}, {stroke:?}");
+        }
         s.execute("imageTrace.setView", &json!({"id": g.0, "view": "outlines"})).unwrap();
         let screen = render_doc(&s, true);
         // The image's top edge (y = 50), away from the art: nothing drawn.
