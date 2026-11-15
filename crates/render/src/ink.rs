@@ -609,7 +609,8 @@ fn darkened_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, amount: f32, blob:
             continue;
         }
         let rgb = if ink.black_endpoint() {
-            base.rgb(&Color::gray(1.0))
+            // Like the other pixels, a proofed black stays in display space; the plates proof it.
+            if display { Ink::Display } else { base }.rgb(&Color::gray(1.0))
         } else if let Some(raw) = raw_cmyk.as_ref().and_then(|v| v.data.as_chunks::<4>().0.get(i)) {
             let mut inks = raw.map(|v| f32::from(v) / 255.0);
             inks[3] = (inks[3] + amount).min(1.0);
@@ -709,6 +710,38 @@ mod tests {
         let (_, warm) = ink_image(&key, &pm, Ink::Display.darkened(0.25), None, false);
         assert_eq!(p25.data(), warm.data());
         assert_eq!(pm.data()[0].r, 204, "source pixels remain unchanged");
+    }
+
+    /// A fully darkened image drawn with a proof that preserves the colors' numbers shows black as
+    /// that proof shows it: proofed once, as its other darkened pixels are.
+    #[test]
+    fn a_proofed_black_endpoint_image_is_proofed_once() {
+        // Simulate Black Ink shows black as a gray, so a second proof would lighten it again.
+        let proof = cms::ProofSetup { target: cms::ProofTarget::WorkingCmyk, preserve_numbers: true, simulate_black: true, ..Default::default() };
+        let (ink, _hold) = proofed_ink(&proof);
+        let dark = ink.darkened(1.0);
+        assert!(dark.black_endpoint());
+        let key = ImageKey {
+            content: Arc::from("proofed-black-endpoint-regression"),
+            adjust: None,
+            grey: false,
+            tint: None,
+            ink: Ink::Display,
+            luts: (0, 0),
+            plates: 0,
+            mip: 0,
+            tile: None,
+        };
+        let pm = Arc::new(Pixmap::from_parts(vec![PremulRgba8 { r: 204, g: 102, b: 51, a: 255 }], 1, 1));
+        let (k, p) = ink_image(&key, &pm, dark, None, false);
+        let doc = Document::new(10.0, 10.0);
+        let Some(lut) = crate::proof::ink_plate_lut(dark, &doc) else { panic!("a preserving proof has plate tables") };
+        let (_, shown) = crate::proof::plate_image(&lut, &k, &p, None, false);
+        // A pixel darkened to black in display space, proofed once.
+        let want = cms::active().proof_srgb([0.0; 3], &proof).map(|v| (v * 255.0).round() as i32);
+        let px = shown.data()[0];
+        let got = [px.r, px.g, px.b].map(i32::from);
+        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 2), "{got:?} vs {want:?}");
     }
 
     #[test]
