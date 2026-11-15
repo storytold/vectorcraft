@@ -297,7 +297,7 @@ color's brightness (the patch's color on the segmented wheel), in a new row with
 right-click menu has Remove Color too. The base color can't be removed. A removed color's row is dropped, unless it
 has current colors and art or a group is open: it then keeps them with `to: null`, that art keeps its colors, and the
 group's swatch at that place is removed. A row with no current colors recolors no art; with a group, the new color of
-one with `added: true` is added to the group after the group's other colors, and a row made with New Row adds none.
+one with `added: true` that is not excluded is added to the group after the group's other colors, and a row made with New Row adds none.
 Setting `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
