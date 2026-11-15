@@ -11789,7 +11789,14 @@ Tools:
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
   gone 3 screen pixels from the press, the gesture stays a drag even when it ends near the press. An Alt-drag draws a
   freehand line and runs it with `points` on release; a line of more than 65,536 points is dropped. Nothing changes
-  while dragging, and Escape during a drag removes nothing. The tool has no options.
+  while dragging, and Escape during a drag removes nothing. Hovering draws in red the stretch a click there would
+  remove. It draws nothing when a click would remove nothing, or when finding the path's crossings takes more than a
+  twentieth of the work a click may do. A drag draws in red every stretch its release would remove while it reaches at
+  most 32 paths, the paths it reaches times the paths that can be edited come to at most 10,000,000, and a freehand
+  line has at most 4,096 points; past those limits it draws none. Once finding the crossings takes more than a
+  twentieth of the work a release may do, or checking the line against the paths' segments takes more than 1,000,000
+  box tests, the drag draws none until the next press. A click or a release still removes what it reaches. The tool
+  has no options.
 
 Commands:
 
