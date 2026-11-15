@@ -321,6 +321,22 @@ pub(crate) fn opaque_paint(paint: &Paint) -> (Paint, Option<Paint>) {
     (base, transparent.then_some(mask))
 }
 
+/// [`opaque_paint`] for a surface of several faces under one opacity mask. A transparent gradient
+/// without a placement (or a freeform gradient without points) is first pinned to `bounds`, the
+/// faces' bounds together grown by 1 pt, so every face's color and the mask share one placement.
+/// An opaque gradient is returned as [`opaque_paint`] returns it.
+pub(crate) fn opaque_surface_paint(paint: &Paint, bounds: impl FnOnce() -> vectorcraft_geom::Rect) -> (Paint, Option<Paint>) {
+    let (base, mask) = opaque_paint(paint);
+    if mask.is_none() || !matches!(paint, Paint::Gradient(_)) {
+        return (base, mask);
+    }
+    let mut pinned = paint.clone();
+    if let Paint::Gradient(g) = &mut pinned {
+        g.pin(bounds().inflate(1.0, 1.0));
+    }
+    opaque_paint(&pinned)
+}
+
 fn composed_art(id: vectorcraft_doc::NodeId, path: &vectorcraft_geom::PathData, paint: &Paint, light: Ramp, seam: f64) -> vectorcraft_doc::Node {
     use std::sync::Arc;
     use vectorcraft_doc::color::BlendMode;

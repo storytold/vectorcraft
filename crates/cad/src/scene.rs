@@ -14,8 +14,8 @@ use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
 
 use crate::aci::nearest_aci;
-use crate::writer::{Codes, Drawing, EntityStyle, Handle, ImageDef, Layer, LineType, fixed};
 use crate::{CAP_HEIGHT, ColorDepth, DxfImage, DxfOptions, DxfOutput, MAX_NEST, Preserve, RasterFormat};
+use craft_dxf::drawing::{Codes, Drawing, EntityStyle, Handle, ImageDef, Layer, LineType, STANDARD_STYLE, fixed};
 
 /// Curves are flattened to within this distance (points) where DXF needs straight segments
 /// (hatch boundaries, R12 polylines).
@@ -543,7 +543,7 @@ impl<'a> Scene<'a> {
             o,
             to_dxf: Affine::new([k, 0.0, 0.0, -k, -r.x0 * k, r.y1 * k]),
             k,
-            e: Codes::new(o.version),
+            e: Codes::new(o.version.into()),
             next: fixed::FIRST_FREE,
             layers: vec![],
             layer_names: Names::with(&["0", "Defpoints"]),
@@ -551,7 +551,7 @@ impl<'a> Scene<'a> {
             flags: LayerFlags { off: false, locked: false, plot: true },
             linetypes: vec![],
             styles: vec![],
-            style_names: Names::with(&[crate::writer::STANDARD_STYLE]),
+            style_names: Names::with(&[STANDARD_STYLE]),
             images: vec![],
             files: vec![],
             by_key: HashMap::new(),
@@ -579,7 +579,7 @@ impl<'a> Scene<'a> {
         let one = (self.o.scale - 1.0).abs() < 1e-12;
         let insunits = if one { crate::insunits_code(self.o.unit).unwrap_or(0) } else { 0 };
         let drawing = Drawing {
-            version: self.o.version,
+            version: self.o.version.into(),
             layers: self.layers,
             linetypes: self.linetypes,
             styles: self.styles,

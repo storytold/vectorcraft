@@ -52,8 +52,8 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     // Without a selection the swatch of the active paint is highlighted.
     let fallback: Vec<String> = if selected.is_empty() { active_swatch.into_iter().collect() } else { vec![] };
     let sel = if selected.is_empty() { &fallback } else { &selected };
-    let lit = app.session.active().map(|st| highlighted(&st.doc, sel)).unwrap_or_default();
-    let is_sel = |name: &str| lit.contains(&name);
+    let lit: Vec<String> = app.session.active().map(|st| highlighted(&st.doc, sel).into_iter().map(str::to_string).collect()).unwrap_or_default();
+    let is_sel = |name: &str| lit.iter().any(|n| n == name);
     let mut ev = TileEvents::default();
     // In a sized panel the list fills the space above the footer (#1638), as the Artboards list
     // does; elsewhere it keeps its 150 pt (200 pt for large thumbnails).
@@ -84,6 +84,7 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                         Entry::Folder(_) => draw_folder(ui, chip),
                     }
                     list_row_name(ui, r, chip, crate::i18n::t_name("swatch", name));
+                    super::item_context_menu(app, ui, &resp, e);
                     tile_input(ui, resp, e, &items, sel, true, &mut ev);
                 }
             } else {
@@ -104,6 +105,7 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                         }
                         Entry::Folder(_) => folder_tile(ui, cell, is_sel(name)),
                     }
+                    super::item_context_menu(app, ui, &resp, e);
                     tile_input(ui, resp, e, &items, sel, false, &mut ev);
                 }
             }

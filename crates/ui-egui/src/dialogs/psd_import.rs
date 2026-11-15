@@ -322,6 +322,49 @@ mod tests {
         assert!(matches!(st.doc.node(id).unwrap().kind, NodeKind::Image(_)));
     }
 
+    /// The OK of the dialog a drop on a canvas opened places in the document the file was dropped
+    /// on, made active again, even when another document became active meanwhile; it doesn't
+    /// place when that document has been reverted or closed since.
+    #[test]
+    fn a_dropped_files_ok_places_in_the_document_it_was_dropped_on() {
+        use crate::place::{DropAt, DropTarget};
+        let psd = layered();
+        let mut app = app();
+        for _ in 0..2 {
+            app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        }
+        let drop_on_first = |app: &mut VectorcraftApp| {
+            app.session.set_active(0);
+            let st = app.session.doc().unwrap();
+            let target = DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at: vectorcraft_geom::Point::new(50.0, 50.0), embed: true });
+            crate::place::drop_files(app, vec![(target, ("poster.psd".into(), None, psd.clone()))]);
+            assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+            // Another document becomes active while the dialog is open.
+            app.session.set_active(1);
+        };
+        let objects =
+            |app: &VectorcraftApp, i: usize| app.session.documents()[i].doc.layers.iter().map(|l| l.children().map_or(0, Vec::len)).sum::<usize>();
+        drop_on_first(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!((objects(&app, 0), objects(&app, 1)), (1, 0), "placed in the document it was dropped on");
+        assert_eq!(app.session.active_index(), Some(0), "which is active again");
+        // Reverted meanwhile: the dialog stays open with the reason, and nothing is placed.
+        drop_on_first(&mut app);
+        let first = app.session.documents()[0].uid;
+        app.session.document_mut(first).unwrap().reverts += 1;
+        let e = super::super::confirm(&mut app).unwrap_err();
+        assert!(e.contains("was reverted"), "{e}");
+        assert_eq!((objects(&app, 0), objects(&app, 1)), (1, 0));
+        // Closed meanwhile.
+        app.ui.dialog = None;
+        drop_on_first(&mut app);
+        app.session.close_document(0);
+        let e = super::super::confirm(&mut app).unwrap_err();
+        assert!(e.contains("was closed"), "{e}");
+        assert_eq!(objects(&app, 0), 0);
+    }
+
     #[test]
     fn several_files_placed_without_link_take_the_last_choices() {
         let dir = std::env::temp_dir().join(format!("vc-psd-import-queue-{}", std::process::id()));
