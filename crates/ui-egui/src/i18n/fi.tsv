@@ -1285,7 +1285,7 @@ lighting	Light	Valo
 	Name* @ 66.67% (RGB/Preview)	Nimi* @ 66.67% (RGB/esikatselu)
 	No Document	Ei asiakirjaa
 	Press 	Paina 
-	Search commands and tools	Hae komentoja ja työkaluja
+	Search commands, tools, panels and effects	Hae komentoja, työkaluja, paneeleita ja tehosteita
 	Style:	Tyyli:
 	Switch workspace	Vaihda työtilaa
 	Show all open documents	Näytä kaikki avoimet asiakirjat
@@ -4350,7 +4350,7 @@ font-technology	Variable	Muuttuvat
 	Saved {path}	Tallennettu {path}
 	Saving	Tallennetaan
 	Saving {}	Tallennetaan {}
-	Search commands and tools…	Hae komentoja ja työkaluja…
+	Search commands, tools, panels and effects…	Hae komentoja, työkaluja, paneeleita ja tehosteita…
 	Dashed Line	Katkoviiva
 	Panel menu	Paneelivalikko
 	Unembed…	Poista upotus…

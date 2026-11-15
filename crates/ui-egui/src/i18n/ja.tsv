@@ -3158,8 +3158,8 @@ mark-style	Japanese	日本式
 	Filter Layers Panel Rows	レイヤーパネルの行をフィルター
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` は変更した設定を表します: プリセットを別の名前で保存してください
 @msg	`{key}` must be an array of these names: {_1}	`{key}` には {_1} の中の名前の配列を指定してください
-	Search commands and tools	コマンドとツールを検索
-	Search commands and tools…	コマンドとツールを検索…
+	Search commands, tools, panels and effects	コマンド、ツール、パネル、効果を検索
+	Search commands, tools, panels and effects…	コマンド、ツール、パネル、効果を検索…
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択
 	Select All Assets	すべてのアセットを選択

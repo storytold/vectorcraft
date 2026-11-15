@@ -1175,7 +1175,7 @@ lighting	Light	სინათლე
 	Name* @ 66.67% (RGB/Preview)	სახელი* @ 66.67% (RGB/წინასწარი ნახვა)
 	No Document	დოკუმენტი არ არის
 	Press 	დააჭირეთ 
-	Search commands and tools	ბრძანებებისა და ხელსაწყოების ძიება
+	Search commands, tools, panels and effects	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება
 	Style:	სტილი:
 	Switch workspace	სამუშაო სივრცის გადართვა
 	Show all open documents	ყველა ღია დოკუმენტის ჩვენება
@@ -3957,7 +3957,7 @@ font-technology	Variable	ცვლადი
 	Saved {path}	შენახულია: {path}
 	Saving	შენახვა
 	Saving {}	ინახება: {}
-	Search commands and tools…	ბრძანებებისა და ხელსაწყოების ძიება…
+	Search commands, tools, panels and effects…	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება…
 	Dashed Line	ტირეებიანი ხაზი
 	Panel menu	პანელის მენიუ
 	Unembed…	ჩაშენების მოხსნა…

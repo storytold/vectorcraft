@@ -3227,8 +3227,8 @@ digits	Malayalam	Malayalam
 	Filter Layers Panel Rows	Filtrer les lignes du panneau Calques
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` désigne des réglages modifiés : enregistrez le paramètre prédéfini sous un autre nom
 @msg	`{key}` must be an array of these names: {_1}	`{key}` doit être un tableau de noms parmi {_1}
-	Search commands and tools	Chercher commandes et outils
-	Search commands and tools…	Chercher commandes et outils…
+	Search commands, tools, panels and effects	Chercher commandes, outils, panneaux et effets
+	Search commands, tools, panels and effects…	Chercher commandes, outils, panneaux et effets…
 	Search Commands…	Rechercher des commandes…
 	Secondary	Secondaire
 	Section Symbol	Symbole de section

@@ -3203,8 +3203,8 @@ digits	Malayalam	Malayalam
 	Filter Layers Panel Rows	Zeilen im Ebenenbedienfeld filtern
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` steht für geänderte Einstellungen: Speichern Sie die Vorgabe unter einem anderen Namen
 @msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
-	Search commands and tools	Befehle und Werkzeuge suchen
-	Search commands and tools…	Befehle und Werkzeuge suchen…
+	Search commands, tools, panels and effects	Befehle, Werkzeuge, Bedienfelder und Effekte suchen
+	Search commands, tools, panels and effects…	Befehle, Werkzeuge, Bedienfelder und Effekte suchen…
 	Search Commands…	Befehle suchen…
 	Secondary	Sekundär
 	Section Symbol	Paragrafenzeichen

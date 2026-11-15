@@ -1736,7 +1736,7 @@ lighting	Light	Licht
 	Name* @ 66.67% (RGB/Preview)	Naam* @ 66.67% (RGB/Voorbeeld)
 	No Document	Geen document
 	Press 	Druk op 
-	Search commands and tools	Opdrachten en gereedschappen zoeken
+	Search commands, tools, panels and effects	Opdrachten, gereedschappen, panelen en effecten zoeken
 	Style:	Stijl:
 	Switch workspace	Werkruimte wisselen
 	Show all open documents	Alle geopende documenten tonen
@@ -4657,7 +4657,7 @@ font-technology	Variable	Variabel
 	Saved {path}	{path} opgeslagen
 	Saving	Bezig met opslaan
 	Saving {}	{} wordt opgeslagen
-	Search commands and tools…	Opdrachten en gereedschappen zoeken…
+	Search commands, tools, panels and effects…	Opdrachten, gereedschappen, panelen en effecten zoeken…
 	Dashed Line	Streepjeslijn
 	Panel menu	Paneelmenu
 	Unembed…	Insluiten ongedaan maken…

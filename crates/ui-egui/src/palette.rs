@@ -1,4 +1,5 @@
-//! The command palette: fuzzy search over every command and tool.
+//! The command palette: fuzzy search over the commands a pick runs, the tools, the panels and the
+//! Effect menu's items.
 
 use std::sync::Arc;
 
@@ -28,19 +29,54 @@ const WRAPPED: &[(&str, &str)] = &[
     ("brush.loadLibrary", "window.brushLibrary.other"),
 ];
 
+/// Engine commands that [`crate::shortcut_editor::needs_a_value`] marks and that a pick, which
+/// gives no params, still runs: Stop Script stops the running script, Clear Script Console empties
+/// the Script Console, Clear Plug-in Cache deletes every plug-in's cache, Reset Preferences resets
+/// every preference, Forget Import Matches forgets every saved match, Begin Undo Group and End
+/// Undo Group begin and end a group, the six Save … Preset commands save a new preset (Save
+/// Gradient Preset the selection's gradient), Delete Gradient Preset deletes the saved preset the
+/// selection's gradient matches, Pixel Snapping Options…
+/// opens its dialog, the three Asset Export commands open the Asset Export panel (#4864), New
+/// Symbol makes a symbol of the selection, Gradient Vector gives the selection the default
+/// gradient, Define Perspective Grid makes the document's grid, and Select Slice deselects the
+/// slices.
+const PICK_RUNS: &[&str] = &[
+    "script.stop",
+    "script.console.clear",
+    "plugin.clearCache",
+    "prefs.reset",
+    "importMatches.reset",
+    "edit.undoGroup.begin",
+    "edit.undoGroup.end",
+    "imageTrace.presets.save",
+    "flattener.presets.save",
+    "pdf.preset.save",
+    "print.presets.save",
+    "perspective.presets.save",
+    "gradient.presets.save",
+    "gradient.presets.delete",
+    "view.snapToPixel.options",
+    "assets.export",
+    "assets.export3D",
+    "assets.settings.set",
+    "symbol.new",
+    "paint.setGradientGeom",
+    "perspective.grid.set",
+    "object.slice.select",
+];
+
+/// The menu path of a panel's result: a pick runs Show Panel (`window.panel`) for the panel.
+const PANEL_PATH: &str = "Window › Show Panel";
+
 /// The menu path ([`context`]) a result takes when another result has its name: (id, English
 /// path), for commands that no item of the menu bar runs and whose id names no parent command.
 const CONTEXTS: &[(&str, &str)] = &[
     ("addon.pen.close", "Pen"),
     ("addon.pen.reshape", "Pen"),
     ("addon.pen.togglePoint", "Pen"),
-    ("brush.library", "Brushes"),
-    ("brush.unused", "Brushes"),
     ("charStyle.setAttrs", "Character Styles"),
     ("file.exportInBackground", "Export"),
     ("file.openInBackground", "Open"),
-    ("graphicStyle.library", "Graphic Styles"),
-    ("help.links", "Help"),
     ("imageTrace.hideRuns", "Image Trace"),
     ("links.reveal", "Links"),
     ("livePaint.fill", "Live Paint"),
@@ -51,9 +87,6 @@ const CONTEXTS: &[(&str, &str)] = &[
     ("path.knife", "Path"),
     ("path.reshapeSegment", "Path"),
     ("plugin.hideRuns", "Plug-ins"),
-    ("swatch.library.get", "Swatches"),
-    ("symbol.library", "Symbols"),
-    ("symbol.unused", "Symbols"),
     ("text.editRange", "Text"),
     ("ui.layersPanelOptions", "Layers"),
     ("ui.navigatorPanelOptions", "Navigator"),
@@ -91,23 +124,35 @@ impl Draft {
     /// The name in `lang`: the path's segments and the label translate on their own, and the id
     /// follows in parentheses when the result shows it.
     fn name(&self, lang: crate::i18n::Lang) -> String {
-        let label = if self.translates { crate::i18n::tr(lang, &self.label) } else { self.label.as_str() };
+        // A built-in effect's label translates by its effect id first, as the Effect menu's does.
+        let label = match self.id.strip_prefix("effect:") {
+            _ if !self.translates => self.label.as_str(),
+            Some(effect) => crate::i18n::tr_id(lang, effect, &self.label),
+            None => crate::i18n::tr(lang, &self.label),
+        };
         let name = if self.path.is_empty() { label.to_string() } else { format!("{} › {label}", shown_label(lang, &self.path)) };
         if self.keyed { format!("{name} ({})", self.id) } else { name }
     }
 }
 
 /// The palette's results before their names are made distinct: every listed engine command and
-/// plug-in command, UI command and tool.
+/// plug-in command, UI command, tool, panel and Effect menu item.
 fn drafts() -> Vec<Draft> {
     let mut out = vec![];
     // Aliases kept for older scripts run a command that is listed already, a wrapped engine
     // command is listed as its UI command, and an engine command with a UI command of the same id
-    // (Place…, Print…) is listed once, as the UI command.
+    // (Place…, Print…) is listed once, as the UI command. An engine command that needs a value a
+    // pick doesn't give, or a query whose answer a pick drops ([`crate::shortcut_editor::needs_a_value`]),
+    // is left out unless it does something besides answering ([`PICK_RUNS`]).
     let plugin_commands = vectorcraft_engine::cmd::plugin::command_specs();
     let ui_ids: std::collections::HashSet<&str> = menus::UI_COMMANDS.iter().map(|c| c.0).collect();
-    let listed = |id: &str| !vectorcraft_engine::cmd::is_alias(id) && !WRAPPED.iter().any(|(engine, _)| *engine == id) && !ui_ids.contains(id);
-    for c in vectorcraft_engine::command_specs().iter().filter(|c| listed(c.id)).chain(plugin_commands) {
+    let listed = |c: &vectorcraft_engine::CommandSpec| {
+        !vectorcraft_engine::cmd::is_alias(c.id)
+            && !WRAPPED.iter().any(|(engine, _)| *engine == c.id)
+            && !ui_ids.contains(c.id)
+            && (!crate::shortcut_editor::needs_a_value(c.id) || PICK_RUNS.contains(&c.id))
+    };
+    for c in vectorcraft_engine::command_specs().iter().filter(|c| listed(c)).chain(plugin_commands) {
         out.push(Draft::new(&c.menu.join(" › "), c.label, c.id.to_string(), menus::shortcut_of(c.id).unwrap_or("")));
     }
     // `plugin.dialog` runs nothing without an id: [`build`] lists each filter instead. A script of
@@ -122,6 +167,18 @@ fn drafts() -> Vec<Draft> {
     }
     for tool in vectorcraft_tools::catalog::all_tools() {
         out.push(Draft::new("", tool.label, format!("tool:{}", tool.id), crate::shortcut_editor::tool_shortcut(tool.id).unwrap_or("")));
+    }
+    // A panel's result shows the panel, as `window.panel` does without `toggle`, under Window ›
+    // Show Panel.
+    for (id, label) in crate::state::all_panels() {
+        out.push(Draft::new(PANEL_PATH, label, format!("panel:{id}"), crate::shortcut_editor::panel_shortcut(id).unwrap_or("")));
+    }
+    // An Effect menu item runs what its item runs; a live-effect plug-in's name does not translate.
+    for e in crate::shortcut_editor::effect_items().iter() {
+        out.push(Draft {
+            translates: vectorcraft_plugins::effect::plugin_id(&e.effect).is_none(),
+            ..Draft::new(&e.group, &e.label, format!("effect:{}", e.effect), crate::shortcut_editor::effect_shortcut(&e.effect).unwrap_or(""))
+        });
     }
     out
 }
@@ -144,7 +201,8 @@ fn context(id: &str) -> Option<String> {
     if id.starts_with("tool:") {
         return Some("Tools".to_string());
     }
-    if id.starts_with("plugin:") {
+    // A plug-in's, panel's or effect's result already shows its menu path.
+    if ["plugin:", "panel:", "effect:"].iter().any(|p| id.starts_with(p)) {
         return None;
     }
     if let Some(path) = crate::shortcut_editor::menu_bar_path(id) {
@@ -273,13 +331,28 @@ fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
 /// stands for. A command whose menu bar item gives params runs what a click on that item runs
 /// ([`crate::shortcut_editor::menu_target_now`]), so Clean Up… and Find and Replace… open their
 /// dialogs. While that item is dimmed, no dialog opens and the status line says why the command
-/// can't run.
+/// can't run. A panel's result shows the panel, and an effect's result runs what its Effect menu
+/// item runs ([`crate::keymap::command_of`]).
 pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
     if let Some(tool) = id.strip_prefix("tool:") {
         app.select_tool(tool);
-    } else if id.starts_with("plugin:") {
+    } else if let Some(panel) = id.strip_prefix("panel:") {
+        // A panel that can be seen stays as it is, where `window.panel` would put an open flyout or
+        // a floating panel away.
+        if let Err(e) = crate::panel_docking::reveal_panel(app, panel) {
+            app.status(e);
+        }
+    } else if id.starts_with("plugin:") || id.starts_with("effect:") {
         let command = crate::keymap::command_of(id);
-        menus::invoke(app, &command.id, command.params);
+        // While the Effect menu dims the item (nothing selected), no dialog opens and the status
+        // line says why.
+        if id.starts_with("effect:") && !menus::enabled(app, &command.id) {
+            if let Err(why) = crate::shortcut_editor::dimmed(app, &command.id) {
+                app.status(why);
+            }
+        } else {
+            menus::invoke(app, &command.id, command.params);
+        }
     } else {
         match crate::shortcut_editor::menu_target_now(app, id) {
             Some(Ok((id, p))) => menus::invoke(app, &id, p),
@@ -287,6 +360,22 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
             None => menus::invoke(app, id, json!({})),
         }
     }
+}
+
+/// The results the palette shows for the lowercased query `q`: the first 14 entries that hold every
+/// word of it, the ones whose name without its menu path is the query (the Layers panel for
+/// "layers") first, each group in catalog order.
+fn matching<'a>(entries: &'a [Entry], q: &str) -> Vec<&'a Entry> {
+    let words: Vec<&str> = q.split_whitespace().collect();
+    let whole = words.join(" ");
+    // The plain, English and shown names are the haystack's first three lines.
+    let named = |e: &Entry| e.haystack.lines().take(3).any(|l| l.rsplit(" › ").next().is_some_and(|n| n.trim_end_matches('…') == whole));
+    let mut found: Vec<&Entry> = entries.iter().filter(|e| words.iter().all(|w| e.haystack.contains(w))).collect();
+    if !whole.is_empty() {
+        found.sort_by_key(|e| !named(e));
+    }
+    found.truncate(14);
+    found
 }
 
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -297,7 +386,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries(ctx, crate::i18n::current());
-    let matches: Vec<&Entry> = entries.iter().filter(|e| q.split_whitespace().all(|w| e.haystack.contains(w))).take(14).collect();
+    let matches = matching(&entries, &q);
     let mut run: Option<String> = None;
     // The highlighted result (#1757): Up and Down move it (wrapping), the pointer over a result
     // takes it, and a new query starts again from the first.
@@ -324,7 +413,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let r = ui.add(
                 egui::TextEdit::singleline(&mut app.ui.palette_query)
                     .align(egui::Align2::LEFT_CENTER)
-                    .hint_text(tl!("Search commands and tools…"))
+                    .hint_text(tl!("Search commands, tools, panels and effects…"))
                     .desired_width(500.0),
             );
             r.request_focus();
@@ -396,7 +485,7 @@ mod tests {
         let ctx = egui::Context::default();
         let query = "use precise cursors";
         let entries = entries(&ctx, Lang::EN);
-        let matches: Vec<&Entry> = entries.iter().filter(|e| query.split_whitespace().all(|word| e.haystack.contains(word))).take(14).collect();
+        let matches = matching(&entries, query);
         assert!(matches.iter().any(|e| e.id == "view.preciseCursors"), "preference toggle appears for its name");
         assert!(entries.iter().filter(|e| e.id == "view.capsLock").all(|e| e.shown != "Use Precise Cursors"));
 
@@ -726,8 +815,10 @@ mod tests {
         let entries = build(Lang::EN);
         let shown = |id: &str| entries.iter().find(|e| e.id == id).map(|e| e.shown.clone()).unwrap_or_else(|| panic!("{id} is a result"));
         for (id, want) in [
-            ("brush.unused", "Brushes › Select All Unused"),
-            ("symbol.unused", "Symbols › Select All Unused"),
+            ("file.exportInBackground", "Export › Continue in Background"),
+            ("file.openInBackground", "Open › Continue in Background"),
+            ("imageTrace.hideRuns", "Image Trace › Continue in Background"),
+            ("plugin.hideRuns", "Plug-ins › Continue in Background"),
             ("ui.layersPanelOptions", "Layers › Panel Options…"),
             ("ui.navigatorPanelOptions", "Navigator › Panel Options…"),
             ("ui.charStyleOptions.resetPanel", "Character Style Options › Reset Panel"),
@@ -742,8 +833,9 @@ mod tests {
             ("text.fitHeadline", "Type › Fit Headline (text.fitHeadline)"),
             ("shape.ellipse", "Ellipse (shape.ellipse)"),
             ("addon.shapes.ellipse", "Ellipse (addon.shapes.ellipse)"),
-            ("help.links", "Help › Links"),
             ("perspective.editText", "Object › Perspective › Edit Text"),
+            ("ui.action.play", "Play Action (ui.action.play)"),
+            ("ui.action.playAt", "Play Action (ui.action.playAt)"),
             ("ui.batchDialog", "Batch…"),
             ("ui.flattenerPreview", "Flattener Preview"),
         ] {
@@ -757,24 +849,30 @@ mod tests {
         let found = |entries: &[Entry], query: &str| -> Vec<String> {
             entries.iter().filter(|e| query.split_whitespace().all(|w| e.haystack.contains(&w.to_lowercase()))).map(|e| e.id.clone()).collect()
         };
-        for query in ["select all unused", "brushes select all unused", "brush.unused"] {
-            assert!(found(&entries, query).contains(&"brush.unused".to_string()), "{query}");
+        let id = "file.exportInBackground".to_string();
+        for query in ["continue in background", "export continue in background", "file.exportinbackground"] {
+            assert!(found(&entries, query).contains(&id), "{query}");
         }
-        assert!(!found(&entries, "symbols select all unused").contains(&"brush.unused".to_string()));
+        assert!(!found(&entries, "open continue in background").contains(&id));
         let zh = Lang::from_code("zh-hant").unwrap();
         let zh_entries = build(zh);
-        let brushes = crate::i18n::tr(zh, "Brushes");
-        let unused = zh_entries.iter().find(|e| e.id == "brush.unused").unwrap();
-        assert_eq!(unused.shown, format!("{brushes} › {}", crate::i18n::tr(zh, "Select All Unused")));
-        assert!(found(&zh_entries, &format!("{brushes} select all unused")).contains(&"brush.unused".to_string()));
+        let export = crate::i18n::tr(zh, "Export");
+        let background = zh_entries.iter().find(|e| e.id == id).unwrap();
+        assert_eq!(background.shown, format!("{export} › {}", crate::i18n::tr(zh, "Continue in Background")));
+        assert!(found(&zh_entries, &format!("{export} continue in background")).contains(&id));
     }
 
-    /// Every menu path a result can take when it shares a name has a row in each catalog with
-    /// complete menus.
+    /// Every menu path a result can take when it shares a name, and Window › Show Panel, has a row
+    /// in each catalog with complete menus. Each command [`CONTEXTS`] names is a result.
     #[test]
     fn the_paths_of_results_that_share_a_name_translate() {
+        let ids: Vec<String> = items().into_iter().map(|(_, id, _)| id).collect();
+        for (id, _) in CONTEXTS {
+            assert!(ids.iter().any(|i| i == id), "{id} is a result");
+        }
         let mut paths: Vec<String> = CONTEXTS.iter().map(|(_, path)| path.to_string()).collect();
         paths.push("Tools".into());
+        paths.push(PANEL_PATH.into());
         let mut by_name: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
         for d in drafts() {
             by_name.entry(d.name(Lang::EN)).or_default().push(d.id);
@@ -847,6 +945,228 @@ mod tests {
         assert_eq!((d.kind.as_str(), d.str("__plugin")), ("plugin", two.to_string()));
         vectorcraft_plugins::registry::remove(one);
         vectorcraft_plugins::registry::remove(two);
+    }
+
+    /// Of the engine commands the palette listed before, it leaves out only the ones
+    /// [`crate::shortcut_editor::needs_a_value`] marks: queries with no default key and no item of
+    /// the menu bar, and commands that need a value no menu item gives. A pick of each one it leaves
+    /// out (with no document, one object selected or several) changes neither the document, its
+    /// selection, history and layer state, nor the interface. Every [`PICK_RUNS`] query is still
+    /// listed.
+    #[test]
+    fn the_palette_leaves_out_the_commands_a_pick_cannot_run() {
+        use vectorcraft_testkit::fixtures::Fixture;
+        let ui_ids: std::collections::HashSet<&str> = menus::UI_COMMANDS.iter().map(|c| c.0).collect();
+        // The rule before: every engine command but the aliases, the wrapped commands and the ids of
+        // UI commands.
+        let before: Vec<&vectorcraft_engine::CommandSpec> = vectorcraft_engine::command_specs()
+            .iter()
+            .filter(|c| !vectorcraft_engine::cmd::is_alias(c.id) && !WRAPPED.iter().any(|(e, _)| *e == c.id) && !ui_ids.contains(c.id))
+            .collect();
+        let listed: std::collections::HashSet<String> = items().into_iter().map(|(_, id, _)| id).collect();
+        let dropped: Vec<&vectorcraft_engine::CommandSpec> = before.iter().copied().filter(|c| !listed.contains(c.id)).collect();
+        let ids: Vec<&str> = dropped.iter().map(|c| c.id).collect();
+        for id in ["document.json", "brush.unused", "symbol.unused", "transparency.set"] {
+            assert!(ids.contains(&id), "{id} is left out: {ids:?}");
+        }
+        // What a pick can change: the document with its selection, history, revision and layer
+        // state, the Script Console, and the interface's state (an open dialog or panel, the
+        // selected tool), the status line aside.
+        let look = |app: &VectorcraftApp| {
+            let mut ui = serde_json::to_value(&app.ui).unwrap_or_default();
+            if let Some(o) = ui.as_object_mut() {
+                o.remove("status");
+            }
+            let doc = app.session.active().map(|st| {
+                (st.doc.clone(), format!("{:?}", st.selection), st.history.undo.len(), st.revision, st.active_layer, st.layer_rows.clone())
+            });
+            (doc, app.session.script_console().lines().len(), ui)
+        };
+        let acts = |id: &str| {
+            [vectorcraft_engine::Session::new(), Fixture::Single.session(), Fixture::Multi.session()].into_iter().any(|session| {
+                let mut app = VectorcraftApp::new(session, crate::Services::default());
+                let before = look(&app);
+                run_pick(&mut app, id);
+                look(&app) != before
+            })
+        };
+        // `layer.setProps {}` records an undo step that changes nothing.
+        let changed: Vec<&str> = ids.iter().copied().filter(|id| *id != "layer.setProps" && acts(id)).collect();
+        assert!(changed.is_empty(), "a pick of these does something: {changed:?}");
+        for c in &dropped {
+            assert!(c.shortcut.is_none() && crate::shortcut_editor::menu_bar_path(c.id).is_none(), "{}", c.id);
+        }
+        // The others are still listed, and each of PICK_RUNS, which needs_a_value marks. A pick of
+        // each one changes what `look` sees, except the commands that act on the session alone:
+        // [`a_pick_of_a_session_command_runs_it`] covers those, or they need a running script, an
+        // installed plug-in or saved import matches.
+        for c in &before {
+            let marked = crate::shortcut_editor::needs_a_value(c.id);
+            assert_eq!(listed.contains(c.id), !marked || PICK_RUNS.contains(&c.id), "{}", c.id);
+            assert!(marked || !PICK_RUNS.contains(&c.id), "{} needs no entry in PICK_RUNS", c.id);
+        }
+        let session_only = [
+            "script.stop",
+            "script.console.clear",
+            "plugin.clearCache",
+            "prefs.reset",
+            "importMatches.reset",
+            "edit.undoGroup.begin",
+            "edit.undoGroup.end",
+            "imageTrace.presets.save",
+            "flattener.presets.save",
+            "pdf.preset.save",
+            "print.presets.save",
+            "perspective.presets.save",
+            "gradient.presets.save",
+            "gradient.presets.delete",
+        ];
+        for id in PICK_RUNS.iter().filter(|id| !session_only.contains(id)) {
+            assert!(acts(id), "a pick of {id} does something");
+        }
+        for id in PICK_RUNS.iter().chain(&["object.group", "select.key", "view.preciseCursors", "path.close"]) {
+            assert!(listed.contains(*id), "{id} stays");
+        }
+    }
+
+    /// A pick of a query that changes the session runs it: Clear Script Console empties the Script
+    /// Console, Reset Preferences resets a changed preference, each Save … Preset command adds a
+    /// preset, Delete Gradient Preset deletes the one saved from the selection, and the edits between Begin Undo Group and End Undo Group are one undo step.
+    #[test]
+    fn a_pick_of_a_session_command_runs_it() {
+        let ids: Vec<String> = items().into_iter().map(|(_, id, _)| id).collect();
+        let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), crate::Services::default());
+        let pick = |app: &mut VectorcraftApp, id: &str| {
+            assert!(ids.iter().any(|i| i == id), "{id} is a result");
+            run_pick(app, id);
+        };
+        app.session.script_frames = true;
+        app.run("script.run", json!({"source": "$.writeln('line')", "name": "c.js"})).unwrap();
+        for _ in 0..10_000 {
+            if !app.session.script_running() {
+                break;
+            }
+            crate::script_runs::poll(&mut app);
+        }
+        assert!(!app.session.script_running() && !app.session.script_console().lines().is_empty());
+        pick(&mut app, "script.console.clear");
+        assert!(app.session.script_console().lines().is_empty(), "{}", app.ui.status);
+
+        let default = app.session.prefs.use_precise_cursors;
+        app.session.prefs.use_precise_cursors = !default;
+        pick(&mut app, "prefs.reset");
+        assert_eq!(app.session.prefs.use_precise_cursors, default, "{}", app.ui.status);
+
+        for (save, list) in [
+            ("imageTrace.presets.save", "imageTrace.presets"),
+            ("flattener.presets.save", "flattener.presets.list"),
+            ("pdf.preset.save", "pdf.preset.list"),
+            ("print.presets.save", "print.presets.list"),
+            ("perspective.presets.save", "perspective.presets.list"),
+        ] {
+            let count = |app: &mut VectorcraftApp| app.run(list, json!({})).unwrap()["presets"].as_array().map_or(0, Vec::len);
+            let before = count(&mut app);
+            pick(&mut app, save);
+            assert_eq!(count(&mut app), before + 1, "{save}: {}", app.ui.status);
+        }
+        // Save Gradient Preset saves the selection's gradient, and Delete Gradient Preset deletes
+        // the saved preset it matches.
+        let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+        app.run("paint.setFill", json!({"gradient": {"kind": "linear", "stops": stops}})).unwrap();
+        pick(&mut app, "gradient.presets.save");
+        assert_eq!(app.session.prefs.gradient_presets.len(), 1, "{}", app.ui.status);
+        pick(&mut app, "gradient.presets.delete");
+        assert!(app.session.prefs.gradient_presets.is_empty(), "{}", app.ui.status);
+
+        let undo = |app: &VectorcraftApp| app.session.active().map_or(0, |st| st.history.undo.len());
+        let before = undo(&app);
+        pick(&mut app, "edit.undoGroup.begin");
+        for x in [10, 200] {
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap();
+        }
+        pick(&mut app, "edit.undoGroup.end");
+        assert_eq!(undo(&app), before + 1, "{}", app.ui.status);
+    }
+
+    /// The UI commands that open an engine command's dialog or ask first are still listed, and the
+    /// engine commands they wrap are not.
+    #[test]
+    fn the_wrapping_ui_commands_stay_listed() {
+        let ids: std::collections::HashSet<String> = items().into_iter().map(|(_, id, _)| id).collect();
+        for (engine, ui) in WRAPPED {
+            assert!(ids.contains(*ui) && !ids.contains(*engine), "{ui} listed, {engine} not");
+        }
+        assert!(menus::UI_COMMANDS.iter().filter(|c| c.0 != "plugin.dialog" && c.0 != crate::scripts_menu::COMMAND).all(|c| ids.contains(c.0)));
+    }
+
+    /// Each panel is a result under Window › Show Panel. A pick shows the panel, and a second pick
+    /// leaves it showing rather than hiding it as the Window menu item does.
+    #[test]
+    fn a_panel_is_a_result_whose_pick_shows_it() {
+        let entries = build(Lang::EN);
+        let panels: Vec<&Entry> = entries.iter().filter(|e| e.id.starts_with("panel:")).collect();
+        assert_eq!(panels.len(), crate::state::all_panels().count());
+        // More than 14 results hold "layers" in their menu path; the panel, named Layers, is shown
+        // first, and "color guide" shows the Color Guide panel first too.
+        for (query, want) in [("layers", "panel:layers"), ("color guide", "panel:colorGuide"), ("Layers ", "panel:layers")] {
+            let all = entries.iter().filter(|e| query.to_lowercase().split_whitespace().all(|w| e.haystack.contains(w))).count();
+            let shown: Vec<&str> = matching(&entries, &query.to_lowercase()).into_iter().map(|e| e.id.as_str()).collect();
+            assert_eq!(shown.first(), Some(&want), "{query}: {shown:?}");
+            assert_eq!(shown.len(), all.min(14), "{query}");
+        }
+        let layers = entries.iter().find(|e| e.id == "panel:layers").unwrap();
+        assert_eq!(layers.shown, "Window › Show Panel › Layers");
+        assert_eq!(layers.shortcut, crate::shortcut_editor::panel_shortcut("layers").unwrap_or(""));
+        let zh = Lang::from_code("zh-hant").unwrap();
+        let shown = build(zh).into_iter().find(|e| e.id == "panel:layers").map(|e| e.shown).unwrap();
+        assert_eq!(shown, ["Window", "Show Panel", "Layers"].map(|s| crate::i18n::tr(zh, s)).join(" › "));
+        for id in ["swatches", crate::panels::asset_export::ID] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+            assert!(!crate::panel_docking::showing(&app.ui, id), "{id}");
+            run_pick(&mut app, &format!("panel:{id}"));
+            assert!(crate::panel_docking::showing(&app.ui, id), "{id}: {}", app.ui.status);
+            run_pick(&mut app, &format!("panel:{id}"));
+            assert!(crate::panel_docking::showing(&app.ui, id), "{id}: picked twice, still showing");
+        }
+    }
+
+    /// Each Effect menu item is a result under its menu path, with its shortcut. With a document
+    /// open and an object selected, a pick of Drop Shadow… opens its dialog, as the menu item
+    /// does, and changes nothing until the dialog is confirmed.
+    #[test]
+    fn an_effect_is_a_result_whose_pick_runs_its_menu_item() {
+        let entries = build(Lang::EN);
+        let effects = crate::shortcut_editor::effect_items();
+        for e in effects.iter() {
+            let key = format!("effect:{}", e.effect);
+            assert_eq!(entries.iter().filter(|r| r.id == key).count(), 1, "{key}");
+        }
+        let found: Vec<&Entry> = entries.iter().filter(|e| "drop shadow".split_whitespace().all(|w| e.haystack.contains(w))).collect();
+        let shadow =
+            found.iter().find(|e| e.id.starts_with("effect:")).unwrap_or_else(|| panic!("{:?}", found.iter().map(|e| &e.id).collect::<Vec<_>>()));
+        let item = effects.iter().find(|e| format!("effect:{}", e.effect) == shadow.id).unwrap();
+        assert_eq!(shadow.shown, format!("{} › {}", item.group, item.label));
+        let mut picked = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), crate::Services::default());
+        let mut clicked = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), crate::Services::default());
+        let before = outcome(&picked);
+        run_pick(&mut picked, &shadow.id);
+        menus::invoke(&mut clicked, item.command, json!({ "effect": item.effect }));
+        let after = outcome(&picked);
+        assert!(after.0.is_some(), "the dialog opens: {}", after.2);
+        assert_eq!(after.1, before.1, "nothing changes yet");
+        assert_eq!(after, outcome(&clicked), "the pick runs what the menu item runs");
+        // With nothing selected the menu item is dimmed: no dialog opens, and the status line says
+        // why.
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.ui.status.clear();
+        run_pick(&mut app, &shadow.id);
+        assert!(app.ui.dialog.is_none() && !app.ui.status.is_empty(), "{}", app.ui.status);
+        // A built-in effect's name translates by its id, as the Effect menu shows it.
+        let fr = Lang::from_code("fr").unwrap();
+        let add = build(fr).into_iter().find(|e| e.id == "effect:pathfinder.add").map(|e| e.shown).unwrap();
+        assert!(add.ends_with(crate::i18n::tr_id(fr, "pathfinder.add", "Add")), "{add}");
+        assert_eq!(crate::i18n::tr_id(fr, "pathfinder.add", "Add"), "Réunion");
     }
 
     /// Two filter plug-ins with one name show their ids after it, the name untranslated, and each
