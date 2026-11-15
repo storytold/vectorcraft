@@ -253,6 +253,25 @@ fn constrain_angle_turns_shapes_made_by_a_click() {
     }
 }
 
+/// An ellipse of another anchor count made by a click turns along the Constrain Angle like the
+/// live ellipse: it keeps its anchors and its box runs along the turned axes from the click.
+#[test]
+fn constrain_angle_turns_an_ellipse_of_six_anchors_made_by_a_click() {
+    let mut s = new_doc();
+    set_angle(&mut s, 90.0);
+    let p = json!({"x": 10, "y": 200, "width": 100, "height": 50, "anchors": 6});
+    let p = constrain_click(&s, "shape.ellipse", p.clone(), corner(&p));
+    assert_eq!(p["anchors"], json!(6));
+    let id = NodeId(s.execute("shape.ellipse", &p).unwrap()["id"].as_u64().unwrap());
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(n.live_shape().is_none());
+    assert_eq!(n.path_data().unwrap().anchor_count(), 6);
+    let b = bounds(&s, id);
+    for (got, want) in [(b.x0, 10.0), (b.y0, 100.0), (b.x1, 60.0), (b.y1, 200.0)] {
+        assert!(close(got, want), "{b:?}");
+    }
+}
+
 /// The Line Segment tool's Shift steps of 45° count from the Constrain Angle.
 #[test]
 fn constrain_angle_steps_the_line_segment_tool() {
