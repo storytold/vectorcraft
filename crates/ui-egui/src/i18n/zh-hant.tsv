@@ -5190,6 +5190,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Working CMYK	使用中的 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加標記)
 	Working RGB (don't tag)	工作 RGB (不加標記)
+	Don't Color Manage This Document	不對此文件進行色彩管理
+	Working RGB: {name}	工作 RGB：{name}
+	Working CMYK: {name}	工作 CMYK：{name}
 	Workspace	工作區
 	Workspace {i}	工作區 {i}
 	Wrinkle Tool	皺摺工具

@@ -4111,6 +4111,9 @@ file-filter	Templates	템플릿
 	Windows	Windows
 	Working CMYK (don't tag)	작업용 CMYK (태그 안 함)
 	Working RGB (don't tag)	작업용 RGB (태그 안 함)
+	Don't Color Manage This Document	이 문서에 색상 관리 안 함
+	Working RGB: {name}	작업용 RGB: {name}
+	Working CMYK: {name}	작업용 CMYK: {name}
 	Workspace {i}	작업 영역 {i}
 	Yellow	노랑
 	[Normal Character Style]	[기본 문자 스타일]

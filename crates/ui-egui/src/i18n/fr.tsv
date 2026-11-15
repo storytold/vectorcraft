@@ -4039,6 +4039,9 @@ digits	Malayalam	Malayalam
 	Working CMYK	CMJN de travail
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
 	Working RGB (don't tag)	RVB de travail (sans balise)
+	Don't Color Manage This Document	Ne pas gérer les couleurs de ce document
+	Working RGB: {name}	RVB de travail : {name}
+	Working CMYK: {name}	CMJN de travail : {name}
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
 	Wrinkle Tool	Outil Fronces

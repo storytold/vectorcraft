@@ -3966,6 +3966,9 @@ effect	Points	Punkte
 	Working CMYK	CMYK-Arbeitsfarbraum
 	Working CMYK (don't tag)	CMYK-Arbeitsfarbraum (nicht kennzeichnen)
 	Working RGB (don't tag)	RGB-Arbeitsfarbraum (nicht kennzeichnen)
+	Don't Color Manage This Document	Kein Farbmanagement für dieses Dokument
+	Working RGB: {name}	RGB-Arbeitsfarbraum: {name}
+	Working CMYK: {name}	CMYK-Arbeitsfarbraum: {name}
 	Workspace	Arbeitsbereich
 	Workspace {i}	Arbeitsbereich {i}
 	Wrinkle Tool	Zerknittern-Werkzeug

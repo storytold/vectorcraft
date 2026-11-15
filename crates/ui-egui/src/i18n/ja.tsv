@@ -4123,6 +4123,9 @@ file-filter	Templates	テンプレート
 	Windows	Windows
 	Working CMYK (don't tag)	作業用 CMYK (タグなし)
 	Working RGB (don't tag)	作業用 RGB (タグなし)
+	Don't Color Manage This Document	このドキュメントにカラーマネジメントを適用しない
+	Working RGB: {name}	作業用 RGB: {name}
+	Working CMYK: {name}	作業用 CMYK: {name}
 	Workspace {i}	ワークスペース {i}
 	Yellow	イエロー
 	[Normal Character Style]	[標準文字スタイル]

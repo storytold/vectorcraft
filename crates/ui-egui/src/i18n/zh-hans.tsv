@@ -3927,6 +3927,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Working CMYK	工作 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加标签)
 	Working RGB (don't tag)	工作 RGB (不加标签)
+	Don't Color Manage This Document	不对此文档进行色彩管理
+	Working RGB: {name}	工作 RGB：{name}
+	Working CMYK: {name}	工作 CMYK：{name}
 	Workspace	工作区
 	Workspace {i}	工作区 {i}
 	Wrinkle Tool	褶皱工具

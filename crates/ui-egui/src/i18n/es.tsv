@@ -4048,6 +4048,9 @@ digits	Malayalam	Malayálam
 	Working CMYK	CMYK de trabajo
 	Working CMYK (don't tag)	CMYK de trabajo (sin etiquetar)
 	Working RGB (don't tag)	RGB de trabajo (sin etiquetar)
+	Don't Color Manage This Document	No gestionar el color de este documento
+	Working RGB: {name}	RGB de trabajo: {name}
+	Working CMYK: {name}	CMYK de trabajo: {name}
 	Workspace	Espacio de trabajo
 	Workspace {i}	Espacio de trabajo {i}
 	Wrinkle Tool	Herramienta Arrugar

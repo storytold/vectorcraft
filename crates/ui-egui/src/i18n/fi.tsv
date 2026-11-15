@@ -2138,6 +2138,9 @@ digits	Malayalam	Malajalam
 	Use Black Point Compensation	Käytä mustan pisteen kompensointia
 	Working CMYK (don't tag)	Työ-CMYK (ei tunnistetta)
 	Working RGB (don't tag)	Työ-RGB (ei tunnistetta)
+	Don't Color Manage This Document	Älä hallitse tämän asiakirjan värejä
+	Working RGB: {name}	Työ-RGB: {name}
+	Working CMYK: {name}	Työ-CMYK: {name}
 	{name} (spot)	{name} (spottiväri)
 	Add to Profiles…	Lisää profiileihin…
 	Align Stroke to Center	Tasaa viiva keskelle

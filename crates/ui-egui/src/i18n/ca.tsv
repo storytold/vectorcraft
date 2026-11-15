@@ -5162,6 +5162,9 @@ digits	Malayalam	Malaiàlam
 	Working CMYK	CMYK de treball
 	Working CMYK (don't tag)	CMYK de treball (sense etiquetar)
 	Working RGB (don't tag)	RGB de treball (sense etiquetar)
+	Don't Color Manage This Document	No gestionis el color d'aquest document
+	Working RGB: {name}	RGB de treball: {name}
+	Working CMYK: {name}	CMYK de treball: {name}
 	Working RGB	RGB de treball
 	Workspace	Espai de treball
 	Workspace {i}	Espai de treball {i}

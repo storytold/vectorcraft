@@ -5574,6 +5574,9 @@ antiAlias	Sharp	शार्प
 	Working CMYK	वर्किंग CMYK
 	Working CMYK (don't tag)	कार्य CMYK (टैग नहीं)
 	Working RGB (don't tag)	कार्य RGB (टैग नहीं)
+	Don't Color Manage This Document	इस दस्तावेज़ का रंग प्रबंधन न करें
+	Working RGB: {name}	कार्य RGB: {name}
+	Working CMYK: {name}	कार्य CMYK: {name}
 	Working RGB	वर्किंग RGB
 	Workspace	वर्कस्पेस
 	Workspace {i}	वर्कस्पेस {i}
