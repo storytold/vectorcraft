@@ -1291,6 +1291,14 @@ fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
     let colors: Vec<Color> =
         colors.into_iter().enumerate().map(|(i, c)| if old.get(i) == Some(&Some(c)) { c } else { super::paint::new_color(s, p, c) }).collect();
     let rename = str_param(p, "rename");
+    // The group's own colors, in order, under its own name change nothing: no undo step.
+    if let Some(g) = s.doc()?.doc.swatch_groups.iter().find(|g| g.name == group)
+        && rename.map(str::trim).is_none_or(|n| n.is_empty() || n == group)
+        && old.len() == colors.len()
+        && old.iter().zip(&colors).all(|(o, c)| *o == Some(*c))
+    {
+        return Ok(json!({"name": group, "swatches": g.swatches.iter().map(|w| w.name.clone()).collect::<Vec<_>>(), "relinked": 0}));
+    }
     let e = s.edit("Edit Color Group", |d, _| rewrite_group(d, group, &colors, rename, C))?;
     e.defaults(s)?;
     Ok(json!({"name": e.name, "swatches": e.swatches, "relinked": e.relinked}))

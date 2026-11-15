@@ -423,6 +423,28 @@ fn edit_color_group_numbers_extra_colors_after_the_names_it_keeps() {
     assert_eq!(*doc(&s), before);
 }
 
+/// `swatch.editGroup` with the group's own colors, in order, and its own name (or a blank one)
+/// records no undo step; a new order, a new color or a new name records one.
+#[test]
+fn edit_color_group_with_its_own_colors_records_no_undo_step() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": ["#ff0000", "#00ff00"], "keepModel": true}));
+    let undo = undo_len(&s);
+    for p in [
+        json!({"group": "Mine", "colors": ["#ff0000", "#00ff00"]}),
+        json!({"group": "Mine", "colors": ["#ff0000", "#00ff00"], "rename": "Mine"}),
+        json!({"group": "Mine", "colors": ["#ff0000", "#00ff00"], "rename": " "}),
+    ] {
+        let r = run(&mut s, "swatch.editGroup", p.clone());
+        assert_eq!(r, json!({"name": "Mine", "swatches": ["R=255 G=0 B=0", "R=0 G=255 B=0"], "relinked": 0}), "{p}");
+        assert_eq!(undo_len(&s), undo, "{p}: no undo step");
+    }
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#00ff00", "#ff0000"]}));
+    assert_eq!(undo_len(&s), undo + 1, "a new order is a step");
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#00ff00", "#ff0000"], "rename": "Yours"}));
+    assert_eq!(undo_len(&s), undo + 2, "a new name is a step");
+}
+
 #[test]
 fn unused_leaves_out_linked_colours_gradients_and_patterns_in_use() {
     let mut s = session();

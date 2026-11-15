@@ -290,7 +290,10 @@ luminosity}`, percent from -100 to 100, 0 by default). The dialog sends a non-ze
 colors; colors opened alone are saved as a group with the change. `display` sets how the Edit tab shows the new
 colors: `smooth` (the smooth wheel, also when unset; each opening starts there), `segmented` (a wheel of solid patches,
 24 hues by 5 saturations, whose markers move as freely) or `bars` (a solid bar per recolored color in row order; a click
-selects its row for the sliders and a drag moves the row without changing a color). Setting
+selects its row for the sliders and a drag moves the row without changing a color). `groupStorage` shows the Color
+Groups list (true when the dialog opens); setting `group` to a color group's name makes it the group being edited,
+as opening on it does, and refuses a name no group has; `groupAction` (`save`, `new` or `delete`) runs the list's Save
+Changes, New Color Group or Delete button on the next frame, or first on confirm (see `docs/mcp.md`). Setting
 `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
