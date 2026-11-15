@@ -635,6 +635,85 @@ fn on_path_placement() {
     assert_eq!(hit_byte(&l, mid), 1);
 }
 
+/// Type on an open path that starts before the path's start draws only the glyphs whose middle is
+/// on the path; the others stay in the layout, drawing nothing. On a closed path a start below 0 is
+/// the path's start, as before.
+#[test]
+fn on_path_open_start_before_the_path_hides_the_glyphs_before_it() {
+    let mut line = BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    let mut t = point("MMMM", style(20.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let whole = layout(db(), &t);
+    let adv = whole.glyphs[0].advance;
+    assert!(adv > 1.0 && whole.glyphs.iter().all(|g| !g.outline.elements().is_empty()));
+    // 2.4 glyphs before the start: the first two are before it, and the third's middle is just past
+    // the path's start, so it is drawn.
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -2.4 * adv / 500.0, end: None };
+    let l = layout(db(), &t);
+    assert!(l.on_path && !l.overflow);
+    assert_eq!(l.glyphs.len(), 4);
+    let drawn: Vec<bool> = l.glyphs.iter().map(|g| !g.outline.elements().is_empty()).collect();
+    assert_eq!(drawn, [false, false, true, true]);
+    assert_eq!(l.glyphs.iter().map(|g| g.off_path).collect::<Vec<_>>(), [true, true, false, false]);
+    assert!(l.glyphs[..2].iter().all(|g| g.carets.iter().all(|c| c.1 == 0.0) && g.advance == 0.0 && g.width == 0.0));
+    assert!(whole.glyphs.iter().all(|g| !g.off_path));
+    // Type that starts on the path keeps drawing every glyph, even where negative tracking steps
+    // its glyphs back before the path's start.
+    let mut packed = t.clone();
+    packed.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    packed.runs[0].style.tracking = -1000.0;
+    let p = layout(db(), &packed);
+    assert!(p.glyphs.len() == 4 && p.glyphs.iter().all(|g| !g.off_path && !g.outline.elements().is_empty()));
+    assert!((l.glyphs[2].origin.x + 0.4 * adv).abs() < 1e-6, "{:?}", l.glyphs[2].origin);
+    assert!((l.glyphs[3].origin.x - 0.6 * adv).abs() < 1e-6, "{:?}", l.glyphs[3].origin);
+    assert_eq!(l.lines[0].end, 4);
+    // A click at the path's start goes before the first drawn character, not into a hidden one, and
+    // the caret in the hidden characters stands at the path's start.
+    assert_eq!(hit_byte(&l, Point::new(0.0, 50.0)), 2);
+    for b in [0, 1] {
+        let (top, bottom) = caret_position(&l, b);
+        assert!(top.x.abs() < 1e-6 && bottom.x.abs() < 1e-6, "{b}: {top:?} {bottom:?}");
+    }
+    // An All Caps ß is two glyphs. With the first before the path's start, a click is measured
+    // against the drawn one: just past its middle, the caret goes after the character.
+    let mut caps = point("ße", style(20.0));
+    caps.runs[0].style.all_caps = true;
+    caps.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let s = layout(db(), &caps).glyphs[0].advance;
+    caps.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -1.2 * s / 500.0, end: None };
+    let c = layout(db(), &caps);
+    assert!(c.glyphs[0].byte == 0 && c.glyphs[1].byte == 0 && c.glyphs[0].off_path && !c.glyphs[1].off_path);
+    let mid = c.glyphs[1].origin.x + c.glyphs[1].advance / 2.0;
+    assert_eq!(hit_byte(&c, Point::new(mid + 0.05 * s, 50.0)), 2);
+    assert_eq!(hit_byte(&c, Point::new(mid - 0.05 * s, 50.0)), 0);
+    // With Align to Path, the hidden characters' caret is moved off the path as the drawn ones are.
+    let mut aligned = t.clone();
+    aligned.path_align = vectorcraft_doc::PathAlign::Ascender;
+    let a = layout(db(), &aligned);
+    let rise = a.glyphs[2].origin.y - 50.0;
+    assert!(rise.abs() > 1.0, "{rise}");
+    for g in &a.glyphs[..2] {
+        assert!(g.off_path && g.origin.x.abs() < 1e-6 && (g.origin.y - 50.0 - rise).abs() < 1e-6, "{:?}", g.origin);
+    }
+    // The whole text before the path: nothing is drawn, and nothing overflows.
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -0.9, end: None };
+    let l = layout(db(), &t);
+    assert!(!l.overflow && l.glyphs.len() == 4 && l.glyphs.iter().all(|g| g.outline.elements().is_empty()));
+    // A closed path starts the text at the path's start.
+    let mut square = BezPath::new();
+    square.move_to((0.0, 0.0));
+    square.line_to((200.0, 0.0));
+    square.line_to((200.0, 200.0));
+    square.line_to((0.0, 200.0));
+    square.close_path();
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&square), start: -0.1, end: None };
+    let l = layout(db(), &t);
+    assert!(l.glyphs.iter().all(|g| !g.outline.elements().is_empty()));
+    assert!(l.glyphs[0].origin.x.abs() < 1e-6 && l.glyphs[0].origin.y.abs() < 1e-6, "{:?}", l.glyphs[0].origin);
+}
+
 #[test]
 fn on_path_effects_orient_glyphs() {
     use vectorcraft_doc::PathEffect;
