@@ -1359,7 +1359,11 @@ pub(crate) fn capture_line_changes(before: &Document, doc: &mut Document, ids: &
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let slot = line_slot(&mut spec.label_styles, line);
         let mut rows = slot.clone().unwrap_or_else(|| line.default_rows());
+        let was_unpainted = stroke_unpainted(&rows);
         merge_row_edits(&mut rows, &old, &new);
+        if old.paint.stroke != new.paint.stroke {
+            keep_painted_stroke_weight(&mut rows, was_unpainted, &new.paint);
+        }
         let kept = (rows != line.default_rows()).then_some(rows);
         changed |= *slot != kept;
         *slot = kept;
@@ -1388,16 +1392,36 @@ pub(crate) fn capture_line_paint_writes(doc: &mut Document, written: &[(NodeId, 
         let slot = line_slot(&mut spec.label_styles, line);
         let mut rows = slot.clone().unwrap_or_else(|| line.default_rows());
         if fill {
-            rows.paint.fill = shown.fill;
+            rows.paint.fill = shown.fill.clone();
         }
         if stroke {
-            rows.paint.stroke = shown.stroke;
+            let was_unpainted = stroke_unpainted(&rows);
+            rows.paint.stroke = shown.stroke.clone();
+            keep_painted_stroke_weight(&mut rows, was_unpainted, &shown);
         }
         let kept = (rows != line.default_rows()).then_some(rows);
         changed |= *slot != kept;
         *slot = kept;
     }
     changed
+}
+
+/// Give kept line rows whose stroke an edit painted the painted line's stroke weight (`shown`) when the kind kept no
+/// stroke paint before the edit (`was_unpainted`) and keeps the zero weight a stroke set to None left. A non-zero kept
+/// weight stays, and so do a zero weight kept with a painted stroke and a zero weight the painted line shows.
+fn keep_painted_stroke_weight(rows: &mut vectorcraft_doc::LabelRows, was_unpainted: bool, shown: &vectorcraft_doc::SeriesPaint) {
+    if was_unpainted
+        && !stroke_unpainted(rows)
+        && rows.paint.stroke_width.is_some_and(|w| w <= 0.0)
+        && let Some(w) = shown.stroke_width.filter(|w| *w > 0.0)
+    {
+        rows.paint.stroke_width = Some(w);
+    }
+}
+
+/// Do kept line rows keep no stroke paint?
+fn stroke_unpainted(rows: &vectorcraft_doc::LabelRows) -> bool {
+    rows.paint.stroke.as_ref().is_none_or(Paint::is_none)
 }
 
 /// Is `id` a graph line: a path directly in a graph's Axes group?
