@@ -573,7 +573,7 @@ fn dock(app: &mut VectorcraftApp, edge: &str) {
 fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let resp = crate::panels::menu_button(ui, "control", rect);
     egui::Popup::menu(&resp).show(|ui| {
-        ui.set_min_width(160.0);
+        widgets::menu_min_width(ui, 160.0);
         widgets::menu_scroll(ui, |ui| {
             for group in CONTROL_BAR_GROUPS {
                 if widgets::menu_item(ui, group_label(group), true, group_on(app, group)) {

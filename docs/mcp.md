@@ -1060,6 +1060,11 @@ styles and brushes.
 `color.removeProfile`, `view.proofSetup`, `view.proofColors`, `view.overprintPreview`, `view.separationsPreview` and
 `swatch.setSpot` reject a param of the wrong type, such as `"bpc": "no"`, `"on": 1`, `"to": 5` or `"colors": "#fff"`,
 and change nothing. Omitting a param or giving null keeps its default.
+The Separations panel's Assign rows (where Edit › Assign Profile… goes) act on the profile of the document's color
+mode: Don't Color Manage This Document runs `edit.assignProfile` with null for that model (no profile, so the colors
+show through the working space), Working RGB or Working CMYK with the working space's name (that profile stays
+assigned when the working space changes), and Profile with another profile of that kind. A choice the document
+already has runs nothing, and the other model's profile stays as it is.
 
 SVG import keeps what the canvas edits live. `<pattern>` becomes a pattern swatch. A `<symbol>` with `<use>` becomes a
 symbol (named after its `data-name`, else its id) with an instance per `<use>`; a `<use>` that shows it differently
@@ -1129,7 +1134,8 @@ gradient meshes whose every point is at 0% opacity, and paths without effects wh
 An image or a mesh with a Crop Marks effect, or with a Vector Halftone effect that makes dots, is measured.
 Such objects in the art of a symbol are left out of its instances too, and an instance whose symbol holds nothing
 else is left out. In the art of a dynamic symbol, an object that an instance's fill, stroke or opacity makes
-the plot draw is measured.
+the plot draw is measured. The art of an instance that goes through 9-slice guides is placed through them first, and
+such objects are then left out of the placed art.
 A document whose only visible art is left out is refused, and Export As refuses an HP-GL plot of it before the save
 dialog. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
 is in VectorCraft Default), the export comes back with a warning that says so. A `.ai` export with
@@ -1297,8 +1303,10 @@ opens at its size in points, the file's numbers times the `UserUnit` (one above 
 such a page opens from that data at the page's size.
 `linkPages: true` (File › Open's Import PDF dialog: Import PDF pages as links) opens each page `pages` picks as a
 placed document linked to that page of the file, as `file.place` with `link` places one, instead of as editable art.
-Each page gets an artboard of its `cropTo` box (`bounding`: its art's bounds), in a row from the left 36 pt apart, and
-a layer named after the page (`Page 2`). The document opens in CMYK when most of those pages are painted mostly in
+Each page gets an artboard of its `cropTo` box (`bounding`: its art's bounds; a blank page gets its crop box), in a row from the left 36 pt apart, and
+a layer named after the page (`Page 2`). A PDF-compatible `.ai` with `cropTo: "crop"` gets its trim boxes, as it does
+when it opens as art. A page on its trim box shows its bleed box round the artboard, and the pages give the document
+their bleed; the artboards are then 36 pt apart plus the bleed on both sides. The document opens in CMYK when most of those pages are painted mostly in
 CMYK, unless `colorMode` names a mode. All the pages' objects share one copy of the file. The Links panel lists each
 page, and `links.embed` makes a page editable art.
 `document.open` refuses `linkPages` for a file that is not a PDF or a PDF-compatible `.ai`, for a file given as
@@ -2571,6 +2579,9 @@ The rest of this section is VectorCraft's own rules:
   `The Scripts folder cannot be read`.
 - A listed file is checked again when it is chosen. A file that is gone, is no longer a `.js` or `.jsx` file under
   the folder, or is or lies behind a link ends with `the script is no longer in the Scripts folder`, and nothing runs.
+  The file is read once for that check, and the text that read checked is the text that runs; its `#include` lines
+  and `$.evalFile` read in the folder that read found. `script.run {path, installed: true}` runs a listed script the
+  same way.
 - The web build has no Scripts folder, and neither has a run with `VECTORCRAFT_NO_PREFS` set.
 
 `script.listInstalled {}` returns the same listing: `{folder, scripts: [{path, label, folders}], truncated,
@@ -4862,6 +4873,14 @@ and `height`, so a new `hSpacing` changes the tile's width. `pattern.options` st
 `object.pattern.edit` edits the pattern that fills or strokes a selected object, and `pattern.options` changes the
 pattern being edited; each returns an error when there is no such pattern. `pattern.delete` requires `name`.
 
+With `pattern.options {moveTileWithArt: true}` (Move Tile with Art), a move of all of the tile art in pattern editing
+mode moves the tile by the same offset: `object.move`, `object.nudge`, `object.transform` with a translation, and drags
+with the Selection tool. A move of only some of the art, a move of direct-selected anchors, a copy, a rotation and a
+scale leave the tile where it is. The option is off for a new pattern and works the same with `sizeTileToArt` on. These
+details are VectorCraft's own rules; the help page says only that the option moves the tile along with the art
+(<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/edit-patterns.html>).
+`pattern.list` reports it as `moveTileWithArt`. A `pattern.options` call that changes nothing records no undo step.
+
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"patternTileEdgeColor","value":"#ff4f4f"}}}
@@ -5519,11 +5538,28 @@ moves that point alone as the focal point, with or without Shift (Shift keeps th
 focal points stay highlighted where it left them; Escape during a drag puts the path back and keeps them, and
 switching to another tool clears them.
 
+`path.eraseRegion` (the Eraser) takes a variation mode for each of its tip's values, as the variation menus of
+Eraser Tool Options set them ([Erase paths using the Eraser
+tool](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-paths/erase-paths-using-eraser-tool.html)):
+`angleMode` with `angleVariation` (degrees, 0 to 180), `roundnessMode` with `roundnessVariation` (percent, 0 to 100)
+and `sizeMode` with `sizeVariation` (points, 0 or more), each `"fixed"` (the default), `"random"`, `"pressure"`,
+`"tilt"`, `"bearing"` or `"rotation"`. A value that varies takes up to its variation either way. Random draws one
+value for the drag. Pressure goes from the value less the variation where the pen presses lightest to the value plus
+it where the pen presses hardest. Tilt goes from less with the pen lying flat to more with it upright. Bearing and
+Rotation go from less at −180° to more at 180° of the way the pen leans or its barrel turns. The tip at each point of
+the drag takes what the pen read there (the points' pressure, tilt and rotation, as `path.freehand` takes them); a
+drag without that reading, such as a mouse drag, erases at the value itself. One Random value per drag, which way
+Tilt, Bearing and Rotation run, and the value itself without a reading are VectorCraft's own rules.
+The command refuses another mode, and a variation below 0 or past its range, and erases nothing. In the desktop app
+the Eraser's tip outline at the pointer takes the angle, roundness and size the pen gives while it erases.
+`tool.setOption {tool: "eraser"}` takes the same keys.
+
 These commands refuse a string or another value that is not a number with `` `dy` must be a number, not "10" ``,
 naming the key; the document does not change and no undo step is recorded: `t`, `dx` and `dy` in
 `path.reshapeSegment` and `object.blend.spine.reshapeSegment`; `x`, `y` and `t` in `path.curvatureEdit`; `x` and `y`
 in `path.convertAnchor`; `t` in `path.insertAnchor`; `fidelity` and the `within` of `redraw` in `path.freehand` (and in
-`brush.freehand`, which runs it); `size`, `sizeVariation`, `angle` and `roundness` in `path.eraseRegion`;
+`brush.freehand`, which runs it); `size`, `sizeVariation`, `angle`, `angleVariation`, `roundness` and
+`roundnessVariation` in `path.eraseRegion`;
 `size`, `sizeVariation`, `angle`, `roundness` and `fidelity` in `path.blob`; `width` in `path.eraseSegments`;
 `radius` and `fidelity` in `path.smoothRegion`; `tolerance` in `path.joinScrub`; `dx` and `dy` in `path.moveAnchors`;
 and `dx`, `dy`, `tol` and `radius` in `path.reshape`. A null is read as a key left out. `path.convertAnchor` refuses
@@ -5686,7 +5722,17 @@ the colour bars are process, spot and black-tint patches. Layers whose Print opt
 The Output and Advanced sections convert colours and write real text. `output: {conversion, destination}` converts
 every colour into the destination profile's model (`destination`; CMYK of another profile too) or only the colours of
 the other model (`preserveNumbers`: colours already in it keep their numbers); grey stays grey, images are converted
-too and printer's marks are not. The destination is any profile `edit.colorSettings` lists (default: the document's
+too and printer's marks are not. With `destination` and an sRGB destination, a gray or RGB image that carries an
+ICC profile is converted from that profile to sRGB with the color settings' intent and written without
+it, at 16 bits a sample when it has them, is not resampled or recompressed and the file is PDF 1.5 or later (an image
+whose profile the color engine can't read, or whose pixels can't be decoded, keeps its profile, with a warning); without
+conversion it keeps its profile. With `destination` and a CMYK destination, or an RGB one other than sRGB that images
+are converted to, an RGB image that carries an ICC profile is converted from that profile to sRGB with the same intent
+and then to the destination, instead of having its numbers read as sRGB (a profile the color engine can't read leaves
+them read as sRGB, with a warning); a gray image keeps its profile, as gray is not converted. An RGB destination other
+than sRGB that is the document's own RGB profile leaves RGB colors and RGB images as they are, so a tagged RGB image keeps its profile
+there.
+`preserveNumbers` still reads an image's numbers as sRGB. The destination is any profile `edit.colorSettings` lists (default: the document's
 for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
 `edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
 the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve (PDF/A, PDF/X-3 and PDF/X-4 files are
@@ -9264,13 +9310,20 @@ as outlines.
 `fwid`, `hwid`, `twid` or `qwid` ([feature list](https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist)),
 or `"default"`, the font's default glyphs. A character holds one form at a time, so setting one replaces another. The
 text keeps its characters, and a character the font has no glyph of that form for keeps its own. Runs that differ only
-in their form are shaped as one piece of text. The form is saved only when it is not `"default"`, character styles
-carry it, PDF draws the glyphs the canvas draws, and live SVG text writes it in `font-feature-settings`. Another value
-is refused with `` `glyphForm` must be one of "traditional", … ``. One undo step, and a `text.setFormat` call that
-gives the form the characters already have records none. With Show East Asian Options on, the Glyphs panel menu lists
-the ten forms and Revert To Default Forms: a form is checked when every selected character has it, choosing it again
-does nothing, and it is disabled when none of the faces that draw the selected text, fallback faces included, has a
-feature for it.
+in their form are shaped as one piece of text. A form other than `"default"` also takes away the characters' glyph
+choice (`text.setGlyphAlternate`), which would otherwise keep drawing its own glyph; `"default"` keeps it. The four
+width forms set the characters on a fixed width, so Proportional Metrics (`palt`) is not applied with them and the
+font's pair kerning (`kern`, `apkn`) is turned off, in shaping and in SVG output (`font-kerning: none`);
+`proportionalMetrics` and `kerning` keep their values. The form is saved only when it is not `"default"`, character
+styles carry it, PDF draws the glyphs the canvas draws, and live SVG text writes it in `font-feature-settings`. Another
+value is refused with `` `glyphForm` must be one of "traditional", … ``. One undo step, and a `text.setFormat` call
+that gives the form the characters already have records none. With Show East Asian Options on, the Glyphs panel menu
+lists the ten forms and Revert To Default Forms. They act on the Type tool's selected range, all the text of the object
+at a caret, or all the text of the selected type objects. A form is checked when every one of those characters has
+it, and choosing it again does nothing unless one of them has a glyph choice, which the form takes away. A form is
+disabled when none of the faces that draw the selected text, fallback faces included, has a feature for it: a `GSUB` feature, or for the width
+forms a `GSUB` or `GPOS` feature
+([fwid](https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid)).
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"glyphForm":"jis78"}}}
