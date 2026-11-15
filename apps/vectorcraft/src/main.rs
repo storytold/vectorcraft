@@ -62,10 +62,10 @@ mod tablet;
 mod window;
 mod window_frame;
 mod windows_alt_codes;
-mod windows_symbol_chars;
 #[cfg(windows)]
 mod windows_cores;
 mod windows_stylus;
+mod windows_symbol_chars;
 mod xwayland;
 
 use vectorcraft_engine::Session;
