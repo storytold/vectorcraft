@@ -2262,3 +2262,21 @@ fn a_continued_frame_carries_the_character_a_repeat_mark_stands_for() {
     assert!(tb.first_para_continues);
     assert_eq!(tb.first_para_lead, vectorcraft_text::repeat_base(&ta.plain_text()));
 }
+
+/// Kurikaeshi Moji Shori: the leads of a thread whose frames hold only repeat marks come from one
+/// pass over the frames, each frame's text gone through once, not once for every frame after it.
+#[test]
+fn continued_frame_leads_go_through_each_frame_once() {
+    let n = 2000;
+    let mut texts = vec!["時".to_string()];
+    texts.extend(std::iter::repeat_n("々\u{2028}".to_string(), n - 1));
+    let continues: Vec<bool> = (0..n).map(|k| k > 0).collect();
+    let before = lead_scans();
+    let leads = first_para_leads(&texts, &continues);
+    assert!(lead_scans() - before <= n, "{} frame texts gone through for {n} frames", lead_scans() - before);
+    assert_eq!(leads.first(), Some(&None));
+    assert!(leads.iter().skip(1).all(|l| *l == Some('時')));
+    // A paragraph break stops the carry, and a frame that starts a paragraph carries nothing.
+    let leads = first_para_leads(&["時".into(), "々\nす".into(), "々".into(), "日".into(), "々".into()], &[false, true, true, false, true]);
+    assert_eq!(leads, [None, Some('時'), Some('す'), None, Some('日')]);
+}
