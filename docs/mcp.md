@@ -8548,7 +8548,9 @@ becomes an asset (or one asset with `multiple: false`).
 
 ### 3D assets
 
-Asset Export's menu item Export 3D Object (`assets.add3D {ids?, format?}`) collects each selected object (or `ids`)
+Asset Export's menu item Export 3D Object and the 3D and Materials panel's Export 3D Object button
+(`assets.add3D {ids?, format?}`; the button passes the ids of the selected objects that have a 3D effect and then shows
+the Asset Export panel, [three-d.md](three-d.md#3d-and-materials-panel)) collect each selected object (or `ids`)
 that carries Extrude & Bevel, Revolve, Inflate or Rotate as a 3D asset, named after the object; an object already
 collected as a 3D asset keeps it, and an object without such an effect is refused. A 3D asset's Format is `usda` (the
 default), `usdz`, `gltf` or `obj`; the panel shows a Format row for the 3D assets it would export, and
