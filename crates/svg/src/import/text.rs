@@ -1473,16 +1473,26 @@ impl Ctx {
             let offset = tp.attribute("startOffset").and_then(|v| self.length(v, em, len)).unwrap_or(0.0) + dx[0];
             let width = if anchor > 0.0 { advance(&point_text(&cells)) } else { 0.0 };
             // On a path of one closed subpath, text that starts before the path's start or past its
-            // end wraps around the path. Otherwise it starts at the path's start or end.
+            // end wraps around the path. On an open path text may start before the path's start,
+            // and its characters before the start are not drawn; text that starts past the end
+            // starts at the end. Other paths start it at the path's start or end.
             let path = PathData::from_bezpath(&bp);
             let wraps = path.subpaths.len() == 1 && path.is_closed();
+            let open = !path.is_closed();
             let wrap = |s: f64| {
                 // `rem_euclid` can round a tiny negative value up to 1.
                 let s = s.rem_euclid(1.0);
                 if s < 1.0 { s } else { 0.0 }
             };
-            let start =
-                Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| if wraps { wrap(s) } else { s.clamp(0.0, 1.0) });
+            let start = Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| {
+                if wraps {
+                    wrap(s)
+                } else if open {
+                    s.clamp(-vectorcraft_doc::PATH_LEAD_MAX, 1.0)
+                } else {
+                    s.clamp(0.0, 1.0)
+                }
+            });
             obj.kind = TextKind::OnPath { path, start, end: None };
             obj.xf = Affine::IDENTITY;
         } else if vertical {
