@@ -2785,7 +2785,10 @@ group selected on its own, or, for `symbolInstance`, an object that is not a sym
 leaves the selection empty. A selected object that is hidden or locked, inside a hidden or locked group or layer, on a
 template layer, on a locked artboard while nothing is isolated, or outside the isolated group is passed over. New art,
 such as a symbol instance just placed, is not passed over for being on a locked artboard while it stays selected. When
-the selection holds no other object, they return the error "nothing selected".
+the selection holds no other object, they return the error "nothing selected". `appearanceAttribute {item?}` takes
+the fill or stroke at appearance item `item`, or the Appearance panel's active item when the call gives none or null; a
+value that is not a whole number of 0 or more fails with "`item` must be a whole number" and leaves the selection as it
+was.
 
 `select.object.allOnSameLayers` selects the objects on the layers and sublayers of the selected objects that can be
 selected. A selected object that is hidden or locked, inside a hidden or locked group or layer, on a template layer, on

@@ -11,7 +11,7 @@ use super::object::can_align;
 use super::panelcmds::artboard_at;
 use super::wand::{fill_of, stroke_of};
 use super::{
-    CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index, ok, str_param,
+    CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index_opt, ok, str_param,
     switch_or, text_param,
 };
 use crate::DocState;
@@ -222,7 +222,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Appearance Attribute",
             ["Select", "Same"],
             None,
-            "{item?: appearance item index} the objects sharing an appearance attribute of the first selected object: its fill or stroke `item` (default: the Appearance panel's active item), else its first effect, else its topmost fill (compound paths as select.same.fillColor)",
+            "{item?: appearance item index (0-based whole number; default, or null: the Appearance panel's active item)} the objects sharing an appearance attribute of the first selected object: its fill or stroke `item` (default: the Appearance panel's active item), else its first effect, else its topmost fill (compound paths as select.same.fillColor)",
             has_selection,
             same_attribute
         ),
@@ -1103,10 +1103,10 @@ enum Attribute {
 
 fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "select.same.appearanceAttribute";
+    let item = index_opt(p, "item", cmd)?.or(s.appearance_item());
     let st = s.doc()?;
     let (refn, _) = same_reference(st, cmd)?;
     let ap = &refn.appearance;
-    let item = p.get("item").and_then(Value::as_u64).map(index).or(s.appearance_item());
     let attr = match (item.and_then(|i| ap.items.get(i)), ap.effects.first()) {
         (Some(it), _) => Attribute::Item(it.clone()),
         (None, Some(e)) => Attribute::Effect(e.clone()),
