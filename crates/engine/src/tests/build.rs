@@ -6133,26 +6133,40 @@ fn image_trace_abutting_seam_fills_sit_under_the_paths() {
     // Overlapping paths are stacked: no seam fills.
     let (s, _, r) = made("overlapping", "imageTrace.make", false);
     assert!(seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).is_none());
-    // White left out: the strokes are still clipped to the image's box.
+}
+
+/// With white left out, the seam fills are clipped to the image's box within the traced paths'
+/// box, so the expanded trace measures as its paths do, also on a turned image.
+#[test]
+fn image_trace_seam_fills_stay_within_the_traced_paths_box() {
+    let seams = |n: &Node| n.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Seam Fills")).cloned();
     let band = vectorcraft_trace::Raster::from_fn(24, 16, |x, y| match ((4..12).contains(&y), x < 12) {
         (false, _) => [255; 4],
         (true, true) => [200, 30, 30, 255],
         (true, false) => [30, 30, 200, 255],
     });
-    let mut s = session();
-    add_image(&mut s, &band, Affine::IDENTITY);
-    let r = s
-        .execute(
-            "imageTrace.make",
-            &json!({"params": {"mode": "color", "palette": "limited", "colors": 3, "method": "abutting", "ignoreWhite": true}}),
-        )
-        .unwrap();
-    assert_eq!(r["paths"], 2, "{r}");
-    let group = seams(&node(&s, NodeId(r["id"].as_u64().unwrap()))).unwrap();
-    let clip = &group.children().unwrap()[0];
-    assert!(matches!(clip.kind, NodeKind::Path { .. }), "{clip:?}");
-    let cb = outline(clip).0.bounds().unwrap();
-    assert!([cb.x0, cb.y0, cb.x1 - 24.0, cb.y1 - 16.0].iter().all(|v| v.abs() < 1e-9), "{cb:?}");
+    for xf in [Affine::IDENTITY, Affine::translate((100.0, 100.0)) * Affine::rotate(0.5)] {
+        let mut s = session();
+        add_image(&mut s, &band, xf);
+        let r = s
+            .execute(
+                "imageTrace.makeAndExpand",
+                &json!({"params": {"mode": "color", "palette": "limited", "colors": 3, "method": "abutting", "ignoreWhite": true}}),
+            )
+            .unwrap();
+        assert_eq!(r["paths"], 2, "{r}");
+        let n = node(&s, NodeId(r["id"].as_u64().unwrap()));
+        let group = seams(&n).unwrap();
+        let clip = &group.children().unwrap()[0];
+        assert!(matches!(clip.kind, NodeKind::Path { clipping: true, .. }), "{clip:?}");
+        let cb = outline(clip).0.bounds().unwrap();
+        let paths = n.children().unwrap()[1..].iter().filter_map(|c| c.geometric_bounds()).reduce(|a, b| a.union(b)).unwrap();
+        assert_eq!(n.geometric_bounds(), Some(paths), "{xf:?}");
+        assert!(cb.x0 >= paths.x0 - 1e-9 && cb.y0 >= paths.y0 - 1e-9 && cb.x1 <= paths.x1 + 1e-9 && cb.y1 <= paths.y1 + 1e-9, "{xf:?}: {cb:?}");
+        if xf == Affine::IDENTITY {
+            assert!([cb.x0, cb.y0 - 4.0, cb.x1 - 24.0, cb.y1 - 12.0].iter().all(|v| v.abs() < 1e-9), "{cb:?}");
+        }
+    }
 }
 
 /// On an image stretched more one way than another, the seam fills are the strokes' outlines in

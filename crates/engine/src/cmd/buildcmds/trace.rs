@@ -723,10 +723,11 @@ fn seam_unit(img_xf: vectorcraft_geom::Affine, xf: vectorcraft_geom::Affine) -> 
 /// the paths, the seam fills and their clip together stay within `max` anchors. With `outlined`,
 /// each stroke is replaced by a filled path, its outline in raster pixels ([`outline_seams`]),
 /// for an image stretched more one way than another ([`seam_unit`]). The strokes have at most as
-/// many anchors as the paths and the clip has four, so a trace whose paths have more than half of
-/// `max` less two gets none. Outlines, which have more anchors, are counted as each is made, and
-/// none is made when [`SEAM_OUTLINE_ANCHORS`] times the strokes' anchors would not fit, or once
-/// those made so far no longer fit. [`EngineError::Cancelled`] once `steps` answers `false`.
+/// many anchors as the paths and the clip at most [`SEAM_CLIP_ANCHORS`], so a trace whose paths
+/// have more than half of `max` less four gets none. Outlines, which have more anchors, are
+/// counted as each is made, and none is made when [`SEAM_OUTLINE_ANCHORS`] times the strokes'
+/// anchors would not fit, or once those made so far no longer fit. [`EngineError::Cancelled`]
+/// once `steps` answers `false`.
 fn seams_within(
     res: &tr::TraceResult,
     params: &tr::TraceParams,
@@ -735,17 +736,17 @@ fn seams_within(
     outlined: bool,
     steps: &(dyn Fn(u64, u64) -> bool + Sync),
 ) -> Result<Option<tr::SeamFills>> {
-    if res.anchor_count().saturating_mul(2).saturating_add(4) > max {
+    if res.anchor_count().saturating_mul(2).saturating_add(SEAM_CLIP_ANCHORS) > max {
         return Ok(None);
     }
     let Some(mut seams) = tr::seam_fills(&res.paths, params, size) else { return Ok(None) };
     if outlined {
         let strokes = seams.strokes.iter().map(|tp| tp.path.anchor_count()).sum::<usize>();
-        let estimate = strokes.saturating_mul(SEAM_OUTLINE_ANCHORS).saturating_add(seams.clip.anchor_count());
+        let estimate = strokes.saturating_mul(SEAM_OUTLINE_ANCHORS).saturating_add(SEAM_CLIP_ANCHORS);
         if res.anchor_count().saturating_add(estimate) > max {
             return Ok(None);
         }
-        let budget = max.saturating_sub(res.anchor_count()).saturating_sub(seams.clip.anchor_count());
+        let budget = max.saturating_sub(res.anchor_count()).saturating_sub(SEAM_CLIP_ANCHORS);
         if !outline_seams(&mut seams.strokes, budget, steps)? {
             return Ok(None);
         }
@@ -756,6 +757,10 @@ fn seams_within(
     }
     Ok(Some(seams))
 }
+
+/// The most anchors the seam fills' clip has: the image's box cut to the box of the traced paths
+/// ([`within_box`]), four corners and at most four more where the image is turned.
+const SEAM_CLIP_ANCHORS: usize = 8;
 
 /// How many seam strokes [`outline_seams`] outlines between asking whether to go on.
 const SEAM_OUTLINE_STEP: usize = 64;
@@ -913,7 +918,8 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
             tp.gradient.as_ref().map_or(solid, |g| traced_gradient(g, xf))
         };
         // Abutting: the seam fills, in a clip group of their own under every path, clipped to the
-        // image's box: strokes, or on an image stretched more one way, their outlines filled.
+        // image's box within the traced paths' box: strokes, or on an image stretched more one
+        // way, their outlines filled.
         let strokes: Vec<Arc<Node>> = seam_fills
             .iter()
             .flat_map(|f| &f.strokes)
@@ -946,16 +952,6 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
                 Some(Arc::new(n))
             })
             .collect();
-        if let Some(f) = seam_fills.as_ref().filter(|_| !strokes.is_empty()) {
-            let mut clip = shape_node(d, f.clip.transformed(xf), None);
-            if let NodeKind::Path { clipping, .. } = &mut clip.kind {
-                *clipping = true;
-            }
-            let members = std::iter::once(Arc::new(clip)).chain(strokes).collect();
-            let mut g = Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true });
-            g.name = Some(SEAM_FILLS_NAME.into());
-            children.push(Arc::new(g));
-        }
         let mut traced = Vec::with_capacity(res.paths.len());
         for tp in res.paths {
             let paint = paint_of(&tp);
@@ -982,6 +978,23 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
             };
             traced.push(n);
         }
+        // The seam fills' clip is the image's box cut to the box of the traced paths, so the group
+        // stays within the box the paths measure.
+        let art = traced.iter().filter_map(Node::geometric_bounds).reduce(|a, b| a.union(b));
+        if let (Some(f), Some(art)) = (seam_fills.as_ref().filter(|_| !strokes.is_empty()), art) {
+            let corners: Vec<Point> = f.clip.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| xf * a.p)).collect();
+            let inside = within_box(&corners, art);
+            if inside.len() >= 3 {
+                let mut clip = shape_node(d, vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&inside, true)), None);
+                if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+                    *clipping = true;
+                }
+                let members = std::iter::once(Arc::new(clip)).chain(strokes).collect();
+                let mut g = Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true });
+                g.name = Some(SEAM_FILLS_NAME.into());
+                children.push(Arc::new(g));
+            }
+        }
         children.extend(grouped(d, traced, &res.parents));
         if group_by_color {
             children = color_groups(c, d, children)?;
@@ -1001,6 +1014,28 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
         Ok(gid)
     })?;
     Ok(json!({ "id": id.0, "paths": npaths, "anchors": anchors, "colors": colors, "warnings": warnings }))
+}
+
+/// The part of the convex polygon `poly` inside `r`, as a polygon with at most four more corners
+/// than `poly` (each side of `r` cuts at most one corner off and adds two); empty when none of it
+/// is inside.
+fn within_box(poly: &[Point], r: Rect) -> Vec<Point> {
+    let sides: [&dyn Fn(Point) -> f64; 4] = [&|p| p.x - r.x0, &|p| r.x1 - p.x, &|p| p.y - r.y0, &|p| r.y1 - p.y];
+    let mut out = poly.to_vec();
+    for side in sides {
+        let corners = std::mem::take(&mut out);
+        for (k, &p) in corners.iter().enumerate() {
+            let Some(&q) = corners.get((k + 1) % corners.len()) else { continue };
+            let (dp, dq) = (side(p), side(q));
+            if dp >= 0.0 {
+                out.push(p);
+            }
+            if (dp > 0.0 && dq < 0.0) || (dp < 0.0 && dq > 0.0) {
+                out.push(p + (q - p) * (dp / (dp - dq)));
+            }
+        }
+    }
+    out
 }
 
 /// Images larger than this on a side are traced, but more slowly: the trace says so.
@@ -1302,7 +1337,7 @@ mod color_group_tests {
 
 #[cfg(test)]
 mod trace_limit_tests {
-    use super::{MAX_TRACE_ANCHORS, SEAM_OUTLINE_ANCHORS, keep_warnings, outline_seams, seams_within, trace_warnings};
+    use super::{MAX_TRACE_ANCHORS, SEAM_CLIP_ANCHORS, SEAM_OUTLINE_ANCHORS, keep_warnings, outline_seams, seams_within, trace_warnings};
     use vectorcraft_trace as tr;
 
     #[test]
@@ -1318,12 +1353,12 @@ mod trace_limit_tests {
         let all = tr::seam_fills(&res.paths, &params, (24, 16));
         assert!(all.is_some(), "{res:?}");
         let anchors = res.anchor_count();
-        assert!(anchors + all.as_ref().map_or(0, tr::SeamFills::anchor_count) <= 2 * anchors + 4);
+        assert!(anchors + all.as_ref().map_or(0, tr::SeamFills::anchor_count) <= 2 * anchors + SEAM_CLIP_ANCHORS);
         let go = |_: u64, _: u64| true;
-        // Twice the paths' anchors and the clip's four leave room for any seam fills.
-        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + 4, false, &go).unwrap(), all);
+        // Twice the paths' anchors and the clip's eight at most leave room for any seam fills.
+        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + SEAM_CLIP_ANCHORS, false, &go).unwrap(), all);
         // One anchor short of that: none.
-        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + 3, false, &go).unwrap(), None);
+        assert_eq!(seams_within(&res, &params, (24, 16), 2 * anchors + SEAM_CLIP_ANCHORS - 1, false, &go).unwrap(), None);
         // Outlined, the seam fills are filled paths, within SEAM_OUTLINE_ANCHORS of the strokes'
         // anchors each.
         let strokes = |f: &tr::SeamFills| f.strokes.iter().map(|tp| tp.path.anchor_count()).sum::<usize>();
@@ -1342,8 +1377,8 @@ mod trace_limit_tests {
         let outlined = seams_within(&res, &params, (32, 32), MAX_TRACE_ANCHORS, true, &go).unwrap().unwrap();
         assert!(strokes(&outlined) > anchors, "{} outline anchors, {anchors} in the paths", strokes(&outlined));
         assert!(strokes(&outlined) <= SEAM_OUTLINE_ANCHORS * n, "{} outline anchors, {n} stroke anchors", strokes(&outlined));
-        let fits = anchors + SEAM_OUTLINE_ANCHORS * n + 4;
-        assert!(fits > 2 * anchors + 4, "{fits}, {anchors} in the paths");
+        let fits = anchors + SEAM_OUTLINE_ANCHORS * n + SEAM_CLIP_ANCHORS;
+        assert!(fits > 2 * anchors + SEAM_CLIP_ANCHORS, "{fits}, {anchors} in the paths");
         assert_eq!(seams_within(&res, &params, (32, 32), fits, true, &go).unwrap(), Some(outlined.clone()));
         assert_eq!(seams_within(&res, &params, (32, 32), fits - 1, true, &go).unwrap(), None);
         assert_eq!(seams_within(&res, &params, (32, 32), fits - 1, false, &go).unwrap(), Some(all.clone()));
@@ -1356,6 +1391,21 @@ mod trace_limit_tests {
         let stop = |_: u64, _: u64| false;
         assert!(matches!(seams_within(&res, &params, (32, 32), MAX_TRACE_ANCHORS, true, &stop), Err(super::EngineError::Cancelled)));
         assert!(matches!(outline_seams(&mut all.strokes.clone(), need, &stop), Err(super::EngineError::Cancelled)));
+    }
+
+    #[test]
+    fn within_box_cuts_a_turned_box_to_a_box() {
+        use vectorcraft_geom::{Point, Rect};
+        // A square turned by 45° in a smaller box: each side cuts a corner off, 8 corners.
+        let diamond = [Point::new(0.0, -10.0), Point::new(10.0, 0.0), Point::new(0.0, 10.0), Point::new(-10.0, 0.0)];
+        let cut = super::within_box(&diamond, Rect::new(-6.0, -6.0, 6.0, 6.0));
+        assert_eq!(cut.len(), 8, "{cut:?}");
+        assert!(cut.iter().all(|p| p.x.abs() <= 6.0 + 1e-12 && p.y.abs() <= 6.0 + 1e-12 && p.x.abs() + p.y.abs() <= 10.0 + 1e-12), "{cut:?}");
+        // A corner on a side is kept once.
+        let square = [Point::new(0.0, 0.0), Point::new(4.0, 0.0), Point::new(4.0, 4.0), Point::new(0.0, 4.0)];
+        assert_eq!(super::within_box(&square, Rect::new(0.0, 0.0, 4.0, 4.0)), square.to_vec());
+        assert_eq!(super::within_box(&square, Rect::new(1.0, 0.0, 4.0, 4.0)).len(), 4);
+        assert!(super::within_box(&square, Rect::new(5.0, 5.0, 6.0, 6.0)).is_empty());
     }
 
     #[test]
