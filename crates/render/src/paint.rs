@@ -303,7 +303,7 @@ fn png_row_scratch(hdr: &craft_image_codecs::PngHeader) -> Option<u64> {
 /// the PNG header says it is a static, non-interlaced image, the format the renderer can stream.
 fn png_row_scratch_from_header(bytes: &[u8], width: u32, height: u32, total_bytes: u64) -> Option<u64> {
     const SIG: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
-    if bytes.get(..8)? != SIG || height == 0 || total_bytes % u64::from(height) != 0 {
+    if bytes.get(..8)? != SIG || height == 0 || !total_bytes.is_multiple_of(u64::from(height)) {
         return None;
     }
     let mut at = 8usize;
