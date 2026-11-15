@@ -106,6 +106,7 @@ pub mod relink;
 pub mod rename_artboards;
 pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
+pub(crate) mod revolve_lights;
 pub mod safe_mode;
 pub mod saturate;
 pub mod save_brush_library;
